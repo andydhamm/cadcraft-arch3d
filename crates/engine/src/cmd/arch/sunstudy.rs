@@ -85,12 +85,12 @@ fn parse_step(s: &str) -> Result<i64, String> {
         if s.len() <= 1 {
             return Err(format!("bad step {s:?}"));
         }
-        s[..s.len().saturating_sub(1)].parse().ok_or_else(|| format!("bad step {s:?}"))?
+        s[..s.len().saturating_sub(1)].parse().map_err(|_| format!("bad step {s:?}"))?
     } else if s.ends_with("min") {
         if s.len() <= 3 {
             return Err(format!("bad step {s:?}"));
         }
-        s[..s.len().saturating_sub(3)].parse().ok_or_else(|| format!("bad step {s:?}"))?
+        s[..s.len().saturating_sub(3)].parse().map_err(|_| format!("bad step {s:?}"))?
     } else {
         return Err(format!("step {s:?} must be <n>h or <n>min"));
     };
@@ -106,19 +106,18 @@ fn parse_step(s: &str) -> Result<i64, String> {
 
 /// JSON handler for `sunstudy`.
 fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
-    let date = params.get("date").and_then(|v| v.as_str()).ok_or_else(|| bad("date (YYYY-MM-DD) required"))?;
+    let date = params.get("date").and_then(|v| v.as_str()).ok_or_else(|| bad("sunstudy", "date (YYYY-MM-DD) required"))?;
     let from = params.get("from").and_then(|v| v.as_str()).unwrap_or("08:00");
     let to = params.get("to").and_then(|v| v.as_str()).unwrap_or("18:00");
     let step = params.get("step").and_then(|v| v.as_str()).unwrap_or("1h");
-    let out = params.get("out").and_then(|v| v.as_str()).ok_or_else(|| bad("out (dir/prefix) required"))?;
+    let out = params.get("out").and_then(|v| v.as_str()).ok_or_else(|| bad("sunstudy", "out (dir/prefix) required"))?;
 
-    let times = study_times(from, to, step).map_err(bad)?;
+    let times = study_times(from, to, step).map_err(|e| bad("sunstudy", e))?;
 
     let drawing = session.doc()?;
-    let site = drawing.arch().site.as_ref().ok_or_else(|| bad("sunstudy needs a site location: run site first"))?;
+    let site = drawing.arch.site.as_ref().map_err(|_| bad("sunstudy", "sunstudy needs a site location: run site first"))?;
 
-    let hooks = render_hooks();
-    let hooks = bad(hooks, "no render hook installed")?;
+    let hooks = render_hooks().map_err(|_| bad("sunstudy", "no render hook installed"))?;
 
     let size: Vec<u64> = params
         .get("size")
@@ -127,7 +126,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
         .unwrap_or_else(|| vec![1200, 800]);
     for &w in &size {
         if w > MAX_SIZE {
-            return bad(format!("size component {} exceeds {}", w, MAX_SIZE));
+            return bad("sunstudy", format!("size component {} exceeds {}", w, MAX_SIZE));
         }
     }
 
@@ -152,9 +151,19 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
             }
             Some(s) => {
                 let dir = true_to_drawing(site, sun::sun_dir(&s));
-                let file_name = format!("{out}-{}{}", t[..2], t[3..]);
-                let request =
-                    RenderRequest { camera, size, out: Some(file_name.clone()), final_render, sun: SunChoice::Dir(dir), ..Default::default() };
+                let file_name = format!("{out}-{}{}.png", t[..2], t[3..]);
+                let request = RenderRequest {
+                    camera,
+                    size,
+                    out: Some(file_name.clone()),
+                    final_render,
+                    sun: SunChoice::Dir(dir),
+                    style: "shaded".to_string(),
+                    ground,
+                    budget: 8,
+                    samples: Vec::new(),
+                    ..Default::default()
+                };
                 let _ = hooks.render(&request);
                 count += 1;
                 stills.push(json!({
