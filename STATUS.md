@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-10-31 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-10-31 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 10 of 13: Lighting, light fixtures and final renders — 7 of 21 segments merged · 0 of 11 acceptance checks**
+**Phase 10 of 13: Lighting, light fixtures and final renders — 8 of 21 segments merged · 0 of 11 acceptance checks**
 
-6,071 workspace tests passing at the last merge · 591 segments merged in all · 0 of 13 seats working
+6,081 workspace tests passing at the last merge · 592 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -20,19 +20,21 @@ Updated 2026-10-31 22:15 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 5.7 h so far · expected done Nov 01 11:01–Nov 02 04:23 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 5.9 h so far · expected done Nov 01 09:16–Nov 02 00:25 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-10 queued, 7 merged, 2 merging, 2 gate
+8 merged, 7 queued, 4 gate, 1 working, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p10-arch-light-placement` | Fixture validation, colour temperature, light point, aim and room grid | merging | kimi-k31 |
+| `p10-arch3d-scene-lights` | Scene lights and direct illuminance with shadow rays | gate | claude-sonnet-d |
+| `p10-arch3d-fixture-meshes` | Fixture housings in 3D | gate | claude-sonnet-a |
 | `p10-r3d-lit-pipeline` | The lit shader: fixture lights with spot cones and shadows, emissive lenses, tone mapping | gate | kimi-k31 |
+| `p10-cmd-lightfixture` | LIGHTFIXTURE: place, grid in a room, edit, delete, list types; arch.inspect lights | working | mai-flash |
 | `p10-io-light-proxies` | DXF: fixture symbols on E-LITE written on save, dropped on read | merging | bonsai-a |
 | `p10-mcp-render-final` | MCP render tool: 3D stills and Finalize Render through the RENDER 3D command | gate | bonsai-ws2-b |
 
@@ -40,6 +42,7 @@ Updated 2026-10-31 22:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Oct 31 22:17 | `p10-arch-light-placement` | merged | 6,081 pass | kimi-k31 |
 | Oct 31 21:50 | `harden-p9-arch-site` | merged | 6,071 pass | tturbo-mac2 |
 | Oct 31 21:36 | `p10-arch-light-symbol` | merged | 6,066 pass | bonsai-ws2-a |
 | Oct 31 21:23 | `p10-cmd-sunstudy` | merged | 6,062 pass | bonsai-b |
@@ -51,7 +54,6 @@ Updated 2026-10-31 22:15 UTC. This page and the card in the README are regenerat
 | Oct 31 20:08 | `p10-r3d-light-pack` | merged | 6,038 pass | bonsai-ws2-b |
 | Oct 31 19:57 | `p10-io-glb-lights` | merged | 6,033 pass | mai-flash |
 | Oct 31 19:32 | `harden-p9-arch-site` | refused | 6,032 pass, 3 fail | tturbo-mac2 |
-| Oct 31 18:49 | `p10-r3d-shadow-atlas` | refused | 6,033 pass, 3 fail | claude-sonnet-c |
 
 ## Seats active in the last hour
 
@@ -61,12 +63,12 @@ Updated 2026-10-31 22:15 UTC. This page and the card in the README are regenerat
 | bonsai-b | bonsai2-27b | gate | 687 |
 | bonsai-ws2-a | bonsai2-27b | gate | 742 |
 | bonsai-ws2-b | bonsai2-27b | gate | 708 |
-| claude-sonnet-a | sonnet | idle | 58 |
+| claude-sonnet-a | sonnet | gate | 58 |
 | claude-sonnet-b | sonnet | idle | 55 |
 | claude-sonnet-c | sonnet | idle | 10 |
-| claude-sonnet-d | sonnet | idle | 2 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 594 |
-| kimi-k31 | k3.1-pro-highspeed | gate | 107 |
-| mai-flash | mai-code-1.1-flash | idle | 30 |
+| claude-sonnet-d | sonnet | gate | 2 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 594 |
+| kimi-k31 | k3.1-pro-highspeed | gate | 108 |
+| mai-flash | mai-code-1.1-flash | agent | 30 |
 | tturbo-mac | tturbo-ultraheretic | gate | 513 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 333 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 334 |
