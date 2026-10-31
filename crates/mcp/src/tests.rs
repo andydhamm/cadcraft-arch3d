@@ -232,10 +232,7 @@ fn find_text_reads_texts_and_render_shows_one_area() {
 #[test]
 fn mcp_render_final_goes_to_the_render_command() {
     let mut s = Server::new(Box::new(Headless::default()));
-    for (id, args) in [
-        (1u64, json!({"final": true})),
-        (2, json!({"view3d": true})),
-    ] {
+    for (id, args) in [(1u64, json!({"final": true})), (2, json!({"view3d": true}))] {
         let r = call(&mut s, id, "tools/call", json!({"name": "render", "arguments": args.clone()}));
         assert_eq!(r["result"]["isError"], json!(true), "{args}");
         assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("3D"), "{args}");

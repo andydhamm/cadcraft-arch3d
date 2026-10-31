@@ -27,7 +27,7 @@ pub fn tool_definitions(has_ui: bool) -> Value {
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
                 "path": {"type": "string"}, "final": {"type": "boolean"}, "view3d": {"type": "boolean"}, "camera": {"type": "object"},
                 "sun": {"anyOf": [{"type": "boolean", "const": false}, {"type": "object", "properties": {"date": {"type": "string"}, "time": {"type": "string"}}, "required": ["date", "time"]}]},
-                "samples": {"type": "array", "items": {"type": "number"}}, "out": {"type": "string"}}}),
+                "samples": {"type": "array", "items": {"type": "number"}}, "out": {"type": "string"}}}}),
         json!({"name": "find_text", "description": "Read the drawing's texts: TEXT, MTEXT (formatting removed), block attributes and multileaders, each with its text, insertion point `at`, height, rotation, style, layer and handle. Filter by `contains` (any case), `layer` and/or `window` [[x0,y0],[x1,y1]] around the insertion points; page with offset and limit (default 200). Use it to find room names, sheet titles and notes without reading all the geometry.",
             "inputSchema": {"type": "object", "properties": {"contains": {"type": "string"}, "layer": {"type": "string"},
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
@@ -44,6 +44,29 @@ pub fn tool_definitions(has_ui: bool) -> Value {
         tools.push(json!({"name": "ui_click", "description": "Click in the drawing area at world coordinates (or screen with space:\"screen\"). Right button = Enter.", "inputSchema": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "space": {"type": "string"}, "button": {"type": "string"}}, "required": ["x", "y"]}}));
     }
     json!({ "tools": tools })
+}
+
+/// Encode bytes using standard Base64 with padding.
+fn base64_encode(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    let mut encoded = String::new();
+    for chunk in bytes.chunks(3) {
+        let a = chunk.first().copied().unwrap_or(0);
+        let b = chunk.get(1).copied().unwrap_or(0);
+        let c = chunk.get(2).copied().unwrap_or(0);
+        let indexes =
+            [usize::from(a >> 2), usize::from(((a & 0x03) << 4) | (b >> 4)), usize::from(((b & 0x0f) << 2) | (c >> 6)), usize::from(c & 0x3f)];
+        for (i, index) in indexes.iter().enumerate() {
+            let padding = (i == 2 && chunk.len() < 2) || (i == 3 && chunk.len() < 3);
+            if padding {
+                encoded.push('=');
+            } else if let Some(byte) = ALPHABET.get(*index) {
+                encoded.push(char::from(*byte));
+            }
+        }
+    }
+    encoded
 }
 
 /// Wrap a JSON value as a successful MCP result containing pretty-printed text.
@@ -140,14 +163,7 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
         "ui_inspect" => b.call("ui.inspect", json!({})),
         "ui_click" => b.call("ui.pointer", a),
         "render" => {
-            let wants_3d = a
-                .get("final")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-                || a
-                    .get("view3d")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false);
+            let wants_3d = a.get("final").and_then(Value::as_bool).unwrap_or(false) || a.get("view3d").and_then(Value::as_bool).unwrap_or(false);
             if !wants_3d {
                 // Plain 2D render, unchanged.
                 return Ok(match b.call("ui.render", a) {
@@ -164,10 +180,7 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
             if let Value::Object(ref mut map) = params {
                 let _ = map.remove("view3d");
             }
-            return Ok(match b.call(
-                "engine.execute",
-                json!({"command": "render", "params": params}),
-            ) {
+            return Ok(match b.call("engine.execute", json!({"command": "render", "params": params})) {
                 Ok(v) => match v.get("out").and_then(Value::as_str) {
                     Some(path) => match std::fs::read(path) {
                         Ok(bytes) => json!({"content": [{"type": "image", "data": base64_encode(&bytes), "mimeType": "image/png"}]}),
