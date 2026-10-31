@@ -111,9 +111,10 @@ fn fs(v: VOut) -> @location(0) vec4<f32> {
     if (p.style == 2u) {
         return c;
     }
+    var rgb = c.rgb;
 
     if (fr.sun.y > 0.5 && fr.sun.z > 0.5 && lit_sun_visibility(v.wpos) < 0.5) {
-        c.rgb = u.albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
+        rgb = u.albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
     }
 
     let n = normalize(cross(dpdy(v.wpos), dpdx(v.wpos)));
@@ -146,15 +147,15 @@ fn fs(v: VOut) -> @location(0) vec4<f32> {
                 shadow = lit_cube_shadow(i, v.wpos - light.pos_range.xyz);
             }
         }
-        c.rgb = c.rgb + (diffuse_albedo / LIT_PI) * illuminance * shadow * fr.params.x;
+        rgb = rgb + (diffuse_albedo / LIT_PI) * illuminance * shadow * fr.params.x;
     }
 
-    c.rgb = c.rgb + u.albedo * p._p6.x;
+    rgb = rgb + u.albedo * p._p6.x;
     if (fr.params.y > 0.5) {
-        let x = c.rgb;
+        let x = rgb;
         let numerator = x * (2.51 * x + vec3<f32>(0.03));
         let denominator = x * (2.43 * x + vec3<f32>(0.59)) + vec3<f32>(0.14);
-        c.rgb = clamp(numerator / denominator, vec3<f32>(0.0), vec3<f32>(1.0));
+        rgb = clamp(numerator / denominator, vec3<f32>(0.0), vec3<f32>(1.0));
     }
-    return vec4<f32>(c.rgb, c.a);
+    return vec4<f32>(rgb, c.a);
 }
