@@ -23,13 +23,10 @@ const MAX_LIGHT_PROXIES: usize = 100_000;
 /// proxy convention. Output is capped at `MAX_LIGHT_PROXIES`.
 pub(crate) fn proxy_light_entities(m: &ArchModel) -> Vec<(String, String, Vec<Tag>)> {
     let mut out: Vec<(String, String, Vec<Tag>)> = Vec::new();
-    'outer: for f in &m.lights {
-        if out.len() >= MAX_LIGHT_PROXIES {
-            break outer;
-        }
+    for f in &m.lights {
         for poly in light::plan_symbol(f) {
             if out.len() >= MAX_LIGHT_PROXIES {
-                break outer;
+                return out;
             }
             let Some(tags) = light_polyline(&poly) else {
                 continue;
@@ -45,18 +42,18 @@ pub(crate) fn proxy_light_entities(m: &ArchModel) -> Vec<(String, String, Vec<Ta
 /// non-finite coordinate. A ring that repeats its first point is emitted closed (70 = 1)
 /// with the repeated vertex dropped.
 fn light_polyline(pts: &[Vec2]) -> Option<Vec<Tag>> {
-    if pts.len() < 2 || pts.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
+    if pts.len() < 2 || pts.iter().any(|p| !p.is_finite()) {
         return None;
     }
-    let closed = matches!(pts.first(), Some(a)) && matches!(pts.last(), Some(b)) && a == b;
-    let verts = if closed { pts.iter().take(pts.len().saturating_sub(1)) } else { pts.iter() };
+    let closed = pts.first() == pts.last();
+    let verts: Vec<&Vec2> = if closed { pts.iter().take(pts.len().saturating_sub(1)).collect() } else { pts.iter().collect() };
     let n = i64::try_from(verts.len()).ok()?;
     let mut tags = vec![Tag::i(90, n), Tag::i(70, i64::from(closed))];
-    for p in verts {
+    for p in &verts {
         tags.push(Tag::f(10, p.x));
         tags.push(Tag::f(20, p.y));
     }
-    marked_light(tags)
+    Some(marked_light(tags))
 }
 
 /// Append the light-proxy marker xdata to `tags`, like the site `marked` helper.
@@ -116,8 +113,8 @@ mod tests {
         // The fixtures survive in the arch record.
         assert_eq!(back.arch.lights.len(), 2, "light fixtures round-trip in the record");
         let shapes: Vec<_> = back.arch.lights.iter().map(|f| f.shape).collect();
-        assert!(shapes.iter().contains(&&FixtureShape::RecessedCan), "pot light survives");
-        assert!(shapes.iter().contains(&&FixtureShape::Sconce), "sconce survives");
+        assert!(shapes.contains(&FixtureShape::RecessedCan), "pot light survives");
+        assert!(shapes.contains(&FixtureShape::Sconce), "sconce survives");
         // Same proxies regenerate from the round-tripped model; none were kept as model-space
         // entities (written only on save, dropped on read).
         assert_eq!(proxy_light_entities(&back.arch).len(), 3, "same proxies, none duplicated");
