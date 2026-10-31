@@ -7,7 +7,7 @@
 //! `p10-r3d-lit-pipeline`: [`LitPipelines::new`] (and `shaders/lit.wgsl`).
 
 use crate::lights::{FRAME_UNIFORM_SIZE, LIGHTS_UNIFORM_SIZE};
-use crate::pipeline::{DEPTH_FORMAT, GpuPipeline};
+use crate::pipeline::{COLOR_FORMAT, DEPTH_FORMAT, GpuPipeline, vertex_layout};
 use crate::shadow::ShadowMap;
 
 /// How a lit frame shades.
@@ -162,7 +162,236 @@ pub(crate) struct LitPipelines {
 impl LitPipelines {
     /// Build the pipelines; `None` when the shader cannot be assembled.
     pub fn new(device: &wgpu::Device, gpu: &GpuPipeline) -> Option<Self> {
-        let _ = (device, gpu);
-        None
+        let source = lit_shader_source()?;
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("render3d lit mesh shader"),
+            source: wgpu::ShaderSource::Wgsl(source.into()),
+        });
+        let layout = bind_group_layout(device);
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("render3d lit pipeline layout"),
+            bind_group_layouts: &[Some(&gpu.bgl), Some(&gpu.pbr_bgl), Some(&layout)],
+            immediate_size: 0,
+        });
+        let opaque = lit_render_pipeline(device, &pipeline_layout, &shader, "render3d lit opaque", None, true);
+        let glass = lit_render_pipeline(device, &pipeline_layout, &shader, "render3d lit glass", Some(wgpu::BlendState::ALPHA_BLENDING), false);
+        Some(LitPipelines { opaque, glass, layout })
+    }
+}
+
+const MESH_FRAGMENT: &str = "@fragment fn fs(v: VOut) -> @location(0) vec4<f32> {";
+
+/// Compose the lit shader without changing the phase-6 mesh shader used by the unlit pipelines.
+fn lit_shader_source() -> Option<String> {
+    let mesh = include_str!("shaders/mesh.wgsl");
+    let (before, after) = mesh.split_once(MESH_FRAGMENT)?;
+    Some(format!("{before}fn fs_base(v: VOut) -> vec4<f32> {{{after}\n{}\n{}", crate::lights::LIGHT_MATH_WGSL, include_str!("shaders/lit.wgsl")))
+}
+
+/// Build one main-pass variant over the shared mesh vertex and bind-group layouts.
+fn lit_render_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    shader: &wgpu::ShaderModule,
+    label: &str,
+    blend: Option<wgpu::BlendState>,
+    depth_write: bool,
+) -> wgpu::RenderPipeline {
+    let targets = [Some(wgpu::ColorTargetState { format: COLOR_FORMAT, blend, write_mask: wgpu::ColorWrites::ALL })];
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(label),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs"),
+            compilation_options: Default::default(),
+            buffers: &[Some(vertex_layout())],
+        },
+        fragment: Some(wgpu::FragmentState { module: shader, entry_point: Some("fs"), compilation_options: Default::default(), targets: &targets }),
+        // Two-sided, matching the phase-6 and shadowed main passes.
+        primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleList, cull_mode: None, ..Default::default() },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(depth_write),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
+        multisample: wgpu::MultisampleState { count: 1, mask: !0, alpha_to_coverage_enabled: false },
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::camera::{Camera, Orbit};
+    use crate::light::Light;
+    use crate::offscreen::{Offscreen, RenderOptions};
+    use crate::types::{ArchId, Mesh, Scene3d};
+    use cadcraft_arch3d::light::{LightKind, SceneLight};
+    use cadcraft_geom::{Vec2, Vec3};
+
+    const SIZE: (u32, u32) = (64, 64);
+
+    fn skip_without_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let device = crate::gputest::shared_device();
+        if device.is_none() {
+            eprintln!("SKIP: no GPU adapter available");
+        }
+        device
+    }
+
+    fn floor_scene() -> Scene3d {
+        let mut mesh = Mesh::new("floor", ArchId(1));
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+        mesh.push_prism(&ring, -0.05, 0.0);
+        let bounds = mesh.bounds();
+        Scene3d { meshes: vec![mesh], bounds, ..Default::default() }
+    }
+
+    fn top_camera() -> Camera {
+        Camera::Orbit(Orbit::at_origin(0.0, 89.0, 12.0, 45.0))
+    }
+
+    /// An unshadowed 60-degree spot and a 1×1 atlas view for the frame's required binding.
+    fn test_frame(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, params: &LitParams) -> (LitFrame, wgpu::Texture) {
+        let cosine = 30.0_f64.to_radians().cos();
+        let lights = [SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::new(2.0, 2.0, 2.4),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 950.4,
+            color: [1.0; 3],
+            cos_inner: cosine,
+            cos_outer: cosine,
+            ..Default::default()
+        }];
+        let packed = crate::lights::pack_lights(&lights, &[0], &[]);
+        let atlas = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("render3d lit test atlas"),
+            size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let atlas_view = atlas.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("render3d lit test atlas view"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        let frame_bytes = frame_uniform(None, params, 1);
+        let frame = LitFrame::new(device, layout, &frame_bytes, None, &packed, &atlas_view, params, (1, 0));
+        (frame, atlas)
+    }
+
+    fn render_spot(device: wgpu::Device, queue: wgpu::Queue, tonemap: bool, exposure: f32) -> Option<(Vec<u8>, Camera)> {
+        let scene = floor_scene();
+        let camera = top_camera();
+        let mut off = Offscreen::with_device(device.clone(), queue, SIZE);
+        off.lit_pipelines = LitPipelines::new(&device, &off.gpu);
+        let params = LitParams { sun_on: false, exposure, tonemap, ..Default::default() };
+        let (frame, _atlas) = {
+            let pipelines = off.lit_pipelines.as_ref()?;
+            test_frame(&device, &pipelines.layout, &params)
+        };
+        let opts = RenderOptions { lit: Some(&frame), ..Default::default() };
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &opts);
+        Some((off.read_rgba().ok()?, camera))
+    }
+
+    fn render_unlit(device: wgpu::Device, queue: wgpu::Queue) -> Option<Vec<u8>> {
+        let scene = floor_scene();
+        let camera = top_camera();
+        let mut off = Offscreen::with_device(device, queue, SIZE);
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &RenderOptions::default());
+        off.read_rgba().ok()
+    }
+
+    fn pixel(rgba: &[u8], camera: &Camera, world: [f64; 3]) -> Option<[u8; 3]> {
+        let p = crate::camera::project_point(camera, SIZE, world)?;
+        if !p[0].is_finite() || !p[1].is_finite() {
+            return None;
+        }
+        let (x, y) = (p[0].floor() as u32, p[1].floor() as u32);
+        if x >= SIZE.0 || y >= SIZE.1 {
+            return None;
+        }
+        let at = ((y * SIZE.0 + x) * 4) as usize;
+        Some([*rgba.get(at)?, *rgba.get(at + 1)?, *rgba.get(at + 2)?])
+    }
+
+    fn brightness(pixel: [u8; 3]) -> u32 {
+        (u32::from(pixel[0]) + u32::from(pixel[1]) + u32::from(pixel[2])) / 3
+    }
+
+    #[test]
+    fn lit_pipelines_build_on_the_test_device() {
+        let Some((device, _queue)) = skip_without_device() else { return };
+        let gpu = GpuPipeline::new(&device, 1);
+        assert!(LitPipelines::new(&device, &gpu).is_some(), "the composed lit shader must build both pipelines");
+    }
+
+    #[test]
+    fn a_spot_lights_its_cone_and_not_beyond() {
+        let Some((device, queue)) = skip_without_device() else { return };
+        let Some((rgba, camera)) = render_spot(device, queue, false, crate::lights::DEFAULT_EXPOSURE) else {
+            assert!(false, "the lit test render failed");
+            return;
+        };
+        match (pixel(&rgba, &camera, [2.0, 2.0, 0.0]), pixel(&rgba, &camera, [0.2, 0.2, 0.0])) {
+            (Some(centre), Some(outside)) => assert!(
+                brightness(centre) >= brightness(outside) + 40,
+                "centre {centre:?} must be at least 40 levels brighter than outside {outside:?}"
+            ),
+            _ => assert!(false, "both test points must project into the render"),
+        }
+    }
+
+    #[test]
+    fn tone_mapping_keeps_highlights_below_white() {
+        let Some((device, queue)) = skip_without_device() else { return };
+        // Raise exposure for this check so the linear reference actually clips at the centre.
+        let exposure = 0.2;
+        let linear = render_spot(device.clone(), queue.clone(), false, exposure);
+        let mapped = render_spot(device, queue, true, exposure);
+        let (Some((linear, camera)), Some((mapped, _))) = (linear, mapped) else {
+            assert!(false, "the tone-mapping test renders failed");
+            return;
+        };
+        match (pixel(&linear, &camera, [2.0, 2.0, 0.0]), pixel(&mapped, &camera, [2.0, 2.0, 0.0])) {
+            (Some(linear), Some(mapped)) => {
+                assert!(linear.iter().any(|&c| c == 255), "the linear reference must saturate: {linear:?}");
+                assert!(mapped.iter().all(|&c| c < 255), "ACES must keep the highlight below white: {mapped:?}");
+            }
+            _ => assert!(false, "the light centre must project into both renders"),
+        }
+    }
+
+    #[test]
+    fn without_lit_the_render_is_unchanged() {
+        let mesh = include_str!("shaders/mesh.wgsl");
+        assert!(mesh.contains(MESH_FRAGMENT));
+        assert!(!mesh.contains("@group(2)"), "the phase-6 shader must remain self-contained");
+        let prefix = mesh.split_once(MESH_FRAGMENT).map(|(before, _)| before);
+        if let (Some(prefix), Some(source)) = (prefix, lit_shader_source()) {
+            assert!(source.starts_with(prefix));
+            assert!(source.contains("fn fs_base(v: VOut) -> vec4<f32> {"));
+            assert!(source.ends_with(include_str!("shaders/lit.wgsl")));
+        } else {
+            assert!(false, "the lit shader must preserve the original mesh shader");
+        }
+
+        let Some((device, queue)) = skip_without_device() else { return };
+        let first = render_unlit(device.clone(), queue.clone());
+        let second = render_unlit(device, queue);
+        match (first, second) {
+            (Some(first), Some(second)) => assert_eq!(first, second, "the lit: None path must retain the phase-6 pixels"),
+            _ => assert!(false, "the unlit reference renders failed"),
+        }
     }
 }
