@@ -39,8 +39,8 @@ pub struct ShadowAtlas {
     built: u64,
     /// Layers the texture really has (`layers` counts those in use).
     capacity: u32,
-    /// Per fixture: its [`light_key`], first layer and whether it is a cube.
-    cache: BTreeMap<ArchId, (u64, u32, bool)>,
+    /// Per fixture: its [`light_key`], first layer, whether it is a cube, and the far plane used.
+    cache: BTreeMap<ArchId, (u64, u32, bool, f32)>,
     /// The [`occluder_key`] the cached maps were rendered against.
     occluders: u64,
 }
@@ -148,8 +148,8 @@ impl ShadowAtlas {
         for &(i, first, cube, spot) in &plan {
             let Some(light) = lights.get(i) else { continue };
             let key = light_key(light);
-            let fresh = full || self.cache.get(&light.id) != Some(&(key, first, cube));
-            next.insert(light.id, (key, first, cube));
+            let fresh = full || self.cache.get(&light.id) != Some(&(key, first, cube, far));
+            next.insert(light.id, (key, first, cube, far));
             let mut view_proj = [[0.0f32; 4]; 4];
             match spot {
                 Some(m) => {
@@ -438,6 +438,107 @@ mod tests {
         assert_eq!(slots.get(1).map(|s| (s.1.first_layer, s.1.cube)), Some((6, false)));
         assert_eq!(atlas.layers(), 7);
         assert_eq!(atlas.maps_built(), 2);
+    }
+
+    #[test]
+    fn changing_far_rebuilds_maps() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let scene = floor_scene();
+        let meshes = crate::pipeline::upload(&device, &scene);
+        let key = occluder_key(&scene);
+        let lights = [spot(1, 0.0)];
+        let mut atlas = ShadowAtlas::new(&device, 64);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 20.0);
+        assert_eq!(atlas.maps_built(), 1);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 40.0);
+        assert_eq!(atlas.maps_built(), 2);
+    }
+
+    #[test]
+    fn empty_shadowed_list() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let scene = floor_scene();
+        let meshes = crate::pipeline::upload(&device, &scene);
+        let lights = [spot(1, 0.0)];
+        let mut atlas = ShadowAtlas::new(&device, 64);
+        let slots = atlas.update(&device, &queue, &meshes, occluder_key(&scene), &lights, &[], 20.0);
+        assert!(slots.is_empty());
+        assert_eq!(atlas.layers(), 0);
+        assert_eq!(atlas.maps_built(), 0);
+    }
+
+    #[test]
+    fn more_lights_than_capacity() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let scene = floor_scene();
+        let meshes = crate::pipeline::upload(&device, &scene);
+        let mut lights = Vec::new();
+        for i in 0..100u32 {
+            lights.push(spot(i, i as f64));
+        }
+        let shadowed: Vec<usize> = (0..100).collect();
+        let mut atlas = ShadowAtlas::new(&device, 32);
+        let slots = atlas.update(&device, &queue, &meshes, occluder_key(&scene), &lights, &shadowed, 20.0);
+        let max_layers = crate::lights::MAX_SHADOW_LAYERS.min(device.limits().max_texture_array_layers);
+        assert!(slots.len() as u32 <= max_layers);
+        assert_eq!(atlas.layers(), slots.len() as u32);
+    }
+
+    #[test]
+    fn non_finite_light_position() {
+        let mut l = spot(1, 0.0);
+        l.position = cadcraft_geom::Vec3::new(f64::NAN, 0.0, 3.0);
+        let k1 = light_key(&l);
+        let k2 = light_key(&l);
+        assert_eq!(k1, k2);
+        let l2 = spot(1, 0.0);
+        assert_ne!(k1, light_key(&l2));
+    }
+
+    #[test]
+    fn re_adding_light_rebuilds() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let scene = floor_scene();
+        let meshes = crate::pipeline::upload(&device, &scene);
+        let key = occluder_key(&scene);
+        let lights = [spot(1, 0.0), spot(2, 1.0)];
+        let mut atlas = ShadowAtlas::new(&device, 64);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0, 1], 20.0);
+        assert_eq!(atlas.maps_built(), 2);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 20.0);
+        assert_eq!(atlas.maps_built(), 2);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0, 1], 20.0);
+        assert_eq!(atlas.maps_built(), 3);
+    }
+
+    #[test]
+    fn spot_too_wide_becomes_cube() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let scene = floor_scene();
+        let meshes = crate::pipeline::upload(&device, &scene);
+        let wide = SceneLight { cos_outer: -1.0, ..spot(1, 0.0) };
+        let lights = [wide];
+        let mut atlas = ShadowAtlas::new(&device, 32);
+        let slots = atlas.update(&device, &queue, &meshes, occluder_key(&scene), &lights, &[0], 20.0);
+        assert_eq!(slots.len(), 1);
+        assert!(slots[0].1.cube);
+        assert_eq!(slots[0].1.first_layer, 0);
+        assert_eq!(atlas.layers(), 6);
     }
 
     #[test]
