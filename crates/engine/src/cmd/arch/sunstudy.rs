@@ -250,4 +250,41 @@ mod tests {
         let msg = r.unwrap_err().to_string();
         assert!(msg.contains(">= 5 min"));
     }
+
+    #[test]
+    fn study_times_refuses_from_after_to() {
+        let r = study_times("18:00", "08:00", "1h");
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("from must be <= to"));
+    }
+
+    #[test]
+    fn study_times_exact_cap_passes() {
+        // 07:50 to 23:55 step 10min = 97 entries (over cap)
+        // 08:00 to 23:55 step 10min = 96 entries (exact cap, passes)
+        let t = study_times("08:00", "23:55", "10min").unwrap();
+        assert_eq!(t.len(), 96);
+    }
+
+    #[test]
+    fn study_times_over_cap_refused() {
+        // 07:50 to 23:55 step 10min = 97 entries (over cap)
+        let r = study_times("07:50", "23:55", "10min");
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("at most 96 stills"));
+    }
+
+    #[test]
+    fn parse_time_rejects_out_of_range() {
+        assert!(parse_time("25:00").is_err());
+        assert!(parse_time("08:60").is_err());
+        assert!(parse_time("08").is_err());
+        assert!(parse_time("").is_err());
+    }
+
+    #[test]
+    fn parse_step_rejects_zero_step() {
+        assert!(parse_step("0h").is_err());
+        assert!(parse_step("0min").is_err());
+    }
 }
