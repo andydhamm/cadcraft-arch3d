@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 use cadcraft_arch::site::true_to_drawing;
 use cadcraft_arch::sun;
+use cadcraft_arch3d::camera::Camera;
 use serde_json::{Value, json};
 
 use crate::cmd::{CommandSpec, bad};
@@ -115,9 +116,9 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let times = study_times(from, to, step).map_err(|e| bad("sunstudy", e))?;
 
     let drawing = session.doc()?;
-    let site = drawing.arch.site.as_ref().map_err(|_| bad("sunstudy", "sunstudy needs a site location: run site first"))?;
+    let site = drawing.arch.site.as_ref().ok_or_else(|| bad("sunstudy", "sunstudy needs a site location: run site first"))?;
 
-    let hooks = render_hooks().map_err(|_| bad("sunstudy", "no render hook installed"))?;
+    let hooks = render_hooks().ok_or_else(|| bad("sunstudy", "no render hook installed"))?;
 
     let size: Vec<u64> = params
         .get("size")
@@ -126,11 +127,12 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
         .unwrap_or_else(|| vec![1200, 800]);
     for &w in &size {
         if w > MAX_SIZE {
-            return bad("sunstudy", format!("size component {} exceeds {}", w, MAX_SIZE));
+            return Err(bad("sunstudy", format!("size component {} exceeds {}", w, MAX_SIZE)));
         }
     }
+    let (w, h): (u32, u32) = (size[0] as u32, size[1] as u32);
 
-    let camera = parse_camera(params);
+    let camera: Option<Camera> = parse_camera(params).ok();
     let final_render = params.get("final").and_then(|v| v.as_bool()).unwrap_or(false);
     let ground = params.get("ground").and_then(|v| v.as_bool()).unwrap_or(true);
 
@@ -151,18 +153,19 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
             }
             Some(s) => {
                 let dir = true_to_drawing(site, sun::sun_dir(&s));
-                let file_name = format!("{out}-{}{}.png", t[..2], t[3..]);
+                let hhmm = t.replace(':', "");
+                let file_name = format!("{out}-{}.png", hhmm);
                 let request = RenderRequest {
-                    camera,
-                    size,
-                    out: Some(file_name.clone()),
+                    drawing,
+                    camera: camera.clone(),
+                    size: (w, h),
+                    out: Some(PathBuf::from(&file_name)),
                     final_render,
                     sun: SunChoice::Dir(dir),
                     style: "shaded".to_string(),
                     ground,
                     budget: 8,
                     samples: Vec::new(),
-                    ..Default::default()
                 };
                 let _ = hooks.render(&request);
                 count += 1;
