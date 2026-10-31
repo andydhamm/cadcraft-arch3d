@@ -220,8 +220,9 @@ mod tests {
         for ring in &s {
             assert!(all_finite(ring));
         }
-        // Points should be near the huge position
-        assert!((s[0][0].x - 1e10).abs() < 1e-6);
+        // The first point of the outer circle is at (c.x + r, c.y)
+        let r = crate::light::housing_diameter(&f) / 2.0;
+        assert!((s[0][0].x - (1e10 + r)).abs() < 1e-6);
         assert!((s[0][0].y - 1e10).abs() < 1e-6);
     }
 
