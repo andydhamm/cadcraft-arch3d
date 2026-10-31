@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn light_point_takes_the_room_ceiling_height() {
         let mut model = ArchModel::default();
-        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: Some(2.4), ..Level::default() });
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
         model.rooms.push(Room {
             level: 0,
             polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)],
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn light_point_defaults_by_mount_and_shape() {
         let mut model = ArchModel::default();
-        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: Some(2.4), ..Level::default() });
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
 
         let t = find_type("Recessed pot light").unwrap();
         let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
@@ -473,7 +473,7 @@ mod tests {
     #[test]
     fn light_point_honours_level_elevation_and_height() {
         let mut model = ArchModel::default();
-        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: Some(2.4), ..Level::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Level::default() });
 
         let t = find_type("Recessed pot light").unwrap();
         let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
