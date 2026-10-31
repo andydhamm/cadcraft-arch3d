@@ -140,7 +140,7 @@ mod tests {
             assert_eq!(layer, LIGHT_LAYER, "proxy is on E-LITE");
             // First tag should be 90 (vertex count)
             assert_eq!(tags[0].code, 90, "first tag is vertex count (90)");
-            let n = tags[0].i();
+            let n = Tag::i(&tags[0]);
             assert!(n >= 2, "at least 2 vertices");
             // Second tag should be 70 (closed flag)
             assert_eq!(tags[1].code, 70, "second tag is closed flag (70)");
