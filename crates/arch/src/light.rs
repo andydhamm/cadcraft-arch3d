@@ -11,7 +11,7 @@ use cadcraft_doc::arch::{ArchModel, FixtureShape, Level, LightFixture, LightKind
 use cadcraft_doc::arch::{
     DEFAULT_FLOOR_LAMP_HEIGHT, DEFAULT_PENDANT_DROP, DEFAULT_WALL_HEIGHT, MAX_FIXTURE_GRID, MAX_KELVIN, MAX_LUMENS, MAX_SPOT_ANGLE, MIN_KELVIN,
 };
-use cadcraft_geom::{Vec2, Vec3, curve::point_in_polygon};
+use cadcraft_geom::{Vec2, Vec3, point_in_polygon};
 
 /// A catalogue entry: what `LIGHTFIXTURE {"type":…}` copies onto a new fixture.
 #[derive(Clone, Debug, PartialEq)]
@@ -221,7 +221,7 @@ pub fn light_point(model: &ArchModel, f: &LightFixture) -> Option<Vec3> {
     let level = model.levels.iter().rev().find(|l| l.index == f.level).or_else(|| model.levels.last());
 
     let elevation = level.map(|l| l.elevation).unwrap_or(0.0);
-    let level_ceiling = level.and_then(|l| l.ceiling_height).unwrap_or(2.4);
+    let level_ceiling: f64 = level.map(|l| l.ceiling_height).unwrap_or(2.4);
 
     if !elevation.is_finite() || !level_ceiling.is_finite() {
         return None;
