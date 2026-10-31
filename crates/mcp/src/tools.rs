@@ -22,10 +22,12 @@ pub fn tool_definitions(has_ui: bool) -> Value {
             "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "layer": {"type": "string"}, "selected": {"type": "boolean"},
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
                 "crossing": {"type": "boolean"}, "limit": {"type": "integer", "minimum": 0}, "offset": {"type": "integer", "minimum": 0}}}}),
-        json!({"name": "render", "description": "Render the active drawing to a PNG and return it as an image: fitted to the extents by default, or just the area `window` [[x0,y0],[x1,y1]] (drawing units), e.g. one sheet or one room of a large drawing. With a window and no size the image is 1600 px wide with the window's shape.",
+        json!({"name": "render", "description": "Render the active drawing and return it as an image. Without `final`/`view3d` this is the 2D PNG: fitted to the extents by default, or just the area `window` [[x0,y0],[x1,y1]] (drawing units), e.g. one sheet or one room of a large drawing; with a window and no size the image is 1600 px wide with the window's shape. With `view3d` (a 3D still from the current camera) or `final` (the Finalize Render — a high-res 3D still with every light shadowed, soft edges, tone-mapped) the request is routed to the RENDER 3D command: `camera` (object, e.g. {\"mode\":\"orbit\", ...}) sets the viewpoint, `sun` is `false` (use the site) or {\"date\",\"time\"}, `samples` is an optional list of antialiasing levels, and the saved PNG path is `out`. Returns the 3D reply as text, or the PNG as an image when the reply has `out`.",
             "inputSchema": {"type": "object", "properties": {"width": {"type": "integer", "minimum": 16}, "height": {"type": "integer", "minimum": 16}, "fit": {"type": "boolean"},
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
-                "path": {"type": "string"}}}}),
+                "path": {"type": "string"}, "final": {"type": "boolean"}, "view3d": {"type": "boolean"}, "camera": {"type": "object"},
+                "sun": {"anyOf": [{"type": "boolean", "const": false}, {"type": "object", "properties": {"date": {"type": "string"}, "time": {"type": "string"}}, "required": ["date", "time"]}]},
+                "samples": {"type": "array", "items": {"type": "number"}}, "out": {"type": "string"}}}}),
         json!({"name": "find_text", "description": "Read the drawing's texts: TEXT, MTEXT (formatting removed), block attributes and multileaders, each with its text, insertion point `at`, height, rotation, style, layer and handle. Filter by `contains` (any case), `layer` and/or `window` [[x0,y0],[x1,y1]] around the insertion points; page with offset and limit (default 200). Use it to find room names, sheet titles and notes without reading all the geometry.",
             "inputSchema": {"type": "object", "properties": {"contains": {"type": "string"}, "layer": {"type": "string"},
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
@@ -42,6 +44,29 @@ pub fn tool_definitions(has_ui: bool) -> Value {
         tools.push(json!({"name": "ui_click", "description": "Click in the drawing area at world coordinates (or screen with space:\"screen\"). Right button = Enter.", "inputSchema": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "space": {"type": "string"}, "button": {"type": "string"}}, "required": ["x", "y"]}}));
     }
     json!({ "tools": tools })
+}
+
+/// Encode bytes using standard Base64 with padding.
+fn base64_encode(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    let mut encoded = String::new();
+    for chunk in bytes.chunks(3) {
+        let a = chunk.first().copied().unwrap_or(0);
+        let b = chunk.get(1).copied().unwrap_or(0);
+        let c = chunk.get(2).copied().unwrap_or(0);
+        let indexes =
+            [usize::from(a >> 2), usize::from(((a & 0x03) << 4) | (b >> 4)), usize::from(((b & 0x0f) << 2) | (c >> 6)), usize::from(c & 0x3f)];
+        for (i, index) in indexes.iter().enumerate() {
+            let padding = (i == 2 && chunk.len() < 2) || (i == 3 && chunk.len() < 3);
+            if padding {
+                encoded.push('=');
+            } else if let Some(byte) = ALPHABET.get(*index) {
+                encoded.push(char::from(*byte));
+            }
+        }
+    }
+    encoded
 }
 
 /// Wrap a JSON value as a successful MCP result containing pretty-printed text.
@@ -138,9 +163,29 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
         "ui_inspect" => b.call("ui.inspect", json!({})),
         "ui_click" => b.call("ui.pointer", a),
         "render" => {
-            return Ok(match b.call("ui.render", a) {
-                Ok(v) => match v.get("pngBase64").and_then(Value::as_str) {
-                    Some(data) => json!({"content": [{"type": "image", "data": data, "mimeType": "image/png"}]}),
+            let wants_3d = a.get("final").and_then(Value::as_bool).unwrap_or(false) || a.get("view3d").and_then(Value::as_bool).unwrap_or(false);
+            if !wants_3d {
+                // Plain 2D render, unchanged.
+                return Ok(match b.call("ui.render", a) {
+                    Ok(v) => match v.get("pngBase64").and_then(Value::as_str) {
+                        Some(data) => json!({"content": [{"type": "image", "data": data, "mimeType": "image/png"}]}),
+                        None => text(&v),
+                    },
+                    Err(e) => err_text(&e),
+                });
+            }
+            // 3D: route to the engine `render` command, the same path `execute` uses;
+            // `view3d` is MCP-only, `final` and `out` are the command's own params.
+            let mut params = a.clone();
+            if let Value::Object(ref mut map) = params {
+                let _ = map.remove("view3d");
+            }
+            return Ok(match b.call("engine.execute", json!({"command": "render", "params": params})) {
+                Ok(v) => match v.get("out").and_then(Value::as_str) {
+                    Some(path) => match std::fs::read(path) {
+                        Ok(bytes) => json!({"content": [{"type": "image", "data": base64_encode(&bytes), "mimeType": "image/png"}]}),
+                        Err(_) => text(&v),
+                    },
                     None => text(&v),
                 },
                 Err(e) => err_text(&e),
