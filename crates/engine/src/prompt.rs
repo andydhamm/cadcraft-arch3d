@@ -183,7 +183,7 @@ impl Prompt {
         // (`M` is Multiple, not a prefix of mEthod). A prefix reaches past the keyword's last
         // capital, as in AutoCAD: `L` is none of LAyer, LType, ltScale or LWeight (AutoCAD 2024's
         // CHPROP: "Ambiguous response, please clarify..."), `LTS` is ltScale.
-        let past_capitals = |k: &str| k.char_indices().rfind(|(_, c)| c.is_ascii_uppercase() || c.is_ascii_digit()).map_or(1, |(i, _)| i + 1);
+        let past_capitals = |k: &str| k.char_indices().rfind(|(_, c)| c.is_ascii_uppercase() || c.is_ascii_digit()).map(|(i, _)| i + 1).unwrap_or(1);
         keys.clone()
             .find(|(_, kl, sc)| tl == *kl || tl == *sc)
             .or_else(|| keys.clone().find(|(k, kl, _)| tl.len() >= past_capitals(k) && kl.starts_with(&tl)))
@@ -276,10 +276,10 @@ pub fn parse_point_with(text: &str, last: Vec2, angles: &crate::units::AngleSett
     if t.is_empty() {
         return None;
     }
-    let t = t.strip_prefix('*').map_or(t, str::trim_start);
+    let t = t.strip_prefix('*').unwrap_or(t).trim_start();
     let (rel, body) = if let Some(b) = t.strip_prefix('@') {
         let b = b.trim();
-        (true, b.strip_prefix('*').map_or(b, str::trim_start))
+        (true, b.strip_prefix('*').unwrap_or(b).trim_start())
     } else if let Some(b) = t.strip_prefix('#') {
         (false, b.trim())
     } else {
