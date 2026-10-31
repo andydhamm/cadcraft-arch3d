@@ -67,9 +67,17 @@ mod tests {
     use cadcraft_doc::arch::FixtureShape;
 
     fn make(id: u32, shape: FixtureShape) -> LightFixture {
-        let mut f = LightFixture::new(id, "pot-light", Vec2::new(5.0, 3.0));
+        let mut f = LightFixture::new(cadcraft_doc::ArchId(id), "pot-light", Vec2::new(5.0, 3.0));
         f.shape = shape;
         f
+    }
+
+    fn all_finite(pts: &[Vec2]) -> bool {
+        pts.iter().all(|p| p.is_finite())
+    }
+
+    fn is_closed(ring: &[Vec2]) -> bool {
+        !ring.is_empty() && ring[0] == *ring.last().unwrap()
     }
 
     #[test]
@@ -115,13 +123,6 @@ mod tests {
 
     #[test]
     fn plan_symbol_rings_are_closed_and_sized() {
-        fn all_finite(pts: &[Vec2]) -> bool {
-            pts.iter().all(|p| p.is_finite())
-        }
-        fn is_closed(ring: &[Vec2]) -> bool {
-            !ring.is_empty() && ring[0] == ring.last().unwrap()
-        }
-
         // RecessedCan: two closed 25-point circles, outer peak at +r from centre.
         let f = make(0, FixtureShape::RecessedCan);
         let r = crate::light::housing_diameter(&f) / 2.0;
@@ -140,12 +141,12 @@ mod tests {
         let c = fp.position;
         let u45 = unit(45.0);
         let u135 = unit(135.0);
-        for (i, u) in pp[1..].iter().enumerate() {
+        for (i, polyline) in pp[1..].iter().enumerate() {
             let u = if i == 0 { u45 } else { u135 };
-            assert!((u[0].x - (c.x - u.x * r)).abs() < 1e-6);
-            assert!((u[0].y - (c.y - u.y * r)).abs() < 1e-6);
-            assert!((u[1].x - (c.x + u.x * r)).abs() < 1e-6);
-            assert!((u[1].y - (c.y + u.y * r)).abs() < 1e-6);
+            assert!((polyline[0].x - (c.x - u.x * r)).abs() < 1e-6);
+            assert!((polyline[0].y - (c.y - u.y * r)).abs() < 1e-6);
+            assert!((polyline[1].x - (c.x + u.x * r)).abs() < 1e-6);
+            assert!((polyline[1].y - (c.y + u.y * r)).abs() < 1e-6);
         }
 
         // SurfaceDome: closed 25-point circle + 8 two-point radial ticks.
@@ -183,9 +184,9 @@ mod tests {
 
     #[test]
     fn plan_symbol_of_a_non_finite_fixture_is_empty() {
-        let f = LightFixture::new(0, "pot-light", Vec2::new(f64::NAN, 3.0));
+        let f = LightFixture::new(cadcraft_doc::ArchId(0), "pot-light", Vec2::new(f64::NAN, 3.0));
         assert!(plan_symbol(&f).is_empty());
-        let f = LightFixture::new(1, "pot-light", Vec2::new(5.0, f64::POS_INFINITY));
+        let f = LightFixture::new(cadcraft_doc::ArchId(1), "pot-light", Vec2::new(5.0, f64::INFINITY));
         assert!(plan_symbol(&f).is_empty());
     }
 }
