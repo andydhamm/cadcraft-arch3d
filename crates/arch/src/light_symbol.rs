@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn sconce_symbol_faces_its_rotation() {
-        let f = make(10, FixtureShape::Sconce);
+        let mut f = make(10, FixtureShape::Sconce);
         f.rotation = 0.0;
         let sc = plan_symbol(&f);
         assert_eq!(sc.len(), 1);
