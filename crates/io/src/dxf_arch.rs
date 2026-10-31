@@ -80,7 +80,7 @@ pub(crate) fn arch_chunks(m: &ArchModel) -> Option<Vec<String>> {
     if m.is_empty() {
         return None;
     }
-    let version = if m.views.is_empty() && m.lights.is_empty() { 8 } else { 9 };
+    let version = 9;
     let json = serde_json::to_string(&Payload { version, model: m.clone() }).ok()?;
     Some(crate::dxf_ext::json_chunks(&json))
 }
