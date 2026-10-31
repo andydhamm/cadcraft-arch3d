@@ -1,6 +1,6 @@
 //! Plan symbols of light fixtures (phase 10), drawn on `E-LITE`. Filled by `p10-arch-light-symbol`.
 
-use cadcraft_doc::arch::LightFixture;
+use cadcraft_doc::arch::{FixtureShape, LightFixture};
 use cadcraft_geom::Vec2;
 
 /// Plan symbol polylines (metres; a closed ring repeats its first point) of the fixture's shape at
@@ -13,13 +13,13 @@ pub fn plan_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
         return Vec::new();
     }
     match f.shape {
-        crate::light::FixtureShape::RecessedCan => vec![circle(c, r), circle(c, r / 2.0)],
-        crate::light::FixtureShape::Pendant => {
+        FixtureShape::RecessedCan => vec![circle(c, r), circle(c, r / 2.0)],
+        FixtureShape::Pendant => {
             let u45 = unit(45.0);
             let u135 = unit(135.0);
             vec![circle(c, r), line(c, u45, r), line(c, u135, r)]
         }
-        crate::light::FixtureShape::SurfaceDome => {
+        FixtureShape::SurfaceDome => {
             let mut rings = vec![circle(c, r)];
             for k in 0..8 {
                 let u = unit(k as f64 * 45.0);
@@ -27,7 +27,7 @@ pub fn plan_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
             }
             rings
         }
-        crate::light::FixtureShape::Sconce => {
+        FixtureShape::Sconce => {
             let mut ring = Vec::with_capacity(14);
             for k in 0..=12 {
                 let a = f.rotation - 90.0 + k as f64 * 15.0;
@@ -36,13 +36,13 @@ pub fn plan_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
             ring.push(ring[0].clone());
             vec![ring]
         }
-        crate::light::FixtureShape::FloorLamp => vec![circle(c, r), circle(c, 0.075)],
+        FixtureShape::FloorLamp => vec![circle(c, r), circle(c, 0.075)],
     }
 }
 
 /// Unit vector at `deg` degrees (CCW from +X).
 fn unit(deg: f64) -> Vec2 {
-    let rad = deg * f64::consts::PI / 180.0;
+    let rad = deg * std::f64::consts::PI / 180.0;
     Vec2::new(rad.cos(), rad.sin())
 }
 
@@ -50,7 +50,7 @@ fn unit(deg: f64) -> Vec2 {
 fn circle(c: Vec2, r: f64) -> Vec<Vec2> {
     let mut pts = Vec::with_capacity(25);
     for k in 0..=24 {
-        let rad = (k as f64 / 24.0) * 2.0 * f64::consts::PI;
+        let rad = (k as f64 / 24.0) * 2.0 * std::f64::consts::PI;
         pts.push(c + Vec2::new(rad.cos() * r, rad.sin() * r));
     }
     pts
@@ -64,7 +64,7 @@ fn line(c: Vec2, u: Vec2, r: f64) -> Vec<Vec2> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::light::FixtureShape;
+    use cadcraft_doc::arch::FixtureShape;
 
     fn make(id: u32, shape: FixtureShape) -> LightFixture {
         let mut f = LightFixture::new(id, "pot-light", Vec2::new(5.0, 3.0));
