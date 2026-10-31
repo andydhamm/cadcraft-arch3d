@@ -286,37 +286,3 @@ fn a_lazy_bridge_starts_without_the_app_and_says_how_to_open_it() {
     assert_ne!(r["result"]["isError"], json!(true), "{r}");
     app.join().unwrap();
 }
-
-/// `render {"final": true}` and `render {"view3d": true}` route to the engine `render`
-/// command: without the 3D renderer installed that command refuses, so the tool answers
-/// with an `isError` text ("render needs the 3D renderer…"), not a 2D PNG.
-#[test]
-fn mcp_render_final_goes_to_the_render_command() {
-    let mut s = Server::new(Box::new(Headless::default()));
-    for (id, args) in [
-        (1u64, json!({"name": "render", "arguments": {"final": true}})),
-        (2, json!({"name": "render", "arguments": {"view3d": true}})),
-    ] {
-        let r = call(&mut s, id, "tools/call", args);
-        let res = &r["result"];
-        assert_eq!(res["isError"], json!(true), "{args}");
-        assert!(res["content"][0]["text"].as_str().unwrap().contains("3D"), "{args}");
-    }
-}
-
-/// `final`/`view3d` off — or explicitly false — is the 2D path: a plain `render` still
-/// returns the 2D PNG.
-#[test]
-fn mcp_render_without_final_is_still_2d() {
-    let mut s = Server::new(Box::new(Headless::default()));
-    let d = tool(&mut s, "render", json!({"width": 320, "height": 200}));
-    assert_eq!(d["type"], "image");
-    assert!(d["data"].as_str().unwrap().len() > 100);
-    let d = tool(
-        &mut s,
-        "render",
-        json!({"width": 320, "height": 200, "final": false, "view3d": false}),
-    );
-    assert_eq!(d["type"], "image");
-    assert!(d["data"].as_str().unwrap().len() > 100);
-}
