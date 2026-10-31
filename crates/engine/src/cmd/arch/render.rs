@@ -49,6 +49,26 @@ pub struct RenderRequest<'a> {
     pub samples: Vec<[f64; 3]>,
 }
 
+impl<'a> RenderRequest<'a> {
+    /// Build a request. All fields are supplied so every caller (`render`,
+    /// `sunstudy`) can set each aspect. The literal below is in the struct's
+    /// own declaring file, so it is exempt from the shared-struct literal rule.
+    pub fn new(
+        drawing: &'a Drawing,
+        camera: Option<Camera>,
+        size: (u32, u32),
+        out: Option<PathBuf>,
+        final_render: bool,
+        sun: SunChoice,
+        style: String,
+        ground: bool,
+        budget: usize,
+        samples: Vec<[f64; 3]>,
+    ) -> Self {
+        Self { drawing, camera, size, out, final_render, sun, style, ground, budget, samples }
+    }
+}
+
 /// What a session's renderer has done so far.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RenderStats {

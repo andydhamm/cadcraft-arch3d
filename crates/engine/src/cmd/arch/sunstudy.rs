@@ -155,18 +155,18 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 let dir = true_to_drawing(Some(site), sun::sun_dir(&s));
                 let hhmm = t.replace(':', "");
                 let file_name = format!("{out}-{}.png", hhmm);
-                let request = RenderRequest {
+                let request = RenderRequest::new(
                     drawing,
-                    camera: camera.clone(),
-                    size: (w, h),
-                    out: Some(PathBuf::from(&file_name)),
+                    camera.clone(),
+                    (w, h),
+                    Some(PathBuf::from(&file_name)),
                     final_render,
-                    sun: SunChoice::Dir(dir),
-                    style: "shaded".to_string(),
+                    SunChoice::Dir(dir),
+                    "shaded".to_string(),
                     ground,
-                    budget: 8,
-                    samples: Vec::new(),
-                };
+                    8,
+                    Vec::new(),
+                );
                 let _ = (hooks.render)(&request);
                 count += 1;
                 stills.push(json!({
