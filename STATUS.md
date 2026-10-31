@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-10-31 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-10-31 23:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 10 of 13: Lighting, light fixtures and final renders — 9 of 21 segments merged · 0 of 11 acceptance checks**
 
@@ -20,21 +20,21 @@ Updated 2026-10-31 22:45 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 6.2 h so far · expected done Nov 01 07:56–Nov 01 21:24 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 6.4 h so far · expected done Nov 01 08:34–Nov 01 22:35 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-9 merged, 7 queued, 4 gate, 1 merging
+9 merged, 7 queued, 3 merging, 2 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p10-arch3d-scene-lights` | Scene lights and direct illuminance with shadow rays | gate | claude-sonnet-d |
+| `p10-arch3d-scene-lights` | Scene lights and direct illuminance with shadow rays | merging | claude-sonnet-d |
 | `p10-arch3d-fixture-meshes` | Fixture housings in 3D | gate | claude-sonnet-a |
 | `p10-r3d-lit-pipeline` | The lit shader: fixture lights with spot cones and shadows, emissive lenses, tone mapping | merging | kimi-k31 |
-| `p10-cmd-lightfixture` | LIGHTFIXTURE: place, grid in a room, edit, delete, list types; arch.inspect lights | gate | mai-flash |
+| `p10-cmd-lightfixture` | LIGHTFIXTURE: place, grid in a room, edit, delete, list types; arch.inspect lights | merging | mai-flash |
 | `p10-mcp-render-final` | MCP render tool: 3D stills and Finalize Render through the RENDER 3D command | gate | bonsai-ws2-b |
 
 ## Recent merges
@@ -58,16 +58,16 @@ Updated 2026-10-31 22:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 739 |
+| bonsai-a | bonsai2-27b | agent | 740 |
 | bonsai-b | bonsai2-27b | gate | 687 |
 | bonsai-ws2-a | bonsai2-27b | gate | 743 |
-| bonsai-ws2-b | bonsai2-27b | gate | 708 |
+| bonsai-ws2-b | bonsai2-27b | gate | 709 |
 | claude-sonnet-a | sonnet | gate | 58 |
 | claude-sonnet-b | sonnet | idle | 55 |
 | claude-sonnet-c | sonnet | idle | 10 |
-| claude-sonnet-d | sonnet | gate | 2 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 595 |
+| claude-sonnet-d | sonnet | merging | 3 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 596 |
 | kimi-k31 | k3.1-pro-highspeed | merging | 109 |
-| mai-flash | mai-code-1.1-flash | gate | 30 |
+| mai-flash | mai-code-1.1-flash | merging | 31 |
 | tturbo-mac | tturbo-ultraheretic | merging | 514 |
 | tturbo-mac2 | tturbo-ultraheretic | merging | 335 |
