@@ -1244,7 +1244,7 @@ mod tests {
         let again = write_dxf(&back);
         assert_eq!(again.matches("CADCRAFT-SITE").count(), text.matches("CADCRAFT-SITE").count());
         let obj: serde_json::Value = serde_json::from_str(&arch_chunks(&back.arch).unwrap_or_default().join("")).unwrap_or_default();
-        assert_eq!(obj["version"].as_u64(), Some(8));
+        assert_eq!(obj["version"].as_u64(), Some(9));
     }
 
     #[test]
