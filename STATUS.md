@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-10-31 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-10-31 21:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 10 of 13: Lighting, light fixtures and final renders — 6 of 21 segments merged · 0 of 11 acceptance checks**
+**Phase 10 of 13: Lighting, light fixtures and final renders — 7 of 21 segments merged · 0 of 11 acceptance checks**
 
-6,062 workspace tests passing at the last merge · 589 segments merged in all · 0 of 13 seats working
+6,066 workspace tests passing at the last merge · 590 segments merged in all · 0 of 13 seats working · PAUSED
 
 ## Phases
 
@@ -20,26 +20,27 @@ Updated 2026-10-31 21:30 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 4.9 h so far · expected done Nov 01 11:04–Nov 02 07:27 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 5.2 h so far · expected done Nov 01 09:24–Nov 02 01:13 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-11 queued, 6 merged, 2 merging, 1 escalate, 1 working
+10 queued, 7 merged, 1 merging, 1 escalate, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p10-arch-light-placement` | Fixture validation, colour temperature, light point, aim and room grid | merging | kimi-k31 |
-| `p10-arch-light-symbol` | Plan symbols of the fixture shapes | merging | bonsai-ws2-a |
 | `p10-r3d-lit-pipeline` | The lit shader: fixture lights with spot cones and shadows, emissive lenses, tone mapping | escalate |  |
-| `p10-mcp-render-final` | MCP render tool: 3D stills and Finalize Render through the RENDER 3D command | working | bonsai-a |
+| `p10-io-light-proxies` | DXF: fixture symbols on E-LITE written on save, dropped on read | working | bonsai-ws2-a |
+| `p10-mcp-render-final` | MCP render tool: 3D stills and Finalize Render through the RENDER 3D command | gate | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Oct 31 21:36 | `p10-arch-light-symbol` | merged | 6,066 pass | bonsai-ws2-a |
 | Oct 31 21:23 | `p10-cmd-sunstudy` | merged | 6,062 pass | bonsai-b |
 | Oct 31 21:14 | `harden-p9-cmd-wall-retaining` | merged | 6,058 pass | tturbo-mac |
 | Oct 31 21:03 | `p10-r3d-shadow-atlas` | merged | 6,047 pass | claude-sonnet-c |
@@ -51,16 +52,15 @@ Updated 2026-10-31 21:30 UTC. This page and the card in the README are regenerat
 | Oct 31 19:32 | `harden-p9-arch-site` | refused | 6,032 pass, 3 fail | tturbo-mac2 |
 | Oct 31 18:49 | `p10-r3d-shadow-atlas` | refused | 6,033 pass, 3 fail | claude-sonnet-c |
 | Oct 31 18:25 | `harden-p9-cmd-wall-retaining` | refused | 6,033 pass, 3 fail | tturbo-mac |
-| Oct 31 17:29 | `harden-p9-arch-terrain-pad` | merged | 6,023 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 737 |
-| bonsai-b | bonsai2-27b | agent | 685 |
-| bonsai-ws2-a | bonsai2-27b | merging | 741 |
-| bonsai-ws2-b | bonsai2-27b | agent | 706 |
+| bonsai-a | bonsai2-27b | gate | 737 |
+| bonsai-b | bonsai2-27b | gate | 685 |
+| bonsai-ws2-a | bonsai2-27b | agent | 741 |
+| bonsai-ws2-b | bonsai2-27b | gate | 707 |
 | claude-sonnet-a | sonnet | idle | 58 |
 | claude-sonnet-b | sonnet | idle | 55 |
 | claude-sonnet-c | sonnet | idle | 10 |
