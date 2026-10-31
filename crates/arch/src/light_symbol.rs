@@ -189,4 +189,95 @@ mod tests {
         let f = LightFixture::new(cadcraft_doc::ArchId(1), "pot-light", Vec2::new(5.0, f64::INFINITY));
         assert!(plan_symbol(&f).is_empty());
     }
+
+    #[test]
+    fn sconce_symbol_at_various_rotations() {
+        for rot in [0.0, 90.0, 180.0, 270.0] {
+            let mut f = make(20, FixtureShape::Sconce);
+            f.rotation = rot;
+            let sc = plan_symbol(&f);
+            assert_eq!(sc.len(), 1);
+            let ring = &sc[0];
+            assert_eq!(ring.len(), 14);
+            assert!(is_closed(ring));
+            assert!(all_finite(ring));
+            // The arc should peak in the direction of rotation
+            let r = crate::light::housing_diameter(&f) / 2.0;
+            let u = unit(rot);
+            let expected_x = f.position.x + u.x * r;
+            let expected_y = f.position.y + u.y * r;
+            assert!((ring[6].x - expected_x).abs() < 1e-6);
+            assert!((ring[6].y - expected_y).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn plan_symbol_with_huge_position() {
+        let mut f = make(30, FixtureShape::RecessedCan);
+        f.position = Vec2::new(1e10, 1e10);
+        let s = plan_symbol(&f);
+        assert_eq!(s.len(), 2);
+        for ring in &s {
+            assert!(all_finite(ring));
+        }
+        // Points should be near the huge position
+        assert!((s[0][0].x - 1e10).abs() < 1e-6);
+        assert!((s[0][0].y - 1e10).abs() < 1e-6);
+    }
+
+    #[test]
+    fn all_shapes_produce_finite_non_empty_points() {
+        let shapes = [FixtureShape::RecessedCan, FixtureShape::Pendant, FixtureShape::SurfaceDome, FixtureShape::Sconce, FixtureShape::FloorLamp];
+        for (i, shape) in shapes.iter().enumerate() {
+            let f = make(100 + i as u32, *shape);
+            let s = plan_symbol(&f);
+            assert!(!s.is_empty(), "shape {:?} produced no symbol", shape);
+            for ring in &s {
+                assert!(!ring.is_empty(), "shape {:?} produced empty ring", shape);
+                assert!(all_finite(ring), "shape {:?} produced non-finite point", shape);
+            }
+        }
+    }
+
+    #[test]
+    fn pendant_diagonal_lines_are_correct() {
+        let f = make(40, FixtureShape::Pendant);
+        let s = plan_symbol(&f);
+        assert_eq!(s.len(), 3);
+        let r = crate::light::housing_diameter(&f) / 2.0;
+        let c = f.position;
+        // Line 1: 45 degrees
+        let u45 = unit(45.0);
+        assert!((s[1][0].x - (c.x - u45.x * r)).abs() < 1e-6);
+        assert!((s[1][0].y - (c.y - u45.y * r)).abs() < 1e-6);
+        assert!((s[1][1].x - (c.x + u45.x * r)).abs() < 1e-6);
+        assert!((s[1][1].y - (c.y + u45.y * r)).abs() < 1e-6);
+        // Line 2: 135 degrees
+        let u135 = unit(135.0);
+        assert!((s[2][0].x - (c.x - u135.x * r)).abs() < 1e-6);
+        assert!((s[2][0].y - (c.y - u135.y * r)).abs() < 1e-6);
+        assert!((s[2][1].x - (c.x + u135.x * r)).abs() < 1e-6);
+        assert!((s[2][1].y - (c.y + u135.y * r)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn surface_dome_ticks_at_correct_angles() {
+        let f = make(50, FixtureShape::SurfaceDome);
+        let s = plan_symbol(&f);
+        assert_eq!(s.len(), 9);
+        let r = crate::light::housing_diameter(&f) / 2.0;
+        let c = f.position;
+        // Check each tick is at the correct angle
+        for k in 0..8 {
+            let u = unit(k as f64 * 45.0);
+            let tick = &s[k + 1];
+            assert_eq!(tick.len(), 2);
+            // Inner point at r
+            assert!((tick[0].x - (c.x + u.x * r)).abs() < 1e-6);
+            assert!((tick[0].y - (c.y + u.y * r)).abs() < 1e-6);
+            // Outer point at r + 0.05
+            assert!((tick[1].x - (c.x + u.x * (r + 0.05))).abs() < 1e-6);
+            assert!((tick[1].y - (c.y + u.y * (r + 0.05))).abs() < 1e-6);
+        }
+    }
 }
