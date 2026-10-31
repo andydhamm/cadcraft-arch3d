@@ -7,8 +7,11 @@
 //! `light_point`, `aim_direction` and `grid_positions` are stubs filled by `p10-arch-light-placement`
 //! (their signatures are final); `plan_symbol` lives in `crate::light_symbol`.
 
-use cadcraft_doc::arch::{ArchModel, FixtureShape, LightFixture, LightKind, LightMount};
-use cadcraft_geom::{Vec2, Vec3};
+use cadcraft_doc::arch::{ArchModel, FixtureShape, Level, LightFixture, LightKind, LightMount, Room};
+use cadcraft_doc::arch::{
+    DEFAULT_FLOOR_LAMP_HEIGHT, DEFAULT_PENDANT_DROP, DEFAULT_WALL_HEIGHT, MAX_FIXTURE_GRID, MAX_KELVIN, MAX_LUMENS, MAX_SPOT_ANGLE, MIN_KELVIN,
+};
+use cadcraft_geom::{Vec2, Vec3, curve::point_in_polygon};
 
 /// A catalogue entry: what `LIGHTFIXTURE {"type":…}` copies onto a new fixture.
 #[derive(Clone, Debug, PartialEq)]
@@ -140,30 +143,148 @@ pub fn intensity_cd(f: &LightFixture) -> f64 {
 /// `cone..=MAX_SPOT_ANGLE`; tilt in `-90..=90`; rotation finite; a height, when set, finite and in
 /// `0..=100`. The message names the field (`lumens must be 0..=200000, got -5`).
 pub fn validate_fixture(f: &LightFixture) -> Result<(), String> {
-    let _ = f;
+    if !f.position.is_finite() {
+        return Err(format!("position must be finite, got {:?}", f.position));
+    }
+    if !f.lumens.is_finite() || f.lumens < 0.0 || f.lumens > MAX_LUMENS {
+        return Err(format!("lumens must be 0..={MAX_LUMENS}, got {}", f.lumens));
+    }
+    if !f.kelvin.is_finite() || f.kelvin < MIN_KELVIN || f.kelvin > MAX_KELVIN {
+        return Err(format!("kelvin must be {MIN_KELVIN}..={MAX_KELVIN}, got {}", f.kelvin));
+    }
+    if !f.rotation.is_finite() {
+        return Err(format!("rotation must be finite, got {}", f.rotation));
+    }
+    if !f.tilt.is_finite() || f.tilt < -90.0 || f.tilt > 90.0 {
+        return Err(format!("tilt must be -90..=90, got {}", f.tilt));
+    }
+    if let Some(h) = f.height {
+        if !h.is_finite() || h < 0.0 || h > 100.0 {
+            return Err(format!("height must be 0..=100, got {h}"));
+        }
+    }
+
+    if !f.cone.is_finite() || !f.falloff.is_finite() {
+        return Err("cone and falloff must be finite".to_string());
+    }
+
+    if f.kind == LightKind::Spot {
+        if f.cone <= 0.0 || f.cone > MAX_SPOT_ANGLE {
+            return Err(format!("cone must be 0..={MAX_SPOT_ANGLE}, got {}", f.cone));
+        }
+        if f.falloff < f.cone || f.falloff > MAX_SPOT_ANGLE {
+            return Err(format!("falloff must be >= cone ({}) and <= {MAX_SPOT_ANGLE}, got {}", f.cone, f.falloff));
+        }
+    }
+
     Ok(())
 }
 
 /// Linear RGB (each 0..=1, the largest component 1) of a black body at `kelvin`, clamped to
 /// `MIN_KELVIN..=MAX_KELVIN`; non-finite = 6500 K (white).
 pub fn kelvin_to_rgb(kelvin: f64) -> [f64; 3] {
-    let _ = kelvin;
-    [1.0, 1.0, 1.0]
+    let k = if kelvin.is_finite() { kelvin.clamp(MIN_KELVIN, MAX_KELVIN) } else { 6500.0 };
+    let t = k / 100.0;
+
+    let r = if t <= 66.0 { 255.0 } else { 329.698727446 * (t - 60.0).powf(-0.1332047592) };
+
+    let g = if t <= 66.0 { 99.4708025861 * t.ln() - 161.1195681661 } else { 288.1221695283 * (t - 60.0).powf(-0.0755148492) };
+
+    let b = if t >= 66.0 {
+        255.0
+    } else if t <= 19.0 {
+        0.0
+    } else {
+        138.5177312231 * (t - 10.0).ln() - 305.0447927307
+    };
+
+    let mut rgb = [r.clamp(0.0, 255.0) / 255.0, g.clamp(0.0, 255.0) / 255.0, b.clamp(0.0, 255.0) / 255.0];
+
+    let max = rgb[0].max(rgb[1]).max(rgb[2]);
+    if max > 0.0 {
+        rgb[0] /= max;
+        rgb[1] /= max;
+        rgb[2] /= max;
+    }
+
+    rgb
 }
 
 /// The world position of the fixture's light point: its plan position at the level's elevation
 /// plus its height (see `LightFixture::height` for the defaults by mount). `None` when the level
 /// or a coordinate is not finite.
 pub fn light_point(model: &ArchModel, f: &LightFixture) -> Option<Vec3> {
-    let _ = (model, f);
-    None
+    if !f.position.is_finite() {
+        return None;
+    }
+
+    let level = model.levels.iter().rev().find(|l| l.index == f.level).or_else(|| model.levels.last());
+
+    let elevation = level.map(|l| l.elevation).unwrap_or(0.0);
+    let level_ceiling = level.and_then(|l| l.ceiling_height).unwrap_or(2.4);
+
+    if !elevation.is_finite() || !level_ceiling.is_finite() {
+        return None;
+    }
+
+    let mut ceiling_height = level_ceiling;
+    for room in &model.rooms {
+        if room.level != f.level {
+            continue;
+        }
+        if room.polygon.len() < 3 {
+            continue;
+        }
+        if !point_in_polygon(&room.polygon, f.position) {
+            continue;
+        }
+        let in_hole = room.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, f.position));
+        if !in_hole {
+            if let Some(ch) = room.ceiling_height {
+                if ch.is_finite() {
+                    ceiling_height = ch;
+                }
+            }
+            break;
+        }
+    }
+
+    let height = match f.height {
+        Some(h) => h,
+        None => match f.mount {
+            LightMount::Wall => DEFAULT_WALL_HEIGHT,
+            LightMount::Floor => DEFAULT_FLOOR_LAMP_HEIGHT,
+            LightMount::Ceiling => {
+                let drop = match f.shape {
+                    FixtureShape::Pendant => DEFAULT_PENDANT_DROP,
+                    FixtureShape::SurfaceDome => 0.05,
+                    _ => 0.0,
+                };
+                ceiling_height - drop
+            }
+        },
+    };
+
+    if !height.is_finite() {
+        return None;
+    }
+
+    Some(Vec3::new(f.position.x, f.position.y, elevation + height))
 }
 
 /// Unit direction a spot points: `tilt` degrees below the horizontal along `rotation` (90 =
 /// straight down `[0,0,-1]`). A point light also returns this (it is unused).
 pub fn aim_direction(f: &LightFixture) -> Vec3 {
-    let _ = f;
-    Vec3::new(0.0, 0.0, -1.0)
+    if !f.rotation.is_finite() || !f.tilt.is_finite() {
+        return Vec3::new(0.0, 0.0, -1.0);
+    }
+    let r = f.rotation.to_radians();
+    let t = f.tilt.to_radians();
+
+    let ct = t.cos();
+    let st = t.sin();
+
+    Vec3::new(ct * r.cos(), ct * r.sin(), -st)
 }
 
 /// Light positions of an even `rows` × `cols` grid over `ring`'s bounding box: cell centres
@@ -171,8 +292,56 @@ pub fn aim_direction(f: &LightFixture) -> Vec3 {
 /// row-major order from the minimum corner. Empty for rows or cols outside `1..=MAX_FIXTURE_GRID`
 /// or a ring of fewer than three finite points.
 pub fn grid_positions(ring: &[Vec2], rows: u32, cols: u32) -> Vec<Vec2> {
-    let _ = (ring, rows, cols);
-    Vec::new()
+    if rows < 1 || rows > MAX_FIXTURE_GRID || cols < 1 || cols > MAX_FIXTURE_GRID {
+        return Vec::new();
+    }
+    if ring.len() < 3 {
+        return Vec::new();
+    }
+
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    for p in ring {
+        if !p.is_finite() {
+            return Vec::new();
+        }
+        if p.x < min_x {
+            min_x = p.x;
+        }
+        if p.y < min_y {
+            min_y = p.y;
+        }
+        if p.x > max_x {
+            max_x = p.x;
+        }
+        if p.y > max_y {
+            max_y = p.y;
+        }
+    }
+
+    let w = max_x - min_x;
+    let h = max_y - min_y;
+
+    if !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    for j in 0..rows {
+        let y = min_y + (j as f64 + 0.5) * h / (rows as f64);
+        for i in 0..cols {
+            let x = min_x + (i as f64 + 0.5) * w / (cols as f64);
+            let p = Vec2::new(x, y);
+            if point_in_polygon(ring, p) {
+                out.push(p);
+            }
+        }
+    }
+
+    out
 }
 
 /// Plan symbol polylines of a fixture (in `crate::light_symbol`, filled by `p10-arch-light-symbol`).
@@ -201,5 +370,174 @@ mod tests {
         assert_eq!(intensity_cd(&off), 0.0);
         let point = LightFixture { kind: LightKind::Point, lumens: 4.0 * std::f64::consts::PI, ..f };
         assert!((intensity_cd(&point) - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn validate_fixture_names_the_bad_field() {
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+
+        f.lumens = -5.0;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("lumens"), "{err}");
+        assert!(err.contains("-5"), "{err}");
+
+        f.lumens = 800.0;
+        f.kelvin = 500.0;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("kelvin"), "{err}");
+        assert!(err.contains("500"), "{err}");
+
+        f.kelvin = 3000.0;
+        f.tilt = 100.0;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("tilt"), "{err}");
+        assert!(err.contains("100"), "{err}");
+    }
+
+    #[test]
+    fn validate_fixture_refuses_falloff_below_cone() {
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.cone = 60.0;
+        f.falloff = 40.0;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("falloff"), "{err}");
+        assert!(err.contains("40"), "{err}");
+    }
+
+    #[test]
+    fn kelvin_3000_is_warm_and_6500_is_white() {
+        let rgb = kelvin_to_rgb(3000.0);
+        assert!((rgb[0] - 1.0).abs() < 0.01);
+        assert!((rgb[1] - 0.695).abs() < 0.005, "g: {}", rgb[1]);
+        assert!((rgb[2] - 0.431).abs() < 0.005, "b: {}", rgb[2]);
+
+        let rgb = kelvin_to_rgb(6500.0);
+        assert!(rgb[0] > 0.97);
+        assert!(rgb[1] > 0.97);
+        assert!(rgb[2] > 0.97);
+
+        let rgb = kelvin_to_rgb(10000.0);
+        assert!((rgb[2] - 1.0).abs() < 0.01);
+        assert!(rgb[0] > 0.78 && rgb[0] < 0.80, "r: {}", rgb[0]);
+    }
+
+    #[test]
+    fn light_point_takes_the_room_ceiling_height() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: Some(2.4), ..Level::default() });
+        model.rooms.push(Room {
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)],
+            holes: vec![],
+            ceiling_height: Some(3.0),
+            ..Room::default()
+        });
+
+        let t = find_type("Recessed pot light").unwrap();
+        let f = fixture_from_type(ArchId(0), &t, Vec2::new(5.0, 5.0));
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 3.0).abs() < 1e-6, "z: {}", p.z);
+    }
+
+    #[test]
+    fn light_point_defaults_by_mount_and_shape() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: Some(2.4), ..Level::default() });
+
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.mount = LightMount::Ceiling;
+        f.shape = FixtureShape::RecessedCan;
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 2.4).abs() < 1e-6);
+
+        f.shape = FixtureShape::Pendant;
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - (2.4 - 0.6)).abs() < 1e-6);
+
+        f.shape = FixtureShape::SurfaceDome;
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - (2.4 - 0.05)).abs() < 1e-6);
+
+        f.mount = LightMount::Wall;
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 1.8).abs() < 1e-6);
+
+        f.mount = LightMount::Floor;
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 1.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn light_point_honours_level_elevation_and_height() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: Some(2.4), ..Level::default() });
+
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.level = 1;
+        f.height = Some(1.0);
+
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - (2.7 + 1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn aim_direction_straight_down_and_level() {
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+
+        f.tilt = 90.0;
+        f.rotation = 0.0;
+        let d = aim_direction(&f);
+        assert!((d.x).abs() < 1e-12);
+        assert!((d.y).abs() < 1e-12);
+        assert!((d.z + 1.0).abs() < 1e-12);
+
+        f.tilt = 0.0;
+        f.rotation = 90.0;
+        let d = aim_direction(&f);
+        assert!((d.x).abs() < 1e-12);
+        assert!((d.y - 1.0).abs() < 1e-12);
+        assert!((d.z).abs() < 1e-12);
+    }
+
+    #[test]
+    fn grid_positions_two_by_two_in_a_square_room() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+        let pts = grid_positions(&ring, 2, 2);
+        assert_eq!(pts.len(), 4);
+        assert_eq!(pts[0], Vec2::new(1.0, 1.0));
+        assert_eq!(pts[1], Vec2::new(3.0, 1.0));
+        assert_eq!(pts[2], Vec2::new(1.0, 3.0));
+        assert_eq!(pts[3], Vec2::new(3.0, 3.0));
+    }
+
+    #[test]
+    fn grid_positions_skip_cells_outside_an_l_shaped_room() {
+        // L shape: 0..4 x 0..4 minus 2..4 x 2..4
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 2.0), Vec2::new(2.0, 2.0), Vec2::new(2.0, 4.0), Vec2::new(0.0, 4.0)];
+        // 2x2 grid over 0..4 x 0..4
+        // Centers: (1,1), (3,1), (1,3), (3,3)
+        // (1,1) inside
+        // (3,1) inside
+        // (1,3) inside
+        // (3,3) outside (in the cutout)
+        let pts = grid_positions(&ring, 2, 2);
+        assert_eq!(pts.len(), 3);
+        assert_eq!(pts[0], Vec2::new(1.0, 1.0));
+        assert_eq!(pts[1], Vec2::new(3.0, 1.0));
+        assert_eq!(pts[2], Vec2::new(1.0, 3.0));
+    }
+
+    #[test]
+    fn grid_positions_refuse_zero_and_too_many_rows() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0)];
+        assert!(grid_positions(&ring, 0, 1).is_empty());
+        assert!(grid_positions(&ring, 1, 0).is_empty());
+        assert!(grid_positions(&ring, MAX_FIXTURE_GRID + 1, 1).is_empty());
+        assert!(grid_positions(&ring, 1, MAX_FIXTURE_GRID + 1).is_empty());
     }
 }
