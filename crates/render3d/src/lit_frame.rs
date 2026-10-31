@@ -132,11 +132,9 @@ impl Offscreen {
         let sun_map = self.lit_state.sun_map.as_ref();
         let params = crate::lit::LitParams {
             sun_on: lighting.sun.is_some(),
-            sun_intensity: 1.0,
             ambient: lighting.sun.map_or(crate::lights::NIGHT_AMBIENT, |l| l.ambient),
             exposure: lighting.exposure,
-            tonemap: false,
-            pcf_radius: 0,
+            ..Default::default()
         };
         let layout = &self.lit_pipelines.as_ref()?.layout;
         let drawn = &self.lit_state.drawn;
