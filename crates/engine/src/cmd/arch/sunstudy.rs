@@ -152,7 +152,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 }));
             }
             Some(s) => {
-                let dir = true_to_drawing(site, sun::sun_dir(&s));
+                let dir = true_to_drawing(Some(site), sun::sun_dir(&s));
                 let hhmm = t.replace(':', "");
                 let file_name = format!("{out}-{}.png", hhmm);
                 let request = RenderRequest {
@@ -167,7 +167,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
                     budget: 8,
                     samples: Vec::new(),
                 };
-                let _ = hooks.render(&request);
+                let _ = (hooks.render)(&request);
                 count += 1;
                 stills.push(json!({
                     "time": t,
