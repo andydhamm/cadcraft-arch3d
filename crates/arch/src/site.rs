@@ -138,4 +138,65 @@ mod tests {
         s.longitude = f64::NAN;
         assert!(validate_site(&s).is_err());
     }
+
+    #[test]
+    fn north_direction_cardinal_angles() {
+        let d0 = north_direction(&site(0.0));
+        assert!((d0.x).abs() < 1e-9 && (d0.y - 1.0).abs() < 1e-9);
+        let d90 = north_direction(&site(90.0));
+        assert!((d90.x + 1.0).abs() < 1e-9 && (d90.y).abs() < 1e-9);
+        let d180 = north_direction(&site(180.0));
+        assert!((d180.x).abs() < 1e-9 && (d180.y + 1.0).abs() < 1e-9);
+        let d270 = north_direction(&site(270.0));
+        assert!((d270.x - 1.0).abs() < 1e-9 && (d270.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn true_to_drawing_identity_at_zero() {
+        let s = site(0.0);
+        let v = true_to_drawing(Some(&s), [3.0, 4.0, 5.0]);
+        assert!((v[0] - 3.0).abs() < 1e-9 && (v[1] - 4.0).abs() < 1e-9 && v[2] == 5.0);
+    }
+
+    #[test]
+    fn north_arrow_with_site_at_custom_position() {
+        let mut m = ArchModel::default();
+        m.site = Some(SiteLocation { true_north: 45.0, north_arrow_at: Some(Vec2::new(10.0, 20.0)), ..SiteLocation::default() });
+        let a = north_arrow(&m).expect("arrow");
+        assert_eq!(a.at, Vec2::new(10.0, 20.0));
+        let d = north_direction(&SiteLocation { true_north: 45.0, ..SiteLocation::default() });
+        assert_eq!(a.direction, d);
+    }
+
+    #[test]
+    fn north_arrow_outline_length_and_closure() {
+        let mut m = ArchModel::default();
+        m.terrain = Some(Terrain { boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0)], ..Terrain::default() });
+        let a = north_arrow(&m).expect("arrow");
+        assert_eq!(a.outline.first(), a.outline.last());
+        let tip = a.outline[3];
+        let expected_tip_x = a.at.x + 2.0 * a.direction.x;
+        let expected_tip_y = a.at.y + 2.0 * a.direction.y;
+        assert!((tip.x - expected_tip_x).abs() < 1e-9);
+        assert!((tip.y - expected_tip_y).abs() < 1e-9);
+        assert_eq!(a.outline.len(), 7);
+    }
+
+    #[test]
+    fn validate_site_reference_and_arrow() {
+        let mut s = site(0.0);
+        s.reference =
+            Some(cadcraft_doc::arch::SiteReference { point: Vec2::new(1.0, 2.0), easting: 100.0, northing: 200.0, crs: "EPSG:4326".into() });
+        assert!(validate_site(&s).is_ok());
+        s.reference =
+            Some(cadcraft_doc::arch::SiteReference { point: Vec2::new(f64::NAN, 2.0), easting: 100.0, northing: 200.0, crs: "EPSG:4326".into() });
+        assert!(validate_site(&s).is_err());
+        s.reference = Some(cadcraft_doc::arch::SiteReference { point: Vec2::new(1.0, 2.0), easting: 100.0, northing: 200.0, crs: "a".repeat(65) });
+        assert!(validate_site(&s).is_err());
+        s.reference = None;
+        s.north_arrow_at = Some(Vec2::new(5.0, 5.0));
+        assert!(validate_site(&s).is_ok());
+        s.north_arrow_at = Some(Vec2::new(f64::NAN, 5.0));
+        assert!(validate_site(&s).is_err());
+    }
 }
