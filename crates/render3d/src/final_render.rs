@@ -183,6 +183,8 @@ impl FinalRender {
         opts: &PathOptions,
         cache: Option<&wgpu::PipelineCache>,
     ) -> Self {
+        let max = off.device.limits().max_texture_dimension_2d.max(1);
+        let size = (size.0.clamp(1, max), size.1.clamp(1, max));
         let Some(gpu) = compute else {
             let mut r = Self::start(off, scene, scene_key, camera, lighting, ground, size);
             r.fallback = Some("no compute shaders");
