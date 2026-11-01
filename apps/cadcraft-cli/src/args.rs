@@ -1113,11 +1113,39 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_spp_last_wins() {
-        let Ok(r) = render_of(&["--spp", "32", "--spp", "64"]) else {
-            panic!("duplicate --spp should parse");
-        };
-        assert_eq!(r.spp, Some(64));
+    fn spp_out_of_range_is_refused() {
+        for bad in ["--spp", "0", "--spp", "65537", "--spp", "-1", "--spp", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--spp", "1"]).is_ok(), "--spp 1 should parse");
+        assert!(render_of(&["--spp", "65536"]).is_ok(), "--spp 65536 should parse");
+    }
+
+    #[test]
+    fn bounces_out_of_range_is_refused() {
+        for bad in ["--bounces", "-1", "--bounces", "33", "--bounces", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--bounces", "0"]).is_ok(), "--bounces 0 should parse");
+        assert!(render_of(&["--bounces", "32"]).is_ok(), "--bounces 32 should parse");
+    }
+
+    #[test]
+    fn seed_out_of_range_is_refused() {
+        for bad in ["--seed", "-1", "--seed", "4294967296", "--seed", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--seed", "0"]).is_ok(), "--seed 0 should parse");
+        assert!(render_of(&["--seed", "4294967295"]).is_ok(), "--seed u32 max should parse");
+    }
+
+    #[test]
+    fn budget_out_of_range_is_refused() {
+        for bad in ["--budget", "-1", "--budget", "65", "--budget", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--budget", "0"]).is_ok(), "--budget 0 should parse");
+        assert!(render_of(&["--budget", "64"]).is_ok(), "--budget 64 should parse");
     }
 
     #[test]
