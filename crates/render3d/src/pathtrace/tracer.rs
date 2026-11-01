@@ -1145,4 +1145,56 @@ mod tests {
         let r_idx = rq_src.find(marker).expect("fn bsdf_sample not found in rq source");
         assert_eq!(&compute_src[c_idx..], &rq_src[r_idx..], "everything after the BSDF module must be byte-identical between compute and rq sources");
     }
+
+    #[test]
+    fn rq_stats_rt_is_true_when_ray_queries_used() {
+        let Some(gpu) = compute() else { return };
+        if !gpu.ray_query {
+            eprintln!("SKIP: no ray queries on this device");
+            return;
+        }
+        let opts = PathOptions { spp: 4, spp_per_step: 4, rt: true, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &scene(), &camera(), &Lighting::default(), false, (8, 8), &opts, None).unwrap();
+        assert!(t.stats().rt, "stats.rt must be true when ray queries are available");
+    }
+
+    #[test]
+    fn rq_path_works_with_empty_scene() {
+        let Some(gpu) = compute() else { return };
+        if !gpu.ray_query {
+            eprintln!("SKIP: no ray queries on this device");
+            return;
+        }
+        let empty = Scene3d::default();
+        let opts = PathOptions { spp: 4, spp_per_step: 4, rt: true, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &empty, &camera(), &Lighting::default(), false, (8, 8), &opts, None).unwrap();
+        loop {
+            match t.step(&gpu) {
+                PathStatus::Done { .. } => break,
+                PathStatus::Running { .. } => {}
+                other => panic!("unexpected status: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn rq_path_works_with_single_triangle() {
+        let Some(gpu) = compute() else { return };
+        if !gpu.ray_query {
+            eprintln!("SKIP: no ray queries on this device");
+            return;
+        }
+        let mut m = Mesh::new("tri", ArchId(1));
+        m.push_prism(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)], 0.0, 0.1);
+        let s = Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), ..Default::default() };
+        let opts = PathOptions { spp: 4, spp_per_step: 4, rt: true, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &s, &camera(), &Lighting::default(), false, (8, 8), &opts, None).unwrap();
+        loop {
+            match t.step(&gpu) {
+                PathStatus::Done { .. } => break,
+                PathStatus::Running { .. } => {}
+                other => panic!("unexpected status: {other:?}"),
+            }
+        }
+    }
 }
