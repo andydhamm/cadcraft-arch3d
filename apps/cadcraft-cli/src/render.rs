@@ -260,6 +260,7 @@ pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError
         sun_shadow: a.sun.is_some() || a.ground,
         budget: usize::try_from(a.budget).unwrap_or(0).min(64),
         exposure: DEFAULT_EXPOSURE,
+        ..Lighting::default()
     };
     let eye = camera.eye();
     let frame = off.lit_frame(&scene, scene.revision, [eye.x, eye.y, eye.z], &lighting, a.ground);
@@ -268,7 +269,7 @@ pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError
         (png, false)
     } else {
         let map = if frame.is_none() && (a.sun.is_some() || a.ground) { off.build_shadow(&scene, scene.revision, &light, a.ground) } else { None };
-        let opts = RenderOptions { lit: frame.as_ref(), shadow: map.as_ref(), style: a.style, ground: a.ground };
+        let opts = RenderOptions { lit: frame.as_ref(), shadow: map.as_ref(), style: a.style, ground: a.ground, ..RenderOptions::default() };
         off.render_with(&scene, scene.revision, &camera, &light, &opts);
         (off.read_png().map_err(gpu)?, map.is_some())
     };
