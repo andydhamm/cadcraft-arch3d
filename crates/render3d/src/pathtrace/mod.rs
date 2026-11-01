@@ -28,6 +28,9 @@ pub mod scene_gpu;
 pub mod shaders;
 pub mod tracer;
 
+#[cfg(test)]
+mod traverse_tests;
+
 pub use device::{ComputeGpu, request_compute};
 pub use tracer::{PathTracer, irradiance};
 
