@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 24 of 24 segments merged · 10 of 13 acceptance checks**
 
-6,430 workspace tests passing at the last merge · 653 segments merged in all · 0 of 13 seats working
+6,436 workspace tests passing at the last merge · 654 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,7 +21,7 @@ Updated 2026-11-01 20:30 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 10 / 13 | 12.8 h so far · expected done Nov 01 20:30–Nov 02 06:03 UTC |
+| 11 | Ray-traced Finalize Render | building | 10 / 13 | 13.1 h so far · expected done Nov 01 20:45–Nov 02 06:51 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
@@ -34,6 +34,7 @@ Updated 2026-11-01 20:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 20:31 | `harden-p11-r3d-rt` | merged | 6,436 pass | tturbo-mac |
 | Nov 01 19:58 | `harden-p11-ui-pane-path` | merged | 6,430 pass | tturbo-mac |
 | Nov 01 19:23 | `harden-p11-final-default-path` | merged | 6,419 pass | tturbo-mac |
 | Nov 01 18:56 | `p11-r3d-rt` | refused | 0 pass | claude-sonnet-b |
@@ -45,7 +46,6 @@ Updated 2026-11-01 20:30 UTC. This page and the card in the README are regenerat
 | Nov 01 16:24 | `p11-cli-render-args` | merged | 6,394 pass | claude-sonnet-d |
 | Nov 01 16:11 | `harden-p11-r3d-denoise` | merged | 6,387 pass | tturbo-mac |
 | Nov 01 15:57 | `p11-cli-render-path` | merged | 6,383 pass | claude-sonnet-a |
-| Nov 01 15:44 | `harden-p11-r3d-final-path` | merged | 6,378 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -62,5 +62,5 @@ Updated 2026-11-01 20:30 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 641 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | merging | 543 |
+| tturbo-mac | tturbo-ultraheretic | agent | 543 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
