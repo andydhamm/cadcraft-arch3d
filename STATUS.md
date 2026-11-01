@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 10 of 13: Lighting, light fixtures and final renders — 18 of 22 segments merged · 2 of 11 acceptance checks**
 
@@ -20,7 +20,7 @@ Updated 2026-11-01 02:30 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 2 / 11 | 9.9 h so far · expected done Nov 01 05:42–Nov 01 13:47 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 2 / 11 | 10.2 h so far · expected done Nov 01 06:02–Nov 01 14:19 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
@@ -58,8 +58,8 @@ Updated 2026-11-01 02:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 750 |
-| bonsai-b | bonsai2-27b | gate | 692 |
-| bonsai-ws2-a | bonsai2-27b | gate | 746 |
+| bonsai-b | bonsai2-27b | gate | 693 |
+| bonsai-ws2-a | bonsai2-27b | agent | 747 |
 | bonsai-ws2-b | bonsai2-27b | idle | 716 |
 | claude-sonnet-a | sonnet | merging | 61 |
 | claude-sonnet-b | sonnet | merging | 60 |
