@@ -751,15 +751,15 @@ mod tests {
     #[test]
     fn area_light_partial_shadow_blocks_some_cells() {
         let mut m = room_with_panel();
-        // A tall thin column at (2.0, 1.0) blocks cells to the left of centre
-        let mut w = Wall::new(Vec2::new(2.0, 1.0), Vec2::new(2.05, 1.0), 0.05);
+        // A column (0.2 m wide, 2.0 m tall) at (2.0, 1.0) partially blocks the panel
+        let mut w = Wall::new(Vec2::new(2.0, 1.0), Vec2::new(2.2, 1.0), 0.2);
         w.height = 2.0;
         m.push_wall(w);
         let scene = crate::build(&m);
-        // Point directly below the column: heavily shadowed
+        // Point directly beside the column: partially shadowed
         let shadowed = illuminance(&scene, Vec3::new(2.0, 1.0, 0.0), up());
-        // Point far from the column: nearly unshadowed
-        let clear = illuminance(&scene, Vec3::new(3.5, 3.5, 0.0), up());
+        // Point at the same distance from the panel but on the other side: unshadowed
+        let clear = illuminance(&scene, Vec3::new(2.0, 3.0, 0.0), up());
         // The shadowed point should have less illuminance
         assert!(shadowed.lux < clear.lux, "shadowed {} < clear {}", shadowed.lux, clear.lux);
         // But not zero (some cells still visible)
