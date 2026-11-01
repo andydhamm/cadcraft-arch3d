@@ -337,6 +337,15 @@ fn read_candela(tokens: &mut Tokens, horizontal: &[f64], vertical_count: usize, 
 // Interpolating
 // ---------------------------------------------------------------------------------------------
 
+/// First `n` characters of `s` as a well-formed slice (0 when `n == 0`). Used only by the
+/// char-aware mutation fuzz test so a prefix is always valid UTF-8.
+fn prefix(s: &str, n: usize) -> &str {
+    match s.char_indices().nth(n) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
 /// Two neighbouring entries of an angle list and how far between them (0 = `lo`, 1 = `hi`).
 struct Bracket {
     lo: usize,
@@ -544,11 +553,11 @@ mod tests {
             let text: String = (0..(next() % 60)).map(|_| pieces[(next() % pieces.len() as u64) as usize]).collect();
             drop(parse(&text, "fuzz.ies"));
         }
-        // Mutations of a good file, including cuts inside multi-byte characters.
-        for cut in 0..DOWNLIGHT.len() {
-            if DOWNLIGHT.is_char_boundary(cut) {
-                drop(parse(&DOWNLIGHT[..cut], "cut.ies"));
-            }
+        // Mutations of a good file, slicing over complete chars only (DOWNLIGHT holds the
+        // multi-byte `é` in [TEST] cadcraft phase-11 test downlight; indexing by character
+        // keeps every prefix a valid slice instead of a byte offset).
+        for (cut, _) in DOWNLIGHT.chars().enumerate() {
+            drop(parse(prefix(DOWNLIGHT, cut + 1), "cut.ies"));
         }
         let wild = IesProfile { vertical: vec![0.0, 90.0], horizontal: vec![0.0, 180.0], candela: vec![1.0], lumens: 1.0, ..Default::default() };
         assert_eq!(candela_at(&wild, 10.0, 10.0), 0.0);
