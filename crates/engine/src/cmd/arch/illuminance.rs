@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use crate::cmd::{CommandSpec, bad};
 use crate::{Result, Session};
 
-fn parse_xyz_array(value: &Value, key: &str, _required: bool, cmd: &str) -> Result<Vec3> {
+fn parse_xyz_array(value: &Value, key: &str, required: bool, cmd: &str) -> Result<Vec3> {
     let raw = match value.get(key) {
         Some(v) if !v.is_null() => v,
         None if required => {
