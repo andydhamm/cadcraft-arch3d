@@ -442,4 +442,36 @@ mod tests {
         let ok: serde_json::Value = json!([[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]]);
         assert!(matches!(parse_samples(Some(&ok)), Ok(_)), "valid samples should be accepted");
     }
+
+    #[test]
+    fn render_parses_path_params_with_defaults() {
+        let p = parse_path_params(&json!({})).unwrap();
+        assert_eq!(p.spp, 256);
+        assert_eq!(p.bounces, 4);
+        assert_eq!(p.seed, 0);
+        assert_eq!(p.denoise, true);
+        assert_eq!(p.rt, false);
+        assert_eq!(p.furnace, None);
+        assert_eq!(p.snapshots, Vec::new());
+    }
+
+    #[test]
+    fn render_refuses_bad_path_params_naming_the_field() {
+        let check = |params: serde_json::Value, field: &str| {
+            let err = parse_path_params(&params).unwrap_err().to_string();
+            assert!(err.contains(field), "{field}: {err}");
+        };
+        check(json!({"spp": 0}), "spp");
+        check(json!({"spp": 65537}), "spp");
+        check(json!({"spp": "a"}), "spp");
+        check(json!({"bounces": 33}), "bounces");
+        check(json!({"seed": 4294967296u64}), "seed");
+        check(json!({"denoise": "yes"}), "denoise");
+        check(json!({"rt": "yes"}), "rt");
+        check(json!({"snapshots": (0..9).map(|_| 1).collect::<Vec<_>>()}), "snapshots");
+        check(json!({"snapshots": [5, 3]}), "snapshots");
+        check(json!({"spp": 10, "snapshots": [20]}), "snapshots");
+        check(json!({"furnace": {"albedo": -0.1, "emission": 1.0}}), "albedo");
+        check(json!({"furnace": {"albedo": 0.5, "emission": 0.0}}), "emission");
+    }
 }
