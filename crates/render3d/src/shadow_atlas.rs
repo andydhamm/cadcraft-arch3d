@@ -4,9 +4,9 @@
 //!
 //! A light's maps are cached under its fixture id with [`light_key`] and the scene's
 //! [`occluder_key`]: [`ShadowAtlas::update`] renders a light's maps again only when one of the
-//! two changed (or the light was not shadowed before). Fixture housings never cast shadows
-//! (`Draw::casts_shadow`), so moving one fixture re-renders that fixture's maps only, and a
-//! camera move renders none.
+//! two changed (or the light was not shadowed before). Fixture housings and ceilings never cast
+//! fixture shadows ([`casts_fixture_shadow`], `Draw::casts_shadow`), so moving one fixture
+//! re-renders that fixture's maps only, and a camera move renders none.
 //!
 //! Filled here: [`ShadowAtlas::new`] (a 1×1×1 placeholder), the accessors. Stubs filled by
 //! `p10-r3d-shadow-atlas`: [`ShadowAtlas::update`], [`light_key`], [`occluder_key`].
@@ -294,12 +294,20 @@ pub fn light_key(light: &SceneLight) -> u64 {
     h.finish()
 }
 
-/// A hash of the shadow casters of `scene`: every mesh whose material is not a fixture's
-/// (`arch3d::light::is_light_material`), its positions and indices. Equal scenes give equal keys;
-/// moving a fixture leaves it unchanged.
+/// Whether a mesh of `material` casts fixture shadows: not a fixture's housing, and not a ceiling.
+/// Every fixture hangs at or under a ceiling, so a ceiling could only shadow the space above it
+/// (lights on the next level stand on its floor slab). A recessed can's opening in the ceiling
+/// follows the can, so leaving ceilings out keeps a fixture move to that fixture's own maps. The
+/// sun's map (`shadow.rs`) still has the ceilings.
+pub fn casts_fixture_shadow(material: &str) -> bool {
+    !cadcraft_arch3d::light::is_light_material(material) && !material.to_ascii_lowercase().starts_with("ceiling")
+}
+
+/// A hash of the shadow casters of `scene`: every mesh that [`casts_fixture_shadow`], its
+/// positions and indices. Equal scenes give equal keys; moving a fixture leaves it unchanged.
 pub fn occluder_key(scene: &Scene3d) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    for m in scene.meshes.iter().filter(|m| !cadcraft_arch3d::light::is_light_material(&m.material)) {
+    for m in scene.meshes.iter().filter(|m| casts_fixture_shadow(&m.material)) {
         m.positions.len().hash(&mut h);
         for p in &m.positions {
             for c in p {
@@ -381,6 +389,28 @@ mod tests {
         let mut wall = floor_scene();
         wall.meshes.push(prism("wall", 3, 0.5, 0.0, 2.0));
         assert_ne!(occluder_key(&base), occluder_key(&wall));
+    }
+
+    #[test]
+    fn ceilings_shadow_no_fixture() {
+        // A recessed can's opening follows the can (arch3d::fixture::ceiling_cutouts): moving the
+        // can reshapes the ceiling, and must still rebuild only that can's maps.
+        let mut uncut = floor_scene();
+        uncut.meshes.push(prism("ceiling", 4, 2.0, 2.38, 2.4));
+        let mut cut = floor_scene();
+        let mut ceiling = crate::types::Mesh::new("ceiling", ArchId(4));
+        ceiling.push_prism_with_holes(&square(2.0), &[square(0.07)], 2.38, 2.4);
+        cut.meshes.push(ceiling);
+        assert_eq!(occluder_key(&uncut), occluder_key(&cut));
+        assert_eq!(occluder_key(&floor_scene()), occluder_key(&cut));
+        assert!(!casts_fixture_shadow("ceiling"));
+        assert!(!casts_fixture_shadow("light-trim"));
+        assert!(casts_fixture_shadow("wall"));
+        assert!(casts_fixture_shadow("floor"));
+        if let Some((device, _queue)) = crate::gputest::shared_device() {
+            let gpu = crate::pipeline::upload(&device, &cut);
+            assert_eq!(gpu.draws.iter().filter(|d| d.casts_shadow).count(), cut.meshes.len() - 1, "every draw but the ceiling casts");
+        }
     }
 
     #[test]
