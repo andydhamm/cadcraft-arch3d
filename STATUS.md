@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 11 of 13: Ray-traced Finalize Render — 27 of 28 segments merged · 13 of 13 acceptance checks**
+**Phase 11 of 13: Ray-traced Finalize Render — 28 of 28 segments merged · 13 of 13 acceptance checks**
 
-6,447 workspace tests passing at the last merge · 657 segments merged in all · 0 of 13 seats working
+6,550 workspace tests passing at the last merge · 658 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,22 +21,20 @@ Updated 2026-11-01 22:30 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 13 / 13 | 14.8 h so far · expected done Nov 01 23:08–Nov 02 08:06 UTC |
+| 11 | Ray-traced Finalize Render | building | 13 / 13 | 15.1 h so far · expected done Nov 01 22:45–Nov 02 06:49 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-27 merged, 1 merging
+28 merged
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `upstream-sync-2034d6899` | merge upstream upstream/main up to 2034d6899 (18 commits) | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 22:41 | `upstream-sync-2034d6899` | merged | 6,550 pass | claude-sonnet-d |
 | Nov 01 22:12 | `p11f-glass-shadow-once` | merged | 6,447 pass | darwin-ws3 |
 | Nov 01 21:58 | `p11f-glass-shadow-once` | refused | 0 pass | bonsai-b |
 | Nov 01 21:56 | `p11f-explicit-spp-kept` | merged | 6,444 pass | claude-sonnet-a |
@@ -48,7 +46,6 @@ Updated 2026-11-01 22:30 UTC. This page and the card in the README are regenerat
 | Nov 01 18:56 | `p11-r3d-rt` | refused | 0 pass | claude-sonnet-b |
 | Nov 01 18:54 | `harden-p11-docs-user-guide` | merged | 6,412 pass | tturbo-mac |
 | Nov 01 18:44 | `p11-final-default-path` | merged | 6,408 pass | claude-sonnet-d |
-| Nov 01 18:25 | `p11-r3d-rt` | refused | 6,410 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
@@ -61,7 +58,7 @@ Updated 2026-11-01 22:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-a | sonnet | idle | 68 |
 | claude-sonnet-b | sonnet | idle | 64 |
 | claude-sonnet-c | sonnet | idle | 14 |
-| claude-sonnet-d | sonnet | merging | 8 |
+| claude-sonnet-d | sonnet | idle | 8 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 645 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 45 |
