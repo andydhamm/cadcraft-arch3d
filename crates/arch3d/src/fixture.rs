@@ -24,6 +24,18 @@ fn square(c: Vec2, s: f64) -> Vec<Vec2> {
     vec![Vec2::new(c.x - h, c.y - h), Vec2::new(c.x + h, c.y - h), Vec2::new(c.x + h, c.y + h), Vec2::new(c.x - h, c.y + h)]
 }
 
+/// A rotated rectangle of `w` x `l` around `c`, CCW, width along `rot_deg`.
+fn rect(c: Vec2, w: f64, l: f64, rot_deg: f64) -> Vec<Vec2> {
+    let hw = w / 2.0;
+    let hl = l / 2.0;
+    let a = rot_deg.to_radians();
+    let (cos_a, sin_a) = (a.cos(), a.sin());
+    // Local corners: (-hw, -hl), (hw, -hl), (hw, hl), (-hw, hl)
+    // Rotate and translate
+    let corners = [(-hw, -hl), (hw, -hl), (hw, hl), (-hw, hl)];
+    corners.iter().map(|&(x, y)| Vec2::new(c.x + x * cos_a - y * sin_a, c.y + x * sin_a + y * cos_a)).collect()
+}
+
 /// The half disc of `radius` facing `rotation_deg`, closed by its chord.
 fn half_disc(c: Vec2, radius: f64, rotation_deg: f64) -> Vec<Vec2> {
     (0..=12)
@@ -92,21 +104,28 @@ pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
                     prism(lens, f, &poly(c, 0.03), zp - 0.03, zp + 0.03),
                 ]
             }
-            // Phase 11 stub, filled by `p11-arch3d-panel`: the frame and the diffuser.
-            FixtureShape::Panel => Vec::new(),
+            FixtureShape::Panel => {
+                let w = if f.width > 0.0 { f.width } else { 0.6 };
+                let l = if f.length > 0.0 { f.length } else { 0.6 };
+                let outer = rect(c, w, l, f.rotation);
+                let inner = rect(c, w - 0.06, l - 0.06, f.rotation);
+                let mut frame_m = Mesh::new("light-trim", f.id);
+                frame_m.push_prism_with_holes(&outer, &[inner.clone()], zp - 0.01, zp);
+                let diffuser = prism(lens, f, &inner, zp - 0.004, zp - 0.002);
+                vec![finish(frame_m), diffuser]
+            }
         };
         out.extend(parts.into_iter().flatten());
     }
     out
 }
 
-/// Openings in `room`'s ceiling for the recessed cans mounted in it: the disc of each can's trim
-/// around its position, for every can on the room's level (on or off, like its housing) whose
-/// light point lies within the ceiling's 20 mm slab. The slab hangs under the ceiling height,
-/// where the light point and the trim sit: without the opening it hides the trim, takes the
-/// probe, and blocks the can's shadow rays and shadow maps. A disc that reaches the room's
-/// outline or one of its holes, or meets an earlier cut, is left out (it would not be a valid
-/// hole), and that can stays covered.
+/// Openings in `room`'s ceiling for the recessed cans and panels mounted in it.
+///
+/// For recessed cans, the disc of the trim. For panels, the outer rectangle.
+/// A fixture is included if its light point lies within the ceiling's 20 mm slab,
+/// it is on the room's level, and its cut shape fits entirely within the room
+/// (not crossing edges or holes) and does not overlap with previous cuts.
 pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec<Vec2>> {
     let Some(top) = crate::floors::ceiling_top(room, level) else { return Vec::new() };
     if room.polygon.len() < 3 {
@@ -114,25 +133,82 @@ pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec
     }
     let rings = std::iter::once(&room.polygon).chain(room.holes.iter().filter(|h| h.len() >= 3));
     let edges: Vec<Line> = rings.flat_map(|r| (0..r.len()).map(move |k| Line::new(r[k], r[(k + 1) % r.len()]))).collect();
+
+    // Store cuts as (center, radius) for collision detection.
+    // For panels, radius is the half-diagonal.
     let mut cut: Vec<(Vec2, f64)> = Vec::new();
-    for f in model.lights.iter().filter(|f| f.shape == FixtureShape::RecessedCan && f.level == room.level) {
-        let (c, r) = (f.position, housing_diameter(f) / 2.0);
-        if !c.is_finite() || !r.is_finite() || r <= 0.0 || !point_in_polygon(&room.polygon, c) {
+    let mut out: Vec<Vec<Vec2>> = Vec::new();
+
+    for f in model.lights.iter().filter(|f| f.level == room.level) {
+        if f.shape != FixtureShape::RecessedCan && f.shape != FixtureShape::Panel {
             continue;
         }
-        if room.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, c)) {
-            continue;
-        }
-        if edges.iter().any(|e| e.dist(c) <= r + 1e-6) || cut.iter().any(|&(o, ro)| o.dist(c) <= r + ro + 1e-6) {
-            continue;
-        }
+
         let Some(p) = light_point(model, f) else { continue };
+        if !p.is_finite() {
+            continue;
+        }
         if p.z > top + 1e-9 || p.z < top - 0.02 - 1e-9 {
             continue;
         }
-        cut.push((c, r));
+
+        let c = f.position;
+        if !c.is_finite() {
+            continue;
+        }
+
+        if f.shape == FixtureShape::RecessedCan {
+            let r = housing_diameter(f) / 2.0;
+            if !r.is_finite() || r <= 0.0 {
+                continue;
+            }
+            if !point_in_polygon(&room.polygon, c) {
+                continue;
+            }
+            if room.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, c)) {
+                continue;
+            }
+            if edges.iter().any(|e| e.dist(c) <= r + 1e-6) {
+                continue;
+            }
+            if cut.iter().any(|&(o, ro)| o.dist(c) <= r + ro + 1e-6) {
+                continue;
+            }
+            cut.push((c, r));
+            out.push(poly(c, r));
+        } else if f.shape == FixtureShape::Panel {
+            let w = if f.width > 0.0 { f.width } else { 0.6 };
+            let l = if f.length > 0.0 { f.length } else { 0.6 };
+            if !w.is_finite() || !l.is_finite() || w <= 0.0 || l <= 0.0 {
+                continue;
+            }
+
+            let outer = rect(c, w, l, f.rotation);
+            // Check if all corners are inside the room polygon and not in any hole
+            if !outer.iter().all(|pt| point_in_polygon(&room.polygon, *pt)) {
+                continue;
+            }
+            if room.holes.iter().any(|h| h.len() >= 3 && outer.iter().any(|pt| point_in_polygon(h, *pt))) {
+                continue;
+            }
+
+            // Check distance to room edges.
+            // Require every room-edge distance from the centre to exceed the half-diagonal.
+            let half_diag = (w * w + l * l).sqrt() / 2.0;
+            if edges.iter().any(|e| e.dist(c) <= half_diag + 1e-6) {
+                continue;
+            }
+
+            // Check overlap with previous cuts using bounding circles
+            if cut.iter().any(|&(o, ro)| o.dist(c) <= half_diag + ro + 1e-6) {
+                continue;
+            }
+
+            cut.push((c, half_diag));
+            out.push(outer);
+        }
     }
-    cut.into_iter().map(|(c, r)| poly(c, r)).collect()
+    out
 }
 
 #[cfg(test)]
@@ -262,5 +338,83 @@ mod tests {
         let mut m = pots_in_a_room(&[(1.0, 1.0), (6.0, 1.0)]);
         m.lights[0].height = Some(2.0);
         assert!(ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]).is_empty());
+    }
+
+    /// A 4 x 4 m room under a 2.4 m ceiling with a panel at `at`.
+    fn panel_in_a_room(at: (f64, f64)) -> ArchModel {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED panel 600");
+        let id = ArchId(0);
+        let p = Vec2::new(at.0, at.1);
+        m.lights.push(t.as_ref().map(|t| cadcraft_arch::light::fixture_from_type(id, t, p)).unwrap_or_else(|| {
+            let mut f = LightFixture::new(id, "LED panel 600", p);
+            f.shape = FixtureShape::Panel;
+            f.width = 0.6;
+            f.length = 0.6;
+            f
+        }));
+        m
+    }
+
+    #[test]
+    fn panel_frame_and_diffuser_sit_in_the_ceiling() {
+        let m = panel_in_a_room((2.0, 2.0));
+        let scene = crate::build(&m);
+        let zp = light_point(&m, &m.lights[0]).map(|p| p.z).unwrap_or(f64::NAN);
+
+        // Frame is from zp - 0.01 to zp. Probe at 2.395 (inside 2.39 to 2.40)
+        let frame_hit = scene.probe(cadcraft_geom::Vec3::new(2.28, 2.0, 2.395));
+        assert_eq!(frame_hit.as_ref().map(|h| h.part.as_str()), Some("light"));
+        assert_eq!(frame_hit.map(|h| h.id), Some(cadcraft_doc::arch::light_label(m.lights[0].id)));
+
+        // Ceiling at (1,1) should still be there
+        let ceiling_hit = scene.probe(cadcraft_geom::Vec3::new(1.0, 1.0, 2.39));
+        assert_eq!(ceiling_hit.as_ref().map(|h| h.part.as_str()), Some("ceiling"));
+
+        // Under diffuser (zp - 0.004 to zp - 0.002) -> 2.396 to 2.398.
+        // Probe at 2.385 should be open (no ceiling, no light part)
+        let open_hit = scene.probe(cadcraft_geom::Vec3::new(2.0, 2.0, 2.385));
+        assert_eq!(open_hit, None, "open under the diffuser");
+
+        // Check ceiling mesh is manifold
+        let ceiling = scene.meshes.iter().find(|x| x.material == "ceiling");
+        assert!(ceiling.is_some_and(|c| c.is_manifold()));
+    }
+
+    #[test]
+    fn the_ceiling_opens_for_a_panel() {
+        let m = panel_in_a_room((2.0, 2.0));
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert_eq!(cuts.len(), 1);
+        // Check the cut is a rectangle of 0.6x0.6 centered at 2,2
+        let cut = &cuts[0];
+        assert_eq!(cut.len(), 4);
+        // Vertices should be roughly (1.7, 1.7), (2.3, 1.7), (2.3, 2.3), (1.7, 2.3)
+        let expected = [Vec2::new(1.7, 1.7), Vec2::new(2.3, 1.7), Vec2::new(2.3, 2.3), Vec2::new(1.7, 2.3)];
+        for (i, p) in cut.iter().enumerate() {
+            assert!((p.x - expected[i].x).abs() < 1e-6);
+            assert!((p.y - expected[i].y).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn a_panel_over_the_room_edge_gets_no_cut() {
+        // Panel at (0.2, 2) with width 0.6 -> extends to x = -0.1, outside room
+        let m = panel_in_a_room((0.2, 2.0));
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert!(cuts.is_empty());
+    }
+
+    #[test]
+    fn panel_lens_material_follows_on_and_off() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        assert!(fixture_meshes(&m).iter().any(|x| x.material == "light-lens-lit"));
+        m.lights[0].on = false;
+        let meshes = fixture_meshes(&m);
+        assert!(meshes.iter().any(|x| x.material == "light-lens"));
+        assert!(!meshes.iter().any(|x| x.material == "light-lens-lit"));
     }
 }
