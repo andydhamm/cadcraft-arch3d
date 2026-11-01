@@ -326,13 +326,18 @@ impl PathTracer {
             }
         };
         let accum: Vec<[f32; 4]> = bytemuck::cast_slice(&accum_data).to_vec();
+        // Each pixel holds its radiance summed over its samples, with the sample count in w.
+        let mean_of = |p: &[f32; 4]| {
+            let n = p[3].max(1.0);
+            [p[0] / n, p[1] / n, p[2] / n]
+        };
 
         // Compute radiance stats.
         let mut min = f32::INFINITY;
         let mut max = f32::NEG_INFINITY;
         let mut sum = 0.0f64;
         for px in &accum {
-            let l = super::luminance([px[0], px[1], px[2]]);
+            let l = super::luminance(mean_of(px));
             min = min.min(l);
             max = max.max(l);
             sum += l as f64;
@@ -350,7 +355,14 @@ impl PathTracer {
                 }
             };
             let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
-            let colors: Vec<[f32; 4]> = accum.iter().map(|p| [p[0], p[1], p[2], 1.0]).collect();
+            // The denoiser takes the per-sample mean and returns w = 1, which resolve divides by.
+            let colors: Vec<[f32; 4]> = accum
+                .iter()
+                .map(|p| {
+                    let [r, g, b] = mean_of(p);
+                    [r, g, b, 1.0]
+                })
+                .collect();
             match super::denoise::denoise(gpu, &colors, &aov, self.size) {
                 Ok(denoised) => denoised,
                 Err(e) => {
@@ -867,6 +879,41 @@ mod tests {
             }
             Err(e) => assert!(false, "{e}"),
         }
+    }
+
+    /// Run `opts` on the floor to the end: (the radiance stats' mean, the resolved image's mean byte).
+    fn finished(gpu: &ComputeGpu, opts: &PathOptions) -> (f32, f64) {
+        let mut t = PathTracer::new(gpu, &scene(), &camera(), &Lighting::default(), false, (16, 16), opts, None).unwrap();
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => {
+                    let rgb: Vec<f64> = rgba.chunks_exact(4).flat_map(|p| p[..3].iter().map(|&c| f64::from(c))).collect();
+                    let mean = t.stats().radiance.expect("radiance stats").mean;
+                    return (mean, rgb.iter().sum::<f64>() / rgb.len() as f64);
+                }
+                other => panic!("the render ended {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn radiance_stats_do_not_grow_with_the_sample_count() {
+        let Some(gpu) = compute() else { return };
+        let (four, _) = finished(&gpu, &PathOptions { spp: 4, denoise: false, ..Default::default() });
+        let (sixteen, _) = finished(&gpu, &PathOptions { spp: 16, denoise: false, ..Default::default() });
+        assert!(four > 0.0, "the floor is lit: {four}");
+        let ratio = sixteen / four;
+        assert!((0.8..=1.25).contains(&ratio), "the stats are per-sample means: spp 4 {four}, spp 16 {sixteen}");
+    }
+
+    #[test]
+    fn the_denoised_still_keeps_the_raw_brightness() {
+        let Some(gpu) = compute() else { return };
+        let (_, raw) = finished(&gpu, &PathOptions { spp: 16, denoise: false, ..Default::default() });
+        let (_, denoised) = finished(&gpu, &PathOptions { spp: 16, denoise: true, ..Default::default() });
+        assert!(raw > 5.0 && raw < 250.0, "the raw floor is neither black nor white: {raw}");
+        assert!((denoised - raw).abs() <= 0.15 * raw, "denoising keeps the brightness: raw {raw:.1}, denoised {denoised:.1}");
     }
 
     #[test]

@@ -285,19 +285,22 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     }
 }
 
-/// One sample: the pixel `p` projects to, the colour there and whether the camera sees `p`.
+/// One sample: the pixel `p` projects into, the colour there and whether the camera sees `p`.
+/// Pixel `x` spans `[x, x + 1)` in `project_point`'s coordinates, and the visibility ray goes
+/// through `p`'s exact projection: a ray through a pixel's corner misses `p` by centimetres
+/// where the surface is seen at a grazing angle.
 fn sample(scene: &Scene3d, camera: &Camera, size: (u32, u32), rgba: &[u8], p: [f64; 3]) -> Value {
     let pixel = project_point(camera, size, p).and_then(|px| {
-        let (x, y) = (px[0].round(), px[1].round());
+        let (x, y) = (px[0].floor(), px[1].floor());
         let inside = x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x < size.0 as f32 && y < size.1 as f32;
-        inside.then_some((x as u32, y as u32))
+        inside.then_some((px, x as u32, y as u32))
     });
-    let Some((x, y)) = pixel else {
+    let Some((px, x, y)) = pixel else {
         return json!({ "point": p, "pixel": null, "rgb": null, "visible": false });
     };
     let at = (usize::try_from(y).unwrap_or(0)).saturating_mul(size.0 as usize).saturating_add(x as usize).saturating_mul(4);
     let rgb = rgba.get(at..at.saturating_add(3)).map(<[u8]>::to_vec);
-    let visible = ray_at(camera, size, [x as f32, y as f32])
+    let visible = ray_at(camera, size, px)
         .and_then(|(origin, dir)| scene.pick(origin, dir))
         .is_some_and(|hit| distance(hit.point, Vec3::new(p[0], p[1], p[2])) <= VISIBLE_TOLERANCE);
     json!({ "point": p, "pixel": [x, y], "rgb": rgb, "visible": visible })
@@ -330,6 +333,35 @@ mod tests {
         d.arch.next_light_id = 4;
         d.touch_arch();
         d
+    }
+
+    #[test]
+    fn a_sample_sees_the_point_it_projects_and_reads_its_pixel() {
+        // The room's inner wall faces from inside, at a grazing angle where a pixel spans several
+        // centimetres; each pixel's red and green are its own x and y.
+        let scene = cadcraft_arch3d::build(&room().arch);
+        let eye = Vec3::new(3.6, 3.6, 1.6);
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, Vec3::new(1.8, 1.0, 0.3), 80.0));
+        let size = (120u32, 90u32);
+        let rgba: Vec<u8> = (0..size.1).flat_map(|y| (0..size.0).flat_map(move |x| [x as u8, y as u8, 0, 255])).collect();
+        let mut seen = 0;
+        for k in 1..8 {
+            for z in [0.3, 1.0, 1.7] {
+                for p in [[f64::from(k) * 0.5, 0.0, z], [0.0, f64::from(k) * 0.5, z]] {
+                    let s = sample(&scene, &camera, size, &rgba, p);
+                    let Some(px) = project_point(&camera, size, p) else { continue };
+                    let (x, y) = (px[0].floor(), px[1].floor());
+                    if x < 0.0 || y < 0.0 || x >= size.0 as f32 || y >= size.1 as f32 {
+                        continue;
+                    }
+                    seen += 1;
+                    assert_eq!(s["visible"], true, "the camera sees {p:?}: {s}");
+                    assert_eq!(s["pixel"], json!([x as u32, y as u32]), "{p:?} lies in that pixel: {s}");
+                    assert_eq!(s["rgb"], json!([x as u8, y as u8, 0]), "{p:?}: {s}");
+                }
+            }
+        }
+        assert!(seen >= 20, "enough wall points are on screen: {seen}");
     }
 
     fn request<'a>(d: &'a Drawing, camera: Option<Camera>, out: Option<std::path::PathBuf>, final_render: bool) -> RenderRequest<'a> {
