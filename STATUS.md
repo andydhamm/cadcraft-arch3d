@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 20 of 24 segments merged · 8 of 13 acceptance checks**
 
@@ -21,19 +21,19 @@ Updated 2026-11-01 16:30 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 8 / 13 | 8.8 h so far · expected done Nov 01 18:16–Nov 02 03:09 UTC |
+| 11 | Ray-traced Finalize Render | building | 8 / 13 | 9.1 h so far · expected done Nov 01 18:33–Nov 02 03:41 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-20 merged, 1 working, 1 escalate, 1 queued, 1 gate
+20 merged, 1 gate, 1 escalate, 1 queued, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p11-r3d-rt` | Optional hardware ray queries: the same traversal through wgpu ray queries, parity with the compute path | working | bonsai-b |
+| `p11-r3d-rt` | Optional hardware ray queries: the same traversal through wgpu ray queries, parity with the compute path | gate | bonsai-b |
 | `p11-ui-pane-path` | The 3D pane's Finalize: path traced or raster, refining on screen with its sample count, cancel | escalate |  |
-| `p11-docs-user-guide` | User guide: the path-traced Finalize, area lights and IES files | gate | bonsai-ws2-a |
+| `p11-docs-user-guide` | User guide: the path-traced Finalize, area lights and IES files | merging | bonsai-ws2-a |
 
 ## Recent merges
 
@@ -56,9 +56,9 @@ Updated 2026-11-01 16:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 777 |
-| bonsai-b | bonsai2-27b | agent | 719 |
-| bonsai-ws2-a | bonsai2-27b | gate | 776 |
+| bonsai-a | bonsai2-27b | agent | 778 |
+| bonsai-b | bonsai2-27b | gate | 719 |
+| bonsai-ws2-a | bonsai2-27b | merging | 777 |
 | bonsai-ws2-b | bonsai2-27b | idle | 757 |
 | claude-sonnet-a | sonnet | idle | 67 |
 | claude-sonnet-b | sonnet | idle | 62 |
@@ -67,5 +67,5 @@ Updated 2026-11-01 16:30 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 625 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | gate | 538 |
+| tturbo-mac | tturbo-ultraheretic | merging | 539 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
