@@ -99,7 +99,9 @@ cargo run -q -p cadcraft-cli -- run --metric \
 - `--ground` draws a ground plane under the model that takes the shadows;
 - `--adapter fallback` uses the software renderer, so it works on a machine without a GPU (`auto`, the default,
   prefers a GPU);
-- `--size WxH` sets the image size in pixels.
+- `--size WxH` sets the image size in pixels;
+- `--night` renders a night scene with no sun (fixture lights only);
+- `--final` runs a Finalize Render: every light shadowed, soft shadow edges, tone mapping, higher resolution.
 
 ```sh
 cargo run -q -p cadcraft-cli -- run --metric \
