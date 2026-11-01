@@ -61,8 +61,27 @@ pub fn is_light_material(material: &str) -> bool {
 /// One [`SceneLight`] per fixture that is on and has a light point
 /// (`arch::light::light_point`), in fixture order.
 pub fn scene_lights(model: &ArchModel) -> Vec<SceneLight> {
-    let _ = model;
-    Vec::new()
+    let mut out = Vec::new();
+    for f in model.lights.iter().filter(|f| f.on) {
+        let Some(position) = cadcraft_arch::light::light_point(model, f) else {
+            continue;
+        };
+        let aim = cadcraft_arch::light::aim_direction(f);
+        let intensity = cadcraft_arch::light::intensity_cd(f);
+        let color = cadcraft_arch::light::kelvin_to_rgb(f.kelvin);
+        if !position.is_finite() || !aim.is_finite() || aim.len() < 1e-12 || !intensity.is_finite() || !color.iter().all(|c| c.is_finite()) {
+            continue;
+        }
+        let (cos_inner, cos_outer) = match f.kind {
+            LightKind::Point => (-1.0, -1.0),
+            LightKind::Spot => ((f.cone.to_radians() * 0.5).cos(), (f.falloff.to_radians() * 0.5).cos()),
+        };
+        if !cos_inner.is_finite() || !cos_outer.is_finite() {
+            continue;
+        }
+        out.push(SceneLight { id: f.id, kind: f.kind, position, direction: aim.normalized(), intensity, color, cos_inner, cos_outer });
+    }
+    out
 }
 
 /// The housings of every fixture (in `crate::fixture`, filled by `p10-arch3d-fixture-meshes`).
@@ -72,8 +91,19 @@ pub use crate::fixture::fixture_meshes;
 /// occlusion: `I(θ) · max(0, n·l) / d²` with `l` the unit vector from the point to the light.
 /// 0 when the point is at the light (d < 1e-9) or behind the surface.
 pub fn direct_illuminance(light: &SceneLight, point: Vec3, normal: Vec3) -> f64 {
-    let _ = (light, point, normal);
-    0.0
+    let v = light.position - point;
+    let d2 = v.dot(v);
+    if !d2.is_finite() || d2 < 1e-18 || !normal.is_finite() {
+        return 0.0;
+    }
+    let nl = normal.len();
+    if !nl.is_finite() || nl <= 0.0 {
+        return 0.0;
+    }
+    let l = v * (1.0 / d2.sqrt());
+    let cos = (normal * (1.0 / nl)).dot(l).max(0.0);
+    let e = light.intensity_toward(-l) * cos / d2;
+    if e.is_finite() { e } else { 0.0 }
 }
 
 /// Direct illuminance at a point from every light of the scene, with shadow rays.
@@ -89,6 +119,112 @@ pub struct Illuminance {
 /// from `point` to the light is not blocked by a scene triangle (fixture housings excluded):
 /// a hit at a distance in `(1e-6, d − 1e-6)` blocks it.
 pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
-    let _ = (scene, point, normal);
-    Illuminance::default()
+    let occluders = crate::pick::Bvh::build(&Scene3d {
+        meshes: scene.meshes.iter().filter(|m| !is_light_material(&m.material)).cloned().collect(),
+        ..Default::default()
+    });
+    let mut out = Illuminance::default();
+    for light in &scene.lights {
+        let mut e = direct_illuminance(light, point, normal);
+        if e > 0.0 {
+            let v = light.position - point;
+            let d = v.len();
+            let l = v * (1.0 / d);
+            if occluders.ray(point + l * 1e-4, l, d - 2e-4).is_some() {
+                e = 0.0;
+            }
+        }
+        out.lux += e;
+        out.per_light.push((light.id, e));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{LightFixture, Wall};
+    use cadcraft_geom::Vec2;
+
+    fn room() -> ArchModel {
+        let mut m = ArchModel::default();
+        let c = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (c[k], c[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            m.push_wall(w);
+        }
+        for (k, (x, y)) in [(1.0, 1.0), (1.0, 3.0), (3.0, 1.0), (3.0, 3.0)].into_iter().enumerate() {
+            m.lights.push(LightFixture::new(ArchId(k as u32), "Recessed pot light", Vec2::new(x, y)));
+        }
+        m.next_light_id = 4;
+        m
+    }
+
+    fn up() -> Vec3 {
+        Vec3::new(0.0, 0.0, 1.0)
+    }
+
+    #[test]
+    fn illuminance_under_a_pot_light_is_165_lux() {
+        let scene = crate::build(&room());
+        let r = illuminance(&scene, Vec3::new(1.0, 1.0, 0.0), up());
+        assert!((r.lux - 165.0).abs() < 1.65, "{}", r.lux);
+        let lit: Vec<_> = r.per_light.iter().filter(|(_, e)| *e > 0.0).collect();
+        assert_eq!(lit.len(), 1);
+        assert_eq!(lit[0].0, ArchId(0));
+    }
+
+    #[test]
+    fn illuminance_inside_the_cone_edge_is_122_lux() {
+        let scene = crate::build(&room());
+        let r = illuminance(&scene, Vec3::new(1.8, 1.8, 0.0), up());
+        assert!((r.lux - 122.1).abs() < 1.221, "{}", r.lux);
+        let lit = r.per_light.iter().filter(|(_, e)| *e > 0.0).count();
+        assert_eq!(lit, 1);
+    }
+
+    #[test]
+    fn a_column_shadows_the_point() {
+        let mut m = room();
+        let mut w = Wall::new(Vec2::new(1.4, 1.5), Vec2::new(1.6, 1.5), 0.2);
+        w.height = 1.0;
+        m.push_wall(w);
+        let scene = crate::build(&m);
+        let shadowed = illuminance(&scene, Vec3::new(1.8, 1.8, 0.0), up());
+        assert!(shadowed.lux.abs() < 0.5, "{}", shadowed.lux);
+        let lit = illuminance(&scene, Vec3::new(1.0, 1.0, 0.0), up());
+        assert!((lit.lux - 165.0).abs() < 1.65, "{}", lit.lux);
+    }
+
+    #[test]
+    fn scene_lights_skip_off_fixtures_and_carry_the_cone() {
+        let mut m = room();
+        if let Some(f) = m.lights.get_mut(1) {
+            f.on = false;
+        }
+        let lights = scene_lights(&m);
+        assert_eq!(lights.len(), 3);
+        assert!(lights.iter().all(|l| l.id != ArchId(1)));
+        let l = &lights[0];
+        let c = 30f64.to_radians().cos();
+        assert!((l.cos_inner - c).abs() < 1e-9 && (l.cos_outer - c).abs() < 1e-9);
+        assert!((l.direction - Vec3::new(0.0, 0.0, -1.0)).len() < 1e-9);
+        assert!((l.intensity - 950.36).abs() < 0.01, "{}", l.intensity);
+    }
+
+    #[test]
+    fn direct_illuminance_is_zero_outside_the_cone_and_behind_the_surface() {
+        let lights = scene_lights(&room());
+        let l = &lights[0];
+        assert!(direct_illuminance(l, Vec3::new(1.0, 1.0, 0.0), up()) > 100.0);
+        // outside the 30 degree half-cone
+        assert_eq!(direct_illuminance(l, Vec3::new(3.0, 1.0, 0.0), up()), 0.0);
+        // surface facing away from the light
+        let down = Vec3::new(0.0, 0.0, -1.0);
+        assert_eq!(direct_illuminance(l, Vec3::new(1.0, 1.0, 0.0), down), 0.0);
+        let none = Vec3::default();
+        assert_eq!(direct_illuminance(l, Vec3::new(1.0, 1.0, 0.0), none), 0.0);
+    }
 }
