@@ -99,8 +99,14 @@ mod traverse_tests {
             return;
         };
         let material = material_for("glass");
-        let expected_glass =
-            [material.albedo[0] * material.transmission, material.albedo[1] * material.transmission, material.albedo[2] * material.transmission];
+        // Single glass triangle at normal incidence: tinted once, with Fresnel (1-F)^2.
+        // F0 = 0.04 for IOR 1.5. cos_i = 1.0. F = 0.04. (1-F)^2 = 0.9216.
+        let fresnel_sq = 0.9216;
+        let expected_glass = [
+            material.albedo[0] * material.transmission * fresnel_sq,
+            material.albedo[1] * material.transmission * fresnel_sq,
+            material.albedo[2] * material.transmission * fresnel_sq,
+        ];
         let glass_pane = {
             let mut m = Mesh::new("glass", ArchId(2));
             m.positions = vec![[0.0, -1.0, -1.0], [0.0, 1.0, -1.0], [0.0, 1.0, 1.0]];
@@ -122,6 +128,88 @@ mod traverse_tests {
             assert!(out[0][0..3].iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-5), "expected {expected:?}, got {:?}", out[0]);
             assert_eq!(out[0][3], 0.0);
         }
+    }
+
+    #[test]
+    fn a_closed_glass_pane_tints_a_shadow_ray_once() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        let material = material_for("glass");
+        // Prism crosses glass twice (enter, exit). Tinted once on entry with Fresnel.
+        let fresnel_sq = 0.9216;
+        let expected = [
+            material.albedo[0] * material.transmission * fresnel_sq,
+            material.albedo[1] * material.transmission * fresnel_sq,
+            material.albedo[2] * material.transmission * fresnel_sq,
+        ];
+        let scene = Scene3d { meshes: vec![prism("glass", 2, [0.0, -1.0, -1.0], [0.02, 1.0, 1.0])], ..Default::default() };
+        let gpu_scene = build_gpu_scene(&scene, false, None);
+        let buffers = upload_scene(&gpu, &gpu_scene);
+        let probes = vec![GpuProbe { point: [-2.0, 0.0, 0.0], normal: [1.0, 0.0, 0.0], _a: 10.0, ..Default::default() }];
+        let frame = GpuFrame { probe_count: 1, ..Default::default() };
+        let out = run_entry(&gpu, &buffers, "visibility_test_main", &frame, &probes).unwrap();
+        assert!(out[0][0..3].iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-5), "expected {expected:?}, got {:?}", out[0]);
+    }
+
+    #[test]
+    fn two_panes_tint_a_shadow_ray_twice() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        let material = material_for("glass");
+        let fresnel_sq = 0.9216;
+        let single = [
+            material.albedo[0] * material.transmission * fresnel_sq,
+            material.albedo[1] * material.transmission * fresnel_sq,
+            material.albedo[2] * material.transmission * fresnel_sq,
+        ];
+        let expected = [single[0] * single[0], single[1] * single[1], single[2] * single[2]];
+        let scene = Scene3d {
+            meshes: vec![prism("glass", 2, [0.0, -1.0, -1.0], [0.02, 1.0, 1.0]), prism("glass", 3, [0.5, -1.0, -1.0], [0.52, 1.0, 1.0])],
+            ..Default::default()
+        };
+        let gpu_scene = build_gpu_scene(&scene, false, None);
+        let buffers = upload_scene(&gpu, &gpu_scene);
+        let probes = vec![GpuProbe { point: [-2.0, 0.0, 0.0], normal: [1.0, 0.0, 0.0], _a: 10.0, ..Default::default() }];
+        let frame = GpuFrame { probe_count: 1, ..Default::default() };
+        let out = run_entry(&gpu, &buffers, "visibility_test_main", &frame, &probes).unwrap();
+        assert!(out[0][0..3].iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-5), "expected {expected:?}, got {:?}", out[0]);
+    }
+
+    #[test]
+    fn fresnel_dims_a_shadow_ray_at_a_steep_angle() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        let material = material_for("glass");
+        // Ray direction (0.463, 0, 0.886). Normal is (1,0,0) for the prism face at x=0.
+        // cos_i = dot(dir, normal) = 0.463.
+        // F0 = 0.04.
+        // F = 0.04 + 0.96 * (1 - 0.463)^5 = 0.04 + 0.96 * (0.537)^5.
+        // (0.537)^5 ≈ 0.0445. F ≈ 0.04 + 0.0427 = 0.0827.
+        // (1-F)^2 ≈ (0.9173)^2 ≈ 0.8414.
+        let cos_i: f32 = 0.463;
+        let f0: f32 = 0.04;
+        let f = f0 + (1.0 - f0) * (1.0 - cos_i).powi(5);
+        let fresnel_sq = (1.0 - f) * (1.0 - f);
+        let expected = [
+            material.albedo[0] * material.transmission * fresnel_sq,
+            material.albedo[1] * material.transmission * fresnel_sq,
+            material.albedo[2] * material.transmission * fresnel_sq,
+        ];
+        let scene = Scene3d { meshes: vec![prism("glass", 2, [0.0, -1.0, -1.0], [0.02, 1.0, 1.0])], ..Default::default() };
+        let gpu_scene = build_gpu_scene(&scene, false, None);
+        let buffers = upload_scene(&gpu, &gpu_scene);
+        // Probe from (-1.0, 0.0, -1.914) along (0.463, 0.0, 0.886)
+        // This ray crosses the pane near the origin.
+        let probes = vec![GpuProbe { point: [-1.0, 0.0, -1.914], normal: [0.463, 0.0, 0.886], _a: 10.0, ..Default::default() }];
+        let frame = GpuFrame { probe_count: 1, ..Default::default() };
+        let out = run_entry(&gpu, &buffers, "visibility_test_main", &frame, &probes).unwrap();
+        assert!(out[0][0..3].iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-4), "expected {expected:?}, got {:?}", out[0]);
     }
 
     #[test]
