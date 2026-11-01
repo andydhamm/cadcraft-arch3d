@@ -8,11 +8,15 @@
 //! `tris[left_or_first .. left_or_first + count]`. Leaves hold at most [`MAX_LEAF_TRIS`]
 //! triangles; the tree is a binned SAH split ([`SAH_BINS`] bins along the widest centroid axis).
 //!
-//! Filled here: the layouts and [`luminance_rgb`]. Stubs filled by `p11-r3d-gpu-scene`:
-//! [`build_gpu_scene`], [`material_for`], [`GpuScene::trace_cpu`].
+//! Here: the layouts, [`luminance_rgb`], [`material_for`], [`build_gpu_scene`] (the triangles in
+//! scene order, one material per mesh, the lights and their IES tables, the SAH tree) and
+//! [`GpuScene::trace_cpu`], the CPU traversal the WGSL must agree with.
 
-use crate::types::Scene3d;
+use super::Furnace;
+use crate::pipeline::material_pbr;
+use crate::types::{Mesh, Scene3d};
 use bytemuck::{Pod, Zeroable};
+use cadcraft_arch3d::light::{LightKind, SceneLight};
 
 /// Most triangles a leaf holds, and the bins of the SAH split.
 pub const MAX_LEAF_TRIS: u32 = 4;
@@ -164,21 +168,340 @@ pub fn luminance_rgb(rgb: [f64; 3]) -> [f32; 3] {
 /// [`MAT_EMIT_CAMERA_ONLY`]; every `light-…` material gets [`MAT_NO_SHADOW`]; `mirror…` is
 /// metallic 1, roughness 0.02, albedo 0.95. Everything else IOR 1.5, no emission.
 pub fn material_for(material: &str) -> GpuMaterial {
-    let _ = material;
-    GpuMaterial { albedo: [0.75; 3], roughness: 0.5, ior: 1.5, ..Default::default() }
+    let (albedo, metallic, roughness, alpha) = material_pbr(material);
+    let name = material.to_ascii_lowercase();
+    let mut m = GpuMaterial { albedo, metallic, roughness, ior: 1.5, ..Default::default() };
+    if alpha < 1.0 {
+        m.flags |= MAT_GLASS;
+        m.transmission = (1.0 - alpha).clamp(0.0, 1.0);
+    }
+    if name.starts_with("light-") {
+        m.flags |= MAT_NO_SHADOW;
+    }
+    if name == "light-lens-lit" {
+        m.flags |= MAT_EMIT_CAMERA_ONLY;
+        m.emission = [LENS_NITS; 3];
+    }
+    if name.starts_with("mirror") {
+        m.albedo = [0.95; 3];
+        m.metallic = 1.0;
+        m.roughness = 0.02;
+    }
+    m
 }
 
 /// Radiance of a lit lens (nits), seen directly.
 pub const LENS_NITS: f32 = 20_000.0;
 
+/// The object id of the ground quad (`shadow::GROUND_OBJECT`).
+const GROUND_OBJECT: u32 = u32::MAX;
+/// Half the side of the ground square (m), centred on the origin.
+const GROUND_HALF_SIDE: f32 = 100.0;
+/// Deepest tree the traversal stack allows; a node at this depth is a leaf whatever it holds.
+const MAX_BVH_DEPTH: u32 = 64;
+
 /// Build the buffers for `scene` (its meshes, lights and `ground`, a 200 m square at z = 0 with
 /// the `ground` material when asked). Lights: every `scene.lights` entry ([`GpuLight`] as above,
-/// IES tables packed in light order). `furnace`: every material diffuse with its albedo and
-/// emission, no lights. Triangles with a non-finite corner or a zero area are skipped; more than
-/// [`MAX_GPU_TRIANGLES`] gives an empty scene.
-pub fn build_gpu_scene(scene: &Scene3d, ground: bool, furnace: Option<super::Furnace>) -> GpuScene {
-    let _ = (scene, ground, furnace);
-    GpuScene::default()
+/// IES tables packed in light order, a table shared by several lights once). `furnace`: every
+/// material diffuse with its albedo and emission, no lights. Triangles with a non-finite corner,
+/// an index out of range or a zero area are skipped; more than [`MAX_GPU_TRIANGLES`] gives an
+/// empty scene. The tree is empty (no nodes) for a scene without triangles.
+pub fn build_gpu_scene(scene: &Scene3d, ground: bool, furnace: Option<Furnace>) -> GpuScene {
+    let mut materials: Vec<GpuMaterial> = scene.meshes.iter().map(|m| material_for(&m.material)).collect();
+    if ground {
+        materials.push(material_for("ground"));
+    }
+    if let Some(f) = furnace {
+        materials.iter_mut().for_each(|m| *m = furnace_material(f));
+    }
+    let Some(tris) = collect_triangles(scene, ground, &materials) else { return GpuScene::default() };
+    let (nodes, order) = build_bvh(&tris);
+    let tris = order.iter().filter_map(|&i| tris.get(i as usize).copied()).collect();
+    let (lights, ies) = if furnace.is_some() { (Vec::new(), Vec::new()) } else { pack_lights(&scene.lights) };
+    GpuScene { nodes, tris, materials, lights, ies }
+}
+
+/// The furnace's material: diffuse, `albedo`, emitting `emission` nits, nothing else.
+fn furnace_material(f: Furnace) -> GpuMaterial {
+    GpuMaterial { albedo: [f.albedo; 3], emission: [f.emission; 3], roughness: 1.0, ior: 1.0, ..Default::default() }
+}
+
+fn corner(p: Option<&[f32; 3]>) -> Option<[f32; 3]> {
+    p.copied().filter(|c| c.iter().all(|v| v.is_finite()))
+}
+
+/// One triangle of `v0`, `v1`, `v2` for material index `material`; `None` when the edges are not
+/// finite or the triangle has no area.
+fn gpu_tri(v: [[f32; 3]; 3], material: u32, object: u32, flags: u32) -> Option<GpuTri> {
+    let e1 = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];
+    let e2 = [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]];
+    let (a, b) = (e1.map(f64::from), e2.map(f64::from));
+    let c = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let len = (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
+    if !len.is_finite() || len <= 1e-12 {
+        return None;
+    }
+    let n = [(c[0] / len) as f32, (c[1] / len) as f32, (c[2] / len) as f32];
+    Some(GpuTri { v0: v[0], material, e1, object, e2, flags, n, _pad: 0 })
+}
+
+/// Every valid triangle of the meshes in scene order, then the ground. `None` past the cap.
+fn collect_triangles(scene: &Scene3d, ground: bool, materials: &[GpuMaterial]) -> Option<Vec<GpuTri>> {
+    let mut tris: Vec<GpuTri> = Vec::new();
+    for (mi, mesh) in scene.meshes.iter().enumerate() {
+        let material = u32::try_from(mi).ok()?;
+        let flags = materials.get(mi).map_or(0, |m| m.flags);
+        if !push_mesh(&mut tris, mesh, material, flags) {
+            return None;
+        }
+    }
+    if ground {
+        let material = u32::try_from(scene.meshes.len()).ok()?;
+        let flags = materials.get(scene.meshes.len()).map_or(0, |m| m.flags);
+        let h = GROUND_HALF_SIDE;
+        let quad = [[-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0]];
+        for ids in [[0, 1, 2], [0, 2, 3]] {
+            tris.extend(gpu_tri(ids.map(|i| quad[i]), material, GROUND_OBJECT, flags));
+        }
+        if tris.len() > MAX_GPU_TRIANGLES {
+            return None;
+        }
+    }
+    Some(tris)
+}
+
+/// Append a mesh's valid triangles; `false` when the cap is passed.
+fn push_mesh(tris: &mut Vec<GpuTri>, mesh: &Mesh, material: u32, flags: u32) -> bool {
+    for g in mesh.indices.chunks_exact(3) {
+        let at = |k: usize| g.get(k).and_then(|&i| corner(mesh.positions.get(i as usize)));
+        let (Some(a), Some(b), Some(c)) = (at(0), at(1), at(2)) else { continue };
+        tris.extend(gpu_tri([a, b, c], material, mesh.object.0, flags));
+        if tris.len() > MAX_GPU_TRIANGLES {
+            return false;
+        }
+    }
+    true
+}
+
+/// The lights in order and the IES floats they index.
+fn pack_lights(lights: &[SceneLight]) -> (Vec<GpuLight>, Vec<f32>) {
+    let mut ies: Vec<f32> = Vec::new();
+    // (profile address, offset) of the tables already packed: lights sharing a profile share it.
+    let mut packed: Vec<(usize, u32)> = Vec::new();
+    let mut out = Vec::with_capacity(lights.len());
+    for light in lights {
+        let mut g = gpu_light(light);
+        if let Some(profile) = &light.ies {
+            let key = std::sync::Arc::as_ptr(profile) as usize;
+            let known = packed.iter().find(|(k, _)| *k == key).map(|&(_, off)| off);
+            let offset = known.or_else(|| {
+                let off = pack_ies(&profile.vertical, &profile.horizontal, &profile.candela, &mut ies)?;
+                packed.push((key, off));
+                Some(off)
+            });
+            if let Some(offset) = offset {
+                g.ies_offset = offset;
+                g.ies_v = profile.vertical.len() as u32;
+                g.ies_h = profile.horizontal.len() as u32;
+            }
+        }
+        out.push(g);
+    }
+    (out, ies)
+}
+
+/// Append a table's vertical angles, horizontal angles and candela (horizontal-major) to `ies`;
+/// the offset it starts at. `None` (nothing appended) for an empty, mismatched or non-finite table.
+fn pack_ies(vertical: &[f64], horizontal: &[f64], candela: &[f64], ies: &mut Vec<f32>) -> Option<u32> {
+    let (v, h) = (vertical.len(), horizontal.len());
+    let all = || vertical.iter().chain(horizontal).chain(candela);
+    if v == 0 || h == 0 || candela.len() != v.checked_mul(h)? || !all().all(|x| x.is_finite()) {
+        return None;
+    }
+    let offset = u32::try_from(ies.len()).ok()?;
+    u32::try_from(ies.len() + v + h + candela.len()).ok()?;
+    ies.extend(all().map(|&x| x as f32));
+    Some(offset)
+}
+
+/// One light without its IES table. A point or spot light's `rgb` is `intensity` × colour /
+/// luminance(colour) (cd); an area light's is its radiance, `intensity / (width × length)` nits.
+fn gpu_light(l: &SceneLight) -> GpuLight {
+    let kind = match l.kind {
+        LightKind::Point => LIGHT_POINT,
+        LightKind::Spot => LIGHT_SPOT,
+        LightKind::Area => LIGHT_AREA,
+    };
+    let scale = if kind == LIGHT_AREA {
+        let area = l.size[0] * l.size[1];
+        if area > 0.0 && area.is_finite() { l.intensity / area } else { 0.0 }
+    } else {
+        l.intensity
+    };
+    let colour = luminance_rgb(l.color);
+    let f = |v: cadcraft_geom::Vec3| [v.x as f32, v.y as f32, v.z as f32];
+    GpuLight {
+        position: f(l.position),
+        kind,
+        direction: f(l.direction),
+        cos_inner: l.cos_inner as f32,
+        rgb: colour.map(|c| (scale * f64::from(c)) as f32),
+        cos_outer: l.cos_outer as f32,
+        axis: f(l.axis),
+        width: l.size[0] as f32,
+        length: l.size[1] as f32,
+        ..Default::default()
+    }
+}
+
+/// A triangle's box and centroid, for the tree builder.
+#[derive(Clone, Copy)]
+struct Prim {
+    min: [f32; 3],
+    max: [f32; 3],
+    centre: [f32; 3],
+}
+
+/// The corners of a triangle as the traversal computes them.
+fn tri_corners(t: &GpuTri) -> [[f32; 3]; 3] {
+    [t.v0, [t.v0[0] + t.e1[0], t.v0[1] + t.e1[1], t.v0[2] + t.e1[2]], [t.v0[0] + t.e2[0], t.v0[1] + t.e2[1], t.v0[2] + t.e2[2]]]
+}
+
+const EMPTY_BOX: ([f32; 3], [f32; 3]) = ([f32::INFINITY; 3], [f32::NEG_INFINITY; 3]);
+
+fn grow(b: &mut ([f32; 3], [f32; 3]), min: [f32; 3], max: [f32; 3]) {
+    for k in 0..3 {
+        b.0[k] = b.0[k].min(min[k]);
+        b.1[k] = b.1[k].max(max[k]);
+    }
+}
+
+/// Surface area of a box (0 for an empty one).
+fn box_area(b: &([f32; 3], [f32; 3])) -> f32 {
+    let d = [b.1[0] - b.0[0], b.1[1] - b.0[1], b.1[2] - b.0[2]];
+    if d.iter().any(|v| *v < 0.0) {
+        return 0.0;
+    }
+    2.0 * (d[0] * d[1] + d[1] * d[2] + d[2] * d[0])
+}
+
+/// The tree over `tris`: the nodes (depth first) and the triangle order the leaves index.
+fn build_bvh(tris: &[GpuTri]) -> (Vec<GpuNode>, Vec<u32>) {
+    let prims: Vec<Prim> = tris
+        .iter()
+        .map(|t| {
+            let mut b = EMPTY_BOX;
+            for c in tri_corners(t) {
+                grow(&mut b, c, c);
+            }
+            Prim { min: b.0, max: b.1, centre: [(b.0[0] + b.1[0]) * 0.5, (b.0[1] + b.1[1]) * 0.5, (b.0[2] + b.1[2]) * 0.5] }
+        })
+        .collect();
+    let mut order: Vec<u32> = (0..prims.len() as u32).collect();
+    let mut nodes = Vec::with_capacity(prims.len() / 2 + 1);
+    if !prims.is_empty() {
+        build_range(&prims, &mut order, 0, 0, &mut nodes);
+    }
+    (nodes, order)
+}
+
+/// Append the subtree over `order` (the triangles at global positions `first..`) to `nodes`.
+fn build_range(prims: &[Prim], order: &mut [u32], first: u32, depth: u32, nodes: &mut Vec<GpuNode>) {
+    let (mut bounds, mut centres) = (EMPTY_BOX, EMPTY_BOX);
+    for p in order.iter().filter_map(|&i| prims.get(i as usize)) {
+        grow(&mut bounds, p.min, p.max);
+        grow(&mut centres, p.centre, p.centre);
+    }
+    let index = nodes.len();
+    let n = order.len();
+    nodes.push(GpuNode { min: bounds.0, left_or_first: first, max: bounds.1, count: n as u32 });
+    if n <= MAX_LEAF_TRIS as usize || depth >= MAX_BVH_DEPTH {
+        return;
+    }
+    let mid = split_point(prims, order, box_area(&bounds), &centres);
+    let (left, right) = order.split_at_mut(mid);
+    if let Some(node) = nodes.get_mut(index) {
+        node.count = 0;
+    }
+    build_range(prims, left, first, depth + 1, nodes);
+    let right_index = nodes.len() as u32;
+    if let Some(node) = nodes.get_mut(index) {
+        node.left_or_first = right_index;
+    }
+    build_range(prims, right, first + mid as u32, depth + 1, nodes);
+}
+
+/// Reorder `order` so `[..mid]` is the left child and return `mid` (always `1..len`): the best
+/// binned SAH split on the widest centroid axis when it beats a leaf, else the median (a leaf
+/// never holds more than [`MAX_LEAF_TRIS`] unless the depth cap forces it).
+fn split_point(prims: &[Prim], order: &mut [u32], node_area: f32, centres: &([f32; 3], [f32; 3])) -> usize {
+    let extent = [centres.1[0] - centres.0[0], centres.1[1] - centres.0[1], centres.1[2] - centres.0[2]];
+    let axis = (0..3).fold(0, |best, k| if extent[k] > extent[best] { k } else { best });
+    if let Some(bin) = best_sah_bin(prims, order, axis, centres.0[axis], extent[axis], node_area) {
+        let bin_of = |i: &u32| prims.get(*i as usize).map_or(0, |p| bin_index(p.centre[axis], centres.0[axis], extent[axis]));
+        let mid = partition(order, |i| bin_of(i) <= bin);
+        if mid > 0 && mid < order.len() {
+            return mid;
+        }
+    }
+    let mid = order.len() / 2;
+    order.select_nth_unstable_by(mid, |a, b| {
+        let c = |i: &u32| prims.get(*i as usize).map_or(0.0, |p| p.centre[axis]);
+        c(a).total_cmp(&c(b))
+    });
+    mid
+}
+
+fn bin_index(c: f32, lo: f32, extent: f32) -> usize {
+    (((c - lo) * (SAH_BINS as f32 / extent)) as usize).min(SAH_BINS - 1)
+}
+
+/// In-place partition: the elements satisfying `pred` first; how many there are.
+fn partition(order: &mut [u32], pred: impl Fn(&u32) -> bool) -> usize {
+    let mut i = 0;
+    for j in 0..order.len() {
+        if order.get(j).is_some_and(&pred) {
+            order.swap(i, j);
+            i += 1;
+        }
+    }
+    i
+}
+
+/// The bin whose boundary (items in bins `..=bin` go left) gives the cheapest split, if its cost
+/// `area(left) · n_left + area(right) · n_right` is below the leaf's `area(node) · n`.
+fn best_sah_bin(prims: &[Prim], order: &[u32], axis: usize, lo: f32, extent: f32, node_area: f32) -> Option<usize> {
+    if !(extent > 0.0) || !(SAH_BINS as f32 / extent).is_finite() {
+        return None;
+    }
+    let mut bins: [(u32, ([f32; 3], [f32; 3])); SAH_BINS] = [(0, EMPTY_BOX); SAH_BINS];
+    for p in order.iter().filter_map(|&i| prims.get(i as usize)) {
+        if let Some((count, b)) = bins.get_mut(bin_index(p.centre[axis], lo, extent)) {
+            *count += 1;
+            grow(b, p.min, p.max);
+        }
+    }
+    // Cost of everything in bins `..=i` going left, from a forward sweep, and of the rest going
+    // right, from a backward one.
+    let mut left_cost = [f32::INFINITY; SAH_BINS];
+    let (mut acc, mut n) = (EMPTY_BOX, 0u32);
+    for (i, (count, b)) in bins.iter().enumerate() {
+        grow(&mut acc, b.0, b.1);
+        n += count;
+        left_cost[i] = if n > 0 { box_area(&acc) * n as f32 } else { f32::INFINITY };
+    }
+    let (mut acc, mut n) = (EMPTY_BOX, 0u32);
+    let mut best: Option<(f32, usize)> = None;
+    for i in (1..SAH_BINS).rev() {
+        let (count, b) = bins[i];
+        grow(&mut acc, b.0, b.1);
+        n += count;
+        let cost = left_cost[i - 1] + if n > 0 { box_area(&acc) * n as f32 } else { f32::INFINITY };
+        if cost.is_finite() && best.is_none_or(|(c, _)| cost <= c) {
+            best = Some((cost, i - 1));
+        }
+    }
+    best.filter(|(c, _)| *c < node_area * order.len() as f32).map(|(_, i)| i)
 }
 
 /// A CPU hit: the distance along the (unit) ray and the triangle's index in `tris`.
@@ -188,13 +511,128 @@ pub struct CpuHit {
     pub tri: u32,
 }
 
+/// Hits nearer than this along a ray are the surface the ray starts on.
+const TRACE_EPS: f32 = 1e-4;
+/// Slack on the barycentric bounds of a hit, so a ray through the seam between two triangles of
+/// a closed mesh hits one of them (single-precision rounding would let it through).
+const UV_EPS: f32 = 1e-6;
+/// The slab test's far distance is scaled up by this, the usual guard against a ray grazing a
+/// box face being rounded out of it.
+const BOX_SLACK: f32 = 1.000_000_4;
+const STACK_SIZE: usize = 128;
+
+fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// Möller–Trumbore, both sides: the distance along `origin + t·dir` to `tri`, if it hits.
+fn tri_distance(tri: &GpuTri, origin: [f32; 3], dir: [f32; 3]) -> Option<f32> {
+    let p = cross(dir, tri.e2);
+    let det = dot(tri.e1, p);
+    if !(det.abs() > 1e-12) {
+        return None;
+    }
+    let inv = 1.0 / det;
+    let s = sub(origin, tri.v0);
+    let u = dot(s, p) * inv;
+    if !(-UV_EPS..=1.0 + UV_EPS).contains(&u) {
+        return None;
+    }
+    let q = cross(s, tri.e1);
+    let v = dot(dir, q) * inv;
+    if !(v >= -UV_EPS) || u + v > 1.0 + UV_EPS {
+        return None;
+    }
+    let t = dot(tri.e2, q) * inv;
+    t.is_finite().then_some(t)
+}
+
+/// Where the ray enters the node's box (0 when it starts inside) if it meets it before `t_far`.
+/// A zero direction component is `±inf` in the reciprocal: the ray is inside that slab or misses.
+fn box_entry(node: &GpuNode, origin: [f32; 3], dir: [f32; 3], inv: [f32; 3], t_far: f32) -> Option<f32> {
+    let (mut near, mut far) = (0.0f32, t_far);
+    for k in 0..3 {
+        if dir[k] == 0.0 {
+            if origin[k] < node.min[k] || origin[k] > node.max[k] {
+                return None;
+            }
+            continue;
+        }
+        let (a, b) = ((node.min[k] - origin[k]) * inv[k], (node.max[k] - origin[k]) * inv[k]);
+        near = near.max(a.min(b));
+        far = far.min(a.max(b) * BOX_SLACK);
+    }
+    (near <= far).then_some(near)
+}
+
 impl GpuScene {
     /// The nearest triangle the ray `origin + t·dir` (unit `dir`) hits with `1e-4 < t < t_max`,
     /// walking the BVH exactly as `pt/traverse.wgsl` does (the reference its GPU test compares
-    /// with). Ties break by the lower triangle index. `None` for a miss or a hostile ray.
+    /// with): a stack, the nearer child (by its box's entry distance) first, a slab test with the
+    /// reciprocal direction and double-sided Möller–Trumbore. Ties break by the lower triangle
+    /// index. `None` for a miss, an empty scene or a hostile ray.
     pub fn trace_cpu(&self, origin: [f32; 3], dir: [f32; 3], t_max: f32) -> Option<CpuHit> {
-        let _ = (origin, dir, t_max);
-        None
+        let finite = origin.iter().chain(&dir).all(|v| v.is_finite());
+        if self.nodes.is_empty() || !finite || !(t_max > TRACE_EPS) || dir.iter().all(|v| *v == 0.0) {
+            return None;
+        }
+        let inv = dir.map(|d| 1.0 / d);
+        let mut best: Option<CpuHit> = None;
+        let mut best_t = t_max;
+        let mut stack = [(0u32, 0.0f32); STACK_SIZE];
+        let root = self.nodes.first().and_then(|n| box_entry(n, origin, dir, inv, best_t))?;
+        stack[0] = (0, root);
+        let mut top = 1;
+        while top > 0 {
+            top -= 1;
+            let (index, entry) = stack[top];
+            let Some(node) = self.nodes.get(index as usize) else { continue };
+            if entry > best_t {
+                continue;
+            }
+            if node.count > 0 {
+                self.leaf_hit(node, origin, dir, &mut best, &mut best_t);
+                continue;
+            }
+            let child = |i: u32| self.nodes.get(i as usize).and_then(|n| box_entry(n, origin, dir, inv, best_t)).map(|e| (i, e));
+            let (left, right) = (child(index + 1), child(node.left_or_first));
+            // Far child first onto the stack, so the near one pops first.
+            let pair = match (left, right) {
+                (Some(l), Some(r)) if l.1 <= r.1 => [Some(r), Some(l)],
+                (Some(l), Some(r)) => [Some(l), Some(r)],
+                (l, r) => [l.or(r), None],
+            };
+            for entry in pair.into_iter().flatten() {
+                if let Some(slot) = stack.get_mut(top) {
+                    *slot = entry;
+                    top += 1;
+                }
+            }
+        }
+        best
+    }
+
+    /// Test a leaf's triangles, keeping the nearest hit in `best` / `best_t`.
+    fn leaf_hit(&self, node: &GpuNode, origin: [f32; 3], dir: [f32; 3], best: &mut Option<CpuHit>, best_t: &mut f32) {
+        let first = node.left_or_first as usize;
+        let end = first.saturating_add(node.count as usize).min(self.tris.len());
+        for index in first..end {
+            let Some(tri) = self.tris.get(index) else { continue };
+            let Some(t) = tri_distance(tri, origin, dir) else { continue };
+            let tied = t == *best_t && best.is_some_and(|b| (index as u32) < b.tri);
+            if t > TRACE_EPS && (t < *best_t || tied) {
+                *best_t = t;
+                *best = Some(CpuHit { t, tri: index as u32 });
+            }
+        }
     }
 }
 
@@ -218,5 +656,361 @@ mod tests {
         let y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
         assert!((y - 1.0).abs() < 1e-5);
         assert_eq!(luminance_rgb([0.0; 3]), [1.0; 3]);
+    }
+
+    use crate::types::ArchId;
+    use cadcraft_geom::Vec3;
+    use std::sync::Arc;
+
+    /// A deterministic stream of floats in `0..1`.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> f32 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            ((self.0 >> 40) as f32) / (1u64 << 24) as f32
+        }
+        fn between(&mut self, lo: f32, hi: f32) -> f32 {
+            lo + (hi - lo) * self.next()
+        }
+    }
+
+    /// An axis-aligned prism as 12 triangles.
+    fn prism(material: &str, object: u32, min: [f32; 3], max: [f32; 3]) -> Mesh {
+        let mut m = Mesh::new(material, ArchId(object));
+        for k in 0..8 {
+            m.positions.push([
+                if k & 1 == 0 { min[0] } else { max[0] },
+                if k & 2 == 0 { min[1] } else { max[1] },
+                if k & 4 == 0 { min[2] } else { max[2] },
+            ]);
+        }
+        let quads: [[u32; 4]; 6] = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+        for q in quads {
+            m.indices.extend([q[0], q[1], q[2], q[0], q[2], q[3]]);
+        }
+        m
+    }
+
+    fn random_prisms(rng: &mut Rng, count: usize) -> Scene3d {
+        let mut scene = Scene3d::default();
+        for i in 0..count {
+            let c = [rng.between(-10.0, 10.0), rng.between(-10.0, 10.0), rng.between(-10.0, 10.0)];
+            let h = [rng.between(0.25, 2.0), rng.between(0.25, 2.0), rng.between(0.25, 2.0)];
+            let material = ["wall", "floor", "glass", "light-lens-lit"][i % 4];
+            scene.meshes.push(prism(material, i as u32 + 1, [c[0] - h[0], c[1] - h[1], c[2] - h[2]], [c[0] + h[0], c[1] + h[1], c[2] + h[2]]));
+        }
+        scene
+    }
+
+    fn corners(t: &GpuTri) -> [[f32; 3]; 3] {
+        tri_corners(t)
+    }
+
+    #[test]
+    fn gpu_scene_holds_every_triangle_once() {
+        let mut scene = random_prisms(&mut Rng(7), 6);
+        // A mesh with one good triangle among a non-finite corner, an index out of range and a
+        // zero-area triangle: only the good one is kept.
+        let mut bad = Mesh::new("wall", ArchId(99));
+        bad.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [f32::NAN, 0.0, 0.0], [2.0, 0.0, 0.0]];
+        bad.indices = vec![0, 1, 2, 0, 1, 3, 0, 1, 9, 0, 1, 4, 0, 0, 1];
+        scene.meshes.push(bad);
+        let gpu = build_gpu_scene(&scene, false, None);
+        assert_eq!(gpu.tris.len(), 6 * 12 + 1);
+        assert_eq!(gpu.materials.len(), 7);
+        // Each source triangle appears exactly once (compared by its corners), in scene order
+        // within its mesh's material.
+        let mut want: Vec<([u32; 9], u32)> = Vec::new();
+        let bits = |c: [[f32; 3]; 3]| {
+            let mut out = [0u32; 9];
+            for (k, v) in c.iter().flatten().enumerate() {
+                out[k] = v.to_bits();
+            }
+            out
+        };
+        for (mi, mesh) in scene.meshes.iter().enumerate() {
+            for g in mesh.indices.chunks_exact(3) {
+                let at = |k: usize| mesh.positions.get(g[k] as usize).copied();
+                if let (Some(a), Some(b), Some(c)) = (at(0), at(1), at(2)) {
+                    let t = GpuTri { v0: a, e1: sub(b, a), e2: sub(c, a), ..Default::default() };
+                    if a.iter().chain(&b).chain(&c).all(|v| v.is_finite()) && gpu_tri([a, b, c], 0, 0, 0).is_some() {
+                        want.push((
+                            bits([a, [a[0] + t.e1[0], a[1] + t.e1[1], a[2] + t.e1[2]], [a[0] + t.e2[0], a[1] + t.e2[1], a[2] + t.e2[2]]]),
+                            mi as u32,
+                        ));
+                    }
+                }
+            }
+        }
+        let mut have: Vec<([u32; 9], u32)> = gpu.tris.iter().map(|t| (bits(corners(t)), t.material)).collect();
+        want.sort();
+        have.sort();
+        assert_eq!(have, want);
+        for t in &gpu.tris {
+            let mesh = &scene.meshes[t.material as usize];
+            assert_eq!(t.object, mesh.object.0);
+            assert_eq!(t.flags, gpu.materials[t.material as usize].flags);
+            let len = (t.n[0] * t.n[0] + t.n[1] * t.n[1] + t.n[2] * t.n[2]).sqrt();
+            assert!((len - 1.0).abs() < 1e-5);
+            let c = cross(t.e1, t.e2);
+            assert!(dot(c, t.n) > 0.0, "n follows e1 x e2");
+        }
+        // Glass and lens flags reach the triangles.
+        assert!(gpu.tris.iter().any(|t| t.flags & MAT_GLASS != 0));
+        assert!(gpu.tris.iter().any(|t| t.flags & MAT_NO_SHADOW != 0));
+        // No scene, no nodes, and a mesh-less scene still answers a trace.
+        let empty = build_gpu_scene(&Scene3d::default(), false, None);
+        assert!(empty.nodes.is_empty() && empty.tris.is_empty());
+        assert_eq!(empty.trace_cpu([0.0; 3], [0.0, 0.0, 1.0], 100.0), None);
+    }
+
+    fn check_tree(gpu: &GpuScene) {
+        let mut seen = vec![0u32; gpu.tris.len()];
+        let mut visit = vec![0usize];
+        let mut nodes_seen = 0;
+        while let Some(i) = visit.pop() {
+            nodes_seen += 1;
+            let node = gpu.nodes[i];
+            if node.count == 0 {
+                let (l, r) = (i + 1, node.left_or_first as usize);
+                assert!(l < gpu.nodes.len() && r > l && r < gpu.nodes.len(), "child links of node {i}");
+                for c in [l, r] {
+                    let child = gpu.nodes[c];
+                    for k in 0..3 {
+                        assert!(child.min[k] >= node.min[k] && child.max[k] <= node.max[k], "node {c} inside its parent {i}");
+                    }
+                    visit.push(c);
+                }
+                continue;
+            }
+            assert!(node.count <= MAX_LEAF_TRIS, "leaf {i} holds {}", node.count);
+            let first = node.left_or_first as usize;
+            for t in first..first + node.count as usize {
+                seen[t] += 1;
+                for c in corners(&gpu.tris[t]) {
+                    for k in 0..3 {
+                        assert!(c[k] >= node.min[k] && c[k] <= node.max[k], "triangle {t} inside leaf {i}");
+                    }
+                }
+            }
+        }
+        assert_eq!(nodes_seen, gpu.nodes.len(), "every node is reachable");
+        assert!(seen.iter().all(|&n| n == 1), "every triangle is in exactly one leaf");
+    }
+
+    #[test]
+    fn bvh_leaves_hold_at_most_four_and_bound_their_triangles() {
+        let scene = random_prisms(&mut Rng(11), 40);
+        let gpu = build_gpu_scene(&scene, true, None);
+        assert_eq!(gpu.tris.len(), 40 * 12 + 2);
+        assert!(gpu.nodes.len() > 1);
+        check_tree(&gpu);
+        // Triangles that cannot be told apart (one centroid, one box) are still split to leaves of four.
+        let mut stack = Mesh::new("wall", ArchId(1));
+        stack.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        for _ in 0..23 {
+            stack.indices.extend([0, 1, 2]);
+        }
+        let same = build_gpu_scene(&Scene3d { meshes: vec![stack], ..Default::default() }, false, None);
+        assert_eq!(same.tris.len(), 23);
+        check_tree(&same);
+    }
+
+    #[test]
+    fn trace_cpu_matches_the_pick_bvh() {
+        let mut rng = Rng(42);
+        let scene = random_prisms(&mut rng, 40);
+        let gpu = build_gpu_scene(&scene, false, None);
+        let pick = cadcraft_arch3d::pick::Bvh::build(&scene);
+        let (mut hits, mut misses) = (0, 0);
+        for n in 0..500 {
+            let origin = [rng.between(-14.0, 14.0), rng.between(-14.0, 14.0), rng.between(-14.0, 14.0)];
+            // Aimed at a random point of the prisms' volume, so a good share of the rays hit.
+            let target = [rng.between(-10.0, 10.0), rng.between(-10.0, 10.0), rng.between(-10.0, 10.0)];
+            let mut dir = sub(target, origin);
+            if n % 25 == 0 {
+                // Axis-aligned rays hit the zero-component branches of the slab test.
+                dir = [0.0, 0.0, 1.0];
+                dir.rotate_left((n / 25) % 3);
+            }
+            let len = dot(dir, dir).sqrt();
+            let dir = dir.map(|v| v / len);
+            let want = pick.ray(
+                Vec3::new(origin[0] as f64, origin[1] as f64, origin[2] as f64),
+                Vec3::new(dir[0] as f64, dir[1] as f64, dir[2] as f64),
+                1e30,
+            );
+            let got = gpu.trace_cpu(origin, dir, 1e30);
+            match (want, got) {
+                (None, None) => misses += 1,
+                (Some(w), Some(g)) => {
+                    hits += 1;
+                    assert!((w.distance - f64::from(g.t)).abs() < 1e-3, "ray {n}: pick {} vs gpu {}", w.distance, g.t);
+                    assert_eq!(gpu.tris[g.tri as usize].object, w.object.0, "ray {n}");
+                }
+                (w, g) => panic!("ray {n}: pick {w:?} vs gpu {g:?}"),
+            }
+        }
+        assert!(hits > 150 && misses > 20, "{hits} hits, {misses} misses");
+        // t_max clips, a hostile ray misses.
+        let o = [-30.0, 0.0, 0.0];
+        let d = [1.0, 0.0, 0.0];
+        if let Some(h) = gpu.trace_cpu(o, d, 1e30) {
+            assert_eq!(gpu.trace_cpu(o, d, h.t * 0.5), None);
+        }
+        assert_eq!(gpu.trace_cpu([f32::NAN, 0.0, 0.0], d, 1e30), None);
+        assert_eq!(gpu.trace_cpu(o, [0.0; 3], 1e30), None);
+        assert_eq!(gpu.trace_cpu(o, d, f32::NAN), None);
+    }
+
+    #[test]
+    fn materials_follow_material_pbr() {
+        let (albedo, metallic, roughness, _) = material_pbr("wall");
+        let wall = material_for("wall");
+        assert_eq!((wall.albedo, wall.metallic, wall.roughness, wall.flags), (albedo, metallic, roughness, 0));
+        assert_eq!((wall.ior, wall.emission, wall.transmission), (1.5, [0.0; 3], 0.0));
+        let glass = material_for("glass");
+        assert_eq!(glass.flags, MAT_GLASS);
+        assert_eq!(glass.ior, 1.5);
+        assert!((glass.transmission - 0.65).abs() < 1e-6);
+        assert_eq!(glass.roughness, material_pbr("glass").2);
+        let lens = material_for("light-lens-lit");
+        assert_eq!(lens.flags, MAT_EMIT_CAMERA_ONLY | MAT_NO_SHADOW);
+        assert_eq!(lens.emission, [LENS_NITS; 3]);
+        let housing = material_for("light-housing");
+        assert_eq!((housing.flags, housing.emission), (MAT_NO_SHADOW, [0.0; 3]));
+        let mirror = material_for("mirror-x");
+        assert_eq!((mirror.albedo, mirror.metallic, mirror.roughness, mirror.flags), ([0.95; 3], 1.0, 0.02, 0));
+        assert_eq!(mirror.ior, 1.5);
+    }
+
+    fn luminance_of(rgb: [f32; 3]) -> f64 {
+        0.2126 * f64::from(rgb[0]) + 0.7152 * f64::from(rgb[1]) + 0.0722 * f64::from(rgb[2])
+    }
+
+    #[test]
+    fn lights_pack_luminance_rgb_and_ies_tables() {
+        let spot = SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::new(1.0, 2.0, 3.0),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 950.36,
+            color: [1.0, 0.8, 0.6],
+            cos_inner: 0.9,
+            cos_outer: 0.8,
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ..Default::default()
+        };
+        // 5 vertical angles, 1 horizontal angle, 5 candela (rotationally symmetric).
+        let mut with_ies = SceneLight {
+            id: ArchId(2),
+            kind: LightKind::Point,
+            intensity: 500.0,
+            color: [1.0; 3],
+            ies: Some(Arc::new(Default::default())),
+            ..Default::default()
+        };
+        if let Some(p) = with_ies.ies.as_mut().and_then(Arc::get_mut) {
+            p.vertical = vec![0.0, 45.0, 90.0, 135.0, 180.0];
+            p.horizontal = vec![0.0];
+            p.candela = vec![1000.0, 800.0, 400.0, 100.0, 0.0];
+            p.lumens = -1.0;
+        }
+        let area = SceneLight {
+            id: ArchId(3),
+            kind: LightKind::Area,
+            intensity: 3600.0 / std::f64::consts::PI,
+            color: [1.0, 0.9, 0.8],
+            size: [0.6, 0.6],
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            axis: Vec3::new(0.0, 1.0, 0.0),
+            cos_inner: 1.0,
+            ..Default::default()
+        };
+        let sharing = SceneLight { id: ArchId(4), ..with_ies.clone() };
+        let scene = Scene3d { lights: vec![spot, with_ies.clone(), area, sharing], ..Default::default() };
+        let gpu = build_gpu_scene(&scene, false, None);
+        assert_eq!(gpu.lights.len(), 4);
+
+        let s = gpu.lights[0];
+        assert_eq!(
+            (s.kind, s.position, s.direction, s.cos_inner, s.cos_outer, s.axis),
+            (LIGHT_SPOT, [1.0, 2.0, 3.0], [0.0, 0.0, -1.0], 0.9, 0.8, [1.0, 0.0, 0.0])
+        );
+        assert!((luminance_of(s.rgb) - 950.36).abs() < 1e-2, "{}", luminance_of(s.rgb));
+        // The colour's ratios survive: blue/red = 0.6/1.
+        assert!((s.rgb[2] / s.rgb[0] - 0.6).abs() < 1e-5);
+        assert_eq!((s.ies_v, s.ies_h, s.width, s.length), (0, 0, 0.0, 0.0));
+
+        let p = gpu.lights[1];
+        assert_eq!(p.kind, LIGHT_POINT);
+        assert_eq!((p.ies_offset, p.ies_v, p.ies_h), (0, 5, 1));
+        assert_eq!(gpu.ies.len(), 5 + 1 + 5);
+        assert_eq!(gpu.ies, vec![0.0, 45.0, 90.0, 135.0, 180.0, 0.0, 1000.0, 800.0, 400.0, 100.0, 0.0]);
+        assert!((luminance_of(p.rgb) - 500.0).abs() < 1e-2);
+
+        // An area light's rgb is its radiance: intensity over its area.
+        let a = gpu.lights[2];
+        assert_eq!((a.kind, a.width, a.length, a.axis), (LIGHT_AREA, 0.6, 0.6, [0.0, 1.0, 0.0]));
+        let nits = 3600.0 / std::f64::consts::PI / 0.36;
+        assert!((luminance_of(a.rgb) - nits).abs() < nits * 1e-5, "{} vs {nits}", luminance_of(a.rgb));
+
+        // A second light on the same profile points at the same table.
+        assert_eq!((gpu.lights[3].ies_offset, gpu.lights[3].ies_v, gpu.lights[3].ies_h), (0, 5, 1));
+
+        // A table of the wrong size is left out, not packed.
+        let mut bad = SceneLight { ies: with_ies.ies.as_ref().map(|p| Arc::new((**p).clone())), ..Default::default() };
+        if let Some(p) = bad.ies.as_mut().and_then(Arc::get_mut) {
+            p.candela.pop();
+        }
+        let gpu = build_gpu_scene(&Scene3d { lights: vec![bad], ..Default::default() }, false, None);
+        assert!(gpu.ies.is_empty());
+        assert_eq!(gpu.lights[0].ies_v, 0);
+    }
+
+    #[test]
+    fn furnace_scene_is_diffuse_with_emission_and_no_lights() {
+        let mut scene = random_prisms(&mut Rng(3), 5);
+        scene.lights.push(SceneLight { intensity: 100.0, color: [1.0; 3], ..Default::default() });
+        let gpu = build_gpu_scene(&scene, true, Some(Furnace { albedo: 0.5, emission: 2.0 }));
+        assert!(gpu.lights.is_empty() && gpu.ies.is_empty());
+        assert_eq!(gpu.materials.len(), 6, "one per mesh and the ground");
+        for m in &gpu.materials {
+            assert_eq!(*m, GpuMaterial { albedo: [0.5; 3], emission: [2.0; 3], roughness: 1.0, ior: 1.0, ..Default::default() });
+        }
+        assert!(gpu.tris.iter().all(|t| t.flags == 0), "no glass, no lens flags");
+        let normal = build_gpu_scene(&scene, true, None);
+        assert_eq!(normal.lights.len(), 1);
+        assert_eq!(gpu.tris.len(), normal.tris.len());
+    }
+
+    #[test]
+    fn ground_adds_two_triangles() {
+        let scene = random_prisms(&mut Rng(5), 3);
+        let without = build_gpu_scene(&scene, false, None);
+        let with = build_gpu_scene(&scene, true, None);
+        assert_eq!(with.tris.len(), without.tris.len() + 2);
+        assert_eq!(with.materials.len(), without.materials.len() + 1);
+        assert_eq!(with.materials[3], material_for("ground"));
+        let ground: Vec<&GpuTri> = with.tris.iter().filter(|t| t.material == 3).collect();
+        assert_eq!(ground.len(), 2);
+        for t in ground {
+            assert_eq!(t.n, [0.0, 0.0, 1.0]);
+            for c in corners(t) {
+                assert_eq!(c[2], 0.0);
+                assert_eq!(c[0].abs(), 100.0);
+                assert_eq!(c[1].abs(), 100.0);
+            }
+        }
+        // A ray from above lands on it, 1.5 m down; an empty scene with only the ground has two triangles.
+        let hit = with.trace_cpu([50.0, 50.0, 1.5], [0.0, 0.0, -1.0], 100.0).filter(|h| with.tris[h.tri as usize].material == 3);
+        assert!(hit.is_some_and(|h| (h.t - 1.5).abs() < 1e-5));
+        let only = build_gpu_scene(&Scene3d::default(), true, None);
+        assert_eq!((only.tris.len(), only.nodes.len()), (2, 1));
+        // The seam diagonal is still a hit (the two triangles share it).
+        assert!(only.trace_cpu([3.0, 3.0, 2.0], [0.0, 0.0, -1.0], 10.0).is_some_and(|h| (h.t - 2.0).abs() < 1e-5));
     }
 }
