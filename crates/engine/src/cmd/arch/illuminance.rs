@@ -180,9 +180,9 @@ mod tests {
     #[test]
     fn illuminance_off_lights_contribute_nothing() {
         let mut model = room_model();
-        // Turn off two of the four lights
+        // Turn off two of the four lights (lf1 at (1,3) and lf3 at (3,3))
         model.lights[1].on = false;
-        model.lights[2].on = false;
+        model.lights[3].on = false;
 
         let mut s = Session::empty();
         s.new_drawing(false);
@@ -190,8 +190,9 @@ mod tests {
         d.arch = model;
         d.touch_arch();
 
-        // Use the center of the fixture grid where all four lights reach
-        let result = s.execute("illuminance", &json!({"point": [1.5, 1.5, 0.0]})).unwrap();
+        // Point (2, 1.5, 0) is within the 60° cone of lf0 (1,1) and lf2 (3,1)
+        // but outside the cone of lf1 (1,3) and lf3 (3,3) (cone radius at floor ~1.39m)
+        let result = s.execute("illuminance", &json!({"point": [2.0, 1.5, 0.0]})).unwrap();
         let contribs = result["contributions"].as_array().unwrap();
         // All four lights are reported, but only the two that are on contribute
         assert_eq!(contribs.len(), 4);
@@ -199,9 +200,9 @@ mod tests {
         assert_eq!(active.len(), 2, "only two lights should be on");
         // The off lights should have zero contribution
         let lf1 = contribs.iter().find(|v| v["id"] == json!("lf1")).unwrap();
-        let lf2 = contribs.iter().find(|v| v["id"] == json!("lf2")).unwrap();
+        let lf3 = contribs.iter().find(|v| v["id"] == json!("lf3")).unwrap();
         assert_eq!(lf1["lux"].as_f64().unwrap(), 0.0);
-        assert_eq!(lf2["lux"].as_f64().unwrap(), 0.0);
+        assert_eq!(lf3["lux"].as_f64().unwrap(), 0.0);
     }
 
     #[test]
