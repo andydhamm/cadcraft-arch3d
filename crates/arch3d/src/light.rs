@@ -76,8 +76,7 @@ impl SceneLight {
 /// measured counter-clockwise (seen against the aim) from `axis` in the plane perpendicular to the
 /// aim; `cadcraft_arch::ies::candela_at` interpolates. 0 for a non-finite direction. Stub filled by
 /// `p11-arch3d-ies-area`.
-pub fn ies_toward(light: &SceneLight, profile: &cadcraft_doc::arch::IesProfile, to_point: Vec3) -> f64 {
-    let _ = (light, profile, to_point);
+pub fn ies_toward(_light: &SceneLight, _profile: &cadcraft_doc::arch::IesProfile, _to_point: Vec3) -> f64 {
     0.0
 }
 
