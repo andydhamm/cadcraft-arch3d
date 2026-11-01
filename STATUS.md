@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 12:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 11 of 13: Ray-traced Finalize Render — 11 of 23 segments merged · 0 of 13 acceptance checks**
+**Phase 11 of 13: Ray-traced Finalize Render — 13 of 23 segments merged · 0 of 13 acceptance checks**
 
-6,317 workspace tests passing at the last merge · 630 segments merged in all · 0 of 13 seats working
+6,321 workspace tests passing at the last merge · 633 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,25 +21,25 @@ Updated 2026-11-01 12:00 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 0 / 13 | 4.3 h so far · expected done Nov 01 16:09–Nov 02 00:40 UTC |
+| 11 | Ray-traced Finalize Render | building | 0 / 13 | 4.6 h so far · expected done Nov 01 15:54–Nov 02 00:30 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-11 merged, 8 queued, 3 escalate, 1 working
+13 merged, 7 queued, 1 working, 1 escalate, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p11-r3d-pt-lights` | WGSL lights: points, spots, IES tables, rectangular area lights, the sun and the sky | escalate |  |
+| `p11-r3d-pt-kernel` | The path-tracing kernel: camera paths, next-event estimation, MIS, roulette, AOVs, irradiance probes | working | claude-sonnet-a |
 | `p11-r3d-pt-driver` | The progressive driver: frames, passes, snapshots, resolve, denoise hook, cancel; irradiance probes | escalate |  |
-| `p11-cmd-lightfixture-area-ies` | LIGHTFIXTURE area lights and IES files; arch.inspect shows them | escalate |  |
-| `p11-io-area-ies` | GLB and DXF for area lights and IES fixtures | working | bonsai-a |
+| `p11-io-area-ies` | GLB and DXF for area lights and IES fixtures | gate | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 12:07 | `harden-p11-r3d-pipeline-cache` | merged | 6,321 pass | tturbo-mac |
 | Nov 01 11:56 | `p11-arch3d-panel` | merged | 6,317 pass | darwin-ws3 |
 | Nov 01 11:40 | `p11-arch3d-ies-area` | merged | 6,313 pass | bonsai-ws2-a |
 | Nov 01 11:23 | `p11-cmd-render-path` | merged | 6,309 pass | bonsai-ws2-b |
@@ -51,22 +51,21 @@ Updated 2026-11-01 12:00 UTC. This page and the card in the README are regenerat
 | Nov 01 09:47 | `p11-r3d-denoise` | merged | 6,266 pass | bonsai-a |
 | Nov 01 09:30 | `p11-r3d-pt-traverse` | merged | 6,259 pass | mai-flash |
 | Nov 01 09:22 | `p11-arch-panel` | merged | 6,256 pass | bonsai-b |
-| Nov 01 09:08 | `p11-arch-ies` | merged | 6,252 pass | bonsai-ws2-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 764 |
+| bonsai-a | bonsai2-27b | gate | 764 |
 | bonsai-b | bonsai2-27b | agent | 706 |
 | bonsai-ws2-a | bonsai2-27b | agent | 762 |
-| bonsai-ws2-b | bonsai2-27b | agent | 737 |
-| claude-sonnet-a | sonnet | idle | 61 |
+| bonsai-ws2-b | bonsai2-27b | agent | 740 |
+| claude-sonnet-a | sonnet | agent | 61 |
 | claude-sonnet-b | sonnet | idle | 60 |
 | claude-sonnet-c | sonnet | idle | 10 |
 | claude-sonnet-d | sonnet | idle | 4 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 604 |
-| kimi-k31 | k3.1-pro-highspeed | down | 111 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 606 |
+| kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | merging | 529 |
+| tturbo-mac | tturbo-ultraheretic | agent | 529 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
