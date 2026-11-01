@@ -25,7 +25,7 @@ fn toward(deg: f64) -> [f32; 3] {
 }
 
 fn probe(material: usize, wo: [f32; 3], samples: u32) -> GpuProbe {
-    GpuProbe { point: wo, _a: material as f32, normal: Z, _b: samples as f32 }
+    GpuProbe { point: wo, _a: material as f32, normal: Z, _b: samples as f32, ..Default::default() }
 }
 
 /// Run kernel entry `entry` over `probes` on a scene holding `materials`; `None` (after a SKIP
