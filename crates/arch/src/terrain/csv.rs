@@ -123,4 +123,47 @@ mod tests {
         assert_eq!(p.len(), 2);
         assert_eq!(p[1], Vec3::new(4.0, 5.0, 6.0));
     }
+
+    #[test]
+    fn csv_rejects_four_field_row() {
+        let e = parse_points_csv("1,2,3,4", None).err().map(|e| e.0);
+        assert_eq!(e.as_deref(), Some("CSV line 1: expected x,y,z numbers, got `1,2,3,4`"));
+    }
+
+    #[test]
+    fn csv_parses_single_point() {
+        let p = parse_points_csv("1,2,3", None).unwrap_or_default();
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0], Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn csv_parses_negative_and_scientific() {
+        let p = parse_points_csv("-1.5,2e3,3.14", None).unwrap_or_default();
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0], Vec3::new(-1.5, 2000.0, 3.14));
+    }
+
+    #[test]
+    fn csv_parses_large_finite_values() {
+        let p = parse_points_csv("1e308,1e308,1e308", None).unwrap_or_default();
+        assert_eq!(p.len(), 1);
+        assert!(p[0].x.is_finite());
+        assert!(p[0].y.is_finite());
+        assert!(p[0].z.is_finite());
+    }
+
+    #[test]
+    fn csv_offset_can_produce_non_finite() {
+        // x = 1e308, offset = (-1e308, 0) -> px = 2e308 = inf
+        let e = parse_points_csv("1e308,1,1", Some((-1e308, 0.0))).err().map(|e| e.0);
+        assert_eq!(e.as_deref(), Some("CSV line 1: coordinates out of range"));
+    }
+
+    #[test]
+    fn csv_four_field_header_is_not_skipped() {
+        // A header with 4 fields is not detected as a header (spec requires 3 fields)
+        let e = parse_points_csv("id,x,y,z\n1,2,3", None).err().map(|e| e.0);
+        assert_eq!(e.as_deref(), Some("CSV line 1: expected x,y,z numbers, got `id,x,y,z`"));
+    }
 }
