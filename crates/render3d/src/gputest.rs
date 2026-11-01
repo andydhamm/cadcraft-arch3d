@@ -26,6 +26,13 @@ pub(crate) fn shared_device() -> Option<(wgpu::Device, wgpu::Queue)> {
     SHARED.get_or_init(|| crate::offscreen::device_within(SHARED_DEVICE_BUDGET)).clone()
 }
 
+/// One compute device (the software adapter) for every path-tracer test in this binary; `None`
+/// (tests skip) without one.
+pub(crate) fn shared_compute() -> Option<crate::pathtrace::ComputeGpu> {
+    static SHARED: std::sync::OnceLock<Option<crate::pathtrace::ComputeGpu>> = std::sync::OnceLock::new();
+    SHARED.get_or_init(|| crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, false).ok().flatten()).clone()
+}
+
 /// How long [`shared_device`] waits for the adapter and device.
 pub(crate) const SHARED_DEVICE_BUDGET: Duration = Duration::from_secs(30);
 

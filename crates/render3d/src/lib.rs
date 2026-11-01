@@ -4,6 +4,7 @@
 //! - [`camera`]: orbit camera with view/projection matrices.
 //! - [`pipeline`]: GPU mesh upload and render pipeline setup.
 //! - [`offscreen`]: offscreen wgpu renderer for headless PNG export.
+//! - [`pathtrace`]: the path-traced Finalize Render (phase 11).
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
@@ -17,6 +18,7 @@ pub mod lights;
 pub mod lit;
 pub mod lit_frame;
 pub mod offscreen;
+pub mod pathtrace;
 pub mod pipeline;
 pub mod shadow;
 pub mod shadow_atlas;

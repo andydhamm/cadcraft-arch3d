@@ -1,5 +1,6 @@
 //! Light fixtures (phase 10): placed in plan on a ceiling, a wall or the floor, each with a plan
-//! symbol, a 3D housing and a light (point or spot, lumens, kelvin). Plain data on
+//! symbol, a 3D housing and a light (point, spot or, since phase 11, a rectangular area; lumens,
+//! kelvin; optionally an IES photometric distribution). Plain data on
 //! [`super::ArchModel`]; the catalogue, placement and photometry live in `arch::light`, the 3D
 //! housing, the scene lights and illuminance in `arch3d::light`, the GPU lighting in `render3d`.
 
@@ -26,6 +27,14 @@ pub const DEFAULT_WALL_HEIGHT: f64 = 1.8;
 pub const DEFAULT_FLOOR_LAMP_HEIGHT: f64 = 1.5;
 /// How far a pendant's light point hangs below the ceiling when the fixture stores no height (m).
 pub const DEFAULT_PENDANT_DROP: f64 = 0.6;
+/// Longest side of an area light (m), and the shortest (a side below it is not an area).
+pub const MAX_AREA_SIDE: f64 = 4.0;
+pub const MIN_AREA_SIDE: f64 = 0.01;
+/// Most vertical or horizontal angles an IES profile may carry, and most candela values.
+pub const MAX_IES_ANGLES: usize = 1_024;
+pub const MAX_IES_VALUES: usize = 65_536;
+/// Largest IES file read (bytes).
+pub const MAX_IES_BYTES: usize = 1_000_000;
 
 /// How the fixture emits.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,6 +45,11 @@ pub enum LightKind {
     Point,
     /// Uniform intensity inside `cone`, fading to zero at `falloff`; one shadow map.
     Spot,
+    /// A `width` × `length` rectangle (phase 11) emitting like a Lambertian surface from its face
+    /// toward the aim: peak intensity `lumens / π` cd along the aim, `cos θ` off it, nothing
+    /// behind. The raster view draws it as a spot over the hemisphere; the path tracer samples
+    /// the rectangle.
+    Area,
 }
 
 /// What the fixture is fixed to.
@@ -64,6 +78,9 @@ pub enum FixtureShape {
     SurfaceDome,
     /// A base, a pole and a shade standing on the floor.
     FloorLamp,
+    /// A rectangular recessed panel (troffer) in the ceiling: a frame and a diffuser, the area
+    /// light's face flush with the ceiling (phase 11).
+    Panel,
 }
 
 impl FixtureShape {
@@ -75,6 +92,7 @@ impl FixtureShape {
             FixtureShape::Sconce => "sconce",
             FixtureShape::SurfaceDome => "surface-dome",
             FixtureShape::FloorLamp => "floor-lamp",
+            FixtureShape::Panel => "panel",
         }
     }
 }
@@ -118,6 +136,40 @@ pub struct LightFixture {
     /// An off fixture keeps its housing and emits nothing.
     #[serde(default = "default_on")]
     pub on: bool,
+    /// An area light's size (m): `width` along the fixture's `rotation`, `length` across it. Zero
+    /// for a point or spot light.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub width: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub length: f64,
+    /// The fixture's measured light distribution (an IES LM-63 file read into the drawing), which
+    /// replaces the cone; `None` = the cone or the area's cosine law.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ies: Option<IesProfile>,
+}
+
+/// A photometric distribution read from an IES LM-63 file (type C photometry): candela by
+/// vertical angle (0° = straight down along the aim, 180° = straight up) and horizontal angle
+/// (0° = the fixture's `rotation` direction, counter-clockwise seen from above).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct IesProfile {
+    /// The file's `[LUMINAIRE]` (else `[TEST]`) keyword, else the file name, for display.
+    pub name: String,
+    /// Vertical angles (degrees, ascending, within 0..=180).
+    pub vertical: Vec<f64>,
+    /// Horizontal angles (degrees, ascending, within 0..=360; one angle = rotationally
+    /// symmetric; last 90 = quadrant-symmetric; last 180 = bilaterally symmetric).
+    pub horizontal: Vec<f64>,
+    /// Candela, already multiplied by the file's multiplier and ballast factor, horizontal-major:
+    /// the value at (`horizontal[h]`, `vertical[v]`) is `candela[h * vertical.len() + v]`.
+    pub candela: Vec<f64>,
+    /// The rated lumens of the lamps (lamps × lumens per lamp); `-1` = absolute photometry.
+    pub lumens: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 
 fn default_tilt() -> f64 {
@@ -152,6 +204,9 @@ impl LightFixture {
             cone: 60.0,
             falloff: 60.0,
             on: true,
+            width: 0.0,
+            length: 0.0,
+            ies: None,
         }
     }
 }

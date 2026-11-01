@@ -21,6 +21,7 @@ cadcraft-arch = { path = "crates/arch" }
 cadcraft-arch3d = { path = "crates/arch3d" }
 cadcraft-constraints = { path = "crates/constraints" }
 cadcraft-render3d = { path = "crates/render3d" }
+cadcraft-gpu-optin = { path = "crates/gpu-optin" }
 cadcraft-fonts = { path = "crates/fonts" }
 cadcraft-render = { path = "crates/render" }
 cadcraft-io = { path = "crates/io" }

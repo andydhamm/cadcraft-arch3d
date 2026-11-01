@@ -92,6 +92,8 @@ pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
                     prism(lens, f, &poly(c, 0.03), zp - 0.03, zp + 0.03),
                 ]
             }
+            // Phase 11 stub, filled by `p11-arch3d-panel`: the frame and the diffuser.
+            FixtureShape::Panel => Vec::new(),
         };
         out.extend(parts.into_iter().flatten());
     }

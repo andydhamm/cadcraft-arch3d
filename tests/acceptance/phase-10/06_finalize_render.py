@@ -10,7 +10,7 @@ for name, extra in (('open', []), ('column', [COLUMN])):
     out = os.path.join(tmp, f'final-{name}.png')
     rc, rr, so, se = run(room_cmds() + [POTS] + extra + [
         cmd('render', {"size": [160, 120], "camera": CAM, "sun": False, "samples": [[1.8, 1.8, 0]]}),
-        cmd('render', {"out": out, "size": [320, 240], "camera": CAM, "sun": False, "final": True, "samples": [[1.8, 1.8, 0], [3, 1, 0]]}),
+        cmd('render', {"out": out, "size": [320, 240], "camera": CAM, "sun": False, "final": "raster", "samples": [[1.8, 1.8, 0], [3, 1, 0]]}),
         'build3d {}'])
     r = renders(rr)
     if len(r) != 2:
@@ -36,7 +36,7 @@ print("ok: the column's shadow in the final render; (3,1,0) unchanged")
 # Every light shadowed in Finalize, past the interactive budget of 8.
 rc, rr, so, se = run(room_cmds(w=6.0, h=4.0) + [cmd('lightfixture', {"room": "r0", "rows": 3, "cols": 4}),
                      cmd('render', {"size": [120, 90], "camera": CAM, "sun": False}),
-                     cmd('render', {"size": [120, 90], "camera": CAM, "sun": False, "final": True})])
+                     cmd('render', {"size": [120, 90], "camera": CAM, "sun": False, "final": "raster"})])
 r = renders(rr)
 if num(r[0].get('shadowedLights'), 'interactive shadowed') != 8 or num(r[1].get('shadowedLights'), 'final shadowed') != 12:
     fail(f"interactive shadows 8 of 12, Finalize all 12: {r[0].get('shadowedLights')}, {r[1].get('shadowedLights')}")
