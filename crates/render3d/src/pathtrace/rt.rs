@@ -92,3 +92,46 @@ impl RqBuild {
         Some(RqBuild { tlas, blas, vertex_buffer })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::scene_gpu::GpuTri;
+    use super::*;
+    use crate::gputest::shared_compute;
+
+    #[test]
+    fn rq_build_returns_none_for_empty_scene() {
+        let Some(gpu) = shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        let scene = GpuScene::default();
+        assert!(RqBuild::build(&gpu, &scene).is_none(), "empty scene should not build a rq structure");
+    }
+
+    #[test]
+    fn rq_build_returns_none_for_non_finite_vertices() {
+        let Some(gpu) = shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        let mut scene = GpuScene::default();
+        scene.tris.push(GpuTri { v0: [0.0, 0.0, 0.0], e1: [1.0, 0.0, 0.0], e2: [0.0, f32::NAN, 0.0], ..Default::default() });
+        assert!(RqBuild::build(&gpu, &scene).is_none(), "non-finite vertex should not build a rq structure");
+    }
+
+    #[test]
+    fn rq_build_succeeds_for_single_triangle() {
+        let Some(gpu) = shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if !gpu.ray_query {
+            eprintln!("SKIP: no ray queries on this device");
+            return;
+        }
+        let mut scene = GpuScene::default();
+        scene.tris.push(GpuTri { v0: [0.0, 0.0, 0.0], e1: [1.0, 0.0, 0.0], e2: [0.0, 1.0, 0.0], ..Default::default() });
+        assert!(RqBuild::build(&gpu, &scene).is_some(), "single triangle should build a rq structure");
+    }
+}
