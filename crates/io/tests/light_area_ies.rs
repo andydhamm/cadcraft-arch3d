@@ -51,3 +51,46 @@ fn arch_record_round_trips_area_and_ies() {
     // Saving what was read gives the same record.
     assert_eq!(read_dxf(write_dxf(&back).as_bytes()).expect("reopen again").arch.lights, d.arch.lights);
 }
+
+#[test]
+fn round_trip_non_square_panel() {
+    let mut d = Drawing::default();
+
+    let panel_type = find_type("LED panel 600").expect("the catalogue's LED panel");
+    let mut panel = fixture_from_type(ArchId(0), &panel_type, Vec2::new(2.0, 1.5));
+    panel.width = 1.2;
+    panel.length = 0.3;
+    d.arch.lights = vec![panel.clone()];
+
+    let text = write_dxf(&d);
+    let back = read_dxf(text.as_bytes()).expect("reopen");
+    assert_eq!(back.arch.lights.len(), 1);
+    assert_eq!(back.arch.lights[0].width, 1.2);
+    assert_eq!(back.arch.lights[0].length, 0.3);
+}
+
+#[test]
+fn round_trip_ies_with_many_values() {
+    let mut d = Drawing::default();
+
+    let pot_type = find_type("Recessed pot light").expect("the catalogue's pot light");
+    let mut pot = fixture_from_type(ArchId(0), &pot_type, Vec2::new(2.0, 1.5));
+
+    // Build a larger IES profile: 10 vertical angles, 8 horizontal angles = 80 candela values
+    let vertical: Vec<f64> = (0..10).map(|i| i as f64 * 18.0).collect();
+    let horizontal: Vec<f64> = (0..8).map(|i| i as f64 * 45.0).collect();
+    let candela: Vec<f64> = (0..80).map(|i| 1000.0 / (1.0 + i as f64 * 0.1)).collect();
+    pot.ies = Some(IesProfile { name: "Large profile".into(), vertical, horizontal, candela, lumens: 1500.0, ..Default::default() });
+
+    d.arch.lights = vec![pot.clone()];
+
+    let text = write_dxf(&d);
+    let back = read_dxf(text.as_bytes()).expect("reopen");
+    assert_eq!(back.arch.lights.len(), 1);
+    let ies = back.arch.lights[0].ies.as_ref().expect("IES should round-trip");
+    assert_eq!(ies.name, "Large profile");
+    assert_eq!(ies.vertical.len(), 10);
+    assert_eq!(ies.horizontal.len(), 8);
+    assert_eq!(ies.candela.len(), 80);
+    assert_eq!(ies.candela, pot.ies.as_ref().unwrap().candela);
+}

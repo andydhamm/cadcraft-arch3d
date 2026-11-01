@@ -124,7 +124,7 @@ struct FinalDone {
 }
 
 /// Finalize Render state shared between the pane's UI and its paint callback.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct FinalUi {
     /// The Finalize button was pressed; the callback starts a render.
     request: bool,
@@ -138,6 +138,62 @@ struct FinalUi {
     started: Option<ViewState>,
     /// The finished still.
     done: Option<FinalDone>,
+    /// Which Finalize the button runs: what render's `final: true` does until the user picks.
+    mode: cadcraft_engine::FinalMode,
+    /// The path tracer's target samples per pixel.
+    samples: u32,
+    /// (samples done, samples wanted) while a path-traced Finalize runs.
+    path_progress: Option<(u32, u32)>,
+    /// The last path Finalize ran as raster: the device has no compute shaders.
+    fallback: bool,
+}
+
+impl Default for FinalUi {
+    fn default() -> Self {
+        FinalUi {
+            request: false,
+            cancel: false,
+            progress: None,
+            error: None,
+            started: None,
+            done: None,
+            mode: cadcraft_engine::FinalMode::default(),
+            samples: cadcraft_render3d::pathtrace::DEFAULT_SPP,
+            path_progress: None,
+            fallback: false,
+        }
+    }
+}
+
+/// The running path Finalize's label: samples done of samples wanted.
+fn samples_label(done: u32, wanted: u32) -> String {
+    crate::i18n::format("{spp} / {total} samples", &[("spp", done.to_string()), ("total", wanted.to_string())])
+}
+
+/// The adapter the pane's compute device comes from: the software one under test, else
+/// `CADCRAFT_RENDER_ADAPTER` (as the CLI reads it), else the best one.
+#[cfg(test)]
+fn compute_adapter() -> cadcraft_render3d::adapter::AdapterChoice {
+    cadcraft_render3d::adapter::AdapterChoice::Fallback
+}
+
+#[cfg(all(not(test), not(target_arch = "wasm32")))]
+fn compute_adapter() -> cadcraft_render3d::adapter::AdapterChoice {
+    use cadcraft_render3d::adapter::AdapterChoice;
+    std::env::var("CADCRAFT_RENDER_ADAPTER").ok().and_then(|v| AdapterChoice::parse(&v)).unwrap_or(AdapterChoice::Auto)
+}
+
+/// The compute device for path-traced Finalize, asked for once.
+#[cfg(not(target_arch = "wasm32"))]
+fn request_pane_compute() -> Option<cadcraft_render3d::pathtrace::ComputeGpu> {
+    cadcraft_render3d::pathtrace::request_compute(compute_adapter(), false).ok().flatten()
+}
+
+/// The web build has no compute device here: its adapter request cannot block, so a path
+/// Finalize there is the raster still.
+#[cfg(target_arch = "wasm32")]
+fn request_pane_compute() -> Option<cadcraft_render3d::pathtrace::ComputeGpu> {
+    None
 }
 
 impl FinalUi {
@@ -535,19 +591,32 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
             }
             ui.add(edit);
         }
-        let (progress, error, has_still) = {
+        let (progress, error, has_still, path_progress, fallback) = {
             let f = lock_final(&finalize);
-            (f.progress, f.error.clone(), f.done.is_some())
+            (f.progress, f.error.clone(), f.done.is_some(), f.path_progress, f.fallback)
         };
         match progress {
             Some(p) => {
-                ui.add(egui::ProgressBar::new(p.clamp(0.0, 1.0)).desired_width(120.0).show_percentage());
+                match path_progress {
+                    Some((done, wanted)) => ui.label(samples_label(done, wanted)),
+                    None => ui.add(egui::ProgressBar::new(p.clamp(0.0, 1.0)).desired_width(120.0).show_percentage()),
+                };
                 if ui.button(crate::i18n::t("Cancel")).clicked() {
                     lock_final(&finalize).cancel = true;
                 }
                 ui.ctx().request_repaint();
             }
             None => {
+                {
+                    use cadcraft_engine::FinalMode;
+                    let mut f = lock_final(&finalize);
+                    ui.selectable_value(&mut f.mode, FinalMode::Path, crate::i18n::t("Path traced"));
+                    ui.selectable_value(&mut f.mode, FinalMode::Raster, crate::i18n::t("Raster"));
+                    if f.mode == FinalMode::Path {
+                        let label = ui.label(crate::i18n::t("Samples"));
+                        ui.add(egui::DragValue::new(&mut f.samples).range(1..=cadcraft_render3d::pathtrace::MAX_SPP)).labelled_by(label.id);
+                    }
+                }
                 if ui.button(crate::i18n::t("Finalize Render")).clicked() {
                     let mut f = lock_final(&finalize);
                     f.request = true;
@@ -557,6 +626,9 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
                     ui.colored_label(ui.visuals().error_fg_color, e);
                 }
             }
+        }
+        if fallback {
+            ui.label(crate::i18n::t("No compute shaders: raster Finalize"));
         }
         #[cfg(not(target_arch = "wasm32"))]
         if has_still && ui.button(crate::i18n::t("Save PNG")).clicked() {
@@ -680,8 +752,12 @@ struct Resources {
     draws: u64,
     /// The Finalize Render in progress.
     final_render: Option<cadcraft_render3d::FinalRender>,
-    /// The finished still on the GPU, with the view it was made for.
+    /// The finished still on the GPU, with the view it was made for; while a path Finalize
+    /// refines, its preview so far.
     final_image: Option<(ViewState, wgpu::BindGroup)>,
+    /// The compute device for path-traced Finalize: `None` until the first path Finalize asks
+    /// for it, `Some(None)` when the adapter has no compute shaders.
+    compute: Option<Option<cadcraft_render3d::pathtrace::ComputeGpu>>,
 }
 
 impl Resources {
@@ -748,7 +824,7 @@ impl Resources {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        Resources { blit, layout, sampler, offscreen: None, bound: None, drawn: None, draws: 0, final_render: None, final_image: None }
+        Resources { blit, layout, sampler, offscreen: None, bound: None, drawn: None, draws: 0, final_render: None, final_image: None, compute: None }
     }
 }
 
@@ -838,7 +914,36 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
         if std::mem::take(&mut ui_state.request) && res.final_render.is_none() {
             res.final_image = None;
             ui_state.done = None;
-            let render = cadcraft_render3d::FinalRender::start(off, &self.scene, self.key, &self.camera, &self.lighting, false, (w, h));
+            ui_state.path_progress = None;
+            ui_state.fallback = false;
+            let render = match ui_state.mode {
+                cadcraft_engine::FinalMode::Raster => {
+                    cadcraft_render3d::FinalRender::start(off, &self.scene, self.key, &self.camera, &self.lighting, false, (w, h))
+                }
+                cadcraft_engine::FinalMode::Path => {
+                    let compute = res.compute.get_or_insert_with(request_pane_compute).as_ref();
+                    let spp = ui_state.samples.clamp(1, cadcraft_render3d::pathtrace::MAX_SPP);
+                    let opts = cadcraft_render3d::pathtrace::PathOptions { spp, ..Default::default() };
+                    let render = cadcraft_render3d::FinalRender::start_path(
+                        compute,
+                        off,
+                        &self.scene,
+                        self.key,
+                        &self.camera,
+                        &self.lighting,
+                        false,
+                        (w, h),
+                        &opts,
+                        None,
+                    );
+                    if render.fallback().is_some() {
+                        ui_state.fallback = true;
+                    } else {
+                        ui_state.path_progress = Some((0, spp));
+                    }
+                    render
+                }
+            };
             res.final_render = Some(render);
             ui_state.started = Some(state);
             ui_state.progress = Some(0.0);
@@ -848,23 +953,40 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
         {
             r.cancel();
         }
+        // One step per frame keeps the pane responsive; a path Finalize shows its image so far.
         let status = res.final_render.as_mut().map(|r| r.step(off));
         match status {
-            Some(cadcraft_render3d::FinalStatus::Running { progress }) => ui_state.progress = Some(progress),
+            Some(cadcraft_render3d::FinalStatus::Running { progress }) => {
+                ui_state.progress = Some(progress);
+                if let Some(r) = res.final_render.as_ref()
+                    && let Some(stats) = r.path_stats()
+                {
+                    let wanted = ui_state.path_progress.map_or(stats.spp_done, |(_, wanted)| wanted);
+                    ui_state.path_progress = Some((stats.spp_done, wanted));
+                    if let Some((pw, ph, rgba)) = r.preview() {
+                        res.final_image = Some((state, upload_still(device, queue, &res.layout, &res.sampler, pw, ph, &rgba)));
+                    }
+                }
+            }
             Some(cadcraft_render3d::FinalStatus::Done { width, height, rgba }) => {
                 let group = upload_still(device, queue, &res.layout, &res.sampler, width, height, &rgba);
                 res.final_image = Some((state, group));
                 ui_state.done = Some(FinalDone { state, width, height, rgba });
                 ui_state.progress = None;
+                ui_state.path_progress = None;
                 res.final_render = None;
             }
             Some(cadcraft_render3d::FinalStatus::Cancelled) => {
                 ui_state.progress = None;
+                ui_state.path_progress = None;
+                res.final_image = None;
                 res.final_render = None;
             }
             Some(cadcraft_render3d::FinalStatus::Failed(msg)) => {
                 ui_state.progress = None;
+                ui_state.path_progress = None;
                 ui_state.error = Some(msg);
+                res.final_image = None;
                 res.final_render = None;
             }
             None => {}
@@ -1351,46 +1473,60 @@ mod tests {
         assert_eq!(pane.last_revision, 2);
     }
 
-    #[test]
-    fn the_paint_callback_draws_the_scene_into_the_window_and_redraws_only_on_change() {
-        let Some((device, queue)) = test_device() else { return };
-        let (w, h) = (64u32, 48u32);
-        let format = wgpu::TextureFormat::Rgba8Unorm;
-        let mut resources = egui_wgpu::CallbackResources::default();
-        resources.insert(Resources::new(&device, format, None));
-        let mut pane = Pane3d::new();
-        pane.available = true;
-        assert!(pane.sync(1, Some(&house())));
-        let callback = |pane: &Pane3d| Pane3dCallback {
+    /// One frame's callback for `pane` at `size` device pixels, in the default light.
+    fn callback_for(pane: &Pane3d, size: (u32, u32)) -> Pane3dCallback {
+        Pane3dCallback {
             scene: pane.scene.clone().expect("scene"),
             key: pane.scene_key(),
             camera: pane.camera(),
-            size: (w, h),
+            size,
             style: pane.style,
             lighting: cadcraft_render3d::Lighting::default(),
             finalize: pane.finalize.clone(),
-        };
-        let screen = egui_wgpu::ScreenDescriptor { size_in_pixels: [w, h], pixels_per_point: 1.0 };
-        let target = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-        let view = target.create_view(&Default::default());
-        let frame = |cb: &Pane3dCallback, resources: &mut egui_wgpu::CallbackResources| {
-            let mut enc = device.create_command_encoder(&Default::default());
-            let extra = egui_wgpu::CallbackTrait::prepare(cb, &device, &queue, &screen, &mut enc, resources);
+        }
+    }
+
+    /// A window target and the pane's callback resources on one device: runs the paint
+    /// callback's frames as egui_wgpu would (prepare, then paint into the window pass).
+    struct Rig {
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        size: (u32, u32),
+        target: wgpu::Texture,
+        view: wgpu::TextureView,
+        resources: egui_wgpu::CallbackResources,
+    }
+
+    impl Rig {
+        fn new(device: wgpu::Device, queue: wgpu::Queue, size: (u32, u32)) -> Self {
+            let format = wgpu::TextureFormat::Rgba8Unorm;
+            let mut resources = egui_wgpu::CallbackResources::default();
+            resources.insert(Resources::new(&device, format, None));
+            let target = device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: wgpu::Extent3d { width: size.0, height: size.1, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
+            });
+            let view = target.create_view(&Default::default());
+            Rig { device, queue, size, target, view, resources }
+        }
+
+        fn frame(&mut self, cb: &Pane3dCallback) {
+            let (w, h) = self.size;
+            let screen = egui_wgpu::ScreenDescriptor { size_in_pixels: [w, h], pixels_per_point: 1.0 };
+            let mut enc = self.device.create_command_encoder(&Default::default());
+            let extra = egui_wgpu::CallbackTrait::prepare(cb, &self.device, &self.queue, &screen, &mut enc, &mut self.resources);
             {
                 let mut pass = enc
                     .begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: None,
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
+                            view: &self.view,
                             depth_slice: None,
                             resolve_target: None,
                             ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::WHITE), store: wgpu::StoreOp::Store },
@@ -1403,25 +1539,48 @@ mod tests {
                     .forget_lifetime();
                 let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, h as f32));
                 let info = egui::PaintCallbackInfo { viewport: rect, clip_rect: rect, pixels_per_point: 1.0, screen_size_px: [w, h] };
-                egui_wgpu::CallbackTrait::paint(cb, info, &mut pass, resources);
+                egui_wgpu::CallbackTrait::paint(cb, info, &mut pass, &self.resources);
             }
-            queue.submit(extra.into_iter().chain([enc.finish()]));
-        };
-        frame(&callback(&pane), &mut resources);
-        let px = read_target(&device, &queue, &target, (w, h));
+            self.queue.submit(extra.into_iter().chain([enc.finish()]));
+        }
+
+        fn res(&mut self) -> &mut Resources {
+            self.resources.get_mut::<Resources>().expect("resources")
+        }
+
+        fn pixels(&self) -> Vec<u8> {
+            read_target(&self.device, &self.queue, &self.target, self.size)
+        }
+    }
+
+    /// The software adapter's compute device, made once for every test that path-traces.
+    fn test_compute() -> Option<cadcraft_render3d::pathtrace::ComputeGpu> {
+        static GPU: std::sync::OnceLock<Option<cadcraft_render3d::pathtrace::ComputeGpu>> = std::sync::OnceLock::new();
+        GPU.get_or_init(request_pane_compute).clone()
+    }
+
+    #[test]
+    fn the_paint_callback_draws_the_scene_into_the_window_and_redraws_only_on_change() {
+        let Some((device, queue)) = test_device() else { return };
+        let size = (64u32, 48u32);
+        let mut rig = Rig::new(device, queue, size);
+        let mut pane = Pane3d::new();
+        pane.available = true;
+        assert!(pane.sync(1, Some(&house())));
+        rig.frame(&callback_for(&pane, size));
+        let px = rig.pixels();
         assert!(px.chunks_exact(4).all(|p| p != [255, 255, 255, 255]), "the blit left part of the pane unpainted");
         let first = &px[..4];
         assert!(px.chunks_exact(4).any(|p| p != first), "the pane shows only the background: the scene was not drawn");
-        let draws = |r: &egui_wgpu::CallbackResources| r.get::<Resources>().expect("resources").draws;
-        assert_eq!(draws(&resources), 1);
+        assert_eq!(rig.res().draws, 1);
         // An unchanged camera and scene: the next frames only blit.
-        frame(&callback(&pane), &mut resources);
-        frame(&callback(&pane), &mut resources);
-        assert_eq!(draws(&resources), 1);
+        rig.frame(&callback_for(&pane, size));
+        rig.frame(&callback_for(&pane, size));
+        assert_eq!(rig.res().draws, 1);
         // Orbiting draws again.
         orbit_by_drag(&mut pane, 30.0, 0.0, 0.01);
-        frame(&callback(&pane), &mut resources);
-        assert_eq!(draws(&resources), 2);
+        rig.frame(&callback_for(&pane, size));
+        assert_eq!(rig.res().draws, 2);
     }
 
     #[test]
@@ -1774,5 +1933,156 @@ mod tests {
         let night: ViewState = (state.0, state.1, state.2, state.3, pane.lighting(), state.5);
         g.observe(&night);
         assert!(g.done.is_none(), "night drops the still");
+    }
+
+    use egui_kittest::kittest::Queryable;
+
+    /// The house pane in a kittest harness drawing the real pane UI. The accessibility check is
+    /// off: the sun's date and time entries (phase 9) have no accessible name yet.
+    fn pane_harness() -> egui_kittest::Harness<'static, Pane3d> {
+        let mut pane = Pane3d::new();
+        pane.available = true;
+        assert!(pane.sync(1, Some(&house())));
+        egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1400.0, 300.0))
+            .with_accessibility_check(false)
+            .build_ui_state(|ui, pane: &mut Pane3d| draw(ui, pane), pane)
+    }
+
+    #[test]
+    fn finalize_offers_path_traced_and_raster() {
+        use cadcraft_engine::FinalMode;
+        let mut h = pane_harness();
+        h.run();
+        assert!(h.query_by_label("Path traced").is_some() && h.query_by_label("Raster").is_some(), "the Finalize control lists both");
+        let mode = |h: &egui_kittest::Harness<'_, Pane3d>| lock_final(&h.state().finalize).mode;
+        assert_eq!(mode(&h), FinalMode::default(), "it starts as render's final: true does");
+        h.get_by_label("Path traced").click();
+        h.run();
+        assert_eq!(mode(&h), FinalMode::Path);
+        assert!(h.query_by_label("Samples").is_some(), "a path Finalize asks for its samples");
+        assert_eq!(lock_final(&h.state().finalize).samples, cadcraft_render3d::pathtrace::DEFAULT_SPP);
+        h.get_by_label("Raster").click();
+        h.run();
+        assert_eq!(mode(&h), FinalMode::Raster);
+        assert!(h.query_by_label("Samples").is_none(), "a raster Finalize has no samples");
+    }
+
+    #[test]
+    fn path_finalize_shows_its_samples_and_refines() {
+        let Some((device, queue)) = test_device() else { return };
+        let Some(compute) = test_compute() else {
+            eprintln!("SKIP: no compute device on the software adapter");
+            return;
+        };
+        let size = (48u32, 32u32);
+        let mut rig = Rig::new(device, queue, size);
+        rig.res().compute = Some(Some(compute));
+        let mut h = pane_harness();
+        h.run();
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.mode = cadcraft_engine::FinalMode::Path;
+            f.samples = 16;
+        }
+        // The samples entry appears and moves the button: lay it out before clicking.
+        h.run();
+        h.get_by_label("Finalize Render").click();
+        h.run();
+        assert!(lock_final(&h.state().finalize).request, "the button asks the paint callback for a render");
+        let (mut seen, mut previewed) = (Vec::new(), false);
+        for _ in 0..400 {
+            rig.frame(&callback_for(h.state(), size));
+            let (path, finished) = {
+                let f = lock_final(&h.state().finalize);
+                (f.path_progress, f.done.is_some())
+            };
+            if finished {
+                break;
+            }
+            let (done, wanted) = path.expect("a running path Finalize reports its samples");
+            assert_eq!(wanted, 16);
+            h.step();
+            assert!(h.query_by_label(&samples_label(done, wanted)).is_some(), "the pane shows {done} / {wanted} samples");
+            previewed |= rig.res().final_image.is_some();
+            seen.push(done);
+        }
+        assert!(previewed, "the image so far is on screen while it refines");
+        assert!(seen.windows(2).all(|w| w[0] <= w[1]) && seen.first() < seen.last(), "the samples rise: {seen:?}");
+        let f = lock_final(&h.state().finalize);
+        let still = f.done.as_ref().expect("the path Finalize ends with a still");
+        assert_eq!((still.width, still.height), size);
+        assert_eq!(still.rgba.len(), (size.0 * size.1 * 4) as usize);
+        assert!(f.progress.is_none() && f.path_progress.is_none() && !f.fallback && f.error.is_none());
+        drop(f);
+        assert!(rig.res().final_image.is_some(), "the still replaces the live view");
+    }
+
+    #[test]
+    fn cancel_stops_a_path_finalize() {
+        let Some((device, queue)) = test_device() else { return };
+        let Some(compute) = test_compute() else {
+            eprintln!("SKIP: no compute device on the software adapter");
+            return;
+        };
+        let size = (48u32, 32u32);
+        let mut rig = Rig::new(device, queue, size);
+        rig.res().compute = Some(Some(compute));
+        let mut h = pane_harness();
+        h.run();
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.mode = cadcraft_engine::FinalMode::Path;
+            f.samples = 4096;
+            f.request = true;
+        }
+        for _ in 0..3 {
+            rig.frame(&callback_for(h.state(), size));
+            h.step();
+        }
+        assert!(lock_final(&h.state().finalize).path_progress.is_some(), "the path Finalize runs");
+        assert!(rig.res().final_render.is_some());
+        h.get_by_label("Cancel").click();
+        h.step();
+        rig.frame(&callback_for(h.state(), size));
+        {
+            let f = lock_final(&h.state().finalize);
+            assert!(f.progress.is_none() && f.path_progress.is_none(), "Cancel stops it");
+            assert!(f.done.is_none() && f.error.is_none(), "with no still and no error");
+        }
+        assert!(rig.res().final_render.is_none(), "the tracer is dropped");
+        assert!(rig.res().final_image.is_none(), "the live view is back");
+        h.step();
+        assert!(h.query_by_label("Finalize Render").is_some(), "the button is back");
+        assert!(h.query_by_label("Cancel").is_none());
+    }
+
+    #[test]
+    fn path_finalize_without_compute_is_the_raster_still_with_a_note() {
+        let Some((device, queue)) = test_device() else { return };
+        let size = (48u32, 32u32);
+        let mut rig = Rig::new(device, queue, size);
+        rig.res().compute = Some(None);
+        let mut h = pane_harness();
+        h.run();
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.mode = cadcraft_engine::FinalMode::Path;
+            f.request = true;
+        }
+        for _ in 0..200 {
+            rig.frame(&callback_for(h.state(), size));
+            if lock_final(&h.state().finalize).done.is_some() {
+                break;
+            }
+        }
+        let f = lock_final(&h.state().finalize);
+        assert!(f.fallback, "the render notes it ran as raster");
+        assert!(f.path_progress.is_none(), "a raster Finalize counts no samples");
+        let still = f.done.as_ref().expect("the raster still");
+        assert_eq!((still.width, still.height), size);
+        drop(f);
+        h.run();
+        assert!(h.query_by_label("No compute shaders: raster Finalize").is_some(), "the pane says why");
     }
 }
