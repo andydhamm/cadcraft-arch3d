@@ -19,12 +19,17 @@
 //! driver and the irradiance probes), [`denoise`] (the à-trous filter), [`cache`] (the on-disk
 //! pipeline cache).
 
+#[cfg(test)]
+mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
 pub mod scene_gpu;
 pub mod shaders;
 pub mod tracer;
+
+#[cfg(test)]
+mod traverse_tests;
 
 pub use device::{ComputeGpu, request_compute};
 pub use tracer::{PathTracer, irradiance};
@@ -52,7 +57,7 @@ pub const DAY_EXPOSURE: f32 = std::f32::consts::PI / SUN_LUX;
 /// The white-furnace test: every surface diffuse with `albedo`, emitting `emission` nits, the
 /// lights, sun and sky off and the environment at `emission / (1 − albedo)` (what a closed box
 /// converges to), so every pixel converges to that value.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Furnace {
     pub albedo: f32,
     pub emission: f32,
