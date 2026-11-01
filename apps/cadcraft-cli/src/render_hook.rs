@@ -104,7 +104,7 @@ fn path_options(p: &PathParams) -> PathOptions {
         seed: p.seed,
         denoise: p.denoise,
         rt: p.rt,
-        furnace: p.furnace.map(|(albedo, emission)| Furnace { albedo: albedo as f32, emission: emission as f32 }),
+        furnace: p.furnace.map(|(albedo, emission)| Furnace { albedo: albedo as f32, emission: emission as f32, ..Furnace::default() }),
         snapshots: p.snapshots.clone(),
         ..PathOptions::default()
     }
