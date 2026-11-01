@@ -2085,4 +2085,161 @@ mod tests {
         h.run();
         assert!(h.query_by_label("No compute shaders: raster Finalize").is_some(), "the pane says why");
     }
+
+    #[test]
+    fn camera_move_cancels_running_path_finalize() {
+        let Some((device, queue)) = test_device() else { return };
+        let Some(compute) = test_compute() else {
+            eprintln!("SKIP: no compute device on the software adapter");
+            return;
+        };
+        let size = (48u32, 32u32);
+        let mut rig = Rig::new(device, queue, size);
+        rig.res().compute = Some(Some(compute));
+        let mut h = pane_harness();
+        h.run();
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.mode = cadcraft_engine::FinalMode::Path;
+            f.samples = 4096;
+            f.request = true;
+        }
+        // Let it run a few frames
+        for _ in 0..3 {
+            rig.frame(&callback_for(h.state(), size));
+            h.step();
+        }
+        assert!(lock_final(&h.state().finalize).path_progress.is_some(), "the path Finalize runs");
+        // Orbit the camera
+        orbit_by_drag(h.state_mut(), 40.0, 10.0, 0.01);
+        rig.frame(&callback_for(h.state(), size));
+        {
+            let f = lock_final(&h.state().finalize);
+            assert!(f.path_progress.is_none(), "camera move cancels the path Finalize");
+            assert!(f.done.is_none(), "no still after cancel");
+            assert!(f.error.is_none(), "no error after cancel");
+        }
+        h.step();
+        assert!(h.query_by_label("Finalize Render").is_some(), "the button is back");
+    }
+
+    #[test]
+    fn sequential_path_finalizes_work() {
+        let Some((device, queue)) = test_device() else { return };
+        let Some(compute) = test_compute() else {
+            eprintln!("SKIP: no compute device on the software adapter");
+            return;
+        };
+        let size = (48u32, 32u32);
+        let mut rig = Rig::new(device, queue, size);
+        rig.res().compute = Some(Some(compute));
+        let mut h = pane_harness();
+        h.run();
+        // First finalize
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.mode = cadcraft_engine::FinalMode::Path;
+            f.samples = 16;
+            f.request = true;
+        }
+        for _ in 0..400 {
+            rig.frame(&callback_for(h.state(), size));
+            if lock_final(&h.state().finalize).done.is_some() {
+                break;
+            }
+        }
+        assert!(lock_final(&h.state().finalize).done.is_some(), "first finalize completes");
+        // Second finalize with different samples
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.samples = 32;
+            f.request = true;
+        }
+        for _ in 0..400 {
+            rig.frame(&callback_for(h.state(), size));
+            if lock_final(&h.state().finalize).done.is_some() {
+                break;
+            }
+        }
+        let f = lock_final(&h.state().finalize);
+        assert!(f.done.is_some(), "second finalize completes");
+        assert_eq!(f.done.as_ref().unwrap().width, size.0);
+        assert_eq!(f.done.as_ref().unwrap().height, size.1);
+    }
+
+    #[test]
+    fn path_finalize_clamps_samples() {
+        let Some((device, queue)) = test_device() else { return };
+        let Some(compute) = test_compute() else {
+            eprintln!("SKIP: no compute device on the software adapter");
+            return;
+        };
+        let size = (48u32, 32u32);
+        let mut rig = Rig::new(device, queue, size);
+        rig.res().compute = Some(Some(compute));
+        let mut h = pane_harness();
+        h.run();
+        // Set samples to 0 (below minimum)
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.mode = cadcraft_engine::FinalMode::Path;
+            f.samples = 0;
+            f.request = true;
+        }
+        // The render should start with 1 sample (clamped)
+        let mut saw_progress = false;
+        for _ in 0..400 {
+            rig.frame(&callback_for(h.state(), size));
+            let path = lock_final(&h.state().finalize).path_progress;
+            if let Some((_, wanted)) = path {
+                assert_eq!(wanted, 1, "samples below 1 clamp to 1");
+                saw_progress = true;
+            }
+            if lock_final(&h.state().finalize).done.is_some() {
+                break;
+            }
+        }
+        assert!(saw_progress, "the path Finalize reported progress");
+        assert!(lock_final(&h.state().finalize).done.is_some(), "finalize completes with clamped samples");
+    }
+
+    #[test]
+    fn raster_finalize_works_after_path_finalize() {
+        let Some((device, queue)) = test_device() else { return };
+        let size = (48u32, 32u32);
+        let mut rig = Rig::new(device, queue, size);
+        let mut h = pane_harness();
+        h.run();
+        // Run a path finalize first (if compute available)
+        let compute = test_compute();
+        if let Some(c) = compute {
+            rig.res().compute = Some(Some(c));
+            {
+                let mut f = lock_final(&h.state().finalize);
+                f.mode = cadcraft_engine::FinalMode::Path;
+                f.samples = 16;
+                f.request = true;
+            }
+            for _ in 0..400 {
+                rig.frame(&callback_for(h.state(), size));
+                if lock_final(&h.state().finalize).done.is_some() {
+                    break;
+                }
+            }
+            assert!(lock_final(&h.state().finalize).done.is_some(), "path finalize completes");
+        }
+        // Now run a raster finalize
+        {
+            let mut f = lock_final(&h.state().finalize);
+            f.mode = cadcraft_engine::FinalMode::Raster;
+            f.request = true;
+        }
+        for _ in 0..200 {
+            rig.frame(&callback_for(h.state(), size));
+            if lock_final(&h.state().finalize).done.is_some() {
+                break;
+            }
+        }
+        assert!(lock_final(&h.state().finalize).done.is_some(), "raster finalize completes after path");
+    }
 }
