@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn csv_very_long_line_truncated_in_error() {
-        let long_val = "1234567890123456789012345678901234567890123456789012345678901234567890";
+        let long_val = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdef";
         let e = parse_points_csv(&format!("1,2,{long_val}"), None).err().map(|e| e.0).unwrap_or_default();
         assert!(e.starts_with("CSV line 1:"));
         // The echoed row should be truncated to 60 chars
