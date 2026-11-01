@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 11 of 13: Ray-traced Finalize Render — 20 of 24 segments merged · 8 of 13 acceptance checks**
+**Phase 11 of 13: Ray-traced Finalize Render — 21 of 24 segments merged · 8 of 13 acceptance checks**
 
-6,394 workspace tests passing at the last merge · 645 segments merged in all · 0 of 13 seats working
+6,395 workspace tests passing at the last merge · 646 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,24 +21,24 @@ Updated 2026-11-01 17:00 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 8 / 13 | 9.3 h so far · expected done Nov 01 18:52–Nov 02 04:15 UTC |
+| 11 | Ray-traced Finalize Render | building | 8 / 13 | 9.6 h so far · expected done Nov 01 18:36–Nov 02 03:25 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-20 merged, 2 escalate, 1 queued, 1 merging
+21 merged, 2 escalate, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p11-r3d-rt` | Optional hardware ray queries: the same traversal through wgpu ray queries, parity with the compute path | escalate |  |
 | `p11-ui-pane-path` | The 3D pane's Finalize: path traced or raster, refining on screen with its sample count, cancel | escalate |  |
-| `p11-docs-user-guide` | User guide: the path-traced Finalize, area lights and IES files | merging | bonsai-ws2-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 17:02 | `p11-docs-user-guide` | merged | 6,395 pass | bonsai-ws2-a |
 | Nov 01 16:24 | `p11-cli-render-args` | merged | 6,394 pass | claude-sonnet-d |
 | Nov 01 16:11 | `harden-p11-r3d-denoise` | merged | 6,387 pass | tturbo-mac |
 | Nov 01 15:57 | `p11-cli-render-path` | merged | 6,383 pass | claude-sonnet-a |
@@ -50,15 +50,14 @@ Updated 2026-11-01 17:00 UTC. This page and the card in the README are regenerat
 | Nov 01 14:04 | `harden-p11-cmd-lightfixture-area-ies` | merged | 6,361 pass | tturbo-mac |
 | Nov 01 13:41 | `p11-r3d-pt-driver` | merged | 6,355 pass | darwin-ws3 |
 | Nov 01 13:13 | `harden-p11-arch3d-panel` | merged | 6,348 pass | tturbo-mac |
-| Nov 01 12:58 | `p11-r3d-pt-kernel` | merged | 6,337 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 778 |
-| bonsai-b | bonsai2-27b | agent | 720 |
-| bonsai-ws2-a | bonsai2-27b | merging | 777 |
+| bonsai-a | bonsai2-27b | agent | 780 |
+| bonsai-b | bonsai2-27b | agent | 721 |
+| bonsai-ws2-a | bonsai2-27b | idle | 777 |
 | bonsai-ws2-b | bonsai2-27b | idle | 757 |
 | claude-sonnet-a | sonnet | idle | 67 |
 | claude-sonnet-b | sonnet | idle | 62 |
