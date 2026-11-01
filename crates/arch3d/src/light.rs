@@ -627,4 +627,142 @@ mod tests {
         let lux_back = direct_illuminance(light, Vec3::new(2.0, 2.0, 2.5), up());
         assert!(lux_back.abs() < 1.0, "behind: {}", lux_back);
     }
+
+    #[test]
+    fn ies_toward_handles_non_finite_inputs() {
+        let vertical = vec![0.0, 90.0];
+        let horizontal = vec![0.0, 180.0];
+        let candela = vec![1000.0, 0.0, 1000.0, 0.0];
+        let mut profile = cadcraft_doc::arch::IesProfile::default();
+        profile.name = "test".into();
+        profile.vertical = vertical;
+        profile.horizontal = horizontal;
+        profile.candela = candela;
+        profile.lumens = 1000.0;
+        let light = SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::ZERO,
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 1.0,
+            cos_outer: 1.0,
+            size: [0.0; 2],
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ies: Some(std::sync::Arc::new(profile.clone())),
+            ..Default::default()
+        };
+        // NaN in to_point
+        assert_eq!(ies_toward(&light, &profile, Vec3::new(f64::NAN, 0.0, -1.0)), 0.0);
+        // Inf in to_point
+        assert_eq!(ies_toward(&light, &profile, Vec3::new(f64::INFINITY, 0.0, -1.0)), 0.0);
+        // Non-finite direction
+        let mut bad_dir = light.clone();
+        bad_dir.direction = Vec3::new(f64::NAN, 0.0, -1.0);
+        assert_eq!(ies_toward(&bad_dir, &profile, Vec3::new(0.0, 0.0, -1.0)), 0.0);
+        // Non-finite axis
+        let mut bad_axis = light.clone();
+        bad_axis.axis = Vec3::new(0.0, f64::NAN, 0.0);
+        assert_eq!(ies_toward(&bad_axis, &profile, Vec3::new(0.0, 0.0, -1.0)), 0.0);
+    }
+
+    #[test]
+    fn area_light_with_ies_uses_point_formulation() {
+        let vertical = vec![0.0, 90.0];
+        let horizontal = vec![0.0, 180.0];
+        let candela = vec![1000.0, 0.0, 1000.0, 0.0];
+        let mut profile = cadcraft_doc::arch::IesProfile::default();
+        profile.name = "test".into();
+        profile.vertical = vertical;
+        profile.horizontal = horizontal;
+        profile.candela = candela;
+        profile.lumens = 1000.0;
+        let light = SceneLight {
+            kind: LightKind::Area,
+            position: Vec3::new(0.0, 0.0, 2.4),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 1.0,
+            cos_outer: 0.0,
+            size: [0.6, 0.6],
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ies: Some(std::sync::Arc::new(profile)),
+            ..Default::default()
+        };
+        // At 0.4 m below centre: point formulation gives I * cos / d^2 = 1000 * 1 / 0.16 = 6250 lx
+        let lux = direct_illuminance(&light, Vec3::new(0.0, 0.0, 2.0), up());
+        assert!((lux - 6250.0).abs() < 62.5, "area+IES at 0.4m: {}", lux);
+        // At 2.4 m (floor): 1000 / 5.76 = 173.6 lx
+        let lux_floor = direct_illuminance(&light, Vec3::new(0.0, 0.0, 0.0), up());
+        assert!((lux_floor - 173.6).abs() < 1.74, "area+IES at floor: {}", lux_floor);
+    }
+
+    #[test]
+    fn area_light_degenerate_size_returns_zero() {
+        let light = SceneLight {
+            kind: LightKind::Area,
+            position: Vec3::new(0.0, 0.0, 2.4),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 1.0,
+            cos_outer: 0.0,
+            size: [0.0, 0.6],
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ies: None,
+            ..Default::default()
+        };
+        assert_eq!(direct_illuminance(&light, Vec3::new(0.0, 0.0, 0.0), up()), 0.0);
+        let light_neg = SceneLight { size: [-0.1, 0.6], ..light.clone() };
+        assert_eq!(direct_illuminance(&light_neg, Vec3::new(0.0, 0.0, 0.0), up()), 0.0);
+        let light_nan = SceneLight { size: [f64::NAN, 0.6], ..light.clone() };
+        assert_eq!(direct_illuminance(&light_nan, Vec3::new(0.0, 0.0, 0.0), up()), 0.0);
+    }
+
+    #[test]
+    fn ies_single_angle_profile() {
+        // Degenerate profile: one vertical angle, one horizontal angle
+        let mut profile = cadcraft_doc::arch::IesProfile::default();
+        profile.name = "single".into();
+        profile.vertical = vec![0.0];
+        profile.horizontal = vec![0.0];
+        profile.candela = vec![500.0];
+        profile.lumens = 500.0;
+        let light = SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::ZERO,
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 500.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 1.0,
+            cos_outer: 1.0,
+            size: [0.0; 2],
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ies: Some(std::sync::Arc::new(profile.clone())),
+            ..Default::default()
+        };
+        // Straight down should give 500 cd
+        assert!((ies_toward(&light, &profile, Vec3::new(0.0, 0.0, -1.0)) - 500.0).abs() < 1.0);
+        // 90 degrees should give 0 (outside profile range)
+        assert_eq!(ies_toward(&light, &profile, Vec3::new(1.0, 0.0, 0.0)), 0.0);
+    }
+
+    #[test]
+    fn area_light_partial_shadow_blocks_some_cells() {
+        let mut m = room_with_panel();
+        // A tall thin column at (2.0, 1.0) blocks cells to the left of centre
+        let mut w = Wall::new(Vec2::new(2.0, 1.0), Vec2::new(2.05, 1.0), 0.05);
+        w.height = 2.0;
+        m.push_wall(w);
+        let scene = crate::build(&m);
+        // Point directly below the column: heavily shadowed
+        let shadowed = illuminance(&scene, Vec3::new(2.0, 1.0, 0.0), up());
+        // Point far from the column: nearly unshadowed
+        let clear = illuminance(&scene, Vec3::new(3.5, 3.5, 0.0), up());
+        // The shadowed point should have less illuminance
+        assert!(shadowed.lux < clear.lux, "shadowed {} < clear {}", shadowed.lux, clear.lux);
+        // But not zero (some cells still visible)
+        assert!(shadowed.lux > 0.0, "some cells must be visible: {}", shadowed.lux);
+    }
 }
