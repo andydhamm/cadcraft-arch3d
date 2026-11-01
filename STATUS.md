@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 10 of 13: Lighting, light fixtures and final renders — 21 of 22 segments merged · 11 of 11 acceptance checks**
+**Phase 10 of 13: Lighting, light fixtures and final renders — 22 of 22 segments merged · 11 of 11 acceptance checks**
 
-6,204 workspace tests passing at the last merge · 613 segments merged in all · 0 of 13 seats working · PAUSED
+6,207 workspace tests passing at the last merge · 614 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -20,23 +20,21 @@ Updated 2026-11-01 06:15 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 11 / 11 | 13.7 h so far · expected done Nov 01 08:06–Nov 01 15:35 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 11 / 11 | 13.9 h so far · expected done Nov 01 07:48–Nov 01 14:41 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-21 merged, 1 merging
+22 merged
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `p10-docs-user-guide` | User guide: light fixtures, illuminance, night renders, Finalize Render, sun studies | merging | kimi-k31 |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 06:17 | `p10-docs-user-guide` | merged | 6,207 pass | kimi-k31 |
 | Nov 01 05:57 | `harden-p10-cli-render-final` | merged | 6,204 pass | tturbo-mac |
 | Nov 01 05:41 | `p10-docs-user-guide` | refused | 6,200 pass | bonsai-ws2-a |
 | Nov 01 05:02 | `p10-docs-user-guide` | refused | 0 pass | bonsai-b |
@@ -48,7 +46,6 @@ Updated 2026-11-01 06:15 UTC. This page and the card in the README are regenerat
 | Nov 01 03:32 | `harden-p10-r3d-lit-frame` | merged | 6,159 pass | tturbo-mac2 |
 | Nov 01 03:13 | `harden-p10-io-glb-lights` | merged | 6,149 pass | tturbo-mac2 |
 | Nov 01 02:57 | `harden-p10-io-light-proxies` | merged | 6,141 pass | tturbo-mac |
-| Nov 01 02:16 | `upstream-sync-5caaf73e3` | merged | 6,136 pass | bonsai-ws2-a |
 
 ## Seats active in the last hour
 
@@ -63,7 +60,7 @@ Updated 2026-11-01 06:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-c | sonnet | idle | 10 |
 | claude-sonnet-d | sonnet | idle | 4 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 599 |
-| kimi-k31 | k3.1-pro-highspeed | merging | 111 |
+| kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 36 |
-| tturbo-mac | tturbo-ultraheretic | gate | 524 |
+| tturbo-mac | tturbo-ultraheretic | merging | 525 |
 | tturbo-mac2 | tturbo-ultraheretic | merging | 343 |
