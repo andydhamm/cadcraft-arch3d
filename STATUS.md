@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 10:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 7 of 23 segments merged · 0 of 13 acceptance checks**
 
-6,266 workspace tests passing at the last merge · 624 segments merged in all · 0 of 13 seats working
+6,296 workspace tests passing at the last merge · 625 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,28 +21,29 @@ Updated 2026-11-01 10:30 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 0 / 13 | 2.8 h so far · expected done Nov 01 16:30–Nov 02 02:36 UTC |
+| 11 | Ray-traced Finalize Render | building | 0 / 13 | 3.1 h so far · expected done Nov 01 17:17–Nov 02 04:17 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-9 queued, 7 merged, 3 gate, 2 merging, 2 working
+9 queued, 7 merged, 3 merging, 3 gate, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p11-arch3d-panel` | The LED panel in 3D: frame, diffuser and its ceiling opening | gate | darwin-ws3 |
+| `p11-arch3d-panel` | The LED panel in 3D: frame, diffuser and its ceiling opening | merging | darwin-ws3 |
 | `p11-arch3d-ies-area` | IES distributions and area lights in the scene lights and the CPU illuminance | merging | bonsai-ws2-a |
-| `p11-r3d-pt-lights` | WGSL lights: points, spots, IES tables, rectangular area lights, the sun and the sky | working | kimi-k31 |
+| `p11-r3d-pt-lights` | WGSL lights: points, spots, IES tables, rectangular area lights, the sun and the sky | escalate |  |
 | `p11-r3d-pt-driver` | The progressive driver: frames, passes, snapshots, resolve, denoise hook, cancel; irradiance probes | gate | bonsai-b |
 | `p11-r3d-pipeline-cache` | The on-disk pipeline cache: directory, file per adapter, open and save | merging | mai-flash |
 | `p11-cmd-render-path` | RENDER path-tracer parameters and ILLUMINANCE method path | gate | bonsai-ws2-b |
-| `p11-cmd-lightfixture-area-ies` | LIGHTFIXTURE area lights and IES files; arch.inspect shows them | working | bonsai-a |
+| `p11-cmd-lightfixture-area-ies` | LIGHTFIXTURE area lights and IES files; arch.inspect shows them | gate | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 10:42 | `harden-p9-arch-terrain-csv` | merged | 6,296 pass | tturbo-mac2 |
 | Nov 01 10:20 | `p11-arch3d-panel` | refused | 0 pass | darwin-ws3 |
 | Nov 01 10:11 | `p11-r3d-pipeline-cache` | refused | 6,270 pass | mai-flash |
 | Nov 01 09:47 | `p11-r3d-denoise` | merged | 6,266 pass | bonsai-a |
@@ -54,22 +55,21 @@ Updated 2026-11-01 10:30 UTC. This page and the card in the README are regenerat
 | Nov 01 08:33 | `harden-p10-docs-user-guide` | merged | 6,235 pass | tturbo-mac |
 | Nov 01 08:07 | `p11-arch-ies` | refused | 0 pass | bonsai-ws2-a |
 | Nov 01 07:40 | `upstream-sync-d7ef7da87` | merged | 6,232 pass | bonsai-ws2-b |
-| Nov 01 07:36 | `harden-p10-cli-render-hook` | merged | 6,232 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 758 |
+| bonsai-a | bonsai2-27b | gate | 758 |
 | bonsai-b | bonsai2-27b | gate | 701 |
 | bonsai-ws2-a | bonsai2-27b | merging | 761 |
-| bonsai-ws2-b | bonsai2-27b | gate | 728 |
+| bonsai-ws2-b | bonsai2-27b | gate | 730 |
 | claude-sonnet-a | sonnet | held | 61 |
 | claude-sonnet-b | sonnet | held | 60 |
 | claude-sonnet-c | sonnet | held | 10 |
 | claude-sonnet-d | sonnet | held | 4 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 603 |
-| kimi-k31 | k3.1-pro-highspeed | agent | 111 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 604 |
+| kimi-k31 | k3.1-pro-highspeed | down | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 44 |
 | tturbo-mac | tturbo-ultraheretic | merging | 527 |
-| tturbo-mac2 | tturbo-ultraheretic | merging | 348 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
