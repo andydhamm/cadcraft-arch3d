@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 18:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 18:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 11 of 13: Ray-traced Finalize Render — 22 of 24 segments merged · 8 of 13 acceptance checks**
+**Phase 11 of 13: Ray-traced Finalize Render — 23 of 24 segments merged · 8 of 13 acceptance checks**
 
-6,403 workspace tests passing at the last merge · 648 segments merged in all · 0 of 13 seats working
+6,408 workspace tests passing at the last merge · 649 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,23 +21,23 @@ Updated 2026-11-01 18:30 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 8 / 13 | 10.8 h so far · expected done Nov 01 19:31–Nov 02 05:12 UTC |
+| 11 | Ray-traced Finalize Render | building | 8 / 13 | 11.1 h so far · expected done Nov 01 19:15–Nov 02 04:20 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-22 merged, 2 merging
+23 merged, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p11-r3d-rt` | Optional hardware ray queries: the same traversal through wgpu ray queries, parity with the compute path | merging | claude-sonnet-b |
-| `p11-final-default-path` | Path traced is the default Finalize | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 18:44 | `p11-final-default-path` | merged | 6,408 pass | claude-sonnet-d |
 | Nov 01 18:25 | `p11-r3d-rt` | refused | 6,410 pass | claude-sonnet-b |
 | Nov 01 17:18 | `harden-p11-io-area-ies` | merged | 6,403 pass | tturbo-mac |
 | Nov 01 17:02 | `p11-docs-user-guide` | merged | 6,395 pass | bonsai-ws2-a |
@@ -49,21 +49,20 @@ Updated 2026-11-01 18:30 UTC. This page and the card in the README are regenerat
 | Nov 01 15:08 | `harden-p11-arch3d-ies-area` | merged | 6,372 pass | tturbo-mac |
 | Nov 01 14:25 | `upstream-sync-258c89fbb` | merged | 6,367 pass | claude-sonnet-b |
 | Nov 01 14:12 | `p11-r3d-final-path` | merged | 6,365 pass | claude-sonnet-c |
-| Nov 01 14:04 | `harden-p11-cmd-lightfixture-area-ies` | merged | 6,361 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 782 |
-| bonsai-b | bonsai2-27b | agent | 722 |
+| bonsai-a | bonsai2-27b | idle | 782 |
+| bonsai-b | bonsai2-27b | agent | 723 |
 | bonsai-ws2-a | bonsai2-27b | idle | 779 |
 | bonsai-ws2-b | bonsai2-27b | merging | 760 |
 | claude-sonnet-a | sonnet | idle | 67 |
 | claude-sonnet-b | sonnet | merging | 64 |
 | claude-sonnet-c | sonnet | idle | 14 |
-| claude-sonnet-d | sonnet | merging | 6 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 631 |
+| claude-sonnet-d | sonnet | idle | 6 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 633 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
 | tturbo-mac | tturbo-ultraheretic | merging | 540 |
