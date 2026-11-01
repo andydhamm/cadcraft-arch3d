@@ -510,6 +510,7 @@ mod tests {
         panel.kind = LightKind::Area;
         panel.width = 0.6;
         panel.length = 0.6;
+        panel.lumens = 3600.0;
         m.lights.push(panel);
         m.next_light_id = 1;
         m
