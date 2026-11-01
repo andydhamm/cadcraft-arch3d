@@ -51,12 +51,14 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
 
     let scene = cadcraft_arch3d::build(&doc.arch);
     let illumination = cadcraft_arch3d::light::illuminance(&scene, point, normal);
-    let contributions = illumination
-        .per_light
-        .into_iter()
-        .map(|(id, lux)| {
+    let contributions = doc
+        .arch
+        .lights
+        .iter()
+        .map(|light| {
+            let lux = illumination.per_light.iter().find(|(id, _)| *id == light.id).map(|(_, v)| *v).unwrap_or(0.0);
             json!({
-                "id": light_label(id),
+                "id": light_label(light.id),
                 "lux": lux,
             })
         })
@@ -145,5 +147,106 @@ mod tests {
         assert_eq!(result["lux"].as_f64(), Some(0.0));
         assert_eq!(result["lights"].as_u64(), Some(0));
         assert!(result["contributions"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn illuminance_refuses_a_zero_length_normal() {
+        let mut s = fresh_session();
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [0.0, 0.0, 0.0]})).unwrap_err();
+        assert!(err.to_string().contains("normal"), "error={err}");
+    }
+
+    #[test]
+    fn illuminance_refuses_a_bad_normal() {
+        let mut s = fresh_session();
+        // NaN in normal
+        assert!(s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [f64::NAN, 0.0, 1.0]})).is_err());
+        // Wrong length
+        assert!(s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [1.0, 0.0]})).is_err());
+        // Non-numeric component
+        assert!(s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": ["a", 0.0, 1.0]})).is_err());
+        // Infinity in normal
+        assert!(s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [f64::INFINITY, 0.0, 1.0]})).is_err());
+    }
+
+    #[test]
+    fn illuminance_null_normal_uses_default() {
+        let mut s = fresh_session();
+        let result = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": null})).unwrap();
+        let lux = result["lux"].as_f64().unwrap();
+        assert!(lux > 0.0, "null normal should use [0,0,1] default and give positive lux, got {lux}");
+    }
+
+    #[test]
+    fn illuminance_off_lights_contribute_nothing() {
+        let mut model = room_model();
+        // Turn off two of the four lights (lf1 at (1,3) and lf3 at (3,3))
+        model.lights[1].on = false;
+        model.lights[3].on = false;
+
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        let d = s.doc_mut().unwrap();
+        d.arch = model;
+        d.touch_arch();
+
+        // Point (2, 1.5, 0) is within the 60° cone of lf0 (1,1) and lf2 (3,1)
+        // but outside the cone of lf1 (1,3) and lf3 (3,3) (cone radius at floor ~1.39m)
+        let result = s.execute("illuminance", &json!({"point": [2.0, 1.5, 0.0]})).unwrap();
+        let contribs = result["contributions"].as_array().unwrap();
+        // All four lights are reported, but only the two that are on contribute
+        assert_eq!(contribs.len(), 4);
+        let active: Vec<_> = contribs.iter().filter(|v| v["lux"].as_f64().unwrap() > 0.0).collect();
+        assert_eq!(active.len(), 2, "only two lights should be on");
+        // The off lights should have zero contribution
+        let lf1 = contribs.iter().find(|v| v["id"] == json!("lf1")).unwrap();
+        let lf3 = contribs.iter().find(|v| v["id"] == json!("lf3")).unwrap();
+        assert_eq!(lf1["lux"].as_f64().unwrap(), 0.0);
+        assert_eq!(lf3["lux"].as_f64().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn illuminance_normal_direction_matters() {
+        let mut s = fresh_session();
+        // Normal pointing up (toward the ceiling lights)
+        let up = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [0.0, 0.0, 1.0]})).unwrap();
+        let lux_up = up["lux"].as_f64().unwrap();
+
+        // Normal pointing down (away from the lights)
+        let down = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [0.0, 0.0, -1.0]})).unwrap();
+        let lux_down = down["lux"].as_f64().unwrap();
+
+        // Lights are above, so the upward normal should receive more light
+        assert!(lux_up > lux_down, "up={lux_up} down={lux_down}: upward normal should get more light from ceiling fixtures");
+    }
+
+    #[test]
+    fn illuminance_huge_finite_coordinates() {
+        let mut s = fresh_session();
+        let result = s.execute("illuminance", &json!({"point": [1e300, 1e300, 1e300]})).unwrap();
+        let lux = result["lux"].as_f64().unwrap();
+        assert!(lux.is_finite(), "lux at huge finite point must be finite, got {lux}");
+        // Very far away from all lights, so illuminance is essentially zero
+        assert!(lux < 1.0, "lux should be negligible at 1e300 m away, got {lux}");
+    }
+
+    #[test]
+    fn illuminance_refuses_infinite_point() {
+        let mut s = fresh_session();
+        assert!(s.execute("illuminance", &json!({"point": [f64::INFINITY, 0.0, 0.0]})).is_err());
+        assert!(s.execute("illuminance", &json!({"point": [0.0, f64::NEG_INFINITY, 0.0]})).is_err());
+        assert!(s.execute("illuminance", &json!({"point": [0.0, 0.0, f64::INFINITY]})).is_err());
+    }
+
+    #[test]
+    fn illuminance_non_unit_normal_works() {
+        let mut s = fresh_session();
+        // Non-unit normal (twice as long as unit)
+        let result = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [0.0, 0.0, 2.0]})).unwrap();
+        let lux = result["lux"].as_f64().unwrap();
+        // Should give the same result as a unit normal (the calculation normalizes)
+        let unit = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [0.0, 0.0, 1.0]})).unwrap();
+        let lux_unit = unit["lux"].as_f64().unwrap();
+        assert!((lux - lux_unit).abs() < lux_unit * 0.01, "non-unit normal lux={lux} vs unit lux={lux_unit}");
     }
 }
