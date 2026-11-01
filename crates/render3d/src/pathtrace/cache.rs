@@ -10,13 +10,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 fn cache_dir_from_env(cadcraft: Option<&str>, xdg: Option<&str>, home: Option<&str>) -> Option<PathBuf> {
     if let Some(dir) = cadcraft.filter(|dir| !dir.trim().is_empty()) {
-        return Some(PathBuf::from(dir));
+        return Some(PathBuf::from(dir.trim()));
     }
     if let Some(dir) = xdg.filter(|dir| !dir.trim().is_empty()) {
-        return Some(PathBuf::from(dir).join("cadcraft").join("pipelines"));
+        return Some(PathBuf::from(dir.trim()).join("cadcraft").join("pipelines"));
     }
     if let Some(home) = home.filter(|home| !home.trim().is_empty()) {
-        return Some(PathBuf::from(home).join(".cache").join("cadcraft").join("pipelines"));
+        return Some(PathBuf::from(home.trim()).join(".cache").join("cadcraft").join("pipelines"));
     }
     None
 }
