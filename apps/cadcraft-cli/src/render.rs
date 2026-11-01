@@ -3,14 +3,16 @@
 use super::args::RenderArgs;
 use super::open;
 use super::output::{OutputError, Streams, write_atomic};
-use cadcraft_engine::Session;
+use cadcraft_engine::{FinalMode, Session};
 use cadcraft_geom::Vec3;
 use cadcraft_render3d::adapter::AdapterChoice;
 use cadcraft_render3d::camera::{Camera, MAX_DISTANCE, Orbit};
+use cadcraft_render3d::final_render::render_final_with;
 use cadcraft_render3d::light::{Light, Sun};
 use cadcraft_render3d::lights::DEFAULT_EXPOSURE;
 use cadcraft_render3d::lit_frame::Lighting;
 use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, Style};
+use cadcraft_render3d::pathtrace::{CacheOutcome, PathOptions, cache, request_compute};
 
 /// Default pixel size for `render`.
 const DEFAULT_SIZE: (u32, u32) = (2400, 1600);
@@ -225,6 +227,50 @@ pub(crate) fn check_flags(a: &RenderArgs) -> Result<(), RenderError> {
     if a.night && a.sun.is_some() { Err(RenderError::NightWithSun) } else { Ok(()) }
 }
 
+/// What a Finalize Render did, for the `FINAL` line.
+#[derive(Clone, Copy)]
+struct FinalInfo {
+    /// `raster` or `path`: the mode that ran (a path request on a device without compute is raster).
+    mode: &'static str,
+    /// Samples per pixel taken; 0 for raster.
+    spp: u32,
+    cache: CacheOutcome,
+}
+
+impl FinalInfo {
+    const RASTER: FinalInfo = FinalInfo { mode: "raster", spp: 0, cache: CacheOutcome::Unsupported };
+}
+
+/// A path-traced Finalize with the `--spp`, `--bounces`, `--seed`, `--no-denoise` and `--rt`
+/// settings; without compute shaders it is the raster Finalize.
+fn render_path(
+    a: &RenderArgs,
+    off: &mut Offscreen,
+    scene: &cadcraft_render3d::Scene3d,
+    camera: &Camera,
+    lighting: &Lighting,
+    size: (u32, u32),
+) -> Result<(Vec<u8>, FinalInfo), cadcraft_render3d::Render3dError> {
+    let p = a.path_params();
+    let opts = PathOptions { spp: p.spp, bounces: p.bounces, seed: p.seed, denoise: p.denoise, rt: p.rt, ..PathOptions::default() };
+    let compute = request_compute(a.adapter, p.rt)?;
+    let mut opened = compute.as_ref().map(|c| cache::open(c, cache::cache_dir().as_deref()));
+    let cache_ref = opened.as_ref().and_then(|(c, _)| c.as_ref());
+    let (png, stats, fallback) =
+        render_final_with(off, compute.as_ref(), scene, scene.revision, camera, lighting, a.ground, size, true, &opts, cache_ref)?;
+    if let (Some(c), Some((Some(handle), CacheOutcome::Miss))) = (&compute, &opened) {
+        if let Some(dir) = cache::cache_dir() {
+            // A cache that can't be written costs only the next start's compile time.
+            let _ = cache::save(c, handle, &dir);
+        }
+    }
+    let info = match (stats, fallback) {
+        (Some(st), None) => FinalInfo { mode: "path", spp: st.spp_done, cache: opened.take().map_or(st.pipeline_cache, |(_, o)| o) },
+        _ => FinalInfo::RASTER,
+    };
+    Ok((png, info))
+}
+
 pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError> {
     check_flags(a)?;
     let size = a.size.unwrap_or(DEFAULT_SIZE);
@@ -264,8 +310,16 @@ pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError
     };
     let eye = camera.eye();
     let frame = off.lit_frame(&scene, scene.revision, [eye.x, eye.y, eye.z], &lighting, a.ground);
-    let (png, sun_map) = if a.final_render {
-        let png = cadcraft_render3d::render_final(&mut off, &scene, scene.revision, &camera, &lighting, a.ground, size).map_err(gpu)?;
+    let mut final_info = None;
+    let (png, sun_map) = if let Some(mode) = a.final_render {
+        let (png, info) = match mode {
+            FinalMode::Raster => {
+                let png = cadcraft_render3d::render_final(&mut off, &scene, scene.revision, &camera, &lighting, a.ground, size).map_err(gpu)?;
+                (png, FinalInfo::RASTER)
+            }
+            FinalMode::Path => render_path(a, &mut off, &scene, &camera, &lighting, size).map_err(gpu)?,
+        };
+        final_info = Some(info);
         (png, false)
     } else {
         let map = if frame.is_none() && (a.sun.is_some() || a.ground) { off.build_shadow(&scene, scene.revision, &light, a.ground) } else { None };
@@ -279,8 +333,16 @@ pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError
     let (drawn, shadowed) = frame.as_ref().map_or((0, 0), |f| (f.lights, f.shadowed));
     io.errln(format_args!("LIGHTS {} shadowed={shadowed} drawn={drawn}", scene.lights.len()));
     io.errln(format_args!("SHADOWMAPS built={}", off.shadow_maps_built()));
-    if a.final_render {
-        io.errln(format_args!("FINAL renders={} size={}x{}", off.final_renders(), size.0, size.1));
+    if let Some(info) = final_info {
+        io.errln(format_args!(
+            "FINAL renders={} size={}x{} mode={} spp={} cache={}",
+            off.final_renders(),
+            size.0,
+            size.1,
+            info.mode,
+            info.spp,
+            info.cache.name()
+        ));
     }
     write_atomic(&a.output, &png)?;
     io.errln(format_args!("wrote {} ({} bytes)", a.output.display(), png.len()));
@@ -814,7 +876,12 @@ mod tests {
             style: Style::Shaded,
             sun: None,
             ground: false,
-            final_render: true,
+            final_render: Some(FinalMode::Raster),
+            spp: None,
+            bounces: None,
+            seed: None,
+            no_denoise: false,
+            rt: false,
             night: true,
             budget: 8,
             adapter: AdapterChoice::Fallback,
@@ -830,6 +897,52 @@ mod tests {
         // Check the output lines
         let stderr = String::from_utf8(err_buf).expect("utf8");
         assert!(stderr.contains("FINAL renders=1"), "missing FINAL line: {}", stderr);
+        assert!(stderr.contains("mode=raster spp=0 cache=unsupported"), "raster FINAL line: {}", stderr);
         assert!(stderr.contains("LIGHTS 2"), "missing LIGHTS 2: {}", stderr);
+    }
+
+    #[test]
+    fn render_final_path_prints_mode_and_cache() {
+        use crate::args::{Cli, Command};
+        if cadcraft_render3d::offscreen::device_within(std::time::Duration::from_secs(5)).is_none() {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        }
+        if !matches!(cadcraft_render3d::pathtrace::request_compute(AdapterChoice::Fallback, false), Ok(Some(_))) {
+            eprintln!("SKIP: the fallback adapter has no compute shaders");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("render_final_path_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let (input, output) = (dir.join("plan.dxf"), dir.join("out.png"));
+        std::fs::write(&input, cadcraft_io::write_dxf(&cadcraft_engine::sample::floor_plan())).expect("write dxf");
+        let argv: Vec<std::ffi::OsString> = [
+            "render".as_ref(),
+            input.as_os_str(),
+            output.as_os_str(),
+            "--final".as_ref(),
+            "path".as_ref(),
+            "--spp".as_ref(),
+            "2".as_ref(),
+            "--size".as_ref(),
+            "32x24".as_ref(),
+            "--adapter".as_ref(),
+            "fallback".as_ref(),
+        ]
+        .iter()
+        .map(|a: &&std::ffi::OsStr| (*a).to_os_string())
+        .collect();
+        let Ok(Cli { command: Command::Render(args), .. }) = crate::args::parse(&argv) else { panic!("render args parse") };
+
+        crate::install_io();
+        let (mut out_buf, mut err_buf) = (Vec::new(), Vec::new());
+        let mut streams = Streams::new(&mut out_buf, &mut err_buf);
+        render(&args, &mut streams).expect("render");
+        let stderr = String::from_utf8(err_buf).expect("utf8");
+        let line = stderr.lines().find(|l| l.starts_with("FINAL ")).unwrap_or_default();
+        assert!(line.contains("size=32x24 mode=path spp=2 cache="), "FINAL line: {stderr}");
+        assert!(["hit", "miss", "unsupported"].iter().any(|c| line.ends_with(&format!("cache={c}"))), "cache outcome: {line}");
+        assert!(stderr.contains("LIGHTS ") && stderr.contains("SHADOWMAPS built="), "{stderr}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
