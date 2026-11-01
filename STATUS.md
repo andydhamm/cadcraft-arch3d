@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 10 of 13: Lighting, light fixtures and final renders — 21 of 22 segments merged · 6 of 11 acceptance checks**
 
@@ -20,7 +20,7 @@ Updated 2026-11-01 04:30 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 6 / 11 | 11.9 h so far · expected done Nov 01 06:21–Nov 01 13:47 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 6 / 11 | 12.2 h so far · expected done Nov 01 06:36–Nov 01 14:05 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
@@ -66,4 +66,4 @@ Updated 2026-11-01 04:30 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | idle | 110 |
 | mai-flash | mai-code-1.1-flash | merging | 35 |
 | tturbo-mac | tturbo-ultraheretic | agent | 520 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 340 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 341 |
