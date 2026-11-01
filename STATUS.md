@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 24 of 28 segments merged · 10 of 13 acceptance checks**
 
@@ -21,20 +21,20 @@ Updated 2026-11-01 21:15 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 10 / 13 | 13.6 h so far · expected done Nov 01 23:48–Nov 02 09:51 UTC |
+| 11 | Ray-traced Finalize Render | building | 10 / 13 | 13.8 h so far · expected done Nov 02 00:14–Nov 02 11:00 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-24 merged, 3 merging, 1 gate
+24 merged, 4 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p11f-denoise-variance` | The denoiser weighs colour by each pixel's measured noise (variance-guided, SVGF-style) | merging | mai-flash |
 | `p11f-glass-shadow-once` | A shadow ray through a glass pane is tinted once, with Fresnel at both faces | merging | bonsai-b |
 | `p11f-explicit-spp-kept` | An explicit spp is rendered as asked on a software adapter | merging | claude-sonnet-a |
-| `upstream-sync-2034d6899` | merge upstream upstream/main up to 2034d6899 (18 commits) | gate | claude-sonnet-d |
+| `upstream-sync-2034d6899` | merge upstream upstream/main up to 2034d6899 (18 commits) | merging | claude-sonnet-d |
 
 ## Recent merges
 
@@ -57,16 +57,16 @@ Updated 2026-11-01 21:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 784 |
+| bonsai-a | bonsai2-27b | gate | 785 |
 | bonsai-b | bonsai2-27b | merging | 726 |
-| bonsai-ws2-a | bonsai2-27b | gate | 779 |
-| bonsai-ws2-b | bonsai2-27b | agent | 764 |
+| bonsai-ws2-a | bonsai2-27b | gate | 780 |
+| bonsai-ws2-b | bonsai2-27b | merging | 765 |
 | claude-sonnet-a | sonnet | merging | 68 |
 | claude-sonnet-b | sonnet | idle | 64 |
 | claude-sonnet-c | sonnet | idle | 14 |
-| claude-sonnet-d | sonnet | gate | 7 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 644 |
+| claude-sonnet-d | sonnet | merging | 8 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 645 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 45 |
-| tturbo-mac | tturbo-ultraheretic | agent | 545 |
+| tturbo-mac | tturbo-ultraheretic | agent | 546 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
