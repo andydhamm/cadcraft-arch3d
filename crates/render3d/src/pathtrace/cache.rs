@@ -168,14 +168,7 @@ mod tests {
         assert_eq!(outcome, CacheOutcome::Unsupported);
         assert!(cache.is_none());
 
-        let alt = ComputeGpu {
-            device: gpu.device.clone(),
-            queue: gpu.queue.clone(),
-            info: gpu.info.clone(),
-            ray_query: gpu.ray_query,
-            pipeline_cache: false,
-            adapter_key: gpu.adapter_key.clone(),
-        };
+        let alt = ComputeGpu::new(gpu.device.clone(), gpu.queue.clone(), gpu.info.clone(), gpu.ray_query, false, gpu.adapter_key.clone());
         let (cache, outcome) = open(&alt, Some(dir.as_path()));
         assert_eq!(outcome, CacheOutcome::Unsupported);
         assert!(cache.is_none());
