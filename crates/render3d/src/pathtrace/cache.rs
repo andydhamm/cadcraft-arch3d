@@ -10,13 +10,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 fn cache_dir_from_env(cadcraft: Option<&str>, xdg: Option<&str>, home: Option<&str>) -> Option<PathBuf> {
     if let Some(dir) = cadcraft.filter(|dir| !dir.trim().is_empty()) {
-        return Some(PathBuf::from(dir));
+        return Some(PathBuf::from(dir.trim()));
     }
     if let Some(dir) = xdg.filter(|dir| !dir.trim().is_empty()) {
-        return Some(PathBuf::from(dir).join("cadcraft").join("pipelines"));
+        return Some(PathBuf::from(dir.trim()).join("cadcraft").join("pipelines"));
     }
     if let Some(home) = home.filter(|home| !home.trim().is_empty()) {
-        return Some(PathBuf::from(home).join(".cache").join("cadcraft").join("pipelines"));
+        return Some(PathBuf::from(home.trim()).join(".cache").join("cadcraft").join("pipelines"));
     }
     None
 }
@@ -172,5 +172,119 @@ mod tests {
         let (cache, outcome) = open(&alt, Some(dir.as_path()));
         assert_eq!(outcome, CacheOutcome::Unsupported);
         assert!(cache.is_none());
+    }
+
+    #[test]
+    fn save_creates_directory_if_needed() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if !gpu.pipeline_cache {
+            eprintln!("SKIP: adapter has no pipeline cache support");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-ptcache-save-mkdir-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        // dir does not exist yet; save should create it
+        let (cache, _) = open(&gpu, Some(dir.as_path()));
+        let cache = cache.expect("open should create the dir and return a cache");
+        assert!(save(&gpu, &cache, &dir).is_ok());
+        assert!(cache_file(&dir, &gpu).exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn save_overwrites_existing_file() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if !gpu.pipeline_cache {
+            eprintln!("SKIP: adapter has no pipeline cache support");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-ptcache-save-overwrite-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let (cache1, _) = open(&gpu, Some(dir.as_path()));
+        let cache1 = cache1.expect("first open should succeed");
+        save(&gpu, &cache1, &dir).unwrap();
+        let first_size = std::fs::metadata(cache_file(&dir, &gpu)).unwrap().len();
+        assert!(first_size > 0);
+
+        // Open again (hit), save again — should overwrite cleanly
+        let (cache2, outcome) = open(&gpu, Some(dir.as_path()));
+        assert_eq!(outcome, CacheOutcome::Hit);
+        let cache2 = cache2.expect("second open should succeed");
+        save(&gpu, &cache2, &dir).unwrap();
+        let second_size = std::fs::metadata(cache_file(&dir, &gpu)).unwrap().len();
+        assert!(second_size > 0);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn open_empty_file_is_a_hit() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if !gpu.pipeline_cache {
+            eprintln!("SKIP: adapter has no pipeline cache support");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-ptcache-empty-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Write an empty cache file
+        let file = cache_file(&dir, &gpu);
+        std::fs::write(&file, []).unwrap();
+
+        // An existing file (even empty) is read and passed to pipeline_cache -> Hit
+        let (cache, outcome) = open(&gpu, Some(dir.as_path()));
+        assert_eq!(outcome, CacheOutcome::Hit);
+        assert!(cache.is_some());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn open_treats_directory_as_miss() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if !gpu.pipeline_cache {
+            eprintln!("SKIP: adapter has no pipeline cache support");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-ptcache-dir-miss-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Make cache_file a directory instead of a file
+        let file = cache_file(&dir, &gpu);
+        std::fs::create_dir(&file).unwrap();
+
+        // fs::read on a directory returns an error -> data is None -> Miss
+        let (cache, outcome) = open(&gpu, Some(dir.as_path()));
+        assert_eq!(outcome, CacheOutcome::Miss);
+        assert!(cache.is_some());
+
+        let _ = std::fs::remove_dir(&file);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
