@@ -840,6 +840,7 @@ dependencies = [
 name = "cadcraft-ui-egui"
 version = "0.15.1"
 dependencies = [
+ "cadcraft-arch",
  "cadcraft-arch3d",
  "cadcraft-color",
  "cadcraft-doc",
@@ -859,6 +860,7 @@ dependencies = [
  "image",
  "log",
  "naga",
+ "rfd",
  "serde",
  "serde_json",
  "toml",

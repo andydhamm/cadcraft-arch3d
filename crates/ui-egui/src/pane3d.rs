@@ -110,6 +110,68 @@ pub fn proxy_handle(id: cadcraft_doc::ArchId, part: &str) -> cadcraft_doc::Handl
     }
 }
 
+/// What the offscreen target (or a finished still) shows: scene key, size, view-projection,
+/// style, lighting and the number of fixture lights drawn.
+type ViewState = (u64, (u32, u32), [[f32; 4]; 4], Style3d, cadcraft_render3d::Lighting, usize);
+
+/// A finished Finalize Render still and the view it was made for.
+#[derive(Debug)]
+struct FinalDone {
+    state: ViewState,
+    width: u32,
+    height: u32,
+    rgba: Vec<u8>,
+}
+
+/// Finalize Render state shared between the pane's UI and its paint callback.
+#[derive(Debug, Default)]
+struct FinalUi {
+    /// The Finalize button was pressed; the callback starts a render.
+    request: bool,
+    /// The Cancel button was pressed (or the view changed under a running render).
+    cancel: bool,
+    /// Progress 0..1 while a render runs.
+    progress: Option<f32>,
+    /// Why the last render failed.
+    error: Option<String>,
+    /// The view the running render was started for.
+    started: Option<ViewState>,
+    /// The finished still.
+    done: Option<FinalDone>,
+}
+
+impl FinalUi {
+    /// Note the view being drawn: a still (or error) made for another view is dropped, and a
+    /// running render for another view is cancelled.
+    fn observe(&mut self, state: &ViewState) {
+        if self.done.as_ref().is_some_and(|d| d.state != *state) {
+            self.done = None;
+        }
+        if self.progress.is_some() && self.started.as_ref() != Some(state) {
+            self.cancel = true;
+        }
+    }
+}
+
+fn lock_final(m: &std::sync::Mutex<FinalUi>) -> std::sync::MutexGuard<'_, FinalUi> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The lighting for `site`, `night`, `date` and `time`. `None` for the sun when the date or
+/// time does not parse (the caller keeps its last good lighting).
+fn compute_lighting(site: Option<&cadcraft_doc::arch::SiteLocation>, night: bool, date: &str, time: &str) -> Option<cadcraft_render3d::Lighting> {
+    use cadcraft_render3d::{Light, Lighting};
+    if night {
+        return Some(Lighting { sun: None, sun_shadow: false, ..Lighting::default() });
+    }
+    let Some(site) = site else { return Some(Lighting::default()) };
+    let sun = cadcraft_arch::sun::sun_position(site.latitude, date.trim(), time.trim())?;
+    let d = cadcraft_arch::site::true_to_drawing(Some(site), cadcraft_arch::sun::sun_dir(&sun));
+    let dir = [d[0] as f32, d[1] as f32, d[2] as f32];
+    let light = Light::from_sun(&cadcraft_render3d::light::Sun { dir, ..Default::default() }, Light::DEFAULT.ambient);
+    Some(Lighting { sun: Some(light), sun_shadow: true, ..Lighting::default() })
+}
+
 /// Per-frame state for the 3D pane.
 #[derive(Debug)]
 pub struct Pane3d {
@@ -143,6 +205,21 @@ pub struct Pane3d {
     framed: bool,
     /// The rectangle the pane last drew into, in points.
     last_rect: Option<egui::Rect>,
+    /// Night: no sun, only the fixture lights.
+    pub night: bool,
+    /// The sun's date, `YYYY-MM-DD`.
+    pub sun_date: String,
+    /// The sun's time, `HH:MM`.
+    pub sun_time: String,
+    /// The model's site, for the sun.
+    site: Option<cadcraft_doc::arch::SiteLocation>,
+    /// The lighting last computed, with the inputs it was computed from.
+    lighting: cadcraft_render3d::Lighting,
+    lighting_inputs: Option<(Option<cadcraft_doc::arch::SiteLocation>, bool, String, String)>,
+    /// Whether the date and time entries parse.
+    sun_valid: bool,
+    /// Finalize Render state shared with the paint callback.
+    finalize: Arc<std::sync::Mutex<FinalUi>>,
 }
 
 impl Pane3d {
@@ -164,7 +241,32 @@ impl Pane3d {
             doc: None,
             framed: false,
             last_rect: None,
+            night: false,
+            sun_date: "2026-06-21".into(),
+            sun_time: "15:00".into(),
+            site: None,
+            lighting: cadcraft_render3d::Lighting::default(),
+            lighting_inputs: None,
+            sun_valid: true,
+            finalize: Arc::default(),
         }
+    }
+
+    /// The lighting for the site, night switch, date and time. Recomputed only when one of
+    /// them changed; an entry that does not parse keeps the last good sun.
+    pub fn lighting(&mut self) -> cadcraft_render3d::Lighting {
+        let inputs = (self.site.clone(), self.night, self.sun_date.clone(), self.sun_time.clone());
+        if self.lighting_inputs.as_ref() != Some(&inputs) {
+            match compute_lighting(self.site.as_ref(), self.night, &self.sun_date, &self.sun_time) {
+                Some(l) => {
+                    self.lighting = l;
+                    self.sun_valid = true;
+                }
+                None => self.sun_valid = false,
+            }
+            self.lighting_inputs = Some(inputs);
+        }
+        self.lighting
     }
 
     /// The rectangle the pane last drew into, in points (`None` before the first draw).
@@ -312,6 +414,9 @@ impl Pane3d {
     pub fn sync(&mut self, revision: u64, model: Option<&cadcraft_doc::ArchModel>) -> bool {
         match model {
             Some(m) => {
+                if self.site != m.site {
+                    self.site = m.site.clone();
+                }
                 if self.last_revision == revision {
                     return false;
                 }
@@ -329,6 +434,7 @@ impl Pane3d {
                 true
             }
             None => {
+                self.site = None;
                 self.scene = None;
                 self.mesh_count = 0;
                 self.has_content = false;
@@ -417,6 +523,48 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
             pane.use_orbit();
         }
     });
+    let lighting = pane.lighting();
+    let finalize = pane.finalize.clone();
+    ui.horizontal(|ui| {
+        ui.checkbox(&mut pane.night, crate::i18n::t("Night"));
+        let red = (!pane.sun_valid).then(|| ui.visuals().error_fg_color);
+        for text in [&mut pane.sun_date, &mut pane.sun_time] {
+            let mut edit = egui::TextEdit::singleline(text).desired_width(76.0);
+            if let Some(c) = red {
+                edit = edit.text_color(c);
+            }
+            ui.add(edit);
+        }
+        let (progress, error, has_still) = {
+            let f = lock_final(&finalize);
+            (f.progress, f.error.clone(), f.done.is_some())
+        };
+        match progress {
+            Some(p) => {
+                ui.add(egui::ProgressBar::new(p.clamp(0.0, 1.0)).desired_width(120.0).show_percentage());
+                if ui.button(crate::i18n::t("Cancel")).clicked() {
+                    lock_final(&finalize).cancel = true;
+                }
+                ui.ctx().request_repaint();
+            }
+            None => {
+                if ui.button(crate::i18n::t("Finalize Render")).clicked() {
+                    let mut f = lock_final(&finalize);
+                    f.request = true;
+                    f.error = None;
+                }
+                if let Some(e) = error {
+                    ui.colored_label(ui.visuals().error_fg_color, e);
+                }
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if has_still && ui.button(crate::i18n::t("Save PNG")).clicked() {
+            save_final_png(&finalize);
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = has_still;
+    });
     let (rect, response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
     if response.clicked() || response.drag_started() {
         response.request_focus();
@@ -447,8 +595,20 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
     if response.has_focus() {
         walk_keys(ui, pane);
     }
-    let callback = Pane3dCallback { scene, key: pane.scene_key(), camera: pane.camera(), size, style: pane.style };
+    let callback = Pane3dCallback { scene, key: pane.scene_key(), camera: pane.camera(), size, style: pane.style, lighting, finalize };
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(rect, callback));
+}
+
+/// Ask for a file and write the finished still there as PNG.
+#[cfg(not(target_arch = "wasm32"))]
+fn save_final_png(finalize: &std::sync::Mutex<FinalUi>) {
+    let Some(path) = rfd::FileDialog::new().add_filter("PNG", &["png"]).save_file() else { return };
+    let mut f = lock_final(finalize);
+    let Some(d) = f.done.as_ref() else { return };
+    let saved = image::save_buffer(&path, &d.rgba, d.width, d.height, image::ColorType::Rgba8);
+    if let Err(e) = saved {
+        f.error = Some(format!("{}: {e}", crate::i18n::t("Save PNG")));
+    }
 }
 
 /// Apply this frame's WASD / arrow key presses to the full camera: W/S and Up/Down walk,
@@ -515,9 +675,13 @@ struct Resources {
     /// The bind group for the offscreen target of this generation.
     bound: Option<(u64, wgpu::BindGroup)>,
     /// What the offscreen target last drew: scene key, size and view-projection.
-    drawn: Option<(u64, (u32, u32), [[f32; 4]; 4], Style3d)>,
+    drawn: Option<ViewState>,
     /// How many times the scene was drawn into the offscreen target.
     draws: u64,
+    /// The Finalize Render in progress.
+    final_render: Option<cadcraft_render3d::FinalRender>,
+    /// The finished still on the GPU, with the view it was made for.
+    final_image: Option<(ViewState, wgpu::BindGroup)>,
 }
 
 impl Resources {
@@ -584,7 +748,7 @@ impl Resources {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        Resources { blit, layout, sampler, offscreen: None, bound: None, drawn: None, draws: 0 }
+        Resources { blit, layout, sampler, offscreen: None, bound: None, drawn: None, draws: 0, final_render: None, final_image: None }
     }
 }
 
@@ -595,6 +759,45 @@ struct Pane3dCallback {
     camera: cadcraft_render3d::Camera,
     size: (u32, u32),
     style: Style3d,
+    lighting: cadcraft_render3d::Lighting,
+    finalize: Arc<std::sync::Mutex<FinalUi>>,
+}
+
+/// Upload a finished still as an sRGB texture and bind it for the blit.
+fn upload_still(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    width: u32,
+    height: u32,
+    rgba: &[u8],
+) -> wgpu::BindGroup {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("pane3d final"),
+        size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        texture.as_image_copy(),
+        rgba,
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(width.saturating_mul(4)), rows_per_image: Some(height) },
+        wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+    );
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("pane3d final"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
+        ],
+    })
 }
 
 impl egui_wgpu::CallbackTrait for Pane3dCallback {
@@ -611,14 +814,62 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
         off.resize(self.size);
         let (w, h) = off.size();
         let vp = cadcraft_render3d::camera::view_proj(&self.camera, f64::from(w) / f64::from(h));
+        // The shadow maps and the light selection live in `off` and are remade only when the
+        // scene or the lights change, so a camera move builds none.
+        let eye = self.camera.eye();
+        let frame = off.lit_frame(&self.scene, self.key, [eye.x, eye.y, eye.z], &self.lighting, false);
         // Redraw only when something visible changed; an idle pane costs one textured triangle.
-        let state = (self.key, (w, h), vp, self.style);
+        let state: ViewState = (self.key, (w, h), vp, self.style, self.lighting, frame.as_ref().map_or(0, |f| f.lights));
         if res.drawn != Some(state) {
-            let opts = cadcraft_render3d::RenderOptions { style: self.style.render_style(), ..Default::default() };
-            off.encode_with(encoder, &self.scene, self.key, &self.camera, &cadcraft_render3d::Light::DEFAULT, &opts);
+            let opts = cadcraft_render3d::RenderOptions { lit: frame.as_ref(), style: self.style.render_style(), ..Default::default() };
+            let sun = self.lighting.sun.unwrap_or(cadcraft_render3d::Light::DEFAULT);
+            off.encode_with(encoder, &self.scene, self.key, &self.camera, &sun, &opts);
             res.drawn = Some(state);
             res.draws += 1;
         }
+        drop(frame);
+
+        // Finalize Render: a view change drops the still and cancels a running render.
+        let mut ui_state = lock_final(&self.finalize);
+        ui_state.observe(&state);
+        if res.final_image.as_ref().is_some_and(|(s, _)| *s != state) {
+            res.final_image = None;
+        }
+        if std::mem::take(&mut ui_state.request) && res.final_render.is_none() {
+            res.final_image = None;
+            ui_state.done = None;
+            let render = cadcraft_render3d::FinalRender::start(off, &self.scene, self.key, &self.camera, &self.lighting, false, (w, h));
+            res.final_render = Some(render);
+            ui_state.started = Some(state);
+            ui_state.progress = Some(0.0);
+        }
+        if std::mem::take(&mut ui_state.cancel)
+            && let Some(r) = res.final_render.as_mut()
+        {
+            r.cancel();
+        }
+        let status = res.final_render.as_mut().map(|r| r.step(off));
+        match status {
+            Some(cadcraft_render3d::FinalStatus::Running { progress }) => ui_state.progress = Some(progress),
+            Some(cadcraft_render3d::FinalStatus::Done { width, height, rgba }) => {
+                let group = upload_still(device, queue, &res.layout, &res.sampler, width, height, &rgba);
+                res.final_image = Some((state, group));
+                ui_state.done = Some(FinalDone { state, width, height, rgba });
+                ui_state.progress = None;
+                res.final_render = None;
+            }
+            Some(cadcraft_render3d::FinalStatus::Cancelled) => {
+                ui_state.progress = None;
+                res.final_render = None;
+            }
+            Some(cadcraft_render3d::FinalStatus::Failed(msg)) => {
+                ui_state.progress = None;
+                ui_state.error = Some(msg);
+                res.final_render = None;
+            }
+            None => {}
+        }
+        drop(ui_state);
         if res.bound.as_ref().is_none_or(|(g, _)| *g != off.generation()) {
             let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("pane3d blit"),
@@ -635,7 +886,8 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
 
     fn paint(&self, info: egui::PaintCallbackInfo, pass: &mut wgpu::RenderPass<'static>, resources: &egui_wgpu::CallbackResources) {
         let Some(res) = resources.get::<Resources>() else { return };
-        let Some((_, group)) = &res.bound else { return };
+        let Some((_, live)) = &res.bound else { return };
+        let group = res.final_image.as_ref().map_or(live, |(_, g)| g);
         let v = info.viewport_in_pixels();
         let [sw, sh] = info.screen_size_px;
         let (x0, y0) = (v.left_px.max(0) as f32, v.top_px.max(0) as f32);
@@ -1115,6 +1367,8 @@ mod tests {
             camera: pane.camera(),
             size: (w, h),
             style: pane.style,
+            lighting: cadcraft_render3d::Lighting::default(),
+            finalize: pane.finalize.clone(),
         };
         let screen = egui_wgpu::ScreenDescriptor { size_in_pixels: [w, h], pixels_per_point: 1.0 };
         let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -1445,5 +1699,80 @@ mod tests {
         // No scene built: pick and apply are both no-ops.
         assert!(pane.pick((100, 100), [50.0, 50.0]).is_none(), "no scene, no pick");
         assert!(apply_pick(&mut pane, &mut session).is_none(), "no pick, no apply");
+    }
+
+    /// The house with a site at 51.05 N and true north 30, synced into a fresh pane.
+    fn site_pane() -> Pane3d {
+        let (mut pane, session) = house_pane();
+        let st = session.state().expect("session state");
+        let mut model = st.doc.arch.clone();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: 51.05, true_north: 30.0, ..Default::default() });
+        assert!(pane.sync(st.doc.arch_revision + 1, Some(&model)), "the model with a site rebuilds the scene");
+        pane
+    }
+
+    #[test]
+    fn pane_night_turns_the_sun_off() {
+        let mut pane = site_pane();
+        assert!(pane.lighting().sun.is_some(), "daytime has a sun");
+        pane.night = true;
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "night has no sun");
+        assert!(!l.sun_shadow, "and no sun shadow");
+        pane.night = false;
+        assert!(pane.lighting().sun.is_some(), "day brings the sun back");
+    }
+
+    #[test]
+    fn pane_sun_comes_from_the_site() {
+        let mut pane = site_pane();
+        let l = pane.lighting();
+        assert!(l.sun_shadow, "a site sun casts shadows");
+        let sun = cadcraft_arch::sun::sun_position(51.05, "2026-06-21", "15:00").expect("a valid sun");
+        let site = cadcraft_doc::arch::SiteLocation { latitude: 51.05, true_north: 30.0, ..Default::default() };
+        let want = cadcraft_arch::site::true_to_drawing(Some(&site), cadcraft_arch::sun::sun_dir(&sun));
+        let got = l.sun.expect("a sun").dir;
+        for i in 0..3 {
+            assert!((f64::from(got[i]) - want[i]).abs() < 1e-5, "axis {i}: {got:?} vs {want:?}");
+        }
+        // A bad time keeps the last good sun and flags the entry.
+        pane.sun_time = "99:99".into();
+        assert_eq!(pane.lighting().sun.map(|s| s.dir), l.sun.map(|s| s.dir));
+        assert!(!pane.sun_valid);
+        // No site: the default light, no sun shadow.
+        let mut bare = Pane3d::new();
+        assert_eq!(bare.lighting(), cadcraft_render3d::Lighting::default());
+    }
+
+    #[test]
+    fn pane_camera_move_keeps_lighting_and_scene_key() {
+        let mut pane = site_pane();
+        let (lighting, key) = (pane.lighting(), pane.scene_key());
+        orbit_by_drag(&mut pane, 40.0, 10.0, 0.01);
+        zoom_by_wheel(&mut pane, 2.0);
+        pane.walk(1.0, 0.0, WALK_STEP);
+        assert_eq!(pane.lighting(), lighting);
+        assert_eq!(pane.scene_key(), key);
+    }
+
+    #[test]
+    fn pane_final_image_clears_on_camera_change() {
+        let mut pane = site_pane();
+        let vp = |c: f32| [[c; 4]; 4];
+        let state: ViewState = (pane.scene_key(), (320, 200), vp(1.0), pane.style, pane.lighting(), 2);
+        let still = || FinalDone { state, width: 1, height: 1, rgba: vec![0; 4] };
+        let mut f = FinalUi { done: Some(still()), progress: Some(0.5), started: Some(state), ..Default::default() };
+        f.observe(&state);
+        assert!(f.done.is_some() && !f.cancel, "the same view keeps the still and the render");
+        let moved: ViewState = (state.0, state.1, vp(2.0), state.3, state.4, state.5);
+        f.observe(&moved);
+        assert!(f.done.is_none(), "a camera move drops the still");
+        assert!(f.cancel, "and cancels a running render");
+        // A lighting change does too.
+        let mut g = FinalUi { done: Some(still()), ..Default::default() };
+        pane.night = true;
+        let night: ViewState = (state.0, state.1, state.2, state.3, pane.lighting(), state.5);
+        g.observe(&night);
+        assert!(g.done.is_none(), "night drops the still");
     }
 }
