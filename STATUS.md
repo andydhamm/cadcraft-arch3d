@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 10 of 13: Lighting, light fixtures and final renders — 21 of 22 segments merged · 6 of 11 acceptance checks**
+**Phase 10 of 13: Lighting, light fixtures and final renders — 21 of 22 segments merged · 11 of 11 acceptance checks**
 
-6,195 workspace tests passing at the last merge · 612 segments merged in all · 0 of 13 seats working
+6,204 workspace tests passing at the last merge · 613 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -20,7 +20,7 @@ Updated 2026-11-01 05:45 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 6 / 11 | 13.2 h so far · expected done Nov 01 07:36–Nov 01 15:05 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 11 / 11 | 13.4 h so far · expected done Nov 01 07:51–Nov 01 15:20 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
@@ -37,6 +37,7 @@ Updated 2026-11-01 05:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 05:57 | `harden-p10-cli-render-final` | merged | 6,204 pass | tturbo-mac |
 | Nov 01 05:41 | `p10-docs-user-guide` | refused | 6,200 pass | bonsai-ws2-a |
 | Nov 01 05:02 | `p10-docs-user-guide` | refused | 0 pass | bonsai-b |
 | Nov 01 04:55 | `p10-docs-user-guide` | refused | 6,201 pass | mai-flash |
@@ -48,13 +49,12 @@ Updated 2026-11-01 05:45 UTC. This page and the card in the README are regenerat
 | Nov 01 03:13 | `harden-p10-io-glb-lights` | merged | 6,149 pass | tturbo-mac2 |
 | Nov 01 02:57 | `harden-p10-io-light-proxies` | merged | 6,141 pass | tturbo-mac |
 | Nov 01 02:16 | `upstream-sync-5caaf73e3` | merged | 6,136 pass | bonsai-ws2-a |
-| Nov 01 02:00 | `p10-cmd-illuminance` | merged | 6,136 pass | mai-flash |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 750 |
+| bonsai-a | bonsai2-27b | merging | 752 |
 | bonsai-b | bonsai2-27b | idle | 697 |
 | bonsai-ws2-a | bonsai2-27b | idle | 750 |
 | bonsai-ws2-b | bonsai2-27b | idle | 716 |
@@ -65,5 +65,5 @@ Updated 2026-11-01 05:45 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 599 |
 | kimi-k31 | k3.1-pro-highspeed | merging | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 36 |
-| tturbo-mac | tturbo-ultraheretic | merging | 523 |
+| tturbo-mac | tturbo-ultraheretic | agent | 523 |
 | tturbo-mac2 | tturbo-ultraheretic | merging | 343 |
