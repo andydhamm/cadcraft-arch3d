@@ -53,12 +53,12 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
     let method = match params.get("method") {
         None => "direct",
         Some(val) => {
-            val.as_str().filter(|s| s == "direct" || s == "path").ok_or_else(|| bad("illuminance", "`method` must be \"direct\" or \"path\""))?
+            val.as_str().filter(|s| *s == "direct" || *s == "path").ok_or_else(|| bad("illuminance", "`method` must be \"direct\" or \"path\""))?
         }
     };
 
     if method == "path" {
-        let whole = |key: &str, lo: u64, hi: u64, def: u64| -> Result<u64, EngineError> {
+        let whole = |key: &str, lo: u64, hi: u64, def: u64| -> Result<u64> {
             match params.get(key) {
                 None => Ok(def),
                 Some(val) => val

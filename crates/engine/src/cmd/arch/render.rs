@@ -318,7 +318,7 @@ fn parse_path_params(v: &Value) -> Result<PathParams, EngineError> {
                 prev = n;
                 out.push(n as u32);
             }
-            Ok(out)
+            out
         }
     };
 
@@ -521,7 +521,7 @@ mod tests {
         assert_eq!(p.denoise, true);
         assert_eq!(p.rt, false);
         assert_eq!(p.furnace, None);
-        assert_eq!(p.snapshots, Vec::new());
+        assert_eq!(p.snapshots, Vec::<u32>::new());
     }
 
     #[test]
