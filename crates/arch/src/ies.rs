@@ -52,7 +52,7 @@ pub fn parse(text: &str, file_name: &str) -> Result<IesProfile, IesError> {
         return Err(at(line, "trailing numbers after the candela values"));
     }
     let name = keywords.name().unwrap_or_else(|| file_name.to_string());
-    Ok(IesProfile { name, vertical, horizontal, candela, lumens: header.lumens })
+    Ok(IesProfile { name, vertical, horizontal, candela, lumens: header.lumens, ..Default::default() })
 }
 
 /// Candela of `p` at `vertical_deg` (0 = along the aim) and `horizontal_deg` (0 = the fixture's
