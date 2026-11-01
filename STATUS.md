@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 24 of 24 segments merged · 10 of 13 acceptance checks**
 
@@ -21,7 +21,7 @@ Updated 2026-11-01 20:15 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 10 / 13 | 12.6 h so far · expected done Nov 01 20:15–Nov 02 05:48 UTC |
+| 11 | Ray-traced Finalize Render | building | 10 / 13 | 12.8 h so far · expected done Nov 01 20:30–Nov 02 06:03 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
@@ -62,5 +62,5 @@ Updated 2026-11-01 20:15 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 641 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | gate | 542 |
+| tturbo-mac | tturbo-ultraheretic | merging | 543 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
