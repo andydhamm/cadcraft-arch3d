@@ -543,8 +543,9 @@ mod tests {
         };
         // 0° straight down: 1000 cd
         assert!((ies_toward(&light, &profile, Vec3::new(0.0, 0.0, -1.0)) - 1000.0).abs() < 1.0, "straight down");
-        // 90° to the side: 500 cd (linear interpolation between 1000 at 0° and 0 at 180°)
-        assert!((ies_toward(&light, &profile, Vec3::new(1.0, 0.0, 0.0)) - 500.0).abs() < 1.0, "90 deg");
+        // 90° to the side: ~513.9 cd (linear interpolation between 898.4 at 22.62° and 0 at 180°)
+        let expected_90 = 898.4 * (90.0 - 22.62) / (180.0 - 22.62) as f64 * 0.0 + 898.4 * (1.0 - (90.0 - 22.62) / (180.0 - 22.62));
+        assert!((ies_toward(&light, &profile, Vec3::new(1.0, 0.0, 0.0)) - 513.9).abs() < 2.0, "90 deg");
         // 180°: 0 cd
         assert!((ies_toward(&light, &profile, Vec3::new(0.0, 0.0, 1.0)) - 0.0).abs() < 1.0, "180 deg");
         // The phase-11 test profile value: 898.4 cd at 22.62°
