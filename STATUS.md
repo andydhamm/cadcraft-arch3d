@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 0 of 1 segments merged**
 
@@ -21,7 +21,7 @@ Updated 2026-11-01 07:15 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | done | — | 0.4 h so far |
+| 11 | Ray-traced Finalize Render | done | — | 0.7 h so far |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
@@ -54,7 +54,7 @@ Updated 2026-11-01 07:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 752 |
+| bonsai-a | bonsai2-27b | merging | 753 |
 | bonsai-b | bonsai2-27b | idle | 697 |
 | bonsai-ws2-a | bonsai2-27b | idle | 750 |
 | bonsai-ws2-b | bonsai2-27b | merging | 717 |
@@ -62,8 +62,8 @@ Updated 2026-11-01 07:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | held | 60 |
 | claude-sonnet-c | sonnet | held | 10 |
 | claude-sonnet-d | sonnet | held | 4 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 599 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 600 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 36 |
 | tturbo-mac | tturbo-ultraheretic | merging | 525 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 344 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 345 |
