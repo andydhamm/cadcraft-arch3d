@@ -417,4 +417,91 @@ mod tests {
         assert!(meshes.iter().any(|x| x.material == "light-lens"));
         assert!(!meshes.iter().any(|x| x.material == "light-lens-lit"));
     }
+
+    #[test]
+    fn rotated_panel_still_cuts_ceiling() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].rotation = 90.0;
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert_eq!(cuts.len(), 1);
+        let cut = &cuts[0];
+        assert_eq!(cut.len(), 4);
+        // For a square rotated 90 degrees, the set of corners is the same
+        let scene = crate::build(&m);
+        let frame_hit = scene.probe(cadcraft_geom::Vec3::new(2.28, 2.0, 2.395));
+        assert_eq!(frame_hit.as_ref().map(|h| h.part.as_str()), Some("light"));
+        let ceiling = scene.meshes.iter().find(|x| x.material == "ceiling");
+        assert!(ceiling.is_some_and(|c| c.is_manifold()));
+    }
+
+    #[test]
+    fn rotated_rectangular_panel_cuts_correctly() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].width = 0.4;
+        m.lights[0].length = 0.8;
+        m.lights[0].rotation = 90.0;
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert_eq!(cuts.len(), 1);
+        let cut = &cuts[0];
+        assert_eq!(cut.len(), 4);
+        // After 90-degree rotation, width and length swap
+        // Original corners: (1.8, 1.6), (2.2, 1.6), (2.2, 2.4), (1.8, 2.4)
+        // Rotated 90 degrees: (2.2, 1.8), (2.2, 2.2), (1.8, 2.2), (1.8, 1.8)
+        // But as a set, the bounding box is now 0.8 wide and 0.4 tall
+        let xs: Vec<f64> = cut.iter().map(|p| p.x).collect();
+        let ys: Vec<f64> = cut.iter().map(|p| p.y).collect();
+        let x_range = xs.iter().cloned().fold(f64::MIN, f64::max) - xs.iter().cloned().fold(f64::MAX, f64::min);
+        let y_range = ys.iter().cloned().fold(f64::MIN, f64::max) - ys.iter().cloned().fold(f64::MAX, f64::min);
+        assert!((x_range - 0.8).abs() < 1e-6, "x range should be 0.8 after rotation");
+        assert!((y_range - 0.4).abs() < 1e-6, "y range should be 0.4 after rotation");
+    }
+
+    #[test]
+    fn panel_with_custom_dimensions() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].width = 0.3;
+        m.lights[0].length = 0.4;
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert_eq!(cuts.len(), 1);
+        let cut = &cuts[0];
+        assert_eq!(cut.len(), 4);
+        let expected = [Vec2::new(1.85, 1.8), Vec2::new(2.15, 1.8), Vec2::new(2.15, 2.2), Vec2::new(1.85, 2.2)];
+        for (i, p) in cut.iter().enumerate() {
+            assert!((p.x - expected[i].x).abs() < 1e-6);
+            assert!((p.y - expected[i].y).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn two_panels_that_do_not_overlap() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED panel 600");
+        for (i, (x, y)) in [(1.0, 2.0), (3.0, 2.0)].iter().enumerate() {
+            let id = ArchId(i as u32);
+            let p = Vec2::new(*x, *y);
+            m.lights.push(t.as_ref().map(|t| cadcraft_arch::light::fixture_from_type(id, t, p)).unwrap_or_else(|| {
+                let mut f = LightFixture::new(id, "LED panel 600", p);
+                f.shape = FixtureShape::Panel;
+                f.width = 0.6;
+                f.length = 0.6;
+                f
+            }));
+        }
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert_eq!(cuts.len(), 2);
+        let scene = crate::build(&m);
+        let ceiling = scene.meshes.iter().find(|x| x.material == "ceiling");
+        assert!(ceiling.is_some_and(|c| c.is_manifold()));
+    }
+
+    #[test]
+    fn panel_with_nan_position_is_skipped() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].position = Vec2::new(f64::NAN, 2.0);
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert!(cuts.is_empty());
+    }
 }
