@@ -1074,4 +1074,63 @@ mod tests {
         let text = parse_with(cmd(), &args(&["sample", "--fontalt", "x"])).err().map(|e| e.to_string()).unwrap_or_default();
         assert!(text.contains("--fontalt"), "{text}");
     }
+
+    #[test]
+    fn path_flags_without_final_parse() {
+        let Ok(r) = render_of(&["--spp", "64", "--bounces", "2", "--seed", "7", "--no-denoise", "--rt"]) else {
+            panic!("path flags without --final should parse");
+        };
+        assert!(r.final_render.is_none());
+        let p = r.path_params();
+        assert_eq!((p.spp, p.bounces, p.seed, p.denoise, p.rt), (64, 2, 7, false, true));
+    }
+
+    #[test]
+    fn final_raster_with_path_flags_parse() {
+        let Ok(r) = render_of(&["--final", "raster", "--spp", "64"]) else {
+            panic!("--final raster --spp should parse");
+        };
+        assert_eq!(r.final_render, Some(FinalMode::Raster));
+        assert_eq!(r.path_params().spp, 64);
+    }
+
+    #[test]
+    fn spp_equals_syntax() {
+        let Ok(r) = render_of(&["--spp=64"]) else {
+            panic!("--spp=64 should parse");
+        };
+        assert_eq!(r.spp, Some(64));
+    }
+
+    #[test]
+    fn duplicate_spp_last_wins() {
+        let Ok(r) = render_of(&["--spp", "32", "--spp", "64"]) else {
+            panic!("duplicate --spp should parse");
+        };
+        assert_eq!(r.spp, Some(64));
+    }
+
+    #[test]
+    fn final_path_seed_u32_max() {
+        let Ok(r) = render_of(&["--final", "path", "--seed", "4294967295"]) else {
+            panic!("--seed u32 max should parse");
+        };
+        assert_eq!(r.seed, Some(4294967295));
+    }
+
+    #[test]
+    fn final_path_bounces_zero() {
+        let Ok(r) = render_of(&["--final", "path", "--bounces", "0"]) else {
+            panic!("--bounces 0 should parse");
+        };
+        assert_eq!(r.bounces, Some(0));
+    }
+
+    #[test]
+    fn final_path_spp_one() {
+        let Ok(r) = render_of(&["--final", "path", "--spp", "1"]) else {
+            panic!("--spp 1 should parse");
+        };
+        assert_eq!(r.spp, Some(1));
+    }
 }
