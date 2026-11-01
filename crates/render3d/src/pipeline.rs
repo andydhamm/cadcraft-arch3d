@@ -247,8 +247,9 @@ pub struct Draw {
     pub roughness: f32,
     /// Opacity; below 1.0 the draw blends (glass).
     pub alpha: f32,
-    /// Whether the draw is rendered into shadow maps (phase 10: fixture housings, `light-…`
-    /// materials, cast none, so moving a fixture changes no other light's shadows).
+    /// Whether the draw is rendered into fixture shadow maps
+    /// ([`crate::shadow_atlas::casts_fixture_shadow`]: fixture housings, `light-…` materials, and
+    /// ceilings cast none, so moving a fixture changes no other light's shadows).
     pub casts_shadow: bool,
     /// Self-lit strength (phase 10: 1 for the lens of a fixture that is on, `light-lens-lit`);
     /// carried to the shader in `PbrUniform::_p2[0]` and used by the lit pipelines only.
@@ -312,7 +313,7 @@ pub fn upload(device: &wgpu::Device, scene: &Scene3d) -> GpuMeshes {
         let index_count = indices.len() as u32 - first_index;
         if index_count > 0 {
             let (albedo, metallic, roughness, alpha) = material_pbr(&mesh.material);
-            let casts_shadow = !cadcraft_arch3d::light::is_light_material(&mesh.material);
+            let casts_shadow = crate::shadow_atlas::casts_fixture_shadow(&mesh.material);
             let emissive = if mesh.material.eq_ignore_ascii_case("light-lens-lit") { 1.0 } else { 0.0 };
             draws.push(Draw { first_index, index_count, albedo, metallic, roughness, alpha, casts_shadow, emissive });
         }

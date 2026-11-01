@@ -161,6 +161,28 @@ fn parse_samples(v: Option<&Value>) -> Result<Vec<[f64; 3]>, EngineError> {
     }
 }
 
+/// `style`: one of shaded, shaded-edges, hidden-line, glass-house; absent is shaded.
+fn parse_style(v: Option<&Value>) -> Result<String, EngineError> {
+    match v {
+        None => Ok("shaded".to_string()),
+        Some(v) => v
+            .as_str()
+            .filter(|s| matches!(*s, "shaded" | "shaded-edges" | "hidden-line" | "glass-house"))
+            .map(str::to_string)
+            .ok_or_else(|| bad("render", "`style` must be one of: shaded, shaded-edges, hidden-line, glass-house")),
+    }
+}
+
+/// `budget`: lights shadowed in the interactive view, a whole number in 0..=64; absent is 8.
+fn parse_budget(v: Option<&Value>) -> Result<usize, EngineError> {
+    match v {
+        None => Ok(8),
+        Some(v) => {
+            v.as_u64().filter(|n| (0..=64).contains(n)).map(|n| n as usize).ok_or_else(|| bad("render", "`budget` must be a whole number in 0..=64"))
+        }
+    }
+}
+
 fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineError> {
     match v {
         None => Ok(SunChoice::Default),
@@ -234,17 +256,9 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let camera = camera_from_params(params.get("camera"), doc)?;
     let final_render = params.get("final").and_then(Value::as_bool).unwrap_or(false);
     let sun = parse_sun(params.get("sun"), doc)?;
-    let style = params
-        .get("style")
-        .and_then(Value::as_str)
-        .and_then(|s| matches!(s, "shaded" | "shaded-edges" | "hidden-line" | "glass-house").then(|| s.to_string()))
-        .ok_or_else(|| bad("render", "`style` must be one of: shaded, shaded-edges, hidden-line, glass-house"))?;
+    let style = parse_style(params.get("style"))?;
     let ground = params.get("ground").and_then(Value::as_bool).unwrap_or(false);
-    let budget = params
-        .get("budget")
-        .and_then(Value::as_u64)
-        .and_then(|n| (0..=64).contains(&n).then_some(n as usize))
-        .ok_or_else(|| bad("render", "`budget` must be a whole number in 0..=64"))?;
+    let budget = parse_budget(params.get("budget"))?;
     let samples = parse_samples(params.get("samples"))?;
     let out = params.get("out").and_then(Value::as_str).map(PathBuf::from);
 
@@ -274,6 +288,18 @@ mod tests {
         let r = s.execute("render", &json!({}));
         let e = r.unwrap_err().to_string();
         assert!(e.contains("render needs the 3D renderer"), "{e}");
+    }
+
+    #[test]
+    fn style_and_budget_default_when_absent_and_are_checked_when_given() {
+        assert_eq!(parse_style(None).ok().as_deref(), Some("shaded"));
+        assert_eq!(parse_style(Some(&json!("glass-house"))).ok().as_deref(), Some("glass-house"));
+        let e = parse_style(Some(&json!("lit"))).map_err(|e| e.to_string()).err().unwrap_or_default();
+        assert!(e.contains("`style` must be one of"), "{e}");
+        assert_eq!(parse_budget(None).ok(), Some(8));
+        assert_eq!(parse_budget(Some(&json!(0))).ok(), Some(0));
+        assert!(parse_budget(Some(&json!(65))).is_err());
+        assert!(parse_budget(Some(&json!("8"))).is_err());
     }
 
     #[test]
