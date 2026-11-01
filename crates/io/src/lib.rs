@@ -17,8 +17,10 @@ mod dxf_write;
 mod dxf_xref;
 pub mod glb;
 mod glb_lights;
+pub mod ifc;
 pub mod pdf;
 pub mod plotter;
+pub mod step;
 pub mod svg;
 mod svg_read;
 
@@ -139,6 +141,11 @@ pub fn write_framed(d: &Drawing, name: impl AsRef<Path>, window: Option<Bounds2>
     // glTF binary (arch3d): not a drawing format, chosen by extension alone.
     if ext(name) == "glb" {
         return Ok(glb::write_drawing(d));
+    }
+    // IFC4 (arch3d, phase 12): the arch model only, chosen by extension alone.
+    if ext(name) == "ifc" {
+        let file_name = name.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        return Ok(ifc::write_drawing(d, &ifc::IfcOptions::from_env(&file_name)).into_bytes());
     }
     match format {
         Some(Format::Dxf | Format::Dwg) => write_with(d, name, &SaveOptions::default()),
