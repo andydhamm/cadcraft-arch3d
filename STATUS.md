@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 10 of 13: Lighting, light fixtures and final renders — 11 of 22 segments merged · 0 of 11 acceptance checks**
+**Phase 10 of 13: Lighting, light fixtures and final renders — 12 of 22 segments merged · 0 of 11 acceptance checks**
 
-6,106 workspace tests passing at the last merge · 598 segments merged in all · 0 of 13 seats working
+6,111 workspace tests passing at the last merge · 599 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -20,20 +20,20 @@ Updated 2026-11-01 00:00 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 7.4 h so far · expected done Nov 01 08:14–Nov 01 20:51 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 0 / 11 | 7.7 h so far · expected done Nov 01 07:26–Nov 01 18:59 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-11 merged, 6 queued, 5 merging
+12 merged, 5 queued, 4 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p10-arch3d-scene-lights` | Scene lights and direct illuminance with shadow rays | merging | claude-sonnet-d |
 | `p10-arch3d-fixture-meshes` | Fixture housings in 3D | merging | claude-sonnet-a |
-| `p10-r3d-lit-frame` | The interactive lit frame: cached selection, shadow maps only when the scene or lights change | merging | claude-sonnet-b |
+| `p10-r3d-finalize` | Finalize Render: every light shadowed at high resolution, soft edges, supersampled, tone mapped, in cancellable steps | working | claude-sonnet-b |
 | `p10-cmd-lightfixture` | LIGHTFIXTURE: place, grid in a room, edit, delete, list types; arch.inspect lights | merging | mai-flash |
 | `upstream-sync-5caaf73e3` | merge upstream upstream/main up to 5caaf73e3 (1 commits) | merging | bonsai-ws2-a |
 
@@ -41,6 +41,7 @@ Updated 2026-11-01 00:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 00:10 | `p10-r3d-lit-frame` | merged | 6,111 pass | claude-sonnet-b |
 | Oct 31 23:59 | `p10-mcp-render-final` | merged | 6,106 pass | kimi-k31 |
 | Oct 31 23:45 | `p10-r3d-lit-pipeline` | merged | 6,104 pass | kimi-k31 |
 | Oct 31 23:31 | `harden-p10-cmd-sunstudy` | merged | 6,100 pass | tturbo-mac2 |
@@ -52,22 +53,21 @@ Updated 2026-11-01 00:00 UTC. This page and the card in the README are regenerat
 | Oct 31 21:36 | `p10-arch-light-symbol` | merged | 6,066 pass | bonsai-ws2-a |
 | Oct 31 21:23 | `p10-cmd-sunstudy` | merged | 6,062 pass | bonsai-b |
 | Oct 31 21:14 | `harden-p9-cmd-wall-retaining` | merged | 6,058 pass | tturbo-mac |
-| Oct 31 21:03 | `p10-r3d-shadow-atlas` | merged | 6,047 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 744 |
-| bonsai-b | bonsai2-27b | idle | 688 |
+| bonsai-a | bonsai2-27b | gate | 747 |
+| bonsai-b | bonsai2-27b | agent | 688 |
 | bonsai-ws2-a | bonsai2-27b | merging | 745 |
-| bonsai-ws2-b | bonsai2-27b | agent | 710 |
+| bonsai-ws2-b | bonsai2-27b | idle | 712 |
 | claude-sonnet-a | sonnet | idle | 59 |
-| claude-sonnet-b | sonnet | merging | 57 |
+| claude-sonnet-b | sonnet | agent | 57 |
 | claude-sonnet-c | sonnet | idle | 10 |
 | claude-sonnet-d | sonnet | idle | 3 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 598 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 598 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 110 |
 | mai-flash | mai-code-1.1-flash | idle | 31 |
 | tturbo-mac | tturbo-ultraheretic | merging | 517 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 335 |
+| tturbo-mac2 | tturbo-ultraheretic | merging | 336 |
