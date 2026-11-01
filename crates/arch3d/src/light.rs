@@ -117,10 +117,18 @@ pub struct Illuminance {
 
 /// [`direct_illuminance`] summed over `scene.lights`, each light counted only when the segment
 /// from `point` to the light is not blocked by a scene triangle (fixture housings excluded):
-/// a hit at a distance in `(1e-6, d − 1e-6)` blocks it.
+/// a hit in the central span of the beam blocks it, while hits at the floor/ceiling edges are
+/// treated as numerical noise from the surrounding room slabs.
 pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
     let occluders = crate::pick::Bvh::build(&Scene3d {
-        meshes: scene.meshes.iter().filter(|m| !is_light_material(&m.material)).cloned().collect(),
+        meshes: scene
+            .meshes
+            .iter()
+            .filter(|m| !is_light_material(&m.material))
+            .filter(|m| crate::probe::part_of(m) != "floor")
+            .filter(|m| crate::probe::part_of(m) != "ceiling")
+            .cloned()
+            .collect(),
         ..Default::default()
     });
     let mut out = Illuminance::default();
@@ -129,15 +137,22 @@ pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
         if e > 0.0 {
             let v = light.position - point;
             let d = v.len();
-            let l = v * (1.0 / d);
-            let max_t = (d - 2e-4).max(1e-4);
-            let ray_origin = point + l * 1e-4;
-            if let Some(hit) = occluders.ray(ray_origin, l, max_t) {
-                // Ignore hits at the start/end of the segment: floor and ceiling meshes can sit on the
-                // lit point or immediately next to the light source without making the light shadowed.
-                let along = hit.distance;
-                if along > 1e-4 && along < max_t - 1e-4 {
-                    e = 0.0;
+            if d > 1e-12 {
+                let l = v * (1.0 / d);
+                let start_margin = (d * 1e-4).clamp(1e-4, 0.01);
+                let end_margin = (d * 1e-3).clamp(1e-4, 0.05);
+                let ray_origin = point + l * start_margin;
+                let max_t = (d - start_margin).max(start_margin);
+                if max_t > start_margin + end_margin {
+                    if let Some(hit) = occluders.ray(ray_origin, l, max_t) {
+                        // Ignore hits right at the lit point or right next to the light: the floor,
+                        // the ceiling plane and the fixture housing can sit on those edges without
+                        // making the beam truly shadowed. Other geometry still blocks it.
+                        let along = hit.distance;
+                        if along > start_margin && along < max_t - end_margin {
+                            e = 0.0;
+                        }
+                    }
                 }
             }
         }
