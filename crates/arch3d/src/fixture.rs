@@ -504,4 +504,76 @@ mod tests {
         let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
         assert!(cuts.is_empty());
     }
+
+    #[test]
+    fn a_panel_larger_than_the_room_gets_no_cut() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].width = 5.0;
+        m.lights[0].length = 5.0;
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert!(cuts.is_empty());
+    }
+
+    #[test]
+    fn a_panel_touching_the_room_edge_gets_no_cut() {
+        // Panel at (2.0, 2.0) with width 4.0 touches both left and right edges exactly
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].width = 4.0;
+        m.lights[0].length = 0.6;
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert!(cuts.is_empty());
+    }
+
+    #[test]
+    fn overlapping_panels_get_separate_cuts() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED panel 600");
+        // Two panels that overlap: at (1.0, 2.0) and (1.3, 2.0) with width 0.6
+        for (i, (x, y)) in [(1.0, 2.0), (1.3, 2.0)].iter().enumerate() {
+            let id = ArchId(i as u32);
+            let p = Vec2::new(*x, *y);
+            m.lights.push(t.as_ref().map(|t| cadcraft_arch::light::fixture_from_type(id, t, p)).unwrap_or_else(|| {
+                let mut f = LightFixture::new(id, "LED panel 600", p);
+                f.shape = FixtureShape::Panel;
+                f.width = 0.6;
+                f.length = 0.6;
+                f
+            }));
+        }
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        // The second panel overlaps the first, so only one cut
+        assert_eq!(cuts.len(), 1);
+    }
+
+    #[test]
+    fn panel_with_zero_dimensions_is_skipped() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].width = 0.0;
+        m.lights[0].length = 0.0;
+        // Zero dimensions fall back to defaults (0.6), so a cut should still be made
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert_eq!(cuts.len(), 1);
+    }
+
+    #[test]
+    fn panel_with_nan_dimensions_is_skipped() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        m.lights[0].width = f64::NAN;
+        m.lights[0].length = 0.6;
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert!(cuts.is_empty());
+    }
+
+    #[test]
+    fn panel_in_room_with_hole_is_skipped() {
+        let mut m = panel_in_a_room((2.0, 2.0));
+        // Add a hole that the panel corners fall into
+        let hole = [Vec2::new(1.5, 1.5), Vec2::new(2.5, 1.5), Vec2::new(2.5, 2.5), Vec2::new(1.5, 2.5)];
+        m.rooms[0].holes.push(hole.to_vec());
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert!(cuts.is_empty());
+    }
 }
