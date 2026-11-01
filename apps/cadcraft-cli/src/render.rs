@@ -803,7 +803,7 @@ mod tests {
 
         // Save to a temp file
         let tmp = std::env::temp_dir().join("render_final_night_test.dxf");
-        cadcraft_io::write_dxf(&d, tmp.as_path()).expect("write dxf");
+        std::fs::write(&tmp, cadcraft_io::write_dxf(&d)).expect("write dxf");
 
         // Render with --night --final using the fallback adapter
         let args = RenderArgs {
