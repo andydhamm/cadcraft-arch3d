@@ -190,7 +190,8 @@ mod tests {
         d.arch = model;
         d.touch_arch();
 
-        let result = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0]})).unwrap();
+        // Use the center of the fixture grid where all four lights reach
+        let result = s.execute("illuminance", &json!({"point": [1.5, 1.5, 0.0]})).unwrap();
         let contribs = result["contributions"].as_array().unwrap();
         // All four lights are reported, but only the two that are on contribute
         assert_eq!(contribs.len(), 4);
