@@ -19,6 +19,8 @@
 //! driver and the irradiance probes), [`denoise`] (the à-trous filter), [`cache`] (the on-disk
 //! pipeline cache).
 
+#[cfg(test)]
+mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
