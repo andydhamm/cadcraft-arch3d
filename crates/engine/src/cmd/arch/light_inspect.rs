@@ -132,6 +132,18 @@ mod tests {
     }
 
     #[test]
+    fn lightfixture_point_inspect_no_width_length() {
+        let mut model = ArchModel::default();
+        model.lights.push(LightFixture { kind: LightKind::Point, ..LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(1.0, 1.0)) });
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        let lights = out["lights"].as_array().unwrap();
+        let light = &lights[0];
+        assert!(light.get("width").is_none(), "{light}");
+        assert!(light.get("length").is_none(), "{light}");
+    }
+
+    #[test]
     fn inspect_lists_area_size_and_ies() {
         let dir = TempDir::new("ies-inspect");
         let file = dir.file("downlight.ies", TEST_DOWNLIGHT_IES);

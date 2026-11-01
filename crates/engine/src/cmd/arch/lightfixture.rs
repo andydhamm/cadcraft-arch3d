@@ -802,6 +802,60 @@ mod tests {
     }
 
     #[test]
+    fn lightfixture_refuses_non_finite_area_size() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"type": "LED panel 600", "at": [2.0, 2.0], "width": "nan"})).is_err());
+        assert!(session.execute("lightfixture", &json!({"type": "LED panel 600", "at": [2.0, 2.0], "length": "long"})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_area_to_point_ignores_size() {
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"type": "LED panel 600", "at": [2.0, 2.0]})).unwrap();
+        session.execute("lightfixture.edit", &json!({"id": "lf0", "kind": "point"})).unwrap();
+        let doc = session.doc().unwrap();
+        let f = &doc.arch.lights[0];
+        assert_eq!(f.kind, LightKind::Point);
+        // width and length are still stored but not checked for non-area lights
+        assert_eq!((f.width, f.length), (0.6, 0.6));
+    }
+
+    #[test]
+    fn lightfixture_ies_with_rotation_and_tilt() {
+        let dir = TempDir::new("ies-rot-tilt");
+        let file = dir.file("downlight.ies", TEST_DOWNLIGHT_IES);
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"type": "Recessed pot light", "at": [1.0, 1.0], "rotation": 45.0, "tilt": 30.0})).unwrap();
+        session.execute("lightfixture.edit", &json!({"id": "lf0", "ies": file})).unwrap();
+        let doc = session.doc().unwrap();
+        let f = &doc.arch.lights[0];
+        assert_eq!(f.rotation, 45.0);
+        assert_eq!(f.tilt, 30.0);
+        assert!(f.ies.is_some());
+    }
+
+    #[test]
+    fn lightfixture_ies_null_when_none_set() {
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"type": "Recessed pot light", "at": [1.0, 1.0]})).unwrap();
+        session.execute("lightfixture.edit", &json!({"id": "lf0", "ies": null})).unwrap();
+        let doc = session.doc().unwrap();
+        assert_eq!(doc.arch.lights[0].ies, None);
+    }
+
+    #[test]
+    fn lightfixture_ies_file_trailing_whitespace() {
+        let dir = TempDir::new("ies-trailing");
+        let file = dir.file("downlight.ies", format!("{}\n\n\n", TEST_DOWNLIGHT_IES));
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"type": "Recessed pot light", "at": [1.0, 1.0]})).unwrap();
+        session.execute("lightfixture.edit", &json!({"id": "lf0", "ies": file})).unwrap();
+        let doc = session.doc().unwrap();
+        assert!(doc.arch.lights[0].ies.is_some());
+    }
+
+    #[test]
     fn lightfixture_refuses_bad_area_sizes_and_bad_ies_files() {
         let dir = TempDir::new("ies-bad");
         let mut session = Session::new();
