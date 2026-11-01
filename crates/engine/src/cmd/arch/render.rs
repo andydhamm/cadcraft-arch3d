@@ -273,7 +273,77 @@ fn parse_budget(v: Option<&Value>) -> Result<usize, EngineError> {
     }
 }
 
-fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineError> {
+/// The path tracer's settings, read flat from the command params into `PathParams` (phase 11).
+/// Absent fields take defaults: `spp` 256, `bounces` 4, `seed` 0, `denoise` true, `rt` false,
+/// `snapshots` [], `furnace` absent. `snapshots` is an array of at most 8 whole numbers, each
+/// in 1..=`spp` and strictly ascending; `furnace` is `{albedo, emission}` with both required,
+/// `0 < albedo < 1` and `0 < emission <= 1000`.
+fn parse_path_params(v: &Value) -> Result<PathParams, EngineError> {
+    let whole = |key: &str, lo: u64, hi: u64, def: u64| -> Result<u64, EngineError> {
+        match v.get(key) {
+            None => Ok(def),
+            Some(val) => {
+                val.as_u64().filter(|n| (lo..=hi).contains(n)).ok_or_else(|| bad("render", format!("`{key}` must be a whole number in {lo}..={hi}")))
+            }
+        }
+    };
+
+    let spp = whole("spp", 1, 65536, 256)?;
+    let bounces = whole("bounces", 0, 32, 4)?;
+    let seed = whole("seed", 0, 4294967295, 0)?;
+
+    let denoise = match v.get("denoise") {
+        None => true,
+        Some(val) => val.as_bool().ok_or_else(|| bad("render", "`denoise` must be a boolean"))?,
+    };
+    let rt = match v.get("rt") {
+        None => false,
+        Some(val) => val.as_bool().ok_or_else(|| bad("render", "`rt` must be true or false"))?,
+    };
+
+    let snapshots = match v.get("snapshots") {
+        None => Vec::new(),
+        Some(val) => {
+            let arr = val.as_array().ok_or_else(|| bad("render", "`snapshots` must be an array"))?;
+            if arr.len() > 8 {
+                return Err(bad("render", "`snapshots` must have at most 8 entries"));
+            }
+            let mut out = Vec::with_capacity(arr.len());
+            let mut prev: u64 = 0;
+            for (i, item) in arr.iter().enumerate() {
+                let n = item.as_u64().ok_or_else(|| bad("render", format!("`snapshots[{}]` must be a whole number", i)))?;
+                if n < 1 || n > spp || n <= prev {
+                    return Err(bad("render", format!("`snapshots` must be whole numbers in 1..={spp} and strictly ascending")));
+                }
+                prev = n;
+                out.push(n as u32);
+            }
+            Ok(out)
+        }
+    };
+
+    let furnace = match v.get("furnace") {
+        None => None,
+        Some(val) => {
+            let obj = val.as_object().ok_or_else(|| bad("render", "`furnace` must be an object with `albedo` and `emission`"))?;
+            let albedo = obj
+                .get("albedo")
+                .and_then(Value::as_f64)
+                .filter(|a| a.is_finite() && *a > 0.0 && *a < 1.0)
+                .ok_or_else(|| bad("render", "`albedo` must be a finite number with 0 < albedo < 1"))?;
+            let emission = obj
+                .get("emission")
+                .and_then(Value::as_f64)
+                .filter(|e| e.is_finite() && *e > 0.0 && *e <= 1000.0)
+                .ok_or_else(|| bad("render", "`emission` must be a finite number with 0 < emission <= 1000"))?;
+            Some((albedo, emission))
+        }
+    };
+
+    Ok(PathParams { spp: spp as u32, bounces: bounces as u32, seed: seed as u32, denoise, rt, furnace, snapshots })
+}
+
+pub fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineError> {
     match v {
         None => Ok(SunChoice::Default),
         Some(Value::Bool(false)) => Ok(SunChoice::Off),
@@ -352,9 +422,8 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let samples = parse_samples(params.get("samples"))?;
     let out = params.get("out").and_then(Value::as_str).map(PathBuf::from);
 
-    // Phase 11: the path tracer's settings are parsed by `p11-cmd-render-path` (defaults until then).
-    let request =
-        RenderRequest::new(&doc, camera, size, out, final_render, sun, style, ground, budget, samples).with_final(final_mode, PathParams::default());
+    let path = parse_path_params(params)?;
+    let request = RenderRequest::new(&doc, camera, size, out, final_render, sun, style, ground, budget, samples).with_final(final_mode, path);
 
     (hooks.render)(&request).map_err(|e| bad("render", e))
 }
@@ -364,7 +433,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("render", "Render 3D", run_render)
             .menu(&["Architecture", "Render 3D"])
-            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?, ground?: bool, budget?, samples?: [[x,y,z], ...]}")
+            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
             .noundo(),
     ]
 }
