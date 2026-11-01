@@ -1,12 +1,13 @@
 //! The denoiser (phase 11): an edge-aware à-trous wavelet filter in WGSL (`pt/denoise.wgsl`),
-//! [`ITERATIONS`] passes at strides 1, 2, 4, 8, 16, each tap weighted by colour, normal and albedo
-//! similarity to the centre, guided by the path tracer's first-hit AOVs. No ML, no C++.
+//! [`ITERATIONS`] passes at strides 1, 2, 4, 8, 16, each tap weighted by colour variance (SVGF's
+//! sigma_l), normal and albedo similarity to the centre, guided by the path tracer's first-hit
+//! AOVs. No ML, no C++.
 //!
 //! One pass is a 5 x 5 B3-spline kernel (1/16, 1/4, 3/8, 1/4, 1/16 per axis) whose taps sit
 //! `step` pixels apart; doubling the step per pass widens the footprint to 61 pixels with 25 taps
 //! a pass. The edge-stopping weights keep the filter from averaging across a change of albedo or
 //! of surface direction (the guides), or across a colour change much larger than the centre's
-//! brightness-relative noise. Pixels with no hit (the sky) are copied and never contribute.
+//! variance-guided noise. Pixels with no hit (the sky) are copied and never contribute.
 
 use super::device::ComputeGpu;
 use bytemuck::{Pod, Zeroable};
@@ -14,9 +15,9 @@ use wgpu::util::DeviceExt;
 
 /// Passes of the filter.
 pub const ITERATIONS: u32 = 5;
-/// Edge-stopping widths: colour (relative to the centre's luminance), normal (cosine power),
-/// albedo (absolute).
-pub const SIGMA_COLOR: f32 = 0.5;
+/// Edge-stopping width in standard deviations of the two pixels' combined variance (SVGF's
+/// `sigma_l`), with normal (cosine power) and albedo (absolute) guides.
+pub const SIGMA_COLOR: f32 = 4.0;
 pub const SIGMA_NORMAL: f32 = 64.0;
 pub const SIGMA_ALBEDO: f32 = 0.1;
 
@@ -107,17 +108,19 @@ fn check_inputs(gpu: &ComputeGpu, color: usize, aov: usize, size: (u32, u32)) ->
     Ok(pixels as usize)
 }
 
-/// Denoise `color` (`size.0 · size.1` linear RGB values, w ignored) guided by `aov` (two entries
+/// Denoise `color` (`size.0 · size.1` linear RGB values, w is the pixel variance of the mean:
+/// luminance-squared, with negative or non-finite values treated as 0) guided by `aov` (two entries
 /// per pixel: albedo with w = 1 where something was hit, then normal and distance; the layout the
-/// kernel writes). Returns the filtered colours (w = 1). Pixels with no hit are left as they are.
+/// kernel writes). Returns the filtered colours with w = 1. Pixels with no hit are left as they are.
 pub fn denoise(gpu: &ComputeGpu, color: &[[f32; 4]], aov: &[[f32; 4]], size: (u32, u32)) -> Result<Vec<[f32; 4]>, String> {
     let pixels = check_inputs(gpu, color.len(), aov.len(), size)?;
     let atrous = build_pipeline(gpu)?;
     let d = &gpu.device;
     let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
     let bytes = (pixels * 16) as u64;
-    // The colour's w is ignored: every pixel goes in with w = 1, so a copied pixel comes out so too.
-    let opaque: Vec<[f32; 4]> = color.iter().map(|c| [c[0], c[1], c[2], 1.0]).collect();
+    // The colour's w is the per-pixel variance of the mean; clamp it to finite non-negative values
+    // before the pass and restore w = 1 on the readback for the caller's old opaque colour API.
+    let opaque: Vec<[f32; 4]> = color.iter().map(|c| [c[0], c[1], c[2], if c[3].is_finite() && c[3] >= 0.0 { c[3] } else { 0.0 }]).collect();
     let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
     let ping = [
         d.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("pt denoise a"), contents: bytemuck::cast_slice(&opaque), usage }),
@@ -186,7 +189,11 @@ fn read_back(gpu: &ComputeGpu, read: &wgpu::Buffer) -> Result<Vec<[f32; 4]>, Str
     rx.recv().map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
     let out: Vec<[f32; 4]> = {
         let view = slice.get_mapped_range().map_err(|e| e.to_string())?;
-        bytemuck::cast_slice(&view).to_vec()
+        let mut result: Vec<[f32; 4]> = bytemuck::cast_slice(&view).to_vec();
+        for px in &mut result {
+            px[3] = 1.0;
+        }
+        result
     };
     read.unmap();
     Ok(out)
@@ -382,6 +389,61 @@ mod tests {
         let pixels: Vec<Pixel> = (0..w * h).map(|_| wall([0.3, 0.6, 0.9])).collect();
         let out = run(&gpu, &pixels, (w, h));
         assert!(out.iter().all(|o| (o[0] - 0.3).abs() <= 1e-5 && (o[1] - 0.6).abs() <= 1e-5 && (o[2] - 0.9).abs() <= 1e-5 && o[3] == 1.0));
+    }
+
+    #[test]
+    fn dark_pixels_average_with_their_brighter_noisy_neighbours() {
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x3c6e_f375);
+        let pixels: Vec<Pixel> = image(|_, _| {
+            let mean = (0..4).map(|_| if noise.next() < -0.5 { 1.0 } else { 0.0 }).sum::<f32>() / 4.0;
+            wall([mean, mean, mean])
+        });
+        let color: Vec<[f32; 4]> = pixels.iter().map(|p| [p.color[0], p.color[1], p.color[2], 0.1875 / 4.0]).collect();
+        let aov: Vec<[f32; 4]> = pixels
+            .iter()
+            .flat_map(|p| [[p.albedo[0], p.albedo[1], p.albedo[2], if p.hit { 1.0 } else { 0.0 }], [p.normal[0], p.normal[1], p.normal[2], 1.0]])
+            .collect();
+        let before = rmse(&color.iter().map(|p| [p[0], p[1], p[2], 1.0]).collect::<Vec<[f32; 4]>>(), 0.25);
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        let after = rmse(&out, 0.25);
+        assert!(after <= 0.3 * before, "RMSE {before} -> {after}: the dark pixels did not average with their brighter neighbours");
+    }
+
+    #[test]
+    fn a_lighting_edge_with_low_variance_is_kept() {
+        let Some(gpu) = compute() else { return };
+        let pixels: Vec<Pixel> = image(|x, _| {
+            let color = if x < N / 2 { [0.2; 3] } else { [0.8; 3] };
+            wall(color)
+        });
+        let color: Vec<[f32; 4]> = pixels.iter().map(|p| [p.color[0], p.color[1], p.color[2], 1e-4]).collect();
+        let aov: Vec<[f32; 4]> = pixels
+            .iter()
+            .flat_map(|p| [[p.albedo[0], p.albedo[1], p.albedo[2], if p.hit { 1.0 } else { 0.0 }], [p.normal[0], p.normal[1], p.normal[2], 1.0]])
+            .collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        let left = band_mean(&out, N / 2 - 2, N / 2);
+        let right = band_mean(&out, N / 2, N / 2 + 2);
+        assert!((left - 0.2).abs() <= 0.01, "low-variance left edge band {left}");
+        assert!((right - 0.8).abs() <= 0.01, "low-variance right edge band {right}");
+    }
+
+    #[test]
+    fn a_lighting_edge_inside_the_noise_is_smoothed() {
+        let Some(gpu) = compute() else { return };
+        let pixels: Vec<Pixel> = image(|x, _| {
+            let color = if x < N / 2 { [0.2; 3] } else { [0.8; 3] };
+            wall(color)
+        });
+        let color: Vec<[f32; 4]> = pixels.iter().map(|p| [p.color[0], p.color[1], p.color[2], 0.05]).collect();
+        let aov: Vec<[f32; 4]> = pixels
+            .iter()
+            .flat_map(|p| [[p.albedo[0], p.albedo[1], p.albedo[2], if p.hit { 1.0 } else { 0.0 }], [p.normal[0], p.normal[1], p.normal[2], 1.0]])
+            .collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        let left = band_mean(&out, N / 2 - 2, N / 2);
+        assert!(left > 0.21, "noise should smooth the edge, not keep it fixed: {left}");
     }
 
     #[test]
