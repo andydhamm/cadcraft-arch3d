@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 12:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 13 of 23 segments merged · 0 of 13 acceptance checks**
 
@@ -21,17 +21,17 @@ Updated 2026-11-01 12:30 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 0 / 13 | 4.8 h so far · expected done Nov 01 16:21–Nov 02 01:24 UTC |
+| 11 | Ray-traced Finalize Render | building | 0 / 13 | 5.1 h so far · expected done Nov 01 16:48–Nov 02 02:21 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-13 merged, 7 queued, 2 gate, 1 escalate
+13 merged, 7 queued, 1 merging, 1 escalate, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p11-r3d-pt-kernel` | The path-tracing kernel: camera paths, next-event estimation, MIS, roulette, AOVs, irradiance probes | gate | claude-sonnet-a |
+| `p11-r3d-pt-kernel` | The path-tracing kernel: camera paths, next-event estimation, MIS, roulette, AOVs, irradiance probes | merging | claude-sonnet-a |
 | `p11-r3d-pt-driver` | The progressive driver: frames, passes, snapshots, resolve, denoise hook, cancel; irradiance probes | escalate |  |
 | `p11-io-area-ies` | GLB and DXF for area lights and IES fixtures | gate | bonsai-a |
 
@@ -56,16 +56,16 @@ Updated 2026-11-01 12:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 765 |
-| bonsai-b | bonsai2-27b | gate | 706 |
-| bonsai-ws2-a | bonsai2-27b | gate | 762 |
-| bonsai-ws2-b | bonsai2-27b | agent | 741 |
-| claude-sonnet-a | sonnet | gate | 62 |
+| bonsai-a | bonsai2-27b | gate | 766 |
+| bonsai-b | bonsai2-27b | gate | 707 |
+| bonsai-ws2-a | bonsai2-27b | idle | 764 |
+| bonsai-ws2-b | bonsai2-27b | agent | 743 |
+| claude-sonnet-a | sonnet | merging | 63 |
 | claude-sonnet-b | sonnet | idle | 60 |
 | claude-sonnet-c | sonnet | idle | 10 |
 | claude-sonnet-d | sonnet | idle | 4 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 607 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 608 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | agent | 530 |
+| tturbo-mac | tturbo-ultraheretic | agent | 531 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
