@@ -975,7 +975,7 @@ mod tests {
     fn furnace_scene_is_diffuse_with_emission_and_no_lights() {
         let mut scene = random_prisms(&mut Rng(3), 5);
         scene.lights.push(SceneLight { intensity: 100.0, color: [1.0; 3], ..Default::default() });
-        let gpu = build_gpu_scene(&scene, true, Some(Furnace { albedo: 0.5, emission: 2.0 }));
+        let gpu = build_gpu_scene(&scene, true, Some(Furnace { albedo: 0.5, emission: 2.0, ..Default::default() }));
         assert!(gpu.lights.is_empty() && gpu.ies.is_empty());
         assert_eq!(gpu.materials.len(), 6, "one per mesh and the ground");
         for m in &gpu.materials {

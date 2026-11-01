@@ -52,7 +52,7 @@ pub const DAY_EXPOSURE: f32 = std::f32::consts::PI / SUN_LUX;
 /// The white-furnace test: every surface diffuse with `albedo`, emitting `emission` nits, the
 /// lights, sun and sky off and the environment at `emission / (1 − albedo)` (what a closed box
 /// converges to), so every pixel converges to that value.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Furnace {
     pub albedo: f32,
     pub emission: f32,
