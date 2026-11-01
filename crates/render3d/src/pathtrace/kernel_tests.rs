@@ -149,7 +149,8 @@ fn irradiance_behind_a_column_is_dark_without_bounces_and_lit_with() {
 #[test]
 fn furnace_pixels_converge_to_two() {
     let Some(gpu) = gpu_or_skip() else { return };
-    let furnace = Furnace { albedo: 0.5, emission: 1.0 };
+    let furnace = Furnace { albedo: 0.5, ..Default::default() };
+    let furnace = Furnace { emission: 1.0, ..furnace };
     let mut scene = room();
     scene.lights.clear();
     let scene = build_gpu_scene(&scene, false, Some(furnace));
