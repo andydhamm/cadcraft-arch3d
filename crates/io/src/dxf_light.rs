@@ -71,7 +71,7 @@ pub(crate) fn is_light_proxy(tags: &[Tag]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::arch::{ArchId, ArchModel, FixtureShape, LightFixture};
+    use cadcraft_doc::arch::{ArchId, ArchModel, FixtureShape, LightFixture, LightKind};
 
     /// A model holding a recessed pot light (two circles) and a wall sconce (one ring).
     fn model_with_lights() -> ArchModel {
@@ -188,5 +188,55 @@ mod tests {
         assert_eq!(proxy_light_entities(&back.arch).len(), 3, "same proxies, none duplicated");
         let again = crate::write_dxf(&back);
         assert_eq!(again.matches(LIGHT_PROXY_MARKER).count(), markers, "probes dropped on read, so no duplicate proxies on save");
+    }
+
+    /// The coordinates (codes 10 and 20) of a proxy's tags, in order.
+    fn proxy_points(tags: &[Tag]) -> Vec<(f64, f64)> {
+        let xs = tags.iter().filter(|t| t.code == 10).map(|t| t.f64());
+        let ys = tags.iter().filter(|t| t.code == 20).map(|t| t.f64());
+        xs.zip(ys).collect()
+    }
+
+    #[test]
+    fn dxf_panel_proxy_is_its_rectangle() {
+        let mut m = ArchModel::default();
+        let mut panel = LightFixture::new(ArchId(0), "LED panel 600", Vec2::new(2.0, 1.0));
+        panel.shape = FixtureShape::Panel;
+        panel.kind = LightKind::Area;
+        panel.width = 0.6;
+        panel.length = 0.4;
+        m.lights.push(panel);
+
+        let p = proxy_light_entities(&m);
+        assert_eq!(p.len(), 3, "the rectangle and its two diagonals");
+        assert!(p.iter().all(|(k, l, t)| k == "LWPOLYLINE" && l == LIGHT_LAYER && is_light_proxy(t)));
+
+        // The rectangle: a closed ring of four corners (the repeated fifth point dropped).
+        let ring = &p[0].2;
+        assert_eq!((ring[0].code, ring[0].i64()), (90, 4), "four vertices");
+        assert_eq!((ring[1].code, ring[1].i64()), (70, 1), "closed");
+        let corners = proxy_points(ring);
+        let expected = [(1.7, 0.8), (2.3, 0.8), (2.3, 1.2), (1.7, 1.2)];
+        assert_eq!(corners.len(), 4);
+        for (got, want) in corners.iter().zip(expected) {
+            assert!((got.0 - want.0).abs() < 1e-9 && (got.1 - want.1).abs() < 1e-9, "{corners:?}");
+        }
+
+        // The diagonals: corner 0 to 2, then 1 to 3, open two-point lines.
+        for (proxy, (from, to)) in p[1..].iter().zip([(0, 2), (1, 3)]) {
+            assert_eq!((proxy.2[0].code, proxy.2[0].i64()), (90, 2));
+            assert_eq!((proxy.2[1].code, proxy.2[1].i64()), (70, 0), "a diagonal is open");
+            let pts = proxy_points(&proxy.2);
+            assert_eq!(pts.len(), 2);
+            assert!((pts[0].0 - expected[from].0).abs() < 1e-9 && (pts[0].1 - expected[from].1).abs() < 1e-9, "{pts:?}");
+            assert!((pts[1].0 - expected[to].0).abs() < 1e-9 && (pts[1].1 - expected[to].1).abs() < 1e-9, "{pts:?}");
+        }
+
+        // Turned 90 degrees, the width runs along +Y.
+        m.lights[0].rotation = 90.0;
+        let turned = proxy_points(&proxy_light_entities(&m)[0].2);
+        let (xs, ys): (Vec<f64>, Vec<f64>) = turned.iter().copied().unzip();
+        let span = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max) - v.iter().copied().fold(f64::MAX, f64::min);
+        assert!((span(&xs) - 0.4).abs() < 1e-9 && (span(&ys) - 0.6).abs() < 1e-9, "{turned:?}");
     }
 }
