@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 10 of 13: Lighting, light fixtures and final renders — 14 of 22 segments merged · 1 of 11 acceptance checks**
 
@@ -20,7 +20,7 @@ Updated 2026-11-01 00:45 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 1 / 11 | 8.2 h so far · expected done Nov 01 06:13–Nov 01 16:03 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 1 / 11 | 8.4 h so far · expected done Nov 01 06:38–Nov 01 16:46 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
@@ -57,8 +57,8 @@ Updated 2026-11-01 00:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 748 |
-| bonsai-b | bonsai2-27b | gate | 689 |
+| bonsai-a | bonsai2-27b | gate | 748 |
+| bonsai-b | bonsai2-27b | gate | 690 |
 | bonsai-ws2-a | bonsai2-27b | idle | 745 |
 | bonsai-ws2-b | bonsai2-27b | idle | 712 |
 | claude-sonnet-a | sonnet | idle | 59 |
@@ -67,6 +67,6 @@ Updated 2026-11-01 00:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-d | sonnet | idle | 3 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 599 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 110 |
-| mai-flash | mai-code-1.1-flash | agent | 31 |
-| tturbo-mac | tturbo-ultraheretic | agent | 517 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 336 |
+| mai-flash | mai-code-1.1-flash | agent | 32 |
+| tturbo-mac | tturbo-ultraheretic | agent | 518 |
+| tturbo-mac2 | tturbo-ultraheretic | merging | 337 |
