@@ -257,12 +257,15 @@ impl PathTracer {
             self.snapshot_idx += 1;
         }
 
-        if self.spp_done >= self.opts.spp {
-            return self.finish(gpu);
-        }
-
         let progress = self.spp_done as f32 / self.opts.spp as f32;
         self.status = PathStatus::Running { progress, spp: self.spp_done };
+
+        if self.spp_done >= self.opts.spp {
+            // Return Running with progress 1.0. The next call to step() will see remaining == 0
+            // and call finish(). This ensures progress rises to 1.0 in a Running state.
+            return self.status.clone();
+        }
+
         self.status.clone()
     }
 
