@@ -10,7 +10,7 @@ cadcraft-geom = { workspace = true }
 cadcraft-color = { workspace = true }
 cadcraft-arch3d = { workspace = true }
 cadcraft-gpu-optin = { workspace = true }
-wgpu = { workspace = true, features = ["ray_query"] }
+wgpu = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png"] }
 thiserror = { workspace = true }
 futures = "0.3"

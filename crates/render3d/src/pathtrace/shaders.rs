@@ -47,6 +47,10 @@ pub struct PtPipelines {
 pub struct RqPtPipelines {
     /// The two-group layout shared by all rq pipelines (group 0 = kernel buffers, group 1 = TLAS).
     pub rq_pipeline_layout: wgpu::PipelineLayout,
+    /// Group 0: the nine kernel buffers.
+    pub kernel_bind_group_layout: wgpu::BindGroupLayout,
+    /// Group 1: the TLAS.
+    pub acc_bind_group_layout: wgpu::BindGroupLayout,
     pub rq_trace: wgpu::ComputePipeline,
     pub rq_irradiance: wgpu::ComputePipeline,
     pub rq_traverse_test: wgpu::ComputePipeline,
@@ -73,18 +77,6 @@ fn acc_layout_entry() -> wgpu::BindGroupLayoutEntry {
         ty: wgpu::BindingType::AccelerationStructure { read_only: true },
         count: None,
     }
-}
-
-/// The two-group pipeline layout for the ray-query kernels: group 0 is the same nine kernel
-/// buffers as the compute path; group 1, binding 0, is the TLAS.
-fn rq_pipeline_layout(device: &wgpu::Device, kernel_layout: &wgpu::BindGroupLayout) -> wgpu::PipelineLayout {
-    let acc_layout =
-        wgpu::BindGroupLayout::from_layout(device, &wgpu::BindGroupLayoutDescriptor { label: Some("pt rq acc"), entries: &[acc_layout_entry()] });
-    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("pt rq"),
-        bind_group_layouts: &[Some(kernel_layout), Some(&acc_layout)],
-        immediate_size: 0,
-    })
 }
 
 const UNIFORM: wgpu::BufferBindingType = wgpu::BufferBindingType::Uniform;
@@ -143,7 +135,13 @@ pub fn build_rq_pipelines(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>)
     let device = &gpu.device;
     let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let kernel_layout = layout(device, "pt rq kernel", &[UNIFORM, READ, READ, READ, READ, READ, WRITE, WRITE, READ]);
-    let rq_pipeline_layout = rq_pipeline_layout(device, &kernel_layout);
+    let acc_layout =
+        wgpu::BindGroupLayout::from_layout(device, &wgpu::BindGroupLayoutDescriptor { label: Some("pt rq acc"), entries: &[acc_layout_entry()] });
+    let rq_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("pt rq"),
+        bind_group_layouts: &[Some(kernel_layout), Some(&acc_layout)],
+        immediate_size: 0,
+    });
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("pt rq kernel"),
         source: wgpu::ShaderSource::Wgsl(rq_kernel_source().into()),
@@ -163,6 +161,8 @@ pub fn build_rq_pipelines(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>)
         rq_irradiance: rq_pipeline("pt rq irradiance", "irradiance_main"),
         rq_traverse_test: rq_pipeline("pt rq traverse test", "traverse_test_main"),
         rq_pipeline_layout,
+        kernel_bind_group_layout: kernel_layout,
+        acc_bind_group_layout: acc_layout,
     };
     match futures::executor::block_on(scope.pop()) {
         Some(e) => Err(e.to_string()),
