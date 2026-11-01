@@ -74,10 +74,30 @@ impl SceneLight {
 /// Candela of `light`'s IES `profile` toward the unit direction `to_point`: the vertical angle is
 /// the angle between `to_point` and the aim (`direction`, 0° = along it), the horizontal angle is
 /// measured counter-clockwise (seen against the aim) from `axis` in the plane perpendicular to the
-/// aim; `cadcraft_arch::ies::candela_at` interpolates. 0 for a non-finite direction. Stub filled by
-/// `p11-arch3d-ies-area`.
-pub fn ies_toward(_light: &SceneLight, _profile: &cadcraft_doc::arch::IesProfile, _to_point: Vec3) -> f64 {
-    0.0
+/// aim; `cadcraft_arch::ies::candela_at` interpolates. 0 for a non-finite direction.
+pub fn ies_toward(light: &SceneLight, profile: &cadcraft_doc::arch::IesProfile, to_point: Vec3) -> f64 {
+    if !to_point.is_finite() || !light.direction.is_finite() || !light.axis.is_finite() {
+        return 0.0;
+    }
+    let c = to_point.dot(light.direction).clamp(-1.0, 1.0);
+    let theta_deg = c.acos() * (180.0 / std::f64::consts::PI);
+    let q = to_point - light.direction * c;
+    let phi_deg = if q.len() < 1e-9 {
+        0.0
+    } else {
+        let cross = Vec3::new(
+            light.axis.y * light.direction.z - light.axis.z * light.direction.y,
+            light.axis.z * light.direction.x - light.axis.x * light.direction.z,
+            light.axis.x * light.direction.y - light.axis.y * light.direction.x,
+        );
+        let p = q.dot(cross);
+        let x = q.dot(light.axis);
+        let rad = p.atan2(x);
+        let deg = rad * (180.0 / std::f64::consts::PI);
+        if deg >= 0.0 { deg } else { deg + 360.0 }
+    };
+    let cd = cadcraft_arch::ies::candela_at(profile, theta_deg, phi_deg);
+    if cd.is_finite() { cd } else { 0.0 }
 }
 
 /// Whether a mesh material belongs to a light fixture housing (`light-trim`, `light-lens`, …).
@@ -109,6 +129,13 @@ pub fn scene_lights(model: &ArchModel) -> Vec<SceneLight> {
         }
         let direction = aim.normalized();
         let size = if f.kind == LightKind::Area { [f.width, f.length] } else { [0.0, 0.0] };
+        let (intensity, ies) = if let Some(p) = &f.ies {
+            let scaled = cadcraft_arch::ies::scaled(p, f.lumens);
+            let peak = cadcraft_arch::ies::peak_candela(&scaled);
+            if peak.is_finite() && peak > 0.0 { (peak, Some(std::sync::Arc::new(scaled))) } else { (intensity, None) }
+        } else {
+            (intensity, None)
+        };
         out.push(SceneLight {
             id: f.id,
             kind: f.kind,
@@ -120,8 +147,7 @@ pub fn scene_lights(model: &ArchModel) -> Vec<SceneLight> {
             cos_outer,
             size,
             axis: light_axis(direction, f.rotation),
-            // Phase 11: `p11-arch3d-ies-area` attaches the fixture's profile, scaled to its lumens.
-            ies: None,
+            ies,
         });
     }
     out
@@ -145,22 +171,63 @@ pub fn light_axis(aim: Vec3, rotation_deg: f64) -> Vec3 {
 pub use crate::fixture::fixture_meshes;
 
 /// Direct illuminance (lux) from one light at `point` on a surface with unit `normal`, without
-/// occlusion: `I(θ) · max(0, n·l) / d²` with `l` the unit vector from the point to the light.
-/// 0 when the point is at the light (d < 1e-9) or behind the surface.
+/// occlusion. For a point or spot light: `I(θ) · max(0, n·l) / d²` with `l` the unit vector from
+/// the point to the light; 0 when the point is at the light or behind the surface. For an area
+/// light without an IES profile, integrates the Lambertian rectangle over a 16 × 16 midpoint
+/// grid: radiance `L = I / (w·l)`, each cell adds `L·cos_s·cos_l·cell_area / d²`.
 pub fn direct_illuminance(light: &SceneLight, point: Vec3, normal: Vec3) -> f64 {
-    let v = light.position - point;
-    let d2 = v.dot(v);
-    if !d2.is_finite() || d2 < 1e-18 || !normal.is_finite() {
-        return 0.0;
-    }
     let nl = normal.len();
     if !nl.is_finite() || nl <= 0.0 {
         return 0.0;
     }
-    let l = v * (1.0 / d2.sqrt());
-    let cos = (normal * (1.0 / nl)).dot(l).max(0.0);
-    let e = light.intensity_toward(-l) * cos / d2;
-    if e.is_finite() { e } else { 0.0 }
+    let n = normal * (1.0 / nl);
+    if light.kind == LightKind::Area && light.ies.is_none() {
+        let (w, l) = (light.size[0], light.size[1]);
+        if !w.is_finite() || !l.is_finite() || w <= 0.0 || !l.is_finite() || l <= 0.0 {
+            return 0.0;
+        }
+        let N = 16;
+        let L = light.intensity / (w * l);
+        if !L.is_finite() || L <= 0.0 {
+            return 0.0;
+        }
+        let du = w / N as f64;
+        let dv = l / N as f64;
+        let cell_area = du * dv;
+        let cross = Vec3::new(
+            light.axis.y * light.direction.z - light.axis.z * light.direction.y,
+            light.axis.z * light.direction.x - light.axis.x * light.direction.z,
+            light.axis.x * light.direction.y - light.axis.y * light.direction.x,
+        );
+        let mut e = 0.0;
+        for i in 0..N {
+            for j in 0..N {
+                let u = (i as f64 + 0.5) * du - w * 0.5;
+                let v = (j as f64 + 0.5) * dv - l * 0.5;
+                let q = light.position + light.axis * u + cross * v;
+                let wv = q - point;
+                let d2 = wv.dot(wv);
+                if d2 > 1e-18 && d2.is_finite() {
+                    let d = d2.sqrt();
+                    let wl = wv * (1.0 / d);
+                    let cos_s = n.dot(wl).max(0.0);
+                    let cos_l = (-light.direction.dot(wl)).max(0.0);
+                    e += L * cos_s * cos_l * cell_area / d2;
+                }
+            }
+        }
+        if e.is_finite() { e } else { 0.0 }
+    } else {
+        let v = light.position - point;
+        let d2 = v.dot(v);
+        if !d2.is_finite() || d2 < 1e-18 || !n.is_finite() {
+            return 0.0;
+        }
+        let l = v * (1.0 / d2.sqrt());
+        let cos = n.dot(l).max(0.0);
+        let e = light.intensity_toward(-l) * cos / d2;
+        if e.is_finite() { e } else { 0.0 }
+    }
 }
 
 /// Direct illuminance at a point from every light of the scene, with shadow rays.
@@ -190,29 +257,94 @@ pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
     });
     let mut out = Illuminance::default();
     for light in &scene.lights {
-        let mut e = direct_illuminance(light, point, normal);
-        if e > 0.0 {
-            let v = light.position - point;
-            let d = v.len();
-            if d > 1e-12 {
-                let l = v * (1.0 / d);
-                let start_margin = (d * 1e-4).clamp(1e-4, 0.01);
-                let end_margin = (d * 1e-3).clamp(1e-4, 0.05);
-                let ray_origin = point + l * start_margin;
-                let max_t = (d - start_margin).max(start_margin);
-                if max_t > start_margin + end_margin {
-                    if let Some(hit) = occluders.ray(ray_origin, l, max_t) {
-                        // Ignore hits right at the lit point or right next to the light: the floor,
-                        // the ceiling plane and the fixture housing can sit on those edges without
-                        // making the beam truly shadowed. Other geometry still blocks it.
-                        let along = hit.distance;
-                        if along > start_margin && along < max_t - end_margin {
-                            e = 0.0;
+        let e = if light.kind == LightKind::Area && light.ies.is_none() {
+            let (w, l) = (light.size[0], light.size[1]);
+            if !w.is_finite() || !l.is_finite() || w <= 0.0 || l <= 0.0 {
+                0.0
+            } else {
+                let N = 16;
+                let L = light.intensity / (w * l);
+                if !L.is_finite() || L <= 0.0 {
+                    0.0
+                } else {
+                    let nl = normal.len();
+                    if !nl.is_finite() || nl <= 0.0 {
+                        0.0
+                    } else {
+                        let n = normal * (1.0 / nl);
+                        let du = w / N as f64;
+                        let dv = l / N as f64;
+                        let cell_area = du * dv;
+                        let cross = Vec3::new(
+                            light.axis.y * light.direction.z - light.axis.z * light.direction.y,
+                            light.axis.z * light.direction.x - light.axis.x * light.direction.z,
+                            light.axis.x * light.direction.y - light.axis.y * light.direction.x,
+                        );
+                        let mut sum = 0.0;
+                        for i in 0..N {
+                            for j in 0..N {
+                                let u = (i as f64 + 0.5) * du - w * 0.5;
+                                let v = (j as f64 + 0.5) * dv - l * 0.5;
+                                let q = light.position + light.axis * u + cross * v;
+                                let wv = q - point;
+                                let d = wv.len();
+                                if d <= 1e-12 || !d.is_finite() {
+                                    continue;
+                                }
+                                let wl = wv * (1.0 / d);
+                                let cos_s = n.dot(wl).max(0.0);
+                                let cos_l = (-light.direction.dot(wl)).max(0.0);
+                                if cos_s <= 0.0 || cos_l <= 0.0 {
+                                    continue;
+                                }
+                                let cell_val = L * cos_s * cos_l * cell_area / (d * d);
+                                let start_margin = (d * 1e-4).clamp(1e-4, 0.01);
+                                let end_margin = (d * 1e-3).clamp(1e-4, 0.05);
+                                let ray_origin = point + wl * start_margin;
+                                let max_t = (d - start_margin).max(start_margin);
+                                if max_t > start_margin + end_margin {
+                                    if let Some(hit) = occluders.ray(ray_origin, wl, max_t) {
+                                        let along = hit.distance;
+                                        if along > start_margin && along < max_t - end_margin {
+                                            // cell is shadowed — skip
+                                        } else {
+                                            sum += cell_val;
+                                        }
+                                    } else {
+                                        sum += cell_val;
+                                    }
+                                } else {
+                                    sum += cell_val;
+                                }
+                            }
+                        }
+                        if sum.is_finite() { sum } else { 0.0 }
+                    }
+                }
+            }
+        } else {
+            let mut e = direct_illuminance(light, point, normal);
+            if e > 0.0 {
+                let v = light.position - point;
+                let d = v.len();
+                if d > 1e-12 {
+                    let l = v * (1.0 / d);
+                    let start_margin = (d * 1e-4).clamp(1e-4, 0.01);
+                    let end_margin = (d * 1e-3).clamp(1e-4, 0.05);
+                    let ray_origin = point + l * start_margin;
+                    let max_t = (d - start_margin).max(start_margin);
+                    if max_t > start_margin + end_margin {
+                        if let Some(hit) = occluders.ray(ray_origin, l, max_t) {
+                            let along = hit.distance;
+                            if along > start_margin && along < max_t - end_margin {
+                                e = 0.0;
+                            }
                         }
                     }
                 }
             }
-        }
+            if e.is_finite() { e } else { 0.0 }
+        };
         out.lux += e;
         out.per_light.push((light.id, e));
     }
@@ -350,5 +482,149 @@ mod tests {
         assert!((r.lux - 165.0).abs() < 1.65, "{}", r.lux);
         let r = illuminance(&scene, Vec3::new(1.8, 1.8, 0.0), up());
         assert!((r.lux - 122.1).abs() < 1.221, "{}", r.lux);
+    }
+
+    /// A 4 × 4 m room with a single LED panel (0.6 × 0.6 m, 3600 lm, 4000 K) on the ceiling,
+    /// centred at (2, 2).
+    fn room_with_panel() -> ArchModel {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let corners = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (corners[k], corners[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            m.push_wall(w);
+        }
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(cadcraft_doc::arch::Room {
+            id: ArchId(10),
+            level: 0,
+            polygon: ring,
+            holes: Vec::new(),
+            room_type: cadcraft_doc::arch::RoomType::Living,
+            ceiling_height: Some(2.4),
+            ..Default::default()
+        });
+        let mut panel = LightFixture::new(ArchId(0), "LED panel 600", Vec2::new(2.0, 2.0));
+        panel.kind = LightKind::Area;
+        panel.width = 0.6;
+        panel.length = 0.6;
+        panel.lumens = 3600.0;
+        m.lights.push(panel);
+        m.next_light_id = 1;
+        m
+    }
+
+    #[test]
+    fn ies_toward_reads_the_profile_by_angle() {
+        let vertical = vec![0.0, 22.62, 180.0];
+        let horizontal = vec![0.0, 180.0];
+        let candela = vec![1000.0, 898.4, 0.0, 1000.0, 898.4, 0.0];
+        let mut profile = cadcraft_doc::arch::IesProfile::default();
+        profile.name = "test".into();
+        profile.vertical = vertical;
+        profile.horizontal = horizontal;
+        profile.candela = candela;
+        profile.lumens = 1000.0;
+        let direction = Vec3::new(0.0, 0.0, -1.0);
+        let axis = Vec3::new(1.0, 0.0, 0.0);
+        let light = SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::ZERO,
+            direction,
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 1.0,
+            cos_outer: 1.0,
+            size: [0.0; 2],
+            axis,
+            ies: Some(std::sync::Arc::new(profile.clone())),
+            ..Default::default()
+        };
+        // 0° straight down: 1000 cd
+        assert!((ies_toward(&light, &profile, Vec3::new(0.0, 0.0, -1.0)) - 1000.0).abs() < 1.0, "straight down");
+        // 90° to the side: ~513.9 cd (linear interpolation between 898.4 at 22.62° and 0 at 180°)
+        let expected_90 = 898.4 * (90.0 - 22.62) / (180.0 - 22.62) as f64 * 0.0 + 898.4 * (1.0 - (90.0 - 22.62) / (180.0 - 22.62));
+        assert!((ies_toward(&light, &profile, Vec3::new(1.0, 0.0, 0.0)) - 513.9).abs() < 2.0, "90 deg");
+        // 180°: 0 cd
+        assert!((ies_toward(&light, &profile, Vec3::new(0.0, 0.0, 1.0)) - 0.0).abs() < 1.0, "180 deg");
+        // The phase-11 test profile value: 898.4 cd at 22.62°
+        assert!((ies_toward(&light, &profile, Vec3::new(0.0, -0.384, -0.923)) - 898.4).abs() < 2.0, "22.62 deg");
+        // Non-finite direction: 0
+        assert_eq!(ies_toward(&light, &profile, Vec3::new(f64::NAN, 0.0, -1.0)), 0.0);
+    }
+
+    #[test]
+    fn scene_lights_attach_the_scaled_profile() {
+        let vertical = vec![0.0, 90.0, 180.0];
+        let horizontal = vec![0.0, 180.0];
+        let candela = vec![1000.0, 200.0, 0.0, 1000.0, 200.0, 0.0];
+        let mut profile = cadcraft_doc::arch::IesProfile::default();
+        profile.name = "test".into();
+        profile.vertical = vertical;
+        profile.horizontal = horizontal;
+        profile.candela = candela;
+        profile.lumens = 1000.0;
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(cadcraft_doc::arch::Room { id: ArchId(10), level: 0, polygon: ring, ..Default::default() });
+        let mut f = LightFixture::new(ArchId(0), "Spot with IES", Vec2::new(2.0, 2.0));
+        f.on = true;
+        f.ies = Some(profile);
+        f.lumens = 2000.0;
+        m.lights.push(f);
+        m.next_light_id = 1;
+        let lights = scene_lights(&m);
+        assert_eq!(lights.len(), 1);
+        let l = &lights[0];
+        assert!(l.ies.is_some());
+        assert_eq!(l.id, ArchId(0));
+        // Scaled to 2000 lm: peak should be 2000 cd (2× the 1000-peak profile).
+        let peak = cadcraft_arch::ies::peak_candela(l.ies.as_ref().unwrap());
+        assert!((peak - 2000.0).abs() < 1.0, "peak = {}", peak);
+        assert!((l.intensity - 2000.0).abs() < 1.0, "intensity = {}", l.intensity);
+    }
+
+    #[test]
+    fn area_light_direct_illuminance_follows_the_rectangle() {
+        let m = room_with_panel();
+        let scene = crate::build(&m);
+        assert_eq!(scene.lights.len(), 1);
+        let light = &scene.lights[0];
+        assert!(light.kind == LightKind::Area);
+        assert!((light.size[0] - 0.6).abs() < 1e-6);
+        assert!((light.size[1] - 0.6).abs() < 1e-6);
+        assert!((light.position.z - 2.4).abs() < 0.01);
+        // 4128.4 lx at (2, 2, 2.0) — 0.4 m below the panel centre
+        let lux = direct_illuminance(light, Vec3::new(2.0, 2.0, 2.0), up());
+        assert!((lux - 4128.4).abs() < 41.3, "at 0.4 m: {}", lux);
+        // 194.9 lx at the floor (2, 2, 0.0) — 2.4 m below
+        let lux_floor = direct_illuminance(light, Vec3::new(2.0, 2.0, 0.0), up());
+        assert!((lux_floor - 194.9).abs() < 1.95, "at floor: {}", lux_floor);
+        // Nothing behind the face (above the panel at z = 2.5)
+        let lux_back = direct_illuminance(light, Vec3::new(2.0, 2.0, 2.5), up());
+        assert!(lux_back.abs() < 1.0, "behind panel: {}", lux_back);
+    }
+
+    #[test]
+    fn area_light_is_dark_behind_and_shadowed_per_cell() {
+        let mut m = room_with_panel();
+        // A column (0.2 m wide, 2.0 m tall) centred at (2.0, 2.0) under the panel centre
+        // blocks the lower portion of the panel's contribution.
+        let mut w = Wall::new(Vec2::new(2.0, 2.0), Vec2::new(2.2, 2.0), 0.2);
+        w.height = 2.0;
+        m.push_wall(w);
+        let scene = crate::build(&m);
+        // At the floor, 1 m to the right of the panel centre: unshadowed reference
+        let unshadowed = illuminance(&scene, Vec3::new(3.0, 2.0, 0.0), up());
+        // At the floor, directly in the column's shadow: reduced illuminance
+        let shadowed = illuminance(&scene, Vec3::new(2.1, 2.0, 0.0), up());
+        assert!(shadowed.lux < unshadowed.lux * 0.8 + 10.0, "shadowed: {} < unshadowed: {}", shadowed.lux, unshadowed.lux);
+        // Directly above the panel (behind the face): zero
+        let light = &scene.lights[0];
+        let lux_back = direct_illuminance(light, Vec3::new(2.0, 2.0, 2.5), up());
+        assert!(lux_back.abs() < 1.0, "behind: {}", lux_back);
     }
 }
