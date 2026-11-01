@@ -116,19 +116,19 @@ pub(crate) struct RenderArgs {
     #[arg(long = "final", value_name = "MODE", num_args = 0..=1, default_missing_value = "", value_parser = parse_final_arg)]
     pub(crate) final_render: Option<FinalMode>,
     /// Path tracer: samples per pixel (1-65536, default 256)
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536))]
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536), action = ArgAction::Set)]
     pub(crate) spp: Option<u32>,
     /// Path tracer: full bounces before Russian roulette (0-32, default 4)
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=32))]
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=32), action = ArgAction::Set)]
     pub(crate) bounces: Option<u32>,
     /// Path tracer: the random seed (default 0)
-    #[arg(long, value_name = "N")]
+    #[arg(long, value_name = "N", action = ArgAction::Set)]
     pub(crate) seed: Option<u32>,
     /// Path tracer: keep the noise (no denoiser)
-    #[arg(long)]
+    #[arg(long, action = ArgAction::Set)]
     pub(crate) no_denoise: bool,
     /// Path tracer: use hardware ray queries when the device has them
-    #[arg(long)]
+    #[arg(long, action = ArgAction::Set)]
     pub(crate) rt: bool,
     /// Night: the sun is off (cannot be combined with --sun)
     #[arg(long)]
