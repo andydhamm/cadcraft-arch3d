@@ -517,4 +517,51 @@ mod tests {
         assert!(session.execute("lightfixture", &json!({"at": [1.0]})).is_err());
         assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
     }
+
+    #[test]
+    fn lightfixture_refuses_nan_lumens() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "lumens": serde_json::Value::Null})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_huge_lumens() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "lumens": 1e308})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_at_cap() {
+        let mut session = Session::new();
+        for i in 0..1024 {
+            let out = session.execute("lightfixture", &json!({"at": [f64::from(i % 10), f64::from(i / 10)]}));
+            assert!(out.is_ok(), "fixture {i} failed: {:?}", out.err());
+        }
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1024);
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0]})).is_err());
+    }
+
+    #[test]
+    fn lightfixture_edit_refuses_unknown_id() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture.edit", &json!({"id": "lf99"})).is_err());
+    }
+
+    #[test]
+    fn lightfixture_grid_with_one_row_and_col() {
+        let mut session = Session::new();
+        let room = Room {
+            id: ArchId(0),
+            name: "Room 1".into(),
+            room_type: RoomType::Living,
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        };
+        session.doc_mut().unwrap().arch.push_room(room);
+        let out = session.execute("lightfixture", &json!({"room": "r0", "rows": 1, "cols": 1})).unwrap();
+        assert_eq!(out["lights"].as_array().unwrap().len(), 1);
+    }
 }
