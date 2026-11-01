@@ -107,9 +107,7 @@ impl FinalRender {
     /// Start a still of `scene` (uploaded under `scene_key`) from `camera` at `size` pixels.
     pub fn start(off: &mut Offscreen, scene: &Scene3d, scene_key: u64, camera: &Camera, lighting: &Lighting, ground: bool, size: (u32, u32)) -> Self {
         let max = off.device.limits().max_texture_dimension_2d.max(1);
-        if size.0 == 0 || size.1 == 0 || size.0 > max || size.1 > max {
-            return failed(size, "the still's size is outside what this GPU can render");
-        }
+        let size = (size.0.clamp(1, max), size.1.clamp(1, max));
         let scale = if size.0.saturating_mul(2) <= max && size.1.saturating_mul(2) <= max { 2 } else { 1 };
         let eye = camera.eye();
         // Every light is shadowed (the budget is all of them); only the 64-light draw cap remains.
@@ -357,6 +355,15 @@ mod tests {
             }
         }
         assert!(false, "the render did not finish");
+    }
+
+    #[test]
+    fn oversized_still_is_clamped_to_the_gpu_limit() {
+        let Some(mut o) = off() else { return };
+        let max = o.device.limits().max_texture_dimension_2d.max(1);
+        let mut r = FinalRender::start(&mut o, &scene(false), 1, &camera(), &night(), false, (max.saturating_mul(2), max.saturating_mul(2)));
+        assert_eq!(r.size(), (max, max));
+        assert!(matches!(r.step(&mut o), FinalStatus::Running { .. } | FinalStatus::Done { .. }));
     }
 
     #[test]
