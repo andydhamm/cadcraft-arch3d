@@ -351,4 +351,136 @@ mod tests {
         let r = illuminance(&scene, Vec3::new(1.8, 1.8, 0.0), up());
         assert!((r.lux - 122.1).abs() < 1.221, "{}", r.lux);
     }
+
+    /// A 4 × 4 m room with a single LED panel (0.6 × 0.6 m, 3600 lm, 4000 K) on the ceiling,
+    /// centred at (2, 2).
+    fn room_with_panel() -> ArchModel {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let corners = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (corners[k], corners[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            m.push_wall(w);
+        }
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(cadcraft_doc::arch::Room {
+            id: ArchId(10),
+            level: 0,
+            polygon: ring,
+            holes: Vec::new(),
+            room_type: cadcraft_doc::arch::RoomType::Living,
+            ceiling_height: Some(2.4),
+            ..Default::default()
+        });
+        let mut panel = LightFixture::new(ArchId(0), "LED panel 600", Vec2::new(2.0, 2.0));
+        panel.kind = LightKind::Area;
+        panel.width = 0.6;
+        panel.length = 0.6;
+        m.lights.push(panel);
+        m.next_light_id = 1;
+        m
+    }
+
+    #[test]
+    fn ies_toward_reads_the_profile_by_angle() {
+        let vertical = vec![0.0, 22.62, 180.0];
+        let horizontal = vec![0.0, 180.0];
+        let candela = vec![1000.0, 898.4, 0.0, 1000.0, 898.4, 0.0];
+        let profile = cadcraft_doc::arch::IesProfile { name: "test".into(), vertical, horizontal, candela, lumens: 1000.0 };
+        let direction = Vec3::new(0.0, 0.0, -1.0);
+        let axis = Vec3::new(1.0, 0.0, 0.0);
+        let light = SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::ZERO,
+            direction,
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 1.0,
+            cos_outer: 1.0,
+            size: [0.0; 2],
+            axis,
+            ies: Some(std::sync::Arc::new(profile.clone())),
+            ..Default::default()
+        };
+        // 0° straight down: 1000 cd
+        assert!((ies_toward(&light, &profile, Vec3::new(0.0, 0.0, -1.0)) - 1000.0).abs() < 1.0, "straight down");
+        // 90° to the side: 500 cd (linear interpolation between 1000 at 0° and 0 at 180°)
+        assert!((ies_toward(&light, &profile, Vec3::new(1.0, 0.0, 0.0)) - 500.0).abs() < 1.0, "90 deg");
+        // 180°: 0 cd
+        assert!((ies_toward(&light, &profile, Vec3::new(0.0, 0.0, 1.0)) - 0.0).abs() < 1.0, "180 deg");
+        // The phase-11 test profile value: 898.4 cd at 22.62°
+        assert!((ies_toward(&light, &profile, Vec3::new(0.0, -0.384, -0.923)) - 898.4).abs() < 2.0, "22.62 deg");
+        // Non-finite direction: 0
+        assert_eq!(ies_toward(&light, &profile, Vec3::new(f64::NAN, 0.0, -1.0)), 0.0);
+    }
+
+    #[test]
+    fn scene_lights_attach_the_scaled_profile() {
+        let vertical = vec![0.0, 90.0, 180.0];
+        let horizontal = vec![0.0, 180.0];
+        let candela = vec![1000.0, 200.0, 0.0, 1000.0, 200.0, 0.0];
+        let profile = cadcraft_doc::arch::IesProfile { name: "test".into(), vertical, horizontal, candela, lumens: 1000.0 };
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(cadcraft_doc::arch::Room { id: ArchId(10), level: 0, polygon: ring, ..Default::default() });
+        let mut f = LightFixture::new(ArchId(0), "Spot with IES", Vec2::new(2.0, 2.0));
+        f.on = true;
+        f.ies = Some(profile);
+        f.lumens = 2000.0;
+        m.lights.push(f);
+        m.next_light_id = 1;
+        let lights = scene_lights(&m);
+        assert_eq!(lights.len(), 1);
+        let l = &lights[0];
+        assert!(l.ies.is_some());
+        assert_eq!(l.id, ArchId(0));
+        // Scaled to 2000 lm: peak should be 2000 cd (2× the 1000-peak profile).
+        let peak = cadcraft_arch::ies::peak_candela(&l.ies.unwrap());
+        assert!((peak - 2000.0).abs() < 1.0, "peak = {}", peak);
+        assert!((l.intensity - 2000.0).abs() < 1.0, "intensity = {}", l.intensity);
+    }
+
+    #[test]
+    fn area_light_direct_illuminance_follows_the_rectangle() {
+        let m = room_with_panel();
+        let scene = crate::build(&m);
+        assert_eq!(scene.lights.len(), 1);
+        let light = &scene.lights[0];
+        assert!(light.kind == LightKind::Area);
+        assert!((light.size[0] - 0.6).abs() < 1e-6);
+        assert!((light.size[1] - 0.6).abs() < 1e-6);
+        assert!((light.position.z - 2.4).abs() < 0.01);
+        // 4128.4 lx at (2, 2, 2.0) — 0.4 m below the panel centre
+        let lux = direct_illuminance(light, Vec3::new(2.0, 2.0, 2.0), up());
+        assert!((lux - 4128.4).abs() < 41.3, "at 0.4 m: {}", lux);
+        // 194.9 lx at the floor (2, 2, 0.0) — 2.4 m below
+        let lux_floor = direct_illuminance(light, Vec3::new(2.0, 2.0, 0.0), up());
+        assert!((lux_floor - 194.9).abs() < 1.95, "at floor: {}", lux_floor);
+        // Nothing behind the face (above the panel at z = 2.5)
+        let lux_back = direct_illuminance(light, Vec3::new(2.0, 2.0, 2.5), up());
+        assert!(lux_back.abs() < 1.0, "behind panel: {}", lux_back);
+    }
+
+    #[test]
+    fn area_light_is_dark_behind_and_shadowed_per_cell() {
+        let mut m = room_with_panel();
+        // A column (0.2 m wide, 2.0 m tall) centred at (2.0, 2.0) under the panel centre
+        // blocks the lower portion of the panel's contribution.
+        let mut w = Wall::new(Vec2::new(2.0, 2.0), Vec2::new(2.2, 2.0), 0.2);
+        w.height = 2.0;
+        m.push_wall(w);
+        let scene = crate::build(&m);
+        // At the floor, 1 m to the right of the panel centre: unshadowed reference
+        let unshadowed = illuminance(&scene, Vec3::new(3.0, 2.0, 0.0), up());
+        // At the floor, directly in the column's shadow: reduced illuminance
+        let shadowed = illuminance(&scene, Vec3::new(2.1, 2.0, 0.0), up());
+        assert!(shadowed.lux < unshadowed.lux * 0.8 + 10.0, "shadowed: {} < unshadowed: {}", shadowed.lux, unshadowed.lux);
+        // Directly above the panel (behind the face): zero
+        let light = &scene.lights[0];
+        let lux_back = direct_illuminance(light, Vec3::new(2.0, 2.0, 2.5), up());
+        assert!(lux_back.abs() < 1.0, "behind: {}", lux_back);
+    }
 }
