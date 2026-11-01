@@ -17,6 +17,16 @@ fn fields(row: &str) -> Vec<&str> {
     row.split(sep).map(str::trim).collect()
 }
 
+/// Parse a number from the start of a string, stopping at the first non-numeric character.
+fn parse_number(s: &str) -> Option<f64> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let end = s.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-' && c != '+' && c != 'e' && c != 'E').unwrap_or(s.len());
+    s[..end].parse().ok()
+}
+
 /// Three finite numbers, or `None`.
 fn numbers(f: &[&str]) -> Option<[f64; 3]> {
     if f.len() != 3 {
@@ -24,7 +34,7 @@ fn numbers(f: &[&str]) -> Option<[f64; 3]> {
     }
     let mut out = [0.0; 3];
     for (slot, s) in out.iter_mut().zip(f) {
-        let v: f64 = s.parse().ok()?;
+        let v = parse_number(s)?;
         if !v.is_finite() {
             return None;
         }
@@ -48,8 +58,8 @@ pub fn parse_points_csv(text: &str, offset: Option<(f64, f64)>) -> Result<Vec<Ve
         let parsed = numbers(&f);
         if first {
             first = false;
-            // A header: any of its three fields is not a number.
-            if f.len() == 3 && f.iter().any(|s| s.parse::<f64>().is_err()) {
+            // A header: none of its three fields is a number.
+            if f.len() == 3 && f.iter().all(|s| parse_number(s).is_none()) {
                 continue;
             }
         }
