@@ -31,12 +31,16 @@ static STATE: Mutex<Option<State>> = Mutex::new(None);
 
 /// Install the renderer as the engine's render hook (idempotent: the first call wins).
 pub(crate) fn install() {
-    set_render_hooks(RenderHooks { render: render_one, stats });
+    set_render_hooks(RenderHooks::new(render_one, stats));
 }
 
 fn stats() -> RenderStats {
     let Ok(guard) = STATE.lock() else { return RenderStats::default() };
-    guard.as_ref().map(|s| RenderStats { shadow_maps_built: s.off.shadow_maps_built(), final_renders: s.off.final_renders() }).unwrap_or_default()
+    let Some(s) = guard.as_ref() else { return RenderStats::default() };
+    let mut r = RenderStats::default();
+    r.shadow_maps_built = s.off.shadow_maps_built();
+    r.final_renders = s.off.final_renders();
+    r
 }
 
 /// The tests use the software adapter so the counts do not depend on the machine's GPU.
@@ -79,7 +83,8 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         SunChoice::Off => None,
         SunChoice::Dir(d) => Some(Light::from_sun(&Sun { dir: [d[0] as f32, d[1] as f32, d[2] as f32], ..Sun::default() }, Light::DEFAULT.ambient)),
     };
-    let lighting = Lighting { sun, sun_shadow: matches!(req.sun, SunChoice::Dir(_)), budget: req.budget, exposure: DEFAULT_EXPOSURE };
+    let lighting =
+        Lighting { sun, sun_shadow: matches!(req.sun, SunChoice::Dir(_)), budget: req.budget, exposure: DEFAULT_EXPOSURE, ..Lighting::default() };
     let maps_before = off.shadow_maps_built();
 
     let (rgba, size, drawn, shadowed, png) = if req.final_render {
