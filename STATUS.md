@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 8 of 23 segments merged · 0 of 13 acceptance checks**
 
-6,300 workspace tests passing at the last merge · 626 segments merged in all · 0 of 13 seats working
+6,305 workspace tests passing at the last merge · 627 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,13 +21,13 @@ Updated 2026-11-01 11:00 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 0 / 13 | 3.3 h so far · expected done Nov 01 16:41–Nov 02 02:40 UTC |
+| 11 | Ray-traced Finalize Render | building | 0 / 13 | 3.6 h so far · expected done Nov 01 17:22–Nov 02 04:07 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-8 merged, 8 queued, 2 merging, 2 escalate, 2 gate, 1 working
+8 merged, 8 queued, 3 merging, 2 escalate, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -35,7 +35,7 @@ Updated 2026-11-01 11:00 UTC. This page and the card in the README are regenerat
 | `p11-arch3d-ies-area` | IES distributions and area lights in the scene lights and the CPU illuminance | merging | bonsai-ws2-a |
 | `p11-r3d-pt-lights` | WGSL lights: points, spots, IES tables, rectangular area lights, the sun and the sky | escalate |  |
 | `p11-r3d-pt-driver` | The progressive driver: frames, passes, snapshots, resolve, denoise hook, cancel; irradiance probes | working | bonsai-b |
-| `p11-cmd-render-path` | RENDER path-tracer parameters and ILLUMINANCE method path | gate | bonsai-ws2-b |
+| `p11-cmd-render-path` | RENDER path-tracer parameters and ILLUMINANCE method path | merging | bonsai-ws2-b |
 | `p11-cmd-lightfixture-area-ies` | LIGHTFIXTURE area lights and IES files; arch.inspect shows them | escalate |  |
 | `p11-io-area-ies` | GLB and DXF for area lights and IES fixtures | gate | bonsai-a |
 
@@ -43,6 +43,7 @@ Updated 2026-11-01 11:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 11:07 | `harden-p10-mcp-render-final` | merged | 6,305 pass | tturbo-mac |
 | Nov 01 10:55 | `p11-r3d-pipeline-cache` | merged | 6,300 pass | mai-flash |
 | Nov 01 10:42 | `harden-p9-arch-terrain-csv` | merged | 6,296 pass | tturbo-mac2 |
 | Nov 01 10:20 | `p11-arch3d-panel` | refused | 0 pass | darwin-ws3 |
@@ -54,16 +55,15 @@ Updated 2026-11-01 11:00 UTC. This page and the card in the README are regenerat
 | Nov 01 08:48 | `p11-r3d-pt-bsdf` | merged | 6,247 pass | bonsai-ws2-b |
 | Nov 01 08:40 | `p11-r3d-gpu-scene` | merged | 6,242 pass | mai-flash |
 | Nov 01 08:33 | `harden-p10-docs-user-guide` | merged | 6,235 pass | tturbo-mac |
-| Nov 01 08:07 | `p11-arch-ies` | refused | 0 pass | bonsai-ws2-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 759 |
-| bonsai-b | bonsai2-27b | agent | 702 |
+| bonsai-a | bonsai2-27b | gate | 760 |
+| bonsai-b | bonsai2-27b | agent | 703 |
 | bonsai-ws2-a | bonsai2-27b | merging | 761 |
-| bonsai-ws2-b | bonsai2-27b | gate | 731 |
+| bonsai-ws2-b | bonsai2-27b | merging | 732 |
 | claude-sonnet-a | sonnet | held | 61 |
 | claude-sonnet-b | sonnet | held | 60 |
 | claude-sonnet-c | sonnet | held | 10 |
@@ -71,5 +71,5 @@ Updated 2026-11-01 11:00 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 604 |
 | kimi-k31 | k3.1-pro-highspeed | down | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | merging | 527 |
+| tturbo-mac | tturbo-ultraheretic | gate | 527 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
