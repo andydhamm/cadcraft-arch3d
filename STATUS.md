@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 03:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 10 of 13: Lighting, light fixtures and final renders — 18 of 22 segments merged · 2 of 11 acceptance checks**
 
-6,141 workspace tests passing at the last merge · 606 segments merged in all · 0 of 13 seats working
+6,149 workspace tests passing at the last merge · 607 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -20,7 +20,7 @@ Updated 2026-11-01 03:00 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 2 / 11 | 10.4 h so far · expected done Nov 01 06:22–Nov 01 14:51 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 2 / 11 | 10.7 h so far · expected done Nov 01 06:42–Nov 01 15:24 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
@@ -40,6 +40,7 @@ Updated 2026-11-01 03:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 03:13 | `harden-p10-io-glb-lights` | merged | 6,149 pass | tturbo-mac2 |
 | Nov 01 02:57 | `harden-p10-io-light-proxies` | merged | 6,141 pass | tturbo-mac |
 | Nov 01 02:16 | `upstream-sync-5caaf73e3` | merged | 6,136 pass | bonsai-ws2-a |
 | Nov 01 02:00 | `p10-cmd-illuminance` | merged | 6,136 pass | mai-flash |
@@ -51,15 +52,14 @@ Updated 2026-11-01 03:00 UTC. This page and the card in the README are regenerat
 | Oct 31 23:59 | `p10-mcp-render-final` | merged | 6,106 pass | kimi-k31 |
 | Oct 31 23:45 | `p10-r3d-lit-pipeline` | merged | 6,104 pass | kimi-k31 |
 | Oct 31 23:31 | `harden-p10-cmd-sunstudy` | merged | 6,100 pass | tturbo-mac2 |
-| Oct 31 23:22 | `harden-p10-arch-light-symbol` | merged | 6,095 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 750 |
-| bonsai-b | bonsai2-27b | gate | 695 |
-| bonsai-ws2-a | bonsai2-27b | agent | 748 |
+| bonsai-b | bonsai2-27b | merging | 697 |
+| bonsai-ws2-a | bonsai2-27b | agent | 749 |
 | bonsai-ws2-b | bonsai2-27b | idle | 716 |
 | claude-sonnet-a | sonnet | merging | 61 |
 | claude-sonnet-b | sonnet | merging | 60 |
