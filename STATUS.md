@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 10 of 13: Lighting, light fixtures and final renders — 13 of 22 segments merged · 1 of 11 acceptance checks**
+**Phase 10 of 13: Lighting, light fixtures and final renders — 14 of 22 segments merged · 1 of 11 acceptance checks**
 
-6,118 workspace tests passing at the last merge · 600 segments merged in all · 0 of 13 seats working
+6,123 workspace tests passing at the last merge · 601 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -20,26 +20,27 @@ Updated 2026-11-01 00:30 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 1 / 11 | 7.9 h so far · expected done Nov 01 06:46–Nov 01 17:24 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 1 / 11 | 8.2 h so far · expected done Nov 01 06:13–Nov 01 16:03 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-13 merged, 5 queued, 4 merging
+14 merged, 4 queued, 3 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p10-arch3d-scene-lights` | Scene lights and direct illuminance with shadow rays | merging | claude-sonnet-d |
 | `p10-arch3d-fixture-meshes` | Fixture housings in 3D | merging | claude-sonnet-a |
 | `p10-r3d-finalize` | Finalize Render: every light shadowed at high resolution, soft edges, supersampled, tone mapped, in cancellable steps | merging | claude-sonnet-b |
+| `p10-cmd-illuminance` | ILLUMINANCE: direct light at a point | working | mai-flash |
 | `upstream-sync-5caaf73e3` | merge upstream upstream/main up to 5caaf73e3 (1 commits) | merging | bonsai-ws2-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 00:37 | `p10-arch3d-scene-lights` | merged | 6,123 pass | claude-sonnet-d |
 | Nov 01 00:26 | `p10-cmd-lightfixture` | merged | 6,118 pass | mai-flash |
 | Nov 01 00:10 | `p10-r3d-lit-frame` | merged | 6,111 pass | claude-sonnet-b |
 | Oct 31 23:59 | `p10-mcp-render-final` | merged | 6,106 pass | kimi-k31 |
@@ -51,14 +52,13 @@ Updated 2026-11-01 00:30 UTC. This page and the card in the README are regenerat
 | Oct 31 22:17 | `p10-arch-light-placement` | merged | 6,081 pass | kimi-k31 |
 | Oct 31 21:50 | `harden-p9-arch-site` | merged | 6,071 pass | tturbo-mac2 |
 | Oct 31 21:36 | `p10-arch-light-symbol` | merged | 6,066 pass | bonsai-ws2-a |
-| Oct 31 21:23 | `p10-cmd-sunstudy` | merged | 6,062 pass | bonsai-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 748 |
-| bonsai-b | bonsai2-27b | idle | 689 |
+| bonsai-a | bonsai2-27b | agent | 748 |
+| bonsai-b | bonsai2-27b | gate | 689 |
 | bonsai-ws2-a | bonsai2-27b | idle | 745 |
 | bonsai-ws2-b | bonsai2-27b | idle | 712 |
 | claude-sonnet-a | sonnet | idle | 59 |
@@ -67,6 +67,6 @@ Updated 2026-11-01 00:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-d | sonnet | idle | 3 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 599 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 110 |
-| mai-flash | mai-code-1.1-flash | idle | 31 |
+| mai-flash | mai-code-1.1-flash | agent | 31 |
 | tturbo-mac | tturbo-ultraheretic | agent | 517 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 336 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 336 |
