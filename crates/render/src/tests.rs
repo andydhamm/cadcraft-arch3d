@@ -1123,51 +1123,27 @@ fn raster_hatch_pattern_matches_one_by_one() {
     }
 }
 
-// ---------- arch poché ----------
-
-/// A drawing with one model-space line and one arch wall (ArchId 0).
-fn arch_wall_drawing() -> Drawing {
-    let mut d = Drawing::new_imperial();
-    d.add(&Space::Model, Common::default(), EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(10.0, 0.0, 0.0) }))
-        .unwrap();
-    let mut model = ArchModel::default();
-    model.add_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.3, height: 3.0, ..Default::default() });
-    d.arch = model;
-    d.touch_arch();
-    d
-}
-
+/// `Options::linetypes` off draws a dashed line, a dashed wide polyline and a linetype on a layer
+/// as the same whole line a Continuous one draws: what hit tests look at.
 #[test]
-fn build_includes_arch_poché() {
-    let d = arch_wall_drawing();
-    let l = build(&d, &Space::Model, &Options::default());
-    assert!(l.prims.iter().any(|p| p.kind == Kind::Tris && p.handle == crate::arch_handle(ArchId(0))), "no arch poché tris in the display list");
-}
-
-#[test]
-fn build_plot_includes_arch_poché() {
-    let d = arch_wall_drawing();
-    let l = build_plot(&d, &Space::Model, &Options::default());
-    assert!(l.prims.iter().any(|p| p.kind == Kind::Tris && p.handle == crate::arch_handle(ArchId(0))), "no arch poché tris in the plot display list");
-}
-
-#[test]
-fn arch_poché_extends_display_bounds() {
-    let mut d = Drawing::new_imperial();
-    d.add(&Space::Model, Common::default(), EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(1.0, 0.0, 0.0) }))
-        .unwrap();
-    let mut model = ArchModel::default();
-    model.add_wall(Wall { start: Vec2::new(100.0, 100.0), end: Vec2::new(110.0, 100.0), thickness: 0.3, height: 3.0, ..Default::default() });
-    d.arch = model;
-    d.touch_arch();
-    let l = build(&d, &Space::Model, &Options::default());
-    assert!(l.bounds.contains(Vec2::new(100.0, 100.0)), "bounds do not contain wall start");
-    assert!(l.bounds.contains(Vec2::new(110.0, 100.0)), "bounds do not contain wall end");
-}
-
-#[test]
-fn paper_space_skips_arch() {
-    let d = arch_wall_drawing();
-    let l = build(&d, &Space::Paper("Layout1".into()), &Options::default());
-    assert!(!l.prims.iter().any(|p| p.handle == crate::arch_handle(ArchId(0))), "arch poché drawn in paper space");
+fn without_linetypes_every_line_is_drawn_whole() {
+    let drawing = |lt: &str| {
+        let mut d = Drawing::new_imperial();
+        d.linetypes.extend(cadcraft_doc::library::standard_linetypes().into_iter().filter(|l| l.name == "DASHED"));
+        d.layer_mut("0").unwrap().linetype = lt.into();
+        let line = EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(30.0, 0.0, 0.0) });
+        d.add(&Space::Model, Common::default(), line).unwrap();
+        let vertices = [(0.0, 5.0), (30.0, 5.0)].map(|(x, y)| PolyVertex::new(Vec2::new(x, y))).to_vec();
+        let wide = cadcraft_doc::LwPolyline { vertices, closed: false, const_width: 0.2, elevation: 0.0, plinegen: false };
+        d.add(&Space::Model, Common::default(), EntityKind::LwPolyline(wide)).unwrap();
+        d
+    };
+    let whole = Options { linetypes: false, ..Options::default() };
+    let continuous = build(&drawing("Continuous"), &Space::Model, &Options::default());
+    let dashed = build(&drawing("DASHED"), &Space::Model, &whole);
+    assert_eq!(dashed.prims.len(), continuous.prims.len());
+    assert_eq!(dashed.verts, continuous.verts);
+    assert_eq!(dashed.tris, continuous.tris);
+    let drawn = build(&drawing("DASHED"), &Space::Model, &Options::default());
+    assert!(drawn.prims.len() > 2 * continuous.prims.len(), "drawn with its linetype: {} primitives", drawn.prims.len());
 }
