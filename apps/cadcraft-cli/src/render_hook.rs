@@ -122,6 +122,12 @@ fn compute_of(state: &mut State, rt: bool) -> Result<Option<ComputeGpu>, String>
 /// The samples per pixel a default Finalize uses on a software (CPU) adapter.
 const SOFTWARE_SPP: u32 = 64;
 
+/// The samples per pixel to render with: `SOFTWARE_SPP` for a request that did not name spp (and
+/// keeps no snapshots) on a CPU adapter, else the request's own.
+fn software_spp(p: &PathParams, on_cpu: bool) -> u32 {
+    if on_cpu && !p.spp_given && p.snapshots.is_empty() { SOFTWARE_SPP } else { p.spp }
+}
+
 /// `<out without .png>-spp<n>.png`.
 fn snapshot_path(out: &std::path::Path, spp: u32) -> std::path::PathBuf {
     let stem = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -160,9 +166,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         // The default 256 spp is too slow on a software (CPU) adapter: lower an unchanged default
         // to 64 (an explicit spp, or snapshots that may need more samples, are kept).
         let on_cpu = compute.as_ref().is_some_and(|c| c.info.adapter_type == "Cpu");
-        if on_cpu && opts.spp == PathParams::default().spp && opts.snapshots.is_empty() {
-            opts.spp = SOFTWARE_SPP;
-        }
+        opts.spp = software_spp(&req.path, on_cpu);
         let cache_ref = pcache.as_ref().and_then(|(c, _)| c.as_ref());
         let (png, stats, fallback) =
             render_final_with(off, compute.as_ref(), scene, key, &camera, &lighting, req.ground, req.size, true, &opts, cache_ref).map_err(gpu)?;
@@ -316,6 +320,16 @@ mod tests {
     use cadcraft_engine::doc::Drawing;
     use cadcraft_engine::doc::arch::{ArchId, LightFixture, Wall};
     use cadcraft_geom::Vec2;
+
+    #[test]
+    fn software_spp_lowers_only_an_unchanged_default() {
+        let given = |spp| PathParams { spp, spp_given: true, ..PathParams::default() };
+        assert_eq!(software_spp(&PathParams::default(), true), SOFTWARE_SPP);
+        assert_eq!(software_spp(&given(256), true), 256);
+        assert_eq!(software_spp(&PathParams::default(), false), 256);
+        assert_eq!(software_spp(&PathParams { snapshots: vec![4, 16], ..PathParams::default() }, true), 256);
+        assert_eq!(software_spp(&given(32), true), 32);
+    }
 
     /// Four pot lights in a closed 4 m room.
     fn room() -> Drawing {
@@ -515,7 +529,7 @@ mod tests {
     }
 
     fn quick(spp: u32) -> PathParams {
-        PathParams { spp, bounces: 1, denoise: false, ..PathParams::default() }
+        PathParams { spp, spp_given: true, bounces: 1, denoise: false, ..PathParams::default() }
     }
 
     fn temp_dir(tag: &str) -> std::path::PathBuf {

@@ -83,6 +83,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
             seed: seed as u32,
             denoise: params.get("denoise").and_then(Value::as_bool).unwrap_or(true),
             rt: params.get("rt").and_then(Value::as_bool).unwrap_or(false),
+            spp_given: params.get("spp").is_some(),
             ..PathParams::default()
         };
 

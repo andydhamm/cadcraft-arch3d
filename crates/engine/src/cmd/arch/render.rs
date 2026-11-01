@@ -83,11 +83,13 @@ pub struct PathParams {
     pub rt: bool,
     pub furnace: Option<(f64, f64)>,
     pub snapshots: Vec<u32>,
+    /// Whether the request named spp; false in `Default`.
+    pub spp_given: bool,
 }
 
 impl Default for PathParams {
     fn default() -> Self {
-        PathParams { spp: 256, bounces: 4, seed: 0, denoise: true, rt: false, furnace: None, snapshots: Vec::new() }
+        PathParams { spp: 256, bounces: 4, seed: 0, denoise: true, rt: false, furnace: None, snapshots: Vec::new(), spp_given: false }
     }
 }
 
@@ -347,7 +349,7 @@ fn parse_path_params(v: &Value) -> Result<PathParams, EngineError> {
         }
     };
 
-    Ok(PathParams { spp: spp as u32, bounces: bounces as u32, seed: seed as u32, denoise, rt, furnace, snapshots })
+    Ok(PathParams { spp: spp as u32, bounces: bounces as u32, seed: seed as u32, denoise, rt, furnace, snapshots, spp_given: v.get("spp").is_some() })
 }
 
 pub fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineError> {
@@ -449,6 +451,14 @@ pub fn specs() -> Vec<CommandSpec> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn parse_path_params_records_whether_spp_was_given() {
+        let p = |v: Value| parse_path_params(&v).map(|p| (p.spp, p.spp_given)).ok();
+        assert_eq!(p(json!({})), Some((256, false)));
+        assert_eq!(p(json!({"spp": 256})), Some((256, true)));
+        assert_eq!(p(json!({"spp": 64})), Some((64, true)));
+    }
 
     #[test]
     fn render_without_a_renderer_is_refused() {
