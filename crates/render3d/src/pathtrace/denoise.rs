@@ -394,4 +394,57 @@ mod tests {
         assert!(denoise(&gpu, &color, &aov[..6], (2, 2)).is_err(), "the guide needs two entries a pixel");
         assert!(denoise(&gpu, &[], &[], (0, 0)).is_err(), "no pixels");
     }
+
+    #[test]
+    fn a_single_pixel_image_is_copied() {
+        let Some(gpu) = compute() else { return };
+        let pixels = vec![wall([0.3, 0.6, 0.9])];
+        let out = run(&gpu, &pixels, (1, 1));
+        let p = &out[0];
+        assert!((p[0] - 0.3).abs() <= 1e-5 && (p[1] - 0.6).abs() <= 1e-5 && (p[2] - 0.9).abs() <= 1e-5, "the single pixel drifted: {p:?}");
+    }
+
+    #[test]
+    fn hdr_values_are_preserved() {
+        let Some(gpu) = compute() else { return };
+        // A sunlit pixel at 100 000 nits and a dark pixel at 1 nit, side by side.
+        let pixels = image(|x, _| if x < N / 2 { wall([100_000.0, 100_000.0, 100_000.0]) } else { wall([1.0, 1.0, 1.0]) });
+        let out = run(&gpu, &pixels, (N, N));
+        let bright = band_mean(&out, 0, N / 2);
+        let dark = band_mean(&out, N / 2, N);
+        assert!(bright > 99_000.0, "the bright side lost its HDR value: {bright}");
+        assert!(dark < 2.0, "the dark side was lifted: {dark}");
+    }
+
+    #[test]
+    fn an_edge_at_the_image_boundary_is_kept() {
+        let Some(gpu) = compute() else { return };
+        // The first column is a different albedo; the edge sits at the image boundary.
+        let pixels = image(|x, _| {
+            let color = if x == 0 { [0.3; 3] } else { [0.6; 3] };
+            let mut p = wall(color);
+            if x == 0 {
+                p.albedo = [0.1; 3];
+            } else {
+                p.albedo = [0.9; 3];
+            }
+            p
+        });
+        let out = run(&gpu, &pixels, (N, N));
+        let edge = band_mean(&out, 0, 1);
+        let rest = band_mean(&out, 1, N);
+        assert!((edge - 0.3).abs() <= 0.05, "the edge column was blurred: {edge}");
+        assert!((rest - 0.6).abs() <= 0.05, "the rest was blurred: {rest}");
+    }
+
+    #[test]
+    fn nan_in_the_guide_does_not_crash() {
+        let Some(gpu) = compute() else { return };
+        // A NaN normal on one pixel: the weight for that tap becomes NaN, but the centre tap
+        // (which has a finite normal) keeps wsum > 0, so the pixel is still averaged.
+        let mut pixels = image(|_, _| wall([0.5; 3]));
+        pixels[(N / 2) as usize * N as usize + (N / 2) as usize].normal = [f32::NAN, 0.0, 1.0];
+        let out = run(&gpu, &pixels, (N, N));
+        assert!(out.iter().all(|p| p.iter().all(|v| v.is_finite())), "a NaN normal made the output non-finite");
+    }
 }

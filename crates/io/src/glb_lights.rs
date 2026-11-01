@@ -1,6 +1,10 @@
 //! `KHR_lights_punctual` for the GLB (phase 10): one glTF light per scene light (spots with their
 //! cone, intensity in candela as glTF wants for punctual lights) and one node per light under the
 //! root, named `light-lf{n}-source`. Filled by `p10-io-glb-lights`.
+//!
+//! Phase 11: an area light is a spot of the widest cone (inner 0, outer pi/2) at its candela
+//! (lumens / pi) with its size in the node's extras, `{"cadcraft": {"area": [width, length]}}`; an
+//! IES fixture carries its peak candela and its profile's name, `{"cadcraft": {"ies": name}}`.
 
 use cadcraft_arch3d::Scene3d;
 use cadcraft_doc::arch::LightKind;
@@ -19,24 +23,45 @@ pub(crate) fn punctual_lights(scene: &Scene3d) -> (Vec<Value>, Vec<Value>) {
             continue;
         }
 
+        // An IES fixture's intensity is the peak of its (lumen-scaled) profile; every other light
+        // carries its candela.
+        let intensity = match &light.ies {
+            Some(profile) => cadcraft_arch::ies::peak_candela(profile),
+            None => light.intensity,
+        };
+        if !intensity.is_finite() || intensity < 0.0 {
+            continue;
+        }
+
         let name = format!("lf{}", light.id.0);
         let mut def = json!({
             "name": name,
-            "type": if light.kind == LightKind::Spot { "spot" } else { "point" },
+            "type": if matches!(light.kind, LightKind::Spot | LightKind::Area) { "spot" } else { "point" },
             "color": [light.color[0], light.color[1], light.color[2]],
-            "intensity": light.intensity,
+            "intensity": intensity,
         });
 
-        if light.kind == LightKind::Spot {
-            let inner = cone_angle(light.cos_inner);
-            let outer = (cone_angle(light.cos_outer)).min(std::f64::consts::PI / 2.0);
-            if !inner.is_finite() || !outer.is_finite() || inner > outer {
-                continue;
+        match light.kind {
+            LightKind::Spot => {
+                let inner = cone_angle(light.cos_inner);
+                let outer = (cone_angle(light.cos_outer)).min(std::f64::consts::PI / 2.0);
+                if !inner.is_finite() || !outer.is_finite() || inner > outer {
+                    continue;
+                }
+                def["spot"] = json!({
+                    "innerConeAngle": inner,
+                    "outerConeAngle": outer,
+                });
             }
-            def["spot"] = json!({
-                "innerConeAngle": inner,
-                "outerConeAngle": outer,
-            });
+            // glTF has no area light: the widest spot approximates the hemisphere an area emits
+            // into, and the extras keep the size for a reader that knows it.
+            LightKind::Area => {
+                def["spot"] = json!({
+                    "innerConeAngle": 0.0,
+                    "outerConeAngle": std::f64::consts::PI / 2.0,
+                });
+            }
+            LightKind::Point => {}
         }
 
         let light_index = lights.len();
@@ -54,6 +79,16 @@ pub(crate) fn punctual_lights(scene: &Scene3d) -> (Vec<Value>, Vec<Value>) {
 
         if let Some(rotation) = quaternion_from_direction(light.direction) {
             node["rotation"] = json!(rotation);
+        }
+        let mut cadcraft = serde_json::Map::new();
+        if light.kind == LightKind::Area && light.size.iter().all(|v| v.is_finite()) {
+            cadcraft.insert("area".into(), json!([light.size[0], light.size[1]]));
+        }
+        if let Some(profile) = &light.ies {
+            cadcraft.insert("ies".into(), json!(profile.name));
+        }
+        if !cadcraft.is_empty() {
+            node["extras"] = json!({ "cadcraft": cadcraft });
         }
         nodes.push(node);
     }
@@ -73,8 +108,9 @@ fn light_valid(light: &cadcraft_arch3d::light::SceneLight) -> bool {
         return false;
     }
     match light.kind {
-        LightKind::Point => true,
-        LightKind::Spot | LightKind::Area => {
+        // An area light's cone is fixed (the whole hemisphere), whatever its cosines say.
+        LightKind::Point | LightKind::Area => true,
+        LightKind::Spot => {
             light.cos_inner.is_finite()
                 && light.cos_outer.is_finite()
                 && (-1.0..=1.0).contains(&light.cos_inner)
@@ -348,5 +384,75 @@ mod tests {
             let idx = n.as_u64().unwrap() as usize;
             blocks["nodes"][idx]["name"] == "light-lf0-source"
         }));
+    }
+
+    #[test]
+    fn glb_exports_an_area_light_as_a_spot_with_its_size_in_extras() {
+        let candela = 3600.0 / std::f64::consts::PI;
+        let mut panel = scene_light(7, LightKind::Area, Vec3::new(2.0, 1.5, 2.4), Vec3::new(0.0, 0.0, -1.0), candela, [1.0, 0.95, 0.9], 1.0, 0.0);
+        panel.size = [0.6, 0.6];
+        let mut strip = scene_light(8, LightKind::Area, Vec3::new(4.0, 1.5, 2.4), Vec3::new(0.0, 0.0, -1.0), candela, [1.0, 1.0, 1.0], 1.0, 0.0);
+        strip.size = [1.2, 0.3];
+        let mesh = Mesh {
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0]],
+            normals: vec![[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]],
+            uvs: vec![[0.0, 0.0], [0.5, 0.0], [0.5, 0.5]],
+            indices: vec![0, 1, 2],
+            ..Mesh::new("wall", ArchId(1))
+        };
+        let scene = Scene3d { meshes: vec![mesh], lights: vec![panel, strip], ..Default::default() };
+
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 2);
+        assert_eq!(nodes.len(), 2);
+        for light in &lights {
+            assert_eq!(light["type"], "spot", "{light}");
+            assert!((light["intensity"].as_f64().unwrap_or(f64::NAN) - candela).abs() < 1e-9, "{light}");
+            let spot = &light["spot"];
+            assert_eq!(spot["innerConeAngle"].as_f64(), Some(0.0), "{spot}");
+            assert!((spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN) - std::f64::consts::PI / 2.0).abs() < 1e-12, "{spot}");
+        }
+        assert_eq!(nodes[0]["extras"]["cadcraft"]["area"], json!([0.6, 0.6]));
+        assert_eq!(nodes[1]["extras"]["cadcraft"]["area"], json!([1.2, 0.3]));
+        assert!(nodes[0]["extras"]["cadcraft"].get("ies").is_none());
+
+        // The same through the whole GLB: the light's node carries the extras.
+        let bytes = crate::glb::write(&scene);
+        let doc = glb_json_chunk(&bytes);
+        let node = doc["nodes"].as_array().and_then(|all| all.iter().find(|n| n["name"] == "light-lf7-source")).expect("the panel's light node");
+        assert_eq!(node["extras"]["cadcraft"]["area"], json!([0.6, 0.6]));
+        assert_eq!(doc["extensions"]["KHR_lights_punctual"]["lights"][0]["type"], "spot");
+    }
+
+    #[test]
+    fn glb_exports_an_ies_fixture_with_its_peak_and_name() {
+        let profile = cadcraft_doc::arch::IesProfile {
+            name: "Downlight 3000K".into(),
+            vertical: vec![0.0, 45.0, 90.0],
+            horizontal: vec![0.0],
+            candela: vec![1200.0, 800.0, 50.0],
+            lumens: -1.0,
+            ..Default::default()
+        };
+        let half = 30.0_f64.to_radians();
+        let mut pot =
+            scene_light(3, LightKind::Spot, Vec3::new(1.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 950.36, [1.0, 1.0, 1.0], half.cos(), half.cos());
+        pot.ies = Some(std::sync::Arc::new(profile));
+        let plain =
+            scene_light(4, LightKind::Spot, Vec3::new(3.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 950.36, [1.0, 1.0, 1.0], half.cos(), half.cos());
+        let scene = Scene3d { lights: vec![pot, plain], ..Default::default() };
+
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 2);
+        assert!(
+            (lights[0]["intensity"].as_f64().unwrap_or(f64::NAN) - 1200.0).abs() < 1e-9,
+            "the IES fixture exports its peak candela, {}",
+            lights[0]
+        );
+        assert_eq!(nodes[0]["extras"]["cadcraft"]["ies"], "Downlight 3000K");
+        assert!(nodes[0]["extras"]["cadcraft"].get("area").is_none());
+        // A light without a profile keeps its own candela and has no extras.
+        assert!((lights[1]["intensity"].as_f64().unwrap_or(f64::NAN) - 950.36).abs() < 1e-9);
+        assert!(nodes[1].get("extras").is_none(), "{}", nodes[1]);
     }
 }
