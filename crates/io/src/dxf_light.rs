@@ -103,6 +103,74 @@ mod tests {
     }
 
     #[test]
+    fn empty_model_writes_no_proxies() {
+        let m = ArchModel::default();
+        let p = proxy_light_entities(&m);
+        assert!(p.is_empty(), "empty model produces no proxies");
+    }
+
+    #[test]
+    fn light_proxies_respect_cap() {
+        let mut m = ArchModel::default();
+        // Each pot light produces 2 polylines. 50,001 pot lights = 100,002 polylines > cap.
+        for i in 0..50_001u32 {
+            m.lights.push(LightFixture::new(ArchId(i), "Recessed pot light", Vec2::new(i as f64, 0.0)));
+        }
+        let p = proxy_light_entities(&m);
+        assert_eq!(p.len(), 100_000, "proxies capped at 100,000");
+    }
+
+    #[test]
+    fn light_proxies_skip_non_finite() {
+        let mut m = ArchModel::default();
+        m.lights.push(LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(f64::NAN, 1.0)));
+        let p = proxy_light_entities(&m);
+        // Should not crash; may produce 0 or 2 polylines depending on plan_symbol's handling
+        for (_, _, tags) in &p {
+            assert!(is_light_proxy(tags), "all proxies are marked");
+        }
+    }
+
+    #[test]
+    fn light_proxy_tag_structure() {
+        let m = model_with_lights();
+        let p = proxy_light_entities(&m);
+        for (kind, layer, tags) in &p {
+            assert_eq!(kind, "LWPOLYLINE", "proxy is a LWPOLYLINE");
+            assert_eq!(layer, LIGHT_LAYER, "proxy is on E-LITE");
+            // First tag should be 90 (vertex count)
+            assert_eq!(tags[0].code, 90, "first tag is vertex count (90)");
+            // Second tag should be 70 (closed flag)
+            assert_eq!(tags[1].code, 70, "second tag is closed flag (70)");
+            // Tag structure: [90, 70, 10, 20, ..., 1001, 1000]
+            // Minimum: 2 vertices = 4 coord tags + 2 header + 2 xdata = 8
+            assert!(tags.len() >= 8, "enough tags for at least 2 vertices and xdata");
+            // Vertex coordinate tags alternate 10/20
+            let coord_tags = &tags[2..tags.len() - 2];
+            assert_eq!(coord_tags.len() % 2, 0, "even number of coordinate tags");
+            for (j, t) in coord_tags.iter().enumerate() {
+                let expected_code = if j % 2 == 0 { 10 } else { 20 };
+                assert_eq!(t.code, expected_code, "coordinate tag code");
+            }
+            // Last two tags are the xdata marker
+            assert_eq!(tags[tags.len() - 2].code, 1001, "xdata app tag (1001)");
+            assert_eq!(tags[tags.len() - 2].str(), crate::dxf_ext::APP, "xdata app is CADCRAFT");
+            assert_eq!(tags[tags.len() - 1].code, 1000, "xdata value tag (1000)");
+            assert_eq!(tags[tags.len() - 1].str(), LIGHT_PROXY_MARKER, "xdata value is CADCRAFT-LIGHT");
+        }
+    }
+
+    #[test]
+    fn light_proxy_round_trip_no_lights() {
+        let mut d = cadcraft_doc::Drawing::default();
+        // No lights at all
+        let text = crate::write_dxf(&d);
+        assert_eq!(text.matches(LIGHT_PROXY_MARKER).count(), 0, "no markers when no lights");
+        let back = crate::read_dxf(text.as_bytes()).expect("reopen");
+        assert!(back.arch.lights.is_empty(), "no lights after round trip");
+    }
+
+    #[test]
     fn light_fixtures_round_trip_and_proxies_drop() {
         let mut d = cadcraft_doc::Drawing::default();
         d.arch = model_with_lights();
