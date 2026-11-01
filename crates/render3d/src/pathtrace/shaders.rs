@@ -13,10 +13,17 @@ pub const LIGHTS_WGSL: &str = include_str!("../shaders/pt/lights.wgsl");
 pub const KERNEL_WGSL: &str = include_str!("../shaders/pt/kernel.wgsl");
 pub const RESOLVE_WGSL: &str = include_str!("../shaders/pt/resolve.wgsl");
 pub const DENOISE_WGSL: &str = include_str!("../shaders/pt/denoise.wgsl");
+pub const RQ_TRAVERSE_WGSL: &str = include_str!("../shaders/pt/traverse_rq.wgsl");
 
 /// The kernel module's source.
 pub fn kernel_source() -> String {
     [COMMON_WGSL, TRAVERSE_WGSL, BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
+}
+
+/// The ray-query kernel module's source: same modules as [`kernel_source`] but the ray-query
+/// traversal replaces the compute traversal. Everything else (bsdf, lights, kernel) is byte-identical.
+pub fn rq_kernel_source() -> String {
+    [COMMON_WGSL, RQ_TRAVERSE_WGSL, BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
 }
 
 /// Every compute pipeline and the layouts their bind groups follow.
@@ -35,6 +42,20 @@ pub struct PtPipelines {
     pub denoise: wgpu::ComputePipeline,
 }
 
+/// The ray-query kernel pipelines. Built only when the device supports ray queries; the layout
+/// takes the same group-0 kernel layout plus group 1 (the TLAS).
+pub struct RqPtPipelines {
+    /// The two-group layout shared by all rq pipelines (group 0 = kernel buffers, group 1 = TLAS).
+    pub rq_pipeline_layout: wgpu::PipelineLayout,
+    /// Group 0: the nine kernel buffers.
+    pub kernel_bind_group_layout: wgpu::BindGroupLayout,
+    /// Group 1: the TLAS.
+    pub acc_bind_group_layout: wgpu::BindGroupLayout,
+    pub rq_trace: wgpu::ComputePipeline,
+    pub rq_irradiance: wgpu::ComputePipeline,
+    pub rq_traverse_test: wgpu::ComputePipeline,
+}
+
 fn entry(binding: u32, ty: wgpu::BufferBindingType) -> wgpu::BindGroupLayoutEntry {
     wgpu::BindGroupLayoutEntry {
         binding,
@@ -47,6 +68,15 @@ fn entry(binding: u32, ty: wgpu::BufferBindingType) -> wgpu::BindGroupLayoutEntr
 fn layout(device: &wgpu::Device, label: &str, kinds: &[wgpu::BufferBindingType]) -> wgpu::BindGroupLayout {
     let entries: Vec<_> = kinds.iter().enumerate().map(|(k, ty)| entry(k as u32, *ty)).collect();
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some(label), entries: &entries })
+}
+
+fn acc_layout_entry() -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding: 0,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::AccelerationStructure { vertex_return: false },
+        count: None,
+    }
 }
 
 const UNIFORM: wgpu::BufferBindingType = wgpu::BufferBindingType::Uniform;
@@ -97,6 +127,45 @@ impl PtPipelines {
             Some(e) => Err(e.to_string()),
             None => Ok(out),
         }
+    }
+}
+
+/// Build the ray-query kernel pipelines on `gpu`. `Err` carries the first validation error.
+pub fn build_rq_pipelines(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>) -> Result<RqPtPipelines, String> {
+    let device = &gpu.device;
+    let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let kernel_layout = layout(device, "pt rq kernel", &[UNIFORM, READ, READ, READ, READ, READ, WRITE, WRITE, READ]);
+    let acc_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("pt rq acc"), entries: &[acc_layout_entry()] });
+    let rq_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("pt rq"),
+        bind_group_layouts: &[Some(&kernel_layout), Some(&acc_layout)],
+        immediate_size: 0,
+    });
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("pt rq kernel"),
+        source: wgpu::ShaderSource::Wgsl(rq_kernel_source().into()),
+    });
+    let rq_pipeline = |label: &str, entry_point: &str| {
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some(label),
+            layout: Some(&rq_pipeline_layout),
+            module: &module,
+            entry_point: Some(entry_point),
+            compilation_options: Default::default(),
+            cache,
+        })
+    };
+    let out = RqPtPipelines {
+        rq_trace: rq_pipeline("pt rq trace", "trace_main"),
+        rq_irradiance: rq_pipeline("pt rq irradiance", "irradiance_main"),
+        rq_traverse_test: rq_pipeline("pt rq traverse test", "traverse_test_main"),
+        rq_pipeline_layout,
+        kernel_bind_group_layout: kernel_layout,
+        acc_bind_group_layout: acc_layout,
+    };
+    match futures::executor::block_on(scope.pop()) {
+        Some(e) => Err(e.to_string()),
+        None => Ok(out),
     }
 }
 

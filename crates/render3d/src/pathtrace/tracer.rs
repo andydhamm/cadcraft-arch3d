@@ -5,8 +5,9 @@
 //! same kernel.
 
 use super::device::ComputeGpu;
+use super::rt::RqBuild;
 use super::scene_gpu::{FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene};
-use super::shaders::PtPipelines;
+use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
 use super::{DAY_EXPOSURE, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX};
 use super::{PathOptions, PathStats, PathStatus};
 use crate::camera::Camera;
@@ -29,6 +30,8 @@ pub struct PathTracer {
     aov: wgpu::Buffer,
     probes_buf: wgpu::Buffer,
     pipelines: PtPipelines,
+    rq_build: Option<RqBuild>,
+    rq_pipelines: Option<RqPtPipelines>,
     spp_done: u32,
     snapshot_idx: usize,
 }
@@ -96,6 +99,8 @@ impl PathTracer {
         }
 
         let pipelines = PtPipelines::new(gpu, cache)?;
+        let rq_build = if opts.rt && gpu.ray_query { RqBuild::build(gpu, &gpu_scene) } else { None };
+        let rq_pipelines = if rq_build.is_some() { build_rq_pipelines(gpu, cache).ok() } else { None };
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
         let d = &gpu.device;
 
@@ -173,7 +178,7 @@ impl PathTracer {
         Ok(PathTracer {
             size,
             status: PathStatus::Running { progress: 0.0, spp: 0 },
-            stats: PathStats::default(),
+            stats: PathStats { rt: rq_pipelines.is_some(), ..PathStats::default() },
             cancelled: false,
             opts: opts.clone(),
             frame,
@@ -183,6 +188,8 @@ impl PathTracer {
             aov,
             probes_buf,
             pipelines,
+            rq_build,
+            rq_pipelines,
             spp_done: 0,
             snapshot_idx: 0,
         })
@@ -216,10 +223,9 @@ impl PathTracer {
             contents: bytemuck::bytes_of(&frame),
             usage: wgpu::BufferUsages::UNIFORM,
         });
-        let bind = d.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("pt trace"),
-            layout: &self.pipelines.kernel_layout,
-            entries: &[
+        let (w, h) = self.size;
+        if let (Some(build), Some(rq)) = (self.rq_build.as_ref(), self.rq_pipelines.as_ref()) {
+            let kernel_entries = &[
                 wgpu::BindGroupEntry { binding: 0, resource: frame_buf.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: self.buffers.nodes.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 2, resource: self.buffers.tris.as_entire_binding() },
@@ -229,20 +235,56 @@ impl PathTracer {
                 wgpu::BindGroupEntry { binding: 6, resource: self.accum.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 7, resource: self.aov.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 8, resource: self.probes_buf.as_entire_binding() },
-            ],
-        });
-        let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt trace") });
-        {
-            let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("pt trace"), timestamp_writes: None });
-            pass.set_pipeline(&self.pipelines.trace);
-            pass.set_bind_group(0, &bind, &[]);
-            let (w, h) = self.size;
-            pass.dispatch_workgroups(w.div_ceil(8), h.div_ceil(8), 1);
-        }
-        gpu.queue.submit([enc.finish()]);
-        if let Some(e) = futures::executor::block_on(scope.pop()) {
-            self.status = PathStatus::Failed(format!("trace dispatch: {e}"));
-            return self.status.clone();
+            ];
+            let bind0 = d.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("pt rq trace g0"),
+                layout: &rq.kernel_bind_group_layout,
+                entries: kernel_entries,
+            });
+            let acc_entries = &[wgpu::BindGroupEntry { binding: 0, resource: build.tlas.as_binding() }];
+            let bind1 =
+                d.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("pt rq acc"), layout: &rq.acc_bind_group_layout, entries: acc_entries });
+            let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt rq trace") });
+            {
+                let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("pt rq trace"), timestamp_writes: None });
+                pass.set_pipeline(&rq.rq_trace);
+                pass.set_bind_group(0, &bind0, &[]);
+                pass.set_bind_group(1, &bind1, &[]);
+                pass.dispatch_workgroups(w.div_ceil(8), h.div_ceil(8), 1);
+            }
+            gpu.queue.submit([enc.finish()]);
+            if let Some(e) = futures::executor::block_on(scope.pop()) {
+                self.status = PathStatus::Failed(format!("rq trace dispatch: {e}"));
+                return self.status.clone();
+            }
+        } else {
+            let bind = d.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("pt trace"),
+                layout: &self.pipelines.kernel_layout,
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: frame_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 1, resource: self.buffers.nodes.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 2, resource: self.buffers.tris.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 3, resource: self.buffers.materials.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 4, resource: self.buffers.lights.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 5, resource: self.buffers.ies.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 6, resource: self.accum.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 7, resource: self.aov.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 8, resource: self.probes_buf.as_entire_binding() },
+                ],
+            });
+            let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt trace") });
+            {
+                let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("pt trace"), timestamp_writes: None });
+                pass.set_pipeline(&self.pipelines.trace);
+                pass.set_bind_group(0, &bind, &[]);
+                pass.dispatch_workgroups(w.div_ceil(8), h.div_ceil(8), 1);
+            }
+            gpu.queue.submit([enc.finish()]);
+            if let Some(e) = futures::executor::block_on(scope.pop()) {
+                self.status = PathStatus::Failed(format!("trace dispatch: {e}"));
+                return self.status.clone();
+            }
         }
 
         self.spp_done += this_pass;
@@ -781,6 +823,7 @@ pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &
 
 #[cfg(test)]
 mod tests {
+    use super::super::*;
     use super::*;
     use crate::camera::{Camera, Orbit};
     use crate::lit_frame::Lighting;
@@ -979,5 +1022,80 @@ mod tests {
         // size 0
         let opts = PathOptions::default();
         assert!(PathTracer::new(&gpu, &s, &c, &l, false, (0, 8), &opts, None).is_err(), "size 0 refused");
+    }
+
+    fn render_to_rgba_stats(gpu: &ComputeGpu, opts: &PathOptions) -> (Vec<u8>, PathStats) {
+        let s = scene();
+        let c = camera();
+        let l = Lighting::default();
+        let mut t = PathTracer::new(&gpu, &s, &c, &l, false, (16, 16), opts, None).unwrap();
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => return (rgba, t.stats()),
+                PathStatus::Cancelled => panic!("unexpected cancel"),
+                PathStatus::Failed(e) => panic!("failed: {e}"),
+            }
+        }
+    }
+
+    fn mean_luminance(rgba: &[u8], w: u32, h: u32) -> f32 {
+        let n = (w * h) as usize;
+        (0..n)
+            .map(|i| {
+                let b = i * 4;
+                luminance([rgba[b] as f32 / 255.0, rgba[b + 1] as f32 / 255.0, rgba[b + 2] as f32 / 255.0])
+            })
+            .sum::<f32>()
+            / n as f32
+    }
+
+    #[test]
+    fn rt_falls_back_to_compute_without_ray_queries() {
+        let Some(gpu) = compute() else { return };
+        if gpu.ray_query {
+            eprintln!("SKIP: device has ray queries (fallback not exercisable)");
+            return;
+        }
+        let opts_rt = PathOptions { spp: 8, spp_per_step: 4, seed: 7, denoise: false, rt: true, ..Default::default() };
+        let (rgba_rt, stats_rt) = render_to_rgba_stats(&gpu, &opts_rt);
+        let opts_comp = PathOptions { spp: 8, spp_per_step: 4, seed: 7, denoise: false, ..Default::default() };
+        let (rgba_comp, _stats_comp) = render_to_rgba_stats(&gpu, &opts_comp);
+        assert!(!stats_rt.rt, "stats.rt must be false when the device lacks ray queries");
+        assert_eq!(rgba_rt, rgba_comp, "fallback must produce the same bytes as the compute path");
+    }
+
+    #[test]
+    fn rt_image_matches_the_compute_path_within_noise() {
+        let Some(gpu) = compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if !gpu.ray_query {
+            eprintln!("SKIP: no ray queries on this device");
+            return;
+        }
+        let opts_rt = PathOptions { spp: 16, spp_per_step: 8, seed: 42, denoise: false, rt: true, ..Default::default() };
+        let (rgba_rt, stats_rt) = render_to_rgba_stats(&gpu, &opts_rt);
+        assert!(stats_rt.rt, "stats.rt must be true when ray queries are available");
+        let opts_comp = PathOptions { spp: 16, spp_per_step: 8, seed: 42, denoise: false, ..Default::default() };
+        let (rgba_comp, _stats_comp) = render_to_rgba_stats(&gpu, &opts_comp);
+        let l1 = mean_luminance(&rgba_rt, 16, 16);
+        let l2 = mean_luminance(&rgba_comp, 16, 16);
+        assert!((l1 - l2).abs() < 2.0, "rt mean {l1} vs compute {l2} (diff {:.3} exceeds 2 levels)", (l1 - l2).abs());
+    }
+
+    #[test]
+    fn rt_kernel_source_replaces_only_the_traversal() {
+        let compute_src = super::super::shaders::kernel_source();
+        let rq_src = super::super::shaders::rq_kernel_source();
+        assert_ne!(compute_src, rq_src, "rq source must differ from compute source");
+        assert!(rq_src.contains("rayQueryInitialize"), "rq source must use rayQueryInitialize");
+        assert!(!compute_src.contains("rayQueryInitialize"), "compute source must not use rayQueryInitialize");
+        // The bsdf + lights + kernel modules must be byte-identical.
+        let marker = "fn bsdf_sample";
+        let c_idx = compute_src.find(marker).expect("fn bsdf_sample not found in compute source");
+        let r_idx = rq_src.find(marker).expect("fn bsdf_sample not found in rq source");
+        assert_eq!(&compute_src[c_idx..], &rq_src[r_idx..], "everything after the BSDF module must be byte-identical between compute and rq sources");
     }
 }
