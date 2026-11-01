@@ -125,10 +125,10 @@ pub(crate) struct RenderArgs {
     #[arg(long, value_name = "N", action = ArgAction::Set)]
     pub(crate) seed: Option<u32>,
     /// Path tracer: keep the noise (no denoiser)
-    #[arg(long, action = ArgAction::Set)]
+    #[arg(long, action = ArgAction::SetTrue)]
     pub(crate) no_denoise: bool,
     /// Path tracer: use hardware ray queries when the device has them
-    #[arg(long, action = ArgAction::Set)]
+    #[arg(long, action = ArgAction::SetTrue)]
     pub(crate) rt: bool,
     /// Night: the sun is off (cannot be combined with --sun)
     #[arg(long)]
