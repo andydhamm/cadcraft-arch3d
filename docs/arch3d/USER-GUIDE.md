@@ -211,17 +211,15 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'roomdetect {}' \
   --cmd 'lightfixture {"room":"r0","rows":2,"cols":2}' \
   --cmd 'lightfixture.types {}' \
-  --cmd 'lightfixture.edit {"id":"lf0","height":2.4}' \
-  --cmd 'illuminance {"point":[1,1,0]}'
+  --cmd 'lightfixture.edit {"id":"lf3","height":2.3}' \
+  --cmd 'illuminance {"point":[1,1,0]}' \
+  --save house.dxf
+cargo run -q -p cadcraft-cli -- render house.dxf night.png --night --final
 ```
 
 The 4 × 4 m room has a 2.4 m ceiling and four default pot lights at (1,1), (1,3), (3,1) and (3,3), so the
 reply to `illuminance {"point":[1,1,0]}` is about 165 lx for direct light from the nearest fixture. This is the
 same control value as the interactive light test and is valid for a 60° cone with 800 lm at 3000 K.
-
-```sh
-cargo run -q -p cadcraft-cli -- render house.dxf night.png --night --final
-```
 
 The `render` command can also be used as a JSON command from the engine or as a file render from the CLI. For a
 night scene the renderer uses the site and the current camera; `sunstudy` requires a saved site and renders one still
