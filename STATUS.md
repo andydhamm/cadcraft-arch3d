@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 10 of 13: Lighting, light fixtures and final renders — 15 of 22 segments merged · 1 of 11 acceptance checks**
+**Phase 10 of 13: Lighting, light fixtures and final renders — 16 of 22 segments merged · 2 of 11 acceptance checks**
 
-6,128 workspace tests passing at the last merge · 602 segments merged in all · 0 of 13 seats working
+6,133 workspace tests passing at the last merge · 603 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -20,28 +20,28 @@ Updated 2026-11-01 01:30 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 1 / 11 | 8.9 h so far · expected done Nov 01 06:32–Nov 01 16:13 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 2 / 11 | 9.2 h so far · expected done Nov 01 06:05–Nov 01 15:06 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-15 merged, 3 merging, 3 gate, 1 queued
+16 merged, 3 merging, 2 gate, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p10-arch3d-fixture-meshes` | Fixture housings in 3D | merging | claude-sonnet-a |
 | `p10-cmd-illuminance` | ILLUMINANCE: direct light at a point | merging | mai-flash |
 | `p10-cli-render-hook` | The CLI's session renderer behind RENDER 3D, SUNSTUDY and MCP | gate | claude-sonnet-a |
 | `p10-cli-render-final` | cadcraft-cli render: --final, --night, --budget and the light report lines | gate | claude-sonnet-b |
-| `p10-ui-pane-lights` | 3D pane: fixture lights, the site's sun or night, Finalize Render with progress, cancel and save | gate | claude-sonnet-d |
+| `p10-ui-pane-lights` | 3D pane: fixture lights, the site's sun or night, Finalize Render with progress, cancel and save | merging | claude-sonnet-d |
 | `upstream-sync-5caaf73e3` | merge upstream upstream/main up to 5caaf73e3 (1 commits) | merging | bonsai-ws2-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 01:39 | `p10-arch3d-fixture-meshes` | merged | 6,133 pass | claude-sonnet-a |
 | Nov 01 01:00 | `p10-r3d-finalize` | merged | 6,128 pass | claude-sonnet-b |
 | Nov 01 00:37 | `p10-arch3d-scene-lights` | merged | 6,123 pass | claude-sonnet-d |
 | Nov 01 00:26 | `p10-cmd-lightfixture` | merged | 6,118 pass | mai-flash |
@@ -53,20 +53,19 @@ Updated 2026-11-01 01:30 UTC. This page and the card in the README are regenerat
 | Oct 31 23:06 | `harden-p10-r3d-shadow-atlas` | merged | 6,090 pass | tturbo-mac |
 | Oct 31 22:44 | `p10-io-light-proxies` | merged | 6,084 pass | bonsai-a |
 | Oct 31 22:17 | `p10-arch-light-placement` | merged | 6,081 pass | kimi-k31 |
-| Oct 31 21:50 | `harden-p9-arch-site` | merged | 6,071 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 749 |
+| bonsai-a | bonsai2-27b | gate | 749 |
 | bonsai-b | bonsai2-27b | idle | 691 |
 | bonsai-ws2-a | bonsai2-27b | idle | 745 |
 | bonsai-ws2-b | bonsai2-27b | gate | 712 |
 | claude-sonnet-a | sonnet | gate | 60 |
 | claude-sonnet-b | sonnet | gate | 58 |
 | claude-sonnet-c | sonnet | idle | 10 |
-| claude-sonnet-d | sonnet | gate | 3 |
+| claude-sonnet-d | sonnet | merging | 4 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 599 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 110 |
 | mai-flash | mai-code-1.1-flash | merging | 33 |
