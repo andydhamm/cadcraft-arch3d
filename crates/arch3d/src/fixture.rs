@@ -109,10 +109,8 @@ pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
                 let l = if f.length > 0.0 { f.length } else { 0.6 };
                 let outer = rect(c, w, l, f.rotation);
                 let inner = rect(c, w - 0.06, l - 0.06, f.rotation);
-                let frame = prism("light-trim", f, &outer, zp - 0.01, zp);
-                // push_prism_with_holes for the frame
                 let mut frame_m = Mesh::new("light-trim", f.id);
-                frame_m.push_prism_with_holes(&outer, &[inner], zp - 0.01, zp);
+                frame_m.push_prism_with_holes(&outer, &[inner.clone()], zp - 0.01, zp);
                 let diffuser = prism(lens, f, &inner, zp - 0.004, zp - 0.002);
                 vec![finish(frame_m), diffuser]
             }
