@@ -782,4 +782,50 @@ mod tests {
         // But extra whitespace around the comma is fine.
         assert_eq!(parse_sun("lat=51.05, date=2026-06-21, time=solar-noon"), Some((Some(51.05), "2026-06-21".to_string(), "solar-noon".to_string())));
     }
+
+    #[test]
+    fn render_final_night_prints_the_light_lines() {
+        // Skip without a GPU adapter
+        if cadcraft_render3d::offscreen::device_within(std::time::Duration::from_secs(5)).is_none() {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        }
+
+        // Create a drawing with two pot lights
+        let mut d = cadcraft_engine::sample::floor_plan();
+        let f1 =
+            cadcraft_engine::doc::arch::LightFixture::new(cadcraft_engine::doc::arch::ArchId(0), "recessed-can", cadcraft_geom::Vec2::new(1.0, 1.0));
+        let f2 =
+            cadcraft_engine::doc::arch::LightFixture::new(cadcraft_engine::doc::arch::ArchId(1), "recessed-can", cadcraft_geom::Vec2::new(3.0, 3.0));
+        d.arch.lights.push(f1);
+        d.arch.lights.push(f2);
+        d.touch_arch();
+
+        // Save to a temp file
+        let tmp = std::env::temp_dir().join("render_final_night_test.dxf");
+        cadcraft_io::dxf::write(&d, tmp.as_path()).expect("write dxf");
+
+        // Render with --night --final using the fallback adapter
+        let args = RenderArgs {
+            file: tmp.clone(),
+            output: tmp.with_extension("png"),
+            camera: None,
+            size: Some((640, 480)),
+            style: Style::Shaded,
+            sun: None,
+            ground: false,
+            final_render: true,
+            night: true,
+            budget: 8,
+            adapter: AdapterChoice::Fallback,
+        };
+
+        let mut streams = Streams::new();
+        render(&args, &mut streams).expect("render");
+
+        // Check the output lines
+        let stderr = streams.stderr();
+        assert!(stderr.contains("FINAL renders=1"), "missing FINAL line: {}", stderr);
+        assert!(stderr.contains("LIGHTS 2"), "missing LIGHTS 2: {}", stderr);
+    }
 }
