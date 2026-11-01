@@ -193,8 +193,7 @@ pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec
             }
 
             // Check distance to room edges.
-            // Simplified check: ensure center distance to any edge > half-diagonal.
-            // This is conservative but robust for rectangular cuts in simple rooms.
+            // Require every room-edge distance from the centre to exceed the half-diagonal.
             let half_diag = (w * w + l * l).sqrt() / 2.0;
             if edges.iter().any(|e| e.dist(c) <= half_diag + 1e-6) {
                 continue;
