@@ -7,9 +7,10 @@
 //! `light_point`, `aim_direction` and `grid_positions` are stubs filled by `p10-arch-light-placement`
 //! (their signatures are final); `plan_symbol` lives in `crate::light_symbol`.
 
-use cadcraft_doc::arch::{ArchModel, FixtureShape, Level, LightFixture, LightKind, LightMount, Room};
+use cadcraft_doc::arch::{ArchModel, FixtureShape, IesProfile, Level, LightFixture, LightKind, LightMount, Room};
 use cadcraft_doc::arch::{
-    DEFAULT_FLOOR_LAMP_HEIGHT, DEFAULT_PENDANT_DROP, DEFAULT_WALL_HEIGHT, MAX_FIXTURE_GRID, MAX_KELVIN, MAX_LUMENS, MAX_SPOT_ANGLE, MIN_KELVIN,
+    DEFAULT_FLOOR_LAMP_HEIGHT, DEFAULT_PENDANT_DROP, DEFAULT_WALL_HEIGHT, MAX_AREA_SIDE, MAX_FIXTURE_GRID, MAX_IES_ANGLES, MAX_IES_VALUES,
+    MAX_KELVIN, MAX_LUMENS, MAX_SPOT_ANGLE, MIN_AREA_SIDE, MIN_KELVIN,
 };
 use cadcraft_geom::{Vec2, Vec3, point_in_polygon};
 
@@ -172,7 +173,11 @@ pub fn intensity_cd(f: &LightFixture) -> f64 {
 /// Check a fixture's values: finite position; lumens in `0..=MAX_LUMENS`; kelvin in
 /// `MIN_KELVIN..=MAX_KELVIN`; a spot's cone in `(0, MAX_SPOT_ANGLE]` and falloff in
 /// `cone..=MAX_SPOT_ANGLE`; tilt in `-90..=90`; rotation finite; a height, when set, finite and in
-/// `0..=100`. The message names the field (`lumens must be 0..=200000, got -5`).
+/// `0..=100`; an area light's `width` then `length` in `MIN_AREA_SIDE..=MAX_AREA_SIDE` (a point or
+/// spot ignores them); an IES profile, when set, has non-empty angle lists of at most
+/// `MAX_IES_ANGLES`, exactly `vertical × horizontal` candela values (at most `MAX_IES_VALUES`),
+/// each finite and >= 0. The message names the field (`lumens must be 0..=200000, got -5`,
+/// `width must be 0.01..=4, got 5`, `ies: candela has 3 values, expected 4`).
 pub fn validate_fixture(f: &LightFixture) -> Result<(), String> {
     if !f.position.is_finite() {
         return Err(format!("position must be finite, got {:?}", f.position));
@@ -208,6 +213,51 @@ pub fn validate_fixture(f: &LightFixture) -> Result<(), String> {
         }
     }
 
+    if f.kind == LightKind::Area {
+        for (name, side) in [("width", f.width), ("length", f.length)] {
+            if !side.is_finite() || side < MIN_AREA_SIDE || side > MAX_AREA_SIDE {
+                return Err(format!("{name} must be {MIN_AREA_SIDE}..={MAX_AREA_SIDE}, got {side}"));
+            }
+        }
+    }
+
+    if let Some(ies) = &f.ies {
+        validate_ies(ies)?;
+    }
+
+    Ok(())
+}
+
+/// The IES table's shape and values (`ies: ...` messages): both angle lists non-empty, finite and
+/// at most `MAX_IES_ANGLES` long; the candela table exactly `vertical × horizontal` long and at
+/// most `MAX_IES_VALUES`; every candela value finite and >= 0.
+fn validate_ies(ies: &IesProfile) -> Result<(), String> {
+    for (name, angles) in [("vertical", &ies.vertical), ("horizontal", &ies.horizontal)] {
+        if angles.is_empty() {
+            return Err(format!("ies: {name} must list at least one angle"));
+        }
+        if angles.len() > MAX_IES_ANGLES {
+            return Err(format!("ies: {name} must list 1..={MAX_IES_ANGLES} angles, got {}", angles.len()));
+        }
+        if let Some(bad) = angles.iter().find(|a| !a.is_finite()) {
+            return Err(format!("ies: {name} angles must be finite, got {bad}"));
+        }
+    }
+    let expected = ies.vertical.len() * ies.horizontal.len();
+    if ies.candela.len() != expected {
+        return Err(format!(
+            "ies: candela must hold {} vertical x {} horizontal = {expected} values, got {}",
+            ies.vertical.len(),
+            ies.horizontal.len(),
+            ies.candela.len()
+        ));
+    }
+    if ies.candela.len() > MAX_IES_VALUES {
+        return Err(format!("ies: candela must hold at most {MAX_IES_VALUES} values, got {}", ies.candela.len()));
+    }
+    if let Some(bad) = ies.candela.iter().find(|c| !c.is_finite() || **c < 0.0) {
+        return Err(format!("ies: candela values must be finite and >= 0, got {bad}"));
+    }
     Ok(())
 }
 
@@ -570,5 +620,131 @@ mod tests {
         assert!(grid_positions(&ring, 1, 0).is_empty());
         assert!(grid_positions(&ring, MAX_FIXTURE_GRID + 1, 1).is_empty());
         assert!(grid_positions(&ring, 1, MAX_FIXTURE_GRID + 1).is_empty());
+    }
+
+    #[test]
+    fn validate_area_sizes_name_the_field() {
+        let t = find_type("LED panel 600").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        assert_eq!((f.width, f.length), (0.6, 0.6));
+        assert!(validate_fixture(&f).is_ok(), "the catalogue panel is valid");
+
+        f.width = 5.0;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("width") && !err.contains("length"), "{err}");
+        assert_eq!(err, "width must be 0.01..=4, got 5");
+
+        // The width is checked first: both bad names the width.
+        f.length = 0.001;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.starts_with("width"), "{err}");
+
+        f.width = 0.6;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("length") && !err.contains("width"), "{err}");
+        assert!(err.contains("0.001"), "{err}");
+
+        f.length = f64::NAN;
+        assert!(validate_fixture(&f).unwrap_err().contains("length"));
+        f.length = 0.0;
+        assert!(validate_fixture(&f).unwrap_err().contains("length"), "an area of zero length is not an area");
+
+        // The limits themselves are accepted.
+        f.width = MIN_AREA_SIDE;
+        f.length = MAX_AREA_SIDE;
+        assert!(validate_fixture(&f).is_ok());
+
+        // A point or spot light ignores its (unused) size.
+        let mut spot = fixture_from_type(ArchId(1), &find_type("Recessed pot light").unwrap(), Vec2::new(1.0, 1.0));
+        spot.width = 99.0;
+        spot.length = -3.0;
+        assert!(validate_fixture(&spot).is_ok());
+    }
+
+    #[test]
+    fn validate_ies_tables() {
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        let good = IesProfile {
+            name: "test".to_string(),
+            vertical: vec![0.0, 90.0, 180.0],
+            horizontal: vec![0.0, 180.0],
+            candela: vec![100.0, 50.0, 0.0, 100.0, 50.0, 0.0],
+            ..IesProfile::default()
+        };
+        f.ies = Some(good.clone());
+        assert!(validate_fixture(&f).is_ok());
+
+        let refused = |mutate: &dyn Fn(&mut IesProfile)| {
+            let mut p = good.clone();
+            mutate(&mut p);
+            let mut g = f.clone();
+            g.ies = Some(p);
+            validate_fixture(&g).unwrap_err()
+        };
+
+        let err = refused(&|p| p.vertical.clear());
+        assert!(err.starts_with("ies:") && err.contains("vertical"), "{err}");
+        let err = refused(&|p| p.horizontal.clear());
+        assert!(err.starts_with("ies:") && err.contains("horizontal"), "{err}");
+        let err = refused(&|p| p.vertical = (0..=MAX_IES_ANGLES).map(|i| i as f64 * 0.1).collect());
+        assert!(err.starts_with("ies:") && err.contains("vertical") && err.contains(&MAX_IES_ANGLES.to_string()), "{err}");
+        let err = refused(&|p| p.horizontal = (0..=MAX_IES_ANGLES).map(|i| i as f64 * 0.3).collect());
+        assert!(err.starts_with("ies:") && err.contains("horizontal"), "{err}");
+        let err = refused(&|p| {
+            p.candela.pop();
+        });
+        assert!(err.starts_with("ies:") && err.contains("candela"), "{err}");
+        let err = refused(&|p| p.candela.push(1.0));
+        assert!(err.starts_with("ies:") && err.contains("candela"), "{err}");
+        let err = refused(&|p| p.candela[2] = -1.0);
+        assert!(err.starts_with("ies:") && err.contains("candela") && err.contains("-1"), "{err}");
+        let err = refused(&|p| p.candela[2] = f64::NAN);
+        assert!(err.starts_with("ies:") && err.contains("candela"), "{err}");
+        let err = refused(&|p| p.candela[0] = f64::INFINITY);
+        assert!(err.starts_with("ies:") && err.contains("candela"), "{err}");
+        let err = refused(&|p| p.vertical[1] = f64::NAN);
+        assert!(err.starts_with("ies:") && err.contains("vertical"), "{err}");
+
+        // Past MAX_IES_VALUES with matching lengths (1024 x 65 = 66560 > 65536).
+        let err = refused(&|p| {
+            p.vertical = (0..MAX_IES_ANGLES).map(|i| i as f64 * 0.17).collect();
+            p.horizontal = (0..65).map(|i| i as f64 * 5.0).collect();
+            p.candela = vec![1.0; MAX_IES_ANGLES * 65];
+        });
+        assert!(err.starts_with("ies:") && err.contains(&MAX_IES_VALUES.to_string()), "{err}");
+
+        // The largest legal table is accepted (1024 x 64 = 65536).
+        let mut p = good.clone();
+        p.vertical = (0..MAX_IES_ANGLES).map(|i| i as f64 * 0.17).collect();
+        p.horizontal = (0..64).map(|i| i as f64 * 5.0).collect();
+        p.candela = vec![1.0; MAX_IES_ANGLES * 64];
+        f.ies = Some(p);
+        assert!(validate_fixture(&f).is_ok());
+    }
+
+    #[test]
+    fn a_panel_takes_the_ceiling_height() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+        model.rooms.push(Room {
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            holes: vec![],
+            ceiling_height: None,
+            ..Room::default()
+        });
+
+        let t = find_type("LED panel 600").unwrap();
+        let f = fixture_from_type(ArchId(0), &t, Vec2::new(2.0, 2.0));
+        assert_eq!((f.shape, f.mount), (FixtureShape::Panel, LightMount::Ceiling));
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 2.4).abs() < 1e-9, "z: {}", p.z);
+        assert_eq!((p.x, p.y), (2.0, 2.0));
+
+        // A room with its own ceiling height moves the panel with it.
+        model.rooms[0].ceiling_height = Some(3.0);
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 3.0).abs() < 1e-9, "z: {}", p.z);
     }
 }
