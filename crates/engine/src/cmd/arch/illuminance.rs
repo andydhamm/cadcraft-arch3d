@@ -83,8 +83,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
             seed: seed as u32,
             denoise: params.get("denoise").and_then(Value::as_bool).unwrap_or(true),
             rt: params.get("rt").and_then(Value::as_bool).unwrap_or(false),
-            furnace: None,
-            snapshots: Vec::new(),
+            ..PathParams::default()
         };
 
         let hooks = render_hooks()
@@ -94,7 +93,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
             .as_ref()
             .ok_or_else(|| bad("illuminance", "path-traced illuminance needs the 3D renderer: run it from cadcraft-cli run or the app"))?;
 
-        let request = IlluminanceRequest { drawing: &doc, probes: vec![[[point.x, point.y, point.z], [normal.x, normal.y, normal.z]]], sun, path };
+        let request = IlluminanceRequest::new(&doc, vec![[[point.x, point.y, point.z], [normal.x, normal.y, normal.z]]], sun, path);
 
         (illuminance_fn)(&request).map_err(|e| bad("illuminance", e))
     } else {

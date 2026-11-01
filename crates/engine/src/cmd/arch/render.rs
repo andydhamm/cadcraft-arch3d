@@ -102,6 +102,13 @@ pub struct IlluminanceRequest<'a> {
     pub path: PathParams,
 }
 
+impl<'a> IlluminanceRequest<'a> {
+    /// Build a request. Each probe is a `(point, normal)` pair.
+    pub fn new(drawing: &'a Drawing, probes: Vec<[[f64; 3]; 2]>, sun: SunChoice, path: PathParams) -> Self {
+        Self { drawing, probes, sun, path }
+    }
+}
+
 impl<'a> RenderRequest<'a> {
     /// Build a request. All fields are supplied so every caller (`render`,
     /// `sunstudy`) can set each aspect. The literal below is in the struct's
