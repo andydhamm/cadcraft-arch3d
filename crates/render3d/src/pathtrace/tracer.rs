@@ -167,7 +167,7 @@ impl PathTracer {
             sky_horizon,
             furnace,
             probe_count: 0,
-            _pad: [0; 3],
+            ..Default::default()
         };
 
         Ok(PathTracer {
@@ -293,7 +293,7 @@ impl PathTracer {
             sum += l as f64;
         }
         let mean = if pixels > 0 { (sum / pixels as f64) as f32 } else { 0.0 };
-        self.stats.radiance = Some(super::RadianceStats { min, max, mean });
+        self.stats.radiance = Some(super::RadianceStats { min, max, mean, ..Default::default() });
 
         // Denoise if requested.
         let final_accum = if self.opts.denoise {
@@ -535,6 +535,7 @@ pub fn irradiance(
             _a: 0.0,
             normal: [normal[0] as f32, normal[1] as f32, normal[2] as f32],
             _b: 0.0,
+            ..Default::default()
         })
         .collect();
 
@@ -581,7 +582,7 @@ pub fn irradiance(
             sky_horizon: [0.0; 4],
             furnace: [0.0; 4],
             probe_count: gpu_probes.len() as u32,
-            _pad: [0; 3],
+            ..Default::default()
         };
         if let Some(sun) = lighting.sun {
             frame.flags |= FRAME_SUN | FRAME_SKY;
@@ -965,11 +966,11 @@ mod tests {
         assert!(PathTracer::new(&gpu, &s, &c, &l, false, size, &opts, None).is_err(), "too many snapshots refused");
 
         // furnace albedo out of range
-        let opts = PathOptions { furnace: Some(super::super::Furnace { albedo: 1.0, emission: 1.0 }), ..Default::default() };
+        let opts = PathOptions { furnace: Some(super::super::Furnace { albedo: 1.0, emission: 1.0, ..Default::default() }), ..Default::default() };
         assert!(PathTracer::new(&gpu, &s, &c, &l, false, size, &opts, None).is_err(), "furnace albedo 1.0 refused");
 
         // furnace emission out of range
-        let opts = PathOptions { furnace: Some(super::super::Furnace { albedo: 0.5, emission: 0.0 }), ..Default::default() };
+        let opts = PathOptions { furnace: Some(super::super::Furnace { albedo: 0.5, emission: 0.0, ..Default::default() }), ..Default::default() };
         assert!(PathTracer::new(&gpu, &s, &c, &l, false, size, &opts, None).is_err(), "furnace emission 0 refused");
 
         // size 0
