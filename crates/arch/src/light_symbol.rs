@@ -37,6 +37,8 @@ pub fn plan_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
             vec![ring]
         }
         FixtureShape::FloorLamp => vec![circle(c, r), circle(c, 0.075)],
+        // Phase 11 stub, filled by `p11-arch-panel`: the panel's rectangle and its diagonals.
+        FixtureShape::Panel => Vec::new(),
     }
 }
 

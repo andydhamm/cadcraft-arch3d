@@ -28,6 +28,9 @@ pub struct FixtureType {
     pub falloff: f64,
     /// Housing diameter (m): the trim ring, the shade, the dome or the sconce's width.
     pub diameter: f64,
+    /// An area light's size (m), `width` along the fixture's rotation; 0 for a point or spot.
+    pub width: f64,
+    pub length: f64,
 }
 
 /// The built-in catalogue, in this order: the recessed pot light (the default), the pendant, the
@@ -44,6 +47,8 @@ pub fn catalogue() -> Vec<FixtureType> {
             cone: 60.0,
             falloff: 60.0,
             diameter: 0.15,
+            width: 0.0,
+            length: 0.0,
         },
         FixtureType {
             name: "Pendant",
@@ -55,6 +60,8 @@ pub fn catalogue() -> Vec<FixtureType> {
             cone: 60.0,
             falloff: 60.0,
             diameter: 0.3,
+            width: 0.0,
+            length: 0.0,
         },
         FixtureType {
             name: "Wall sconce",
@@ -66,6 +73,8 @@ pub fn catalogue() -> Vec<FixtureType> {
             cone: 60.0,
             falloff: 60.0,
             diameter: 0.2,
+            width: 0.0,
+            length: 0.0,
         },
         FixtureType {
             name: "Surface ceiling fixture",
@@ -77,6 +86,8 @@ pub fn catalogue() -> Vec<FixtureType> {
             cone: 60.0,
             falloff: 60.0,
             diameter: 0.35,
+            width: 0.0,
+            length: 0.0,
         },
         FixtureType {
             name: "Floor lamp",
@@ -88,6 +99,21 @@ pub fn catalogue() -> Vec<FixtureType> {
             cone: 60.0,
             falloff: 60.0,
             diameter: 0.4,
+            width: 0.0,
+            length: 0.0,
+        },
+        FixtureType {
+            name: "LED panel 600",
+            shape: FixtureShape::Panel,
+            kind: LightKind::Area,
+            mount: LightMount::Ceiling,
+            lumens: 3600.0,
+            kelvin: 4000.0,
+            cone: 60.0,
+            falloff: 60.0,
+            diameter: 0.6,
+            width: 0.6,
+            length: 0.6,
         },
     ]
 }
@@ -108,6 +134,8 @@ pub fn fixture_from_type(id: cadcraft_doc::arch::ArchId, t: &FixtureType, positi
         kelvin: t.kelvin,
         cone: t.cone,
         falloff: t.falloff,
+        width: t.width,
+        length: t.length,
         ..LightFixture::new(id, t.name, position)
     }
 }
@@ -125,7 +153,8 @@ pub fn cone_solid_angle(apex_deg: f64) -> f64 {
 }
 
 /// Luminous intensity (candela) of a fixture: a point light spreads its lumens over 4π sr, a spot
-/// over its `cone`'s solid angle (the falloff band adds light outside it and is not counted).
+/// over its `cone`'s solid angle (the falloff band adds light outside it and is not counted), an
+/// area light's peak along its aim is lumens / π (it falls off as cos θ).
 /// 800 lm in a 60° cone is 950.36 cd. Zero for an off fixture or a non-finite input.
 pub fn intensity_cd(f: &LightFixture) -> f64 {
     if !f.on || !f.lumens.is_finite() || f.lumens <= 0.0 {
@@ -134,6 +163,8 @@ pub fn intensity_cd(f: &LightFixture) -> f64 {
     let omega = match f.kind {
         LightKind::Point => 4.0 * std::f64::consts::PI,
         LightKind::Spot => cone_solid_angle(f.cone),
+        // A Lambertian face: Φ = π·I₀, so I₀ = Φ/π along the aim (I₀·cos θ off it).
+        LightKind::Area => std::f64::consts::PI,
     };
     if omega.is_finite() && omega > 0.0 { f.lumens / omega } else { 0.0 }
 }
@@ -356,7 +387,7 @@ mod tests {
     fn the_pot_light_is_800_lumens_in_a_60_degree_cone() {
         let t = find_type(" recessed POT light ").unwrap_or_else(|| catalogue().remove(1));
         assert_eq!((t.kind, t.lumens, t.kelvin, t.cone, t.falloff), (LightKind::Spot, 800.0, 3000.0, 60.0, 60.0));
-        assert_eq!(catalogue().len(), 5);
+        assert_eq!(catalogue().len(), 6);
         assert!(find_type("Pendant").is_some() && find_type("Wall sconce").is_some() && find_type("Surface ceiling fixture").is_some());
     }
 

@@ -74,7 +74,7 @@ fn light_valid(light: &cadcraft_arch3d::light::SceneLight) -> bool {
     }
     match light.kind {
         LightKind::Point => true,
-        LightKind::Spot => {
+        LightKind::Spot | LightKind::Area => {
             light.cos_inner.is_finite()
                 && light.cos_outer.is_finite()
                 && (-1.0..=1.0).contains(&light.cos_inner)

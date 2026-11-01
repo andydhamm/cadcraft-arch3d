@@ -131,8 +131,10 @@ pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, Shad
         write_f32(&mut buf, base + 4, l.position.y as f32);
         write_f32(&mut buf, base + 8, l.position.z as f32);
         write_f32(&mut buf, base + 12, far as f32);
+        // An area light is drawn as a spot over its hemisphere (cos 0..1 smoothstepped, close to its
+        // cosine law); the path tracer samples its rectangle.
         let cos_outer = match l.kind {
-            LightKind::Spot => l.cos_outer,
+            LightKind::Spot | LightKind::Area => l.cos_outer,
             LightKind::Point => -2.0,
         };
         write_f32(&mut buf, base + 16, l.direction.x as f32);

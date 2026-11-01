@@ -28,6 +28,7 @@ const SHARED_ROOTS: &[&str] = &[
     "crates/arch3d/src/",
     "crates/render3d/src/",
     "crates/doc/src/arch.rs",
+    "crates/doc/src/arch/light.rs",
     "crates/render/src/arch.rs",
     "crates/io/src/dxf_arch.rs",
     "crates/io/src/glb.rs",

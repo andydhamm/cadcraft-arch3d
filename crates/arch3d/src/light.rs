@@ -28,20 +28,38 @@ pub struct SceneLight {
     /// Linear RGB of the colour temperature, the largest component 1 (`arch::light::kelvin_to_rgb`).
     pub color: [f64; 3],
     /// cos of half the cone (full intensity inside) and of half the falloff (zero outside);
-    /// `-1, -1` for a point light. `cos_inner >= cos_outer`.
+    /// `-1, -1` for a point light; `1, 0` for an area light (the raster view's hemisphere).
+    /// `cos_inner >= cos_outer`.
     pub cos_inner: f64,
     pub cos_outer: f64,
+    /// An area light's `[width, length]` (m); `[0, 0]` for a point or spot light.
+    pub size: [f64; 2],
+    /// Unit direction perpendicular to `direction`: the fixture's rotation, the area's width
+    /// direction and an IES profile's horizontal 0°. `[0,0,0]` when unknown (a default light).
+    pub axis: Vec3,
+    /// The fixture's IES distribution, scaled to the fixture's lumens; it replaces the cone (and
+    /// an area light's cosine law) in [`SceneLight::intensity_toward`].
+    pub ies: Option<std::sync::Arc<cadcraft_doc::arch::IesProfile>>,
 }
 
 impl SceneLight {
     /// Intensity (cd) toward the unit direction `to_point` (from the light to the lit point):
     /// `intensity` inside the cone, 0 outside the falloff, a smoothstep between them; a point
-    /// light is `intensity` everywhere. A direction exactly on the cone edge counts as inside.
+    /// light is `intensity` everywhere; an area light `intensity · cos θ` in front of its face. A
+    /// direction exactly on the cone edge counts as inside. With an IES profile, the profile's
+    /// candela at that direction ([`ies_toward`]).
     pub fn intensity_toward(&self, to_point: Vec3) -> f64 {
+        if let Some(profile) = &self.ies {
+            return ies_toward(self, profile, to_point);
+        }
         if self.kind == LightKind::Point {
             return self.intensity;
         }
         let c = to_point.dot(self.direction);
+        if self.kind == LightKind::Area {
+            // Lambertian: I₀·cos θ in front of the face, nothing behind it.
+            return if c.is_finite() && c > 0.0 { self.intensity * c } else { 0.0 };
+        }
         if !c.is_finite() || c < self.cos_outer - 1e-12 {
             return 0.0;
         }
@@ -51,6 +69,16 @@ impl SceneLight {
         let t = ((c - self.cos_outer) / (self.cos_inner - self.cos_outer)).clamp(0.0, 1.0);
         self.intensity * t * t * (3.0 - 2.0 * t)
     }
+}
+
+/// Candela of `light`'s IES `profile` toward the unit direction `to_point`: the vertical angle is
+/// the angle between `to_point` and the aim (`direction`, 0° = along it), the horizontal angle is
+/// measured counter-clockwise (seen against the aim) from `axis` in the plane perpendicular to the
+/// aim; `cadcraft_arch::ies::candela_at` interpolates. 0 for a non-finite direction. Stub filled by
+/// `p11-arch3d-ies-area`.
+pub fn ies_toward(light: &SceneLight, profile: &cadcraft_doc::arch::IesProfile, to_point: Vec3) -> f64 {
+    let _ = (light, profile, to_point);
+    0.0
 }
 
 /// Whether a mesh material belongs to a light fixture housing (`light-trim`, `light-lens`, …).
@@ -75,13 +103,43 @@ pub fn scene_lights(model: &ArchModel) -> Vec<SceneLight> {
         let (cos_inner, cos_outer) = match f.kind {
             LightKind::Point => (-1.0, -1.0),
             LightKind::Spot => ((f.cone.to_radians() * 0.5).cos(), (f.falloff.to_radians() * 0.5).cos()),
+            LightKind::Area => (1.0, 0.0),
         };
         if !cos_inner.is_finite() || !cos_outer.is_finite() {
             continue;
         }
-        out.push(SceneLight { id: f.id, kind: f.kind, position, direction: aim.normalized(), intensity, color, cos_inner, cos_outer });
+        let direction = aim.normalized();
+        let size = if f.kind == LightKind::Area { [f.width, f.length] } else { [0.0, 0.0] };
+        out.push(SceneLight {
+            id: f.id,
+            kind: f.kind,
+            position,
+            direction,
+            intensity,
+            color,
+            cos_inner,
+            cos_outer,
+            size,
+            axis: light_axis(direction, f.rotation),
+            // Phase 11: `p11-arch3d-ies-area` attaches the fixture's profile, scaled to its lumens.
+            ies: None,
+        });
     }
     out
+}
+
+/// The unit direction of `rotation_deg` (counter-clockwise from +X in plan) made perpendicular to
+/// the unit `aim`; when the two are parallel, +X (or +Y) made perpendicular instead.
+pub fn light_axis(aim: Vec3, rotation_deg: f64) -> Vec3 {
+    let r = rotation_deg.to_radians();
+    for guess in [Vec3::new(r.cos(), r.sin(), 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)] {
+        let v = guess - aim * guess.dot(aim);
+        let n = v.len();
+        if n.is_finite() && n > 1e-6 {
+            return v * (1.0 / n);
+        }
+    }
+    Vec3::new(0.0, 0.0, 0.0)
 }
 
 /// The housings of every fixture (in `crate::fixture`, filled by `p10-arch3d-fixture-meshes`).

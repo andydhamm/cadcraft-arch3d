@@ -9,6 +9,7 @@ fn kind_name(kind: LightKind) -> &'static str {
     match kind {
         LightKind::Point => "point",
         LightKind::Spot => "spot",
+        LightKind::Area => "area",
     }
 }
 
@@ -72,23 +73,7 @@ mod tests {
             room_type: RoomType::Living,
             ..Room::default()
         });
-        model.lights.push(LightFixture {
-            id: ArchId(0),
-            fixture: "Recessed pot light".into(),
-            shape: cadcraft_doc::arch::FixtureShape::RecessedCan,
-            kind: LightKind::Spot,
-            mount: cadcraft_doc::arch::LightMount::Ceiling,
-            level: 0,
-            position: Vec2::new(1.0, 1.0),
-            height: None,
-            rotation: 0.0,
-            tilt: 90.0,
-            lumens: 800.0,
-            kelvin: 3000.0,
-            cone: 60.0,
-            falloff: 60.0,
-            on: true,
-        });
+        model.lights.push(LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(1.0, 1.0)) });
         let mut out = Map::new();
         inspect_lights(&model, &json!({"lights": true}), &mut out);
         let lights = out["lights"].as_array().unwrap();

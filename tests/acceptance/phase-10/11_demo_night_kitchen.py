@@ -43,7 +43,7 @@ final = os.path.join(tmp, 'night-kitchen.png')
 orbit = [cmd('render', {"size": [200, 150], "camera": CAM(200 + k), "sun": False}) for k in range(31)]
 rc, rr, so, se = run([cmd('lightfixture', {"room": kid, "rows": 2, "cols": 2}), 'arch.inspect {"lights":true}',
                       cmd('illuminance', {"point": under})] + orbit + [
-                      cmd('render', {"out": final, "size": [480, 360], "camera": INSIDE, "sun": False, "final": True,
+                      cmd('render', {"out": final, "size": [480, 360], "camera": INSIDE, "sun": False, "final": "raster",
                                      "samples": [under, mid]})], file=dxf, save=os.path.join(tmp, 'kitchen-lit.dxf'))
 ls = lights_of(rr)
 at = sorted((round(num(l['at'][0], 'x'), 6), round(num(l['at'][1], 'y'), 6)) for l in ls)

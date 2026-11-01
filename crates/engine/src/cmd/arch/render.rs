@@ -53,6 +53,53 @@ pub struct RenderRequest<'a> {
     pub budget: usize,
     /// World points whose pixel and colour the reply reports (at most 64).
     pub samples: Vec<[f64; 3]>,
+    /// Which Finalize Render `final_render` runs (phase 11).
+    pub final_mode: FinalMode,
+    /// The path tracer's settings (phase 11; used when `final_mode` is `Path`).
+    pub path: PathParams,
+}
+
+/// Which Finalize Render a request runs (phase 11): the phase-10 shadow-mapped still, or the path
+/// tracer. `RenderRequest::new` takes `Raster` until `p11-final-default-path` makes `Path` the
+/// default; a device without compute shaders always gets `Raster`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FinalMode {
+    #[default]
+    Raster,
+    Path,
+}
+
+/// The path tracer's settings in a request (phase 11): samples per pixel (1..=65536, default
+/// 256), full bounces before Russian roulette (0..=32, default 4; 0 = direct light only), the
+/// seed (default 0), the denoiser (default on), hardware ray queries (default off), the furnace
+/// test `(albedo, emission)` and the sample counts to keep images at (`snapshots`, at most 8,
+/// ascending, each <= spp).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PathParams {
+    pub spp: u32,
+    pub bounces: u32,
+    pub seed: u32,
+    pub denoise: bool,
+    pub rt: bool,
+    pub furnace: Option<(f64, f64)>,
+    pub snapshots: Vec<u32>,
+}
+
+impl Default for PathParams {
+    fn default() -> Self {
+        PathParams { spp: 256, bounces: 4, seed: 0, denoise: true, rt: false, furnace: None, snapshots: Vec::new() }
+    }
+}
+
+/// One path-traced `illuminance` (phase 11): irradiance at each `(point, unit normal)` of the
+/// drawing's 3D scene, with `path`'s spp, bounces and seed.
+#[derive(Clone, Debug)]
+pub struct IlluminanceRequest<'a> {
+    pub drawing: &'a Drawing,
+    pub probes: Vec<[[f64; 3]; 2]>,
+    /// Night (`SunChoice::Off`), the default light, or a sun direction.
+    pub sun: SunChoice,
+    pub path: PathParams,
 }
 
 impl<'a> RenderRequest<'a> {
@@ -71,7 +118,27 @@ impl<'a> RenderRequest<'a> {
         budget: usize,
         samples: Vec<[f64; 3]>,
     ) -> Self {
-        Self { drawing, camera, size, out, final_render, sun, style, ground, budget, samples }
+        Self {
+            drawing,
+            camera,
+            size,
+            out,
+            final_render,
+            sun,
+            style,
+            ground,
+            budget,
+            samples,
+            final_mode: FinalMode::default(),
+            path: PathParams::default(),
+        }
+    }
+
+    /// The same request with a Finalize mode and path-tracer settings (phase 11).
+    pub fn with_final(mut self, final_mode: FinalMode, path: PathParams) -> Self {
+        self.final_mode = final_mode;
+        self.path = path;
+        self
     }
 }
 
@@ -80,6 +147,8 @@ impl<'a> RenderRequest<'a> {
 pub struct RenderStats {
     pub shadow_maps_built: u64,
     pub final_renders: u64,
+    /// Path-traced stills started (phase 11): a camera move never starts one.
+    pub path_traces: u64,
 }
 
 /// The app's renderer: `render` returns the reply JSON of one still (see `p10-cli-render-hook`
@@ -87,12 +156,21 @@ pub struct RenderStats {
 pub struct RenderHooks {
     pub render: fn(&RenderRequest) -> Result<Value, String>,
     pub stats: fn() -> RenderStats,
+    /// Path-traced illuminance (phase 11): the reply JSON (`p11-cli-render-path`) or an error;
+    /// `None` = `illuminance {"method":"path"}` is refused.
+    pub illuminance: Option<fn(&IlluminanceRequest) -> Result<Value, String>>,
 }
 
 impl RenderHooks {
     /// The renderer's two entry points.
     pub fn new(render: fn(&RenderRequest) -> Result<Value, String>, stats: fn() -> RenderStats) -> Self {
-        Self { render, stats }
+        Self { render, stats, illuminance: None }
+    }
+
+    /// The same hooks with a path-traced illuminance (phase 11).
+    pub fn with_illuminance(mut self, f: fn(&IlluminanceRequest) -> Result<Value, String>) -> Self {
+        self.illuminance = Some(f);
+        self
     }
 }
 
@@ -158,6 +236,18 @@ fn parse_samples(v: Option<&Value>) -> Result<Vec<[f64; 3]>, EngineError> {
             Ok(out)
         }
         _ => Err(bad("render", "`samples` must be an array of [x,y,z] points")),
+    }
+}
+
+/// `final`: absent or false = the interactive view; true = the default Finalize
+/// ([`FinalMode::default`]); "raster" or "path" = that Finalize.
+fn parse_final(v: Option<&Value>) -> Result<(bool, FinalMode), EngineError> {
+    match v {
+        None | Some(Value::Bool(false)) => Ok((false, FinalMode::default())),
+        Some(Value::Bool(true)) => Ok((true, FinalMode::default())),
+        Some(Value::String(s)) if s == "raster" => Ok((true, FinalMode::Raster)),
+        Some(Value::String(s)) if s == "path" => Ok((true, FinalMode::Path)),
+        _ => Err(bad("render", "`final` must be true, false, \"raster\" or \"path\"")),
     }
 }
 
@@ -254,7 +344,7 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
 
     let size = parse_size(params.get("size"))?;
     let camera = camera_from_params(params.get("camera"), doc)?;
-    let final_render = params.get("final").and_then(Value::as_bool).unwrap_or(false);
+    let (final_render, final_mode) = parse_final(params.get("final"))?;
     let sun = parse_sun(params.get("sun"), doc)?;
     let style = parse_style(params.get("style"))?;
     let ground = params.get("ground").and_then(Value::as_bool).unwrap_or(false);
@@ -262,7 +352,9 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let samples = parse_samples(params.get("samples"))?;
     let out = params.get("out").and_then(Value::as_str).map(PathBuf::from);
 
-    let request = RenderRequest { drawing: &doc, camera, size, out, final_render, sun, style, ground, budget, samples };
+    // Phase 11: the path tracer's settings are parsed by `p11-cmd-render-path` (defaults until then).
+    let request =
+        RenderRequest::new(&doc, camera, size, out, final_render, sun, style, ground, budget, samples).with_final(final_mode, PathParams::default());
 
     (hooks.render)(&request).map_err(|e| bad("render", e))
 }
@@ -272,7 +364,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("render", "Render 3D", run_render)
             .menu(&["Architecture", "Render 3D"])
-            .params("{out?: path, size?: [w,h], camera?, final?: bool, sun?: false | {date, time} | \"default\", style?, ground?: bool, budget?, samples?: [[x,y,z], ...]}")
+            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?, ground?: bool, budget?, samples?: [[x,y,z], ...]}")
             .noundo(),
     ]
 }
@@ -288,6 +380,16 @@ mod tests {
         let r = s.execute("render", &json!({}));
         let e = r.unwrap_err().to_string();
         assert!(e.contains("render needs the 3D renderer"), "{e}");
+    }
+
+    #[test]
+    fn final_takes_a_bool_or_a_mode() {
+        assert_eq!(parse_final(None).ok(), Some((false, FinalMode::default())));
+        assert_eq!(parse_final(Some(&json!(true))).ok(), Some((true, FinalMode::default())));
+        assert_eq!(parse_final(Some(&json!("raster"))).ok(), Some((true, FinalMode::Raster)));
+        assert_eq!(parse_final(Some(&json!("path"))).ok(), Some((true, FinalMode::Path)));
+        let e = parse_final(Some(&json!("foo"))).map_err(|e| e.to_string()).err().unwrap_or_default();
+        assert!(e.contains("`final` must be"), "{e}");
     }
 
     #[test]
