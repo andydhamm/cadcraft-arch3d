@@ -55,7 +55,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
         .lights
         .iter()
         .map(|light| {
-            let lux = illumination.per_light.get(&light.id).copied().unwrap_or(0.0);
+            let lux = illumination.per_light.iter().find(|(id, _)| *id == light.id).map(|(_, v)| *v).unwrap_or(0.0);
             json!({
                 "id": light_label(light.id),
                 "lux": lux,
