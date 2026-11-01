@@ -178,6 +178,9 @@ pub fn luminance(rgb: [f32; 3]) -> f32 {
 mod lights_tests;
 
 #[cfg(test)]
+mod kernel_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
