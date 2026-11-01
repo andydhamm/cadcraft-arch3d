@@ -177,11 +177,11 @@ pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec
             cut.push((c, r));
             out.push(poly(c, r));
         } else if f.shape == FixtureShape::Panel {
-            let w = if f.width > 0.0 { f.width } else { 0.6 };
-            let l = if f.length > 0.0 { f.length } else { 0.6 };
-            if !w.is_finite() || !l.is_finite() || w <= 0.0 || l <= 0.0 {
+            if !f.width.is_finite() || !f.length.is_finite() {
                 continue;
             }
+            let w = if f.width > 0.0 { f.width } else { 0.6 };
+            let l = if f.length > 0.0 { f.length } else { 0.6 };
 
             let outer = rect(c, w, l, f.rotation);
             // Check if all corners are inside the room polygon and not in any hole
