@@ -1,9 +1,149 @@
-//! `illuminance`: direct light from the fixtures at a point, with shadows (phase 10). Filled in
-//! by `p10-cmd-illuminance`.
+//! `illuminance`: direct light from the fixtures at a point, with shadows (phase 10).
 
-use crate::cmd::CommandSpec;
+use cadcraft_doc::arch::{ArchId, light_label};
+use cadcraft_geom::Vec3;
+use serde_json::{Value, json};
 
-/// Command specs (filled in by `p10-cmd-illuminance`).
+use crate::cmd::{CommandSpec, bad};
+use crate::{Result, Session};
+
+fn parse_xyz_array(value: &Value, key: &str, _required: bool, cmd: &str) -> Result<Vec3> {
+    let raw = match value.get(key) {
+        Some(v) if !v.is_null() => v,
+        None if required => {
+            return Err(bad(cmd, format!("{key} must be [x, y, z] finite numbers")));
+        }
+        _ => {
+            return Err(bad(cmd, format!("{key} must be [x, y, z] finite numbers")));
+        }
+    };
+
+    let arr = raw.as_array().ok_or_else(|| bad(cmd, format!("{key} must be [x, y, z] finite numbers")))?;
+    if arr.len() != 3 {
+        return Err(bad(cmd, format!("{key} must be [x, y, z] finite numbers")));
+    }
+
+    let mut xyz = [0.0_f64; 3];
+    for (i, item) in arr.iter().enumerate() {
+        let value = item.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("{key} must be [x, y, z] finite numbers")))?;
+        xyz[i] = value;
+    }
+    Ok(Vec3::new(xyz[0], xyz[1], xyz[2]))
+}
+
+fn run(session: &mut Session, params: &Value) -> Result<Value> {
+    let doc = session.doc()?;
+    let point = parse_xyz_array(params, "point", true, "illuminance")?;
+    let normal = match params.get("normal") {
+        Some(v) if !v.is_null() => {
+            let v = parse_xyz_array(params, "normal", true, "illuminance")?;
+            let len = v.len();
+            if len <= 0.0 || !len.is_finite() {
+                return Err(bad("illuminance", "normal must be [x, y, z] finite numbers with non-zero length"));
+            }
+            v
+        }
+        _ => Vec3::new(0.0, 0.0, 1.0),
+    };
+    if !normal.is_finite() || normal.len() <= 0.0 {
+        return Err(bad("illuminance", "normal must be [x, y, z] finite numbers with non-zero length"));
+    }
+
+    let scene = cadcraft_arch3d::build(&doc.arch);
+    let illumination = cadcraft_arch3d::light::illuminance(&scene, point, normal);
+    let contributions = illumination
+        .per_light
+        .into_iter()
+        .map(|(id, lux)| {
+            json!({
+                "id": light_label(id),
+                "lux": lux,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "lux": illumination.lux,
+        "lights": scene.lights.len(),
+        "direct": true,
+        "contributions": contributions,
+    }))
+}
+
+/// Command specs for direct illuminance at a point.
 pub fn specs() -> Vec<CommandSpec> {
-    Vec::new()
+    vec![
+        CommandSpec::new("illuminance", "Illuminance", run)
+            .menu(&["Architecture", "Illuminance"])
+            .params("{point: [x,y,z], normal?: [x,y,z]}")
+            .noundo(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{ArchId, ArchModel, Level, LightFixture};
+    use cadcraft_geom::Vec2;
+    use serde_json::json;
+
+    fn room_model() -> ArchModel {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+
+        let corners = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (x1, y1) = corners[k];
+            let (x2, y2) = corners[(k + 1) % 4];
+            let mut wall = cadcraft_doc::Wall::new(Vec2::new(x1, y1), Vec2::new(x2, y2), 0.2);
+            wall.height = 2.4;
+            model.push_wall(wall);
+        }
+
+        for (k, x, y) in [(0, 1.0, 1.0), (1, 1.0, 3.0), (2, 3.0, 1.0), (3, 3.0, 3.0)] {
+            model.lights.push(LightFixture::new(ArchId(k as u32), "Recessed pot light", Vec2::new(x, y)));
+        }
+        model.next_light_id = 4;
+        model
+    }
+
+    fn fresh_session() -> Session {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        let d = s.doc_mut().unwrap();
+        d.arch = room_model();
+        d.touch_arch();
+        s
+    }
+
+    #[test]
+    fn illuminance_reports_lux_per_light() {
+        let mut s = fresh_session();
+        let result = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0]})).unwrap();
+        let lux = result["lux"].as_f64().unwrap();
+        assert!((lux - 165.0).abs() < 1.65, "lux={lux}");
+        let contribs = result["contributions"].as_array().unwrap();
+        assert_eq!(contribs.len(), 4);
+        let ids: Vec<_> = contribs.iter().filter_map(|v| v.get("id").and_then(Value::as_str)).collect();
+        assert_eq!(ids, vec!["lf0", "lf1", "lf2", "lf3"]);
+        assert!(contribs.iter().all(|v| v.get("lux").and_then(Value::as_f64).is_some()));
+    }
+
+    #[test]
+    fn illuminance_refuses_a_bad_point() {
+        let mut s = fresh_session();
+        assert!(s.execute("illuminance", &json!({})).is_err());
+        assert!(s.execute("illuminance", &json!({"point": [1.0, 1.0, f64::NAN]})).is_err());
+        assert!(s.execute("illuminance", &json!({"point": [1.0, 1.0]})).is_err());
+    }
+
+    #[test]
+    fn illuminance_without_lights_is_zero() {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        let result = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0]})).unwrap();
+        assert_eq!(result["lux"].as_f64(), Some(0.0));
+        assert_eq!(result["lights"].as_u64(), Some(0));
+        assert!(result["contributions"].as_array().unwrap().is_empty());
+    }
 }
