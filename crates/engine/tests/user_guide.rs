@@ -634,6 +634,42 @@ fn user_guide_render_flags_documented() {
     assert!(content.contains("--final"), "the guide should document the --final flag");
 }
 
+/// The path-traced Finalize block in the user guide runs through the engine; its illuminance reply is positive.
+#[test]
+fn user_guide_path_tracing_block_runs() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found_path_block = false;
+
+    for lines in &blocks {
+        let Some(line) = lines.iter().find(|line| line.contains("LED panel") && line.contains("illuminance")) else {
+            continue;
+        };
+        found_path_block = true;
+        let cmds = cmd_args(line);
+        assert!(!cmds.is_empty(), "path-tracing block should contain one or more --cmd lines");
+
+        let mut session = Session::new();
+        session.new_drawing(true);
+        let mut result = None;
+        for command in &cmds {
+            let Some((id, json)) = command.split_once(' ') else {
+                panic!("invalid command format: {command}");
+            };
+            let params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+            let reply = session.execute(id, &params).unwrap_or_else(|error| panic!("path-tracing command `{command}` failed: {error:?}"));
+            result = Some(reply);
+        }
+
+        let lux = result
+            .and_then(|reply| reply.get("lux").and_then(serde_json::Value::as_f64))
+            .unwrap_or_else(|| panic!("path-tracing block should return a lux value from illuminance: {line}"));
+        assert!(lux > 0.0, "path-tracing block illuminance should be positive, got {lux}");
+        return;
+    }
+
+    assert!(found_path_block, "user guide should contain a path-tracing example block");
+}
+
 /// The guide documents the key phase 7 commands with their parameters.
 #[test]
 fn user_guide_documents_phase7_parameters() {

@@ -238,7 +238,82 @@ penumbra, tone-maps the scene and stays cached until the camera or the scene cha
 beyond the pane's live lighting: the sun, the fixtures and the shadow atlas are all still in the interactive view,
 but the Finalize Render is a one-off, high-quality still.
 
+## Path-traced Finalize
+
+When a compute device is available, the Finalize Render switches to a path-traced solver that models real light
+transport by Monte Carlo sampling. Each pixel traces many rays (samples per pixel, `spp`) and bounces up to a
+maximum depth (`bounces`), with Russian roulette terminating chains. This gives natural **bounced light** (indirect
+illumination from surfaces), a physically based **sun and sky** (100 000 lx sun, 2 500–5 000 nits sky), **glass**
+(smooth dielectric, IOR 1.5, exact Fresnel), **glossy and mirror materials** (GGX metallic-roughness; a mirror
+below a roughness of 0.02), **area lights** (a Lambertian emitting rectangle, peak lumens/π cd), and **IES files**
+(photometric candela curves over vertical and horizontal angles, scaled to the fixture's lumens). A guided
+a-trous **denoiser** (5 passes, guided by first-hit albedo and normal) cleans the result.
+
+The raster path stays as a fallback: when compute shaders are absent (WebGL2, or `CADCRAFT_RENDER_LIMITS=webgl2`)
+Finalize runs the raster pipeline and reports `"final":"raster"`.
+
+### Render parameters
+
+The `render` command (CLI flags or the engine JSON) accepts these Finalize parameters:
+
+| Parameter   | Default       | Description                                                                 |
+|-------------|---------------|-----------------------------------------------------------------------------|
+| `final`     | `path`        | `path` (path-traced) or `raster` (raster pipeline)                          |
+| `spp`       | 256           | samples per pixel (max 65536)                                               |
+| `bounces`   | 4             | maximum light-bounce depth (max 32)                                         |
+| `seed`      | 0             | Monte Carlo seed — same seed gives the same image on the same adapter        |
+| `denoise`   | true          | enable the guided a-trous denoiser                                          |
+| `rt`        | false         | use hardware ray queries when available (software fallback always works)    |
+| `snapshots` | —             | list of sample counts at which to save an intermediate frame (max 8)        |
+
+The reply keys are `final`, `spp`, `bounces`, `seed`, `denoised`, `rt`, `pipeline_cache`, `radiance`,
+`path_traces`, and `snapshots`.
+
+### Pipeline cache
+
+Compiled shaders are cached per adapter and driver under `CADCRAFT_PIPELINE_CACHE_DIR` (default: the XDG cache
+directory). Re-rendering the same scene on the same adapter does not recompile.
+
+### Area lights and IES files
+
+The catalogue includes an **LED panel 600** (a 0.6 × 0.6 m Lambertian area light, 3600 lm, 4000 K) placed on the
+ceiling. Place it in a room with `lightfixture {"room":"r0","rows":1,"cols":1,"type":"LED panel 600"}`.
+An IES photometric file (vertical and horizontal candela curves, lumens) describes a fixture's angular distribution;
+attach one with `lightfixture.edit {"id":"lf0","ies":"file.ies"}`.
+
+### Path-traced illuminance
+
+`illuminance {"point":[x,y,z],"method":"path"}` returns the path-traced illuminance in lux at a point, computed
+with the same units and physics as the direct method but including bounced light. The direct method
+(`"method":"direct"`, the default) uses shadow rays only.
+
+### CLI flags
+
+```
+cargo run -q -p cadcraft-cli -- render IN.dxf OUT.png --final path --spp 1024 --bounces 8 --seed 42 --no-denoise --rt
+cargo run -q -p cadcraft-cli -- render IN.dxf OUT.png --final raster
+```
+
+The path-traced commands and render calls below need a compute device (GPU or a software compute adapter). They are
+shown in a `text` block for reference and are not executed by the engine tests.
+
+```text
+render house.dxf path.png --final path --spp 1024 --bounces 8 --seed 42 --no-denoise --rt
+render house.dxf raster.png --final raster --spp 256 --bounces 4
+illuminance {"point":[2,2,0],"method":"path"}
+```
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[-0.1,-0.1],[4.1,-0.1],[4.1,4.1],[-0.1,4.1],[-0.1,-0.1]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'lightfixture {"room":"r0","rows":2,"cols":1}' \
+  --cmd 'lightfixture {"room":"r0","rows":1,"cols":1,"type":"LED panel 600"}' \
+  --cmd 'illuminance {"point":[2,2,0]}' \
+  --save path-demo.dxf
+```
+
 ## Out of scope
 
-Not part of arch3d so far: SSAO, TAA, cascaded shadows, path tracing, bounced light, IES files (phase 11),
-animated walkthrough paths, and gamepad or 3D-mouse input.
+Not part of arch3d so far: SSAO, TAA, cascaded shadows, switches, outlets, circuits, animated walkthrough paths,
+and gamepad or 3D-mouse input.
