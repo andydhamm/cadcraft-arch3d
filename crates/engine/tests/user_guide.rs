@@ -307,6 +307,41 @@ fn user_guide_archdetect_block_runs() {
     assert!(found_archdetect, "user guide should contain an archdetect example");
 }
 
+#[test]
+fn user_guide_lighting_block_runs() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found_light_block = false;
+
+    for lines in &blocks {
+        let Some(line) = lines.iter().find(|line| line.contains("lightfixture") && line.contains("illuminance")) else {
+            continue;
+        };
+        found_light_block = true;
+        let cmds = cmd_args(line);
+        assert!(!cmds.is_empty(), "lighting block should contain one or more --cmd lines");
+
+        let mut session = Session::new();
+        session.new_drawing(true);
+        let mut result = None;
+        for command in &cmds {
+            let Some((id, json)) = command.split_once(' ') else {
+                panic!("invalid command format: {command}");
+            };
+            let params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+            let reply = session.execute(id, &params).unwrap_or_else(|error| panic!("lighting command `{command}` failed: {error:?}"));
+            result = Some(reply);
+        }
+
+        let lux = result
+            .and_then(|reply| reply.get("lux").and_then(serde_json::Value::as_f64))
+            .unwrap_or_else(|| panic!("lighting block should return a lux value from illuminance: {line}"));
+        assert!((lux - 165.0).abs() <= 2.0, "lighting block illuminance should be ~165 lx, got {lux}");
+        return;
+    }
+
+    assert!(found_light_block, "user guide should contain a lighting example block");
+}
+
 /// The guide is titled for arch3d (not "Phase 6"), puts 51.05 N in Calgary (London is 51.5 N) and uses the real
 /// CLI syntax, not an invented `--command ... --params` form.
 #[test]

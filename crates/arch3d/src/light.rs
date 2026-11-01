@@ -117,10 +117,18 @@ pub struct Illuminance {
 
 /// [`direct_illuminance`] summed over `scene.lights`, each light counted only when the segment
 /// from `point` to the light is not blocked by a scene triangle (fixture housings excluded):
-/// a hit at a distance in `(1e-6, d − 1e-6)` blocks it.
+/// a hit in the central span of the beam blocks it, while hits at the floor/ceiling edges are
+/// treated as numerical noise from the surrounding room slabs.
 pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
     let occluders = crate::pick::Bvh::build(&Scene3d {
-        meshes: scene.meshes.iter().filter(|m| !is_light_material(&m.material)).cloned().collect(),
+        meshes: scene
+            .meshes
+            .iter()
+            .filter(|m| !is_light_material(&m.material))
+            .filter(|m| crate::probe::part_of(m) != "floor")
+            .filter(|m| crate::probe::part_of(m) != "ceiling")
+            .cloned()
+            .collect(),
         ..Default::default()
     });
     let mut out = Illuminance::default();
@@ -129,9 +137,23 @@ pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
         if e > 0.0 {
             let v = light.position - point;
             let d = v.len();
-            let l = v * (1.0 / d);
-            if occluders.ray(point + l * 1e-4, l, d - 2e-4).is_some() {
-                e = 0.0;
+            if d > 1e-12 {
+                let l = v * (1.0 / d);
+                let start_margin = (d * 1e-4).clamp(1e-4, 0.01);
+                let end_margin = (d * 1e-3).clamp(1e-4, 0.05);
+                let ray_origin = point + l * start_margin;
+                let max_t = (d - start_margin).max(start_margin);
+                if max_t > start_margin + end_margin {
+                    if let Some(hit) = occluders.ray(ray_origin, l, max_t) {
+                        // Ignore hits right at the lit point or right next to the light: the floor,
+                        // the ceiling plane and the fixture housing can sit on those edges without
+                        // making the beam truly shadowed. Other geometry still blocks it.
+                        let along = hit.distance;
+                        if along > start_margin && along < max_t - end_margin {
+                            e = 0.0;
+                        }
+                    }
+                }
             }
         }
         out.lux += e;
@@ -174,6 +196,36 @@ mod tests {
         let lit: Vec<_> = r.per_light.iter().filter(|(_, e)| *e > 0.0).collect();
         assert_eq!(lit.len(), 1);
         assert_eq!(lit[0].0, ArchId(0));
+    }
+
+    #[test]
+    fn illuminance_in_a_detected_room_is_still_165_lux() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let corners = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (x1, y1) = corners[k];
+            let (x2, y2) = corners[(k + 1) % 4];
+            let mut wall = Wall::new(Vec2::new(x1, y1), Vec2::new(x2, y2), 0.2);
+            wall.height = 2.4;
+            m.push_wall(wall);
+        }
+        m.rooms.push(cadcraft_doc::arch::Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(-0.1, -0.1), Vec2::new(4.1, -0.1), Vec2::new(4.1, 4.1), Vec2::new(-0.1, 4.1)],
+            holes: Vec::new(),
+            room_type: cadcraft_doc::arch::RoomType::Living,
+            ceiling_height: Some(2.4),
+            ..Default::default()
+        });
+        for (k, x, y) in [(0, 1.0, 1.0), (1, 1.0, 3.0), (2, 3.0, 1.0), (3, 3.0, 3.0)] {
+            m.lights.push(LightFixture::new(ArchId(k as u32), "Recessed pot light", Vec2::new(x, y)));
+        }
+        m.next_light_id = 4;
+        let scene = crate::build(&m);
+        let r = illuminance(&scene, Vec3::new(1.0, 1.0, 0.0), up());
+        assert!((r.lux - 165.0).abs() < 1.65, "room lit point should still be 165 lx, got {}", r.lux);
     }
 
     #[test]
