@@ -79,8 +79,8 @@ fn trace(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
 }
 
 // What reaches o + t_max·d from o: 0 behind an opaque triangle, the glass tint
-// (albedo · transmission) through each glass triangle, 1 when clear. MAT_NO_SHADOW triangles
-// (fixture housings) are skipped. Continues the ray query from the new origin after each hit.
+// (albedo · transmission) and Fresnel transmittance at both faces, once per pane (on entering it),
+// 1 when clear. MAT_NO_SHADOW triangles (fixture housings) are skipped.
 fn visibility(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> vec3<f32> {
     if (scene_is_empty()) {
         return vec3<f32>(1.0);
@@ -89,6 +89,7 @@ fn visibility(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> vec3<f32> {
     var total = 0.0;
     var origin = o;
     var hits = 0u;
+    var glass_hits = 0u;
     while (total < t_max && hits < 16u) {
         let hit = trace(origin, d, t_max - total);
         if (hit.t < 0.0) {
@@ -97,8 +98,17 @@ fn visibility(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> vec3<f32> {
         let tri = tris[hit.tri];
         if ((tri.flags & MAT_NO_SHADOW) == 0u) {
             if ((tri.flags & MAT_GLASS) != 0u) {
-                let material = materials[tri.material];
-                transmittance = transmittance * (material.albedo * material.transmission);
+                glass_hits = glass_hits + 1u;
+                if (glass_hits % 2u == 1u) {
+                    let material = materials[tri.material];
+                    let tint = material.albedo * material.transmission;
+                    let ior = material.ior;
+                    let f0 = ((ior - 1.0) / (ior + 1.0)) * ((ior - 1.0) / (ior + 1.0));
+                    let cos_i = abs(dot(d, tri.n));
+                    let f = f0 + (1.0 - f0) * pow(1.0 - cos_i, 5.0);
+                    let fresnel = (1.0 - f) * (1.0 - f);
+                    transmittance = transmittance * tint * fresnel;
+                }
             } else {
                 return vec3<f32>(0.0);
             }
