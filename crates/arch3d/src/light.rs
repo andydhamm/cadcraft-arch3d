@@ -90,8 +90,8 @@ pub fn ies_toward(light: &SceneLight, profile: &cadcraft_doc::arch::IesProfile, 
             light.axis.z * light.direction.x - light.axis.x * light.direction.z,
             light.axis.x * light.direction.y - light.axis.y * light.direction.x,
         );
-        let p = q.dot(&cross);
-        let x = q.dot(&light.axis);
+        let p = q.dot(cross);
+        let x = q.dot(light.axis);
         let rad = p.atan2(x);
         let deg = rad * (180.0 / std::f64::consts::PI);
         if deg >= 0.0 { deg } else { deg + 360.0 }
