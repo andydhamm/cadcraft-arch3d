@@ -1,38 +1,3 @@
-// p11-r3d-rt — ray-query traversal. Identical trace()/visibility() entry points to
-// traverse.wgsl, but they resolve hits against an acceleration structure (group 1, binding 0)
-// with rayQueryInitialize / rayQueryNextHit instead of walking the triangle array by hand.
-// The kernel module (kernel.wgsl) is unchanged; only this module is swapped in.
-enable wgpu_ray_query;
-
-var acc: acceleration_structure @group(1) @binding(0);
-
-struct Ray {
-  origin: vec3<f32>,
-  direction: vec3<f32>,
-  near: f32,
-  far: f32,
-  payload: vec3<f32>,
-}
-
-// Returns the nearest committed triangle along the ray, or `vec3<f32>(1e30)` if none.
-// The committed hit gives: distance t, the triangle index (primitive index) and barycentrics.
-fn rq_nearest(ray: Ray) -> vec4<f32> {
-  var hit = rayQueryInitialize(ray);
-  var out = vec4<f32>(vec3<f32>(1e30), 0.0);
-  while (hit) {
-    let tri = rayQueryNextHit(ray);
-    let dist = tri.payload[0];
-    if (dist >= 0.001 && dist < out[0]) {
-      out = vec4<f32>(dist, tri.payload[1], tri.payload[2], tri.payload[3]);
-    }
-    hit = rayQueryInitialize(ray);
-  }
-  return out;
-}
-
-fn trace(ray: Ray) -> vec4<f32> {
-  return rq_nearest(ray);
-}
 // p11-r3d-rt — ray-query traversal. A drop-in replacement for traverse.wgsl: the same
 // trace()/visibility() entry points and the same hit structure, but hits are resolved
 // against an acceleration structure (group 1, binding 0) via rayQueryInitialize /
@@ -55,13 +20,6 @@ struct Ray {
     near: f32,
     far: f32,
     payload: vec3<f32>,
-}
-
-struct RqHit {
-    t: f32,
-    tri: u32,
-    u: f32,
-    v: f32,
 }
 
 fn scene_is_empty() -> bool {
@@ -96,21 +54,20 @@ fn rq_nearest(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
         far: t_max,
         payload: vec3<f32>(0.0),
     };
+    var best = vec4<f32>(vec3<f32>(1e30), 0.0);
     var hit = rayQueryInitialize(ray);
-    var done = false;
-    while (!done) {
-        if (hit) {
-            let t = hit.payload[0];
-            if (t > PT_EPS && t < t_max) {
-                h.t = t;
-                h.tri = u32(hit.payload[1]);
-                h.u = hit.payload[2];
-                h.v = hit.payload[3];
-                done = true;
-            } else {
-            // no further hits; rayQueryNextHit stops returning valid hits
+    while (hit) {
+        let dist = hit.payload[0];
+        if (dist >= PT_EPS && dist < t_max && dist < best[0]) {
+            best = vec4<f32>(dist, hit.payload[1], hit.payload[2], hit.payload[3]);
         }
-        done = true;
+        hit = rayQueryNextHit(ray);
+    }
+    if (best[0] < 1e30) {
+        h.t = best[0];
+        h.tri = u32(best[1]);
+        h.u = best[2];
+        h.v = best[3];
     }
     return h;
 }
