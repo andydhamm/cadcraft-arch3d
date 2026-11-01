@@ -9,7 +9,6 @@
 //! brightness-relative noise. Pixels with no hit (the sky) are copied and never contribute.
 
 use super::device::ComputeGpu;
-use super::shaders::DENOISE_WGSL;
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
@@ -60,8 +59,10 @@ fn build_pipeline(gpu: &ComputeGpu) -> Result<AtrousPipeline, String> {
         label: Some("pt denoise"),
         entries: &[layout_entry(0, wgpu::BufferBindingType::Uniform), layout_entry(1, read), layout_entry(2, read), layout_entry(3, write)],
     });
-    let module =
-        d.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("pt denoise"), source: wgpu::ShaderSource::Wgsl(DENOISE_WGSL.into()) });
+    let module = d.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("pt denoise"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/pt/denoise.wgsl").to_string()),
+    });
     let pipeline_layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pt denoise"),
         bind_group_layouts: &[Some(&layout)],
