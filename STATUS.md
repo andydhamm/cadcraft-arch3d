@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-01 23:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 11 of 13: Ray-traced Finalize Render — 28 of 28 segments merged · 13 of 13 acceptance checks**
+**Phase 12 of 13: Exports and interoperability**
 
 6,550 workspace tests passing at the last merge · 658 segments merged in all · 0 of 13 seats working
 
@@ -21,13 +21,13 @@ Updated 2026-11-01 23:00 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 13 / 13 | 15.3 h so far · expected done Nov 01 23:00–Nov 02 07:36 UTC |
-| 12 | Exports and interoperability | planned | — | — |
+| 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
+| 12 | Exports and interoperability | planning | — | 0.0 h so far · expected done Nov 02 01:17–Nov 09 10:36 UTC |
 | 13 | Polish | planned | — | — |
 
-## Phase 11 segments
+## Phase 12 segments
 
-28 merged
+none yet
 
 
 ## Recent merges
@@ -62,5 +62,5 @@ Updated 2026-11-01 23:00 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 645 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 45 |
-| tturbo-mac | tturbo-ultraheretic | gate | 550 |
+| tturbo-mac | tturbo-ultraheretic | agent | 552 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
