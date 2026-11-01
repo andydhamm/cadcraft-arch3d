@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn render_hook_empty_scene_renders() {
         let _g = reset();
-        let d = Drawing::new_metric();
+        let mut d = Drawing::new_metric();
         d.touch_arch();
         let Some(v) = render(&request(&d, None, None, false)) else { return };
         assert_eq!(v["ok"], true, "{v}");
