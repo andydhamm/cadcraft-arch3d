@@ -3,7 +3,7 @@
 use super::device::ComputeGpu;
 use super::scene_gpu::GpuScene;
 
-use wgpu::api::blas::{AccelerationStructure, AccelerationStructureBounds, AccelerationStructureDescriptor, IndexType};
+use wgpu::{AccelerationStructure, AccelerationStructureBounds, AccelerationStructureDescriptor, IndexType};
 
 /// A BLAS of every triangle plus a single-instance TLAS over it.
 pub struct RqBuild {
@@ -31,9 +31,9 @@ impl RqBuild {
         let n = scene.tris.len();
         let mut positions: Vec<f32> = Vec::with_capacity(n * 9);
         for tri in &scene.tris {
-            let tri_bytes: [u8; 64] = bytemuck::cast(tri);
-            let verts: [f32; 9] = bytemuck::cast(&tri_bytes[0..36]);
-            for v in &verts {
+            let tri_bytes: [u8; 64] = bytemuck::cast(*tri);
+            let verts = bytemuck::cast_slice(&tri_bytes[0..36]);
+            for v in verts {
                 if !v.is_finite() {
                     return None;
                 }

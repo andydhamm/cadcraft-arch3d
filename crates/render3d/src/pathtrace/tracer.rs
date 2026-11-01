@@ -823,7 +823,7 @@ pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &
 
 #[cfg(test)]
 mod tests {
-    use super::luminance;
+    use super::super::*;
     use super::*;
     use crate::camera::{Camera, Orbit};
     use crate::lit_frame::Lighting;
@@ -1087,8 +1087,8 @@ mod tests {
 
     #[test]
     fn rt_kernel_source_replaces_only_the_traversal() {
-        let compute_src = super::shaders::kernel_source();
-        let rq_src = super::shaders::rq_kernel_source();
+        let compute_src = super::super::shaders::kernel_source();
+        let rq_src = super::super::shaders::rq_kernel_source();
         assert_ne!(compute_src, rq_src, "rq source must differ from compute source");
         assert!(rq_src.contains("rayQueryInitialize"), "rq source must use rayQueryInitialize");
         assert!(!compute_src.contains("rayQueryInitialize"), "compute source must not use rayQueryInitialize");
