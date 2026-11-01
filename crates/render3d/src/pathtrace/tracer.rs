@@ -5,12 +5,9 @@
 //! same kernel.
 
 use super::device::ComputeGpu;
-use super::scene_gpu::{GpuFrame, GpuProbe, GpuScene, build_gpu_scene};
+use super::scene_gpu::{FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene};
 use super::shaders::PtPipelines;
-use super::{
-    DAY_EXPOSURE, FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, MAX_GPU_TRIANGLES, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS,
-    SUN_LUX,
-};
+use super::{DAY_EXPOSURE, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX};
 use super::{PathOptions, PathStats, PathStatus};
 use crate::camera::Camera;
 use crate::lit_frame::Lighting;
