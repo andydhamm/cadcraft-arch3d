@@ -557,4 +557,60 @@ mod tests {
         check(json!({"furnace": {"albedo": -0.1, "emission": 1.0}}), "albedo");
         check(json!({"furnace": {"albedo": 0.5, "emission": 0.0}}), "emission");
     }
+
+    #[test]
+    fn parse_path_params_empty_snapshots_accepted() {
+        let p = parse_path_params(&json!({"snapshots": []})).unwrap();
+        assert_eq!(p.snapshots, Vec::<u32>::new());
+    }
+
+    #[test]
+    fn parse_path_params_furnace_missing_albedo_refused() {
+        let err = parse_path_params(&json!({"furnace": {"emission": 1.0}})).unwrap_err().to_string();
+        assert!(err.contains("albedo"), "{err}");
+    }
+
+    #[test]
+    fn parse_path_params_furnace_missing_emission_refused() {
+        let err = parse_path_params(&json!({"furnace": {"albedo": 0.5}})).unwrap_err().to_string();
+        assert!(err.contains("emission"), "{err}");
+    }
+
+    #[test]
+    fn parse_sun_default_string_accepted() {
+        let doc = cadcraft_doc::Drawing::new_metric();
+        let sun: serde_json::Value = json!("default");
+        assert!(matches!(parse_sun(Some(&sun), &doc), Ok(SunChoice::Default)));
+    }
+
+    #[test]
+    fn parse_sun_refuses_invalid_values() {
+        let doc = cadcraft_doc::Drawing::new_metric();
+        let true_val: serde_json::Value = json!(true);
+        assert!(parse_sun(Some(&true_val), &doc).is_err());
+        let num: serde_json::Value = json!(42);
+        assert!(parse_sun(Some(&num), &doc).is_err());
+        let arr: serde_json::Value = json!([]);
+        assert!(parse_sun(Some(&arr), &doc).is_err());
+        let unknown: serde_json::Value = json!("off");
+        let err = parse_sun(Some(&unknown), &doc).unwrap_err().to_string();
+        assert!(err.contains("unknown sun value"), "{err}");
+    }
+
+    #[test]
+    fn parse_samples_refuses_non_number() {
+        let not_a_number: serde_json::Value = json!([["nan", 0.0, 0.0]]);
+        let err = parse_samples(Some(&not_a_number)).unwrap_err().to_string();
+        assert!(err.contains("finite"), "{err}");
+    }
+
+    #[test]
+    fn parse_samples_refuses_wrong_element_count() {
+        let two: serde_json::Value = json!([[0.0, 0.0]]);
+        let err = parse_samples(Some(&two)).unwrap_err().to_string();
+        assert!(err.contains("must be [x,y,z]"), "{err}");
+        let four: serde_json::Value = json!([[0.0, 0.0, 0.0, 0.0]]);
+        let err = parse_samples(Some(&four)).unwrap_err().to_string();
+        assert!(err.contains("must be [x,y,z]"), "{err}");
+    }
 }
