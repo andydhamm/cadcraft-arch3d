@@ -265,6 +265,12 @@ fn polyface_faces(d: &Drawing) -> Vec<Face3d> {
     }
 }
 
+/// Old name of the test below, kept: polyface/mesh polylines become faces, not bogus vertices.
+#[test]
+fn polyface_and_polygon_mesh_polylines_become_faces_not_bogus_vertices() {
+    polyface_and_polygon_mesh_polylines_read_as_meshes_and_faces_not_bogus_vertices();
+}
+
 #[test]
 fn polyface_and_polygon_mesh_polylines_read_as_meshes_and_faces_not_bogus_vertices() {
     let p = |x: f64, y: f64, z: f64| Vec3::new(x, y, z);

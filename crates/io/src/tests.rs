@@ -727,6 +727,48 @@ fn viewport_frozen_layers_read_from_331_or_341_once_each() {
 }
 
 #[test]
+fn viewport_frozen_layers_written_as_341_handles() {
+    // An R2000 DXF holds the frozen layers in group 341.
+    let (d, _) = frozen_vp_dxf();
+    let p = pairs(&write_dxf(&d));
+    let rec = &p[vp_record(&p, "2")];
+    let h341: Vec<&str> = rec.iter().filter(|(c, _)| c == "341").map(|(_, v)| v.as_str()).collect();
+    assert_eq!(h341, [layer_handle(&p, "Walls").as_str(), layer_handle(&p, "A B").as_str()]);
+}
+
+#[test]
+fn viewport_frozen_layers_read_from_341_without_xdata() {
+    let (_, p) = frozen_vp_dxf();
+    let r = vp_record(&p, "2");
+    // 331 becomes 341, plus a 341 to a handle that names no layer.
+    let mut q = p.clone();
+    for t in &mut q[r.clone()] {
+        if t.0 == "331" {
+            t.0 = "341".into();
+        }
+    }
+    q.splice(r.end..r.end, [("341".into(), "FFFFF".into())]);
+    let back = read_dxf(join(&q).as_bytes()).unwrap();
+    assert_eq!(viewport_frozen(&back, 2), ["Walls", "A B"]);
+}
+
+#[test]
+fn viewport_frozen_xdata_wins_over_341() {
+    // Handles are now authoritative: pointing every one at layer 0 is read as exactly that.
+    let (_, p) = frozen_vp_dxf();
+    let r = vp_record(&p, "2");
+    let zero = layer_handle(&p, "0");
+    let mut q = p.clone();
+    for t in &mut q[r] {
+        if t.0 == "331" || t.0 == "341" {
+            t.1 = zero.clone();
+        }
+    }
+    let back = read_dxf(join(&q).as_bytes()).unwrap();
+    assert_eq!(viewport_frozen(&back, 2), ["0"]);
+}
+
+#[test]
 fn viewport_freeze_edited_in_autocad_is_read_as_edited() {
     // Every layer thawed in AutoCAD (no 331 left) stays thawed; a layer it froze instead is read.
     let (_, p) = frozen_vp_dxf();
