@@ -670,7 +670,7 @@ mod tests {
             vertical: vec![0.0, 90.0, 180.0],
             horizontal: vec![0.0, 180.0],
             candela: vec![100.0, 50.0, 0.0, 100.0, 50.0, 0.0],
-            lumens: 800.0,
+            ..IesProfile::default()
         };
         f.ies = Some(good.clone());
         assert!(validate_fixture(&f).is_ok());
