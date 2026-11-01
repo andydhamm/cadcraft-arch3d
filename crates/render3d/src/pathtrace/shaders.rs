@@ -138,7 +138,7 @@ pub fn build_rq_pipelines(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>)
     let acc_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("pt rq acc"), entries: &[acc_layout_entry()] });
     let rq_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pt rq"),
-        bind_group_layouts: &[Some(kernel_layout), Some(&acc_layout)],
+        bind_group_layouts: &[Some(&kernel_layout), Some(&acc_layout)],
         immediate_size: 0,
     });
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {

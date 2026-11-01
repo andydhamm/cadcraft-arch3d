@@ -4,117 +4,91 @@ use super::device::ComputeGpu;
 use super::scene_gpu::GpuScene;
 
 use wgpu::util::DeviceExt;
-use wgpu::{AccelerationStructure, AccelerationStructureBounds, AccelerationStructureDescriptor, AccelerationStructureFlags, IndexType};
 
 /// A BLAS of every triangle plus a single-instance TLAS over it.
 pub struct RqBuild {
     /// The TLAS (with one instance into the BLAS) that the rq pipelines bind.
-    pub tlas: AccelerationStructure,
-    /// The BLAS (needed only to keep the TLAS's parent alive for the render's lifetime).
-    pub blas: AccelerationStructure,
-    /// The vertex buffer holding the triangle vertices (owned by the TLAS build; kept alive).
+    pub tlas: wgpu::Tlas,
+    /// The BLAS the TLAS instance points at (kept alive for the render's lifetime).
+    pub blas: wgpu::Blas,
+    /// The vertex buffer holding the triangle vertices (kept alive).
     pub vertex_buffer: wgpu::Buffer,
-    /// The index buffer holding the triangle indices (owned by the TLAS build; kept alive).
-    pub index_buffer: wgpu::Buffer,
 }
 
 impl RqBuild {
-    /// Build a BLAS of every triangle in `scene` and a TLAS with one instance. Returns `None` when
-    /// the scene has no triangles (nothing to accelerate) or the device cannot create the
-    /// acceleration structure.
+    /// Build a BLAS of every triangle in `scene` (primitive index = triangle index) and a TLAS with
+    /// one instance. Returns `None` when the scene has no triangles or a vertex is not finite.
     pub fn build(gpu: &ComputeGpu, scene: &GpuScene) -> Option<RqBuild> {
         if scene.tris.is_empty() {
             return None;
         }
         let d = &gpu.device;
 
-        // Extract the three vertices from each triangle (first 36 bytes of each 64-byte GpuTri).
-        let n = scene.tris.len();
-        let mut positions: Vec<f32> = Vec::with_capacity(n * 9);
+        // Three vertices per triangle (v0, v0 + e1, v0 + e2), unindexed.
+        let mut positions: Vec<f32> = Vec::with_capacity(scene.tris.len().checked_mul(9)?);
         for tri in &scene.tris {
-            let tri_bytes: [u8; 64] = bytemuck::cast(*tri);
-            let verts: &[f32] = bytemuck::cast_slice(&tri_bytes[0..36]);
-            for v in verts {
-                if !v.is_finite() {
-                    return None;
-                }
-                positions.push(*v);
-            }
-        }
-
-        // Triangle indices: 0,1,2 per triangle.
-        let indices: Vec<u32> = (0..n as u32).flat_map(|i| [i * 3, i * 3 + 1, i * 3 + 2]).collect();
-
-        // Compute the scene AABB from the vertices.
-        let mut min_x = f32::INFINITY;
-        let mut min_y = f32::INFINITY;
-        let mut min_z = f32::INFINITY;
-        let mut max_x = f32::NEG_INFINITY;
-        let mut max_y = f32::NEG_INFINITY;
-        let mut max_z = f32::NEG_INFINITY;
-        for i in (0..positions.len()).step_by(3) {
-            for axis in 0..3 {
-                let v = positions[i + axis];
-                match axis {
-                    0 => {
-                        min_x = min_x.min(v);
-                        max_x = max_x.max(v);
+            for k in 0..3 {
+                for a in 0..3 {
+                    let v = match k {
+                        0 => tri.v0[a],
+                        1 => tri.v0[a] + tri.e1[a],
+                        _ => tri.v0[a] + tri.e2[a],
+                    };
+                    if !v.is_finite() {
+                        return None;
                     }
-                    1 => {
-                        min_y = min_y.min(v);
-                        max_y = max_y.max(v);
-                    }
-                    _ => {
-                        min_z = min_z.min(v);
-                        max_z = max_z.max(v);
-                    }
+                    positions.push(v);
                 }
             }
         }
-        if !min_x.is_finite() || !max_x.is_finite() || !min_y.is_finite() || !max_y.is_finite() || !min_z.is_finite() || !max_z.is_finite() {
-            return None;
-        }
+        let vertex_count = u32::try_from(scene.tris.len().checked_mul(3)?).ok()?;
 
         let vertex_buffer = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("pt rq verts"),
             contents: bytemuck::cast_slice(&positions),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let index_buffer = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("pt rq indices"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::BLAS_INPUT | wgpu::BufferUsages::STORAGE,
         });
 
-        let blas = match d.create_blas(&AccelerationStructureDescriptor {
-            buffer: vertex_buffer.clone(),
-            index: Some(index_buffer.clone()),
-            index_type: IndexType::U32,
-            base_instance: 0,
-            instance_count: 1,
-            max_triangle_count: n as u32,
-            bounds: AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
-            flags: AccelerationStructureFlags::NONE,
-        }) {
-            Some(b) => b,
-            None => return None,
+        let size = wgpu::BlasTriangleGeometrySizeDescriptor {
+            vertex_format: wgpu::VertexFormat::Float32x3,
+            vertex_count,
+            index_format: None,
+            index_count: None,
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };
+        let blas = d.create_blas(
+            &wgpu::CreateBlasDescriptor {
+                label: Some("pt rq blas"),
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            },
+            wgpu::BlasGeometrySizeDescriptors::Triangles { descriptors: vec![size.clone()] },
+        );
+        let mut tlas = d.create_tlas(&wgpu::CreateTlasDescriptor {
+            label: Some("pt rq tlas"),
+            max_instances: 1,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        });
+        *tlas.get_mut_single(0)? = Some(wgpu::TlasInstance::new(&blas, [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0], 0, 0xff));
 
-        let tlas = match d.create_tlas(&AccelerationStructureDescriptor {
-            blas: blas.clone(),
-            buffer: None,
-            index: None,
-            index_type: IndexType::U32,
-            base_instance: 0,
-            instance_count: 1,
-            max_triangle_count: n as u32,
-            bounds: AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
-            flags: AccelerationStructureFlags::NONE,
-        }) {
-            Some(t) => t,
-            None => return None,
+        let entry = wgpu::BlasBuildEntry {
+            blas: &blas,
+            geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
+                size: &size,
+                vertex_buffer: &vertex_buffer,
+                first_vertex: 0,
+                vertex_stride: 12,
+                index_buffer: None,
+                first_index: None,
+                transform_buffer: None,
+                transform_buffer_offset: None,
+            }]),
         };
+        let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt rq build") });
+        enc.build_acceleration_structures([&entry], [&tlas]);
+        gpu.queue.submit([enc.finish()]);
 
-        Some(RqBuild { tlas, blas, vertex_buffer, index_buffer })
+        Some(RqBuild { tlas, blas, vertex_buffer })
     }
 }

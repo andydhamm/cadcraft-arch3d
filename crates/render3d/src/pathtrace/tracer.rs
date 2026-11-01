@@ -241,7 +241,7 @@ impl PathTracer {
                 layout: &rq.kernel_bind_group_layout,
                 entries: kernel_entries,
             });
-            let acc_entries = &[wgpu::BindGroupEntry { binding: 0, resource: build.tlas.as_entire_binding() }];
+            let acc_entries = &[wgpu::BindGroupEntry { binding: 0, resource: build.tlas.as_binding() }];
             let bind1 =
                 d.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("pt rq acc"), layout: &rq.acc_bind_group_layout, entries: acc_entries });
             let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt rq trace") });
