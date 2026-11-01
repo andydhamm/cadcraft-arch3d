@@ -823,6 +823,7 @@ pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &
 
 #[cfg(test)]
 mod tests {
+    use super::luminance;
     use super::*;
     use crate::camera::{Camera, Orbit};
     use crate::lit_frame::Lighting;

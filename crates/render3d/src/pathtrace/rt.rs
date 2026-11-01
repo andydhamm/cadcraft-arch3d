@@ -3,12 +3,14 @@
 use super::device::ComputeGpu;
 use super::scene_gpu::GpuScene;
 
+use wgpu::api::blas::{AccelerationStructure, AccelerationStructureBounds, AccelerationStructureDescriptor, IndexType};
+
 /// A BLAS of every triangle plus a single-instance TLAS over it.
 pub struct RqBuild {
     /// The TLAS (with one instance into the BLAS) that the rq pipelines bind.
-    pub tlas: wgpu::AccelerationStructure,
+    pub tlas: AccelerationStructure,
     /// The BLAS (needed only to keep the TLAS's parent alive for the render's lifetime).
-    pub blas: wgpu::AccelerationStructure,
+    pub blas: AccelerationStructure,
     /// The vertex buffer holding the triangle vertices (owned by the TLAS build; kept alive).
     pub vertex_buffer: wgpu::Buffer,
     /// The index buffer holding the triangle indices (owned by the TLAS build; kept alive).
@@ -83,29 +85,29 @@ impl RqBuild {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let blas = match d.create_acceleration_structure(&wgpu::AccelerationStructureDescriptor {
+        let blas = match d.create_acceleration_structure(&AccelerationStructureDescriptor {
             buffer: vertex_buffer.clone(),
             index: Some(index_buffer.clone()),
-            index_type: wgpu::IndexType::U32,
+            index_type: IndexType::U32,
             base_instance: 0,
             instance_count: 1,
             max_triangle_count: n as u32,
-            bounds: wgpu::AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
+            bounds: AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
             flags: 0,
         }) {
             Some(b) => b,
             None => return None,
         };
 
-        let tlas = match d.create_tlase(&wgpu::AccelerationStructureDescriptor {
+        let tlas = match d.create_tlase(&AccelerationStructureDescriptor {
             blas: blas.clone(),
             buffer: wgpu::Buffer::none(),
             index: None,
-            index_type: wgpu::IndexType::U32,
+            index_type: IndexType::U32,
             base_instance: 0,
             instance_count: 1,
             max_triangle_count: n as u32,
-            bounds: wgpu::AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
+            bounds: AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
             flags: 0,
         }) {
             Some(t) => t,
