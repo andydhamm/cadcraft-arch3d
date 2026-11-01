@@ -37,6 +37,13 @@ pub struct PathTracer {
 }
 
 impl PathTracer {
+    pub(crate) fn variance_of_mean(px: [f32; 4], sum_sq: f32) -> f32 {
+        let n = px[3].max(1.0);
+        let m = super::luminance([px[0] / n, px[1] / n, px[2] / n]);
+        let variance = sum_sq / n - m * m;
+        if !variance.is_finite() || variance <= 0.0 { 0.0 } else { variance / n }
+    }
+
     /// Start a still of `scene` from `camera` at `size` pixels, lit by `lighting` (its sun, or
     /// night) and the scene's lights. `Err` when the size is outside 1..=the device's largest
     /// buffer, the options are out of range, the scene has more than `MAX_GPU_TRIANGLES`, or the
@@ -60,7 +67,7 @@ impl PathTracer {
             return Err(format!("size {w}x{h} exceeds max_texture_dimension_2d {max_dim}"));
         }
         let pixels = u64::from(w) * u64::from(h);
-        let accum_bytes = pixels * 16;
+        let accum_bytes = pixels * 32;
         let max_binding = u64::from(gpu.device.limits().max_storage_buffer_binding_size);
         if accum_bytes > max_binding {
             return Err(format!("accum buffer {accum_bytes} bytes exceeds max_storage_buffer_binding_size {max_binding}"));
@@ -314,10 +321,11 @@ impl PathTracer {
     fn finish(&mut self, gpu: &ComputeGpu) -> PathStatus {
         let (w, h) = self.size;
         let pixels = (w * h) as usize;
-        let accum_bytes = (pixels * 16) as u64;
+        let accum_bytes = (pixels * 32) as u64;
         let aov_bytes = (pixels * 32) as u64;
 
-        // Read back accum.
+        // Read back the full accumulator: the first half keeps the radiance sum, and the second
+        // stores the luminance-squared sum used to estimate the per-pixel variance of the mean.
         let accum_data = match self.read_buffer(gpu, &self.accum, accum_bytes) {
             Ok(d) => d,
             Err(e) => {
@@ -326,6 +334,7 @@ impl PathTracer {
             }
         };
         let accum: Vec<[f32; 4]> = bytemuck::cast_slice(&accum_data).to_vec();
+        let colors_accum = &accum[..pixels];
         // Each pixel holds its radiance summed over its samples, with the sample count in w.
         let mean_of = |p: &[f32; 4]| {
             let n = p[3].max(1.0);
@@ -336,7 +345,7 @@ impl PathTracer {
         let mut min = f32::INFINITY;
         let mut max = f32::NEG_INFINITY;
         let mut sum = 0.0f64;
-        for px in &accum {
+        for px in colors_accum {
             let l = super::luminance(mean_of(px));
             min = min.min(l);
             max = max.max(l);
@@ -355,12 +364,13 @@ impl PathTracer {
                 }
             };
             let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
-            // The denoiser takes the per-sample mean and returns w = 1, which resolve divides by.
-            let colors: Vec<[f32; 4]> = accum
+            let colors: Vec<[f32; 4]> = colors_accum
                 .iter()
-                .map(|p| {
+                .enumerate()
+                .map(|(i, p)| {
                     let [r, g, b] = mean_of(p);
-                    [r, g, b, 1.0]
+                    let variance = Self::variance_of_mean(*p, accum[pixels + i][0]);
+                    [r, g, b, variance]
                 })
                 .collect();
             match super::denoise::denoise(gpu, &colors, &aov, self.size) {
@@ -371,10 +381,10 @@ impl PathTracer {
                 }
             }
         } else {
-            accum
+            colors_accum.to_vec()
         };
 
-        // Write denoised result back into accum so resolve reads it.
+        // Write denoised result back into the first half of accum so resolve reads it.
         let d = &gpu.device;
         let src = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("pt denoised"),
@@ -382,7 +392,7 @@ impl PathTracer {
             usage: wgpu::BufferUsages::COPY_SRC,
         });
         let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt write denoised") });
-        enc.copy_buffer_to_buffer(&src, 0, &self.accum, 0, accum_bytes);
+        enc.copy_buffer_to_buffer(&src, 0, &self.accum, 0, (pixels * 16) as u64);
         gpu.queue.submit([enc.finish()]);
 
         self.stats.denoised = self.opts.denoise;
@@ -780,14 +790,15 @@ pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &
     let probe_buf = storage(d, "pt probes", probes);
     let read = d.create_buffer(&wgpu::BufferDescriptor {
         label: Some("pt read"),
-        size: (n * 16) as u64,
+        size: (n * 32) as u64,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    // Buffers start zeroed.
+    // Buffers start zeroed. The trace kernel appends the luminance-squared moment to a second
+    // per-pixel block, so the accumulator covers both the colour sum and the variance guide.
     let accum_src = d.create_buffer(&wgpu::BufferDescriptor {
         label: Some("pt accum"),
-        size: (n * 16) as u64,
+        size: (n * 32) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
@@ -813,7 +824,7 @@ pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &
         pass.set_bind_group(0, &bind, &[]);
         pass.dispatch_workgroups((n as u32).div_ceil(64), 1, 1);
     }
-    enc.copy_buffer_to_buffer(&accum_src, 0, &read, 0, (n * 16) as u64);
+    enc.copy_buffer_to_buffer(&accum_src, 0, &read, 0, (n * 32) as u64);
     gpu.queue.submit([enc.finish()]);
     if let Some(e) = futures::executor::block_on(scope.pop()) {
         return Err(e.to_string());
@@ -864,6 +875,17 @@ mod tests {
             eprintln!("SKIP: no compute device");
         }
         gpu
+    }
+
+    #[test]
+    fn variance_of_mean_of_four_samples() {
+        assert!(
+            (PathTracer::variance_of_mean([1.0, 1.0, 1.0, 4.0], 1.0) - 0.046875).abs() <= 1e-6,
+            "{:?}",
+            PathTracer::variance_of_mean([1.0, 1.0, 1.0, 4.0], 1.0)
+        );
+        assert!(PathTracer::variance_of_mean([2.0, 2.0, 2.0, 4.0], 1.0).abs() <= 1e-6, "constant pixel is variance 0");
+        assert!(PathTracer::variance_of_mean([0.0, 0.0, 0.0, 0.0], 1.0).is_finite(), "w = 0 is treated as one sample");
     }
 
     #[test]

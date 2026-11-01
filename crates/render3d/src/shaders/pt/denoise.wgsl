@@ -1,9 +1,9 @@
-// Path tracer: one à-trous pass of the edge-aware denoiser.
+// Path tracer: one à-trous pass of the variance-guided denoiser.
 // Pass k reads `src`, writes `dst` with a 5×5 B3-spline kernel at stride `step` (1, 2, 4, 8, 16),
-// each tap weighted by its colour, normal and albedo distance to the centre (sigma_c, sigma_n,
-// sigma_a); the guides come from the path tracer's AOVs (guide[2i] albedo, guide[2i + 1] normal).
-// A pixel whose albedo guide has w = 1 is a hit; taps without a hit are skipped and a pixel
-// without a hit is copied.
+// each tap weighted by its luminance distance in the two pixels' combined variance, its normal and
+// albedo distance to the centre (sigma_c, sigma_n, sigma_a); the guides come from the path
+// tracer's AOVs (guide[2i] albedo, guide[2i + 1] normal). A pixel whose albedo guide has w = 1 is
+// a hit; taps without a hit are skipped and a pixel without a hit is copied.
 
 struct DenoiseParams { size: vec2<u32>, step: u32, _pad: u32, sigma_c: f32, sigma_n: f32, sigma_a: f32, _pad2: f32 };
 
@@ -45,10 +45,9 @@ fn atrous_main(@builtin(global_invocation_id) id: vec3<u32>) {
         return;
     }
     let rgb0 = c0.rgb;
+    let v0 = c0.w;
     let a0 = guide[2u * i].rgb;
     let n0 = guide[2u * i + 1u].xyz;
-    let lum0 = lum(rgb0) + 1.0e-3;
-    let denom_c = dp.sigma_c * dp.sigma_c * lum0 * lum0 + 1.0e-8;
     let denom_a = dp.sigma_a * dp.sigma_a + 1.0e-8;
     let w = i32(dp.size.x);
     let h = i32(dp.size.y);
@@ -58,6 +57,7 @@ fn atrous_main(@builtin(global_invocation_id) id: vec3<u32>) {
 
     var sum = vec3<f32>(0.0);
     var wsum = 0.0;
+    var vsum = 0.0;
     for (var dy = -2; dy <= 2; dy = dy + 1) {
         let y = cy + dy * stride;
         if (y < 0 || y >= h) {
@@ -73,20 +73,22 @@ fn atrous_main(@builtin(global_invocation_id) id: vec3<u32>) {
                 continue;
             }
             let c = src[j].rgb;
-            let dc = c - rgb0;
+            let vj = src[j].w;
+            let dl = lum(c) - lum(rgb0);
             let da = guide[2u * j].rgb - a0;
             let cosn = dot(guide[2u * j + 1u].xyz, n0);
             let wn = select(0.0, pow(cosn, dp.sigma_n), cosn > 0.0);
-            let weight = b3(dx) * b3(dy) * exp(-dot(dc, dc) / denom_c) * wn * exp(-dot(da, da) / denom_a);
+            let weight = b3(dx) * b3(dy) * exp(-(dl * dl) / (dp.sigma_c * dp.sigma_c * (v0 + vj) + 1.0e-8)) * wn * exp(-dot(da, da) / denom_a);
             sum = sum + weight * c;
             wsum = wsum + weight;
+            vsum = vsum + weight * weight * vj;
         }
     }
     // The centre tap alone weighs b3(0)² > 0, but a degenerate (zero or non-finite) normal can
     // zero it; then the pixel has nothing to average with and stays as it is.
     if (wsum > 0.0) {
-        dst[i] = vec4<f32>(sum / wsum, 1.0);
+        dst[i] = vec4<f32>(sum / wsum, vsum / (wsum * wsum));
     } else {
-        dst[i] = vec4<f32>(rgb0, 1.0);
+        dst[i] = vec4<f32>(rgb0, v0);
     }
 }

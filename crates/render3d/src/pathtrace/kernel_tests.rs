@@ -165,6 +165,108 @@ fn furnace_pixels_converge_to_two() {
 }
 
 #[test]
+fn trace_accumulates_luminance_squares_after_the_colours() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let furnace = Furnace { albedo: 0.5, ..Default::default() };
+    let furnace = Furnace { emission: 1.0, ..furnace };
+    let mut scene = room();
+    scene.lights.clear();
+    let scene = build_gpu_scene(&scene, false, Some(furnace));
+    let d = &gpu.device;
+    let buffers = upload_scene(&gpu, &scene);
+    let frame = GpuFrame {
+        flags: FRAME_FURNACE,
+        furnace: [0.5, 1.0, 2.0, 0.0],
+        spp_this_pass: 4,
+        seed: 11,
+        ..camera_frame([2.0, 2.0, 1.2], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0])
+    };
+    let pipelines = PtPipelines::new(&gpu, None).unwrap();
+    let module = d.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("pt test kernel"),
+        source: wgpu::ShaderSource::Wgsl(kernel_source().into()),
+    });
+    let layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("pt test"),
+        bind_group_layouts: &[Some(&pipelines.kernel_layout)],
+        immediate_size: 0,
+    });
+    let pipeline = d.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("trace_main"),
+        layout: Some(&layout),
+        module: &module,
+        entry_point: Some("trace_main"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+    let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("sq frame"),
+        contents: bytemuck::bytes_of(&frame),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    let accum = d.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("sq accum"),
+        size: (64 * 2 * 16) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let aov = d.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("sq aov"),
+        size: (64 * 2 * 16) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let probes = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("sq probes"),
+        contents: bytemuck::cast_slice(&vec![GpuProbe::default(); 64]),
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+    let bind = d.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("sq trace"),
+        layout: &pipelines.kernel_layout,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: frame_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: buffers.nodes.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: buffers.tris.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: buffers.materials.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: buffers.lights.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 5, resource: buffers.ies.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 6, resource: accum.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 7, resource: aov.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 8, resource: probes.as_entire_binding() },
+        ],
+    });
+    let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("sq trace") });
+    {
+        let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("trace_main"), timestamp_writes: None });
+        pass.set_pipeline(&pipeline);
+        pass.set_bind_group(0, &bind, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+    }
+    let read = d.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("sq read"),
+        size: (64 * 2 * 16) as u64,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    enc.copy_buffer_to_buffer(&accum, 0, &read, 0, (64 * 2 * 16) as u64);
+    gpu.queue.submit([enc.finish()]);
+    let slice = read.slice(..);
+    let (tx, rx) = std::sync::mpsc::channel();
+    slice.map_async(wgpu::MapMode::Read, move |r| {
+        let _ = tx.send(r);
+    });
+    d.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(std::time::Duration::from_secs(300)) }).unwrap();
+    rx.recv().unwrap().unwrap();
+    let out: Vec<[f32; 4]> = bytemuck::cast_slice(&slice.get_mapped_range().unwrap()).to_vec();
+    read.unmap();
+    let first = &out[0];
+    assert_eq!(first[3], 4.0, "sample count");
+    let expected = 4.0 * luminance([first[0] / 4.0, first[1] / 4.0, first[2] / 4.0]).powi(2);
+    assert!((out[64][0] - expected).abs() <= 1e-3 * expected.max(1.0), "variance storage mismatch: {:?}", (&out[0], &out[64]));
+}
+
+#[test]
 fn a_seed_fixes_every_sample() {
     let Some(gpu) = gpu_or_skip() else { return };
     let scene = build_gpu_scene(&room(), false, None);
