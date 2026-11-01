@@ -9,6 +9,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use cadcraft_engine::geom::{Bounds2, Vec2};
+use cadcraft_engine::{FinalMode, PathParams};
 use cadcraft_io::Format;
 use cadcraft_mcp::args::{blank_env_is_unset, name_env_vars};
 use clap::builder::{OsStringValueParser, PathBufValueParser, TypedValueParser};
@@ -110,9 +111,25 @@ pub(crate) struct RenderArgs {
     /// Draw a ground plane under the scene (and cast shadows on it)
     #[arg(long)]
     pub(crate) ground: bool,
-    /// Finalize Render: every light shadowed at high resolution, soft edges, supersampled and tone mapped
-    #[arg(long = "final")]
-    pub(crate) final_render: bool,
+    /// Finalize Render, optionally `raster` (every light shadowed at high resolution, soft edges,
+    /// supersampled and tone mapped) or `path` (the path tracer); a bare --final is the default mode
+    #[arg(long = "final", value_name = "MODE", num_args = 0..=1, default_missing_value = "", value_parser = parse_final_arg)]
+    pub(crate) final_render: Option<FinalMode>,
+    /// Path tracer: samples per pixel (1-65536, default 256)
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536))]
+    pub(crate) spp: Option<u32>,
+    /// Path tracer: full bounces before Russian roulette (0-32, default 4)
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=32))]
+    pub(crate) bounces: Option<u32>,
+    /// Path tracer: the random seed (default 0)
+    #[arg(long, value_name = "N")]
+    pub(crate) seed: Option<u32>,
+    /// Path tracer: keep the noise (no denoiser)
+    #[arg(long)]
+    pub(crate) no_denoise: bool,
+    /// Path tracer: use hardware ray queries when the device has them
+    #[arg(long)]
+    pub(crate) rt: bool,
     /// Night: the sun is off (cannot be combined with --sun)
     #[arg(long)]
     pub(crate) night: bool,
@@ -122,6 +139,51 @@ pub(crate) struct RenderArgs {
     /// GPU adapter: auto or fallback (software)
     #[arg(long, value_name = "ADAPTER", default_value = "auto", value_parser = parse_adapter_arg)]
     pub(crate) adapter: cadcraft_render3d::adapter::AdapterChoice,
+}
+
+impl RenderArgs {
+    /// The path tracer's settings from `--spp`, `--bounces`, `--seed`, `--no-denoise` and `--rt`.
+    pub(crate) fn path_params(&self) -> PathParams {
+        let d = PathParams::default();
+        PathParams {
+            spp: self.spp.unwrap_or(d.spp),
+            bounces: self.bounces.unwrap_or(d.bounces),
+            seed: self.seed.unwrap_or(d.seed),
+            denoise: !self.no_denoise,
+            rt: self.rt,
+            ..d
+        }
+    }
+}
+
+/// `--final`'s mode word; empty (a bare `--final`) is the default mode.
+fn parse_final_arg(s: &str) -> Result<FinalMode, String> {
+    match s {
+        "" => Ok(FinalMode::default()),
+        "raster" => Ok(FinalMode::Raster),
+        "path" => Ok(FinalMode::Path),
+        _ => Err(format!("`{s}` is not raster or path")),
+    }
+}
+
+/// `render`'s `--final` takes its mode word only when the next argument is `raster` or `path`;
+/// any other next argument (a file, a flag) is left alone, so a bare `--final` becomes `--final=`.
+fn bare_final(args: &[OsString]) -> Vec<OsString> {
+    let mut out = Vec::with_capacity(args.len());
+    if args.first().is_none_or(|a| a != "render") {
+        return args.to_vec();
+    }
+    let mut literal = false;
+    for (i, a) in args.iter().enumerate() {
+        literal |= a == "--";
+        let word = args.get(i + 1).is_some_and(|n| n == "raster" || n == "path");
+        if !literal && a == "--final" && !word {
+            out.push(OsString::from("--final="));
+        } else {
+            out.push(a.clone());
+        }
+    }
+    out
 }
 
 fn parse_style_arg(s: &str) -> Result<cadcraft_render3d::Style, String> {
@@ -594,7 +656,7 @@ fn command(var: impl Fn(&OsStr) -> Option<OsString> + Copy) -> clap::Command {
 /// [`parse`] with `cmd` from [`command`]; a bad value from a variable is a usage error naming the
 /// variable.
 fn parse_with(mut cmd: clap::Command, args: &[OsString]) -> Result<Cli, clap::Error> {
-    let argv = std::iter::once(OsString::from("cadcraft-cli")).chain(args.iter().cloned());
+    let argv = std::iter::once(OsString::from("cadcraft-cli")).chain(bare_final(args));
     let matches = match cmd.try_get_matches_from_mut(argv) {
         // `use_stderr`: a real error, not the help `-h` asked for (a retry would make it `--help`).
         Err(e) if e.use_stderr() && args.iter().take_while(|a| *a != "--").any(|a| *a == "--help" || *a == "-h") => {
@@ -831,7 +893,7 @@ mod tests {
         assert_eq!(err.as_deref(), Some("--night and --sun cannot be combined"));
         let Ok(cli) = parse_args(&["render", "a.dxf", "b.png", "--night", "--final"]) else { panic!("night final parses") };
         let Command::Render(r) = cli.command else { panic!("not render") };
-        assert!(r.night && r.final_render && crate::render::check_flags(&r).is_ok());
+        assert!(r.night && r.final_render.is_some() && crate::render::check_flags(&r).is_ok());
     }
 
     #[test]
@@ -856,7 +918,7 @@ mod tests {
             panic!("--night alone should parse");
         };
         let Command::Render(r) = cli.command else { panic!("not render") };
-        assert!(r.night && !r.final_render && r.sun.is_none());
+        assert!(r.night && r.final_render.is_none() && r.sun.is_none());
         assert!(crate::render::check_flags(&r).is_ok());
     }
 
@@ -866,7 +928,7 @@ mod tests {
             panic!("--final alone should parse");
         };
         let Command::Render(r) = cli.command else { panic!("not render") };
-        assert!(r.final_render && !r.night && r.sun.is_none());
+        assert!(r.final_render.is_some() && !r.night && r.sun.is_none());
         assert!(crate::render::check_flags(&r).is_ok());
     }
 
@@ -876,7 +938,7 @@ mod tests {
             panic!("--final --night should parse");
         };
         let Command::Render(r) = cli.command else { panic!("not render") };
-        assert!(r.final_render && r.night && r.sun.is_none());
+        assert!(r.final_render.is_some() && r.night && r.sun.is_none());
         assert!(crate::render::check_flags(&r).is_ok());
     }
 
@@ -886,8 +948,58 @@ mod tests {
             panic!("--final --sun should parse");
         };
         let Command::Render(r) = cli.command else { panic!("not render") };
-        assert!(r.final_render && !r.night && r.sun.is_some());
+        assert!(r.final_render.is_some() && !r.night && r.sun.is_some());
         assert!(crate::render::check_flags(&r).is_ok());
+    }
+
+    fn render_of(a: &[&str]) -> Result<RenderArgs, clap::Error> {
+        let args: Vec<&str> = ["render", "a.dxf", "b.png"].iter().chain(a).copied().collect();
+        match parse_args(&args)?.command {
+            Command::Render(r) => Ok(r),
+            _ => panic!("not render"),
+        }
+    }
+
+    #[test]
+    fn render_args_parse_final_mode_and_path_flags() {
+        let Ok(r) = render_of(&[]) else { panic!("plain render parses") };
+        assert_eq!((r.final_render, r.path_params()), (None, PathParams::default()));
+        let mode = |a: &[&str]| render_of(a).map(|r| r.final_render);
+        assert_eq!(mode(&["--final", "raster"]).ok(), Some(Some(FinalMode::Raster)));
+        assert_eq!(mode(&["--final", "path"]).ok(), Some(Some(FinalMode::Path)));
+        assert_eq!(mode(&["--final=path"]).ok(), Some(Some(FinalMode::Path)));
+        // A path flag after the mode word.
+        let Ok(r) = render_of(&["--final", "path", "--spp", "8", "--bounces", "2", "--seed", "7", "--no-denoise", "--rt"]) else {
+            panic!("path flags parse")
+        };
+        let p = r.path_params();
+        assert_eq!((r.final_render, p.spp, p.bounces, p.seed, p.denoise, p.rt), (Some(FinalMode::Path), 8, 2, 7, false, true));
+        // The file arguments may come after the flags.
+        let Ok(Cli { command: Command::Render(r), .. }) = parse_args(&["render", "--final", "path", "a.dxf", "b.png"]) else { panic!("mode first") };
+        assert_eq!((r.final_render, r.file, r.output), (Some(FinalMode::Path), "a.dxf".into(), "b.png".into()));
+        for bad in [
+            &["--final", "path", "--spp", "0"][..],
+            &["--spp", "65537"],
+            &["--spp", "x"],
+            &["--bounces", "33"],
+            &["--bounces", "-1"],
+            &["--seed", "4294967296"],
+            &["--seed", "-1"],
+            &["--final=bogus"],
+        ] {
+            assert!(render_of(bad).is_err(), "{bad:?} should be refused");
+        }
+        assert_eq!(render_of(&["--spp", "65536", "--bounces", "32", "--seed", "4294967295"]).map(|r| r.path_params().spp).ok(), Some(65536));
+    }
+
+    #[test]
+    fn bare_final_is_the_default_mode() {
+        let mode = |a: &[&str]| render_of(a).map(|r| r.final_render).ok();
+        assert_eq!(mode(&["--final"]), Some(Some(FinalMode::default())));
+        assert_eq!(mode(&["--final", "--night"]), Some(Some(FinalMode::default())));
+        assert_eq!(mode(&["--final", "--spp", "4"]), Some(Some(FinalMode::default())));
+        let Ok(Cli { command: Command::Render(r), .. }) = parse_args(&["render", "--final", "a.dxf", "b.png"]) else { panic!("bare final first") };
+        assert_eq!((r.final_render, r.file, r.output), (Some(FinalMode::default()), "a.dxf".into(), "b.png".into()));
     }
 
     #[test]
