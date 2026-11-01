@@ -5,13 +5,16 @@
 use std::sync::Mutex;
 
 use cadcraft_arch3d::camera::{project_point, ray_at};
-use cadcraft_engine::{RenderHooks, RenderRequest, RenderStats, SunChoice, set_render_hooks};
+use cadcraft_engine::{FinalMode, IlluminanceRequest, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, set_render_hooks};
 use cadcraft_geom::Vec3;
 use cadcraft_render3d::adapter::AdapterChoice;
 use cadcraft_render3d::camera::{Camera, Orbit};
+use cadcraft_render3d::final_render::render_final_with;
 use cadcraft_render3d::light::{Light, Sun};
 use cadcraft_render3d::lights::DEFAULT_EXPOSURE;
 use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, Style, png_rgba};
+use cadcraft_render3d::pathtrace::cache;
+use cadcraft_render3d::pathtrace::{CacheOutcome, ComputeGpu, Furnace, PathOptions, irradiance, luminance, request_compute};
 use cadcraft_render3d::{Lighting, Scene3d, render_final};
 use serde_json::{Value, json};
 
@@ -25,13 +28,21 @@ struct State {
     off: Offscreen,
     /// The `arch_revision` the scene below was built for, and the scene.
     scene: Option<(u64, Scene3d)>,
+    /// The compute device, requested once on the first path request (`Some(None)`: none available).
+    compute: Option<Option<ComputeGpu>>,
+    /// The pipeline cache and what opening it reported, kept for the process.
+    cache: Option<(Option<wgpu::PipelineCache>, CacheOutcome)>,
+    /// Whether the cache file was written after a miss.
+    cache_saved: bool,
+    /// Path-traced stills rendered (a fallback to raster is not one).
+    path_traces: u64,
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
 
 /// Install the renderer as the engine's render hook (idempotent: the first call wins).
 pub(crate) fn install() {
-    set_render_hooks(RenderHooks::new(render_one, stats));
+    set_render_hooks(RenderHooks::new(render_one, stats).with_illuminance(illuminance_one));
 }
 
 fn stats() -> RenderStats {
@@ -40,6 +51,7 @@ fn stats() -> RenderStats {
     let mut r = RenderStats::default();
     r.shadow_maps_built = s.off.shadow_maps_built();
     r.final_renders = s.off.final_renders();
+    r.path_traces = s.path_traces;
     r
 }
 
@@ -61,33 +73,133 @@ fn gpu(e: cadcraft_render3d::Render3dError) -> String {
     }
 }
 
-fn render_one(req: &RenderRequest) -> Result<Value, String> {
-    let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
+/// The renderer state, created on first use at `size`, with the scene for `drawing` built.
+fn ready<'a>(guard: &'a mut Option<State>, drawing: &cadcraft_engine::doc::Drawing, size: (u32, u32)) -> Result<&'a mut State, String> {
     if guard.is_none() {
-        let off = Offscreen::create_with(adapter_choice(), req.size).map_err(gpu)?;
-        *guard = Some(State { off, scene: None });
+        let off = Offscreen::create_with(adapter_choice(), size).map_err(gpu)?;
+        *guard = Some(State { off, scene: None, compute: None, cache: None, cache_saved: false, path_traces: 0 });
     }
     let state = guard.as_mut().ok_or("renderer unavailable")?;
-    let key = req.drawing.arch_revision;
+    let key = drawing.arch_revision;
     if state.scene.as_ref().is_none_or(|(k, _)| *k != key) {
-        state.scene = Some((key, cadcraft_arch3d::build(&req.drawing.arch)));
+        state.scene = Some((key, cadcraft_arch3d::build(&drawing.arch)));
     }
-    let State { off, scene } = state;
+    Ok(state)
+}
+
+fn lighting_for(sun: SunChoice, budget: usize) -> Lighting {
+    let light = match sun {
+        SunChoice::Default => Some(Light::DEFAULT),
+        SunChoice::Off => None,
+        SunChoice::Dir(d) => Some(Light::from_sun(&Sun { dir: [d[0] as f32, d[1] as f32, d[2] as f32], ..Sun::default() }, Light::DEFAULT.ambient)),
+    };
+    Lighting { sun: light, sun_shadow: matches!(sun, SunChoice::Dir(_)), budget, exposure: DEFAULT_EXPOSURE, ..Lighting::default() }
+}
+
+/// The path-tracer options a request asks for.
+fn path_options(p: &PathParams) -> PathOptions {
+    PathOptions {
+        spp: p.spp,
+        bounces: p.bounces,
+        seed: p.seed,
+        denoise: p.denoise,
+        rt: p.rt,
+        furnace: p.furnace.map(|(albedo, emission)| Furnace { albedo: albedo as f32, emission: emission as f32, ..Furnace::default() }),
+        snapshots: p.snapshots.clone(),
+        ..PathOptions::default()
+    }
+}
+
+/// The compute device, requested on the first call (a later `rt` request keeps the device made
+/// before and renders the compute path).
+fn compute_of(state: &mut State, rt: bool) -> Result<Option<ComputeGpu>, String> {
+    if state.compute.is_none() {
+        state.compute = Some(request_compute(adapter_choice(), rt).map_err(gpu)?);
+    }
+    Ok(state.compute.clone().flatten())
+}
+
+/// `<out without .png>-spp<n>.png`.
+fn snapshot_path(out: &std::path::Path, spp: u32) -> std::path::PathBuf {
+    let stem = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    out.with_file_name(format!("{stem}-spp{spp}.png"))
+}
+
+fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
+    if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).map_err(|e| format!("can't create {}: {e}", dir.display()))?;
+    }
+    crate::output::write_atomic(out, png).map_err(|e| e.to_string())
+}
+
+fn render_one(req: &RenderRequest) -> Result<Value, String> {
+    let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
+    let state = ready(&mut guard, req.drawing, req.size)?;
+    let key = req.drawing.arch_revision;
+    let want_path = req.final_render && req.final_mode == FinalMode::Path;
+    let compute = if want_path { compute_of(state, req.path.rt)? } else { None };
+    if let (Some(c), None) = (&compute, &state.cache) {
+        state.cache = Some(cache::open(c, cache::cache_dir().as_deref()));
+    }
+    let State { off, scene, cache: pcache, cache_saved, path_traces, .. } = state;
     let scene = &scene.as_ref().ok_or("renderer unavailable")?.1;
     off.resize(req.size);
 
     let camera = req.camera.clone().unwrap_or_else(|| Camera::Orbit(Orbit::fit(&scene.bounds)));
     let eye = camera.eye();
-    let sun = match req.sun {
-        SunChoice::Default => Some(Light::DEFAULT),
-        SunChoice::Off => None,
-        SunChoice::Dir(d) => Some(Light::from_sun(&Sun { dir: [d[0] as f32, d[1] as f32, d[2] as f32], ..Sun::default() }, Light::DEFAULT.ambient)),
-    };
-    let lighting =
-        Lighting { sun, sun_shadow: matches!(req.sun, SunChoice::Dir(_)), budget: req.budget, exposure: DEFAULT_EXPOSURE, ..Lighting::default() };
+    let lighting = lighting_for(req.sun, req.budget);
     let maps_before = off.shadow_maps_built();
 
-    let (rgba, size, drawn, shadowed, png) = if req.final_render {
+    let mut final_mode: Option<&str> = None;
+    let mut path_info = serde_json::Map::new();
+    let (rgba, size, drawn, shadowed, png) = if want_path {
+        let opts = path_options(&req.path);
+        let cache_ref = pcache.as_ref().and_then(|(c, _)| c.as_ref());
+        let (png, stats, fallback) =
+            render_final_with(off, compute.as_ref(), scene, key, &camera, &lighting, req.ground, req.size, true, &opts, cache_ref).map_err(gpu)?;
+        if let (Some(c), Some((Some(handle), CacheOutcome::Miss)), false) = (&compute, &*pcache, *cache_saved) {
+            if let Some(dir) = cache::cache_dir() {
+                *cache_saved = cache::save(c, handle, &dir).is_ok();
+            }
+        }
+        match (stats, fallback) {
+            (Some(st), None) => {
+                final_mode = Some("path");
+                *path_traces += 1;
+                // The first open reports miss/hit; later renders in this process report the same.
+                let outcome = pcache.as_ref().map_or(st.pipeline_cache, |(_, o)| *o);
+                path_info.insert("spp".into(), json!(st.spp_done));
+                path_info.insert("bounces".into(), json!(opts.bounces));
+                path_info.insert("seed".into(), json!(opts.seed));
+                path_info.insert("denoised".into(), json!(st.denoised));
+                path_info.insert("rt".into(), json!(st.rt));
+                path_info.insert("pipelineCache".into(), json!(outcome.name()));
+                path_info.insert("radiance".into(), st.radiance.map_or(Value::Null, |r| json!({ "min": r.min, "max": r.max, "mean": r.mean })));
+                let mut snaps = Vec::new();
+                for (spp, pixels) in &st.snapshots {
+                    let file = match &req.out {
+                        Some(out) => {
+                            let img = cadcraft_render3d::offscreen::encode_png(req.size.0, req.size.1, pixels).map_err(gpu)?;
+                            let path = snapshot_path(out, *spp);
+                            write_png(&path, &img)?;
+                            Some(path.display().to_string())
+                        }
+                        None => None,
+                    };
+                    snaps.push(json!({ "spp": spp, "out": file }));
+                }
+                path_info.insert("snapshots".into(), Value::Array(snaps));
+            }
+            (_, fallback) => {
+                final_mode = Some("raster");
+                path_info.insert("fallback".into(), json!(fallback.unwrap_or("no compute shaders")));
+            }
+        }
+        let rgba = png_rgba(&png).map_err(gpu)?;
+        let lights = scene.lights.len();
+        (rgba, req.size, lights, lights, Some(png))
+    } else if req.final_render {
+        final_mode = Some("raster");
         let png = render_final(off, scene, key, &camera, &lighting, req.ground, req.size).map_err(gpu)?;
         let rgba = png_rgba(&png).map_err(gpu)?;
         (rgba, req.size, scene.lights.len(), scene.lights.len(), Some(png))
@@ -108,14 +220,11 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         (Some(_), None) => Some(off.read_png().map_err(gpu)?),
     };
     if let (Some(out), Some(png)) = (&req.out, &png) {
-        if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
-            std::fs::create_dir_all(dir).map_err(|e| format!("can't create {}: {e}", dir.display()))?;
-        }
-        crate::output::write_atomic(out, png).map_err(|e| e.to_string())?;
+        write_png(out, png)?;
     }
 
     let samples: Vec<Value> = req.samples.iter().take(MAX_SAMPLES).map(|p| sample(scene, &camera, size, &rgba, *p)).collect();
-    Ok(json!({
+    let mut reply = json!({
         "ok": true,
         "out": req.out.as_ref().map(|p| p.display().to_string()),
         "size": [size.0, size.1],
@@ -128,7 +237,43 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         "frameShadowMaps": off.shadow_maps_built().saturating_sub(maps_before),
         "samples": samples,
         "device": off.device_info().line(),
-    }))
+        "finalMode": final_mode,
+        "pathTraces": *path_traces,
+    });
+    if let Some(map) = reply.as_object_mut() {
+        map.extend(path_info);
+    }
+    Ok(reply)
+}
+
+/// Path-traced illuminance at the request's probes: one probe's answer is the object, several
+/// are `{"probes": [...]}`.
+fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
+    let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
+    let state = ready(&mut guard, req.drawing, (64, 64))?;
+    let Some(device) = compute_of(state, req.path.rt)? else {
+        return Err("path-traced illuminance needs compute shaders on this GPU".into());
+    };
+    let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.1;
+    let lighting = lighting_for(req.sun, 8);
+    let opts = path_options(&req.path);
+    let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
+    let results: Vec<Value> = req
+        .probes
+        .iter()
+        .zip(&rgb)
+        .map(|([point, normal], c)| {
+            json!({
+                "lux": luminance(*c), "rgb": c, "method": "path",
+                "spp": opts.spp, "bounces": opts.bounces, "seed": opts.seed,
+                "point": point, "normal": normal,
+            })
+        })
+        .collect();
+    match results.len() {
+        1 => Ok(results.into_iter().next().unwrap_or(Value::Null)),
+        _ => Ok(json!({ "probes": results })),
+    }
 }
 
 /// One sample: the pixel `p` projects to, the colour there and whether the camera sees `p`.
@@ -322,6 +467,114 @@ mod tests {
         assert_eq!(v["ok"], true, "{v}");
         assert_eq!(v["lights"], 4, "{v}");
         assert_eq!(v["shadowMapsBuilt"], 4, "{v}");
+    }
+
+    fn path_request<'a>(d: &'a Drawing, out: Option<std::path::PathBuf>, path: PathParams) -> RenderRequest<'a> {
+        request(d, None, out, true).with_final(FinalMode::Path, path)
+    }
+
+    fn quick(spp: u32) -> PathParams {
+        PathParams { spp, bounces: 1, denoise: false, ..PathParams::default() }
+    }
+
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("cadcraft-render-hook-{tag}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn render_hook_path_final_reports_spp_and_counts_a_path_trace() {
+        let _g = reset();
+        let d = room();
+        let v = match render_one(&path_request(&d, None, quick(4))) {
+            Ok(v) => v,
+            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
+            Err(e) => panic!("render failed: {e}"),
+        };
+        if v["finalMode"] != "path" {
+            // No compute shaders on this machine: the still ran as raster.
+            assert_eq!(v["finalMode"], "raster", "{v}");
+            assert_eq!(v["fallback"], "no compute shaders", "{v}");
+            eprintln!("SKIP: no compute device");
+            return;
+        }
+        assert_eq!(v["spp"], 4, "{v}");
+        assert_eq!(v["pathTraces"], 1, "{v}");
+        assert_eq!(v["finalRenders"], 1, "{v}");
+        assert!(v["radiance"]["max"].is_number(), "{v}");
+        assert!(v["pipelineCache"].is_string(), "{v}");
+        assert_eq!(v["shadowedLights"], 4, "{v}");
+        assert_eq!(stats().path_traces, 1);
+    }
+
+    #[test]
+    fn render_hook_path_falls_back_without_compute() {
+        let _g = reset();
+        let d = room();
+        // A first raster still creates the renderer; then the compute request is answered "none"
+        // exactly as CADCRAFT_RENDER_LIMITS=webgl2 does.
+        let Some(_) = render(&request(&d, None, None, false)) else { return };
+        if let Ok(mut g) = STATE.lock() {
+            if let Some(s) = g.as_mut() {
+                s.compute = Some(None);
+            }
+        }
+        let Some(v) = render(&path_request(&d, None, quick(4))) else { return };
+        assert_eq!(v["finalMode"], "raster", "{v}");
+        assert_eq!(v["fallback"], "no compute shaders", "{v}");
+        assert_eq!(v["pathTraces"], 0, "{v}");
+        assert_eq!(v["finalRenders"], 1, "{v}");
+    }
+
+    #[test]
+    fn render_hook_writes_snapshots() {
+        let _g = reset();
+        let d = room();
+        let dir = temp_dir("snap");
+        let out = dir.join("still.png");
+        let mut p = quick(8);
+        p.snapshots = vec![4];
+        let Some(v) = render(&path_request(&d, Some(out.clone()), p)) else { return };
+        if v["finalMode"] != "path" {
+            eprintln!("SKIP: no compute device");
+            return;
+        }
+        let snaps = v["snapshots"].as_array().cloned().unwrap_or_default();
+        assert_eq!(snaps.len(), 1, "{v}");
+        assert_eq!(snaps[0]["spp"], 4, "{v}");
+        let bytes = std::fs::read(dir.join("still-spp4.png")).unwrap_or_default();
+        assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G']), "snapshot is not a PNG: {v}");
+        assert!(out.exists(), "{v}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn illuminance_hook_answers_lux_from_the_path_tracer() {
+        let _g = reset();
+        let d = room();
+        let probe = vec![[[2.0, 2.0, 0.0], [0.0, 0.0, 1.0]]];
+        let req = IlluminanceRequest::new(&d, probe, SunChoice::Off, quick(16));
+        match illuminance_one(&req) {
+            Ok(v) => {
+                assert_eq!(v["method"], "path", "{v}");
+                assert!(v["lux"].as_f64().is_some_and(|l| l.is_finite() && l >= 0.0), "{v}");
+                assert_eq!(v["spp"], 16, "{v}");
+            }
+            Err(e) if e.starts_with("NO_ADAPTER") => eprintln!("SKIP: {e}"),
+            Err(e) if e.contains("needs compute shaders") => eprintln!("SKIP: {e}"),
+            Err(e) => panic!("illuminance failed: {e}"),
+        }
+    }
+
+    #[test]
+    fn camera_moves_start_no_path_trace() {
+        let _g = reset();
+        let d = room();
+        for k in 0..30 {
+            let Some(v) = render(&request(&d, Some(orbit(&d, f64::from(k))), None, false)) else { return };
+            assert_eq!(v["pathTraces"], 0, "frame {k}: {v}");
+            assert!(v["finalMode"].is_null(), "frame {k}: {v}");
+        }
+        assert_eq!(stats().path_traces, 0);
     }
 
     #[test]

@@ -31,6 +31,7 @@ same-file = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { version = "1", features = ["full"] }
+wgpu = { workspace = true }
 
 [dev-dependencies]
 # Shell completions and man pages (examples/man-and-completions.rs, for the Linux packages); not
