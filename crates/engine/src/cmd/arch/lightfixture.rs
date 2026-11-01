@@ -123,7 +123,11 @@ fn apply_overrides(fixture: &mut LightFixture, params: &Value) -> Result<()> {
         fixture.rotation = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`rotation` must be a finite number"))?;
     }
     if let Some(value) = params.get("tilt") {
-        fixture.tilt = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`tilt` must be a finite number"))?;
+        let tilt = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`tilt` must be a finite number"))?;
+        if tilt < 0.0 || tilt > 90.0 {
+            return Err(bad("lightfixture", "`tilt` must be between 0 and 90 degrees"));
+        }
+        fixture.tilt = tilt;
     }
     if let Some(value) = params.get("lumens") {
         fixture.lumens = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`lumens` must be a finite number"))?;
