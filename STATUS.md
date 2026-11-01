@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 11 of 13: Ray-traced Finalize Render — 3 of 23 segments merged · 0 of 13 acceptance checks**
+**Phase 11 of 13: Ray-traced Finalize Render — 4 of 23 segments merged · 0 of 13 acceptance checks**
 
-6,247 workspace tests passing at the last merge · 620 segments merged in all · 0 of 13 seats working
+6,252 workspace tests passing at the last merge · 621 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,27 +21,28 @@ Updated 2026-11-01 09:00 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 0 / 13 | 1.3 h so far · expected done Nov 01 16:30–Nov 02 21:10 UTC |
+| 11 | Ray-traced Finalize Render | building | 0 / 13 | 1.6 h so far · expected done Nov 01 15:52–Nov 02 09:09 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-14 queued, 4 merging, 3 merged, 1 working, 1 gate
+13 queued, 4 merged, 4 merging, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p11-arch-ies` | IES LM-63 files: parse, interpolate with symmetry, scale to a fixture | merging | bonsai-ws2-a |
 | `p11-arch-panel` | Area fixtures in plan: validation, the panel symbol, the panel at the ceiling | merging | bonsai-b |
 | `p11-arch3d-panel` | The LED panel in 3D: frame, diffuser and its ceiling opening | merging | darwin-ws3 |
-| `p11-r3d-pt-traverse` | WGSL BVH traversal and shadow-ray visibility, checked against the CPU traversal | working | mai-flash |
-| `p11-r3d-pt-lights` | WGSL lights: points, spots, IES tables, rectangular area lights, the sun and the sky | gate | bonsai-ws2-b |
+| `p11-arch3d-ies-area` | IES distributions and area lights in the scene lights and the CPU illuminance | gate | bonsai-ws2-a |
+| `p11-r3d-pt-traverse` | WGSL BVH traversal and shadow-ray visibility, checked against the CPU traversal | merging | mai-flash |
+| `p11-r3d-pt-lights` | WGSL lights: points, spots, IES tables, rectangular area lights, the sun and the sky | working | bonsai-ws2-b |
 | `p11-r3d-denoise` | The edge-aware à-trous denoiser in WGSL, guided by albedo and normals | merging | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 09:08 | `p11-arch-ies` | merged | 6,252 pass | bonsai-ws2-a |
 | Nov 01 08:48 | `p11-r3d-pt-bsdf` | merged | 6,247 pass | bonsai-ws2-b |
 | Nov 01 08:40 | `p11-r3d-gpu-scene` | merged | 6,242 pass | mai-flash |
 | Nov 01 08:33 | `harden-p10-docs-user-guide` | merged | 6,235 pass | tturbo-mac |
@@ -53,7 +54,6 @@ Updated 2026-11-01 09:00 UTC. This page and the card in the README are regenerat
 | Nov 01 05:57 | `harden-p10-cli-render-final` | merged | 6,204 pass | tturbo-mac |
 | Nov 01 05:41 | `p10-docs-user-guide` | refused | 6,200 pass | bonsai-ws2-a |
 | Nov 01 05:02 | `p10-docs-user-guide` | refused | 0 pass | bonsai-b |
-| Nov 01 04:55 | `p10-docs-user-guide` | refused | 6,201 pass | mai-flash |
 
 ## Seats active in the last hour
 
@@ -61,14 +61,14 @@ Updated 2026-11-01 09:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 756 |
 | bonsai-b | bonsai2-27b | merging | 699 |
-| bonsai-ws2-a | bonsai2-27b | merging | 753 |
-| bonsai-ws2-b | bonsai2-27b | gate | 721 |
+| bonsai-ws2-a | bonsai2-27b | gate | 753 |
+| bonsai-ws2-b | bonsai2-27b | agent | 724 |
 | claude-sonnet-a | sonnet | held | 61 |
 | claude-sonnet-b | sonnet | held | 60 |
 | claude-sonnet-c | sonnet | held | 10 |
 | claude-sonnet-d | sonnet | held | 4 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 603 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 40 |
+| mai-flash | mai-code-1.1-flash | merging | 41 |
 | tturbo-mac | tturbo-ultraheretic | merging | 527 |
 | tturbo-mac2 | tturbo-ultraheretic | merging | 348 |
