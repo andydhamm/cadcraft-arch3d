@@ -358,3 +358,47 @@ fn render_orbit_target_changes_projection() {
     let p2 = s2.lines().find(|l| l.starts_with("PROJECTED ")).expect("PROJECTED line 2");
     assert_ne!(p1, p2, "different targets should produce different projections");
 }
+
+#[test]
+fn render_final_night_prints_the_light_lines() {
+    let dir = temp_dir("render_final_night_prints_the_light_lines");
+    let in_dxf = dir.join("lit.dxf");
+    let out_png = dir.join("night.png");
+    let out = run_cli(&[
+        "run".into(),
+        "--metric".into(),
+        "--cmd".into(),
+        r#"wall {"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4}"#.into(),
+        "--cmd".into(),
+        r#"lightfixture {"at":[3,4]}"#.into(),
+        "--cmd".into(),
+        r#"lightfixture {"at":[7,4]}"#.into(),
+        "--save".into(),
+        in_dxf.to_string_lossy().into(),
+    ]);
+    assert!(out.status.success(), "setup failed: {}", String::from_utf8_lossy(&out.stderr));
+    let out = run_cli(&[
+        "render".into(),
+        in_dxf.to_string_lossy().into(),
+        out_png.to_string_lossy().into(),
+        "--adapter".into(),
+        "fallback".into(),
+        "--night".into(),
+        "--final".into(),
+        "--camera".into(),
+        "full,eye=-8,-10,6,target=5,4,1,fov=50".into(),
+        "--size".into(),
+        "160x100".into(),
+    ]);
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    if out.status.code() == Some(3) {
+        assert!(stderr.contains("NO_ADAPTER"), "{stderr}");
+        eprintln!("SKIP: no fallback adapter");
+        return;
+    }
+    assert!(out.status.success(), "render failed: {stderr}");
+    assert!(is_png(&out_png), "no PNG written");
+    assert!(stderr.lines().any(|l| l.starts_with("FINAL renders=1 size=160x100")), "{stderr}");
+    assert!(stderr.lines().any(|l| l.starts_with("LIGHTS 2 ")), "{stderr}");
+    assert!(stderr.lines().any(|l| l.starts_with("SHADOWMAPS built=")), "{stderr}");
+}

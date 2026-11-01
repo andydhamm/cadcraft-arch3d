@@ -124,7 +124,9 @@ pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, Shad
     for (k, &i) in drawn.iter().take(MAX_GPU_LIGHTS).enumerate() {
         let Some(l) = lights.get(i) else { continue };
         let base = 16 + 64 * k;
-        let far = slots.get(i).map_or(0.0, |s| s.1.far);
+        // `slots` pairs a light index with its slot, in the atlas's order, not the light's.
+        let slot = slots.iter().find(|(j, _)| *j == i).map(|(_, s)| s);
+        let far = slot.map_or(0.0, |s| s.far);
         write_f32(&mut buf, base + 0, l.position.x as f32);
         write_f32(&mut buf, base + 4, l.position.y as f32);
         write_f32(&mut buf, base + 8, l.position.z as f32);
@@ -141,12 +143,12 @@ pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, Shad
         write_f32(&mut buf, base + 36, (l.color[1] * l.intensity) as f32);
         write_f32(&mut buf, base + 40, (l.color[2] * l.intensity) as f32);
         write_f32(&mut buf, base + 44, l.cos_inner as f32);
-        match slots.get(i) {
+        match slot {
             Some(s) => {
-                write_f32(&mut buf, base + 48, s.1.first_layer as f32);
-                write_f32(&mut buf, base + 52, if s.1.cube { 1.0 } else { 0.0 });
-                write_f32(&mut buf, base + 56, s.1.near);
-                write_f32(&mut buf, base + 60, s.1.bias);
+                write_f32(&mut buf, base + 48, s.first_layer as f32);
+                write_f32(&mut buf, base + 52, if s.cube { 1.0 } else { 0.0 });
+                write_f32(&mut buf, base + 56, s.near);
+                write_f32(&mut buf, base + 60, s.bias);
             }
             None => {
                 write_f32(&mut buf, base + 48, -1.0);
@@ -155,12 +157,13 @@ pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, Shad
                 write_f32(&mut buf, base + 60, 0.0);
             }
         }
-        if let Some(s) = slots.get(i) {
-            if !s.1.cube {
+        if let Some(s) = slot {
+            if !s.cube {
+                // mat4x4<f32>, column-major: 16 bytes a column.
                 let vp_base = 16 + 64 * 64 + 64 * k;
-                for (col, col_arr) in s.1.view_proj.iter().enumerate() {
+                for (col, col_arr) in s.view_proj.iter().enumerate() {
                     for (row, v) in col_arr.iter().enumerate() {
-                        write_f32(&mut buf, vp_base + col * 4 + row * 4, *v);
+                        write_f32(&mut buf, vp_base + col * 16 + row * 4, *v);
                     }
                 }
             }
@@ -274,6 +277,59 @@ fn write_f32(buf: &mut Vec<u8>, off: usize, v: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn f32_at(buf: &[u8], off: usize) -> f32 {
+        f32::from_le_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]])
+    }
+
+    fn spot_at(id: u32, x: f64) -> SceneLight {
+        SceneLight {
+            id: crate::types::ArchId(id),
+            kind: LightKind::Spot,
+            position: Vec3::new(x, 0.0, 2.4),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 950.0,
+            color: [1.0; 3],
+            cos_inner: 0.866,
+            cos_outer: 0.866,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn packed_spot_matrix_is_column_major_sixteen_bytes_a_column() {
+        let mut vp = [[0.0f32; 4]; 4];
+        for (c, col) in vp.iter_mut().enumerate() {
+            for (r, v) in col.iter_mut().enumerate() {
+                *v = (c * 4 + r + 1) as f32;
+            }
+        }
+        let slot = ShadowSlot { first_layer: 0, cube: false, view_proj: vp, near: 0.05, far: 9.0, bias: 0.02 };
+        let buf = pack_lights(&[spot_at(0, 0.0)], &[0], &[(0, slot)]);
+        let base = 16 + 64 * MAX_GPU_LIGHTS;
+        for c in 0..4 {
+            for r in 0..4 {
+                assert_eq!(f32_at(&buf, base + c * 16 + r * 4), (c * 4 + r + 1) as f32, "column {c} row {r}");
+            }
+        }
+    }
+
+    #[test]
+    fn each_drawn_light_packs_its_own_slot() {
+        let lights = [spot_at(0, 0.0), spot_at(1, 2.0)];
+        let slot =
+            |layer: u32, far: f32| ShadowSlot { first_layer: layer, cube: false, view_proj: [[layer as f32; 4]; 4], near: 0.05, far, bias: 0.02 };
+        // The atlas lists light 1's slot first.
+        let buf = pack_lights(&lights, &[0, 1], &[(1, slot(5, 7.0)), (0, slot(3, 4.0))]);
+        assert_eq!(f32_at(&buf, 16 + 48), 3.0, "light 0's layer");
+        assert_eq!(f32_at(&buf, 16 + 12), 4.0, "light 0's far");
+        assert_eq!(f32_at(&buf, 16 + 64 + 48), 5.0, "light 1's layer");
+        assert_eq!(f32_at(&buf, 16 + 64 + 12), 7.0, "light 1's far");
+        assert_eq!(f32_at(&buf, 16 + 64 * MAX_GPU_LIGHTS + 64), 5.0, "light 1's matrix");
+        // A drawn light with no slot is unshadowed.
+        let buf = pack_lights(&lights, &[0, 1], &[(1, slot(5, 7.0))]);
+        assert_eq!(f32_at(&buf, 16 + 48), -1.0);
+    }
 
     fn apply(m: &[[f32; 4]; 4], p: [f64; 3]) -> [f64; 4] {
         let mut out = [0.0; 4];

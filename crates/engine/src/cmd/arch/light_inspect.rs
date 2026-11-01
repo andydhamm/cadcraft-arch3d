@@ -97,4 +97,21 @@ mod tests {
         assert_eq!(lights[0]["z"], 2.4);
         assert!((lights[0]["candela"].as_f64().unwrap() - 950.36).abs() < 0.02);
     }
+
+    #[test]
+    fn inspect_lights_empty() {
+        let model = ArchModel::default();
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        let lights = out["lights"].as_array().unwrap();
+        assert!(lights.is_empty());
+    }
+
+    #[test]
+    fn inspect_lights_not_requested() {
+        let model = ArchModel::default();
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({}), &mut out);
+        assert!(!out.contains_key("lights"));
+    }
 }

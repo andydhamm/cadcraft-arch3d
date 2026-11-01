@@ -29,7 +29,7 @@ def inside(ring, x, y):
 kitchen = [r for r in rooms if inside(ring_of(r), 8.0, 5.5)]
 if len(kitchen) != 1:
     fail(f"one room holds (8, 5.5), the kitchen: {[(r.get('id') or r.get('label'), ring_of(r)[:4]) for r in rooms]}")
-kid = kitchen[0].get('label') or kitchen[0].get('id')
+kid = kitchen[0].get('id')   # arch.inspect: 'id' is r<n>; 'label' is the label point
 xs = [p[0] for p in ring_of(kitchen[0])]; ys = [p[1] for p in ring_of(kitchen[0])]
 x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
 centres = sorted((round(x0 + (i + 0.5) * (x1 - x0) / 2, 6), round(y0 + (j + 0.5) * (y1 - y0) / 2, 6)) for i in range(2) for j in range(2))

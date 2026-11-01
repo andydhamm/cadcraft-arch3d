@@ -110,6 +110,15 @@ pub(crate) struct RenderArgs {
     /// Draw a ground plane under the scene (and cast shadows on it)
     #[arg(long)]
     pub(crate) ground: bool,
+    /// Finalize Render: every light shadowed at high resolution, soft edges, supersampled and tone mapped
+    #[arg(long = "final")]
+    pub(crate) final_render: bool,
+    /// Night: the sun is off (cannot be combined with --sun)
+    #[arg(long)]
+    pub(crate) night: bool,
+    /// Fixture lights that cast shadows, nearest first (0-64)
+    #[arg(long, value_name = "N", default_value_t = 8, value_parser = clap::value_parser!(u32).range(0..=64))]
+    pub(crate) budget: u32,
     /// GPU adapter: auto or fallback (software)
     #[arg(long, value_name = "ADAPTER", default_value = "auto", value_parser = parse_adapter_arg)]
     pub(crate) adapter: cadcraft_render3d::adapter::AdapterChoice,
@@ -810,6 +819,35 @@ mod tests {
         let Command::Render(r) = cli.command else { panic!("not render") };
         assert_eq!((r.camera.as_deref(), r.size), (Some("orbit"), Some((640, 480))));
         assert!(parse_args(&["render", "a.dxf", "b.png", "--size", "9000x10"]).is_err());
+    }
+
+    #[test]
+    fn render_args_refuse_night_with_sun() {
+        let Ok(cli) = parse_args(&["render", "a.dxf", "b.png", "--night", "--sun", "lat=51,date=2026-06-21,time=solar-noon"]) else {
+            panic!("the flags parse; the combination is refused when rendering")
+        };
+        let Command::Render(r) = cli.command else { panic!("not render") };
+        let err = crate::render::check_flags(&r).err().map(|e| e.to_string());
+        assert_eq!(err.as_deref(), Some("--night and --sun cannot be combined"));
+        let Ok(cli) = parse_args(&["render", "a.dxf", "b.png", "--night", "--final"]) else { panic!("night final parses") };
+        let Command::Render(r) = cli.command else { panic!("not render") };
+        assert!(r.night && r.final_render && crate::render::check_flags(&r).is_ok());
+    }
+
+    #[test]
+    fn render_args_budget_limits() {
+        let budget = |b: &str| match parse_args(&["render", "a.dxf", "b.png", "--budget", b]) {
+            Ok(Cli { command: Command::Render(r), .. }) => Some(r.budget),
+            _ => None,
+        };
+        assert_eq!(budget("0"), Some(0));
+        assert_eq!(budget("64"), Some(64));
+        assert_eq!(budget("65"), None);
+        assert_eq!(budget("-1"), None);
+        assert_eq!(budget("x"), None);
+        let Ok(cli) = parse_args(&["render", "a.dxf", "b.png"]) else { panic!("parses") };
+        let Command::Render(r) = cli.command else { panic!("not render") };
+        assert_eq!(r.budget, 8);
     }
 
     #[test]

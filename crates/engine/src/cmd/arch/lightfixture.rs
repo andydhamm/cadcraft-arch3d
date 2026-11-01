@@ -123,7 +123,11 @@ fn apply_overrides(fixture: &mut LightFixture, params: &Value) -> Result<()> {
         fixture.rotation = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`rotation` must be a finite number"))?;
     }
     if let Some(value) = params.get("tilt") {
-        fixture.tilt = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`tilt` must be a finite number"))?;
+        let tilt = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`tilt` must be a finite number"))?;
+        if tilt < 0.0 || tilt > 90.0 {
+            return Err(bad("lightfixture", "`tilt` must be between 0 and 90 degrees"));
+        }
+        fixture.tilt = tilt;
     }
     if let Some(value) = params.get("lumens") {
         fixture.lumens = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("lightfixture", "`lumens` must be a finite number"))?;
@@ -199,6 +203,7 @@ fn run_lightfixture(session: &mut Session, params: &Value) -> Result<Value> {
             return Err(bad("lightfixture", format!("at most {} light fixtures are allowed", MAX_LIGHT_FIXTURES)));
         }
         fixture.id = id;
+        doc_mut.ensure_layer("E-LITE");
         doc_mut.arch.lights.push(fixture);
         doc_mut.arch.next_light_id = doc_mut.arch.next_light_id.saturating_add(1);
         doc_mut.touch_arch();
@@ -235,6 +240,7 @@ fn run_lightfixture(session: &mut Session, params: &Value) -> Result<Value> {
     }
 
     let mut doc_mut = session.doc_mut()?;
+    doc_mut.ensure_layer("E-LITE");
     let labels = fixtures.iter().map(|f| light_label(f.id)).collect::<Vec<_>>();
     let handles = fixtures.iter().map(|f| handle_json(light_handle(f.id))).collect::<Vec<_>>();
     doc_mut.arch.lights.extend(fixtures);
@@ -378,5 +384,184 @@ mod tests {
         assert_eq!(types.len(), 5);
         assert_eq!(types[0]["name"], "Recessed pot light");
         assert_eq!(types[0]["shape"], "recessed-can");
+    }
+
+    #[test]
+    fn lightfixture_refuses_non_number_lumens() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "lumens": "high"})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_lumens_above_max() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "lumens": 200001.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_kelvin_below_min() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "kelvin": 999.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_kelvin_above_max() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "kelvin": 12001.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_cone_above_max() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "cone": 171.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_falloff_below_cone() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "cone": 60.0, "falloff": 50.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_negative_tilt() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "tilt": -1.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_tilt_above_90() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "tilt": 91.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_zero_rows() {
+        let mut session = Session::new();
+        let room = Room {
+            id: ArchId(0),
+            name: "Room 1".into(),
+            room_type: RoomType::Living,
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        };
+        session.doc_mut().unwrap().arch.push_room(room);
+        assert!(session.execute("lightfixture", &json!({"room": "r0", "rows": 0, "cols": 2})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_rows_above_max() {
+        let mut session = Session::new();
+        let room = Room {
+            id: ArchId(0),
+            name: "Room 1".into(),
+            room_type: RoomType::Living,
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        };
+        session.doc_mut().unwrap().arch.push_room(room);
+        assert!(session.execute("lightfixture", &json!({"room": "r0", "rows": 33, "cols": 2})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_edit_refuses_invalid() {
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"at": [1.0, 1.0]})).unwrap();
+        assert!(session.execute("lightfixture.edit", &json!({"id": "lf0", "lumens": -1.0})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights[0].lumens, 800.0);
+    }
+
+    #[test]
+    fn lightfixture_delete_unknown() {
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"at": [1.0, 1.0]})).unwrap();
+        assert!(session.execute("lightfixture.delete", &json!({"id": "lf99"})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1);
+    }
+
+    #[test]
+    fn lightfixture_refuses_unknown_type() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "type": "Chandelier"})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_ensures_elite_layer() {
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"at": [1.0, 1.0]})).unwrap();
+        assert!(session.doc().unwrap().layer("E-LITE").is_some());
+    }
+
+    #[test]
+    fn lightfixture_refuses_both_at_and_room() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "room": "r0"})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_invalid_at() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0]})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_nan_lumens() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "lumens": serde_json::Value::Null})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_huge_lumens() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0], "lumens": 1e308})).is_err());
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn lightfixture_refuses_at_cap() {
+        let mut session = Session::new();
+        for i in 0..1024 {
+            let out = session.execute("lightfixture", &json!({"at": [f64::from(i % 10), f64::from(i / 10)]}));
+            assert!(out.is_ok(), "fixture {i} failed: {:?}", out.err());
+        }
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1024);
+        assert!(session.execute("lightfixture", &json!({"at": [1.0, 1.0]})).is_err());
+    }
+
+    #[test]
+    fn lightfixture_edit_refuses_unknown_id() {
+        let mut session = Session::new();
+        assert!(session.execute("lightfixture.edit", &json!({"id": "lf99"})).is_err());
+    }
+
+    #[test]
+    fn lightfixture_grid_with_one_row_and_col() {
+        let mut session = Session::new();
+        let room = Room {
+            id: ArchId(0),
+            name: "Room 1".into(),
+            room_type: RoomType::Living,
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        };
+        session.doc_mut().unwrap().arch.push_room(room);
+        let out = session.execute("lightfixture", &json!({"room": "r0", "rows": 1, "cols": 1})).unwrap();
+        assert_eq!(out["lights"].as_array().unwrap().len(), 1);
     }
 }

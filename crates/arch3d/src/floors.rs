@@ -79,6 +79,20 @@ pub fn floor_slab(room: &Room, level: &Level, mat: &str) -> Option<Mesh> {
     }
 }
 
+/// The top of `room`'s ceiling slab: `level.elevation + ch`, with `ch` as in [`ceiling_surface`].
+/// `None` when the room type has no ceiling or `ch` is non-finite or <= 0.02.
+pub fn ceiling_top(room: &Room, level: &Level) -> Option<f64> {
+    if !room.room_type.has_ceiling() {
+        return None;
+    }
+    let ch = room.ceiling_height.filter(|h| h.is_finite() && *h > 0.0).unwrap_or(level.ceiling_height);
+    if !ch.is_finite() || ch <= 0.02 {
+        return None;
+    }
+    let top = level.elevation + ch;
+    top.is_finite().then_some(top)
+}
+
 /// Build a ceiling-surface mesh for `room` at `level`.
 ///
 /// The surface is a thin 0.02-unit slab whose top face sits at
@@ -91,14 +105,7 @@ pub fn floor_slab(room: &Room, level: &Level, mat: &str) -> Option<Mesh> {
 /// - the effective ceiling height is non-finite or <= 0.02,
 /// - the resulting mesh has no vertices (e.g. empty polygon).
 pub fn ceiling_surface(room: &Room, level: &Level, mat: &str) -> Option<Mesh> {
-    if !room.room_type.has_ceiling() {
-        return None;
-    }
-    let ch = room.ceiling_height.filter(|h| h.is_finite() && *h > 0.0).unwrap_or(level.ceiling_height);
-    if !ch.is_finite() || ch <= 0.02 {
-        return None;
-    }
-    let top = level.elevation + ch;
+    let top = ceiling_top(room, level)?;
     let mut m = Mesh::new(mat, room.id);
     m.level_elevation = level.elevation;
     m.push_prism_with_holes(&room.polygon, &room.holes, top - 0.02, top);

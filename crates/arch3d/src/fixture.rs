@@ -2,8 +2,8 @@
 
 use crate::Mesh;
 use cadcraft_arch::light::{housing_diameter, light_point};
-use cadcraft_doc::arch::{ArchModel, FixtureShape, LightFixture};
-use cadcraft_geom::Vec2;
+use cadcraft_doc::arch::{ArchModel, FixtureShape, Level, LightFixture, Room};
+use cadcraft_geom::{Line, Vec2, point_in_polygon};
 
 /// Sides of a round part.
 const SIDES: usize = 16;
@@ -98,6 +98,41 @@ pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
     out
 }
 
+/// Openings in `room`'s ceiling for the recessed cans mounted in it: the disc of each can's trim
+/// around its position, for every can on the room's level (on or off, like its housing) whose
+/// light point lies within the ceiling's 20 mm slab. The slab hangs under the ceiling height,
+/// where the light point and the trim sit: without the opening it hides the trim, takes the
+/// probe, and blocks the can's shadow rays and shadow maps. A disc that reaches the room's
+/// outline or one of its holes, or meets an earlier cut, is left out (it would not be a valid
+/// hole), and that can stays covered.
+pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec<Vec2>> {
+    let Some(top) = crate::floors::ceiling_top(room, level) else { return Vec::new() };
+    if room.polygon.len() < 3 {
+        return Vec::new();
+    }
+    let rings = std::iter::once(&room.polygon).chain(room.holes.iter().filter(|h| h.len() >= 3));
+    let edges: Vec<Line> = rings.flat_map(|r| (0..r.len()).map(move |k| Line::new(r[k], r[(k + 1) % r.len()]))).collect();
+    let mut cut: Vec<(Vec2, f64)> = Vec::new();
+    for f in model.lights.iter().filter(|f| f.shape == FixtureShape::RecessedCan && f.level == room.level) {
+        let (c, r) = (f.position, housing_diameter(f) / 2.0);
+        if !c.is_finite() || !r.is_finite() || r <= 0.0 || !point_in_polygon(&room.polygon, c) {
+            continue;
+        }
+        if room.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, c)) {
+            continue;
+        }
+        if edges.iter().any(|e| e.dist(c) <= r + 1e-6) || cut.iter().any(|&(o, ro)| o.dist(c) <= r + ro + 1e-6) {
+            continue;
+        }
+        let Some(p) = light_point(model, f) else { continue };
+        if p.z > top + 1e-9 || p.z < top - 0.02 - 1e-9 {
+            continue;
+        }
+        cut.push((c, r));
+    }
+    cut.into_iter().map(|(c, r)| poly(c, r)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +207,58 @@ mod tests {
         let hit = scene.probe(cadcraft_geom::Vec3::new(pos.x, pos.y, zp + 0.1));
         assert_eq!(hit.as_ref().map(|h| h.part.as_str()), Some("light"));
         assert_eq!(hit.map(|h| h.id), Some(cadcraft_doc::arch::light_label(m.lights[0].id)));
+    }
+
+    /// A 4 x 4 m room under a 2.4 m ceiling with a recessed pot light at each of `at`.
+    fn pots_in_a_room(at: &[(f64, f64)]) -> ArchModel {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("Recessed pot light");
+        for (i, &(x, y)) in at.iter().enumerate() {
+            let id = ArchId(i as u32);
+            let p = Vec2::new(x, y);
+            m.lights.push(
+                t.as_ref()
+                    .map(|t| cadcraft_arch::light::fixture_from_type(id, t, p))
+                    .unwrap_or_else(|| LightFixture::new(id, "Recessed pot light", p)),
+            );
+        }
+        m
+    }
+
+    #[test]
+    fn the_ceiling_opens_where_a_pot_light_sits() {
+        let m = pots_in_a_room(&[(1.0, 1.0)]);
+        let scene = crate::build(&m);
+        // The trim ring (2.39 to 2.4 m) is inside the 20 mm ceiling slab's height: the slab leaves it a hole.
+        let trim = scene.probe(cadcraft_geom::Vec3::new(1.065, 1.0, 2.395));
+        assert_eq!(trim.as_ref().map(|h| h.part.as_str()), Some("light"));
+        assert_eq!(trim.map(|h| h.id), Some(cadcraft_doc::arch::light_label(m.lights[0].id)));
+        assert_eq!(scene.probe(cadcraft_geom::Vec3::new(1.0, 1.0, 2.385)), None, "open under the lens");
+        let beside = scene.probe(cadcraft_geom::Vec3::new(2.0, 2.0, 2.39));
+        assert_eq!(beside.map(|h| h.part), Some("ceiling".to_string()));
+        let ceiling = scene.meshes.iter().find(|x| x.material == "ceiling");
+        assert!(ceiling.is_some_and(|c| c.is_manifold()));
+    }
+
+    #[test]
+    fn a_can_over_the_room_edge_or_on_another_cut_gets_none() {
+        // (0.05, 2) reaches past the wall face at x = 0; (3.1, 3) overlaps the cut of (3, 3).
+        let m = pots_in_a_room(&[(0.05, 2.0), (3.0, 3.0), (3.1, 3.0)]);
+        let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
+        assert_eq!(cuts.len(), 1);
+        assert!(cuts[0].iter().all(|p| (*p - Vec2::new(3.0, 3.0)).len() < 0.076));
+        let scene = crate::build(&m);
+        let ceiling = scene.meshes.iter().find(|x| x.material == "ceiling");
+        assert!(ceiling.is_some_and(|c| c.is_manifold()));
+    }
+
+    #[test]
+    fn a_can_hung_below_the_ceiling_or_in_another_room_gets_no_cut() {
+        let mut m = pots_in_a_room(&[(1.0, 1.0), (6.0, 1.0)]);
+        m.lights[0].height = Some(2.0);
+        assert!(ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]).is_empty());
     }
 }

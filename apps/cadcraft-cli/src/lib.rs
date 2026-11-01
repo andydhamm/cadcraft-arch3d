@@ -17,6 +17,7 @@ mod mcp;
 mod output;
 mod perf;
 mod render;
+mod render_hook;
 mod run;
 mod sample;
 
@@ -95,6 +96,9 @@ where
     };
     // The engine's hooks are set-once, so installing them on every call is harmless.
     install_io();
+    if matches!(cli.command, Command::Run(_) | Command::Mcp(_)) {
+        render_hook::install();
+    }
     match &cli.command {
         Command::Convert(a) => a.settings.apply(),
         Command::Run(a) => a.settings.apply(),
