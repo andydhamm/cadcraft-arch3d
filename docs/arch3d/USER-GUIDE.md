@@ -197,7 +197,48 @@ cargo run -q -p cadcraft-cli -- convert examples/apartment.dxf apartment.glb
 The **Detection Review** panel (Architecture > Detection Review) lets you inspect, check and accept candidates
 interactively.
 
+## Lighting and final renders
+
+The lighting model is built from the same room model as the 3D view: fixtures sit on the ceiling, wall or floor,
+with a 3D housing and a light source. The pane shadows only the nearest and brightest eight lights; camera moves
+never rebuild shadow maps, and a fixture edit rebuilds the shadow maps only for the changed light. Finalize Render
+uses a still from the current camera, renders every light with a high-resolution shadow map, soft shadow edges and
+extra antialiasing, then tone-maps the frame before saving it.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[-0.1,-0.1],[4.1,-0.1],[4.1,4.1],[-0.1,4.1],[-0.1,-0.1]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'lightfixture {"room":"r0","rows":2,"cols":2}' \
+  --cmd 'lightfixture.types {}' \
+  --cmd 'lightfixture.edit {"id":"lf0","height":2.4}' \
+  --cmd 'illuminance {"point":[1,1,0]}'
+```
+
+The 4 × 4 m room has a 2.4 m ceiling and four default pot lights at (1,1), (1,3), (3,1) and (3,3), so the
+reply to `illuminance {"point":[1,1,0]}` is about 165 lx for direct light from the nearest fixture. This is the
+same control value as the interactive light test and is valid for a 60° cone with 800 lm at 3000 K.
+
+```sh
+cargo run -q -p cadcraft-cli -- render house.dxf night.png --night --final
+```
+
+The `render` command can also be used as a JSON command from the engine or as a file render from the CLI. For a
+night scene the renderer uses the site and the current camera; `sunstudy` requires a saved site and renders one still
+per hour from the current camera.
+
+```text
+render {"out":"night.png","size":[1200,900],"camera":{"kind":"orbit","target":[2,2,1.2],"azimuth":215,"elevation":26,"distance":10,"fov":60},"sun":false,"final":true}
+sunstudy {"date":"2026-06-21","from":"08:00","to":"18:00","step":"1h","out":"study/house"}
+```
+
+The interactive pane exposes the same workflow as the headless renderer: the pane button, `render --final`, and
+`render {"final":true}` all run a Finalize Render. A final still keeps every light shadowed, softens the
+penumbra, tone-maps the scene and stays cached until the camera or the scene changes. This adds one more step
+beyond the pane's live lighting: the sun, the fixtures and the shadow atlas are all still in the interactive view,
+but the Finalize Render is a one-off, high-quality still.
+
 ## Out of scope
 
-Not part of arch3d so far: SSAO, TAA, cascaded shadows, path tracing, artificial lights, animated walkthrough
-paths, and gamepad or 3D-mouse input.
+Not part of arch3d so far: SSAO, TAA, cascaded shadows, path tracing, bounced light, IES files (phase 11),
+animated walkthrough paths, and gamepad or 3D-mouse input.
