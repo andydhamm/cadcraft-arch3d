@@ -51,12 +51,13 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
 
     let scene = cadcraft_arch3d::build(&doc.arch);
     let illumination = cadcraft_arch3d::light::illuminance(&scene, point, normal);
-    let contributions = illumination
-        .per_light
-        .into_iter()
-        .map(|(id, lux)| {
+    let contributions = scene
+        .lights
+        .iter()
+        .map(|light| {
+            let lux = illumination.per_light.get(&light.id).copied().unwrap_or(0.0);
             json!({
-                "id": light_label(id),
+                "id": light_label(light.id),
                 "lux": lux,
             })
         })
