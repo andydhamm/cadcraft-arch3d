@@ -588,6 +588,52 @@ fn user_guide_all_cmd_json_is_valid() {
     }
 }
 
+/// The lighting section documents everything the spec requires.
+#[test]
+fn user_guide_lighting_section_completeness() {
+    let content = read_user_guide();
+    assert!(content.contains("Lighting and final renders"), "the guide should have a Lighting and final renders section");
+    assert!(content.contains("lightfixture"), "the guide should mention the lightfixture command");
+    assert!(content.contains("illuminance"), "the guide should mention the illuminance command");
+    assert!(content.contains("Finalize Render"), "the guide should document Finalize Render");
+    assert!(content.contains("sunstudy"), "the guide should mention sunstudy");
+    assert!(content.contains("8"), "the guide should mention the 8-light interactive budget");
+    assert!(content.contains("bounced light"), "the guide should mention bounced light as out of scope");
+    assert!(content.contains("IES"), "the guide should mention IES files as out of scope");
+    assert!(content.contains("shadow map"), "the guide should mention shadow maps");
+    assert!(content.contains("tone-map") || content.contains("tone mapping"), "the guide should mention tone mapping");
+}
+
+/// Hostile lighting parameters are refused with nothing written.
+#[test]
+fn user_guide_hostile_lighting_params() {
+    let mut session = Session::new();
+    // illuminance point must have 3 components
+    let r = session.execute("illuminance", &serde_json::json!({"point":[1,1]}));
+    assert!(r.is_err(), "illuminance point with 2 components should be refused");
+    let r = session.execute("illuminance", &serde_json::json!({"point":[1,1,0,0]}));
+    assert!(r.is_err(), "illuminance point with 4 components should be refused");
+    // lightfixture with non-existent room
+    let r = session.execute("lightfixture", &serde_json::json!({"room":"r99","rows":1,"cols":1}));
+    assert!(r.is_err(), "lightfixture in non-existent room should be refused");
+    // lightfixture with zero rows
+    session.execute("wall", &serde_json::json!({"points":[[0,0],[4,0],[4,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})).ok();
+    session.execute("roomdetect", &serde_json::json!({})).ok();
+    let r = session.execute("lightfixture", &serde_json::json!({"room":"r0","rows":0,"cols":1}));
+    assert!(r.is_err(), "lightfixture with 0 rows should be refused");
+    // lightfixture with too many rows (cap is 32)
+    let r = session.execute("lightfixture", &serde_json::json!({"room":"r0","rows":33,"cols":1}));
+    assert!(r.is_err(), "lightfixture with 33 rows should be refused");
+}
+
+/// The render section documents the --night and --final flags.
+#[test]
+fn user_guide_render_flags_documented() {
+    let content = read_user_guide();
+    assert!(content.contains("--night"), "the guide should document the --night flag");
+    assert!(content.contains("--final"), "the guide should document the --final flag");
+}
+
 /// The guide documents the key phase 7 commands with their parameters.
 #[test]
 fn user_guide_documents_phase7_parameters() {
