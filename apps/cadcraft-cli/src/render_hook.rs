@@ -119,6 +119,9 @@ fn compute_of(state: &mut State, rt: bool) -> Result<Option<ComputeGpu>, String>
     Ok(state.compute.clone().flatten())
 }
 
+/// The samples per pixel a default Finalize uses on a software (CPU) adapter.
+const SOFTWARE_SPP: u32 = 64;
+
 /// `<out without .png>-spp<n>.png`.
 fn snapshot_path(out: &std::path::Path, spp: u32) -> std::path::PathBuf {
     let stem = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -153,7 +156,13 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     let mut final_mode: Option<&str> = None;
     let mut path_info = serde_json::Map::new();
     let (rgba, size, drawn, shadowed, png) = if want_path {
-        let opts = path_options(&req.path);
+        let mut opts = path_options(&req.path);
+        // The default 256 spp is too slow on a software (CPU) adapter: lower an unchanged default
+        // to 64 (an explicit spp, or snapshots that may need more samples, are kept).
+        let on_cpu = compute.as_ref().is_some_and(|c| c.info.adapter_type == "Cpu");
+        if on_cpu && opts.spp == PathParams::default().spp && opts.snapshots.is_empty() {
+            opts.spp = SOFTWARE_SPP;
+        }
         let cache_ref = pcache.as_ref().and_then(|(c, _)| c.as_ref());
         let (png, stats, fallback) =
             render_final_with(off, compute.as_ref(), scene, key, &camera, &lighting, req.ground, req.size, true, &opts, cache_ref).map_err(gpu)?;

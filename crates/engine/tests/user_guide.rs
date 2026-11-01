@@ -670,6 +670,95 @@ fn user_guide_path_tracing_block_runs() {
     assert!(found_path_block, "user guide should contain a path-tracing example block");
 }
 
+/// Exactly one sh block in the guide matches the path-tracing block's signature ("LED panel" and "illuminance").
+#[test]
+fn user_guide_path_tracing_block_is_unique() {
+    let blocks = sh_blocks(GUIDE);
+    let mut count = 0;
+    for lines in &blocks {
+        if lines.iter().any(|line| line.contains("LED panel") && line.contains("illuminance")) {
+            count += 1;
+        }
+    }
+    assert_eq!(count, 1, "exactly one sh block should match the path-tracing block signature, found {count}");
+}
+
+/// The path-tracing block has exactly five commands: wall, roomdetect, two lightfixtures, illuminance.
+#[test]
+fn user_guide_path_tracing_block_command_count() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found = false;
+    for lines in &blocks {
+        let Some(line) = lines.iter().find(|line| line.contains("LED panel") && line.contains("illuminance")) else {
+            continue;
+        };
+        found = true;
+        let cmds = cmd_args(line);
+        assert_eq!(cmds.len(), 5, "path-tracing block should have exactly 5 commands, found {}", cmds.len());
+        let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
+        assert_eq!(ids, ["wall", "roomdetect", "lightfixture", "lightfixture", "illuminance"], "path-tracing block command order");
+        return;
+    }
+    assert!(found, "path-tracing block not found");
+}
+
+/// The illuminance command in the path-tracing block measures at point [2,2,0].
+#[test]
+fn user_guide_path_tracing_block_illuminance_point_is_220() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found = false;
+    for lines in &blocks {
+        let Some(line) = lines.iter().find(|line| line.contains("LED panel") && line.contains("illuminance")) else {
+            continue;
+        };
+        found = true;
+        let cmds = cmd_args(line);
+        let illum_cmd = cmds.iter().find(|c| c.starts_with("illuminance ")).expect("path-tracing block should have an illuminance command");
+        let json = illum_cmd.split_once(' ').unwrap().1;
+        let params: serde_json::Value = serde_json::from_str(json).expect("illuminance JSON should parse");
+        let point = params.get("point").and_then(serde_json::Value::as_array).expect("illuminance should have a point array");
+        assert_eq!(point.len(), 3, "illuminance point should have 3 components");
+        assert_eq!(point[0].as_f64(), Some(2.0), "illuminance point x should be 2.0");
+        assert_eq!(point[1].as_f64(), Some(2.0), "illuminance point y should be 2.0");
+        assert_eq!(point[2].as_f64(), Some(0.0), "illuminance point z should be 0.0");
+        return;
+    }
+    assert!(found, "path-tracing block not found");
+}
+
+/// The lighting block (illuminance at [1,1,0]) and the path-tracing block (illuminance at [2,2,0]) are distinct.
+#[test]
+fn user_guide_lighting_and_path_tracing_blocks_differ() {
+    let blocks = sh_blocks(GUIDE);
+    let mut lighting_point = None;
+    let mut path_point = None;
+
+    for lines in &blocks {
+        for line in lines {
+            if line.contains("lightfixture") && line.contains("illuminance") && !line.contains("LED panel") {
+                let cmds = cmd_args(line);
+                if let Some(illum_cmd) = cmds.iter().find(|c| c.starts_with("illuminance ")) {
+                    let json = illum_cmd.split_once(' ').unwrap().1;
+                    let params: serde_json::Value = serde_json::from_str(json).expect("lighting illuminance JSON should parse");
+                    lighting_point = params.get("point").cloned();
+                }
+            }
+            if line.contains("LED panel") && line.contains("illuminance") {
+                let cmds = cmd_args(line);
+                if let Some(illum_cmd) = cmds.iter().find(|c| c.starts_with("illuminance ")) {
+                    let json = illum_cmd.split_once(' ').unwrap().1;
+                    let params: serde_json::Value = serde_json::from_str(json).expect("path illuminance JSON should parse");
+                    path_point = params.get("point").cloned();
+                }
+            }
+        }
+    }
+
+    assert!(lighting_point.is_some(), "lighting block with illuminance not found");
+    assert!(path_point.is_some(), "path-tracing block with illuminance not found");
+    assert_ne!(lighting_point, path_point, "lighting and path-tracing blocks should measure at different points");
+}
+
 /// The guide documents the key phase 7 commands with their parameters.
 #[test]
 fn user_guide_documents_phase7_parameters() {

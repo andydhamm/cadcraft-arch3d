@@ -60,12 +60,12 @@ pub struct RenderRequest<'a> {
 }
 
 /// Which Finalize Render a request runs (phase 11): the phase-10 shadow-mapped still, or the path
-/// tracer. `RenderRequest::new` takes `Raster` until `p11-final-default-path` makes `Path` the
-/// default; a device without compute shaders always gets `Raster`.
+/// tracer. `Path` is the default (`final: true`); `Raster` stays available as `final: "raster"`,
+/// and a device without compute shaders always gets `Raster`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FinalMode {
-    #[default]
     Raster,
+    #[default]
     Path,
 }
 
@@ -466,6 +466,13 @@ mod tests {
         assert_eq!(parse_final(Some(&json!("path"))).ok(), Some((true, FinalMode::Path)));
         let e = parse_final(Some(&json!("foo"))).map_err(|e| e.to_string()).err().unwrap_or_default();
         assert!(e.contains("`final` must be"), "{e}");
+    }
+
+    #[test]
+    fn final_true_is_path_traced_by_default() {
+        assert_eq!(FinalMode::default(), FinalMode::Path);
+        assert_eq!(parse_final(Some(&json!(true))).ok(), Some((true, FinalMode::Path)));
+        assert_eq!(parse_final(Some(&json!("raster"))).ok(), Some((true, FinalMode::Raster)));
     }
 
     #[test]
