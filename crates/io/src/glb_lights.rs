@@ -455,4 +455,80 @@ mod tests {
         assert!((lights[1]["intensity"].as_f64().unwrap_or(f64::NAN) - 950.36).abs() < 1e-9);
         assert!(nodes[1].get("extras").is_none(), "{}", nodes[1]);
     }
+
+    #[test]
+    fn area_light_with_nan_size_omits_area_extras() {
+        let candela = 3600.0 / std::f64::consts::PI;
+        let mut panel = scene_light(5, LightKind::Area, Vec3::new(2.0, 1.5, 2.4), Vec3::new(0.0, 0.0, -1.0), candela, [1.0, 1.0, 1.0], 1.0, 0.0);
+        panel.size = [f64::NAN, 0.6];
+        let (_, nodes) = punctual_lights(&Scene3d { lights: vec![panel], ..Default::default() });
+        assert_eq!(nodes.len(), 1);
+        assert!(nodes[0].get("extras").is_none(), "NaN size should omit extras entirely");
+    }
+
+    #[test]
+    fn ies_profile_with_zero_peak_exports_zero_intensity() {
+        let profile = cadcraft_doc::arch::IesProfile {
+            name: "Dim fixture".into(),
+            vertical: vec![0.0, 90.0],
+            horizontal: vec![0.0],
+            candela: vec![0.0, 0.0],
+            lumens: -1.0,
+            ..Default::default()
+        };
+        let half = 30.0_f64.to_radians();
+        let mut pot =
+            scene_light(9, LightKind::Spot, Vec3::new(1.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 950.36, [1.0, 1.0, 1.0], half.cos(), half.cos());
+        pot.ies = Some(std::sync::Arc::new(profile));
+        let (lights, _) = punctual_lights(&Scene3d { lights: vec![pot], ..Default::default() });
+        assert_eq!(lights.len(), 1);
+        assert!((lights[0]["intensity"].as_f64().unwrap_or(f64::NAN) - 0.0).abs() < 1e-9, "zero-peak IES should export intensity 0, {}", lights[0]);
+    }
+
+    #[test]
+    fn area_light_with_ies_carries_both_extras() {
+        let candela = 3600.0 / std::f64::consts::PI;
+        let profile = cadcraft_doc::arch::IesProfile {
+            name: "Panel IES".into(),
+            vertical: vec![0.0, 90.0],
+            horizontal: vec![0.0],
+            candela: vec![1000.0, 500.0],
+            lumens: -1.0,
+            ..Default::default()
+        };
+        let mut panel = scene_light(10, LightKind::Area, Vec3::new(2.0, 1.5, 2.4), Vec3::new(0.0, 0.0, -1.0), candela, [1.0, 1.0, 1.0], 1.0, 0.0);
+        panel.size = [0.6, 0.6];
+        panel.ies = Some(std::sync::Arc::new(profile));
+        let (lights, nodes) = punctual_lights(&Scene3d { lights: vec![panel], ..Default::default() });
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0]["type"], "spot");
+        // IES peak candela should be used as intensity
+        assert!((lights[0]["intensity"].as_f64().unwrap_or(f64::NAN) - 1000.0).abs() < 1e-9, "IES peak should override area candela, {}", lights[0]);
+        assert_eq!(nodes[0]["extras"]["cadcraft"]["area"], json!([0.6, 0.6]));
+        assert_eq!(nodes[0]["extras"]["cadcraft"]["ies"], "Panel IES");
+    }
+
+    #[test]
+    fn mixed_light_types_export_in_order() {
+        let candela = 3600.0 / std::f64::consts::PI;
+        let point = scene_light(0, LightKind::Point, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.0, 0.0);
+        let half = 30.0_f64.to_radians();
+        let spot =
+            scene_light(1, LightKind::Spot, Vec3::new(1.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 950.36, [1.0, 1.0, 1.0], half.cos(), half.cos());
+        let mut area = scene_light(2, LightKind::Area, Vec3::new(2.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), candela, [1.0, 1.0, 1.0], 1.0, 0.0);
+        area.size = [0.6, 0.6];
+        let scene = Scene3d { lights: vec![point, spot, area], ..Default::default() };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 3);
+        assert_eq!(nodes.len(), 3);
+        assert_eq!(lights[0]["type"], "point");
+        assert_eq!(lights[1]["type"], "spot");
+        assert_eq!(lights[2]["type"], "spot"); // area exported as spot
+        assert_eq!(nodes[0]["name"], "light-lf0-source");
+        assert_eq!(nodes[1]["name"], "light-lf1-source");
+        assert_eq!(nodes[2]["name"], "light-lf2-source");
+        assert!(nodes[0].get("extras").is_none());
+        assert!(nodes[1].get("extras").is_none());
+        assert_eq!(nodes[2]["extras"]["cadcraft"]["area"], json!([0.6, 0.6]));
+    }
 }
