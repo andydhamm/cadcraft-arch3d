@@ -61,7 +61,7 @@ fn build_pipeline(gpu: &ComputeGpu) -> Result<AtrousPipeline, String> {
     });
     let module = d.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("pt denoise"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/pt/denoise.wgsl")),
+        source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/pt/denoise.wgsl").into()),
     });
     let pipeline_layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pt denoise"),
