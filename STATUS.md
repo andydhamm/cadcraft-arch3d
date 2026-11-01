@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 17:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 22 of 24 segments merged · 8 of 13 acceptance checks**
 
@@ -21,18 +21,18 @@ Updated 2026-11-01 17:30 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 8 / 13 | 9.8 h so far · expected done Nov 01 18:25–Nov 02 03:13 UTC |
+| 11 | Ray-traced Finalize Render | building | 8 / 13 | 10.1 h so far · expected done Nov 01 18:41–Nov 02 03:42 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-22 merged, 1 gate, 1 working
+22 merged, 2 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p11-r3d-rt` | Optional hardware ray queries: the same traversal through wgpu ray queries, parity with the compute path | gate | claude-sonnet-b |
-| `p11-final-default-path` | Path traced is the default Finalize | working | claude-sonnet-d |
+| `p11-r3d-rt` | Optional hardware ray queries: the same traversal through wgpu ray queries, parity with the compute path | merging | claude-sonnet-b |
+| `p11-final-default-path` | Path traced is the default Finalize | merging | claude-sonnet-d |
 
 ## Recent merges
 
@@ -55,16 +55,16 @@ Updated 2026-11-01 17:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 781 |
+| bonsai-a | bonsai2-27b | gate | 781 |
 | bonsai-b | bonsai2-27b | idle | 722 |
 | bonsai-ws2-a | bonsai2-27b | gate | 777 |
 | bonsai-ws2-b | bonsai2-27b | gate | 757 |
 | claude-sonnet-a | sonnet | idle | 67 |
-| claude-sonnet-b | sonnet | gate | 62 |
+| claude-sonnet-b | sonnet | merging | 63 |
 | claude-sonnet-c | sonnet | idle | 14 |
-| claude-sonnet-d | sonnet | agent | 5 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 625 |
+| claude-sonnet-d | sonnet | merging | 6 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 626 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | agent | 539 |
+| tturbo-mac | tturbo-ultraheretic | gate | 539 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
