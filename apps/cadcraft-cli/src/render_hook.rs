@@ -274,4 +274,75 @@ mod tests {
         assert_eq!(s[0]["rgb"].as_array().map(Vec::len), Some(3));
         assert!(s[1]["pixel"].is_null() || s[1]["visible"] == false, "{v}");
     }
+
+    #[test]
+    fn render_hook_empty_scene_renders() {
+        let _g = reset();
+        let d = Drawing::new_metric();
+        d.touch_arch();
+        let Some(v) = render(&request(&d, None, None, false)) else { return };
+        assert_eq!(v["ok"], true, "{v}");
+        assert_eq!(v["lights"], 0, "{v}");
+        assert_eq!(v["shadowMapsBuilt"], 0, "{v}");
+        assert_eq!(v["finalRenders"], 0, "{v}");
+    }
+
+    #[test]
+    fn render_hook_sample_nan_point() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.samples = vec![[f64::NAN, f64::NAN, f64::NAN]];
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), 1, "{v}");
+        // NaN projects to nothing or is not visible.
+        assert!(s[0]["pixel"].is_null() || s[0]["visible"] == false, "{v}");
+    }
+
+    #[test]
+    fn render_hook_sample_far_point() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.samples = vec![[1000.0, 1000.0, 1000.0]];
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), 1, "{v}");
+        assert_eq!(s[0]["visible"], false, "{v}");
+    }
+
+    #[test]
+    fn render_hook_sun_off_renders() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.sun = SunChoice::Off;
+        let Some(v) = render(&req) else { return };
+        assert_eq!(v["ok"], true, "{v}");
+        assert_eq!(v["lights"], 4, "{v}");
+        assert_eq!(v["shadowMapsBuilt"], 4, "{v}");
+    }
+
+    #[test]
+    fn render_hook_moving_fixture_back_rebuilds_again() {
+        let _g = reset();
+        let mut d = room();
+        let Some(v) = render(&request(&d, None, None, false)) else { return };
+        assert_eq!(v["shadowMapsBuilt"], 4, "{v}");
+        if let Some(l) = d.arch.lights.first_mut() {
+            l.position = Vec2::new(1.5, 1.5);
+        }
+        d.touch_arch();
+        let Some(v) = render(&request(&d, None, None, false)) else { return };
+        assert_eq!(v["shadowMapsBuilt"], 5, "{v}");
+        // Move it back: the scene key changes again, so the map rebuilds once more.
+        if let Some(l) = d.arch.lights.first_mut() {
+            l.position = Vec2::new(1.0, 1.0);
+        }
+        d.touch_arch();
+        let Some(v) = render(&request(&d, None, None, false)) else { return };
+        assert_eq!(v["shadowMapsBuilt"], 6, "{v}");
+        assert_eq!(v["frameShadowMaps"], 1, "{v}");
+    }
 }
