@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 23:31 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability**
 
-6,550 workspace tests passing at the last merge · 658 segments merged in all · 0 of 13 seats working
+6,561 workspace tests passing at the last merge · 659 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -22,7 +22,7 @@ Updated 2026-11-01 23:31 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | planning | — | 0.3 h so far · expected done Nov 02 01:17–Nov 09 10:36 UTC |
+| 12 | Exports and interoperability | planning | — | 0.5 h so far · expected done Nov 02 01:17–Nov 09 10:36 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
@@ -34,6 +34,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 23:41 | `harden-p11-cli-render-args` | merged | 6,561 pass | tturbo-mac |
 | Nov 01 22:41 | `upstream-sync-2034d6899` | merged | 6,550 pass | claude-sonnet-d |
 | Nov 01 22:12 | `p11f-glass-shadow-once` | merged | 6,447 pass | darwin-ws3 |
 | Nov 01 21:58 | `p11f-glass-shadow-once` | refused | 0 pass | bonsai-b |
@@ -45,7 +46,6 @@ none yet
 | Nov 01 19:23 | `harden-p11-final-default-path` | merged | 6,419 pass | tturbo-mac |
 | Nov 01 18:56 | `p11-r3d-rt` | refused | 0 pass | claude-sonnet-b |
 | Nov 01 18:54 | `harden-p11-docs-user-guide` | merged | 6,412 pass | tturbo-mac |
-| Nov 01 18:44 | `p11-final-default-path` | merged | 6,408 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -62,5 +62,5 @@ none yet
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 645 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 45 |
-| tturbo-mac | tturbo-ultraheretic | merging | 553 |
+| tturbo-mac | tturbo-ultraheretic | agent | 553 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
