@@ -77,14 +77,9 @@ fn acc_layout_entry() -> wgpu::BindGroupLayoutEntry {
 
 /// The two-group pipeline layout for the ray-query kernels: group 0 is the same nine kernel
 /// buffers as the compute path; group 1, binding 0, is the TLAS.
-fn rq_pipeline_layout(
-    device: &wgpu::Device,
-    kernel_layout: &wgpu::BindGroupLayout,
-) -> wgpu::PipelineLayout {
-    let acc_layout = wgpu::BindGroupLayout::from_layout(device, &wgpu::BindGroupLayoutDescriptor {
-        label: Some("pt rq acc"),
-        entries: &[acc_layout_entry()],
-    });
+fn rq_pipeline_layout(device: &wgpu::Device, kernel_layout: &wgpu::BindGroupLayout) -> wgpu::PipelineLayout {
+    let acc_layout =
+        wgpu::BindGroupLayout::from_layout(device, &wgpu::BindGroupLayoutDescriptor { label: Some("pt rq acc"), entries: &[acc_layout_entry()] });
     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pt rq"),
         bind_group_layouts: &[Some(kernel_layout), Some(&acc_layout)],
@@ -147,13 +142,7 @@ impl PtPipelines {
 pub fn build_rq_pipelines(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>) -> Result<RqPtPipelines, String> {
     let device = &gpu.device;
     let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
-    let kernel_layout = layout(
-        device,
-        "pt rq kernel",
-        &[
-            UNIFORM, READ, READ, READ, READ, READ, WRITE, WRITE, READ,
-        ],
-    );
+    let kernel_layout = layout(device, "pt rq kernel", &[UNIFORM, READ, READ, READ, READ, READ, WRITE, WRITE, READ]);
     let rq_pipeline_layout = rq_pipeline_layout(device, &kernel_layout);
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("pt rq kernel"),

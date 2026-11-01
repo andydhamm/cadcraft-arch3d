@@ -15,15 +15,6 @@ pub struct RqBuild {
     pub index_buffer: wgpu::Buffer,
 }
 
-/// A raw triangle with its three vertices, used to fill the BLAS vertex buffer.
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct TriVerts {
-    a: [f32; 3],
-    b: [f32; 3],
-    c: [f32; 3],
-}
-
 impl RqBuild {
     /// Build a BLAS of every triangle in `scene` and a TLAS with one instance. Returns `None` when
     /// the scene has no triangles (nothing to accelerate) or the device cannot create the
@@ -34,25 +25,22 @@ impl RqBuild {
         }
         let d = &gpu.device;
 
-        // Extract the three vertices from each triangle (first 36 bytes of each GpuTri).
-        let mut positions: Vec<f32> = Vec::with_capacity(scene.tris.len() * 9);
+        // Extract the three vertices from each triangle (first 36 bytes of each 64-byte GpuTri).
+        let n = scene.tris.len();
+        let mut positions: Vec<f32> = Vec::with_capacity(n * 9);
         for tri in &scene.tris {
-            if tri.len() < 36 {
-                return None;
+            let tri_bytes: [u8; 64] = bytemuck::cast(tri);
+            let verts: [f32; 9] = bytemuck::cast(&tri_bytes[0..36]);
+            for v in &verts {
+                if !v.is_finite() {
+                    return None;
+                }
+                positions.push(*v);
             }
-            let v = bytemuck::cast_slice::<TriVerts>(&tri[0..36])[0];
-            positions.extend_from_slice(&v.a);
-            positions.extend_from_slice(&v.b);
-            positions.extend_from_slice(&v.c);
-        }
-        if positions.len() != scene.tris.len() * 9 {
-            return None;
         }
 
         // Triangle indices: 0,1,2 per triangle.
-        let indices: Vec<u32> = (0..scene.tris.len())
-            .flat_map(|i| [i * 3, i * 3 + 1, i * 3 + 2])
-            .collect();
+        let indices: Vec<u32> = (0..n as u32).flat_map(|i| [i * 3, i * 3 + 1, i * 3 + 2]).collect();
 
         // Compute the scene AABB from the vertices.
         let mut min_x = f32::INFINITY;
@@ -61,25 +49,26 @@ impl RqBuild {
         let mut max_x = f32::NEG_INFINITY;
         let mut max_y = f32::NEG_INFINITY;
         let mut max_z = f32::NEG_INFINITY;
-        for i in 0..positions.len() step_by(3) {
+        for i in (0..positions.len()).step_by(3) {
             for axis in 0..3 {
                 let v = positions[i + axis];
-                if !v.is_finite() {
-                    return None;
+                match axis {
+                    0 => {
+                        min_x = min_x.min(v);
+                        max_x = max_x.max(v);
+                    }
+                    1 => {
+                        min_y = min_y.min(v);
+                        max_y = max_y.max(v);
+                    }
+                    _ => {
+                        min_z = min_z.min(v);
+                        max_z = max_z.max(v);
+                    }
                 }
-                let idx = axis % 3;
-                let (mn, mx) = match idx {
-                    0 => &mut (min_x, max_x),
-                    1 => &mut (min_y, max_y),
-                    _ => &mut (min_z, max_z),
-                };
-                *mn = (*mn).min(v);
-                *mx = (*mx).max(v);
             }
         }
-        if !min_x.is_finite() || !max_x.is_finite() || !min_y.is_finite() || !max_y.is_finite()
-            || !min_z.is_finite() || !max_z.is_finite()
-        {
+        if !min_x.is_finite() || !max_x.is_finite() || !min_y.is_finite() || !max_y.is_finite() || !min_z.is_finite() || !max_z.is_finite() {
             return None;
         }
 
@@ -100,11 +89,8 @@ impl RqBuild {
             index_type: wgpu::IndexType::U32,
             base_instance: 0,
             instance_count: 1,
-            max_triangle_count: scene.tris.len() as u32,
-            bounds: wgpu::AccelerationStructureBounds {
-                min: [min_x, min_y, min_z],
-                max: [max_x, max_y, max_z],
-            },
+            max_triangle_count: n as u32,
+            bounds: wgpu::AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
             flags: 0,
         }) {
             Some(b) => b,
@@ -118,22 +104,14 @@ impl RqBuild {
             index_type: wgpu::IndexType::U32,
             base_instance: 0,
             instance_count: 1,
-            max_triangle_count: scene.tris.len() as u32,
-            bounds: wgpu::AccelerationStructureBounds {
-                min: [min_x, min_y, min_z],
-                max: [max_x, max_y, max_z],
-            },
+            max_triangle_count: n as u32,
+            bounds: wgpu::AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
             flags: 0,
         }) {
             Some(t) => t,
             None => return None,
         };
 
-        Some(RqBuild {
-            tlas,
-            blas,
-            vertex_buffer,
-            index_buffer,
-        })
+        Some(RqBuild { tlas, blas, vertex_buffer, index_buffer })
     }
 }

@@ -24,9 +24,9 @@ mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
+pub mod rt;
 pub mod scene_gpu;
 pub mod shaders;
-pub mod rt;
 pub mod tracer;
 
 #[cfg(test)]
