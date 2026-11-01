@@ -315,3 +315,24 @@ sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFA
 - **Phase-10 groundwork (2026-10-31).** `doc::arch::light` (`LightFixture`, `LightKind`, `LightMount`, `FixtureShape`, handles `lf{n}` at `+0x48000`, `ArchModel.lights`, skipped when empty; `CADCRAFT_ARCH` **v9**); `arch::light` with the catalogue (pot light, pendant, sconce, surface fixture, floor lamp) and the photometry (`cone_solid_angle`, `intensity_cd`: 800 lm in 60° = 950.36 cd); `arch3d::light::SceneLight` and `Scene3d.lights`/`fixtures`, probe part `light`. In `render3d`, the light contract the segments build on: group 2 of the lit pipelines (frame uniform, sun map, a 64-light uniform, a `Depth32Float` 2D-array shadow atlas — one layer per spot, six per point light, read with `textureLoad`), the cube-face and spot matrices in Rust and `shaders/light_math.wgsl` (tested against each other: maps store `far/(far−near)·(1−near/z)` and lookups compare metres), `RenderOptions::lit` (absent = the phase-6 pipelines, pixel for pixel), `Draw.casts_shadow` (fixture housings cast none, so moving a fixture rebuilds only its own map) and `Draw.emissive`. Site and fixture albedos (terrain green, paths by surface, crowns, trunks: the phase-9 grey site). The engine's `render` hook (`RenderHooks`: the app's renderer lives for the session, so a camera-only `render` builds no shadow map); stubs with final signatures for every phase-10 module; uk.tsv rows for the seven new commands.
 - **Phase-10 operator fixes (2026-10-31/11-01).** Ceiling openings for recessed cans (e8e1585f), `sunstudy` errors (4e199057), `render` defaults, spot-shadow packing, ceilings out of fixture shadows and check 11's room id (30d9cb91..29a465e7). Three of them were found by merging every queued branch into a trial tree and running the phase's checks before the merge queue drained.
 - **Phase-11 groundwork (2026-11-01, 1af74ca1).** Area lights (`LightKind::Area`, `FixtureShape::Panel`, the 'LED panel 600'), `IesProfile` and `arch::ies`, `SceneLight` size/axis/ies, `render3d::pathtrace` (options, units, the compute device, GPU byte layouts, WGSL skeleton, pipelines, test helpers `upload_scene`/`run_entry`), and `crates/gpu-optin`, the only unsafe code in the workspace (wgpu's experimental-feature token for ray queries, a pipeline cache from disk).
+
+## Phase 11 plan
+
+Phase 11 (path-traced Finalize Render) is planned on operator groundwork (commit 'Phase 11 groundwork'). Decisions:
+- The path tracer lives in render3d::pathtrace on its own compute device (request_compute: the adapter's limits, not WebGL2's).
+  No compute shaders (WebGL2, or CADCRAFT_RENDER_LIMITS=webgl2) means the raster Finalize, reported as fallback "no compute shaders".
+- Units: radiance in nits; a fixture's RGB carries its candela with luminance 1 (colour / luminance), so path-traced
+  illuminance in lux is the luminance of the irradiance and matches the CPU illuminance (165 lx under a pot light).
+  Sun 100 000 lx, sky 2 500 to 5 000 nits; night exposure = the raster's, day exposure pi / 100 000; the raster's ACES.
+- Fixtures: lights are sampled (next-event estimation, shadow rays through glass tinted, fixture housings never in the way);
+  a lit lens is seen by the camera only (its light is the fixture's). Area lights are rectangles sampled by area (MIS with
+  the BSDF); IES LM-63 type C profiles replace the cone (and the cosine law) and are scaled to the fixture's lumens.
+- Integrator: bounces full bounces, then Russian roulette; bounces 0 = direct light only. A sample depends only on
+  (pixel, sample index, seed): the same seed gives the same image on the same adapter, however the passes are cut.
+- Materials from pipeline::material_pbr: Lambert + GGX (VNDF) by metalness and roughness, a mirror below roughness 0.02,
+  glass (alpha < 1) a smooth dielectric (IOR 1.5, exact Fresnel). Denoiser: 5 a-trous passes guided by first-hit albedo
+  and normal. Pipeline cache: Vulkan's, a file per adapter and driver (CADCRAFT_PIPELINE_CACHE_DIR, else the XDG cache).
+- Unsafe: crates/gpu-optin holds the only two unsafe calls (experimental ray-query features behind --rt, a pipeline cache
+  from disk); render3d still forbids unsafe code. Hardware ray queries are optional and must match the compute image.
+- The raster still stays as final "raster" (phase-10 checks 06 and 11 ask for it); p11-final-default-path makes final:true
+  path-traced once the path tracer's checks pass.
