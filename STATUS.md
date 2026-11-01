@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-01 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 14:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 11 of 13: Ray-traced Finalize Render — 16 of 24 segments merged · 1 of 13 acceptance checks**
+**Phase 11 of 13: Ray-traced Finalize Render — 17 of 24 segments merged · 1 of 13 acceptance checks**
 
-6,365 workspace tests passing at the last merge · 638 segments merged in all · 0 of 13 seats working
+6,367 workspace tests passing at the last merge · 639 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -21,26 +21,26 @@ Updated 2026-11-01 14:15 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 1 / 13 | 6.6 h so far · expected done Nov 01 17:29–Nov 02 02:32 UTC |
+| 11 | Ray-traced Finalize Render | building | 1 / 13 | 6.8 h so far · expected done Nov 01 17:13–Nov 02 01:43 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 11 segments
 
-16 merged, 3 working, 3 queued, 1 escalate, 1 merging
+17 merged, 3 queued, 2 escalate, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p11-r3d-rt` | Optional hardware ray queries: the same traversal through wgpu ray queries, parity with the compute path | working | bonsai-b |
-| `p11-cli-render-path` | The CLI's renderer: path-traced Finalize, path illuminance, the pipeline cache, the reply keys | working | claude-sonnet-c |
+| `p11-cli-render-path` | The CLI's renderer: path-traced Finalize, path illuminance, the pipeline cache, the reply keys | escalate |  |
 | `p11-io-area-ies` | GLB and DXF for area lights and IES fixtures | escalate |  |
-| `p11-ui-pane-path` | The 3D pane's Finalize: path traced or raster, refining on screen with its sample count, cancel | working | bonsai-ws2-b |
-| `upstream-sync-258c89fbb` | merge upstream upstream/main up to 258c89fbb (1 commits) | merging | claude-sonnet-b |
+| `p11-ui-pane-path` | The 3D pane's Finalize: path traced or raster, refining on screen with its sample count, cancel | gate | bonsai-ws2-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 14:25 | `upstream-sync-258c89fbb` | merged | 6,367 pass | claude-sonnet-b |
 | Nov 01 14:12 | `p11-r3d-final-path` | merged | 6,365 pass | claude-sonnet-c |
 | Nov 01 14:04 | `harden-p11-cmd-lightfixture-area-ies` | merged | 6,361 pass | tturbo-mac |
 | Nov 01 13:41 | `p11-r3d-pt-driver` | merged | 6,355 pass | darwin-ws3 |
@@ -52,22 +52,21 @@ Updated 2026-11-01 14:15 UTC. This page and the card in the README are regenerat
 | Nov 01 11:23 | `p11-cmd-render-path` | merged | 6,309 pass | bonsai-ws2-b |
 | Nov 01 11:07 | `harden-p10-mcp-render-final` | merged | 6,305 pass | tturbo-mac |
 | Nov 01 10:55 | `p11-r3d-pipeline-cache` | merged | 6,300 pass | mai-flash |
-| Nov 01 10:42 | `harden-p9-arch-terrain-csv` | merged | 6,296 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 772 |
-| bonsai-b | bonsai2-27b | agent | 710 |
-| bonsai-ws2-a | bonsai2-27b | agent | 764 |
-| bonsai-ws2-b | bonsai2-27b | agent | 749 |
+| bonsai-a | bonsai2-27b | agent | 773 |
+| bonsai-b | bonsai2-27b | agent | 711 |
+| bonsai-ws2-a | bonsai2-27b | agent | 765 |
+| bonsai-ws2-b | bonsai2-27b | gate | 749 |
 | claude-sonnet-a | sonnet | idle | 63 |
-| claude-sonnet-b | sonnet | merging | 62 |
-| claude-sonnet-c | sonnet | agent | 11 |
+| claude-sonnet-b | sonnet | idle | 62 |
+| claude-sonnet-c | sonnet | idle | 14 |
 | claude-sonnet-d | sonnet | idle | 4 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 617 |
-| kimi-k31 | k3.1-pro-highspeed | down | 111 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 620 |
+| kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
-| tturbo-mac | tturbo-ultraheretic | gate | 533 |
+| tturbo-mac | tturbo-ultraheretic | gate | 534 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
