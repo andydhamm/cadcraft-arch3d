@@ -438,7 +438,7 @@ mod tests {
         assert!(l.ies.is_some());
         assert_eq!(l.id, ArchId(0));
         // Scaled to 2000 lm: peak should be 2000 cd (2× the 1000-peak profile).
-        let peak = cadcraft_arch::ies::peak_candela(&l.ies.unwrap());
+        let peak = cadcraft_arch::ies::peak_candela(l.ies.as_ref().unwrap());
         assert!((peak - 2000.0).abs() < 1.0, "peak = {}", peak);
         assert!((l.intensity - 2000.0).abs() < 1.0, "intensity = {}", l.intensity);
     }
