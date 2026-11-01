@@ -803,7 +803,7 @@ mod tests {
 
         // Save to a temp file
         let tmp = std::env::temp_dir().join("render_final_night_test.dxf");
-        cadcraft_io::dxf::write(&d, tmp.as_path()).expect("write dxf");
+        cadcraft_io::write_dxf(&d, tmp.as_path()).expect("write dxf");
 
         // Render with --night --final using the fallback adapter
         let args = RenderArgs {
@@ -820,11 +820,13 @@ mod tests {
             adapter: AdapterChoice::Fallback,
         };
 
-        let mut streams = Streams::new();
+        let mut out_buf = Vec::new();
+        let mut err_buf = Vec::new();
+        let mut streams = Streams::new(&mut out_buf, &mut err_buf);
         render(&args, &mut streams).expect("render");
 
         // Check the output lines
-        let stderr = streams.stderr();
+        let stderr = String::from_utf8(err_buf).expect("utf8");
         assert!(stderr.contains("FINAL renders=1"), "missing FINAL line: {}", stderr);
         assert!(stderr.contains("LIGHTS 2"), "missing LIGHTS 2: {}", stderr);
     }
