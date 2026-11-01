@@ -1488,3 +1488,8 @@
 	Sun Study	Дослідження інсоляції
 	cmd.sunstudy	Дослідження інсоляції
 	Architecture>Sun Study	Архітектура>Дослідження інсоляції
+	Path traced	Трасування шляхів
+	Raster	Растр
+	Samples	Семпли
+	{spp} / {total} samples	{spp} / {total} семплів
+	No compute shaders: raster Finalize	Немає обчислювальних шейдерів: растровий фінальний рендер
