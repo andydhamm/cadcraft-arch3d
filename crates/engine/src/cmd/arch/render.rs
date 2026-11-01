@@ -89,6 +89,13 @@ pub struct RenderHooks {
     pub stats: fn() -> RenderStats,
 }
 
+impl RenderHooks {
+    /// The renderer's two entry points.
+    pub fn new(render: fn(&RenderRequest) -> Result<Value, String>, stats: fn() -> RenderStats) -> Self {
+        Self { render, stats }
+    }
+}
+
 static HOOKS: OnceLock<RenderHooks> = OnceLock::new();
 
 /// Install the app's renderer (the first call wins).

@@ -167,7 +167,7 @@ fn run(session: &mut Session, params: &Value) -> Result<Value, EngineError> {
                     8,
                     Vec::new(),
                 );
-                let _ = (hooks.render)(&request);
+                (hooks.render)(&request).map_err(|e| bad("sunstudy", format!("{file_name}: {e}")))?;
                 count += 1;
                 stills.push(json!({
                     "time": t,
