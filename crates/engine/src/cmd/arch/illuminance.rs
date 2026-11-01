@@ -51,7 +51,8 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
 
     let scene = cadcraft_arch3d::build(&doc.arch);
     let illumination = cadcraft_arch3d::light::illuminance(&scene, point, normal);
-    let contributions = scene
+    let contributions = doc
+        .arch
         .lights
         .iter()
         .map(|light| {
