@@ -32,7 +32,7 @@ pub const CLEAR: wgpu::Color = wgpu::Color { r: 0.02, g: 0.025, b: 0.034, a: 1.0
 pub const READBACK_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Encode tight RGBA8 pixels as PNG.
-pub(crate) fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, Render3dError> {
+pub fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, Render3dError> {
     let mut out = Vec::new();
     let enc = image::codecs::png::PngEncoder::new(&mut out);
     enc.write_image(rgba, width, height, image::ExtendedColorType::Rgba8).map_err(|e| Render3dError::Buffer(e.to_string()))?;

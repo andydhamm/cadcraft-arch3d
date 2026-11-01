@@ -820,6 +820,8 @@ mod tests {
             adapter: AdapterChoice::Fallback,
         };
 
+        // The io hooks are set once per process; other tests may not have run first.
+        crate::install_io();
         let mut out_buf = Vec::new();
         let mut err_buf = Vec::new();
         let mut streams = Streams::new(&mut out_buf, &mut err_buf);
