@@ -37,9 +37,28 @@ pub fn plan_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
             vec![ring]
         }
         FixtureShape::FloorLamp => vec![circle(c, r), circle(c, 0.075)],
-        // Phase 11 stub, filled by `p11-arch-panel`: the panel's rectangle and its diagonals.
-        FixtureShape::Panel => Vec::new(),
+        FixtureShape::Panel => panel_symbol(f),
     }
+}
+
+/// The catalogue panel's side (m), used for a side the fixture stores as 0 (or not finite).
+const DEFAULT_PANEL_SIDE: f64 = 0.6;
+
+/// A panel's plan symbol: its `width` x `length` rectangle centred at the position, the width along
+/// `rotation` (degrees CCW), as a closed 5-point ring (corners in the order (-w,-l), (+w,-l),
+/// (+w,+l), (-w,+l) along and across the rotation) followed by its two diagonals (corner 0 to 2,
+/// then 1 to 3). A side that is 0 or not finite is the catalogue's 0.6 m.
+fn panel_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
+    let side = |v: f64| if v.is_finite() && v > 0.0 { v } else { DEFAULT_PANEL_SIDE };
+    let half_w = side(f.width) / 2.0;
+    let half_l = side(f.length) / 2.0;
+    let rot = if f.rotation.is_finite() { f.rotation } else { 0.0 };
+    let along = unit(rot);
+    let across = unit(rot + 90.0);
+    let c = f.position;
+    let corner = |sw: f64, sl: f64| c + along * (sw * half_w) + across * (sl * half_l);
+    let corners = [corner(-1.0, -1.0), corner(1.0, -1.0), corner(1.0, 1.0), corner(-1.0, 1.0)];
+    vec![vec![corners[0], corners[1], corners[2], corners[3], corners[0]], vec![corners[0], corners[2]], vec![corners[1], corners[3]]]
 }
 
 /// Unit vector at `deg` degrees (CCW from +X).
@@ -282,5 +301,53 @@ mod tests {
             assert!((tick[1].x - (c.x + u.x * (r + 0.05))).abs() < 1e-6);
             assert!((tick[1].y - (c.y + u.y * (r + 0.05))).abs() < 1e-6);
         }
+    }
+
+    #[test]
+    fn panel_symbol_is_its_rectangle_and_diagonals() {
+        // The catalogue panel (0.6 x 0.6) at rotation 0.
+        let t = crate::light::find_type("LED panel 600").unwrap();
+        let mut f = crate::light::fixture_from_type(cadcraft_doc::ArchId(0), &t, Vec2::new(5.0, 3.0));
+        let s = plan_symbol(&f);
+        assert_eq!(s.len(), 3);
+        assert_eq!((s[0].len(), s[1].len(), s[2].len()), (5, 2, 2));
+        assert!(is_closed(&s[0]));
+        for line in &s {
+            assert!(all_finite(line));
+        }
+        let near = |a: Vec2, x: f64, y: f64| (a.x - x).abs() < 1e-9 && (a.y - y).abs() < 1e-9;
+        assert!(near(s[0][0], 4.7, 2.7) && near(s[0][1], 5.3, 2.7) && near(s[0][2], 5.3, 3.3) && near(s[0][3], 4.7, 3.3));
+        // The diagonals join opposite corners.
+        assert_eq!((s[1][0], s[1][1]), (s[0][0], s[0][2]));
+        assert_eq!((s[2][0], s[2][1]), (s[0][1], s[0][3]));
+
+        // 90 degrees CCW turns the corners about the centre: (+0.3, -0.3) -> (+0.3, +0.3), ...
+        f.rotation = 90.0;
+        let s = plan_symbol(&f);
+        assert!(near(s[0][0], 5.3, 2.7) && near(s[0][1], 5.3, 3.3) && near(s[0][2], 4.7, 3.3) && near(s[0][3], 4.7, 2.7));
+
+        // A 45 degree rotation puts the corners on the axes, 0.3 * sqrt(2) from the centre.
+        f.rotation = 45.0;
+        let s = plan_symbol(&f);
+        let d = 0.3 * std::f64::consts::SQRT_2;
+        assert!(near(s[0][0], 5.0, 3.0 - d) && near(s[0][1], 5.0 + d, 3.0) && near(s[0][2], 5.0, 3.0 + d) && near(s[0][3], 5.0 - d, 3.0));
+
+        // The width runs along the rotation, the length across it (1.2 x 0.4 at 90 degrees).
+        f.rotation = 90.0;
+        f.width = 1.2;
+        f.length = 0.4;
+        let s = plan_symbol(&f);
+        assert!(near(s[0][0], 5.2, 2.4) && near(s[0][1], 5.2, 3.6) && near(s[0][2], 4.8, 3.6) && near(s[0][3], 4.8, 2.4));
+
+        // A panel stored without a size draws the catalogue's 0.6 x 0.6.
+        f.rotation = 0.0;
+        f.width = 0.0;
+        f.length = 0.0;
+        let s = plan_symbol(&f);
+        assert!(near(s[0][0], 4.7, 2.7) && near(s[0][2], 5.3, 3.3));
+
+        // A non-finite position gives no symbol.
+        f.position = Vec2::new(f64::NAN, 3.0);
+        assert!(plan_symbol(&f).is_empty());
     }
 }
