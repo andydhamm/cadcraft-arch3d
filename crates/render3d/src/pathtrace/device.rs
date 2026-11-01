@@ -27,6 +27,13 @@ pub struct ComputeGpu {
     pub adapter_key: String,
 }
 
+impl ComputeGpu {
+    /// Builds a compute device description from the concrete adapter state.
+    pub fn new(device: wgpu::Device, queue: wgpu::Queue, info: DeviceInfo, ray_query: bool, pipeline_cache: bool, adapter_key: String) -> Self {
+        Self { device, queue, info, ray_query, pipeline_cache, adapter_key }
+    }
+}
+
 /// Whether `CADCRAFT_RENDER_LIMITS=webgl2` asks for no compute device.
 pub fn compute_disabled_by_env() -> bool {
     std::env::var("CADCRAFT_RENDER_LIMITS").is_ok_and(|v| v.trim().eq_ignore_ascii_case("webgl2"))
@@ -101,7 +108,7 @@ pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoi
         format!("{:04x}-{:04x}-{}-{}-app{}", a.vendor, a.device, key_part(&a.driver), key_part(&a.driver_info), key_part(env!("CARGO_PKG_VERSION")));
     let info =
         DeviceInfo { name: a.name, backend: format!("{:?}", a.backend), adapter_type: format!("{:?}", a.device_type), ..DeviceInfo::unknown(false) };
-    Ok(Some(ComputeGpu { device, queue, info, ray_query: rq, pipeline_cache: features.contains(wgpu::Features::PIPELINE_CACHE), adapter_key }))
+    Ok(Some(ComputeGpu::new(device, queue, info, rq, features.contains(wgpu::Features::PIPELINE_CACHE), adapter_key)))
 }
 
 #[cfg(test)]
