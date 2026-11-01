@@ -431,6 +431,12 @@ mod tests {
         Scene3d { meshes, bounds, lights: vec![spot(10, -2.0, 0.0, 50.0), spot(11, 3.5, -3.5, 20.0)], ..Default::default() }
     }
 
+    fn scene_no_lights() -> Scene3d {
+        let meshes = vec![prism(1, "floor", (-5.0, -5.0), (5.0, 5.0), (-0.1, 0.0))];
+        let bounds = meshes[0].bounds();
+        Scene3d { meshes, bounds, lights: vec![], ..Default::default() }
+    }
+
     fn camera() -> Camera {
         Camera::Orbit(Orbit::at_origin(0.0, 89.0, 12.0, 45.0))
     }
@@ -611,6 +617,114 @@ mod tests {
         let slots = o.shadowed_lights();
         assert!(render_final(&mut o, &s, 1, &camera(), &night(), false, SIZE).is_ok());
         assert_eq!(o.shadowed_lights(), slots);
+        assert_eq!(o.final_renders(), 1);
+    }
+
+    #[test]
+    fn final_path_preview_none_after_done() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let mut r = FinalRender::start_path(Some(&c), &mut o, &scene(false), 1, &camera(), &night(), false, SIZE, &path_opts(4), None);
+        for _ in 0..200 {
+            match r.step(&mut o) {
+                FinalStatus::Running { .. } => {}
+                FinalStatus::Done { .. } => {
+                    assert!(r.preview().is_none(), "preview must be None once done");
+                    return;
+                }
+                other => assert!(false, "unexpected {other:?}"),
+            }
+        }
+        assert!(false, "the render did not finish");
+    }
+
+    #[test]
+    fn final_path_no_lights() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let mut r = FinalRender::start_path(Some(&c), &mut o, &scene_no_lights(), 1, &camera(), &night(), false, SIZE, &path_opts(4), None);
+        for _ in 0..200 {
+            match r.step(&mut o) {
+                FinalStatus::Running { .. } => {}
+                FinalStatus::Done { width, height, rgba } => {
+                    assert_eq!((width, height), SIZE);
+                    assert_eq!(rgba.len(), (SIZE.0 * SIZE.1 * 4) as usize);
+                    return;
+                }
+                other => assert!(false, "unexpected {other:?}"),
+            }
+        }
+        assert!(false, "the render did not finish");
+    }
+
+    #[test]
+    fn final_path_oversized_clamped() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let max = o.device.limits().max_texture_dimension_2d.max(1);
+        let mut r = FinalRender::start_path(
+            Some(&c),
+            &mut o,
+            &scene(false),
+            1,
+            &camera(),
+            &night(),
+            false,
+            (max.saturating_mul(2), max.saturating_mul(2)),
+            &path_opts(4),
+            None,
+        );
+        assert_eq!(r.size(), (max, max));
+        for _ in 0..200 {
+            match r.step(&mut o) {
+                FinalStatus::Running { .. } => {}
+                FinalStatus::Done { width, height, .. } => {
+                    assert_eq!((width, height), (max, max));
+                    return;
+                }
+                other => assert!(false, "unexpected {other:?}"),
+            }
+        }
+        assert!(false, "the render did not finish");
+    }
+
+    #[test]
+    fn render_final_with_raster_mode() {
+        let Some(mut o) = off() else { return };
+        let r = render_final_with(&mut o, None, &scene(false), 1, &camera(), &night(), false, SIZE, false, &path_opts(4), None);
+        assert!(r.is_ok(), "{:?}", r.as_ref().err());
+        let Ok((png, stats, fallback)) = r else { return };
+        assert!(stats.is_none());
+        assert!(fallback.is_none());
+        assert_eq!(crate::offscreen::png_rgba(&png).map(|p| p.len()).ok(), Some((SIZE.0 * SIZE.1 * 4) as usize));
+        assert_eq!(o.final_renders(), 1);
+    }
+
+    #[test]
+    fn final_path_with_ground() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let mut r = FinalRender::start_path(Some(&c), &mut o, &scene(false), 1, &camera(), &night(), true, SIZE, &path_opts(4), None);
+        for _ in 0..200 {
+            match r.step(&mut o) {
+                FinalStatus::Running { .. } => {}
+                FinalStatus::Done { width, height, rgba } => {
+                    assert_eq!((width, height), SIZE);
+                    assert_eq!(rgba.len(), (SIZE.0 * SIZE.1 * 4) as usize);
+                    return;
+                }
+                other => assert!(false, "unexpected {other:?}"),
+            }
+        }
+        assert!(false, "the render did not finish");
+    }
+
+    #[test]
+    fn render_final_with_path_mode() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let r = render_final_with(&mut o, Some(&c), &scene(false), 1, &camera(), &night(), false, SIZE, true, &path_opts(4), None);
+        assert!(r.is_ok(), "{:?}", r.as_ref().err());
+        let Ok((png, stats, fallback)) = r else { return };
+        assert!(stats.is_some());
+        assert!(fallback.is_none());
+        assert_eq!(stats.as_ref().map(|s| s.spp_done), Some(4));
+        assert_eq!(crate::offscreen::png_rgba(&png).map(|p| p.len()).ok(), Some((SIZE.0 * SIZE.1 * 4) as usize));
         assert_eq!(o.final_renders(), 1);
     }
 }
