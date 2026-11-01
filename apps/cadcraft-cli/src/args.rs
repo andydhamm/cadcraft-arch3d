@@ -851,6 +851,46 @@ mod tests {
     }
 
     #[test]
+    fn render_args_night_alone_is_ok() {
+        let Ok(cli) = parse_args(&["render", "a.dxf", "b.png", "--night"]) else {
+            panic!("--night alone should parse");
+        };
+        let Command::Render(r) = cli.command else { panic!("not render") };
+        assert!(r.night && !r.final_render && r.sun.is_none());
+        assert!(crate::render::check_flags(&r).is_ok());
+    }
+
+    #[test]
+    fn render_args_final_alone_is_ok() {
+        let Ok(cli) = parse_args(&["render", "a.dxf", "b.png", "--final"]) else {
+            panic!("--final alone should parse");
+        };
+        let Command::Render(r) = cli.command else { panic!("not render") };
+        assert!(r.final_render && !r.night && r.sun.is_none());
+        assert!(crate::render::check_flags(&r).is_ok());
+    }
+
+    #[test]
+    fn render_args_final_night_is_ok() {
+        let Ok(cli) = parse_args(&["render", "a.dxf", "b.png", "--final", "--night"]) else {
+            panic!("--final --night should parse");
+        };
+        let Command::Render(r) = cli.command else { panic!("not render") };
+        assert!(r.final_render && r.night && r.sun.is_none());
+        assert!(crate::render::check_flags(&r).is_ok());
+    }
+
+    #[test]
+    fn render_args_final_sun_is_ok() {
+        let Ok(cli) = parse_args(&["render", "a.dxf", "b.png", "--final", "--sun", "lat=51,date=2026-06-21,time=solar-noon"]) else {
+            panic!("--final --sun should parse");
+        };
+        let Command::Render(r) = cli.command else { panic!("not render") };
+        assert!(r.final_render && !r.night && r.sun.is_some());
+        assert!(crate::render::check_flags(&r).is_ok());
+    }
+
+    #[test]
     fn window_parses() {
         let b = |x0, y0, x1, y1| Bounds2::new(Vec2::new(x0, y0), Vec2::new(x1, y1));
         assert_eq!(parse_window("0,0,30,20").unwrap(), b(0.0, 0.0, 30.0, 20.0));
