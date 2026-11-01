@@ -4,6 +4,7 @@ use cadcraft_doc::arch::{ArchId, light_label};
 use cadcraft_geom::Vec3;
 use serde_json::{Value, json};
 
+use crate::cmd::arch::render::{IlluminanceRequest, PathParams, SunChoice, parse_sun, render_hooks};
 use crate::cmd::{CommandSpec, bad};
 use crate::{Result, Session};
 
@@ -49,27 +50,75 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
         return Err(bad("illuminance", "normal must be [x, y, z] finite numbers with non-zero length"));
     }
 
-    let scene = cadcraft_arch3d::build(&doc.arch);
-    let illumination = cadcraft_arch3d::light::illuminance(&scene, point, normal);
-    let contributions = doc
-        .arch
-        .lights
-        .iter()
-        .map(|light| {
-            let lux = illumination.per_light.iter().find(|(id, _)| *id == light.id).map(|(_, v)| *v).unwrap_or(0.0);
-            json!({
-                "id": light_label(light.id),
-                "lux": lux,
-            })
-        })
-        .collect::<Vec<_>>();
+    let method = match params.get("method") {
+        None => "direct",
+        Some(val) => {
+            val.as_str().filter(|s| *s == "direct" || *s == "path").ok_or_else(|| bad("illuminance", "`method` must be \"direct\" or \"path\""))?
+        }
+    };
 
-    Ok(json!({
-        "lux": illumination.lux,
-        "lights": scene.lights.len(),
-        "direct": true,
-        "contributions": contributions,
-    }))
+    if method == "path" {
+        let whole = |key: &str, lo: u64, hi: u64, def: u64| -> Result<u64> {
+            match params.get(key) {
+                None => Ok(def),
+                Some(val) => val
+                    .as_u64()
+                    .filter(|n| (lo..=hi).contains(n))
+                    .ok_or_else(|| bad("illuminance", format!("`{key}` must be a whole number in {lo}..={hi}"))),
+            }
+        };
+
+        let spp = whole("spp", 1, 65536, 1024)?;
+        let bounces = whole("bounces", 0, 32, 4)?;
+        let seed = whole("seed", 0, 4294967295, 0)?;
+
+        let sun = match params.get("sun") {
+            None => SunChoice::Off,
+            Some(val) => parse_sun(Some(val), &doc)?,
+        };
+
+        let path = PathParams {
+            spp: spp as u32,
+            bounces: bounces as u32,
+            seed: seed as u32,
+            denoise: params.get("denoise").and_then(Value::as_bool).unwrap_or(true),
+            rt: params.get("rt").and_then(Value::as_bool).unwrap_or(false),
+            ..PathParams::default()
+        };
+
+        let hooks = render_hooks()
+            .ok_or_else(|| bad("illuminance", "path-traced illuminance needs the 3D renderer: run it from cadcraft-cli run or the app"))?;
+        let illuminance_fn = hooks
+            .illuminance
+            .as_ref()
+            .ok_or_else(|| bad("illuminance", "path-traced illuminance needs the 3D renderer: run it from cadcraft-cli run or the app"))?;
+
+        let request = IlluminanceRequest::new(&doc, vec![[[point.x, point.y, point.z], [normal.x, normal.y, normal.z]]], sun, path);
+
+        (illuminance_fn)(&request).map_err(|e| bad("illuminance", e))
+    } else {
+        let scene = cadcraft_arch3d::build(&doc.arch);
+        let illumination = cadcraft_arch3d::light::illuminance(&scene, point, normal);
+        let contributions = doc
+            .arch
+            .lights
+            .iter()
+            .map(|light| {
+                let lux = illumination.per_light.iter().find(|(id, _)| *id == light.id).map(|(_, v)| *v).unwrap_or(0.0);
+                json!({
+                    "id": light_label(light.id),
+                    "lux": lux,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        Ok(json!({
+            "lux": illumination.lux,
+            "lights": scene.lights.len(),
+            "direct": true,
+            "contributions": contributions,
+        }))
+    }
 }
 
 /// Command specs for direct illuminance at a point.
@@ -77,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("illuminance", "Illuminance", run)
             .menu(&["Architecture", "Illuminance"])
-            .params("{point: [x,y,z], normal?: [x,y,z]}")
+            .params("{point: [x,y,z], normal?: [x,y,z], method?: \"direct\" | \"path\", path: spp? 1..=65536, bounces? 0..=32, seed? 0..=4294967295, sun?: false | {date, time}}")
             .noundo(),
     ]
 }
@@ -248,5 +297,45 @@ mod tests {
         let unit = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "normal": [0.0, 0.0, 1.0]})).unwrap();
         let lux_unit = unit["lux"].as_f64().unwrap();
         assert!((lux - lux_unit).abs() < lux_unit * 0.01, "non-unit normal lux={lux} vs unit lux={lux_unit}");
+    }
+
+    #[test]
+    fn illuminance_path_needs_the_renderer() {
+        let mut s = fresh_session();
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path"})).unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+    }
+
+    #[test]
+    fn illuminance_parses_method_spp_bounces_seed_sun() {
+        let mut s = fresh_session();
+
+        // Invalid method name
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "foo"})).unwrap_err();
+        assert!(err.to_string().contains("`method` must be"), "error={err}");
+
+        // Path with valid params → renderer error (not a parse error)
+        let err = s
+            .execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "spp": 512, "bounces": 4, "seed": 1, "sun": false}))
+            .unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+
+        // Path with bad spp
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "spp": 0})).unwrap_err();
+        assert!(err.to_string().contains("`spp` must be"), "error={err}");
+
+        // Path with bad bounces
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "bounces": 33})).unwrap_err();
+        assert!(err.to_string().contains("`bounces` must be"), "error={err}");
+
+        // Path with bad seed
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "seed": 4294967296u64})).unwrap_err();
+        assert!(err.to_string().contains("`seed` must be"), "error={err}");
+
+        // Path with sun object but no site → sun parse error before renderer check
+        let err = s
+            .execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "sun": {"date": "2026-06-21", "time": "12:00"}}))
+            .unwrap_err();
+        assert!(err.to_string().contains("sun needs a site location"), "error={err}");
     }
 }
