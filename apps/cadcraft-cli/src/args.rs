@@ -151,6 +151,7 @@ impl RenderArgs {
             seed: self.seed.unwrap_or(d.seed),
             denoise: !self.no_denoise,
             rt: self.rt,
+            spp_given: self.spp.is_some(),
             ..d
         }
     }
@@ -958,6 +959,15 @@ mod tests {
             Command::Render(r) => Ok(r),
             _ => panic!("not render"),
         }
+    }
+
+    #[test]
+    fn the_spp_flag_marks_spp_given() {
+        let Ok(r) = render_of(&["--final", "path", "--spp", "256"]) else { panic!("--spp parses") };
+        let p = r.path_params();
+        assert_eq!((p.spp, p.spp_given), (256, true));
+        let Ok(r) = render_of(&["--final", "path"]) else { panic!("no --spp parses") };
+        assert!(!r.path_params().spp_given);
     }
 
     #[test]
