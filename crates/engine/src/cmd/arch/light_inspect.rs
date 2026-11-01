@@ -1,8 +1,10 @@
-//! The light fixtures' part of `arch.inspect` (phase 10): `{"lights":true}`. Filled in by
-//! `p10-cmd-lightfixture`.
+//! The light fixtures' part of `arch.inspect` (phase 10): `{"lights":true}`. Since phase 11 an area
+//! light also lists its `width` and `length`, and every light an `ies` object (`{name, lumens,
+//! peak}`, or `null` without a profile).
 
+use cadcraft_arch::ies::{peak_candela, scaled};
 use cadcraft_arch::light::{intensity_cd, light_point};
-use cadcraft_doc::arch::{ArchModel, LightKind, LightMount, handle_json, light_handle};
+use cadcraft_doc::arch::{ArchModel, LightFixture, LightKind, LightMount, handle_json, light_handle};
 use serde_json::{Map, Value, json};
 
 fn kind_name(kind: LightKind) -> &'static str {
@@ -21,6 +23,26 @@ fn mount_name(mount: LightMount) -> &'static str {
     }
 }
 
+/// The fixture's IES profile as `{name, lumens, peak}`, or `null`: `lumens` is the file's rated
+/// lumens (-1 = absolute photometry) and `peak` the largest candela value once the profile is
+/// fitted to the fixture's own lumens (what the fixture emits).
+fn ies_json(fixture: &LightFixture) -> Value {
+    match &fixture.ies {
+        Some(profile) => json!({ "name": profile.name, "lumens": profile.lumens, "peak": peak_candela(&scaled(profile, fixture.lumens)) }),
+        None => Value::Null,
+    }
+}
+
+/// Peak luminous intensity along the aim (cd): an IES fixture's is the peak of its fitted profile,
+/// any other the kind's own (`intensity_cd`). An off fixture emits nothing.
+fn candela(fixture: &LightFixture) -> f64 {
+    match &fixture.ies {
+        Some(profile) if fixture.on => peak_candela(&scaled(profile, fixture.lumens)),
+        Some(_) => 0.0,
+        None => intensity_cd(fixture),
+    }
+}
+
 /// Add the `lights` key to `out` when `p` asks for it (`{"lights":true}`). Read-only.
 pub(crate) fn inspect_lights(model: &ArchModel, p: &Value, out: &mut Map<String, Value>) {
     if p.get("lights").and_then(Value::as_bool) != Some(true) {
@@ -32,7 +54,7 @@ pub(crate) fn inspect_lights(model: &ArchModel, p: &Value, out: &mut Map<String,
         .iter()
         .map(|fixture| {
             let z = light_point(model, fixture).map(|point| point.z);
-            json!({
+            let mut light = json!({
                 "id": format!("lf{}", fixture.id.0),
                 "handle": handle_json(light_handle(fixture.id)),
                 "fixture": fixture.fixture,
@@ -48,9 +70,15 @@ pub(crate) fn inspect_lights(model: &ArchModel, p: &Value, out: &mut Map<String,
                 "kelvin": fixture.kelvin,
                 "cone": fixture.cone,
                 "falloff": fixture.falloff,
-                "candela": intensity_cd(fixture),
+                "candela": candela(fixture),
+                "ies": ies_json(fixture),
                 "on": fixture.on,
-            })
+            });
+            if let (Some(object), LightKind::Area) = (light.as_object_mut(), fixture.kind) {
+                object.insert("width".to_string(), json!(fixture.width));
+                object.insert("length".to_string(), json!(fixture.length));
+            }
+            light
         })
         .collect::<Vec<_>>();
 
@@ -60,6 +88,9 @@ pub(crate) fn inspect_lights(model: &ArchModel, p: &Value, out: &mut Map<String,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Session;
+    use crate::cmd::arch::lightfixture::TEST_DOWNLIGHT_IES;
+    use crate::temp_dir::TempDir;
     use cadcraft_doc::arch::{ArchId, LightFixture, Room, RoomType};
     use cadcraft_geom::Vec2;
 
@@ -98,5 +129,46 @@ mod tests {
         let mut out = Map::new();
         inspect_lights(&model, &json!({}), &mut out);
         assert!(!out.contains_key("lights"));
+    }
+
+    #[test]
+    fn inspect_lists_area_size_and_ies() {
+        let dir = TempDir::new("ies-inspect");
+        let file = dir.file("downlight.ies", TEST_DOWNLIGHT_IES);
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"type": "LED panel 600", "at": [2.0, 2.0]})).unwrap();
+        session.execute("lightfixture", &json!({"type": "Recessed pot light", "at": [1.0, 1.0]})).unwrap();
+        session.execute("lightfixture.edit", &json!({"id": "lf1", "ies": file})).unwrap();
+        let inspect = |session: &mut Session| session.execute("arch.inspect", &json!({"lights": true})).unwrap()["lights"].clone();
+
+        // The panel: an area light 0.6 x 0.6 with 3600 / pi cd along its aim and no profile.
+        let lights = inspect(&mut session);
+        let panel = &lights[0];
+        assert_eq!((panel["id"].as_str(), panel["kind"].as_str(), panel["shape"].as_str()), (Some("lf0"), Some("area"), Some("panel")));
+        assert_eq!((panel["width"].as_f64(), panel["length"].as_f64()), (Some(0.6), Some(0.6)));
+        assert!((panel["candela"].as_f64().unwrap() - 1145.9).abs() < 0.05, "{panel}");
+        assert!(panel["ies"].is_null(), "{panel}");
+
+        // The pot light with the IES file: no size, the profile's name, rated lumens and peak, and
+        // its candela is that peak.
+        let pot = &lights[1];
+        assert_eq!(pot["kind"], "spot");
+        assert!(pot.get("width").is_none() && pot.get("length").is_none(), "{pot}");
+        assert_eq!(pot["ies"], json!({"name": "Test downlight 1000 lm", "lumens": 1000.0, "peak": 1000.0}));
+        assert_eq!((pot["lumens"].as_f64(), pot["candela"].as_f64()), (Some(1000.0), Some(1000.0)));
+
+        // The peak follows the fixture's own lumens (the profile is scaled); an off fixture emits nothing.
+        session.execute("lightfixture.edit", &json!({"id": "lf1", "lumens": 2000.0})).unwrap();
+        let pot = inspect(&mut session)[1].clone();
+        assert_eq!(pot["ies"], json!({"name": "Test downlight 1000 lm", "lumens": 1000.0, "peak": 2000.0}));
+        assert_eq!(pot["candela"].as_f64(), Some(2000.0));
+        session.execute("lightfixture.edit", &json!({"id": "lf1", "on": false})).unwrap();
+        assert_eq!(inspect(&mut session)[1]["candela"].as_f64(), Some(0.0));
+
+        // Clearing the profile brings the cone's candela back and `ies` reads null.
+        session.execute("lightfixture.edit", &json!({"id": "lf1", "ies": null, "on": true})).unwrap();
+        let pot = inspect(&mut session)[1].clone();
+        assert!(pot["ies"].is_null(), "{pot}");
+        assert!((pot["candela"].as_f64().unwrap() - 2000.0 / cadcraft_arch::light::cone_solid_angle(60.0)).abs() < 1e-6, "{pot}");
     }
 }
