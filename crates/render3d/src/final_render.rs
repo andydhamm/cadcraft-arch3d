@@ -8,6 +8,7 @@ use crate::Render3dError;
 use crate::camera::Camera;
 use crate::lit_frame::Lighting;
 use crate::offscreen::Offscreen;
+use crate::pathtrace::{ComputeGpu, PathOptions, PathStats, PathStatus, PathTracer};
 use crate::types::Scene3d;
 use cadcraft_arch3d::light::{LightKind, SceneLight};
 
@@ -44,16 +45,24 @@ struct Job {
     steps: usize,
 }
 
+/// The work a render keeps between steps: the raster job, or a path tracer with its device.
+enum Inner {
+    Raster(Job),
+    Path(Box<PathTracer>, ComputeGpu),
+}
+
 /// A Finalize Render in progress.
 pub struct FinalRender {
     pub(crate) size: (u32, u32),
     pub(crate) cancelled: bool,
     pub(crate) status: FinalStatus,
-    job: Option<Job>,
+    inner: Option<Inner>,
+    fallback: Option<&'static str>,
+    path_stats: Option<PathStats>,
 }
 
 fn failed(size: (u32, u32), msg: &str) -> FinalRender {
-    FinalRender { size, cancelled: false, status: FinalStatus::Failed(msg.into()), job: None }
+    FinalRender { size, cancelled: false, status: FinalStatus::Failed(msg.into()), inner: None, fallback: None, path_stats: None }
 }
 
 /// Layers the drawn lights need (a spot one, anything else a cube of six).
@@ -148,7 +157,52 @@ impl FinalRender {
             rendered: false,
             steps: 0,
         };
-        FinalRender { size, cancelled: false, status: FinalStatus::Running { progress: 0.0 }, job: Some(job) }
+        FinalRender {
+            size,
+            cancelled: false,
+            status: FinalStatus::Running { progress: 0.0 },
+            inner: Some(Inner::Raster(job)),
+            fallback: None,
+            path_stats: None,
+        }
+    }
+
+    /// Start a path-traced still. With a compute device it starts a [`PathTracer`] (an error
+    /// from `PathTracer::new` makes the render `Failed`); without one it starts the raster still
+    /// and records [`FinalRender::fallback`] = "no compute shaders".
+    #[allow(clippy::too_many_arguments)]
+    pub fn start_path(
+        compute: Option<&ComputeGpu>,
+        off: &mut Offscreen,
+        scene: &Scene3d,
+        scene_key: u64,
+        camera: &Camera,
+        lighting: &Lighting,
+        ground: bool,
+        size: (u32, u32),
+        opts: &PathOptions,
+        cache: Option<&wgpu::PipelineCache>,
+    ) -> Self {
+        let Some(gpu) = compute else {
+            let mut r = Self::start(off, scene, scene_key, camera, lighting, ground, size);
+            r.fallback = Some("no compute shaders");
+            return r;
+        };
+        match PathTracer::new(gpu, scene, camera, lighting, ground, size, opts, cache) {
+            Ok(t) => {
+                let size = t.size();
+                let path_stats = Some(t.stats());
+                FinalRender {
+                    size,
+                    cancelled: false,
+                    status: FinalStatus::Running { progress: 0.0 },
+                    inner: Some(Inner::Path(Box::new(t), gpu.clone())),
+                    fallback: None,
+                    path_stats,
+                }
+            }
+            Err(msg) => failed(size, &msg),
+        }
     }
 
     /// Do one bounded piece of work and report where it is. After `Done`, `Cancelled` or
@@ -156,26 +210,41 @@ impl FinalRender {
     pub fn step(&mut self, off: &mut Offscreen) -> FinalStatus {
         if self.cancelled && matches!(self.status, FinalStatus::Running { .. }) {
             self.status = FinalStatus::Cancelled;
-            self.job = None;
+            self.inner = None;
         }
         if !matches!(self.status, FinalStatus::Running { .. }) {
             return self.status.clone();
         }
-        let Some(mut job) = self.job.take() else {
-            self.status = FinalStatus::Failed("the render has no work".into());
-            return self.status.clone();
-        };
-        match advance(off, &mut job, self.size) {
-            Ok(Some(rgba)) => {
-                off.final_renders += 1;
-                self.status = FinalStatus::Done { width: self.size.0, height: self.size.1, rgba };
+        match self.inner.take() {
+            Some(Inner::Raster(mut job)) => match advance(off, &mut job, self.size) {
+                Ok(Some(rgba)) => {
+                    off.final_renders += 1;
+                    self.status = FinalStatus::Done { width: self.size.0, height: self.size.1, rgba };
+                }
+                Ok(None) => {
+                    let total = job.drawn.len() + 2;
+                    self.status = FinalStatus::Running { progress: (job.steps as f32 / total as f32).clamp(0.0, 1.0) };
+                    self.inner = Some(Inner::Raster(job));
+                }
+                Err(msg) => self.status = FinalStatus::Failed(msg),
+            },
+            Some(Inner::Path(mut tracer, gpu)) => {
+                let status = tracer.step(&gpu);
+                self.path_stats = Some(tracer.stats());
+                match status {
+                    PathStatus::Running { progress, .. } => {
+                        self.status = FinalStatus::Running { progress: progress.clamp(0.0, 1.0) };
+                        self.inner = Some(Inner::Path(tracer, gpu));
+                    }
+                    PathStatus::Done { width, height, rgba } => {
+                        off.final_renders += 1;
+                        self.status = FinalStatus::Done { width, height, rgba };
+                    }
+                    PathStatus::Cancelled => self.status = FinalStatus::Cancelled,
+                    PathStatus::Failed(msg) => self.status = FinalStatus::Failed(msg),
+                }
             }
-            Ok(None) => {
-                let total = job.drawn.len() + 2;
-                self.status = FinalStatus::Running { progress: (job.steps as f32 / total as f32).clamp(0.0, 1.0) };
-                self.job = Some(job);
-            }
-            Err(msg) => self.status = FinalStatus::Failed(msg),
+            None => self.status = FinalStatus::Failed("the render has no work".into()),
         }
         self.status.clone()
     }
@@ -183,6 +252,25 @@ impl FinalRender {
     /// Stop at the next step.
     pub fn cancel(&mut self) {
         self.cancelled = true;
+    }
+
+    /// Why a path render ran as a raster one (`Some("no compute shaders")`), else `None`.
+    pub fn fallback(&self) -> Option<&'static str> {
+        self.fallback
+    }
+
+    /// What the path tracer did so far; `None` for a raster render.
+    pub fn path_stats(&self) -> Option<&PathStats> {
+        self.path_stats.as_ref()
+    }
+
+    /// The path tracer's image so far (width, height, RGBA8) while it refines; `None` for a
+    /// raster render, before the first pass, or once finished.
+    pub fn preview(&self) -> Option<(u32, u32, Vec<u8>)> {
+        match &self.inner {
+            Some(Inner::Path(tracer, gpu)) => tracer.preview(gpu),
+            _ => None,
+        }
     }
 
     /// The pixel size of the still.
@@ -259,6 +347,42 @@ pub fn render_final(
         match render.step(off) {
             FinalStatus::Running { .. } => {}
             FinalStatus::Done { width, height, rgba } => return crate::offscreen::encode_png(width, height, &rgba),
+            FinalStatus::Cancelled => return Err(Render3dError::Wgpu("Finalize Render was cancelled".into())),
+            FinalStatus::Failed(msg) => return Err(Render3dError::Wgpu(msg)),
+        }
+    }
+    Err(Render3dError::Wgpu("Finalize Render did not finish".into()))
+}
+
+/// Run a Finalize Render to the end in raster or path mode and return the PNG, the path
+/// statistics (`None` for raster) and the fallback reason if a path render ran as raster.
+#[allow(clippy::too_many_arguments)]
+pub fn render_final_with(
+    off: &mut Offscreen,
+    compute: Option<&ComputeGpu>,
+    scene: &Scene3d,
+    scene_key: u64,
+    camera: &Camera,
+    lighting: &Lighting,
+    ground: bool,
+    size: (u32, u32),
+    mode_path: bool,
+    opts: &PathOptions,
+    cache: Option<&wgpu::PipelineCache>,
+) -> Result<(Vec<u8>, Option<PathStats>, Option<&'static str>), Render3dError> {
+    if !mode_path {
+        return Ok((render_final(off, scene, scene_key, camera, lighting, ground, size)?, None, None));
+    }
+    let mut render = FinalRender::start_path(compute, off, scene, scene_key, camera, lighting, ground, size, opts, cache);
+    // A path render takes spp / spp_per_step steps plus the resolve; bound it by the option caps.
+    let limit = u64::from(opts.spp) + 1000;
+    for _ in 0..limit {
+        match render.step(off) {
+            FinalStatus::Running { .. } => {}
+            FinalStatus::Done { width, height, rgba } => {
+                let png = crate::offscreen::encode_png(width, height, &rgba)?;
+                return Ok((png, render.path_stats().cloned(), render.fallback()));
+            }
             FinalStatus::Cancelled => return Err(Render3dError::Wgpu("Finalize Render was cancelled".into())),
             FinalStatus::Failed(msg) => return Err(Render3dError::Wgpu(msg)),
         }
@@ -375,6 +499,78 @@ mod tests {
         assert_eq!(r.step(&mut o), FinalStatus::Cancelled);
         assert_eq!(r.step(&mut o), FinalStatus::Cancelled);
         assert_eq!(o.final_renders(), 0);
+    }
+
+    fn path_opts(spp: u32) -> PathOptions {
+        PathOptions { spp, spp_per_step: 2, denoise: false, ..Default::default() }
+    }
+
+    fn compute() -> Option<ComputeGpu> {
+        let c = crate::gputest::shared_compute();
+        if c.is_none() {
+            eprintln!("SKIP: no compute device available");
+        }
+        c
+    }
+
+    #[test]
+    fn final_path_runs_the_path_tracer_to_done() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let mut r = FinalRender::start_path(Some(&c), &mut o, &scene(false), 1, &camera(), &night(), false, SIZE, &path_opts(4), None);
+        assert!(r.fallback().is_none());
+        for _ in 0..200 {
+            match r.step(&mut o) {
+                FinalStatus::Running { .. } => {}
+                FinalStatus::Done { width, height, rgba } => {
+                    assert_eq!((width, height), SIZE);
+                    assert_eq!(rgba.len(), (SIZE.0 * SIZE.1 * 4) as usize);
+                    assert_eq!(o.final_renders(), 1);
+                    assert_eq!(r.path_stats().map(|s| s.spp_done), Some(4));
+                    return;
+                }
+                other => assert!(false, "unexpected {other:?}"),
+            }
+        }
+        assert!(false, "the render did not finish");
+    }
+
+    #[test]
+    fn final_path_falls_back_to_raster_without_compute() {
+        let Some(mut o) = off() else { return };
+        let r = render_final_with(&mut o, None, &scene(false), 1, &camera(), &night(), false, SIZE, true, &path_opts(4), None);
+        assert!(r.is_ok(), "{:?}", r.as_ref().err());
+        let Ok((png, stats, fallback)) = r else { return };
+        assert!(stats.is_none());
+        assert_eq!(fallback, Some("no compute shaders"));
+        assert_eq!(crate::offscreen::png_rgba(&png).map(|p| p.len()).ok(), Some((SIZE.0 * SIZE.1 * 4) as usize));
+        assert_eq!(o.final_renders(), 1);
+    }
+
+    #[test]
+    fn final_path_cancels_and_counts_nothing() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let mut r = FinalRender::start_path(Some(&c), &mut o, &scene(false), 1, &camera(), &night(), false, SIZE, &path_opts(64), None);
+        assert!(matches!(r.step(&mut o), FinalStatus::Running { .. }));
+        r.cancel();
+        assert_eq!(r.step(&mut o), FinalStatus::Cancelled);
+        assert_eq!(r.step(&mut o), FinalStatus::Cancelled);
+        assert_eq!(o.final_renders(), 0);
+    }
+
+    #[test]
+    fn final_path_preview_refines() {
+        let (Some(c), Some(mut o)) = (compute(), off()) else { return };
+        let mut r = FinalRender::start_path(Some(&c), &mut o, &scene(false), 1, &camera(), &night(), false, SIZE, &path_opts(64), None);
+        assert!(r.preview().is_none(), "nothing to show before the first pass");
+        assert!(matches!(r.step(&mut o), FinalStatus::Running { .. }));
+        let p = r.preview();
+        assert!(p.is_some());
+        let Some((w, h, rgba)) = p else { return };
+        assert_eq!((w, h), SIZE);
+        assert_eq!(rgba.len(), (SIZE.0 * SIZE.1 * 4) as usize);
+        let first = r.path_stats().map_or(0, |s| s.spp_done);
+        assert!(matches!(r.step(&mut o), FinalStatus::Running { .. }));
+        assert!(r.path_stats().map_or(0, |s| s.spp_done) > first);
     }
 
     fn lum(rgba: &[u8], world: [f64; 3]) -> Option<u32> {
