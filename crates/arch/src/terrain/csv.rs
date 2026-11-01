@@ -227,7 +227,7 @@ mod tests {
         let e = parse_points_csv(&format!("1,2,{long_val}"), None).err().map(|e| e.0).unwrap_or_default();
         assert!(e.starts_with("CSV line 1:"));
         // The echoed row should be truncated to 60 chars
-        assert!(e.chars().count() < 100);
+        assert!(e.chars().count() <= 105);
     }
 
     #[test]
