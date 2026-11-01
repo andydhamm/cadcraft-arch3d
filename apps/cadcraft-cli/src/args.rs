@@ -116,19 +116,19 @@ pub(crate) struct RenderArgs {
     #[arg(long = "final", value_name = "MODE", num_args = 0..=1, default_missing_value = "", value_parser = parse_final_arg)]
     pub(crate) final_render: Option<FinalMode>,
     /// Path tracer: samples per pixel (1-65536, default 256)
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536))]
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536), action = ArgAction::Set)]
     pub(crate) spp: Option<u32>,
     /// Path tracer: full bounces before Russian roulette (0-32, default 4)
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=32))]
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=32), action = ArgAction::Set)]
     pub(crate) bounces: Option<u32>,
     /// Path tracer: the random seed (default 0)
-    #[arg(long, value_name = "N")]
+    #[arg(long, value_name = "N", action = ArgAction::Set)]
     pub(crate) seed: Option<u32>,
     /// Path tracer: keep the noise (no denoiser)
-    #[arg(long)]
+    #[arg(long, action = ArgAction::SetTrue)]
     pub(crate) no_denoise: bool,
     /// Path tracer: use hardware ray queries when the device has them
-    #[arg(long)]
+    #[arg(long, action = ArgAction::SetTrue)]
     pub(crate) rt: bool,
     /// Night: the sun is off (cannot be combined with --sun)
     #[arg(long)]
@@ -1083,5 +1083,92 @@ mod tests {
         assert!(text.contains("for 'CARGO_PKG_NAME'") && !text.contains("--fontalt"), "{text}");
         let text = parse_with(cmd(), &args(&["sample", "--fontalt", "x"])).err().map(|e| e.to_string()).unwrap_or_default();
         assert!(text.contains("--fontalt"), "{text}");
+    }
+
+    #[test]
+    fn path_flags_without_final_parse() {
+        let Ok(r) = render_of(&["--spp", "64", "--bounces", "2", "--seed", "7", "--no-denoise", "--rt"]) else {
+            panic!("path flags without --final should parse");
+        };
+        assert!(r.final_render.is_none());
+        let p = r.path_params();
+        assert_eq!((p.spp, p.bounces, p.seed, p.denoise, p.rt), (64, 2, 7, false, true));
+    }
+
+    #[test]
+    fn final_raster_with_path_flags_parse() {
+        let Ok(r) = render_of(&["--final", "raster", "--spp", "64"]) else {
+            panic!("--final raster --spp should parse");
+        };
+        assert_eq!(r.final_render, Some(FinalMode::Raster));
+        assert_eq!(r.path_params().spp, 64);
+    }
+
+    #[test]
+    fn spp_equals_syntax() {
+        let Ok(r) = render_of(&["--spp=64"]) else {
+            panic!("--spp=64 should parse");
+        };
+        assert_eq!(r.spp, Some(64));
+    }
+
+    #[test]
+    fn spp_out_of_range_is_refused() {
+        for bad in ["--spp", "0", "--spp", "65537", "--spp", "-1", "--spp", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--spp", "1"]).is_ok(), "--spp 1 should parse");
+        assert!(render_of(&["--spp", "65536"]).is_ok(), "--spp 65536 should parse");
+    }
+
+    #[test]
+    fn bounces_out_of_range_is_refused() {
+        for bad in ["--bounces", "-1", "--bounces", "33", "--bounces", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--bounces", "0"]).is_ok(), "--bounces 0 should parse");
+        assert!(render_of(&["--bounces", "32"]).is_ok(), "--bounces 32 should parse");
+    }
+
+    #[test]
+    fn seed_out_of_range_is_refused() {
+        for bad in ["--seed", "-1", "--seed", "4294967296", "--seed", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--seed", "0"]).is_ok(), "--seed 0 should parse");
+        assert!(render_of(&["--seed", "4294967295"]).is_ok(), "--seed u32 max should parse");
+    }
+
+    #[test]
+    fn budget_out_of_range_is_refused() {
+        for bad in ["--budget", "-1", "--budget", "65", "--budget", "abc"] {
+            assert!(render_of(&[bad]).is_err(), "`{bad}` should be refused");
+        }
+        assert!(render_of(&["--budget", "0"]).is_ok(), "--budget 0 should parse");
+        assert!(render_of(&["--budget", "64"]).is_ok(), "--budget 64 should parse");
+    }
+
+    #[test]
+    fn final_path_seed_u32_max() {
+        let Ok(r) = render_of(&["--final", "path", "--seed", "4294967295"]) else {
+            panic!("--seed u32 max should parse");
+        };
+        assert_eq!(r.seed, Some(4294967295));
+    }
+
+    #[test]
+    fn final_path_bounces_zero() {
+        let Ok(r) = render_of(&["--final", "path", "--bounces", "0"]) else {
+            panic!("--bounces 0 should parse");
+        };
+        assert_eq!(r.bounces, Some(0));
+    }
+
+    #[test]
+    fn final_path_spp_one() {
+        let Ok(r) = render_of(&["--final", "path", "--spp", "1"]) else {
+            panic!("--spp 1 should parse");
+        };
+        assert_eq!(r.spp, Some(1));
     }
 }
