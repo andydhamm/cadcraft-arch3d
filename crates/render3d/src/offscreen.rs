@@ -609,8 +609,12 @@ impl Offscreen {
 /// unaffected. Debug builds would also turn on wgpu's DEBUG flag, which names every labelled
 /// object through the Vulkan loader; that call crashed the render3d test binary (SIGSEGV, about
 /// one run in three on cgynb4, 2026-10-30) while another test thread created its own instance, so
-/// headless instances leave it out.
+/// headless instances leave it out. Instances are made one at a time: two threads in
+/// `vkCreateInstance` at once crashed the cadcraft-cli test binary inside the Vulkan loader (SIGSEGV at
+/// address 0, loader 1.4.341 on cgynb4, about one run in six, 2026-11-01).
 pub fn headless_instance() -> wgpu::Instance {
+    static MAKING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one_at_a_time = MAKING.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     wgpu::Instance::new(headless_descriptor())
 }
 
@@ -720,6 +724,28 @@ mod offscreen_behavior_tests {
             !desc.flags.contains(wgpu::InstanceFlags::DEBUG),
             "DEBUG makes every labelled object a vkSetDebugUtilsObjectNameEXT call, which crashes in the loader while another thread creates an instance"
         );
+    }
+
+    /// 2026-11-01: three test threads in `vkCreateInstance` at once crashed the cadcraft-cli lib test
+    /// binary (SIGSEGV at address 0 inside libvulkan, loader 1.4.341, about one run in six); the
+    /// integrator reported the cut-short run as "the workspace tests did not run to completion" and
+    /// refused two merges for it. Many threads making instances (and asking each for an adapter) at once
+    /// must not crash.
+    #[test]
+    fn headless_instances_can_be_created_from_many_threads_at_once() {
+        let threads: Vec<_> = (0..32)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    for _ in 0..12 {
+                        let instance = headless_instance();
+                        let _ = futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()));
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            assert!(t.join().is_ok(), "a thread making instances panicked");
+        }
     }
 
     fn with_offscreen<F>(size: (u32, u32), f: F)
