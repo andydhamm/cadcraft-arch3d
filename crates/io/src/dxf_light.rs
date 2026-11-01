@@ -239,4 +239,49 @@ mod tests {
         let span = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max) - v.iter().copied().fold(f64::MAX, f64::min);
         assert!((span(&xs) - 0.4).abs() < 1e-9 && (span(&ys) - 0.6).abs() < 1e-9, "{turned:?}");
     }
+
+    #[test]
+    fn dxf_panel_at_45_degrees() {
+        let mut m = ArchModel::default();
+        let mut panel = LightFixture::new(ArchId(0), "LED panel 600", Vec2::new(2.0, 2.0));
+        panel.shape = FixtureShape::Panel;
+        panel.kind = LightKind::Area;
+        panel.width = 0.6;
+        panel.length = 0.6;
+        panel.rotation = 45.0;
+        m.lights.push(panel);
+
+        let p = proxy_light_entities(&m);
+        assert_eq!(p.len(), 3, "rectangle and two diagonals");
+        let ring = &p[0].2;
+        let corners = proxy_points(ring);
+        assert_eq!(corners.len(), 4);
+        // At 45 degrees, the corners should be rotated around the center (2.0, 2.0)
+        let cos = 45.0_f64.to_radians().cos();
+        let sin = 45.0_f64.to_radians().sin();
+        let rotate = |x: f64, y: f64| -> (f64, f64) {
+            let dx = x - 2.0;
+            let dy = y - 2.0;
+            (2.0 + dx * cos - dy * sin, 2.0 + dx * sin + dy * cos)
+        };
+        let expected = [rotate(1.7, 1.7), rotate(2.3, 1.7), rotate(2.3, 2.3), rotate(1.7, 2.3)];
+        for (got, want) in corners.iter().zip(expected) {
+            assert!((got.0 - want.0).abs() < 1e-9 && (got.1 - want.1).abs() < 1e-9, "{corners:?}");
+        }
+    }
+
+    #[test]
+    fn dxf_panel_with_nan_position_skipped() {
+        let mut m = ArchModel::default();
+        let mut panel = LightFixture::new(ArchId(0), "LED panel 600", Vec2::new(f64::NAN, 1.0));
+        panel.shape = FixtureShape::Panel;
+        panel.kind = LightKind::Area;
+        panel.width = 0.6;
+        panel.length = 0.4;
+        m.lights.push(panel);
+
+        let p = proxy_light_entities(&m);
+        // plan_symbol should produce polylines with NaN vertices, which light_polyline skips
+        assert!(p.is_empty(), "NaN position should produce no proxies");
+    }
 }
