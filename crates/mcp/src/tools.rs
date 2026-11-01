@@ -80,8 +80,12 @@ fn err_text(e: &str) -> Value {
 }
 
 /// Whether `v` fits the subset of JSON Schema the tool definitions use: `type`, `items`,
-/// `minItems`, `maxItems` and `minimum`.
+/// `minItems`, `maxItems`, `minimum`, `required`, `const` and `anyOf`.
 fn fits(v: &Value, schema: &Value) -> bool {
+    // anyOf: the value must fit at least one of the listed subschemas.
+    if let Some(alternatives) = schema["anyOf"].as_array() {
+        return alternatives.iter().any(|alt| fits(v, alt));
+    }
     let typed = match schema["type"].as_str() {
         Some("string") => v.is_string(),
         // JSON Schema integers include numbers such as 2.0.
@@ -93,7 +97,13 @@ fn fits(v: &Value, schema: &Value) -> bool {
         _ => true,
     };
     let len = v.as_array().map(Vec::len);
+    // required: for object schemas, every named key must be present.
+    let required_ok =
+        v.as_object().is_none_or(|o| schema["required"].as_array().into_iter().flatten().all(|r| r.as_str().is_some_and(|k| o.get(k).is_some())));
+    let const_ok = schema["const"].is_null() || v == &schema["const"];
     typed
+        && required_ok
+        && const_ok
         && schema["minimum"].as_f64().is_none_or(|m| v.as_f64().is_none_or(|f| f >= m))
         && schema["minItems"].as_u64().is_none_or(|m| len.is_none_or(|n| n as u64 >= m))
         && schema["maxItems"].as_u64().is_none_or(|m| len.is_none_or(|n| n as u64 <= m))
@@ -197,4 +207,39 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
         Ok(v) => text(&v),
         Err(e) => err_text(&e),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mcp_render_sun_string_rejected() {
+        let r = check_args("render", &json!({"sun": "hello"}));
+        assert!(r.is_err(), "sun: \"hello\" should be rejected: {r:?}");
+    }
+
+    #[test]
+    fn mcp_render_sun_true_rejected() {
+        let r = check_args("render", &json!({"sun": true}));
+        assert!(r.is_err(), "sun: true should be rejected: {r:?}");
+    }
+
+    #[test]
+    fn mcp_render_sun_false_accepted() {
+        let r = check_args("render", &json!({"sun": false}));
+        assert!(r.is_ok(), "sun: false should be accepted: {r:?}");
+    }
+
+    #[test]
+    fn mcp_render_sun_object_accepted() {
+        let r = check_args("render", &json!({"sun": {"date": "2026-06-21", "time": "solar-noon"}}));
+        assert!(r.is_ok(), "sun object should be accepted: {r:?}");
+    }
+
+    #[test]
+    fn mcp_render_sun_object_missing_time_rejected() {
+        let r = check_args("render", &json!({"sun": {"date": "2026-06-21"}}));
+        assert!(r.is_err(), "sun object missing time should be rejected: {r:?}");
+    }
 }
