@@ -168,8 +168,11 @@ pub fn luminance_rgb(rgb: [f64; 3]) -> [f32; 3] {
 /// [`MAT_EMIT_CAMERA_ONLY`]; every `light-…` material gets [`MAT_NO_SHADOW`]; `mirror…` is
 /// metallic 1, roughness 0.02, albedo 0.95. Everything else IOR 1.5, no emission.
 pub fn material_for(material: &str) -> GpuMaterial {
-    let (albedo, metallic, roughness, alpha) = material_pbr(material);
     let name = material.to_ascii_lowercase();
+    // An opening's meshes are `<window|door>-<part>` (arch3d openings.rs): each is its part's
+    // material, so window glass lets the sun through.
+    let part = name.strip_prefix("window-").or_else(|| name.strip_prefix("door-")).filter(|p| !p.is_empty()).unwrap_or(&name);
+    let (albedo, metallic, roughness, alpha) = material_pbr(part);
     let mut m = GpuMaterial { albedo, metallic, roughness, ior: 1.5, ..Default::default() };
     if alpha < 1.0 {
         m.flags |= MAT_GLASS;
@@ -864,6 +867,21 @@ mod tests {
         assert_eq!(gpu.trace_cpu([f32::NAN, 0.0, 0.0], d, 1e30), None);
         assert_eq!(gpu.trace_cpu(o, [0.0; 3], 1e30), None);
         assert_eq!(gpu.trace_cpu(o, d, f32::NAN), None);
+    }
+
+    #[test]
+    fn an_opening_part_is_its_part_material() {
+        // arch3d names an opening's meshes `<window|door>-<part>` (openings.rs).
+        for name in ["window-glass", "door-glass", "Window-Glass"] {
+            let m = material_for(name);
+            assert_eq!(m.flags & MAT_GLASS, MAT_GLASS, "{name} lets light through");
+            assert_eq!(m.transmission, material_for("glass").transmission, "{name}");
+        }
+        for (name, part) in [("window-frame", "frame"), ("window-sill", "sill"), ("door-leaf", "leaf"), ("door-casing", "casing")] {
+            let m = material_for(name);
+            assert_eq!(m.flags & MAT_GLASS, 0, "{name} is opaque");
+            assert_eq!((m.albedo, m.roughness), (material_for(part).albedo, material_for(part).roughness), "{name}");
+        }
     }
 
     #[test]
