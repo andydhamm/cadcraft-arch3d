@@ -8,6 +8,8 @@ use cadcraft_geom::Vec3;
 use cadcraft_render3d::adapter::AdapterChoice;
 use cadcraft_render3d::camera::{Camera, MAX_DISTANCE, Orbit};
 use cadcraft_render3d::light::{Light, Sun};
+use cadcraft_render3d::lights::DEFAULT_EXPOSURE;
+use cadcraft_render3d::lit_frame::Lighting;
 use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, Style};
 
 /// Default pixel size for `render`.
@@ -41,6 +43,8 @@ pub(crate) enum RenderError {
     Sun(String),
     #[error("--sun needs lat=DEG when the drawing has no site location")]
     NoSiteLat,
+    #[error("--night and --sun cannot be combined")]
+    NightWithSun,
     #[error("render: no GPU adapter")]
     NoAdapter,
     #[error("render: {0}")]
@@ -216,7 +220,13 @@ fn sun_light_dir(
     Ok(cadcraft_arch::site::true_to_drawing(site, dir))
 }
 
+/// Refuse flag combinations that make no sense: `--night` turns the sun off, `--sun` places it.
+pub(crate) fn check_flags(a: &RenderArgs) -> Result<(), RenderError> {
+    if a.night && a.sun.is_some() { Err(RenderError::NightWithSun) } else { Ok(()) }
+}
+
 pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError> {
+    check_flags(a)?;
     let size = a.size.unwrap_or(DEFAULT_SIZE);
     let mut s = Session::empty();
     open(&mut s, &a.file).map_err(|e| RenderError::Open(Box::new(e)))?;
@@ -245,12 +255,31 @@ pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError
     };
     let mut off = Offscreen::create_with(a.adapter, size).map_err(gpu)?;
     io.errln(format_args!("{}", off.device_info().line()));
-    let map = if a.sun.is_some() || a.ground { off.build_shadow(&scene, scene.revision, &light, a.ground) } else { None };
-    let opts = RenderOptions { shadow: map.as_ref(), style: a.style, ground: a.ground, ..RenderOptions::default() };
-    off.render_with(&scene, scene.revision, &camera, &light, &opts);
-    let png = off.read_png().map_err(gpu)?;
-    if map.is_some() {
+    let lighting = Lighting {
+        sun: if a.night { None } else { Some(light) },
+        sun_shadow: a.sun.is_some() || a.ground,
+        budget: usize::try_from(a.budget).unwrap_or(0).min(64),
+        exposure: DEFAULT_EXPOSURE,
+    };
+    let eye = camera.eye();
+    let frame = off.lit_frame(&scene, scene.revision, [eye.x, eye.y, eye.z], &lighting, a.ground);
+    let (png, sun_map) = if a.final_render {
+        let png = cadcraft_render3d::render_final(&mut off, &scene, scene.revision, &camera, &lighting, a.ground, size).map_err(gpu)?;
+        (png, false)
+    } else {
+        let map = if frame.is_none() && (a.sun.is_some() || a.ground) { off.build_shadow(&scene, scene.revision, &light, a.ground) } else { None };
+        let opts = RenderOptions { lit: frame.as_ref(), shadow: map.as_ref(), style: a.style, ground: a.ground };
+        off.render_with(&scene, scene.revision, &camera, &light, &opts);
+        (off.read_png().map_err(gpu)?, map.is_some())
+    };
+    if sun_map || (a.sun.is_some() || a.ground) && frame.is_some() {
         io.errln(format_args!("SHADOW size={} built={}", cadcraft_render3d::shadow::SHADOW_SIZE, off.shadow_maps_built()));
+    }
+    let (drawn, shadowed) = frame.as_ref().map_or((0, 0), |f| (f.lights, f.shadowed));
+    io.errln(format_args!("LIGHTS {} shadowed={shadowed} drawn={drawn}", scene.lights.len()));
+    io.errln(format_args!("SHADOWMAPS built={}", off.shadow_maps_built()));
+    if a.final_render {
+        io.errln(format_args!("FINAL renders={} size={}x{}", off.final_renders(), size.0, size.1));
     }
     write_atomic(&a.output, &png)?;
     io.errln(format_args!("wrote {} ({} bytes)", a.output.display(), png.len()));
