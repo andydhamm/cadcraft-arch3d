@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 18:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 18:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 11 of 13: Ray-traced Finalize Render — 22 of 24 segments merged · 8 of 13 acceptance checks**
 
@@ -21,7 +21,7 @@ Updated 2026-11-01 18:15 UTC. This page and the card in the README are regenerat
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
-| 11 | Ray-traced Finalize Render | building | 8 / 13 | 10.6 h so far · expected done Nov 01 19:14–Nov 02 04:42 UTC |
+| 11 | Ray-traced Finalize Render | building | 8 / 13 | 10.8 h so far · expected done Nov 01 19:31–Nov 02 05:12 UTC |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
@@ -38,6 +38,7 @@ Updated 2026-11-01 18:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 01 18:25 | `p11-r3d-rt` | refused | 6,410 pass | claude-sonnet-b |
 | Nov 01 17:18 | `harden-p11-io-area-ies` | merged | 6,403 pass | tturbo-mac |
 | Nov 01 17:02 | `p11-docs-user-guide` | merged | 6,395 pass | bonsai-ws2-a |
 | Nov 01 16:24 | `p11-cli-render-args` | merged | 6,394 pass | claude-sonnet-d |
@@ -49,21 +50,20 @@ Updated 2026-11-01 18:15 UTC. This page and the card in the README are regenerat
 | Nov 01 14:25 | `upstream-sync-258c89fbb` | merged | 6,367 pass | claude-sonnet-b |
 | Nov 01 14:12 | `p11-r3d-final-path` | merged | 6,365 pass | claude-sonnet-c |
 | Nov 01 14:04 | `harden-p11-cmd-lightfixture-area-ies` | merged | 6,361 pass | tturbo-mac |
-| Nov 01 13:41 | `p11-r3d-pt-driver` | merged | 6,355 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 782 |
-| bonsai-b | bonsai2-27b | idle | 722 |
+| bonsai-b | bonsai2-27b | agent | 722 |
 | bonsai-ws2-a | bonsai2-27b | idle | 779 |
-| bonsai-ws2-b | bonsai2-27b | gate | 759 |
+| bonsai-ws2-b | bonsai2-27b | merging | 760 |
 | claude-sonnet-a | sonnet | idle | 67 |
-| claude-sonnet-b | sonnet | merging | 63 |
+| claude-sonnet-b | sonnet | merging | 64 |
 | claude-sonnet-c | sonnet | idle | 14 |
 | claude-sonnet-d | sonnet | merging | 6 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 629 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 631 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 44 |
 | tturbo-mac | tturbo-ultraheretic | merging | 540 |
