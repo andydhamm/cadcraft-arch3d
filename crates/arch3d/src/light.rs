@@ -227,4 +227,19 @@ mod tests {
         let none = Vec3::default();
         assert_eq!(direct_illuminance(l, Vec3::new(1.0, 1.0, 0.0), none), 0.0);
     }
+
+    #[test]
+    fn a_pot_light_shines_through_its_own_ceiling() {
+        // The room's ceiling slab runs 2.38 to 2.4 m, around the light point at 2.4 m.
+        let mut m = room();
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(cadcraft_doc::arch::Room { id: ArchId(10), polygon: ring, ..Default::default() });
+        let scene = crate::build(&m);
+        assert_eq!(scene.ceilings, 1);
+        let r = illuminance(&scene, Vec3::new(1.0, 1.0, 0.0), up());
+        assert!((r.lux - 165.0).abs() < 1.65, "{}", r.lux);
+        let r = illuminance(&scene, Vec3::new(1.8, 1.8, 0.0), up());
+        assert!((r.lux - 122.1).abs() < 1.221, "{}", r.lux);
+    }
 }

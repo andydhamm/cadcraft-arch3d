@@ -152,6 +152,18 @@ fn well_holes_for(model: &ArchModel, room: &cadcraft_doc::arch::Room) -> Vec<Vec
     holes
 }
 
+/// `room`'s ceiling, with an opening for each recessed can mounted in it
+/// ([`fixture::ceiling_cutouts`]).
+fn ceiling_for(model: &ArchModel, room: &cadcraft_doc::arch::Room, level: &cadcraft_doc::arch::Level) -> Option<Mesh> {
+    let cuts = fixture::ceiling_cutouts(model, room, level);
+    if cuts.is_empty() {
+        return floors::ceiling_surface(room, level, "ceiling");
+    }
+    let mut clone = room.clone();
+    clone.holes.extend(cuts);
+    floors::ceiling_surface(&clone, level, "ceiling")
+}
+
 /// The [`Level`] corresponding to `index`, preferring the last level
 /// (or a default) when no level with that index exists.
 fn level_for(model: &ArchModel, index: u32) -> cadcraft_doc::arch::Level {
@@ -290,7 +302,7 @@ impl Scene3d {
                     }
                 }
             }
-            if let Some(m) = floors::ceiling_surface(room, &level, "ceiling") {
+            if let Some(m) = ceiling_for(model, room, &level) {
                 meshes.push(m);
                 ceilings += 1;
             }
@@ -554,7 +566,7 @@ impl Scene3d {
                     }
                 }
             }
-            if let Some(m) = floors::ceiling_surface(room, &level, "ceiling") {
+            if let Some(m) = ceiling_for(model, room, &level) {
                 meshes.push(m);
                 ceilings += 1;
             }
