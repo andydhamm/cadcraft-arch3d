@@ -255,4 +255,69 @@ mod tests {
         let Some(f) = f else { return };
         assert_eq!(f.sun_intensity, 0.0);
     }
+
+    #[test]
+    fn empty_scene_builds_no_maps() {
+        let Some(mut o) = off() else { return };
+        let s = scene(vec![]);
+        assert!(o.lit_frame(&s, 1, orbit(0.0), &Lighting::default(), false).is_some());
+        assert_eq!(o.shadow_maps_built(), 0);
+        assert_eq!(o.shadowed_lights(), 0);
+    }
+
+    #[test]
+    fn sun_shadow_map_cached_across_camera_moves() {
+        let Some(mut o) = off() else { return };
+        let s = scene(four());
+        let l = Lighting { sun_shadow: true, ..Lighting::default() };
+        assert!(o.lit_frame(&s, 1, orbit(0.0), &l, false).is_some());
+        // 4 fixture maps + 1 sun map
+        let n = o.shadow_maps_built();
+        assert_eq!(n, 5);
+        for i in 1..=10 {
+            assert!(o.lit_frame(&s, 1, orbit(i as f64), &l, false).is_some());
+        }
+        assert_eq!(o.shadow_maps_built(), n);
+    }
+
+    #[test]
+    fn budget_larger_than_light_count_shadows_all() {
+        let Some(mut o) = off() else { return };
+        let l = Lighting { budget: 100, ..Lighting::default() };
+        let f = o.lit_frame(&scene(four()), 1, orbit(0.0), &l, false);
+        assert!(f.is_some());
+        let Some(f) = f else { return };
+        assert_eq!(f.shadowed, 4);
+        assert_eq!(f.lights, 4);
+        assert_eq!(o.shadowed_lights(), 4);
+    }
+
+    #[test]
+    fn coincident_lights_all_shadowed() {
+        let Some(mut o) = off() else { return };
+        let lights = vec![spot(1, 0.0, 0.0), spot(2, 0.0, 0.0), spot(3, 0.0, 0.0)];
+        let f = o.lit_frame(&scene(lights), 1, orbit(0.0), &Lighting::default(), false);
+        assert!(f.is_some());
+        let Some(f) = f else { return };
+        assert_eq!(f.shadowed, 3);
+        assert_eq!(f.lights, 3);
+    }
+
+    #[test]
+    fn nan_light_position_does_not_panic() {
+        let Some(mut o) = off() else { return };
+        let mut lights = four();
+        lights[0].position = Vec3::new(f64::NAN, 0.0, 3.0);
+        let f = o.lit_frame(&scene(lights), 1, orbit(0.0), &Lighting::default(), false);
+        assert!(f.is_some());
+    }
+
+    #[test]
+    fn ground_change_produces_valid_frame() {
+        let Some(mut o) = off() else { return };
+        let s = scene(four());
+        let l = Lighting::default();
+        assert!(o.lit_frame(&s, 1, orbit(0.0), &l, false).is_some());
+        assert!(o.lit_frame(&s, 1, orbit(0.0), &l, true).is_some());
+    }
 }
