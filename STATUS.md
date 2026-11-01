@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-01 01:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-01 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 10 of 13: Lighting, light fixtures and final renders — 15 of 22 segments merged · 1 of 11 acceptance checks**
 
@@ -20,22 +20,22 @@ Updated 2026-11-01 01:15 UTC. This page and the card in the README are regenerat
 | 7 | Generated elevations and sections | done | 9 / 9 | 8.2 h |
 | 8 | Recognition from plain DXF | done | 10 / 10 | 16.6 h |
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
-| 10 | Lighting, light fixtures and final renders | building | 1 / 11 | 8.7 h so far · expected done Nov 01 06:08–Nov 01 15:33 UTC |
+| 10 | Lighting, light fixtures and final renders | building | 1 / 11 | 8.9 h so far · expected done Nov 01 06:32–Nov 01 16:13 UTC |
 | 11 | Ray-traced Finalize Render | planned | — | — |
 | 12 | Exports and interoperability | planned | — | — |
 | 13 | Polish | planned | — | — |
 
 ## Phase 10 segments
 
-15 merged, 3 working, 2 merging, 1 gate, 1 queued
+15 merged, 3 merging, 3 gate, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p10-arch3d-fixture-meshes` | Fixture housings in 3D | merging | claude-sonnet-a |
-| `p10-cmd-illuminance` | ILLUMINANCE: direct light at a point | gate | mai-flash |
-| `p10-cli-render-hook` | The CLI's session renderer behind RENDER 3D, SUNSTUDY and MCP | working | claude-sonnet-a |
-| `p10-cli-render-final` | cadcraft-cli render: --final, --night, --budget and the light report lines | working | claude-sonnet-b |
-| `p10-ui-pane-lights` | 3D pane: fixture lights, the site's sun or night, Finalize Render with progress, cancel and save | working | claude-sonnet-d |
+| `p10-cmd-illuminance` | ILLUMINANCE: direct light at a point | merging | mai-flash |
+| `p10-cli-render-hook` | The CLI's session renderer behind RENDER 3D, SUNSTUDY and MCP | gate | claude-sonnet-a |
+| `p10-cli-render-final` | cadcraft-cli render: --final, --night, --budget and the light report lines | gate | claude-sonnet-b |
+| `p10-ui-pane-lights` | 3D pane: fixture lights, the site's sun or night, Finalize Render with progress, cancel and save | gate | claude-sonnet-d |
 | `upstream-sync-5caaf73e3` | merge upstream upstream/main up to 5caaf73e3 (1 commits) | merging | bonsai-ws2-a |
 
 ## Recent merges
@@ -59,16 +59,16 @@ Updated 2026-11-01 01:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 748 |
-| bonsai-b | bonsai2-27b | gate | 690 |
+| bonsai-a | bonsai2-27b | agent | 749 |
+| bonsai-b | bonsai2-27b | idle | 691 |
 | bonsai-ws2-a | bonsai2-27b | idle | 745 |
-| bonsai-ws2-b | bonsai2-27b | idle | 712 |
-| claude-sonnet-a | sonnet | agent | 59 |
-| claude-sonnet-b | sonnet | agent | 58 |
+| bonsai-ws2-b | bonsai2-27b | gate | 712 |
+| claude-sonnet-a | sonnet | gate | 60 |
+| claude-sonnet-b | sonnet | gate | 58 |
 | claude-sonnet-c | sonnet | idle | 10 |
-| claude-sonnet-d | sonnet | agent | 3 |
+| claude-sonnet-d | sonnet | gate | 3 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 599 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 110 |
-| mai-flash | mai-code-1.1-flash | gate | 32 |
+| mai-flash | mai-code-1.1-flash | merging | 33 |
 | tturbo-mac | tturbo-ultraheretic | gate | 518 |
 | tturbo-mac2 | tturbo-ultraheretic | merging | 337 |
