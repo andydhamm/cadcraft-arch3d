@@ -205,6 +205,115 @@ mod tests {
     }
 
     #[test]
+    fn empty_scene_has_no_lights() {
+        let scene = Scene3d::default();
+        let (lights, nodes) = punctual_lights(&scene);
+        assert!(lights.is_empty());
+        assert!(nodes.is_empty());
+    }
+
+    #[test]
+    fn point_light_has_no_spot_section() {
+        let scene = Scene3d {
+            lights: vec![scene_light(0, LightKind::Point, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.0, 0.0)],
+            ..Default::default()
+        };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0]["type"], "point");
+        assert!(lights[0].get("spot").is_none());
+        assert_eq!(nodes.len(), 1);
+    }
+
+    #[test]
+    fn non_finite_light_is_skipped() {
+        let scene = Scene3d {
+            lights: vec![
+                scene_light(0, LightKind::Point, Vec3::new(f64::NAN, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.0, 0.0),
+                scene_light(1, LightKind::Point, Vec3::new(1.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.0, 0.0),
+            ],
+            ..Default::default()
+        };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0]["name"], "lf1");
+        assert_eq!(nodes.len(), 1);
+    }
+
+    #[test]
+    fn invalid_spot_cone_is_skipped() {
+        let scene = Scene3d {
+            lights: vec![
+                scene_light(0, LightKind::Spot, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.5, 0.7),
+                scene_light(1, LightKind::Spot, Vec3::new(1.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.7, 0.5),
+            ],
+            ..Default::default()
+        };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0]["name"], "lf1");
+        assert_eq!(nodes.len(), 1);
+    }
+
+    #[test]
+    fn opposite_direction_gets_180_rotation() {
+        let scene = Scene3d {
+            lights: vec![scene_light(0, LightKind::Spot, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0), 100.0, [1.0, 1.0, 1.0], 0.5, 0.5)],
+            ..Default::default()
+        };
+        let (_, nodes) = punctual_lights(&scene);
+        let node = &nodes[0];
+        let rotation = node["rotation"].as_array().unwrap();
+        let q = [
+            rotation[0].as_f64().unwrap_or_default(),
+            rotation[1].as_f64().unwrap_or_default(),
+            rotation[2].as_f64().unwrap_or_default(),
+            rotation[3].as_f64().unwrap_or_default(),
+        ];
+        assert!((q[0] - 1.0).abs() < 1e-9);
+        assert!(q[1].abs() < 1e-9);
+        assert!(q[2].abs() < 1e-9);
+        assert!(q[3].abs() < 1e-9);
+        let rotated = rotate_quat(Vec3::new(0.0, 0.0, -1.0), q);
+        assert!((rotated.z - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn outer_cone_capped_at_pi_over_2() {
+        let scene = Scene3d {
+            lights: vec![scene_light(0, LightKind::Spot, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.0, -0.5)],
+            ..Default::default()
+        };
+        let (lights, _) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        let spot = &lights[0]["spot"];
+        let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        assert!((outer - std::f64::consts::PI / 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn zero_direction_is_skipped() {
+        let scene = Scene3d {
+            lights: vec![scene_light(0, LightKind::Point, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, 0.0), 100.0, [1.0, 1.0, 1.0], 0.0, 0.0)],
+            ..Default::default()
+        };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert!(lights.is_empty());
+        assert!(nodes.is_empty());
+    }
+
+    #[test]
+    fn negative_intensity_is_skipped() {
+        let scene = Scene3d {
+            lights: vec![scene_light(0, LightKind::Point, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), -1.0, [1.0, 1.0, 1.0], 0.0, 0.0)],
+            ..Default::default()
+        };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert!(lights.is_empty());
+        assert!(nodes.is_empty());
+    }
+
+    #[test]
     fn glb_declares_the_lights_extension() {
         let mesh = Mesh {
             positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0]],
