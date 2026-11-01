@@ -116,7 +116,7 @@ pub(crate) struct RenderArgs {
     #[arg(long = "final", value_name = "MODE", num_args = 0..=1, default_missing_value = "", value_parser = parse_final_arg)]
     pub(crate) final_render: Option<FinalMode>,
     /// Path tracer: samples per pixel (1-65536, default 256)
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536), action = ArgAction::Set, num_args = 1)]
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536), action = ArgAction::SetLast, num_args = 1)]
     pub(crate) spp: Option<u32>,
     /// Path tracer: full bounces before Russian roulette (0-32, default 4)
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=32), action = ArgAction::Set)]
