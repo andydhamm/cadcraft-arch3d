@@ -232,47 +232,66 @@ fn glass_splits_by_fresnel_and_refracts_by_snell() {
 
 #[test]
 fn white_bsdfs_do_not_create_energy() {
-    // (material, name, strict): a strict material's weights are individually bounded by 1, so
-    // its mean cannot exceed 1 + 1e-3; a dielectric blend's one-sample mixture estimator has a
-    // statistical error of ~1e-3 around an expectation that is at most 1, so it gets 1 + 1e-2
-    // (an uncompensated diffuse + specular sum would be 1.04 at normal incidence).
+    // The spec's bound for every white (albedo 1) material: the mean weight never exceeds
+    // 1 + 1e-3. A strict material's weights are individually bounded by 1, so one probe of
+    // PER_PROBE samples already satisfies it. A dielectric blend's one-sample mixture estimator
+    // has a standard error of ~1.2e-3 at PER_PROBE samples around an expectation of at most
+    // 1.0001 (the lobes' quadrature), so its mean is taken over 2^20 samples (error ~2e-4):
+    // BLEND_CHUNKS probes with their own random streams, each short enough that bsdf_test_main's
+    // f32 running sum stays exact to ~1e-5 and no invocation loops for long, averaged here in
+    // f64. (An uncompensated diffuse + specular sum would be 1.04 at normal incidence.)
+    const PER_PROBE: u32 = 32768;
+    const BLEND_CHUNKS: usize = 32;
+    const LIMIT: f64 = 1.0 + 1e-3;
     let white = [1.0f32; 3];
+    // (material, name, dielectric blend)
     let materials: Vec<(GpuMaterial, &str, bool)> = vec![
-        (opaque(white, 0.0, 0.5, 1.0), "lambert", true),
-        (opaque(white, 1.0, 0.0, 1.5), "mirror metal", true),
-        (opaque(white, 1.0, 0.03, 1.5), "metal roughness 0.03", true),
-        (opaque(white, 1.0, 0.3, 1.5), "metal roughness 0.3", true),
-        (opaque(white, 1.0, 0.5, 1.5), "metal roughness 0.5", true),
-        (opaque(white, 1.0, 1.0, 1.5), "metal roughness 1", true),
-        (glass(white, 1.0), "glass", true),
-        (opaque(white, 0.0, 0.0, 1.5), "smooth dielectric", false),
-        (opaque(white, 0.0, 0.1, 1.5), "dielectric roughness 0.1", false),
-        (opaque(white, 0.0, 0.5, 1.5), "dielectric roughness 0.5", false),
-        (opaque(white, 0.0, 1.0, 1.5), "dielectric roughness 1", false),
-        (opaque(white, 0.5, 0.4, 1.5), "half metal roughness 0.4", false),
+        (opaque(white, 0.0, 0.5, 1.0), "lambert", false),
+        (opaque(white, 1.0, 0.0, 1.5), "mirror metal", false),
+        (opaque(white, 1.0, 0.03, 1.5), "metal roughness 0.03", false),
+        (opaque(white, 1.0, 0.3, 1.5), "metal roughness 0.3", false),
+        (opaque(white, 1.0, 0.5, 1.5), "metal roughness 0.5", false),
+        (opaque(white, 1.0, 1.0, 1.5), "metal roughness 1", false),
+        (glass(white, 1.0), "glass", false),
+        (opaque(white, 0.0, 0.0, 1.5), "smooth dielectric", true),
+        (opaque(white, 0.0, 0.1, 1.5), "dielectric roughness 0.1", true),
+        (opaque(white, 0.0, 0.5, 1.5), "dielectric roughness 0.5", true),
+        (opaque(white, 0.0, 1.0, 1.5), "dielectric roughness 1", true),
+        (opaque(white, 0.5, 0.4, 1.5), "half metal roughness 0.4", true),
     ];
     let angles = [0.0, 30.0, 60.0, 85.0];
+    let chunks_of = |blend: bool| if blend { BLEND_CHUNKS } else { 1 };
     let mut probes = Vec::new();
-    for k in 0..materials.len() {
+    for (k, (_, _, blend)) in materials.iter().enumerate() {
         for d in angles {
-            probes.push(probe(k, toward(d), 32768));
+            for _ in 0..chunks_of(*blend) {
+                probes.push(probe(k, toward(d), PER_PROBE));
+            }
         }
     }
     let Some(out) = run("bsdf_test_main", materials.iter().map(|m| m.0).collect(), &probes) else {
         return;
     };
-    for (k, (_, name, strict)) in materials.iter().enumerate() {
-        let limit = if *strict { 1.0 + 1e-3 } else { 1.0 + 1e-2 };
-        for (a, d) in angles.iter().enumerate() {
-            let o = out[k * angles.len() + a];
+    let mut at = 0;
+    for (_, name, blend) in &materials {
+        let chunks = chunks_of(*blend);
+        for d in angles {
+            let mut mean = [0.0f64; 3];
+            for o in &out[at..at + chunks] {
+                for c in 0..3 {
+                    mean[c] += o[c] as f64 / chunks as f64;
+                }
+            }
+            at += chunks;
             for c in 0..3 {
-                assert!((o[c] as f64) <= limit, "{name} at {d} deg channel {c}: mean weight {} exceeds {limit}", o[c]);
-                assert!(o[c] > 0.3, "{name} at {d} deg channel {c}: mean weight {} lost most of the energy", o[c]);
+                assert!(mean[c] <= LIMIT, "{name} at {d} deg channel {c}: mean weight {} exceeds {LIMIT}", mean[c]);
+                assert!(mean[c] > 0.3, "{name} at {d} deg channel {c}: mean weight {} lost most of the energy", mean[c]);
                 if *name == "lambert" || *name == "glass" || *name == "mirror metal" {
                     // Nothing is lost in these: a white one returns exactly what it receives.
-                    close(o[c], 1.0, 1e-4, &format!("{name} at {d} deg channel {c}"));
+                    close(mean[c] as f32, 1.0, 1e-4, &format!("{name} at {d} deg channel {c}"));
                 }
             }
         }
     }
+    assert_eq!(at, out.len(), "every probe's result was read");
 }
