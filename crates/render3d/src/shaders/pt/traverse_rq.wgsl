@@ -19,7 +19,7 @@ struct Ray {
     direction: vec3<f32>,
     near: f32,
     far: f32,
-    payload: vec3<f32>,
+    payload: vec4<f32>,
 }
 
 fn scene_is_empty() -> bool {
@@ -52,7 +52,7 @@ fn rq_nearest(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
         direction: d,
         near: PT_EPS,
         far: t_max,
-        payload: vec3<f32>(0.0),
+        payload: vec4<f32>(0.0, 0.0, 0.0, 0.0),
     };
     var best = vec4<f32>(vec3<f32>(1e30), 0.0);
     var hit = rayQueryInitialize(ray);

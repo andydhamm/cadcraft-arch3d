@@ -74,7 +74,7 @@ fn acc_layout_entry() -> wgpu::BindGroupLayoutEntry {
     wgpu::BindGroupLayoutEntry {
         binding: 0,
         visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::AccelerationStructure { read_only: true },
+        ty: wgpu::BindingType::AccelerationStructure { vertex_return: false },
         count: None,
     }
 }
@@ -135,8 +135,7 @@ pub fn build_rq_pipelines(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>)
     let device = &gpu.device;
     let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let kernel_layout = layout(device, "pt rq kernel", &[UNIFORM, READ, READ, READ, READ, READ, WRITE, WRITE, READ]);
-    let acc_layout =
-        wgpu::BindGroupLayout::from_layout(device, &wgpu::BindGroupLayoutDescriptor { label: Some("pt rq acc"), entries: &[acc_layout_entry()] });
+    let acc_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("pt rq acc"), entries: &[acc_layout_entry()] });
     let rq_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pt rq"),
         bind_group_layouts: &[Some(kernel_layout), Some(&acc_layout)],

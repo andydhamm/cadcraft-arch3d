@@ -3,7 +3,8 @@
 use super::device::ComputeGpu;
 use super::scene_gpu::GpuScene;
 
-use wgpu::{AccelerationStructure, AccelerationStructureBounds, AccelerationStructureDescriptor, IndexType};
+use wgpu::util::DeviceExt;
+use wgpu::{AccelerationStructure, AccelerationStructureBounds, AccelerationStructureDescriptor, AccelerationStructureFlags, IndexType};
 
 /// A BLAS of every triangle plus a single-instance TLAS over it.
 pub struct RqBuild {
@@ -32,7 +33,7 @@ impl RqBuild {
         let mut positions: Vec<f32> = Vec::with_capacity(n * 9);
         for tri in &scene.tris {
             let tri_bytes: [u8; 64] = bytemuck::cast(*tri);
-            let verts = bytemuck::cast_slice(&tri_bytes[0..36]);
+            let verts: &[f32] = bytemuck::cast_slice(&tri_bytes[0..36]);
             for v in verts {
                 if !v.is_finite() {
                     return None;
@@ -85,7 +86,7 @@ impl RqBuild {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let blas = match d.create_acceleration_structure(&AccelerationStructureDescriptor {
+        let blas = match d.create_blas(&AccelerationStructureDescriptor {
             buffer: vertex_buffer.clone(),
             index: Some(index_buffer.clone()),
             index_type: IndexType::U32,
@@ -93,22 +94,22 @@ impl RqBuild {
             instance_count: 1,
             max_triangle_count: n as u32,
             bounds: AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
-            flags: 0,
+            flags: AccelerationStructureFlags::NONE,
         }) {
             Some(b) => b,
             None => return None,
         };
 
-        let tlas = match d.create_tlase(&AccelerationStructureDescriptor {
+        let tlas = match d.create_tlas(&AccelerationStructureDescriptor {
             blas: blas.clone(),
-            buffer: wgpu::Buffer::none(),
+            buffer: None,
             index: None,
             index_type: IndexType::U32,
             base_instance: 0,
             instance_count: 1,
             max_triangle_count: n as u32,
             bounds: AccelerationStructureBounds { min: [min_x, min_y, min_z], max: [max_x, max_y, max_z] },
-            flags: 0,
+            flags: AccelerationStructureFlags::NONE,
         }) {
             Some(t) => t,
             None => return None,
