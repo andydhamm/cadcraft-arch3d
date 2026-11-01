@@ -71,7 +71,7 @@ mod traverse_tests {
             } else {
                 dir = [dir[0] / len, dir[1] / len, dir[2] / len];
             }
-            probes.push(GpuProbe { point: origin, normal: dir, _a: 0.0, _b: 0.0 });
+            probes.push(GpuProbe { point: origin, normal: dir, ..Default::default() });
         }
         let frame = GpuFrame { probe_count: probes.len() as u32, ..Default::default() };
         let out = run_entry(&gpu, &buffers, "traverse_test_main", &frame, &probes).unwrap();
@@ -116,7 +116,7 @@ mod traverse_tests {
         for (scene, expected) in cases {
             let gpu_scene = build_gpu_scene(&scene, false, None);
             let buffers = upload_scene(&gpu, &gpu_scene);
-            let probes = vec![GpuProbe { point: [-2.0, 0.0, 0.0], normal: [1.0, 0.0, 0.0], _a: 10.0, _b: 0.0 }];
+            let probes = vec![GpuProbe { point: [-2.0, 0.0, 0.0], normal: [1.0, 0.0, 0.0], _a: 10.0, ..Default::default() }];
             let frame = GpuFrame { probe_count: 1, ..Default::default() };
             let out = run_entry(&gpu, &buffers, "visibility_test_main", &frame, &probes).unwrap();
             assert!(out[0][0..3].iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-5), "expected {expected:?}, got {:?}", out[0]);
@@ -132,7 +132,7 @@ mod traverse_tests {
         };
         let scene = build_gpu_scene(&Scene3d::default(), false, None);
         let buffers = upload_scene(&gpu, &scene);
-        let probes = vec![GpuProbe { point: [0.0, 0.0, 0.0], normal: [0.0, 0.0, 1.0], _a: 1e30, _b: 0.0 }];
+        let probes = vec![GpuProbe { point: [0.0, 0.0, 0.0], normal: [0.0, 0.0, 1.0], _a: 1e30, ..Default::default() }];
         let frame = GpuFrame { probe_count: 1, ..Default::default() };
         let out = run_entry(&gpu, &buffers, "traverse_test_main", &frame, &probes).unwrap();
         assert!(out[0][0] < 0.0, "empty scene should miss: {:?}", out[0]);
