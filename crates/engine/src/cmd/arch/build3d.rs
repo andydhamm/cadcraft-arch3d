@@ -1217,6 +1217,10 @@ mod tests {
         let r = s.execute("build3d", &json!({"digest": true})).unwrap();
         let baseline_digest = r["digest"].as_str().expect("missing digest");
 
+        // Save the original wall state for a proper undo (stretch_wall also moves
+        // the T-stem at the shared join).
+        let original_walls = s.doc().unwrap().arch.walls.clone();
+
         // Stretch wall 1, then restore it (simulating undo).
         {
             let d = s.doc_mut().unwrap();
@@ -1227,12 +1231,10 @@ mod tests {
         let stretched_digest = r_stretched["digest"].as_str().expect("missing digest");
         assert!(stretched_digest != baseline_digest, "stretch should change the scene digest");
 
-        // Restore wall 1 to its original end (simulating undo).
+        // Restore ALL walls to their original state (proper undo).
         {
             let d = s.doc_mut().unwrap();
-            if let Some(w) = d.arch.walls.iter_mut().find(|w| w.id == ArchId(1)) {
-                w.end = Vec2::new(10.0, 0.0);
-            }
+            d.arch.walls = original_walls;
             d.touch_arch();
         }
         let r_undone = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
