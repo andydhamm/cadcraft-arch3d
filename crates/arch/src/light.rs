@@ -755,7 +755,38 @@ mod tests {
         f.width = f64::NAN;
         let err = validate_fixture(&f).unwrap_err();
         assert!(err.contains("width"), "{err}");
-        assert!(err.contains("Nan"), "{err}");
+        assert!(err.contains("NaN"), "{err}");
+    }
+
+    #[test]
+    fn validate_area_zero_width_names_width() {
+        let t = find_type("LED panel 600").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.width = 0.0;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("width"), "{err}");
+        assert!(err.contains("0"), "{err}");
+    }
+
+    #[test]
+    fn validate_area_infinity_length_names_length() {
+        let t = find_type("LED panel 600").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.length = f64::INFINITY;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("length"), "{err}");
+        assert!(err.contains("inf"), "{err}");
+    }
+
+    #[test]
+    fn validate_area_both_bad_names_width_first() {
+        let t = find_type("LED panel 600").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.width = 10.0;
+        f.length = 0.001;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("width"), "should name width first: {err}");
+        assert!(!err.contains("length"), "should not name length yet: {err}");
     }
 
     #[test]
