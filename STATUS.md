@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-02 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 13 of 13: Polish — 4 of 23 segments merged · 0 of 13 acceptance checks**
+**Phase 13 of 13: Polish — 4 of 22 segments merged · 0 of 13 acceptance checks**
 
 6,697 workspace tests passing at the last merge · 683 segments merged in all · 0 of 14 seats working
 
@@ -23,21 +23,21 @@ Updated 2026-11-02 21:15 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 0 / 13 | 6.8 h so far · expected done Nov 03 20:46–Nov 05 19:52 UTC |
+| 13 | Polish | building | 0 / 13 | 7.1 h so far · expected done Nov 03 20:36–Nov 05 20:18 UTC |
 
 ## Phase 13 segments
 
-11 queued, 5 merging, 4 merged, 2 working, 1 replaced, 1 stuck
+11 queued, 6 merging, 4 merged, 1 replaced, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
+| `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | escalate |  |
 | `p13-sample-house` | arch.sample {"house":true}: the 300-wall benchmark house | merging | mai-flash-esc |
 | `p13-arch-casework-symbols` | Plan symbols for cabinets and fixtures | merging | claude-sonnet-c |
-| `p13-cmd-casework` | cabinet and fixture commands, inspect | working | claude-sonnet-d |
+| `p13-cmd-casework` | cabinet and fixture commands, inspect | merging | claude-sonnet-d |
 | `p13-inspect-finishes` | arch.inspect reports wall finish, roof covering and room floor finish | merging | claude-sonnet-b |
 | `p13-io-finish-round-trip` | DXF: finishes survive the arch XRECORD round trip | merging | bonsai-ws2-b |
 | `upstream-sync-dae4b7b2f` | merge upstream upstream/main up to dae4b7b2f (3 commits) | merging | mai-flash |
-| `p13-arch3d-object-keys` | arch3d: ObjectKind/ObjectKey, object_key, changed_objects, Scene3d::digest | working | claude-sonnet-a |
 
 ## Recent merges
 
@@ -61,13 +61,13 @@ Updated 2026-11-02 21:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 813 |
-| bonsai-b | bonsai2-27b | agent | 753 |
-| bonsai-ws2-a | bonsai2-27b | gate | 817 |
+| bonsai-b | bonsai2-27b | agent | 755 |
+| bonsai-ws2-a | bonsai2-27b | gate | 818 |
 | bonsai-ws2-b | bonsai2-27b | merging | 797 |
-| claude-sonnet-a | sonnet | agent | 70 |
+| claude-sonnet-a | sonnet | idle | 71 |
 | claude-sonnet-b | sonnet | merging | 69 |
 | claude-sonnet-c | sonnet | merging | 19 |
-| claude-sonnet-d | sonnet | agent | 11 |
+| claude-sonnet-d | sonnet | merging | 12 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 677 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 52 |
