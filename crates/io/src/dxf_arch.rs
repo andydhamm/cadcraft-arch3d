@@ -493,7 +493,7 @@ pub(crate) fn proxy_roof_polylines(m: &ArchModel) -> Vec<Vec<Tag>> {
 mod tests {
     use super::*;
     use crate::{read_dxf, write_dxf};
-    use cadcraft_doc::arch::{Opening, OpeningKind, Railing, Roof, RoofEdge, RoofEdgeKind, RoofPlane, Room, RoomType, Stair};
+    use cadcraft_doc::arch::{Finish, Opening, OpeningKind, Railing, Roof, RoofEdge, RoofEdgeKind, RoofPlane, Room, RoomType, Stair};
     use cadcraft_doc::{ArchModel, Drawing, EntityKind, Wall};
     use cadcraft_geom::{Vec2, Vec3};
 
@@ -2409,5 +2409,45 @@ mod tests {
         assert_eq!(back.arch.walls[0].retaining, want.retaining, "retaining flag lost on round trip");
         assert_eq!(back.arch.walls[0].freeboard, want.freeboard, "freeboard lost on round trip");
         assert_eq!(back.arch.walls[0].footing, want.footing, "footing lost on round trip");
+    }
+
+    #[test]
+    fn finishes_survive_a_dxf_round_trip() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2) });
+        let rid = d.arch.push_roof(Roof { covering: Some(Finish::Shingles), ..Roof::default() });
+        let room_id = d.arch.push_room(Room {
+            floor_finish: Some(Finish::Wood),
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(9.0, 0.0), Vec2::new(9.0, 7.0), Vec2::new(0.0, 7.0)],
+            ..Room::default()
+        });
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+        assert_eq!(back.arch.walls, d.arch.walls);
+        assert_eq!(back.arch.roofs, d.arch.roofs);
+        assert_eq!(back.arch.rooms, d.arch.rooms);
+        assert_eq!(back.arch.walls.iter().find(|w| w.id == wid).and_then(|w| w.finish), Some(Finish::Brick));
+        assert_eq!(back.arch.roofs.iter().find(|r| r.id == rid).and_then(|r| r.covering), Some(Finish::Shingles));
+        assert_eq!(back.arch.rooms.iter().find(|r| r.id == room_id).and_then(|r| r.floor_finish), Some(Finish::Wood));
+    }
+
+    #[test]
+    fn older_records_read_without_finishes() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2) });
+        let mut v = serde_json::to_value(&m).unwrap();
+        assert!(
+            v.get("walls").and_then(|walls| walls.get(0)).and_then(serde_json::Value::as_object).is_some_and(|map| map.contains_key("finish")),
+            "a current record must serialize its finish key"
+        );
+        if let Some(walls) = v.get_mut("walls") {
+            if let Some(first) = walls.get_mut(0) {
+                if let Some(map) = first.as_object_mut() {
+                    map.remove("finish");
+                }
+            }
+        }
+        let model: ArchModel = serde_json::from_value(v).unwrap();
+        assert_eq!(model.walls[0].finish, None, "an older record without the finish key must read None");
     }
 }
