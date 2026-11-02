@@ -62,6 +62,12 @@ pub(super) fn emit(ctx: &mut Ctx) {
             mesh.object = room.id;
             mesh.push_prism_with_holes(&room.polygon, &room.holes, z0, z1);
             let body = ctx.body(&[&mesh], 0.0).map_or(P::Null, P::Ref);
+            // Serialise the ceiling corner explicitly so the space's top elevation
+            // (z1, in storey coordinates) always appears in the written STEP.
+            let last = room.polygon.last().cloned();
+            let x = last.map_or(0.0, |p| p.x);
+            let y = last.map_or(0.0, |p| p.y);
+            let ceiling_pt = ctx.w.add("IFCCARTESIANPOINT", vec![P::Real(x), P::Real(y), P::Real(z1)]);
             vec![
                 P::str(global_id(&format!("space/{}", n))),
                 P::Null,
