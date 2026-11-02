@@ -18,6 +18,7 @@ pub use cadcraft_doc::{
 };
 
 pub mod area;
+pub mod casework;
 pub mod detect;
 pub mod graph;
 pub mod ies;
