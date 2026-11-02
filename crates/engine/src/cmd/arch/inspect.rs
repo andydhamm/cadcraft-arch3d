@@ -107,6 +107,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         }
         obj.insert("kind".to_string(), json!(w.wall_type.to_string()));
         obj.insert("level".to_string(), json!(w.base_level));
+        obj.insert("finish".to_string(), json!(w.finish.map(cadcraft_doc::arch::Finish::name)));
 
         if poché {
             if let Some(poly) = solved.get(&w.id) {
@@ -176,6 +177,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             obj.insert("livingIncluded".to_string(), json!(is_living(r, level)));
             obj.insert("ceiling".to_string(), json!(r.ceiling_height));
             obj.insert("deckHeight".to_string(), json!(r.deck_height));
+            obj.insert("floorFinish".to_string(), json!(r.floor_finish.map(cadcraft_doc::arch::Finish::name)));
             obj.insert("hasFloor".to_string(), json!(r.room_type.has_floor()));
             let label_pt = label_point(&r.polygon, &r.holes).unwrap_or_else(|| centroid_points(&r.polygon));
             obj.insert("label".to_string(), json!([label_pt.x, label_pt.y]));
@@ -256,6 +258,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             obj.insert("thickness".to_string(), json!(r.thickness));
             obj.insert("fascia".to_string(), json!(r.fascia));
             obj.insert("soffit".to_string(), json!(r.soffit));
+            obj.insert("covering".to_string(), json!(r.covering.map(cadcraft_doc::arch::Finish::name)));
             // Note: If fascia/soffit are bools in the struct, json! will serialize them as bools.
             // The spec says "fascia" and "soffit" in the JSON output.
             // The error said "expected bool, found floating-point number" in the TEST initializer.
@@ -869,6 +872,42 @@ mod tests {
             Err(_) => {}
         }
         s
+    }
+
+    #[test]
+    fn inspect_wall_finish_is_null_by_default() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]] }));
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        assert!(v["walls"][0].get("finish").is_some(), "finish key must be present");
+        assert_eq!(v["walls"][0]["finish"], Value::Null);
+    }
+
+    #[test]
+    fn inspect_reports_finishes() {
+        use cadcraft_doc::arch::{Finish, Roof};
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]] }));
+        if let Ok(d) = s.doc_mut() {
+            if let Some(w) = d.arch.walls.first_mut() {
+                w.finish = Some(Finish::Brick);
+            }
+            d.arch.push_roof(Roof { covering: Some(Finish::Shingles), ..Roof::default() });
+            d.arch.push_room(Room {
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+                floor_finish: Some(Finish::Wood),
+                ..Room::default()
+            });
+            d.touch_arch();
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "roofs": true, "rooms": true }));
+        assert_eq!(v["walls"][0]["finish"], "brick");
+        assert_eq!(v["roofs"][0]["covering"], "shingles");
+        assert_eq!(v["rooms"][0]["floorFinish"], "wood");
+        let plain = exec(&mut s, "arch.inspect", &json!({}));
+        assert_eq!(plain["walls"][0]["finish"], "brick");
+        assert!(plain.get("roofs").is_none());
+        assert!(plain.get("rooms").is_none());
     }
 
     #[test]
