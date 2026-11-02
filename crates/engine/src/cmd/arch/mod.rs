@@ -20,6 +20,7 @@ pub mod inspect;
 pub mod level;
 pub(crate) mod light_inspect;
 pub mod lightfixture;
+pub mod material;
 pub mod opening;
 pub mod pick;
 pub mod plant;
@@ -89,6 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(terrain_query::specs());
     v.extend(plant::specs());
     v.extend(lightfixture::specs());
+    v.extend(material::specs());
     v.extend(illuminance::specs());
     v.extend(render::specs());
     v.extend(sunstudy::specs());
