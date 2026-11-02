@@ -296,11 +296,12 @@ fn parse_data(text: &str) -> Result<BTreeMap<u32, (String, Vec<Token>)>, String>
         let n: u32 = num_str.parse().map_err(|_| "invalid instance number")?;
 
         let (name, params_str) = rest.split_once('(').ok_or("invalid instance format")?;
-        let params_str = params_str.trim_end().strip_suffix(");").ok_or("missing );")?;
-        // split_once consumes the '(', but parse_params expects to see it.
-        let params_str = format!("({params_str}");
+        // params_str contains everything after the first '(' including the trailing ');'
+        // We need to pass the full parameter list including parentheses to parse_params
+        // The original line ended with ");" so we just need to ensure we pass "(...)"
+        let full_params = format!("({params_str}");
 
-        let mut parser = StepParser::new(&params_str);
+        let mut parser = StepParser::new(&full_params);
         let params = parser.parse_params()?;
 
         instances.insert(n, (name.to_string(), params));
