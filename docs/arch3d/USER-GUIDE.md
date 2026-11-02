@@ -287,6 +287,12 @@ attach one with `lightfixture.edit {"id":"lf0","ies":"file.ies"}`.
 with the same units and physics as the direct method but including bounced light. The direct method
 (`"method":"direct"`, the default) uses shadow rays only.
 
+### Exposure
+
+When the sun is on, the path tracer uses `render {"exposure": "auto"}` by default, which adjusts the exposure
+based on the scene's luminance to prevent blown-out highlights or crushed shadows. You can override this with
+a fixed exposure value.
+
 ### CLI flags
 
 ```
@@ -311,6 +317,56 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'lightfixture {"room":"r0","rows":1,"cols":1,"type":"LED panel 600"}' \
   --cmd 'illuminance {"point":[2,2,0]}' \
   --save path-demo.dxf
+```
+
+## Exporting IFC, OBJ and glTF
+
+arch3d exports the building model to three interoperable formats: IFC (Industry Foundation Classes), OBJ (Wavefront)
+and glTF (GL Transmission Format). The format is chosen by the file extension.
+
+- `cadcraft-cli convert house.dxf house.ifc` writes an IFC4 file.
+- `cadcraft-cli convert house.dxf house.obj` writes an OBJ file and a `house.mtl` material library beside it.
+- `cadcraft-cli convert house.dxf house.glb` writes a binary glTF file.
+- `cadcraft-cli run --cmd '...' --export house.ifc` exports the current session's drawing.
+
+The `export` command is also available via MCP or the engine API:
+- `export {"path": "house.ifc"}` writes the file.
+- `export {"format": "glb"}` returns the file contents as base64-encoded data in the reply.
+
+### IFC4 contents
+
+The IFC export follows IFC4 (ISO 16739-1). It includes:
+- **Spatial structure**: `IfcProject`, `IfcSite` (with latitude, longitude, and elevation from the site location),
+  `IfcBuilding`, and one `IfcBuildingStorey` per level, placed at its elevation.
+- **Elements**: Walls, doors and windows (in their host walls), slabs, roof planes (in their roof), stairs, railings,
+  spaces (rooms with their areas), terrain, plants, and light fixtures.
+- **Geometry**: Each body is an `IfcTriangulatedFaceSet` derived from the 3D view's meshes. Voids (like door openings)
+  are represented as boxes subtracted from the host wall. Spaces are prisms from floor to ceiling.
+- **Determinism**: GlobalIds are hashed from stable keys (e.g., `wall/3`), so two exports of the same model are
+  byte-identical if `SOURCE_DATE_EPOCH` is set. OwnerHistory is omitted.
+
+### Checking exports
+
+Validators are external tools:
+- **IFC**: Use [IfcOpenShell](https://ifcopenshell.org/) (Python library) to validate and inspect IFC files.
+- **glTF**: Use the [Khronos glTF Validator](https://github.khronos.org/glTF-Validator/) to check glTF files.
+
+### Example
+
+This example builds a simple house, exports it to IFC, OBJ, and glTF, and verifies the export command works.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'door {"wall":"w0","offset":3.0,"width":0.9,"height":2.1,"style":"hinged"}' \
+  --cmd 'window {"wall":"w2","offset":4.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'roofauto {"pitchRise":6,"pitchRun":12,"overhang":0.5,"walls":[{"wall":"w0","directive":"gable"},{"wall":"w2","directive":"gable"}]}' \
+  --cmd 'export {"path":"house.ifc"}' \
+  --cmd 'export {"path":"house.obj"}' \
+  --cmd 'export {"path":"house.glb"}' \
+  --cmd 'export {"format":"glb"}' \
+  --save house-export.dxf
 ```
 
 ## Out of scope

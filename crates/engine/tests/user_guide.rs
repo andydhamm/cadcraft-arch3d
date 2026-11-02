@@ -154,17 +154,19 @@ fn stand_in_plot(_: &cadcraft_doc::Drawing, _: &cadcraft_doc::Space, _: &serde_j
     Ok(b"%PDF-1.4 user guide".to_vec())
 }
 
+/// Installs the stand-in file hooks (the first installation in the process wins): no reader, a writer that
+/// answers with a few bytes so `export` runs, and the stand-in plotter.
+fn install_io() {
+    set_io(IoHooks { read: |_, _| Err("no reader in this test".into()), write: |_, _| Ok(b"stand-in export".to_vec()), plot: Some(stand_in_plot) });
+}
+
 /// Every `run` line of every ```sh block executes through the engine as the CLI runs it: a fresh session per line,
 /// a new metric drawing for `--metric`, then each `--cmd` in order. `render` and `convert` lines need a GPU adapter
 /// or a saved file and are left to acceptance check 02 (which also plots the real PDF). A relative `path` (exportpdf)
 /// is written to a temp dir.
 #[test]
 fn user_guide_sh_blocks_execute_through_the_engine() {
-    set_io(IoHooks {
-        read: |_, _| Err("no reader in this test".into()),
-        write: |_, _| Err("no writer in this test".into()),
-        plot: Some(stand_in_plot),
-    });
+    install_io();
     let out_dir = std::env::temp_dir().join(format!("cadcraft-user-guide-{}", std::process::id()));
     if let Err(error) = fs::create_dir_all(&out_dir) {
         panic!("cannot create {}: {error}", out_dir.display());
@@ -274,11 +276,7 @@ fn user_guide_archdetect_block_runs() {
                 let dxf_path = repo_root.join("examples/apartment.dxf");
 
                 if dxf_path.exists() {
-                    set_io(IoHooks {
-                        read: |_, _| Err("no reader in this test".into()),
-                        write: |_, _| Err("no writer in this test".into()),
-                        plot: Some(stand_in_plot),
-                    });
+                    install_io();
 
                     let mut session = Session::new();
                     let bytes = fs::read(&dxf_path).unwrap_or_else(|e| panic!("failed to read apartment.dxf: {e}"));
@@ -700,6 +698,64 @@ fn user_guide_path_tracing_block_command_count() {
         return;
     }
     assert!(found, "path-tracing block not found");
+}
+
+/// The exports block in the user guide runs through the engine.
+#[test]
+fn user_guide_exports_block_runs() {
+    install_io();
+    let blocks = sh_blocks(GUIDE);
+    let mut found = false;
+
+    for lines in &blocks {
+        let Some(line) = lines.iter().find(|line| line.contains("export") && line.contains("house.ifc")) else {
+            continue;
+        };
+        found = true;
+        let cmds = cmd_args(line);
+        assert!(!cmds.is_empty(), "exports block should contain one or more --cmd lines");
+
+        let mut session = Session::new();
+        session.new_drawing(true);
+
+        // Build the house first (same as the block)
+        session
+            .execute("wall", &serde_json::json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}))
+            .expect("wall");
+        session.execute("door", &serde_json::json!({"wall":"w0","offset":3.0,"width":0.9,"height":2.1,"style":"hinged"})).expect("door");
+        session
+            .execute("window", &serde_json::json!({"wall":"w2","offset":4.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}))
+            .expect("window");
+        session.execute("roomdetect", &serde_json::json!({})).expect("roomdetect");
+        session.execute("roofauto", &serde_json::json!({"pitchRise":6,"pitchRun":12,"overhang":0.5,"walls":[{"wall":"w0","directive":"gable"},{"wall":"w2","directive":"gable"}]})).expect("roofauto");
+
+        // Execute the export commands from the block
+        for command in &cmds {
+            let Some((id, json)) = command.split_once(' ') else {
+                panic!("invalid command format: {command}");
+            };
+            if id != "export" {
+                continue;
+            }
+            let mut params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+            let out_dir = std::env::temp_dir().join(format!("cadcraft-user-guide-exports-{}", std::process::id()));
+            fs::create_dir_all(&out_dir).unwrap_or_else(|e| panic!("cannot create {}: {e}", out_dir.display()));
+            if let Some(path) = params.get("path").and_then(serde_json::Value::as_str) {
+                if Path::new(path).is_relative() {
+                    params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
+                }
+            }
+            let reply = session.execute(id, &params).unwrap_or_else(|error| panic!("export command `{command}` failed: {error:?}"));
+            let _ = fs::remove_dir_all(&out_dir);
+            // Verify reply structure for format-only exports
+            if params.get("format").is_some() {
+                assert!(reply.get("data").is_some(), "export with format should return data");
+            }
+        }
+        return;
+    }
+
+    assert!(found, "user guide should contain an exports example block");
 }
 
 /// The illuminance command in the path-tracing block measures at point [2,2,0].
