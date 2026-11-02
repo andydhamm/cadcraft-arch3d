@@ -150,4 +150,59 @@ mod tests {
         assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
         assert_eq!(text.matches("=IFCRELFILLSELEMENT(").count(), 1);
     }
+
+    #[test]
+    fn a_wall_along_y_axis_gets_a_correct_void() {
+        let mut m = ArchModel::default();
+        let host = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 8.0), thickness: 0.2, height: 2.4, ..Wall::default() });
+        m.push_opening(Opening { host, offset: 3.0, width: 1.0, height: 2.1, sill: 0.0, kind: OpeningKind::Door, ..Opening::default() });
+        let text = export(&m);
+        assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCRELVOIDSELEMENT(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCRELFILLSELEMENT(").count(), 1, "{text}");
+    }
+
+    #[test]
+    fn a_garage_door_is_an_ifc_door() {
+        let text = export(&model(&[OpeningKind::GarageDoor]));
+        assert_eq!(text.matches("=IFCDOOR(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCWINDOW(").count(), 0, "{text}");
+        assert!(text.contains(",$,2.1,0.9,.DOOR.,.NOTDEFINED.,$);"), "{text}");
+    }
+
+    #[test]
+    fn an_opening_wider_than_its_wall_still_voids() {
+        let mut m = ArchModel::default();
+        let host = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(8.0, 0.0), thickness: 0.2, height: 2.4, ..Wall::default() });
+        m.push_opening(Opening { host, offset: 4.0, width: 10.0, height: 2.1, sill: 0.0, kind: OpeningKind::Door, ..Opening::default() });
+        let text = export(&m);
+        assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCRELVOIDSELEMENT(").count(), 1, "{text}");
+    }
+
+    #[test]
+    fn a_negative_sill_is_allowed() {
+        let mut m = ArchModel::default();
+        let host = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(8.0, 0.0), thickness: 0.2, height: 2.4, ..Wall::default() });
+        m.push_opening(Opening { host, offset: 4.0, width: 1.0, height: 1.0, sill: -0.5, kind: OpeningKind::Window, ..Opening::default() });
+        let text = export(&m);
+        assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
+        assert!(text.contains(",$,1.0,1.0,.WINDOW.,.NOTDEFINED.,$);"), "{text}");
+    }
+
+    #[test]
+    fn a_zero_width_opening_is_skipped() {
+        let mut m = model(&[OpeningKind::Door]);
+        m.push_opening(Opening { host: ArchId(0), width: 0.0, ..Opening::default() });
+        let text = export(&m);
+        assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
+    }
+
+    #[test]
+    fn a_nan_offset_is_skipped() {
+        let mut m = model(&[OpeningKind::Door]);
+        m.push_opening(Opening { host: ArchId(0), offset: f64::NAN, ..Opening::default() });
+        let text = export(&m);
+        assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
+    }
 }
