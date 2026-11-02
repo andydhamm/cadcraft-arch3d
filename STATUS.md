@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 15:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 15:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 0 of 21 segments merged · 0 of 13 acceptance checks**
 
@@ -23,16 +23,16 @@ Updated 2026-11-02 15:30 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 0 / 13 | 1.1 h so far · expected done Nov 02 21:03–Nov 04 23:53 UTC |
+| 13 | Polish | building | 0 / 13 | 1.3 h so far · expected done Nov 02 21:18–Nov 05 00:08 UTC |
 
 ## Phase 13 segments
 
-17 queued, 2 working, 1 replaced, 1 gate, 1 merging
+17 queued, 2 merging, 1 replaced, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-doc-casework` | Cabinets and fixtures: data model and catalogue | gate | claude-sonnet-c |
-| `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | working | bonsai-ws2-b |
+| `p13-doc-casework` | Cabinets and fixtures: data model and catalogue | merging | claude-sonnet-c |
+| `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | gate | bonsai-ws2-b |
 | `p13-sample-house` | arch.sample {"house":true}: the 300-wall benchmark house | working | mai-flash |
 | `p13-doc-finish-data` | Finish enum and the finish fields on Wall / Roof / Room | merging | claude-sonnet-d |
 
@@ -58,14 +58,14 @@ Updated 2026-11-02 15:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 810 |
-| bonsai-b | bonsai2-27b | gate | 747 |
-| bonsai-ws2-a | bonsai2-27b | agent | 801 |
-| bonsai-ws2-b | bonsai2-27b | agent | 794 |
+| bonsai-b | bonsai2-27b | gate | 748 |
+| bonsai-ws2-a | bonsai2-27b | gate | 801 |
+| bonsai-ws2-b | bonsai2-27b | gate | 794 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | idle | 67 |
-| claude-sonnet-c | sonnet | gate | 16 |
+| claude-sonnet-c | sonnet | merging | 17 |
 | claude-sonnet-d | sonnet | merging | 10 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 673 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 673 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 49 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 3 |
