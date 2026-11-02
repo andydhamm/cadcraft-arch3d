@@ -13,6 +13,7 @@ pub mod edges;
 pub mod fixture;
 pub mod floors;
 pub mod hlr;
+pub mod incremental;
 pub mod light;
 pub mod mesh;
 pub mod openings;
@@ -28,6 +29,7 @@ pub mod stairs;
 pub mod views;
 pub mod walls;
 
+pub use crate::incremental::{ObjectKey, ObjectKind, RebuildStats, SceneCache, changed_objects, object_key};
 pub use crate::mesh::{Bounds3, Mesh};
 pub use cadcraft_doc::ArchId;
 
@@ -426,6 +428,15 @@ impl Scene3d {
                 walls_to_rebuild.insert(opening.host);
             }
         }
+        for wall in &model.walls {
+            if walls_to_rebuild.contains(&wall.id) {
+                for opening in &model.openings {
+                    if opening.host == wall.id {
+                        walls_to_rebuild.insert(opening.id);
+                    }
+                }
+            }
+        }
 
         {
             let mut dirty_boxes: Vec<Bounds2> = Vec::new();
@@ -511,7 +522,8 @@ impl Scene3d {
             });
         for opening in &model.openings {
             let span = wall_map.get(&opening.host).and_then(|w| wall_span(model, w));
-            if dirty.contains(&opening.id) {
+            let needs_rebuild = dirty.contains(&opening.id) || walls_to_rebuild.contains(&opening.host);
+            if needs_rebuild {
                 let o_meshes: Vec<Mesh> =
                     openings::opening_meshes(&wall_map, opening, span).into_iter().filter(|m| !m.positions.is_empty()).collect();
                 if !o_meshes.is_empty() {
