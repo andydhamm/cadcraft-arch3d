@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 14:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish**
 
@@ -23,7 +23,7 @@ Updated 2026-11-02 14:30 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | planning | — | 0.1 h so far · expected done Nov 02 16:03–Nov 08 15:25 UTC |
+| 13 | Polish | planning | — | 0.3 h so far · expected done Nov 02 16:03–Nov 08 15:25 UTC |
 
 ## Phase 13 segments
 
