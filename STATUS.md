@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 11:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability — 12 of 13 segments merged · 14 of 15 acceptance checks**
 
@@ -22,16 +22,16 @@ Updated 2026-11-02 11:15 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 14 / 15 | 12.0 h so far · expected done Nov 02 12:07–Nov 03 00:02 UTC |
+| 12 | Exports and interoperability | building | 14 / 15 | 12.3 h so far · expected done Nov 02 12:22–Nov 03 00:17 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-12 merged, 1 working
+12 merged, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p12f-ifc-step-grammar` | IFC export round-trip: every instance parses and has IFC4's attribute count | working | bonsai-a |
+| `p12f-ifc-step-grammar` | IFC export round-trip: every instance parses and has IFC4's attribute count | gate | bonsai-a |
 
 ## Recent merges
 
@@ -54,15 +54,15 @@ Updated 2026-11-02 11:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 798 |
-| bonsai-b | bonsai2-27b | agent | 744 |
+| bonsai-a | bonsai2-27b | gate | 799 |
+| bonsai-b | bonsai2-27b | idle | 745 |
 | bonsai-ws2-a | bonsai2-27b | idle | 799 |
-| bonsai-ws2-b | bonsai2-27b | idle | 789 |
+| bonsai-ws2-b | bonsai2-27b | agent | 789 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | idle | 67 |
 | claude-sonnet-c | sonnet | idle | 15 |
 | claude-sonnet-d | sonnet | idle | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 666 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 667 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 48 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 1 |
