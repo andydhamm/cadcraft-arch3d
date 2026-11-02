@@ -1,8 +1,12 @@
 //! The site's location and geographic elements (phase 12).
+//!
+//! `references` fills the `IfcSite`'s `RefLatitude`, `RefLongitude` and `RefElevation` from
+//! the model's `SiteLocation`; `emit` writes the terrain, each plant and each draped path
+//! (road/driveway/sidewalk) as `IfcGeographicElement`s placed in the site.
 
 use super::Ctx;
 use crate::step::P;
-use cadcraft_doc::arch::ArchModel;
+use cadcraft_doc::arch::{ArchModel, ModifierKind, PathKind, TerrainModifier};
 
 /// `IfcSite`'s `RefLatitude`, `RefLongitude` and `RefElevation` from the model's site location:
 /// latitude and longitude as `IfcCompoundPlaneAngleMeasure` lists (degrees, minutes, seconds,
