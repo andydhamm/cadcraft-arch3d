@@ -599,4 +599,121 @@ mod tests {
         assert!((outer - outer_rad).abs() < 1e-9, "outer should match input falloff");
         assert!(inner < outer);
     }
+
+    #[test]
+    fn spot_light_with_nan_cosines_is_skipped() {
+        let scene = Scene3d {
+            lights: vec![
+                scene_light(0, LightKind::Spot, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], f64::NAN, 0.5),
+                scene_light(1, LightKind::Spot, Vec3::new(1.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.5, f64::NAN),
+                scene_light(2, LightKind::Spot, Vec3::new(2.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.5, 0.5),
+            ],
+            ..Default::default()
+        };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0]["name"], "lf2");
+        assert_eq!(nodes.len(), 1);
+    }
+
+    #[test]
+    fn spot_light_with_boundary_cosines() {
+        // cos_inner = 1.0 (0 degrees), cos_outer = -1.0 (180 degrees, clamped to 90)
+        let scene = Scene3d {
+            lights: vec![scene_light(0, LightKind::Spot, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 1.0, -1.0)],
+            ..Default::default()
+        };
+        let (lights, _) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        let spot = &lights[0]["spot"];
+        let inner = spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        assert_eq!(inner, 0.0, "zero-degree inner cone");
+        assert!((outer - std::f64::consts::PI / 2.0).abs() < 1e-9, "outer clamped to PI/2");
+        assert!(inner < outer);
+    }
+
+    #[test]
+    fn spot_light_with_narrow_inner_wide_outer() {
+        // Inner 10 degrees, outer 60 degrees
+        let inner_rad = 10.0_f64.to_radians();
+        let outer_rad = 60.0_f64.to_radians();
+        let scene = Scene3d {
+            lights: vec![scene_light(
+                0,
+                LightKind::Spot,
+                Vec3::new(0.0, 0.0, 2.4),
+                Vec3::new(0.0, 0.0, -1.0),
+                100.0,
+                [1.0, 1.0, 1.0],
+                inner_rad.cos(),
+                outer_rad.cos(),
+            )],
+            ..Default::default()
+        };
+        let (lights, _) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        let spot = &lights[0]["spot"];
+        let inner = spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        assert!((inner - inner_rad).abs() < 1e-9, "inner matches input");
+        assert!((outer - outer_rad).abs() < 1e-9, "outer matches input");
+        assert!(inner < outer);
+    }
+
+    #[test]
+    fn spot_light_with_wide_inner_and_outer_clamps_outer() {
+        // Inner 80 degrees, outer 100 degrees (clamped to 90)
+        let inner_rad = 80.0_f64.to_radians();
+        let outer_rad = 100.0_f64.to_radians();
+        let scene = Scene3d {
+            lights: vec![scene_light(
+                0,
+                LightKind::Spot,
+                Vec3::new(0.0, 0.0, 2.4),
+                Vec3::new(0.0, 0.0, -1.0),
+                100.0,
+                [1.0, 1.0, 1.0],
+                inner_rad.cos(),
+                outer_rad.cos(),
+            )],
+            ..Default::default()
+        };
+        let (lights, _) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        let spot = &lights[0]["spot"];
+        let inner = spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        assert!((inner - inner_rad).abs() < 1e-9, "inner matches input");
+        assert!((outer - std::f64::consts::PI / 2.0).abs() < 1e-9, "outer clamped to PI/2");
+        assert!(inner < outer);
+    }
+
+    #[test]
+    fn point_light_with_nan_color_is_skipped() {
+        let scene = Scene3d {
+            lights: vec![
+                scene_light(0, LightKind::Point, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [f64::NAN, 1.0, 1.0], 0.0, 0.0),
+                scene_light(1, LightKind::Point, Vec3::new(1.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, f64::NAN, 1.0], 0.0, 0.0),
+                scene_light(2, LightKind::Point, Vec3::new(2.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, f64::NAN], 0.0, 0.0),
+                scene_light(3, LightKind::Point, Vec3::new(3.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 100.0, [1.0, 1.0, 1.0], 0.0, 0.0),
+            ],
+            ..Default::default()
+        };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0]["name"], "lf3");
+        assert_eq!(nodes.len(), 1);
+    }
+
+    #[test]
+    fn spot_light_with_zero_intensity_is_kept() {
+        let scene = Scene3d {
+            lights: vec![scene_light(0, LightKind::Spot, Vec3::new(0.0, 0.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 0.0, [1.0, 1.0, 1.0], 0.5, 0.5)],
+            ..Default::default()
+        };
+        let (lights, _) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0]["intensity"], 0.0);
+    }
 }
