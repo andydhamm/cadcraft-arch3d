@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability — 8 of 12 segments merged · 8 of 15 acceptance checks**
 
@@ -22,19 +22,19 @@ Updated 2026-11-02 05:45 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 8 / 15 | 6.5 h so far · expected done Nov 02 08:21–Nov 02 21:30 UTC |
+| 12 | Exports and interoperability | building | 8 / 15 | 6.8 h so far · expected done Nov 02 08:42–Nov 02 22:21 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-8 merged, 2 working, 1 escalate, 1 merging
+8 merged, 2 gate, 1 escalate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p12-ifc-spaces` | IFC spaces with their areas | escalate |  |
-| `p12-ifc-site` | IFC site location and geographic elements | working | mai-flash-esc |
+| `p12-ifc-site` | IFC site location and geographic elements | gate | mai-flash-esc |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | merging | bonsai-b |
-| `p12-docs-user-guide` | User guide: exporting IFC, OBJ and glTF | working | bonsai-a |
+| `p12-docs-user-guide` | User guide: exporting IFC, OBJ and glTF | gate | bonsai-a |
 
 ## Recent merges
 
@@ -57,10 +57,10 @@ Updated 2026-11-02 05:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 790 |
-| bonsai-b | bonsai2-27b | agent | 732 |
-| bonsai-ws2-a | bonsai2-27b | agent | 790 |
-| bonsai-ws2-b | bonsai2-27b | agent | 774 |
+| bonsai-a | bonsai2-27b | gate | 790 |
+| bonsai-b | bonsai2-27b | gate | 732 |
+| bonsai-ws2-a | bonsai2-27b | gate | 791 |
+| bonsai-ws2-b | bonsai2-27b | gate | 774 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | idle | 67 |
 | claude-sonnet-c | sonnet | idle | 15 |
@@ -68,5 +68,5 @@ Updated 2026-11-02 05:45 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 655 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 48 |
-| tturbo-mac | tturbo-ultraheretic | agent | 558 |
+| tturbo-mac | tturbo-ultraheretic | gate | 558 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
