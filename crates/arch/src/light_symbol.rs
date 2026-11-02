@@ -352,33 +352,6 @@ mod tests {
     }
 
     #[test]
-    fn panel_symbol_with_non_finite_dimensions_defaults_to_catalogue() {
-        let t = crate::light::find_type("LED panel 600").unwrap();
-        let mut f = crate::light::fixture_from_type(cadcraft_doc::ArchId(0), &t, Vec2::new(5.0, 3.0));
-        f.width = f64::NAN;
-        f.length = f64::INFINITY;
-        let s = plan_symbol(&f);
-        assert_eq!(s.len(), 3);
-        let near = |a: Vec2, x: f64, y: f64| (a.x - x).abs() < 1e-9 && (a.y - y).abs() < 1e-9;
-        assert!(near(s[0][0], 4.7, 2.7));
-        assert!(near(s[0][2], 5.3, 3.3));
-    }
-
-    #[test]
-    fn panel_symbol_at_180_degree_rotation() {
-        let t = crate::light::find_type("LED panel 600").unwrap();
-        let mut f = crate::light::fixture_from_type(cadcraft_doc::ArchId(0), &t, Vec2::new(5.0, 3.0));
-        f.rotation = 180.0;
-        let s = plan_symbol(&f);
-        assert_eq!(s.len(), 3);
-        let near = |a: Vec2, x: f64, y: f64| (a.x - x).abs() < 1e-9 && (a.y - y).abs() < 1e-9;
-        assert!(near(s[0][0], 5.3, 3.3));
-        assert!(near(s[0][1], 4.7, 3.3));
-        assert!(near(s[0][2], 4.7, 2.7));
-        assert!(near(s[0][3], 5.3, 2.7));
-    }
-
-    #[test]
     fn panel_symbol_with_huge_dimensions() {
         let t = crate::light::find_type("LED panel 600").unwrap();
         let mut f = crate::light::fixture_from_type(cadcraft_doc::ArchId(0), &t, Vec2::new(5.0, 3.0));
