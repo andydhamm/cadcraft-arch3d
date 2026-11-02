@@ -217,8 +217,12 @@ mod tests {
             assert_eq!(light["type"], "spot");
             assert!((light["intensity"].as_f64().unwrap_or(f64::NAN) - 950.36).abs() < 0.01);
             let spot = &light["spot"];
-            assert!((spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN) - std::f64::consts::PI / 6.0).abs() < 1e-9, "{spot}");
-            assert!((spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN) - std::f64::consts::PI / 6.0).abs() < 1e-9, "{spot}");
+            let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+            let inner = spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN);
+            assert!((outer - std::f64::consts::PI / 6.0).abs() < 1e-9, "{spot}");
+            // glTF requires inner < outer; equal inputs are shrunk by 0.001.
+            assert!((inner - (outer - 0.001)).abs() < 1e-9, "{spot}");
+            assert!(inner < outer);
         }
     }
 
