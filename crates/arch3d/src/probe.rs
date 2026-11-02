@@ -38,6 +38,15 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("light-") {
         return "light";
     }
+    if m.contains("cabinet") {
+        return "cabinet";
+    }
+    if m.contains("counter") {
+        return "counter";
+    }
+    if m.contains("fixture") {
+        return "fixture";
+    }
     if m.contains("glass") {
         return "glass";
     }
@@ -173,6 +182,10 @@ pub fn mesh_label(mesh: &Mesh) -> String {
     // Site meshes first: a plant, the terrain solid, a path (its modifier) are named as the commands name them.
     let label = if m.starts_with("light-") {
         cadcraft_doc::arch::light_label(mesh.object)
+    } else if m.starts_with("cabinet-") || m == "counter" {
+        cadcraft_doc::arch::cabinet_label(mesh.object)
+    } else if m.starts_with("fixture-") {
+        cadcraft_doc::arch::fixture_label(mesh.object)
     } else if m.starts_with("plant-") {
         cadcraft_doc::arch::plant_label(mesh.object)
     } else if m == "terrain" {

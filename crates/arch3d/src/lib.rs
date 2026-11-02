@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 pub mod camera;
+pub mod casework;
 pub mod edges;
 pub mod fixture;
 pub mod floors;
