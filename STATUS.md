@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 9 of 12 segments merged · 8 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 10 of 12 segments merged · 9 of 15 acceptance checks**
 
-6,620 workspace tests passing at the last merge · 670 segments merged in all · 0 of 14 seats working · PAUSED
+6,622 workspace tests passing at the last merge · 671 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -22,23 +22,23 @@ Updated 2026-11-02 08:45 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 8 / 15 | 9.5 h so far · expected done Nov 02 11:17–Nov 03 03:53 UTC |
+| 12 | Exports and interoperability | building | 9 / 15 | 9.8 h so far · expected done Nov 02 10:33–Nov 03 01:27 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-9 merged, 3 escalate
+10 merged, 2 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p12-ifc-spaces` | IFC spaces with their areas | escalate |  |
 | `p12-ifc-site` | IFC site location and geographic elements | escalate |  |
-| `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | escalate |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 08:49 | `p12-gltf-valid` | merged | 6,622 pass | darwin-ws3 |
 | Nov 02 08:20 | `harden-p12-cmd-export` | refused | 6,630 pass, 1 fail | tturbo-mac |
 | Nov 02 08:03 | `p12-docs-user-guide` | merged | 6,620 pass | bonsai-a |
 | Nov 02 07:37 | `p12-docs-user-guide` | refused | 6,620 pass | bonsai-ws2-a |
@@ -50,21 +50,20 @@ Updated 2026-11-02 08:45 UTC. This page and the card in the README are regenerat
 | Nov 02 03:40 | `p12-ifc-openings` | merged | 6,598 pass | claude-sonnet-d |
 | Nov 02 03:28 | `p12-ifc-roofs` | merged | 6,595 pass | claude-sonnet-c |
 | Nov 02 03:17 | `p12-ifc-stairs` | merged | 6,592 pass | bonsai-a |
-| Nov 02 02:44 | `p12-io-obj` | merged | 6,590 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 792 |
-| bonsai-b | bonsai2-27b | agent | 738 |
-| bonsai-ws2-a | bonsai2-27b | gate | 795 |
-| bonsai-ws2-b | bonsai2-27b | merging | 784 |
+| bonsai-a | bonsai2-27b | agent | 793 |
+| bonsai-b | bonsai2-27b | gate | 740 |
+| bonsai-ws2-a | bonsai2-27b | merging | 796 |
+| bonsai-ws2-b | bonsai2-27b | agent | 784 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | idle | 67 |
 | claude-sonnet-c | sonnet | idle | 15 |
 | claude-sonnet-d | sonnet | idle | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 665 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 665 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 48 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 1 |
