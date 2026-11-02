@@ -636,6 +636,7 @@ mod tests {
 
     #[test]
     fn web_export_delivers_a_download_instead_of_writing_a_path() {
+        DELIVERED.lock().unwrap().clear();
         deliver_file("export", "Drawing1.svg", b"<svg/>", Some(record)).unwrap();
         deliver_file("export", "dir/Plan.pdf", b"%PDF", Some(record)).unwrap();
         let got = DELIVERED.lock().unwrap().clone();
@@ -1066,5 +1067,185 @@ mod tests {
         let mut s = session();
         let e = s.execute("export", &json!({ "format": "xyz" })).unwrap_err().to_string();
         assert!(e.contains("dxf, dwg, svg, png, pdf, glb, obj or ifc"), "{e}");
+    }
+
+    #[test]
+    fn export_obj_without_a_path_returns_data_and_mtl() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let r = s.execute("export", &json!({ "format": "obj" })).unwrap();
+        assert_eq!(r["format"], "obj");
+        assert_eq!(base64_decode(r["data"].as_str().unwrap()).unwrap(), b"export.obj:2");
+        assert_eq!(base64_decode(r["mtl"].as_str().unwrap()).unwrap(), b"export.mtl:2");
+    }
+
+    #[test]
+    fn web_export_delivers_3d_mime_types() {
+        DELIVERED.lock().unwrap().clear();
+        deliver_file("export", "model.glb", b"glb", Some(record)).unwrap();
+        deliver_file("export", "model.obj", b"obj", Some(record)).unwrap();
+        deliver_file("export", "model.mtl", b"mtl", Some(record)).unwrap();
+        deliver_file("export", "model.ifc", b"ifc", Some(record)).unwrap();
+        let got = DELIVERED.lock().unwrap().clone();
+        assert_eq!(
+            got,
+            [
+                ("model.glb".to_string(), "model/gltf-binary".to_string(), 3),
+                ("model.obj".to_string(), "model/obj".to_string(), 3),
+                ("model.mtl".to_string(), "model/mtl".to_string(), 3),
+                ("model.ifc".to_string(), "application/x-step".to_string(), 3),
+            ]
+        );
+    }
+
+    #[test]
+    fn export_explicit_format_overrides_path_extension() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let path = temp("out.dxf");
+        let ps = path.to_string_lossy().to_string();
+        let r = s.execute("export", &json!({ "path": ps, "format": "glb" })).unwrap();
+        assert_eq!(r["format"], "glb");
+        let expected = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected.as_bytes());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn export_format_and_extension_are_case_insensitive() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        // Uppercase format
+        let r = s.execute("export", &json!({ "format": "GLB" })).unwrap();
+        assert_eq!(r["format"], "glb");
+        // Leading dot and uppercase
+        let r = s.execute("export", &json!({ "format": ".OBJ" })).unwrap();
+        assert_eq!(r["format"], "obj");
+        // Uppercase extension in path
+        let path = temp("out.GLB");
+        let ps = path.to_string_lossy().to_string();
+        let r = s.execute("export", &json!({ "path": ps })).unwrap();
+        assert_eq!(r["format"], "glb");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn export_obj_mtl_stem_matches_path_stem() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        // Path with multiple dots
+        let path = temp("my.drawing.obj");
+        let ps = path.to_string_lossy().to_string();
+        let r = s.execute("export", &json!({ "path": ps })).unwrap();
+        let mtl_path = temp("my.drawing.mtl");
+        assert_eq!(r["mtl"].as_str().unwrap(), mtl_path.to_string_lossy().as_ref());
+        assert!(std::fs::read(&mtl_path).is_ok());
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&mtl_path);
+
+        // Path without extension
+        let path2 = temp("output");
+        let ps2 = path2.to_string_lossy().to_string();
+        let r2 = s.execute("export", &json!({ "path": ps2, "format": "obj" })).unwrap();
+        let mtl_path2 = temp("output.mtl");
+        assert_eq!(r2["mtl"].as_str().unwrap(), mtl_path2.to_string_lossy().as_ref());
+        let _ = std::fs::remove_file(&path2);
+        let _ = std::fs::remove_file(&mtl_path2);
+    }
+
+    #[test]
+    fn export_path_without_extension_and_no_format_is_refused() {
+        let mut s = session();
+        let e = s.execute("export", &json!({ "path": "output" })).unwrap_err().to_string();
+        assert!(e.contains("dxf, dwg, svg, png, pdf, glb, obj or ifc"), "{e}");
+    }
+
+    #[test]
+    fn export_ifc_without_path_returns_data() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let r = s.execute("export", &json!({ "format": "ifc" })).unwrap();
+        assert_eq!(r["format"], "ifc");
+        assert_eq!(base64_decode(r["data"].as_str().unwrap()).unwrap(), b"export.ifc:2");
+        // IFC has no companion file like OBJ's MTL.
+        assert!(r.get("mtl").is_none());
+    }
+
+    #[test]
+    fn export_empty_drawing_succeeds() {
+        let ours = our_hooks();
+        if !ours {
+            return;
+        }
+        let mut s = Session::new();
+        // Don't add any entities; leave the drawing empty.
+        let r = s.execute("export", &json!({ "format": "dxf" })).unwrap();
+        assert_eq!(r["format"], "dxf");
+        let data = base64_decode(r["data"].as_str().unwrap()).unwrap();
+        assert_eq!(data, b"export.dxf:0", "an empty drawing exports with zero entities");
+    }
+
+    #[test]
+    fn export_format_trims_whitespace_and_dot() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        for fmt in [" glb ", ".GLB", "  .glb  "] {
+            let r = s.execute("export", &json!({ "format": fmt })).unwrap();
+            assert_eq!(r["format"], "glb", "format `{fmt}` should normalise to glb");
+        }
+    }
+
+    #[test]
+    fn export_obj_with_bare_filename() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        // No directory component: the MTL must land beside the OBJ in the current directory.
+        let r = s.execute("export", &json!({ "path": "bare.obj" })).unwrap();
+        assert_eq!(r["format"], "obj");
+        let mtl = r["mtl"].as_str().unwrap();
+        assert_eq!(mtl, "bare.mtl", "MTL must share the bare filename's stem");
+        let expected_obj = b"bare.obj:2";
+        assert_eq!(std::fs::read("bare.obj").unwrap(), expected_obj);
+        let expected_mtl = b"bare.mtl:2";
+        assert_eq!(std::fs::read("bare.mtl").unwrap(), expected_mtl);
+        let _ = std::fs::remove_file("bare.obj");
+        let _ = std::fs::remove_file("bare.mtl");
+    }
+
+    #[test]
+    fn export_path_with_spaces() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let path = temp("my drawing.glb");
+        let ps = path.to_string_lossy().to_string();
+        let r = s.execute("export", &json!({ "path": ps })).unwrap();
+        assert_eq!(r["format"], "glb");
+        let expected = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected.as_bytes());
+        let _ = std::fs::remove_file(&path);
     }
 }
