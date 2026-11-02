@@ -10,7 +10,7 @@ use super::Ctx;
 use super::guid::global_id;
 use crate::step::P;
 use cadcraft_arch3d::Mesh;
-use cadcraft_doc::arch::{Level, Room, RoomType};
+use cadcraft_doc::arch::{Level, RoomType};
 
 /// A human-readable IFC long name for a room type.
 fn room_type_long_name(t: RoomType) -> &'static str {
@@ -62,12 +62,6 @@ pub(super) fn emit(ctx: &mut Ctx) {
             mesh.object = room.id;
             mesh.push_prism_with_holes(&room.polygon, &room.holes, z0, z1);
             let body = ctx.body(&[&mesh], 0.0).map_or(P::Null, P::Ref);
-            // Serialise the ceiling corner explicitly so the space's top elevation
-            // (z1, in storey coordinates) always appears in the written STEP.
-            let last = room.polygon.last().cloned();
-            let x = last.map_or(0.0, |p| p.x);
-            let y = last.map_or(0.0, |p| p.y);
-            let ceiling_pt = ctx.w.add("IFCCARTESIANPOINT", vec![P::Real(x), P::Real(y), P::Real(z1)]);
             vec![
                 P::str(global_id(&format!("space/{}", n))),
                 P::Null,
@@ -183,6 +177,18 @@ mod tests {
         let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
         // z0 = 0.0, z1 = 0.0 + 2.55 = 2.55 (storey coordinates, no offset).
         assert!(text.contains("2.55"), "ceiling z 2.55 not found: {text}");
+    }
+
+    #[test]
+    fn every_cartesian_point_is_one_coordinate_list() {
+        // IfcCartesianPoint has one attribute, Coordinates (a list): IFCCARTESIANPOINT((x,y,z)).
+        // IfcOpenShell refuses IfcCartesianPoint(2.55) as CP2Dor3D (phase-12/11).
+        let m = room_model();
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        for (at, _) in text.match_indices("=IFCCARTESIANPOINT(") {
+            let rest = &text[at + "=IFCCARTESIANPOINT(".len()..];
+            assert!(rest.starts_with('('), "a point without its coordinate list: {}", &text[at..at + 60.min(text.len() - at)]);
+        }
     }
 
     #[test]
