@@ -274,11 +274,11 @@ fn build_benchmark_house() -> crate::Result<(ArchModel, Value)> {
             let idx = model.walls.len() - start_count;
             let x = 0.5 + (idx as f64 * 0.9).rem_euclid(17.5);
             let y0 = 0.8 + (idx as f64 * 0.7).rem_euclid(10.5);
-            let y1 = y0 + 1.2 + ((idx % 4) as f64) * 0.4;
+            let y1 = (y0 + 1.2 + ((idx % 4) as f64) * 0.4).min(11.0);
             if idx % 2 == 0 {
                 push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, y0), cadcraft_geom::Vec2::new(x, y1), level, false, 0.12);
             } else {
-                let x1 = x + 1.3 + ((idx % 3) as f64) * 0.5;
+                let x1 = (x + 1.3 + ((idx % 3) as f64) * 0.5).min(17.0);
                 push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, y0), cadcraft_geom::Vec2::new(x1, y0), level, false, 0.12);
             }
         }
@@ -1136,7 +1136,7 @@ mod tests {
         let l2 = d.arch.levels.iter().find(|l| l.index == 2).expect("Level 2 missing");
         assert_eq!(l1.elevation, 0.0, "Level 1 should be at elevation 0");
         assert_eq!(l2.elevation, 2.7, "Level 2 should be at elevation 2.7");
-        assert_eq!(l1.ceiling_height + l1.structure, 2.7, "floor-to-floor should be 2.7");
+        assert!((l1.ceiling_height + l1.structure - 2.7).abs() < 1e-9, "floor-to-floor should be 2.7");
     }
 
     /// At least 15 rooms per level (spec requirement).
