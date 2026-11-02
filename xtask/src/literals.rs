@@ -368,11 +368,47 @@ fn not_a_struct_literal(c: &[char], s: usize) -> bool {
     if in_enum_body(c, start) {
         return true;
     }
-    match prev_nonws(c, start) {
+    match before_borrow(c, start) {
         Some(p) if c[p] == '>' && p >= 1 && c[p - 1] == '-' => true,
         Some(p) if is_ident(c[p]) => NON_LITERAL_BEFORE.contains(&word_ending_at(c, p + 1).as_str()),
         _ => false,
     }
+}
+
+/// The last non-whitespace char before `start`, stepping back over a reference or pointer prefix (`&`, `&mut`,
+/// `&'a`, `&'a mut`, `*const`, `*mut`), so `-> &Name {` reads as a return type like `-> Name {` does. A borrowed
+/// literal (`= &Name {`, `f(&mut Name {`) still lands on its `=` or `(`.
+fn before_borrow(c: &[char], start: usize) -> Option<usize> {
+    let mut before = prev_nonws(c, start);
+    while let Some(p) = before {
+        if c[p] == '&' || c[p] == '*' {
+            before = prev_nonws(c, p);
+            continue;
+        }
+        if !is_ident(c[p]) {
+            break;
+        }
+        let from = word_start(c, p);
+        let lifetime = is_lifetime(c, p);
+        // `mut` / `const` count only right after `&`, `*` or a lifetime (`&'a mut`).
+        let qualifier = matches!(word_ending_at(c, p + 1).as_str(), "mut" | "const")
+            && prev_nonws(c, from).is_some_and(|q| c[q] == '&' || c[q] == '*' || is_lifetime(c, q));
+        if !(lifetime || qualifier) {
+            break;
+        }
+        before = prev_nonws(c, if lifetime { from - 1 } else { from });
+    }
+    before
+}
+
+/// Start of the identifier whose last char is at `p`.
+fn word_start(c: &[char], p: usize) -> usize {
+    p + 1 - word_ending_at(c, p + 1).chars().count()
+}
+
+/// Whether the identifier whose last char is at `p` is a lifetime (`'a`).
+fn is_lifetime(c: &[char], p: usize) -> bool {
+    is_ident(c[p]) && word_start(c, p).checked_sub(1).is_some_and(|s| c[s] == '\'')
 }
 
 /// Whether `s` sits directly in the body of an `enum` declaration, where `Name {` declares a variant.
@@ -649,6 +685,24 @@ mod tests {
         ] {
             assert!(violations_in("crates/io/src/glb.rs", ok).is_empty(), "{ok}");
         }
+    }
+
+    #[test]
+    fn a_reference_return_type_is_a_header_not_a_literal() {
+        // 11-02: p13-arch3d-incremental's spec asks for `pub fn scene(&self) -> &Scene3d;`, and its body `{ &self.scene }`
+        // was reported as an exhaustive literal at every gate (7 rounds) because only `-> Scene3d {` counted as a header.
+        for ok in [
+            "impl Cache {\n    pub fn scene(&self) -> &Scene3d {\n        &self.scene\n    }\n}\n",
+            "fn f(&mut self) -> &mut Scene3d { &mut self.scene }",
+            "fn f<'a>(c: &'a Cache) -> &'a Scene3d { &c.scene }",
+            "fn f<'a>(c: &'a mut Cache) -> &'a mut cadcraft_arch3d::Scene3d { &mut c.scene }",
+            "fn f(c: &Cache) -> *const Scene3d { &c.scene }",
+        ] {
+            assert!(violations_in("crates/arch3d/src/incremental.rs", ok).is_empty(), "{ok}");
+        }
+        // A literal behind a borrow is still a literal.
+        assert_eq!(violations_in("crates/io/src/glb.rs", "fn t() { let s = &Scene3d { meshes: vec![], floors: 0 }; }").len(), 1);
+        assert_eq!(violations_in("crates/io/src/glb.rs", "fn t() { g(&mut Scene3d { meshes: vec![], floors: 0 }); }").len(), 1);
     }
 
     #[test]

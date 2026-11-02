@@ -13,6 +13,7 @@ pub mod edges;
 pub mod fixture;
 pub mod floors;
 pub mod hlr;
+pub mod incremental;
 pub mod light;
 pub mod mesh;
 pub mod openings;
@@ -28,6 +29,7 @@ pub mod stairs;
 pub mod views;
 pub mod walls;
 
+pub use crate::incremental::{ObjectKey, ObjectKind, RebuildStats, SceneCache, changed_objects, object_key};
 pub use crate::mesh::{Bounds3, Mesh};
 pub use cadcraft_doc::ArchId;
 
@@ -225,190 +227,19 @@ impl Scene3d {
 
     /// Build the full 3D scene from an arch model.
     ///
-    /// Solves joins once, then extrudes each wall (falling back to a raw
-    /// rectangular mesh when the join solver produced no shape for a wall).
+    /// Solves joins once, then makes each object's meshes (walls, falling back to a raw
+    /// rectangular mesh when the join solver produced no shape for a wall; openings; room floors
+    /// and ceilings; roofs; stairs; railings; decks; the site; light fixtures) in that order, each
+    /// from the inputs [`incremental::Sections`] records, so [`SceneCache`] can rebuild only the
+    /// objects an edit changed and still match this build exactly.
     pub fn build(model: &ArchModel) -> Scene3d {
-        let shapes = solve_joins(model);
-        let shape_by_id: BTreeMap<ArchId, usize> = shapes.iter().enumerate().map(|(i, s)| (s.id, i)).collect();
-        let mut meshes: Vec<Mesh> = Vec::with_capacity(model.walls.len());
-
-        for wall in &model.walls {
-            let Some((base, top)) = wall_span(model, wall) else {
-                continue;
-            };
-
-            let openings: Vec<&Opening> = model.openings.iter().filter(|o| o.host == wall.id).collect();
-
-            // Find roof clip and roof-top polyline
-            let clip = find_roof_clip(model, wall);
-            let roof_top = roof_top_polyline(model, wall, base, top);
-
-            let mesh = if !openings.is_empty() || clip.is_some() || roof_top.is_some() {
-                if let Some(shape) = shape_by_id.get(&wall.id).and_then(|&i| shapes.get(i)) {
-                    if let Some(profile) = elevation_profile(shape, wall, base, top, clip.as_ref(), roof_top.as_deref(), &openings) {
-                        if roof_top.is_some() {
-                            extrude_profile_slab(shape, &profile, base, wall, "wall")
-                        } else {
-                            extrude_wall_profile(shape, profile, base, "wall")
-                        }
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                let height = top - base;
-                match shape_by_id.get(&wall.id).and_then(|&i| shapes.get(i)) {
-                    Some(shape) => walls::extrude_wall(shape, height, base, "wall"),
-                    None => raw_wall_mesh(wall, base, top, wall.id),
-                }
-            };
-
-            if let Some(mut m) = mesh {
-                m.level_elevation = base;
-                meshes.push(m);
-            }
-        }
-
-        let mut openings_built = 0;
-        let wall_map: BTreeMap<ArchId, &Wall> = model.walls.iter().map(|w| (w.id, w)).collect();
-        for opening in &model.openings {
-            let span = wall_map.get(&opening.host).and_then(|w| wall_span(model, w));
-            let o_meshes: Vec<Mesh> = openings::opening_meshes(&wall_map, opening, span).into_iter().filter(|m| !m.positions.is_empty()).collect();
-            if !o_meshes.is_empty() {
-                openings_built += 1;
-                meshes.extend(o_meshes);
-            }
-        }
-
-        let mut floors = 0;
-        let mut ceilings = 0;
-        for room in &model.rooms {
-            let level = level_for(model, room.level);
-            let well_holes = well_holes_for(model, room);
-            if room.room_type != cadcraft_doc::arch::RoomType::Deck {
-                if well_holes.is_empty() {
-                    if let Some(m) = floors::floor_slab(room, &level, "floor") {
-                        meshes.push(m);
-                        floors += 1;
-                    }
-                } else {
-                    let mut clone = room.clone();
-                    clone.holes = well_holes;
-                    if let Some(m) = floors::floor_slab(&clone, &level, "floor") {
-                        meshes.push(m);
-                        floors += 1;
-                    }
-                }
-            }
-            if let Some(m) = ceiling_for(model, room, &level) {
-                meshes.push(m);
-                ceilings += 1;
-            }
-        }
-
-        let mut roofs = 0;
-        for roof in &model.roofs {
-            // Determine eave_z for the roof.
-            // Use the level elevation + tallest exterior wall height on that level.
-            let level = level_for(model, roof.level);
-            let mut max_wall_height = 0.0;
-            for wall in &model.walls {
-                if wall.base_level == roof.level {
-                    if let Some((_, top)) = wall_span(model, wall) {
-                        let h = top - level.elevation;
-                        if h > max_wall_height {
-                            max_wall_height = h;
-                        }
-                    }
-                }
-            }
-            let eave_z = level.elevation + max_wall_height;
-
-            let r_meshes: Vec<Mesh> = roof_meshes(roof, eave_z).into_iter().filter(|m| !m.positions.is_empty()).collect();
-            if !r_meshes.is_empty() {
-                roofs += 1;
-                meshes.extend(r_meshes);
-            }
-        }
-
-        let mut stairs_count = 0;
-        for stair in &model.stairs {
-            let base = level_for(model, stair.from_level).elevation;
-            let mut stair_meshes: Vec<Mesh> = Vec::new();
-            if let Some(m) = stairs::stair_mesh(stair, base) {
-                stair_meshes.push(m);
-            }
-            if let Some(m) = stairs::landing_mesh(stair, base) {
-                stair_meshes.push(m);
-            }
-            if !stair_meshes.is_empty() {
-                stairs_count += 1;
-                meshes.extend(stair_meshes);
-            }
-        }
-
-        let mut railings_count = 0;
-        for railing in &model.railings {
-            let base = level_for(model, railing.level).elevation;
-            if let Some(m) = railing::railing_mesh(railing, base) {
-                meshes.push(m);
-                railings_count += 1;
-            }
-        }
-
-        let mut decks_count = 0;
-        for room in &model.rooms {
-            if room.room_type == cadcraft_doc::arch::RoomType::Deck {
-                let level = level_for(model, room.level);
-                let material = if room.deck_height.map_or(false, |h| h > 0.0 && h.is_finite()) { "deck" } else { "floor" };
-                if let Some(m) = floors::floor_slab(room, &level, material) {
-                    meshes.push(m);
-                    decks_count += 1;
-                    floors += 1;
-                }
-            }
-        }
-
-        let site = site::site_meshes(model);
-        let (terrain, paths, plants) = (site.terrain, site.paths, site.plants);
-        meshes.extend(site.meshes);
-        let fixture_meshes = light::fixture_meshes(model);
-        let fixtures = fixture_meshes.iter().map(|m| m.object).collect::<BTreeSet<ArchId>>().len();
-        meshes.extend(fixture_meshes);
-        let lights = light::scene_lights(model);
-
-        meshes.retain(|m| !m.positions.is_empty() && mesh_is_finite(m));
-
-        let bounds = match meshes.first() {
-            None => Bounds3::empty(),
-            Some(first) => meshes[1..].iter().fold(first.bounds(), |mut b, m| {
-                b.extend(&m.bounds());
-                b
-            }),
-        };
-
-        Scene3d {
-            meshes,
-            bounds,
-            revision: 0,
-            openings_built,
-            floors,
-            ceilings,
-            roofs,
-            stairs: stairs_count,
-            railings: railings_count,
-            decks: decks_count,
-            terrain,
-            paths,
-            plants,
-            lights,
-            fixtures,
-        }
+        incremental::Sections::make(model, None).into_scene(model)
     }
 
     /// Incremental rebuild: reuses meshes for ids not in `dirty`, recomputes bounds.
+    ///
+    /// Kept for compatibility: ids are not kind-tagged here (`w3` and `o3` are both `ArchId(3)`).
+    /// [`SceneCache`] is the exact incremental rebuild.
     pub fn build_dirty(model: &ArchModel, dirty: &BTreeSet<ArchId>, prev: &Scene3d) -> Scene3d {
         let shapes = solve_joins(model);
         let shape_by_id: BTreeMap<ArchId, usize> = shapes.iter().enumerate().map(|(i, s)| (s.id, i)).collect();
