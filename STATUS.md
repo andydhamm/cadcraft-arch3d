@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 8 of 12 segments merged · 8 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 9 of 12 segments merged · 8 of 15 acceptance checks**
 
-6,619 workspace tests passing at the last merge · 669 segments merged in all · 0 of 14 seats working
+6,620 workspace tests passing at the last merge · 670 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -22,24 +22,23 @@ Updated 2026-11-02 08:00 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 8 / 15 | 8.8 h so far · expected done Nov 02 11:31–Nov 03 05:14 UTC |
+| 12 | Exports and interoperability | building | 8 / 15 | 9.0 h so far · expected done Nov 02 10:40–Nov 03 02:25 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-8 merged, 3 escalate, 1 merging
+9 merged, 2 escalate, 1 stuck
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p12-ifc-spaces` | IFC spaces with their areas | escalate |  |
 | `p12-ifc-site` | IFC site location and geographic elements | escalate |  |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | escalate |  |
-| `p12-docs-user-guide` | User guide: exporting IFC, OBJ and glTF | merging | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 08:03 | `p12-docs-user-guide` | merged | 6,620 pass | bonsai-a |
 | Nov 02 07:37 | `p12-docs-user-guide` | refused | 6,620 pass | bonsai-ws2-a |
 | Nov 02 07:06 | `harden-p11-arch-panel` | merged | 6,619 pass | tturbo-mac |
 | Nov 02 06:16 | `p12-gltf-valid` | refused | 0 pass | bonsai-b |
@@ -51,13 +50,12 @@ Updated 2026-11-02 08:00 UTC. This page and the card in the README are regenerat
 | Nov 02 03:17 | `p12-ifc-stairs` | merged | 6,592 pass | bonsai-a |
 | Nov 02 02:44 | `p12-io-obj` | merged | 6,590 pass | claude-sonnet-a |
 | Nov 02 01:48 | `p12-ifc-lights` | merged | 6,586 pass | mai-flash |
-| Nov 02 00:57 | `harden-p11f-glass-shadow-once` | merged | 6,584 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 791 |
+| bonsai-a | bonsai2-27b | idle | 791 |
 | bonsai-b | bonsai2-27b | idle | 737 |
 | bonsai-ws2-a | bonsai2-27b | idle | 792 |
 | bonsai-ws2-b | bonsai2-27b | merging | 784 |
