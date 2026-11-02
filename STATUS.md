@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-02 10:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 12 of 12 segments merged · 14 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 12 of 13 segments merged · 14 of 15 acceptance checks**
 
 6,642 workspace tests passing at the last merge · 675 segments merged in all · 0 of 14 seats working
 
@@ -22,13 +22,16 @@ Updated 2026-11-02 10:15 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 14 / 15 | 11.0 h so far · expected done Nov 02 10:15–Nov 03 00:36 UTC |
+| 12 | Exports and interoperability | building | 14 / 15 | 11.3 h so far · expected done Nov 02 11:19–Nov 02 22:29 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-12 merged
+12 merged, 1 working
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `p12f-ifc-step-grammar` | IFC export round-trip: every instance parses and has IFC4's attribute count | working | bonsai-a |
 
 ## Recent merges
 
@@ -51,17 +54,17 @@ Updated 2026-11-02 10:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 797 |
-| bonsai-b | bonsai2-27b | idle | 742 |
-| bonsai-ws2-a | bonsai2-27b | idle | 796 |
+| bonsai-a | bonsai2-27b | agent | 797 |
+| bonsai-b | bonsai2-27b | gate | 742 |
+| bonsai-ws2-a | bonsai2-27b | agent | 796 |
 | bonsai-ws2-b | bonsai2-27b | idle | 789 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | idle | 67 |
 | claude-sonnet-c | sonnet | idle | 15 |
 | claude-sonnet-d | sonnet | idle | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 665 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 665 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 48 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 1 |
-| tturbo-mac | tturbo-ultraheretic | gate | 562 |
+| tturbo-mac | tturbo-ultraheretic | merging | 563 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
