@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 1 of 12 segments merged · 1 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 2 of 12 segments merged · 3 of 15 acceptance checks**
 
-6,586 workspace tests passing at the last merge · 661 segments merged in all · 0 of 13 seats working
+6,590 workspace tests passing at the last merge · 662 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -22,12 +22,12 @@ Updated 2026-11-02 02:30 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 1 / 15 | 3.3 h so far · expected done Nov 02 16:52–Nov 09 18:01 UTC |
+| 12 | Exports and interoperability | building | 3 / 15 | 3.5 h so far · expected done Nov 02 12:48–Nov 04 20:50 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-6 merging, 4 gate, 1 merged, 1 queued
+5 merging, 3 gate, 2 merged, 1 working, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -36,8 +36,7 @@ Updated 2026-11-02 02:30 UTC. This page and the card in the README are regenerat
 | `p12-ifc-roofs` | IFC roofs: IfcRoof aggregating its planes, fascia and soffit | merging | claude-sonnet-c |
 | `p12-ifc-stairs` | IFC stairs and railings | merging | bonsai-a |
 | `p12-ifc-spaces` | IFC spaces with their areas | gate | bonsai-ws2-b |
-| `p12-ifc-site` | IFC site location and geographic elements | gate | bonsai-ws2-a |
-| `p12-io-obj` | OBJ export with an MTL file | merging | claude-sonnet-a |
+| `p12-ifc-site` | IFC site location and geographic elements | working | bonsai-ws2-a |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | merging | bonsai-b |
 | `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | gate | darwin-ws3 |
 | `p12-pt-auto-exposure` | Path-traced daylight stills expose for what they show | gate | mai-flash |
@@ -46,6 +45,7 @@ Updated 2026-11-02 02:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 02:44 | `p12-io-obj` | merged | 6,590 pass | claude-sonnet-a |
 | Nov 02 01:48 | `p12-ifc-lights` | merged | 6,586 pass | mai-flash |
 | Nov 02 00:57 | `harden-p11f-glass-shadow-once` | merged | 6,584 pass | tturbo-mac |
 | Nov 01 23:41 | `harden-p11-cli-render-args` | merged | 6,561 pass | tturbo-mac |
@@ -57,7 +57,6 @@ Updated 2026-11-02 02:30 UTC. This page and the card in the README are regenerat
 | Nov 01 21:08 | `p11f-glass-shadow-once` | refused | 0 pass | darwin-ws3 |
 | Nov 01 20:31 | `harden-p11-r3d-rt` | merged | 6,436 pass | tturbo-mac |
 | Nov 01 19:58 | `harden-p11-ui-pane-path` | merged | 6,430 pass | tturbo-mac |
-| Nov 01 19:23 | `harden-p11-final-default-path` | merged | 6,419 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -65,14 +64,14 @@ Updated 2026-11-02 02:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 789 |
 | bonsai-b | bonsai2-27b | merging | 732 |
-| bonsai-ws2-a | bonsai2-27b | gate | 784 |
+| bonsai-ws2-a | bonsai2-27b | agent | 785 |
 | bonsai-ws2-b | bonsai2-27b | gate | 768 |
-| claude-sonnet-a | sonnet | merging | 69 |
+| claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | merging | 65 |
 | claude-sonnet-c | sonnet | merging | 15 |
 | claude-sonnet-d | sonnet | merging | 9 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 648 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | gate | 47 |
-| tturbo-mac | tturbo-ultraheretic | gate | 557 |
+| tturbo-mac | tturbo-ultraheretic | merging | 558 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
