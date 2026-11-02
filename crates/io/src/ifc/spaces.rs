@@ -143,7 +143,7 @@ mod tests {
     fn room_model() -> ArchModel {
         let mut m = ArchModel::default();
         m.push_room(Room {
-            id: m.next_room_id,
+            id: cadcraft_doc::ArchId(m.next_room_id),
             name: "Living Room".into(),
             room_type: RoomType::Living,
             level: 0,
