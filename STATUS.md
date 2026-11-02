@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 13:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 13 of 14 segments merged · 15 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 14 of 14 segments merged · 15 of 15 acceptance checks**
 
-6,674 workspace tests passing at the last merge · 678 segments merged in all · 0 of 14 seats working
+6,678 workspace tests passing at the last merge · 679 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -22,21 +22,19 @@ Updated 2026-11-02 13:15 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 15 / 15 | 14.0 h so far · expected done Nov 02 14:03–Nov 03 00:58 UTC |
+| 12 | Exports and interoperability | building | 15 / 15 | 14.3 h so far · expected done Nov 02 13:30–Nov 02 23:09 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-13 merged, 1 gate
+14 merged
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `p12f-ifc-step-grammar` | IFC export round-trip: every instance parses and has IFC4's attribute count | gate | mai-flash-esc |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 13:21 | `p12f-ifc-step-grammar` | merged | 6,678 pass | darwin-ws3 |
 | Nov 02 12:36 | `upstream-sync-ebc67fa81` | merged | 6,674 pass | bonsai-ws2-a |
 | Nov 02 11:32 | `harden-p12-gltf-valid` | merged | 6,662 pass | tturbo-mac |
 | Nov 02 10:51 | `harden-p12-ifc-site` | merged | 6,655 pass | tturbo-mac |
@@ -48,13 +46,12 @@ Updated 2026-11-02 13:15 UTC. This page and the card in the README are regenerat
 | Nov 02 08:03 | `p12-docs-user-guide` | merged | 6,620 pass | bonsai-a |
 | Nov 02 07:37 | `p12-docs-user-guide` | refused | 6,620 pass | bonsai-ws2-a |
 | Nov 02 07:06 | `harden-p11-arch-panel` | merged | 6,619 pass | tturbo-mac |
-| Nov 02 06:16 | `p12-gltf-valid` | refused | 0 pass | bonsai-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 806 |
+| bonsai-a | bonsai2-27b | idle | 808 |
 | bonsai-b | bonsai2-27b | idle | 747 |
 | bonsai-ws2-a | bonsai2-27b | idle | 800 |
 | bonsai-ws2-b | bonsai2-27b | idle | 792 |
@@ -62,9 +59,9 @@ Updated 2026-11-02 13:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 67 |
 | claude-sonnet-c | sonnet | idle | 15 |
 | claude-sonnet-d | sonnet | idle | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 673 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 673 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 49 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 1 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 3 |
 | tturbo-mac | tturbo-ultraheretic | agent | 567 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
