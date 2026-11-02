@@ -57,7 +57,7 @@ fn build_demo_house() -> Session {
 }
 
 /// Export the session's drawing to a temporary IFC file and return its contents.
-fn export_ifc(session: &Session) -> String {
+fn export_ifc(session: &mut Session) -> String {
     let mut path = std::env::temp_dir();
     path.push(format!("cadcraft_ifc_test_{}.ifc", std::process::id()));
 
@@ -294,8 +294,8 @@ fn parse_data(text: &str) -> Result<BTreeMap<u32, (String, Vec<Token>)>, String>
 
 #[test]
 fn every_instance_of_the_demo_house_ifc_parses() {
-    let session = build_demo_house();
-    let text = export_ifc(&session);
+    let mut session = build_demo_house();
+    let text = export_ifc(&mut session);
 
     assert!(text.contains("FILE_SCHEMA(('IFC4'));"), "Missing IFC4 schema");
 
@@ -334,8 +334,8 @@ fn check_refs(params: &[Token], defined: &BTreeSet<u32>, n: u32, name: &str) {
 
 #[test]
 fn cartesian_points_and_directions_are_coordinate_lists() {
-    let session = build_demo_house();
-    let text = export_ifc(&session);
+    let mut session = build_demo_house();
+    let text = export_ifc(&mut session);
     let instances = parse_data(&text).expect("Failed to parse DATA section");
 
     for (n, (name, params)) in &instances {
@@ -394,8 +394,8 @@ fn cartesian_points_and_directions_are_coordinate_lists() {
 
 #[test]
 fn entities_have_ifc4_attribute_counts() {
-    let session = build_demo_house();
-    let text = export_ifc(&session);
+    let mut session = build_demo_house();
+    let text = export_ifc(&mut session);
     let instances = parse_data(&text).expect("Failed to parse DATA section");
 
     // IFC4 attribute counts (ISO 16739-1:2018)
@@ -454,8 +454,8 @@ fn entities_have_ifc4_attribute_counts() {
 
 #[test]
 fn rooted_entities_have_unique_global_ids() {
-    let session = build_demo_house();
-    let text = export_ifc(&session);
+    let mut session = build_demo_house();
+    let text = export_ifc(&mut session);
     let instances = parse_data(&text).expect("Failed to parse DATA section");
 
     let mut ids: BTreeSet<String> = BTreeSet::new();
