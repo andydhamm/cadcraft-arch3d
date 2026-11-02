@@ -747,4 +747,63 @@ mod tests {
         let p = light_point(&model, &f).unwrap();
         assert!((p.z - 3.0).abs() < 1e-9, "z: {}", p.z);
     }
+
+    #[test]
+    fn validate_area_nan_width_names_width() {
+        let t = find_type("LED panel 600").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.width = f64::NAN;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("width"), "{err}");
+        assert!(err.contains("Nan"), "{err}");
+    }
+
+    #[test]
+    fn validate_area_negative_width() {
+        let t = find_type("LED panel 600").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.width = -0.5;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("width"), "{err}");
+        assert!(err.contains("-0.5"), "{err}");
+    }
+
+    #[test]
+    fn ies_with_zero_candela_values_is_valid() {
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        let p = IesProfile {
+            name: "test".to_string(),
+            vertical: vec![0.0, 90.0],
+            horizontal: vec![0.0, 180.0],
+            candela: vec![0.0, 0.0, 0.0, 0.0],
+            ..IesProfile::default()
+        };
+        f.ies = Some(p);
+        assert!(validate_fixture(&f).is_ok());
+    }
+
+    #[test]
+    fn panel_light_point_in_room_with_hole() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+        model.rooms.push(Room {
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)],
+            holes: vec![vec![Vec2::new(4.0, 4.0), Vec2::new(6.0, 4.0), Vec2::new(6.0, 6.0), Vec2::new(4.0, 6.0)]],
+            ceiling_height: Some(3.5),
+            ..Room::default()
+        });
+
+        let t = find_type("LED panel 600").unwrap();
+        // Panel in the room but not in the hole
+        let f = fixture_from_type(ArchId(0), &t, Vec2::new(2.0, 2.0));
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 3.5).abs() < 1e-9, "z: {}", p.z);
+
+        // Panel in the hole falls back to the level ceiling height
+        let f2 = fixture_from_type(ArchId(1), &t, Vec2::new(5.0, 5.0));
+        let p2 = light_point(&model, &f2).unwrap();
+        assert!((p2.z - 2.4).abs() < 1e-9, "z: {}", p2.z);
+    }
 }
