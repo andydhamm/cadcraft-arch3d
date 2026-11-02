@@ -123,13 +123,44 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let file = format!("export.{format}");
     let lost = super::file::loss_on_save(s, &file);
-    let bytes = (hooks.write)(s.doc()?, &file).map_err(|e| bad("export", e))?;
+    // Determine the name passed to the writer hook.
+    // If a path is given, use the file name so the writer can name internal references
+    // correctly (e.g. the OBJ's MTL), otherwise use a generic name.
+    let hook_name = if let Some(p) = path {
+        std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("export.{format}"))
+    } else {
+        format!("export.{format}")
+    };
+    let bytes = (hooks.write)(s.doc()?, &hook_name).map_err(|e| bad("export", e))?;
     let mut r = match path {
         Some(path) => {
             write_file("export", path, &bytes)?;
-            json!({ "path": path, "format": format, "bytes": bytes.len(), "message": format!("Exported to {path}") })
+            let mut out = json!({
+                "path": path,
+                "format": format,
+                "bytes": bytes.len(),
+                "message": format!("Exported to {path}"),
+            });
+            if format == "obj" {
+                // OBJ needs a companion material library file.
+                let p = std::path::Path::new(path);
+                let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "export".into());
+                let mtl_name = format!("{stem}.mtl");
+                let mtl_path = p.parent().map(|d| d.join(&mtl_name)).unwrap_or_else(|| std::path::PathBuf::from(&mtl_name));
+                let mtl_bytes = (hooks.write)(s.doc()?, &mtl_name).map_err(|e| bad("export", e))?;
+                write_file("export", mtl_path.to_string_lossy().as_ref(), &mtl_bytes)?;
+                out["mtl"] = json!(mtl_path.to_string_lossy());
+            }
+            Ok(out)
         }
-        None => json!({ "data": base64_encode(&bytes), "format": format, "bytes": bytes.len() }),
+        None => {
+            let mut out = json!({ "data": base64_encode(&bytes), "format": format, "bytes": bytes.len() });
+            if format == "obj" {
+                let mtl_bytes = (hooks.write)(s.doc()?, "export.mtl").map_err(|e| bad("export", e))?;
+                out["mtl"] = json!(base64_encode(&mtl_bytes));
+            }
+            Ok(out)
+        }
     };
     super::file::report_not_saved(s, &mut r, &lost);
     Ok(r)
