@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 02:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 0 of 12 segments merged · 1 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 1 of 12 segments merged · 1 of 15 acceptance checks**
 
-6,584 workspace tests passing at the last merge · 660 segments merged in all · 0 of 13 seats working
+6,586 workspace tests passing at the last merge · 661 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -22,12 +22,12 @@ Updated 2026-11-02 01:45 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 1 / 15 | 2.5 h so far · expected done Nov 02 05:28–Nov 03 11:10 UTC |
+| 12 | Exports and interoperability | building | 1 / 15 | 2.8 h so far · expected done Nov 02 14:11–Nov 08 13:32 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-6 merging, 3 gate, 2 queued, 1 working
+5 merging, 4 gate, 1 merged, 1 working, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -36,16 +36,17 @@ Updated 2026-11-02 01:45 UTC. This page and the card in the README are regenerat
 | `p12-ifc-roofs` | IFC roofs: IfcRoof aggregating its planes, fascia and soffit | merging | claude-sonnet-c |
 | `p12-ifc-stairs` | IFC stairs and railings | merging | bonsai-a |
 | `p12-ifc-spaces` | IFC spaces with their areas | gate | bonsai-ws2-b |
-| `p12-ifc-site` | IFC site location and geographic elements | working | bonsai-ws2-a |
-| `p12-ifc-lights` | IFC light fixtures | merging | mai-flash |
+| `p12-ifc-site` | IFC site location and geographic elements | gate | bonsai-ws2-a |
 | `p12-io-obj` | OBJ export with an MTL file | merging | claude-sonnet-a |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | gate | bonsai-b |
 | `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | gate | darwin-ws3 |
+| `p12-pt-auto-exposure` | Path-traced daylight stills expose for what they show | working | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 01:48 | `p12-ifc-lights` | merged | 6,586 pass | mai-flash |
 | Nov 02 00:57 | `harden-p11f-glass-shadow-once` | merged | 6,584 pass | tturbo-mac |
 | Nov 01 23:41 | `harden-p11-cli-render-args` | merged | 6,561 pass | tturbo-mac |
 | Nov 01 22:41 | `upstream-sync-2034d6899` | merged | 6,550 pass | claude-sonnet-d |
@@ -57,22 +58,21 @@ Updated 2026-11-02 01:45 UTC. This page and the card in the README are regenerat
 | Nov 01 20:31 | `harden-p11-r3d-rt` | merged | 6,436 pass | tturbo-mac |
 | Nov 01 19:58 | `harden-p11-ui-pane-path` | merged | 6,430 pass | tturbo-mac |
 | Nov 01 19:23 | `harden-p11-final-default-path` | merged | 6,419 pass | tturbo-mac |
-| Nov 01 18:56 | `p11-r3d-rt` | refused | 0 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 789 |
-| bonsai-b | bonsai2-27b | gate | 730 |
-| bonsai-ws2-a | bonsai2-27b | agent | 783 |
+| bonsai-b | bonsai2-27b | gate | 731 |
+| bonsai-ws2-a | bonsai2-27b | gate | 783 |
 | bonsai-ws2-b | bonsai2-27b | gate | 767 |
 | claude-sonnet-a | sonnet | merging | 69 |
 | claude-sonnet-b | sonnet | merging | 65 |
 | claude-sonnet-c | sonnet | merging | 15 |
 | claude-sonnet-d | sonnet | merging | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 646 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 647 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
-| mai-flash | mai-code-1.1-flash | merging | 46 |
-| tturbo-mac | tturbo-ultraheretic | agent | 556 |
+| mai-flash | mai-code-1.1-flash | agent | 46 |
+| tturbo-mac | tturbo-ultraheretic | gate | 556 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
