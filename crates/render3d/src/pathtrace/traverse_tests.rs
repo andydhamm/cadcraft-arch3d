@@ -232,8 +232,8 @@ mod traverse_tests {
             eprintln!("SKIP: no compute device");
             return;
         };
-        // Glass pane at x=2, ray goes along x-axis from -2 to 10, misses the pane.
-        let scene = Scene3d { meshes: vec![prism("glass", 2, [2.0, -1.0, -1.0], [2.02, 1.0, 1.0])], ..Default::default() };
+        // Glass pane at x=2, y=2..3; ray goes along x-axis at y=0, so it misses the pane.
+        let scene = Scene3d { meshes: vec![prism("glass", 2, [2.0, 2.0, -1.0], [2.02, 3.0, 1.0])], ..Default::default() };
         let gpu_scene = build_gpu_scene(&scene, false, None);
         let buffers = upload_scene(&gpu, &gpu_scene);
         let probes = vec![GpuProbe { point: [-2.0, 0.0, 0.0], normal: [1.0, 0.0, 0.0], _a: 10.0, ..Default::default() }];
