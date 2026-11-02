@@ -574,12 +574,21 @@ pub fn arch_id_from_handle(h: Handle) -> Option<ArchTarget> {
     None
 }
 
+/// Whether `h` is a cabinet or fixture proxy handle (no grips).
+fn is_casework_handle(h: Handle) -> bool {
+    cadcraft_doc::arch::is_cabinet_handle(h) || cadcraft_doc::arch::is_fixture_handle(h)
+}
+
 impl Session {
     /// Drag grip `grip_index` of `handle` to `new_point` in `mode` (one undo step).
     /// The base point of the rotate/scale/mirror modes is the grip itself. As in AutoCAD the edit
     /// covers the selection: a stretch drags the grips of other selected objects that sit on the
     /// same point, and the other modes transform every selected object.
     pub fn grip_edit(&mut self, handle: Handle, grip_index: usize, new_point: Vec2, mode: GripMode) -> Result<()> {
+        if is_casework_handle(handle) {
+            // Cabinets and fixtures have no grips yet; a drag is a silent no-op.
+            return Ok(());
+        }
         if let Some(target) = arch_id_from_handle(handle) {
             if matches!(target, ArchTarget::Room(_) | ArchTarget::View(_)) {
                 // Rooms are not drag-editable yet; a grip drag is a silent no-op for every mode.
@@ -660,6 +669,9 @@ impl Session {
 
     /// Grip points of an object (the indices `grip_edit` takes).
     pub fn grips_of(&self, handle: Handle) -> Result<Vec<Vec2>> {
+        if is_casework_handle(handle) {
+            return Ok(Vec::new());
+        }
         if let Some(target) = arch_id_from_handle(handle) {
             let d = self.doc()?;
             return match target {

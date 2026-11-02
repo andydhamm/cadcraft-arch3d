@@ -1497,3 +1497,24 @@
 	Material	Матеріал
 	cmd.material	Матеріал
 	Architecture>Material	Архітектура>Матеріал
+	Cabinet	Шафа
+	cmd.cabinet	Шафа
+	Architecture>Cabinet	Архітектура>Шафа
+	Edit Cabinet	Змінити шафу
+	cmd.cabinet.edit	Змінити шафу
+	Architecture>Edit Cabinet	Архітектура>Змінити шафу
+	Delete Cabinet	Видалити шафу
+	cmd.cabinet.delete	Видалити шафу
+	Architecture>Delete Cabinet	Архітектура>Видалити шафу
+	Fixture	Прилад
+	cmd.fixture	Прилад
+	Architecture>Fixture	Архітектура>Прилад
+	Edit Fixture	Змінити прилад
+	cmd.fixture.edit	Змінити прилад
+	Architecture>Edit Fixture	Архітектура>Змінити прилад
+	Delete Fixture	Видалити прилад
+	cmd.fixture.delete	Видалити прилад
+	Architecture>Delete Fixture	Архітектура>Видалити прилад
+	Fixture Types	Типи приладів
+	cmd.fixture.types	Типи приладів
+	Architecture>Fixture Types	Архітектура>Типи приладів

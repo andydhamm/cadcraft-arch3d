@@ -1403,6 +1403,13 @@
 	Level	楼层
 	Light Fixture	灯具
 	Light Fixture Types	灯具类型
+	Cabinet	橱柜
+	Edit Cabinet	编辑橱柜
+	Delete Cabinet	删除橱柜
+	Fixture	设备
+	Edit Fixture	编辑设备
+	Delete Fixture	删除设备
+	Fixture Types	设备类型
 	Move Opening	移动洞口
 	Pick 3D	三维拾取
 	Plane	平面
