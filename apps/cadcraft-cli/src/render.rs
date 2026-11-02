@@ -880,6 +880,7 @@ mod tests {
             spp: None,
             bounces: None,
             seed: None,
+            exposure: None,
             no_denoise: false,
             rt: false,
             night: true,
