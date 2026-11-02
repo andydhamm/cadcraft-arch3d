@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 03:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability — 2 of 12 segments merged · 3 of 15 acceptance checks**
 
@@ -22,12 +22,12 @@ Updated 2026-11-02 03:00 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 3 / 15 | 3.8 h so far · expected done Nov 02 13:46–Nov 05 01:48 UTC |
+| 12 | Exports and interoperability | building | 3 / 15 | 4.0 h so far · expected done Nov 02 14:43–Nov 05 06:42 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-5 merging, 4 gate, 2 merged, 1 queued
+6 merging, 2 escalate, 2 merged, 1 gate, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -35,11 +35,11 @@ Updated 2026-11-02 03:00 UTC. This page and the card in the README are regenerat
 | `p12-ifc-slabs` | IFC floors, decks and ceilings | merging | claude-sonnet-b |
 | `p12-ifc-roofs` | IFC roofs: IfcRoof aggregating its planes, fascia and soffit | merging | claude-sonnet-c |
 | `p12-ifc-stairs` | IFC stairs and railings | merging | bonsai-a |
-| `p12-ifc-spaces` | IFC spaces with their areas | gate | bonsai-ws2-b |
-| `p12-ifc-site` | IFC site location and geographic elements | gate | bonsai-ws2-a |
+| `p12-ifc-spaces` | IFC spaces with their areas | escalate |  |
+| `p12-ifc-site` | IFC site location and geographic elements | escalate |  |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | merging | bonsai-b |
 | `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | gate | darwin-ws3 |
-| `p12-pt-auto-exposure` | Path-traced daylight stills expose for what they show | gate | mai-flash |
+| `p12-pt-auto-exposure` | Path-traced daylight stills expose for what they show | merging | mai-flash |
 
 ## Recent merges
 
@@ -64,14 +64,14 @@ Updated 2026-11-02 03:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 789 |
 | bonsai-b | bonsai2-27b | merging | 732 |
-| bonsai-ws2-a | bonsai2-27b | gate | 785 |
-| bonsai-ws2-b | bonsai2-27b | gate | 769 |
+| bonsai-ws2-a | bonsai2-27b | idle | 786 |
+| bonsai-ws2-b | bonsai2-27b | idle | 770 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | merging | 65 |
 | claude-sonnet-c | sonnet | merging | 15 |
 | claude-sonnet-d | sonnet | merging | 9 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 649 |
-| kimi-k31 | k3.1-pro-highspeed | idle | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 47 |
+| kimi-k31 | k3.1-pro-highspeed | down | 111 |
+| mai-flash | mai-code-1.1-flash | merging | 48 |
 | tturbo-mac | tturbo-ultraheretic | merging | 558 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
