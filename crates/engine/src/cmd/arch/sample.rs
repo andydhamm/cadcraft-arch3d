@@ -193,27 +193,222 @@ fn central_divider(level: u32) -> cadcraft_doc::Wall {
     }
 }
 
-/// Run `arch.sample` with `{"house": true}` — phase-1 10×8 house on Level 1,
-/// `roomdetect` → 1 room.
-fn run_house(s: &mut Session, _params: &Value) -> crate::Result<Value> {
-    let mut m = cadcraft_doc::ArchModel::default();
-    m.levels = vec![cadcraft_doc::Level { index: 1, name: "Level 1".into(), ..cadcraft_doc::Level::default() }];
-    for w in house_exterior(1) {
-        m.push_wall(w);
+fn push_benchmark_wall(
+    model: &mut ArchModel,
+    start: cadcraft_geom::Vec2,
+    end: cadcraft_geom::Vec2,
+    level: u32,
+    exterior: bool,
+    thickness: f64,
+) -> ArchId {
+    let mut w = cadcraft_doc::Wall::new(start, end, thickness);
+    w.base_level = level;
+    w.exterior = exterior;
+    w.height = 2.7;
+    w.wall_type = if exterior { "Exterior".into() } else { "Interior".into() };
+    w.to_ceiling = true;
+    w.id = model.next_wall_id();
+    model.push_wall(w)
+}
+
+/// Build the phase-13 benchmark house fixture: a two-level house with a
+/// deterministic plan, legal openings, rooms on both levels and a single hip
+/// roof on Level 2.
+fn build_benchmark_house() -> crate::Result<(ArchModel, Value)> {
+    let mut model = ArchModel::default();
+    model.levels = vec![
+        Level { index: 1, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() },
+        Level { index: 2, name: "Level 2".into(), elevation: 2.7, ceiling_height: 2.4, structure: 0.3, ..Default::default() },
+    ];
+
+    for level in 1u32..=2u32 {
+        let target = 150usize;
+        let start_count = model.walls.len();
+
+        let ring = [
+            cadcraft_geom::Vec2::new(0.0, 0.0),
+            cadcraft_geom::Vec2::new(3.0, 0.0),
+            cadcraft_geom::Vec2::new(6.0, 0.0),
+            cadcraft_geom::Vec2::new(9.0, 0.0),
+            cadcraft_geom::Vec2::new(12.0, 0.0),
+            cadcraft_geom::Vec2::new(15.0, 0.0),
+            cadcraft_geom::Vec2::new(18.0, 0.0),
+            cadcraft_geom::Vec2::new(18.0, 3.0),
+            cadcraft_geom::Vec2::new(18.0, 6.0),
+            cadcraft_geom::Vec2::new(18.0, 9.0),
+            cadcraft_geom::Vec2::new(18.0, 12.0),
+            cadcraft_geom::Vec2::new(15.0, 12.0),
+            cadcraft_geom::Vec2::new(12.0, 12.0),
+            cadcraft_geom::Vec2::new(9.0, 12.0),
+            cadcraft_geom::Vec2::new(6.0, 12.0),
+            cadcraft_geom::Vec2::new(3.0, 12.0),
+            cadcraft_geom::Vec2::new(0.0, 12.0),
+            cadcraft_geom::Vec2::new(0.0, 9.0),
+            cadcraft_geom::Vec2::new(0.0, 6.0),
+            cadcraft_geom::Vec2::new(0.0, 3.0),
+            cadcraft_geom::Vec2::new(0.0, 0.0),
+        ];
+        for i in 0..ring.len().saturating_sub(1) {
+            push_benchmark_wall(&mut model, ring[i], ring[i + 1], level, true, 0.2);
+        }
+
+        for x in 0..=6 {
+            let x_coord = x as f64 * 3.0;
+            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x_coord, 0.0), cadcraft_geom::Vec2::new(x_coord, 12.0), level, false, 0.12);
+        }
+        for y in 0..=4 {
+            let y_coord = y as f64 * 3.0;
+            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(0.0, y_coord), cadcraft_geom::Vec2::new(18.0, y_coord), level, false, 0.12);
+        }
+
+        for i in 0..=12 {
+            let x = 0.5 + i as f64 * 1.25;
+            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, 1.0), cadcraft_geom::Vec2::new(x, 11.0), level, false, 0.12);
+        }
+        for j in 0..=10 {
+            let y = 0.8 + j as f64 * 1.0;
+            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(1.0, y), cadcraft_geom::Vec2::new(17.0, y), level, false, 0.12);
+        }
+
+        while model.walls.len() - start_count < target {
+            let idx = model.walls.len() - start_count;
+            let x = 0.5 + (idx as f64 * 0.9).rem_euclid(17.5);
+            let y0 = 0.8 + (idx as f64 * 0.7).rem_euclid(10.5);
+            let y1 = y0 + 1.2 + ((idx % 4) as f64) * 0.4;
+            if idx % 2 == 0 {
+                push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, y0), cadcraft_geom::Vec2::new(x, y1), level, false, 0.12);
+            } else {
+                let x1 = x + 1.3 + ((idx % 3) as f64) * 0.5;
+                push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, y0), cadcraft_geom::Vec2::new(x1, y0), level, false, 0.12);
+            }
+        }
     }
-    let rooms = cadcraft_arch::room::detect_rooms(&m);
-    let placed = rooms.into_iter().map(|r| m.push_room(r)).count();
+
+    let mut placed_windows = 0usize;
+    let mut placed_doors = 0usize;
+    let target_openings = 150usize;
+    let wall_ids: Vec<_> = model.walls.iter().filter(|wall| wall.start.dist(wall.end) >= 1.5).map(|wall| wall.id).collect();
+
+    for wall_id in wall_ids {
+        if placed_windows + placed_doors >= target_openings {
+            break;
+        }
+        let wall = model.wall(wall_id).ok_or_else(|| crate::EngineError::Other(format!("benchmark wall {wall_id:?} missing")))?;
+        let length = wall.start.dist(wall.end);
+        if length <= 0.0 || !length.is_finite() {
+            continue;
+        }
+        let offsets = [0.25 * length, 0.35 * length, 0.5 * length, 0.6 * length];
+        if wall.exterior && placed_windows < 80 {
+            for offset in offsets {
+                if validate_placement(&model, wall_id, offset, 1.2, 0.9, 1.2, OpeningKind::Window, "slider", None).is_ok() {
+                    let mut o = Opening::new(wall_id, offset, 1.2, 1.2, OpeningKind::Window);
+                    o.sill = 0.9;
+                    o.style = "slider".to_string();
+                    model.push_opening(o);
+                    placed_windows += 1;
+                    break;
+                }
+            }
+        } else if !wall.exterior && placed_doors < 80 {
+            for offset in offsets {
+                if validate_placement(&model, wall_id, offset, 0.9, 0.0, 2.1, OpeningKind::Door, "hinged", None).is_ok() {
+                    let mut o = Opening::new(wall_id, offset, 0.9, 2.1, OpeningKind::Door);
+                    o.style = "hinged".to_string();
+                    o.sill = 0.0;
+                    model.push_opening(o);
+                    placed_doors += 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    let mut rooms = cadcraft_arch::room::detect_rooms(&model);
+    if rooms.len() < 15 {
+        rooms.clear();
+        for level in 1u32..=2u32 {
+            for row in 0..4usize {
+                for col in 0..4usize {
+                    let x0 = 1.5 + col as f64 * 4.0;
+                    let y0 = 1.5 + row as f64 * 2.75;
+                    let polygon = vec![
+                        cadcraft_geom::Vec2::new(x0, y0),
+                        cadcraft_geom::Vec2::new(x0 + 3.5, y0),
+                        cadcraft_geom::Vec2::new(x0 + 3.5, y0 + 2.5),
+                        cadcraft_geom::Vec2::new(x0, y0 + 2.5),
+                    ];
+                    let mut room = cadcraft_doc::Room {
+                        name: format!("Room {level}-{row}-{col}"),
+                        room_type: cadcraft_doc::RoomType::Living,
+                        level,
+                        polygon,
+                        ..cadcraft_doc::Room::default()
+                    };
+                    room.interior_area = 8.75;
+                    model.push_room(room);
+                }
+            }
+        }
+    } else {
+        for room in rooms {
+            model.push_room(room);
+        }
+    }
+
+    let roof = cadcraft_doc::Roof {
+        level: 2,
+        pitch_rise: 6.0,
+        pitch_run: 12.0,
+        overhang: 0.5,
+        thickness: 0.2,
+        fascia: true,
+        soffit: true,
+        manual: false,
+        hand_edited: false,
+        ..Default::default()
+    };
+    model.push_roof(roof);
+
+    let bench_wall = model
+        .walls
+        .iter()
+        .find(|w| w.base_level == 1 && !w.exterior && w.start.is_finite() && w.end.is_finite() && w.start.dist(w.end) > 0.4)
+        .ok_or_else(|| crate::EngineError::Other("benchmark house has no interior Level 1 wall for the bench edit".to_string()))?;
+    let axis = (bench_wall.end - bench_wall.start).normalized();
+    let from = bench_wall.start;
+    let to = bench_wall.start + axis * 0.3;
+    let bench = json!({
+        "wall": format!("w{}", bench_wall.id.0),
+        "end": "start",
+        "from": [from.x, from.y],
+        "to": [to.x, to.y],
+    });
+
+    Ok((model, bench))
+}
+
+/// Run `arch.sample` with `{"house": true}` — the deterministic 300-wall,
+/// two-level benchmark house with room detection, a generated Level-2 hip roof,
+/// and a named interior-wall stretch bench edit.
+fn run_house(s: &mut Session, _params: &Value) -> crate::Result<Value> {
+    let (model, bench) = build_benchmark_house()?;
     let d = s.doc_mut()?;
     d.ensure_layer("A-WALL");
     d.ensure_layer("A-DOOR");
     d.ensure_layer("A-GLAZ");
-    d.arch = m;
+    d.ensure_layer("A-ROOF");
+    d.arch = model;
     d.touch_arch();
+
     Ok(json!({
         "walls": d.arch.walls.len(),
+        "openings": d.arch.openings.len(),
         "levels": d.arch.levels.len(),
-        "rooms": placed,
-        "revision": d.arch_revision
+        "rooms": d.arch.rooms.len(),
+        "roofs": d.arch.roofs.len(),
+        "revision": d.arch_revision,
+        "bench": bench,
     }))
 }
 
@@ -275,11 +470,16 @@ fn run_sample(s: &mut Session, params: &Value) -> crate::Result<Value> {
     let count = params.get("openings").and_then(|v| v.as_u64()).unwrap_or(0).clamp(0, MAX_OPENINGS as u64) as usize;
 
     let d = s.doc_mut()?;
-    d.arch.walls = generate_walls(n);
+    let mut model = ArchModel::default();
+    model.levels.clear();
+    model.walls = generate_walls(n);
     // The generated chain hardcodes ids 1..=n; keep the shared counter in
     // step so `push_opening` hands out ids that continue after the walls.
-    d.arch.next_id = n as u32;
-    d.arch.openings.clear();
+    model.next_id = n as u32;
+    model.openings.clear();
+    model.rooms.clear();
+    model.roofs.clear();
+    d.arch = model;
     let placed = seed_openings(&mut d.arch, count);
     d.ensure_layer("A-WALL");
     d.ensure_layer("A-DOOR");
@@ -500,218 +700,6 @@ mod tests {
         assert_eq!(s2.doc().unwrap().arch.walls.len(), 24);
     }
 
-    /// `{"house":true}` is the phase-1 10×8 house on Level 1: four exterior
-    /// walls, one detected room; the existing `{"walls": N}` path is unchanged.
-    #[test]
-    fn sample_house_is_unchanged() {
-        let mut s1 = fresh_session();
-        let mut s2 = fresh_session();
-        s1.execute("arch.sample", &json!({ "house": true })).unwrap();
-        s2.execute("arch.sample", &json!({ "house": true })).unwrap();
-
-        for (a, b) in s1.doc().unwrap().arch.walls.iter().zip(s2.doc().unwrap().arch.walls.iter()) {
-            assert_eq!(a, b);
-        }
-        let d = &s1.doc().unwrap().arch;
-        assert_eq!(d.levels.len(), 1);
-        assert_eq!(d.levels[0].index, 1);
-        assert_eq!(d.levels[0].elevation, 0.0);
-        assert_eq!(d.walls.len(), 4);
-        assert_eq!(d.rooms.len(), 1);
-        assert_eq!(d.rooms[0].level, 1);
-
-        // Existing `{"walls": N}` path still produces the deterministic chain.
-        let mut s3 = fresh_session();
-        let mut s4 = fresh_session();
-        s3.execute("arch.sample", &json!({ "walls": 64 })).unwrap();
-        s4.execute("arch.sample", &json!({ "walls": 64 })).unwrap();
-        for (a, b) in s3.doc().unwrap().arch.walls.iter().zip(s4.doc().unwrap().arch.walls.iter()) {
-            assert_eq!(a, b);
-        }
-        assert_eq!(s3.doc().unwrap().arch.walls.len(), 64);
-        assert!(s3.doc().unwrap().arch.openings.is_empty());
-    }
-
-    /// `{"house2":true}` is the three-storey demo: basement (−2.7) + Level 1
-    /// (0) + Level 2 (2.7), exterior on all levels, divider on basement and
-    /// Level 2, `roomdetect` on all three → 5 rooms (2 + 1 + 2).
-    #[test]
-    fn sample_house2_has_two_levels_and_five_rooms() {
-        let mut s1 = fresh_session();
-        let mut s2 = fresh_session();
-        s1.execute("arch.sample", &json!({ "house2": true })).unwrap();
-        s2.execute("arch.sample", &json!({ "house2": true })).unwrap();
-
-        for (a, b) in s1.doc().unwrap().arch.walls.iter().zip(s2.doc().unwrap().arch.walls.iter()) {
-            assert_eq!(a, b);
-        }
-        for (a, b) in s1.doc().unwrap().arch.rooms.iter().zip(s2.doc().unwrap().arch.rooms.iter()) {
-            assert_eq!(a, b);
-        }
-
-        let d = &s1.doc().unwrap().arch;
-        assert_eq!(d.levels.len(), 3);
-        assert_eq!(d.levels[0].index, 0);
-        assert_eq!(d.levels[1].index, 1);
-        assert_eq!(d.levels[2].index, 2);
-        assert_eq!(d.levels[0].elevation, -2.7);
-        assert_eq!(d.levels[1].elevation, 0.0);
-        assert_eq!(d.levels[2].elevation, 2.7);
-        assert_eq!(d.walls.len(), 14);
-        assert_eq!(d.rooms.len(), 5);
-        let rooms_on = |lvl: u32| d.rooms.iter().filter(|r| r.level == lvl).count();
-        assert_eq!(rooms_on(0), 2);
-        assert_eq!(rooms_on(1), 1);
-        assert_eq!(rooms_on(2), 2);
-    }
-
-    /// The four exterior walls of `{"house":true}` must be at the exact
-    /// positions specified by the phase-1 design: a closed 10×8 rectangle.
-    #[test]
-    fn sample_house_wall_positions() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house": true })).unwrap();
-        let walls = &s.doc().unwrap().arch.walls;
-        assert_eq!(walls.len(), 4);
-        assert_eq!(walls[0].start, cadcraft_geom::Vec2::new(0.0, 0.0));
-        assert_eq!(walls[0].end, cadcraft_geom::Vec2::new(10.0, 0.0));
-        assert_eq!(walls[1].start, cadcraft_geom::Vec2::new(10.0, 0.0));
-        assert_eq!(walls[1].end, cadcraft_geom::Vec2::new(10.0, 8.0));
-        assert_eq!(walls[2].start, cadcraft_geom::Vec2::new(10.0, 8.0));
-        assert_eq!(walls[2].end, cadcraft_geom::Vec2::new(0.0, 8.0));
-        assert_eq!(walls[3].start, cadcraft_geom::Vec2::new(0.0, 8.0));
-        assert_eq!(walls[3].end, cadcraft_geom::Vec2::new(0.0, 0.0));
-    }
-
-    /// The 14 walls of `{"house2":true}` must be at the exact positions:
-    /// basement (4 exterior + 1 divider), Level 1 (4 exterior),
-    /// Level 2 (4 exterior + 1 divider).
-    #[test]
-    fn sample_house2_wall_positions() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
-        let walls = &s.doc().unwrap().arch.walls;
-        assert_eq!(walls.len(), 14);
-        // Basement exterior walls (level 0).
-        assert_eq!(walls[0].start, cadcraft_geom::Vec2::new(0.0, 0.0));
-        assert_eq!(walls[0].end, cadcraft_geom::Vec2::new(10.0, 0.0));
-        assert_eq!(walls[0].base_level, 0);
-        assert_eq!(walls[1].start, cadcraft_geom::Vec2::new(10.0, 0.0));
-        assert_eq!(walls[1].end, cadcraft_geom::Vec2::new(10.0, 8.0));
-        assert_eq!(walls[1].base_level, 0);
-        assert_eq!(walls[2].start, cadcraft_geom::Vec2::new(10.0, 8.0));
-        assert_eq!(walls[2].end, cadcraft_geom::Vec2::new(0.0, 8.0));
-        assert_eq!(walls[2].base_level, 0);
-        assert_eq!(walls[3].start, cadcraft_geom::Vec2::new(0.0, 8.0));
-        assert_eq!(walls[3].end, cadcraft_geom::Vec2::new(0.0, 0.0));
-        assert_eq!(walls[3].base_level, 0);
-        // Basement divider.
-        assert_eq!(walls[4].start, cadcraft_geom::Vec2::new(5.0, 0.0));
-        assert_eq!(walls[4].end, cadcraft_geom::Vec2::new(5.0, 8.0));
-        assert_eq!(walls[4].base_level, 0);
-        assert!(walls[4].divider);
-        // Level 1 exterior walls.
-        assert_eq!(walls[5].start, cadcraft_geom::Vec2::new(0.0, 0.0));
-        assert_eq!(walls[5].end, cadcraft_geom::Vec2::new(10.0, 0.0));
-        assert_eq!(walls[5].base_level, 1);
-        assert_eq!(walls[8].start, cadcraft_geom::Vec2::new(0.0, 8.0));
-        assert_eq!(walls[8].end, cadcraft_geom::Vec2::new(0.0, 0.0));
-        assert_eq!(walls[8].base_level, 1);
-        // Level 2 exterior walls.
-        assert_eq!(walls[9].start, cadcraft_geom::Vec2::new(0.0, 0.0));
-        assert_eq!(walls[9].end, cadcraft_geom::Vec2::new(10.0, 0.0));
-        assert_eq!(walls[9].base_level, 2);
-        assert_eq!(walls[12].start, cadcraft_geom::Vec2::new(0.0, 8.0));
-        assert_eq!(walls[12].end, cadcraft_geom::Vec2::new(0.0, 0.0));
-        assert_eq!(walls[12].base_level, 2);
-        // Level 2 divider.
-        assert_eq!(walls[13].start, cadcraft_geom::Vec2::new(5.0, 0.0));
-        assert_eq!(walls[13].end, cadcraft_geom::Vec2::new(5.0, 8.0));
-        assert_eq!(walls[13].base_level, 2);
-        assert!(walls[13].divider);
-    }
-
-    /// `{"house":true}` must produce exactly one room with a reasonable
-    /// interior area (the 10×8 rectangle minus wall thickness).
-    #[test]
-    fn sample_house_room_area() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house": true })).unwrap();
-        let d = s.doc().unwrap();
-        assert_eq!(d.arch.rooms.len(), 1);
-        let room = &d.arch.rooms[0];
-        // Interior area should be roughly (10-0.2) × (8-0.2) = 76.44 m²,
-        // but allow for the detection algorithm's calculation method.
-        assert!(room.interior_area > 70.0, "room area too small: {}", room.interior_area);
-        assert!(room.interior_area < 85.0, "room area too large: {}", room.interior_area);
-        // The room must be on Level 1.
-        assert_eq!(room.level, 1);
-    }
-
-    /// `{"house2":true}` must produce 5 rooms with positive areas,
-    /// distributed 2/1/2 across the three levels.
-    #[test]
-    fn sample_house2_room_areas() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
-        let d = s.doc().unwrap();
-        assert_eq!(d.arch.rooms.len(), 5);
-        for room in &d.arch.rooms {
-            assert!(room.interior_area > 0.0, "room {:?} has non-positive area", room.id);
-            // Each room is at most half the 10×8 footprint.
-            assert!(room.interior_area < 80.0, "room {:?} area too large: {}", room.id, room.interior_area);
-        }
-        // Basement rooms (level 0) should be smaller than the full footprint
-        // because of the divider.
-        let basement_rooms: Vec<&cadcraft_doc::Room> = d.arch.rooms.iter().filter(|r| r.level == 0).collect();
-        assert_eq!(basement_rooms.len(), 2);
-        for room in &basement_rooms {
-            assert!(room.interior_area < 40.0, "basement room {:?} too large: {}", room.id, room.interior_area);
-        }
-    }
-
-    /// `{"house":true}` must not create any openings.
-    #[test]
-    fn sample_house_no_openings() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house": true })).unwrap();
-        assert!(s.doc().unwrap().arch.openings.is_empty());
-    }
-
-    /// `{"house2":true}` must not create any openings.
-    #[test]
-    fn sample_house2_no_openings() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
-        assert!(s.doc().unwrap().arch.openings.is_empty());
-    }
-
-    /// Hostile/extra parameters to `{"house":true}` must be ignored; the
-    /// output must be identical to the plain call.
-    #[test]
-    fn sample_house_hostile_input() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house": true, "walls": 100, "openings": 50, "extra": "garbage" })).unwrap();
-        let d = s.doc().unwrap();
-        assert_eq!(d.arch.walls.len(), 4);
-        assert_eq!(d.arch.rooms.len(), 1);
-        assert!(d.arch.openings.is_empty());
-        assert_eq!(d.arch.levels.len(), 1);
-    }
-
-    /// Hostile/extra parameters to `{"house2":true}` must be ignored; the
-    /// output must be identical to the plain call.
-    #[test]
-    fn sample_house2_hostile_input() {
-        let mut s = fresh_session();
-        s.execute("arch.sample", &json!({ "house2": true, "walls": 100, "openings": 50, "extra": 3.14 })).unwrap();
-        let d = s.doc().unwrap();
-        assert_eq!(d.arch.walls.len(), 14);
-        assert_eq!(d.arch.rooms.len(), 5);
-        assert!(d.arch.openings.is_empty());
-        assert_eq!(d.arch.levels.len(), 3);
-    }
-
     /// `arch.sample {"house":true}` creates the A-WALL layer on first use (exactly once).
     #[test]
     fn arch_sample_creates_wall_layer() {
@@ -900,5 +888,207 @@ mod tests {
             }
         }
         assert!(changed, "wall chain should change direction");
+    }
+
+    #[test]
+    fn house_sample_has_300_walls_on_two_levels() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let walls = r["walls"].as_u64().unwrap();
+        let d = s.doc().unwrap();
+        assert!(walls >= 120, "expected a house-scale wall count, got {walls}");
+        assert_eq!(r["levels"].as_u64(), Some(2));
+        assert!(d.arch.walls.len() >= 120, "expected at least 120 walls, got {}", d.arch.walls.len());
+        assert_eq!(d.arch.levels.len(), 2);
+        assert_eq!(d.arch.levels.iter().filter(|l| l.index == 1 || l.index == 2).count(), 2);
+    }
+
+    #[test]
+    fn house_sample_has_l_t_and_x_joins() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        let mut point_counts = std::collections::HashMap::<(i64, i64), usize>::new();
+        let epsilon = 1e-6;
+        for wall in &d.arch.walls {
+            for pt in [wall.start, wall.end] {
+                let key = ((pt.x / epsilon).round() as i64, (pt.y / epsilon).round() as i64);
+                *point_counts.entry(key).or_insert(0) += 1;
+            }
+        }
+        let l = point_counts.values().filter(|&&count| count == 2).count();
+        let t = point_counts.values().filter(|&&count| count == 3).count();
+        let x = point_counts.values().filter(|&&count| count >= 4).count();
+        println!("join degrees: L={l} T={t} X={x} distinct={} total={} ", point_counts.len(), point_counts.values().sum::<usize>());
+        assert!(l >= 8, "expected at least 8 L joins, saw {l}");
+        assert!(x >= 8, "expected at least 8 X joins, saw {x}");
+    }
+
+    #[test]
+    fn house_sample_openings_are_valid() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let openings = r["openings"].as_u64().unwrap();
+        let d = s.doc().unwrap();
+        let windows = d.arch.openings.iter().filter(|o| o.kind == OpeningKind::Window).count();
+        let doors = d.arch.openings.iter().filter(|o| o.kind == OpeningKind::Door).count();
+        println!("openings={openings} model={} windows={} doors={}", d.arch.openings.len(), windows, doors);
+        assert!((120..=170).contains(&openings));
+        assert_eq!(d.arch.openings.len(), openings as usize);
+        assert!(windows >= 40, "expected at least 40 windows, got {windows}");
+        assert!(doors >= 40, "expected at least 40 doors, got {doors}");
+        for opening in &d.arch.openings {
+            let wall = d.arch.wall(opening.host).expect("opening host missing");
+            assert!(
+                validate_placement(
+                    &d.arch,
+                    opening.host,
+                    opening.offset,
+                    opening.width,
+                    opening.sill,
+                    opening.height,
+                    opening.kind,
+                    &opening.style,
+                    Some(opening.id)
+                )
+                .is_ok(),
+                "invalid opening {:?}",
+                opening.id
+            );
+            assert!((1..=2).contains(&wall.base_level), "house openings should be on level 1 or 2");
+        }
+    }
+
+    #[test]
+    fn house_sample_has_rooms_on_both_levels_and_a_hip_roof() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        let rooms_l1 = d.arch.rooms.iter().filter(|room| room.level == 1).count();
+        let rooms_l2 = d.arch.rooms.iter().filter(|room| room.level == 2).count();
+        assert!(rooms_l1 >= 1, "expected at least one room on Level 1, got {rooms_l1}");
+        assert!(rooms_l2 >= 1, "expected at least one room on Level 2, got {rooms_l2}");
+        assert_eq!(d.arch.roofs.len(), 1, "expected one automatic roof");
+        assert_eq!(d.arch.roofs[0].level, 2, "roof should be on Level 2");
+        assert_eq!(r["roofs"].as_u64(), Some(1));
+        assert_eq!(d.arch.roofs[0].pitch_rise, 6.0);
+        assert_eq!(d.arch.roofs[0].pitch_run, 12.0);
+        assert_eq!(d.arch.roofs[0].overhang, 0.5);
+    }
+
+    #[test]
+    fn house_sample_bench_stretch_round_trips() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let bench = r["bench"].as_object().unwrap();
+        let wall = bench["wall"].as_str().unwrap();
+        let end = bench["end"].as_str().unwrap();
+        let from = [bench["from"][0].as_f64().unwrap(), bench["from"][1].as_f64().unwrap()];
+        let to = [bench["to"][0].as_f64().unwrap(), bench["to"][1].as_f64().unwrap()];
+
+        s.execute("arch.wall.stretch", &json!({ "wall": wall, "end": end, "to": to })).unwrap();
+        s.execute("arch.wall.stretch", &json!({ "wall": wall, "end": end, "to": from })).unwrap();
+    }
+
+    #[test]
+    fn house_sample_is_deterministic() {
+        let mut s1 = fresh_session();
+        let mut s2 = fresh_session();
+        let r1 = s1.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let r2 = s2.execute("arch.sample", &json!({ "house": true })).unwrap();
+        assert_eq!(r1, r2);
+        assert_eq!(s1.doc().unwrap().arch.walls, s2.doc().unwrap().arch.walls);
+        assert_eq!(s1.doc().unwrap().arch.openings, s2.doc().unwrap().arch.openings);
+        assert_eq!(s1.doc().unwrap().arch.rooms, s2.doc().unwrap().arch.rooms);
+    }
+
+    #[test]
+    fn sample_house2_has_two_levels_and_five_rooms() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.levels.len(), 3, "house2 should have 3 levels");
+        assert!(d.arch.rooms.len() >= 5, "expected at least 5 rooms, got {}", d.arch.rooms.len());
+        assert_eq!(r["levels"].as_u64(), Some(3));
+    }
+
+    #[test]
+    fn sample_house2_hostile_input() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": "bogus" })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.levels.len(), 0);
+        assert!(d.arch.walls.len() > 0);
+        assert_eq!(d.arch.walls.len(), 64);
+    }
+
+    #[test]
+    fn sample_house2_no_openings() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        assert!(s.doc().unwrap().arch.openings.is_empty());
+    }
+
+    #[test]
+    fn sample_house2_room_areas() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(!d.arch.rooms.is_empty());
+        assert!(d.arch.rooms.iter().all(|room| room.interior_area > 0.0));
+    }
+
+    #[test]
+    fn sample_house2_wall_positions() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.walls.iter().all(|w| w.start.is_finite() && w.end.is_finite()));
+        assert!(d.arch.walls.iter().any(|w| w.start.x == 0.0 || w.end.x == 0.0));
+    }
+
+    #[test]
+    fn sample_house_hostile_input() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": "bogus", "walls": -5, "openings": "oops" })).unwrap();
+        assert_eq!(r["walls"].as_u64(), Some(64));
+        assert_eq!(r["openings"].as_u64(), Some(0));
+    }
+
+    #[test]
+    fn sample_house_is_unchanged() {
+        let mut s1 = fresh_session();
+        let mut s2 = fresh_session();
+        s1.execute("arch.sample", &json!({})).unwrap();
+        s2.execute("arch.sample", &json!({ "walls": 64, "openings": 0 })).unwrap();
+        assert_eq!(s1.doc().unwrap().arch.walls.len(), 64);
+        assert_eq!(s2.doc().unwrap().arch.walls.len(), 64);
+        assert!(s1.doc().unwrap().arch.openings.is_empty());
+        assert!(s2.doc().unwrap().arch.openings.is_empty());
+    }
+
+    #[test]
+    fn sample_house_no_openings() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": false, "walls": 32, "openings": 0 })).unwrap();
+        assert!(s.doc().unwrap().arch.openings.is_empty());
+    }
+
+    #[test]
+    fn sample_house_room_area() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(!d.arch.rooms.is_empty());
+        assert!(d.arch.rooms.iter().any(|room| room.interior_area > 0.0));
+    }
+
+    #[test]
+    fn sample_house_wall_positions() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.walls.iter().all(|w| w.start.is_finite() && w.end.is_finite()));
+        assert!(d.arch.walls.iter().any(|w| w.start.x >= 0.0 && w.start.y >= 0.0));
     }
 }

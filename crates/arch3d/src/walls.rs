@@ -21,7 +21,7 @@ const GABLE_TOP_OFFSET: f64 = 1e-4;
 /// The roof plane is defined by its base edge in plan (the eave line) and a
 /// slope (rise/run). The height of the roof at any point `(x,y)` is
 /// `eave_z + slope * distance_to_base_edge`.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct RoofClip {
     /// The base edge in plan coordinates `[x0, y0, x1, y1]`.
     pub base_edge: [f64; 4],
@@ -359,7 +359,16 @@ pub fn roof_top_polyline(model: &ArchModel, wall: &Wall, base: f64, top: f64) ->
     if model.roofs.is_empty() {
         return None;
     }
-    let fp = cadcraft_arch::roof::outer_footprint(model, wall.base_level)?;
+    roof_top_polyline_in(model, cadcraft_arch::roof::outer_footprint(model, wall.base_level).as_ref(), wall, base, top)
+}
+
+/// [`roof_top_polyline`] with the outer footprint of the wall's level already made (`fp`), so a
+/// scene build makes it once per level instead of once per wall.
+pub fn roof_top_polyline_in(model: &ArchModel, fp: Option<&cadcraft_arch::roof::Footprint>, wall: &Wall, base: f64, top: f64) -> Option<Vec<Vec2>> {
+    if model.roofs.is_empty() {
+        return None;
+    }
+    let fp = fp?;
     let edges: Vec<_> = fp.edges.iter().filter(|e| e.wall == wall.id).collect();
     if edges.is_empty() {
         return None;
