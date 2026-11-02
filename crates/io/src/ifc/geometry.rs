@@ -77,7 +77,7 @@ pub(crate) fn body(w: &mut StepWriter, body_context: Ref, meshes: &[&Mesh], z0: 
     let mut triangles = Vec::new();
     for m in meshes {
         let base = u32::try_from(points.len()).ok()?;
-        points.extend(m.positions.iter().map(|p| [f64::from(p[0]), f64::from(p[1]), f64::from(p[2]) - z0]));
+        points.extend(m.positions.iter().map(|p| [exact(p[0]), exact(p[1]), to_nm(exact(p[2]) - z0)]));
         for t in m.indices.chunks_exact(3) {
             triangles.push([base + t[0], base + t[1], base + t[2]]);
         }
@@ -85,6 +85,17 @@ pub(crate) fn body(w: &mut StepWriter, body_context: Ref, meshes: &[&Mesh], z0: 
     let set = faceset(w, &points, &triangles)?;
     let shape = w.add("IfcShapeRepresentation", vec![P::Ref(body_context), P::str("Body"), P::str("Tessellation"), P::refs(&[set])]);
     Some(w.add("IfcProductDefinitionShape", vec![P::Null, P::Null, P::refs(&[shape])]))
+}
+
+/// A mesh coordinate (f32) as the f64 of its shortest decimal: 2.55f32 is written 2.55, not the
+/// 2.549999952316284 that widening gives.
+fn exact(v: f32) -> f64 {
+    v.to_string().parse().unwrap_or(f64::from(v))
+}
+
+/// A difference of two such values kept to the nanometre, so 5.25 - 2.7 is written 2.55.
+fn to_nm(v: f64) -> f64 {
+    (v * 1e9).round() / 1e9
 }
 
 #[cfg(test)]
@@ -139,6 +150,20 @@ mod tests {
         assert!(text.contains("#3=IFCTRIANGULATEDFACESET(#2,$,$,((1,2,3),(1,3,4),(5,6,7),(5,7,8)),$);"), "{text}");
         assert!(text.contains("#4=IFCSHAPEREPRESENTATION(#1,'Body','Tessellation',(#3));"), "{text}");
         assert!(text.contains("#5=IFCPRODUCTDEFINITIONSHAPE($,$,(#4));"), "{text}");
+    }
+
+    #[test]
+    fn coordinates_are_written_as_the_decimals_the_model_holds() {
+        // 2.55f32 widened to f64 is 2.549999952316284, and 5.25 - 2.7 in f64 is 2.5499999999999998.
+        let (a, b) = (square("space", 0, 2.55), square("space", 0, 5.25));
+        let mut w = StepWriter::new();
+        let ctx = w.add("IfcGeometricRepresentationSubContext", vec![]);
+        assert!(body(&mut w, ctx, &[&a], 0.0).is_some());
+        assert!(body(&mut w, ctx, &[&b], 2.7).is_some());
+        let text = w.finish(&StepHeader::default());
+        assert!(text.contains("#2=IFCCARTESIANPOINTLIST3D(((0.,0.,2.55),(1.,0.,2.55),"), "{text}");
+        assert!(text.contains("IFCCARTESIANPOINTLIST3D(((0.,0.,2.55),(1.,0.,2.55),(1.,1.,2.55),(0.,1.,2.55)));\n#7="), "{text}");
+        assert!(!text.contains("2.54999"), "{text}");
     }
 
     #[test]
