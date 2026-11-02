@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-02 15:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 15:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 13 of 13: Polish — 0 of 18 segments merged · 0 of 13 acceptance checks**
+**Phase 13 of 13: Polish — 0 of 21 segments merged · 0 of 13 acceptance checks**
 
 6,678 workspace tests passing at the last merge · 679 segments merged in all · 0 of 14 seats working
 
@@ -23,18 +23,18 @@ Updated 2026-11-02 15:15 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 0 / 13 | 0.8 h so far · expected done Nov 02 20:01–Nov 04 18:23 UTC |
+| 13 | Polish | building | 0 / 13 | 1.1 h so far · expected done Nov 02 21:03–Nov 04 23:53 UTC |
 
 ## Phase 13 segments
 
-13 queued, 3 gate, 1 stuck, 1 working
+17 queued, 2 working, 1 replaced, 1 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p13-doc-casework` | Cabinets and fixtures: data model and catalogue | gate | claude-sonnet-c |
-| `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | gate | bonsai-ws2-b |
+| `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | working | bonsai-ws2-b |
 | `p13-sample-house` | arch.sample {"house":true}: the 300-wall benchmark house | working | mai-flash |
-| `p13-doc-finish-data` | Finish enum and the finish fields on Wall / Roof / Room | gate | claude-sonnet-d |
+| `p13-doc-finish-data` | Finish enum and the finish fields on Wall / Roof / Room | merging | claude-sonnet-d |
 
 ## Recent merges
 
@@ -57,17 +57,17 @@ Updated 2026-11-02 15:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 809 |
+| bonsai-a | bonsai2-27b | gate | 810 |
 | bonsai-b | bonsai2-27b | gate | 747 |
-| bonsai-ws2-a | bonsai2-27b | gate | 800 |
-| bonsai-ws2-b | bonsai2-27b | gate | 793 |
+| bonsai-ws2-a | bonsai2-27b | agent | 801 |
+| bonsai-ws2-b | bonsai2-27b | agent | 794 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | idle | 67 |
 | claude-sonnet-c | sonnet | gate | 16 |
-| claude-sonnet-d | sonnet | gate | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 673 |
+| claude-sonnet-d | sonnet | merging | 10 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 673 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 49 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 3 |
-| tturbo-mac | tturbo-ultraheretic | agent | 571 |
+| tturbo-mac | tturbo-ultraheretic | gate | 571 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
