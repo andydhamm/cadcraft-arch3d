@@ -45,7 +45,7 @@ fn geographic_element(ctx: &mut Ctx, key: &str, name: &str, object_type: P, mesh
     if meshes.is_empty() {
         return;
     }
-    let g = crate::ifc::guid(key);
+    let g = super::guid::global_id(key);
     let placement = ctx.placement_in_site();
     if let Some(body) = ctx.body(meshes, 0.0) {
         let r = ctx.w.add(
@@ -63,28 +63,28 @@ fn geographic_element(ctx: &mut Ctx, key: &str, name: &str, object_type: P, mesh
 pub(super) fn emit(ctx: &mut Ctx) {
     // Terrain: one `IfcGeographicElement`, key `terrain`, `.TERRAIN.`
     for id in ctx.pieces.ids("terrain") {
-        let meshes = ctx.pieces.get("terrain", id);
+        let meshes = ctx.pieces.get("terrain", id).to_vec();
         if !meshes.is_empty() {
-            geographic_element(ctx, "terrain", "terrain", P::Null, meshes, ".TERRAIN.");
+            geographic_element(ctx, "terrain", "terrain", P::Null, &meshes, ".TERRAIN.");
         }
     }
 
     // Plants: one per plant, key `plant/<n>`, `.USERDEFINED.`, ObjectType `PLANT`
     for id in ctx.pieces.ids("plant") {
-        let meshes = ctx.pieces.get("plant", id);
+        let meshes = ctx.pieces.get("plant", id).to_vec();
         if !meshes.is_empty() {
             let n = id.0;
-            geographic_element(ctx, &format!("plant/{n}"), &format!("plant-pl{n}"), P::Str("PLANT".into()), meshes, ".USERDEFINED.");
+            geographic_element(ctx, &format!("plant/{n}"), &format!("plant-pl{n}"), P::Str("PLANT".into()), &meshes, ".USERDEFINED.");
         }
     }
 
     // Paths: one per path, key `path/<n>`, `.USERDEFINED.`, ObjectType `PATH`
     for id in ctx.pieces.ids("path") {
-        let meshes = ctx.pieces.get("path", id);
+        let meshes = ctx.pieces.get("path", id).to_vec();
         if !meshes.is_empty() {
             let n = id.0;
             let kind = meshes.first().map_or("path", |m| m.material.split('-').nth(1).unwrap_or("path"));
-            geographic_element(ctx, &format!("path/{n}"), &format!("{kind}-tm{n}"), P::Str("PATH".into()), meshes, ".USERDEFINED.");
+            geographic_element(ctx, &format!("path/{n}"), &format!("{kind}-tm{n}"), P::Str("PATH".into()), &meshes, ".USERDEFINED.");
         }
     }
 }
