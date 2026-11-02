@@ -38,14 +38,16 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
                 }
                 None => {
                     let (cache, stats) = cadcraft_arch3d::SceneCache::new(&arch_model);
+                    let scene = cache.scene().clone();
                     st.scene_cache = Some(cache);
-                    (cache.scene().clone(), stats)
+                    (scene, stats)
                 }
             }
         } else {
             let (cache, stats) = cadcraft_arch3d::SceneCache::new(&arch_model);
+            let scene = cache.scene().clone();
             st.scene_cache = Some(cache);
-            (cache.scene().clone(), stats)
+            (scene, stats)
         }
     };
 
