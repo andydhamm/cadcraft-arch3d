@@ -96,7 +96,7 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
     });
     if show_digest {
         if let serde_json::Value::Object(ref mut obj) = reply {
-            obj.insert("digest".to_string(), scene.digest());
+            obj.insert("digest".to_string(), serde_json::Value::String(scene.digest()));
         }
     }
 
