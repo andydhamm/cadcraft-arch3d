@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability — 0 of 12 segments merged · 0 of 15 acceptance checks**
 
@@ -22,23 +22,23 @@ Updated 2026-11-02 00:15 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 0 / 15 | 1.0 h so far · expected done Nov 02 03:59–Nov 03 09:41 UTC |
+| 12 | Exports and interoperability | building | 0 / 15 | 1.3 h so far · expected done Nov 02 04:13–Nov 03 09:55 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-8 gate, 2 working, 2 queued
+10 gate, 2 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p12-ifc-openings` | IFC openings: IfcOpeningElement voiding the wall, filled by IfcDoor or IfcWindow | gate | claude-sonnet-d |
 | `p12-ifc-slabs` | IFC floors, decks and ceilings | gate | claude-sonnet-b |
 | `p12-ifc-roofs` | IFC roofs: IfcRoof aggregating its planes, fascia and soffit | gate | claude-sonnet-c |
-| `p12-ifc-stairs` | IFC stairs and railings | working | bonsai-a |
+| `p12-ifc-stairs` | IFC stairs and railings | gate | bonsai-a |
 | `p12-ifc-spaces` | IFC spaces with their areas | gate | bonsai-ws2-b |
 | `p12-ifc-site` | IFC site location and geographic elements | gate | bonsai-ws2-a |
 | `p12-ifc-lights` | IFC light fixtures | gate | mai-flash |
-| `p12-io-obj` | OBJ export with an MTL file | working | claude-sonnet-a |
+| `p12-io-obj` | OBJ export with an MTL file | gate | claude-sonnet-a |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | gate | bonsai-b |
 | `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | gate | darwin-ws3 |
 
@@ -63,16 +63,16 @@ Updated 2026-11-02 00:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 788 |
-| bonsai-b | bonsai2-27b | gate | 728 |
+| bonsai-a | bonsai2-27b | gate | 788 |
+| bonsai-b | bonsai2-27b | gate | 729 |
 | bonsai-ws2-a | bonsai2-27b | gate | 782 |
 | bonsai-ws2-b | bonsai2-27b | gate | 765 |
-| claude-sonnet-a | sonnet | agent | 68 |
+| claude-sonnet-a | sonnet | gate | 68 |
 | claude-sonnet-b | sonnet | gate | 64 |
 | claude-sonnet-c | sonnet | gate | 14 |
 | claude-sonnet-d | sonnet | gate | 8 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 645 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 646 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
 | mai-flash | mai-code-1.1-flash | gate | 45 |
-| tturbo-mac | tturbo-ultraheretic | gate | 554 |
+| tturbo-mac | tturbo-ultraheretic | merging | 555 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
