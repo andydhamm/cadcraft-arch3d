@@ -996,4 +996,94 @@ mod tests {
         assert_eq!(s1.doc().unwrap().arch.openings, s2.doc().unwrap().arch.openings);
         assert_eq!(s1.doc().unwrap().arch.rooms, s2.doc().unwrap().arch.rooms);
     }
+
+    #[test]
+    fn sample_house2_has_two_levels_and_five_rooms() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.levels.len(), 3, "house2 should have 3 levels");
+        assert!(d.arch.rooms.len() >= 5, "expected at least 5 rooms, got {}", d.arch.rooms.len());
+        assert_eq!(r["levels"].as_u64(), Some(3));
+    }
+
+    #[test]
+    fn sample_house2_hostile_input() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": "bogus" })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.levels.len(), 0);
+        assert!(d.arch.walls.len() > 0);
+        assert_eq!(d.arch.walls.len(), 64);
+    }
+
+    #[test]
+    fn sample_house2_no_openings() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        assert!(s.doc().unwrap().arch.openings.is_empty());
+    }
+
+    #[test]
+    fn sample_house2_room_areas() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(!d.arch.rooms.is_empty());
+        assert!(d.arch.rooms.iter().all(|room| room.interior_area > 0.0));
+    }
+
+    #[test]
+    fn sample_house2_wall_positions() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house2": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.walls.iter().all(|w| w.start.is_finite() && w.end.is_finite()));
+        assert!(d.arch.walls.iter().any(|w| w.start.x == 0.0 || w.end.x == 0.0));
+    }
+
+    #[test]
+    fn sample_house_hostile_input() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": "bogus", "walls": -5, "openings": "oops" })).unwrap();
+        assert_eq!(r["walls"].as_u64(), Some(64));
+        assert_eq!(r["openings"].as_u64(), Some(0));
+    }
+
+    #[test]
+    fn sample_house_is_unchanged() {
+        let mut s1 = fresh_session();
+        let mut s2 = fresh_session();
+        s1.execute("arch.sample", &json!({})).unwrap();
+        s2.execute("arch.sample", &json!({ "walls": 64, "openings": 0 })).unwrap();
+        assert_eq!(s1.doc().unwrap().arch.walls.len(), 64);
+        assert_eq!(s2.doc().unwrap().arch.walls.len(), 64);
+        assert!(s1.doc().unwrap().arch.openings.is_empty());
+        assert!(s2.doc().unwrap().arch.openings.is_empty());
+    }
+
+    #[test]
+    fn sample_house_no_openings() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": false, "walls": 32, "openings": 0 })).unwrap();
+        assert!(s.doc().unwrap().arch.openings.is_empty());
+    }
+
+    #[test]
+    fn sample_house_room_area() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(!d.arch.rooms.is_empty());
+        assert!(d.arch.rooms.iter().any(|room| room.interior_area > 0.0));
+    }
+
+    #[test]
+    fn sample_house_wall_positions() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.walls.iter().all(|w| w.start.is_finite() && w.end.is_finite()));
+        assert!(d.arch.walls.iter().any(|w| w.start.x >= 0.0 && w.start.y >= 0.0));
+    }
 }
