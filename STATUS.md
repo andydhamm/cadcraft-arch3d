@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 03:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 2 of 12 segments merged · 3 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 4 of 12 segments merged · 5 of 15 acceptance checks**
 
-6,590 workspace tests passing at the last merge · 662 segments merged in all · 0 of 13 seats working
+6,595 workspace tests passing at the last merge · 664 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -22,29 +22,29 @@ Updated 2026-11-02 03:15 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 3 / 15 | 4.0 h so far · expected done Nov 02 14:43–Nov 05 06:42 UTC |
+| 12 | Exports and interoperability | building | 5 / 15 | 4.3 h so far · expected done Nov 02 09:42–Nov 03 08:02 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-6 merging, 2 escalate, 2 merged, 1 gate, 1 queued
+5 merging, 4 merged, 1 working, 1 escalate, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p12-ifc-openings` | IFC openings: IfcOpeningElement voiding the wall, filled by IfcDoor or IfcWindow | merging | claude-sonnet-d |
 | `p12-ifc-slabs` | IFC floors, decks and ceilings | merging | claude-sonnet-b |
-| `p12-ifc-roofs` | IFC roofs: IfcRoof aggregating its planes, fascia and soffit | merging | claude-sonnet-c |
-| `p12-ifc-stairs` | IFC stairs and railings | merging | bonsai-a |
-| `p12-ifc-spaces` | IFC spaces with their areas | escalate |  |
+| `p12-ifc-spaces` | IFC spaces with their areas | working | kimi-k31 |
 | `p12-ifc-site` | IFC site location and geographic elements | escalate |  |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | merging | bonsai-b |
-| `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | gate | darwin-ws3 |
+| `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | merging | darwin-ws3 |
 | `p12-pt-auto-exposure` | Path-traced daylight stills expose for what they show | merging | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 03:28 | `p12-ifc-roofs` | merged | 6,595 pass | claude-sonnet-c |
+| Nov 02 03:17 | `p12-ifc-stairs` | merged | 6,592 pass | bonsai-a |
 | Nov 02 02:44 | `p12-io-obj` | merged | 6,590 pass | claude-sonnet-a |
 | Nov 02 01:48 | `p12-ifc-lights` | merged | 6,586 pass | mai-flash |
 | Nov 02 00:57 | `harden-p11f-glass-shadow-once` | merged | 6,584 pass | tturbo-mac |
@@ -55,23 +55,21 @@ Updated 2026-11-02 03:15 UTC. This page and the card in the README are regenerat
 | Nov 01 21:56 | `p11f-explicit-spp-kept` | merged | 6,444 pass | claude-sonnet-a |
 | Nov 01 21:39 | `p11f-denoise-variance` | merged | 6,441 pass | mai-flash |
 | Nov 01 21:08 | `p11f-glass-shadow-once` | refused | 0 pass | darwin-ws3 |
-| Nov 01 20:31 | `harden-p11-r3d-rt` | merged | 6,436 pass | tturbo-mac |
-| Nov 01 19:58 | `harden-p11-ui-pane-path` | merged | 6,430 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 789 |
+| bonsai-a | bonsai2-27b | idle | 789 |
 | bonsai-b | bonsai2-27b | merging | 732 |
 | bonsai-ws2-a | bonsai2-27b | idle | 786 |
 | bonsai-ws2-b | bonsai2-27b | idle | 770 |
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | merging | 65 |
-| claude-sonnet-c | sonnet | merging | 15 |
+| claude-sonnet-c | sonnet | idle | 15 |
 | claude-sonnet-d | sonnet | merging | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 649 |
-| kimi-k31 | k3.1-pro-highspeed | down | 111 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 650 |
+| kimi-k31 | k3.1-pro-highspeed | agent | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 48 |
 | tturbo-mac | tturbo-ultraheretic | merging | 558 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
