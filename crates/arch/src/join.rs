@@ -136,6 +136,9 @@ pub enum ArchError {
     NotFinite,
     #[error("too many walls (max {MAX_WALLS})")]
     TooManyWalls,
+    /// A value (cabinet, fixture or placement) the catalogue refuses.
+    #[error("{0}")]
+    Invalid(String),
 }
 
 /// The two long face lines of a wall's poché ring, as `[left, right]` where

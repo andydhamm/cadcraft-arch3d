@@ -147,6 +147,9 @@ pub(crate) fn parse_arch(text: &str) -> Option<ArchModel> {
     if model.lights.len() > cadcraft_doc::arch::MAX_LIGHT_FIXTURES {
         return None;
     }
+    if model.cabinets.len() > cadcraft_doc::arch::MAX_CABINETS || model.fixtures.len() > cadcraft_doc::arch::MAX_FIXTURES {
+        return None;
+    }
     if model.openings.len() > cadcraft_doc::arch::MAX_OPENINGS {
         return None;
     }
@@ -1245,6 +1248,40 @@ mod tests {
         assert_eq!(again.matches("CADCRAFT-SITE").count(), text.matches("CADCRAFT-SITE").count());
         let obj: serde_json::Value = serde_json::from_str(&arch_chunks(&back.arch).unwrap_or_default().join("")).unwrap_or_default();
         assert_eq!(obj["version"].as_u64(), Some(9));
+    }
+
+    #[test]
+    fn casework_survives_a_dxf_round_trip() {
+        use cadcraft_arch::casework::{cabinet_defaults, fixture_defaults};
+        use cadcraft_doc::arch::{CabinetKind, FixtureKind};
+        let mut d = Drawing::new_metric();
+        d.arch = one_wall_model();
+        for (i, k) in [CabinetKind::Base, CabinetKind::Wall, CabinetKind::Tall].into_iter().enumerate() {
+            let mut c = cabinet_defaults(k);
+            c.position = Vec2::new(i as f64, 1.0);
+            c.rotation = 15.0 * i as f64;
+            d.arch.push_cabinet(c);
+        }
+        let kinds = [
+            FixtureKind::Sink,
+            FixtureKind::Lavatory,
+            FixtureKind::Toilet,
+            FixtureKind::Bathtub,
+            FixtureKind::Shower,
+            FixtureKind::Range,
+            FixtureKind::Refrigerator,
+            FixtureKind::Dishwasher,
+        ];
+        for (i, k) in kinds.into_iter().enumerate() {
+            let mut f = fixture_defaults(k);
+            f.position = Vec2::new(i as f64, 3.0);
+            d.arch.push_fixture(f);
+        }
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).expect("reopen");
+        assert_eq!(back.arch.cabinets, d.arch.cabinets);
+        assert_eq!(back.arch.fixtures, d.arch.fixtures);
+        assert_eq!((back.arch.next_cabinet_id, back.arch.next_fixture_id), (3, 8));
     }
 
     #[test]
