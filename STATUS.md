@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability — 8 of 12 segments merged · 8 of 15 acceptance checks**
 
-6,609 workspace tests passing at the last merge · 668 segments merged in all · 0 of 13 seats working
+6,609 workspace tests passing at the last merge · 668 segments merged in all · 0 of 13 seats working · PAUSED
 
 ## Phases
 
@@ -22,7 +22,7 @@ Updated 2026-11-02 05:00 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 8 / 15 | 5.8 h so far · expected done Nov 02 07:18–Nov 02 18:57 UTC |
+| 12 | Exports and interoperability | building | 8 / 15 | 6.0 h so far · expected done Nov 02 07:39–Nov 02 19:48 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
@@ -57,7 +57,7 @@ Updated 2026-11-02 05:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | down | 789 |
+| bonsai-a | bonsai2-27b | gate | 789 |
 | bonsai-b | bonsai2-27b | merging | 732 |
 | bonsai-ws2-a | bonsai2-27b | gate | 789 |
 | bonsai-ws2-b | bonsai2-27b | gate | 773 |
