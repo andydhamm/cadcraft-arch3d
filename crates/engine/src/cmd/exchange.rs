@@ -628,6 +628,7 @@ mod tests {
     use serde_json::json;
 
     static DELIVERED: std::sync::Mutex<Vec<(String, String, usize)>> = std::sync::Mutex::new(Vec::new());
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn record(name: &str, mime: &str, bytes: &[u8]) -> std::result::Result<(), String> {
         DELIVERED.lock().map_err(|e| e.to_string())?.push((name.into(), mime.into(), bytes.len()));
@@ -636,6 +637,7 @@ mod tests {
 
     #[test]
     fn web_export_delivers_a_download_instead_of_writing_a_path() {
+        let _guard = TEST_LOCK.lock().unwrap();
         DELIVERED.lock().unwrap().clear();
         deliver_file("export", "Drawing1.svg", b"<svg/>", Some(record)).unwrap();
         deliver_file("export", "dir/Plan.pdf", b"%PDF", Some(record)).unwrap();
@@ -1084,6 +1086,7 @@ mod tests {
 
     #[test]
     fn web_export_delivers_3d_mime_types() {
+        let _guard = TEST_LOCK.lock().unwrap();
         DELIVERED.lock().unwrap().clear();
         deliver_file("export", "model.glb", b"glb", Some(record)).unwrap();
         deliver_file("export", "model.obj", b"obj", Some(record)).unwrap();
