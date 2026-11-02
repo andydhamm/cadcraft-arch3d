@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 03:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 03:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 4 of 12 segments merged · 5 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 5 of 12 segments merged · 6 of 15 acceptance checks**
 
-6,595 workspace tests passing at the last merge · 664 segments merged in all · 0 of 13 seats working
+6,598 workspace tests passing at the last merge · 665 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -22,16 +22,15 @@ Updated 2026-11-02 03:30 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 5 / 15 | 4.3 h so far · expected done Nov 02 09:42–Nov 03 08:02 UTC |
+| 12 | Exports and interoperability | building | 6 / 15 | 4.5 h so far · expected done Nov 02 08:37–Nov 03 01:27 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-5 merging, 4 merged, 1 working, 1 escalate, 1 queued
+5 merged, 4 merging, 1 working, 1 escalate, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p12-ifc-openings` | IFC openings: IfcOpeningElement voiding the wall, filled by IfcDoor or IfcWindow | merging | claude-sonnet-d |
 | `p12-ifc-slabs` | IFC floors, decks and ceilings | merging | claude-sonnet-b |
 | `p12-ifc-spaces` | IFC spaces with their areas | working | kimi-k31 |
 | `p12-ifc-site` | IFC site location and geographic elements | escalate |  |
@@ -43,6 +42,7 @@ Updated 2026-11-02 03:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 03:40 | `p12-ifc-openings` | merged | 6,598 pass | claude-sonnet-d |
 | Nov 02 03:28 | `p12-ifc-roofs` | merged | 6,595 pass | claude-sonnet-c |
 | Nov 02 03:17 | `p12-ifc-stairs` | merged | 6,592 pass | bonsai-a |
 | Nov 02 02:44 | `p12-io-obj` | merged | 6,590 pass | claude-sonnet-a |
@@ -54,7 +54,6 @@ Updated 2026-11-02 03:30 UTC. This page and the card in the README are regenerat
 | Nov 01 21:58 | `p11f-glass-shadow-once` | refused | 0 pass | bonsai-b |
 | Nov 01 21:56 | `p11f-explicit-spp-kept` | merged | 6,444 pass | claude-sonnet-a |
 | Nov 01 21:39 | `p11f-denoise-variance` | merged | 6,441 pass | mai-flash |
-| Nov 01 21:08 | `p11f-glass-shadow-once` | refused | 0 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
@@ -67,7 +66,7 @@ Updated 2026-11-02 03:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-a | sonnet | idle | 69 |
 | claude-sonnet-b | sonnet | merging | 65 |
 | claude-sonnet-c | sonnet | idle | 15 |
-| claude-sonnet-d | sonnet | merging | 9 |
+| claude-sonnet-d | sonnet | idle | 9 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 650 |
 | kimi-k31 | k3.1-pro-highspeed | agent | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 48 |
