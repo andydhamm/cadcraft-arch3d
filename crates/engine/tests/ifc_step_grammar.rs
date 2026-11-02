@@ -59,7 +59,9 @@ fn build_demo_house() -> Session {
 /// Export the session's drawing to a temporary IFC file and return its contents.
 fn export_ifc(session: &mut Session) -> String {
     let mut path = std::env::temp_dir();
-    path.push(format!("cadcraft_ifc_test_{}.ifc", std::process::id()));
+    // Use a unique filename per test to avoid race conditions in parallel execution
+    let unique_id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    path.push(format!("cadcraft_ifc_test_{}_{}.ifc", std::process::id(), unique_id));
 
     // Ensure the file is removed if it exists from a previous run
     let _ = fs::remove_file(&path);
