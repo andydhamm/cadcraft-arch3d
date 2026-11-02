@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 13 of 13: Polish — 3 of 22 segments merged · 0 of 13 acceptance checks**
+**Phase 13 of 13: Polish — 4 of 22 segments merged · 0 of 13 acceptance checks**
 
-6,689 workspace tests passing at the last merge · 682 segments merged in all · 0 of 14 seats working
+6,697 workspace tests passing at the last merge · 683 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,25 +23,27 @@ Updated 2026-11-02 20:45 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 0 / 13 | 6.3 h so far · expected done Nov 03 23:25–Nov 06 20:01 UTC |
+| 13 | Polish | building | 0 / 13 | 6.6 h so far · expected done Nov 03 18:29–Nov 05 14:50 UTC |
 
 ## Phase 13 segments
 
-13 queued, 4 merging, 3 merged, 1 replaced, 1 escalate, 1 gate
+11 queued, 4 merged, 4 merging, 1 replaced, 1 escalate, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-doc-casework` | Cabinets and fixtures: data model and catalogue | merging | claude-sonnet-c |
 | `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | escalate |  |
 | `p13-sample-house` | arch.sample {"house":true}: the 300-wall benchmark house | merging | mai-flash-esc |
+| `p13-arch-casework-symbols` | Plan symbols for cabinets and fixtures | gate | claude-sonnet-c |
+| `p13-cmd-casework` | cabinet and fixture commands, inspect | working | claude-sonnet-d |
 | `p13-inspect-finishes` | arch.inspect reports wall finish, roof covering and room floor finish | merging | claude-sonnet-b |
 | `p13-io-finish-round-trip` | DXF: finishes survive the arch XRECORD round trip | merging | bonsai-ws2-b |
-| `upstream-sync-dae4b7b2f` | merge upstream upstream/main up to dae4b7b2f (3 commits) | gate | mai-flash |
+| `upstream-sync-dae4b7b2f` | merge upstream upstream/main up to dae4b7b2f (3 commits) | merging | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 20:55 | `p13-doc-casework` | merged | 6,697 pass | claude-sonnet-c |
 | Nov 02 20:20 | `p13-finish-regeneration` | merged | 6,689 pass | claude-sonnet-a |
 | Nov 02 19:54 | `p13-cmd-material` | merged | 6,687 pass | claude-sonnet-d |
 | Nov 02 19:03 | `p13-inspect-finishes` | refused | 6,683 pass | claude-sonnet-b |
@@ -53,23 +55,22 @@ Updated 2026-11-02 20:45 UTC. This page and the card in the README are regenerat
 | Nov 02 11:32 | `harden-p12-gltf-valid` | merged | 6,662 pass | tturbo-mac |
 | Nov 02 10:51 | `harden-p12-ifc-site` | merged | 6,655 pass | tturbo-mac |
 | Nov 02 10:02 | `harden-p12-ifc-spaces` | merged | 6,642 pass | tturbo-mac |
-| Nov 02 09:37 | `harden-p12-cmd-export` | merged | 6,636 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 813 |
-| bonsai-b | bonsai2-27b | idle | 752 |
-| bonsai-ws2-a | bonsai2-27b | gate | 814 |
+| bonsai-b | bonsai2-27b | agent | 752 |
+| bonsai-ws2-a | bonsai2-27b | agent | 816 |
 | bonsai-ws2-b | bonsai2-27b | merging | 797 |
 | claude-sonnet-a | sonnet | idle | 70 |
 | claude-sonnet-b | sonnet | merging | 69 |
-| claude-sonnet-c | sonnet | merging | 18 |
-| claude-sonnet-d | sonnet | idle | 11 |
+| claude-sonnet-c | sonnet | gate | 18 |
+| claude-sonnet-d | sonnet | agent | 11 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 677 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 51 |
+| mai-flash | mai-code-1.1-flash | merging | 52 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 9 |
 | tturbo-mac | tturbo-ultraheretic | merging | 579 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
