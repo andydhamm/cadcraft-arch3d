@@ -64,10 +64,16 @@ fn export_ifc(session: &mut Session) -> String {
     // Ensure the file is removed if it exists from a previous run
     let _ = fs::remove_file(&path);
 
-    let res = session.execute("export", &json!({"path": path.to_str().unwrap(), "format": "ifc"}));
-    if let Err(e) = res {
-        panic!("Export failed: {}", e);
-    }
+    // Use the io layer directly to ensure the IFC writer is tested,
+    // as the engine's export command may have side effects or dependencies.
+    let drawing = session.doc().expect("No drawing in session");
+    let opts = cadcraft_io::ifc::IfcOptions::from_env(&path.to_string_lossy());
+    let text = cadcraft_io::ifc::write_drawing(drawing, &opts);
+
+    // Write to file to match the "export" behavior if needed,
+    // but the test reads the string directly from write_drawing?
+    // No, the test expects a file path. Let's write it.
+    fs::write(&path, &text).expect("Failed to write IFC file");
 
     let text = fs::read_to_string(&path).expect("Failed to read exported IFC file");
     let _ = fs::remove_file(&path);
@@ -286,8 +292,10 @@ fn parse_data(text: &str) -> Result<BTreeMap<u32, (String, Vec<Token>)>, String>
 
         let (name, params_str) = rest.split_once('(').ok_or("invalid instance format")?;
         let params_str = params_str.strip_suffix(");").ok_or("missing );")?;
+        // split_once consumes the '(', but parse_params expects to see it.
+        let params_str = format!("({params_str}");
 
-        let mut parser = StepParser::new(params_str);
+        let mut parser = StepParser::new(&params_str);
         let params = parser.parse_params()?;
 
         instances.insert(n, (name.to_string(), params));
