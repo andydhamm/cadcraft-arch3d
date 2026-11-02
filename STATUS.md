@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-02 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 12 of 13: Exports and interoperability — 7 of 12 segments merged · 7 of 15 acceptance checks**
+**Phase 12 of 13: Exports and interoperability — 8 of 12 segments merged · 8 of 15 acceptance checks**
 
-6,605 workspace tests passing at the last merge · 667 segments merged in all · 0 of 13 seats working
+6,609 workspace tests passing at the last merge · 668 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -22,24 +22,25 @@ Updated 2026-11-02 04:15 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 7 / 15 | 5.0 h so far · expected done Nov 02 07:07–Nov 02 19:01 UTC |
+| 12 | Exports and interoperability | building | 8 / 15 | 5.5 h so far · expected done Nov 02 06:57–Nov 02 18:05 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-7 merged, 2 escalate, 2 merging, 1 queued
+8 merged, 2 working, 1 escalate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p12-ifc-spaces` | IFC spaces with their areas | escalate |  |
+| `p12-ifc-spaces` | IFC spaces with their areas | working | kimi-k31 |
 | `p12-ifc-site` | IFC site location and geographic elements | escalate |  |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | merging | bonsai-b |
-| `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | merging | darwin-ws3 |
+| `p12-docs-user-guide` | User guide: exporting IFC, OBJ and glTF | working | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 04:16 | `p12-cmd-export` | merged | 6,609 pass | darwin-ws3 |
 | Nov 02 04:03 | `p12-pt-auto-exposure` | merged | 6,605 pass | mai-flash |
 | Nov 02 03:51 | `p12-ifc-slabs` | merged | 6,601 pass | claude-sonnet-b |
 | Nov 02 03:40 | `p12-ifc-openings` | merged | 6,598 pass | claude-sonnet-d |
@@ -51,22 +52,21 @@ Updated 2026-11-02 04:15 UTC. This page and the card in the README are regenerat
 | Nov 01 23:41 | `harden-p11-cli-render-args` | merged | 6,561 pass | tturbo-mac |
 | Nov 01 22:41 | `upstream-sync-2034d6899` | merged | 6,550 pass | claude-sonnet-d |
 | Nov 01 22:12 | `p11f-glass-shadow-once` | merged | 6,447 pass | darwin-ws3 |
-| Nov 01 21:58 | `p11f-glass-shadow-once` | refused | 0 pass | bonsai-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 789 |
+| bonsai-a | bonsai2-27b | down | 789 |
 | bonsai-b | bonsai2-27b | merging | 732 |
-| bonsai-ws2-a | bonsai2-27b | idle | 786 |
-| bonsai-ws2-b | bonsai2-27b | idle | 770 |
+| bonsai-ws2-a | bonsai2-27b | gate | 788 |
+| bonsai-ws2-b | bonsai2-27b | gate | 773 |
 | claude-sonnet-a | sonnet | idle | 69 |
-| claude-sonnet-b | sonnet | idle | 65 |
+| claude-sonnet-b | sonnet | agent | 66 |
 | claude-sonnet-c | sonnet | idle | 15 |
 | claude-sonnet-d | sonnet | idle | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 650 |
-| kimi-k31 | k3.1-pro-highspeed | down | 111 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 652 |
+| kimi-k31 | k3.1-pro-highspeed | agent | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 48 |
 | tturbo-mac | tturbo-ultraheretic | merging | 558 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
+| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
