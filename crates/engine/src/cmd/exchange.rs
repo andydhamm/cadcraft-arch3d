@@ -689,7 +689,8 @@ mod tests {
         let ps = path.to_string_lossy().to_string();
         let r = s.execute("export", &json!({ "path": ps })).unwrap();
         assert_eq!(r["format"], "png");
-        assert_eq!(std::fs::read(&path).unwrap(), b"out.png:2");
+        let expected = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected.as_bytes());
         let _ = std::fs::remove_file(&path);
         let st = s.state().unwrap();
         assert!(st.path.is_none() && st.title == "Drawing1", "the drawing keeps its name");
@@ -1016,8 +1017,9 @@ mod tests {
         let r = s.execute("export", &json!({ "path": ps })).unwrap();
         assert_eq!(r["format"], "ifc");
         // The hook returns "{name}:{len}" for any name.
-        // Since we pass the file name "out.ifc", it returns "out.ifc:2"
-        assert_eq!(std::fs::read(&path).unwrap(), b"out.ifc:2");
+        // Since we pass the file name, it returns "<filename>:2"
+        let expected = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected.as_bytes());
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1032,13 +1034,15 @@ mod tests {
         let ps = path.to_string_lossy().to_string();
         let r = s.execute("export", &json!({ "path": ps })).unwrap();
         assert_eq!(r["format"], "obj");
-        // Hook receives "out.obj", returns "out.obj:2"
-        assert_eq!(std::fs::read(&path).unwrap(), b"out.obj:2");
+        // Hook receives the file name, returns "<filename>:2"
+        let expected_obj = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected_obj.as_bytes());
 
         let mtl_path = temp("out.mtl");
         assert_eq!(r["mtl"].as_str().unwrap(), mtl_path.to_string_lossy().as_ref());
-        // Hook receives "out.mtl", returns "out.mtl:2"
-        assert_eq!(std::fs::read(&mtl_path).unwrap(), b"out.mtl:2");
+        // Hook receives the mtl file name, returns "<mtl_filename>:2"
+        let expected_mtl = format!("{}:2", mtl_path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&mtl_path).unwrap(), expected_mtl.as_bytes());
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(&mtl_path);
