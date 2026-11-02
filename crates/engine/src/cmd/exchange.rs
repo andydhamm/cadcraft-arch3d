@@ -23,7 +23,7 @@ use super::{CommandSpec, bad, point_value, str_param};
 use crate::{EngineError, Result, Session};
 
 /// Formats EXPORT writes (the io layer picks the writer from the extension).
-pub const EXPORT_FORMATS: &[&str] = &["dxf", "dwg", "svg", "png", "pdf"];
+pub const EXPORT_FORMATS: &[&str] = &["dxf", "dwg", "svg", "png", "pdf", "glb", "obj", "ifc"];
 /// Default and largest plot preview width, in pixels.
 const PREVIEW_PX: u64 = 1200;
 const MAX_PREVIEW_PX: u64 = 4096;
@@ -99,6 +99,10 @@ pub(super) fn deliver_file(cmd: &str, path: &str, bytes: &[u8], hook: Option<sup
         "svg" => "image/svg+xml",
         "png" => "image/png",
         "pdf" => "application/pdf",
+        "glb" => "model/gltf-binary",
+        "obj" => "model/obj",
+        "mtl" => "model/mtl",
+        "ifc" => "application/x-step",
         _ => "application/octet-stream",
     };
     let deliver = hook.ok_or_else(|| bad(cmd, "files can't be written in this build; omit `path` to get the file as base64 `data`"))?;
@@ -115,15 +119,52 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
         None => path.map(extension).unwrap_or_default(),
     };
     if !EXPORT_FORMATS.contains(&format.as_str()) {
-        return Err(bad("export", "`format` must be dxf, dwg, svg, png or pdf (or give a `path` with one of those extensions)"));
+        return Err(bad("export", "`format` must be dxf, dwg, svg, png, pdf, glb, obj or ifc (or give a `path` with one of those extensions)"));
     }
-    let bytes = (hooks.write)(s.doc()?, &format!("export.{format}")).map_err(|e| bad("export", e))?;
+
+    // Determine the name passed to the writer hook.
+    // If a path is given, use the file name so the writer can name internal references correctly (e.g. OBJ mtllib).
+    // Otherwise use a generic name.
+    let hook_name = if let Some(p) = path {
+        std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("export.{format}"))
+    } else {
+        format!("export.{format}")
+    };
+
+    let bytes = (hooks.write)(s.doc()?, &hook_name).map_err(|e| bad("export", e))?;
+
     match path {
         Some(path) => {
             write_file("export", path, &bytes)?;
-            Ok(json!({ "path": path, "format": format, "bytes": bytes.len(), "message": format!("Exported to {path}") }))
+            let mut out = json!({ "path": path, "format": format, "bytes": bytes.len(), "message": format!("Exported to {path}") });
+
+            if format == "obj" {
+                // OBJ needs a material library file.
+                let p = std::path::Path::new(path);
+                let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "export".into());
+                let mtl_name = format!("{stem}.mtl");
+                let mtl_path = p.parent().map(|d| d.join(&mtl_name)).unwrap_or_else(|| std::path::PathBuf::from(&mtl_name));
+
+                // Ask the hook to write the MTL file.
+                // Pass the mtl_name so the hook can generate the correct content if needed,
+                // but typically the hook writes the same content regardless of name for tests.
+                let mtl_bytes = (hooks.write)(s.doc()?, &mtl_name).map_err(|e| bad("export", e))?;
+                write_file("export", mtl_path.to_string_lossy().as_ref(), &mtl_bytes)?;
+
+                out["mtl"] = json!(mtl_path.to_string_lossy());
+            }
+            Ok(out)
         }
-        None => Ok(json!({ "data": base64_encode(&bytes), "format": format, "bytes": bytes.len() })),
+        None => {
+            let mut out = json!({ "data": base64_encode(&bytes), "format": format, "bytes": bytes.len() });
+            if format == "obj" {
+                // OBJ needs a material library file.
+                let mtl_name = "export.mtl".to_string();
+                let mtl_bytes = (hooks.write)(s.doc()?, &mtl_name).map_err(|e| bad("export", e))?;
+                out["mtl"] = json!(base64_encode(&mtl_bytes));
+            }
+            Ok(out)
+        }
     }
 }
 
@@ -648,7 +689,8 @@ mod tests {
         let ps = path.to_string_lossy().to_string();
         let r = s.execute("export", &json!({ "path": ps })).unwrap();
         assert_eq!(r["format"], "png");
-        assert_eq!(std::fs::read(&path).unwrap(), b"export.png:2");
+        let expected = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected.as_bytes());
         let _ = std::fs::remove_file(&path);
         let st = s.state().unwrap();
         assert!(st.path.is_none() && st.title == "Drawing1", "the drawing keeps its name");
@@ -961,5 +1003,68 @@ mod tests {
             let e = s.execute(&resolve_alias(c), &Value::Null).unwrap_err().to_string();
             assert!(e.contains("not available yet"), "{c}: {e}");
         }
+    }
+
+    #[test]
+    fn export_writes_ifc_to_a_path() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let path = temp("out.ifc");
+        let ps = path.to_string_lossy().to_string();
+        let r = s.execute("export", &json!({ "path": ps })).unwrap();
+        assert_eq!(r["format"], "ifc");
+        // The hook returns "{name}:{len}" for any name.
+        // Since we pass the file name, it returns "<filename>:2"
+        let expected = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected.as_bytes());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn export_obj_writes_its_mtl_beside() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let path = temp("out.obj");
+        let ps = path.to_string_lossy().to_string();
+        let r = s.execute("export", &json!({ "path": ps })).unwrap();
+        assert_eq!(r["format"], "obj");
+        // Hook receives the file name, returns "<filename>:2"
+        let expected_obj = format!("{}:2", path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&path).unwrap(), expected_obj.as_bytes());
+
+        let mtl_path = temp("out.mtl");
+        assert_eq!(r["mtl"].as_str().unwrap(), mtl_path.to_string_lossy().as_ref());
+        // Hook receives the mtl file name, returns "<mtl_filename>:2"
+        let expected_mtl = format!("{}:2", mtl_path.file_name().unwrap().to_string_lossy());
+        assert_eq!(std::fs::read(&mtl_path).unwrap(), expected_mtl.as_bytes());
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&mtl_path);
+    }
+
+    #[test]
+    fn export_glb_without_a_path_returns_data() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let r = s.execute("export", &json!({ "format": "glb" })).unwrap();
+        assert_eq!(r["format"], "glb");
+        // Hook returns "export.glb:2"
+        assert_eq!(base64_decode(r["data"].as_str().unwrap()).unwrap(), b"export.glb:2");
+    }
+
+    #[test]
+    fn export_refuses_an_unknown_format() {
+        let mut s = session();
+        let e = s.execute("export", &json!({ "format": "xyz" })).unwrap_err().to_string();
+        assert!(e.contains("dxf, dwg, svg, png, pdf, glb, obj or ifc"), "{e}");
     }
 }
