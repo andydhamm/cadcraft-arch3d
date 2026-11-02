@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 1 of 21 segments merged · 0 of 13 acceptance checks**
 
@@ -23,15 +23,15 @@ Updated 2026-11-02 17:45 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 0 / 13 | 3.3 h so far · expected done Nov 03 20:14–Nov 13 11:42 UTC |
+| 13 | Polish | building | 0 / 13 | 3.6 h so far · expected done Nov 03 22:31–Nov 14 07:43 UTC |
 
 ## Phase 13 segments
 
-13 queued, 4 gate, 3 merging, 1 replaced, 1 merged
+13 queued, 4 merging, 3 gate, 1 replaced, 1 merged
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-doc-casework` | Cabinets and fixtures: data model and catalogue | gate | claude-sonnet-c |
+| `p13-doc-casework` | Cabinets and fixtures: data model and catalogue | merging | claude-sonnet-c |
 | `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | gate | mai-flash-esc |
 | `p13-sample-house` | arch.sample {"house":true}: the 300-wall benchmark house | gate | mai-flash |
 | `p13-cmd-material` | The `material` command: assign a finish to walls, roofs or rooms | merging | claude-sonnet-d |
@@ -43,6 +43,7 @@ Updated 2026-11-02 17:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 02 17:51 | `p13-doc-casework` | refused | 6,689 pass | bonsai-a |
 | Nov 02 16:23 | `p13-doc-casework` | refused | 0 pass | claude-sonnet-c |
 | Nov 02 16:23 | `p13-doc-finish-data` | merged | 6,681 pass | claude-sonnet-d |
 | Nov 02 13:21 | `p12f-ifc-step-grammar` | merged | 6,678 pass | darwin-ws3 |
@@ -54,23 +55,22 @@ Updated 2026-11-02 17:45 UTC. This page and the card in the README are regenerat
 | Nov 02 09:14 | `p12-ifc-spaces` | merged | 6,625 pass | bonsai-ws2-a |
 | Nov 02 08:49 | `p12-gltf-valid` | merged | 6,622 pass | darwin-ws3 |
 | Nov 02 08:20 | `harden-p12-cmd-export` | refused | 6,630 pass, 1 fail | tturbo-mac |
-| Nov 02 08:03 | `p12-docs-user-guide` | merged | 6,620 pass | bonsai-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 812 |
+| bonsai-a | bonsai2-27b | gate | 812 |
 | bonsai-b | bonsai2-27b | gate | 749 |
-| bonsai-ws2-a | bonsai2-27b | gate | 805 |
+| bonsai-ws2-a | bonsai2-27b | gate | 806 |
 | bonsai-ws2-b | bonsai2-27b | gate | 796 |
 | claude-sonnet-a | sonnet | merging | 70 |
 | claude-sonnet-b | sonnet | merging | 68 |
-| claude-sonnet-c | sonnet | gate | 17 |
+| claude-sonnet-c | sonnet | merging | 18 |
 | claude-sonnet-d | sonnet | merging | 11 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 676 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 676 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | gate | 50 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 6 |
-| tturbo-mac | tturbo-ultraheretic | gate | 573 |
+| tturbo-mac | tturbo-ultraheretic | agent | 574 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
