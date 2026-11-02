@@ -111,6 +111,17 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
 
         // Replace-per-level: remove rooms for the target level, then insert the
         // detected ones. One `touch_arch()` → one undo step.
+        // Snapshot the rooms being replaced so a new room can inherit its floor finish.
+        let old_rooms: Vec<cadcraft_arch::Room> = d
+            .arch
+            .rooms
+            .iter()
+            .filter(|r| match level_filter {
+                Some(l) => r.level == l,
+                None => true,
+            })
+            .cloned()
+            .collect();
         let before = d.arch.rooms.len();
         d.arch.rooms.retain(|r| match level_filter {
             Some(l) => r.level != l,
@@ -123,7 +134,16 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
         detected.truncate(cap);
         let count = detected.len();
 
-        for r in detected {
+        for mut r in detected {
+            if r.floor_finish.is_none() {
+                if let Some(pt) = cadcraft_arch::label::label_point(&r.polygon, &r.holes) {
+                    r.floor_finish = old_rooms
+                        .iter()
+                        .filter(|o| o.level == r.level)
+                        .find(|o| cadcraft_geom::point_in_polygon(&o.polygon, pt) && !o.holes.iter().any(|h| cadcraft_geom::point_in_polygon(h, pt)))
+                        .and_then(|o| o.floor_finish);
+                }
+            }
             d.arch.push_room(r);
         }
         cadcraft_arch::area::refresh_areas(&mut d.arch);
@@ -164,6 +184,25 @@ mod tests {
             "exterior": true
         });
         s.execute("wall", &wall_params).expect("wall must succeed");
+    }
+
+    /// Re-detecting rooms keeps each room's floor finish; fresh rooms have none.
+    #[test]
+    fn roomdetect_keeps_a_rooms_floor_finish() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = Session::new();
+        build_test_wall(&mut s);
+        s.execute("roomdetect", &json!({})).unwrap();
+        assert!(!s.doc().unwrap().arch.rooms.is_empty());
+        assert!(s.doc().unwrap().arch.rooms.iter().all(|r| r.floor_finish.is_none()));
+
+        for r in s.doc_mut().unwrap().arch.rooms.iter_mut() {
+            r.floor_finish = Some(Finish::Wood);
+        }
+        s.execute("roomdetect", &json!({})).unwrap();
+        let d = s.doc().unwrap();
+        assert!(!d.arch.rooms.is_empty());
+        assert!(d.arch.rooms.iter().all(|r| r.floor_finish == Some(Finish::Wood)));
     }
 
     /// `roomdetect` must be a single undo step: one revision bump, one labelled
