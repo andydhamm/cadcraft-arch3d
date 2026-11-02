@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 1 of 21 segments merged · 0 of 13 acceptance checks**
 
@@ -23,20 +23,21 @@ Updated 2026-11-02 16:45 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 0 / 13 | 2.3 h so far · expected done Nov 03 11:14–Nov 10 04:46 UTC |
+| 13 | Polish | building | 0 / 13 | 2.6 h so far · expected done Nov 03 13:28–Nov 11 00:27 UTC |
 
 ## Phase 13 segments
 
-14 queued, 4 gate, 2 working, 1 replaced, 1 merged
+13 queued, 6 gate, 1 replaced, 1 working, 1 merged
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p13-doc-casework` | Cabinets and fixtures: data model and catalogue | gate | claude-sonnet-c |
 | `p13-arch3d-incremental` | Incremental 3D rebuild: kind-tagged dirty set, scene cache, digest | gate | mai-flash-esc |
 | `p13-sample-house` | arch.sample {"house":true}: the 300-wall benchmark house | working | mai-flash |
-| `p13-cmd-material` | The `material` command: assign a finish to walls, roofs or rooms | working | claude-sonnet-d |
+| `p13-cmd-material` | The `material` command: assign a finish to walls, roofs or rooms | gate | claude-sonnet-d |
 | `p13-inspect-finishes` | arch.inspect reports wall finish, roof covering and room floor finish | gate | claude-sonnet-b |
 | `p13-finish-regeneration` | Finishes survive roofauto and roomdetect regeneration | gate | claude-sonnet-a |
+| `p13-io-finish-round-trip` | DXF: finishes survive the arch XRECORD round trip | gate | bonsai-ws2-b |
 
 ## Recent merges
 
@@ -62,14 +63,14 @@ Updated 2026-11-02 16:45 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | merging | 812 |
 | bonsai-b | bonsai2-27b | gate | 749 |
 | bonsai-ws2-a | bonsai2-27b | gate | 803 |
-| bonsai-ws2-b | bonsai2-27b | gate | 795 |
+| bonsai-ws2-b | bonsai2-27b | gate | 796 |
 | claude-sonnet-a | sonnet | gate | 69 |
 | claude-sonnet-b | sonnet | gate | 67 |
 | claude-sonnet-c | sonnet | gate | 17 |
-| claude-sonnet-d | sonnet | agent | 10 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 674 |
+| claude-sonnet-d | sonnet | gate | 10 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 675 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 50 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 4 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 5 |
 | tturbo-mac | tturbo-ultraheretic | gate | 573 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
