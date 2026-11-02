@@ -43,10 +43,15 @@ pub(crate) fn punctual_lights(scene: &Scene3d) -> (Vec<Value>, Vec<Value>) {
 
         match light.kind {
             LightKind::Spot => {
-                let inner = cone_angle(light.cos_inner);
+                let mut inner = cone_angle(light.cos_inner);
                 let outer = (cone_angle(light.cos_outer)).min(std::f64::consts::PI / 2.0);
-                if !inner.is_finite() || !outer.is_finite() || inner > outer {
+                if !inner.is_finite() || !outer.is_finite() {
                     continue;
+                }
+                // glTF requires 0 <= innerConeAngle < outerConeAngle <= PI/2.
+                // If they are equal (uniform cone) or inner >= outer, shrink inner slightly.
+                if inner >= outer {
+                    inner = (outer - 0.001).max(0.0);
                 }
                 def["spot"] = json!({
                     "innerConeAngle": inner,
@@ -212,8 +217,12 @@ mod tests {
             assert_eq!(light["type"], "spot");
             assert!((light["intensity"].as_f64().unwrap_or(f64::NAN) - 950.36).abs() < 0.01);
             let spot = &light["spot"];
-            assert!((spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN) - std::f64::consts::PI / 6.0).abs() < 1e-9, "{spot}");
-            assert!((spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN) - std::f64::consts::PI / 6.0).abs() < 1e-9, "{spot}");
+            let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+            let inner = spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN);
+            assert!((outer - std::f64::consts::PI / 6.0).abs() < 1e-9, "{spot}");
+            // glTF requires inner < outer; equal inputs are shrunk by 0.001.
+            assert!((inner - (outer - 0.001)).abs() < 1e-9, "{spot}");
+            assert!(inner < outer);
         }
     }
 
@@ -530,5 +539,64 @@ mod tests {
         assert!(nodes[0].get("extras").is_none());
         assert!(nodes[1].get("extras").is_none());
         assert_eq!(nodes[2]["extras"]["cadcraft"]["area"], json!([0.6, 0.6]));
+    }
+
+    #[test]
+    fn a_spot_lights_inner_cone_is_inside_its_outer_cone() {
+        // A pot light with uniform intensity (inner == outer cos)
+        let half = 30.0_f64.to_radians();
+        let scene = Scene3d {
+            lights: vec![scene_light(
+                0,
+                LightKind::Spot,
+                Vec3::new(1.0, 1.0, 2.4),
+                Vec3::new(0.0, 0.0, -1.0),
+                950.36,
+                [1.0, 1.0, 1.0],
+                half.cos(),
+                half.cos(),
+            )],
+            ..Default::default()
+        };
+
+        let (lights, _) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        let spot = &lights[0]["spot"];
+        let inner = spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+
+        assert!(inner < outer, "inner ({inner}) must be strictly less than outer ({outer})");
+        assert!(inner >= 0.0);
+        assert!(outer <= std::f64::consts::PI / 2.0);
+    }
+
+    #[test]
+    fn a_spot_with_falloff_beyond_its_cone_keeps_both_angles() {
+        // Inner cone 30 deg, outer cone 45 deg
+        let inner_rad = 30.0_f64.to_radians();
+        let outer_rad = 45.0_f64.to_radians();
+        let scene = Scene3d {
+            lights: vec![scene_light(
+                0,
+                LightKind::Spot,
+                Vec3::new(1.0, 1.0, 2.4),
+                Vec3::new(0.0, 0.0, -1.0),
+                950.36,
+                [1.0, 1.0, 1.0],
+                inner_rad.cos(),
+                outer_rad.cos(),
+            )],
+            ..Default::default()
+        };
+
+        let (lights, _) = punctual_lights(&scene);
+        assert_eq!(lights.len(), 1);
+        let spot = &lights[0]["spot"];
+        let inner = spot["innerConeAngle"].as_f64().unwrap_or(f64::NAN);
+        let outer = spot["outerConeAngle"].as_f64().unwrap_or(f64::NAN);
+
+        assert!((inner - inner_rad).abs() < 1e-9, "inner should match input cone");
+        assert!((outer - outer_rad).abs() < 1e-9, "outer should match input falloff");
+        assert!(inner < outer);
     }
 }
