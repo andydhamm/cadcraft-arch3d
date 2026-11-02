@@ -48,7 +48,7 @@ pub enum Fronts {
 }
 
 /// A cabinet.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Cabinet {
     pub id: ArchId,
     pub kind: CabinetKind,
@@ -100,7 +100,7 @@ pub enum FixtureKind {
 }
 
 /// A plumbing or appliance fixture.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Fixture {
     pub id: ArchId,
     pub kind: FixtureKind,

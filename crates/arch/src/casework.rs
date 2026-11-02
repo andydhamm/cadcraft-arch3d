@@ -21,22 +21,15 @@ fn bad<T>(msg: impl Into<String>) -> Result<T, ArchError> {
 /// at 0.914), a wall cabinet 0.6 x 0.305 x 0.762 hung at 1.372, a tall one 0.6 x 0.6 x 2.134.
 pub fn cabinet_defaults(kind: CabinetKind) -> Cabinet {
     let mut c = Cabinet {
-        id: ArchId(0),
         kind,
-        level: 0,
-        position: Vec2::new(0.0, 0.0),
-        rotation: 0.0,
         width: 0.6,
         depth: 0.6,
         height: 0.876,
-        elevation: 0.0,
         fronts: Fronts::Doors,
         doors: 1,
-        drawers: 0,
-        counter: false,
         counter_thickness: 0.038,
         counter_overhang: 0.025,
-        toe_kick: false,
+        ..Cabinet::default()
     };
     match kind {
         CabinetKind::Base => {
@@ -73,7 +66,7 @@ pub fn fixture_defaults(kind: FixtureKind) -> Fixture {
         FixtureKind::Refrigerator => (0.76, 0.76, 1.78, 0.0),
         FixtureKind::Dishwasher => (0.6, 0.6, 0.876, 0.0),
     };
-    Fixture { id: ArchId(0), kind, level: 0, position: Vec2::new(0.0, 0.0), rotation: 0.0, width, depth, height, elevation }
+    Fixture { kind, width, depth, height, elevation, ..Fixture::default() }
 }
 
 fn in_range(v: f64, lo: f64, hi: f64) -> bool {
