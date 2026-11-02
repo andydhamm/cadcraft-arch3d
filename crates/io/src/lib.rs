@@ -18,6 +18,7 @@ mod dxf_xref;
 pub mod glb;
 mod glb_lights;
 pub mod ifc;
+pub mod obj;
 pub mod pdf;
 pub mod plotter;
 pub mod step;
@@ -141,6 +142,14 @@ pub fn write_framed(d: &Drawing, name: impl AsRef<Path>, window: Option<Bounds2>
     // glTF binary (arch3d): not a drawing format, chosen by extension alone.
     if ext(name) == "glb" {
         return Ok(glb::write_drawing(d));
+    }
+    // Wavefront OBJ and its MTL (arch3d, phase 12): chosen by extension alone.
+    if ext(name) == "obj" {
+        let stem = name.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        return Ok(obj::write_obj(&cadcraft_arch3d::Scene3d::build(&d.arch), &format!("{stem}.mtl")).into_bytes());
+    }
+    if ext(name) == "mtl" {
+        return Ok(obj::write_mtl(&cadcraft_arch3d::Scene3d::build(&d.arch)).into_bytes());
     }
     // IFC4 (arch3d, phase 12): the arch model only, chosen by extension alone.
     if ext(name) == "ifc" {
