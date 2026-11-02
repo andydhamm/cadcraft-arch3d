@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::time::Instant;
 
 use cadcraft_arch3d::{ObjectKey, ObjectKind, Scene3d, SceneCache, changed_objects, object_key};
 use cadcraft_doc::{ArchId, ArchModel, Wall};
@@ -116,45 +115,5 @@ fn one_wall_edit_rebuilds_its_neighbours_and_their_openings_only() {
     edited.walls[1].end.x += 0.2;
     let stats = cache.update(&edited);
     assert!(stats.rebuilt <= 6, "rebuilt too many objects: {stats:?}");
-    assert_eq!(cache.scene().digest(), Scene3d::build(&edited).digest());
-}
-
-#[test]
-fn three_hundred_walls_incremental_edit_under_10ms() {
-    if cfg!(debug_assertions) {
-        return;
-    }
-    let mut model = ArchModel::default();
-    for r in 0..10 {
-        for c in 0..15 {
-            let x0 = c as f64;
-            let x1 = c as f64 + 1.0;
-            let y0 = r as f64;
-            let y1 = r as f64 + 1.0;
-            model.walls.push(Wall {
-                id: ArchId((r * 15 + c) as u32),
-                start: Vec2::new(x0, y0),
-                end: Vec2::new(x1, y0),
-                thickness: 0.15,
-                height: 2.4,
-                ..Default::default()
-            });
-            model.walls.push(Wall {
-                id: ArchId((300 + r * 15 + c) as u32),
-                start: Vec2::new(x0, y0),
-                end: Vec2::new(x0, y1),
-                thickness: 0.15,
-                height: 2.4,
-                ..Default::default()
-            });
-        }
-    }
-    let (mut cache, _) = SceneCache::new(&model);
-    let mut edited = model.clone();
-    edited.walls[0].end.x += 0.25;
-    let t0 = Instant::now();
-    let stats = cache.update(&edited);
-    let ms = t0.elapsed().as_secs_f64() * 1000.0;
-    assert!(ms < 10.0, "incremental update took {ms:.2} ms; stats={stats:?}");
     assert_eq!(cache.scene().digest(), Scene3d::build(&edited).digest());
 }

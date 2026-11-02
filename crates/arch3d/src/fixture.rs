@@ -65,59 +65,61 @@ fn finish(m: Mesh) -> Option<Mesh> {
 /// and `light-…` materials (`light-trim`, `light-shade`, `light-cord`, and `light-lens-lit` for a
 /// fixture that is on or `light-lens` for one that is off).
 pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
-    let mut out = Vec::new();
-    for f in &model.lights {
-        let Some(p) = light_point(model, f) else { continue };
-        let d = housing_diameter(f);
-        if !p.is_finite() || !d.is_finite() || d <= 0.0 {
-            continue;
-        }
-        let r = d / 2.0;
-        let c = f.position;
-        let zp = p.z;
-        let lens = if f.on { "light-lens-lit" } else { "light-lens" };
-        let parts: Vec<Option<Mesh>> = match f.shape {
-            FixtureShape::RecessedCan => {
-                let mut trim = Mesh::new("light-trim", f.id);
-                trim.push_prism_with_holes(&poly(c, r), &[poly(c, r - 0.02)], zp - 0.01, zp);
-                vec![finish(trim), prism(lens, f, &poly(c, r - 0.02), zp - 0.004, zp - 0.002)]
-            }
-            FixtureShape::SurfaceDome => {
-                let zc = zp + 0.05;
-                vec![prism("light-trim", f, &poly(c, r + 0.01), zc - 0.01, zc), prism(lens, f, &poly(c, r), zc - 0.08, zc - 0.01)]
-            }
-            FixtureShape::Pendant => vec![
-                prism("light-shade", f, &poly(c, r), zp - 0.02, zp + 0.18),
-                prism(lens, f, &poly(c, r - 0.01), zp - 0.03, zp - 0.02),
-                prism("light-cord", f, &square(c, 0.012), zp + 0.18, zp + 0.6),
-            ],
-            FixtureShape::Sconce => vec![
-                prism("light-shade", f, &half_disc(c, r, f.rotation), zp - 0.125, zp + 0.125),
-                prism(lens, f, &half_disc(c, r - 0.01, f.rotation), zp - 0.135, zp - 0.125),
-            ],
-            FixtureShape::FloorLamp => {
-                let zf = zp - f.height.unwrap_or(1.5);
-                vec![
-                    prism("light-trim", f, &poly(c, 0.15), zf, zf + 0.02),
-                    prism("light-cord", f, &square(c, 0.025), zf + 0.02, zp - 0.15),
-                    prism("light-shade", f, &poly(c, r), zp - 0.15, zp + 0.1),
-                    prism(lens, f, &poly(c, 0.03), zp - 0.03, zp + 0.03),
-                ]
-            }
-            FixtureShape::Panel => {
-                let w = if f.width > 0.0 { f.width } else { 0.6 };
-                let l = if f.length > 0.0 { f.length } else { 0.6 };
-                let outer = rect(c, w, l, f.rotation);
-                let inner = rect(c, w - 0.06, l - 0.06, f.rotation);
-                let mut frame_m = Mesh::new("light-trim", f.id);
-                frame_m.push_prism_with_holes(&outer, &[inner.clone()], zp - 0.01, zp);
-                let diffuser = prism(lens, f, &inner, zp - 0.004, zp - 0.002);
-                vec![finish(frame_m), diffuser]
-            }
-        };
-        out.extend(parts.into_iter().flatten());
+    model.lights.iter().flat_map(|f| fixture_housing(f, light_point(model, f))).collect()
+}
+
+/// One fixture's housing with its light at `point` ([`light_point`]); none without a point. The
+/// incremental rebuild reuses it while the fixture and its point are unchanged.
+pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> Vec<Mesh> {
+    let Some(p) = point else { return Vec::new() };
+    let d = housing_diameter(f);
+    if !p.is_finite() || !d.is_finite() || d <= 0.0 {
+        return Vec::new();
     }
-    out
+    let r = d / 2.0;
+    let c = f.position;
+    let zp = p.z;
+    let lens = if f.on { "light-lens-lit" } else { "light-lens" };
+    let parts: Vec<Option<Mesh>> = match f.shape {
+        FixtureShape::RecessedCan => {
+            let mut trim = Mesh::new("light-trim", f.id);
+            trim.push_prism_with_holes(&poly(c, r), &[poly(c, r - 0.02)], zp - 0.01, zp);
+            vec![finish(trim), prism(lens, f, &poly(c, r - 0.02), zp - 0.004, zp - 0.002)]
+        }
+        FixtureShape::SurfaceDome => {
+            let zc = zp + 0.05;
+            vec![prism("light-trim", f, &poly(c, r + 0.01), zc - 0.01, zc), prism(lens, f, &poly(c, r), zc - 0.08, zc - 0.01)]
+        }
+        FixtureShape::Pendant => vec![
+            prism("light-shade", f, &poly(c, r), zp - 0.02, zp + 0.18),
+            prism(lens, f, &poly(c, r - 0.01), zp - 0.03, zp - 0.02),
+            prism("light-cord", f, &square(c, 0.012), zp + 0.18, zp + 0.6),
+        ],
+        FixtureShape::Sconce => vec![
+            prism("light-shade", f, &half_disc(c, r, f.rotation), zp - 0.125, zp + 0.125),
+            prism(lens, f, &half_disc(c, r - 0.01, f.rotation), zp - 0.135, zp - 0.125),
+        ],
+        FixtureShape::FloorLamp => {
+            let zf = zp - f.height.unwrap_or(1.5);
+            vec![
+                prism("light-trim", f, &poly(c, 0.15), zf, zf + 0.02),
+                prism("light-cord", f, &square(c, 0.025), zf + 0.02, zp - 0.15),
+                prism("light-shade", f, &poly(c, r), zp - 0.15, zp + 0.1),
+                prism(lens, f, &poly(c, 0.03), zp - 0.03, zp + 0.03),
+            ]
+        }
+        FixtureShape::Panel => {
+            let w = if f.width > 0.0 { f.width } else { 0.6 };
+            let l = if f.length > 0.0 { f.length } else { 0.6 };
+            let outer = rect(c, w, l, f.rotation);
+            let inner = rect(c, w - 0.06, l - 0.06, f.rotation);
+            let mut frame_m = Mesh::new("light-trim", f.id);
+            frame_m.push_prism_with_holes(&outer, &[inner.clone()], zp - 0.01, zp);
+            let diffuser = prism(lens, f, &inner, zp - 0.004, zp - 0.002);
+            vec![finish(frame_m), diffuser]
+        }
+    };
+    parts.into_iter().flatten().collect()
 }
 
 /// Openings in `room`'s ceiling for the recessed cans and panels mounted in it.

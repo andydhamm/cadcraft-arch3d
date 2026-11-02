@@ -301,3 +301,24 @@ fn build_dirty_unknown_id_is_noop() {
     let rebuilt = cadcraft_arch3d::build_dirty(&model, &dirty, &scene);
     assert_eq!(rebuilt.meshes.len(), scene.meshes.len(), "unknown dirty ID should not change mesh count");
 }
+
+/// A one-wall edit through `SceneCache::update` rebuilds a few objects (the wall and the walls
+/// joined to it), leaves the scene equal to a full build, and takes < 10 ms (median of 5, release).
+#[test]
+fn three_hundred_walls_incremental_edit_under_10ms() {
+    let mut model = build_300_wall_grid();
+    let (mut cache, _) = cadcraft_arch3d::SceneCache::new(&model);
+    let mut times = Vec::new();
+    for k in 0..5 {
+        model.walls[0].end.x += if k % 2 == 0 { 0.25 } else { -0.25 };
+        let t0 = Instant::now();
+        let stats = cache.update(&model);
+        times.push(t0.elapsed().as_secs_f64() * 1000.0);
+        assert!(stats.incremental && stats.rebuilt >= 1 && stats.rebuilt * 10 <= stats.objects, "{stats:?}");
+        assert_eq!(cache.scene().digest(), cadcraft_arch3d::build(&model).digest());
+    }
+    times.sort_by(f64::total_cmp);
+    if !cfg!(debug_assertions) {
+        assert!(times[2] < 10.0, "median one-wall update {:.2} ms (budget 10 ms)", times[2]);
+    }
+}
