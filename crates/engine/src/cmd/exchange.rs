@@ -636,6 +636,7 @@ mod tests {
 
     #[test]
     fn web_export_delivers_a_download_instead_of_writing_a_path() {
+        DELIVERED.lock().unwrap().clear();
         deliver_file("export", "Drawing1.svg", b"<svg/>", Some(record)).unwrap();
         deliver_file("export", "dir/Plan.pdf", b"%PDF", Some(record)).unwrap();
         let got = DELIVERED.lock().unwrap().clone();
