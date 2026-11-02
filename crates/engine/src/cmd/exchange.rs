@@ -146,6 +146,8 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
                 let mtl_path = p.parent().map(|d| d.join(&mtl_name)).unwrap_or_else(|| std::path::PathBuf::from(&mtl_name));
 
                 // Ask the hook to write the MTL file.
+                // Pass the mtl_name so the hook can generate the correct content if needed,
+                // but typically the hook writes the same content regardless of name for tests.
                 let mtl_bytes = (hooks.write)(s.doc()?, &mtl_name).map_err(|e| bad("export", e))?;
                 write_file("export", mtl_path.to_string_lossy().as_ref(), &mtl_bytes)?;
 
