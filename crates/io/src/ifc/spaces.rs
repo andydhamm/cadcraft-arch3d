@@ -198,4 +198,79 @@ mod tests {
         let text = write_model(model, &Scene3d::build(model), &IfcOptions::default());
         text.matches("IFCRELAGGREGATES").count()
     }
+
+    #[test]
+    fn a_room_with_an_empty_name_gets_an_rn_name() {
+        let mut m = room_model();
+        m.rooms[0].name = "".into();
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert!(text.contains("'r0'"), "empty room name should fall back to r0: {text}");
+        assert!(!text.contains("'Living Room'"), "original name should not appear: {text}");
+    }
+
+    #[test]
+    fn a_room_with_nan_areas_has_no_body_and_no_area_data() {
+        let mut m = room_model();
+        m.rooms[0].interior_area = f64::NAN;
+        m.rooms[0].standard_area = f64::NAN;
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert!(text.contains("IFCSPACE"), "space should still be written: {text}");
+        assert!(!text.contains("CADCraft_RoomAreas"), "no areas pset when both areas are NaN: {text}");
+        assert!(!text.contains("NetFloorArea"), "no NetFloorArea when interior is NaN: {text}");
+        assert!(!text.contains("GrossFloorArea"), "no GrossFloorArea when standard is NaN: {text}");
+    }
+
+    #[test]
+    fn a_room_with_only_interior_area_finite_writes_only_that() {
+        let mut m = room_model();
+        m.rooms[0].standard_area = f64::NAN;
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert!(text.contains("CADCraft_RoomAreas"), "areas pset should be written: {text}");
+        assert!(text.contains("InteriorArea"), "InteriorArea should be written: {text}");
+        assert!(!text.contains("StandardArea"), "StandardArea should not be written when NaN: {text}");
+        assert!(text.contains("NetFloorArea"), "NetFloorArea should be written: {text}");
+        assert!(!text.contains("GrossFloorArea"), "GrossFloorArea should not be written when NaN: {text}");
+    }
+
+    #[test]
+    fn a_room_with_fewer_than_three_points_has_no_body() {
+        let mut m = room_model();
+        m.rooms[0].polygon = vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0)];
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert!(text.contains("IFCSPACE"), "space should still be written: {text}");
+        assert!(!text.contains("IFCTRANGULATEDFACESET"), "no body means no triangulated face set: {text}");
+        assert!(text.contains("CADCraft_RoomAreas"), "areas pset should still be written: {text}");
+    }
+
+    #[test]
+    fn a_room_with_floor_height_uses_it_as_z0() {
+        let mut m = room_model();
+        m.rooms[0].floor_height = Some(0.5);
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        // z0 = 0.5, z1 = 0.5 + 2.55 = 3.05
+        assert!(text.contains("3.05"), "ceiling z 3.05 not found: {text}");
+    }
+
+    #[test]
+    fn multiple_rooms_produce_multiple_spaces() {
+        let mut m = room_model();
+        m.push_room(Room {
+            id: cadcraft_doc::ArchId(m.next_room_id),
+            name: "Bedroom".into(),
+            room_type: RoomType::Bedroom,
+            level: 0,
+            polygon: vec![Vec2::new(6.0, 0.0), Vec2::new(12.0, 0.0), Vec2::new(12.0, 4.0), Vec2::new(6.0, 4.0)],
+            holes: Vec::new(),
+            ceiling_height: Some(2.55),
+            floor_height: None,
+            interior_area: 24.0,
+            standard_area: 26.4,
+            ..Room::default()
+        });
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        let count = text.matches("IFCSPACE").count();
+        assert_eq!(count, 2, "expected 2 IfcSpace entities, got {count}: {text}");
+        assert!(text.contains("'Living Room'"), "first room name missing: {text}");
+        assert!(text.contains("'Bedroom'"), "second room name missing: {text}");
+    }
 }
