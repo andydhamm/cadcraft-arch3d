@@ -8,8 +8,10 @@ use crate::Handle;
 use cadcraft_geom::{Bounds2, Vec2};
 use serde::{Deserialize, Serialize};
 
+pub mod finish;
 pub mod light;
 pub mod site;
+pub use finish::*;
 pub use light::*;
 pub use site::*;
 
@@ -400,6 +402,11 @@ pub struct Wall {
     /// `None` = [`DEFAULT_RETAINING_FOOTING`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub footing: Option<f64>,
+    /// Finish of the wall's EXTERIOR face: the face on the right of start->end, i.e. the side of
+    /// its first layer band in `arch::wall::wall_layer_polygons` (outside for a counter-clockwise
+    /// ring).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<Finish>,
 }
 
 fn default_wall_type() -> String {
@@ -436,6 +443,7 @@ impl Wall {
             retaining: false,
             freeboard: None,
             footing: None,
+            finish: None,
         }
     }
 }
@@ -463,6 +471,7 @@ impl Default for Wall {
             retaining: false,
             freeboard: None,
             footing: None,
+            finish: None,
         }
     }
 }
@@ -754,6 +763,9 @@ pub struct Room {
     pub standard_area: f64,
     /// Height of the deck surface above the level elevation, if this is a deck room.
     pub deck_height: Option<f64>,
+    /// The room's floor finish.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floor_finish: Option<Finish>,
 }
 
 impl Default for Room {
@@ -770,6 +782,7 @@ impl Default for Room {
             interior_area: 0.0,
             standard_area: 0.0,
             deck_height: None,
+            floor_finish: None,
         }
     }
 }
@@ -875,6 +888,9 @@ pub struct Roof {
     pub hand_edited: bool,
     pub planes: Vec<RoofPlane>,
     pub edges: Vec<RoofEdge>,
+    /// The covering of the roof planes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub covering: Option<Finish>,
 }
 
 /// An architectural stair.
@@ -999,6 +1015,7 @@ impl Default for Roof {
             hand_edited: false,
             planes: Vec::new(),
             edges: Vec::new(),
+            covering: None,
         }
     }
 }
