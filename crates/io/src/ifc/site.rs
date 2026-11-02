@@ -158,6 +158,104 @@ mod tests {
     }
 
     #[test]
+    fn compound_angle_zero() {
+        let p = compound_angle(0.0);
+        match p {
+            P::List(parts) => {
+                assert_eq!(parts.len(), 4);
+                assert_eq!(parts[0], P::Int(0));
+                assert_eq!(parts[1], P::Int(0));
+                assert_eq!(parts[2], P::Int(0));
+                assert_eq!(parts[3], P::Int(0));
+            }
+            _ => panic!("expected P::List for zero angle"),
+        }
+    }
+
+    #[test]
+    fn compound_angle_nan_returns_null() {
+        let p = compound_angle(f64::NAN);
+        assert!(matches!(p, P::Null), "NaN angle should give P::Null");
+    }
+
+    #[test]
+    fn compound_angle_infinity_returns_null() {
+        assert!(matches!(compound_angle(f64::INFINITY), P::Null));
+        assert!(matches!(compound_angle(f64::NEG_INFINITY), P::Null));
+    }
+
+    #[test]
+    fn compound_angle_very_small() {
+        // 0.000001 degrees * 3.6e9 = 3600 millionths
+        let p = compound_angle(0.000001);
+        match p {
+            P::List(parts) => {
+                assert_eq!(parts.len(), 4);
+                assert_eq!(parts[0], P::Int(0));
+                assert_eq!(parts[1], P::Int(0));
+                assert_eq!(parts[2], P::Int(0));
+                assert_eq!(parts[3], P::Int(3600));
+            }
+            _ => panic!("expected P::List"),
+        }
+    }
+
+    #[test]
+    fn compound_angle_parts_never_exceed_59() {
+        // Invariant: minutes and seconds must never round to 60
+        for angle in [0.0, 1.0, 45.0, 90.0, 135.0, 179.999, 180.0, -45.0, -90.0, -180.0] {
+            let p = compound_angle(angle);
+            match p {
+                P::List(parts) => {
+                    assert_eq!(parts.len(), 4);
+                    if let P::Int(minutes) = parts[1] {
+                        assert!(minutes.abs() < 60, "minutes {} out of range for angle {}", minutes, angle);
+                    }
+                    if let P::Int(seconds) = parts[2] {
+                        assert!(seconds.abs() < 60, "seconds {} out of range for angle {}", seconds, angle);
+                    }
+                    if let P::Int(millis) = parts[3] {
+                        assert!(millis.abs() < 1_000_000, "millis {} out of range for angle {}", millis, angle);
+                    }
+                }
+                _ => panic!("expected P::List for angle {}", angle),
+            }
+        }
+    }
+
+    #[test]
+    fn references_with_nan_latitude() {
+        let mut model = ArchModel::default();
+        model.site =
+            Some(SiteLocation { latitude: f64::NAN, longitude: 43.65, elevation: 150.0, true_north: 0.0, reference: None, north_arrow_at: None });
+        let [lat, lon, elev] = references(&model);
+        assert!(matches!(lat, P::Null), "NaN latitude should give P::Null");
+        assert!(matches!(lon, P::List(_)), "valid longitude should still be computed");
+        assert!(matches!(elev, P::Real(150.0)), "valid elevation should still be computed");
+    }
+
+    #[test]
+    fn references_with_nan_elevation() {
+        let mut model = ArchModel::default();
+        model.site =
+            Some(SiteLocation { latitude: -114.07, longitude: 43.65, elevation: f64::NAN, true_north: 0.0, reference: None, north_arrow_at: None });
+        let [lat, lon, elev] = references(&model);
+        assert!(matches!(lat, P::List(_)));
+        assert!(matches!(lon, P::List(_)));
+        assert!(matches!(elev, P::Null), "NaN elevation should give P::Null");
+    }
+
+    #[test]
+    fn emit_with_empty_scene_writes_nothing() {
+        let scene = Scene3d::default();
+        let model = ArchModel::default();
+        let mut ctx = crate::ifc::Ctx::new(&model, &scene);
+        emit(&mut ctx);
+        let text = ctx.w.finish(&crate::step::StepHeader::default());
+        assert!(!text.contains("IFCGEOGRAPHICELEMENT"), "empty scene should write no geographic elements");
+    }
+
+    #[test]
     fn terrain_and_plants_are_geographic_elements_in_the_site() {
         let scene = Scene3d {
             meshes: vec![
