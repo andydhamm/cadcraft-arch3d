@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 02:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability — 1 of 12 segments merged · 1 of 15 acceptance checks**
 
@@ -22,12 +22,12 @@ Updated 2026-11-02 02:15 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 1 / 15 | 3.0 h so far · expected done Nov 02 15:30–Nov 09 03:35 UTC |
+| 12 | Exports and interoperability | building | 1 / 15 | 3.3 h so far · expected done Nov 02 16:52–Nov 09 18:01 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-5 merging, 4 gate, 1 working, 1 merged, 1 queued
+6 merging, 4 gate, 1 merged, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -36,9 +36,9 @@ Updated 2026-11-02 02:15 UTC. This page and the card in the README are regenerat
 | `p12-ifc-roofs` | IFC roofs: IfcRoof aggregating its planes, fascia and soffit | merging | claude-sonnet-c |
 | `p12-ifc-stairs` | IFC stairs and railings | merging | bonsai-a |
 | `p12-ifc-spaces` | IFC spaces with their areas | gate | bonsai-ws2-b |
-| `p12-ifc-site` | IFC site location and geographic elements | working | bonsai-ws2-a |
+| `p12-ifc-site` | IFC site location and geographic elements | gate | bonsai-ws2-a |
 | `p12-io-obj` | OBJ export with an MTL file | merging | claude-sonnet-a |
-| `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | gate | bonsai-b |
+| `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | merging | bonsai-b |
 | `p12-cmd-export` | The export command writes IFC, OBJ (+MTL) and GLB | gate | darwin-ws3 |
 | `p12-pt-auto-exposure` | Path-traced daylight stills expose for what they show | gate | mai-flash |
 
@@ -64,15 +64,15 @@ Updated 2026-11-02 02:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 789 |
-| bonsai-b | bonsai2-27b | gate | 731 |
-| bonsai-ws2-a | bonsai2-27b | agent | 784 |
-| bonsai-ws2-b | bonsai2-27b | gate | 767 |
+| bonsai-b | bonsai2-27b | merging | 732 |
+| bonsai-ws2-a | bonsai2-27b | gate | 784 |
+| bonsai-ws2-b | bonsai2-27b | gate | 768 |
 | claude-sonnet-a | sonnet | merging | 69 |
 | claude-sonnet-b | sonnet | merging | 65 |
 | claude-sonnet-c | sonnet | merging | 15 |
 | claude-sonnet-d | sonnet | merging | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 647 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 648 |
 | kimi-k31 | k3.1-pro-highspeed | idle | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 46 |
-| tturbo-mac | tturbo-ultraheretic | agent | 557 |
+| mai-flash | mai-code-1.1-flash | gate | 47 |
+| tturbo-mac | tturbo-ultraheretic | gate | 557 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
