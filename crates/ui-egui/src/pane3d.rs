@@ -255,6 +255,11 @@ pub struct Pane3d {
     pub has_content: bool,
     /// The last built scene (`None` until the first successful build).
     scene: Option<Arc<cadcraft_render3d::Scene3d>>,
+    /// The incremental builder behind `scene`: seeded by the first build of a document,
+    /// updated by later revisions, dropped when the document changes.
+    cache: Option<cadcraft_arch3d::SceneCache>,
+    /// What the last rebuild did (`None` until a build).
+    pub last_rebuild: Option<cadcraft_arch3d::RebuildStats>,
     /// The document the scene was built from ([`Pane3d::sync_doc`]).
     doc: Option<u64>,
     /// Whether the orbit distance has been fitted to a scene yet.
@@ -294,6 +299,8 @@ impl Pane3d {
             available: false,
             has_content: false,
             scene: None,
+            cache: None,
+            last_rebuild: None,
             doc: None,
             framed: false,
             last_rect: None,
@@ -477,7 +484,19 @@ impl Pane3d {
                     return false;
                 }
                 self.load_active_camera(m);
-                let scene = cadcraft_arch3d::build(m);
+                let stats = match self.cache.as_mut() {
+                    Some(cache) => cache.update(m),
+                    None => {
+                        let (cache, stats) = cadcraft_arch3d::SceneCache::new(m);
+                        self.cache = Some(cache);
+                        stats
+                    }
+                };
+                self.last_rebuild = Some(stats);
+                let Some(cache) = self.cache.as_ref() else {
+                    return false;
+                };
+                let scene = cache.scene().clone();
                 let mesh_count = scene.meshes.len();
                 let has_content = !scene.meshes.is_empty();
                 if has_content && !self.framed {
@@ -492,6 +511,8 @@ impl Pane3d {
             None => {
                 self.site = None;
                 self.scene = None;
+                self.cache = None;
+                self.last_rebuild = None;
                 self.mesh_count = 0;
                 self.has_content = false;
                 self.last_revision = revision;
@@ -505,6 +526,7 @@ impl Pane3d {
     pub fn sync_doc(&mut self, doc: u64, revision: u64, model: Option<&cadcraft_doc::ArchModel>) -> bool {
         if self.doc != Some(doc) {
             self.doc = Some(doc);
+            self.cache = None;
             self.last_revision = u64::MAX;
             self.loaded_camera = None;
             self.full = None;
@@ -1362,6 +1384,33 @@ mod tests {
         zoom_by_wheel(&mut pane, 1.0);
         assert_ne!(pane.orbit.distance, initial_distance, "zoom should change distance");
         assert!(pane.orbit.distance < initial_distance, "positive zoom delta should zoom in");
+    }
+
+    #[test]
+    fn pane_sync_rebuilds_incrementally_after_an_edit() {
+        let mut arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        let first = pane.last_rebuild.expect("first build");
+        assert!(!first.incremental, "the first build seeds the cache");
+        arch.walls[0].height = 3.0;
+        assert!(pane.sync_doc(1, 2, Some(&arch)));
+        let second = pane.last_rebuild.expect("second build");
+        assert!(second.incremental, "{second:?}");
+        assert!(second.rebuilt > 0 && second.rebuilt < second.objects, "{second:?}");
+        assert_eq!(pane.scene().expect("scene").meshes.len(), cadcraft_arch3d::build(&arch).meshes.len());
+    }
+
+    #[test]
+    fn pane_sync_reseeds_for_another_document() {
+        let mut arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        arch.walls[0].height = 3.0;
+        assert!(pane.sync_doc(2, 1, Some(&arch)));
+        let stats = pane.last_rebuild.expect("build");
+        assert!(!stats.incremental, "another document is a full build: {stats:?}");
+        assert_eq!(stats.rebuilt, stats.objects);
     }
 
     #[test]
