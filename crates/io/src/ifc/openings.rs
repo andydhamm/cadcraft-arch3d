@@ -187,7 +187,7 @@ mod tests {
         m.push_opening(Opening { host, offset: 4.0, width: 1.0, height: 1.0, sill: -0.5, kind: OpeningKind::Window, ..Opening::default() });
         let text = export(&m);
         assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
-        assert!(text.contains(",$,1.0,1.0,.WINDOW.,.NOTDEFINED.,$);"), "{text}");
+        assert!(text.contains(",$,1.,1.,.WINDOW.,.NOTDEFINED.,$);"), "{text}");
     }
 
     #[test]
