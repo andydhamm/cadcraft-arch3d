@@ -154,17 +154,19 @@ fn stand_in_plot(_: &cadcraft_doc::Drawing, _: &cadcraft_doc::Space, _: &serde_j
     Ok(b"%PDF-1.4 user guide".to_vec())
 }
 
+/// Installs the stand-in file hooks (the first installation in the process wins): no reader, a writer that
+/// answers with a few bytes so `export` runs, and the stand-in plotter.
+fn install_io() {
+    set_io(IoHooks { read: |_, _| Err("no reader in this test".into()), write: |_, _| Ok(b"stand-in export".to_vec()), plot: Some(stand_in_plot) });
+}
+
 /// Every `run` line of every ```sh block executes through the engine as the CLI runs it: a fresh session per line,
 /// a new metric drawing for `--metric`, then each `--cmd` in order. `render` and `convert` lines need a GPU adapter
 /// or a saved file and are left to acceptance check 02 (which also plots the real PDF). A relative `path` (exportpdf)
 /// is written to a temp dir.
 #[test]
 fn user_guide_sh_blocks_execute_through_the_engine() {
-    set_io(IoHooks {
-        read: |_, _| Err("no reader in this test".into()),
-        write: |_, _| Err("no writer in this test".into()),
-        plot: Some(stand_in_plot),
-    });
+    install_io();
     let out_dir = std::env::temp_dir().join(format!("cadcraft-user-guide-{}", std::process::id()));
     if let Err(error) = fs::create_dir_all(&out_dir) {
         panic!("cannot create {}: {error}", out_dir.display());
@@ -274,11 +276,7 @@ fn user_guide_archdetect_block_runs() {
                 let dxf_path = repo_root.join("examples/apartment.dxf");
 
                 if dxf_path.exists() {
-                    set_io(IoHooks {
-                        read: |_, _| Err("no reader in this test".into()),
-                        write: |_, _| Err("no writer in this test".into()),
-                        plot: Some(stand_in_plot),
-                    });
+                    install_io();
 
                     let mut session = Session::new();
                     let bytes = fs::read(&dxf_path).unwrap_or_else(|e| panic!("failed to read apartment.dxf: {e}"));
@@ -705,6 +703,7 @@ fn user_guide_path_tracing_block_command_count() {
 /// The exports block in the user guide runs through the engine.
 #[test]
 fn user_guide_exports_block_runs() {
+    install_io();
     let blocks = sh_blocks(GUIDE);
     let mut found = false;
 
@@ -738,8 +737,16 @@ fn user_guide_exports_block_runs() {
             if id != "export" {
                 continue;
             }
-            let params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+            let mut params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+            let out_dir = std::env::temp_dir().join(format!("cadcraft-user-guide-exports-{}", std::process::id()));
+            fs::create_dir_all(&out_dir).unwrap_or_else(|e| panic!("cannot create {}: {e}", out_dir.display()));
+            if let Some(path) = params.get("path").and_then(serde_json::Value::as_str) {
+                if Path::new(path).is_relative() {
+                    params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
+                }
+            }
             let reply = session.execute(id, &params).unwrap_or_else(|error| panic!("export command `{command}` failed: {error:?}"));
+            let _ = fs::remove_dir_all(&out_dir);
             // Verify reply structure for format-only exports
             if params.get("format").is_some() {
                 assert!(reply.get("data").is_some(), "export with format should return data");
