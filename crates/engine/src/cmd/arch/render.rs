@@ -81,6 +81,7 @@ pub struct PathParams {
     pub seed: u32,
     pub denoise: bool,
     pub rt: bool,
+    pub exposure: Option<f64>,
     pub furnace: Option<(f64, f64)>,
     pub snapshots: Vec<u32>,
     /// Whether the request named spp; false in `Default`.
@@ -89,7 +90,7 @@ pub struct PathParams {
 
 impl Default for PathParams {
     fn default() -> Self {
-        PathParams { spp: 256, bounces: 4, seed: 0, denoise: true, rt: false, furnace: None, snapshots: Vec::new(), spp_given: false }
+        PathParams { spp: 256, bounces: 4, seed: 0, denoise: true, rt: false, exposure: None, furnace: None, snapshots: Vec::new(), spp_given: false }
     }
 }
 
@@ -331,6 +332,21 @@ fn parse_path_params(v: &Value) -> Result<PathParams, EngineError> {
         }
     };
 
+    let exposure = match v.get("exposure") {
+        None => None,
+        Some(val) => match val {
+            Value::String(s) if s == "auto" => None,
+            Value::Number(n) if n.is_f64() => {
+                let x = n
+                    .as_f64()
+                    .filter(|v| v.is_finite() && *v > 0.0 && *v <= 1000.0)
+                    .ok_or_else(|| bad("render", "`exposure` must be \"auto\" or a positive number"))?;
+                Some(x)
+            }
+            _ => return Err(bad("render", "`exposure` must be \"auto\" or a positive number")),
+        },
+    };
+
     let furnace = match v.get("furnace") {
         None => None,
         Some(val) => {
@@ -349,7 +365,17 @@ fn parse_path_params(v: &Value) -> Result<PathParams, EngineError> {
         }
     };
 
-    Ok(PathParams { spp: spp as u32, bounces: bounces as u32, seed: seed as u32, denoise, rt, furnace, snapshots, spp_given: v.get("spp").is_some() })
+    Ok(PathParams {
+        spp: spp as u32,
+        bounces: bounces as u32,
+        seed: seed as u32,
+        denoise,
+        rt,
+        exposure,
+        furnace,
+        snapshots,
+        spp_given: v.get("spp").is_some(),
+    })
 }
 
 pub fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineError> {
@@ -458,6 +484,18 @@ mod tests {
         assert_eq!(p(json!({})), Some((256, false)));
         assert_eq!(p(json!({"spp": 256})), Some((256, true)));
         assert_eq!(p(json!({"spp": 64})), Some((64, true)));
+    }
+
+    #[test]
+    fn parse_path_params_reads_exposure() {
+        let empty = parse_path_params(&json!({})).unwrap();
+        assert_eq!(empty.exposure, None);
+        let auto = parse_path_params(&json!({"exposure": "auto"})).unwrap();
+        assert_eq!(auto.exposure, None);
+        let fixed = parse_path_params(&json!({"exposure": 0.5})).unwrap();
+        assert_eq!(fixed.exposure, Some(0.5));
+        let err = parse_path_params(&json!({"exposure": 0.0})).unwrap_err().to_string();
+        assert!(err.contains("`exposure` must be \"auto\" or a positive number"), "{err}");
     }
 
     #[test]

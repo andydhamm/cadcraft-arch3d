@@ -8,7 +8,7 @@ use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene};
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
-use super::{DAY_EXPOSURE, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX};
+use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX};
 use super::{PathOptions, PathStats, PathStatus};
 use crate::camera::Camera;
 use crate::lit_frame::Lighting;
@@ -139,13 +139,17 @@ impl PathTracer {
         let mut sky_zenith = [0.0f32; 4];
         let mut sky_horizon = [0.0f32; 4];
         let mut furnace = [0.0f32; 4];
-        let exposure;
+        let exposure = match opts.exposure {
+            Exposure::Fixed(x) => x,
+            Exposure::Auto if opts.furnace.is_some() => 1.0,
+            Exposure::Auto if lighting.sun.is_some() => DAY_EXPOSURE,
+            Exposure::Auto => lighting.exposure,
+        };
 
         if let Some(f) = opts.furnace {
             flags |= FRAME_FURNACE;
             let env = f.emission / (1.0 - f.albedo);
             furnace = [f.albedo, f.emission, env, 0.0];
-            exposure = 1.0;
         } else if lighting.sun.is_some() {
             flags |= FRAME_SUN | FRAME_SKY;
             let sun = lighting.sun.unwrap();
@@ -154,9 +158,6 @@ impl PathTracer {
             sun_rgb = [SUN_LUX, SUN_LUX, SUN_LUX, 0.0];
             sky_zenith = [SKY_ZENITH_NITS; 4];
             sky_horizon = [SKY_HORIZON_NITS; 4];
-            exposure = DAY_EXPOSURE;
-        } else {
-            exposure = lighting.exposure;
         }
         if ground {
             flags |= FRAME_GROUND;
@@ -185,7 +186,7 @@ impl PathTracer {
         Ok(PathTracer {
             size,
             status: PathStatus::Running { progress: 0.0, spp: 0 },
-            stats: PathStats { rt: rq_pipelines.is_some(), ..PathStats::default() },
+            stats: PathStats { rt: rq_pipelines.is_some(), exposure, ..PathStats::default() },
             cancelled: false,
             opts: opts.clone(),
             frame,
@@ -318,6 +319,61 @@ impl PathTracer {
         self.status.clone()
     }
 
+    fn compute_auto_exposure(&self, gpu: &ComputeGpu) -> f32 {
+        let pixels = (self.size.0 * self.size.1) as usize;
+        if pixels == 0 {
+            return DAY_EXPOSURE;
+        }
+        let accum_bytes = (pixels * 32) as u64;
+        let aov_bytes = (pixels * 32) as u64;
+        let accum_data = match self.read_buffer(gpu, &self.accum, accum_bytes) {
+            Ok(d) => d,
+            Err(_) => return DAY_EXPOSURE,
+        };
+        let aov_data = match self.read_buffer(gpu, &self.aov, aov_bytes) {
+            Ok(d) => d,
+            Err(_) => return DAY_EXPOSURE,
+        };
+        let accum: Vec<[f32; 4]> = bytemuck::cast_slice(&accum_data).to_vec();
+        let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
+        let mean_of = |p: &[f32; 4]| {
+            let n = p[3].max(1.0);
+            [p[0] / n, p[1] / n, p[2] / n]
+        };
+        let radiance = if self.opts.denoise {
+            let colors: Vec<[f32; 4]> = accum[..pixels]
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    let [r, g, b] = mean_of(p);
+                    let variance = Self::variance_of_mean(*p, accum[pixels + i][0]);
+                    [r, g, b, variance]
+                })
+                .collect();
+            match super::denoise::denoise(gpu, &colors, &aov, self.size) {
+                Ok(denoised) => denoised,
+                Err(_) => accum[..pixels].iter().map(|p| [mean_of(p)[0], mean_of(p)[1], mean_of(p)[2], 0.0]).collect(),
+            }
+        } else {
+            accum[..pixels].iter().map(|p| [mean_of(p)[0], mean_of(p)[1], mean_of(p)[2], 0.0]).collect()
+        };
+        let mut log_sum = 0.0f64;
+        let mut count = 0usize;
+        for (i, px) in radiance.iter().enumerate() {
+            if aov[2 * i][3] <= 0.5 {
+                continue;
+            }
+            let lum = super::luminance([px[0], px[1], px[2]]).max(0.0);
+            log_sum += (1e-4 + lum as f64).ln();
+            count += 1;
+        }
+        if count == 0 {
+            return DAY_EXPOSURE;
+        }
+        let lavg = (log_sum / count as f64).exp() as f32;
+        (0.18 / lavg).clamp(DAY_EXPOSURE, NIGHT_EXPOSURE)
+    }
+
     fn finish(&mut self, gpu: &ComputeGpu) -> PathStatus {
         let (w, h) = self.size;
         let pixels = (w * h) as usize;
@@ -396,6 +452,13 @@ impl PathTracer {
         gpu.queue.submit([enc.finish()]);
 
         self.stats.denoised = self.opts.denoise;
+        self.exposure = match self.opts.exposure {
+            Exposure::Fixed(x) => x,
+            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_FURNACE != 0 => 1.0,
+            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_SUN != 0 => self.compute_auto_exposure(gpu),
+            Exposure::Auto => self.exposure,
+        };
+        self.stats.exposure = self.exposure;
 
         // Resolve.
         match self.resolve(gpu) {
@@ -423,7 +486,13 @@ impl PathTracer {
             exposure: f32,
             spp: u32,
         }
-        let params = ResolveParams { size: [w, h], exposure: self.exposure, spp: self.spp_done };
+        let exposure = match self.opts.exposure {
+            Exposure::Fixed(x) => x,
+            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_FURNACE != 0 => 1.0,
+            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_SUN != 0 => self.compute_auto_exposure(gpu),
+            Exposure::Auto => self.exposure,
+        };
+        let params = ResolveParams { size: [w, h], exposure, spp: self.spp_done };
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
         let uniform = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {

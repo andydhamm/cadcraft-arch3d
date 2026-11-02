@@ -14,7 +14,7 @@ use cadcraft_render3d::light::{Light, Sun};
 use cadcraft_render3d::lights::DEFAULT_EXPOSURE;
 use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, Style, png_rgba};
 use cadcraft_render3d::pathtrace::cache;
-use cadcraft_render3d::pathtrace::{CacheOutcome, ComputeGpu, Furnace, PathOptions, irradiance, luminance, request_compute};
+use cadcraft_render3d::pathtrace::{CacheOutcome, ComputeGpu, Exposure, Furnace, PathOptions, irradiance, luminance, request_compute};
 use cadcraft_render3d::{Lighting, Scene3d, render_final};
 use serde_json::{Value, json};
 
@@ -104,6 +104,7 @@ fn path_options(p: &PathParams) -> PathOptions {
         seed: p.seed,
         denoise: p.denoise,
         rt: p.rt,
+        exposure: p.exposure.map(|x| Exposure::Fixed(x as f32)).unwrap_or(Exposure::Auto),
         furnace: p.furnace.map(|(albedo, emission)| Furnace { albedo: albedo as f32, emission: emission as f32, ..Furnace::default() }),
         snapshots: p.snapshots.clone(),
         ..PathOptions::default()
@@ -186,6 +187,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                 path_info.insert("seed".into(), json!(opts.seed));
                 path_info.insert("denoised".into(), json!(st.denoised));
                 path_info.insert("rt".into(), json!(st.rt));
+                path_info.insert("exposure".into(), json!(st.exposure));
                 path_info.insert("pipelineCache".into(), json!(outcome.name()));
                 path_info.insert("radiance".into(), st.radiance.map_or(Value::Null, |r| json!({ "min": r.min, "max": r.max, "mean": r.mean })));
                 let mut snaps = Vec::new();
