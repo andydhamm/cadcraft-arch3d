@@ -78,54 +78,12 @@ fn align4(buf: &mut Vec<u8>) {
     }
 }
 
-/// Build the JSON text plus the single binary buffer (with all views/accessors) for `scene`.
-fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
-    let mut bin: Vec<u8> = Vec::new();
-    let mut buffer_views: Vec<Value> = Vec::new();
-    let mut accessors: Vec<Value> = Vec::new();
-    let mut meshes: Vec<Value> = Vec::new();
-    let mut nodes: Vec<Value> = Vec::new();
-
-    let mut materials: Vec<Value> = Vec::new();
-    let mut material_index: HashMap<String, u32> = HashMap::new();
-    /// Plane index seen so far per roof id, so roof planes are named in
-    /// scene order: `roof-r{n}p0`, `roof-r{n}p1`, ...
+/// One node name per written mesh (those with vertices), in scene order, shared with the OBJ
+/// writer. Roof planes are numbered in scene order: `roof-r{n}p0`, `roof-r{n}p1`, ...
+pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
     let mut roof_planes: HashMap<u32, u32> = HashMap::new();
-
-    let written_meshes: Vec<&Mesh> = scene.meshes.iter().filter(|m| !m.positions.is_empty()).collect();
-    for (i, m) in written_meshes.iter().enumerate() {
-        let mat_idx = if let Some(idx) = material_index.get(&m.material) {
-            *idx
-        } else {
-            let is_roof = m.material == "roof";
-            let rgb = base_color_for(&m.material);
-            let is_glass = m.material.contains("glass");
-            let mut mat = json!({
-                "name": m.material,
-                "pbrMetallicRoughness": {
-                    "baseColorFactor": if is_roof {
-                        [ROOF_ALBEDO[0], ROOF_ALBEDO[1], ROOF_ALBEDO[2], 1.0]
-                    } else {
-                        [
-                            rgb.0 as f64 / 255.0,
-                            rgb.1 as f64 / 255.0,
-                            rgb.2 as f64 / 255.0,
-                            if is_glass { 0.35 } else { 1.0 }
-                        ]
-                    },
-                    "metallicFactor": 0.0,
-                    "roughnessFactor": if is_roof { 0.9 } else if is_glass { 0.05 } else { 1.0 },
-                },
-            });
-            if is_glass {
-                mat["alphaMode"] = json!("BLEND");
-            }
-            materials.push(mat);
-            let idx = (materials.len() - 1) as u32;
-            material_index.insert(m.material.clone(), idx);
-            idx
-        };
-
+    let mut names = Vec::new();
+    for m in scene.meshes.iter().filter(|m| !m.positions.is_empty()) {
         let name = match m.material.as_str() {
             "roof" => {
                 let plane = match roof_planes.entry(m.object.0) {
@@ -161,6 +119,58 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
             }
             _ => format!("{}-o{}", m.material, m.object.0),
         };
+        names.push(name);
+    }
+    names
+}
+
+/// Build the JSON text plus the single binary buffer (with all views/accessors) for `scene`.
+fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
+    let mut bin: Vec<u8> = Vec::new();
+    let mut buffer_views: Vec<Value> = Vec::new();
+    let mut accessors: Vec<Value> = Vec::new();
+    let mut meshes: Vec<Value> = Vec::new();
+    let mut nodes: Vec<Value> = Vec::new();
+
+    let mut materials: Vec<Value> = Vec::new();
+    let mut material_index: HashMap<String, u32> = HashMap::new();
+    let names = node_names(scene);
+
+    let written_meshes: Vec<&Mesh> = scene.meshes.iter().filter(|m| !m.positions.is_empty()).collect();
+    for (i, m) in written_meshes.iter().enumerate() {
+        let mat_idx = if let Some(idx) = material_index.get(&m.material) {
+            *idx
+        } else {
+            let is_roof = m.material == "roof";
+            let rgb = base_color_for(&m.material);
+            let is_glass = m.material.contains("glass");
+            let mut mat = json!({
+                "name": m.material,
+                "pbrMetallicRoughness": {
+                    "baseColorFactor": if is_roof {
+                        [ROOF_ALBEDO[0], ROOF_ALBEDO[1], ROOF_ALBEDO[2], 1.0]
+                    } else {
+                        [
+                            rgb.0 as f64 / 255.0,
+                            rgb.1 as f64 / 255.0,
+                            rgb.2 as f64 / 255.0,
+                            if is_glass { 0.35 } else { 1.0 }
+                        ]
+                    },
+                    "metallicFactor": 0.0,
+                    "roughnessFactor": if is_roof { 0.9 } else if is_glass { 0.05 } else { 1.0 },
+                },
+            });
+            if is_glass {
+                mat["alphaMode"] = json!("BLEND");
+            }
+            materials.push(mat);
+            let idx = (materials.len() - 1) as u32;
+            material_index.insert(m.material.clone(), idx);
+            idx
+        };
+
+        let name = names.get(i).cloned().unwrap_or_default();
 
         // POSITION (VEC3, f32).
         let pos_start = bin.len();
@@ -340,6 +350,17 @@ const ROOF_ALBEDO: [f64; 3] = [151.0 / 255.0, 84.0 / 255.0, 74.0 / 255.0];
 fn base_color_for(name: &str) -> Rgb {
     let c = Color::parse(name).unwrap_or(Color::ByLayer);
     c.resolve(Color::ByLayer, Color::ByLayer)
+}
+
+/// Linear 0..=1 RGBA of material `name`, as the GLB's base colour factor shows it (roof albedo,
+/// glass at 0.35 alpha).
+pub(crate) fn material_rgba(name: &str) -> [f64; 4] {
+    if name == "roof" {
+        return [ROOF_ALBEDO[0], ROOF_ALBEDO[1], ROOF_ALBEDO[2], 1.0];
+    }
+    let rgb = base_color_for(name);
+    let alpha = if name.contains("glass") { 0.35 } else { 1.0 };
+    [rgb.0 as f64 / 255.0, rgb.1 as f64 / 255.0, rgb.2 as f64 / 255.0, alpha]
 }
 
 /// Axis-aligned extents (min/max) of a set of `VEC3` vertices.

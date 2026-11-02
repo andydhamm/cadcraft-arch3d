@@ -137,6 +137,12 @@ pub(crate) fn export_framed(s: &Session, out: &Path, window: Option<Bounds2>, io
     let bytes = cadcraft_io::write_framed(d, out, window)?;
     write_atomic(out, &bytes)?;
     io.errln(format_args!("wrote {} ({} bytes)", out.display(), bytes.len()));
+    if out.extension().is_some_and(|e| e.eq_ignore_ascii_case("obj")) {
+        let mtl = out.with_extension("mtl");
+        let bytes = cadcraft_io::write_framed(d, &mtl, None)?;
+        write_atomic(&mtl, &bytes)?;
+        io.errln(format_args!("wrote {} ({} bytes)", mtl.display(), bytes.len()));
+    }
     if cadcraft_engine::cmd::file::drops_unknown(out) {
         let lost = cadcraft_engine::cmd::file::not_saved(d);
         if let Some(m) = cadcraft_engine::cmd::file::not_saved_message(&lost) {
