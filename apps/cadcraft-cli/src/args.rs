@@ -124,6 +124,9 @@ pub(crate) struct RenderArgs {
     /// Path tracer: the random seed (default 0)
     #[arg(long, value_name = "N", action = ArgAction::Set)]
     pub(crate) seed: Option<u32>,
+    /// Path tracer: exposure, `auto` or a positive number in 0 < n <= 1000
+    #[arg(long, value_name = "AUTO|N", value_parser = parse_exposure_arg)]
+    pub(crate) exposure: Option<Option<f64>>,
     /// Path tracer: keep the noise (no denoiser)
     #[arg(long, action = ArgAction::SetTrue)]
     pub(crate) no_denoise: bool,
@@ -149,6 +152,7 @@ impl RenderArgs {
             spp: self.spp.unwrap_or(d.spp),
             bounces: self.bounces.unwrap_or(d.bounces),
             seed: self.seed.unwrap_or(d.seed),
+            exposure: self.exposure.unwrap_or(d.exposure),
             denoise: !self.no_denoise,
             rt: self.rt,
             spp_given: self.spp.is_some(),
@@ -197,6 +201,17 @@ fn parse_sun_arg(s: &str) -> Result<(Option<f64>, String, String), String> {
 
 fn parse_adapter_arg(s: &str) -> Result<cadcraft_render3d::adapter::AdapterChoice, String> {
     crate::render::parse_adapter(s).ok_or_else(|| format!("`{s}` is not auto or fallback"))
+}
+
+fn parse_exposure_arg(s: &str) -> Result<Option<f64>, String> {
+    if s == "auto" {
+        return Ok(None);
+    }
+    let n = s.parse::<f64>().map_err(|_| format!("`{s}` is not auto or a positive number"))?;
+    if !n.is_finite() || n <= 0.0 || n > 1000.0 {
+        return Err(format!("`{s}` is not auto or a positive number"));
+    }
+    Ok(Some(n))
 }
 
 /// Print a drawing's summary as JSON

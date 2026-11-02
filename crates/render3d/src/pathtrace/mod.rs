@@ -54,6 +54,17 @@ pub const SKY_ZENITH_NITS: f32 = 2_500.0;
 pub const SKY_HORIZON_NITS: f32 = 5_000.0;
 /// Exposure with the sun on: a white Lambertian surface facing the sun reads 1.0 before tone mapping.
 pub const DAY_EXPOSURE: f32 = std::f32::consts::PI / SUN_LUX;
+pub const NIGHT_EXPOSURE: f32 = crate::lights::DEFAULT_EXPOSURE;
+
+/// How the path tracer chooses the still's exposure.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Exposure {
+    /// Auto-expose from the rendered image when the sun is on; otherwise keep the night exposure.
+    #[default]
+    Auto,
+    /// Use this fixed display exposure directly.
+    Fixed(f32),
+}
 
 /// The white-furnace test: every surface diffuse with `albedo`, emitting `emission` nits, the
 /// lights, sun and sky off and the environment at `emission / (1 − albedo)` (what a closed box
@@ -84,6 +95,8 @@ pub struct PathOptions {
     pub denoise: bool,
     /// Use hardware ray queries where the adapter has them (the image must match the compute path).
     pub rt: bool,
+    /// Exposure used to resolve the image to display output.
+    pub exposure: Exposure,
     /// Samples per pixel each [`PathTracer::step`] adds.
     pub spp_per_step: u32,
     pub furnace: Option<Furnace>,
@@ -99,6 +112,7 @@ impl Default for PathOptions {
             seed: 0,
             denoise: true,
             rt: false,
+            exposure: Exposure::Auto,
             spp_per_step: DEFAULT_SPP_PER_STEP,
             furnace: None,
             snapshots: Vec::new(),
@@ -146,6 +160,8 @@ pub struct PathStats {
     /// Hardware ray queries were used.
     pub rt: bool,
     pub pipeline_cache: CacheOutcome,
+    /// The display exposure used for the final image.
+    pub exposure: f32,
     /// Linear radiance over the pixels (every render reports it; the furnace test checks it).
     pub radiance: Option<RadianceStats>,
     /// `(spp, rgba)` images kept at the requested `snapshots`.
@@ -175,6 +191,28 @@ pub fn luminance(rgb: [f32; 3]) -> f32 {
     0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
 }
 
+/// Auto exposure from a still's hit pixels: `clamp(0.18 / Lavg, DAY_EXPOSURE, NIGHT_EXPOSURE)`.
+pub fn auto_exposure_from_luminances(luminance: &[f32], hit: &[bool]) -> f32 {
+    if luminance.len() != hit.len() || luminance.is_empty() {
+        return DAY_EXPOSURE;
+    }
+    let mut log_sum = 0.0f64;
+    let mut count = 0usize;
+    for (&l, &is_hit) in luminance.iter().zip(hit.iter()) {
+        if !is_hit {
+            continue;
+        }
+        let lum = l.max(0.0);
+        log_sum += (1e-4 + lum as f64).ln();
+        count += 1;
+    }
+    if count == 0 {
+        return DAY_EXPOSURE;
+    }
+    let lavg = (log_sum / count as f64).exp() as f32;
+    (0.18 / lavg).clamp(DAY_EXPOSURE, NIGHT_EXPOSURE)
+}
+
 #[cfg(test)]
 mod lights_tests;
 
@@ -201,5 +239,29 @@ mod tests {
     #[test]
     fn cache_outcomes_have_reply_names() {
         assert_eq!([CacheOutcome::Unsupported, CacheOutcome::Miss, CacheOutcome::Hit].map(|c| c.name()), ["unsupported", "miss", "hit"]);
+    }
+
+    #[test]
+    fn auto_exposure_lifts_a_dim_daylit_still() {
+        let lum = [0.01, 0.01, 0.1];
+        let e = auto_exposure_from_luminances(&lum, &[true, true, true]);
+        assert!(e > DAY_EXPOSURE, "auto exposure kept the daylit setting: {e}");
+        assert!(e <= NIGHT_EXPOSURE, "auto exposure exceeded the night ceiling: {e}");
+    }
+
+    #[test]
+    fn a_fixed_exposure_is_used_as_given() {
+        let e = match Exposure::Fixed(0.25) {
+            Exposure::Fixed(x) => x,
+            Exposure::Auto => panic!("auto exposure should not be chosen here"),
+        };
+        assert_eq!(e, 0.25);
+    }
+
+    #[test]
+    fn night_keeps_the_night_exposure() {
+        let lum = [1.0, 2.0, 5.0];
+        let e = auto_exposure_from_luminances(&lum, &[true, true, true]);
+        assert_eq!(e, NIGHT_EXPOSURE, "bright hits should clamp to the night exposure: {e}");
     }
 }
