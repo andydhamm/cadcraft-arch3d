@@ -64,7 +64,10 @@ fn export_ifc(session: &mut Session) -> String {
     // Ensure the file is removed if it exists from a previous run
     let _ = fs::remove_file(&path);
 
-    session.execute("export", &json!({"path": path.to_str().unwrap(), "format": "ifc"})).unwrap();
+    let res = session.execute("export", &json!({"path": path.to_str().unwrap(), "format": "ifc"}));
+    if let Err(e) = res {
+        panic!("Export failed: {}", e);
+    }
 
     let text = fs::read_to_string(&path).expect("Failed to read exported IFC file");
     let _ = fs::remove_file(&path);
