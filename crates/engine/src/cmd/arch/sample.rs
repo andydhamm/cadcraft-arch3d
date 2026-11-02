@@ -470,11 +470,16 @@ fn run_sample(s: &mut Session, params: &Value) -> crate::Result<Value> {
     let count = params.get("openings").and_then(|v| v.as_u64()).unwrap_or(0).clamp(0, MAX_OPENINGS as u64) as usize;
 
     let d = s.doc_mut()?;
-    d.arch.walls = generate_walls(n);
+    let mut model = ArchModel::default();
+    model.levels.clear();
+    model.walls = generate_walls(n);
     // The generated chain hardcodes ids 1..=n; keep the shared counter in
     // step so `push_opening` hands out ids that continue after the walls.
-    d.arch.next_id = n as u32;
-    d.arch.openings.clear();
+    model.next_id = n as u32;
+    model.openings.clear();
+    model.rooms.clear();
+    model.roofs.clear();
+    d.arch = model;
     let placed = seed_openings(&mut d.arch, count);
     d.ensure_layer("A-WALL");
     d.ensure_layer("A-DOOR");
