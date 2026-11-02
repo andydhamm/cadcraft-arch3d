@@ -25,6 +25,8 @@ pub mod roof;
 pub mod section;
 pub mod site;
 pub mod stairs;
+pub mod texture;
+pub mod uv;
 pub mod views;
 pub mod walls;
 
