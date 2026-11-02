@@ -135,6 +135,7 @@ impl<'a> StepParser<'a> {
                 break;
             }
             if !params.is_empty() {
+                self.skip_whitespace();
                 if !self.eat(b',') {
                     return Err("expected ,".into());
                 }
@@ -241,7 +242,7 @@ impl<'a> StepParser<'a> {
                 let start = self.pos;
                 while self.pos < self.text.len() {
                     let c = self.text.as_bytes()[self.pos];
-                    if c == b'(' {
+                    if c == b'(' || c.is_ascii_whitespace() {
                         break;
                     }
                     if !(c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_') {
@@ -250,8 +251,10 @@ impl<'a> StepParser<'a> {
                     self.pos += 1;
                 }
                 let name = self.text[start..self.pos].to_string();
+                self.skip_whitespace();
                 if self.eat(b'(') {
                     let token = self.parse_token()?;
+                    self.skip_whitespace();
                     if !self.eat(b')') {
                         return Err("expected ) after typed value".into());
                     }
@@ -291,7 +294,7 @@ fn parse_data(text: &str) -> Result<BTreeMap<u32, (String, Vec<Token>)>, String>
         let n: u32 = num_str.parse().map_err(|_| "invalid instance number")?;
 
         let (name, params_str) = rest.split_once('(').ok_or("invalid instance format")?;
-        let params_str = params_str.strip_suffix(");").ok_or("missing );")?;
+        let params_str = params_str.trim_end().strip_suffix(");").ok_or("missing );")?;
         // split_once consumes the '(', but parse_params expects to see it.
         let params_str = format!("({params_str}");
 
