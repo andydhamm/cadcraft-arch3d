@@ -7,7 +7,7 @@
 //! removes the triangles it crosses and retriangulates the polygon on each side of it. Every step
 //! scans the triangles (brute force), which is fine at terrain sizes.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::tin::{MAX_TIN_POINTS, Tin, TinError, in_circumcircle, triangulate};
 use crate::{Vec2, Vec3};
@@ -196,7 +196,7 @@ impl Work {
     fn insert_on_edge(&mut self, x: usize, c: usize, d: usize) -> Result<(), TinError> {
         let px = self.xy(x);
         let by_edge = self.edge_map();
-        let mut cavity: HashSet<usize> = [by_edge.get(&(c, d)), by_edge.get(&(d, c))].into_iter().flatten().copied().collect();
+        let mut cavity: BTreeSet<usize> = [by_edge.get(&(c, d)), by_edge.get(&(d, c))].into_iter().flatten().copied().collect();
         if cavity.is_empty() {
             return Err(TinError::Degenerate);
         }
@@ -250,7 +250,7 @@ impl Work {
         });
         let (t0, mut right, mut left) = start.ok_or(TinError::Degenerate)?;
         let by_edge = self.edge_map();
-        let mut cavity: HashSet<usize> = HashSet::from([t0]);
+        let mut cavity: BTreeSet<usize> = BTreeSet::from([t0]);
         let (mut below, mut above) = (vec![right], vec![left]);
         loop {
             if self.constrained.contains(&key(right, left)) {
@@ -330,7 +330,9 @@ impl Work {
         m
     }
 
-    fn replace(&mut self, gone: &HashSet<usize>, new: Vec<[usize; 3]>) {
+    /// Drop the `gone` triangles and append `new`. Cavities are BTreeSets so the triangles a cavity
+    /// is refilled with come out in one order on every run (a HashSet's order is seeded per process).
+    fn replace(&mut self, gone: &BTreeSet<usize>, new: Vec<[usize; 3]>) {
         let mut t = 0;
         self.triangles.retain(|_| {
             t += 1;
@@ -449,6 +451,24 @@ mod tests {
         assert_eq!(cdt.constrained, vec![[81, 82]]);
         assert!((area(&cdt.tin) - before).abs() < 1e-9);
         assert_sound(&cdt);
+    }
+
+    #[test]
+    fn cdt_gives_the_same_triangles_in_the_same_order_every_time() {
+        // Crossing breaklines over a grid split at their crossings (insert_on_edge with cavities of
+        // several triangles); a cavity walked in hash order refilled them in a different order on
+        // every run, so the terrain mesh, its GLB and its IFC changed between two exports.
+        let mut grid: Vec<Vec3> = (0..81).map(|i| Vec3::new((i % 9) as f64, (i / 9) as f64, 0.0)).collect();
+        grid.extend([Vec3::new(0.3, 0.6, 1.0), Vec3::new(7.7, 7.1, 1.0), Vec3::new(0.4, 7.3, 2.0), Vec3::new(7.6, 0.2, 2.0)]);
+        grid.extend([Vec3::new(1.5, 4.5, 0.5), Vec3::new(6.5, 4.5, 0.5)]);
+        let constraints = [[81, 82], [83, 84], [85, 86]];
+        let first = triangulate_constrained(&grid, &constraints).unwrap();
+        assert_sound(&first);
+        for _ in 0..40 {
+            let again = triangulate_constrained(&grid, &constraints).unwrap();
+            assert_eq!(again.tin.triangles, first.tin.triangles);
+            assert_eq!(again.tin.points, first.tin.points);
+        }
     }
 
     #[test]

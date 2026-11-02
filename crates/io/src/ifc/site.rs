@@ -65,7 +65,7 @@ pub(super) fn emit(ctx: &mut Ctx) {
     for id in ctx.pieces.ids("terrain") {
         let meshes = ctx.pieces.get("terrain", id).to_vec();
         if !meshes.is_empty() {
-            geographic_element(ctx, "terrain", "terrain", P::Null, &meshes, ".TERRAIN.");
+            geographic_element(ctx, "terrain", "terrain", P::Null, &meshes, "TERRAIN");
         }
     }
 
@@ -74,7 +74,7 @@ pub(super) fn emit(ctx: &mut Ctx) {
         let meshes = ctx.pieces.get("plant", id).to_vec();
         if !meshes.is_empty() {
             let n = id.0;
-            geographic_element(ctx, &format!("plant/{n}"), &format!("plant-pl{n}"), P::Str("PLANT".into()), &meshes, ".USERDEFINED.");
+            geographic_element(ctx, &format!("plant/{n}"), &format!("plant-pl{n}"), P::Str("PLANT".into()), &meshes, "USERDEFINED");
         }
     }
 
@@ -84,7 +84,7 @@ pub(super) fn emit(ctx: &mut Ctx) {
         if !meshes.is_empty() {
             let n = id.0;
             let kind = meshes.first().map_or("path", |m| m.material.split('-').nth(1).unwrap_or("path"));
-            geographic_element(ctx, &format!("path/{n}"), &format!("{kind}-tm{n}"), P::Str("PATH".into()), &meshes, ".USERDEFINED.");
+            geographic_element(ctx, &format!("path/{n}"), &format!("{kind}-tm{n}"), P::Str("PATH".into()), &meshes, "USERDEFINED");
         }
     }
 }
@@ -190,7 +190,9 @@ mod tests {
         emit(&mut ctx);
         let text = ctx.w.finish(&crate::step::StepHeader::default());
         assert!(text.contains("IFCGEOGRAPHICELEMENT"));
-        assert!(text.contains(".TERRAIN."));
-        assert!(text.contains(".USERDEFINED."));
+        // P::Enum adds the dots: PredefinedType is written .TERRAIN., never ..TERRAIN.. (unreadable STEP).
+        assert!(text.contains(",.TERRAIN.);"), "{text}");
+        assert!(text.contains("'PLANT',") && text.contains(",.USERDEFINED.);"), "{text}");
+        assert!(!text.contains(".."), "{text}");
     }
 }
