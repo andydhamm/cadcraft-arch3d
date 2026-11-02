@@ -30,6 +30,12 @@ pub enum ObjectKind {
     Light,
 }
 
+impl Default for ObjectKind {
+    fn default() -> Self {
+        Self::Wall
+    }
+}
+
 impl ObjectKind {
     fn from_part(part: &str) -> Self {
         match part {
@@ -52,6 +58,12 @@ impl ObjectKind {
 pub struct ObjectKey {
     pub kind: ObjectKind,
     pub id: ArchId,
+}
+
+impl Default for ObjectKey {
+    fn default() -> Self {
+        Self { kind: ObjectKind::default(), id: ArchId::default() }
+    }
 }
 
 impl ObjectKey {

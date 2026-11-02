@@ -407,6 +407,7 @@ impl Scene3d {
             plants,
             lights,
             fixtures,
+            ..Default::default()
         }
     }
 
@@ -734,6 +735,7 @@ impl Scene3d {
             plants,
             lights,
             fixtures,
+            ..Default::default()
         }
     }
 }

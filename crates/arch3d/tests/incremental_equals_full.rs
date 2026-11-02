@@ -26,7 +26,7 @@ fn changed_objects_finds_one_moved_wall() {
     next.walls[0].end.x += 0.5;
 
     let changed = changed_objects(&prev, &next).expect("wall move should be object-local");
-    assert_eq!(changed, BTreeSet::from([ObjectKey { kind: ObjectKind::Wall, id: ArchId(0) }]));
+    assert_eq!(changed, BTreeSet::from([ObjectKey { kind: ObjectKind::Wall, ..Default::default() }]));
 }
 
 #[test]
