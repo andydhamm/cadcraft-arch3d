@@ -702,6 +702,55 @@ fn user_guide_path_tracing_block_command_count() {
     assert!(found, "path-tracing block not found");
 }
 
+/// The exports block in the user guide runs through the engine.
+#[test]
+fn user_guide_exports_block_runs() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found = false;
+
+    for lines in &blocks {
+        let Some(line) = lines.iter().find(|line| line.contains("export") && line.contains("house.ifc")) else {
+            continue;
+        };
+        found = true;
+        let cmds = cmd_args(line);
+        assert!(!cmds.is_empty(), "exports block should contain one or more --cmd lines");
+
+        let mut session = Session::new();
+        session.new_drawing(true);
+
+        // Build the house first (same as the block)
+        session
+            .execute("wall", &serde_json::json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}))
+            .expect("wall");
+        session.execute("door", &serde_json::json!({"wall":"w0","offset":3.0,"width":0.9,"height":2.1,"style":"hinged"})).expect("door");
+        session
+            .execute("window", &serde_json::json!({"wall":"w2","offset":4.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}))
+            .expect("window");
+        session.execute("roomdetect", &serde_json::json!({})).expect("roomdetect");
+        session.execute("roofauto", &serde_json::json!({"pitchRise":6,"pitchRun":12,"overhang":0.5,"walls":[{"wall":"w0","directive":"gable"},{"wall":"w2","directive":"gable"}]})).expect("roofauto");
+
+        // Execute the export commands from the block
+        for command in &cmds {
+            let Some((id, json)) = command.split_once(' ') else {
+                panic!("invalid command format: {command}");
+            };
+            if id != "export" {
+                continue;
+            }
+            let params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+            let reply = session.execute(id, &params).unwrap_or_else(|error| panic!("export command `{command}` failed: {error:?}"));
+            // Verify reply structure for format-only exports
+            if params.get("format").is_some() {
+                assert!(reply.get("data").is_some(), "export with format should return data");
+            }
+        }
+        return;
+    }
+
+    assert!(found, "user guide should contain an exports example block");
+}
+
 /// The illuminance command in the path-tracing block measures at point [2,2,0].
 #[test]
 fn user_guide_path_tracing_block_illuminance_point_is_220() {
