@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 3 of 22 segments merged · 0 of 13 acceptance checks**
 
@@ -23,11 +23,11 @@ Updated 2026-11-02 20:30 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 0 / 13 | 6.1 h so far · expected done Nov 03 22:05–Nov 06 15:54 UTC |
+| 13 | Polish | building | 0 / 13 | 6.3 h so far · expected done Nov 03 23:25–Nov 06 20:01 UTC |
 
 ## Phase 13 segments
 
-13 queued, 4 merging, 3 merged, 1 replaced, 1 escalate, 1 working
+13 queued, 4 merging, 3 merged, 1 replaced, 1 escalate, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -36,7 +36,7 @@ Updated 2026-11-02 20:30 UTC. This page and the card in the README are regenerat
 | `p13-sample-house` | arch.sample {"house":true}: the 300-wall benchmark house | merging | mai-flash-esc |
 | `p13-inspect-finishes` | arch.inspect reports wall finish, roof covering and room floor finish | merging | claude-sonnet-b |
 | `p13-io-finish-round-trip` | DXF: finishes survive the arch XRECORD round trip | merging | bonsai-ws2-b |
-| `upstream-sync-dae4b7b2f` | merge upstream upstream/main up to dae4b7b2f (3 commits) | working | mai-flash |
+| `upstream-sync-dae4b7b2f` | merge upstream upstream/main up to dae4b7b2f (3 commits) | gate | mai-flash |
 
 ## Recent merges
 
@@ -61,7 +61,7 @@ Updated 2026-11-02 20:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 813 |
 | bonsai-b | bonsai2-27b | idle | 752 |
-| bonsai-ws2-a | bonsai2-27b | gate | 813 |
+| bonsai-ws2-a | bonsai2-27b | gate | 814 |
 | bonsai-ws2-b | bonsai2-27b | merging | 797 |
 | claude-sonnet-a | sonnet | idle | 70 |
 | claude-sonnet-b | sonnet | merging | 69 |
@@ -69,7 +69,7 @@ Updated 2026-11-02 20:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-d | sonnet | idle | 11 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 677 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 51 |
+| mai-flash | mai-code-1.1-flash | gate | 51 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 9 |
 | tturbo-mac | tturbo-ultraheretic | merging | 579 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
