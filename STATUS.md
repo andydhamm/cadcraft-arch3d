@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-02 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-02 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 12 of 13: Exports and interoperability — 8 of 12 segments merged · 8 of 15 acceptance checks**
 
@@ -22,19 +22,19 @@ Updated 2026-11-02 04:45 UTC. This page and the card in the README are regenerat
 | 9 | Terrain and site | done | 12 / 12 | 19.4 h |
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
-| 12 | Exports and interoperability | building | 8 / 15 | 5.5 h so far · expected done Nov 02 06:57–Nov 02 18:05 UTC |
+| 12 | Exports and interoperability | building | 8 / 15 | 5.8 h so far · expected done Nov 02 07:18–Nov 02 18:57 UTC |
 | 13 | Polish | planned | — | — |
 
 ## Phase 12 segments
 
-8 merged, 2 working, 1 escalate, 1 merging
+8 merged, 2 escalate, 1 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p12-ifc-spaces` | IFC spaces with their areas | working | kimi-k31 |
+| `p12-ifc-spaces` | IFC spaces with their areas | escalate |  |
 | `p12-ifc-site` | IFC site location and geographic elements | escalate |  |
 | `p12-gltf-valid` | glTF passes the Khronos validator: spot cones | merging | bonsai-b |
-| `p12-docs-user-guide` | User guide: exporting IFC, OBJ and glTF | working | claude-sonnet-b |
+| `p12-docs-user-guide` | User guide: exporting IFC, OBJ and glTF | gate | claude-sonnet-b |
 
 ## Recent merges
 
@@ -59,14 +59,14 @@ Updated 2026-11-02 04:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | down | 789 |
 | bonsai-b | bonsai2-27b | merging | 732 |
-| bonsai-ws2-a | bonsai2-27b | gate | 788 |
+| bonsai-ws2-a | bonsai2-27b | gate | 789 |
 | bonsai-ws2-b | bonsai2-27b | gate | 773 |
 | claude-sonnet-a | sonnet | idle | 69 |
-| claude-sonnet-b | sonnet | agent | 66 |
+| claude-sonnet-b | sonnet | gate | 66 |
 | claude-sonnet-c | sonnet | idle | 15 |
 | claude-sonnet-d | sonnet | idle | 9 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 652 |
-| kimi-k31 | k3.1-pro-highspeed | agent | 111 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 653 |
+| kimi-k31 | k3.1-pro-highspeed | down | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 48 |
 | tturbo-mac | tturbo-ultraheretic | merging | 558 |
-| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
