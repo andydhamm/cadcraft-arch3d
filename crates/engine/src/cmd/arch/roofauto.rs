@@ -136,7 +136,9 @@ fn run_roofauto(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok(json!({"handEdited": true, "rebuilt": false}));
         }
         // Replace
-        doc.arch.roofs[idx] = built_roof;
+        let mut new_roof = built_roof;
+        new_roof.covering = doc.arch.roofs[idx].covering;
+        doc.arch.roofs[idx] = new_roof;
         rebuilt = true;
     } else {
         // Push new
@@ -183,7 +185,8 @@ pub fn refresh_auto_roofs(d: &mut Drawing) -> usize {
             continue;
         }
         match build_roof(&d.arch, roof.level, roof) {
-            Ok(new_roof) => {
+            Ok(mut new_roof) => {
+                new_roof.covering = roof.covering;
                 kept.push(new_roof);
                 rebuilt = rebuilt.saturating_add(1);
             }
@@ -208,6 +211,37 @@ mod tests {
         d.arch.levels.push(Level { name: "ground".to_string(), ceiling_height: 2.4, structure: 0.3, ..Default::default() });
         d.touch_arch();
         s
+    }
+
+    #[test]
+    fn roofauto_keeps_the_roof_covering() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]], "closed": true, "thickness": 0.2, "exterior": true}))
+            .unwrap();
+        let params = json!({"pitchRise": 6.0, "pitchRun": 12.0});
+        s.execute("roofauto", &params).unwrap();
+        assert_eq!(s.doc().unwrap().arch.roofs[0].covering, None);
+
+        // A roof that never had a covering still has none after a rebuild.
+        s.execute("roofauto", &params).unwrap();
+        assert_eq!(s.doc().unwrap().arch.roofs[0].covering, None);
+
+        s.doc_mut().unwrap().arch.roofs[0].covering = Some(Finish::Shingles);
+        s.execute("roofauto", &params).unwrap();
+        {
+            let d = s.doc().unwrap();
+            let roof = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
+            assert_eq!(roof.covering, Some(Finish::Shingles));
+            assert!(!roof.planes.is_empty());
+        }
+
+        let n = refresh_auto_roofs(s.doc_mut().unwrap());
+        assert_eq!(n, 1);
+        let d = s.doc().unwrap();
+        let roof = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
+        assert_eq!(roof.covering, Some(Finish::Shingles));
+        assert!(!roof.planes.is_empty());
     }
 
     #[test]

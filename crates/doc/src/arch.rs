@@ -8,9 +8,11 @@ use crate::Handle;
 use cadcraft_geom::{Bounds2, Vec2};
 use serde::{Deserialize, Serialize};
 
+pub mod casework;
 pub mod finish;
 pub mod light;
 pub mod site;
+pub use casework::*;
 pub use finish::*;
 pub use light::*;
 pub use site::*;
@@ -132,6 +134,8 @@ pub fn part_handle(id: ArchId, part: &str) -> Handle {
         "railing" => railing_handle(id),
         "plant" => plant_handle(id),
         "light" => light_handle(id),
+        "cabinet" | "counter" => cabinet_handle(id),
+        "fixture" => fixture_handle(id),
         _ => arch_handle(id),
     }
 }
@@ -1499,6 +1503,15 @@ pub struct ArchModel {
     pub lights: Vec<LightFixture>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub next_light_id: u32,
+    // Phase 13: cabinets and fixtures, skipped when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cabinets: Vec<Cabinet>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_cabinet_id: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixtures: Vec<Fixture>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_fixture_id: u32,
 }
 
 impl Default for ArchModel {
@@ -1526,6 +1539,10 @@ impl Default for ArchModel {
             next_plant_id: 0,
             lights: Vec::new(),
             next_light_id: 0,
+            cabinets: Vec::new(),
+            next_cabinet_id: 0,
+            fixtures: Vec::new(),
+            next_fixture_id: 0,
             plant_species: Vec::new(),
             levels: vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3 }],
             types: vec![
@@ -1608,6 +1625,26 @@ impl ArchModel {
             && self.plants.is_empty()
             && self.plant_species.is_empty()
             && self.lights.is_empty()
+            && self.cabinets.is_empty()
+            && self.fixtures.is_empty()
+    }
+
+    /// Add a cabinet and return its new id.
+    pub fn push_cabinet(&mut self, mut c: Cabinet) -> ArchId {
+        let id = ArchId(self.next_cabinet_id);
+        self.next_cabinet_id = self.next_cabinet_id.saturating_add(1);
+        c.id = id;
+        self.cabinets.push(c);
+        id
+    }
+
+    /// Add a plumbing or appliance fixture and return its new id.
+    pub fn push_fixture(&mut self, mut f: Fixture) -> ArchId {
+        let id = ArchId(self.next_fixture_id);
+        self.next_fixture_id = self.next_fixture_id.saturating_add(1);
+        f.id = id;
+        self.fixtures.push(f);
+        id
     }
 
     /// Look up a wall type by name (case-insensitive).
@@ -2296,6 +2333,18 @@ impl ArchModel {
             messages.push(msg);
         }
         if let Some(msg) = self.stale_next_id("next_view_id", self.next_view_id, self.views.iter().map(|v| v.id.0).max()) {
+            messages.push(msg);
+        }
+        if self.cabinets.len() > MAX_CABINETS {
+            messages.push(format!("model has {} cabinets, max {MAX_CABINETS}", self.cabinets.len()));
+        }
+        if self.fixtures.len() > MAX_FIXTURES {
+            messages.push(format!("model has {} fixtures, max {MAX_FIXTURES}", self.fixtures.len()));
+        }
+        if let Some(msg) = self.stale_next_id("next_cabinet_id", self.next_cabinet_id, self.cabinets.iter().map(|c| c.id.0).max()) {
+            messages.push(msg);
+        }
+        if let Some(msg) = self.stale_next_id("next_fixture_id", self.next_fixture_id, self.fixtures.iter().map(|f| f.id.0).max()) {
             messages.push(msg);
         }
 
