@@ -1494,3 +1494,6 @@
 	Samples	Семпли
 	{spp} / {total} samples	{spp} / {total} семплів
 	No compute shaders: raster Finalize	Немає обчислювальних шейдерів: растровий фінальний рендер
+	Material	Матеріал
+	cmd.material	Матеріал
+	Architecture>Material	Архітектура>Матеріал
