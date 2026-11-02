@@ -687,7 +687,7 @@ mod tests {
         let ps = path.to_string_lossy().to_string();
         let r = s.execute("export", &json!({ "path": ps })).unwrap();
         assert_eq!(r["format"], "png");
-        assert_eq!(std::fs::read(&path).unwrap(), b"export.png:2");
+        assert_eq!(std::fs::read(&path).unwrap(), b"out.png:2");
         let _ = std::fs::remove_file(&path);
         let st = s.state().unwrap();
         assert!(st.path.is_none() && st.title == "Drawing1", "the drawing keeps its name");
@@ -1013,9 +1013,8 @@ mod tests {
         let ps = path.to_string_lossy().to_string();
         let r = s.execute("export", &json!({ "path": ps })).unwrap();
         assert_eq!(r["format"], "ifc");
-        // The hook returns "export.ifc:2" for any name ending in .ifc if it's not "probe.test"
-        // But our hook logic is: `if name == "probe.test" { b"exchange" } else { format!("{name}:{}", d.model.len()) }`
-        // So for "out.ifc" it returns "out.ifc:2"
+        // The hook returns "{name}:{len}" for any name.
+        // Since we pass the file name "out.ifc", it returns "out.ifc:2"
         assert_eq!(std::fs::read(&path).unwrap(), b"out.ifc:2");
         let _ = std::fs::remove_file(&path);
     }
@@ -1031,10 +1030,12 @@ mod tests {
         let ps = path.to_string_lossy().to_string();
         let r = s.execute("export", &json!({ "path": ps })).unwrap();
         assert_eq!(r["format"], "obj");
+        // Hook receives "out.obj", returns "out.obj:2"
         assert_eq!(std::fs::read(&path).unwrap(), b"out.obj:2");
 
         let mtl_path = temp("out.mtl");
         assert_eq!(r["mtl"].as_str().unwrap(), mtl_path.to_string_lossy().as_ref());
+        // Hook receives "out.mtl", returns "out.mtl:2"
         assert_eq!(std::fs::read(&mtl_path).unwrap(), b"out.mtl:2");
 
         let _ = std::fs::remove_file(&path);
