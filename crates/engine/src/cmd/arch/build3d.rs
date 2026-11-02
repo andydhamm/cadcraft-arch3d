@@ -95,7 +95,9 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
         "probe": probe_results,
     });
     if show_digest {
-        reply.insert("digest".to_string(), scene.digest());
+        if let serde_json::Value::Object(ref mut obj) = reply {
+            obj.insert("digest".to_string(), scene.digest());
+        }
     }
 
     Ok(reply)
@@ -1242,7 +1244,7 @@ mod tests {
     fn build3d_incremental_without_a_cache_builds_everything() {
         // No cache has been seeded yet: an incremental build must seed one with a
         // full build and report incremental=false.
-        let s = t_junction_session();
+        let mut s = t_junction_session();
         let r = s.execute("build3d", &json!({"incremental": true})).unwrap();
         let incremental = r["incremental"].as_bool().expect("missing incremental");
         let rebuilt = r["rebuilt"].as_u64().expect("missing rebuilt");
@@ -1295,7 +1297,7 @@ mod tests {
     #[test]
     fn build3d_full_reports_rebuilt_equal_to_objects() {
         // A full build rebuilds every object, so rebuilt must equal objects.
-        let s = t_junction_session();
+        let mut s = t_junction_session();
         let r = s.execute("build3d", &json!({})).unwrap();
         let rebuilt = r["rebuilt"].as_u64().expect("missing rebuilt");
         let objects = r["objects"].as_u64().expect("missing objects");
@@ -1305,14 +1307,14 @@ mod tests {
 
     #[test]
     fn build3d_rejects_non_boolean_incremental() {
-        let s = wall_session();
+        let mut s = wall_session();
         let r = s.execute("build3d", &json!({"incremental": "yes"}));
         assert!(r.is_err(), "non-boolean `incremental` must be refused");
     }
 
     #[test]
     fn build3d_rejects_non_boolean_digest() {
-        let s = wall_session();
+        let mut s = wall_session();
         let r = s.execute("build3d", &json!({"digest": "true"}));
         assert!(r.is_err(), "non-boolean `digest` must be refused");
     }
