@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 13:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 22 of 24 segments merged · 9 of 13 acceptance checks**
 
@@ -23,15 +23,15 @@ Updated 2026-11-03 12:45 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 9 / 13 | 22.3 h so far · expected done Nov 03 14:29–Nov 04 06:42 UTC |
+| 13 | Polish | building | 9 / 13 | 22.6 h so far · expected done Nov 03 14:55–Nov 04 08:45 UTC |
 
 ## Phase 13 segments
 
-22 merged, 2 gate, 1 replaced, 1 abandoned
+22 merged, 1 replaced, 1 escalate, 1 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-mcp-examples` | MCP examples for agents | gate | bonsai-b |
+| `p13-mcp-examples` | MCP examples for agents | escalate |  |
 | `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | gate | mai-flash-esc |
 
 ## Recent merges
@@ -55,17 +55,17 @@ Updated 2026-11-03 12:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 842 |
-| bonsai-b | bonsai2-27b | gate | 781 |
+| bonsai-a | bonsai2-27b | agent | 843 |
+| bonsai-b | bonsai2-27b | idle | 782 |
 | bonsai-ws2-a | bonsai2-27b | merging | 853 |
 | bonsai-ws2-b | bonsai2-27b | merging | 829 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 20 |
 | claude-sonnet-d | sonnet | idle | 13 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 705 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 706 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 15 |
-| tturbo-mac | tturbo-ultraheretic | agent | 588 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 16 |
+| tturbo-mac | tturbo-ultraheretic | agent | 589 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
