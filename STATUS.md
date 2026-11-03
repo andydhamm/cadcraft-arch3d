@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 19 of 23 segments merged · 5 of 13 acceptance checks**
 
-6,794 workspace tests passing at the last merge · 701 segments merged in all · 0 of 13 seats working
+6,794 workspace tests passing at the last merge · 701 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,15 +23,15 @@ Updated 2026-11-03 06:15 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 5 / 13 | 15.8 h so far · expected done Nov 03 08:39–Nov 03 20:28 UTC |
+| 13 | Polish | building | 5 / 13 | 16.1 h so far · expected done Nov 03 08:54–Nov 03 20:43 UTC |
 
 ## Phase 13 segments
 
-19 merged, 2 queued, 1 replaced, 1 working, 1 abandoned, 1 merging
+19 merged, 2 queued, 1 replaced, 1 gate, 1 abandoned, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-io-casework` | GLB, OBJ and IFC export cabinets and fixtures | working | bonsai-a |
+| `p13-io-casework` | GLB, OBJ and IFC export cabinets and fixtures | gate | bonsai-a |
 | `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | merging | mai-flash-esc |
 
 ## Recent merges
@@ -55,14 +55,15 @@ Updated 2026-11-03 06:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 826 |
-| bonsai-b | bonsai2-27b | agent | 766 |
+| bonsai-a | bonsai2-27b | gate | 826 |
+| bonsai-b | bonsai2-27b | gate | 766 |
 | bonsai-ws2-a | bonsai2-27b | idle | 834 |
-| bonsai-ws2-b | bonsai2-27b | agent | 820 |
+| bonsai-ws2-b | bonsai2-27b | agent | 821 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 20 |
 | claude-sonnet-d | sonnet | idle | 13 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 687 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 11 |
