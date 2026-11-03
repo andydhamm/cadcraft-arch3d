@@ -2018,7 +2018,7 @@ mod tests {
     #[test]
     fn glb_texture_accessor_min_max_with_negative_uvs() {
         let mut m = wall_mesh();
-        m.uvs = vec![-1.0, 2.0], [3.0, -4.0], [0.0, 0.0]];
+        m.uvs = vec![[−1.0, 2.0], [3.0, −4.0], [0.0, 0.0]];
         let mut scene = scene_with(0);
         scene.meshes.push(m);
         let bytes = write(&scene);
