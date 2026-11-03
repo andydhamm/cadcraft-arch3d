@@ -8,13 +8,19 @@ use crate::Handle;
 use cadcraft_geom::{Bounds2, Vec2};
 use serde::{Deserialize, Serialize};
 
+pub mod backdrop;
 pub mod casework;
 pub mod finish;
+pub mod furnishing;
 pub mod light;
+pub mod paint;
 pub mod site;
+pub use backdrop::*;
 pub use casework::*;
 pub use finish::*;
+pub use furnishing::*;
 pub use light::*;
+pub use paint::*;
 pub use site::*;
 
 /// A stable identifier for an architectural object.
@@ -1512,6 +1518,26 @@ pub struct ArchModel {
     pub fixtures: Vec<Fixture>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub next_fixture_id: u32,
+    // Phase 14: furnishings, symbols, paints and backdrop, skipped when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub furnishings: Vec<Furnishing>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_furnishing_id: u32,
+    /// Every symbol a furnishing or a cabinet pull uses, by key.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub symbols: std::collections::BTreeMap<String, SymbolMesh>,
+    /// Library material and backdrop images by item id.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub images: std::collections::BTreeMap<String, ImageRgba>,
+    /// Paint by surface key.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub paints: std::collections::BTreeMap<String, Paint>,
+    /// The 3D backdrop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backdrop: Option<Backdrop>,
+    /// Set as Default: command parameters used when a command omits them.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub defaults: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for ArchModel {
@@ -1543,6 +1569,13 @@ impl Default for ArchModel {
             next_cabinet_id: 0,
             fixtures: Vec::new(),
             next_fixture_id: 0,
+            furnishings: Vec::new(),
+            next_furnishing_id: 0,
+            symbols: Default::default(),
+            images: Default::default(),
+            paints: Default::default(),
+            backdrop: None,
+            defaults: Default::default(),
             plant_species: Vec::new(),
             levels: vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3 }],
             types: vec![
@@ -1627,6 +1660,31 @@ impl ArchModel {
             && self.lights.is_empty()
             && self.cabinets.is_empty()
             && self.fixtures.is_empty()
+            && self.furnishings.is_empty()
+            && self.symbols.is_empty()
+            && self.images.is_empty()
+            && self.paints.is_empty()
+            && self.backdrop.is_none()
+            && self.defaults.is_empty()
+    }
+
+    /// Add a furnishing and return its new id.
+    pub fn push_furnishing(&mut self, mut f: Furnishing) -> ArchId {
+        let id = ArchId(self.next_furnishing_id);
+        self.next_furnishing_id = self.next_furnishing_id.saturating_add(1);
+        f.id = id;
+        self.furnishings.push(f);
+        id
+    }
+
+    /// The furnishing with id `id`.
+    pub fn furnishing(&self, id: ArchId) -> Option<&Furnishing> {
+        self.furnishings.iter().find(|f| f.id == id)
+    }
+
+    /// Mutable access to furnishing `id`.
+    pub fn furnishing_mut(&mut self, id: ArchId) -> Option<&mut Furnishing> {
+        self.furnishings.iter_mut().find(|f| f.id == id)
     }
 
     /// Add a cabinet and return its new id.
