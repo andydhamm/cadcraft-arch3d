@@ -318,8 +318,99 @@ redistributed and must allow that.
   Sweet Home 3D itself is GPL: behaviour may inform the furniture catalogue UI, its code may not be used.
 * **Local only, never in the repo:** sunvage SimHome (`huggingface.co/datasets/sunvage-lab/sunvage-vertens3d-simhome`,
   2,000 whole homes and 12,169 rooms in OpenUSD + glb) is "non-commercial research only", gated, no redistribution
-  without written permission. This is a personal, non-commercial project, so it may be used locally once Andy accepts
-  its terms: as evaluation data (room detection and area rules against real homes) or as a local furniture source read
-  from a folder outside the repository. The fork (`andydhamm/cadcraft`) is public, so none of it is ever committed.
+  without written permission. This is a personal, non-commercial project, so it may be used locally: Andy was granted
+  access on 2026-11-02. Use it as evaluation data (room detection and area rules against real homes) or as a local
+  furniture source read from a folder outside the repository (phase 14's local catalog). The fork (`andydhamm/cadcraft`)
+  is public, so none of it is ever committed, and no check depends on it.
 * **Not an asset source:** D5 Render (free Community tier, Windows + RTX) and its D5 Works library (terms not
   published on its download page). At most a check that the phase 9 glTF export renders correctly in it.
+
+## 6. The library: how content is reached and applied (from Chief's training videos, 2026-11-02)
+
+Andy supplied 29 Chief Architect training videos as the description of the library. This section is a clean-room summary
+of the **behaviour** they show, in our own words, cited as (video mm:ss); the transcripts stay outside the repository.
+Chief's catalog content belongs to its vendor and manufacturers: arch3d ships its own (section 5 lists the sources).
+
+### 6.1 The browser
+- One side panel beside the plan, opened from the View menu or a toolbar button (librarybrowser 00:09–00:32). Panels, top
+  to bottom: a filter bar, the folder tree with the filter results, a preview, details, an optional tags panel and a
+  toolbar; panels can be closed, rearranged, locked and reset (librarybrowser 03:09–08:23).
+- **Catalogs:** stock catalogs (generic core content installed at first run, plus optional extra and manufacturer
+  catalogs) are read-only and can be updated; **Copy to User Catalog** makes an editable copy, which no longer receives
+  updates. The **user catalog** holds what you make or import; items deleted from it go to a **trash** you can restore
+  from or empty (librarybrowser 00:37–03:09). Online catalogs show in results with a badge and download whole, not item by
+  item (library 01:00–04:05).
+- **Search:** typing offers a plain text search (names, keywords, folder names) and attribute filters (manufacturer,
+  style, symbol type, symbol placement, hardware, material maps, object type, part number). Each chosen filter becomes a
+  chip; chips combine with AND, a chip's X removes it, and a leftover chip can leave zero results (library 01:13–03:22;
+  librarybrowser 03:20–03:48). Back/forward through filter history; saved advanced filters (librarybrowser 03:48–04:37);
+  tags with a built-in Favorites tag, usable as a filter (librarybrowser 06:19–06:50); a grid/list toggle; search into
+  subfolders or not (librarybrowser 06:57–07:48); "show in folder" from a result (stairsandrailings 04:54).
+- **Preview and details:** the preview rotates and zooms, switches rendering style and, for a material, the sample shape;
+  details show name, folder, tags and, for user items, notes (librarybrowser 05:04–06:00).
+- **Opened from dialogs:** a specification dialog's library button opens the browser already narrowed to what fits there:
+  door styles, door hardware, appliances in a cabinet face, newels and balusters, rail and molding profiles, cladding,
+  roof and ceiling finish layers, backdrops (residentialbootcamp 32:48; doorsandwindows 06:06; appliancesandfixtures
+  07:16; stairsandrailings 02:12; kitchenandbathbootcamp 25:08; 3dcladding 02:07; suspendedceilings 01:45; backdrops
+  01:22).
+
+### 6.2 Applying an item
+- **Click, move, click:** select an item in the browser, move into a plan or 3D view without holding the button, click to
+  place; there is no drag and drop (library 01:41–01:54). The cursor tells what will happen: an outline to place, a
+  swap cursor over a part it can replace, a spray can or roller for materials (kitchenandbathbootcamp 19:14–23:41).
+- **Hosts:** what you click on decides the result.
+  - Empty floor: the item is placed on its own, at the floor (library 01:35).
+  - Over a matching part: the part is swapped, e.g. a cabinet door style or a pull (kitchenandbathbootcamp 19:23–20:39).
+  - A sink over a base cabinet snaps into it: the counter gets its cut-out and the top drawer becomes a false front
+    (appliancesandfixtures 02:53–03:09; residentialbootcamp 73:53–74:19); the sink stays a sub-object you can select and
+    nudge (appliancesandfixtures 03:17–04:05).
+  - An appliance dropped in the gap between two base cabinets gets the counter carried over it (appliancesandfixtures
+    02:07–02:24); a microwave drawer or wall oven dropped on a cabinet becomes that cabinet's face item
+    (appliancesandfixtures 05:51–09:06).
+  - A faucet snaps toward the wall behind its sink and centres on it (appliancesandfixtures 04:24–05:02).
+  - Ceiling lights hang from the room's ceiling and drop to a soffit placed under them (ceilingbasics 02:36–03:09).
+- **After placing:** open its specification (size, elevation, materials), set it as the default for the next one, centre
+  it on another object, move it point to point, copy and reflect, multiple-copy at intervals (appliancesandfixtures 04:50;
+  kitchenandbathbootcamp 34:39–36:21, 80:21; residentialbootcamp 76:09). Tab cycles through stacked objects
+  (appliancesandfixtures 03:23).
+- **Material painter:** pick a material, click a surface. **Scope** decides how far it goes: one component; the whole
+  object; every surface in the room that has the clicked material (other objects included); the floor; the plan
+  (kitchenandbathbootcamp 22:12–23:14; materials 06:24–06:44). **Paint** replaces the material; **blend** tints it and
+  keeps the texture (materials 06:55–07:19; library 05:34–05:50). An eyedropper picks a material up from a surface
+  (kitchenandbathbootcamp 27:45).
+- **Object painter (replace from library):** pick a replacement, click a target; scope component, object, room, floor or
+  plan swaps every like item in that scope (hardware, doors, stools, balusters, stair panels); a toggle switches between
+  replacing and placing (librarypainter 00:00–02:30).
+- **Into the library:** selected objects become a user-catalog item with **Add to Library** (insertionpoints 02:31–02:49;
+  kitchenandbathbootcamp 44:56–46:06); a block's insertion point can be set before adding it (insertionpoints 03:35–04:45);
+  a material can be copied into the user catalog and edited there (kitchenandbathbootcamp 77:32–78:29).
+- **Defaults:** Set as Default on a configured object makes the next one of its kind match; defaults belong to the plan
+  (doorsandwindows 04:27; residentialbootcamp 41:25–42:52; kitchenandbathbootcamp 24:14).
+
+### 6.3 Materials and finishes
+- A material has a 2D pattern (for plan and elevation hatching) and a 3D texture with scale, offset, angle and a blend
+  colour, plus a class (matte, plastic, polished, metal, glass, water…) and optional bump, normal and emissive maps
+  (materials 00:15–05:58). Editing a material changes it wherever it is used, so copy first (decks 56:17).
+- Tile and stone materials are generated from parameters (shape, layout, colours, grout) and saved to the user catalog
+  (materials 08:23–10:42; tilematerials 06:55–08:22).
+- Room types carry default floor finishes (residentialbootcamp 23:38); finish layers of ceilings and roofs take library
+  materials (suspendedceilings 01:11; 3dcladding 05:59).
+
+### 6.4 Electrical
+- Outlets, switches and can lights come from **electrical tools**, not the library; the library adds more fixtures
+  (kitchenandbathbootcamp 79:49–82:52). Work happens in an Electrical plan view (kitchenandbathbootcamp 79:25).
+- **Connections:** drag from a switch to the lights it controls; each wire is an arc you can reshape
+  (kitchenandbathbootcamp 81:36–82:14).
+- **Auto-place outlets:** in a kitchen, GFCI outlets go along the counters above the base cabinets and under the wall
+  cabinets (kitchenandbathbootcamp 82:14–82:35).
+- Lights on one circuit dim together; light sets choose which lights a view uses (smallspacelightingandvisualizing
+  22:27–23:30; interiorraytracing 08:08–10:10).
+
+### 6.5 Views of library objects
+- Every object has a plan symbol and a 3D shape; its category decides its layer and which pickers list it
+  (stairsandrailings 06:44; kitchenandbathbootcamp 42:19–43:09). Saved plan views (e.g. Electrical, Kitchen & Bath) show
+  and hide categories and labels (savedplanviews 00:10–05:38; kitchenandbathbootcamp 79:02–79:39).
+- 3D rendering techniques: standard, vector (the line style elevations use), glass house, technical illustration,
+  watercolor, hand-drawn lines, duotone, clay (a plain grey model) and physically based ray trace
+  (kitchenandbathbootcamp 84:50–86:39). Watercolor and glass house are not required (Andy 2026-11-02); technical
+  illustration is optional.
