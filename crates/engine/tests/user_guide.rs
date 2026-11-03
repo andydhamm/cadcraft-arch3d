@@ -937,9 +937,7 @@ fn user_guide_new_blocks_execute_through_the_engine() {
     assert!(found_large, "user guide should contain a large models example block");
 }
 
-/// The sh_blocks helper handles edge cases: no blocks, unterminated block, empty block.
-#[test]
-fn user_guide_sh_blocks_edge_cases() {
+/// The sh_blocks helper handles edge cases: no blocks, unterminated block, empty block.#[test]fn user_guide_sh_blocks_edge_cases() {
     // No sh blocks at all
     let blocks = sh_blocks("just some text\nno blocks here\n");
     assert_eq!(blocks.len(), 0, "no sh blocks should yield empty vec");

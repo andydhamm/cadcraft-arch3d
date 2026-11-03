@@ -375,9 +375,9 @@ The `material` command assigns finishes to exterior walls, roofs, and room floor
 appearance and are exported with embedded textures in GLB files. The path tracer uses each texture's mean colour
 for lighting calculations.
 
-- **Walls**: `siding` or `brick`. Applied to the exterior face of the wall.
-- **Roof**: `shingles` or `wood`. Applied to the roof planes.
-- **Floors**: `wood`. Applied to the room's floor surface.
+- **Walls**: `siding` or `brick` on the exterior wall faces.
+- **Roof**: `shingles` on the roof planes.
+- **Floors**: `wood` on the room floor surface.
 
 ```sh
 cargo run -q -p cadcraft-cli -- run --metric \
@@ -386,9 +386,10 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'window {"wall":"w2","offset":4.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}' \
   --cmd 'roomdetect {}' \
   --cmd 'roofauto {"pitchRise":6,"pitchRun":12,"overhang":0.5,"walls":[{"wall":"w0","directive":"gable"},{"wall":"w2","directive":"gable"}]}' \
-  --cmd 'material {"walls":["w0"],"finish":"siding"}' \
+  --cmd 'material {"walls":"exterior","finish":"siding"}' \
+  --cmd 'material {"walls":["w0"],"finish":"brick"}' \
+  --cmd 'material {"roofs":"all","finish":"shingles"}' \
   --cmd 'material {"rooms":["r0"],"finish":"wood"}' \
-  --cmd 'material {"roofs":["r0"],"finish":"shingles"}' \
   --cmd 'export {"path":"materials.glb"}' \
   --save materials.dxf
 cargo run -q -p cadcraft-cli -- render materials.dxf materials.png --adapter fallback
@@ -431,7 +432,7 @@ checking performance on large models.
 cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'arch.sample {"house":true}' \
   --cmd 'build3d {}' \
-  --cmd 'arch.wall.stretch {"wall":"w10","end":"start","to":[5,5]}' \
+  --cmd 'arch.wall.stretch {"wall":"w52","end":"end","to":[8,9.7]}' \
   --cmd 'build3d {"incremental":true}' \
   --save large-model.dxf
 ```
