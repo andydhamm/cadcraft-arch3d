@@ -40,6 +40,9 @@ pub struct DocState {
     /// The fonts missing on Windows that a save last named: the next save names them again only
     /// when they change.
     pub(crate) fonts_noted: String,
+    /// The per-document 3D scene cache. Kept on `DocState` (not `Drawing`) because undo
+    /// snapshots share `Drawing` through `Arc`; a cache there would be cloned and go stale.
+    pub(crate) scene_cache: Option<cadcraft_arch3d::SceneCache>,
 }
 
 static NEXT_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -68,6 +71,7 @@ impl DocState {
             block_edit: None,
             erased: Default::default(),
             fonts_noted: String::new(),
+            scene_cache: None,
         }
     }
     /// The drawing has changes not saved to its file, or the Block Editor has changes not yet

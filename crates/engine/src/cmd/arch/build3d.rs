@@ -6,7 +6,6 @@
 
 use std::time::Instant;
 
-use cadcraft_arch3d::build;
 use cadcraft_geom::Vec3;
 use serde_json::{Value, json};
 
@@ -14,15 +13,43 @@ use crate::Session;
 
 /// Run body. Returns `{"meshes": ..., "triangles": ..., "rebuildMs": ...,
 /// "bounds": {"min": [x,y,z], "max": [x,y,z]}, "floors": ..., "ceilings": ..., "roofs": ...,
-/// "stairs": ..., "railings": ..., "decks": ...,
-/// "openings": ..., "revision": ..., "probe": [{id, part, level} | null, ...]}`.
+/// "stairs": ..., "railings": ..., "decks": ..., "terrain": ..., "paths": ..., "plants": ...,
+/// "lights": ..., "fixtures": ..., "openings": ..., "revision": ...,
+/// "incremental": bool, "rebuilt": n, "objects": n, "probe": [{id, part, level} | null, ...]}`.
+/// With `{"digest": true}` a `"digest"` key (16 hex chars) is also present.
 /// The optional `probe` key is a list of at most 1024 `[x, y, z]` points;
 /// each element of the returned `probe` array is the hit (or `null`) for the
 /// corresponding input point, in the same order.
 fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
-    let d = s.doc()?;
+    let incremental = parse_bool_param(params, "incremental")?;
+    let show_digest = parse_bool_param(params, "digest")?;
+
+    let arch_model = s.doc()?.arch.clone();
+    let arch_revision = s.doc()?.arch_revision;
     let t = Instant::now();
-    let scene = build(&d.arch);
+
+    let (scene, stats) = {
+        let st = s.state_mut()?;
+        if incremental {
+            match st.scene_cache.as_mut() {
+                Some(cache) => {
+                    let stats = cache.update(&arch_model);
+                    (cache.scene().clone(), stats)
+                }
+                None => {
+                    let (cache, stats) = cadcraft_arch3d::SceneCache::new(&arch_model);
+                    let scene = cache.scene().clone();
+                    st.scene_cache = Some(cache);
+                    (scene, stats)
+                }
+            }
+        } else {
+            let (cache, stats) = cadcraft_arch3d::SceneCache::new(&arch_model);
+            let scene = cache.scene().clone();
+            st.scene_cache = Some(cache);
+            (scene, stats)
+        }
+    };
 
     let probe_points = parse_probe_points(params)?;
     let probe_results: Vec<Value> = probe_points
@@ -41,7 +68,7 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
         })
         .collect();
 
-    Ok(json!({
+    let mut reply = json!({
         "meshes": scene.meshes.len(),
         "triangles": scene.meshes.iter().map(|m| m.indices.len() / 3).sum::<usize>(),
         "rebuildMs": elapsed_ms(t),
@@ -63,13 +90,34 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
         "shadowMapsBuilt": super::render::stats().shadow_maps_built,
         "finalRenders": super::render::stats().final_renders,
         "openings": scene.openings_built,
-        "revision": d.arch_revision,
+        "incremental": stats.incremental,
+        "rebuilt": stats.rebuilt,
+        "objects": stats.objects,
+        "revision": arch_revision,
         "probe": probe_results,
-    }))
+    });
+    if show_digest {
+        if let serde_json::Value::Object(ref mut obj) = reply {
+            obj.insert("digest".to_string(), serde_json::Value::String(scene.digest()));
+        }
+    }
+
+    Ok(reply)
+}
+
+/// Parse an optional boolean param. Missing or `null` yields `false`; any other type is
+/// refused.
+fn parse_bool_param(params: &Value, key: &str) -> crate::Result<bool> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(false),
+        Some(v) => match v {
+            Value::Bool(b) => Ok(*b),
+            _ => Err(crate::cmd::bad("build3d", format!("`{key}` must be a boolean"))),
+        },
+    }
 }
 
 /// Parse the optional `probe` key — a JSON array of `[x, y, z]` arrays — into a
-/// capped, finite list of 3D points.
 ///
 /// Absent or `null` yields an empty list (no probing). A non-array value, an
 /// array longer than 1024 entries, an element that is not a 3-number array,
@@ -119,7 +167,7 @@ pub fn specs() -> Vec<crate::cmd::CommandSpec> {
         crate::cmd::CommandSpec::new("build3d", "Build 3D", run_build3d)
             .menu(&["Architecture", "Build 3D"])
             .noundo()
-            .params("{probe?: [[x, y, z], ...]}"),
+            .params("{probe?: [[x, y, z], ...], incremental?: bool, digest?: bool}"),
     );
     v
 }
@@ -1085,5 +1133,193 @@ mod tests {
 
         let r = s.execute("build3d", &json!({})).unwrap();
         assert_eq!(r["decks"].as_u64(), Some(1), "expected 1 deck");
+    }
+
+    /// Helper: a T-junction of two walls (shared join) plus three isolated walls, so a
+    /// stretch of one wall rebuilds only the affected join, not every wall.
+    fn t_junction_session() -> Session {
+        let mut s = fresh_session();
+        let d = s.doc_mut().unwrap();
+        d.arch.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        d.arch.walls.push(Wall {
+            id: ArchId(2),
+            start: Vec2::new(10.0, 0.0),
+            end: Vec2::new(10.0, 8.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        d.arch.walls.push(Wall {
+            id: ArchId(3),
+            start: Vec2::new(20.0, 0.0),
+            end: Vec2::new(24.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        d.arch.walls.push(Wall {
+            id: ArchId(4),
+            start: Vec2::new(28.0, 0.0),
+            end: Vec2::new(32.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        d.arch.walls.push(Wall {
+            id: ArchId(5),
+            start: Vec2::new(36.0, 0.0),
+            end: Vec2::new(40.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        d.touch_arch();
+        s
+    }
+
+    #[test]
+    fn build3d_incremental_after_one_stretch_rebuilds_few_objects() {
+        use cadcraft_arch::join::{End, stretch_wall};
+
+        let mut s = t_junction_session();
+
+        // Seed the cache with a full build.
+        s.execute("build3d", &json!({})).unwrap();
+
+        // Stretch wall 1's end from (10,0) to (11,0); the T-stem (wall 2) is affected.
+        let d = s.doc_mut().unwrap();
+        stretch_wall(&mut d.arch, ArchId(1), End::End, Vec2::new(11.0, 0.0)).unwrap();
+        d.touch_arch();
+
+        let r = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        let rebuilt = r["rebuilt"].as_u64().expect("missing rebuilt");
+        let objects = r["objects"].as_u64().expect("missing objects");
+
+        assert!(rebuilt >= 1, "at least one object should be rebuilt, got {}", rebuilt);
+        assert!(rebuilt <= 2, "stretching one wall should rebuild at most 2 objects (got {} out of {})", rebuilt, objects);
+        assert_eq!(objects, 5, "scene should still have 5 wall objects, got {}", objects);
+    }
+
+    #[test]
+    fn build3d_incremental_digest_equals_a_full_build() {
+        use cadcraft_arch::join::{End, stretch_wall};
+
+        let mut s = t_junction_session();
+
+        // Seed the cache, get the baseline digest.
+        let r = s.execute("build3d", &json!({"digest": true})).unwrap();
+        let baseline_digest = r["digest"].as_str().expect("missing digest");
+
+        // Save the original wall state for a proper undo (stretch_wall also moves
+        // the T-stem at the shared join).
+        let original_walls = s.doc().unwrap().arch.walls.clone();
+
+        // Stretch wall 1, then restore it (simulating undo).
+        {
+            let d = s.doc_mut().unwrap();
+            stretch_wall(&mut d.arch, ArchId(1), End::End, Vec2::new(11.0, 0.0)).unwrap();
+            d.touch_arch();
+        }
+        let r_stretched = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
+        let stretched_digest = r_stretched["digest"].as_str().expect("missing digest");
+        assert!(stretched_digest != baseline_digest, "stretch should change the scene digest");
+
+        // Restore ALL walls to their original state (proper undo).
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.walls = original_walls;
+            d.touch_arch();
+        }
+        let r_undone = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
+        let undone_digest = r_undone["digest"].as_str().expect("missing digest");
+
+        // The scene after undo must be digest-identical to the original full build.
+        assert_eq!(undone_digest, baseline_digest, "undo should restore the original scene: {} != {}", undone_digest, baseline_digest);
+    }
+
+    #[test]
+    fn build3d_incremental_without_a_cache_builds_everything() {
+        // No cache has been seeded yet: an incremental build must seed one with a
+        // full build and report incremental=false.
+        let mut s = t_junction_session();
+        let r = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        let incremental = r["incremental"].as_bool().expect("missing incremental");
+        let rebuilt = r["rebuilt"].as_u64().expect("missing rebuilt");
+        let objects = r["objects"].as_u64().expect("missing objects");
+
+        assert!(!incremental, "a first incremental build (no cache) is a full build: incremental should be false");
+        assert_eq!(rebuilt, objects, "first build must rebuild every object: rebuilt={} objects={}", rebuilt, objects);
+    }
+
+    #[test]
+    fn build3d_incremental_follows_undo() {
+        use cadcraft_arch::join::{End, stretch_wall};
+
+        let mut s = t_junction_session();
+
+        // Baseline: full build, no digest.
+        s.execute("build3d", &json!({})).unwrap();
+
+        // Stretch wall 1.
+        {
+            let d = s.doc_mut().unwrap();
+            stretch_wall(&mut d.arch, ArchId(1), End::End, Vec2::new(11.0, 0.0)).unwrap();
+            d.touch_arch();
+        }
+        // Incremental: few rebuilds.
+        let r_stretched = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        let rebuilt = r_stretched["rebuilt"].as_u64().expect("missing rebuilt");
+        assert!(rebuilt >= 1 && rebuilt <= 2, "stretch rebuilds a few: rebuilt={}", rebuilt);
+
+        // Undo: restore wall 1's end.
+        {
+            let d = s.doc_mut().unwrap();
+            if let Some(w) = d.arch.walls.iter_mut().find(|w| w.id == ArchId(1)) {
+                w.end = Vec2::new(10.0, 0.0);
+            }
+            d.touch_arch();
+        }
+        // Incremental again: must produce a scene whose wall-1 mesh matches a full build of
+        // the restored model.
+        let r_undone = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
+        let undone_digest = r_undone["digest"].as_str().expect("missing digest");
+
+        // The full-build digest of the same restored model must agree.
+        let r_full = s.execute("build3d", &json!({"digest": true})).unwrap();
+        let full_digest = r_full["digest"].as_str().expect("missing digest");
+
+        assert_eq!(undone_digest, full_digest, "incremental-after-undo digest {} must equal full digest {}", undone_digest, full_digest);
+    }
+
+    #[test]
+    fn build3d_full_reports_rebuilt_equal_to_objects() {
+        // A full build rebuilds every object, so rebuilt must equal objects.
+        let mut s = t_junction_session();
+        let r = s.execute("build3d", &json!({})).unwrap();
+        let rebuilt = r["rebuilt"].as_u64().expect("missing rebuilt");
+        let objects = r["objects"].as_u64().expect("missing objects");
+
+        assert_eq!(rebuilt, objects, "full build must rebuild all objects: rebuilt={} objects={}", rebuilt, objects);
+    }
+
+    #[test]
+    fn build3d_rejects_non_boolean_incremental() {
+        let mut s = wall_session();
+        let r = s.execute("build3d", &json!({"incremental": "yes"}));
+        assert!(r.is_err(), "non-boolean `incremental` must be refused");
+    }
+
+    #[test]
+    fn build3d_rejects_non_boolean_digest() {
+        let mut s = wall_session();
+        let r = s.execute("build3d", &json!({"digest": "true"}));
+        assert!(r.is_err(), "non-boolean `digest` must be refused");
     }
 }

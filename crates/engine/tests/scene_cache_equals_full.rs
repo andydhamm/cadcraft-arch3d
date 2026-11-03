@@ -153,6 +153,24 @@ fn the_scene_cache_follows_every_edit_of_the_300_wall_sample() {
 }
 
 #[test]
+fn the_benchmark_house_bench_edit_rebuilds_a_few_objects() {
+    // Phase-13 check 08 times this edit: `arch.sample {"house": true}` names an interior wall end and a point 0.3 m
+    // along the wall; the stretch takes the X join there with it, out and back.
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let r = s.execute("arch.sample", &json!({"house": true})).expect("the benchmark house");
+    let b = &r["bench"];
+    let (mut cache, full) = SceneCache::new(&s.doc().expect("a drawing").arch);
+    for to in [&b["to"], &b["from"]] {
+        s.execute("arch.wall.stretch", &json!({"wall": b["wall"], "end": b["end"], "to": to})).expect("the bench stretch");
+        let m = s.doc().expect("a drawing").arch.clone();
+        let stats = cache.update(&m);
+        assert_eq!(signature(cache.scene()), signature(&Scene3d::build(&m)), "the bench edit to {to}: {stats:?}");
+        assert!(stats.incremental && stats.rebuilt >= 1 && stats.rebuilt * 10 <= full.objects, "the bench edit to {to}: {stats:?}");
+    }
+}
+
+#[test]
 fn an_update_without_an_edit_rebuilds_nothing() {
     let m = house();
     let (mut cache, _) = SceneCache::new(&m);
