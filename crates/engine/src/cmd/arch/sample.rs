@@ -211,176 +211,129 @@ fn push_benchmark_wall(
     model.push_wall(w)
 }
 
-/// Build the phase-13 benchmark house fixture: a two-level house with a
-/// deterministic plan, legal openings, rooms on both levels and a single hip
-/// roof on Level 2.
+/// Grid lines of the benchmark house plan (centre lines): 9 bays of 2 m across
+/// x and 6 of 2 m across y, an 18 × 12 m footprint.
+const HOUSE_X: [f64; 10] = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0];
+const HOUSE_Y: [f64; 7] = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0];
+
+/// A closet in the top-right corner of a bay: `CLOSET_W` along x, `CLOSET_D`
+/// along y. Its two partitions meet in an L and end on the middle of the bay's
+/// top wall and on the bay's right wall (T joins on the walls' sides).
+const CLOSET_W: f64 = 1.0;
+const CLOSET_D: f64 = 0.6;
+
+/// Bays (column, row) that get a closet: a checkerboard of the 8 × 4 bays whose
+/// top and right walls are partitions, so a closet never touches the ring.
+fn house_closet_bays() -> impl Iterator<Item = (usize, usize)> {
+    (0..4usize).flat_map(|row| (0..8usize).map(move |col| (col, row))).filter(|(col, row)| (col + row) % 2 == 0)
+}
+
+/// Build the phase-13 benchmark house fixture: two identical levels on an
+/// 18 × 12 m footprint. Per level: the exterior ring split into 30 segments
+/// where the partitions meet it (T joins), a 2 m grid of partitions split at
+/// every crossing (X joins: four ends at one point), 16 closets whose two walls
+/// meet in an L and end on other walls' sides (T joins), and the ring's four
+/// corners (L joins): 155 walls per level, 310 in all. 60 windows (one per ring
+/// segment) and 100 doors on partitions that no closet ends on; rooms come from
+/// `detect_rooms`; Level 2 gets the automatic hip roof `roofauto` would make.
+/// The bench edit pulls the end of the Level 1 partition (8,8)→(8,10) 0.3 m
+/// back along itself; `arch.wall.stretch` takes the X join at (8,10) with it.
 fn build_benchmark_house() -> crate::Result<(ArchModel, Value)> {
+    use cadcraft_geom::Vec2;
+    let err = |m: String| crate::EngineError::Other(format!("benchmark house: {m}"));
     let mut model = ArchModel::default();
     model.levels = vec![
         Level { index: 1, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() },
         Level { index: 2, name: "Level 2".into(), elevation: 2.7, ceiling_height: 2.4, structure: 0.3, ..Default::default() },
     ];
-
-    for level in 1u32..=2u32 {
-        let target = 150usize;
-        let start_count = model.walls.len();
-
-        let ring = [
-            cadcraft_geom::Vec2::new(0.0, 0.0),
-            cadcraft_geom::Vec2::new(3.0, 0.0),
-            cadcraft_geom::Vec2::new(6.0, 0.0),
-            cadcraft_geom::Vec2::new(9.0, 0.0),
-            cadcraft_geom::Vec2::new(12.0, 0.0),
-            cadcraft_geom::Vec2::new(15.0, 0.0),
-            cadcraft_geom::Vec2::new(18.0, 0.0),
-            cadcraft_geom::Vec2::new(18.0, 3.0),
-            cadcraft_geom::Vec2::new(18.0, 6.0),
-            cadcraft_geom::Vec2::new(18.0, 9.0),
-            cadcraft_geom::Vec2::new(18.0, 12.0),
-            cadcraft_geom::Vec2::new(15.0, 12.0),
-            cadcraft_geom::Vec2::new(12.0, 12.0),
-            cadcraft_geom::Vec2::new(9.0, 12.0),
-            cadcraft_geom::Vec2::new(6.0, 12.0),
-            cadcraft_geom::Vec2::new(3.0, 12.0),
-            cadcraft_geom::Vec2::new(0.0, 12.0),
-            cadcraft_geom::Vec2::new(0.0, 9.0),
-            cadcraft_geom::Vec2::new(0.0, 6.0),
-            cadcraft_geom::Vec2::new(0.0, 3.0),
-            cadcraft_geom::Vec2::new(0.0, 0.0),
-        ];
-        for i in 0..ring.len().saturating_sub(1) {
-            push_benchmark_wall(&mut model, ring[i], ring[i + 1], level, true, 0.2);
+    let (nx, ny) = (HOUSE_X.len() - 1, HOUSE_Y.len() - 1);
+    let (xmax, ymax) = (HOUSE_X[nx], HOUSE_Y[ny]);
+    let mut hosts = std::collections::BTreeSet::new();
+    let mut walls_by_level: Vec<(Vec<ArchId>, Vec<ArchId>)> = Vec::new();
+    for level in 1u32..=2 {
+        let mut ring = Vec::new();
+        for i in 0..nx {
+            ring.push(push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i], 0.0), Vec2::new(HOUSE_X[i + 1], 0.0), level, true, 0.2));
         }
-
-        for x in 0..=6 {
-            let x_coord = x as f64 * 3.0;
-            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x_coord, 0.0), cadcraft_geom::Vec2::new(x_coord, 12.0), level, false, 0.12);
+        for j in 0..ny {
+            ring.push(push_benchmark_wall(&mut model, Vec2::new(xmax, HOUSE_Y[j]), Vec2::new(xmax, HOUSE_Y[j + 1]), level, true, 0.2));
         }
-        for y in 0..=4 {
-            let y_coord = y as f64 * 3.0;
-            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(0.0, y_coord), cadcraft_geom::Vec2::new(18.0, y_coord), level, false, 0.12);
+        for i in (0..nx).rev() {
+            ring.push(push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i + 1], ymax), Vec2::new(HOUSE_X[i], ymax), level, true, 0.2));
         }
-
-        for i in 0..=12 {
-            let x = 0.5 + i as f64 * 1.25;
-            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, 1.0), cadcraft_geom::Vec2::new(x, 11.0), level, false, 0.12);
+        for j in (0..ny).rev() {
+            ring.push(push_benchmark_wall(&mut model, Vec2::new(0.0, HOUSE_Y[j + 1]), Vec2::new(0.0, HOUSE_Y[j]), level, true, 0.2));
         }
-        for j in 0..=10 {
-            let y = 0.8 + j as f64 * 1.0;
-            push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(1.0, y), cadcraft_geom::Vec2::new(17.0, y), level, false, 0.12);
-        }
-
-        while model.walls.len() - start_count < target {
-            let idx = model.walls.len() - start_count;
-            let x = 0.5 + (idx as f64 * 0.9).rem_euclid(17.5);
-            let y0 = 0.8 + (idx as f64 * 0.7).rem_euclid(10.5);
-            let y1 = y0 + 1.2 + ((idx % 4) as f64) * 0.4;
-            if idx % 2 == 0 {
-                push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, y0), cadcraft_geom::Vec2::new(x, y1), level, false, 0.12);
-            } else {
-                let x1 = x + 1.3 + ((idx % 3) as f64) * 0.5;
-                push_benchmark_wall(&mut model, cadcraft_geom::Vec2::new(x, y0), cadcraft_geom::Vec2::new(x1, y0), level, false, 0.12);
+        // Partitions: x-line i between bays i-1 and i, segment j spans row j; y-line j likewise.
+        let mut x_seg = std::collections::BTreeMap::new();
+        let mut y_seg = std::collections::BTreeMap::new();
+        let mut partitions = Vec::new();
+        for i in 1..nx {
+            for j in 0..ny {
+                let id = push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i], HOUSE_Y[j]), Vec2::new(HOUSE_X[i], HOUSE_Y[j + 1]), level, false, 0.12);
+                x_seg.insert((i, j), id);
+                partitions.push(id);
             }
+        }
+        for j in 1..ny {
+            for i in 0..nx {
+                let id = push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i], HOUSE_Y[j]), Vec2::new(HOUSE_X[i + 1], HOUSE_Y[j]), level, false, 0.12);
+                y_seg.insert((i, j), id);
+                partitions.push(id);
+            }
+        }
+        for (col, row) in house_closet_bays() {
+            let (right, top) = (HOUSE_X[col + 1], HOUSE_Y[row + 1]);
+            let corner = Vec2::new(right - CLOSET_W, top - CLOSET_D);
+            push_benchmark_wall(&mut model, Vec2::new(right - CLOSET_W, top), corner, level, false, 0.12);
+            push_benchmark_wall(&mut model, corner, Vec2::new(right, top - CLOSET_D), level, false, 0.12);
+            hosts.extend(y_seg.get(&(col, row + 1)).copied());
+            hosts.extend(x_seg.get(&(col + 1, row)).copied());
+        }
+        walls_by_level.push((ring, partitions));
+    }
+
+    // One window centred on every ring segment, then doors centred on the
+    // partitions no closet ends on, 50 per level.
+    const DOORS_PER_LEVEL: usize = 50;
+    for (ring, partitions) in &walls_by_level {
+        for &id in ring {
+            let len = model.wall(id).map(|w| w.start.dist(w.end)).ok_or_else(|| err(format!("ring wall {id} missing")))?;
+            validate_placement(&model, id, len / 2.0, 1.2, 0.9, 1.2, OpeningKind::Window, "slider", None)
+                .map_err(|e| err(format!("window on {id}: {}", e.0)))?;
+            let mut o = Opening::new(id, len / 2.0, 1.2, 1.2, OpeningKind::Window);
+            o.sill = 0.9;
+            o.style = "slider".to_string();
+            model.push_opening(o);
+        }
+        for &id in partitions.iter().filter(|id| !hosts.contains(*id)).take(DOORS_PER_LEVEL) {
+            let len = model.wall(id).map(|w| w.start.dist(w.end)).ok_or_else(|| err(format!("partition {id} missing")))?;
+            validate_placement(&model, id, len / 2.0, 0.9, 0.0, 2.1, OpeningKind::Door, "hinged", None)
+                .map_err(|e| err(format!("door on {id}: {}", e.0)))?;
+            let mut o = Opening::new(id, len / 2.0, 0.9, 2.1, OpeningKind::Door);
+            o.style = "hinged".to_string();
+            o.sill = 0.0;
+            model.push_opening(o);
         }
     }
 
-    let mut placed_windows = 0usize;
-    let mut placed_doors = 0usize;
-    let target_openings = 150usize;
-    let wall_ids: Vec<_> = model.walls.iter().filter(|wall| wall.start.dist(wall.end) >= 1.5).map(|wall| wall.id).collect();
-
-    for wall_id in wall_ids {
-        if placed_windows + placed_doors >= target_openings {
-            break;
-        }
-        let wall = model.wall(wall_id).ok_or_else(|| crate::EngineError::Other(format!("benchmark wall {wall_id:?} missing")))?;
-        let length = wall.start.dist(wall.end);
-        if length <= 0.0 || !length.is_finite() {
-            continue;
-        }
-        let offsets = [0.25 * length, 0.35 * length, 0.5 * length, 0.6 * length];
-        if wall.exterior && placed_windows < 80 {
-            for offset in offsets {
-                if validate_placement(&model, wall_id, offset, 1.2, 0.9, 1.2, OpeningKind::Window, "slider", None).is_ok() {
-                    let mut o = Opening::new(wall_id, offset, 1.2, 1.2, OpeningKind::Window);
-                    o.sill = 0.9;
-                    o.style = "slider".to_string();
-                    model.push_opening(o);
-                    placed_windows += 1;
-                    break;
-                }
-            }
-        } else if !wall.exterior && placed_doors < 80 {
-            for offset in offsets {
-                if validate_placement(&model, wall_id, offset, 0.9, 0.0, 2.1, OpeningKind::Door, "hinged", None).is_ok() {
-                    let mut o = Opening::new(wall_id, offset, 0.9, 2.1, OpeningKind::Door);
-                    o.style = "hinged".to_string();
-                    o.sill = 0.0;
-                    model.push_opening(o);
-                    placed_doors += 1;
-                    break;
-                }
-            }
-        }
+    for room in cadcraft_arch::room::detect_rooms(&model) {
+        model.push_room(room);
     }
 
-    let mut rooms = cadcraft_arch::room::detect_rooms(&model);
-    if rooms.len() < 15 {
-        rooms.clear();
-        for level in 1u32..=2u32 {
-            for row in 0..4usize {
-                for col in 0..4usize {
-                    let x0 = 1.5 + col as f64 * 4.0;
-                    let y0 = 1.5 + row as f64 * 2.75;
-                    let polygon = vec![
-                        cadcraft_geom::Vec2::new(x0, y0),
-                        cadcraft_geom::Vec2::new(x0 + 3.5, y0),
-                        cadcraft_geom::Vec2::new(x0 + 3.5, y0 + 2.5),
-                        cadcraft_geom::Vec2::new(x0, y0 + 2.5),
-                    ];
-                    let mut room = cadcraft_doc::Room {
-                        name: format!("Room {level}-{row}-{col}"),
-                        room_type: cadcraft_doc::RoomType::Living,
-                        level,
-                        polygon,
-                        ..cadcraft_doc::Room::default()
-                    };
-                    room.interior_area = 8.75;
-                    model.push_room(room);
-                }
-            }
-        }
-    } else {
-        for room in rooms {
-            model.push_room(room);
-        }
-    }
-
-    let roof = cadcraft_doc::Roof {
-        level: 2,
-        pitch_rise: 6.0,
-        pitch_run: 12.0,
-        overhang: 0.5,
-        thickness: 0.2,
-        fascia: true,
-        soffit: true,
-        manual: false,
-        hand_edited: false,
-        ..Default::default()
-    };
+    let auto = cadcraft_doc::Roof { level: 2, pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, fascia: true, soffit: true, ..Default::default() };
+    let roof = cadcraft_arch::roof::build_roof(&model, 2, &auto).map_err(|e| err(format!("roof: {e:?}")))?;
     model.push_roof(roof);
 
+    let (from, to) = (Vec2::new(8.0, 10.0), Vec2::new(8.0, 9.7));
     let bench_wall = model
         .walls
         .iter()
-        .find(|w| w.base_level == 1 && !w.exterior && w.start.is_finite() && w.end.is_finite() && w.start.dist(w.end) > 0.4)
-        .ok_or_else(|| crate::EngineError::Other("benchmark house has no interior Level 1 wall for the bench edit".to_string()))?;
-    let axis = (bench_wall.end - bench_wall.start).normalized();
-    let from = bench_wall.start;
-    let to = bench_wall.start + axis * 0.3;
+        .find(|w| w.base_level == 1 && !w.exterior && w.start == Vec2::new(8.0, 8.0) && w.end == from)
+        .ok_or_else(|| err("no Level 1 partition (8,8)→(8,10) for the bench edit".into()))?;
     let bench = json!({
         "wall": format!("w{}", bench_wall.id.0),
-        "end": "start",
+        "end": "end",
         "from": [from.x, from.y],
         "to": [to.x, to.y],
     });
@@ -894,13 +847,77 @@ mod tests {
     fn house_sample_has_300_walls_on_two_levels() {
         let mut s = fresh_session();
         let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
-        let walls = r["walls"].as_u64().unwrap();
         let d = s.doc().unwrap();
-        assert!(walls >= 120, "expected a house-scale wall count, got {walls}");
+        let walls = r["walls"].as_u64().unwrap() as usize;
+        assert!((300..=320).contains(&walls), "expected 300 to 320 walls, got {walls}");
+        assert_eq!(d.arch.walls.len(), walls);
         assert_eq!(r["levels"].as_u64(), Some(2));
-        assert!(d.arch.walls.len() >= 120, "expected at least 120 walls, got {}", d.arch.walls.len());
-        assert_eq!(d.arch.levels.len(), 2);
-        assert_eq!(d.arch.levels.iter().filter(|l| l.index == 1 || l.index == 2).count(), 2);
+        assert_eq!(d.arch.levels.iter().map(|l| (l.index, l.elevation)).collect::<Vec<_>>(), vec![(1, 0.0), (2, 2.7)]);
+        for level in 1..=2 {
+            let on = d.arch.walls.iter().filter(|w| w.base_level == level).count();
+            assert!(on >= 120, "expected at least 120 walls on level {level}, got {on}");
+        }
+        assert!(d.arch.walls.iter().any(|w| w.exterior) && d.arch.walls.iter().any(|w| !w.exterior));
+    }
+
+    /// L, T and X joins per level from the walls' centre lines, counted the way
+    /// the phase-13 acceptance check counts them: ends within 1e-4 form a
+    /// cluster; 2 non-collinear ends are an L, 3 a T, 4 or more an X; a lone end
+    /// on another wall's side is a T; two walls crossing in their interiors an X.
+    fn classify_joins(walls: &[cadcraft_doc::Wall]) -> (usize, usize, usize) {
+        let key = |p: cadcraft_geom::Vec2| ((p.x / 1e-4).round() as i64, (p.y / 1e-4).round() as i64);
+        let (mut l, mut t, mut x) = (0, 0, 0);
+        let mut levels: Vec<u32> = walls.iter().map(|w| w.base_level).collect();
+        levels.sort_unstable();
+        levels.dedup();
+        for level in levels {
+            let ws: Vec<_> = walls.iter().filter(|w| w.base_level == level).collect();
+            let mut clusters = std::collections::BTreeMap::<(i64, i64), Vec<(cadcraft_geom::Vec2, cadcraft_geom::Vec2)>>::new();
+            for w in &ws {
+                clusters.entry(key(w.start)).or_default().push((w.start, w.end));
+                clusters.entry(key(w.end)).or_default().push((w.end, w.start));
+            }
+            for ends in clusters.values() {
+                match ends.len() {
+                    2 => {
+                        let (u, v) = (ends[0].1 - ends[0].0, ends[1].1 - ends[1].0);
+                        if (u.x * v.y - u.y * v.x).abs() / (u.len() * v.len()) > 0.5 {
+                            l += 1;
+                        }
+                    }
+                    3 => t += 1,
+                    n if n >= 4 => x += 1,
+                    _ => {}
+                }
+            }
+            for w in &ws {
+                for p in [w.start, w.end] {
+                    if clusters.get(&key(p)).is_some_and(|c| c.len() > 1) {
+                        continue;
+                    }
+                    let on_side = ws.iter().any(|o| {
+                        let d = o.end - o.start;
+                        let ll = d.x * d.x + d.y * d.y;
+                        let k = ((p.x - o.start.x) * d.x + (p.y - o.start.y) * d.y) / ll.max(1e-300);
+                        !std::ptr::eq(*o, *w) && ll > 0.0 && 0.01 < k && k < 0.99 && (o.start + d * k).dist(p) <= o.thickness / 2.0 + 1e-6
+                    });
+                    t += usize::from(on_side);
+                }
+            }
+            for (i, a) in ws.iter().enumerate() {
+                for b in &ws[i + 1..] {
+                    let (r, q) = (a.end - a.start, b.end - b.start);
+                    let den = r.x * q.y - r.y * q.x;
+                    if den.abs() < 1e-12 {
+                        continue;
+                    }
+                    let e = b.start - a.start;
+                    let (ta, tb) = ((e.x * q.y - e.y * q.x) / den, (e.x * r.y - e.y * r.x) / den);
+                    x += usize::from(0.01 < ta && ta < 0.99 && 0.01 < tb && tb < 0.99);
+                }
+            }
+        }
+        (l, t, x)
     }
 
     #[test]
@@ -908,20 +925,17 @@ mod tests {
         let mut s = fresh_session();
         s.execute("arch.sample", &json!({ "house": true })).unwrap();
         let d = s.doc().unwrap();
-        let mut point_counts = std::collections::HashMap::<(i64, i64), usize>::new();
-        let epsilon = 1e-6;
-        for wall in &d.arch.walls {
-            for pt in [wall.start, wall.end] {
-                let key = ((pt.x / epsilon).round() as i64, (pt.y / epsilon).round() as i64);
-                *point_counts.entry(key).or_insert(0) += 1;
+        let (l, t, x) = classify_joins(&d.arch.walls);
+        assert!(l >= 8 && t >= 8 && x >= 8, "expected at least 8 L, 8 T and 8 X joins, saw L={l} T={t} X={x}");
+        // The ring's corners are L joins on each level, so every corner has exactly two wall ends.
+        for level in 1..=2 {
+            let ends = |p: cadcraft_geom::Vec2| {
+                d.arch.walls.iter().filter(|w| w.base_level == level).filter(|w| w.start == p || w.end == p).count()
+            };
+            for c in [(0.0, 0.0), (18.0, 0.0), (18.0, 12.0), (0.0, 12.0)] {
+                assert_eq!(ends(cadcraft_geom::Vec2::new(c.0, c.1)), 2, "corner {c:?} on level {level}");
             }
         }
-        let l = point_counts.values().filter(|&&count| count == 2).count();
-        let t = point_counts.values().filter(|&&count| count == 3).count();
-        let x = point_counts.values().filter(|&&count| count >= 4).count();
-        println!("join degrees: L={l} T={t} X={x} distinct={} total={} ", point_counts.len(), point_counts.values().sum::<usize>());
-        assert!(l >= 8, "expected at least 8 L joins, saw {l}");
-        assert!(x >= 8, "expected at least 8 X joins, saw {x}");
     }
 
     #[test]
@@ -930,15 +944,14 @@ mod tests {
         let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
         let openings = r["openings"].as_u64().unwrap();
         let d = s.doc().unwrap();
-        let windows = d.arch.openings.iter().filter(|o| o.kind == OpeningKind::Window).count();
-        let doors = d.arch.openings.iter().filter(|o| o.kind == OpeningKind::Door).count();
-        println!("openings={openings} model={} windows={} doors={}", d.arch.openings.len(), windows, doors);
-        assert!((120..=170).contains(&openings));
+        let host = |o: &Opening| d.arch.wall(o.host).expect("opening host missing");
+        let windows = d.arch.openings.iter().filter(|o| o.kind == OpeningKind::Window && host(o).exterior).count();
+        let doors = d.arch.openings.iter().filter(|o| o.kind == OpeningKind::Door && !host(o).exterior).count();
+        assert!((150..=170).contains(&openings), "expected 150 to 170 openings, got {openings}");
         assert_eq!(d.arch.openings.len(), openings as usize);
-        assert!(windows >= 40, "expected at least 40 windows, got {windows}");
-        assert!(doors >= 40, "expected at least 40 doors, got {doors}");
+        assert!(windows >= 40, "expected at least 40 windows in exterior walls, got {windows}");
+        assert!(doors >= 40, "expected at least 40 doors in partitions, got {doors}");
         for opening in &d.arch.openings {
-            let wall = d.arch.wall(opening.host).expect("opening host missing");
             assert!(
                 validate_placement(
                     &d.arch,
@@ -955,7 +968,7 @@ mod tests {
                 "invalid opening {:?}",
                 opening.id
             );
-            assert!((1..=2).contains(&wall.base_level), "house openings should be on level 1 or 2");
+            assert!((1..=2).contains(&host(opening).base_level), "house openings should be on level 1 or 2");
         }
     }
 
@@ -964,16 +977,20 @@ mod tests {
         let mut s = fresh_session();
         let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
         let d = s.doc().unwrap();
-        let rooms_l1 = d.arch.rooms.iter().filter(|room| room.level == 1).count();
-        let rooms_l2 = d.arch.rooms.iter().filter(|room| room.level == 2).count();
-        assert!(rooms_l1 >= 1, "expected at least one room on Level 1, got {rooms_l1}");
-        assert!(rooms_l2 >= 1, "expected at least one room on Level 2, got {rooms_l2}");
+        for level in 1..=2 {
+            let rooms = d.arch.rooms.iter().filter(|room| room.level == level).count();
+            assert!(rooms >= 15, "expected at least 15 detected rooms on level {level}, got {rooms}");
+        }
+        assert_eq!(r["rooms"].as_u64(), Some(d.arch.rooms.len() as u64));
         assert_eq!(d.arch.roofs.len(), 1, "expected one automatic roof");
-        assert_eq!(d.arch.roofs[0].level, 2, "roof should be on Level 2");
+        let roof = &d.arch.roofs[0];
+        assert_eq!(roof.level, 2, "roof should be on Level 2");
         assert_eq!(r["roofs"].as_u64(), Some(1));
-        assert_eq!(d.arch.roofs[0].pitch_rise, 6.0);
-        assert_eq!(d.arch.roofs[0].pitch_run, 12.0);
-        assert_eq!(d.arch.roofs[0].overhang, 0.5);
+        assert_eq!((roof.pitch_rise, roof.pitch_run, roof.overhang), (6.0, 12.0, 0.5));
+        assert!(!roof.manual && !roof.hand_edited);
+        assert!(roof.planes.len() >= 4, "a hip roof has at least 4 planes, got {}", roof.planes.len());
+        assert!(roof.planes.iter().all(|p| p.slope.is_finite() && p.slope > 0.1), "no vertical (gable) plane: {:?}",
+            roof.planes.iter().map(|p| p.slope).collect::<Vec<_>>());
     }
 
     #[test]
