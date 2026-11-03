@@ -173,4 +173,86 @@ mod tests {
         x.rotation = 45.0;
         assert!(fixture_symbol(&x).iter().flatten().all(|p| p.is_finite()));
     }
+
+    #[test]
+    fn cabinet_with_nan_position_has_no_symbol() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.position = Vec2::new(f64::NAN, 0.0);
+        let s = cabinet_symbol(&c);
+        assert!(s.is_empty(), "NaN position should produce no symbol");
+    }
+
+    #[test]
+    fn cabinet_with_nan_rotation_has_no_symbol() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.rotation = f64::NAN;
+        let s = cabinet_symbol(&c);
+        assert!(s.is_empty(), "NaN rotation should produce no symbol");
+    }
+
+    #[test]
+    fn cabinet_with_nan_width_has_no_symbol() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.width = f64::NAN;
+        let s = cabinet_symbol(&c);
+        assert!(s.is_empty(), "NaN width should produce no symbol");
+    }
+
+    #[test]
+    fn fixture_with_nan_depth_has_no_symbol() {
+        let mut f = fixture_defaults(FixtureKind::Sink);
+        f.depth = f64::NAN;
+        let s = fixture_symbol(&f);
+        assert!(s.is_empty(), "NaN depth should produce no symbol");
+    }
+
+    #[test]
+    fn all_fixture_kinds_produce_symbols() {
+        for kind in [
+            FixtureKind::Sink,
+            FixtureKind::Lavatory,
+            FixtureKind::Toilet,
+            FixtureKind::Bathtub,
+            FixtureKind::Shower,
+            FixtureKind::Range,
+            FixtureKind::Refrigerator,
+            FixtureKind::Dishwasher,
+        ] {
+            let f = fixture_defaults(kind);
+            let s = fixture_symbol(&f);
+            assert!(!s.is_empty(), "fixture {:?} should produce a symbol", kind);
+            assert!(s.iter().all(|r| !r.is_empty()), "fixture {:?} should have non-empty rings", kind);
+            assert!(s.iter().flatten().all(|p| p.is_finite()), "fixture {:?} should have finite points", kind);
+        }
+    }
+
+    #[test]
+    fn cabinet_rotated_180_flips_symbol() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.rotation = 180.0;
+        let s = cabinet_symbol(&c);
+        // Local (-0.3, 0) -> (0.3, 0); local (0.3, 0.6) -> (-0.3, -0.6).
+        assert!(near(s[0][0], 0.3, 0.0), "rotated 180 should flip x");
+        assert!(near(s[0][2], -0.3, -0.6), "rotated 180 should flip both axes");
+    }
+
+    #[test]
+    fn cabinet_with_huge_values_is_finite() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.position = Vec2::new(1e12, 1e12);
+        c.width = 1e6;
+        c.depth = 1e6;
+        let s = cabinet_symbol(&c);
+        assert!(!s.is_empty(), "huge cabinet should produce a symbol");
+        assert!(s.iter().flatten().all(|p| p.is_finite()), "all points should be finite");
+    }
+
+    #[test]
+    fn cabinet_with_zero_depth_is_degenerate_but_finite() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.depth = 0.0;
+        let s = cabinet_symbol(&c);
+        assert!(!s.is_empty(), "zero-depth cabinet should still produce a symbol");
+        assert!(s.iter().flatten().all(|p| p.is_finite()), "all points should be finite");
+    }
 }
