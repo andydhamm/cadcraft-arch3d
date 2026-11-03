@@ -1,22 +1,194 @@
-use cadcraft_geom::Vec3;
+use cadcraft_doc::arch::{Furnishing, FurnishingHost, Surface};
+use cadcraft_geom::{Vec2, Vec3, norm_angle};
 
-use super::{Entity, Handle, Mat3, Result, Session, Value, Vec2, bad, bool_or, erase_kept, f64_req, json, point_param, point_req, targets};
+use super::{Entity, Handle, Mat3, Result, Session, Value, bad, bool_or, erase_kept, f64_req, json, point_param, point_req, targets};
 
 // ---------------- core operations ----------------
 
 pub(crate) fn transform_entities(s: &mut Session, hs: &[Handle], m: &Mat3, copy: bool) -> Result<Vec<Handle>> {
-    edit_entities(s, hs, copy, |e| e.kind.transform(m))
+    let mut ordinary = Vec::new();
+    let mut furnishing = Vec::new();
+    {
+        let d = s.doc()?;
+        for (idx, h) in hs.iter().copied().enumerate() {
+            if cadcraft_doc::arch::is_furnishing_handle(h) {
+                if let Some(id) = cadcraft_doc::arch::furnishing_id_of_handle(h) {
+                    if d.arch.furnishing(id).is_some() {
+                        furnishing.push((idx, id));
+                        continue;
+                    }
+                }
+            }
+            ordinary.push((idx, h));
+        }
+    }
+
+    let mut out = vec![None; hs.len()];
+    if !ordinary.is_empty() {
+        let ordinary_hs: Vec<Handle> = ordinary.iter().map(|(_, h)| *h).collect();
+        let ordinary_out = edit_entities(s, &ordinary_hs, copy, |e| e.kind.transform(m))?;
+        for ((idx, _), handle) in ordinary.iter().zip(ordinary_out) {
+            out[*idx] = Some(handle);
+        }
+    }
+
+    if !furnishing.is_empty() {
+        let mut doc = s.doc_mut()?;
+        for (idx, id) in furnishing {
+            let mut f = doc.arch.furnishing_mut(id).cloned().unwrap();
+            let new_at = m.apply(Vec2::new(f.at[0], f.at[1]));
+            let old_rotation = f.rotation.to_radians();
+            let mirror = m.det() < 0.0;
+            let mut new_rotation = norm_angle(old_rotation + m.rotation());
+            let mut mirrored = f.mirrored;
+            if mirror {
+                mirrored = !mirrored;
+                let line_angle = 0.5 * m.rotation();
+                new_rotation = norm_angle(2.0 * line_angle - old_rotation);
+            }
+
+            if copy {
+                let mut fresh = f.clone();
+                fresh.at = [new_at.x, new_at.y];
+                fresh.rotation = new_rotation.to_degrees();
+                fresh.mirrored = mirrored;
+                fresh.host = FurnishingHost::None;
+                let new_id = doc.arch.push_furnishing(fresh);
+                let mut cloned = Vec::new();
+                for (key, paint) in doc.arch.paints.iter() {
+                    let Some(surface) = Surface::parse(key) else { continue };
+                    if let Surface::Furnishing { furnishing: old, part } = surface {
+                        if old == id {
+                            cloned.push((Surface::Furnishing { furnishing: new_id, part }.key(), paint.clone()));
+                        }
+                    }
+                }
+                for (key, paint) in cloned {
+                    doc.arch.paints.insert(key, paint);
+                }
+                out[idx] = Some(cadcraft_doc::arch::furnishing_handle(new_id));
+            } else {
+                let f = doc.arch.furnishing_mut(id).unwrap();
+                f.at = [new_at.x, new_at.y];
+                f.rotation = new_rotation.to_degrees();
+                f.mirrored = mirrored;
+                f.host = FurnishingHost::None;
+                out[idx] = Some(cadcraft_doc::arch::furnishing_handle(id));
+            }
+        }
+        doc.touch_arch();
+    }
+
+    Ok(out.into_iter().flatten().collect())
 }
 
 /// Scale `hs` by `f` about `base` in 3D, as AutoCAD 2024's SCALE does: about the base point's XY,
 /// and every height of the objects about its Z, their thickness too.
 pub(crate) fn scale_entities(s: &mut Session, hs: &[Handle], base: Vec3, f: f64, copy: bool) -> Result<Vec<Handle>> {
+    if hs.iter().any(|h| cadcraft_doc::arch::is_furnishing_handle(*h)) {
+        return Err(bad("scale", "scale a furnishing with furnishing.edit size"));
+    }
     let m = Mat3::scale_about(base.xy(), f);
     edit_entities(s, hs, copy, |e| {
         e.kind.transform(&m);
         e.kind.scale_heights(base.z, f);
         e.common.thickness *= f;
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use cadcraft_doc::Handle;
+    use cadcraft_doc::arch::{ArchId, Furnishing, furnishing_handle};
+    use cadcraft_geom::Vec2;
+    use serde_json::json;
+
+    use super::*;
+
+    fn add_furnishing(s: &mut Session, at: [f64; 2], rotation: f64) -> ArchId {
+        s.doc_mut().unwrap().arch.push_furnishing(Furnishing {
+            item: "armchair".into(),
+            symbol: "sym".into(),
+            name: "Armchair".into(),
+            category: "Seating".into(),
+            symbol_type: "chair".into(),
+            at,
+            rotation,
+            size: [1.0, 1.0, 0.9],
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn move_moves_a_furnishing() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 2.0], 0.0);
+        let h = furnishing_handle(id);
+        let moved = transform_entities(&mut s, &[h], &Mat3::translate(Vec2::new(5.0, 7.0)), false).unwrap();
+        assert_eq!(moved, vec![h]);
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, [6.0, 9.0]);
+    }
+
+    #[test]
+    fn copy_count_makes_copies_at_the_interval() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [0.0, 0.0], 0.0);
+        let h = furnishing_handle(id);
+        let out = s.execute("copy", &json!({"handles": [h.hex()], "from": [0.0, 0.0], "to": [10.0, 0.0], "count": 3})).unwrap();
+        let handles: Vec<Handle> = out["handles"].as_array().unwrap().iter().map(|v| Handle::parse_hex(v.as_str().unwrap()).unwrap()).collect();
+        let positions: Vec<[f64; 2]> = handles
+            .iter()
+            .map(|h| {
+                let id = cadcraft_doc::arch::furnishing_id_of_handle(*h).unwrap();
+                s.doc().unwrap().arch.furnishing(id).unwrap().at
+            })
+            .collect();
+        assert_eq!(positions, vec![[10.0, 0.0], [20.0, 0.0], [30.0, 0.0]]);
+    }
+
+    #[test]
+    fn rotate_about_a_base_turns_a_furnishing() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [2.0, 0.0], 0.0);
+        let h = furnishing_handle(id);
+        transform_entities(&mut s, &[h], &Mat3::rotate_about(Vec2::new(0.0, 0.0), std::f64::consts::FRAC_PI_2), false).unwrap();
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!((f.at[0]).abs() < 1e-9);
+        assert!((f.at[1] - 2.0).abs() < 1e-9);
+        assert!((f.rotation - 90.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mirror_reflects_and_marks_mirrored() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 0.0], 0.0);
+        let h = furnishing_handle(id);
+        transform_entities(&mut s, &[h], &Mat3::mirror(Vec2::new(0.0, 0.0), Vec2::new(0.0, 3.0)), false).unwrap();
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert_eq!(f.at, [-3.0, 0.0]);
+        assert!(f.mirrored);
+        assert!((f.rotation - 180.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn scale_refuses_furnishings() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 1.0], 0.0);
+        let h = furnishing_handle(id);
+        let err = s.execute("scale", &json!({"handles": [h.hex()], "base": [0.0, 0.0], "factor": 2.0})).unwrap_err();
+        assert!(err.to_string().contains("scale a furnishing with furnishing.edit size"));
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, [1.0, 1.0]);
+    }
+
+    #[test]
+    fn transforms_are_one_undo_step() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [2.0, 0.0], 0.0);
+        let before = s.state().unwrap().undo.len();
+        let h = furnishing_handle(id);
+        s.execute("move", &json!({"handles": [h.hex()], "delta": [10.0, 0.0]})).unwrap();
+        assert_eq!(s.state().unwrap().undo.len(), before + 1);
+    }
 }
 
 /// `p` at the current elevation (ELEVATION), the Z AutoCAD gives a point entered without one.
