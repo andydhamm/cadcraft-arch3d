@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 /// The kind of object a mesh's material belongs to: `wall`, `opening` (every `window-…` and
 /// `door-…` part), `floor`, `ceiling`, `roof` (roof planes), `fascia`, `soffit`, `stair`,
 /// `railing`, `deck`, `terrain`, `plant` (crown and trunk), `path` (`path-…`), `light` (`light-…`),
-/// else `other`.
+/// `cabinet` (`cabinet-…`, `counter`), `fixture` (`fixture-…`), else `other`.
 pub(crate) fn kind_of(material: &str) -> &'static str {
     match material {
         "wall" => "wall",
@@ -30,6 +30,8 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
         m if m.starts_with("plant-") => "plant",
         m if m.starts_with("path-") => "path",
         m if m.starts_with("light-") => "light",
+        m if m.starts_with("cabinet-") || m == "counter" => "cabinet",
+        m if m.starts_with("fixture-") => "fixture",
         _ => "other",
     }
 }

@@ -45,6 +45,11 @@ fn build_demo_house() -> Session {
         ("terrain", json!({"boundary": [[-10,-10],[20,-10],[20,18],[-10,18]], "points": [[-10,-10,0],[20,-10,0],[20,18,0],[-10,18,0]]})),
         ("plant", json!({"species": "Sugar Maple", "at": [15,13], "age": 20})),
         ("plant", json!({"species": "Common Lilac", "at": [-4,2], "age": 4})),
+        ("cabinet", json!({"points": [[1,0],[3,0]], "height": 0.914, "depth": 0.6, "type": "base"})),
+        ("cabinet", json!({"points": [[1,0],[3,0]], "height": 0.7, "depth": 0.3, "type": "wall", "elevation": 1.5})),
+        ("fixture", json!({"kind": "sink", "at": [2,0.3], "level": 0})),
+        ("fixture", json!({"kind": "range", "at": [2.5,0.3], "level": 0})),
+        ("fixture", json!({"kind": "toilet", "at": [9,7], "level": 0})),
     ];
 
     for (cmd, params) in commands {
@@ -450,6 +455,9 @@ fn entities_have_ifc4_attribute_counts() {
     expected_counts.insert("IFCPROPERTYSINGLEVALUE", 4);
     expected_counts.insert("IFCELEMENTQUANTITY", 6);
     expected_counts.insert("IFCQUANTITYAREA", 5);
+    expected_counts.insert("IFCFURNITURE", 9);
+    expected_counts.insert("IFCSANITARYTERMINAL", 9);
+    expected_counts.insert("IFCELECTRICAPPLIANCE", 9);
 
     // Additional entities likely present in the export
     expected_counts.insert("IFCUNITASSIGNMENT", 1);
