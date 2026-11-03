@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 20 of 24 segments merged · 9 of 13 acceptance checks**
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 08:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 9 / 13 | 17.6 h so far · expected done Nov 03 10:24–Nov 03 22:13 UTC |
+| 13 | Polish | building | 9 / 13 | 17.8 h so far · expected done Nov 03 10:39–Nov 03 22:28 UTC |
 
 ## Phase 13 segments
 
@@ -55,7 +55,7 @@ Updated 2026-11-03 08:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 831 |
+| bonsai-a | bonsai2-27b | gate | 832 |
 | bonsai-b | bonsai2-27b | merging | 770 |
 | bonsai-ws2-a | bonsai2-27b | gate | 839 |
 | bonsai-ws2-b | bonsai2-27b | idle | 822 |
@@ -67,5 +67,5 @@ Updated 2026-11-03 08:00 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 11 |
-| tturbo-mac | tturbo-ultraheretic | gate | 584 |
+| tturbo-mac | tturbo-ultraheretic | agent | 585 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
