@@ -125,4 +125,36 @@ mod tests {
         assert!(encode_rgba8(2, 2, &[0; 15]).is_err());
         assert!(encode_rgba8(u32::MAX, 1, &[]).is_err());
     }
+
+    #[test]
+    fn png_single_pixel_round_trips() {
+        let px = vec![10u8, 20, 30, 255];
+        let png = encode_rgba8(1, 1, &px).expect("encode");
+        let mut at = 8;
+        let mut idat = Vec::new();
+        while at + 12 <= png.len() {
+            let len = u32::from_be_bytes([png[at], png[at + 1], png[at + 2], png[at + 3]]) as usize;
+            let kind = &png[at + 4..at + 8];
+            let data = &png[at + 8..at + 8 + len];
+            if kind == b"IDAT" {
+                idat.extend_from_slice(data);
+            }
+            at += 12 + len;
+        }
+        let raw = miniz_oxide::inflate::decompress_to_vec_zlib(&idat).expect("inflate");
+        assert_eq!(raw.len(), 5); // filter byte + 4 pixel bytes
+        assert_eq!(raw[0], 0);
+        assert_eq!(&raw[1..], &px);
+    }
+
+    #[test]
+    fn png_max_size_is_accepted() {
+        let px = pixels(MAX_SIDE, 1);
+        assert!(encode_rgba8(MAX_SIDE, 1, &px).is_ok());
+    }
+
+    #[test]
+    fn png_above_max_size_is_refused() {
+        assert!(encode_rgba8(MAX_SIDE + 1, 1, &[]).is_err());
+    }
 }

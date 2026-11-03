@@ -139,7 +139,9 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
     if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| format!("can't create {}: {e}", dir.display()))?;
     }
-    crate::output::write_atomic(out, png).map_err(|e| e.to_string())
+    // `write_atomic` now returns the newly-created folder (if any); we only need the write to
+    // succeed, so discard it.
+    crate::output::write_atomic(out, png).map_err(|e| e.to_string()).map(|_| ())
 }
 
 fn render_one(req: &RenderRequest) -> Result<Value, String> {

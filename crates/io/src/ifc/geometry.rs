@@ -192,4 +192,33 @@ mod tests {
         assert!(faceset(&mut w, &[[f64::NAN, 0.0, 0.0], [0.0; 3], [0.0; 3]], &[[0, 1, 2]]).is_none(), "a NaN");
         assert!(w.is_empty());
     }
+
+    #[test]
+    fn pieces_include_finished_faces_in_their_object_body() {
+        let scene = Scene3d {
+            meshes: vec![
+                square("wall", 1, 0.0),
+                square("wall-brick", 1, 0.0),
+                square("roof", 0, 0.0),
+                square("roof-shingles", 0, 0.0),
+                square("floor", 2, 0.0),
+                square("floor-wood", 2, 0.0),
+            ],
+            ..Scene3d::default()
+        };
+        let pieces = Pieces::new(&scene);
+        assert_eq!(pieces.get("wall", ArchId(1)).len(), 2);
+        assert_eq!(pieces.get("roof", ArchId(0)).len(), 2);
+        assert_eq!(pieces.get("floor", ArchId(2)).len(), 2);
+        assert_eq!(pieces.ids("wall"), vec![ArchId(1)]);
+        assert_eq!(pieces.ids("roof"), vec![ArchId(0)]);
+        assert_eq!(pieces.ids("floor"), vec![ArchId(2)]);
+    }
+
+    #[test]
+    fn kind_of_bogus_finish_is_other() {
+        assert_eq!(kind_of("wall-notafinish"), "other");
+        assert_eq!(kind_of("roof-notafinish"), "other");
+        assert_eq!(kind_of("floor-notafinish"), "other");
+    }
 }
