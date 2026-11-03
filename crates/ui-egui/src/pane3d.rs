@@ -527,7 +527,7 @@ impl Pane3d {
         if self.doc != Some(doc) {
             self.doc = Some(doc);
             self.cache = None;
-            self.last_revision = u64::MAX;
+            self.last_revision = 0;
             self.loaded_camera = None;
             self.full = None;
             self.orbit_target = None;
@@ -1411,6 +1411,145 @@ mod tests {
         let stats = pane.last_rebuild.expect("build");
         assert!(!stats.incremental, "another document is a full build: {stats:?}");
         assert_eq!(stats.rebuilt, stats.objects);
+    }
+
+    #[test]
+    fn pane_sync_incremental_after_adding_wall() {
+        let mut arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        let first = pane.last_rebuild.expect("first build");
+        assert!(!first.incremental);
+        arch.push_wall(cadcraft_doc::Wall {
+            start: cadcraft_geom::Vec2::new(5.0, 4.0),
+            end: cadcraft_geom::Vec2::new(5.0, 8.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Default::default()
+        });
+        assert!(pane.sync_doc(1, 2, Some(&arch)));
+        let second = pane.last_rebuild.expect("second build");
+        assert!(second.incremental, "adding a wall should be incremental: {second:?}");
+        assert!(second.rebuilt > 0 && second.rebuilt < second.objects, "only some objects rebuilt: {second:?}");
+    }
+
+    #[test]
+    fn pane_sync_incremental_after_removing_wall() {
+        let mut arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        let first = pane.last_rebuild.expect("first build");
+        assert!(!first.incremental);
+        let initial_objects = first.objects;
+        arch.walls.pop();
+        assert!(pane.sync_doc(1, 2, Some(&arch)));
+        let second = pane.last_rebuild.expect("second build");
+        assert!(second.incremental, "removing a wall should be incremental: {second:?}");
+        assert!(second.rebuilt > 0, "some objects rebuilt: {second:?}");
+        assert_eq!(second.objects, initial_objects - 1, "one fewer object");
+    }
+
+    #[test]
+    fn pane_sync_multiple_incremental_rebuilds() {
+        let mut arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        assert!(!pane.last_rebuild.expect("first").incremental);
+        for i in 0..3 {
+            arch.walls[0].height = 2.8 + (i as f64) * 0.1;
+            assert!(pane.sync_doc(1, 2 + i as u64, Some(&arch)));
+            let stats = pane.last_rebuild.expect("rebuild");
+            assert!(stats.incremental, "edit {i} should be incremental: {stats:?}");
+            assert!(stats.rebuilt > 0 && stats.rebuilt < stats.objects, "edit {i}: {stats:?}");
+        }
+    }
+
+    #[test]
+    fn pane_sync_same_doc_different_revision_is_incremental() {
+        let mut arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        assert!(!pane.last_rebuild.expect("first").incremental);
+        arch.walls[1].thickness = 0.3;
+        assert!(pane.sync_doc(1, 2, Some(&arch)));
+        let stats = pane.last_rebuild.expect("rebuild");
+        assert!(stats.incremental, "same doc, new revision should be incremental: {stats:?}");
+    }
+
+    #[test]
+    fn pane_sync_incremental_scene_matches_full_build() {
+        let mut arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        arch.walls[0].height = 3.5;
+        assert!(pane.sync_doc(1, 2, Some(&arch)));
+        let incremental_meshes = pane.scene().expect("scene").meshes.len();
+        let full_scene = cadcraft_arch3d::build(&arch);
+        assert_eq!(incremental_meshes, full_scene.meshes.len(), "incremental mesh count matches full build");
+    }
+
+    #[test]
+    fn pane_sync_revision_backwards_rebuilds() {
+        let arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 5, Some(&arch)));
+        assert_eq!(pane.last_revision, 5);
+        assert!(pane.sync_doc(1, 3, Some(&arch)));
+        assert_eq!(pane.last_revision, 3);
+        assert!(!pane.sync_doc(1, 3, Some(&arch)));
+    }
+
+    #[test]
+    fn pane_sync_huge_revision() {
+        let arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, u64::MAX, Some(&arch)));
+        assert_eq!(pane.last_revision, u64::MAX);
+        assert!(pane.scene().is_some());
+    }
+
+    #[test]
+    fn pane_sync_empty_then_add_wall_is_incremental() {
+        let mut arch = cadcraft_doc::ArchModel::default();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        assert!(!pane.last_rebuild.expect("first").incremental);
+        arch.push_wall(cadcraft_doc::Wall {
+            start: cadcraft_geom::Vec2::new(0.0, 0.0),
+            end: cadcraft_geom::Vec2::new(5.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Default::default()
+        });
+        assert!(pane.sync_doc(1, 2, Some(&arch)));
+        let stats = pane.last_rebuild.expect("rebuild");
+        assert!(stats.incremental, "adding to empty model should be incremental: {stats:?}");
+        assert!(pane.has_content);
+    }
+
+    #[test]
+    fn pane_sync_nan_site_does_not_panic() {
+        let arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        let mut model = arch.clone();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: f64::NAN, ..Default::default() });
+        pane.sync_doc(1, 2, Some(&model));
+        assert_eq!(pane.last_revision, 2);
+    }
+
+    #[test]
+    fn pane_sync_doc_none_clears_cache() {
+        let arch = house();
+        let mut pane = Pane3d::new();
+        assert!(pane.sync_doc(1, 1, Some(&arch)));
+        assert!(pane.cache.is_some(), "cache exists after build");
+        assert!(pane.sync_doc(1, 2, None));
+        assert!(pane.cache.is_none(), "cache cleared with None model");
+        assert!(pane.scene().is_none());
+        assert!(pane.sync_doc(1, 3, Some(&arch)));
+        assert!(pane.cache.is_some(), "cache re-seeded");
+        assert!(!pane.last_rebuild.expect("rebuild").incremental, "re-seed is a full build");
     }
 
     #[test]
