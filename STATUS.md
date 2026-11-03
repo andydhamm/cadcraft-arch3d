@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 9 of 23 segments merged · 1 of 13 acceptance checks**
 
@@ -23,11 +23,11 @@ Updated 2026-11-03 00:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 1 / 13 | 9.6 h so far · expected done Nov 03 13:23–Nov 04 13:35 UTC |
+| 13 | Polish | building | 1 / 13 | 9.8 h so far · expected done Nov 03 13:59–Nov 04 14:50 UTC |
 
 ## Phase 13 segments
 
-9 merged, 7 queued, 6 merging, 1 replaced, 1 abandoned, 1 working
+9 merged, 7 queued, 6 merging, 1 replaced, 1 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,7 +37,7 @@ Updated 2026-11-03 00:00 UTC. This page and the card in the README are regenerat
 | `p13-arch-casework-symbols` | Plan symbols for cabinets and fixtures | merging | claude-sonnet-c |
 | `p13-arch3d-casework` | Cabinets and fixtures in 3D | merging | mai-flash-esc |
 | `p13-cmd-casework` | cabinet and fixture commands, inspect | merging | claude-sonnet-d |
-| `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | working | bonsai-ws2-b |
+| `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | gate | bonsai-ws2-b |
 
 ## Recent merges
 
@@ -60,10 +60,10 @@ Updated 2026-11-03 00:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 821 |
+| bonsai-a | bonsai2-27b | merging | 823 |
 | bonsai-b | bonsai2-27b | merging | 760 |
 | bonsai-ws2-a | bonsai2-27b | merging | 829 |
-| bonsai-ws2-b | bonsai2-27b | agent | 808 |
+| bonsai-ws2-b | bonsai2-27b | gate | 809 |
 | claude-sonnet-a | sonnet | merging | 72 |
 | claude-sonnet-b | sonnet | merging | 71 |
 | claude-sonnet-c | sonnet | merging | 19 |
