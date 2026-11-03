@@ -253,7 +253,22 @@ fn user_guide_sh_blocks_execute_through_the_engine() {
     }
     let _ = fs::remove_dir_all(&out_dir);
     assert!(runs >= 7, "the guide's sh blocks should hold at least 7 `run` examples, found {runs}");
-    for id in ["sun", "camera", "walkthrough", "pick3d", "elevation", "section", "view.delete", "viewsheet", "exportpdf", "archdetect"] {
+    for id in [
+        "sun",
+        "camera",
+        "walkthrough",
+        "pick3d",
+        "elevation",
+        "section",
+        "view.delete",
+        "viewsheet",
+        "exportpdf",
+        "archdetect",
+        "material",
+        "cabinet",
+        "fixture",
+        "arch.sample",
+    ] {
         assert!(ids.iter().any(|x| x == id), "no sh block in the user guide runs `{id}`");
     }
 }
@@ -836,6 +851,11 @@ fn user_guide_has_materials_cabinets_and_large_models() {
     assert!(GUIDE.contains("fixture"), "guide should mention the fixture command");
     assert!(GUIDE.contains("arch.sample"), "guide should mention the arch.sample command");
     assert!(GUIDE.contains("build3d"), "guide should mention the build3d command");
+    assert!(GUIDE.contains("siding"), "guide should mention siding finish");
+    assert!(GUIDE.contains("shingles"), "guide should mention shingles finish");
+    assert!(GUIDE.contains("wood"), "guide should mention wood finish");
+    assert!(GUIDE.contains("rebuilt"), "guide should explain rebuilt count");
+    assert!(GUIDE.contains("rebuildMs"), "guide should explain rebuildMs");
 }
 
 /// The new blocks for materials, cabinets, and large models execute through the engine.

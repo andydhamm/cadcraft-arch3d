@@ -409,13 +409,13 @@ bathtubs, ranges, refrigerators, and dishwashers.
 cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
   --cmd 'roomdetect {}' \
-  --cmd 'cabinet {"type":"base","wall":"w0","offset":1.0,"width":1.5}' \
-  --cmd 'cabinet {"type":"base","wall":"w0","offset":2.5,"width":1.5}' \
-  --cmd 'cabinet {"type":"wall","wall":"w0","offset":1.0,"width":1.5}' \
-  --cmd 'fixture {"type":"sink","wall":"w0","offset":1.75}' \
-  --cmd 'fixture {"type":"range","wall":"w0","offset":3.25}' \
-  --cmd 'fixture {"type":"refrigerator","wall":"w1","offset":1.0}' \
-  --cmd 'fixture {"type":"dishwasher","wall":"w0","offset":4.25}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":1.0,"width":1.5}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":2.5,"width":1.5}' \
+  --cmd 'cabinet {"kind":"wall","wall":"w0","offset":1.0,"width":1.5}' \
+  --cmd 'fixture {"kind":"sink","wall":"w0","offset":1.75}' \
+  --cmd 'fixture {"kind":"range","wall":"w0","offset":3.25}' \
+  --cmd 'fixture {"kind":"refrigerator","wall":"w1","offset":1.0}' \
+  --cmd 'fixture {"kind":"dishwasher","wall":"w0","offset":4.25}' \
   --cmd 'arch.inspect {"cabinets":true,"fixtures":true}' \
   --save kitchen.dxf
 ```
