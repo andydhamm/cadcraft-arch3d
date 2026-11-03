@@ -151,7 +151,7 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
                 write_file("export", mtl_path.to_string_lossy().as_ref(), &mtl_bytes)?;
                 out["mtl"] = json!(mtl_path.to_string_lossy());
             }
-            Ok(out)
+            out
         }
         None => {
             let mut out = json!({ "data": base64_encode(&bytes), "format": format, "bytes": bytes.len() });
@@ -159,7 +159,7 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
                 let mtl_bytes = (hooks.write)(s.doc()?, "export.mtl").map_err(|e| bad("export", e))?;
                 out["mtl"] = json!(base64_encode(&mtl_bytes));
             }
-            Ok(out)
+            out
         }
     };
     super::file::report_not_saved(s, &mut r, &lost);
