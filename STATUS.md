@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 16:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 16:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 24 of 25 segments merged · 13 of 13 acceptance checks**
 
-6,944 workspace tests passing at the last merge · 709 segments merged in all · 0 of 14 seats working · PAUSED
+6,944 workspace tests passing at the last merge · 709 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 16:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 13 / 13 | 25.6 h so far · expected done Nov 03 17:12–Nov 04 14:49 UTC |
+| 13 | Polish | building | 13 / 13 | 25.8 h so far · expected done Nov 03 17:27–Nov 04 15:04 UTC |
 
 ## Phase 13 segments
 
@@ -56,15 +56,15 @@ Updated 2026-11-03 16:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 845 |
 | bonsai-b | bonsai2-27b | idle | 784 |
-| bonsai-ws2-a | bonsai2-27b | gate | 855 |
+| bonsai-ws2-a | bonsai2-27b | gate | 856 |
 | bonsai-ws2-b | bonsai2-27b | idle | 829 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 20 |
 | claude-sonnet-d | sonnet | idle | 13 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 710 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 711 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 17 |
-| tturbo-mac | tturbo-ultraheretic | idle | 595 |
+| tturbo-mac | tturbo-ultraheretic | agent | 595 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
