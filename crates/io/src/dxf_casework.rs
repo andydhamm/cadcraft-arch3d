@@ -126,4 +126,76 @@ mod tests {
         assert!(back.arch.is_empty());
         assert_eq!(back.model.len(), d.model.len() + n, "every proxy survives as plain linework");
     }
+
+    #[test]
+    fn empty_model_produces_no_proxies() {
+        let d = Drawing::default();
+        assert!(proxy_casework_entities(&d.arch).is_empty());
+    }
+
+    #[test]
+    fn two_point_polyline_is_written() {
+        let pts = [Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        let tags = casework_polyline(&pts).unwrap();
+        assert_eq!(tags[0].code, 90);
+        assert_eq!(tags[0].i64(), 2);
+        assert_eq!(tags[1].code, 70);
+        assert_eq!(tags[1].i64(), 0); // not closed
+    }
+
+    #[test]
+    fn closed_ring_drops_repeated_vertex() {
+        let pts = [Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 0.0)];
+        let tags = casework_polyline(&pts).unwrap();
+        assert_eq!(tags[0].i64(), 3); // 4 points, one dropped
+        assert_eq!(tags[1].i64(), 1); // closed
+    }
+
+    #[test]
+    fn casework_polyline_skips_one_point() {
+        let pts = [Vec2::new(0.0, 0.0)];
+        assert!(casework_polyline(&pts).is_none());
+    }
+
+    #[test]
+    fn casework_polyline_skips_empty() {
+        assert!(casework_polyline(&[]).is_none());
+    }
+
+    #[test]
+    fn is_casework_proxy_requires_marker() {
+        let tags: Vec<Tag> = vec![Tag::i(0, 0)];
+        assert!(!is_casework_proxy(&tags));
+        let tags2 = vec![Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, "CADCRAFT-LIGHT")];
+        assert!(!is_casework_proxy(&tags2));
+        let tags3 = vec![Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, CASEWORK_PROXY_MARKER)];
+        assert!(is_casework_proxy(&tags3));
+    }
+
+    #[test]
+    fn huge_coordinates_are_written() {
+        let pts = [Vec2::new(1e12, 1e12), Vec2::new(-1e12, -1e12)];
+        let tags = casework_polyline(&pts).unwrap();
+        assert_eq!(tags[0].i64(), 2);
+    }
+
+    #[test]
+    fn collinear_points_are_preserved() {
+        let pts = [Vec2::new(0.0, 0.0), Vec2::new(0.5, 0.0), Vec2::new(1.0, 0.0)];
+        let tags = casework_polyline(&pts).unwrap();
+        assert_eq!(tags[0].i64(), 3); // all 3 points kept
+    }
+
+    #[test]
+    fn cabinets_precede_fixtures_in_output() {
+        let mut d = Drawing::default();
+        d.arch.push_fixture(fixture_defaults(FixtureKind::Sink));
+        d.arch.push_cabinet(cabinet_defaults(CabinetKind::Base));
+        let p = proxy_casework_entities(&d.arch);
+        let first_fixture = p.iter().position(|(_, l, _)| l == "P-FLOR-FIXT");
+        let last_cabinet = p.iter().rposition(|(_, l, _)| l == "A-FLOR-CASE");
+        assert!(first_fixture.is_some());
+        assert!(last_cabinet.is_some());
+        assert!(last_cabinet.unwrap() < first_fixture.unwrap());
+    }
 }
