@@ -431,7 +431,7 @@ checking performance on large models.
 cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'arch.sample {"house":true}' \
   --cmd 'build3d {}' \
-  --cmd 'wall.stretch {"wall":"w10","end":"start","point":[5,5]}' \
+  --cmd 'arch.wall.stretch {"wall":"w10","end":"start","point":[5,5]}' \
   --cmd 'build3d {"incremental":true}' \
   --save large-model.dxf
 ```
