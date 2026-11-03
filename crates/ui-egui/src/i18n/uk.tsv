@@ -1479,3 +1479,8 @@
 	Terrain	Рельєф
 	Terrain Elevation	Висота рельєфу
 	Terrain Modifier	Модифікатор рельєфу
+	cmd.lightfixture.edit	Редагувати світильник
+	cmd.terrain.contours	Контури
+	cmd.plant.species	Види рослин
+	Architecture>Terrain	Архітектура>Рельєф
+	Architecture>Light Fixture	Архітектура>Світильник
