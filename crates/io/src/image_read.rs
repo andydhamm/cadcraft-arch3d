@@ -31,7 +31,7 @@ pub fn read_image(bytes: &[u8], max_side: u32) -> Result<ImageRgba, String> {
     }
     let img = image::load_from_memory_with_format(bytes, format).map_err(|e| format!("cannot decode image: {e}"))?.into_rgba8();
     let (w, h) = (img.width(), img.height());
-    let mut cur = ImageRgba { width: w, height: h, rgba: img.into_raw() };
+    let mut cur = ImageRgba { width: w, height: h, rgba: img.into_raw(), ..Default::default() };
     let long = w.max(h);
     if long > max_side {
         let f = long / max_side;
@@ -76,7 +76,7 @@ fn box_reduce(src: &ImageRgba, f: u32) -> ImageRgba {
             }
         }
     }
-    ImageRgba { width: nw as u32, height: nh as u32, rgba: out }
+    ImageRgba { width: nw as u32, height: nh as u32, rgba: out, ..Default::default() }
 }
 
 /// First source cell and weights of the cells covering destination cell `i` of `n` over `len` cells.
@@ -134,7 +134,7 @@ fn area_resize(src: &ImageRgba, nw: u32, nh: u32) -> ImageRgba {
             }
         }
     }
-    ImageRgba { width: nw as u32, height: nh as u32, rgba: out }
+    ImageRgba { width: nw as u32, height: nh as u32, rgba: out, ..Default::default() }
 }
 
 #[cfg(test)]

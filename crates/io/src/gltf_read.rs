@@ -38,7 +38,7 @@ pub fn read_glb(bytes: &[u8]) -> Result<SymbolMesh, String> {
         return Err("the file contains no triangles".into());
     }
     recentre(&mut parts)?;
-    Ok(SymbolMesh { key: fnv1a64_hex(bytes), parts, textures })
+    Ok(SymbolMesh { key: fnv1a64_hex(bytes), parts, textures, ..Default::default() })
 }
 
 fn u32_at(b: &[u8], at: usize) -> Option<u32> {
@@ -499,6 +499,7 @@ impl<'a> Reader<'a> {
             metallic: mat.metallic,
             roughness: mat.roughness,
             texture,
+            ..Default::default()
         });
         Ok(())
     }
