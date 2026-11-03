@@ -72,14 +72,8 @@ impl Target {
 /// Parse an id: a plain integer, the integer with the target's letter prefix
 /// (case-insensitive), or a finite non-negative integer number.
 fn parse_arch_id(prefix: char, v: &Value) -> Option<ArchId> {
+    // Only strings: a bare JSON number is not an id (the segment's spec; phase-13/11 sends `[1, 2, 3]` as garbage).
     let n: u64 = match v {
-        Value::Number(n) => {
-            let f = n.as_f64()?;
-            if !(f.is_finite() && f >= 0.0 && f.fract() == 0.0 && f <= u32::MAX as f64) {
-                return None;
-            }
-            f as u64
-        }
         Value::String(s) => {
             let s = s.trim();
             let digits = match s.chars().next() {
@@ -233,6 +227,18 @@ mod tests {
 
     fn finishes(s: &Session) -> Vec<Option<Finish>> {
         s.doc().unwrap().arch.walls.iter().map(|w| w.finish).collect()
+    }
+
+    /// Ids are strings (`"w1"` or `"1"`); a bare JSON number is hostile input and is refused, never read as an id
+    /// (phase-13/11_hostile.py: `{"walls": [1, 2, 3]}` finished w1..w3).
+    #[test]
+    fn material_refuses_numbers_for_ids() {
+        let mut s = house();
+        let e = s.execute("material", &json!({"walls": [1, 2, 3], "finish": "brick"})).unwrap_err();
+        assert!(e.to_string().contains("malformed wall id"), "{e}");
+        assert!(finishes(&s).iter().all(Option::is_none), "{:?}", finishes(&s));
+        let r = s.execute("material", &json!({"walls": ["w1", "2"], "finish": "brick"})).unwrap();
+        assert_eq!(r["ids"], json!(["w1", "w2"]));
     }
 
     #[test]
