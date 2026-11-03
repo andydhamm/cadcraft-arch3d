@@ -21,6 +21,7 @@ pub mod area;
 pub mod casework;
 pub mod casework_symbol;
 pub mod detect;
+pub mod furnishing;
 pub mod graph;
 pub mod ies;
 pub mod join;

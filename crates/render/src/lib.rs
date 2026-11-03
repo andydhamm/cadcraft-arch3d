@@ -9,6 +9,7 @@
 
 mod arch;
 mod arch_casework;
+mod arch_furnishing;
 mod arch_light;
 mod arch_site;
 pub mod clip;
