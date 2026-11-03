@@ -19,6 +19,7 @@ mod dxf_xref;
 pub mod glb;
 mod glb_lights;
 pub mod ifc;
+pub mod library;
 pub mod obj;
 pub mod pdf;
 pub mod plotter;
