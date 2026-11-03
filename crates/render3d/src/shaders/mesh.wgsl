@@ -29,6 +29,16 @@ struct PbrUniforms {
 };
 @group(1) @binding(1) var<uniform> p: PbrUniforms;
 
+// The finish textures (group 3): layer 0 is white, so an untextured draw is unchanged.
+@group(3) @binding(0) var mat_tex: texture_2d_array<f32>;
+@group(3) @binding(1) var mat_samp: sampler;
+
+// Albedo of the draw at `uv`: the draw colour times its texture layer (`_p6.y`). Samples, so call
+// it from uniform control flow only.
+fn base_albedo(uv: vec2<f32>) -> vec3<f32> {
+    return u.albedo * textureSample(mat_tex, mat_samp, uv, i32(p._p6.y)).rgb;
+}
+
 const PI: f32 = 3.14159265;
 // Matches `offscreen::CLEAR`: hidden-line draws faces in the background colour.
 const CLEAR_COLOR: vec3<f32> = vec3<f32>(0.02, 0.025, 0.034);
@@ -78,6 +88,7 @@ fn fresnel_schlick(vdh: f32, f0: vec3<f32>) -> vec3<f32> {
         return vec4<f32>(CLEAR_COLOR, 1.0);
     }
 
+    let albedo = base_albedo(v.uv);
     let l = normalize(p.light_dir);
     var vdir = n;
     let to_eye = p.camera_pos - v.wpos;
@@ -94,19 +105,19 @@ fn fresnel_schlick(vdh: f32, f0: vec3<f32>) -> vec3<f32> {
 
     let metallic = clamp(p.metallic, 0.0, 1.0);
     let rough = clamp(p.roughness, 0.045, 1.0);
-    let f0 = mix(vec3<f32>(0.04), u.albedo, metallic);
+    let f0 = mix(vec3<f32>(0.04), albedo, metallic);
     let f = fresnel_schlick(vdh, f0);
     let d = distribution_ggx(ndh, rough * rough);
     let g = geometry_smith(ndv, ndl, rough);
     let spec = d * g * f / max(4.0 * ndv * ndl, 1e-4);
     // Lambert diffuse for dielectrics; metals have none.
     let kd = (vec3<f32>(1.0) - f) * (1.0 - metallic);
-    let diffuse = kd * u.albedo / PI;
+    let diffuse = kd * albedo / PI;
 
     // The sun carries (1 - ambient) of the light so a white diffuse face at ndl = 1 is fully lit.
     let radiance = p.sun_intensity * (1.0 - p.ambient) * PI;
     let lit = (diffuse + spec) * radiance * ndl;
-    let amb = u.albedo * p.ambient * (1.0 - metallic * 0.5);
+    let amb = albedo * p.ambient * (1.0 - metallic * 0.5);
     let c = amb + lit;
 
     let alpha = clamp(p.alpha, 0.0, 1.0);

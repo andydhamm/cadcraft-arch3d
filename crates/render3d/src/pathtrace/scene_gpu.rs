@@ -172,7 +172,11 @@ pub fn material_for(material: &str) -> GpuMaterial {
     // An opening's meshes are `<window|door>-<part>` (arch3d openings.rs): each is its part's
     // material, so window glass lets the sun through.
     let part = name.strip_prefix("window-").or_else(|| name.strip_prefix("door-")).filter(|p| !p.is_empty()).unwrap_or(&name);
-    let (albedo, metallic, roughness, alpha) = material_pbr(part);
+    let (mut albedo, metallic, roughness, alpha) = material_pbr(part);
+    // The path tracer does not sample textures: a finished surface is its texture's mean colour.
+    if let Some(finish) = crate::textures::finish_of(part) {
+        albedo = finish_mean_linear(finish);
+    }
     let mut m = GpuMaterial { albedo, metallic, roughness, ior: 1.5, ..Default::default() };
     if alpha < 1.0 {
         m.flags |= MAT_GLASS;
@@ -191,6 +195,15 @@ pub fn material_for(material: &str) -> GpuMaterial {
         m.roughness = 0.02;
     }
     m
+}
+
+/// The mean linear colour of a finish texture, computed once per finish.
+fn finish_mean_linear(finish: cadcraft_doc::arch::Finish) -> [f32; 3] {
+    use cadcraft_doc::arch::Finish;
+    static MEANS: std::sync::OnceLock<Vec<[f32; 3]>> = std::sync::OnceLock::new();
+    let means =
+        MEANS.get_or_init(|| Finish::ALL.iter().map(|f| cadcraft_arch3d::texture::mean_linear(&cadcraft_arch3d::texture::texture(*f))).collect());
+    Finish::ALL.iter().position(|f| *f == finish).and_then(|i| means.get(i)).copied().unwrap_or([0.75; 3])
 }
 
 /// Radiance of a lit lens (nits), seen directly.
@@ -651,6 +664,21 @@ mod tests {
         assert_eq!(std::mem::size_of::<GpuLight>(), 80);
         assert_eq!(std::mem::size_of::<GpuFrame>(), 208);
         assert_eq!(std::mem::size_of::<GpuProbe>(), 32);
+    }
+
+    #[test]
+    fn path_tracer_uses_the_texture_mean() {
+        use cadcraft_arch3d::texture::{mean_linear, texture};
+        use cadcraft_doc::arch::Finish;
+        for f in Finish::ALL {
+            let mean = mean_linear(&texture(f));
+            for prefix in ["wall", "roof", "floor"] {
+                assert_eq!(material_for(&format!("{prefix}-{}", f.name())).albedo, mean, "{prefix}-{}", f.name());
+            }
+        }
+        // Unfinished materials keep their flat albedo.
+        assert_eq!(material_for("wall").albedo, crate::pipeline::material_albedo("wall"));
+        assert_eq!(material_for("roof").albedo, crate::pipeline::material_albedo("roof"));
     }
 
     #[test]

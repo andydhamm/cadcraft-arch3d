@@ -22,6 +22,7 @@ pub mod pathtrace;
 pub mod pipeline;
 pub mod shadow;
 pub mod shadow_atlas;
+pub mod textures;
 pub mod types;
 
 #[cfg(test)]

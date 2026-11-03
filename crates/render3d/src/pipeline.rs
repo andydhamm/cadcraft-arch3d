@@ -69,7 +69,7 @@ pub struct PbrUniform {
     /// Shadow-map depth range end.
     pub shadow_max: f32,
     pub _p1: [f32; 3],
-    /// `[emissive, 0, 0, 0]` (WGSL `_p6`; phase 10, read by the lit pipelines only).
+    /// `[emissive, texture layer, 0, 0]` (WGSL `_p6`; emissive is read by the lit pipelines only).
     pub _p2: [f32; 4],
 }
 /// Byte size of [`PbrUniform`].
@@ -101,7 +101,7 @@ impl PbrUniform {
             shadow_min: 0.0,
             shadow_max: 0.0,
             _p1: [0.0; 3],
-            _p2: [fin(draw.emissive, 0.0).clamp(0.0, 100.0), 0.0, 0.0, 0.0],
+            _p2: [fin(draw.emissive, 0.0).clamp(0.0, 100.0), draw.layer.min(crate::textures::LAYERS - 1) as f32, 0.0, 0.0],
         }
     }
 }
@@ -114,8 +114,18 @@ pub fn valid_sample_count(n: u32) -> u32 {
 /// PBR parameters for an arch3d material name: `(albedo, metallic, roughness, alpha)`. Albedo is
 /// [`material_albedo`]; unknown names are a neutral matte dielectric `([0.75; 3], 0.0, 0.5, 1.0)`.
 pub fn material_pbr(material: &str) -> ([f32; 3], f32, f32, f32) {
-    let albedo = material_albedo(material);
     let m = material.to_ascii_lowercase();
+    if let Some(f) = crate::textures::finish_of(&m) {
+        // The texture is the colour; the finish sets the roughness.
+        let rough = match f {
+            cadcraft_doc::arch::Finish::Siding => 0.6,
+            cadcraft_doc::arch::Finish::Shingles => 0.95,
+            cadcraft_doc::arch::Finish::Brick => 0.9,
+            cadcraft_doc::arch::Finish::Wood => 0.5,
+        };
+        return ([1.0; 3], 0.0, rough, 1.0);
+    }
+    let albedo = material_albedo(material);
     let starts = |names: &[&str]| names.iter().any(|n| m.starts_with(n));
     if starts(&["glass"]) {
         return (albedo, 0.0, 0.05, 0.35);
@@ -254,11 +264,23 @@ pub struct Draw {
     /// Self-lit strength (phase 10: 1 for the lens of a fixture that is on, `light-lens-lit`);
     /// carried to the shader in `PbrUniform::_p2[0]` and used by the lit pipelines only.
     pub emissive: f32,
+    /// Layer of the material texture array ([`crate::textures::layer_for`]); 0 is white.
+    pub layer: u32,
 }
 
 impl Default for Draw {
     fn default() -> Self {
-        Draw { first_index: 0, index_count: 0, albedo: [0.75; 3], metallic: 0.0, roughness: 0.5, alpha: 1.0, casts_shadow: true, emissive: 0.0 }
+        Draw {
+            first_index: 0,
+            index_count: 0,
+            albedo: [0.75; 3],
+            metallic: 0.0,
+            roughness: 0.5,
+            alpha: 1.0,
+            casts_shadow: true,
+            emissive: 0.0,
+            layer: 0,
+        }
     }
 }
 
@@ -315,7 +337,8 @@ pub fn upload(device: &wgpu::Device, scene: &Scene3d) -> GpuMeshes {
             let (albedo, metallic, roughness, alpha) = material_pbr(&mesh.material);
             let casts_shadow = crate::shadow_atlas::casts_fixture_shadow(&mesh.material);
             let emissive = if mesh.material.eq_ignore_ascii_case("light-lens-lit") { 1.0 } else { 0.0 };
-            draws.push(Draw { first_index, index_count, albedo, metallic, roughness, alpha, casts_shadow, emissive });
+            let layer = crate::textures::layer_for(&mesh.material);
+            draws.push(Draw { first_index, index_count, albedo, metallic, roughness, alpha, casts_shadow, emissive, layer });
         }
         vertex_offset += n;
     }
@@ -387,6 +410,7 @@ struct Built {
     blended: wgpu::RenderPipeline,
     bgl: wgpu::BindGroupLayout,
     pbr_bgl: wgpu::BindGroupLayout,
+    tex_bgl: wgpu::BindGroupLayout,
 }
 
 /// Build the render pipelines and related resources.
@@ -415,9 +439,10 @@ fn create_all(device: &wgpu::Device, sample_count: u32) -> Built {
         entries: &[uniform_entry(1, PBR_SIZE)],
     });
 
+    let tex_bgl = crate::textures::bind_group_layout(device);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("render3d pipeline layout"),
-        bind_group_layouts: &[Some(&bgl), Some(&pbr_bgl)],
+        bind_group_layouts: &[Some(&bgl), Some(&pbr_bgl), None, Some(&tex_bgl)],
         immediate_size: 0,
     });
 
@@ -457,7 +482,7 @@ fn create_all(device: &wgpu::Device, sample_count: u32) -> Built {
     // alpha uses One / OneMinusSrcAlpha, while the depth test stays Less and depth writes stay off.
     let blended = make("render3d glass pipeline", false, Some(glass_blend_state()));
 
-    Built { opaque, blended, bgl, pbr_bgl }
+    Built { opaque, blended, bgl, pbr_bgl, tex_bgl }
 }
 
 /// Create a lit render pipeline with a 32-bit float depth state. `sample_count` is 1 or 4
@@ -477,6 +502,10 @@ pub struct GpuPipeline {
     pub bgl: wgpu::BindGroupLayout,
     /// Layout of group 1 (PBR block, binding 1, dynamic offset).
     pub pbr_bgl: wgpu::BindGroupLayout,
+    /// Layout of group 3 (the finish texture array and its sampler).
+    pub tex_bgl: wgpu::BindGroupLayout,
+    /// Group 3, bound once per pass.
+    pub tex_bind_group: wgpu::BindGroup,
     pub uniform: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
     /// Slot-0 PBR block buffer and its group-1 bind group.
@@ -487,8 +516,9 @@ pub struct GpuPipeline {
 impl GpuPipeline {
     /// Build the full pipeline with uniform buffers initialised to zero / default uniforms.
     /// `sample_count` is 1 or 4 (anything else is 1).
-    pub fn new(device: &wgpu::Device, sample_count: u32) -> Self {
-        let Built { opaque, blended, bgl, pbr_bgl } = create_all(device, sample_count);
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, sample_count: u32) -> Self {
+        let Built { opaque, blended, bgl, pbr_bgl, tex_bgl } = create_all(device, sample_count);
+        let tex_bind_group = crate::textures::MaterialTextures::new(device, queue, &tex_bgl).bind_group;
 
         let uniform = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("render3d uniform buffer"),
@@ -516,7 +546,18 @@ impl GpuPipeline {
         });
         let pbr_bind_group = pbr_bind_group(device, &pbr_bgl, &pbr_uniform);
 
-        GpuPipeline { pipeline: opaque, glass_pipeline: blended, bgl, pbr_bgl, uniform, bind_group, pbr_uniform, pbr_bind_group }
+        GpuPipeline {
+            pipeline: opaque,
+            glass_pipeline: blended,
+            bgl,
+            pbr_bgl,
+            tex_bgl,
+            tex_bind_group,
+            uniform,
+            bind_group,
+            pbr_uniform,
+            pbr_bind_group,
+        }
     }
 
     /// Upload a new uniform to the GPU (slot 0; bind with dynamic offset 0).
@@ -660,9 +701,9 @@ mod tests {
         for bad in [0, 2, 8, 16, u32::MAX] {
             assert_eq!(valid_sample_count(bad), 1);
         }
-        let Some((device, _queue)) = crate::gputest::shared_device() else { return };
-        let _ = GpuPipeline::new(&device, 4);
-        let _ = GpuPipeline::new(&device, 2);
+        let Some((device, queue)) = crate::gputest::shared_device() else { return };
+        let _ = GpuPipeline::new(&device, &queue, 4);
+        let _ = GpuPipeline::new(&device, &queue, 2);
     }
 
     #[test]
@@ -771,7 +812,7 @@ mod tests {
     #[test]
     fn gpu_pipeline_new_and_write_uniform() {
         let Some((device, queue)) = crate::gputest::shared_device() else { return };
-        let gp = GpuPipeline::new(&device, 1);
+        let gp = GpuPipeline::new(&device, &queue, 1);
         let u = GpuUniform::new(
             [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
             [0.0, 0.0, -1.0],
