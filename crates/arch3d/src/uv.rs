@@ -113,4 +113,74 @@ mod tests {
         assert_eq!(rd.indices.len(), 3);
         assert_eq!(rd.normals[0], [0.0, 0.0, 1.0]);
     }
+
+    #[test]
+    fn face_uvs_on_empty_mesh_returns_empty() {
+        let m = Mesh::new("wall", ArchId(0));
+        let r = face_uvs(&m, [1.0, 1.0]);
+        assert!(r.positions.is_empty());
+        assert!(r.normals.is_empty());
+        assert!(r.uvs.is_empty());
+        assert!(r.indices.is_empty());
+        assert_eq!(r.material, "wall");
+        assert_eq!(r.object, ArchId(0));
+    }
+
+    #[test]
+    fn face_uvs_on_x_running_wall() {
+        // Wall running along X at y=0, from x=0 to x=4, z=0 to z=3.
+        let m = quad([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 0.0, 3.0], [0.0, 0.0, 3.0]]);
+        let r = face_uvs(&m, [1.0, 1.0]);
+        // Normal should be (0, -1, 0).
+        assert!((r.normals[0][1] + 1.0).abs() < 1e-5, "normal y = {}", r.normals[0][1]);
+        // u runs along x, v runs along z.
+        for (p, uv) in r.positions.iter().zip(&r.uvs) {
+            assert!((uv[0] - p[0]).abs() < 1e-5, "u {} x {}", uv[0], p[0]);
+            assert!((uv[1] - p[2]).abs() < 1e-5, "v {} z {}", uv[1], p[2]);
+        }
+    }
+
+    #[test]
+    fn face_uvs_with_zero_and_negative_tile() {
+        let m = quad([[0.0, 0.0, 0.0], [0.0, 0.0, 3.0], [0.0, 4.0, 3.0], [0.0, 4.0, 0.0]]);
+        let r = face_uvs(&m, [0.0, -1.0]);
+        // Zero and negative tile components are treated as 1.0.
+        assert!((span(&r, 0) - 4.0).abs() < 1e-5, "u span {}", span(&r, 0));
+        assert!((span(&r, 1) - 3.0).abs() < 1e-5, "v span {}", span(&r, 1));
+    }
+
+    #[test]
+    fn face_uvs_on_downward_facing_horizontal() {
+        // Horizontal face at z=1 with normal (0, 0, -1).
+        let m = quad([[0.0, 0.0, 1.0], [0.0, 3.0, 1.0], [2.0, 3.0, 1.0], [2.0, 0.0, 1.0]]);
+        let r = face_uvs(&m, [1.0, 1.0]);
+        assert!((r.normals[0][2] + 1.0).abs() < 1e-5, "normal z = {}", r.normals[0][2]);
+        // u = x, v = y for horizontal faces regardless of normal direction.
+        for (p, uv) in r.positions.iter().zip(&r.uvs) {
+            assert!((uv[0] - p[0]).abs() < 1e-5, "u {} x {}", uv[0], p[0]);
+            assert!((uv[1] - p[1]).abs() < 1e-5, "v {} y {}", uv[1], p[1]);
+        }
+    }
+
+    #[test]
+    fn face_uvs_with_nan_positions_does_not_crash() {
+        let m =
+            Mesh { positions: vec![[0.0, 0.0, 0.0], [f32::NAN, 0.0, 0.0], [0.0, 0.0, 0.0]], indices: vec![0, 1, 2], ..Mesh::new("wall", ArchId(0)) };
+        let r = face_uvs(&m, [1.0, 1.0]);
+        assert_eq!(r.positions.len(), 3);
+        // Degenerate triangle (two vertices coincide) keeps +z normal.
+        assert_eq!(r.normals[0], [0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn face_uvs_single_triangle() {
+        let m = Mesh { positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], indices: vec![0, 1, 2], ..Mesh::new("floor", ArchId(5)) };
+        let r = face_uvs(&m, [1.0, 1.0]);
+        assert_eq!(r.positions.len(), 3);
+        assert_eq!(r.indices.len(), 3);
+        // Horizontal face: u = x, v = y.
+        assert_eq!(r.uvs[0], [0.0, 0.0]);
+        assert_eq!(r.uvs[1], [1.0, 0.0]);
+        assert_eq!(r.uvs[2], [0.0, 1.0]);
+    }
 }
