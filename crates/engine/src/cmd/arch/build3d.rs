@@ -51,6 +51,8 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
         }
     };
 
+    let rebuild_ms = elapsed_ms(t);
+
     let probe_points = parse_probe_points(params)?;
     let probe_results: Vec<Value> = probe_points
         .iter()
@@ -71,7 +73,7 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
     let mut reply = json!({
         "meshes": scene.meshes.len(),
         "triangles": scene.meshes.iter().map(|m| m.indices.len() / 3).sum::<usize>(),
-        "rebuildMs": elapsed_ms(t),
+        "rebuildMs": rebuild_ms,
         "bounds": {
             "min": [scene.bounds.min[0], scene.bounds.min[1], scene.bounds.min[2]],
             "max": [scene.bounds.max[0], scene.bounds.max[1], scene.bounds.max[2]]
@@ -1321,5 +1323,86 @@ mod tests {
         let mut s = wall_session();
         let r = s.execute("build3d", &json!({"digest": "true"}));
         assert!(r.is_err(), "non-boolean `digest` must be refused");
+    }
+
+    /// An incremental build with no model changes since the last build must rebuild zero objects.
+    #[test]
+    fn build3d_incremental_no_changes_rebuilds_zero() {
+        let mut s = wall_session();
+        // Seed the cache with a full build.
+        s.execute("build3d", &json!({})).unwrap();
+        // Incremental build with no changes: rebuilt must be 0.
+        let r = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        let rebuilt = r["rebuilt"].as_u64().expect("missing rebuilt");
+        let objects = r["objects"].as_u64().expect("missing objects");
+        assert_eq!(rebuilt, 0, "no changes -> 0 rebuilt, got {}", rebuilt);
+        assert_eq!(objects, 1, "scene should still have 1 wall object, got {}", objects);
+        assert!(r["incremental"].as_bool().expect("missing incremental"), "should report incremental=true");
+    }
+
+    /// Adding a wall after a full build must be detected by an incremental build.
+    #[test]
+    fn build3d_incremental_after_adding_wall() {
+        let mut s = wall_session();
+        // Seed the cache with a full build (1 wall).
+        let r_full = s.execute("build3d", &json!({})).unwrap();
+        let objects_before = r_full["objects"].as_u64().expect("missing objects");
+        assert_eq!(objects_before, 1, "baseline should have 1 wall");
+
+        // Add a second wall.
+        let d = s.doc_mut().unwrap();
+        d.arch.walls.push(Wall {
+            id: ArchId(2),
+            start: Vec2::new(0.0, 5.0),
+            end: Vec2::new(10.0, 5.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        d.touch_arch();
+
+        // Incremental build must see the new wall.
+        let r = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        let rebuilt = r["rebuilt"].as_u64().expect("missing rebuilt");
+        let objects = r["objects"].as_u64().expect("missing objects");
+        assert!(rebuilt >= 1, "adding a wall must rebuild at least 1 object, got {}", rebuilt);
+        assert_eq!(objects, 2, "scene should now have 2 wall objects, got {}", objects);
+    }
+
+    /// Removing a wall after a full build must be detected by an incremental build.
+    #[test]
+    fn build3d_incremental_after_removing_wall() {
+        let mut s = t_junction_session();
+        // Seed the cache with a full build (5 walls).
+        let r_full = s.execute("build3d", &json!({})).unwrap();
+        let objects_before = r_full["objects"].as_u64().expect("missing objects");
+        assert_eq!(objects_before, 5, "baseline should have 5 walls");
+
+        // Remove one wall.
+        let d = s.doc_mut().unwrap();
+        d.arch.walls.retain(|w| w.id != ArchId(5));
+        d.touch_arch();
+
+        // Incremental build must see the removal.
+        let r = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        let objects = r["objects"].as_u64().expect("missing objects");
+        assert_eq!(objects, 4, "scene should now have 4 wall objects, got {}", objects);
+    }
+
+    /// An incremental build on an empty model must work and report zero objects.
+    #[test]
+    fn build3d_incremental_empty_model() {
+        let mut s = fresh_session();
+        // Incremental build with no cache: full build of empty model, seeds cache.
+        let r1 = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        assert_eq!(r1["objects"].as_u64(), Some(0), "empty model -> 0 objects");
+        assert_eq!(r1["rebuilt"].as_u64(), Some(0), "empty model -> 0 rebuilt");
+        assert!(!r1["incremental"].as_bool().expect("missing incremental"), "first build is full");
+
+        // Second incremental build: cache exists, no changes.
+        let r2 = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        assert_eq!(r2["objects"].as_u64(), Some(0), "empty model -> 0 objects");
+        assert_eq!(r2["rebuilt"].as_u64(), Some(0), "no changes -> 0 rebuilt");
+        assert!(r2["incremental"].as_bool().expect("missing incremental"), "should report incremental=true");
     }
 }
