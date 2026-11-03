@@ -23,6 +23,9 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
         "railing" => "railing",
         "deck" => "deck",
         "terrain" => "terrain",
+        m if m.starts_with("wall-") && crate::glb::finish_of(m).is_some() => "wall",
+        m if m.starts_with("roof-") && crate::glb::finish_of(m).is_some() => "roof",
+        m if m.starts_with("floor-") && crate::glb::finish_of(m).is_some() => "floor",
         m if m.starts_with("window-") || m.starts_with("door-") => "opening",
         m if m.starts_with("plant-") => "plant",
         m if m.starts_with("path-") => "path",
@@ -137,6 +140,19 @@ mod tests {
         assert_eq!(pieces.ids("wall"), vec![ArchId(0), ArchId(1)]);
         assert_eq!(pieces.get("opening", ArchId(0)).len(), 2);
         assert!(pieces.get("opening", ArchId(1)).is_empty());
+    }
+
+    #[test]
+    fn ifc_wall_body_includes_its_exterior_face() {
+        assert_eq!(kind_of("wall-brick"), "wall");
+        assert_eq!(kind_of("roof-shingles"), "roof");
+        assert_eq!(kind_of("floor-wood"), "floor");
+        assert_eq!(kind_of("wall-bogus"), "other");
+        let scene =
+            Scene3d { meshes: vec![square("wall", 1, 0.0), square("wall-brick", 1, 0.0), square("floor-wood", 2, 0.0)], ..Scene3d::default() };
+        let pieces = Pieces::new(&scene);
+        assert_eq!(pieces.get("wall", ArchId(1)).len(), 2);
+        assert_eq!(pieces.get("floor", ArchId(2)).len(), 1);
     }
 
     #[test]

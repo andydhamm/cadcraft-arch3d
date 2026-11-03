@@ -21,6 +21,7 @@ pub mod ifc;
 pub mod obj;
 pub mod pdf;
 pub mod plotter;
+pub mod png;
 pub mod step;
 pub mod svg;
 mod svg_read;

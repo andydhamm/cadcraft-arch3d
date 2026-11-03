@@ -12,9 +12,10 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use cadcraft_arch3d::{Mesh, Scene3d};
+use cadcraft_arch3d::{Mesh, Scene3d, texture};
 use cadcraft_color::{Color, Rgb};
 use cadcraft_doc::Drawing;
+use cadcraft_doc::arch::Finish;
 use serde_json::{Value, json};
 
 /// Build a GLB from the 3D scene extracted from the drawing's arch model.
@@ -78,6 +79,22 @@ fn align4(buf: &mut Vec<u8>) {
     }
 }
 
+/// The finish of a finished-face material `wall-<f>`, `roof-<f>` or `floor-<f>`.
+pub(crate) fn finish_of(material: &str) -> Option<Finish> {
+    let rest = material.strip_prefix("wall-").or_else(|| material.strip_prefix("roof-")).or_else(|| material.strip_prefix("floor-"))?;
+    Finish::parse(rest)
+}
+
+/// Roughness of a finish's material.
+fn finish_roughness(f: Finish) -> f64 {
+    match f {
+        Finish::Siding => 0.6,
+        Finish::Shingles => 0.95,
+        Finish::Brick => 0.9,
+        Finish::Wood => 0.5,
+    }
+}
+
 /// One node name per written mesh (those with vertices), in scene order, shared with the OBJ
 /// writer. Roof planes are numbered in scene order: `roof-r{n}p0`, `roof-r{n}p1`, ...
 pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
@@ -102,6 +119,14 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
             "fascia" => format!("roof-r{}-fascia", m.object.0),
             "soffit" => format!("roof-r{}-soffit", m.object.0),
             "wall" => format!("wall-{}", m.object),
+            mat if mat.starts_with("wall-") && finish_of(mat).is_some() => format!("wall-{}-exterior", m.object),
+            mat if mat.starts_with("roof-") && finish_of(mat).is_some() => {
+                let plane = roof_planes.entry(m.object.0).or_insert(0);
+                let i = *plane;
+                *plane += 1;
+                format!("roof-r{}p{}", m.object.0, i)
+            }
+            mat if mat.starts_with("floor-") && finish_of(mat).is_some() => format!("floor-r{}", m.object.0),
             "stair" => format!("stair-s{}", m.object.0),
             "railing" => format!("railing-ra{}", m.object.0),
             "deck" => format!("deck-r{}", m.object.0),
@@ -137,6 +162,16 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
     let names = node_names(scene);
 
     let written_meshes: Vec<&Mesh> = scene.meshes.iter().filter(|m| !m.positions.is_empty()).collect();
+    // One PNG per finish used, in Finish::ALL order.
+    let mut pngs: Vec<(Finish, Vec<u8>)> = Vec::new();
+    for f in Finish::ALL {
+        if written_meshes.iter().any(|m| finish_of(&m.material) == Some(f)) {
+            let t = texture::texture(f);
+            if let Ok(bytes) = crate::png::encode_rgba8(t.width, t.height, &t.rgba) {
+                pngs.push((f, bytes));
+            }
+        }
+    }
     for (i, m) in written_meshes.iter().enumerate() {
         let mat_idx = if let Some(idx) = material_index.get(&m.material) {
             *idx
@@ -161,6 +196,15 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                     "roughnessFactor": if is_roof { 0.9 } else if is_glass { 0.05 } else { 1.0 },
                 },
             });
+            let textured = finish_of(&m.material).and_then(|f| pngs.iter().position(|(g, _)| *g == f).map(|t| (f, t)));
+            if let Some((f, t)) = textured {
+                mat["pbrMetallicRoughness"] = json!({
+                    "baseColorTexture": { "index": t },
+                    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+                    "metallicFactor": 0.0,
+                    "roughnessFactor": finish_roughness(f),
+                });
+            }
             if is_glass {
                 mat["alphaMode"] = json!("BLEND");
             }
@@ -241,13 +285,25 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
             "byteLength": uv_len,
             "target": 34962,
         }));
-        accessors.push(json!({
+        let mut uv_acc = json!({
             "bufferView": bv_uv,
             "byteOffset": 0,
             "count": m.uvs.len() as u32,
             "type": "VEC2",
             "componentType": 5126,
-        }));
+        });
+        if let Some(first) = m.uvs.first() {
+            let (mut lo, mut hi) = (*first, *first);
+            for uv in &m.uvs {
+                for k in 0..2 {
+                    lo[k] = lo[k].min(uv[k]);
+                    hi[k] = hi[k].max(uv[k]);
+                }
+            }
+            uv_acc["min"] = json!([lo[0] as f64, lo[1] as f64]);
+            uv_acc["max"] = json!([hi[0] as f64, hi[1] as f64]);
+        }
+        accessors.push(uv_acc);
         let acc_uv = accessors.len() - 1;
 
         // INDICES (SCALAR, uint32).
@@ -297,6 +353,18 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         }));
     }
 
+    // Images: each PNG is its own bufferView after the mesh data.
+    let mut images: Vec<Value> = Vec::new();
+    let mut textures: Vec<Value> = Vec::new();
+    for (k, (f, png)) in pngs.iter().enumerate() {
+        let start = bin.len();
+        bin.extend_from_slice(png);
+        align4(&mut bin);
+        buffer_views.push(json!({ "buffer": 0, "byteOffset": start, "byteLength": png.len() as u32 }));
+        images.push(json!({ "bufferView": buffer_views.len() - 1, "mimeType": "image/png", "name": f.name() }));
+        textures.push(json!({ "sampler": 0, "source": k, "name": f.name() }));
+    }
+
     let buffers: Vec<Value> = if bin.is_empty() { Vec::new() } else { vec![json!({ "byteLength": bin.len() as u32 })] };
     let (light_defs, light_nodes) = crate::glb_lights::punctual_lights(scene);
     // Root node carries the Z-up -> Y-up rotation; its children are the per-mesh
@@ -329,6 +397,11 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         "bufferViews": buffer_views,
         "accessors": accessors,
     });
+    if !pngs.is_empty() {
+        value["samplers"] = json!([{ "magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497 }]);
+        value["images"] = json!(images);
+        value["textures"] = json!(textures);
+    }
     if has_root && !light_defs.is_empty() {
         value["extensionsUsed"] = json!(["KHR_lights_punctual"]);
         value["extensions"] = json!({ "KHR_lights_punctual": { "lights": light_defs } });
@@ -535,6 +608,71 @@ mod tests {
             }
             _ => assert!(false, "accessors is not an array"),
         }
+    }
+
+    fn finished(material: &str, id: u32) -> Mesh {
+        let mut m = wall_mesh();
+        m.material = material.into();
+        m.object = ArchId(id);
+        m
+    }
+
+    #[test]
+    fn glb_embeds_one_png_per_finish_used() {
+        let mut scene = scene_with(0);
+        scene.meshes = vec![finished("wall-brick", 1), finished("wall-brick", 2), finished("roof-shingles", 0), finished("floor-wood", 3)];
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let images = json["images"].as_array().unwrap();
+        let names: Vec<&str> = images.iter().map(|i| i["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["shingles", "brick", "wood"]);
+        let json_len = le32(&bytes, 12) as usize;
+        let bin = 20 + json_len + 8;
+        for (i, img) in images.iter().enumerate() {
+            assert_eq!(img["mimeType"], "image/png");
+            let bv = &json["bufferViews"][img["bufferView"].as_u64().unwrap() as usize];
+            assert!(bv.get("target").is_none() && bv.get("byteStride").is_none());
+            let off = bv["byteOffset"].as_u64().unwrap() as usize;
+            assert_eq!(off % 4, 0);
+            assert_eq!(&bytes[bin + off..bin + off + 8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+            assert_eq!(json["textures"][i]["source"], i as u64);
+            assert_eq!(json["textures"][i]["sampler"], 0);
+        }
+        assert_eq!(json["samplers"][0]["minFilter"], 9987);
+        assert_eq!(json["samplers"][0]["wrapS"], 10497);
+        assert_eq!(write(&scene), bytes);
+    }
+
+    #[test]
+    fn finished_material_uses_its_texture() {
+        let mut scene = scene_with(0);
+        scene.meshes = vec![finished("wall-brick", 1), finished("roof-shingles", 0)];
+        let json = glb_json_chunk(&write(&scene));
+        let mats = json["materials"].as_array().unwrap();
+        let brick = mats.iter().find(|m| m["name"] == "wall-brick").unwrap();
+        let pbr = &brick["pbrMetallicRoughness"];
+        assert_eq!(pbr["baseColorTexture"]["index"], 1);
+        assert_eq!(pbr["baseColorFactor"], json!([1.0, 1.0, 1.0, 1.0]));
+        assert_eq!(pbr["metallicFactor"].as_f64().unwrap(), 0.0);
+        assert_eq!(pbr["roughnessFactor"].as_f64().unwrap(), 0.9);
+        let roof = mats.iter().find(|m| m["name"] == "roof-shingles").unwrap();
+        assert_eq!(roof["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0);
+        assert_eq!(roof["pbrMetallicRoughness"]["roughnessFactor"].as_f64().unwrap(), 0.95);
+        let uv = json["accessors"].as_array().unwrap().iter().find(|a| a["type"] == "VEC2").unwrap();
+        assert_eq!(uv["max"], json!([0.5, 0.5]));
+    }
+
+    #[test]
+    fn glb_without_finishes_has_no_images() {
+        let json = glb_json_chunk(&write(&scene_with_roof()));
+        assert!(json.get("images").is_none() && json.get("textures").is_none() && json.get("samplers").is_none());
+    }
+
+    #[test]
+    fn exterior_face_node_is_named_wall_exterior() {
+        let mut scene = scene_with(0);
+        scene.meshes = vec![finished("wall-siding", 4), finished("roof-wood", 2), finished("roof-wood", 2), finished("floor-wood", 5)];
+        assert_eq!(node_names(&scene), ["wall-w4-exterior", "roof-r2p0", "roof-r2p1", "floor-r5"]);
     }
 
     #[test]

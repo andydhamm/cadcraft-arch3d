@@ -270,14 +270,16 @@ fn build_benchmark_house() -> crate::Result<(ArchModel, Value)> {
         let mut partitions = Vec::new();
         for i in 1..nx {
             for j in 0..ny {
-                let id = push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i], HOUSE_Y[j]), Vec2::new(HOUSE_X[i], HOUSE_Y[j + 1]), level, false, 0.12);
+                let id =
+                    push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i], HOUSE_Y[j]), Vec2::new(HOUSE_X[i], HOUSE_Y[j + 1]), level, false, 0.12);
                 x_seg.insert((i, j), id);
                 partitions.push(id);
             }
         }
         for j in 1..ny {
             for i in 0..nx {
-                let id = push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i], HOUSE_Y[j]), Vec2::new(HOUSE_X[i + 1], HOUSE_Y[j]), level, false, 0.12);
+                let id =
+                    push_benchmark_wall(&mut model, Vec2::new(HOUSE_X[i], HOUSE_Y[j]), Vec2::new(HOUSE_X[i + 1], HOUSE_Y[j]), level, false, 0.12);
                 y_seg.insert((i, j), id);
                 partitions.push(id);
             }
@@ -321,7 +323,16 @@ fn build_benchmark_house() -> crate::Result<(ArchModel, Value)> {
         model.push_room(room);
     }
 
-    let auto = cadcraft_doc::Roof { level: 2, pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, fascia: true, soffit: true, ..Default::default() };
+    let auto = cadcraft_doc::Roof {
+        level: 2,
+        pitch_rise: 6.0,
+        pitch_run: 12.0,
+        overhang: 0.5,
+        thickness: 0.2,
+        fascia: true,
+        soffit: true,
+        ..Default::default()
+    };
     let roof = cadcraft_arch::roof::build_roof(&model, 2, &auto).map_err(|e| err(format!("roof: {e:?}")))?;
     model.push_roof(roof);
 
@@ -929,9 +940,7 @@ mod tests {
         assert!(l >= 8 && t >= 8 && x >= 8, "expected at least 8 L, 8 T and 8 X joins, saw L={l} T={t} X={x}");
         // The ring's corners are L joins on each level, so every corner has exactly two wall ends.
         for level in 1..=2 {
-            let ends = |p: cadcraft_geom::Vec2| {
-                d.arch.walls.iter().filter(|w| w.base_level == level).filter(|w| w.start == p || w.end == p).count()
-            };
+            let ends = |p: cadcraft_geom::Vec2| d.arch.walls.iter().filter(|w| w.base_level == level).filter(|w| w.start == p || w.end == p).count();
             for c in [(0.0, 0.0), (18.0, 0.0), (18.0, 12.0), (0.0, 12.0)] {
                 assert_eq!(ends(cadcraft_geom::Vec2::new(c.0, c.1)), 2, "corner {c:?} on level {level}");
             }
@@ -989,8 +998,11 @@ mod tests {
         assert_eq!((roof.pitch_rise, roof.pitch_run, roof.overhang), (6.0, 12.0, 0.5));
         assert!(!roof.manual && !roof.hand_edited);
         assert!(roof.planes.len() >= 4, "a hip roof has at least 4 planes, got {}", roof.planes.len());
-        assert!(roof.planes.iter().all(|p| p.slope.is_finite() && p.slope > 0.1), "no vertical (gable) plane: {:?}",
-            roof.planes.iter().map(|p| p.slope).collect::<Vec<_>>());
+        assert!(
+            roof.planes.iter().all(|p| p.slope.is_finite() && p.slope > 0.1),
+            "no vertical (gable) plane: {:?}",
+            roof.planes.iter().map(|p| p.slope).collect::<Vec<_>>()
+        );
     }
 
     #[test]
