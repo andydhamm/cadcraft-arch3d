@@ -171,4 +171,23 @@ mod tests {
         assert!(String::from_utf8(obj).expect("utf8").contains("mtllib house.mtl\n"));
         assert!(String::from_utf8(mtl).expect("utf8").starts_with("# CADCraft arch3d"));
     }
+
+    #[test]
+    fn obj_finished_face_uses_exterior_node_name() {
+        let mut s = Scene3d::default();
+        s.meshes = vec![mesh("wall-brick", 1, true), mesh("wall", 1, true)];
+        let obj = write_obj(&s, "x.mtl");
+        let groups: Vec<&str> = obj.lines().filter_map(|l| l.strip_prefix("o ")).collect();
+        assert_eq!(groups, ["wall-w1-exterior", "wall-w1"]);
+    }
+
+    #[test]
+    fn obj_empty_scene_is_valid() {
+        let s = Scene3d::default();
+        let obj = write_obj(&s, "x.mtl");
+        assert!(obj.starts_with("# CADCraft arch3d\nmtllib x.mtl\n"));
+        assert!(!obj.contains("o "));
+        assert!(!obj.contains("v "));
+        assert!(!obj.contains("f "));
+    }
 }
