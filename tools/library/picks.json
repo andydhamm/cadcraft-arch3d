@@ -1,0 +1,643 @@
+[
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#36",
+  "id": "chair-dining-wood",
+  "category": "Furniture",
+  "symbolType": "chair/stool",
+  "placement": "floor",
+  "keywords": [
+   "dining",
+   "chair",
+   "wood"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#38",
+  "id": "chair-dining-2",
+  "category": "Furniture",
+  "symbolType": "chair/stool",
+  "placement": "floor",
+  "keywords": [
+   "dining",
+   "chair"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#58",
+  "id": "stool-bar",
+  "category": "Furniture",
+  "symbolType": "chair/stool",
+  "placement": "floor",
+  "keywords": [
+   "stool",
+   "bar",
+   "counter"
+  ]
+ },
+ {
+  "src": "DodecagonBedroom.sh3f",
+  "entry": "#1",
+  "id": "bed-double-wood",
+  "category": "Furniture",
+  "symbolType": "bed",
+  "placement": "floor",
+  "keywords": [
+   "bed",
+   "double",
+   "wood"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#53",
+  "id": "bed-single",
+  "category": "Furniture",
+  "symbolType": "bed",
+  "placement": "floor",
+  "keywords": [
+   "bed",
+   "single"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#31",
+  "id": "table-dining-150",
+  "category": "Furniture",
+  "symbolType": "table",
+  "placement": "floor",
+  "keywords": [
+   "dining",
+   "table"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#oakTable",
+  "id": "table-dining-oak",
+  "category": "Furniture",
+  "symbolType": "table",
+  "placement": "floor",
+  "keywords": [
+   "dining",
+   "table",
+   "oak"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#28",
+  "id": "table-coffee-90",
+  "category": "Furniture",
+  "symbolType": "table",
+  "placement": "floor",
+  "keywords": [
+   "coffee",
+   "table",
+   "living"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#bedsideTable2",
+  "id": "table-bedside",
+  "category": "Furniture",
+  "symbolType": "table",
+  "placement": "floor",
+  "keywords": [
+   "bedside",
+   "nightstand",
+   "bedroom"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#lbDesk",
+  "id": "desk",
+  "category": "Furniture",
+  "symbolType": "desk",
+  "placement": "floor",
+  "keywords": [
+   "desk",
+   "office"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#4",
+  "id": "dresser-6-drawers",
+  "category": "Furniture",
+  "symbolType": "storage",
+  "placement": "floor",
+  "keywords": [
+   "dresser",
+   "drawers",
+   "bedroom",
+   "wood"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#16",
+  "id": "wardrobe-hanging",
+  "category": "Furniture",
+  "symbolType": "storage",
+  "placement": "floor",
+  "keywords": [
+   "wardrobe",
+   "closet",
+   "bedroom",
+   "wood"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#bookcase",
+  "id": "bookcase",
+  "category": "Furniture",
+  "symbolType": "storage",
+  "placement": "floor",
+  "keywords": [
+   "bookcase",
+   "shelves",
+   "living"
+  ]
+ },
+ {
+  "src": "KatorLegaz.sh3f",
+  "entry": "Kator Legaz#oriental-rug",
+  "id": "rug-oriental",
+  "category": "Furniture",
+  "symbolType": "rug",
+  "placement": "floor",
+  "keywords": [
+   "rug",
+   "carpet",
+   "living"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#towel3",
+  "id": "towel-rack",
+  "category": "Furniture",
+  "symbolType": "décor",
+  "placement": "wall",
+  "keywords": [
+   "towel",
+   "rack",
+   "bathroom",
+   "wall"
+  ]
+ },
+ {
+  "src": "DodecagonKitchen2.sh3f",
+  "entry": "#2",
+  "id": "dishwasher-60",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "dishwasher",
+  "placement": "floor",
+  "keywords": [
+   "dishwasher",
+   "kitchen",
+   "appliance"
+  ]
+ },
+ {
+  "src": "DodecagonAppliances.sh3f",
+  "entry": "#2",
+  "id": "refrigerator-fridge-freezer",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "refrigerator",
+  "placement": "floor",
+  "keywords": [
+   "refrigerator",
+   "fridge",
+   "freezer",
+   "kitchen"
+  ]
+ },
+ {
+  "src": "KatorLegaz.sh3f",
+  "entry": "Kator Legaz#fridge",
+  "id": "refrigerator-small",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "refrigerator",
+  "placement": "floor",
+  "keywords": [
+   "refrigerator",
+   "fridge",
+   "kitchen"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#mano_cooktop",
+  "id": "cooktop",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "cooktop",
+  "placement": "counter",
+  "keywords": [
+   "cooktop",
+   "hob",
+   "kitchen"
+  ],
+  "cutout": [
+   0.56,
+   0.48
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#oven",
+  "id": "oven-built-in",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "oven",
+  "placement": "in-cabinet",
+  "keywords": [
+   "oven",
+   "built-in",
+   "kitchen"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#rangeHood",
+  "id": "range-hood",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "hood",
+  "placement": "wall",
+  "keywords": [
+   "hood",
+   "range hood",
+   "kitchen"
+  ]
+ },
+ {
+  "src": "DodecagonBathroom.sh3f",
+  "entry": "#38",
+  "id": "sink-built-in",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "sink",
+  "placement": "counter",
+  "keywords": [
+   "sink",
+   "kitchen",
+   "built-in"
+  ],
+  "cutout": [
+   0.48,
+   0.38
+  ],
+  "name": "Built-in sink"
+ },
+ {
+  "src": "DodecagonAppliances.sh3f",
+  "entry": "#17",
+  "id": "faucet-kitchen-chrome",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "faucet",
+  "placement": "counter",
+  "keywords": [
+   "faucet",
+   "tap",
+   "kitchen",
+   "chrome"
+  ]
+ },
+ {
+  "src": "DodecagonBathroom.sh3f",
+  "entry": "#23",
+  "id": "faucet-bathroom-chrome",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "faucet",
+  "placement": "counter",
+  "keywords": [
+   "faucet",
+   "tap",
+   "bathroom",
+   "chrome"
+  ]
+ },
+ {
+  "src": "DodecagonBathroom.sh3f",
+  "entry": "#36",
+  "id": "toilet",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "toilet",
+  "placement": "floor",
+  "keywords": [
+   "toilet",
+   "wc",
+   "bathroom"
+  ]
+ },
+ {
+  "src": "DodecagonBathroom.sh3f",
+  "entry": "#47",
+  "id": "bathtub",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "bathtub",
+  "placement": "floor",
+  "keywords": [
+   "bathtub",
+   "tub",
+   "bath",
+   "bathroom"
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#clothes_washing_machine",
+  "id": "washing-machine",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "washer",
+  "placement": "floor",
+  "keywords": [
+   "washer",
+   "laundry",
+   "appliance"
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#ceiling-lamp",
+  "id": "light-ceiling",
+  "category": "Lighting and electrical",
+  "symbolType": "light",
+  "placement": "ceiling",
+  "keywords": [
+   "light",
+   "ceiling",
+   "lamp"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-BY.sh3f",
+  "entry": "Blend Swap CC-BY#hangingLight",
+  "id": "light-pendant",
+  "category": "Lighting and electrical",
+  "symbolType": "light",
+  "placement": "ceiling",
+  "keywords": [
+   "light",
+   "pendant",
+   "hanging",
+   "ceiling"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#wallLight",
+  "id": "light-wall",
+  "category": "Lighting and electrical",
+  "symbolType": "light",
+  "placement": "wall",
+  "keywords": [
+   "light",
+   "sconce",
+   "wall"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#desklamp",
+  "id": "lamp-desk",
+  "category": "Lighting and electrical",
+  "symbolType": "light",
+  "placement": "floor",
+  "keywords": [
+   "lamp",
+   "desk",
+   "table lamp"
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#living_lamp",
+  "id": "lamp-floor",
+  "category": "Lighting and electrical",
+  "symbolType": "light",
+  "placement": "floor",
+  "keywords": [
+   "lamp",
+   "floor lamp",
+   "living"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#oakTable",
+  "member": "blendswap-cc-0/oakTable/oak.jpg",
+  "id": "material-oak",
+  "category": "Materials",
+  "symbolType": "material",
+  "placement": null,
+  "keywords": [
+   "wood",
+   "oak"
+  ],
+  "name": "Oak"
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#lowerCabinet",
+  "member": "blendswap-cc-0/lowerCabinet/marble_14.jpg",
+  "id": "material-marble",
+  "category": "Materials",
+  "symbolType": "material",
+  "placement": null,
+  "keywords": [
+   "stone",
+   "marble",
+   "counter"
+  ],
+  "name": "Marble"
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#couch2",
+  "member": "blendswap-cc-0/couch2/Fabric_011_COLOR.jpg",
+  "id": "material-fabric",
+  "category": "Materials",
+  "symbolType": "material",
+  "placement": null,
+  "keywords": [
+   "fabric",
+   "upholstery"
+  ],
+  "name": "Fabric"
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#door",
+  "id": "door-panel",
+  "category": "Doors and windows",
+  "symbolType": "door",
+  "placement": "wall",
+  "keywords": [
+   "door",
+   "interior"
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#glass_door",
+  "id": "door-glass",
+  "category": "Doors and windows",
+  "symbolType": "door",
+  "placement": "wall",
+  "keywords": [
+   "door",
+   "glass"
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#window_2x4",
+  "id": "window-double",
+  "category": "Doors and windows",
+  "symbolType": "window",
+  "placement": "wall",
+  "keywords": [
+   "window",
+   "double"
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#turn-window",
+  "id": "window-turn",
+  "category": "Doors and windows",
+  "symbolType": "window",
+  "placement": "wall",
+  "keywords": [
+   "window",
+   "casement"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#plant",
+  "id": "plant-large",
+  "category": "Plants",
+  "symbolType": "plant",
+  "placement": "floor",
+  "keywords": [
+   "plant",
+   "indoor"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#chair2",
+  "id": "chair-dining-3",
+  "category": "Furniture",
+  "symbolType": "chair/stool",
+  "placement": "floor",
+  "keywords": [
+   "dining",
+   "chair"
+  ]
+ },
+ {
+  "src": "DodecagonFurniture01.sh3f",
+  "entry": "#34",
+  "id": "armchair",
+  "category": "Furniture",
+  "symbolType": "chair/stool",
+  "placement": "floor",
+  "keywords": [
+   "armchair",
+   "chair",
+   "living"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#couch2",
+  "id": "sofa-chaise",
+  "category": "Furniture",
+  "symbolType": "sofa",
+  "placement": "floor",
+  "keywords": [
+   "sofa",
+   "couch",
+   "chaise",
+   "living"
+  ]
+ },
+ {
+  "src": "KatorLegaz.sh3f",
+  "entry": "Kator Legaz#futon-couch",
+  "id": "sofa-futon",
+  "category": "Furniture",
+  "symbolType": "sofa",
+  "placement": "floor",
+  "keywords": [
+   "sofa",
+   "futon",
+   "couch"
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#tv",
+  "id": "tv",
+  "category": "Furniture",
+  "symbolType": "décor",
+  "placement": "floor",
+  "keywords": [
+   "tv",
+   "television",
+   "living"
+  ],
+  "size": [
+   0.56,
+   0.115,
+   0.454
+  ]
+ },
+ {
+  "src": "Scopia.sh3f",
+  "entry": "Scopia#small_lavatory",
+  "id": "lavatory-small",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "lavatory",
+  "placement": "wall",
+  "keywords": [
+   "lavatory",
+   "washbasin",
+   "bathroom"
+  ]
+ },
+ {
+  "src": "DodecagonBathroom.sh3f",
+  "entry": "#26",
+  "id": "shower-rain-wall",
+  "category": "Appliances and plumbing fixtures",
+  "symbolType": "shower",
+  "placement": "wall",
+  "keywords": [
+   "shower",
+   "rain shower",
+   "bathroom"
+  ]
+ },
+ {
+  "src": "BlendSwap-CC-0.sh3f",
+  "entry": "Blend Swap CC-0#littlePlant",
+  "id": "plant-small",
+  "category": "Plants",
+  "symbolType": "plant",
+  "placement": "floor",
+  "keywords": [
+   "plant",
+   "small",
+   "indoor"
+  ]
+ }
+]

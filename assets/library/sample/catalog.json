@@ -1,0 +1,1160 @@
+{
+ "version": 1,
+ "items": [
+  {
+   "id": "armchair",
+   "name": "Arm chair",
+   "category": "Furniture",
+   "symbolType": "chair/stool",
+   "placement": "floor",
+   "size": [
+    0.613,
+    0.5916,
+    0.9122
+   ],
+   "keywords": [
+    "armchair",
+    "chair",
+    "living",
+    "dodecagon chair"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #34",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "armchair.glb"
+  },
+  {
+   "id": "bathtub",
+   "name": "Bath 1",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "bathtub",
+   "placement": "floor",
+   "size": [
+    1.7,
+    0.8,
+    0.604995
+   ],
+   "keywords": [
+    "bathtub",
+    "tub",
+    "bath",
+    "bathroom",
+    "dodecagon bath"
+   ],
+   "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #47",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "bathtub.glb"
+  },
+  {
+   "id": "bed-double-wood",
+   "name": "Bed wood 180",
+   "category": "Furniture",
+   "symbolType": "bed",
+   "placement": "floor",
+   "size": [
+    1.92,
+    2.13,
+    0.915
+   ],
+   "keywords": [
+    "bed",
+    "double",
+    "wood",
+    "dodecagon bed"
+   ],
+   "source": "Dodecagon bedroom (https://www.dodecagon.nl/dodecagonbedroom), entry #1",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "bed-double-wood.glb"
+  },
+  {
+   "id": "bed-single",
+   "name": "Bed 200x90",
+   "category": "Furniture",
+   "symbolType": "bed",
+   "placement": "floor",
+   "size": [
+    0.95,
+    2.06,
+    0.55
+   ],
+   "keywords": [
+    "bed",
+    "single",
+    "dodecagon bed"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #53",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "bed-single.glb"
+  },
+  {
+   "id": "bookcase",
+   "name": "Bookcase",
+   "category": "Furniture",
+   "symbolType": "storage",
+   "placement": "floor",
+   "size": [
+    0.919,
+    0.365,
+    1.472
+   ],
+   "keywords": [
+    "bookcase",
+    "shelves",
+    "living",
+    "blend swap",
+    "bookshelf"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#bookcase",
+   "licence": "CC0-1.0",
+   "author": "Michtek",
+   "file": "bookcase.glb"
+  },
+  {
+   "id": "chair-dining-2",
+   "name": "Dining chair 2",
+   "category": "Furniture",
+   "symbolType": "chair/stool",
+   "placement": "floor",
+   "size": [
+    0.426,
+    0.571578,
+    0.9122
+   ],
+   "keywords": [
+    "dining",
+    "chair",
+    "dodecagon chair"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #38",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "chair-dining-2.glb"
+  },
+  {
+   "id": "chair-dining-3",
+   "name": "Chair",
+   "category": "Furniture",
+   "symbolType": "chair/stool",
+   "placement": "floor",
+   "size": [
+    0.403,
+    0.489,
+    0.868
+   ],
+   "keywords": [
+    "dining",
+    "chair",
+    "blend swap",
+    "seat"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#chair2",
+   "licence": "CC0-1.0",
+   "author": "Ingoenius",
+   "file": "chair-dining-3.glb"
+  },
+  {
+   "id": "chair-dining-wood",
+   "name": "Dining chair",
+   "category": "Furniture",
+   "symbolType": "chair/stool",
+   "placement": "floor",
+   "size": [
+    0.45,
+    0.58,
+    0.915
+   ],
+   "keywords": [
+    "dining",
+    "chair",
+    "wood",
+    "dodecagon chair"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #36",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "chair-dining-wood.glb"
+  },
+  {
+   "id": "cooktop",
+   "name": "Cooktop",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "cooktop",
+   "placement": "counter",
+   "size": [
+    0.58,
+    0.5,
+    0.038
+   ],
+   "keywords": [
+    "cooktop",
+    "hob",
+    "kitchen",
+    "blend swap",
+    "cooker",
+    "appliance"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#mano_cooktop",
+   "licence": "CC0-1.0",
+   "author": "Mano",
+   "file": "cooktop.glb",
+   "cutout": [
+    0.56,
+    0.48
+   ]
+  },
+  {
+   "id": "desk",
+   "name": "Desk",
+   "category": "Furniture",
+   "symbolType": "desk",
+   "placement": "floor",
+   "size": [
+    1.6,
+    0.8,
+    0.723
+   ],
+   "keywords": [
+    "desk",
+    "office",
+    "blend swap",
+    "table"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#lbDesk",
+   "licence": "CC0-1.0",
+   "author": "Wiresoulstudio",
+   "file": "desk.glb"
+  },
+  {
+   "id": "dishwasher-60",
+   "name": "Dishwasher",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "dishwasher",
+   "placement": "floor",
+   "size": [
+    0.6,
+    0.66,
+    0.91
+   ],
+   "keywords": [
+    "dishwasher",
+    "kitchen",
+    "appliance",
+    "dodecagon dishwasher2"
+   ],
+   "source": "Dodecagon kitchen2 (https://www.dodecagon.nl/dodecagonkitchen2), entry #2",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "dishwasher-60.glb"
+  },
+  {
+   "id": "door-glass",
+   "name": "Glass door",
+   "category": "Doors and windows",
+   "symbolType": "door",
+   "placement": "wall",
+   "size": [
+    1.044,
+    0.175,
+    2.1
+   ],
+   "keywords": [
+    "door",
+    "glass",
+    "adjustable"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#glass_door",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "door-glass.glb"
+  },
+  {
+   "id": "door-panel",
+   "name": "Door",
+   "category": "Doors and windows",
+   "symbolType": "door",
+   "placement": "wall",
+   "size": [
+    0.96,
+    0.175,
+    2.1
+   ],
+   "keywords": [
+    "door",
+    "interior",
+    "adjustable"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#door",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "door-panel.glb"
+  },
+  {
+   "id": "dresser-6-drawers",
+   "name": "Dresser 6 Drawers wood",
+   "category": "Furniture",
+   "symbolType": "storage",
+   "placement": "floor",
+   "size": [
+    1.0,
+    0.5,
+    0.71
+   ],
+   "keywords": [
+    "dresser",
+    "drawers",
+    "bedroom",
+    "wood",
+    "dodecagon dresser cabinet wardrobe"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #4",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "dresser-6-drawers.glb"
+  },
+  {
+   "id": "faucet-bathroom-chrome",
+   "name": "Faucet 2 Chrome",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "faucet",
+   "placement": "counter",
+   "size": [
+    0.1046,
+    0.1288,
+    0.1091
+   ],
+   "keywords": [
+    "faucet",
+    "tap",
+    "bathroom",
+    "chrome",
+    "dodecagon faucet chrome"
+   ],
+   "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #23",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "faucet-bathroom-chrome.glb"
+  },
+  {
+   "id": "faucet-kitchen-chrome",
+   "name": "KitchenFaucetChrome",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "faucet",
+   "placement": "counter",
+   "size": [
+    0.0956,
+    0.241313,
+    0.415841
+   ],
+   "keywords": [
+    "faucet",
+    "tap",
+    "kitchen",
+    "chrome",
+    "dodecagon faucet"
+   ],
+   "source": "Dodecagon appliances (https://www.dodecagon.nl/dodecagonappliances), entry #17",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "faucet-kitchen-chrome.glb"
+  },
+  {
+   "id": "lamp-desk",
+   "name": "Desk lamp",
+   "category": "Lighting and electrical",
+   "symbolType": "light",
+   "placement": "floor",
+   "size": [
+    0.244,
+    0.244,
+    0.4
+   ],
+   "keywords": [
+    "lamp",
+    "desk",
+    "table lamp",
+    "blend swap"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#desklamp",
+   "licence": "CC0-1.0",
+   "author": "ColdShiverGames",
+   "file": "lamp-desk.glb"
+  },
+  {
+   "id": "lamp-floor",
+   "name": "Lamp",
+   "category": "Lighting and electrical",
+   "symbolType": "light",
+   "placement": "floor",
+   "size": [
+    0.396,
+    0.583,
+    1.429
+   ],
+   "keywords": [
+    "lamp",
+    "floor lamp",
+    "living"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#living_lamp",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "lamp-floor.glb"
+  },
+  {
+   "id": "lavatory-small",
+   "name": "Small lavatory",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "lavatory",
+   "placement": "wall",
+   "size": [
+    0.5,
+    0.424,
+    0.344
+   ],
+   "keywords": [
+    "lavatory",
+    "washbasin",
+    "bathroom"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#small_lavatory",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "lavatory-small.glb"
+  },
+  {
+   "id": "light-ceiling",
+   "name": "Ceiling lamp",
+   "category": "Lighting and electrical",
+   "symbolType": "light",
+   "placement": "ceiling",
+   "size": [
+    0.3,
+    0.3,
+    0.054
+   ],
+   "keywords": [
+    "light",
+    "ceiling",
+    "lamp"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#ceiling-lamp",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "light-ceiling.glb"
+  },
+  {
+   "id": "light-pendant",
+   "name": "Hanging light",
+   "category": "Lighting and electrical",
+   "symbolType": "light",
+   "placement": "ceiling",
+   "size": [
+    0.439,
+    0.439,
+    0.86
+   ],
+   "keywords": [
+    "light",
+    "pendant",
+    "hanging",
+    "ceiling",
+    "blend swap"
+   ],
+   "source": "BlendSwap-CC-BY (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-BY-1.9.3.zip/download), entry Blend Swap CC-BY#hangingLight",
+   "licence": "CC-BY-3.0",
+   "author": "Jay-Artist",
+   "file": "light-pendant.glb"
+  },
+  {
+   "id": "light-wall",
+   "name": "Wall light",
+   "category": "Lighting and electrical",
+   "symbolType": "light",
+   "placement": "wall",
+   "size": [
+    0.228,
+    0.246,
+    0.538
+   ],
+   "keywords": [
+    "light",
+    "sconce",
+    "wall",
+    "blend swap"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#wallLight",
+   "licence": "CC0-1.0",
+   "author": "Ndakasha",
+   "file": "light-wall.glb"
+  },
+  {
+   "id": "material-fabric",
+   "name": "Fabric",
+   "category": "Materials",
+   "symbolType": "material",
+   "placement": null,
+   "size": null,
+   "keywords": [
+    "fabric",
+    "upholstery",
+    "blend swap",
+    "sofa",
+    "corner"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#couch2",
+   "licence": "CC0-1.0",
+   "author": "Karagez",
+   "file": "material-fabric.jpg"
+  },
+  {
+   "id": "material-marble",
+   "name": "Marble",
+   "category": "Materials",
+   "symbolType": "material",
+   "placement": null,
+   "size": null,
+   "keywords": [
+    "stone",
+    "marble",
+    "counter",
+    "blend swap",
+    "cupboard"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#lowerCabinet",
+   "licence": "CC0-1.0",
+   "author": "Vladoffsky",
+   "file": "material-marble.jpg"
+  },
+  {
+   "id": "material-oak",
+   "name": "Oak",
+   "category": "Materials",
+   "symbolType": "material",
+   "placement": null,
+   "size": null,
+   "keywords": [
+    "wood",
+    "oak",
+    "blend swap",
+    "dining",
+    "dinner"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oakTable",
+   "licence": "CC0-1.0",
+   "author": "Doug C",
+   "file": "material-oak.jpg"
+  },
+  {
+   "id": "oven-built-in",
+   "name": "Oven",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "oven",
+   "placement": "in-cabinet",
+   "size": [
+    0.6,
+    0.515,
+    0.578
+   ],
+   "keywords": [
+    "oven",
+    "built-in",
+    "kitchen",
+    "blend swap",
+    "appliance",
+    "cooker"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oven",
+   "licence": "CC0-1.0",
+   "author": "Martanda",
+   "file": "oven-built-in.glb"
+  },
+  {
+   "id": "own:backdrop-sky",
+   "name": "Sky gradient",
+   "category": "Backdrops",
+   "symbolType": "backdrop",
+   "placement": null,
+   "size": null,
+   "keywords": [
+    "sky",
+    "gradient",
+    "backdrop"
+   ],
+   "file": "backdrop-sky.png",
+   "source": "arch3d tools/library/own.py",
+   "licence": "CC0-1.0",
+   "author": "arch3d (made for the sample set)"
+  },
+  {
+   "id": "own:pull-bar-128",
+   "name": "Bar pull, 128 mm",
+   "category": "Cabinet parts",
+   "symbolType": "pull",
+   "placement": "in-cabinet",
+   "size": [
+    0.148,
+    0.035,
+    0.01
+   ],
+   "keywords": [
+    "pull",
+    "handle",
+    "bar",
+    "modern"
+   ],
+   "file": "pull-bar.glb",
+   "source": "arch3d tools/library/own.py",
+   "licence": "CC0-1.0",
+   "author": "arch3d (made for the sample set)"
+  },
+  {
+   "id": "own:pull-knob-32",
+   "name": "Knob, 32 mm",
+   "category": "Cabinet parts",
+   "symbolType": "pull",
+   "placement": "in-cabinet",
+   "size": [
+    0.032,
+    0.025,
+    0.032
+   ],
+   "keywords": [
+    "pull",
+    "knob",
+    "round"
+   ],
+   "file": "pull-knob.glb",
+   "source": "arch3d tools/library/own.py",
+   "licence": "CC0-1.0",
+   "author": "arch3d (made for the sample set)"
+  },
+  {
+   "id": "own:range-30",
+   "name": "Range, 30 in",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "range",
+   "placement": "floor",
+   "size": [
+    0.762,
+    0.69,
+    0.914
+   ],
+   "keywords": [
+    "range",
+    "stove",
+    "oven",
+    "cooker",
+    "kitchen"
+   ],
+   "file": "range-30.glb",
+   "source": "arch3d tools/library/own.py",
+   "licence": "CC0-1.0",
+   "author": "arch3d (made for the sample set)"
+  },
+  {
+   "id": "plant-large",
+   "name": "Plant",
+   "category": "Plants",
+   "symbolType": "plant",
+   "placement": "floor",
+   "size": [
+    0.818,
+    0.69,
+    1.171
+   ],
+   "keywords": [
+    "plant",
+    "indoor",
+    "blend swap",
+    "patio",
+    "decoration"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#plant",
+   "licence": "CC0-1.0",
+   "author": "Ndakasha",
+   "file": "plant-large.glb"
+  },
+  {
+   "id": "plant-small",
+   "name": "Little plant",
+   "category": "Plants",
+   "symbolType": "plant",
+   "placement": "floor",
+   "size": [
+    0.266,
+    0.266,
+    0.232
+   ],
+   "keywords": [
+    "plant",
+    "small",
+    "indoor",
+    "blend swap",
+    "patio",
+    "decoration"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#littlePlant",
+   "licence": "CC0-1.0",
+   "author": "Rameshrj",
+   "file": "plant-small.glb"
+  },
+  {
+   "id": "range-hood",
+   "name": "Range hood",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "hood",
+   "placement": "wall",
+   "size": [
+    0.6,
+    0.318,
+    0.426
+   ],
+   "keywords": [
+    "hood",
+    "range hood",
+    "kitchen",
+    "blend swap",
+    "appliance",
+    "cooker"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#rangeHood",
+   "licence": "CC0-1.0",
+   "author": "Doniypolo",
+   "file": "range-hood.glb"
+  },
+  {
+   "id": "refrigerator-fridge-freezer",
+   "name": "FridgeFreezer",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "refrigerator",
+   "placement": "floor",
+   "size": [
+    0.65,
+    0.668524,
+    2.36
+   ],
+   "keywords": [
+    "refrigerator",
+    "fridge",
+    "freezer",
+    "kitchen",
+    "dodecagon refrigerator freezer fridge"
+   ],
+   "source": "Dodecagon appliances (https://www.dodecagon.nl/dodecagonappliances), entry #2",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "refrigerator-fridge-freezer.glb"
+  },
+  {
+   "id": "refrigerator-small",
+   "name": "Fridge",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "refrigerator",
+   "placement": "floor",
+   "size": [
+    0.6,
+    0.591,
+    1.262
+   ],
+   "keywords": [
+    "refrigerator",
+    "fridge",
+    "kitchen",
+    "freezer",
+    "appliance"
+   ],
+   "source": "KatorLegaz (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-KatorLegaz-1.9.3.zip/download), entry Kator Legaz#fridge",
+   "licence": "CC-BY-3.0-US",
+   "author": "Kator Legaz",
+   "file": "refrigerator-small.glb"
+  },
+  {
+   "id": "rug-oriental",
+   "name": "Oriental rug",
+   "category": "Furniture",
+   "symbolType": "rug",
+   "placement": "floor",
+   "size": [
+    1.858,
+    2.577,
+    0.025
+   ],
+   "keywords": [
+    "rug",
+    "carpet",
+    "living",
+    "decoration"
+   ],
+   "source": "KatorLegaz (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-KatorLegaz-1.9.3.zip/download), entry Kator Legaz#oriental-rug",
+   "licence": "CC-BY-3.0-US",
+   "author": "Kator Legaz",
+   "file": "rug-oriental.glb"
+  },
+  {
+   "id": "shower-rain-wall",
+   "name": "Rain shower wallmount",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "shower",
+   "placement": "wall",
+   "size": [
+    0.2514,
+    0.507749,
+    1.1575
+   ],
+   "keywords": [
+    "shower",
+    "rain shower",
+    "bathroom",
+    "dodecagon rain shower wall"
+   ],
+   "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #26",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "shower-rain-wall.glb"
+  },
+  {
+   "id": "sink-built-in",
+   "name": "Built-in sink",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "sink",
+   "placement": "counter",
+   "size": [
+    0.5,
+    0.4,
+    0.0985
+   ],
+   "keywords": [
+    "sink",
+    "kitchen",
+    "built-in",
+    "dodecagon sink"
+   ],
+   "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #38",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "sink-built-in.glb",
+   "cutout": [
+    0.48,
+    0.38
+   ]
+  },
+  {
+   "id": "sofa-chaise",
+   "name": "Couch",
+   "category": "Furniture",
+   "symbolType": "sofa",
+   "placement": "floor",
+   "size": [
+    2.3,
+    1.597,
+    0.866
+   ],
+   "keywords": [
+    "sofa",
+    "couch",
+    "chaise",
+    "living",
+    "blend swap",
+    "corner"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#couch2",
+   "licence": "CC0-1.0",
+   "author": "Karagez",
+   "file": "sofa-chaise.glb"
+  },
+  {
+   "id": "sofa-futon",
+   "name": "Futon couch",
+   "category": "Furniture",
+   "symbolType": "sofa",
+   "placement": "floor",
+   "size": [
+    1.96,
+    0.898,
+    0.878
+   ],
+   "keywords": [
+    "sofa",
+    "futon",
+    "couch",
+    "seat"
+   ],
+   "source": "KatorLegaz (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-KatorLegaz-1.9.3.zip/download), entry Kator Legaz#futon-couch",
+   "licence": "CC-BY-3.0-US",
+   "author": "Kator Legaz",
+   "file": "sofa-futon.glb"
+  },
+  {
+   "id": "stool-bar",
+   "name": "Bar stool",
+   "category": "Furniture",
+   "symbolType": "chair/stool",
+   "placement": "floor",
+   "size": [
+    0.45,
+    0.528,
+    1.016
+   ],
+   "keywords": [
+    "stool",
+    "bar",
+    "counter",
+    "dodecagon chair bar"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #58",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "stool-bar.glb"
+  },
+  {
+   "id": "table-bedside",
+   "name": "Bedside table",
+   "category": "Furniture",
+   "symbolType": "table",
+   "placement": "floor",
+   "size": [
+    0.4855,
+    0.481,
+    0.454
+   ],
+   "keywords": [
+    "bedside",
+    "nightstand",
+    "bedroom",
+    "blend swap"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#bedsideTable2",
+   "licence": "CC0-1.0",
+   "author": "Nhumrod",
+   "file": "table-bedside.glb"
+  },
+  {
+   "id": "table-coffee-90",
+   "name": "Table 90x90 h44",
+   "category": "Furniture",
+   "symbolType": "table",
+   "placement": "floor",
+   "size": [
+    0.9,
+    0.9,
+    0.44
+   ],
+   "keywords": [
+    "coffee",
+    "table",
+    "living",
+    "dodecagon table"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #28",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "table-coffee-90.glb"
+  },
+  {
+   "id": "table-dining-150",
+   "name": "Table 150x90",
+   "category": "Furniture",
+   "symbolType": "table",
+   "placement": "floor",
+   "size": [
+    1.5,
+    0.9,
+    0.75
+   ],
+   "keywords": [
+    "dining",
+    "table",
+    "dodecagon table"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #31",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "table-dining-150.glb"
+  },
+  {
+   "id": "table-dining-oak",
+   "name": "Oak table",
+   "category": "Furniture",
+   "symbolType": "table",
+   "placement": "floor",
+   "size": [
+    1.24,
+    1.24,
+    0.741
+   ],
+   "keywords": [
+    "dining",
+    "table",
+    "oak",
+    "blend swap",
+    "dinner"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oakTable",
+   "licence": "CC0-1.0",
+   "author": "Doug C",
+   "file": "table-dining-oak.glb"
+  },
+  {
+   "id": "toilet",
+   "name": "Toilet (non-opening)",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "toilet",
+   "placement": "floor",
+   "size": [
+    0.38,
+    0.55,
+    1.065
+   ],
+   "keywords": [
+    "toilet",
+    "wc",
+    "bathroom",
+    "dodecagon toilet"
+   ],
+   "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #36",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "toilet.glb"
+  },
+  {
+   "id": "towel-rack",
+   "name": "Towel rack",
+   "category": "Furniture",
+   "symbolType": "décor",
+   "placement": "wall",
+   "size": [
+    0.596,
+    0.081,
+    0.478
+   ],
+   "keywords": [
+    "towel",
+    "rack",
+    "bathroom",
+    "wall",
+    "blend swap"
+   ],
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#towel3",
+   "licence": "CC0-1.0",
+   "author": "Wfg5001",
+   "file": "towel-rack.glb"
+  },
+  {
+   "id": "tv",
+   "name": "TV 16:9",
+   "category": "Furniture",
+   "symbolType": "décor",
+   "placement": "floor",
+   "size": [
+    0.56,
+    0.115,
+    0.454
+   ],
+   "keywords": [
+    "tv",
+    "television",
+    "living",
+    "electronics",
+    "appliance",
+    "flat",
+    "plasma",
+    "lcd",
+    "led"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#tv",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "tv.glb"
+  },
+  {
+   "id": "wardrobe-hanging",
+   "name": "Wardrobe hang wood",
+   "category": "Furniture",
+   "symbolType": "storage",
+   "placement": "floor",
+   "size": [
+    0.6,
+    0.631,
+    1.9
+   ],
+   "keywords": [
+    "wardrobe",
+    "closet",
+    "bedroom",
+    "wood",
+    "dodecagon wardrobe"
+   ],
+   "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #16",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "file": "wardrobe-hanging.glb"
+  },
+  {
+   "id": "washing-machine",
+   "name": "Clothes washing machine",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "washer",
+   "placement": "floor",
+   "size": [
+    0.59,
+    0.601,
+    0.842
+   ],
+   "keywords": [
+    "washer",
+    "laundry",
+    "appliance"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#clothes_washing_machine",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "washing-machine.glb"
+  },
+  {
+   "id": "window-double",
+   "name": "Double window 4 panes",
+   "category": "Doors and windows",
+   "symbolType": "window",
+   "placement": "wall",
+   "size": [
+    1.085,
+    0.313,
+    2.0
+   ],
+   "keywords": [
+    "window",
+    "double",
+    "adjustable"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#window_2x4",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "window-double.glb"
+  },
+  {
+   "id": "window-turn",
+   "name": "Turn window",
+   "category": "Doors and windows",
+   "symbolType": "window",
+   "placement": "wall",
+   "size": [
+    0.59,
+    0.135,
+    1.02
+   ],
+   "keywords": [
+    "window",
+    "casement",
+    "velux",
+    "adjustable"
+   ],
+   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#turn-window",
+   "licence": "CC-BY-3.0",
+   "author": "Scopia",
+   "file": "window-turn.glb"
+  }
+ ]
+}

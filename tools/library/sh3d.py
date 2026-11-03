@@ -204,14 +204,6 @@ def _index(token, count):
     return i if 0 <= i < count else None
 
 
-def _sub(a, b):
-    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
-
-
-def _cross(a, b):
-    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
-
-
 def _unit(v, fallback=(0.0, 0.0, 1.0)):
     n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
     if not n or not math.isfinite(n):
@@ -219,15 +211,25 @@ def _unit(v, fallback=(0.0, 0.0, 1.0)):
     return (v[0] / n, v[1] / n, v[2] / n)
 
 
+def _newell(p):
+    """A polygon's unit normal by Newell's method (any planar n-gon, either winding sense kept), or +Z when degenerate."""
+    n = [0.0, 0.0, 0.0]
+    for a, b in zip(p, p[1:] + p[:1]):
+        n[0] += (a[1] - b[1]) * (a[2] + b[2])
+        n[1] += (a[2] - b[2]) * (a[0] + b[0])
+        n[2] += (a[0] - b[0]) * (a[1] + b[1])
+    return _unit(tuple(n))
+
+
 def _rotate(m, p):
     return (m[0] * p[0] + m[1] * p[1] + m[2] * p[2], m[3] * p[0] + m[4] * p[1] + m[5] * p[2],
             m[6] * p[0] + m[7] * p[1] + m[8] * p[2])
 
 
-def obj_to_glb(zf, model, rotation=None):
+def obj_to_glb(zf, model, rotation=None, textures=True):
     """The OBJ member `model` of `zf` as plain .glb bytes: one primitive per material in first-use order, faces
     triangulated as fans, flat normals where the OBJ gives none, V flipped (glTF's origin is top-left), the catalog's
-    modelRotation (row-major 3 x 3) applied when given."""
+    modelRotation (row-major 3 x 3) applied when given; `textures=False` keeps every material's Kd and embeds no image."""
     text = (_read_member(zf, model) or b'').decode('utf-8', 'replace')
     base = posixpath.dirname(model)
     verts, uvs, norms, mats = [], [], [], {}
@@ -268,7 +270,7 @@ def obj_to_glb(zf, model, rotation=None):
     for name in order:
         mat = mats.get(name, {'kd': [0.8, 0.8, 0.8], 'alpha': 1.0, 'map': None})
         image = None
-        if mat['map']:
+        if mat['map'] and textures:
             data = _read_member(zf, posixpath.normpath(posixpath.join(base, mat['map'].replace('\\', '/'))))
             if data and (data.startswith(PNG_MAGIC) or data.startswith(JPEG_MAGIC)):
                 image = data
@@ -276,14 +278,11 @@ def obj_to_glb(zf, model, rotation=None):
         pos, nor, tex, idx, seen = [], [], [], [], {}
         for face_no, corners in enumerate(groups[name]):
             p = [verts[v] for v, _, _ in corners]
-            flat = None
+            flat = _newell(p)        # one normal per polygon, so its fan triangles share their corners
             for k in range(1, len(corners) - 1):
-                tri = (0, k, k + 1)
-                if flat is None or any(corners[j][2] is None for j in tri):
-                    flat = _unit(_cross(_sub(p[k], p[0]), _sub(p[k + 1], p[0])), flat or (0.0, 0.0, 1.0))
-                for j in tri:
+                for j in (0, k, k + 1):
                     v, vt, vn = corners[j]
-                    key = (v, vt if textured else None, vn if vn is not None else ('flat', face_no, k))
+                    key = (v, vt if textured else None, vn if vn is not None else ('flat', face_no))
                     if key not in seen:
                         seen[key] = len(pos)
                         pos.append(p[j])
@@ -312,7 +311,7 @@ def _pad(b, fill):
 def write_glb(primitives, name='symbol'):
     """A plain glTF 2.0 binary: one node, one mesh, one primitive and one material per entry (baseColorFactor from
     `color`, baseColorTexture for an `image` of PNG or JPEG bytes), POSITION with min/max, NORMAL, TEXCOORD_0 when
-    `uvs` is given, uint32 indices; the BIN chunk 4-byte aligned."""
+    `uvs` is given, uint16 indices (uint32 past 65535 vertices); the BIN chunk 4-byte aligned."""
     bin_, views, accs, meshes_p, materials, images, textures = bytearray(), [], [], [], [], [], []
 
     def view(data, target=None):
@@ -332,8 +331,10 @@ def write_glb(primitives, name='symbol'):
             a = {'bufferView': view(data, 34962), 'componentType': 5126, 'count': len(values),
                  'type': {2: 'VEC2', 3: 'VEC3'}[width]}
         else:
-            data = struct.pack(f'<{len(flat)}I', *flat)
-            a = {'bufferView': view(data, 34963), 'componentType': 5125, 'count': len(values), 'type': 'SCALAR'}
+            small = max(flat, default=0) < 65536       # uint16 indices: half the bytes, core glTF (no extension)
+            data = struct.pack(f'<{len(flat)}{"H" if small else "I"}', *flat)
+            a = {'bufferView': view(data, 34963), 'componentType': 5123 if small else 5125, 'count': len(values),
+                 'type': 'SCALAR'}
         accs.append(a)
         return len(accs) - 1, a
 

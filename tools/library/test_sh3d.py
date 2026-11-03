@@ -108,8 +108,9 @@ class GlbParts:
     def ints(self, glb, doc, acc_index):
         a = doc['accessors'][acc_index]
         bv = doc['bufferViews'][a['bufferView']]
-        data = self.bin_chunk(glb)[bv.get('byteOffset', 0) + a.get('byteOffset', 0):][:a['count'] * 4]
-        return list(struct.unpack(f'<{a["count"]}I', data))
+        width, code = (2, 'H') if a['componentType'] == 5123 else (4, 'I')
+        data = self.bin_chunk(glb)[bv.get('byteOffset', 0) + a.get('byteOffset', 0):][:a['count'] * width]
+        return list(struct.unpack(f'<{a["count"]}{code}', data))
 
     def triangles(self, glb):
         """Every triangle as a sorted tuple of its three rounded positions, over all primitives."""
@@ -158,6 +159,23 @@ class Sh3dTests(unittest.TestCase, GlbParts):
         self.assertTrue(normals)
         for n in normals:
             self.assertAlmostEqual(math.sqrt(sum(c * c for c in n)), 1.0, places=5)
+
+    def test_a_flat_polygon_shares_its_corners(self):
+        p = os.path.join(self.dir.name, 'quad.sh3f')
+        make_sh3f(p, obj="v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3 4\n")
+        glb = obj_to_glb(zipfile.ZipFile(p), "cube.obj")
+        doc = self.json_chunk(glb)
+        prim = doc['meshes'][0]['primitives'][0]
+        self.assertEqual(doc['accessors'][prim['attributes']['POSITION']]['count'], 4)   # one quad, two triangles
+        self.assertEqual(doc['accessors'][prim['indices']]['count'], 6)
+
+    def test_small_primitives_use_16_bit_indices(self):
+        glb = obj_to_glb(zipfile.ZipFile(self.sh3f), "cube.obj")
+        doc = self.json_chunk(glb)
+        self.assertEqual({a['componentType'] for a in self.index_accessors(doc)}, {5123})
+        big = write_glb([{'positions': [(float(k), 0.0, 0.0) for k in range(70000)], 'normals': [(0.0, 0.0, 1.0)] * 70000,
+                          'uvs': None, 'indices': [0, 1, 69999], 'color': [1, 1, 1, 1], 'image': None}])
+        self.assertEqual({a['componentType'] for a in self.index_accessors(self.json_chunk(big))}, {5125})
 
     def test_negative_indices(self):
         pos_obj = "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3 4\n"

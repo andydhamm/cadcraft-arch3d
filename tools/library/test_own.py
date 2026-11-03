@@ -27,17 +27,17 @@ class OwnItemsTests(unittest.TestCase, GlbParts):
         with open(os.path.join(self.dir.name, name), 'rb') as f:
             return f.read()
 
-    def test_writes_the_three_files_with_entries(self):
-        self.assertEqual(sorted(self.by_file), ['backdrop-sky.png', 'pull-bar.glb', 'pull-knob.glb'])
+    def test_writes_its_files_with_entries(self):
+        self.assertEqual(sorted(self.by_file), ['backdrop-sky.png', 'pull-bar.glb', 'pull-knob.glb', 'range-30.glb'])
         for i in self.items:
             self.assertEqual(i['licence'], 'CC0-1.0')
             self.assertTrue(i['author'] and i['source'] and i['id'] and i['name'])
-        self.assertEqual({i['symbolType'] for i in self.items}, {'pull', 'backdrop'})
+        self.assertEqual({i['symbolType'] for i in self.items}, {'pull', 'backdrop', 'range'})
         self.assertEqual(self.by_file['backdrop-sky.png']['category'], 'Backdrops')
         self.assertEqual(self.by_file['pull-bar.glb']['category'], 'Cabinet parts')
 
     def test_glbs_are_plain_gltf2(self):
-        for name in ('pull-bar.glb', 'pull-knob.glb'):
+        for name in ('pull-bar.glb', 'pull-knob.glb', 'range-30.glb'):
             glb = self.read(name)
             self.assertEqual(struct.unpack('<4sII', glb[:12]), (GLB_MAGIC, 2, len(glb)))
             doc = self.json_chunk(glb)
@@ -57,6 +57,18 @@ class OwnItemsTests(unittest.TestCase, GlbParts):
         acc = [doc['accessors'][p['attributes']['POSITION']] for p in doc['meshes'][0]['primitives']]
         span = max(a['max'][0] for a in acc) - min(a['min'][0] for a in acc)
         self.assertAlmostEqual(span, 0.032, delta=1e-6)
+
+    def test_range_is_30_inches_wide_on_the_floor(self):
+        doc = self.json_chunk(self.read('range-30.glb'))
+        acc = [doc['accessors'][p['attributes']['POSITION']] for p in doc['meshes'][0]['primitives']]
+        lo = [min(a['min'][k] for a in acc) for k in range(3)]
+        hi = [max(a['max'][k] for a in acc) for k in range(3)]
+        self.assertAlmostEqual(hi[0] - lo[0], 0.762, delta=1e-6)       # width along X
+        self.assertAlmostEqual(lo[1], 0.0, delta=1e-6)                 # stands on y = 0 (glTF Y up)
+        item = self.by_file['range-30.glb']
+        self.assertEqual((item['category'], item['placement']), ('Appliances and plumbing fixtures', 'floor'))
+        for k, v in enumerate((hi[0] - lo[0], hi[2] - lo[2], hi[1] - lo[1])):  # size is width, depth, height (Z up)
+            self.assertAlmostEqual(item['size'][k], v, delta=1e-6)
 
     def test_sky_is_a_1024_by_512_png(self):
         png = self.read('backdrop-sky.png')

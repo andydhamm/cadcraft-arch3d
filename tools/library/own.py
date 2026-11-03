@@ -1,6 +1,6 @@
-"""The sample set's own items, made here (CC-0, ours): a bar pull, a knob pull and a sky backdrop.
+"""The sample set's own items, made here (CC-0, ours): a bar pull, a knob pull, a 30-inch range and a sky backdrop.
 
-    python3 tools/library/own.py --out DIR     writes pull-bar.glb, pull-knob.glb, backdrop-sky.png into DIR
+    python3 tools/library/own.py --out DIR     writes pull-bar.glb, pull-knob.glb, range-30.glb, backdrop-sky.png into DIR
 
 The pulls are glTF (Y up, metres) facing +Z: their back is the plane z = 0, where they meet the cabinet front.
 """
@@ -17,6 +17,7 @@ from sh3d import write_glb  # noqa: E402
 SOURCE = 'arch3d tools/library/own.py'
 AUTHOR = 'arch3d (made for the sample set)'
 METAL = [0.62, 0.62, 0.64, 1.0]
+FILES = ('pull-bar.glb', 'pull-knob.glb', 'range-30.glb', 'backdrop-sky.png')   # what own_items writes
 
 
 def box(x0, x1, y0, y1, z0, z1):
@@ -81,6 +82,34 @@ def pull_knob(diameter=0.032):
                       prim('stem', cylinder(0.006, 0.0, 0.008))], name='pull-knob')
 
 
+def upright(part, cx=0.0, cz=0.0):
+    """A Z-axis part stood on the Y axis (-90 degrees about X: (x, y, z) -> (x, z, -y), handedness kept), moved by cx, cz."""
+    pos, nor, idx = part
+    return ([(x + cx, z, -y + cz) for x, y, z in pos], [(x, z, -y) for x, y, z in nor], idx)
+
+
+def range_cooker(width=0.762, depth=0.66, height=0.91):
+    """A freestanding 30-inch range, front at +Z: a white body, a black glass top with four burners, an oven window and a
+    handle."""
+    w, d = width / 2, depth / 2
+    white, black, steel = [0.92, 0.92, 0.9, 1.0], [0.05, 0.05, 0.06, 1.0], METAL
+    burners = []
+    for x in (-w / 2, w / 2):
+        for z in (-d / 2, d / 2):
+            burners.append(upright(cylinder(0.085, 0.0, 0.004, 24), x, z))
+    pos, nor, idx = [], [], []
+    for bp, bn, bi in burners:              # the four burners as one primitive, lifted onto the top
+        k = len(pos)
+        pos += [(x, y + height, z) for x, y, z in bp]
+        nor += bn
+        idx += [k + i for i in bi]
+    return write_glb([prim('body', box(-w, w, 0.0, height - 0.02, -d, d), white),
+                      prim('top', box(-w, w, height - 0.02, height, -d, d), black),
+                      prim('burners', (pos, nor, idx), [0.18, 0.18, 0.2, 1.0]),
+                      prim('oven-window', box(-w + 0.1, w - 0.1, 0.22, 0.6, d, d + 0.004), black),
+                      prim('handle', box(-w + 0.08, w - 0.08, 0.68, 0.7, d + 0.004, d + 0.03), steel)], name='range-30')
+
+
 def png(width, height, row):
     """An RGB PNG whose row y is the 3-byte colour row(y) across its width."""
     def chunk(kind, data):
@@ -101,7 +130,9 @@ def sky(width=1024, height=512, top=(74, 128, 196), horizon=(214, 228, 240)):
 def own_items(out):
     """Write the own items into `out`; their catalog entries (sizes in metres, width x depth x height, Z up)."""
     os.makedirs(out, exist_ok=True)
-    files = {'pull-bar.glb': pull_bar(), 'pull-knob.glb': pull_knob(), 'backdrop-sky.png': sky()}
+    files = {'pull-bar.glb': pull_bar(), 'pull-knob.glb': pull_knob(), 'range-30.glb': range_cooker(),
+             'backdrop-sky.png': sky()}
+    assert tuple(files) == FILES, 'own.FILES lists what own_items writes'
     for name, data in files.items():
         with open(os.path.join(out, name), 'wb') as f:
             f.write(data)
@@ -113,6 +144,9 @@ def own_items(out):
         {'id': 'own:pull-knob-32', 'name': 'Knob, 32 mm', 'category': 'Cabinet parts', 'symbolType': 'pull',
          'placement': 'in-cabinet', 'size': [0.032, 0.025, 0.032], 'keywords': ['pull', 'knob', 'round'],
          'file': 'pull-knob.glb', **common},
+        {'id': 'own:range-30', 'name': 'Range, 30 in', 'category': 'Appliances and plumbing fixtures', 'symbolType': 'range',
+         'placement': 'floor', 'size': [0.762, 0.69, 0.914], 'keywords': ['range', 'stove', 'oven', 'cooker', 'kitchen'],
+         'file': 'range-30.glb', **common},
         {'id': 'own:backdrop-sky', 'name': 'Sky gradient', 'category': 'Backdrops', 'symbolType': 'backdrop',
          'placement': None, 'size': None, 'keywords': ['sky', 'gradient', 'backdrop'], 'file': 'backdrop-sky.png',
          **common},
