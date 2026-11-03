@@ -1108,4 +1108,89 @@ mod tests {
         assert!(d.arch.walls.iter().all(|w| w.start.is_finite() && w.end.is_finite()));
         assert!(d.arch.walls.iter().any(|w| w.start.x >= 0.0 && w.start.y >= 0.0));
     }
+
+    /// Exterior walls are 0.2 m thick, interior walls 0.12 m, all walls 2.7 m high.
+    #[test]
+    fn house_sample_wall_thickness_and_height() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        for w in &d.arch.walls {
+            let expected_thickness = if w.exterior { 0.2 } else { 0.12 };
+            assert_eq!(w.thickness, expected_thickness, "wall {:?} (exterior={}) thickness should be {}", w.id, w.exterior, expected_thickness);
+            assert_eq!(w.height, 2.7, "wall {:?} height should be 2.7", w.id);
+        }
+    }
+
+    /// The bench wall is interior, on Level 1, and `to` is exactly 0.3 m from
+    /// `from` along the wall's axis.
+    #[test]
+    fn house_sample_bench_wall_properties() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let bench = r["bench"].as_object().unwrap();
+        let wall_name = bench["wall"].as_str().unwrap();
+        let from = [bench["from"][0].as_f64().unwrap(), bench["from"][1].as_f64().unwrap()];
+        let to = [bench["to"][0].as_f64().unwrap(), bench["to"][1].as_f64().unwrap()];
+
+        let d = s.doc().unwrap();
+        let wall_id = wall_name.strip_prefix('w').unwrap().parse::<u32>().unwrap();
+        let wall = d.arch.wall(ArchId(wall_id)).expect("bench wall missing");
+        assert!(!wall.exterior, "bench wall should be interior");
+        assert_eq!(wall.base_level, 1, "bench wall should be on Level 1");
+
+        let dist = ((to[0] - from[0]).powi(2) + (to[1] - from[1]).powi(2)).sqrt();
+        assert!((dist - 0.3).abs() < 1e-9, "bench 'to' should be 0.3 m from 'from', got {}", dist);
+    }
+
+    /// Level 1 is at elevation 0, Level 2 is at 2.7 (floor-to-floor = ceiling + structure).
+    #[test]
+    fn house_sample_level_elevations() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        let l1 = d.arch.levels.iter().find(|l| l.index == 1).expect("Level 1 missing");
+        let l2 = d.arch.levels.iter().find(|l| l.index == 2).expect("Level 2 missing");
+        assert_eq!(l1.elevation, 0.0, "Level 1 should be at elevation 0");
+        assert_eq!(l2.elevation, 2.7, "Level 2 should be at elevation 2.7");
+        assert!((l1.ceiling_height + l1.structure - 2.7).abs() < 1e-9, "floor-to-floor should be 2.7");
+    }
+
+    /// At least 15 rooms per level (spec requirement).
+    #[test]
+    fn house_sample_rooms_per_level_minimum() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        let rooms_l1 = d.arch.rooms.iter().filter(|r| r.level == 1).count();
+        let rooms_l2 = d.arch.rooms.iter().filter(|r| r.level == 2).count();
+        assert!(rooms_l1 >= 15, "expected at least 15 rooms on Level 1, got {rooms_l1}");
+        assert!(rooms_l2 >= 15, "expected at least 15 rooms on Level 2, got {rooms_l2}");
+    }
+
+    /// All walls lie within the 18×12 m footprint of the house.
+    #[test]
+    fn house_sample_wall_footprint_bounds() {
+        let mut s = fresh_session();
+        s.execute("arch.sample", &json!({ "house": true })).unwrap();
+        let d = s.doc().unwrap();
+        for w in &d.arch.walls {
+            assert!(w.start.x >= 0.0 && w.start.x <= 18.0, "wall {:?} start.x out of bounds", w.id);
+            assert!(w.start.y >= 0.0 && w.start.y <= 12.0, "wall {:?} start.y out of bounds", w.id);
+            assert!(w.end.x >= 0.0 && w.end.x <= 18.0, "wall {:?} end.x out of bounds", w.id);
+            assert!(w.end.y >= 0.0 && w.end.y <= 12.0, "wall {:?} end.y out of bounds", w.id);
+        }
+    }
+
+    /// Hostile `walls` and `openings` params are ignored when `house: true`.
+    #[test]
+    fn house_sample_ignores_wall_and_opening_params() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": true, "walls": 5, "openings": 3 })).unwrap();
+        let walls = r["walls"].as_u64().unwrap();
+        assert!(walls >= 120, "house should ignore walls param, got {walls}");
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.levels.len(), 2, "house should have 2 levels");
+        assert_eq!(d.arch.roofs.len(), 1, "house should have 1 roof");
+    }
 }
