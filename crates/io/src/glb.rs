@@ -142,6 +142,10 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
                 let kind = mat.trim_start_matches("path-").split('-').next().unwrap_or("path");
                 format!("{kind}-tm{}", m.object.0)
             }
+            "cabinet-box" => format!("cabinet-cb{}", m.object.0),
+            "cabinet-front" => format!("cabinet-cb{}-front", m.object.0),
+            "counter" => format!("cabinet-cb{}-counter", m.object.0),
+            mat if mat.starts_with("fixture-") => format!("fixture-fx{}", m.object.0),
             _ => format!("{}-o{}", m.material, m.object.0),
         };
         names.push(name);
@@ -421,8 +425,17 @@ const ROOF_ALBEDO: [f64; 3] = [151.0 / 255.0, 84.0 / 255.0, 74.0 / 255.0];
 
 /// Resolve a material name to a flat base colour via [`cadcraft_color`].
 fn base_color_for(name: &str) -> Rgb {
-    let c = Color::parse(name).unwrap_or(Color::ByLayer);
-    c.resolve(Color::ByLayer, Color::ByLayer)
+    match name {
+        "cabinet-box" => Rgb(222, 184, 135),   // Light wood tone
+        "cabinet-front" => Rgb(205, 164, 115), // Slightly darker wood
+        "counter" => Rgb(160, 160, 160),       // Stone grey
+        "fixture-sink" | "fixture-lavatory" | "fixture-toilet" | "fixture-bathtub" | "fixture-shower" => Rgb(240, 240, 240), // White
+        "fixture-range" | "fixture-refrigerator" | "fixture-dishwasher" => Rgb(192, 192, 192), // Stainless grey
+        _ => {
+            let c = Color::parse(name).unwrap_or(Color::ByLayer);
+            c.resolve(Color::ByLayer, Color::ByLayer)
+        }
+    }
 }
 
 /// Linear 0..=1 RGBA of material `name`, as the GLB's base colour factor shows it (roof albedo,
@@ -1812,5 +1825,43 @@ mod tests {
         let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
         assert!(mesh_names.contains(&"floor-r65535".to_string()), "missing floor-r65535: {:?}", mesh_names);
         assert!(mesh_names.contains(&"ceiling-r1048576".to_string()), "missing ceiling-r1048576: {:?}", mesh_names);
+    }
+
+    #[test]
+    fn cabinet_nodes_are_named_by_label() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-box".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-front".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "counter".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "fixture-sink".into();
+            m.object = ArchId(2);
+            m
+        });
+
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+
+        assert!(mesh_names.contains(&"cabinet-cb1".to_string()), "missing cabinet-cb1: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"cabinet-cb1-front".to_string()), "missing cabinet-cb1-front: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"cabinet-cb1-counter".to_string()), "missing cabinet-cb1-counter: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"fixture-fx2".to_string()), "missing fixture-fx2: {:?}", mesh_names);
     }
 }

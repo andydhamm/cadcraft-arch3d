@@ -6,6 +6,7 @@
 //! (`SOURCE_DATE_EPOCH`). The elements are written by one module each, in this order: walls,
 //! openings (which need the walls), slabs, roofs, stairs, spaces, site, lights.
 
+mod casework;
 pub mod geometry;
 pub mod guid;
 mod lights;
@@ -67,6 +68,7 @@ pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> Str
     spaces::emit(&mut ctx);
     site::emit(&mut ctx);
     lights::emit(&mut ctx);
+    casework::emit(&mut ctx);
     ctx.finish(opts)
 }
 
