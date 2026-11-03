@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 18:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 25 of 25 segments merged · 13 of 13 acceptance checks**
 
-7,031 workspace tests passing at the last merge · 712 segments merged in all · 0 of 14 seats working
+7,042 workspace tests passing at the last merge · 713 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 18:45 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 13 / 13 | 28.3 h so far · expected done Nov 03 18:45–Nov 04 22:40 UTC |
+| 13 | Polish | building | 13 / 13 | 28.6 h so far · expected done Nov 03 19:00–Nov 04 22:55 UTC |
 
 ## Phase 13 segments
 
@@ -34,6 +34,7 @@ Updated 2026-11-03 18:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 18:58 | `harden-p13-texture-gen` | merged | 7,042 pass | tturbo-mac |
 | Nov 03 18:43 | `upstream-sync-b639b18f6` | merged | 7,031 pass | claude-sonnet-c |
 | Nov 03 18:15 | `harden-p13-docs-user-guide` | merged | 6,954 pass | tturbo-mac |
 | Nov 03 17:51 | `upstream-sync-b639b18f6` | refused | 7,024 pass | claude-sonnet-c |
@@ -45,7 +46,6 @@ Updated 2026-11-03 18:45 UTC. This page and the card in the README are regenerat
 | Nov 03 13:50 | `upstream-sync-6c4984f5a` | refused | 6,930 pass | bonsai-ws2-b |
 | Nov 03 13:22 | `upstream-sync-6c4984f5a` | refused | 6,930 pass | bonsai-ws2-a |
 | Nov 03 12:27 | `harden-p13-io-casework` | merged | 6,886 pass | tturbo-mac |
-| Nov 03 11:17 | `p13-docs-user-guide` | merged | 6,880 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
@@ -59,9 +59,9 @@ Updated 2026-11-03 18:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 25 |
 | claude-sonnet-d | sonnet | idle | 13 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 721 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 721 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 17 |
-| tturbo-mac | tturbo-ultraheretic | merging | 599 |
+| tturbo-mac | tturbo-ultraheretic | agent | 599 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
