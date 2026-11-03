@@ -10,7 +10,8 @@
    "dining",
    "chair",
    "wood"
-  ]
+  ],
+  "expect": "Dining chair"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -22,7 +23,8 @@
   "keywords": [
    "dining",
    "chair"
-  ]
+  ],
+  "expect": "Dining chair 2"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -35,7 +37,8 @@
    "stool",
    "bar",
    "counter"
-  ]
+  ],
+  "expect": "Bar stool"
  },
  {
   "src": "DodecagonBedroom.sh3f",
@@ -48,7 +51,8 @@
    "bed",
    "double",
    "wood"
-  ]
+  ],
+  "expect": "Bed wood 180"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -60,7 +64,8 @@
   "keywords": [
    "bed",
    "single"
-  ]
+  ],
+  "expect": "Bed 200x90"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -72,7 +77,8 @@
   "keywords": [
    "dining",
    "table"
-  ]
+  ],
+  "expect": "Table 150x90"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -85,7 +91,8 @@
    "dining",
    "table",
    "oak"
-  ]
+  ],
+  "expect": "Oak table"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -98,7 +105,8 @@
    "coffee",
    "table",
    "living"
-  ]
+  ],
+  "expect": "Table 90x90 h44"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -111,7 +119,8 @@
    "bedside",
    "nightstand",
    "bedroom"
-  ]
+  ],
+  "expect": "Bedside table"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -123,7 +132,8 @@
   "keywords": [
    "desk",
    "office"
-  ]
+  ],
+  "expect": "Desk"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -137,7 +147,8 @@
    "drawers",
    "bedroom",
    "wood"
-  ]
+  ],
+  "expect": "Dresser 6 Drawers wood"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -151,7 +162,8 @@
    "closet",
    "bedroom",
    "wood"
-  ]
+  ],
+  "expect": "Wardrobe hang wood"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -164,7 +176,8 @@
    "bookcase",
    "shelves",
    "living"
-  ]
+  ],
+  "expect": "Bookcase"
  },
  {
   "src": "KatorLegaz.sh3f",
@@ -177,7 +190,9 @@
    "rug",
    "carpet",
    "living"
-  ]
+  ],
+  "expect": "Oriental rug",
+  "texture": "katorlegaz/oriental-rug/rug.jpg"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -191,20 +206,8 @@
    "rack",
    "bathroom",
    "wall"
-  ]
- },
- {
-  "src": "DodecagonKitchen2.sh3f",
-  "entry": "#2",
-  "id": "dishwasher-60",
-  "category": "Appliances and plumbing fixtures",
-  "symbolType": "dishwasher",
-  "placement": "floor",
-  "keywords": [
-   "dishwasher",
-   "kitchen",
-   "appliance"
-  ]
+  ],
+  "expect": "Towel rack"
  },
  {
   "src": "DodecagonAppliances.sh3f",
@@ -218,7 +221,8 @@
    "fridge",
    "freezer",
    "kitchen"
-  ]
+  ],
+  "expect": "FridgeFreezer"
  },
  {
   "src": "KatorLegaz.sh3f",
@@ -231,7 +235,8 @@
    "refrigerator",
    "fridge",
    "kitchen"
-  ]
+  ],
+  "expect": "Fridge"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -248,7 +253,8 @@
   "cutout": [
    0.56,
    0.48
-  ]
+  ],
+  "expect": "Cooktop"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -261,7 +267,8 @@
    "oven",
    "built-in",
    "kitchen"
-  ]
+  ],
+  "expect": "Oven"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -274,25 +281,27 @@
    "hood",
    "range hood",
    "kitchen"
-  ]
+  ],
+  "expect": "Range hood"
  },
  {
   "src": "DodecagonBathroom.sh3f",
   "entry": "#38",
-  "id": "sink-built-in",
+  "id": "basin-built-in",
   "category": "Appliances and plumbing fixtures",
-  "symbolType": "sink",
+  "symbolType": "lavatory",
   "placement": "counter",
   "keywords": [
-   "sink",
-   "kitchen",
+   "basin",
+   "bathroom",
    "built-in"
   ],
   "cutout": [
    0.48,
    0.38
   ],
-  "name": "Built-in sink"
+  "name": "Built-in basin",
+  "expect": "Sink for build-in"
  },
  {
   "src": "DodecagonAppliances.sh3f",
@@ -306,7 +315,8 @@
    "tap",
    "kitchen",
    "chrome"
-  ]
+  ],
+  "expect": "KitchenFaucetChrome"
  },
  {
   "src": "DodecagonBathroom.sh3f",
@@ -320,7 +330,8 @@
    "tap",
    "bathroom",
    "chrome"
-  ]
+  ],
+  "expect": "Faucet 2 Chrome"
  },
  {
   "src": "DodecagonBathroom.sh3f",
@@ -333,7 +344,8 @@
    "toilet",
    "wc",
    "bathroom"
-  ]
+  ],
+  "expect": "Toilet (non-opening)"
  },
  {
   "src": "DodecagonBathroom.sh3f",
@@ -347,7 +359,8 @@
    "tub",
    "bath",
    "bathroom"
-  ]
+  ],
+  "expect": "Bath 1"
  },
  {
   "src": "Scopia.sh3f",
@@ -360,7 +373,8 @@
    "washer",
    "laundry",
    "appliance"
-  ]
+  ],
+  "expect": "Clothes washing machine"
  },
  {
   "src": "Scopia.sh3f",
@@ -373,7 +387,8 @@
    "light",
    "ceiling",
    "lamp"
-  ]
+  ],
+  "expect": "Ceiling lamp"
  },
  {
   "src": "BlendSwap-CC-BY.sh3f",
@@ -387,7 +402,8 @@
    "pendant",
    "hanging",
    "ceiling"
-  ]
+  ],
+  "expect": "Hanging light"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -400,7 +416,8 @@
    "light",
    "sconce",
    "wall"
-  ]
+  ],
+  "expect": "Wall light"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -413,7 +430,8 @@
    "lamp",
    "desk",
    "table lamp"
-  ]
+  ],
+  "expect": "Desk lamp"
  },
  {
   "src": "Scopia.sh3f",
@@ -426,7 +444,8 @@
    "lamp",
    "floor lamp",
    "living"
-  ]
+  ],
+  "expect": "Lamp"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -440,7 +459,8 @@
    "wood",
    "oak"
   ],
-  "name": "Oak"
+  "name": "Oak",
+  "expect": "Oak table"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -455,7 +475,8 @@
    "marble",
    "counter"
   ],
-  "name": "Marble"
+  "name": "Marble",
+  "expect": "Lower cabinet"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -469,55 +490,8 @@
    "fabric",
    "upholstery"
   ],
-  "name": "Fabric"
- },
- {
-  "src": "Scopia.sh3f",
-  "entry": "Scopia#door",
-  "id": "door-panel",
-  "category": "Doors and windows",
-  "symbolType": "door",
-  "placement": "wall",
-  "keywords": [
-   "door",
-   "interior"
-  ]
- },
- {
-  "src": "Scopia.sh3f",
-  "entry": "Scopia#glass_door",
-  "id": "door-glass",
-  "category": "Doors and windows",
-  "symbolType": "door",
-  "placement": "wall",
-  "keywords": [
-   "door",
-   "glass"
-  ]
- },
- {
-  "src": "Scopia.sh3f",
-  "entry": "Scopia#window_2x4",
-  "id": "window-double",
-  "category": "Doors and windows",
-  "symbolType": "window",
-  "placement": "wall",
-  "keywords": [
-   "window",
-   "double"
-  ]
- },
- {
-  "src": "Scopia.sh3f",
-  "entry": "Scopia#turn-window",
-  "id": "window-turn",
-  "category": "Doors and windows",
-  "symbolType": "window",
-  "placement": "wall",
-  "keywords": [
-   "window",
-   "casement"
-  ]
+  "name": "Fabric",
+  "expect": "Couch"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -529,7 +503,8 @@
   "keywords": [
    "plant",
    "indoor"
-  ]
+  ],
+  "expect": "Plant"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -541,7 +516,8 @@
   "keywords": [
    "dining",
    "chair"
-  ]
+  ],
+  "expect": "Chair"
  },
  {
   "src": "DodecagonFurniture01.sh3f",
@@ -554,7 +530,8 @@
    "armchair",
    "chair",
    "living"
-  ]
+  ],
+  "expect": "Arm chair"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -568,7 +545,8 @@
    "couch",
    "chaise",
    "living"
-  ]
+  ],
+  "expect": "Couch"
  },
  {
   "src": "KatorLegaz.sh3f",
@@ -581,7 +559,8 @@
    "sofa",
    "futon",
    "couch"
-  ]
+  ],
+  "expect": "Futon couch"
  },
  {
   "src": "Scopia.sh3f",
@@ -599,7 +578,8 @@
    0.56,
    0.115,
    0.454
-  ]
+  ],
+  "expect": "TV 16:9"
  },
  {
   "src": "Scopia.sh3f",
@@ -612,7 +592,8 @@
    "lavatory",
    "washbasin",
    "bathroom"
-  ]
+  ],
+  "expect": "Small lavatory"
  },
  {
   "src": "DodecagonBathroom.sh3f",
@@ -625,7 +606,8 @@
    "shower",
    "rain shower",
    "bathroom"
-  ]
+  ],
+  "expect": "Rain shower wallmount"
  },
  {
   "src": "BlendSwap-CC-0.sh3f",
@@ -638,6 +620,7 @@
    "plant",
    "small",
    "indoor"
-  ]
+  ],
+  "expect": "Little plant"
  }
 ]

@@ -11,10 +11,13 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from curate import Refused, convert  # noqa: E402
 from sh3d import read_sh3f  # noqa: E402
-from test_sh3d import PROPS, make_sh3f  # noqa: E402
+from test_sh3d import PROPS, Sh3dTests, make_sh3f  # noqa: E402
 
 PICK = {'src': 'lib.sh3f', 'entry': 'test#cube', 'id': 'cube', 'category': 'Furniture', 'symbolType': 'décor',
         'placement': 'floor', 'keywords': []}
+CUBE = PROPS.replace('width#1=60', 'width#1=50').replace('depth#1=55', 'depth#1=50').replace('height#1=85', 'height#1=50')
+BLENDSWAP = ('------\nThank you for downloading "Country-Kitchen Cycles" by Jay-Artist\nReleased under Creative Commons '
+             'Attribution 3.0\nDownloaded from http://www.blendswap.com/blends/view/42851\n')
 
 
 class CurateTests(unittest.TestCase):
@@ -24,16 +27,50 @@ class CurateTests(unittest.TestCase):
     def tearDown(self):
         self.dir.cleanup()
 
-    def convert(self, licence='CC0-1.0', props=PROPS):
-        make_sh3f(os.path.join(self.dir.name, 'lib.sh3f'), props=props)
-        sources = {'lib.sh3f': {'licence': licence, 'library': 'Test', 'url': 'https://example.invalid/lib'}}
-        return convert(PICK, self.dir.name, sources, lambda f: read_sh3f(os.path.join(self.dir.name, f)))
+    def convert(self, licence='CC0-1.0', props=CUBE, attribution='', extra=None, **pick):
+        make_sh3f(os.path.join(self.dir.name, 'lib.sh3f'), props=props, extra=extra)
+        sources = {'lib.sh3f': {'licence': licence, 'library': 'Test', 'url': 'https://example.invalid/lib',
+                                'attribution': attribution}}
+        return convert({**PICK, **pick}, self.dir.name, sources, lambda f: read_sh3f(os.path.join(self.dir.name, f)))
 
     def test_a_cc0_pick_converts_with_its_attribution(self):
         item, data, title = self.convert()
         self.assertEqual((item['licence'], item['author'], item['file'], title), ('CC0-1.0', 'tester', 'cube.glb', 'Cube'))
-        self.assertEqual(item['size'], [0.6, 0.55, 0.85])
+        self.assertEqual(item['size'], [0.5, 0.5, 0.5])
         self.assertTrue(data.startswith(b'glTF'))
+
+    def test_the_glb_is_bottom_centred_at_the_catalog_size(self):
+        item, data, _ = self.convert()
+        lo, hi = Sh3dTests('test_glb_is_plain_gltf2').bounds(data)
+        for got, want in zip(lo + hi, [-0.25, 0.0, -0.25, 0.25, 0.5, 0.25]):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_a_cc_by_item_credits_the_author_the_licensor_and_the_change(self):
+        item, _, _ = self.convert(licence='CC-BY-3.0', attribution='Copyright © 2008 A. Licensor')
+        for part in ('"Cube"', 'tester', 'Copyright © 2008 A. Licensor', 'CC-BY-3.0', 'converted'):
+            self.assertIn(part, item['attribution'])
+
+    def test_a_blendswap_licence_file_gives_the_original_title_and_url(self):
+        item, _, _ = self.convert(licence='CC-BY-3.0', extra={'BLENDSWAP_LICENSE.txt': BLENDSWAP})
+        self.assertIn('"Country-Kitchen Cycles"', item['attribution'])
+        self.assertIn('http://www.blendswap.com/blends/view/42851', item['attribution'])
+        self.assertIn('http://www.blendswap.com/blends/view/42851', item['source'])
+
+    def test_a_pick_whose_entry_name_changed_is_refused(self):
+        with self.assertRaisesRegex(Refused, 'Sphere'):
+            self.convert(expect='Sphere')
+        self.assertEqual(self.convert(expect='Cube')[0]['name'], 'Cube')
+
+    def test_a_wall_light_keeps_its_height_and_its_light_source(self):
+        props = CUBE + 'elevation#1=140\nlightSourceX#1=25\nlightSourceY#1=25\nlightSourceZ#1=45\nlightSourceColor#1=#998764\n'
+        item, _, _ = self.convert(props=props, placement='wall', symbolType='light', category='Lighting and electrical')
+        self.assertEqual(item['elevation'], 1.4)
+        self.assertEqual(item['light']['position'], [0.0, 0.0, 0.45])
+
+    def test_a_mesh_out_of_its_catalog_proportions_is_refused(self):
+        with self.assertRaisesRegex(Refused, 'proportions'):
+            self.convert(props=PROPS)                    # a unit cube catalogued 0.6 x 0.55 x 0.85
+        self.assertEqual(self.convert(props=PROPS, size=[0.5, 0.5, 0.5])[0]['size'], [0.5, 0.5, 0.5])
 
     def test_a_library_that_is_not_cc0_or_cc_by_is_refused(self):
         with self.assertRaisesRegex(Refused, 'not CC0 or CC-BY'):
@@ -41,11 +78,11 @@ class CurateTests(unittest.TestCase):
 
     def test_an_entry_without_a_creator_is_refused(self):
         with self.assertRaisesRegex(Refused, 'no creator'):
-            self.convert(props=PROPS.replace('creator#1=tester\n', ''))
+            self.convert(props=CUBE.replace('creator#1=tester\n', ''))
 
     def test_an_entry_licence_that_disagrees_is_refused(self):
         with self.assertRaisesRegex(Refused, 'Free Art'):
-            self.convert(licence='CC-BY-3.0', props=PROPS + 'license#1=Free Art License\n')
+            self.convert(licence='CC-BY-3.0', props=CUBE + 'license#1=Free Art License\n')
 
 
 if __name__ == '__main__':
