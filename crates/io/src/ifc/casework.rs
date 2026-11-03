@@ -32,13 +32,27 @@ pub(crate) fn emit(ctx: &mut Ctx<'_>) {
         let level = ctx.model.cabinets.iter().find(|c| c.id == id).map(|c| c.level).unwrap_or(0);
         let slot = ctx.storey_for(level);
 
-        let tail = vec![
+        // IfcFurniture has 9 attributes:
+        // 1. GlobalId, 2. OwnerHistory, 3. Name, 4. Description, 5. ObjectType,
+        // 6. ObjectPlacement, 7. Representation, 8. Tag, 9. PredefinedType
+        let placement = ctx.placement_in_storey(slot);
+        let z0 = ctx.storeys.get(slot).map_or(0.0, |s| s.elevation);
+        let body = ctx.body(&meshes, z0).map_or(P::Null, P::Ref);
+
+        let params = vec![
+            P::str(crate::ifc::guid::global_id(&key)),
+            P::Null, // OwnerHistory
+            P::str(name),
+            P::Null,          // Description
+            P::str(obj_type), // ObjectType
+            P::Ref(placement),
+            body,
             P::Null, // Tag
             P::Enum("USERDEFINED"),
-            P::Str(obj_type.to_string()),
         ];
 
-        ctx.element("IfcFurniture", &key, &name, slot, &meshes, tail);
+        let r = ctx.w.add("IfcFurniture", params);
+        ctx.contain(slot, r);
     }
 
     // Fixtures: kind "fixture"
