@@ -354,7 +354,7 @@ impl Sections {
                 (wall.id, input)
             })
             .collect();
-        let walls = parts(pw, wall_items, |i| wall_mesh(i).into_iter().collect());
+        let walls = parts(pw, wall_items, |i| wall_mesh(i));
 
         let opening_items = model
             .openings
@@ -385,7 +385,7 @@ impl Sections {
             if i.room.room_type != RoomType::Deck {
                 let mut floor = i.room.clone();
                 floor.holes = i.wells.clone();
-                out.extend(floors::floor_slab(&floor, &i.level, "floor"));
+                out.extend(floors::floor_slab(&floor, &i.level, "floor").map(|m| crate::finish::finish_floor(m, i.room.floor_finish)));
             }
             let mut ceiling = i.room.clone();
             ceiling.holes.extend(i.cuts.iter().cloned());
@@ -466,7 +466,7 @@ impl Sections {
         let decks = made(&self.decks);
         let scene = Scene3d {
             openings_built: made(&self.openings),
-            floors: room_meshes().filter(|m| m.material == "floor").count() + decks,
+            floors: room_meshes().filter(|m| m.material.starts_with("floor")).count() + decks,
             ceilings: room_meshes().filter(|m| m.material == "ceiling").count(),
             roofs: made(&self.roofs),
             stairs: made(&self.stairs),
@@ -542,7 +542,21 @@ fn made<I>(list: &[Part<I>]) -> usize {
 }
 
 /// One wall's mesh: its join shape extruded, cut by its openings and clipped by the roof over it.
-fn wall_mesh(i: &WallIn) -> Option<Mesh> {
+fn wall_mesh(i: &WallIn) -> Vec<Mesh> {
+    let Some(mesh) = wall_base_mesh(i) else {
+        return Vec::new();
+    };
+    let (rest, outer) = crate::finish::split_exterior_face(&i.wall, mesh);
+    let mut out = Vec::new();
+    if !rest.indices.is_empty() {
+        out.push(rest);
+    }
+    out.extend(outer);
+    out
+}
+
+/// The wall's whole mesh, before any finish splits its exterior face off.
+fn wall_base_mesh(i: &WallIn) -> Option<Mesh> {
     let (base, top) = i.span?;
     let openings: Vec<&Opening> = i.openings.iter().collect();
     let mesh = if !openings.is_empty() || i.clip.is_some() || i.roof_top.is_some() {
