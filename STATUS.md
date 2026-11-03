@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 25 of 25 segments merged · 13 of 13 acceptance checks**
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 19:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 13 / 13 | 28.6 h so far · expected done Nov 03 19:00–Nov 04 22:55 UTC |
+| 13 | Polish | building | 13 / 13 | 28.8 h so far · expected done Nov 03 19:15–Nov 05 06:05 UTC |
 
 ## Phase 13 segments
 
@@ -63,5 +63,5 @@ Updated 2026-11-03 19:00 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 17 |
-| tturbo-mac | tturbo-ultraheretic | agent | 599 |
+| tturbo-mac | tturbo-ultraheretic | gate | 599 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
