@@ -683,6 +683,7 @@ dependencies = [
  "clap_mangen",
  "same-file",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "wgpu",
