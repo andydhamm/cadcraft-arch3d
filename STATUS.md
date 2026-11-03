@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 13:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 22 of 24 segments merged · 9 of 13 acceptance checks**
 
-6,886 workspace tests passing at the last merge · 706 segments merged in all · 0 of 14 seats working
+6,886 workspace tests passing at the last merge · 706 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 13:30 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 9 / 13 | 23.1 h so far · expected done Nov 03 15:54–Nov 04 14:11 UTC |
+| 13 | Polish | building | 9 / 13 | 23.3 h so far · expected done Nov 03 16:29–Nov 04 17:58 UTC |
 
 ## Phase 13 segments
 
@@ -55,9 +55,9 @@ Updated 2026-11-03 13:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 844 |
-| bonsai-b | bonsai2-27b | idle | 782 |
-| bonsai-ws2-a | bonsai2-27b | gate | 853 |
+| bonsai-a | bonsai2-27b | idle | 845 |
+| bonsai-b | bonsai2-27b | agent | 782 |
+| bonsai-ws2-a | bonsai2-27b | merging | 854 |
 | bonsai-ws2-b | bonsai2-27b | merging | 829 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
@@ -67,5 +67,5 @@ Updated 2026-11-03 13:30 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 17 |
-| tturbo-mac | tturbo-ultraheretic | gate | 590 |
+| tturbo-mac | tturbo-ultraheretic | agent | 591 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
