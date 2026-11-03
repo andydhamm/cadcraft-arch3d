@@ -527,7 +527,7 @@ impl Pane3d {
         if self.doc != Some(doc) {
             self.doc = Some(doc);
             self.cache = None;
-            self.last_revision = u64::MAX;
+            self.last_revision = 0;
             self.loaded_camera = None;
             self.full = None;
             self.orbit_target = None;
@@ -1456,7 +1456,7 @@ mod tests {
         assert!(pane.sync_doc(1, 1, Some(&arch)));
         assert!(!pane.last_rebuild.expect("first").incremental);
         for i in 0..3 {
-            arch.walls[0].height = 2.7 + (i as f64) * 0.1;
+            arch.walls[0].height = 2.8 + (i as f64) * 0.1;
             assert!(pane.sync_doc(1, 2 + i as u64, Some(&arch)));
             let stats = pane.last_rebuild.expect("rebuild");
             assert!(stats.incremental, "edit {i} should be incremental: {stats:?}");
