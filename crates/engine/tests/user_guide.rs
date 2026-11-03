@@ -835,6 +835,7 @@ fn user_guide_has_materials_cabinets_and_large_models() {
     assert!(GUIDE.contains("cabinet"), "guide should mention the cabinet command");
     assert!(GUIDE.contains("fixture"), "guide should mention the fixture command");
     assert!(GUIDE.contains("arch.sample"), "guide should mention the arch.sample command");
+    assert!(GUIDE.contains("build3d"), "guide should mention the build3d command");
 }
 
 /// The new blocks for materials, cabinets, and large models execute through the engine.
@@ -848,6 +849,8 @@ fn user_guide_new_blocks_execute_through_the_engine() {
 
     for lines in &blocks {
         let line = lines.join(" ");
+
+        // Materials block: contains material and export
         if line.contains("material") && line.contains("export") {
             found_materials = true;
             let cmds = cmd_args(&line);
@@ -871,6 +874,8 @@ fn user_guide_new_blocks_execute_through_the_engine() {
                 }
             }
         }
+
+        // Cabinets block: contains cabinet and fixture
         if line.contains("cabinet") && line.contains("fixture") {
             found_cabinets = true;
             let cmds = cmd_args(&line);
@@ -887,6 +892,8 @@ fn user_guide_new_blocks_execute_through_the_engine() {
                 }
             }
         }
+
+        // Large models block: contains arch.sample and build3d
         if line.contains("arch.sample") && line.contains("build3d") {
             found_large = true;
             let cmds = cmd_args(&line);

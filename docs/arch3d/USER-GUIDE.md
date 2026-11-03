@@ -386,9 +386,9 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'window {"wall":"w2","offset":4.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}' \
   --cmd 'roomdetect {}' \
   --cmd 'roofauto {"pitchRise":6,"pitchRun":12,"overhang":0.5,"walls":[{"wall":"w0","directive":"gable"},{"wall":"w2","directive":"gable"}]}' \
-  --cmd 'material {"target":"w0","finish":"siding"}' \
-  --cmd 'material {"target":"r0","finish":"wood"}' \
-  --cmd 'material {"target":"roof-r0","finish":"shingles"}' \
+  --cmd 'material {"walls":["w0"],"finish":"siding"}' \
+  --cmd 'material {"rooms":["r0"],"finish":"wood"}' \
+  --cmd 'material {"roofs":["r0"],"finish":"shingles"}' \
   --cmd 'export {"path":"materials.glb"}' \
   --save materials.dxf
 cargo run -q -p cadcraft-cli -- render materials.dxf materials.png --adapter fallback
