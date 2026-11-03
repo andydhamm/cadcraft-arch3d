@@ -990,6 +990,174 @@ fn user_guide_cmd_args_edge_cases() {
     assert!(cmds[0].contains("[[0, 0], [1, 0]]"), "JSON with spaces should be preserved");
 }
 
+/// Hostile material parameters are refused with nothing written.
+#[test]
+fn user_guide_hostile_material_params() {
+    let mut session = Session::new();
+    // Build a wall first
+    session.execute("wall", &serde_json::json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})).ok();
+    // Bad finish name
+    let r = session.execute("material", &serde_json::json!({"walls":"exterior","finish":"marble"}));
+    assert!(r.is_err(), "finish \"marble\" should be refused");
+    // Bad wall id
+    let r = session.execute("material", &serde_json::json!({"walls":["w99"],"finish":"siding"}));
+    assert!(r.is_err(), "wall \"w99\" should be refused");
+    // Empty walls list
+    let r = session.execute("material", &serde_json::json!({"walls":[],"finish":"siding"}));
+    assert!(r.is_err(), "empty walls list should be refused");
+    // Bad roof finish
+    let r = session.execute("material", &serde_json::json!({"roofs":"all","finish":"siding"}));
+    assert!(r.is_err(), "roof finish \"siding\" should be refused");
+    // Bad room finish
+    let r = session.execute("material", &serde_json::json!({"rooms":["r0"],"finish":"siding"}));
+    assert!(r.is_err(), "room finish \"siding\" should be refused");
+}
+
+/// Hostile cabinet parameters are refused with nothing written.
+#[test]
+fn user_guide_hostile_cabinet_params() {
+    let mut session = Session::new();
+    // Build a wall and room first
+    session.execute("wall", &serde_json::json!({"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})).ok();
+    session.execute("roomdetect", &serde_json::json!({})).ok();
+    // Bad kind
+    let r = session.execute("cabinet", &serde_json::json!({"kind":"tall","wall":"w0","offset":1.0,"width":1.5,"height":2.0}));
+    assert!(r.is_ok(), "tall cabinet should be accepted");
+    let r = session.execute("cabinet", &serde_json::json!({"kind":"drawer","wall":"w0","offset":1.0,"width":1.5}));
+    assert!(r.is_err(), "kind \"drawer\" should be refused");
+    // Bad wall id
+    let r = session.execute("cabinet", &serde_json::json!({"kind":"base","wall":"w99","offset":1.0,"width":1.5}));
+    assert!(r.is_err(), "wall \"w99\" should be refused");
+    // Zero width
+    let r = session.execute("cabinet", &serde_json::json!({"kind":"base","wall":"w0","offset":1.0,"width":0.0}));
+    assert!(r.is_err(), "width 0.0 should be refused");
+    // Negative offset
+    let r = session.execute("cabinet", &serde_json::json!({"kind":"base","wall":"w0","offset":-1.0,"width":1.5}));
+    assert!(r.is_err(), "offset -1.0 should be refused");
+    // Offset too large for wall
+    let r = session.execute("cabinet", &serde_json::json!({"kind":"base","wall":"w0","offset":10.0,"width":1.5}));
+    assert!(r.is_err(), "offset 10.0 on 6m wall should be refused");
+}
+
+/// Hostile fixture parameters are refused with nothing written.
+#[test]
+fn user_guide_hostile_fixture_params() {
+    let mut session = Session::new();
+    // Build a wall and room first
+    session.execute("wall", &serde_json::json!({"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})).ok();
+    session.execute("roomdetect", &serde_json::json!({})).ok();
+    // Bad kind
+    let r = session.execute("fixture", &serde_json::json!({"kind":"stove","wall":"w0","offset":1.0}));
+    assert!(r.is_err(), "kind \"stove\" should be refused");
+    // Bad wall id
+    let r = session.execute("fixture", &serde_json::json!({"kind":"sink","wall":"w99","offset":1.0}));
+    assert!(r.is_err(), "wall \"w99\" should be refused");
+    // Negative offset
+    let r = session.execute("fixture", &serde_json::json!({"kind":"sink","wall":"w0","offset":-1.0}));
+    assert!(r.is_err(), "offset -1.0 should be refused");
+}
+
+/// Cabinets and fixtures survive a save/reload round-trip.
+#[test]
+fn user_guide_cabinets_fixtures_round_trip() {
+    let mut session = Session::new();
+    session
+        .execute("wall", &serde_json::json!({"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}))
+        .expect("wall should succeed");
+    session.execute("roomdetect", &serde_json::json!({})).expect("roomdetect should succeed");
+    session.execute("cabinet", &serde_json::json!({"kind":"base","wall":"w0","offset":1.0,"width":1.5})).expect("cabinet should succeed");
+    session.execute("fixture", &serde_json::json!({"kind":"sink","wall":"w0","offset":1.75})).expect("fixture should succeed");
+
+    // Verify they exist
+    let inspect = session.execute("arch.inspect", &serde_json::json!({"cabinets":true,"fixtures":true})).expect("inspect should succeed");
+    let cabinets_before = inspect.get("cabinets").and_then(serde_json::Value::as_array);
+    let fixtures_before = inspect.get("fixtures").and_then(serde_json::Value::as_array);
+    assert!(cabinets_before.is_some(), "inspect should return cabinets array");
+    assert!(fixtures_before.is_some(), "inspect should return fixtures array");
+    assert_eq!(cabinets_before.unwrap().len(), 1, "one cabinet should exist before save");
+    assert_eq!(fixtures_before.unwrap().len(), 1, "one fixture should exist before save");
+
+    // Save and reload
+    let drawing = session.doc().expect("doc should exist").clone();
+    let mut session2 = Session::new();
+    session2.open_drawing(drawing, "test", None);
+
+    // Verify they still exist after reload
+    let inspect2 =
+        session2.execute("arch.inspect", &serde_json::json!({"cabinets":true,"fixtures":true})).expect("inspect should succeed after reload");
+    let cabinets_after = inspect2.get("cabinets").and_then(serde_json::Value::as_array);
+    let fixtures_after = inspect2.get("fixtures").and_then(serde_json::Value::as_array);
+    assert!(cabinets_after.is_some(), "inspect should return cabinets array after reload");
+    assert!(fixtures_after.is_some(), "inspect should return fixtures array after reload");
+    assert_eq!(cabinets_after.unwrap().len(), 1, "one cabinet should exist after reload");
+    assert_eq!(fixtures_after.unwrap().len(), 1, "one fixture should exist after reload");
+}
+
+/// The materials block has exactly 10 commands: wall, door, window, roomdetect, roofauto, 4 materials, export.
+#[test]
+fn user_guide_materials_block_command_count() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found = false;
+    for lines in &blocks {
+        let line = lines.join(" ");
+        if line.contains("material") && line.contains("export") {
+            found = true;
+            let cmds = cmd_args(&line);
+            assert_eq!(cmds.len(), 10, "materials block should have exactly 10 commands, found {}", cmds.len());
+            let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
+            assert_eq!(
+                ids,
+                ["wall", "door", "window", "roomdetect", "roofauto", "material", "material", "material", "material", "export"],
+                "materials block command order"
+            );
+            return;
+        }
+    }
+    assert!(found, "materials block not found");
+}
+
+/// The cabinets block has exactly 10 commands: wall, roomdetect, 3 cabinets, 4 fixtures, inspect.
+#[test]
+fn user_guide_cabinets_block_command_count() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found = false;
+    for lines in &blocks {
+        let line = lines.join(" ");
+        if line.contains("cabinet") && line.contains("fixture") {
+            found = true;
+            let cmds = cmd_args(&line);
+            assert_eq!(cmds.len(), 10, "cabinets block should have exactly 10 commands, found {}", cmds.len());
+            let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
+            assert_eq!(
+                ids,
+                ["wall", "roomdetect", "cabinet", "cabinet", "cabinet", "fixture", "fixture", "fixture", "fixture", "arch.inspect"],
+                "cabinets block command order"
+            );
+            return;
+        }
+    }
+    assert!(found, "cabinets block not found");
+}
+
+/// The large models block has exactly 4 commands: arch.sample, build3d, wall.stretch, build3d.
+#[test]
+fn user_guide_large_models_block_command_count() {
+    let blocks = sh_blocks(GUIDE);
+    let mut found = false;
+    for lines in &blocks {
+        let line = lines.join(" ");
+        if line.contains("arch.sample") && line.contains("build3d") {
+            found = true;
+            let cmds = cmd_args(&line);
+            assert_eq!(cmds.len(), 4, "large models block should have exactly 4 commands, found {}", cmds.len());
+            let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
+            assert_eq!(ids, ["arch.sample", "build3d", "arch.wall.stretch", "build3d"], "large models block command order");
+            return;
+        }
+    }
+    assert!(found, "large models block not found");
+}
+
 /// Views survive a save/reload round-trip through the engine.
 #[test]
 fn user_guide_views_round_trip() {
