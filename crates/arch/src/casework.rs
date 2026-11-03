@@ -6,6 +6,8 @@ use cadcraft_doc::arch::{Cabinet, CabinetKind, Fixture, FixtureKind, Fronts};
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::Vec2;
 
+pub use crate::casework_symbol::{cabinet_symbol, fixture_symbol};
+
 /// Widest cabinet that still gets a single door (m).
 const SINGLE_DOOR_MAX_WIDTH: f64 = 0.6;
 /// Highest a cabinet may reach above the floor (m).
