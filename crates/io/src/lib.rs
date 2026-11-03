@@ -22,8 +22,10 @@ pub mod ifc;
 pub mod obj;
 pub mod pdf;
 pub mod plotter;
+pub mod png;
 /// Open → save → reopen comparison and the real-file corpus harness (gaps FF1, FF5).
 pub mod roundtrip;
+pub mod step;
 pub mod svg;
 mod svg_read;
 
