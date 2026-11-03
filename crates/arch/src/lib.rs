@@ -19,6 +19,7 @@ pub use cadcraft_doc::{
 
 pub mod area;
 pub mod casework;
+pub mod casework_layout;
 pub mod casework_symbol;
 pub mod detect;
 pub mod graph;
