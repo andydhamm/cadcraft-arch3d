@@ -135,7 +135,7 @@ fn mcp_examples_readme_lists_all_files() {
     let readme = std::fs::read_to_string(&readme_path).expect("read README.md");
     for file in list_example_files() {
         let name = file.file_name().unwrap().to_string_lossy();
-        assert!(readme.contains(&name), "README.md does not mention {}", name);
+        assert!(readme.contains(&*name), "README.md does not mention {}", name);
     }
 }
 
