@@ -1,11 +1,11 @@
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent","version":"1.0"}}}
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"new_drawing","arguments":{"metric":true}}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"execute","arguments":{"id":"site","params":{"latitude":51.05,"longitude":-114.07,"elevation":1000.0,"trueNorth":0.0}}}}
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"execute","arguments":{"id":"terrain","params":{"boundary":[[0,0],[40,0],[40,30],[0,30],[0,0]],"elevation":0.0}}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"execute","arguments":{"id":"terrain.modify","params":{"hill":{"center":[20,15],"height":2.0,"radius":5.0}}}}}
-{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"execute","arguments":{"id":"plant","params":{"species":"Colorado blue spruce","at":[10,10],"age":10}}}}
-{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"execute","arguments":{"id":"wall","params":{"points":[[-0.1,-0.1],[4.1,-0.1],[4.1,4.1],[-0.1,4.1],[-0.1,-0.1]],"thickness":0.2,"height":2.4,"exterior":true}}}}
-{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"execute","arguments":{"id":"roomdetect","params":{}}}}
-{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"execute","arguments":{"id":"lightfixture","params":{"room":"r0","rows":2,"cols":2}}}}
-{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"execute","arguments":{"id":"illuminance","params":{"point":[1,1,0]}}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"execute","arguments":{"command":"site","params":{"latitude":51.05,"longitude":-114.07,"elevation":1000.0,"trueNorth":0.0}}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"execute","arguments":{"command":"terrain","params":{"boundary":[[0,0],[40,0],[40,30],[0,30],[0,0]],"elevation":0.0}}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"execute","arguments":{"command":"terrain.modify","params":{"hill":{"center":[20,15],"height":2.0,"radius":5.0}}}}}
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"execute","arguments":{"command":"plant","params":{"species":"Colorado blue spruce","at":[10,10],"age":10}}}}
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"execute","arguments":{"command":"wall","params":{"points":[[-0.1,-0.1],[4.1,-0.1],[4.1,4.1],[-0.1,4.1],[-0.1,-0.1]],"thickness":0.2,"height":2.4,"exterior":true}}}}
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"execute","arguments":{"command":"roomdetect","params":{}}}}
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"execute","arguments":{"command":"lightfixture","params":{"room":"r0","rows":2,"cols":2}}}}
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"execute","arguments":{"command":"illuminance","params":{"point":[1,1,0]}}}}
 {"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"save","arguments":{"path":"site.dxf"}}}
