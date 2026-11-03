@@ -121,51 +121,49 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
     if !EXPORT_FORMATS.contains(&format.as_str()) {
         return Err(bad("export", "`format` must be dxf, dwg, svg, png, pdf, glb, obj or ifc (or give a `path` with one of those extensions)"));
     }
-
+    let file = format!("export.{format}");
+    let lost = super::file::loss_on_save(s, &file);
     // Determine the name passed to the writer hook.
-    // If a path is given, use the file name so the writer can name internal references correctly (e.g. OBJ mtllib).
-    // Otherwise use a generic name.
+    // If a path is given, use the file name so the writer can name internal references
+    // correctly (e.g. the OBJ's MTL), otherwise use a generic name.
     let hook_name = if let Some(p) = path {
         std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("export.{format}"))
     } else {
         format!("export.{format}")
     };
-
     let bytes = (hooks.write)(s.doc()?, &hook_name).map_err(|e| bad("export", e))?;
-
-    match path {
+    let mut r = match path {
         Some(path) => {
             write_file("export", path, &bytes)?;
-            let mut out = json!({ "path": path, "format": format, "bytes": bytes.len(), "message": format!("Exported to {path}") });
-
+            let mut out = json!({
+                "path": path,
+                "format": format,
+                "bytes": bytes.len(),
+                "message": format!("Exported to {path}"),
+            });
             if format == "obj" {
-                // OBJ needs a material library file.
+                // OBJ needs a companion material library file.
                 let p = std::path::Path::new(path);
                 let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "export".into());
                 let mtl_name = format!("{stem}.mtl");
                 let mtl_path = p.parent().map(|d| d.join(&mtl_name)).unwrap_or_else(|| std::path::PathBuf::from(&mtl_name));
-
-                // Ask the hook to write the MTL file.
-                // Pass the mtl_name so the hook can generate the correct content if needed,
-                // but typically the hook writes the same content regardless of name for tests.
                 let mtl_bytes = (hooks.write)(s.doc()?, &mtl_name).map_err(|e| bad("export", e))?;
                 write_file("export", mtl_path.to_string_lossy().as_ref(), &mtl_bytes)?;
-
                 out["mtl"] = json!(mtl_path.to_string_lossy());
             }
-            Ok(out)
+            out
         }
         None => {
             let mut out = json!({ "data": base64_encode(&bytes), "format": format, "bytes": bytes.len() });
             if format == "obj" {
-                // OBJ needs a material library file.
-                let mtl_name = "export.mtl".to_string();
-                let mtl_bytes = (hooks.write)(s.doc()?, &mtl_name).map_err(|e| bad("export", e))?;
+                let mtl_bytes = (hooks.write)(s.doc()?, "export.mtl").map_err(|e| bad("export", e))?;
                 out["mtl"] = json!(base64_encode(&mtl_bytes));
             }
-            Ok(out)
+            out
         }
-    }
+    };
+    super::file::report_not_saved(s, &mut r, &lost);
+    Ok(r)
 }
 
 // ---------- IMPORT ----------
@@ -939,6 +937,26 @@ mod tests {
             png(&mut s, json!({ "layout": "Layout1", "width": 200, "fit": false, "scale": 0.5 })),
             "scale decides, not the saved fit"
         );
+    }
+
+    /// A Model-space preview fits its content onto the paper, so a window opens centred: the
+    /// same 500 × 500 mm line renders pixel-for-pixel where it sits in model space.
+    #[test]
+    fn the_window_opens_centred() {
+        let png_of = |points: [(f64, f64); 2]| {
+            let mut s = Session::new();
+            s.execute(
+                "line",
+                &json!({
+                    "points": [[points[0].0, points[0].1], [points[1].0, points[1].1]],
+                }),
+            )
+            .unwrap();
+            s.execute("preview", &json!({ "width": 400 })).unwrap()["data"].as_str().unwrap_or_default().to_string()
+        };
+        let a = png_of([(0.0, 0.0), (500.0, 500.0)]);
+        let b = png_of([(5000.0, 0.0), (5500.0, 500.0)]);
+        assert_eq!(a, b, "a centred Model-space window shows the same content where it is drawn");
     }
     #[test]
     fn pdfbook_collects_frames_into_one_pdf_per_row() {
