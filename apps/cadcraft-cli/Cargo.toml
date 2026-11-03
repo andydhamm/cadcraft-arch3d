@@ -38,3 +38,4 @@ wgpu = { workspace = true }
 # in the binary.
 clap_complete = { workspace = true }
 clap_mangen = { workspace = true }
+tempfile = "3"
