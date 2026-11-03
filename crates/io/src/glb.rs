@@ -1826,4 +1826,42 @@ mod tests {
         assert!(mesh_names.contains(&"floor-r65535".to_string()), "missing floor-r65535: {:?}", mesh_names);
         assert!(mesh_names.contains(&"ceiling-r1048576".to_string()), "missing ceiling-r1048576: {:?}", mesh_names);
     }
+
+    #[test]
+    fn cabinet_nodes_are_named_by_label() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-box".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-front".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "counter".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "fixture-sink".into();
+            m.object = ArchId(2);
+            m
+        });
+
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+
+        assert!(mesh_names.contains(&"cabinet-cb1".to_string()), "missing cabinet-cb1: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"cabinet-cb1-front".to_string()), "missing cabinet-cb1-front: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"cabinet-cb1-counter".to_string()), "missing cabinet-cb1-counter: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"fixture-fx2".to_string()), "missing fixture-fx2: {:?}", mesh_names);
+    }
 }

@@ -13,6 +13,7 @@ pub(crate) fn emit(ctx: &mut Ctx<'_>) {
         if meshes.is_empty() {
             continue;
         }
+
         // Determine cabinet type from the first mesh material if possible, or default
         // We assume the first mesh material indicates the type if it's specific, but here
         // materials are generic (cabinet-box, cabinet-front, counter).
@@ -73,5 +74,102 @@ pub(crate) fn emit(ctx: &mut Ctx<'_>) {
         ];
 
         ctx.element(entity, &key, &name, slot, &meshes, tail);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ifc::IfcOptions;
+    use cadcraft_arch3d::{ArchId, Mesh, Scene3d};
+    use cadcraft_doc::Drawing;
+    use cadcraft_doc::arch::{ArchModel, Level};
+
+    fn export(model: &ArchModel) -> String {
+        let scene = Scene3d::build(model);
+        crate::ifc::write_model(model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() })
+    }
+
+    #[test]
+    fn ifc_cabinet_is_userdefined_furniture() {
+        let mut model = ArchModel::default();
+        model.levels = vec![Level::default()];
+        // Add a cabinet to the model so it gets built into the scene
+        // We need to manually add meshes to the scene or ensure the builder creates them.
+        // Since we are testing the IFC writer, we can construct a scene with cabinet meshes directly.
+
+        let mut scene = Scene3d::default();
+        scene.meshes.push(Mesh {
+            material: "cabinet-box".into(),
+            object: ArchId(0),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        assert!(text.contains("IFCFURNITURE"), "Expected IFCFURNITURE in output");
+        assert!(text.contains(".USERDEFINED."), "Expected USERDEFINED enum");
+        assert!(text.contains("'BASE CABINET'"), "Expected BASE CABINET object type");
+    }
+
+    #[test]
+    fn ifc_sink_is_a_sanitary_terminal() {
+        let model = ArchModel::default();
+        let mut scene = Scene3d::default();
+        scene.meshes.push(Mesh {
+            material: "fixture-sink".into(),
+            object: ArchId(0),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        assert!(text.contains("IFCSANITARYTERMINAL"), "Expected IFCSANITARYTERMINAL in output");
+        assert!(text.contains(".SINK."), "Expected SINK enum");
+    }
+
+    #[test]
+    fn ifc_range_is_an_electric_cooker() {
+        let model = ArchModel::default();
+        let mut scene = Scene3d::default();
+        scene.meshes.push(Mesh {
+            material: "fixture-range".into(),
+            object: ArchId(0),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        assert!(text.contains("IFCELECTRICAPPLIANCE"), "Expected IFCELECTRICAPPLIANCE in output");
+        assert!(text.contains(".ELECTRICCOOKER."), "Expected ELECTRICCOOKER enum");
+    }
+
+    #[test]
+    fn casework_is_contained_in_its_storey() {
+        let mut model = ArchModel::default();
+        model.levels = vec![Level { index: 0, ..Level::default() }, Level { index: 1, elevation: 2.7, ..Level::default() }];
+
+        let mut scene = Scene3d::default();
+        // Cabinet on level 0 (default)
+        scene.meshes.push(Mesh {
+            material: "cabinet-box".into(),
+            object: ArchId(0),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        // Check that there is a containment relationship
+        assert!(text.contains("IFCRELCONTAINEDINSPATIALSTRUCTURE"), "Expected containment relationship");
+        // The cabinet should be contained in the first storey
+        assert!(text.contains("IFCFURNITURE"), "Expected cabinet furniture");
     }
 }
