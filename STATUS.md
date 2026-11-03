@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 15 of 23 segments merged · 3 of 13 acceptance checks**
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 02:30 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 3 / 13 | 12.1 h so far · expected done Nov 03 07:59–Nov 03 23:02 UTC |
+| 13 | Polish | building | 3 / 13 | 12.3 h so far · expected done Nov 03 08:14–Nov 03 23:17 UTC |
 
 ## Phase 13 segments
 
@@ -60,15 +60,15 @@ Updated 2026-11-03 02:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 823 |
 | bonsai-b | bonsai2-27b | gate | 761 |
-| bonsai-ws2-a | bonsai2-27b | gate | 829 |
-| bonsai-ws2-b | bonsai2-27b | agent | 816 |
+| bonsai-ws2-a | bonsai2-27b | gate | 830 |
+| bonsai-ws2-b | bonsai2-27b | agent | 817 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | merging | 73 |
 | claude-sonnet-c | sonnet | merging | 20 |
 | claude-sonnet-d | sonnet | idle | 12 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 684 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 684 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 10 |
-| tturbo-mac | tturbo-ultraheretic | gate | 581 |
+| tturbo-mac | tturbo-ultraheretic | merging | 582 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
