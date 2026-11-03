@@ -14,6 +14,7 @@ pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 
 pub mod archdetect;
 pub mod build3d;
+pub mod casework;
 pub mod deck;
 pub mod illuminance;
 pub mod inspect;
@@ -90,6 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(terrain_query::specs());
     v.extend(plant::specs());
     v.extend(lightfixture::specs());
+    v.extend(casework::specs());
     v.extend(material::specs());
     v.extend(illuminance::specs());
     v.extend(render::specs());
