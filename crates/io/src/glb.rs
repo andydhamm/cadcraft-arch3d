@@ -1828,6 +1828,121 @@ mod tests {
     }
 
     #[test]
+    fn glb_cabinet_zero_id() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-box".into();
+            m.object = ArchId(0);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "fixture-sink".into();
+            m.object = ArchId(0);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert!(mesh_names.contains(&"cabinet-cb0".to_string()), "missing cabinet-cb0: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"fixture-fx0".to_string()), "missing fixture-fx0: {:?}", mesh_names);
+    }
+
+    #[test]
+    fn glb_multiple_cabinets_interleaved() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-box".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-box".into();
+            m.object = ArchId(2);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-front".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "counter".into();
+            m.object = ArchId(2);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert_eq!(mesh_names, vec!["cabinet-cb1", "cabinet-cb2", "cabinet-cb1-front", "cabinet-cb2-counter"]);
+    }
+
+    #[test]
+    fn glb_cabinet_material_colors() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-box".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "cabinet-front".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "counter".into();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "fixture-sink".into();
+            m.object = ArchId(2);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "fixture-range".into();
+            m.object = ArchId(3);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let materials = json["materials"].as_array().unwrap();
+        let box_mat = materials.iter().find(|m| m["name"] == "cabinet-box").unwrap();
+        let box_color = &box_mat["pbrMetallicRoughness"]["baseColorFactor"];
+        // Light wood tone: 222/255, 184/255, 135/255
+        assert!((box_color[0].as_f64().unwrap() - 222.0 / 255.0).abs() < 0.01);
+        assert!((box_color[1].as_f64().unwrap() - 184.0 / 255.0).abs() < 0.01);
+        assert!((box_color[2].as_f64().unwrap() - 135.0 / 255.0).abs() < 0.01);
+        let front_mat = materials.iter().find(|m| m["name"] == "cabinet-front").unwrap();
+        let front_color = &front_mat["pbrMetallicRoughness"]["baseColorFactor"];
+        // Slightly darker wood: 205/255, 164/255, 115/255
+        assert!((front_color[0].as_f64().unwrap() - 205.0 / 255.0).abs() < 0.01);
+        let counter_mat = materials.iter().find(|m| m["name"] == "counter").unwrap();
+        let counter_color = &counter_mat["pbrMetallicRoughness"]["baseColorFactor"];
+        // Stone grey: 160/255
+        assert!((counter_color[0].as_f64().unwrap() - 160.0 / 255.0).abs() < 0.01);
+        let sink_mat = materials.iter().find(|m| m["name"] == "fixture-sink").unwrap();
+        let sink_color = &sink_mat["pbrMetallicRoughness"]["baseColorFactor"];
+        // White: 240/255
+        assert!((sink_color[0].as_f64().unwrap() - 240.0 / 255.0).abs() < 0.01);
+        let range_mat = materials.iter().find(|m| m["name"] == "fixture-range").unwrap();
+        let range_color = &range_mat["pbrMetallicRoughness"]["baseColorFactor"];
+        // Stainless grey: 192/255
+        assert!((range_color[0].as_f64().unwrap() - 192.0 / 255.0).abs() < 0.01);
+    }
+
+    #[test]
     fn cabinet_nodes_are_named_by_label() {
         let mut scene = scene_with(0);
         scene.meshes.push({
