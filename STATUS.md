@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 19 of 23 segments merged · 5 of 13 acceptance checks**
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 06:30 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 5 / 13 | 16.1 h so far · expected done Nov 03 08:54–Nov 03 20:43 UTC |
+| 13 | Polish | building | 5 / 13 | 16.3 h so far · expected done Nov 03 09:09–Nov 03 20:58 UTC |
 
 ## Phase 13 segments
 
@@ -56,9 +56,9 @@ Updated 2026-11-03 06:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 826 |
-| bonsai-b | bonsai2-27b | gate | 766 |
+| bonsai-b | bonsai2-27b | gate | 767 |
 | bonsai-ws2-a | bonsai2-27b | idle | 834 |
-| bonsai-ws2-b | bonsai2-27b | agent | 821 |
+| bonsai-ws2-b | bonsai2-27b | gate | 821 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 20 |
