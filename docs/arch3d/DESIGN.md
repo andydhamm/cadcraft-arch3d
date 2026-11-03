@@ -484,3 +484,141 @@ sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFA
 - **Phase-12 operator fixes (2026-11-02).** p12-ifc-site landed at level 2 with its enum fix (`P::Enum` adds the dots; it wrote `..TERRAIN..`) and `geom::cdt` cavities as BTreeSets (76307a4d, merge 4fb65e16); IFC coordinates at the model's decimals (0dd4b9b1, same merge); the stray `IFCCARTESIANPOINT(x,y,z)` a racer wrote per space only to satisfy its own `contains("2.55")` test removed (0a563f4b, merge 0e87b75d). All three slipped past unit tests that asserted substrings malformed output also contains (decision 32).
 - **Phase-13 operator fixes (2026-11-02/03).** The exact incremental rebuild (66063a44, decision 33), `xtask literals` reading a `-> &Scene3d {` return type as a literal (cba772a4) and phase-9 check 10's bar as min(wall, CPU) (35b30cdd, decision 34), landed with p13-arch3d-incremental at level 2 (merge 5931a657); the benchmark-house generator rebuilt (310 walls, L 40 T 116 X 80; 2c7aa167, merge 14799b78); p13-arch3d-casework landed at level 2 with 120 seeded casework edits in scene_cache_equals_full, check 08's reply count and `material` refusing numeric ids (merge c5cff184); IFC cabinet ObjectType by kind and the toe kick in the carcass mesh (a21ab50d, merge 06a445ee); phase-12 check 12 accepting upstream #2260's made-and-named folder and check 10's `--manifest-path` (7e445008, merge bbb9dd7c).
 - **Phase-14 groundwork (2026-11-03).** The library sample set `assets/library/sample/` (49 items, CC0 and CC-BY, 5.5 MB): plain glTF 2.0 `.glb` symbols and texture images. **Every symbol is bottom-centred at its catalog size in metres** (glTF Y up: x and z centred on 0, lowest y at 0, extents = size; front towards +Z as Sweet Home 3D stores its models), so a reader only turns Y-up to Z-up and places the box; base-colour factors and PNG/JPEG textures, smoothing groups averaged, 16- or 32-bit indices, no extensions. `catalog.json` = `{"version": 1, "items": [{id, name, category, symbolType, placement (floor, wall, ceiling, counter, in-cabinet; null for images), size [w, d, h] metres Z up, keywords, source, licence (SPDX), author, attribution (the full CC credit line), file, elevation (wall items: metres to the bottom), light (lights: position in metres from the bottom centre, x across, y back to front, z up; diameter; colour), cutout [w, d] (sinks, cooktops, the basin)}]}`, every file in `ATTRIBUTION.md`. Doors and windows come from the existing door and window catalogue, not as mesh symbols. The kitchen sink (0.8 x 0.55) and the dishwasher (0.6 x 0.6 x 0.876, no top) are made at the phase-13 casework sizes. Made by `tools/library/` (Python standard library, run by the operator, never by the swarm): `fetch.py` downloads the Sweet Home 3D CC0 and CC-BY libraries (links, licences and whom to credit read from their pages, LICENSE files and catalogs), `curate.py` converts `picks.json` with `sh3d.py` and adds `own.py`'s items (two pulls, a 30-inch range, the sink, the dishwasher, a sky backdrop), `check_sample.py` checks the set against the brief. Also in: CHIEF-REFERENCE §6 (the library, from Chief's training videos) and the SimHome note in §5 (a local catalog, never committed).
+
+## Phase 14 plan
+
+Phase 14 (the library) builds on the operator groundwork, which was the sample set `assets/library/sample/` (49 items, its `catalog.json` and `ATTRIBUTION.md`) and `tools/library/`.
+
+The DAG opens with four kinds of segment: the data segments (p14-doc-furnishing, p14-doc-cabinet-parts), the pure library records (p14-arch-library), the embedded sample files (p14-io-library-files) and the glTF reader (p14-io-gltf-read). The decisions follow.
+
+**One library, nine categories.**
+- The categories, in this order: Furniture; Appliances and plumbing fixtures; Cabinet parts; Lighting and electrical; Materials; Doors and windows; Plants; Backdrops; User catalog.
+- Every item is an `ItemRecord` in `arch::library` (id, name, category, folder, kind, symbolType, placement, size, keywords, tags, style, source, licence, author, attribution, catalog, readOnly, file, elevation, cutout, notes).
+- Each catalog contributes items:
+  - `builtin`: the existing catalogues as items:
+    - door:/window:<style>, plant:<species>, lightfixture:<type>;
+    - finish:<name>, cabinet:<kind>, fixture:<kind>;
+    - frontstyle:door-/drawer-<style>;
+    - backdrop:colour/gradient.
+  - `sample`: embedded in every binary by `io::library::sample_files`, so the web build has it too.
+  - `installed:<name>`: copied into the user dir by `library.install`; read-only, and installing again updates it.
+  - `local`: a folder of .glb files with one licence, sizes from the mesh bounds, categories from folder names; remembered, never committed.
+  - `user`: see the user catalog below.
+- An item with no licence never loads. The engine's `Session.library` holds the catalogs.
+- The file readers reach it through `engine::library::LibraryIo` (read_glb, read_image, encode_png, sample), which the apps install, as they do for IoHooks.
+
+**The user dir.**
+- It is CADCRAFT_LIBRARY_USER_DIR, else $XDG_DATA_HOME/cadcraft/library.
+- It holds `state.json` (tags, saved filters, local catalogs), `installed/`, `user/`, `trash/` and `icons/<hash>.png`.
+- The checks point the user dir at a temporary folder.
+
+**Search.**
+- Every word of the text must be a substring of the name, a keyword or the folder.
+- Chips (category, folder, symbolType, placement, source = the item's catalog, style, tag) combine with AND. Zero results is a valid answer.
+- `FilterHistory` gives Back and Forward. Saved filters persist; Favorites is a built-in tag.
+- Folders come from catalog.json or `folder_for(symbolType)`.
+- `library {"for": surface key}` uses `query_for`: a pull gives pulls, a front gives front styles, a carcass gives in-cabinet items, a wall, floor, ceiling or roof gives Materials.
+
+**3D symbols.**
+- `io::gltf_read` is our own reader on serde_json and image, never the gltf crate. It accepts plain glTF 2.0 binary only:
+  - an `extensionsRequired` entry, a URI or a sparse accessor is refused, and the reason names the extension (Draco, meshopt, KTX2);
+  - textures are PNG or JPEG, decoded to RGBA at up to 256 px.
+- The mesh turns Y up to Z up, (x, y, z) → (x, −z, y), and is bottom-centred.
+- A `SymbolMesh` (parts with base colour, metallic, roughness and texture) is keyed by the FNV-1a 64 of its file.
+- Symbols are stored in the drawing (`ArchModel.symbols`), as are library images (`ArchModel.images`). A drawing therefore opens anywhere with its furniture, and undo and DXF carry it.
+
+**Furnishings.**
+- A `Furnishing` arch object has the handle f<n> at +0x60000. It records:
+  - item, symbol key, name, category and symbol type;
+  - placement, level, `at` (the footprint centre), rotation, elevation (its bottom above the level's floor) and size;
+  - mirrored, host and cut-out.
+- `Furnishing::local_to_plan` scales to the size, mirrors x, rotates, then moves. A symbol's front is its local −y (glTF +z).
+- Layers come from `layer_for`: I-FURN; P-FLOR-FIXT for sinks, lavatories, faucets, toilets, tubs and showers, else A-FLOR-APPL; E-LITE; L-PLNT.
+- IFC classes come from `ifc_class_for`: IfcFurniture, IfcSanitaryTerminal, IfcElectricAppliance, IfcLightFixture.
+- The plan symbol is the convex hull of the placed mesh, seen from above.
+
+**Placing** (`arch::library::place`, rules tried in order):
+1. A cabinet-part item over a cabinet swaps its pull or front style, and nothing is placed.
+2. A faucet on a sink takes the sink's back centre.
+3. A cut-out item over a base cabinet is centred in it, its top 1 cm above the counter, facing the room (cabinet rotation + 180). The cabinet then has a cut-out hole and a false top front. Without a cabinet, it stands at counter height.
+4. An under-counter appliance clicked in a gap of its depth between two base cabinets takes the gap (host Gap), and the counter is carried over it.
+5. A wall item puts its back on the nearest wall face within 0.3 m, at its catalog elevation, facing out.
+6. A ceiling item hangs with its top at the level's ceiling.
+7. Anything else stands at the click.
+
+**Cabinet parts.**
+- `arch::casework_layout` is the one front layout. It gives fronts, hinges and pull positions:
+  - door pulls 0.05 m from the free edge and 0.075 m from the top, or from the bottom on wall cabinets;
+  - drawer pulls centred.
+- It also gives false fronts, counter runs and gaps:
+  - touching in-line base cabinets share one counter, owned by the first;
+  - a bridged gap joins the run.
+- Front styles (slab, shaker, raised panel) have the same outer box; their triangle counts grow in that order.
+- A cabinet's pulls are one mesh group, `pull:<key>:<i>`, and export as node `cabinet-cb<n>-pull`.
+
+**Materials and painters.**
+- Surfaces have string keys:
+  - wall/w3/left|right, room/r0/floor|ceiling, roof/r0;
+  - cabinet/cb0/carcass|front|counter|pull;
+  - fixture/fx0, furnishing/f2/<part>.
+- `ArchModel.paints` maps a surface key to `Paint { material: Option<MaterialRef>, tint }`. A `MaterialRef` is a Finish, a library item (an image) or a colour.
+- `arch::paint` gives every surface its room and its effective material key: finish:<f>, item:<id>, colour:#rrggbb, default:<what>, frontstyle:<s> or sym:<key>:<i>. A wall side's room is found 0.05 m off its face; exterior sides have none.
+- Scopes select surfaces with the clicked surface's material:
+  - component: the clicked surface;
+  - object: every surface of its object;
+  - room: that material in the clicked surface's room;
+  - floor: that material on its level;
+  - plan: that material everywhere.
+- `paint.object` selects like items instead: like pulls, front styles or symbols.
+- `blend` keeps the material and sets a tint.
+- Each painter call is one undo step.
+
+**The 3D build.**
+- Mesh material names:
+  - `sym:<key>:<i>` for furnishing parts;
+  - `pull:<key>:<i>` for pulls;
+  - `paint:<surface key>` for painted surfaces. A painted wall side is split out as its own mesh, as the phase-13 exterior faces are.
+- `Scene3d` gains:
+  - `materials` (MaterialDef: base colour, metallic, roughness, texture key, tile, tint);
+  - `textures` (sym:<key>:t<i>, finish:<f>, item:<id>);
+  - `backdrop`.
+  Every renderer and exporter reads `materials` first.
+- The scene cache gains a furnishings section. Every object's inputs include its paints. A cabinet's inputs include its level's base cabinets, the furnishings they host and its pull symbol, so the cache stays the full build.
+- Furnishings probe by their placed box, since symbol meshes need not be closed.
+
+**Exports.**
+- GLB: one node `furnishing-f<n>` per furnishing, one primitive per part. Textures are embedded once as PNG; the tint goes into baseColorFactor.
+- OBJ: groups by node name, with mean colours.
+- IFC: elements by category, named as the nodes, with `CADCraft_Library` (Item, Licence, Source).
+- DXF: LWPOLYLINE proxies marked CADCRAFT-FURNISHING. Everything else rides in the v9 record's serialized model.
+
+**Icons.**
+- `arch3d::icon` is a software rasterizer: fixed camera (yaw −30°, pitch 25°), fixed light, 128 × 128.
+- Kinds: materials on a UV sphere, backdrops as thumbnails, gradients and solids.
+- Icons are byte-identical every time and cached by content hash.
+
+**Backdrops.**
+- Colour, a gradient (top to bottom of the view), or an image, flat or equirectangular (the top row is the zenith, the middle row the horizon).
+- Drawn where no surface is hit by the 3D view, the raster Finalize and the path tracer (after the resolve), in display colours.
+- A backdrop never lights the scene.
+
+**The UI.**
+- A dockable Library panel (Panel::Library): tiles, folder tree, grid or list, text and chips, Back and Forward, saved filters, Favorites, details, and a preview that turns and zooms.
+- Click an item, then click in the plan or 3D to place it. The property panel's "Library…" button runs `library {for}`.
+- Painter and eyedropper tools in the 3D pane.
+
+**Set as Default.** `arch.default {id}` stores the command parameters per kind in `ArchModel.defaults`: cabinet.<kind>, door, window, furnishing.<item>. `cabinet`, `door`, `window` and `library.place` fill in the parameters they omit from it.
+
+**Left out.**
+- Out of scope by the brief:
+  - online catalogs and accounts, manufacturer catalogs;
+  - reading OpenUSD (SimReady and SimHome are converted outside);
+  - the tile and wood material builders, the texture editor;
+  - outlets, switches, wiring (phase 15).
+- Ours:
+  - symbol lights do not emit light (their catalog `light` is data only, for phase 15);
+  - a ceiling item does not find a soffit under it;
+  - the plan outline is a convex hull, so an L-shaped sofa's notch is filled;
+  - the path tracer uses texture means;
+  - icons are flat-shaded.
+
