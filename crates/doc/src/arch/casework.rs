@@ -34,6 +34,49 @@ pub enum CabinetKind {
     Tall,
 }
 
+/// The style used for a cabinet front.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FrontStyle {
+    /// Flat slab front.
+    #[default]
+    Slab,
+    /// Shaker-style front with a recessed centre panel.
+    Shaker,
+    /// Raised panel front.
+    RaisedPanel,
+}
+
+impl FrontStyle {
+    /// Parses a front-style name as it appears in JSON or library data.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "slab" => Some(Self::Slab),
+            "shaker" => Some(Self::Shaker),
+            "raised-panel" => Some(Self::RaisedPanel),
+            _ => None,
+        }
+    }
+
+    /// Returns the canonical encoded name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Slab => "slab",
+            Self::Shaker => "shaker",
+            Self::RaisedPanel => "raised-panel",
+        }
+    }
+}
+
+impl FrontStyle {
+    /// All supported front styles, in canonical order.
+    pub const ALL: [FrontStyle; 3] = [Self::Slab, Self::Shaker, Self::RaisedPanel];
+}
+
+fn is_default_front_style(style: &FrontStyle) -> bool {
+    *style == FrontStyle::Slab
+}
+
 /// What the front of a cabinet is made of.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +110,18 @@ pub struct Cabinet {
     #[serde(default)]
     pub elevation: f64,
     pub fronts: Fronts,
+    /// Door front style.
+    #[serde(default, skip_serializing_if = "is_default_front_style")]
+    pub door_style: FrontStyle,
+    /// Drawer front style.
+    #[serde(default, skip_serializing_if = "is_default_front_style")]
+    pub drawer_style: FrontStyle,
+    /// Library item id for the installed pull.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull: Option<String>,
+    /// Symbol key for the pull in `ArchModel.symbols`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_symbol: Option<String>,
     /// Door count (0..=4).
     #[serde(default)]
     pub doors: u32,
@@ -169,6 +224,10 @@ mod tests {
             height: 0.876,
             elevation: 0.0,
             fronts: Fronts::Doors,
+            door_style: FrontStyle::Slab,
+            drawer_style: FrontStyle::Slab,
+            pull: None,
+            pull_symbol: None,
             doors: 1,
             drawers: 0,
             counter: false,
@@ -190,6 +249,86 @@ mod tests {
             height: 0.02,
             elevation: 0.914,
         }
+    }
+
+    #[test]
+    fn front_style_names_round_trip() {
+        let want = [FrontStyle::Slab, FrontStyle::Shaker, FrontStyle::RaisedPanel];
+        for style in want {
+            assert_eq!(FrontStyle::parse(style.name()), Some(style));
+            assert_eq!(style.name(), format!("{}", style.name()));
+        }
+        assert_eq!(FrontStyle::ALL, want);
+    }
+
+    #[test]
+    fn front_style_parse_refuses_others() {
+        assert_eq!(FrontStyle::parse("slab"), Some(FrontStyle::Slab));
+        assert_eq!(FrontStyle::parse("SLA B"), None);
+        assert_eq!(FrontStyle::parse("shaker"), Some(FrontStyle::Shaker));
+        assert_eq!(FrontStyle::parse("raised_panel"), None);
+        assert_eq!(FrontStyle::parse("raised-panel"), Some(FrontStyle::RaisedPanel));
+        assert_eq!(FrontStyle::parse(""), None);
+    }
+
+    #[test]
+    fn a_phase13_cabinet_reads_with_slab_fronts_and_no_pull() {
+        let json = serde_json::json!({
+            "id": 7,
+            "kind": "base",
+            "level": 0,
+            "position": [1.0, 2.0],
+            "rotation": 90.0,
+            "width": 0.6,
+            "depth": 0.6,
+            "height": 0.876,
+            "elevation": 0.0,
+            "fronts": "doors",
+            "doors": 2,
+            "drawers": 0,
+            "counter": true,
+            "counter_thickness": 0.038,
+            "counter_overhang": 0.025,
+            "toe_kick": true
+        });
+        let cabinet: Cabinet = serde_json::from_value(json).unwrap();
+        assert_eq!(cabinet.door_style, FrontStyle::Slab);
+        assert_eq!(cabinet.drawer_style, FrontStyle::Slab);
+        assert_eq!(cabinet.pull, None);
+        assert_eq!(cabinet.pull_symbol, None);
+    }
+
+    #[test]
+    fn cabinet_with_parts_round_trips_through_serde() {
+        let original = Cabinet {
+            id: ArchId(5),
+            kind: CabinetKind::Base,
+            level: 2,
+            position: Vec2::new(1.5, 2.5),
+            rotation: 45.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.1,
+            fronts: Fronts::DrawerOverDoor,
+            door_style: FrontStyle::RaisedPanel,
+            drawer_style: FrontStyle::Shaker,
+            pull: Some("pull-01".to_owned()),
+            pull_symbol: Some("pull:brushed.nickel".to_owned()),
+            doors: 2,
+            drawers: 2,
+            counter: true,
+            counter_thickness: 0.04,
+            counter_overhang: 0.03,
+            toe_kick: true,
+        };
+        let json = serde_json::to_value(&original).unwrap();
+        assert_eq!(json.get("door_style"), Some(&serde_json::Value::String("raised-panel".into())));
+        assert_eq!(json.get("drawer_style"), Some(&serde_json::Value::String("shaker".into())));
+        assert_eq!(json.get("pull"), Some(&serde_json::Value::String("pull-01".into())));
+        assert_eq!(json.get("pull_symbol"), Some(&serde_json::Value::String("pull:brushed.nickel".into())));
+        let round_trip: Cabinet = serde_json::from_value(json).unwrap();
+        assert_eq!(round_trip, original);
     }
 
     #[test]
