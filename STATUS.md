@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 15 of 23 segments merged · 3 of 13 acceptance checks**
 
-6,771 workspace tests passing at the last merge · 696 segments merged in all · 0 of 14 seats working
+6,775 workspace tests passing at the last merge · 697 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 04:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 3 / 13 | 13.6 h so far · expected done Nov 03 09:29–Nov 04 00:32 UTC |
+| 13 | Polish | building | 3 / 13 | 13.8 h so far · expected done Nov 03 09:44–Nov 04 00:47 UTC |
 
 ## Phase 13 segments
 
@@ -41,6 +41,7 @@ Updated 2026-11-03 04:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 04:10 | `harden-p13-build3d-incremental` | merged | 6,775 pass | tturbo-mac |
 | Nov 03 02:11 | `p13-arch3d-casework` | refused | 0 pass | mai-flash-esc |
 | Nov 03 02:11 | `p13-build3d-incremental` | merged | 6,771 pass | bonsai-ws2-a |
 | Nov 03 01:36 | `p13-arch3d-finish-meshes` | merged | 6,764 pass | claude-sonnet-b |
@@ -52,7 +53,6 @@ Updated 2026-11-03 04:00 UTC. This page and the card in the README are regenerat
 | Nov 02 23:22 | `harden-p12-ifc-openings` | merged | 6,726 pass | tturbo-mac |
 | Nov 02 22:22 | `p13-sample-house` | merged | 6,707 pass | mai-flash-esc |
 | Nov 02 22:03 | `p13-inspect-finishes` | merged | 6,701 pass | claude-sonnet-b |
-| Nov 02 21:39 | `p13-io-finish-round-trip` | merged | 6,699 pass | bonsai-ws2-b |
 
 ## Seats active in the last hour
 
@@ -60,13 +60,13 @@ Updated 2026-11-03 04:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 823 |
 | bonsai-b | bonsai2-27b | gate | 762 |
-| bonsai-ws2-a | bonsai2-27b | down | 831 |
-| bonsai-ws2-b | bonsai2-27b | down | 817 |
+| bonsai-ws2-a | bonsai2-27b | idle | 831 |
+| bonsai-ws2-b | bonsai2-27b | idle | 817 |
 | claude-sonnet-a | sonnet | down | 72 |
 | claude-sonnet-b | sonnet | down | 73 |
 | claude-sonnet-c | sonnet | down | 20 |
 | claude-sonnet-d | sonnet | down | 12 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 686 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 686 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | down | 52 |
 | mai-flash-esc | mai-code-1.1-flash | down | 11 |
