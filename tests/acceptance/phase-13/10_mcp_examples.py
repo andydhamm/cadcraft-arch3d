@@ -44,7 +44,11 @@ for path in files:
     os.symlink(os.path.join(ROOT, 'examples'), os.path.join(tmp, 'examples'))
     env = dict(os.environ)
     env.setdefault('CADCRAFT_RENDER_ADAPTER', 'fallback')
-    p = subprocess.run(cli_args('mcp'), input='\n'.join(lines) + '\n', cwd=tmp, capture_output=True, text=True,
+    # From the empty directory cargo needs the workspace's manifest (as 09 does), else 'could not find Cargo.toml'.
+    exe = os.environ.get('CADCRAFT_CLI')
+    args = [exe, 'mcp'] if exe else ['cargo', 'run', '-q', '--manifest-path', os.path.join(ROOT, 'Cargo.toml'), '-p',
+                                     'cadcraft-cli', '--', 'mcp']
+    p = subprocess.run(args, input='\n'.join(lines) + '\n', cwd=tmp, capture_output=True, text=True,
                        timeout=1800, env=env)
     if 'panicked' in p.stdout + p.stderr:
         fail(f"{name}: panic: {(p.stderr + p.stdout)[-600:]}")

@@ -1,19 +1,30 @@
-# Hostile and edge cases: an export into a missing directory or with an unknown extension is refused with a message (no
-# panic, no file); a model without arch objects is still a valid IFC (project, site, building, one storey, no element);
-# names with apostrophes, backslashes and non-ASCII characters survive ISO 10303-21 encoding (and the OBJ stays readable);
-# 300 walls export to IFC and OBJ in under 60 s each.
+# Hostile and edge cases: an export with an unknown extension is refused with a message (no panic, no file), and one into
+# a missing directory is either refused the same way or (upstream #2260, 11-02: a save to a missing folder writes the file
+# and says so) writes the file and names the topmost folder it made; a model without arch objects is still a valid IFC
+# (project, site, building, one storey, no element); names with apostrophes, backslashes and non-ASCII characters survive
+# ISO 10303-21 encoding (and the OBJ stays readable); 300 walls export to IFC and OBJ in under 60 s each.
 # needs: p12-io-obj, p12-ifc-openings
 import os, time
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p12lib.inc')).read())
 
 tmp = tempfile.mkdtemp()
 WALL = cmd('wall', {"points": [[0, 0], [4, 0]], "thickness": 0.2, "height": 2.4})
-for out, why in ((os.path.join(tmp, 'no', 'such', 'dir', 'x.ifc'), 'a missing directory'),
-                 (os.path.join(tmp, 'x.ifcx'), 'an unknown extension')):
-    rc, rr, so, se = export([WALL], out, expect_ok=False)
-    if rc == 0 or os.path.exists(out):
-        fail(f"an export to {why} is refused (nonzero exit, no file): rc {rc}, exists {os.path.exists(out)}")
-print("ok: a missing directory and an unknown extension are refused")
+out, top = os.path.join(tmp, 'no', 'such', 'dir', 'x.ifc'), os.path.join(tmp, 'no')
+rc, rr, so, se = export([WALL], out, expect_ok=False)
+# Named as upstream names it: the reply's createdFolder, or 'created the folder <top>' at the command line (the 'wrote'
+# line's path alone also starts with <top>).
+said = any(isinstance(r, dict) and r.get('createdFolder') == top for r in rr) or f'created the folder {top}' in se + so
+if rc == 0 and not (os.path.exists(out) and said):
+    fail(f"an export to a missing directory that succeeds writes the file and names the folder it made ({top}): "
+         f"exists {os.path.exists(out)}, named {said}: {(se + so)[-400:]}")
+if rc != 0 and os.path.exists(out):
+    fail(f"a refused export to a missing directory leaves no file: rc {rc}")
+print(f"ok: a missing directory is {'made and named' if rc == 0 else 'refused'}")
+out = os.path.join(tmp, 'x.ifcx')
+rc, rr, so, se = export([WALL], out, expect_ok=False)
+if rc == 0 or os.path.exists(out):
+    fail(f"an export to an unknown extension is refused (nonzero exit, no file): rc {rc}, exists {os.path.exists(out)}")
+print("ok: an unknown extension is refused")
 empty = os.path.join(tmp, 'empty.ifc')
 export([], empty)
 _, inst = step_file(empty)
