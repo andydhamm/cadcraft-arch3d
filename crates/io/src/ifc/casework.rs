@@ -34,7 +34,7 @@ pub(crate) fn emit(ctx: &mut Ctx<'_>) {
         let tail = vec![
             P::Null, // Tag
             P::Enum("USERDEFINED"),
-            P::Str(obj_type),
+            P::Str(obj_type.to_string()),
         ];
 
         ctx.element("IfcFurniture", &key, &name, slot, meshes, tail);
