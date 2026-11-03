@@ -1,8 +1,9 @@
 //! The incremental 3D rebuild (`SceneCache::update`) gives exactly the full build (`Scene3d::build`)
 //! after any edit, on models drawn with the commands: two levels, rooms, a roof, a stair, light
-//! fixtures and a terrain, and the 300-wall sample with 150 openings. Seeded random edits of every
-//! kind; after each one the cached scene has the full build's meshes in the full build's order,
-//! the same counts, and a `rebuilt` count no larger than what the edit can reach.
+//! fixtures and a terrain; that house with cabinets and casework fixtures; and the 300-wall sample
+//! with 150 openings. Seeded random edits of every kind; after each one the cached scene has the
+//! full build's meshes in the full build's order, the same counts, and a `rebuilt` count no larger
+//! than what the edit can reach.
 
 use std::collections::BTreeMap;
 
@@ -111,9 +112,60 @@ fn edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
     }
 }
 
+/// One seeded casework edit; returns its name.
+fn casework_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
+    *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    let r = (*state >> 33) as usize;
+    let d = if r & 1 == 0 { 0.05 } else { -0.05 };
+    match r % 7 {
+        0 if !m.cabinets.is_empty() => {
+            let i = r % m.cabinets.len();
+            m.cabinets[i].position.x += d;
+            "move a cabinet"
+        }
+        1 if !m.cabinets.is_empty() => {
+            let i = r % m.cabinets.len();
+            m.cabinets[i].width = (m.cabinets[i].width + d).max(0.3);
+            "resize a cabinet"
+        }
+        2 if !m.cabinets.is_empty() => {
+            let i = r % m.cabinets.len();
+            m.cabinets[i].counter = !m.cabinets[i].counter;
+            "toggle a counter"
+        }
+        3 if !m.cabinets.is_empty() => {
+            let i = r % m.cabinets.len();
+            m.cabinets[i].drawers = (m.cabinets[i].drawers + 1) % 4;
+            "change a cabinet's drawers"
+        }
+        4 if !m.fixtures.is_empty() => {
+            let i = r % m.fixtures.len();
+            m.fixtures[i].position.y += d;
+            "move a fixture"
+        }
+        5 if !m.fixtures.is_empty() => {
+            let i = r % m.fixtures.len();
+            m.fixtures[i].rotation += 90.0;
+            "turn a fixture"
+        }
+        _ => edit(m, state),
+    }
+}
+
 /// `edits` seeded edits of `m`; after each, the cache equals the full build. Returns, per edit kind,
 /// the most objects one edit of that kind rebuilt.
-fn cache_follows_every_edit(name: &str, mut m: ArchModel, edits: usize, seed: u64) -> BTreeMap<&'static str, usize> {
+fn cache_follows_every_edit(name: &str, m: ArchModel, edits: usize, seed: u64) -> BTreeMap<&'static str, usize> {
+    cache_follows(name, m, edits, seed, edit)
+}
+
+/// [`cache_follows_every_edit`] with another seeded edit.
+fn cache_follows(
+    name: &str,
+    mut m: ArchModel,
+    edits: usize,
+    seed: u64,
+    edit: fn(&mut ArchModel, &mut u64) -> &'static str,
+) -> BTreeMap<&'static str, usize> {
     let (mut cache, full) = SceneCache::new(&m);
     assert!(!full.incremental && full.rebuilt == full.objects, "{name}: {full:?}");
     let mut state = seed;
@@ -142,6 +194,26 @@ fn the_scene_cache_follows_every_edit_of_a_two_level_house() {
     let most = cache_follows_every_edit("house", house(), 150, 7);
     // A ceiling carries the lights in it (their height), so raising one rebuilds the room and its 4 fixtures.
     assert!(most.values().all(|&n| n <= 6), "{most:?}");
+}
+
+#[test]
+fn the_scene_cache_follows_every_casework_edit() {
+    let mut cmds = vec![
+        ("arch.sample", json!({"house2": true})),
+        ("cabinet", json!({"kind": "base", "wall": "w1", "offset": 1.0, "widths": [0.6, 0.9, 0.6]})),
+        ("cabinet", json!({"kind": "wall", "wall": "w1", "offset": 1.0})),
+        ("cabinet", json!({"kind": "tall", "wall": "w2", "offset": 1.0})),
+    ];
+    for (kind, at) in [("sink", [2.0, 1.0]), ("toilet", [6.0, 1.0]), ("refrigerator", [3.0, 6.0]), ("bathtub", [7.0, 6.0])] {
+        cmds.push(("fixture", json!({"kind": kind, "at": at})));
+    }
+    let m = model(&cmds);
+    assert!(m.cabinets.len() >= 3 && m.fixtures.len() == 4, "{} cabinets, {} fixtures", m.cabinets.len(), m.fixtures.len());
+    let most = cache_follows("casework", m, 120, 13, casework_edit);
+    // A casework edit rebuilds only that cabinet or fixture.
+    for kind in ["move a cabinet", "resize a cabinet", "toggle a counter", "change a cabinet's drawers", "move a fixture", "turn a fixture"] {
+        assert_eq!(most.get(kind), Some(&1), "{kind}: {most:?}");
+    }
 }
 
 #[test]
