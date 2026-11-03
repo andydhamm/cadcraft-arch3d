@@ -1979,4 +1979,52 @@ mod tests {
         assert!(mesh_names.contains(&"cabinet-cb1-counter".to_string()), "missing cabinet-cb1-counter: {:?}", mesh_names);
         assert!(mesh_names.contains(&"fixture-fx2".to_string()), "missing fixture-fx2: {:?}", mesh_names);
     }
+
+    #[test]
+    fn glb_finished_wall_interior_and_exterior_both_named() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall".into();
+            m.object = ArchId(3);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-brick".into();
+            m.object = ArchId(3);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert!(mesh_names.contains(&"wall-w3".to_string()), "missing wall-w3: {:?}", mesh_names);
+        assert!(mesh_names.contains(&"wall-w3-exterior".to_string()), "missing wall-w3-exterior: {:?}", mesh_names);
+    }
+
+    #[test]
+    fn glb_texture_accessor_min_max_with_zero_uvs() {
+        let mut m = wall_mesh();
+        m.uvs = vec![[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]];
+        let mut scene = scene_with(0);
+        scene.meshes.push(m);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let uv = json["accessors"].as_array().unwrap().iter().find(|a| a["type"] == "VEC2").unwrap();
+        assert_eq!(uv["min"], json!([0.0, 0.0]));
+        assert_eq!(uv["max"], json!([0.0, 0.0]));
+    }
+
+    #[test]
+    fn glb_texture_accessor_min_max_with_negative_uvs() {
+        let mut m = wall_mesh();
+        m.uvs = vec![[-1.0, 2.0], [3.0, -4.0], [0.0, 0.0]];
+        let mut scene = scene_with(0);
+        scene.meshes.push(m);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let uv = json["accessors"].as_array().unwrap().iter().find(|a| a["type"] == "VEC2").unwrap();
+        assert_eq!(uv["min"], json!([-1.0, -4.0]));
+        assert_eq!(uv["max"], json!([3.0, 2.0]));
+    }
 }
