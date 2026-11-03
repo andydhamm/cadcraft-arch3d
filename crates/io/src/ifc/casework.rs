@@ -165,6 +165,80 @@ mod tests {
     }
 
     #[test]
+    fn ifc_unknown_fixture_material_is_skipped() {
+        let model = ArchModel::default();
+        let mut scene = Scene3d::default();
+        scene.meshes.push(Mesh {
+            material: "fixture-bogus".into(),
+            object: ArchId(0),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        assert!(!text.contains("IFCSANITARYTERMINAL"), "unknown fixture should not emit sanitary terminal");
+        assert!(!text.contains("IFCELECTRICAPPLIANCE"), "unknown fixture should not emit appliance");
+    }
+
+    #[test]
+    fn ifc_cabinet_on_level_one() {
+        let mut model = ArchModel::default();
+        model.levels = vec![Level { index: 0, ..Level::default() }, Level { index: 1, elevation: 2.7, ..Level::default() }];
+
+        let mut scene = Scene3d::default();
+        scene.meshes.push(Mesh {
+            material: "cabinet-box".into(),
+            object: ArchId(0),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        assert!(text.contains("IFCFURNITURE"), "Expected cabinet furniture");
+        // Cabinet defaults to level 0, so contained in first storey
+        assert!(text.contains("IFCRELCONTAINEDINSPATIALSTRUCTURE"));
+    }
+
+    #[test]
+    fn ifc_multiple_fixture_types() {
+        let model = ArchModel::default();
+        let mut scene = Scene3d::default();
+        scene.meshes.push(Mesh {
+            material: "fixture-sink".into(),
+            object: ArchId(0),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+        scene.meshes.push(Mesh {
+            material: "fixture-toilet".into(),
+            object: ArchId(1),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+        scene.meshes.push(Mesh {
+            material: "fixture-dishwasher".into(),
+            object: ArchId(2),
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Mesh::default()
+        });
+
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        assert!(text.contains(".SINK."), "Expected SINK enum");
+        assert!(text.contains(".TOILETPAN."), "Expected TOILETPAN enum");
+        assert!(text.contains(".DISHWASHER."), "Expected DISHWASHER enum");
+        assert!(text.contains("IFCSANITARYTERMINAL"));
+        assert!(text.contains("IFCELECTRICAPPLIANCE"));
+    }
+
+    #[test]
     fn casework_is_contained_in_its_storey() {
         let mut model = ArchModel::default();
         model.levels = vec![Level { index: 0, ..Level::default() }, Level { index: 1, elevation: 2.7, ..Level::default() }];
