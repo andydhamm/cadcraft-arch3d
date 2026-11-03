@@ -18,6 +18,7 @@ mod output;
 mod perf;
 mod render;
 mod render_hook;
+mod roundtrip;
 mod run;
 mod sample;
 
@@ -34,6 +35,7 @@ use output::Streams;
 #[cfg(test)]
 use output::{export_window, model_views, write_atomic};
 use perf::perf;
+use roundtrip::roundtrip;
 use run::run_cmds;
 #[cfg(test)]
 use run::{fill_last, returned_handle};
@@ -104,7 +106,7 @@ where
         Command::Run(a) => a.settings.apply(),
         Command::Mcp(a) => a.settings.apply(),
         Command::Sample(a) => a.settings.apply(),
-        Command::Info(_) | Command::Commands(_) | Command::Perf(_) | Command::Render(_) => {}
+        Command::Info(_) | Command::Commands(_) | Command::Perf(_) | Command::Roundtrip(_) | Command::Render(_) => {}
     }
     let mut io = Streams::new(out, err);
     let result = match &cli.command {
@@ -115,6 +117,7 @@ where
         Command::Mcp(a) => mcp(a),
         Command::Perf(a) => perf(a.target.as_ref(), &mut io),
         Command::Sample(a) => sample(a, &mut io),
+        Command::Roundtrip(a) => roundtrip(a, &mut io),
         Command::Render(a) => match render::render(a, &mut io) {
             Ok(()) => Ok(()),
             Err(render::RenderError::NoAdapter) => {

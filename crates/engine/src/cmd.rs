@@ -23,6 +23,7 @@ mod inquiry;
 mod layer;
 mod layout;
 mod lisp;
+mod merge;
 mod mleader_content;
 mod mleader_edit;
 mod modify;

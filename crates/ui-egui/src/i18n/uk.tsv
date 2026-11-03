@@ -1442,75 +1442,45 @@
 	CADCraft is up to date.	Встановлено найновішу версію CADCraft.
 	Could not check for updates.	Не вдалося перевірити оновлення.
 	Save changes to block "{name}"?	Зберегти зміни в блоці «{name}»?
-	Site Location	Розташування ділянки
-	cmd.site	Розташування ділянки
-	Architecture>Site Location	Архітектура>Розташування ділянки
-	Terrain	Рельєф
-	cmd.terrain	Рельєф
-	Architecture>Terrain	Архітектура>Рельєф
-	Terrain Modifier	Модифікатор рельєфу
-	cmd.terrain.modify	Модифікатор рельєфу
-	Architecture>Terrain Modifier	Архітектура>Модифікатор рельєфу
-	Terrain Elevation	Висота рельєфу
-	cmd.terrain.query	Висота рельєфу
-	Contours	Горизонталі
-	cmd.terrain.contours	Горизонталі
-	Cut and Fill	Виїмка і насип
-	cmd.terrain.volumes	Виїмка і насип
-	Delete Terrain	Видалити рельєф
-	cmd.terrain.delete	Видалити рельєф
-	Plant	Рослина
-	cmd.plant	Рослина
-	Architecture>Plant	Архітектура>Рослина
-	Plant Species	Види рослин
-	cmd.plant.species	Види рослин
-	Light Fixture	Світильник
-	cmd.lightfixture	Світильник
-	Architecture>Light Fixture	Архітектура>Світильник
-	Edit Light Fixture	Змінити світильник
-	cmd.lightfixture.edit	Змінити світильник
-	Architecture>Edit Light Fixture	Архітектура>Змінити світильник
-	Delete Light Fixture	Видалити світильник
-	cmd.lightfixture.delete	Видалити світильник
-	Architecture>Delete Light Fixture	Архітектура>Видалити світильник
-	Light Fixture Types	Типи світильників
-	cmd.lightfixture.types	Типи світильників
-	Architecture>Light Fixture Types	Архітектура>Типи світильників
-	Illuminance	Освітленість
-	cmd.illuminance	Освітленість
-	Architecture>Illuminance	Архітектура>Освітленість
-	Render 3D	Візуалізація 3D
-	cmd.render	Візуалізація 3D
-	Architecture>Render 3D	Архітектура>Візуалізація 3D
-	Sun Study	Дослідження інсоляції
-	cmd.sunstudy	Дослідження інсоляції
-	Architecture>Sun Study	Архітектура>Дослідження інсоляції
-	Path traced	Трасування шляхів
-	Raster	Растр
-	Samples	Семпли
-	{spp} / {total} samples	{spp} / {total} семплів
-	No compute shaders: raster Finalize	Немає обчислювальних шейдерів: растровий фінальний рендер
-	Material	Матеріал
-	cmd.material	Матеріал
-	Architecture>Material	Архітектура>Матеріал
+	Find All	Find All
+	Find what:	Find what:
+	Match case	Match case
+	Replace	Replace
+	Replace All	Replace All
+	Replace with:	Replace with:
+	Replacement text	Replacement text
+	Results	Results
+	Searches the current space.	Searches the current space.
+	Text to find	Text to find
+	Whole words	Whole words
+	Nothing found	Nothing found
 	Cabinet	Шафа
-	cmd.cabinet	Шафа
-	Architecture>Cabinet	Архітектура>Шафа
-	Edit Cabinet	Змінити шафу
-	cmd.cabinet.edit	Змінити шафу
-	Architecture>Edit Cabinet	Архітектура>Змінити шафу
+	Contours	Контури
+	Cut and Fill	Виймання і насипання
 	Delete Cabinet	Видалити шафу
-	cmd.cabinet.delete	Видалити шафу
-	Architecture>Delete Cabinet	Архітектура>Видалити шафу
-	Fixture	Прилад
-	cmd.fixture	Прилад
-	Architecture>Fixture	Архітектура>Прилад
-	Edit Fixture	Змінити прилад
-	cmd.fixture.edit	Змінити прилад
-	Architecture>Edit Fixture	Архітектура>Змінити прилад
-	Delete Fixture	Видалити прилад
-	cmd.fixture.delete	Видалити прилад
-	Architecture>Delete Fixture	Архітектура>Видалити прилад
-	Fixture Types	Типи приладів
-	cmd.fixture.types	Типи приладів
-	Architecture>Fixture Types	Архітектура>Типи приладів
+	Delete Fixture	Видалити світильник
+	Delete Light Fixture	Видалити світильник
+	Delete Terrain	Видалити рельєф
+	Edit Cabinet	Редагувати шафу
+	Edit Fixture	Редагувати світильник
+	Edit Light Fixture	Редагувати світильник
+	Fixture	Світильник
+	Fixture Types	Типи світильників
+	Illuminance	Освітленість
+	Light Fixture	Світильник
+	Light Fixture Types	Типи світильників
+	Material	Матеріал
+	Multiple Insert	Множинна вставка
+	Plant	Рослина
+	Plant Species	Види рослин
+	Render 3D	Візуалізація 3D
+	Site Location	Розташування ділянки
+	Sun Study	Аналіз сонячного освітлення
+	Terrain	Рельєф
+	Terrain Elevation	Висота рельєфу
+	Terrain Modifier	Модифікатор рельєфу
+	cmd.lightfixture.edit	Редагувати світильник
+	cmd.terrain.contours	Контури
+	cmd.plant.species	Види рослин
+	Architecture>Terrain	Архітектура>Рельєф
+	Architecture>Light Fixture	Архітектура>Світильник
