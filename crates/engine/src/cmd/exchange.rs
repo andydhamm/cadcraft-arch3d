@@ -938,6 +938,31 @@ mod tests {
             "scale decides, not the saved fit"
         );
     }
+
+    /// A Model-space preview fits its content onto the paper, so a window opens centred: the
+    /// same 500 × 500 mm line renders pixel-for-pixel where it sits in model space.
+    #[test]
+    fn the_window_opens_centred() {
+        let png_of = |points: [(f64, f64); 2]| {
+            let mut s = Session::new();
+            s.execute("line", &json!({
+                "points": [[points[0].0, points[0].1], [points[1].0, points[1].1]]],
+            }))
+            .unwrap();
+            s.execute("preview", &json!({ "width": 400 }))
+                .unwrap()["data"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        };
+        let a = png_of(((0.0, 0.0), (500.0, 500.0)));
+        let b = png_of(((5000.0, 0.0), (5500.0, 500.0)));
+        assert_eq!(
+            a,
+            b,
+            "a centred Model-space window shows the same content where it is drawn"
+        );
+    }
     #[test]
     fn pdfbook_collects_frames_into_one_pdf_per_row() {
         our_hooks();
