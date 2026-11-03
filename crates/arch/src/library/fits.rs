@@ -12,17 +12,21 @@ pub fn query_for(target: &str) -> Option<Query> {
     match kind {
         "cabinet" => {
             let chip = match sub {
-                Some("pull") => Chip { kind: ChipKind::SymbolType, value: "pull".into() },
-                Some("front") => Chip { kind: ChipKind::Folder, value: "Front styles".into() },
-                Some("carcass") => Chip { kind: ChipKind::Placement, value: "in-cabinet".into() },
+                Some("pull") => Chip { kind: ChipKind::SymbolType, value: "pull".into(), ..Default::default() },
+                Some("front") => Chip { kind: ChipKind::Folder, value: "Front styles".into(), ..Default::default() },
+                Some("carcass") => Chip { kind: ChipKind::Placement, value: "in-cabinet".into(), ..Default::default() },
                 _ => return None,
             };
-            Some(Query { text: String::new(), chips: vec![chip] })
+            Some(Query { text: String::new(), chips: vec![chip], ..Default::default() })
         }
         "wall" | "room" | "roof" => {
             // wall/<id>/<side>, room/<id>/floor|ceiling, roof/<id>
             // All map to Materials category
-            Some(Query { text: String::new(), chips: vec![Chip { kind: ChipKind::Category, value: "Materials".into() }] })
+            Some(Query {
+                text: String::new(),
+                chips: vec![Chip { kind: ChipKind::Category, value: "Materials".into(), ..Default::default() }],
+                ..Default::default()
+            })
         }
         _ => None,
     }

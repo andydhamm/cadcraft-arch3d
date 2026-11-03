@@ -33,7 +33,7 @@ impl ChipKind {
 }
 
 /// A filter chip.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Chip {
     pub kind: ChipKind,
     pub value: String,

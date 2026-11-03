@@ -67,13 +67,13 @@ mod tests {
         assert!(!h.can_forward());
         assert!(h.current().is_none());
 
-        let q1 = Query { text: "a".into(), chips: vec![] };
+        let q1 = Query { text: "a".into(), chips: vec![], ..Default::default() };
         h.push(q1.clone());
         assert_eq!(h.current(), Some(&q1));
         assert!(!h.can_back());
         assert!(!h.can_forward());
 
-        let q2 = Query { text: "b".into(), chips: vec![] };
+        let q2 = Query { text: "b".into(), chips: vec![], ..Default::default() };
         h.push(q2.clone());
         assert_eq!(h.current(), Some(&q2));
         assert!(h.can_back());
@@ -85,7 +85,7 @@ mod tests {
         assert!(!h.can_back());
         assert!(h.can_forward());
 
-        let q3 = Query { text: "c".into(), chips: vec![] };
+        let q3 = Query { text: "c".into(), chips: vec![], ..Default::default() };
         h.push(q3.clone());
         assert_eq!(h.current(), Some(&q3));
         assert!(h.can_back());
