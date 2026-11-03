@@ -1,0 +1,129 @@
+//! Save-time proxies for cabinets and fixtures (phase 13): each plan symbol polyline as an
+//! `LWPOLYLINE` on its casework layer, so a drawing opened elsewhere still shows the casework.
+//! Written only on save, dropped on read while the arch record is present (the record is the
+//! truth) and kept as plain linework when it is not.
+
+use cadcraft_arch::casework::{cabinet_layer, cabinet_symbol, fixture_layer, fixture_symbol};
+use cadcraft_doc::arch::ArchModel;
+use cadcraft_dxf::Tag;
+use cadcraft_geom::Vec2;
+
+/// Marker in the `CADCRAFT` xdata of every casework proxy.
+pub(crate) const CASEWORK_PROXY_MARKER: &str = "CADCRAFT-CASEWORK";
+/// Most proxy polylines written for casework, so a pathological count can't flood a save.
+pub(crate) const MAX_CASEWORK_PROXIES: usize = 20_000;
+
+/// `(entity kind, layer, tags)` for every casework proxy (`LWPOLYLINE`s on the item's layer).
+///
+/// One `LWPOLYLINE` per polyline of each cabinet's and fixture's plan symbol, skipping rings with
+/// fewer than two finite vertices. A ring repeating its first point is written closed (70 = 1)
+/// with the repeated vertex dropped. Output is capped at [`MAX_CASEWORK_PROXIES`].
+pub(crate) fn proxy_casework_entities(m: &ArchModel) -> Vec<(String, String, Vec<Tag>)> {
+    let mut out: Vec<(String, String, Vec<Tag>)> = Vec::new();
+    let cabinets = m.cabinets.iter().map(|c| (cabinet_layer(c.kind), cabinet_symbol(c)));
+    let fixtures = m.fixtures.iter().map(|f| (fixture_layer(f.kind), fixture_symbol(f)));
+    for (layer, symbol) in cabinets.chain(fixtures) {
+        for poly in symbol {
+            if out.len() >= MAX_CASEWORK_PROXIES {
+                return out;
+            }
+            if let Some(tags) = casework_polyline(&poly) {
+                out.push(("LWPOLYLINE".into(), layer.into(), tags));
+            }
+        }
+    }
+    out
+}
+
+/// Tags for one symbol ring; `None` with fewer than two vertices or a non-finite coordinate.
+fn casework_polyline(pts: &[Vec2]) -> Option<Vec<Tag>> {
+    if pts.len() < 2 || pts.iter().any(|p| !p.is_finite()) {
+        return None;
+    }
+    let closed = pts.len() > 2 && pts.first() == pts.last();
+    let keep = if closed { pts.len().saturating_sub(1) } else { pts.len() };
+    let n = i64::try_from(keep).ok()?;
+    let mut tags = vec![Tag::i(90, n), Tag::i(70, i64::from(closed))];
+    for p in pts.iter().take(keep) {
+        tags.push(Tag::f(10, p.x));
+        tags.push(Tag::f(20, p.y));
+    }
+    tags.push(Tag::s(1001, crate::dxf_ext::APP));
+    tags.push(Tag::s(1000, CASEWORK_PROXY_MARKER));
+    Some(tags)
+}
+
+/// True when an entity's `CADCRAFT` xdata marks it as a casework proxy.
+pub(crate) fn is_casework_proxy(tags: &[Tag]) -> bool {
+    crate::dxf_ext::xdata(tags, crate::dxf_ext::APP).iter().any(|t| t.code == 1000 && t.str().trim() == CASEWORK_PROXY_MARKER)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use cadcraft_arch::casework::{cabinet_defaults, fixture_defaults};
+    use cadcraft_doc::Drawing;
+    use cadcraft_doc::arch::{CabinetKind, FixtureKind};
+
+    fn drawing() -> Drawing {
+        let mut d = Drawing::default();
+        d.arch.push_cabinet(cabinet_defaults(CabinetKind::Base));
+        let mut wall = cabinet_defaults(CabinetKind::Wall);
+        wall.position = Vec2::new(3.0, 0.0);
+        d.arch.push_cabinet(wall);
+        d.arch.push_fixture(fixture_defaults(FixtureKind::Sink));
+        d.arch.push_fixture(fixture_defaults(FixtureKind::Range));
+        d
+    }
+
+    #[test]
+    fn casework_proxies_sit_on_their_layers() {
+        let d = drawing();
+        let p = proxy_casework_entities(&d.arch);
+        assert!(!p.is_empty());
+        assert!(p.iter().all(|(k, _, t)| k == "LWPOLYLINE" && is_casework_proxy(t)));
+        let on = |name: &str| p.iter().filter(|(_, l, _)| l == name).count();
+        assert!(on("A-FLOR-CASE") > 0 && on("A-FLOR-CASE-UPPR") > 0 && on("P-FLOR-FIXT") > 0 && on("A-FLOR-APPL") > 0);
+        assert_eq!(p.len(), on("A-FLOR-CASE") + on("A-FLOR-CASE-UPPR") + on("P-FLOR-FIXT") + on("A-FLOR-APPL"), "no proxy on another layer");
+    }
+
+    #[test]
+    fn casework_proxies_are_capped_and_skip_non_finite() {
+        let mut d = Drawing::default();
+        for _ in 0..(MAX_CASEWORK_PROXIES + 10) {
+            d.arch.cabinets.push(cabinet_defaults(CabinetKind::Base));
+        }
+        assert_eq!(proxy_casework_entities(&d.arch).len(), MAX_CASEWORK_PROXIES);
+        let mut bad = Drawing::default();
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.position = Vec2::new(f64::NAN, 0.0);
+        bad.arch.cabinets.push(c);
+        assert!(proxy_casework_entities(&bad.arch).is_empty());
+    }
+
+    #[test]
+    fn casework_proxies_are_dropped_on_read_with_the_record() {
+        let d = drawing();
+        let text = crate::write_dxf(&d);
+        let markers = text.matches(CASEWORK_PROXY_MARKER).count();
+        assert_eq!(markers, proxy_casework_entities(&d.arch).len(), "save writes the proxies");
+        let back = crate::read_dxf(text.as_bytes()).unwrap();
+        assert_eq!(back.arch.cabinets, d.arch.cabinets);
+        assert_eq!(back.arch.fixtures, d.arch.fixtures);
+        assert_eq!(back.model.len(), d.model.len(), "no proxy kept as linework");
+        assert_eq!(crate::write_dxf(&back).matches(CASEWORK_PROXY_MARKER).count(), markers, "no duplicates on re-save");
+    }
+
+    #[test]
+    fn casework_proxies_stay_as_linework_without_the_record() {
+        let d = drawing();
+        let n = proxy_casework_entities(&d.arch).len();
+        let chunks = crate::dxf_arch::arch_chunks(&d.arch).unwrap();
+        let text = crate::write_dxf(&d).replace(&chunks[0], "not json at all");
+        let back = crate::read_dxf(text.as_bytes()).unwrap();
+        assert!(back.arch.is_empty());
+        assert_eq!(back.model.len(), d.model.len() + n, "every proxy survives as plain linework");
+    }
+}
