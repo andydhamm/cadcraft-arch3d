@@ -825,6 +825,91 @@ fn user_guide_documents_phase7_parameters() {
     assert!(GUIDE.contains("\"paper\""), "guide should show viewsheet paper parameter");
 }
 
+/// The guide contains sections for materials, cabinets/fixtures, and large models.
+#[test]
+fn user_guide_has_materials_cabinets_and_large_models() {
+    assert!(GUIDE.contains("## Materials"), "guide should have a Materials section");
+    assert!(GUIDE.contains("## Cabinets and fixtures"), "guide should have a Cabinets and fixtures section");
+    assert!(GUIDE.contains("## Large models"), "guide should have a Large models section");
+    assert!(GUIDE.contains("material"), "guide should mention the material command");
+    assert!(GUIDE.contains("cabinet"), "guide should mention the cabinet command");
+    assert!(GUIDE.contains("fixture"), "guide should mention the fixture command");
+    assert!(GUIDE.contains("arch.sample"), "guide should mention the arch.sample command");
+}
+
+/// The new blocks for materials, cabinets, and large models execute through the engine.
+#[test]
+fn user_guide_new_blocks_execute_through_the_engine() {
+    install_io();
+    let blocks = sh_blocks(GUIDE);
+    let mut found_materials = false;
+    let mut found_cabinets = false;
+    let mut found_large = false;
+
+    for lines in &blocks {
+        let line = lines.join(" ");
+        if line.contains("material") && line.contains("export") {
+            found_materials = true;
+            let cmds = cmd_args(&line);
+            assert!(!cmds.is_empty(), "materials block should contain commands");
+            let mut session = Session::new();
+            session.new_drawing(true);
+            for command in &cmds {
+                let Some((id, json)) = command.split_once(' ') else {
+                    panic!("invalid command format: {command}");
+                };
+                let mut params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+                if let Some(path) = params.get("path").and_then(serde_json::Value::as_str) {
+                    if Path::new(path).is_relative() {
+                        let out_dir = std::env::temp_dir().join(format!("cadcraft-user-guide-materials-{}", std::process::id()));
+                        fs::create_dir_all(&out_dir).unwrap_or_else(|e| panic!("cannot create {}: {e}", out_dir.display()));
+                        params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
+                    }
+                }
+                if let Err(error) = session.execute(id, &params) {
+                    panic!("materials command `{command}` failed: {error:?}");
+                }
+            }
+        }
+        if line.contains("cabinet") && line.contains("fixture") {
+            found_cabinets = true;
+            let cmds = cmd_args(&line);
+            assert!(!cmds.is_empty(), "cabinets block should contain commands");
+            let mut session = Session::new();
+            session.new_drawing(true);
+            for command in &cmds {
+                let Some((id, json)) = command.split_once(' ') else {
+                    panic!("invalid command format: {command}");
+                };
+                let params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+                if let Err(error) = session.execute(id, &params) {
+                    panic!("cabinets command `{command}` failed: {error:?}");
+                }
+            }
+        }
+        if line.contains("arch.sample") && line.contains("build3d") {
+            found_large = true;
+            let cmds = cmd_args(&line);
+            assert!(!cmds.is_empty(), "large models block should contain commands");
+            let mut session = Session::new();
+            session.new_drawing(true);
+            for command in &cmds {
+                let Some((id, json)) = command.split_once(' ') else {
+                    panic!("invalid command format: {command}");
+                };
+                let params: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| panic!("invalid JSON in {command}: {e}"));
+                if let Err(error) = session.execute(id, &params) {
+                    panic!("large models command `{command}` failed: {error:?}");
+                }
+            }
+        }
+    }
+
+    assert!(found_materials, "user guide should contain a materials example block");
+    assert!(found_cabinets, "user guide should contain a cabinets example block");
+    assert!(found_large, "user guide should contain a large models example block");
+}
+
 /// The sh_blocks helper handles edge cases: no blocks, unterminated block, empty block.
 #[test]
 fn user_guide_sh_blocks_edge_cases() {

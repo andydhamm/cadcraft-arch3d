@@ -369,7 +369,75 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --save house-export.dxf
 ```
 
+## Materials
+
+The `material` command assigns finishes to exterior walls, roofs, and room floors. These finishes affect the 3D
+appearance and are exported with embedded textures in GLB files. The path tracer uses each texture's mean colour
+for lighting calculations.
+
+- **Walls**: `siding` or `brick`. Applied to the exterior face of the wall.
+- **Roof**: `shingles` or `wood`. Applied to the roof planes.
+- **Floors**: `wood`. Applied to the room's floor surface.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'door {"wall":"w0","offset":3.0,"width":0.9,"height":2.1,"style":"hinged"}' \
+  --cmd 'window {"wall":"w2","offset":4.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'roofauto {"pitchRise":6,"pitchRun":12,"overhang":0.5,"walls":[{"wall":"w0","directive":"gable"},{"wall":"w2","directive":"gable"}]}' \
+  --cmd 'material {"target":"w0","finish":"siding"}' \
+  --cmd 'material {"target":"r0","finish":"wood"}' \
+  --cmd 'material {"target":"roof-r0","finish":"shingles"}' \
+  --cmd 'export {"path":"materials.glb"}' \
+  --save materials.dxf
+cargo run -q -p cadcraft-cli -- render materials.dxf materials.png --adapter fallback
+```
+
+## Cabinets and fixtures
+
+`cabinet` and `fixture` commands place kitchen and bathroom elements. Cabinets are placed with their back against
+a wall (by offset or point/rotation) and include carcass, doors, and counters. Fixtures include sinks, toilets,
+bathtubs, ranges, refrigerators, and dishwashers.
+
+- **Cabinets**: `base`, `wall`, `tall`. Base cabinets have a counter at 0.914 m.
+- **Fixtures**: `sink`, `lavatory`, `toilet`, `bathtub`, `shower`, `range`, `refrigerator`, `dishwasher`.
+- **Plan layers**: `A-FLOR-CASE` (base cabinets), `A-FLOR-CASE-UPPR` (wall cabinets), `P-FLOR-FIXT` (plumbing fixtures),
+  `A-FLOR-APPL` (appliances).
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'cabinet {"type":"base","wall":"w0","offset":1.0,"width":1.5}' \
+  --cmd 'cabinet {"type":"base","wall":"w0","offset":2.5,"width":1.5}' \
+  --cmd 'cabinet {"type":"wall","wall":"w0","offset":1.0,"width":1.5}' \
+  --cmd 'fixture {"type":"sink","wall":"w0","offset":1.75}' \
+  --cmd 'fixture {"type":"range","wall":"w0","offset":3.25}' \
+  --cmd 'fixture {"type":"refrigerator","wall":"w1","offset":1.0}' \
+  --cmd 'fixture {"type":"dishwasher","wall":"w0","offset":4.25}' \
+  --cmd 'arch.inspect {"cabinets":true,"fixtures":true}' \
+  --save kitchen.dxf
+```
+
+## Large models
+
+`arch.sample {"house": true}` generates a benchmark house with two levels, 300 walls, 150 openings, rooms, and a hip
+roof. `build3d {}` builds the full 3D scene. `build3d {"incremental": true}` rebuilds only changed objects, reporting
+`rebuilt` (count of objects rebuilt), `objects` (total objects), and `rebuildMs` (time taken). This is useful for
+checking performance on large models.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'arch.sample {"house":true}' \
+  --cmd 'build3d {}' \
+  --cmd 'wall.stretch {"wall":"w10","end":"start","point":[5,5]}' \
+  --cmd 'build3d {"incremental":true}' \
+  --save large-model.dxf
+```
+
 ## Out of scope
 
 Not part of arch3d so far: SSAO, TAA, cascaded shadows, switches, outlets, circuits, animated walkthrough paths,
-and gamepad or 3D-mouse input.
+and gamepad or 3D-mouse input. Moldings, material regions, plan check, materials list and costing, and the contextual
+toolbar are also out of scope.
