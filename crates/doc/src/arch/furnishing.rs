@@ -366,7 +366,7 @@ mod tests {
         }
         m.symbols.insert("0123456789abcdef".into(), SymbolMesh { key: "0123456789abcdef".into(), ..Default::default() });
         m.images.insert("material-oak".into(), ImageRgba { width: 1, height: 1, rgba: vec![1, 2, 3, 255] });
-        m.paints.insert("wall/w3/left".into(), super::super::Paint { material: super::super::MaterialRef::parse("siding"), tint: Some([1, 2, 3]) });
+        m.paints.insert("wall/w3/left".into(), super::super::Paint { tint: Some([1, 2, 3]), ..Default::default() });
         m.backdrop = Some(super::super::Backdrop::Gradient { top: [1, 2, 3], bottom: [4, 5, 6] });
         m.defaults.insert("door".into(), serde_json::json!({"width": 0.9}));
         let json = serde_json::to_string(&m).unwrap();
