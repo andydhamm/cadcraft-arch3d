@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 03:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 15 of 23 segments merged · 3 of 13 acceptance checks**
 
@@ -23,16 +23,16 @@ Updated 2026-11-03 03:45 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 3 / 13 | 13.3 h so far · expected done Nov 03 09:14–Nov 04 00:17 UTC |
+| 13 | Polish | building | 3 / 13 | 13.6 h so far · expected done Nov 03 09:29–Nov 04 00:32 UTC |
 
 ## Phase 13 segments
 
-15 merged, 3 merging, 3 queued, 1 replaced, 1 working, 1 escalate, 1 abandoned
+15 merged, 3 merging, 3 queued, 1 replaced, 1 gate, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p13-glb-textures` | GLB embeds the finish textures (PNG) and names finished faces | merging | claude-sonnet-b |
-| `p13-render3d-textures` | render3d samples the finish textures | working | bonsai-b |
+| `p13-render3d-textures` | render3d samples the finish textures | gate | bonsai-b |
 | `p13-arch3d-casework` | Cabinets and fixtures in 3D | escalate |  |
 | `p13-dxf-casework` | DXF: cabinets and fixtures as plan proxies | merging | claude-sonnet-c |
 | `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | merging | mai-flash-esc |
@@ -58,17 +58,17 @@ Updated 2026-11-03 03:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 823 |
-| bonsai-b | bonsai2-27b | agent | 762 |
+| bonsai-a | bonsai2-27b | gate | 823 |
+| bonsai-b | bonsai2-27b | gate | 762 |
 | bonsai-ws2-a | bonsai2-27b | down | 831 |
 | bonsai-ws2-b | bonsai2-27b | down | 817 |
 | claude-sonnet-a | sonnet | down | 72 |
 | claude-sonnet-b | sonnet | down | 73 |
 | claude-sonnet-c | sonnet | down | 20 |
 | claude-sonnet-d | sonnet | down | 12 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 685 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 686 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | down | 52 |
 | mai-flash-esc | mai-code-1.1-flash | down | 11 |
-| tturbo-mac | tturbo-ultraheretic | agent | 582 |
+| tturbo-mac | tturbo-ultraheretic | gate | 582 |
 | tturbo-mac2 | tturbo-ultraheretic | down | 348 |
