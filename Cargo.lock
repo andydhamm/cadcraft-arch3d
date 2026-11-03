@@ -722,6 +722,7 @@ name = "cadcraft-dwg"
 version = "0.17.0"
 dependencies = [
  "acadrust",
+ "log",
 ]
 
 [[package]]

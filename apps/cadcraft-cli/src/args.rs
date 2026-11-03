@@ -82,136 +82,7 @@ pub(crate) enum Command {
     Mcp(McpArgs),
     Perf(PerfArgs),
     Sample(SampleArgs),
-    Render(RenderArgs),
-}
-
-/// Render a drawing's architectural 3D scene to a PNG
-///
-/// Prints `PROJECTED x0,y0,x1,y1` (the scene's screen bounds) on stdout and stderr. Without a GPU
-/// adapter it prints NO_ADAPTER on stderr and exits 3.
-#[derive(Args)]
-pub(crate) struct RenderArgs {
-    #[arg(value_name = "FILE", help = read_help())]
-    pub(crate) file: PathBuf,
-    #[arg(value_name = "OUT.png")]
-    pub(crate) output: PathBuf,
-    /// The camera: `orbit[,azimuth=A][,elevation=E][,distance=D][,fov=F]`
-    #[arg(long, value_name = "SPEC")]
-    pub(crate) camera: Option<String>,
-    /// The image size in pixels (default 2400x1600, each side 1-8192)
-    #[arg(long, value_name = "WxH", value_parser = crate::render::parse_size)]
-    pub(crate) size: Option<(u32, u32)>,
-    /// Face style: shaded, shaded-edges, hidden-line or glass-house
-    #[arg(long, value_name = "STYLE", default_value = "shaded", value_parser = parse_style_arg)]
-    pub(crate) style: cadcraft_render3d::Style,
-    /// Sun for shadows: `date=YYYY-MM-DD,time=solar-noon|HH:MM[,lat=DEG]`; an omitted
-    /// latitude is taken from the drawing's site location
-    #[arg(long, value_name = "SPEC", value_parser = parse_sun_arg)]
-    pub(crate) sun: Option<(Option<f64>, String, String)>,
-    /// Draw a ground plane under the scene (and cast shadows on it)
-    #[arg(long)]
-    pub(crate) ground: bool,
-    /// Finalize Render, optionally `raster` (every light shadowed at high resolution, soft edges,
-    /// supersampled and tone mapped) or `path` (the path tracer); a bare --final is the default mode
-    #[arg(long = "final", value_name = "MODE", num_args = 0..=1, default_missing_value = "", value_parser = parse_final_arg)]
-    pub(crate) final_render: Option<FinalMode>,
-    /// Path tracer: samples per pixel (1-65536, default 256)
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=65536), action = ArgAction::Set)]
-    pub(crate) spp: Option<u32>,
-    /// Path tracer: full bounces before Russian roulette (0-32, default 4)
-    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=32), action = ArgAction::Set)]
-    pub(crate) bounces: Option<u32>,
-    /// Path tracer: the random seed (default 0)
-    #[arg(long, value_name = "N", action = ArgAction::Set)]
-    pub(crate) seed: Option<u32>,
-    /// Path tracer: exposure, `auto` or a positive number in 0 < n <= 1000
-    #[arg(long, value_name = "AUTO|N", value_parser = parse_exposure_arg)]
-    pub(crate) exposure: Option<Option<f64>>,
-    /// Path tracer: keep the noise (no denoiser)
-    #[arg(long, action = ArgAction::SetTrue)]
-    pub(crate) no_denoise: bool,
-    /// Path tracer: use hardware ray queries when the device has them
-    #[arg(long, action = ArgAction::SetTrue)]
-    pub(crate) rt: bool,
-    /// Night: the sun is off (cannot be combined with --sun)
-    #[arg(long)]
-    pub(crate) night: bool,
-    /// Fixture lights that cast shadows, nearest first (0-64)
-    #[arg(long, value_name = "N", default_value_t = 8, value_parser = clap::value_parser!(u32).range(0..=64))]
-    pub(crate) budget: u32,
-    /// GPU adapter: auto or fallback (software)
-    #[arg(long, value_name = "ADAPTER", default_value = "auto", value_parser = parse_adapter_arg)]
-    pub(crate) adapter: cadcraft_render3d::adapter::AdapterChoice,
-}
-
-impl RenderArgs {
-    /// The path tracer's settings from `--spp`, `--bounces`, `--seed`, `--no-denoise` and `--rt`.
-    pub(crate) fn path_params(&self) -> PathParams {
-        let d = PathParams::default();
-        PathParams {
-            spp: self.spp.unwrap_or(d.spp),
-            bounces: self.bounces.unwrap_or(d.bounces),
-            seed: self.seed.unwrap_or(d.seed),
-            exposure: self.exposure.unwrap_or(d.exposure),
-            denoise: !self.no_denoise,
-            rt: self.rt,
-            spp_given: self.spp.is_some(),
-            ..d
-        }
-    }
-}
-
-/// `--final`'s mode word; empty (a bare `--final`) is the default mode.
-fn parse_final_arg(s: &str) -> Result<FinalMode, String> {
-    match s {
-        "" => Ok(FinalMode::default()),
-        "raster" => Ok(FinalMode::Raster),
-        "path" => Ok(FinalMode::Path),
-        _ => Err(format!("`{s}` is not raster or path")),
-    }
-}
-
-/// `render`'s `--final` takes its mode word only when the next argument is `raster` or `path`;
-/// any other next argument (a file, a flag) is left alone, so a bare `--final` becomes `--final=`.
-fn bare_final(args: &[OsString]) -> Vec<OsString> {
-    let mut out = Vec::with_capacity(args.len());
-    if args.first().is_none_or(|a| a != "render") {
-        return args.to_vec();
-    }
-    let mut literal = false;
-    for (i, a) in args.iter().enumerate() {
-        literal |= a == "--";
-        let word = args.get(i + 1).is_some_and(|n| n == "raster" || n == "path");
-        if !literal && a == "--final" && !word {
-            out.push(OsString::from("--final="));
-        } else {
-            out.push(a.clone());
-        }
-    }
-    out
-}
-
-fn parse_style_arg(s: &str) -> Result<cadcraft_render3d::Style, String> {
-    crate::render::parse_style(s).ok_or_else(|| format!("`{s}` is not one of shaded, shaded-edges, hidden-line, glass-house"))
-}
-
-fn parse_sun_arg(s: &str) -> Result<(Option<f64>, String, String), String> {
-    crate::render::parse_sun(s).ok_or_else(|| format!("`{s}` is not date=YYYY-MM-DD,time=solar-noon|HH:MM[,lat=DEG]"))
-}
-
-fn parse_adapter_arg(s: &str) -> Result<cadcraft_render3d::adapter::AdapterChoice, String> {
-    crate::render::parse_adapter(s).ok_or_else(|| format!("`{s}` is not auto or fallback"))
-}
-
-fn parse_exposure_arg(s: &str) -> Result<Option<f64>, String> {
-    if s == "auto" {
-        return Ok(None);
-    }
-    let n = s.parse::<f64>().map_err(|_| format!("`{s}` is not auto or a positive number"))?;
-    if !n.is_finite() || n <= 0.0 || n > 1000.0 {
-        return Err(format!("`{s}` is not auto or a positive number"));
-    }
-    Ok(Some(n))
+    Roundtrip(RoundtripArgs),
 }
 
 /// Print a drawing's summary as JSON
@@ -442,6 +313,40 @@ fn perf_target(p: PathBuf) -> PerfTarget {
     }
 }
 
+/// Open each DXF/DWG, save it as DXF and DWG, reopen and compare; writes report.md and report.json
+///
+/// FOLDER defaults to $CADCRAFT_CORPUS_DIR. With CADCRAFT_CORPUS_STRICT=1 it fails when a file
+/// doesn't open, save or reopen, or loses records on save.
+#[derive(Args)]
+pub(crate) struct RoundtripArgs {
+    /// A drawing, or a folder of them
+    #[arg(value_name = "FILE|FOLDER")]
+    pub(crate) path: Option<PathBuf>,
+    /// Where the report goes (default: `report` beside the files)
+    #[arg(long, value_name = "DIR")]
+    pub(crate) out: Option<PathBuf>,
+    /// Keep the saved files, in `saved` under the report folder
+    #[arg(long)]
+    pub(crate) keep_saved: bool,
+    /// Save only in each file's own format
+    #[arg(long)]
+    pub(crate) same_format: bool,
+    /// Don't count what each file holds (faster; no "read lost" column)
+    #[arg(long)]
+    pub(crate) no_census: bool,
+    /// How far numbers may move and still count as equal
+    #[arg(long, value_name = "T", default_value_t = cadcraft_io::roundtrip::Options::default().abs_tol, value_parser = tolerance)]
+    pub(crate) tolerance: f64,
+}
+
+/// `--tolerance`: a finite number, 0 or more.
+fn tolerance(v: &str) -> Result<f64, ValueError> {
+    match v.parse::<f64>() {
+        Ok(t) if t.is_finite() && t >= 0.0 => Ok(t),
+        _ => Err(ValueError::Tolerance(v.to_string())),
+    }
+}
+
 /// Write a built-in sample drawing
 #[derive(Args)]
 pub(crate) struct SampleArgs {
@@ -494,6 +399,8 @@ pub(crate) enum ValueError {
     CmdId,
     #[error(transparent)]
     CmdJson(#[from] serde_json::Error),
+    #[error("expected a number of 0 or more, got `{0}`")]
+    Tolerance(String),
 }
 
 /// Why `parse` refuses flags clap accepted: clap prints it as a usage error (exit 2).

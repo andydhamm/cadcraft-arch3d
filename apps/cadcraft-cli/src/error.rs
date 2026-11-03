@@ -1,5 +1,6 @@
 use crate::output::OutputError;
 use crate::perf::PerfError;
+use crate::roundtrip::RoundtripError;
 use crate::run::RunError;
 
 /// Why a subcommand failed: printed as `error: {e}`, exit 1.
@@ -20,7 +21,7 @@ pub(crate) enum CliError {
     #[error(transparent)]
     Perf(#[from] PerfError),
     #[error(transparent)]
-    Render(#[from] crate::render::RenderError),
+    Roundtrip(#[from] RoundtripError),
     /// The engine and io crates take file names as text.
     #[error("{}: the file name is not valid Unicode", .0.display())]
     NotUnicode(std::path::PathBuf),
