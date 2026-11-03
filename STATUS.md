@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 13 of 13: Polish — 22 of 24 segments merged · 9 of 13 acceptance checks**
+**Phase 13 of 13: Polish — 23 of 24 segments merged · 10 of 13 acceptance checks**
 
-6,886 workspace tests passing at the last merge · 706 segments merged in all · 0 of 14 seats working · PAUSED
+6,888 workspace tests passing at the last merge · 707 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -23,21 +23,21 @@ Updated 2026-11-03 14:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 9 / 13 | 23.6 h so far · expected done Nov 03 16:44–Nov 04 18:12 UTC |
+| 13 | Polish | building | 10 / 13 | 23.8 h so far · expected done Nov 03 15:37–Nov 04 16:19 UTC |
 
 ## Phase 13 segments
 
-22 merged, 1 replaced, 1 escalate, 1 abandoned, 1 merging
+23 merged, 1 replaced, 1 abandoned, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-mcp-examples` | MCP examples for agents | escalate |  |
 | `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | merging | mai-flash-esc |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 14:14 | `p13-mcp-examples` | merged | 6,888 pass | darwin-ws3 |
 | Nov 03 13:50 | `upstream-sync-6c4984f5a` | refused | 6,930 pass | bonsai-ws2-b |
 | Nov 03 13:22 | `upstream-sync-6c4984f5a` | refused | 6,930 pass | bonsai-ws2-a |
 | Nov 03 12:27 | `harden-p13-io-casework` | merged | 6,886 pass | tturbo-mac |
@@ -49,23 +49,22 @@ Updated 2026-11-03 14:00 UTC. This page and the card in the README are regenerat
 | Nov 03 07:08 | `upstream-sync-7bc76f94c` | merged | 6,863 pass | mai-flash-esc |
 | Nov 03 06:05 | `p13-render3d-textures` | merged | 6,794 pass | claude-sonnet-d |
 | Nov 03 05:33 | `p13-glb-textures` | merged | 6,788 pass | claude-sonnet-b |
-| Nov 03 05:09 | `p13-dxf-casework` | merged | 6,779 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 845 |
-| bonsai-b | bonsai2-27b | agent | 783 |
+| bonsai-b | bonsai2-27b | idle | 784 |
 | bonsai-ws2-a | bonsai2-27b | merging | 854 |
 | bonsai-ws2-b | bonsai2-27b | idle | 829 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 20 |
 | claude-sonnet-d | sonnet | idle | 13 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 706 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 706 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 17 |
-| tturbo-mac | tturbo-ultraheretic | agent | 592 |
+| tturbo-mac | tturbo-ultraheretic | gate | 593 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
