@@ -3132,3 +3132,14 @@ fn solid_hatch_keeps_angle_scale_and_double_flag() {
     assert!(f("41").is_some_and(|s| (s - 2.0).abs() < 1e-12), "{h:?}");
     assert_eq!(group(h, "77"), Some("0"), "{h:?}");
 }
+
+#[test]
+fn reading_a_drawing_with_arch_objects_reports_metres() {
+    let mut d = Drawing::new_metric();
+    d.header.set_i64("INSUNITS", 4);
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    assert_eq!(d.header.i64("INSUNITS", 0), 4);
+    let back = roundtrip(&d);
+    assert_eq!(back.arch.walls.len(), 1);
+    assert_eq!(back.header.i64("INSUNITS", 0), 6);
+}

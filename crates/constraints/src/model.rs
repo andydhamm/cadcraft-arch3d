@@ -825,6 +825,21 @@ mod budget_tests {
         assert_eq!(again.rigid[&bar2].len(), 4);
     }
 
+    /// A second model receives no sampled block points after the first model spends the shared member budget.
+    #[test]
+    fn rigid_sampling_budget_is_shared_between_models() {
+        let mut d = Drawing::default();
+        add_block(&mut d, "BAR", 3);
+        add_block(&mut d, "BAZ", 3);
+        let (bar, baz) = (add_insert(&mut d, "BAR"), add_insert(&mut d, "BAZ"));
+        let mut prep = Prep::new(2);
+        let first = Model::build_with(&d, &[bar], &mut prep);
+        assert_eq!(first.rigid[&bar].len(), 4);
+        assert_eq!(prep.members_left, 0);
+        let next = Model::build_with(&d, &[baz], &mut prep);
+        assert!(next.rigid[&baz].is_empty());
+    }
+
     /// Block names resolve ignoring ASCII case, as `Drawing::block` does, through one index.
     #[test]
     fn block_names_resolve_ignoring_case() {
