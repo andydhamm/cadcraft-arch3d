@@ -9,7 +9,7 @@ use cadcraft_doc::arch::ArchId;
 pub(crate) fn emit(ctx: &mut Ctx<'_>) {
     // Cabinets: kind "cabinet"
     for id in ctx.pieces.ids("cabinet") {
-        let meshes = ctx.pieces.get("cabinet", id);
+        let meshes: Vec<&cadcraft_arch3d::Mesh> = ctx.pieces.get("cabinet", id).to_vec();
         if meshes.is_empty() {
             continue;
         }
@@ -37,12 +37,12 @@ pub(crate) fn emit(ctx: &mut Ctx<'_>) {
             P::Str(obj_type.to_string()),
         ];
 
-        ctx.element("IfcFurniture", &key, &name, slot, meshes, tail);
+        ctx.element("IfcFurniture", &key, &name, slot, &meshes, tail);
     }
 
     // Fixtures: kind "fixture"
     for id in ctx.pieces.ids("fixture") {
-        let meshes = ctx.pieces.get("fixture", id);
+        let meshes: Vec<&cadcraft_arch3d::Mesh> = ctx.pieces.get("fixture", id).to_vec();
         if meshes.is_empty() {
             continue;
         }
@@ -72,6 +72,6 @@ pub(crate) fn emit(ctx: &mut Ctx<'_>) {
             P::Enum(predef_type),
         ];
 
-        ctx.element(entity, &key, &name, slot, meshes, tail);
+        ctx.element(entity, &key, &name, slot, &meshes, tail);
     }
 }
