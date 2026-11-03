@@ -417,7 +417,7 @@ pub fn roof_meshes(roof: &Roof, eave_z: f64) -> Vec<Mesh> {
         let ez = if plane.eave_z.is_finite() { plane.eave_z } else { eave_z };
 
         if let Some(m) = roof_plane_mesh(plane, ez, "roof", roof.id) {
-            meshes.push(m);
+            meshes.push(crate::finish::cover_roof(m, roof.covering));
         }
 
         if roof.fascia {

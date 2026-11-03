@@ -135,6 +135,8 @@ fn label_and_handle(id: ArchId, part: &str) -> (String, String) {
         "railing" => railing_label(id),
         "plant" => cadcraft_doc::arch::plant_label(id),
         "light" => cadcraft_doc::arch::light_label(id),
+        "cabinet" | "counter" => cadcraft_doc::arch::cabinet_label(id),
+        "fixture" => cadcraft_doc::arch::fixture_label(id),
         _ => wall_label(id),
     };
     (label, handle_json(part_handle(id, part)))
@@ -186,6 +188,19 @@ mod tests {
 
     fn front() -> Value {
         json!({ "kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": 45 })
+    }
+
+    #[test]
+    fn pick3d_answers_a_cabinet_label() {
+        use cadcraft_doc::arch::{cabinet_handle, fixture_handle, handle_json};
+        for part in ["cabinet", "counter"] {
+            let (label, handle) = label_and_handle(ArchId(2), part);
+            assert_eq!(label, "cb2");
+            assert_eq!(handle, handle_json(cabinet_handle(ArchId(2))));
+        }
+        let (label, handle) = label_and_handle(ArchId(1), "fixture");
+        assert_eq!(label, "fx1");
+        assert_eq!(handle, handle_json(fixture_handle(ArchId(1))));
     }
 
     #[test]

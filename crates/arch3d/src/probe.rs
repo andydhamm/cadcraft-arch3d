@@ -38,14 +38,15 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("light-") {
         return "light";
     }
-    if m.contains("cabinet") {
-        return "cabinet";
+    // Phase 13: finished faces belong to their wall, roof or room.
+    if m.starts_with("wall-") {
+        return "wall";
     }
-    if m.contains("counter") {
-        return "counter";
+    if m.starts_with("roof-") {
+        return "roof";
     }
-    if m.contains("fixture") {
-        return "fixture";
+    if m.starts_with("floor-") {
+        return "floor";
     }
     if m.contains("glass") {
         return "glass";
@@ -182,10 +183,6 @@ pub fn mesh_label(mesh: &Mesh) -> String {
     // Site meshes first: a plant, the terrain solid, a path (its modifier) are named as the commands name them.
     let label = if m.starts_with("light-") {
         cadcraft_doc::arch::light_label(mesh.object)
-    } else if m.starts_with("cabinet-") || m == "counter" {
-        cadcraft_doc::arch::cabinet_label(mesh.object)
-    } else if m.starts_with("fixture-") {
-        cadcraft_doc::arch::fixture_label(mesh.object)
     } else if m.starts_with("plant-") {
         cadcraft_doc::arch::plant_label(mesh.object)
     } else if m == "terrain" {
@@ -194,6 +191,8 @@ pub fn mesh_label(mesh: &Mesh) -> String {
         cadcraft_doc::arch::terrain_label(Some(mesh.object.0))
     } else if m.contains("floor") || m.contains("ceiling") {
         cadcraft_doc::arch::room_label(mesh.object)
+    } else if m.starts_with("roof-") {
+        cadcraft_doc::arch::roof_label(mesh.object)
     } else if m.contains("door")
         || m.contains("window")
         || m.contains("glass")

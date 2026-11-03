@@ -11,6 +11,7 @@
 pub mod camera;
 pub mod casework;
 pub mod edges;
+pub mod finish;
 pub mod fixture;
 pub mod floors;
 pub mod hlr;
@@ -27,6 +28,8 @@ pub mod roof;
 pub mod section;
 pub mod site;
 pub mod stairs;
+pub mod texture;
+pub mod uv;
 pub mod views;
 pub mod walls;
 

@@ -18,6 +18,9 @@ use cadcraft_arch3d::light::{LightKind, SceneLight};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
+/// The wgpu texture type (aliased so the name does not collide with arch3d's `Texture` struct).
+type GpuTexture = wgpu::Texture;
+
 /// WGSL of the depth-only pass (the same as the sun's).
 const DEPTH_SHADER: &str = "
 struct Light { vp: mat4x4<f32> };
@@ -95,7 +98,7 @@ impl ShadowAtlas {
     }
 
     #[cfg(test)]
-    pub(crate) fn texture(&self) -> &wgpu::Texture {
+    pub(crate) fn texture(&self) -> &GpuTexture {
         &self.texture
     }
 
