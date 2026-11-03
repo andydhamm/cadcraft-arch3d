@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 02:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 15 of 23 segments merged · 3 of 13 acceptance checks**
 
@@ -23,19 +23,19 @@ Updated 2026-11-03 02:15 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 3 / 13 | 11.8 h so far · expected done Nov 03 07:39–Nov 03 22:28 UTC |
+| 13 | Polish | building | 3 / 13 | 12.1 h so far · expected done Nov 03 07:59–Nov 03 23:02 UTC |
 
 ## Phase 13 segments
 
-15 merged, 3 queued, 2 merging, 1 replaced, 1 gate, 1 escalate, 1 abandoned, 1 working
+15 merged, 3 queued, 2 merging, 1 replaced, 1 working, 1 escalate, 1 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p13-glb-textures` | GLB embeds the finish textures (PNG) and names finished faces | merging | claude-sonnet-b |
-| `p13-render3d-textures` | render3d samples the finish textures | gate | bonsai-ws2-b |
+| `p13-render3d-textures` | render3d samples the finish textures | working | bonsai-ws2-b |
 | `p13-arch3d-casework` | Cabinets and fixtures in 3D | escalate |  |
 | `p13-dxf-casework` | DXF: cabinets and fixtures as plan proxies | merging | claude-sonnet-c |
-| `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | working | mai-flash-esc |
+| `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | gate | mai-flash-esc |
 
 ## Recent merges
 
@@ -59,16 +59,16 @@ Updated 2026-11-03 02:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 823 |
-| bonsai-b | bonsai2-27b | agent | 761 |
-| bonsai-ws2-a | bonsai2-27b | agent | 829 |
-| bonsai-ws2-b | bonsai2-27b | gate | 815 |
+| bonsai-b | bonsai2-27b | gate | 761 |
+| bonsai-ws2-a | bonsai2-27b | gate | 829 |
+| bonsai-ws2-b | bonsai2-27b | agent | 816 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | merging | 73 |
 | claude-sonnet-c | sonnet | merging | 20 |
 | claude-sonnet-d | sonnet | idle | 12 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 683 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 684 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 10 |
-| tturbo-mac | tturbo-ultraheretic | agent | 581 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 10 |
+| tturbo-mac | tturbo-ultraheretic | gate | 581 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
