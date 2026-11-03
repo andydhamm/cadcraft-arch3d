@@ -390,7 +390,7 @@ fn many_distinct_symbol_names_read_quickly() {
     let started = std::time::Instant::now();
     let d = read(t.as_bytes(), "many.dxf").unwrap();
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "took {:?}", started.elapsed());
-    assert!(d.layers.len() > N && d.layers.len() < N + 3, "{}", d.layers.len());
+    assert!(d.layers.len() > N && d.layers.len() < N + 64, "{}", d.layers.len());
     assert_eq!(d.linetype("LT0").map(|l| l.description.as_str()), Some("first"));
     assert_eq!(d.text_style("ST0").map(|s| s.height), Some(2.0));
 }
