@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 24 of 25 segments merged · 13 of 13 acceptance checks**
 
-6,944 workspace tests passing at the last merge · 709 segments merged in all · 0 of 14 seats working
+6,947 workspace tests passing at the last merge · 710 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,20 +23,21 @@ Updated 2026-11-03 17:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 13 / 13 | 26.6 h so far · expected done Nov 03 18:12–Nov 04 15:48 UTC |
+| 13 | Polish | building | 13 / 13 | 26.8 h so far · expected done Nov 03 18:37–Nov 04 19:19 UTC |
 
 ## Phase 13 segments
 
-24 merged, 1 replaced, 1 abandoned, 1 gate
+24 merged, 1 replaced, 1 abandoned, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-b639b18f6` | merge upstream upstream/main up to b639b18f6 (33 commits) | gate | claude-sonnet-c |
+| `upstream-sync-b639b18f6` | merge upstream upstream/main up to b639b18f6 (33 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 17:04 | `harden-p13-mcp-examples` | merged | 6,947 pass | tturbo-mac |
 | Nov 03 15:38 | `harden-p13-glb-textures` | merged | 6,944 pass | tturbo-mac |
 | Nov 03 15:25 | `upstream-sync-6c4984f5a` | merged | 6,934 pass | bonsai-ws2-a |
 | Nov 03 15:02 | `upstream-sync-6c4984f5a` | refused | 6,935 pass | mai-flash-esc |
@@ -48,7 +49,6 @@ Updated 2026-11-03 17:00 UTC. This page and the card in the README are regenerat
 | Nov 03 11:01 | `upstream-sync-6c4984f5a` | refused | 6,922 pass | bonsai-b |
 | Nov 03 09:15 | `p13-io-casework` | merged | 6,878 pass | darwin-ws3 |
 | Nov 03 08:45 | `upstream-sync-6c4984f5a` | refused | 6,917 pass | bonsai-b |
-| Nov 03 07:29 | `harden-p13-pane-incremental` | merged | 6,873 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -60,11 +60,11 @@ Updated 2026-11-03 17:00 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-b | bonsai2-27b | idle | 829 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
-| claude-sonnet-c | sonnet | gate | 23 |
+| claude-sonnet-c | sonnet | merging | 24 |
 | claude-sonnet-d | sonnet | idle | 13 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 713 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 716 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 17 |
-| tturbo-mac | tturbo-ultraheretic | merging | 597 |
+| tturbo-mac | tturbo-ultraheretic | agent | 597 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
