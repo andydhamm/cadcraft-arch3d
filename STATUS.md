@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 14:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 23 of 24 segments merged · 10 of 13 acceptance checks**
 
-6,888 workspace tests passing at the last merge · 707 segments merged in all · 0 of 14 seats working · PAUSED
+6,888 workspace tests passing at the last merge · 707 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,7 +23,7 @@ Updated 2026-11-03 14:15 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 10 / 13 | 23.8 h so far · expected done Nov 03 15:37–Nov 04 16:19 UTC |
+| 13 | Polish | building | 10 / 13 | 24.1 h so far · expected done Nov 03 15:52–Nov 04 16:34 UTC |
 
 ## Phase 13 segments
 
@@ -66,5 +66,5 @@ Updated 2026-11-03 14:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 17 |
-| tturbo-mac | tturbo-ultraheretic | gate | 593 |
+| tturbo-mac | tturbo-ultraheretic | agent | 593 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
