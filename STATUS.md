@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 13 of 13: Polish — 10 of 23 segments merged · 1 of 13 acceptance checks**
+**Phase 13 of 13: Polish — 11 of 23 segments merged · 2 of 13 acceptance checks**
 
-6,732 workspace tests passing at the last merge · 690 segments merged in all · 0 of 14 seats working
+6,741 workspace tests passing at the last merge · 691 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,11 +23,11 @@ Updated 2026-11-03 00:45 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 1 / 13 | 10.3 h so far · expected done Nov 03 12:40–Nov 04 11:22 UTC |
+| 13 | Polish | building | 2 / 13 | 10.6 h so far · expected done Nov 03 11:10–Nov 04 07:38 UTC |
 
 ## Phase 13 segments
 
-10 merged, 6 merging, 6 queued, 1 replaced, 1 abandoned, 1 working
+11 merged, 6 queued, 5 merging, 1 replaced, 1 abandoned, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -35,14 +35,14 @@ Updated 2026-11-03 00:45 UTC. This page and the card in the README are regenerat
 | `p13-pane-incremental` | The 3D pane rebuilds incrementally | merging | claude-sonnet-a |
 | `p13-texture-gen` | Procedural textures and face-aligned UVs | merging | claude-sonnet-b |
 | `p13-arch3d-casework` | Cabinets and fixtures in 3D | merging | mai-flash-esc |
-| `p13-cmd-casework` | cabinet and fixture commands, inspect | merging | claude-sonnet-d |
 | `p13-dxf-casework` | DXF: cabinets and fixtures as plan proxies | merging | claude-sonnet-c |
-| `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | working | bonsai-ws2-b |
+| `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | escalate |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 00:49 | `p13-cmd-casework` | merged | 6,741 pass | claude-sonnet-d |
 | Nov 03 00:22 | `p13-arch-casework-symbols` | merged | 6,732 pass | claude-sonnet-c |
 | Nov 02 23:50 | `upstream-sync-dae4b7b2f` | merged | 6,726 pass | mai-flash |
 | Nov 02 23:22 | `harden-p12-ifc-openings` | merged | 6,726 pass | tturbo-mac |
@@ -54,20 +54,19 @@ Updated 2026-11-03 00:45 UTC. This page and the card in the README are regenerat
 | Nov 02 19:54 | `p13-cmd-material` | merged | 6,687 pass | claude-sonnet-d |
 | Nov 02 19:03 | `p13-inspect-finishes` | refused | 6,683 pass | claude-sonnet-b |
 | Nov 02 17:51 | `p13-doc-casework` | refused | 6,689 pass | bonsai-a |
-| Nov 02 16:23 | `p13-doc-casework` | refused | 0 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 823 |
-| bonsai-b | bonsai2-27b | merging | 760 |
+| bonsai-b | bonsai2-27b | idle | 760 |
 | bonsai-ws2-a | bonsai2-27b | merging | 829 |
-| bonsai-ws2-b | bonsai2-27b | agent | 812 |
+| bonsai-ws2-b | bonsai2-27b | idle | 814 |
 | claude-sonnet-a | sonnet | merging | 72 |
 | claude-sonnet-b | sonnet | merging | 71 |
 | claude-sonnet-c | sonnet | merging | 20 |
-| claude-sonnet-d | sonnet | merging | 12 |
+| claude-sonnet-d | sonnet | idle | 12 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 681 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
