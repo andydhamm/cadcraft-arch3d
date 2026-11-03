@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 20 of 24 segments merged · 9 of 13 acceptance checks**
 
-6,863 workspace tests passing at the last merge · 702 segments merged in all · 0 of 14 seats working
+6,873 workspace tests passing at the last merge · 703 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,21 +23,22 @@ Updated 2026-11-03 07:15 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 9 / 13 | 16.8 h so far · expected done Nov 03 09:30–Nov 03 20:38 UTC |
+| 13 | Polish | building | 9 / 13 | 17.1 h so far · expected done Nov 03 09:45–Nov 03 20:53 UTC |
 
 ## Phase 13 segments
 
-20 merged, 2 working, 2 queued, 1 replaced, 1 abandoned
+20 merged, 2 gate, 2 queued, 1 replaced, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-io-casework` | GLB, OBJ and IFC export cabinets and fixtures | working | bonsai-a |
-| `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | working | bonsai-b |
+| `p13-io-casework` | GLB, OBJ and IFC export cabinets and fixtures | gate | bonsai-a |
+| `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | gate | bonsai-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 07:29 | `harden-p13-pane-incremental` | merged | 6,873 pass | tturbo-mac |
 | Nov 03 07:08 | `upstream-sync-7bc76f94c` | merged | 6,863 pass | mai-flash-esc |
 | Nov 03 06:05 | `p13-render3d-textures` | merged | 6,794 pass | claude-sonnet-d |
 | Nov 03 05:33 | `p13-glb-textures` | merged | 6,788 pass | claude-sonnet-b |
@@ -49,23 +50,22 @@ Updated 2026-11-03 07:15 UTC. This page and the card in the README are regenerat
 | Nov 03 01:20 | `p13-pane-incremental` | merged | 6,751 pass | claude-sonnet-a |
 | Nov 03 01:07 | `p13-texture-gen` | merged | 6,749 pass | claude-sonnet-b |
 | Nov 03 00:49 | `p13-cmd-casework` | merged | 6,741 pass | claude-sonnet-d |
-| Nov 03 00:22 | `p13-arch-casework-symbols` | merged | 6,732 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 829 |
-| bonsai-b | bonsai2-27b | agent | 768 |
-| bonsai-ws2-a | bonsai2-27b | agent | 835 |
+| bonsai-a | bonsai2-27b | gate | 829 |
+| bonsai-b | bonsai2-27b | gate | 769 |
+| bonsai-ws2-a | bonsai2-27b | gate | 836 |
 | bonsai-ws2-b | bonsai2-27b | idle | 822 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 20 |
 | claude-sonnet-d | sonnet | idle | 13 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 689 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 690 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 11 |
-| tturbo-mac | tturbo-ultraheretic | merging | 584 |
+| tturbo-mac | tturbo-ultraheretic | agent | 584 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
