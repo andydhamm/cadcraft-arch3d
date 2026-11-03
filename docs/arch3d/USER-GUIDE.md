@@ -437,6 +437,10 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --save large-model.dxf
 ```
 
+## MCP examples for agents
+
+The `docs/arch3d/mcp-examples/` directory contains JSONL sessions that demonstrate how to use the MCP server to build houses, detect plans, and export models. Each file is a sequence of JSON-RPC requests that can be replayed with `cadcraft-cli mcp < FILE.jsonl`. See the README in that directory for details.
+
 ## Out of scope
 
 Not part of arch3d so far: SSAO, TAA, cascaded shadows, switches, outlets, circuits, animated walkthrough paths,
