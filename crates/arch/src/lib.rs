@@ -25,6 +25,7 @@ pub mod graph;
 pub mod ies;
 pub mod join;
 pub mod label;
+pub mod library;
 pub mod light;
 pub mod light_symbol;
 pub mod opening;
