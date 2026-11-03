@@ -7,6 +7,7 @@ Prints `sample set ok: N items, M MB` or every problem found, and exits non-zero
 import argparse
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -17,11 +18,16 @@ from sh3d import GLB_MAGIC, JPEG_MAGIC, PNG_MAGIC  # noqa: E402
 
 CATEGORIES = ['Furniture', 'Appliances and plumbing fixtures', 'Cabinet parts', 'Lighting and electrical', 'Materials',
               'Doors and windows', 'Plants', 'Backdrops']           # and User, empty in the sample set
+# The brief's existing door and window catalogue fills Doors and windows; a door or window as a mesh symbol would be hung on
+# a wall face instead of in an opening (review 11-03), so the sample set has none.
+FROM_THE_CATALOGUES = {'Doors and windows'}
 PLACEMENTS = {'floor', 'wall', 'ceiling', 'counter', 'in-cabinet'}
 LICENCES = {'CC0-1.0', 'CC-BY-3.0', 'CC-BY-3.0-US', 'CC-BY-4.0'}
 IMAGE_ONLY = {'backdrop', 'material'}                                # an image, not a placed symbol
 MAX_FILE, MAX_TOTAL = 1_500_000, 15_000_000
-FIELDS = ('id', 'name', 'category', 'symbolType', 'placement', 'size', 'keywords', 'source', 'licence', 'author', 'file')
+FIELDS = ('id', 'name', 'category', 'symbolType', 'placement', 'size', 'keywords', 'source', 'licence', 'author',
+          'attribution', 'file')
+FIT = 1e-4          # metres: every symbol is bottom-centred at its catalog size (tools/library/sh3d.py fit_primitives)
 
 
 def glb_problems(data):
@@ -48,21 +54,36 @@ def glb_problems(data):
     return out
 
 
-def glb_extents(data):
-    """The mesh bounds' extents (x, y, z) of a GLB, from its POSITION min/max."""
+def glb_bounds(data):
+    """(lo, hi) of a GLB's POSITION accessors, glTF axes (y up)."""
     n = struct.unpack('<I', data[12:16])[0]
     doc = json.loads(data[20:20 + n])
     acc = [doc['accessors'][p['attributes']['POSITION']] for m in doc['meshes'] for p in m['primitives']]
-    return [max(a['max'][k] for a in acc) - min(a['min'][k] for a in acc) for k in range(3)]
+    return ([min(a['min'][k] for a in acc) for k in range(3)], [max(a['max'][k] for a in acc) for k in range(3)])
 
 
-def proportion_problem(size, ext, tolerance=0.2):
-    """The reader scales a symbol to its nominal size; a size [w, d, h] (Z up) whose proportions are not the mesh's
-    (glTF x, z, y) would stretch it. None when every axis scales alike within `tolerance`."""
-    scales = [e / v for e, v in zip((ext[0], ext[2], ext[1]), size) if v > 1e-4 and e > 1e-6]
-    if len(scales) == 3 and min(scales) < (1 - tolerance) * max(scales):
-        mesh = ' x '.join(f'{e:.3g}' for e in (ext[0], ext[2], ext[1]))
-        return f'size {size} is not in the mesh\'s proportions ({mesh}, width x depth x height)'
+def fit_problem(size, data):
+    """Why a symbol is not bottom-centred at its catalog size [w, d, h] (glTF x and z centred, y from 0), or None."""
+    lo, hi = glb_bounds(data)
+    w, d, h = size
+    want = [-w / 2, 0.0, -d / 2, w / 2, h, d / 2]
+    if any(abs(g - e) > FIT for g, e in zip(lo + hi, want)):
+        return f'mesh bounds {[round(v, 4) for v in lo + hi]} are not bottom-centred at its size {size}'
+    return None
+
+
+def light_problem(item):
+    """Why a light item's light source is missing or outside its box, or None."""
+    lt = item.get('light')
+    if not isinstance(lt, dict):
+        return 'a light without its light source'
+    w, d, h = item['size']
+    x, y, z = lt.get('position') or (None, None, None)
+    if None in (x, y, z) or abs(x) > w / 2 + 1e-3 or abs(y) > d / 2 + 1e-3 or not -1e-3 <= z <= h + 1e-3:
+        return f'light position {lt.get("position")} outside its {item["size"]} box'
+    if not isinstance(lt.get('diameter'), (int, float)) or lt['diameter'] < 0 or \
+            not re.fullmatch(r'#[0-9a-fA-F]{6}', str(lt.get('colour', ''))):
+        return f'light diameter {lt.get("diameter")!r} or colour {lt.get("colour")!r}'
     return None
 
 
@@ -110,8 +131,10 @@ def problems(sample_dir, attribution='ATTRIBUTION.md'):
             out.append(f'{tag}: category {i["category"]!r}')
         if i['licence'] not in LICENCES:
             out.append(f'{tag}: licence {i["licence"]!r}')
-        if not str(i['author']).strip() or not str(i['source']).strip():
-            out.append(f'{tag}: no author or source')
+        if not str(i['author']).strip() or not str(i['source']).strip() or not str(i['attribution']).strip():
+            out.append(f'{tag}: no author, source or attribution')
+        if i['placement'] == 'wall' and not (isinstance(i.get('elevation'), (int, float)) and i['elevation'] >= 0):
+            out.append(f'{tag}: a wall item without its elevation')
         if i['symbolType'] in IMAGE_ONLY:
             if i['placement'] is not None:
                 out.append(f'{tag}: an image item has placement {i["placement"]!r}')
@@ -133,9 +156,11 @@ def problems(sample_dir, attribution='ATTRIBUTION.md'):
             found = glb_problems(data)
             out += [f'{tag}: {p}' for p in found]
             if not found and isinstance(i['size'], list) and len(i['size']) == 3:
-                bad = proportion_problem(i['size'], glb_extents(data))
+                bad = fit_problem(i['size'], data)
                 if bad:
                     out.append(f'{tag}: {bad}')
+                if i['symbolType'] == 'light' and light_problem(i):
+                    out.append(f'{tag}: {light_problem(i)}')
             glbs.append(path)
         elif not (data.startswith(PNG_MAGIC) or data.startswith(JPEG_MAGIC)):
             out.append(f'{tag}: {i["file"]} is neither a .glb nor a PNG or JPEG')
@@ -145,6 +170,8 @@ def problems(sample_dir, attribution='ATTRIBUTION.md'):
     if total > MAX_TOTAL:
         out.append(f'the set is {total / 1e6:.1f} MB (at most 15)')
     for c in CATEGORIES:
+        if c in FROM_THE_CATALOGUES:
+            continue
         if not any(i.get('category') == c for i in items):
             out.append(f'no item in {c}')
 

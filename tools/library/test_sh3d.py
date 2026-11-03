@@ -14,6 +14,7 @@ import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sh3d import GLB_MAGIC, obj_to_glb, read_sh3f, write_glb  # noqa: E402
+from sh3d import keywords_of  # noqa: E402
 
 
 def png_2x2():
@@ -69,8 +70,10 @@ creator#1=tester
 """
 
 
-def make_sh3f(path, obj=CUBE_OBJ, mtl=CUBE_MTL, props=PROPS):
+def make_sh3f(path, obj=CUBE_OBJ, mtl=CUBE_MTL, props=PROPS, extra=None):
     with zipfile.ZipFile(path, 'w') as z:
+        for name, data in (extra or {}).items():
+            z.writestr(name, data)
         z.writestr('PluginFurnitureCatalog.properties', props)
         z.writestr('cube.obj', obj)
         z.writestr('cube.mtl', mtl)
@@ -176,6 +179,72 @@ class Sh3dTests(unittest.TestCase, GlbParts):
         big = write_glb([{'positions': [(float(k), 0.0, 0.0) for k in range(70000)], 'normals': [(0.0, 0.0, 1.0)] * 70000,
                           'uvs': None, 'indices': [0, 1, 69999], 'color': [1, 1, 1, 1], 'image': None}])
         self.assertEqual({a['componentType'] for a in self.index_accessors(self.json_chunk(big))}, {5125})
+
+    def bounds(self, glb):
+        doc = self.json_chunk(glb)
+        acc = [doc['accessors'][p['attributes']['POSITION']] for m in doc['meshes'] for p in m['primitives']]
+        return ([min(a['min'][k] for a in acc) for k in range(3)], [max(a['max'][k] for a in acc) for k in range(3)])
+
+    def normals_at(self, glb, point):
+        doc = self.json_chunk(glb)
+        out = []
+        for p in doc['meshes'][0]['primitives']:
+            pos = self.floats(glb, doc, p['attributes']['POSITION'])
+            nor = self.floats(glb, doc, p['attributes']['NORMAL'])
+            out += [tuple(round(c, 4) for c in n) for q, n in zip(pos, nor) if all(abs(a - b) < 1e-6 for a, b in zip(q, point))]
+        return sorted(set(out))
+
+    def test_fit_puts_the_mesh_bottom_centre_at_its_size(self):
+        # Sweet Home 3D meshes come in any unit with any origin (a table at x 19.55..20.45 m in centimetres, 11-03).
+        p = os.path.join(self.dir.name, 'far.sh3f')
+        far = ''.join(f'v {x + 1955} {y} {z + 755}\n' for x, y, z in
+                      [(0, 0, 0), (90, 0, 0), (90, 44, 0), (0, 44, 0), (0, 0, 90), (90, 0, 90), (90, 44, 90), (0, 44, 90)])
+        make_sh3f(p, obj=far + 'f 1 4 3 2\nf 5 6 7 8\nf 1 2 6 5\nf 2 3 7 6\nf 3 4 8 7\nf 4 1 5 8\n')
+        lo, hi = self.bounds(obj_to_glb(zipfile.ZipFile(p), 'cube.obj', fit=(0.9, 0.9, 0.44)))
+        for got, want in zip(lo + hi, [-0.45, 0.0, -0.45, 0.45, 0.44, 0.45]):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_a_smoothing_group_averages_its_corner_normals(self):
+        # Two faces folded 90 degrees along x = 1 under `s 1` share the fold's normals; under `s off` they stay flat.
+        fold = 'v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 1 0 -1\nv 1 1 -1\n'
+        for group, want in (('s 1', [(0.7071, 0.0, 0.7071)]), ('s off', [(0.0, 0.0, 1.0), (1.0, 0.0, 0.0)])):
+            p = os.path.join(self.dir.name, group.replace(' ', '') + '.sh3f')
+            make_sh3f(p, obj=fold + group + '\nf 1 2 3 4\nf 2 5 6 3\n')
+            self.assertEqual(self.normals_at(obj_to_glb(zipfile.ZipFile(p), 'cube.obj'), (1.0, 0.0, 0.0)), want, group)
+
+    def test_index_65535_is_kept_for_primitive_restart(self):
+        n = 65536            # glTF: an index may not be the component type's maximum, so 65535 needs uint32
+        glb = write_glb([{'positions': [(float(k), 0.0, 0.0) for k in range(n)], 'normals': [(0.0, 0.0, 1.0)] * n,
+                          'uvs': None, 'indices': [0, 1, 65535], 'color': [1, 1, 1, 1], 'image': None}])
+        self.assertEqual({a['componentType'] for a in self.index_accessors(self.json_chunk(glb))}, {5125})
+
+    def test_a_texture_path_from_another_machine_falls_back_to_its_name(self):
+        p = os.path.join(self.dir.name, 'abs.sh3f')
+        make_sh3f(p, mtl=CUBE_MTL.replace('map_Kd tex.png', 'map_Kd /Users/someone/3D/ TEXTURES/tex.png'))
+        doc = self.json_chunk(obj_to_glb(zipfile.ZipFile(p), 'cube.obj'))
+        self.assertEqual([i['mimeType'] for i in doc['images']], ['image/png'])
+
+    def test_a_texture_override_fills_a_map_that_does_not_resolve(self):
+        p = os.path.join(self.dir.name, 'rug.sh3f')
+        make_sh3f(p, mtl=CUBE_MTL.replace('map_Kd tex.png', 'map_Kd Living room rug.jpg'))
+        self.assertNotIn('images', self.json_chunk(obj_to_glb(zipfile.ZipFile(p), 'cube.obj')))
+        doc = self.json_chunk(obj_to_glb(zipfile.ZipFile(p), 'cube.obj', texture='tex.png'))
+        self.assertEqual([i['mimeType'] for i in doc['images']], ['image/png'])
+
+    def test_keywords_drop_library_names(self):
+        self.assertEqual(keywords_of('Dodecagon Chair Bar'), ['chair', 'bar'])
+        self.assertEqual(keywords_of('Blend Swap, Appliance, Cooker'), ['appliance', 'cooker'])
+        self.assertEqual(keywords_of('Sofa, Seat'), ['sofa', 'seat'])
+        self.assertEqual(keywords_of(''), [])
+
+    def test_reads_elevation_and_light_source_in_metres(self):
+        p = os.path.join(self.dir.name, 'lamp.sh3f')
+        make_sh3f(p, props=PROPS + 'elevation#1=140\nlightSourceX#1=30\nlightSourceY#1=27.5\nlightSourceZ#1=80\n'
+                                   'lightSourceColor#1=#998764\nlightSourceDiameter#1=15\n')
+        e = read_sh3f(p)[0]
+        self.assertEqual(e['elevation'], 1.4)
+        self.assertEqual(e['light'], {'position': [0.0, 0.0, 0.8], 'diameter': 0.15, 'colour': '#998764'})
+        self.assertIsNone(read_sh3f(self.sh3f)[0]['light'])
 
     def test_negative_indices(self):
         pos_obj = "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3 4\n"

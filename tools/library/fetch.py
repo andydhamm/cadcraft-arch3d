@@ -2,8 +2,8 @@
 
     python3 tools/library/fetch.py --out DIR [--refresh]
 
-Writes DIR/<library>.sh3f and DIR/sources.json ({file: {url, library, licence, page_licence, licence_text, sha256,
-bytes}}). Keep DIR outside the repository: only the curated, converted items are committed.
+Writes DIR/<library>.sh3f and DIR/sources.json ({file: {url, library, licence, page_licence, licence_text,
+attribution (whom a CC-BY library says to credit), sha256, bytes}}). Keep DIR outside the repository: only the curated, converted items are committed.
 
 Every link is resolved from the pages at run time, never kept here (standing rule 2026-10-18):
 - https://www.sweethome3d.com/import-models/ lists "3DModels-<library>-<version>.zip (size - n models - licence)";
@@ -49,10 +49,15 @@ def sh3d_libraries(page):
 
 
 def dodecagon_libraries(page):
-    """[{fileid, file}] for each download form of a Dodecagon library page."""
-    pat = re.compile(r'<form[^>]*action="download"[^>]*>.*?name="fileid"\s+value="(\d+)".*?([A-Za-z0-9_.-]+\.sh3f)\s*</button>',
-                     re.S | re.I)
-    return [{'fileid': fid, 'file': name} for fid, name in pat.findall(page)]
+    """[{fileid, file}] for each download form of a Dodecagon library page that names both; a form's id and name are
+    read inside that form only (a lazy match across forms paired one form's id with the next one's file, review 11-03)."""
+    out = []
+    for body in re.findall(r'<form[^>]*action="download"[^>]*>(.*?)</form>', page, re.S | re.I):
+        fid = re.search(r'name="fileid"\s+value="(\d+)"', body)
+        name = re.search(r'([A-Za-z0-9_.-]+\.sh3f)\s*</button>', body)
+        if fid and name:
+            out.append({'fileid': fid.group(1), 'file': name.group(1)})
+    return out
 
 
 def dodecagon_site_licence(index):
@@ -69,13 +74,28 @@ def licence_id(text):
     t = ' '.join((text or '').lower().split())
     if not t or re.search(r'non-?commercial|share-?alike|no-?deriv|\bby-(nc|sa|nd)\b|cc[- ]by[- ](nc|sa|nd)|free art', t):
         return None
-    if re.search(r'public domain|\bcc-?0\b|publicdomain/zero|creative commons zero', t):
+    cc0 = re.search(r'public domain|\bcc-?0\b|cc0|publicdomain/zero|creative commons zero', t)
+    by = re.search(r'attribution|licenses/by/|\bcc[- ]by\b', t)
+    if cc0 and by:                        # both named: ambiguous, never filed as the freer one (review 11-03)
+        return None
+    if cc0:
         return 'CC0-1.0'
     m = re.search(r'(?:attribution|licenses/by/|\bcc[- ]by\b)\D{0,40}?(\d\.\d)', t)
     if not m:
         return None
     us = '/by/3.0/us' in t or 'united states' in t     # a bare ' us' matched "commercial use" (11-03)
     return f'CC-BY-{m.group(1)}' + ('-US' if us and m.group(1) == '3.0' else '')
+
+
+def attribution_line(licence_text, catalog_licence):
+    """Whom a CC-BY library says to credit: the licence text's "attribute it to ...", else the catalog's copyright line
+    ("Copyright (c) 2003-2008 Andrew Kator & Jennifer Legaz"), else ''."""
+    t = ' '.join((licence_text or '').split())
+    m = re.search(r'attribute it to (.+?)(?=\s+\(C\)|\s+Copyright|$)', t, re.I)
+    if m:
+        return m.group(1).strip().rstrip('.')
+    m = re.search(r'((?:Copyright\s*)?©.*|Copyright\b.*)$', ' '.join((catalog_licence or '').split()))
+    return m.group(1).strip() if m else ''
 
 
 def page_says_free(text):
@@ -140,7 +160,8 @@ def fetch_sh3d(out, refresh, sources, refused):
             continue
         file = f'{name}.sh3f'
         sources[file] = record(out, file, sh3f, url=lib['url'], library=name, licence=spdx,
-                               page_licence=lib['page_licence'], licence_text=' '.join(text.split())[:400])
+                               page_licence=lib['page_licence'], licence_text=' '.join(text.split())[:4000],
+                               attribution=attribution_line(text, catalog_licence(sh3f)))
 
 
 def fetch_dodecagon(out, refresh, sources, refused):
@@ -169,7 +190,8 @@ def fetch_dodecagon(out, refresh, sources, refused):
                 continue
             sources[form['file']] = record(out, form['file'], data, url=DODECAGON + page, library=f'Dodecagon {want}',
                                            licence=spdx, page_licence=site,
-                                           licence_text=' '.join((own or site).split())[:400],
+                                           licence_text=' '.join((own or site).split())[:4000],
+                                           attribution=attribution_line(own, own) if spdx != 'CC0-1.0' else '',
                                            fileid=form['fileid'])
 
 

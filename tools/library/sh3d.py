@@ -12,6 +12,7 @@ KTX2; PNG or JPEG textures only, sniffed by their bytes; any other texture is dr
 import json
 import math
 import posixpath
+import re
 import struct
 import zipfile
 
@@ -99,8 +100,10 @@ def _floats(s):
 
 def read_sh3f(path):
     """One dict per catalog entry, in index order: index, id, name, category, model (ZIP member), width, depth, height
-    (metres), creator, keywords, door_or_window, staircase, rotation (the 3 x 3 modelRotation row-major, or None),
-    licence and information (as the catalog states them, or '')."""
+    (metres), creator, keywords (keywords_of the tags), door_or_window, staircase, rotation (the 3 x 3 modelRotation
+    row-major, or None), elevation (metres above the floor, or None), light (the light source: position in metres from
+    the bottom centre of the box, x across, y back to front, z up; diameter; colour; or None), licence and information
+    (as the catalog states them, or '')."""
     with zipfile.ZipFile(path) as zf:
         props = parse_properties(zf.read(CATALOG).decode('latin-1'))
     by_index = {}
@@ -122,18 +125,45 @@ def read_sh3f(path):
             except ValueError:
                 size.append(0.0)
         rot = _floats(f.get('modelRotation', ''))
+        light = None
+        src = [_floats(f.get(f'lightSource{a}', '')) for a in 'XYZ']
+        if all(v and len(v) == 1 for v in src):
+            x, y, z = (v[0] / 100.0 for v in src)
+            light = {'position': [round(x - size[0] / 2, 6), round(y - size[1] / 2, 6), round(z, 6)],
+                     'diameter': round((_floats(f.get('lightSourceDiameter', '')) or [0.0])[0] / 100.0, 6),
+                     'colour': f.get('lightSourceColor', '#ffffff').strip() or '#ffffff'}
+        elev = _floats(f.get('elevation', ''))
         entries.append({
             'index': n, 'id': f.get('id', f'#{n}'), 'name': f['name'], 'category': f.get('category', ''),
             'model': _member(f['model']), 'width': size[0], 'depth': size[1], 'height': size[2],
             'creator': f.get('creator', '').strip(),
-            'keywords': [t.strip() for t in f.get('tags', '').split(',') if t.strip()],
+            'keywords': keywords_of(f.get('tags', '')),
             'door_or_window': f.get('doorOrWindow', 'false').strip().lower() == 'true',
             'staircase': bool(f.get('staircaseCutOutShape', '').strip()),
             'rotation': rot if rot and len(rot) == 9 else None,
+            'elevation': round(elev[0] / 100.0, 6) if elev and len(elev) == 1 else None, 'light': light,
             'licence': f.get('license', f.get('licence', '')).strip(),
             'information': f.get('information', '').strip(),
         })
     return entries
+
+
+LIBRARY_WORDS = re.compile(r'\bblend\s*swap\b|\bdodecagon\b|\bscopia\b|\bkator\s*legaz\b', re.I)
+
+
+def keywords_of(tags):
+    """Search keywords from a catalog's `tags`: comma-separated, lowercased, without the library names a tag carries
+    (Dodecagon writes one space-separated tag such as "Dodecagon Chair Bar"; Blend Swap tags itself), which the item's
+    `source` already says."""
+    out = []
+    for tag in (tags or '').split(','):
+        tag = tag.strip()
+        if LIBRARY_WORDS.search(tag):
+            words = LIBRARY_WORDS.sub(' ', tag).split()
+        else:
+            words = [tag] if tag else []
+        out += [w.lower() for w in words]
+    return list(dict.fromkeys(out))
 
 
 # ---------- OBJ and MTL ----------
@@ -195,6 +225,19 @@ def parse_mtl(text):
     return mats
 
 
+def _texture(zf, base, name):
+    """The image bytes a map_Kd names, relative to the model's folder, or (a path from the author's machine, such as
+    "/Users/.../ TEXTURES/rug.jpg") by its file name in that folder or anywhere in the library."""
+    name = name.replace('\\', '/')
+    data = _read_member(zf, posixpath.normpath(posixpath.join(base, name)))
+    if data is None:
+        leaf = posixpath.basename(name).lower()
+        here = [n for n in zf.namelist() if posixpath.basename(n).lower() == leaf]
+        near = [n for n in here if posixpath.dirname(n) == base] or here
+        data = zf.read(near[0]) if near else None
+    return data
+
+
 def _index(token, count):
     """An OBJ index (1-based, or negative from the end) as a 0-based index, or None when absent or out of range."""
     if not token:
@@ -211,14 +254,19 @@ def _unit(v, fallback=(0.0, 0.0, 1.0)):
     return (v[0] / n, v[1] / n, v[2] / n)
 
 
-def _newell(p):
-    """A polygon's unit normal by Newell's method (any planar n-gon, either winding sense kept), or +Z when degenerate."""
+def _newell_vector(p):
+    """Newell's normal of a polygon, unnormalised: its length is twice the area, so sums of it are area-weighted."""
     n = [0.0, 0.0, 0.0]
     for a, b in zip(p, p[1:] + p[:1]):
         n[0] += (a[1] - b[1]) * (a[2] + b[2])
         n[1] += (a[2] - b[2]) * (a[0] + b[0])
         n[2] += (a[0] - b[0]) * (a[1] + b[1])
-    return _unit(tuple(n))
+    return tuple(n)
+
+
+def _newell(p):
+    """A polygon's unit normal by Newell's method (any planar n-gon, either winding sense kept), or +Z when degenerate."""
+    return _unit(_newell_vector(p))
 
 
 def _rotate(m, p):
@@ -226,14 +274,49 @@ def _rotate(m, p):
             m[6] * p[0] + m[7] * p[1] + m[8] * p[2])
 
 
-def obj_to_glb(zf, model, rotation=None, textures=True):
+def fit_primitives(prims, size):
+    """Move and scale primitives so their bounds are bottom-centred (x and z centred on 0, lowest y at 0) and measure
+    `size` = (width, depth, height) in metres along glTF x, z and y; normals follow the scale (inverse transpose)."""
+    pts = [q for p in prims for q in p['positions']]
+    if not pts:
+        return prims
+    lo = [min(q[k] for q in pts) for k in range(3)]
+    hi = [max(q[k] for q in pts) for k in range(3)]
+    want = (size[0], size[2], size[1])
+    sc = [w / (h - l) if h - l > 1e-12 and w > 0 else 1.0 for w, l, h in zip(want, lo, hi)]
+    mid = ((lo[0] + hi[0]) / 2, lo[1], (lo[2] + hi[2]) / 2)
+    out = []
+    for p in prims:
+        q = dict(p)
+        q['positions'] = [tuple((v[k] - mid[k]) * sc[k] for k in range(3)) for v in p['positions']]
+        q['normals'] = [_unit(tuple(n[k] / sc[k] for k in range(3))) for n in p['normals']]
+        out.append(q)
+    return out
+
+
+def obj_to_glb(zf, model, rotation=None, textures=True, fit=None, texture=None):
+    """obj_primitives as .glb bytes, bottom-centred at `fit` = (width, depth, height) in metres when given."""
+    prims = obj_primitives(zf, model, rotation, textures, texture)
+    return write_glb(fit_primitives(prims, fit) if fit else prims)
+
+
+def extents(prims):
+    """The (x, y, z) extents of primitives' positions (glTF axes, y up)."""
+    pts = [q for p in prims for q in p['positions']]
+    return [max(q[k] for q in pts) - min(q[k] for q in pts) for k in range(3)] if pts else [0.0, 0.0, 0.0]
+
+
+def obj_primitives(zf, model, rotation=None, textures=True, texture=None):
     """The OBJ member `model` of `zf` as plain .glb bytes: one primitive per material in first-use order, faces
     triangulated as fans, flat normals where the OBJ gives none, V flipped (glTF's origin is top-left), the catalog's
-    modelRotation (row-major 3 x 3) applied when given; `textures=False` keeps every material's Kd and embeds no image."""
+    modelRotation (row-major 3 x 3) applied when given; `textures=False` keeps every material's Kd and embeds no image.
+    Corners without a normal in a smoothing group (`s 1`, not `s off`/`s 0`) get the area-weighted mean of the group's
+    faces at that vertex. `texture` is the ZIP member used for a material whose map_Kd names a file the library lacks.
+    The primitives as write_glb takes them, in the OBJ's own units and origin."""
     text = (_read_member(zf, model) or b'').decode('utf-8', 'replace')
     base = posixpath.dirname(model)
     verts, uvs, norms, mats = [], [], [], {}
-    groups, order, cur = {}, [], ''
+    groups, order, cur, smooth = {}, [], '', 0
     for raw in text.splitlines():
         t = raw.strip().split()
         if not t:
@@ -253,6 +336,8 @@ def obj_to_glb(zf, model, rotation=None, textures=True):
                     break
         elif key == 'usemtl':
             cur = ' '.join(t[1:])
+        elif key == 's':
+            smooth = 0 if len(t) < 2 or t[1].lower() in ('off', '0') else t[1]
         elif key == 'f' and len(t) >= 4:
             corners = []
             for c in t[1:]:
@@ -265,28 +350,43 @@ def obj_to_glb(zf, model, rotation=None, textures=True):
             if cur not in groups:
                 groups[cur] = []
                 order.append(cur)
-            groups[cur].append(corners)
+            groups[cur].append((corners, smooth))
+    vertex_normal = {}                    # (vertex, smoothing group) -> area-weighted sum of its faces' normals
+    for faces in groups.values():
+        for corners, g in faces:
+            if g and any(vn is None for _, _, vn in corners):
+                n = _newell_vector([verts[v] for v, _, _ in corners])
+                for v, _, _ in corners:
+                    a = vertex_normal.get((v, g), (0.0, 0.0, 0.0))
+                    vertex_normal[(v, g)] = (a[0] + n[0], a[1] + n[1], a[2] + n[2])
     prims = []
     for name in order:
         mat = mats.get(name, {'kd': [0.8, 0.8, 0.8], 'alpha': 1.0, 'map': None})
         image = None
         if mat['map'] and textures:
-            data = _read_member(zf, posixpath.normpath(posixpath.join(base, mat['map'].replace('\\', '/'))))
+            data = _texture(zf, base, mat['map'])
+            if data is None and texture:
+                data = _read_member(zf, texture)
             if data and (data.startswith(PNG_MAGIC) or data.startswith(JPEG_MAGIC)):
                 image = data
         textured = image is not None
         pos, nor, tex, idx, seen = [], [], [], [], {}
-        for face_no, corners in enumerate(groups[name]):
+        for face_no, (corners, g) in enumerate(groups[name]):
             p = [verts[v] for v, _, _ in corners]
             flat = _newell(p)        # one normal per polygon, so its fan triangles share their corners
             for k in range(1, len(corners) - 1):
                 for j in (0, k, k + 1):
                     v, vt, vn = corners[j]
-                    key = (v, vt if textured else None, vn if vn is not None else ('flat', face_no))
+                    if vn is not None:
+                        key, normal = (v, vt if textured else None, vn), None
+                    elif g:
+                        key, normal = (v, vt if textured else None, ('s', g)), vertex_normal[(v, g)]
+                    else:
+                        key, normal = (v, vt if textured else None, ('flat', face_no)), None
                     if key not in seen:
                         seen[key] = len(pos)
                         pos.append(p[j])
-                        nor.append(_unit(norms[vn]) if vn is not None else flat)
+                        nor.append(_unit(norms[vn]) if vn is not None else _unit(normal, flat) if normal else flat)
                         if textured:
                             u = uvs[vt] if vt is not None else (0.0, 0.0)
                             tex.append((u[0], 1.0 - u[1]))
@@ -299,7 +399,7 @@ def obj_to_glb(zf, model, rotation=None, textures=True):
         color = [1.0, 1.0, 1.0, mat['alpha']] if textured else list(mat['kd']) + [mat['alpha']]
         prims.append({'positions': pos, 'normals': nor, 'uvs': tex if textured else None, 'indices': idx,
                       'color': color, 'image': image, 'name': name})
-    return write_glb(prims)
+    return prims
 
 
 # ---------- glTF binary ----------
@@ -311,7 +411,7 @@ def _pad(b, fill):
 def write_glb(primitives, name='symbol'):
     """A plain glTF 2.0 binary: one node, one mesh, one primitive and one material per entry (baseColorFactor from
     `color`, baseColorTexture for an `image` of PNG or JPEG bytes), POSITION with min/max, NORMAL, TEXCOORD_0 when
-    `uvs` is given, uint16 indices (uint32 past 65535 vertices); the BIN chunk 4-byte aligned."""
+    `uvs` is given, uint16 indices (uint32 when one would be 65535 or more); the BIN chunk 4-byte aligned."""
     bin_, views, accs, meshes_p, materials, images, textures = bytearray(), [], [], [], [], [], []
 
     def view(data, target=None):
@@ -331,7 +431,7 @@ def write_glb(primitives, name='symbol'):
             a = {'bufferView': view(data, 34962), 'componentType': 5126, 'count': len(values),
                  'type': {2: 'VEC2', 3: 'VEC3'}[width]}
         else:
-            small = max(flat, default=0) < 65536       # uint16 indices: half the bytes, core glTF (no extension)
+            small = max(flat, default=0) < 65535       # uint16 (core glTF), but 65535 is reserved for primitive restart
             data = struct.pack(f'<{len(flat)}{"H" if small else "I"}', *flat)
             a = {'bufferView': view(data, 34963), 'componentType': 5123 if small else 5125, 'count': len(values),
                  'type': 'SCALAR'}

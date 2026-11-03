@@ -7,7 +7,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fetch import dodecagon_libraries, dodecagon_site_licence, licence_id, sh3d_libraries  # noqa: E402
+from fetch import attribution_line, dodecagon_libraries, dodecagon_site_licence, licence_id, sh3d_libraries  # noqa: E402
 
 SH3D_PAGE = '''<p><a href="https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Contributions-1.9.3.zip/download" target="_blank">3DModels-Contributions-1.9.3.zip</a> (29 MB &#8211; 511 models &#8211; Free Art License)</p>
 <p><a href="https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download" target="_blank" rel="noopener">3DModels-Scopia-1.9.3.zip</a> (69.5 MB &#8211; 500 models &#8211; CC-BY License)</p>
@@ -57,6 +57,29 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(licence_id('This file is under the Creative Commons Attribution 3.0 license: '
                                     'http://creativecommons.org/licenses/by/3.0/ ... to make commercial use of the work'),
                          'CC-BY-3.0')
+
+    def test_a_text_naming_both_cc0_and_cc_by_is_refused(self):
+        # A CC-BY library whose text also mentions CC0 or the public domain must not be filed as CC0 (review 11-03).
+        for text in ('Models are CC-BY 4.0; textures from cc0textures.com (CC0)',
+                     'Creative Commons Attribution 3.0. Some textures are in the public domain.',
+                     'CC0 1.0 Universal, except the sofa: Creative Commons Attribution 4.0'):
+            self.assertIsNone(licence_id(text), text)
+
+    def test_a_form_without_a_file_name_does_not_borrow_the_next(self):
+        page = ('<form action="download" method="post"><input type="hidden" name="fileid" value="4">'
+                '<button type="submit">Download</button></form>' + DODECAGON_PAGE)
+        self.assertEqual(dodecagon_libraries(page), [{'fileid': '5', 'file': 'DodecagonBathroom.sh3f'}])
+
+    def test_attribution_line_names_whom_the_licence_says(self):
+        scopia = ('Attribution: If you want distribute this work, or derivates, you must attribute it to Space Mushrooms '
+                  '<info@sweethome3d.com> and Scopia Visual Interfaces Systems, s.l. (http://www.scopia.es) (C) Copyright '
+                  '2024 Space Mushrooms')
+        self.assertEqual(attribution_line(scopia, ''), 'Space Mushrooms <info@sweethome3d.com> and Scopia Visual '
+                                                        'Interfaces Systems, s.l. (http://www.scopia.es)')
+        kator = 'Creative Commons Attribution 3.0 United States license  Copyright © 2003-2008 Andrew Kator & Jennifer Legaz'
+        self.assertEqual(attribution_line('These files are under the CC BY 3.0 US license', kator),
+                         'Copyright © 2003-2008 Andrew Kator & Jennifer Legaz')
+        self.assertEqual(attribution_line('CC0 1.0 Universal', ''), '')
 
     def test_refused_licences(self):
         for text in ('Free Art License', 'CC-BY License', 'Creative Commons Attribution-NonCommercial 3.0',
