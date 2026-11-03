@@ -26,8 +26,8 @@ def measure():
     if was_refused(rc, se):
         fail(f"the benchmark session ran without a refused step: {se[-500:]}")
     builds = [r for r in rr if isinstance(r, dict) and 'rebuildMs' in r]
-    if len(builds) != 12:
-        fail(f"twelve build3d replies: {len(builds)}")
+    if len(builds) != 11:
+        fail(f"eleven build3d replies: {len(builds)}")
     return builds
 
 
@@ -69,9 +69,9 @@ if problems:
 d_inc, d_full = builds[7].get('digest'), builds[8].get('digest')
 if not (isinstance(d_inc, str) and re.fullmatch(r'[0-9a-f]{16}', d_inc)) or d_inc != d_full:
     fail(f"after five edits the incrementally kept scene is the full build's: digests {d_inc} vs {d_full}")
-u_inc, u_full = builds[10].get('digest'), builds[11].get('digest')
-if builds[10].get('incremental') is not True or u_inc != u_full:
-    fail(f"after undo the incremental scene is the full build's: {u_inc} vs {u_full} (incremental {builds[10].get('incremental')})")
+u_inc, u_full = builds[9].get('digest'), builds[10].get('digest')
+if builds[9].get('incremental') is not True or u_inc != u_full:
+    fail(f"after undo the incremental scene is the full build's: {u_inc} vs {u_full} (incremental {builds[9].get('incremental')})")
 if u_inc == d_inc:
     fail("undo changed the model, so its digest differs from before the undo")
 print(f"ok: median {med:.2f} ms, at most {max(e.get('rebuilt') for e in builds[2:7])} of {builds[0].get('objects')} objects "

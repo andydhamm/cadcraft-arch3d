@@ -48,6 +48,16 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("floor-") {
         return "floor";
     }
+    // Phase 13: casework (`cabinet-box`, `cabinet-front`, `counter`, `fixture-sink`, …).
+    if m.starts_with("cabinet-") {
+        return "cabinet";
+    }
+    if m == "counter" || m.starts_with("counter-") {
+        return "counter";
+    }
+    if m.starts_with("fixture-") {
+        return "fixture";
+    }
     if m.contains("glass") {
         return "glass";
     }
@@ -183,6 +193,10 @@ pub fn mesh_label(mesh: &Mesh) -> String {
     // Site meshes first: a plant, the terrain solid, a path (its modifier) are named as the commands name them.
     let label = if m.starts_with("light-") {
         cadcraft_doc::arch::light_label(mesh.object)
+    } else if m.starts_with("cabinet-") || m == "counter" || m.starts_with("counter-") {
+        cadcraft_doc::arch::cabinet_label(mesh.object)
+    } else if m.starts_with("fixture-") {
+        cadcraft_doc::arch::fixture_label(mesh.object)
     } else if m.starts_with("plant-") {
         cadcraft_doc::arch::plant_label(mesh.object)
     } else if m == "terrain" {

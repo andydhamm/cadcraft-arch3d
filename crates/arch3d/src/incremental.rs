@@ -16,7 +16,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use cadcraft_arch::join::{WallShape, solve_joins};
 use cadcraft_arch::roof::{Footprint, outer_footprint};
-use cadcraft_doc::arch::{Level, LightFixture, Opening, Plant, PlantSpecies, Railing, Roof, Room, RoomType, Stair, Terrain, WallType};
+use cadcraft_doc::arch::{
+    Cabinet, Fixture, Level, LightFixture, Opening, Plant, PlantSpecies, Railing, Roof, Room, RoomType, Stair, Terrain, WallType,
+};
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
 
@@ -24,8 +26,8 @@ use crate::mesh::{Bounds3, Mesh};
 use crate::probe::part_of;
 use crate::walls::{RoofClip, elevation_profile, extrude_profile_slab, extrude_wall_profile, roof_top_polyline_in};
 use crate::{
-    Scene3d, find_roof_clip, fixture, floors, level_for, light, mesh_is_finite, openings, railing, raw_wall_mesh, site, stairs, wall_span, walls,
-    well_holes_for,
+    Scene3d, casework, find_roof_clip, fixture, floors, level_for, light, mesh_is_finite, openings, railing, raw_wall_mesh, site, stairs, wall_span,
+    walls, well_holes_for,
 };
 
 const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
@@ -44,6 +46,8 @@ pub enum ObjectKind {
     Terrain,
     Plant,
     Light,
+    Cabinet,
+    Fixture,
 }
 
 impl ObjectKind {
@@ -58,6 +62,8 @@ impl ObjectKind {
             "terrain" | "path" => ObjectKind::Terrain,
             "plant" => ObjectKind::Plant,
             "light" => ObjectKind::Light,
+            "cabinet" | "counter" => ObjectKind::Cabinet,
+            "fixture" => ObjectKind::Fixture,
             _ => ObjectKind::Wall,
         }
     }
@@ -91,6 +97,8 @@ pub fn changed_objects(prev: &ArchModel, next: &ArchModel) -> Option<BTreeSet<Ob
     diff(&prev.railings, &next.railings, |r| r.id, ObjectKind::Railing, &mut changes);
     diff(&prev.plants, &next.plants, |p| p.id, ObjectKind::Plant, &mut changes);
     diff(&prev.lights, &next.lights, |l| l.id, ObjectKind::Light, &mut changes);
+    diff(&prev.cabinets, &next.cabinets, |c| c.id, ObjectKind::Cabinet, &mut changes);
+    diff(&prev.fixtures, &next.fixtures, |f| f.id, ObjectKind::Fixture, &mut changes);
     if prev.terrain != next.terrain {
         changes.insert(ObjectKey { kind: ObjectKind::Terrain, id: ArchId(0) });
     }
@@ -277,6 +285,18 @@ struct FixtureIn {
     point: Option<Vec3>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct CabinetIn {
+    cabinet: Cabinet,
+    level: Level,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct CaseworkFixtureIn {
+    fixture: Fixture,
+    level: Level,
+}
+
 /// The parts of a scene, section by section in the order [`Scene3d::build`] emits them.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Sections {
@@ -289,6 +309,8 @@ pub(crate) struct Sections {
     decks: Vec<Part<DeckIn>>,
     site: Vec<Part<SiteIn>>,
     fixtures: Vec<Part<FixtureIn>>,
+    cabinets: Vec<Part<CabinetIn>>,
+    casework_fixtures: Vec<Part<CaseworkFixtureIn>>,
     /// The join shapes, for the walls and wall types they were solved for.
     joins: Option<(Vec<Wall>, Vec<WallType>, Vec<WallShape>)>,
     /// Per level: its walls, and the outer footprint they make (it joins every wall on the level).
@@ -308,6 +330,8 @@ impl Sections {
             decks: pd,
             site: pt,
             fixtures: px,
+            cabinets: pc,
+            casework_fixtures: pfx,
             joins,
             footprints: mut old_footprints,
         } = prev.unwrap_or_default();
@@ -428,8 +452,15 @@ impl Sections {
             model.lights.iter().map(|f| (f.id, FixtureIn { light: f.clone(), point: cadcraft_arch::light::light_point(model, f) })).collect();
         let fixtures = parts(px, fixture_items, |i| fixture::fixture_housing(&i.light, i.point));
 
+        let cabinet_items = model.cabinets.iter().map(|c| (c.id, CabinetIn { cabinet: c.clone(), level: level_for(model, c.level) })).collect();
+        let cabinets = parts(pc, cabinet_items, |i| casework::cabinet_meshes(model, &i.cabinet));
+
+        let casework_fixture_items =
+            model.fixtures.iter().map(|f| (f.id, CaseworkFixtureIn { fixture: f.clone(), level: level_for(model, f.level) })).collect();
+        let casework_fixtures = parts(pfx, casework_fixture_items, |i| vec![casework::fixture_mesh(model, &i.fixture)]);
+
         let joins = Some((model.walls.clone(), model.types.clone(), shapes));
-        Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, joins, footprints }
+        Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, cabinets, casework_fixtures, joins, footprints }
     }
 
     /// The scene these parts make (a copy; the cache keeps its parts).
@@ -441,7 +472,7 @@ impl Sections {
     /// The scene these parts make, moving their meshes into it.
     pub(crate) fn into_scene(self, model: &ArchModel) -> Scene3d {
         let counts = self.counts(model);
-        let Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, .. } = self;
+        let Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, cabinets, casework_fixtures, .. } = self;
         fn meshes<I>(list: Vec<Part<I>>) -> impl Iterator<Item = Mesh> {
             list.into_iter().flat_map(|p| p.meshes)
         }
@@ -453,7 +484,9 @@ impl Sections {
             .chain(meshes(railings))
             .chain(meshes(decks))
             .chain(meshes(site))
-            .chain(meshes(fixtures));
+            .chain(meshes(fixtures))
+            .chain(meshes(cabinets))
+            .chain(meshes(casework_fixtures));
         with_meshes(counts, all.filter(keep).collect())
     }
 
@@ -495,6 +528,8 @@ impl Sections {
             .chain(self.decks.iter().map(|p| &p.meshes))
             .chain(self.site.iter().map(|p| &p.meshes))
             .chain(self.fixtures.iter().map(|p| &p.meshes))
+            .chain(self.cabinets.iter().map(|p| &p.meshes))
+            .chain(self.casework_fixtures.iter().map(|p| &p.meshes))
     }
 
     /// The objects of the parts made in the last build.
@@ -514,6 +549,8 @@ impl Sections {
         self.decks.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.site.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.fixtures.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.cabinets.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.casework_fixtures.iter().for_each(|p| add(p.fresh, &p.meshes));
         out
     }
 }
