@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use cadcraft_arch3d::{Mesh, Scene3d};
+use cadcraft_arch3d::{Mesh, Scene3d, texture};
 
 use crate::glb;
 
@@ -60,7 +60,13 @@ pub fn write_mtl(scene: &Scene3d) -> String {
             continue;
         }
         seen.push(m.material.as_str());
-        let c = glb::material_rgba(&m.material);
+        let c = match glb::finish_of(&m.material) {
+            Some(f) => {
+                let [r, g, b] = texture::mean_srgb(&texture::texture(f));
+                [f64::from(r) / 255.0, f64::from(g) / 255.0, f64::from(b) / 255.0, 1.0]
+            }
+            None => glb::material_rgba(&m.material),
+        };
         let _ = writeln!(out, "newmtl {}", m.material);
         let _ = writeln!(out, "Kd {} {} {}", num(c[0] as f32), num(c[1] as f32), num(c[2] as f32));
         let _ = writeln!(out, "d {}", num(c[3] as f32));
@@ -142,6 +148,19 @@ mod tests {
         }
         assert_eq!(faces, 5);
         assert!(obj.contains("v 0 3 -2\n"), "Y-up axes");
+    }
+
+    #[test]
+    fn obj_mtl_gives_a_finished_material_its_mean_colour() {
+        let mut s = Scene3d::default();
+        s.meshes = vec![mesh("wall-brick", 1, true), mesh("wall", 1, true)];
+        let obj = write_obj(&s, "x.mtl");
+        assert!(obj.contains("o wall-w1-exterior\nusemtl wall-brick\n"));
+        let mtl = write_mtl(&s);
+        assert!(!mtl.contains("map_Kd"));
+        let [r, g, b] = texture::mean_srgb(&texture::texture(cadcraft_doc::arch::Finish::Brick));
+        let want = format!("newmtl wall-brick\nKd {} {} {}\n", num(f32::from(r) / 255.0), num(f32::from(g) / 255.0), num(f32::from(b) / 255.0));
+        assert!(mtl.contains(&want), "{mtl}");
     }
 
     #[test]
