@@ -4,9 +4,10 @@ use super::record::ItemRecord;
 use serde::{Deserialize, Serialize};
 
 /// The kind of filter chip.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ChipKind {
+    #[default]
     Category,
     Folder,
     SymbolType,
