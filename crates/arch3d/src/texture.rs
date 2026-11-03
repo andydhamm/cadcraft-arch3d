@@ -276,4 +276,60 @@ mod tests {
         let b = mean_srgb(&texture(Finish::Brick));
         assert!(b[0] > b[2], "brick is red-ish: {b:?}");
     }
+
+    #[test]
+    fn all_four_finishes_are_pairwise_distinct() {
+        let textures: Vec<Texture> = Finish::ALL.iter().copied().map(texture).collect();
+        for i in 0..textures.len() {
+            for j in i + 1..textures.len() {
+                assert_ne!(textures[i].rgba, textures[j].rgba, "finishes {} and {} are identical", i, j);
+            }
+        }
+    }
+
+    #[test]
+    fn tile_values_match_the_spec() {
+        assert_eq!(texture(Finish::Siding).tile, [1.2, 1.2]);
+        assert_eq!(texture(Finish::Shingles).tile, [1.0, 1.0]);
+        assert_eq!(texture(Finish::Brick).tile, [0.84, 0.6]);
+        assert_eq!(texture(Finish::Wood).tile, [1.2, 0.84]);
+    }
+
+    #[test]
+    fn mean_of_empty_texture_returns_zero() {
+        let empty = Texture { finish: Finish::Siding, width: 0, height: 0, rgba: Vec::new(), tile: [1.0, 1.0] };
+        assert_eq!(mean_srgb(&empty), [0, 0, 0]);
+        assert_eq!(mean_linear(&empty), [0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn shingles_have_dark_gaps_between_courses() {
+        let t = texture(Finish::Shingles);
+        // 8 courses of 32 pixels; the gap is at the bottom of each course (row >= 30).
+        for course in 0..8 {
+            let gap_y = course * 32 + 31;
+            let tab_y = course * 32 + 15;
+            let gap_lum = lum(&t, 100, gap_y);
+            let tab_lum = lum(&t, 100, tab_y);
+            assert!(gap_lum < tab_lum, "gap at y={} should be darker than tab at y={}", gap_y, tab_y);
+        }
+    }
+
+    #[test]
+    fn wood_has_staggered_end_joints() {
+        let t = texture(Finish::Wood);
+        // 6 planks, each about 42.67 pixels high. Each plank has a dark end joint.
+        let plank_height = N / 6;
+        for plank in 0..6 {
+            let y = plank * plank_height + plank_height / 2;
+            let has_joint = (0..N).any(|x| {
+                let i = (y * N + x) * 4;
+                let r = t.rgba[i] as i32;
+                let g = t.rgba[i + 1] as i32;
+                let b = t.rgba[i + 2] as i32;
+                r + g + b < 200
+            });
+            assert!(has_joint, "plank {} should have a dark end joint", plank);
+        }
+    }
 }
