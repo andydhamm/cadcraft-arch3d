@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 20 of 24 segments merged · 9 of 13 acceptance checks**
 
@@ -23,16 +23,16 @@ Updated 2026-11-03 09:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 9 / 13 | 18.6 h so far · expected done Nov 03 11:45–Nov 04 01:15 UTC |
+| 13 | Polish | building | 9 / 13 | 18.8 h so far · expected done Nov 03 11:59–Nov 04 01:30 UTC |
 
 ## Phase 13 segments
 
-20 merged, 2 queued, 1 replaced, 1 gate, 1 abandoned, 1 working
+20 merged, 2 queued, 1 replaced, 1 merging, 1 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p13-io-casework` | GLB, OBJ and IFC export cabinets and fixtures | gate | bonsai-a |
-| `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | working | bonsai-b |
+| `p13-io-casework` | GLB, OBJ and IFC export cabinets and fixtures | merging | bonsai-a |
+| `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | gate | bonsai-b |
 
 ## Recent merges
 
@@ -55,8 +55,8 @@ Updated 2026-11-03 09:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 835 |
-| bonsai-b | bonsai2-27b | agent | 771 |
+| bonsai-a | bonsai2-27b | merging | 836 |
+| bonsai-b | bonsai2-27b | gate | 772 |
 | bonsai-ws2-a | bonsai2-27b | merging | 840 |
 | bonsai-ws2-b | bonsai2-27b | idle | 822 |
 | claude-sonnet-a | sonnet | idle | 72 |
