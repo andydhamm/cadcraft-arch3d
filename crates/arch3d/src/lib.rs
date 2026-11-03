@@ -10,6 +10,7 @@
 
 pub mod camera;
 pub mod edges;
+pub mod finish;
 pub mod fixture;
 pub mod floors;
 pub mod hlr;

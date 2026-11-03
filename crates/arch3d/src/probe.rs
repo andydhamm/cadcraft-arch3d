@@ -38,6 +38,16 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("light-") {
         return "light";
     }
+    // Phase 13: finished faces belong to their wall, roof or room.
+    if m.starts_with("wall-") {
+        return "wall";
+    }
+    if m.starts_with("roof-") {
+        return "roof";
+    }
+    if m.starts_with("floor-") {
+        return "floor";
+    }
     if m.contains("glass") {
         return "glass";
     }
@@ -181,6 +191,8 @@ pub fn mesh_label(mesh: &Mesh) -> String {
         cadcraft_doc::arch::terrain_label(Some(mesh.object.0))
     } else if m.contains("floor") || m.contains("ceiling") {
         cadcraft_doc::arch::room_label(mesh.object)
+    } else if m.starts_with("roof-") {
+        cadcraft_doc::arch::roof_label(mesh.object)
     } else if m.contains("door")
         || m.contains("window")
         || m.contains("glass")
