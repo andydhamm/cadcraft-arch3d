@@ -15,13 +15,40 @@
    "keywords": [
     "armchair",
     "chair",
-    "living",
-    "dodecagon chair"
+    "living"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #34",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Arm chair\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "armchair.glb"
+  },
+  {
+   "id": "basin-built-in",
+   "name": "Built-in basin",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "lavatory",
+   "placement": "counter",
+   "size": [
+    0.5,
+    0.4,
+    0.0985
+   ],
+   "keywords": [
+    "basin",
+    "bathroom",
+    "built-in",
+    "sink"
+   ],
+   "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #38",
+   "licence": "CC0-1.0",
+   "author": "Keet",
+   "attribution": "\"Sink for build-in\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "basin-built-in.glb",
+   "cutout": [
+    0.48,
+    0.38
+   ]
   },
   {
    "id": "bathtub",
@@ -38,12 +65,12 @@
     "bathtub",
     "tub",
     "bath",
-    "bathroom",
-    "dodecagon bath"
+    "bathroom"
    ],
    "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #47",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Bath 1\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "bathtub.glb"
   },
   {
@@ -60,12 +87,12 @@
    "keywords": [
     "bed",
     "double",
-    "wood",
-    "dodecagon bed"
+    "wood"
    ],
    "source": "Dodecagon bedroom (https://www.dodecagon.nl/dodecagonbedroom), entry #1",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Bed wood 180\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "bed-double-wood.glb"
   },
   {
@@ -81,12 +108,12 @@
    ],
    "keywords": [
     "bed",
-    "single",
-    "dodecagon bed"
+    "single"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #53",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Bed 200x90\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "bed-single.glb"
   },
   {
@@ -104,12 +131,12 @@
     "bookcase",
     "shelves",
     "living",
-    "blend swap",
     "bookshelf"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#bookcase",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#bookcase; original http://www.blendswap.com/blends/view/57875",
    "licence": "CC0-1.0",
-   "author": "Michtek",
+   "author": "michtek",
+   "attribution": "\"Wooden bookcase no texture \" by michtek (http://www.blendswap.com/blends/view/57875), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "bookcase.glb"
   },
   {
@@ -125,12 +152,12 @@
    ],
    "keywords": [
     "dining",
-    "chair",
-    "dodecagon chair"
+    "chair"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #38",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Dining chair 2\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "chair-dining-2.glb"
   },
   {
@@ -147,12 +174,12 @@
    "keywords": [
     "dining",
     "chair",
-    "blend swap",
     "seat"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#chair2",
    "licence": "CC0-1.0",
    "author": "Ingoenius",
+   "attribution": "\"Chair\" by Ingoenius, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "chair-dining-3.glb"
   },
   {
@@ -169,12 +196,12 @@
    "keywords": [
     "dining",
     "chair",
-    "wood",
-    "dodecagon chair"
+    "wood"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #36",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Dining chair\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "chair-dining-wood.glb"
   },
   {
@@ -192,13 +219,13 @@
     "cooktop",
     "hob",
     "kitchen",
-    "blend swap",
     "cooker",
     "appliance"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#mano_cooktop",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#mano_cooktop; original http://www.blendswap.com/blends/view/805",
    "licence": "CC0-1.0",
-   "author": "Mano",
+   "author": "mano",
+   "attribution": "\"Cooktop\" by mano (http://www.blendswap.com/blends/view/805), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "cooktop.glb",
    "cutout": [
     0.56,
@@ -219,77 +246,13 @@
    "keywords": [
     "desk",
     "office",
-    "blend swap",
     "table"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#lbDesk",
    "licence": "CC0-1.0",
    "author": "Wiresoulstudio",
+   "attribution": "\"Desk\" by Wiresoulstudio, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "desk.glb"
-  },
-  {
-   "id": "dishwasher-60",
-   "name": "Dishwasher",
-   "category": "Appliances and plumbing fixtures",
-   "symbolType": "dishwasher",
-   "placement": "floor",
-   "size": [
-    0.6,
-    0.66,
-    0.91
-   ],
-   "keywords": [
-    "dishwasher",
-    "kitchen",
-    "appliance",
-    "dodecagon dishwasher2"
-   ],
-   "source": "Dodecagon kitchen2 (https://www.dodecagon.nl/dodecagonkitchen2), entry #2",
-   "licence": "CC0-1.0",
-   "author": "Keet",
-   "file": "dishwasher-60.glb"
-  },
-  {
-   "id": "door-glass",
-   "name": "Glass door",
-   "category": "Doors and windows",
-   "symbolType": "door",
-   "placement": "wall",
-   "size": [
-    1.044,
-    0.175,
-    2.1
-   ],
-   "keywords": [
-    "door",
-    "glass",
-    "adjustable"
-   ],
-   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#glass_door",
-   "licence": "CC-BY-3.0",
-   "author": "Scopia",
-   "file": "door-glass.glb"
-  },
-  {
-   "id": "door-panel",
-   "name": "Door",
-   "category": "Doors and windows",
-   "symbolType": "door",
-   "placement": "wall",
-   "size": [
-    0.96,
-    0.175,
-    2.1
-   ],
-   "keywords": [
-    "door",
-    "interior",
-    "adjustable"
-   ],
-   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#door",
-   "licence": "CC-BY-3.0",
-   "author": "Scopia",
-   "file": "door-panel.glb"
   },
   {
    "id": "dresser-6-drawers",
@@ -307,11 +270,13 @@
     "drawers",
     "bedroom",
     "wood",
-    "dodecagon dresser cabinet wardrobe"
+    "cabinet",
+    "wardrobe"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #4",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Dresser 6 Drawers wood\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "dresser-6-drawers.glb"
   },
   {
@@ -329,12 +294,12 @@
     "faucet",
     "tap",
     "bathroom",
-    "chrome",
-    "dodecagon faucet chrome"
+    "chrome"
    ],
    "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #23",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Faucet 2 Chrome\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "faucet-bathroom-chrome.glb"
   },
   {
@@ -352,12 +317,12 @@
     "faucet",
     "tap",
     "kitchen",
-    "chrome",
-    "dodecagon faucet"
+    "chrome"
    ],
    "source": "Dodecagon appliances (https://www.dodecagon.nl/dodecagonappliances), entry #17",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"KitchenFaucetChrome\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "faucet-kitchen-chrome.glb"
   },
   {
@@ -374,13 +339,22 @@
    "keywords": [
     "lamp",
     "desk",
-    "table lamp",
-    "blend swap"
+    "table lamp"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#desklamp",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#desklamp; original http://www.blendswap.com/blends/view/67340",
    "licence": "CC0-1.0",
    "author": "ColdShiverGames",
-   "file": "lamp-desk.glb"
+   "attribution": "\"Desklamp\" by ColdShiverGames (http://www.blendswap.com/blends/view/67340), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "lamp-desk.glb",
+   "light": {
+    "position": [
+     0.0,
+     0.0,
+     0.36
+    ],
+    "diameter": 0.06,
+    "colour": "#888888"
+   }
   },
   {
    "id": "lamp-floor",
@@ -401,7 +375,17 @@
    "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#living_lamp",
    "licence": "CC-BY-3.0",
    "author": "Scopia",
-   "file": "lamp-floor.glb"
+   "attribution": "\"Lamp\" by Scopia, Space Mushrooms <info@sweethome3d.com> and Scopia Visual Interfaces Systems, s.l. (http://www.scopia.es), CC-BY-3.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "lamp-floor.glb",
+   "light": {
+    "position": [
+     0.0,
+     -0.0925,
+     1.28
+    ],
+    "diameter": 0.08,
+    "colour": "#777777"
+   }
   },
   {
    "id": "lavatory-small",
@@ -422,7 +406,9 @@
    "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#small_lavatory",
    "licence": "CC-BY-3.0",
    "author": "Scopia",
-   "file": "lavatory-small.glb"
+   "attribution": "\"Small lavatory\" by Scopia, Space Mushrooms <info@sweethome3d.com> and Scopia Visual Interfaces Systems, s.l. (http://www.scopia.es), CC-BY-3.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "lavatory-small.glb",
+   "elevation": 0.5
   },
   {
    "id": "light-ceiling",
@@ -443,7 +429,17 @@
    "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#ceiling-lamp",
    "licence": "CC-BY-3.0",
    "author": "Scopia",
-   "file": "light-ceiling.glb"
+   "attribution": "\"Ceiling lamp\" by Scopia, Space Mushrooms <info@sweethome3d.com> and Scopia Visual Interfaces Systems, s.l. (http://www.scopia.es), CC-BY-3.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "light-ceiling.glb",
+   "light": {
+    "position": [
+     0.0,
+     0.0,
+     0.01
+    ],
+    "diameter": 0.07,
+    "colour": "#cccccc"
+   }
   },
   {
    "id": "light-pendant",
@@ -460,13 +456,22 @@
     "light",
     "pendant",
     "hanging",
-    "ceiling",
-    "blend swap"
+    "ceiling"
    ],
-   "source": "BlendSwap-CC-BY (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-BY-1.9.3.zip/download), entry Blend Swap CC-BY#hangingLight",
+   "source": "BlendSwap-CC-BY (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-BY-1.9.3.zip/download), entry Blend Swap CC-BY#hangingLight; original http://www.blendswap.com/blends/view/42851",
    "licence": "CC-BY-3.0",
    "author": "Jay-Artist",
-   "file": "light-pendant.glb"
+   "attribution": "\"Country-Kitchen Cycles\" by Jay-Artist (http://www.blendswap.com/blends/view/42851), CC-BY-3.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "light-pendant.glb",
+   "light": {
+    "position": [
+     0.0005,
+     0.0005,
+     0.125
+    ],
+    "diameter": 0.25,
+    "colour": "#aa9770"
+   }
   },
   {
    "id": "light-wall",
@@ -482,13 +487,23 @@
    "keywords": [
     "light",
     "sconce",
-    "wall",
-    "blend swap"
+    "wall"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#wallLight",
    "licence": "CC0-1.0",
    "author": "Ndakasha",
-   "file": "light-wall.glb"
+   "attribution": "\"Wall light\" by Ndakasha, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "light-wall.glb",
+   "elevation": 1.4,
+   "light": {
+    "position": [
+     0.0,
+     -0.009,
+     0.469
+    ],
+    "diameter": 0.15,
+    "colour": "#998764"
+   }
   },
   {
    "id": "material-fabric",
@@ -500,13 +515,13 @@
    "keywords": [
     "fabric",
     "upholstery",
-    "blend swap",
     "sofa",
     "corner"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#couch2",
    "licence": "CC0-1.0",
    "author": "Karagez",
+   "attribution": "texture from \"Couch\" by Karagez, CC0-1.0; copied unmodified",
    "file": "material-fabric.jpg"
   },
   {
@@ -520,12 +535,12 @@
     "stone",
     "marble",
     "counter",
-    "blend swap",
     "cupboard"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#lowerCabinet",
    "licence": "CC0-1.0",
    "author": "Vladoffsky",
+   "attribution": "texture from \"Lower cabinet\" by Vladoffsky, CC0-1.0; copied unmodified",
    "file": "material-marble.jpg"
   },
   {
@@ -538,13 +553,13 @@
    "keywords": [
     "wood",
     "oak",
-    "blend swap",
     "dining",
     "dinner"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oakTable",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oakTable; original http://www.blendswap.com/blends/view/66530",
    "licence": "CC0-1.0",
    "author": "Doug C",
+   "attribution": "texture from \"Oak Table\" by Doug C (http://www.blendswap.com/blends/view/66530), CC0-1.0; copied unmodified",
    "file": "material-oak.jpg"
   },
   {
@@ -562,13 +577,13 @@
     "oven",
     "built-in",
     "kitchen",
-    "blend swap",
     "appliance",
     "cooker"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oven",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oven; original http://www.blendswap.com/blends/view/2719",
    "licence": "CC0-1.0",
-   "author": "Martanda",
+   "author": "martanda",
+   "attribution": "\"ge-zet3058sh\" by martanda (http://www.blendswap.com/blends/view/2719), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "oven-built-in.glb"
   },
   {
@@ -586,7 +601,31 @@
    "file": "backdrop-sky.png",
    "source": "arch3d tools/library/own.py",
    "licence": "CC0-1.0",
-   "author": "arch3d (made for the sample set)"
+   "author": "arch3d (made for the sample set)",
+   "attribution": "made for the arch3d library sample set by arch3d (made for the sample set), CC0-1.0"
+  },
+  {
+   "id": "own:dishwasher-60",
+   "name": "Dishwasher, 60 cm",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "dishwasher",
+   "placement": "floor",
+   "size": [
+    0.6,
+    0.6,
+    0.876
+   ],
+   "keywords": [
+    "dishwasher",
+    "kitchen",
+    "appliance",
+    "built-under"
+   ],
+   "file": "dishwasher-60.glb",
+   "source": "arch3d tools/library/own.py",
+   "licence": "CC0-1.0",
+   "author": "arch3d (made for the sample set)",
+   "attribution": "made for the arch3d library sample set by arch3d (made for the sample set), CC0-1.0"
   },
   {
    "id": "own:pull-bar-128",
@@ -608,7 +647,8 @@
    "file": "pull-bar.glb",
    "source": "arch3d tools/library/own.py",
    "licence": "CC0-1.0",
-   "author": "arch3d (made for the sample set)"
+   "author": "arch3d (made for the sample set)",
+   "attribution": "made for the arch3d library sample set by arch3d (made for the sample set), CC0-1.0"
   },
   {
    "id": "own:pull-knob-32",
@@ -629,7 +669,8 @@
    "file": "pull-knob.glb",
    "source": "arch3d tools/library/own.py",
    "licence": "CC0-1.0",
-   "author": "arch3d (made for the sample set)"
+   "author": "arch3d (made for the sample set)",
+   "attribution": "made for the arch3d library sample set by arch3d (made for the sample set), CC0-1.0"
   },
   {
    "id": "own:range-30",
@@ -652,7 +693,35 @@
    "file": "range-30.glb",
    "source": "arch3d tools/library/own.py",
    "licence": "CC0-1.0",
-   "author": "arch3d (made for the sample set)"
+   "author": "arch3d (made for the sample set)",
+   "attribution": "made for the arch3d library sample set by arch3d (made for the sample set), CC0-1.0"
+  },
+  {
+   "id": "own:sink-kitchen",
+   "name": "Kitchen sink, single bowl",
+   "category": "Appliances and plumbing fixtures",
+   "symbolType": "sink",
+   "placement": "counter",
+   "size": [
+    0.8,
+    0.55,
+    0.2
+   ],
+   "cutout": [
+    0.76,
+    0.51
+   ],
+   "keywords": [
+    "sink",
+    "kitchen",
+    "stainless",
+    "drop-in"
+   ],
+   "file": "sink-kitchen.glb",
+   "source": "arch3d tools/library/own.py",
+   "licence": "CC0-1.0",
+   "author": "arch3d (made for the sample set)",
+   "attribution": "made for the arch3d library sample set by arch3d (made for the sample set), CC0-1.0"
   },
   {
    "id": "plant-large",
@@ -668,13 +737,13 @@
    "keywords": [
     "plant",
     "indoor",
-    "blend swap",
     "patio",
     "decoration"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#plant",
    "licence": "CC0-1.0",
    "author": "Ndakasha",
+   "attribution": "\"Plant\" by Ndakasha, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "plant-large.glb"
   },
   {
@@ -692,13 +761,13 @@
     "plant",
     "small",
     "indoor",
-    "blend swap",
     "patio",
     "decoration"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#littlePlant",
    "licence": "CC0-1.0",
    "author": "Rameshrj",
+   "attribution": "\"Little plant\" by Rameshrj, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "plant-small.glb"
   },
   {
@@ -716,14 +785,15 @@
     "hood",
     "range hood",
     "kitchen",
-    "blend swap",
     "appliance",
     "cooker"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#rangeHood",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#rangeHood; original http://www.blendswap.com/blends/view/67047",
    "licence": "CC0-1.0",
-   "author": "Doniypolo",
-   "file": "range-hood.glb"
+   "author": "doniypolo modified by Emmanuel Puybaret / eTeks to add brushed metal texture from https://cc0textures.com/view?id=Metal009",
+   "attribution": "\"Range hood\" by doniypolo modified by Emmanuel Puybaret / eTeks to add brushed metal texture from https://cc0textures.com/view?id=Metal009 (http://www.blendswap.com/blends/view/67047), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "range-hood.glb",
+   "elevation": 1.5
   },
   {
    "id": "refrigerator-fridge-freezer",
@@ -740,12 +810,12 @@
     "refrigerator",
     "fridge",
     "freezer",
-    "kitchen",
-    "dodecagon refrigerator freezer fridge"
+    "kitchen"
    ],
    "source": "Dodecagon appliances (https://www.dodecagon.nl/dodecagonappliances), entry #2",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"FridgeFreezer\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "refrigerator-fridge-freezer.glb"
   },
   {
@@ -769,6 +839,7 @@
    "source": "KatorLegaz (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-KatorLegaz-1.9.3.zip/download), entry Kator Legaz#fridge",
    "licence": "CC-BY-3.0-US",
    "author": "Kator Legaz",
+   "attribution": "\"Fridge\" by Kator Legaz, Copyright © 2003-2008 Andrew Kator & Jennifer Legaz, CC-BY-3.0-US; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "refrigerator-small.glb"
   },
   {
@@ -791,6 +862,7 @@
    "source": "KatorLegaz (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-KatorLegaz-1.9.3.zip/download), entry Kator Legaz#oriental-rug",
    "licence": "CC-BY-3.0-US",
    "author": "Kator Legaz",
+   "attribution": "\"Oriental rug\" by Kator Legaz, Copyright © 2003-2008 Andrew Kator & Jennifer Legaz, CC-BY-3.0-US; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "rug-oriental.glb"
   },
   {
@@ -808,38 +880,15 @@
     "shower",
     "rain shower",
     "bathroom",
-    "dodecagon rain shower wall"
+    "rain",
+    "wall"
    ],
    "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #26",
    "licence": "CC0-1.0",
    "author": "Keet",
-   "file": "shower-rain-wall.glb"
-  },
-  {
-   "id": "sink-built-in",
-   "name": "Built-in sink",
-   "category": "Appliances and plumbing fixtures",
-   "symbolType": "sink",
-   "placement": "counter",
-   "size": [
-    0.5,
-    0.4,
-    0.0985
-   ],
-   "keywords": [
-    "sink",
-    "kitchen",
-    "built-in",
-    "dodecagon sink"
-   ],
-   "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #38",
-   "licence": "CC0-1.0",
-   "author": "Keet",
-   "file": "sink-built-in.glb",
-   "cutout": [
-    0.48,
-    0.38
-   ]
+   "attribution": "\"Rain shower wallmount\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "shower-rain-wall.glb",
+   "elevation": 1.0
   },
   {
    "id": "sofa-chaise",
@@ -857,12 +906,12 @@
     "couch",
     "chaise",
     "living",
-    "blend swap",
     "corner"
    ],
    "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#couch2",
    "licence": "CC0-1.0",
    "author": "Karagez",
+   "attribution": "\"Couch\" by Karagez, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "sofa-chaise.glb"
   },
   {
@@ -885,6 +934,7 @@
    "source": "KatorLegaz (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-KatorLegaz-1.9.3.zip/download), entry Kator Legaz#futon-couch",
    "licence": "CC-BY-3.0-US",
    "author": "Kator Legaz",
+   "attribution": "\"Futon couch\" by Kator Legaz, Copyright © 2003-2008 Andrew Kator & Jennifer Legaz, CC-BY-3.0-US; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "sofa-futon.glb"
   },
   {
@@ -902,11 +952,12 @@
     "stool",
     "bar",
     "counter",
-    "dodecagon chair bar"
+    "chair"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #58",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Bar stool\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "stool-bar.glb"
   },
   {
@@ -923,12 +974,12 @@
    "keywords": [
     "bedside",
     "nightstand",
-    "bedroom",
-    "blend swap"
+    "bedroom"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#bedsideTable2",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#bedsideTable2; original http://www.blendswap.com/blends/view/62576",
    "licence": "CC0-1.0",
-   "author": "Nhumrod",
+   "author": "numroud",
+   "attribution": "\"IKEA s Oppdal double size bed with simple bedside tables\" by numroud (http://www.blendswap.com/blends/view/62576), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "table-bedside.glb"
   },
   {
@@ -945,12 +996,12 @@
    "keywords": [
     "coffee",
     "table",
-    "living",
-    "dodecagon table"
+    "living"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #28",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Table 90x90 h44\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "table-coffee-90.glb"
   },
   {
@@ -966,12 +1017,12 @@
    ],
    "keywords": [
     "dining",
-    "table",
-    "dodecagon table"
+    "table"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #31",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Table 150x90\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "table-dining-150.glb"
   },
   {
@@ -989,12 +1040,12 @@
     "dining",
     "table",
     "oak",
-    "blend swap",
     "dinner"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oakTable",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#oakTable; original http://www.blendswap.com/blends/view/66530",
    "licence": "CC0-1.0",
    "author": "Doug C",
+   "attribution": "\"Oak Table\" by Doug C (http://www.blendswap.com/blends/view/66530), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "table-dining-oak.glb"
   },
   {
@@ -1011,12 +1062,12 @@
    "keywords": [
     "toilet",
     "wc",
-    "bathroom",
-    "dodecagon toilet"
+    "bathroom"
    ],
    "source": "Dodecagon bathroom (https://www.dodecagon.nl/dodecagonbathroom), entry #36",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Toilet (non-opening)\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "toilet.glb"
   },
   {
@@ -1034,13 +1085,14 @@
     "towel",
     "rack",
     "bathroom",
-    "wall",
-    "blend swap"
+    "wall"
    ],
-   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#towel3",
+   "source": "BlendSwap-CC-0 (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-BlendSwap-CC-0-1.9.3.zip/download), entry Blend Swap CC-0#towel3; original http://www.blendswap.com/blends/view/66658",
    "licence": "CC0-1.0",
-   "author": "Wfg5001",
-   "file": "towel-rack.glb"
+   "author": "wfg5001",
+   "attribution": "\"Stone Shower\" by wfg5001 (http://www.blendswap.com/blends/view/66658), CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
+   "file": "towel-rack.glb",
+   "elevation": 0.4
   },
   {
    "id": "tv",
@@ -1067,6 +1119,7 @@
    "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#tv",
    "licence": "CC-BY-3.0",
    "author": "Scopia",
+   "attribution": "\"TV 16:9\" by Scopia, Space Mushrooms <info@sweethome3d.com> and Scopia Visual Interfaces Systems, s.l. (http://www.scopia.es), CC-BY-3.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "tv.glb"
   },
   {
@@ -1084,12 +1137,12 @@
     "wardrobe",
     "closet",
     "bedroom",
-    "wood",
-    "dodecagon wardrobe"
+    "wood"
    ],
    "source": "Dodecagon furniture01 (https://www.dodecagon.nl/dodecagonfurniture01), entry #16",
    "licence": "CC0-1.0",
    "author": "Keet",
+   "attribution": "\"Wardrobe hang wood\" by Keet, CC0-1.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "wardrobe-hanging.glb"
   },
   {
@@ -1111,50 +1164,8 @@
    "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#clothes_washing_machine",
    "licence": "CC-BY-3.0",
    "author": "Scopia",
+   "attribution": "\"Clothes washing machine\" by Scopia, Space Mushrooms <info@sweethome3d.com> and Scopia Visual Interfaces Systems, s.l. (http://www.scopia.es), CC-BY-3.0; converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, specular terms dropped, textures other than PNG or JPEG dropped",
    "file": "washing-machine.glb"
-  },
-  {
-   "id": "window-double",
-   "name": "Double window 4 panes",
-   "category": "Doors and windows",
-   "symbolType": "window",
-   "placement": "wall",
-   "size": [
-    1.085,
-    0.313,
-    2.0
-   ],
-   "keywords": [
-    "window",
-    "double",
-    "adjustable"
-   ],
-   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#window_2x4",
-   "licence": "CC-BY-3.0",
-   "author": "Scopia",
-   "file": "window-double.glb"
-  },
-  {
-   "id": "window-turn",
-   "name": "Turn window",
-   "category": "Doors and windows",
-   "symbolType": "window",
-   "placement": "wall",
-   "size": [
-    0.59,
-    0.135,
-    1.02
-   ],
-   "keywords": [
-    "window",
-    "casement",
-    "velux",
-    "adjustable"
-   ],
-   "source": "Scopia (https://sourceforge.net/projects/sweethome3d/files/SweetHome3D-models/3DModels-1.9.3/3DModels-Scopia-1.9.3.zip/download), entry Scopia#turn-window",
-   "licence": "CC-BY-3.0",
-   "author": "Scopia",
-   "file": "window-turn.glb"
   }
  ]
 }
