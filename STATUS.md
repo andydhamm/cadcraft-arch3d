@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 13 of 13: Polish — 19 of 23 segments merged · 5 of 13 acceptance checks**
+**Phase 13 of 13: Polish — 20 of 24 segments merged · 9 of 13 acceptance checks**
 
-6,794 workspace tests passing at the last merge · 701 segments merged in all · 0 of 14 seats working
+6,863 workspace tests passing at the last merge · 702 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,21 +23,22 @@ Updated 2026-11-03 07:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 5 / 13 | 16.6 h so far · expected done Nov 03 09:24–Nov 03 21:13 UTC |
+| 13 | Polish | building | 9 / 13 | 16.8 h so far · expected done Nov 03 09:30–Nov 03 20:38 UTC |
 
 ## Phase 13 segments
 
-19 merged, 2 queued, 1 replaced, 1 working, 1 abandoned, 1 merging
+20 merged, 2 working, 2 queued, 1 replaced, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p13-io-casework` | GLB, OBJ and IFC export cabinets and fixtures | working | bonsai-a |
-| `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | merging | mai-flash-esc |
+| `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | working | bonsai-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 07:08 | `upstream-sync-7bc76f94c` | merged | 6,863 pass | mai-flash-esc |
 | Nov 03 06:05 | `p13-render3d-textures` | merged | 6,794 pass | claude-sonnet-d |
 | Nov 03 05:33 | `p13-glb-textures` | merged | 6,788 pass | claude-sonnet-b |
 | Nov 03 05:09 | `p13-dxf-casework` | merged | 6,779 pass | claude-sonnet-c |
@@ -49,21 +50,20 @@ Updated 2026-11-03 07:00 UTC. This page and the card in the README are regenerat
 | Nov 03 01:07 | `p13-texture-gen` | merged | 6,749 pass | claude-sonnet-b |
 | Nov 03 00:49 | `p13-cmd-casework` | merged | 6,741 pass | claude-sonnet-d |
 | Nov 03 00:22 | `p13-arch-casework-symbols` | merged | 6,732 pass | claude-sonnet-c |
-| Nov 02 23:50 | `upstream-sync-dae4b7b2f` | merged | 6,726 pass | mai-flash |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 827 |
-| bonsai-b | bonsai2-27b | gate | 767 |
-| bonsai-ws2-a | bonsai2-27b | idle | 834 |
+| bonsai-a | bonsai2-27b | agent | 829 |
+| bonsai-b | bonsai2-27b | agent | 768 |
+| bonsai-ws2-a | bonsai2-27b | agent | 835 |
 | bonsai-ws2-b | bonsai2-27b | idle | 822 |
 | claude-sonnet-a | sonnet | idle | 72 |
 | claude-sonnet-b | sonnet | idle | 73 |
 | claude-sonnet-c | sonnet | idle | 20 |
 | claude-sonnet-d | sonnet | idle | 13 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 687 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 689 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 11 |
