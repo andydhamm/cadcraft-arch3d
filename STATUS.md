@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-03 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 13 of 13: Polish — 13 of 23 segments merged · 2 of 13 acceptance checks**
+**Phase 13 of 13: Polish — 14 of 23 segments merged · 3 of 13 acceptance checks**
 
-6,751 workspace tests passing at the last merge · 694 segments merged in all · 0 of 14 seats working
+6,764 workspace tests passing at the last merge · 695 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -23,16 +23,17 @@ Updated 2026-11-03 01:30 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 2 / 13 | 11.1 h so far · expected done Nov 03 08:53–Nov 04 01:56 UTC |
+| 13 | Polish | building | 3 / 13 | 11.3 h so far · expected done Nov 03 08:01–Nov 03 23:42 UTC |
 
 ## Phase 13 segments
 
-13 merged, 5 queued, 4 merging, 1 replaced, 1 abandoned, 1 escalate
+14 merged, 3 merging, 3 queued, 2 gate, 1 replaced, 1 abandoned, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p13-build3d-incremental` | build3d {"incremental": true}: a per-document scene cache | merging | bonsai-ws2-a |
-| `p13-arch3d-finish-meshes` | Finished faces in the 3D build: exterior wall faces, roof coverings, wood floors | merging | claude-sonnet-b |
+| `p13-glb-textures` | GLB embeds the finish textures (PNG) and names finished faces | gate | claude-sonnet-b |
+| `p13-render3d-textures` | render3d samples the finish textures | gate | bonsai-ws2-b |
 | `p13-arch3d-casework` | Cabinets and fixtures in 3D | merging | mai-flash-esc |
 | `p13-dxf-casework` | DXF: cabinets and fixtures as plan proxies | merging | claude-sonnet-c |
 | `upstream-sync-7bc76f94c` | merge upstream upstream/main up to 7bc76f94c (24 commits) | escalate |  |
@@ -41,6 +42,7 @@ Updated 2026-11-03 01:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 01:36 | `p13-arch3d-finish-meshes` | merged | 6,764 pass | claude-sonnet-b |
 | Nov 03 01:20 | `p13-pane-incremental` | merged | 6,751 pass | claude-sonnet-a |
 | Nov 03 01:07 | `p13-texture-gen` | merged | 6,749 pass | claude-sonnet-b |
 | Nov 03 00:49 | `p13-cmd-casework` | merged | 6,741 pass | claude-sonnet-d |
@@ -52,21 +54,20 @@ Updated 2026-11-03 01:30 UTC. This page and the card in the README are regenerat
 | Nov 02 21:39 | `p13-io-finish-round-trip` | merged | 6,699 pass | bonsai-ws2-b |
 | Nov 02 20:55 | `p13-doc-casework` | merged | 6,697 pass | claude-sonnet-c |
 | Nov 02 20:20 | `p13-finish-regeneration` | merged | 6,689 pass | claude-sonnet-a |
-| Nov 02 19:54 | `p13-cmd-material` | merged | 6,687 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 823 |
-| bonsai-b | bonsai2-27b | idle | 760 |
+| bonsai-b | bonsai2-27b | agent | 760 |
 | bonsai-ws2-a | bonsai2-27b | merging | 829 |
-| bonsai-ws2-b | bonsai2-27b | idle | 814 |
+| bonsai-ws2-b | bonsai2-27b | gate | 814 |
 | claude-sonnet-a | sonnet | idle | 72 |
-| claude-sonnet-b | sonnet | merging | 72 |
+| claude-sonnet-b | sonnet | gate | 72 |
 | claude-sonnet-c | sonnet | merging | 20 |
 | claude-sonnet-d | sonnet | idle | 12 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 681 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 681 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 52 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 10 |
