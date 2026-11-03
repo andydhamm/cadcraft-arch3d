@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-03 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-03 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 13 of 13: Polish — 21 of 24 segments merged · 9 of 13 acceptance checks**
 
@@ -23,21 +23,22 @@ Updated 2026-11-03 11:00 UTC. This page and the card in the README are regenerat
 | 10 | Lighting, light fixtures and final renders | done | 11 / 11 | 14.2 h |
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
-| 13 | Polish | building | 9 / 13 | 20.6 h so far · expected done Nov 03 13:24–Nov 04 04:43 UTC |
+| 13 | Polish | building | 9 / 13 | 20.8 h so far · expected done Nov 03 13:39–Nov 04 04:58 UTC |
 
 ## Phase 13 segments
 
-21 merged, 2 merging, 1 replaced, 1 queued, 1 abandoned
+21 merged, 1 replaced, 1 merging, 1 queued, 1 abandoned, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p13-docs-user-guide` | User guide: materials, cabinets and fixtures, large models | merging | mai-flash-esc |
-| `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | merging | bonsai-b |
+| `upstream-sync-6c4984f5a` | merge upstream upstream/main up to 6c4984f5a (40 commits) | escalate |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 03 11:01 | `upstream-sync-6c4984f5a` | refused | 6,922 pass | bonsai-b |
 | Nov 03 09:15 | `p13-io-casework` | merged | 6,878 pass | darwin-ws3 |
 | Nov 03 08:45 | `upstream-sync-6c4984f5a` | refused | 6,917 pass | bonsai-b |
 | Nov 03 07:29 | `harden-p13-pane-incremental` | merged | 6,873 pass | tturbo-mac |
@@ -49,14 +50,13 @@ Updated 2026-11-03 11:00 UTC. This page and the card in the README are regenerat
 | Nov 03 02:11 | `p13-arch3d-casework` | refused | 0 pass | mai-flash-esc |
 | Nov 03 02:11 | `p13-build3d-incremental` | merged | 6,771 pass | bonsai-ws2-a |
 | Nov 03 01:36 | `p13-arch3d-finish-meshes` | merged | 6,764 pass | claude-sonnet-b |
-| Nov 03 01:20 | `p13-pane-incremental` | merged | 6,751 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 838 |
-| bonsai-b | bonsai2-27b | merging | 776 |
+| bonsai-b | bonsai2-27b | idle | 776 |
 | bonsai-ws2-a | bonsai2-27b | idle | 850 |
 | bonsai-ws2-b | bonsai2-27b | idle | 825 |
 | claude-sonnet-a | sonnet | idle | 72 |
