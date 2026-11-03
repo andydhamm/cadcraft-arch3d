@@ -170,7 +170,7 @@ impl LitPipelines {
         let layout = bind_group_layout(device);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("render3d lit pipeline layout"),
-            bind_group_layouts: &[Some(&gpu.bgl), Some(&gpu.pbr_bgl), Some(&layout)],
+            bind_group_layouts: &[Some(&gpu.bgl), Some(&gpu.pbr_bgl), Some(&layout), Some(&gpu.tex_bgl)],
             immediate_size: 0,
         });
         let opaque = lit_render_pipeline(device, &pipeline_layout, &shader, "render3d lit opaque", None, true);
@@ -331,8 +331,8 @@ mod tests {
 
     #[test]
     fn lit_pipelines_build_on_the_test_device() {
-        let Some((device, _queue)) = skip_without_device() else { return };
-        let gpu = GpuPipeline::new(&device, 1);
+        let Some((device, queue)) = skip_without_device() else { return };
+        let gpu = GpuPipeline::new(&device, &queue, 1);
         assert!(LitPipelines::new(&device, &gpu).is_some(), "the composed lit shader must build both pipelines");
     }
 

@@ -837,6 +837,7 @@ dependencies = [
  "bytemuck",
  "cadcraft-arch3d",
  "cadcraft-color",
+ "cadcraft-doc",
  "cadcraft-geom",
  "cadcraft-gpu-optin",
  "futures",

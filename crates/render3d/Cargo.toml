@@ -9,6 +9,7 @@ repository.workspace = true
 cadcraft-geom = { workspace = true }
 cadcraft-color = { workspace = true }
 cadcraft-arch3d = { workspace = true }
+cadcraft-doc = { workspace = true }
 cadcraft-gpu-optin = { workspace = true }
 wgpu = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png"] }

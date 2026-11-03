@@ -211,7 +211,7 @@ impl Offscreen {
     pub fn with_device(device: wgpu::Device, queue: wgpu::Queue, size: (u32, u32)) -> Self {
         let size = clamp_size(&device, size);
         let targets = Targets::new(&device, size);
-        let gpu = GpuPipeline::new(&device, 1);
+        let gpu = GpuPipeline::new(&device, &queue, 1);
         let stride = uniform_stride(&device);
         let info = DeviceInfo::unknown(device.limits() == wgpu::Limits::downlevel_webgl2_defaults());
         Offscreen {
@@ -472,6 +472,8 @@ impl Offscreen {
             (None, None, false) => &self.gpu.glass_pipeline,
             (None, None, true) => &self.gpu.pipeline,
         };
+        // Group 3 (the finish textures) is the same for every pipeline and draw of the pass.
+        pass.set_bind_group(3, &self.gpu.tex_bind_group, &[]);
         if style_is_glass_house {
             let mut scene_draw_count = 0usize;
             for mesh in &scene.meshes {

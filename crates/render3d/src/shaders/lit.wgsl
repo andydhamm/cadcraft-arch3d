@@ -111,15 +111,16 @@ fn fs(v: VOut) -> @location(0) vec4<f32> {
     if (p.style == 2u) {
         return c;
     }
+    let albedo = base_albedo(v.uv);
     var rgb = c.rgb;
 
     if (fr.sun.y > 0.5 && fr.sun.z > 0.5 && lit_sun_visibility(v.wpos) < 0.5) {
-        rgb = u.albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
+        rgb = albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
     }
 
     let n = normalize(cross(dpdy(v.wpos), dpdx(v.wpos)));
     let n_l = select(n, -n, dot(n, p.camera_pos - v.wpos) < 0.0);
-    let diffuse_albedo = u.albedo * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
+    let diffuse_albedo = albedo * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
     let light_count = min(lu.count.x, 64u);
     for (var i = 0u; i < light_count; i = i + 1u) {
         let light = lu.lights[i];
@@ -150,7 +151,7 @@ fn fs(v: VOut) -> @location(0) vec4<f32> {
         rgb = rgb + (diffuse_albedo / LIT_PI) * illuminance * shadow * fr.params.x;
     }
 
-    rgb = rgb + u.albedo * p._p6.x;
+    rgb = rgb + albedo * p._p6.x;
     if (fr.params.y > 0.5) {
         let x = rgb;
         let numerator = x * (2.51 * x + vec3<f32>(0.03));

@@ -42,6 +42,7 @@ struct ShadowU { vp: mat4x4<f32>, params: vec4<f32> };
     if (p.style == 2u) {
         return c;
     }
+    let albedo = base_albedo(v.uv);
     let lc = sh.vp * vec4<f32>(v.wpos, 1.0);
     let ndc = lc.xyz / lc.w;
     let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
@@ -51,7 +52,7 @@ struct ShadowU { vp: mat4x4<f32>, params: vec4<f32> };
     let dims = vec2<f32>(textureDimensions(shadow_tex));
     let stored = textureLoad(shadow_tex, vec2<i32>(uv * dims), 0);
     if (ndc.z > stored + sh.params.x) {
-        let amb = u.albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
+        let amb = albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
         return vec4<f32>(amb, c.a);
     }
     return c;
@@ -133,7 +134,7 @@ impl ShadowPipelines {
         let shadow_bgl = bind_group_layout(device);
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("render3d shadowed pipeline layout"),
-            bind_group_layouts: &[Some(&gpu.bgl), Some(&gpu.pbr_bgl), Some(&shadow_bgl)],
+            bind_group_layouts: &[Some(&gpu.bgl), Some(&gpu.pbr_bgl), Some(&shadow_bgl), Some(&gpu.tex_bgl)],
             immediate_size: 0,
         });
         let make = |label: &str, depth_write: bool, blend: Option<wgpu::BlendState>| {
