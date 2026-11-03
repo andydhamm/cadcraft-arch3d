@@ -64,9 +64,10 @@ impl Category {
 }
 
 /// The kind of item in the library.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ItemKind {
+    #[default]
     Symbol,
     Material,
     Backdrop,
