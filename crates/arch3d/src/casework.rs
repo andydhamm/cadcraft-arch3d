@@ -54,18 +54,15 @@ pub fn cabinet_meshes(model: &ArchModel, c: &Cabinet) -> Vec<Mesh> {
     let toe = if c.toe_kick { 0.1 } else { 0.0 };
     let mut meshes = Vec::new();
 
+    // The recessed plinth is part of the carcass mesh: exports name one node per mesh, so a second "cabinet-box"
+    // mesh would be a second `cabinet-cb<n>` node (phase-13 check 13 counts one per cabinet).
     let mut carcass = Mesh::new("cabinet-box", c.id);
     push_box(&mut carcass, c.position, c.rotation, -c.width / 2.0, c.width / 2.0, 0.0, c.depth - 0.019, level_z + toe, level_z + c.height);
+    if c.toe_kick {
+        push_box(&mut carcass, c.position, c.rotation, -c.width / 2.0, c.width / 2.0, 0.0, c.depth - 0.075, level_z, level_z + 0.1);
+    }
     if !carcass.indices.is_empty() {
         meshes.push(carcass);
-    }
-
-    if c.toe_kick {
-        let mut plinth = Mesh::new("cabinet-box", c.id);
-        push_box(&mut plinth, c.position, c.rotation, -c.width / 2.0, c.width / 2.0, 0.0, c.depth - 0.075, level_z, level_z + 0.1);
-        if !plinth.indices.is_empty() {
-            meshes.push(plinth);
-        }
     }
 
     let mut front = Mesh::new("cabinet-front", c.id);
@@ -221,6 +218,17 @@ mod tests {
         let meshes = cabinet_meshes(&model, c);
         let counter = meshes.iter().find(|m| m.material == "counter").expect("counter mesh");
         assert!((counter.bounds().max[2] - 0.914).abs() < 1e-6, "counter top is {}", counter.bounds().max[2]);
+    }
+
+    #[test]
+    fn toe_kick_plinth_is_part_of_the_carcass_mesh() {
+        let model = base_model();
+        let meshes = cabinet_meshes(&model, &model.cabinets[0]);
+        let boxes: Vec<&Mesh> = meshes.iter().filter(|m| m.material == "cabinet-box").collect();
+        assert_eq!(boxes.len(), 1, "one carcass mesh, so one GLB/OBJ node cabinet-cb0, plinth included");
+        let b = boxes[0].bounds();
+        assert!(b.min[2].abs() < 1e-6, "the carcass reaches the floor through its plinth: min z {}", b.min[2]);
+        assert!((b.max[2] - 0.876).abs() < 1e-6, "carcass top {}", b.max[2]);
     }
 
     #[test]

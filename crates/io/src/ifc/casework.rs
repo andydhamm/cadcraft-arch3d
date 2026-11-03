@@ -3,7 +3,7 @@
 
 use crate::ifc::Ctx;
 use crate::step::P;
-use cadcraft_doc::arch::ArchId;
+use cadcraft_doc::arch::{ArchId, CabinetKind};
 
 /// Emit cabinets and fixtures.
 pub(crate) fn emit(ctx: &mut Ctx<'_>) {
@@ -14,22 +14,17 @@ pub(crate) fn emit(ctx: &mut Ctx<'_>) {
             continue;
         }
 
-        // Determine cabinet type from the first mesh material if possible, or default
-        // We assume the first mesh material indicates the type if it's specific, but here
-        // materials are generic (cabinet-box, cabinet-front, counter).
-        // We'll default to BASE CABINET for now as we don't have type info in ArchId.
-        // In a full implementation, ArchModel would carry CabinetType.
-        let obj_type = "BASE CABINET";
+        // ObjectType names the cabinet's kind; one missing from the model (a scene built by hand) reads as a base cabinet.
+        let cabinet = ctx.model.cabinets.iter().find(|c| c.id == id);
+        let obj_type = match cabinet.map(|c| c.kind).unwrap_or_default() {
+            CabinetKind::Base => "BASE CABINET",
+            CabinetKind::Wall => "WALL CABINET",
+            CabinetKind::Tall => "TALL CABINET",
+        };
         let name = format!("cabinet-cb{}", id.0);
         let key = format!("cabinet/{}", id.0);
 
-        // Find the level for this cabinet. For now, assume level 0 or search for it.
-        // Since we don't have direct access to the cabinet object's level here without
-        // iterating the model, we'll place it in the first storey (level 0) by default
-        // or search the model if we had access.
-        // Note: Ctx has model. We can look up the cabinet in model.cabinets if they exist.
-        // Assuming model.cabinets exists and has a level field.
-        let level = ctx.model.cabinets.iter().find(|c| c.id == id).map(|c| c.level).unwrap_or(0);
+        let level = cabinet.map(|c| c.level).unwrap_or(0);
         let slot = ctx.storey_for(level);
 
         // IfcFurniture has 9 attributes:
@@ -126,6 +121,30 @@ mod tests {
         assert!(text.contains("IFCFURNITURE"), "Expected IFCFURNITURE in output");
         assert!(text.contains(".USERDEFINED."), "Expected USERDEFINED enum");
         assert!(text.contains("'BASE CABINET'"), "Expected BASE CABINET object type");
+    }
+
+    #[test]
+    fn ifc_cabinet_object_type_names_its_kind() {
+        use cadcraft_doc::arch::{Cabinet, CabinetKind};
+        let mut model = ArchModel::default();
+        model.levels = vec![Level::default()];
+        for (k, kind) in [CabinetKind::Base, CabinetKind::Wall, CabinetKind::Tall].into_iter().enumerate() {
+            model.cabinets.push(Cabinet {
+                id: ArchId(k as u32),
+                kind,
+                position: cadcraft_geom::Vec2::new(k as f64, 0.0),
+                width: 0.6,
+                depth: 0.6,
+                height: 0.9,
+                ..Cabinet::default()
+            });
+        }
+        let text = export(&model);
+        let furniture: Vec<&str> = text.lines().filter(|l| l.contains("IFCFURNITURE(")).collect();
+        assert_eq!(furniture.len(), 3, "three cabinets are three IfcFurniture: {furniture:?}");
+        for want in ["'BASE CABINET'", "'WALL CABINET'", "'TALL CABINET'"] {
+            assert_eq!(furniture.iter().filter(|l| l.contains(want)).count(), 1, "one {want} ObjectType: {furniture:?}");
+        }
     }
 
     #[test]
