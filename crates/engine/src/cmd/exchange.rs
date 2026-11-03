@@ -122,7 +122,15 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("export", "`format` must be dxf, dwg, svg, png, pdf, glb, obj or ifc (or give a `path` with one of those extensions)"));
     }
     let file = format!("export.{format}");
-    let bytes = (hooks.write)(s.doc()?, &file).map_err(|e| bad("export", e))?;
+    // Determine the name passed to the writer hook.
+    // If a path is given, use the file name so the writer can name internal references
+    // correctly (e.g. the OBJ's MTL), otherwise use a generic name.
+    let hook_name = if let Some(p) = path {
+        std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("export.{format}"))
+    } else {
+        format!("export.{format}")
+    };
+    let bytes = (hooks.write)(s.doc()?, &hook_name).map_err(|e| bad("export", e))?;
     let folder = path.and_then(super::file::new_folder);
     let mut r = match path {
         Some(path) => {
