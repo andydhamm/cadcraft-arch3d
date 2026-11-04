@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 14:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 19 of 34 segments merged · 0 of 13 acceptance checks**
 
@@ -24,7 +24,7 @@ Updated 2026-11-04 14:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 18.8 h so far · expected done Nov 06 06:15–Nov 11 03:15 UTC |
+| 14 | The library | building | 0 / 13 | 19.0 h so far · expected done Nov 06 06:30–Nov 11 03:30 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
@@ -63,9 +63,9 @@ Updated 2026-11-04 14:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 866 |
+| bonsai-a | bonsai2-27b | agent | 867 |
 | bonsai-b | bonsai2-27b | idle | 805 |
-| bonsai-ws2-a | bonsai2-27b | gate | 879 |
+| bonsai-ws2-a | bonsai2-27b | agent | 880 |
 | bonsai-ws2-b | bonsai2-27b | idle | 855 |
 | claude-sonnet-a | sonnet | idle | 76 |
 | claude-sonnet-b | sonnet | idle | 80 |
@@ -75,5 +75,5 @@ Updated 2026-11-04 14:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 58 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 20 |
-| tturbo-mac | tturbo-ultraheretic | agent | 607 |
+| tturbo-mac | tturbo-ultraheretic | gate | 607 |
 | tturbo-mac2 | tturbo-ultraheretic | down | 348 |
