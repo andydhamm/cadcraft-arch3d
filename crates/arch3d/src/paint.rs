@@ -227,7 +227,11 @@ pub fn materials(model: &ArchModel, scene: &mut Scene3d) {
         {
             if let Some(f) = key.strip_prefix("finish:").and_then(Finish::parse) {
                 let t = texture(f);
-                scene.textures.insert(key, ImageRgba { width: t.width, height: t.height, rgba: t.rgba });
+                let mut img = ImageRgba::default();
+                img.width = t.width;
+                img.height = t.height;
+                img.rgba = t.rgba;
+                scene.textures.insert(key, img);
             } else if let Some(img) = key.strip_prefix("item:").and_then(|id| model.images.get(id)) {
                 scene.textures.insert(key, img.clone());
             }
@@ -262,7 +266,10 @@ mod tests {
     }
 
     fn paint(model: &mut ArchModel, key: &str, material: Option<MaterialRef>, tint: Option<[u8; 3]>) {
-        model.paints.insert(key.to_string(), Paint { material, tint });
+        let mut p = Paint::default();
+        p.material = material;
+        p.tint = tint;
+        model.paints.insert(key.to_string(), p);
     }
 
     #[test]
@@ -354,7 +361,10 @@ mod tests {
             roughness: 0.8,
             ..Default::default()
         };
-        model.symbols.insert("0123456789abcdef".to_string(), SymbolMesh { key: "0123456789abcdef".to_string(), parts: vec![part], textures: vec![] });
+        let mut sym = SymbolMesh::default();
+        sym.key = "0123456789abcdef".to_string();
+        sym.parts = vec![part];
+        model.symbols.insert("0123456789abcdef".to_string(), sym);
         model.furnishings.push(Furnishing {
             id: ArchId(0),
             item: "test".to_string(),
