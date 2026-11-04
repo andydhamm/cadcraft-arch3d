@@ -907,4 +907,146 @@ mod tests {
         assert!(stats.incremental);
         assert_eq!(stats.rebuilt, 1);
     }
+
+    /// A pull symbol with two parts (a bar and a cap).
+    fn two_part_symbol() -> SymbolMesh {
+        let positions = vec![
+            [-0.05_f32, -0.01_f32, 0.0_f32],
+            [0.05_f32, -0.01_f32, 0.0_f32],
+            [0.05_f32, 0.01_f32, 0.0_f32],
+            [-0.05_f32, 0.01_f32, 0.0_f32],
+            [-0.05_f32, -0.01_f32, 0.02_f32],
+            [0.05_f32, -0.01_f32, 0.02_f32],
+            [0.05_f32, 0.01_f32, 0.02_f32],
+            [-0.05_f32, 0.01_f32, 0.02_f32],
+        ];
+        let indices = vec![0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+        let normals = vec![[0.0, 0.0, 1.0]; 8];
+        SymbolMesh {
+            key: "two".into(),
+            parts: vec![
+                SymbolPart {
+                    name: "bar".into(),
+                    positions: positions.clone(),
+                    normals: normals.clone(),
+                    indices: indices.clone(),
+                    base_color: [1.0; 4],
+                    roughness: 0.5,
+                    ..SymbolPart::default()
+                },
+                SymbolPart { name: "cap".into(), positions, normals, indices, base_color: [0.5; 4], roughness: 0.5, ..SymbolPart::default() },
+            ],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn pull_symbol_with_multiple_parts() {
+        let mut c = cab(0, 0.0, Fronts::Doors);
+        c.pull = Some("two".into());
+        c.pull_symbol = Some("two".into());
+        let mut model = ArchModel::default();
+        model.cabinets.push(c);
+        model.symbols.insert("two".into(), two_part_symbol());
+        let meshes = cabinet_meshes(&model, &model.cabinets[0]);
+        let pulls: Vec<&Mesh> = meshes.iter().filter(|m| m.material.starts_with("pull:two:")).collect();
+        assert_eq!(pulls.len(), 2, "two pull meshes for two parts");
+        assert_eq!(pulls[0].material, "pull:two:0");
+        assert_eq!(pulls[1].material, "pull:two:1");
+    }
+
+    #[test]
+    fn cabinet_with_rotation_180_extends_in_negative_y() {
+        let mut model = ArchModel::default();
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(2.0, 3.0),
+            rotation: 180.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            elevation: 0.0,
+            fronts: Fronts::Doors,
+            doors: 1,
+            ..Cabinet::default()
+        });
+        let bounds = cabinet_meshes(&model, &model.cabinets[0])[0].bounds();
+        // With rotation 180, the cabinet extends from x=1.7 to x=2.3 and y=2.4 to y=3.0
+        assert!((bounds.min[0] - 1.7).abs() < 1e-2, "min x {}", bounds.min[0]);
+        assert!((bounds.max[0] - 2.3).abs() < 1e-2, "max x {}", bounds.max[0]);
+        assert!((bounds.min[1] - 2.4).abs() < 1e-2, "min y {}", bounds.min[1]);
+        assert!((bounds.max[1] - 3.0).abs() < 1e-2, "max y {}", bounds.max[1]);
+    }
+
+    #[test]
+    fn counter_run_with_cutout_most_of_counter() {
+        let mut model = model_of(vec![cab(0, 0.0, Fronts::Doors)]);
+        // A cutout that covers most of the counter but not all of it
+        model.furnishings.push(Furnishing {
+            id: ArchId(0),
+            at: [0.0, 0.3],
+            size: [0.5, 0.4, 0.2],
+            host: FurnishingHost::Cabinet { cabinet: ArchId(0) },
+            cutout: Some([0.55, 0.55]),
+            ..Furnishing::default()
+        });
+        let all = counters(&model);
+        assert_eq!(all.len(), 1);
+        // The hole is inside the counter, so the counter has a thin border
+        let area = top_area(&all[0].1);
+        let expect = 0.6 * 0.625 - 0.55 * 0.55;
+        assert!((area - expect).abs() < 1e-6, "counter area {area} vs {expect}");
+        assert!(all[0].1.is_manifold(), "counter with a large cutout should be closed");
+    }
+
+    #[test]
+    fn cabinet_with_zero_width_does_not_crash() {
+        let mut model = ArchModel::default();
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            width: 0.0,
+            depth: 0.6,
+            height: 0.876,
+            elevation: 0.0,
+            fronts: Fronts::Doors,
+            doors: 1,
+            ..Cabinet::default()
+        });
+        let meshes = cabinet_meshes(&model, &model.cabinets[0]);
+        // A zero-width cabinet produces no non-finite vertices
+        for m in &meshes {
+            assert!(m.positions.iter().all(|p| p.iter().all(|v| v.is_finite())), "non-finite vertex");
+        }
+    }
+
+    #[test]
+    fn pull_on_a_small_front() {
+        let mut model = ArchModel::default();
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            width: 0.1,
+            depth: 0.6,
+            height: 0.876,
+            elevation: 0.0,
+            fronts: Fronts::Doors,
+            doors: 1,
+            pull: Some("bar".into()),
+            pull_symbol: Some("bar".into()),
+            ..Cabinet::default()
+        });
+        model.symbols.insert("bar".into(), bar_symbol());
+        let meshes = cabinet_meshes(&model, &model.cabinets[0]);
+        let pull = mesh_named(&meshes, "pull:bar:0");
+        assert!(pull.is_some(), "pull should be placed even on a small front");
+    }
 }
