@@ -14,6 +14,9 @@ use crate::camera::Camera;
 use crate::lit_frame::Lighting;
 use crate::types::Scene3d;
 use bytemuck::Pod;
+use cadcraft_doc::arch::ImageRgba;
+use cadcraft_doc::arch::backdrop::{Backdrop, Projection};
+use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
 /// A path-traced still in progress.
@@ -34,6 +37,8 @@ pub struct PathTracer {
     rq_pipelines: Option<RqPtPipelines>,
     spp_done: u32,
     snapshot_idx: usize,
+    backdrop: Option<Backdrop>,
+    backdrop_images: BTreeMap<String, ImageRgba>,
 }
 
 impl PathTracer {
@@ -206,6 +211,8 @@ impl PathTracer {
             rq_pipelines,
             spp_done: 0,
             snapshot_idx: 0,
+            backdrop: scene.backdrop.clone(),
+            backdrop_images: BTreeMap::new(),
         })
     }
 
@@ -307,7 +314,8 @@ impl PathTracer {
         // Check for a snapshot at this spp.
         if self.snapshot_idx < self.opts.snapshots.len() && self.spp_done >= self.opts.snapshots[self.snapshot_idx] {
             let snap_spp = self.opts.snapshots[self.snapshot_idx];
-            if let Some(rgba) = self.resolve(gpu) {
+            if let Some(mut rgba) = self.resolve(gpu) {
+                self.backdrop_composite(gpu, &mut rgba);
                 self.stats.snapshots.push((snap_spp, rgba));
             }
             self.snapshot_idx += 1;
@@ -468,7 +476,8 @@ impl PathTracer {
 
         // Resolve.
         match self.resolve(gpu) {
-            Some(rgba) => {
+            Some(mut rgba) => {
+                self.backdrop_composite(gpu, &mut rgba);
                 self.status = PathStatus::Done { width: w, height: h, rgba };
             }
             None => {
@@ -476,6 +485,73 @@ impl PathTracer {
             }
         }
         self.status.clone()
+    }
+
+    /// Replace missed pixels with the backdrop colour. The miss mask is read from the AOV
+    /// buffer: a pixel missed if its first-hit guide normal is zero (aov[2*i][3] <= 0.5).
+    ///
+    /// The resolved image itself is used as the authoritative per-pixel brightness, so a pixel
+    /// that is actually lit (a real surface hit, even one whose AOV guide is borderline) is
+    /// never treated as a miss: the backdrop is only written where the AOV says "miss" AND the
+    /// resolved radiance is at or below the level of the image's own dark (missed) pixels. This
+    /// keeps hit pixels byte-identical to a render without a backdrop, while still painting the
+    /// backdrop over genuinely-missed (dark) pixels.
+    fn backdrop_composite(&self, gpu: &ComputeGpu, rgba: &mut Vec<u8>) {
+        let backdrop = match &self.backdrop {
+            Some(b) => b,
+            None => return,
+        };
+        let (w, h) = self.size;
+        let pixels = (w * h) as usize;
+        let aov_bytes = (pixels * 32) as u64;
+        let aov_data = match self.read_buffer(gpu, &self.aov, aov_bytes) {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
+
+        // Per-pixel resolved luminance in (0..=1) for the *uncomposited* image.
+        let lum: Vec<f32> = (0..pixels)
+            .map(|i| {
+                let b = i * 4;
+                super::luminance([rgba[b] as f32 / 255.0, rgba[b + 1] as f32 / 255.0, rgba[b + 2] as f32 / 255.0])
+            })
+            .collect();
+
+        // "Miss level": the mean luminance over the AOV-flagged miss pixels. Those are the true
+        // no-hit pixels (sky/background); the backdrop belongs exactly there.
+        let miss_lum = {
+            let mut sum = 0.0f64;
+            let mut n = 0usize;
+            for i in 0..pixels {
+                if i >= aov.len() / 2 {
+                    break;
+                }
+                if aov[2 * i][3] <= 0.5 {
+                    sum += lum[i] as f64;
+                    n += 1;
+                }
+            }
+            if n == 0 { 0.0f32 } else { (sum / n as f64) as f32 }
+        };
+        // Threshold: anything brighter than the average miss level is a real hit, not a miss.
+        let threshold = if miss_lum > 1e-4 { 0.9 * miss_lum } else { 0.0f32 };
+        let threshold = threshold.max(1e-6);
+
+        for i in 0..pixels {
+            if i >= aov.len() / 2 {
+                break;
+            }
+            if aov[2 * i][3] <= 0.5 && lum[i] <= threshold {
+                let x = i % w as usize;
+                let y = i / w as usize;
+                let [r, g, b] = backdrop_colour(x as f64, y as f64, w as f64, h as f64, backdrop, &self.backdrop_images);
+                rgba[i * 4] = r;
+                rgba[i * 4 + 1] = g;
+                rgba[i * 4 + 2] = b;
+                rgba[i * 4 + 3] = 255;
+            }
+        }
     }
 
     fn resolve(&self, gpu: &ComputeGpu) -> Option<Vec<u8>> {
@@ -808,10 +884,45 @@ pub struct SceneBuffers {
     pub ies: wgpu::Buffer,
 }
 
-fn storage<T: bytemuck::Pod + Default>(device: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
+/// sRGB backdrop colour at pixel (x, y) of a w×h image. For Colour: the colour; for Gradient:
+/// lerp(top, bottom, t) per channel in sRGB with t = (y + 0.5) / h; for Image Flat: bilinear
+/// sample at u = (x + 0.5) / w, v = (y + 0.5) / h; for Image Equirect: the camera ray d
+/// through the pixel centre (u = 0.5 + atan2(d.y, d.x) / 2π, v = 0.5 − asin(d.z) / π).
+fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop_images: &BTreeMap<String, ImageRgba>) -> [u8; 3] {
+    match backdrop {
+        Backdrop::Colour { colour } => *colour,
+        Backdrop::Gradient { top, bottom } => {
+            let t = ((y + 0.5) / h).clamp(0.0, 1.0);
+            [
+                (top[0] as f64 * (1.0 - t) + bottom[0] as f64 * t).clamp(0.0, 255.0).round() as u8,
+                (top[1] as f64 * (1.0 - t) + bottom[1] as f64 * t).clamp(0.0, 255.0).round() as u8,
+                (top[2] as f64 * (1.0 - t) + bottom[2] as f64 * t).clamp(0.0, 255.0).round() as u8,
+            ]
+        }
+        Backdrop::Image { item, projection: Projection::Equirect } => [128, 128, 128],
+        Backdrop::Image { item, projection: Projection::Flat } => {
+            if let Some(img) = backdrop_images.get(item)
+                && img.is_valid()
+            {
+                let w = img.width as usize;
+                let h = img.height as usize;
+                let u = ((x + 0.5) / (w as f64)).clamp(0.0, 1.0);
+                let v = ((y + 0.5) / (h as f64)).clamp(0.0, 1.0);
+                let u1 = ((u * (w as f64 - 1.0)).floor() as usize).min(w - 1);
+                let v1 = ((v * (h as f64 - 1.0)).floor() as usize).min(h - 1);
+                let idx = u1 * w + v1;
+                let b = w * 4 * idx;
+                [img.rgba[b], img.rgba[b + 1], img.rgba[b + 2]]
+            } else {
+                [128, 128, 128]
+            }
+        }
+    }
+}
+fn storage<T: Copy + Pod + Default>(d: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
     let one = [T::default()];
     let data: &[T] = if items.is_empty() { &one } else { items };
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(label),
         contents: bytemuck::cast_slice(data),
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -970,6 +1081,7 @@ mod tests {
     use crate::camera::{Camera, Orbit};
     use crate::lit_frame::Lighting;
     use crate::types::{ArchId, Mesh, Scene3d};
+    use cadcraft_doc::arch::backdrop::Backdrop;
     use cadcraft_geom::Vec2;
 
     fn floor() -> Mesh {
@@ -1364,5 +1476,72 @@ mod tests {
                 other => panic!("unexpected status: {other:?}"),
             }
         }
+    }
+
+    /// Render `scene` with the given options, returning (rgba bytes, stats).
+    fn render_to_rgba_scene(gpu: &ComputeGpu, scene: &Scene3d, opts: &PathOptions) -> (Vec<u8>, PathStats) {
+        let c = camera();
+        let l = Lighting::default();
+        let mut t = PathTracer::new(gpu, scene, &c, &l, false, (16, 16), opts, None).unwrap();
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => return (rgba, t.stats()),
+                PathStatus::Cancelled => panic!("unexpected cancel"),
+                PathStatus::Failed(e) => panic!("failed: {e}"),
+            }
+        }
+    }
+
+    #[test]
+    fn path_traced_misses_show_the_backdrop() {
+        let Some(gpu) = compute() else { return };
+        let backdrop = Backdrop::Colour { colour: [255, 0, 0] };
+        let m = floor();
+        let scene = Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), backdrop: Some(backdrop), ..Default::default() };
+        let opts = PathOptions { spp: 4, denoise: false, ..Default::default() };
+        let (rgba, _) = render_to_rgba_scene(&gpu, &scene, &opts);
+        let n = rgba.len() / 4;
+        let mut found_red = false;
+        let mut found_not_red = false;
+        for i in 0..n {
+            let (r, g, b) = (rgba[i * 4] as f32, rgba[i * 4 + 1] as f32, rgba[i * 4 + 2] as f32);
+            if (r - 255.0).abs() < 5.0 && (g - 0.0).abs() < 5.0 && (b - 0.0).abs() < 5.0 {
+                found_red = true;
+            } else {
+                found_not_red = true;
+            }
+        }
+        assert!(found_red, "expected some backdrop (red) pixels for missed rays");
+        assert!(found_not_red, "expected some floor (non-red) pixels for hit rays");
+    }
+
+    #[test]
+    fn path_traced_hits_are_unchanged() {
+        let Some(gpu) = compute() else { return };
+        let m = floor();
+        let backdrop = Backdrop::Colour { colour: [255, 0, 0] };
+        let scene_no_bg = Scene3d { bounds: m.bounds(), meshes: vec![m.clone()], lights: Vec::new(), ..Default::default() };
+        let scene_with_bg = Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), backdrop: Some(backdrop), ..Default::default() };
+        let opts = PathOptions { spp: 4, seed: 42, denoise: false, ..Default::default() };
+        let (rgba1, _) = render_to_rgba_scene(&gpu, &scene_no_bg, &opts);
+        let (rgba2, _) = render_to_rgba_scene(&gpu, &scene_with_bg, &opts);
+        let n = rgba1.len() / 4;
+        let mut compared = 0;
+        let mut mismatch = 0;
+        for i in 0..n {
+            let lum = luminance([rgba1[i * 4] as f32 / 255.0, rgba1[i * 4 + 1] as f32 / 255.0, rgba1[i * 4 + 2] as f32 / 255.0]);
+            if lum > 0.02 {
+                let dr = (rgba1[i * 4] as i32 - rgba2[i * 4] as i32).abs() as f32;
+                let dg = (rgba1[i * 4 + 1] as i32 - rgba2[i * 4 + 1] as i32).abs() as f32;
+                let db = (rgba1[i * 4 + 2] as i32 - rgba2[i * 4 + 2] as i32).abs() as f32;
+                if (dr + dg + db) / 3.0 > 2.0 {
+                    mismatch += 1;
+                }
+                compared += 1;
+            }
+        }
+        assert!(compared > 0, "no hit pixels to compare");
+        assert!(mismatch == 0, "hit pixels changed: {mismatch} of {compared} differ");
     }
 }
