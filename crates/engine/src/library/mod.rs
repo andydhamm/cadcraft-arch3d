@@ -288,12 +288,6 @@ impl Library {
         self.items.binary_search_by(|r| r.id.as_str().cmp(id)).ok().and_then(|i| self.items.get(i))
     }
 
-    /// Mutable access to the item `id` in the merged item list.
-    pub fn item_mut(&mut self, id: &str) -> Option<&mut ItemRecord> {
-        let idx = self.items.binary_search_by(|r| r.id.as_str().cmp(id)).ok()?;
-        self.items.get_mut(idx)
-    }
-
     /// The user dir, if there is one.
     pub fn user_dir(&self) -> Option<PathBuf> {
         self.user_dir.clone()
@@ -446,11 +440,6 @@ impl Library {
         let id = &r.id;
         if catalog_name == "local" {
             return catalog::read_item_file(std::path::Path::new(&r.source));
-        }
-        if catalog_name == "user" && self.user_dir.is_none() {
-            if file.is_none() {
-                return Ok(Vec::new());
-            }
         }
         let dir = self.user_dir.as_ref().ok_or_else(|| format!("`{id}`'s catalog has no folder"))?;
         let file = file.filter(|f| catalog::safe_relative(f)).ok_or_else(|| format!("`{id}` has no file"))?;

@@ -1425,11 +1425,11 @@
 	View Sheet	Аркуш видів
 	Walkthrough	Обхід
 	cmd.room	Кімната
-	cmd.roomdetect	Виявити кімнати
 	Place From Library	Розмістити з бібліотеки
 	Edit Furnishing	Редагувати меблі
 	Delete Furnishing	Видалити меблі
 	Center Furnishing	Центрувати меблі
+	cmd.roomdetect	Виявити кімнати
 	cmd.level	Рівень
 	Architecture>Room	Архітектура>Кімната
 	Architecture>Room Detect	Архітектура>Виявити кімнати
