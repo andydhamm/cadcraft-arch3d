@@ -154,6 +154,13 @@ pub fn install_io() {
         groups: cadcraft_io::entity_groups,
         entity: cadcraft_io::entity_from_groups,
     });
+    // The library's file readers.
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
 }
 
 fn services() -> Services {
