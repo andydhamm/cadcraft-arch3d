@@ -62,12 +62,19 @@ mod tests {
             uvs: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             indices: vec![0, 1, 2, 0, 2, 3],
             base_color: [0.5, 0.25, 0.125, 1.0],
-            metallic: 0.0,
             roughness: 0.5,
             texture: Some(0),
+            ..Default::default()
         };
-        let tex = ImageRgba { width: 2, height: 2, rgba: vec![200; 16] };
-        SymbolMesh { key: "00112233aabbccdd".into(), parts: vec![part], textures: vec![tex] }
+        let mut tex = ImageRgba::default();
+        tex.width = 2;
+        tex.height = 2;
+        tex.rgba = vec![200; 16];
+        let mut mesh = SymbolMesh::default();
+        mesh.key = "00112233aabbccdd".into();
+        mesh.parts = vec![part];
+        mesh.textures = vec![tex];
+        mesh
     }
 
     fn drawing() -> Drawing {
@@ -94,11 +101,15 @@ mod tests {
             size: [1.2, 0.6, 0.75],
             ..Default::default()
         });
-        d.arch.images.insert("material-oak".into(), ImageRgba { width: 1, height: 1, rgba: vec![10, 20, 30, 255] });
-        d.arch.paints.insert(
-            Surface::Furnishing { furnishing: d.arch.furnishings[0].id, part: 0 }.key(),
-            Paint { material: MaterialRef::parse("#c04020"), tint: Some([1, 2, 3]) },
-        );
+        let mut oak = ImageRgba::default();
+        oak.width = 1;
+        oak.height = 1;
+        oak.rgba = vec![10, 20, 30, 255];
+        d.arch.images.insert("material-oak".into(), oak);
+        let mut paint = Paint::default();
+        paint.material = MaterialRef::parse("#c04020");
+        paint.tint = Some([1, 2, 3]);
+        d.arch.paints.insert(Surface::Furnishing { furnishing: d.arch.furnishings[0].id, part: 0 }.key(), paint);
         d.arch.backdrop = Some(Backdrop::Image { item: "material-oak".into(), projection: Projection::Equirect });
         d.arch.defaults.insert("door".into(), serde_json::json!({"width": 0.9}));
         d
