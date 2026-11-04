@@ -9,7 +9,6 @@ use cadcraft_engine::cmd::file::IoHooks;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::PathBuf;
 
 /// Setup: install the real writer once per test.
 fn setup_io() {
@@ -58,7 +57,45 @@ fn build_demo_house() -> Session {
         }
     }
 
+    add_furnishings(session.doc_mut().expect("a drawing"));
     session
+}
+
+/// Phase 14: one library furnishing of each IFC class (a sofa, a toilet, a refrigerator, a ceiling
+/// light on the upper level), all of one two-part symbol, plus one whose symbol is missing (built as
+/// a box). Added to the model directly: placing them needs only the furnishing records.
+fn add_furnishings(d: &mut Drawing) {
+    use cadcraft_doc::arch::{Furnishing, SymbolMesh, SymbolPart};
+    let part = |z: f32| SymbolPart {
+        positions: vec![[-0.5, -0.5, z], [0.5, -0.5, z], [0.5, 0.5, z + 0.5], [-0.5, 0.5, z + 0.5]],
+        normals: vec![[0.0, 0.0, 1.0]; 4],
+        indices: vec![0, 1, 2, 0, 2, 3],
+        ..Default::default()
+    };
+    let key = "0123456789abcdef";
+    d.arch.symbols.insert(key.into(), SymbolMesh { key: key.into(), parts: vec![part(0.0), part(0.5)], ..Default::default() });
+    let items = [
+        ("sofa-futon", "Furniture", "sofa", 0, [5.0, 6.0], 0.0),
+        ("toilet", "Appliances and plumbing fixtures", "toilet", 0, [8.5, 1.0], 0.0),
+        ("refrigerator-small", "Appliances and plumbing fixtures", "refrigerator", 0, [1.0, 1.0], 0.0),
+        ("light-ceiling", "Lighting and electrical", "light", 1, [5.0, 5.0], 2.2),
+        ("armchair", "Furniture", "chair/stool", 0, [3.0, 6.0], 0.0),
+    ];
+    for (item, category, symbol_type, level, at, elevation) in items {
+        let symbol = if item == "armchair" { "missing".to_string() } else { key.to_string() };
+        d.arch.push_furnishing(Furnishing {
+            item: item.into(),
+            symbol,
+            name: item.into(),
+            category: category.into(),
+            symbol_type: symbol_type.into(),
+            level,
+            at,
+            elevation,
+            size: [0.8, 0.8, 0.9],
+            ..Default::default()
+        });
+    }
 }
 
 /// Export the session's drawing to a temporary IFC file and return its contents.
@@ -352,6 +389,30 @@ fn check_refs(params: &[Token], defined: &BTreeSet<u32>, n: u32, name: &str) {
             _ => {}
         }
     }
+}
+
+#[test]
+fn the_demo_house_furnishings_are_ifc_elements() {
+    let mut session = build_demo_house();
+    let text = export_ifc(&mut session);
+    let instances = parse_data(&text).expect("Failed to parse DATA section");
+    let mut found: Vec<(String, String)> = instances
+        .values()
+        .filter_map(|(name, params)| match params.get(2) {
+            Some(Token::String(s)) if s.starts_with("furnishing-") => Some((s.clone(), name.clone())),
+            _ => None,
+        })
+        .collect();
+    found.sort();
+    let want = [
+        ("furnishing-f0", "IFCFURNITURE"),
+        ("furnishing-f1", "IFCSANITARYTERMINAL"),
+        ("furnishing-f2", "IFCELECTRICAPPLIANCE"),
+        ("furnishing-f3", "IFCLIGHTFIXTURE"),
+        ("furnishing-f4", "IFCFURNITURE"),
+    ];
+    let want: Vec<(String, String)> = want.iter().map(|(n, e)| (n.to_string(), e.to_string())).collect();
+    assert_eq!(found, want);
 }
 
 #[test]

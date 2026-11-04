@@ -2,6 +2,7 @@
 use crate::cmd::CommandSpec;
 use crate::{EngineError, Session};
 use cadcraft_arch::area::is_living;
+use cadcraft_arch::casework_layout::{self, FrontKind, Hinge};
 use cadcraft_arch::join::solve_joins;
 use cadcraft_arch::label::label_point;
 use cadcraft_arch::opening::rough_offset;
@@ -10,8 +11,9 @@ use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
 use cadcraft_doc::ArchId;
 use cadcraft_doc::Handle;
 use cadcraft_doc::arch::{
-    OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair, StairShape, arch_handle, handle_json,
-    opening_handle, railing_handle, railing_label, roof_handle, roof_label, room_handle, room_label, stair_handle, stair_label, wall_label,
+    ArchModel, FurnishingHost, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair, StairShape, arch_handle,
+    cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle, railing_handle, railing_label, roof_handle, roof_label,
+    room_handle, room_label, stair_handle, stair_label, wall_label,
 };
 use std::f64::consts::PI;
 // RoofId might be ArchId or a new type. If it's not found, we might need to use ArchId or import it if it exists.
@@ -42,7 +44,11 @@ use serde_json::{Map as JsonMap, Value};
 /// Command specs for the arch inspection module.
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = Vec::new();
-    v.push(CommandSpec::new("arch.inspect", "Arch Inspect", run_inspect).noundo().params("{poché?: bool, views?: bool}"));
+    v.push(
+        CommandSpec::new("arch.inspect", "Arch Inspect", run_inspect)
+            .noundo()
+            .params("{poché?: bool, views?: bool, furnishings?: bool, surfaces?: bool, cabinets?: bool}"),
+    );
     v
 }
 
@@ -368,8 +374,100 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::site_inspect::inspect_site(&d.arch, p, &mut out);
     super::light_inspect::inspect_lights(&d.arch, p, &mut out);
     super::casework::inspect_casework(&d.arch, p, &mut out);
+    inspect_cabinet_parts(&d.arch, &mut out);
+    inspect_furnishings(&d.arch, p, &mut out);
 
     Ok(Value::Object(out))
+}
+
+/// Add the cabinet-part fields (styles, pull, fronts, false front, cut-out) to the
+/// `cabinets` rows already in `out`. Read-only.
+fn inspect_cabinet_parts(model: &ArchModel, out: &mut JsonMap<String, Value>) {
+    let Some(Value::Array(rows)) = out.get_mut("cabinets") else { return };
+    for (row, c) in rows.iter_mut().zip(model.cabinets.iter()) {
+        let Value::Object(obj) = row else { continue };
+        let fronts = casework_layout::fronts(model, c);
+        let false_front = fronts.iter().any(|f| f.kind == FrontKind::False);
+        let list: Vec<Value> = fronts
+            .iter()
+            .map(|f| {
+                json!({
+                    "kind": match f.kind {
+                        FrontKind::Door => "door",
+                        FrontKind::Drawer => "drawer",
+                        FrontKind::False => "false",
+                    },
+                    "rect": f.rect,
+                    "hinge": f.hinge.map(|h| match h {
+                        Hinge::Left => "left",
+                        Hinge::Right => "right",
+                    }),
+                    "pull": f.pull,
+                })
+            })
+            .collect();
+        obj.insert("doorStyle".to_string(), json!(c.door_style.name()));
+        obj.insert("drawerStyle".to_string(), json!(c.drawer_style.name()));
+        obj.insert("pull".to_string(), json!(c.pull));
+        obj.insert("falseFront".to_string(), json!(false_front));
+        obj.insert("cutout".to_string(), json!(casework_layout::hosted_cutout(model, c).map(|(_, _, size)| size)));
+        // `fronts` stays the phase-13 mode name (the cabinet command's own parameter, which phase-13 check 04 and
+        // Set as Default read); the layout of the doors and drawers is `frontParts`.
+        obj.insert("frontParts".to_string(), Value::Array(list));
+    }
+}
+
+/// Add `furnishings` and `surfaces` to `out` when `p` asks for them. Read-only.
+fn inspect_furnishings(model: &ArchModel, p: &Value, out: &mut JsonMap<String, Value>) {
+    if p.get("furnishings").and_then(Value::as_bool) == Some(true) {
+        let list: Vec<Value> = model
+            .furnishings
+            .iter()
+            .map(|f| {
+                let host = match &f.host {
+                    FurnishingHost::None => Value::Null,
+                    FurnishingHost::Wall { wall } => json!({"kind": "wall", "wall": wall_label(*wall)}),
+                    FurnishingHost::Cabinet { cabinet } => json!({"kind": "cabinet", "cabinet": cabinet_label(*cabinet)}),
+                    FurnishingHost::Sink { furnishing } => json!({"kind": "sink", "furnishing": furnishing_label(*furnishing)}),
+                    FurnishingHost::Gap { left, right } => json!({"kind": "gap", "left": cabinet_label(*left), "right": cabinet_label(*right)}),
+                };
+                json!({
+                    "id": furnishing_label(f.id),
+                    "handle": handle_json(furnishing_handle(f.id)),
+                    "item": f.item,
+                    "name": f.name,
+                    "category": f.category,
+                    "symbolType": f.symbol_type,
+                    "placement": f.placement.name(),
+                    "level": f.level,
+                    "at": f.at,
+                    "rotation": f.rotation,
+                    "elevation": f.elevation,
+                    "size": f.size,
+                    "mirrored": f.mirrored,
+                    "host": host,
+                    "layer": cadcraft_arch::library::layer_for(&f.category, &f.symbol_type),
+                    "cutout": f.cutout,
+                })
+            })
+            .collect();
+        out.insert("furnishings".to_string(), Value::Array(list));
+    }
+    if p.get("surfaces").and_then(Value::as_bool) == Some(true) {
+        let list: Vec<Value> = cadcraft_arch::paint::surfaces(model)
+            .iter()
+            .map(|si| {
+                json!({
+                    "surface": si.surface.key(),
+                    "room": si.room.map(room_label),
+                    "level": si.level,
+                    "material": si.material,
+                    "tint": si.tint.map(|t| format!("#{:02x}{:02x}{:02x}", t[0], t[1], t[2])),
+                })
+            })
+            .collect();
+        out.insert("surfaces".to_string(), Value::Array(list));
+    }
 }
 
 /// Camel-case key for a roof edge kind.
@@ -2251,5 +2349,152 @@ mod tests {
             let ring = h.as_array().expect("each hole must be an array of points");
             assert_eq!(ring.len(), 4, "each hole should have 4 points");
         }
+    }
+
+    /// Build a session around `f` applied to a fresh arch model.
+    fn session_with(f: impl FnOnce(&mut cadcraft_doc::arch::ArchModel)) -> Session {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            f(&mut d.arch);
+            d.touch_arch();
+        }
+        s
+    }
+
+    #[test]
+    fn inspect_lists_furnishings_with_hosts_and_layers() {
+        use cadcraft_doc::arch::{Furnishing, FurnishingHost, Placement};
+        let mut s = session_with(|m| {
+            let w = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), ..Wall::default() });
+            m.push_furnishing(Furnishing {
+                item: "armchair".into(),
+                name: "Armchair".into(),
+                category: "Furniture".into(),
+                symbol_type: "chair".into(),
+                at: [1.0, 2.0],
+                rotation: 90.0,
+                size: [0.8, 0.9, 1.0],
+                mirrored: true,
+                host: FurnishingHost::Wall { wall: w },
+                placement: Placement::Wall,
+                ..Furnishing::default()
+            });
+            m.push_furnishing(Furnishing { cutout: Some([0.5, 0.4]), ..Furnishing::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "furnishings": true }));
+        let list = v["furnishings"].as_array().expect("furnishings array");
+        assert_eq!(list.len(), 2);
+        let f = &list[0];
+        assert_eq!(f["id"], "f0");
+        assert_eq!(f["item"], "armchair");
+        assert_eq!(f["placement"], "wall");
+        assert_eq!(f["at"], json!([1.0, 2.0]));
+        assert_eq!(f["size"], json!([0.8, 0.9, 1.0]));
+        assert_eq!(f["mirrored"], true);
+        assert_eq!(f["host"], json!({"kind": "wall", "wall": "w0"}));
+        assert_eq!(f["layer"], "I-FURN");
+        assert!(f["cutout"].is_null());
+        assert!(f["handle"].is_string());
+        assert!(list[1]["host"].is_null());
+        assert_eq!(list[1]["cutout"], json!([0.5, 0.4]));
+        let none = exec(&mut Session::new(), "arch.inspect", &json!({ "furnishings": true }));
+        assert_eq!(none["furnishings"], json!([]));
+    }
+
+    #[test]
+    fn inspect_lists_surfaces_with_rooms_and_materials() {
+        let mut s = session_with(|m| {
+            m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), ..Wall::default() });
+            m.push_room(Room {
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
+                ..Room::default()
+            });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "surfaces": true }));
+        let list = v["surfaces"].as_array().expect("surfaces array");
+        let keys: Vec<&str> = list.iter().filter_map(|x| x["surface"].as_str()).collect();
+        assert!(keys.contains(&"wall/w0/left") && keys.contains(&"wall/w0/right"), "{keys:?}");
+        assert!(keys.contains(&"room/r0/floor"), "{keys:?}");
+        for row in list {
+            assert!(row["material"].is_string());
+            assert!(row.get("room").is_some() && row.get("tint").is_some() && row["level"].is_number());
+        }
+        let floor = list.iter().find(|x| x["surface"] == "room/r0/floor").expect("floor");
+        assert_eq!(floor["room"], "r0");
+    }
+
+    fn kitchen_cabinet() -> cadcraft_doc::arch::Cabinet {
+        use cadcraft_doc::arch::{Cabinet, CabinetKind, FrontStyle, Fronts};
+        Cabinet {
+            kind: CabinetKind::Base,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.88,
+            fronts: Fronts::Doors,
+            doors: 2,
+            door_style: FrontStyle::Shaker,
+            drawer_style: FrontStyle::RaisedPanel,
+            pull: Some("bar".into()),
+            toe_kick: true,
+            ..Cabinet::default()
+        }
+    }
+
+    #[test]
+    fn inspect_cabinets_report_styles_pulls_and_fronts() {
+        let mut s = session_with(|m| {
+            m.push_cabinet(kitchen_cabinet());
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        let c = &v["cabinets"][0];
+        assert_eq!(c["doorStyle"], "shaker");
+        assert_eq!(c["drawerStyle"], "raised-panel");
+        assert_eq!(c["pull"], "bar");
+        assert_eq!(c["falseFront"], false);
+        assert!(c["cutout"].is_null());
+        // `fronts` stays the phase-13 mode (the cabinet command's own parameter); the layout is `frontParts`.
+        assert_eq!(c["fronts"], "doors");
+        let fronts = c["frontParts"].as_array().expect("frontParts");
+        assert_eq!(fronts.len(), 2);
+        assert_eq!(fronts[0]["kind"], "door");
+        assert_eq!(fronts[0]["hinge"], "left");
+        assert_eq!(fronts[1]["hinge"], "right");
+        assert_eq!(fronts[0]["rect"].as_array().map(Vec::len), Some(4));
+        assert_eq!(fronts[0]["pull"].as_array().map(Vec::len), Some(2));
+    }
+
+    #[test]
+    fn inspect_reports_false_fronts_and_cutouts() {
+        use cadcraft_doc::arch::{Fronts, Furnishing, FurnishingHost};
+        let mut s = session_with(|m| {
+            let id = m.push_cabinet(kitchen_cabinet());
+            if let Some(c) = m.cabinets.first_mut() {
+                c.fronts = Fronts::Drawers;
+                c.drawers = 3;
+                c.doors = 0;
+            }
+            m.push_furnishing(Furnishing { cutout: Some([0.5, 0.4]), host: FurnishingHost::Cabinet { cabinet: id }, ..Furnishing::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        let c = &v["cabinets"][0];
+        assert_eq!(c["falseFront"], true);
+        assert_eq!(c["cutout"], json!([0.5, 0.4]));
+        let fronts = c["frontParts"].as_array().expect("frontParts");
+        let f = fronts.iter().find(|f| f["kind"] == "false").expect("a false front");
+        assert!(f["pull"].is_null() && f["hinge"].is_null());
+    }
+
+    #[test]
+    fn inspect_without_flags_is_unchanged() {
+        let mut s = session_with(|m| {
+            m.push_cabinet(kitchen_cabinet());
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        assert!(v.get("furnishings").is_none());
+        assert!(v.get("surfaces").is_none());
+        assert!(v.get("cabinets").is_none());
+        let rows = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        assert!(rows["cabinets"][0]["frontParts"].is_array());
+        assert!(rows["cabinets"][0].get("frontsMode").is_none());
     }
 }

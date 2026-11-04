@@ -26,6 +26,7 @@ pub(crate) mod light_inspect;
 pub mod lightfixture;
 pub mod material;
 pub mod opening;
+pub mod paint;
 pub mod pick;
 pub mod plant;
 pub mod railing;
@@ -89,6 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(railing::specs());
     v.extend(sun::specs());
     v.extend(sheet::specs());
+    v.extend(paint::specs());
     v.extend(archdetect::specs());
     v.extend(site::specs());
     v.extend(terrain::specs());
