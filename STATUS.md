@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 13:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 12 of 34 segments merged · 0 of 13 acceptance checks**
 
@@ -24,7 +24,7 @@ Updated 2026-11-04 13:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 18.3 h so far · expected done Nov 06 13:45–Nov 10 06:34 UTC |
+| 14 | The library | building | 0 / 13 | 18.5 h so far · expected done Nov 07 00:40–Nov 12 21:00 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
