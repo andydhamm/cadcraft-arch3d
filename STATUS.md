@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 23:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 32 of 35 segments merged · 7 of 13 acceptance checks**
 
@@ -24,16 +24,16 @@ Updated 2026-11-04 22:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 7 / 13 | 27.3 h so far · expected done Nov 05 01:22–Nov 05 18:04 UTC |
+| 14 | The library | building | 7 / 13 | 27.5 h so far · expected done Nov 05 01:37–Nov 05 18:19 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-32 merged, 1 working, 1 queued, 1 abandoned, 1 merging
+32 merged, 1 gate, 1 queued, 1 abandoned, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p14-cmd-user-catalog` | The user catalog: add, copy, edit, delete, Trash, placing groups | working | mai-flash-esc |
+| `p14-cmd-user-catalog` | The user catalog: add, copy, edit, delete, Trash, placing groups | gate | mai-flash-esc |
 | `upstream-sync-5f8999f30-v2` | merge upstream upstream/main up to 5f8999f30 (39 commits) | merging | mai-flash |
 
 ## Recent merges
@@ -59,7 +59,7 @@ Updated 2026-11-04 22:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 876 |
 | bonsai-b | bonsai2-27b | idle | 816 |
-| bonsai-ws2-a | bonsai2-27b | gate | 897 |
+| bonsai-ws2-a | bonsai2-27b | gate | 898 |
 | bonsai-ws2-b | bonsai2-27b | idle | 863 |
 | claude-sonnet-a | sonnet | idle | 78 |
 | claude-sonnet-b | sonnet | idle | 80 |
@@ -68,6 +68,6 @@ Updated 2026-11-04 22:45 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 750 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 59 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 20 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 21 |
 | tturbo-mac | tturbo-ultraheretic | merging | 610 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
