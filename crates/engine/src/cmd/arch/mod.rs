@@ -22,6 +22,7 @@ pub mod illuminance;
 pub mod inspect;
 pub mod level;
 pub mod library;
+pub mod library_icon;
 pub(crate) mod light_inspect;
 pub mod lightfixture;
 pub mod material;
@@ -79,6 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(pick::specs());
     v.extend(level::specs());
     v.extend(stair::specs());
+    v.extend(library_icon::specs());
     v.extend(build3d::specs());
     v.extend(sample::specs());
     v.extend(stretch::specs());
