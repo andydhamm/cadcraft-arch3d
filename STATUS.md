@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 11 of 35 segments merged · 0 of 13 acceptance checks**
 
@@ -24,7 +24,7 @@ Updated 2026-11-04 07:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 11.8 h so far · expected done Nov 05 11:29–Nov 06 23:53 UTC |
+| 14 | The library | building | 0 / 13 | 12.0 h so far · expected done Nov 05 12:18–Nov 07 01:26 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
@@ -44,9 +44,9 @@ Updated 2026-11-04 07:15 UTC. This page and the card in the README are regenerat
 | `p14-cmd-casework-parts` | cabinet and cabinet.edit take door and drawer styles and a pull | gate | claude-sonnet-a |
 | `p14-cmd-backdrop` | The backdrop command | gate | claude-sonnet-c |
 | `p14-io-glb-furnishing` | GLB: furnishing nodes, pull nodes, painted faces, symbol and paint materials | gate | mai-flash |
-| `p14-io-obj-ifc-furnishing` | OBJ groups and IFC elements for furnishings | gate | darwin-ws3 |
+| `p14-io-obj-ifc-furnishing` | OBJ groups and IFC elements for furnishings | working | darwin-ws3 |
 | `p14-io-dxf-furnishing` | DXF: furnishing proxies and the round trip | merging | claude-sonnet-d |
-| `p14-r3d-symbol-materials` | render3d draws symbol and paint materials: base colours, textures, tints | working | bonsai-ws2-b |
+| `p14-r3d-symbol-materials` | render3d draws symbol and paint materials: base colours, textures, tints | gate | bonsai-ws2-b |
 | `p14-r3d-backdrop` | Backdrops behind the 3D view and the raster Finalize | gate | claude-sonnet-d |
 | `upstream-sync-5f8999f30` | merge upstream upstream/main up to 5f8999f30 (39 commits) | merging | mai-flash |
 
@@ -72,14 +72,14 @@ Updated 2026-11-04 07:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 865 |
-| bonsai-b | bonsai2-27b | gate | 797 |
+| bonsai-b | bonsai2-27b | gate | 798 |
 | bonsai-ws2-a | bonsai2-27b | gate | 875 |
-| bonsai-ws2-b | bonsai2-27b | agent | 850 |
+| bonsai-ws2-b | bonsai2-27b | gate | 850 |
 | claude-sonnet-a | sonnet | gate | 75 |
 | claude-sonnet-b | sonnet | gate | 79 |
 | claude-sonnet-c | sonnet | gate | 30 |
 | claude-sonnet-d | sonnet | gate | 18 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 736 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 737 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | gate | 54 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 18 |
