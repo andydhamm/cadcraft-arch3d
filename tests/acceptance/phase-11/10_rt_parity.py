@@ -1,5 +1,8 @@
 # Hardware ray queries are optional: asked for with rt, they are used only where the adapter offers them, and give the
-# compute path's image within noise. SKIPs (passes) where the adapter has no ray queries (the reply says rt false).
+# compute path's image within noise. SKIPs (passes) where the adapter has no ray queries (the reply says rt false and
+# carries no rtError). The gates' software adapter (llvmpipe) offers them, so there the comparison runs. Until 2026-11-03
+# the ray-query kernel never compiled and the session kept its first (compute) device, so this check skipped everywhere;
+# an adapter that offers ray queries but whose kernel fails to build now fails it (rtError).
 # needs: p11-r3d-rt, p11-r3d-pt-kernel, p11-r3d-pt-driver, p11-cmd-render-path, p11-cli-render-path
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p11lib.inc')).read())
@@ -14,8 +17,10 @@ if len(r) != 2:
     fail(f"two path-traced replies, got {len(r)}: {json.dumps(rr)[-500:]}")
 if r[0].get('rt') is not False:
     fail(f"without rt the compute path runs (rt false): {r[0].get('rt')}")
+if r[1].get('rtError'):
+    fail(f"the adapter offers ray queries but the ray-query kernel did not build: {str(r[1]['rtError'])[:800]}")
 if r[1].get('rt') is not True:
-    print(f"SKIP: no hardware ray queries on this adapter ({r[1].get('device')}); the compute path rendered it")
+    print(f"SKIP: the adapter offers no ray queries ({r[1].get('device')}); the compute path rendered it")
     if not os.path.exists(os.path.join(tmp, 'rt.png')):
         fail("asked for rt without ray queries, the still is still written (compute path)")
     print("PASS 10")

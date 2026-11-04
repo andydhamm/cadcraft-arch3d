@@ -1,25 +1,28 @@
-// p11-r3d-rt — ray-query traversal. A drop-in replacement for traverse.wgsl: the same
-// trace()/visibility() entry points and the same hit structure, but hits are resolved
-// against an acceleration structure (group 1, binding 0) via rayQueryInitialize /
-// rayQueryNextHit instead of walking the triangle array by hand. The kernel module
-// (kernel.wgsl) and the BSDF/lights modules are unchanged; only this module is swapped in.
+// p11-r3d-rt — ray-query traversal. A drop-in replacement for traverse.wgsl: the same Hit, trace()
+// and visibility(), with the nearest hit found by wgpu's ray queries in the acceleration structure
+// (group 1, binding 0; one BLAS of every triangle, primitive index = triangle index, one TLAS
+// instance) instead of walking the BVH by hand. The kernel, BSDF and lights modules are unchanged.
+// rq_kernel_source() moves the `enable` directive below to the top of the module: WGSL directives
+// must come before every declaration (until 2026-11-03 it sat after common.wgsl and the module
+// never compiled).
 enable wgpu_ray_query;
 
-var acc: acceleration_structure @group(1) @binding(0);
+@group(1) @binding(0) var acc: acceleration_structure;
 
-struct Hit {
-    t: f32,
-    tri: u32,
-    u: f32,
-    v: f32,
+struct Hit { t: f32, tri: u32, u: f32, v: f32 };
+
+// The compute traversal's own cross and dot: the BSDF, lights and kernel modules call them, so both
+// kernels evaluate those modules with the same arithmetic.
+fn cross(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x,
+    );
 }
 
-struct Ray {
-    origin: vec3<f32>,
-    direction: vec3<f32>,
-    near: f32,
-    far: f32,
-    payload: vec4<f32>,
+fn dot(a: vec3<f32>, b: vec3<f32>) -> f32 {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 fn scene_is_empty() -> bool {
@@ -33,49 +36,31 @@ fn scene_is_empty() -> bool {
     return false;
 }
 
-// Nearest committed triangle along the ray o + t·d with PT_EPS < t < t_max.
-// Returns t, the triangle index (primitive index) and barycentrics; t = -1 on a miss.
-fn rq_nearest(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
+// The nearest triangle hit by o + t·d (unit d) with PT_EPS < t < t_max; t = -1 for a miss. Barycentrics
+// u, v of the hit (the weights of v0 + e1 and v0 + e2, as tri_hit's). The BLAS is opaque, so one
+// rayQueryProceed commits the closest hit; equal distances may resolve to either triangle.
+fn trace(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
     var h: Hit;
     h.t = -1.0;
     h.tri = 0u;
     h.u = 0.0;
     h.v = 0.0;
-    if (scene_is_empty()) {
+    if (scene_is_empty() || all(d == vec3<f32>(0.0)) || !(t_max > PT_EPS)) {
         return h;
     }
-    if (all(d == vec3<f32>(0.0))) {
+    var rq: ray_query;
+    rayQueryInitialize(&rq, acc, RayDesc(RAY_FLAG_NONE, 0xFFu, PT_EPS, t_max, o, d));
+    while (rayQueryProceed(&rq)) {
+    }
+    let hit = rayQueryGetCommittedIntersection(&rq);
+    if (hit.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
         return h;
     }
-    let ray = Ray {
-        origin: o,
-        direction: d,
-        near: PT_EPS,
-        far: t_max,
-        payload: vec4<f32>(0.0, 0.0, 0.0, 0.0),
-    };
-    var best = vec4<f32>(vec3<f32>(1e30), 0.0);
-    var hit = rayQueryInitialize(ray);
-    while (hit) {
-        let dist = hit.payload[0];
-        if (dist >= PT_EPS && dist < t_max && dist < best[0]) {
-            best = vec4<f32>(dist, hit.payload[1], hit.payload[2], hit.payload[3]);
-        }
-        hit = rayQueryNextHit(ray);
-    }
-    if (best[0] < 1e30) {
-        h.t = best[0];
-        h.tri = u32(best[1]);
-        h.u = best[2];
-        h.v = best[3];
-    }
+    h.t = hit.t;
+    h.tri = hit.primitive_index;
+    h.u = hit.barycentrics.x;
+    h.v = hit.barycentrics.y;
     return h;
-}
-
-// The nearest triangle hit by o + t·d (unit d) with PT_EPS < t < t_max; t = -1 for a miss.
-// Same semantics as the compute path in traverse.wgsl.
-fn trace(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
-    return rq_nearest(o, d, t_max);
 }
 
 // What reaches o + t_max·d from o: 0 behind an opaque triangle, the glass tint
@@ -128,3 +113,4 @@ fn visibility_test_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let probe = probes[id.x];
     accum[id.x] = vec4<f32>(visibility(probe.point, probe.normal, probe._a), 0.0);
 }
+
