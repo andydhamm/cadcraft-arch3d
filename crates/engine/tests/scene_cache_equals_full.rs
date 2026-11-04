@@ -209,10 +209,15 @@ fn the_scene_cache_follows_every_casework_edit() {
     }
     let m = model(&cmds);
     assert!(m.cabinets.len() >= 3 && m.fixtures.len() == 4, "{} cabinets, {} fixtures", m.cabinets.len(), m.fixtures.len());
+    let cabinets = m.cabinets.len();
     let most = cache_follows("casework", m, 120, 13, casework_edit);
-    // A casework edit rebuilds only that cabinet or fixture.
-    for kind in ["move a cabinet", "resize a cabinet", "toggle a counter", "change a cabinet's drawers", "move a fixture", "turn a fixture"] {
+    // A fixture edit rebuilds only that fixture. A cabinet edit rebuilds the cabinets of its level
+    // (phase 14: counter runs, gaps and cut-outs reach across a level's base cabinets), no more.
+    for kind in ["move a fixture", "turn a fixture"] {
         assert_eq!(most.get(kind), Some(&1), "{kind}: {most:?}");
+    }
+    for kind in ["move a cabinet", "resize a cabinet", "toggle a counter", "change a cabinet's drawers"] {
+        assert!(most.get(kind).is_some_and(|&n| (1..=cabinets).contains(&n)), "{kind}: {most:?}");
     }
 }
 

@@ -9,6 +9,7 @@ use crate::Scene3d;
 use crate::mesh::Mesh;
 use crate::ray::mesh_crossings_upward;
 use cadcraft_doc::ArchId;
+use cadcraft_doc::arch::{CabinetPart, Surface};
 use cadcraft_geom::Vec3;
 
 /// Maximum number of triangles to scan for a single probe.
@@ -24,6 +25,16 @@ pub(crate) const MAX_PROBE_TRIANGLES: usize = 1_000_000;
 /// list. Unrecognised materials map to `"wall"`.
 pub fn part_of(mesh: &Mesh) -> &'static str {
     let m = mesh.material.to_lowercase();
+    // Phase 14 first: a symbol key or a surface key could hold any word.
+    if m.starts_with("sym:") {
+        return "furnishing";
+    }
+    if m.starts_with("pull:") {
+        return "pull";
+    }
+    if let Some(key) = m.strip_prefix("paint:") {
+        return Surface::parse(key).map_or("wall", |s| unpainted_part(&s));
+    }
     // Site parts first (phase 9): a path's own material could be any word.
     if m == "terrain" {
         return "terrain";
@@ -98,6 +109,21 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
         return "wall";
     }
     "wall"
+}
+
+/// The part a surface's mesh has when it is not painted.
+fn unpainted_part(surface: &Surface) -> &'static str {
+    match surface {
+        Surface::WallSide { .. } => "wall",
+        Surface::RoomFloor(_) => "floor",
+        Surface::RoomCeiling(_) => "ceiling",
+        Surface::Roof(_) => "roof",
+        Surface::Cabinet { part: CabinetPart::Carcass | CabinetPart::Front, .. } => "cabinet",
+        Surface::Cabinet { part: CabinetPart::Counter, .. } => "counter",
+        Surface::Cabinet { part: CabinetPart::Pull, .. } => "pull",
+        Surface::Fixture(_) => "fixture",
+        Surface::Furnishing { .. } => "furnishing",
+    }
 }
 
 /// Whether a mesh can be probed (i.e. it is a closed volume).
@@ -190,8 +216,23 @@ pub fn probe_mesh(mesh: &Mesh, p: Vec3) -> bool {
 /// empty string.
 pub fn mesh_label(mesh: &Mesh) -> String {
     let m = mesh.material.to_lowercase();
+    // Phase 14: furnishing parts, pulls and painted surfaces are named by their object's kind.
+    let label = match part_of(mesh) {
+        "furnishing" => Some(cadcraft_doc::arch::furnishing_label(mesh.object)),
+        "pull" => Some(cadcraft_doc::arch::cabinet_label(mesh.object)),
+        _ => m.strip_prefix("paint:").and_then(Surface::parse).map(|s| match s {
+            Surface::WallSide { .. } => cadcraft_doc::arch::wall_label(mesh.object),
+            Surface::RoomFloor(_) | Surface::RoomCeiling(_) => cadcraft_doc::arch::room_label(mesh.object),
+            Surface::Roof(_) => cadcraft_doc::arch::roof_label(mesh.object),
+            Surface::Cabinet { .. } => cadcraft_doc::arch::cabinet_label(mesh.object),
+            Surface::Fixture(_) => cadcraft_doc::arch::fixture_label(mesh.object),
+            Surface::Furnishing { .. } => cadcraft_doc::arch::furnishing_label(mesh.object),
+        }),
+    };
     // Site meshes first: a plant, the terrain solid, a path (its modifier) are named as the commands name them.
-    let label = if m.starts_with("light-") {
+    let label = if let Some(label) = label {
+        label
+    } else if m.starts_with("light-") {
         cadcraft_doc::arch::light_label(mesh.object)
     } else if m.starts_with("cabinet-") || m == "counter" || m.starts_with("counter-") {
         cadcraft_doc::arch::cabinet_label(mesh.object)
@@ -234,21 +275,25 @@ pub fn mesh_level(mesh: &Mesh) -> f64 {
     mesh.bounds().min[2]
 }
 
-/// Probe the scene at point `p`, returning the first mesh that contains it.
+/// Probe the scene at point `p`, returning the first furnishing box or mesh that contains it.
 ///
 /// Returns `None` immediately if any coordinate of `p` is non-finite.
-/// Otherwise iterates `scene.meshes` in build order and returns the first
-/// mesh for which [`probe_mesh`] is true, as a [`Hit`] with the mesh's
-/// label, part name and level elevation. First match wins; no merging or
-/// sorting.
+/// Furnishings come first: each one is its placed box ([`Scene3d::furnishing_boxes`], in build
+/// order), since symbol meshes need not be closed; a hit is the furnishing's label, part
+/// `"furnishing"` and its level's elevation. Then `scene.meshes` in build order (furnishing parts
+/// left out), returning the first mesh for which [`probe_mesh`] is true, as a [`Hit`] with the
+/// mesh's label, part name and level elevation. First match wins; no merging or sorting.
 ///
 /// `Scene3d::probe` (in `lib.rs`) delegates to this function.
 pub fn probe(scene: &Scene3d, p: Vec3) -> Option<Hit> {
     if !p.is_finite() {
         return None;
     }
+    if let Some(b) = scene.furnishing_boxes.iter().find(|b| b.contains(p)) {
+        return Some(Hit { id: cadcraft_doc::arch::furnishing_label(b.id), part: "furnishing".to_string(), level: b.level });
+    }
     for mesh in &scene.meshes {
-        if probe_mesh(mesh, p) {
+        if probe_mesh(mesh, p) && part_of(mesh) != "furnishing" {
             return Some(Hit { id: mesh_label(mesh), part: part_of(mesh).to_string(), level: mesh_level(mesh) });
         }
     }
@@ -356,6 +401,40 @@ mod tests {
         // Priority: "glass" wins over "frame" in "glass-frame"
         let mixed = box_mesh(0.0, 0.0, 0.0, 1.0, "glass-frame", ArchId(12));
         assert_eq!(part_of(&mixed), "glass");
+    }
+
+    #[test]
+    fn part_of_maps_phase_14_materials() {
+        let part = |material: &str| part_of(&Mesh::new(material, ArchId(2)));
+        assert_eq!(part("sym:0123456789abcdef:0"), "furnishing");
+        assert_eq!(part("sym:missing:0"), "furnishing");
+        // A hostile symbol key cannot pass for another part.
+        assert_eq!(part("sym:glass-floor:3"), "furnishing");
+        assert_eq!(part("pull:0123456789abcdef:1"), "pull");
+        for (key, unpainted) in [
+            ("wall/w3/left", "wall"),
+            ("wall/w3/right", "wall"),
+            ("room/r0/floor", "floor"),
+            ("room/r0/ceiling", "ceiling"),
+            ("roof/r0", "roof"),
+            ("cabinet/cb0/carcass", "cabinet"),
+            ("cabinet/cb0/front", "cabinet"),
+            ("cabinet/cb0/counter", "counter"),
+            ("cabinet/cb0/pull", "pull"),
+            ("fixture/fx0", "fixture"),
+            ("furnishing/f2/0", "furnishing"),
+        ] {
+            assert_eq!(part(&format!("paint:{key}")), unpainted, "{key}");
+        }
+        assert_eq!(part("paint:nothing/x"), "wall");
+        assert_eq!(mesh_label(&Mesh::new("sym:k:0", ArchId(2))), "f2");
+        assert_eq!(mesh_label(&Mesh::new("pull:k:0", ArchId(2))), "cb2");
+        assert_eq!(mesh_label(&Mesh::new("paint:wall/w2/left", ArchId(2))), "w2");
+        assert_eq!(mesh_label(&Mesh::new("paint:room/r2/ceiling", ArchId(2))), cadcraft_doc::arch::room_label(ArchId(2)));
+        assert_eq!(mesh_label(&Mesh::new("paint:roof/r2", ArchId(2))), cadcraft_doc::arch::roof_label(ArchId(2)));
+        assert_eq!(mesh_label(&Mesh::new("paint:cabinet/cb2/counter", ArchId(2))), "cb2");
+        assert_eq!(mesh_label(&Mesh::new("paint:fixture/fx2", ArchId(2))), "fx2");
+        assert_eq!(mesh_label(&Mesh::new("paint:furnishing/f2/1", ArchId(2))), "f2");
     }
 
     #[test]

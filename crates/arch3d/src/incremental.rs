@@ -11,13 +11,21 @@
 //!
 //! Arch ids are numbered per kind (`w3`, `o3`, room 3 and roof 3 are all `ArchId(3)`), so a mesh's
 //! owner is an [`ObjectKey`]: its [`ObjectKind`] plus its id.
+//!
+//! Phase 14: every object's inputs include its paints (the `ArchModel.paints` entries of its
+//! surfaces), and every part ends with [`crate::paint::apply`]. Symbols are content-addressed (a
+//! key is the hash of the file), so a furnishing's inputs name its symbol by key, plus whether the
+//! model has it. A cabinet's inputs include the base cabinets of its level, the furnishings they
+//! host and its pull symbol, since counter runs and cut-outs reach across cabinets. The materials,
+//! textures and backdrop are filled from the model after every build and update.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use cadcraft_arch::join::{WallShape, solve_joins};
 use cadcraft_arch::roof::{Footprint, outer_footprint};
 use cadcraft_doc::arch::{
-    Cabinet, Fixture, Level, LightFixture, Opening, Plant, PlantSpecies, Railing, Roof, Room, RoomType, Stair, Terrain, WallType,
+    Cabinet, CabinetKind, CabinetPart, Fixture, Furnishing, FurnishingHost, Level, LightFixture, Opening, Paint, Plant, PlantSpecies, Railing, Roof,
+    Room, RoomType, Side, Stair, Surface, Terrain, WallType,
 };
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
@@ -26,8 +34,8 @@ use crate::mesh::{Bounds3, Mesh};
 use crate::probe::part_of;
 use crate::walls::{RoofClip, elevation_profile, extrude_profile_slab, extrude_wall_profile, roof_top_polyline_in};
 use crate::{
-    Scene3d, casework, find_roof_clip, fixture, floors, level_for, light, mesh_is_finite, openings, railing, raw_wall_mesh, site, stairs, wall_span,
-    walls, well_holes_for,
+    Scene3d, casework, fill_materials, find_roof_clip, fixture, floors, furnishing, level_for, light, mesh_is_finite, openings, railing,
+    raw_wall_mesh, site, stairs, wall_span, walls, well_holes_for,
 };
 
 const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
@@ -48,6 +56,8 @@ pub enum ObjectKind {
     Light,
     Cabinet,
     Fixture,
+    /// Phase 14: a placed library item (`f<n>`).
+    Furnishing,
 }
 
 impl ObjectKind {
@@ -62,8 +72,9 @@ impl ObjectKind {
             "terrain" | "path" => ObjectKind::Terrain,
             "plant" => ObjectKind::Plant,
             "light" => ObjectKind::Light,
-            "cabinet" | "counter" => ObjectKind::Cabinet,
+            "cabinet" | "counter" | "pull" => ObjectKind::Cabinet,
             "fixture" => ObjectKind::Fixture,
+            "furnishing" => ObjectKind::Furnishing,
             _ => ObjectKind::Wall,
         }
     }
@@ -82,10 +93,19 @@ pub fn object_key(mesh: &Mesh) -> ObjectKey {
 }
 
 /// The objects whose data differ between `prev` and `next` (added, removed or changed, compared by
-/// id per kind); `None` when something not owned by one object differs (levels, wall types, the
-/// site location, the plant species), and the caller rebuilds everything.
+/// id per kind; a changed paint counts for the object it paints, an added or removed symbol for the
+/// furnishings and cabinets that use it); `None` when something not owned by one object differs
+/// (levels, wall types, the site location, the plant species, a paint key that names no surface, a
+/// symbol whose content changed under the same key), and the caller rebuilds everything.
+///
+/// Images, the backdrop and the defaults belong to no object: they change only the materials,
+/// textures and backdrop, which every update fills again.
 pub fn changed_objects(prev: &ArchModel, next: &ArchModel) -> Option<BTreeSet<ObjectKey>> {
     if prev.levels != next.levels || prev.types != next.types || prev.site != next.site || prev.plant_species != next.plant_species {
+        return None;
+    }
+    // A key is the hash of its symbol's file, so new content under an old key is a corrupt model.
+    if next.symbols.iter().any(|(key, symbol)| prev.symbols.get(key).is_some_and(|old| old != symbol)) {
         return None;
     }
     let mut changes = BTreeSet::new();
@@ -99,10 +119,57 @@ pub fn changed_objects(prev: &ArchModel, next: &ArchModel) -> Option<BTreeSet<Ob
     diff(&prev.lights, &next.lights, |l| l.id, ObjectKind::Light, &mut changes);
     diff(&prev.cabinets, &next.cabinets, |c| c.id, ObjectKind::Cabinet, &mut changes);
     diff(&prev.fixtures, &next.fixtures, |f| f.id, ObjectKind::Fixture, &mut changes);
+    diff(&prev.furnishings, &next.furnishings, |f| f.id, ObjectKind::Furnishing, &mut changes);
     if prev.terrain != next.terrain {
         changes.insert(ObjectKey { kind: ObjectKind::Terrain, id: ArchId(0) });
     }
+    for key in prev.paints.keys().chain(next.paints.keys()) {
+        if prev.paints.get(key) != next.paints.get(key) {
+            changes.insert(surface_owner(&Surface::parse(key)?));
+        }
+    }
+    for key in prev.symbols.keys().chain(next.symbols.keys()) {
+        if prev.symbols.contains_key(key) != next.symbols.contains_key(key) {
+            for f in prev.furnishings.iter().chain(&next.furnishings).filter(|f| f.symbol == *key) {
+                changes.insert(ObjectKey { kind: ObjectKind::Furnishing, id: f.id });
+            }
+            for c in prev.cabinets.iter().chain(&next.cabinets).filter(|c| c.pull_symbol.as_deref() == Some(key.as_str())) {
+                changes.insert(ObjectKey { kind: ObjectKind::Cabinet, id: c.id });
+            }
+        }
+    }
     Some(changes)
+}
+
+/// The object a surface belongs to.
+fn surface_owner(surface: &Surface) -> ObjectKey {
+    let (kind, id) = match surface {
+        Surface::WallSide { wall, .. } => (ObjectKind::Wall, *wall),
+        Surface::RoomFloor(r) | Surface::RoomCeiling(r) => (ObjectKind::Room, *r),
+        Surface::Roof(r) => (ObjectKind::Roof, *r),
+        Surface::Cabinet { cabinet, .. } => (ObjectKind::Cabinet, *cabinet),
+        Surface::Fixture(f) => (ObjectKind::Fixture, *f),
+        Surface::Furnishing { furnishing, .. } => (ObjectKind::Furnishing, *furnishing),
+    };
+    ObjectKey { kind, id }
+}
+
+/// The paints of the object whose [`Surface::object_key`] is `object`: every entry of
+/// `model.paints` whose key starts with `object` + "/".
+fn paints_under(model: &ArchModel, object: &str) -> Vec<(String, Paint)> {
+    let prefix = format!("{object}/");
+    model.paints.range(prefix.clone()..).take_while(|(k, _)| k.starts_with(&prefix)).map(|(k, p)| (k.clone(), p.clone())).collect()
+}
+
+/// The paint of the object whose whole surface is `object` (roofs and casework fixtures).
+fn paint_of(model: &ArchModel, object: &str) -> Vec<(String, Paint)> {
+    model.paints.get(object).map(|p| vec![(object.to_string(), p.clone())]).unwrap_or_default()
+}
+
+/// `meshes` after [`crate::paint::apply`]: how every part builder ends.
+fn painted(model: &ArchModel, mut meshes: Vec<Mesh>) -> Vec<Mesh> {
+    crate::paint::apply(model, &mut meshes);
+    meshes
 }
 
 /// Add to `out` every id of `kind` whose objects differ between `prev` and `next` (all objects
@@ -146,13 +213,15 @@ impl SceneCache {
     /// A full build of `model`.
     pub fn new(model: &ArchModel) -> (SceneCache, RebuildStats) {
         let sections = Sections::make(model, None);
-        let scene = sections.scene(model);
+        let mut scene = sections.scene(model);
+        fill_materials(model, &mut scene);
         let objects = object_keys(&scene.meshes).len();
         (SceneCache { model: model.clone(), sections, scene }, RebuildStats { rebuilt: objects, objects, incremental: false })
     }
 
     /// Bring the scene up to `model`: a full build when something global changed (see
-    /// [`changed_objects`]), else only the parts whose inputs changed are made again.
+    /// [`changed_objects`]), else only the parts whose inputs changed are made again. Either way the
+    /// materials, textures and backdrop are filled again from `model`.
     pub fn update(&mut self, model: &ArchModel) -> RebuildStats {
         let Some(changed) = changed_objects(&self.model, model) else {
             let (cache, stats) = SceneCache::new(model);
@@ -163,6 +232,7 @@ impl SceneCache {
             self.sections = Sections::make(model, Some(std::mem::take(&mut self.sections)));
             self.scene = self.sections.scene(model);
         }
+        fill_materials(model, &mut self.scene);
         self.model = model.clone();
         let present = object_keys(&self.scene.meshes);
         let rebuilt = if changed.is_empty() { 0 } else { self.sections.fresh_keys().intersection(&present).count() };
@@ -226,6 +296,7 @@ struct WallIn {
     openings: Vec<Opening>,
     clip: Option<RoofClip>,
     roof_top: Option<Vec<Vec2>>,
+    paints: Vec<(String, Paint)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -243,12 +314,14 @@ struct RoomIn {
     wells: Vec<Vec<Vec2>>,
     /// The ceiling openings of the recessed fixtures in it.
     cuts: Vec<Vec<Vec2>>,
+    paints: Vec<(String, Paint)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct RoofIn {
     roof: Roof,
     eave_z: f64,
+    paints: Vec<(String, Paint)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -267,6 +340,8 @@ struct RailingIn {
 struct DeckIn {
     room: Room,
     level: Level,
+    /// A deck is a room: its floor takes the room's paints.
+    paints: Vec<(String, Paint)>,
 }
 
 /// Everything [`site::site_meshes`] reads.
@@ -289,12 +364,31 @@ struct FixtureIn {
 struct CabinetIn {
     cabinet: Cabinet,
     level: Level,
+    paints: Vec<(String, Paint)>,
+    /// Every base cabinet on the cabinet's level: counter runs and gaps reach across them.
+    neighbours: Vec<Cabinet>,
+    /// The furnishings hosted by a cabinet on that level or by a gap beside one (cut-outs, bridged
+    /// gaps).
+    hosted: Vec<Furnishing>,
+    /// The pull symbol's key, when the model has that symbol.
+    pull_symbol: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct CaseworkFixtureIn {
     fixture: Fixture,
     level: Level,
+    paints: Vec<(String, Paint)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct FurnishingIn {
+    furnishing: Furnishing,
+    level: Level,
+    paints: Vec<(String, Paint)>,
+    /// Whether the model has the symbol (`furnishing.symbol` names its content): a missing one
+    /// builds a box.
+    has_symbol: bool,
 }
 
 /// The parts of a scene, section by section in the order [`Scene3d::build`] emits them.
@@ -311,6 +405,7 @@ pub(crate) struct Sections {
     fixtures: Vec<Part<FixtureIn>>,
     cabinets: Vec<Part<CabinetIn>>,
     casework_fixtures: Vec<Part<CaseworkFixtureIn>>,
+    furnishings: Vec<Part<FurnishingIn>>,
     /// The join shapes, for the walls and wall types they were solved for.
     joins: Option<(Vec<Wall>, Vec<WallType>, Vec<WallShape>)>,
     /// Per level: its walls, and the outer footprint they make (it joins every wall on the level).
@@ -332,6 +427,7 @@ impl Sections {
             fixtures: px,
             cabinets: pc,
             casework_fixtures: pfx,
+            furnishings: pfu,
             joins,
             footprints: mut old_footprints,
         } = prev.unwrap_or_default();
@@ -358,7 +454,8 @@ impl Sections {
             .iter()
             .map(|wall| {
                 let span = wall_span(model, wall);
-                let mut input = WallIn { wall: wall.clone(), span, shape: None, openings: Vec::new(), clip: None, roof_top: None };
+                let paints = paints_under(model, &Surface::WallSide { wall: wall.id, side: Side::Left }.object_key());
+                let mut input = WallIn { wall: wall.clone(), span, shape: None, openings: Vec::new(), clip: None, roof_top: None, paints };
                 if let Some((base, top)) = span {
                     input.shape = shape_by_id.get(&wall.id).and_then(|&i| shapes.get(i)).cloned();
                     input.openings = hosted.get(&wall.id).cloned().unwrap_or_default();
@@ -378,7 +475,7 @@ impl Sections {
                 (wall.id, input)
             })
             .collect();
-        let walls = parts(pw, wall_items, |i| wall_mesh(i));
+        let walls = parts(pw, wall_items, |i| painted(model, wall_mesh(i)));
 
         let opening_items = model
             .openings
@@ -391,7 +488,7 @@ impl Sections {
             .collect();
         let openings = parts(po, opening_items, |i| {
             let map: BTreeMap<ArchId, &Wall> = i.host.iter().map(|w| (i.opening.host, w)).collect();
-            openings::opening_meshes(&map, &i.opening, i.span).into_iter().filter(|m| !m.positions.is_empty()).collect()
+            painted(model, openings::opening_meshes(&map, &i.opening, i.span).into_iter().filter(|m| !m.positions.is_empty()).collect())
         });
 
         let room_items = model
@@ -401,7 +498,8 @@ impl Sections {
                 let level = level_for(model, room.level);
                 let wells = well_holes_for(model, room);
                 let cuts = fixture::ceiling_cutouts(model, room, &level);
-                (room.id, RoomIn { room: room.clone(), level, wells, cuts })
+                let paints = paints_under(model, &Surface::RoomFloor(room.id).object_key());
+                (room.id, RoomIn { room: room.clone(), level, wells, cuts, paints })
             })
             .collect();
         let rooms = parts(pr, room_items, |i| {
@@ -414,29 +512,42 @@ impl Sections {
             let mut ceiling = i.room.clone();
             ceiling.holes.extend(i.cuts.iter().cloned());
             out.extend(floors::ceiling_surface(&ceiling, &i.level, "ceiling"));
-            out
+            painted(model, out)
         });
 
-        let roof_items = model.roofs.iter().map(|roof| (roof.id, RoofIn { roof: roof.clone(), eave_z: eave_z(model, roof.level) })).collect();
-        let roofs = parts(pf, roof_items, |i| crate::roof::roof_meshes(&i.roof, i.eave_z).into_iter().filter(|m| !m.positions.is_empty()).collect());
+        let roof_items = model
+            .roofs
+            .iter()
+            .map(|roof| {
+                let paints = paint_of(model, &Surface::Roof(roof.id).object_key());
+                (roof.id, RoofIn { roof: roof.clone(), eave_z: eave_z(model, roof.level), paints })
+            })
+            .collect();
+        let roofs = parts(pf, roof_items, |i| {
+            painted(model, crate::roof::roof_meshes(&i.roof, i.eave_z).into_iter().filter(|m| !m.positions.is_empty()).collect())
+        });
 
         let stair_items = model.stairs.iter().map(|s| (s.id, StairIn { stair: s.clone(), base: level_for(model, s.from_level).elevation })).collect();
-        let stairs =
-            parts(ps, stair_items, |i| stairs::stair_mesh(&i.stair, i.base).into_iter().chain(stairs::landing_mesh(&i.stair, i.base)).collect());
+        let stairs = parts(ps, stair_items, |i| {
+            painted(model, stairs::stair_mesh(&i.stair, i.base).into_iter().chain(stairs::landing_mesh(&i.stair, i.base)).collect())
+        });
 
         let railing_items =
             model.railings.iter().map(|r| (r.id, RailingIn { railing: r.clone(), base: level_for(model, r.level).elevation })).collect();
-        let railings = parts(pl, railing_items, |i| railing::railing_mesh(&i.railing, i.base).into_iter().collect());
+        let railings = parts(pl, railing_items, |i| painted(model, railing::railing_mesh(&i.railing, i.base).into_iter().collect()));
 
         let deck_items = model
             .rooms
             .iter()
             .filter(|r| r.room_type == RoomType::Deck)
-            .map(|r| (r.id, DeckIn { room: r.clone(), level: level_for(model, r.level) }))
+            .map(|r| {
+                let paints = paints_under(model, &Surface::RoomFloor(r.id).object_key());
+                (r.id, DeckIn { room: r.clone(), level: level_for(model, r.level), paints })
+            })
             .collect();
         let decks = parts(pd, deck_items, |i| {
             let material = if i.room.deck_height.is_some_and(|h| h > 0.0 && h.is_finite()) { "deck" } else { "floor" };
-            floors::floor_slab(&i.room, &i.level, material).into_iter().collect()
+            painted(model, floors::floor_slab(&i.room, &i.level, material).into_iter().collect())
         });
 
         let site_in = SiteIn {
@@ -446,21 +557,73 @@ impl Sections {
             breaklines: model.walls.iter().filter(|w| w.retaining).map(|w| [w.start, w.end]).collect(),
             pads: if model.terrain.is_some() { cadcraft_arch::terrain::pad::pad_regions(model) } else { Vec::new() },
         };
-        let site = parts(pt, vec![(ArchId(0), site_in)], |_| site::site_meshes(model).meshes);
+        let site = parts(pt, vec![(ArchId(0), site_in)], |_| painted(model, site::site_meshes(model).meshes));
 
         let fixture_items =
             model.lights.iter().map(|f| (f.id, FixtureIn { light: f.clone(), point: cadcraft_arch::light::light_point(model, f) })).collect();
-        let fixtures = parts(px, fixture_items, |i| fixture::fixture_housing(&i.light, i.point));
+        let fixtures = parts(px, fixture_items, |i| painted(model, fixture::fixture_housing(&i.light, i.point)));
 
-        let cabinet_items = model.cabinets.iter().map(|c| (c.id, CabinetIn { cabinet: c.clone(), level: level_for(model, c.level) })).collect();
-        let cabinets = parts(pc, cabinet_items, |i| casework::cabinet_meshes(model, &i.cabinet));
+        let casework = casework_levels(model);
+        let cabinet_items = model
+            .cabinets
+            .iter()
+            .map(|c| {
+                let (neighbours, hosted) = casework.get(&c.level).cloned().unwrap_or_default();
+                let input = CabinetIn {
+                    cabinet: c.clone(),
+                    level: level_for(model, c.level),
+                    paints: paints_under(model, &Surface::Cabinet { cabinet: c.id, part: CabinetPart::Carcass }.object_key()),
+                    neighbours,
+                    hosted,
+                    pull_symbol: c.pull_symbol.clone().filter(|k| model.symbols.contains_key(k)),
+                };
+                (c.id, input)
+            })
+            .collect();
+        let cabinets = parts(pc, cabinet_items, |i| painted(model, casework::cabinet_meshes(model, &i.cabinet)));
 
-        let casework_fixture_items =
-            model.fixtures.iter().map(|f| (f.id, CaseworkFixtureIn { fixture: f.clone(), level: level_for(model, f.level) })).collect();
-        let casework_fixtures = parts(pfx, casework_fixture_items, |i| vec![casework::fixture_mesh(model, &i.fixture)]);
+        let casework_fixture_items = model
+            .fixtures
+            .iter()
+            .map(|f| {
+                let paints = paint_of(model, &Surface::Fixture(f.id).object_key());
+                (f.id, CaseworkFixtureIn { fixture: f.clone(), level: level_for(model, f.level), paints })
+            })
+            .collect();
+        let casework_fixtures = parts(pfx, casework_fixture_items, |i| painted(model, vec![casework::fixture_mesh(model, &i.fixture)]));
+
+        let furnishing_items = model
+            .furnishings
+            .iter()
+            .map(|f| {
+                let input = FurnishingIn {
+                    furnishing: f.clone(),
+                    level: level_for(model, f.level),
+                    paints: paints_under(model, &Surface::Furnishing { furnishing: f.id, part: 0 }.object_key()),
+                    has_symbol: model.symbols.contains_key(&f.symbol),
+                };
+                (f.id, input)
+            })
+            .collect();
+        let furnishings = parts(pfu, furnishing_items, |i| painted(model, furnishing::furnishing_meshes(model, &i.furnishing)));
 
         let joins = Some((model.walls.clone(), model.types.clone(), shapes));
-        Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, cabinets, casework_fixtures, joins, footprints }
+        Sections {
+            walls,
+            openings,
+            rooms,
+            roofs,
+            stairs,
+            railings,
+            decks,
+            site,
+            fixtures,
+            cabinets,
+            casework_fixtures,
+            furnishings,
+            joins,
+            footprints,
+        }
     }
 
     /// The scene these parts make (a copy; the cache keeps its parts).
@@ -472,7 +635,7 @@ impl Sections {
     /// The scene these parts make, moving their meshes into it.
     pub(crate) fn into_scene(self, model: &ArchModel) -> Scene3d {
         let counts = self.counts(model);
-        let Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, cabinets, casework_fixtures, .. } = self;
+        let Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, cabinets, casework_fixtures, furnishings, .. } = self;
         fn meshes<I>(list: Vec<Part<I>>) -> impl Iterator<Item = Mesh> {
             list.into_iter().flat_map(|p| p.meshes)
         }
@@ -486,7 +649,8 @@ impl Sections {
             .chain(meshes(site))
             .chain(meshes(fixtures))
             .chain(meshes(cabinets))
-            .chain(meshes(casework_fixtures));
+            .chain(meshes(casework_fixtures))
+            .chain(meshes(furnishings));
         with_meshes(counts, all.filter(keep).collect())
     }
 
@@ -510,6 +674,13 @@ impl Sections {
             plants: site_meshes.filter(|m| m.material.starts_with("plant-")).map(|m| m.object).collect::<BTreeSet<_>>().len(),
             lights: light::scene_lights(model),
             fixtures: fixture_ids.len(),
+            furnishings: made(&self.furnishings),
+            furnishing_boxes: self
+                .furnishings
+                .iter()
+                .filter(|p| !p.meshes.is_empty())
+                .filter_map(|p| furnishing::placed_box(&p.input.furnishing, p.input.level.elevation))
+                .collect(),
             ..Default::default()
         };
         scene
@@ -530,6 +701,7 @@ impl Sections {
             .chain(self.fixtures.iter().map(|p| &p.meshes))
             .chain(self.cabinets.iter().map(|p| &p.meshes))
             .chain(self.casework_fixtures.iter().map(|p| &p.meshes))
+            .chain(self.furnishings.iter().map(|p| &p.meshes))
     }
 
     /// The objects of the parts made in the last build.
@@ -551,8 +723,35 @@ impl Sections {
         self.fixtures.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.cabinets.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.casework_fixtures.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.furnishings.iter().for_each(|p| add(p.fresh, &p.meshes));
         out
     }
+}
+
+/// Per level index: its base cabinets, and the furnishings hosted by any cabinet on it or by a gap
+/// beside one, both in model order. The casework inputs every cabinet on that level shares.
+fn casework_levels(model: &ArchModel) -> BTreeMap<u32, (Vec<Cabinet>, Vec<Furnishing>)> {
+    let mut on_level: BTreeMap<u32, BTreeSet<ArchId>> = BTreeMap::new();
+    for c in &model.cabinets {
+        on_level.entry(c.level).or_default().insert(c.id);
+    }
+    on_level
+        .into_iter()
+        .map(|(level, ids)| {
+            let base = model.cabinets.iter().filter(|c| c.level == level && c.kind == CabinetKind::Base).cloned().collect();
+            let hosted = model
+                .furnishings
+                .iter()
+                .filter(|f| match f.host {
+                    FurnishingHost::Cabinet { cabinet } => ids.contains(&cabinet),
+                    FurnishingHost::Gap { left, right } => ids.contains(&left) || ids.contains(&right),
+                    FurnishingHost::None | FurnishingHost::Wall { .. } | FurnishingHost::Sink { .. } => false,
+                })
+                .cloned()
+                .collect();
+            (level, (base, hosted))
+        })
+        .collect()
 }
 
 /// Whether a mesh goes into the scene: [`Scene3d::build`] drops empty and non-finite meshes.
@@ -655,14 +854,36 @@ fn mesh_digest(mesh: &Mesh) -> u64 {
     hash
 }
 
+/// FNV-1a 64 of `bytes` with their length in front, so consecutive strings cannot run together.
+fn fnv1a_str(bytes: &[u8], hash: u64) -> u64 {
+    fnv1a(bytes, fnv1a(&(bytes.len() as u64).to_le_bytes(), hash))
+}
+
 impl Scene3d {
     /// FNV-1a 64 of every mesh (material, owner, positions, normals, uvs as f32 bits, indices),
-    /// taken in a canonical order (meshes sorted by their own digest): 16 lower-case hex digits that
-    /// do not depend on mesh order. Equal geometry gives equal digests.
+    /// taken in a canonical order (meshes sorted by their own digest), then of every material by
+    /// name (its name, base colour, metallic and roughness as f32 bits, texture key, tile and tint):
+    /// 16 lower-case hex digits that do not depend on mesh order. Equal geometry and materials give
+    /// equal digests; a scene without materials digests as it did before phase 14.
     pub fn digest(&self) -> String {
         let mut digests: Vec<u64> = self.meshes.iter().map(mesh_digest).collect();
         digests.sort_unstable();
-        let hash = digests.iter().fold(FNV_OFFSET_BASIS, |h, d| fnv1a(&d.to_le_bytes(), h));
+        let mut hash = digests.iter().fold(FNV_OFFSET_BASIS, |h, d| fnv1a(&d.to_le_bytes(), h));
+        // `materials` is a BTreeMap: its iteration is sorted by name.
+        for (name, m) in &self.materials {
+            hash = fnv1a_str(name.as_bytes(), hash);
+            for v in m.base_color.iter().chain([&m.metallic, &m.roughness]).chain(&m.tile) {
+                hash = fnv1a(&v.to_bits().to_le_bytes(), hash);
+            }
+            hash = match &m.texture {
+                Some(key) => fnv1a_str(key.as_bytes(), fnv1a(&[1], hash)),
+                None => fnv1a(&[0], hash),
+            };
+            hash = match m.tint {
+                Some(t) => fnv1a(&t, fnv1a(&[1], hash)),
+                None => fnv1a(&[0], hash),
+            };
+        }
         format!("{hash:016x}")
     }
 }
