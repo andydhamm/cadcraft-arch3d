@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 11:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 12 of 35 segments merged · 0 of 13 acceptance checks**
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 11:30 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 16.0 h so far · expected done Nov 06 05:57–Nov 08 22:06 UTC |
+| 14 | The library | building | 0 / 13 | 16.3 h so far · expected done Nov 06 06:12–Nov 08 22:21 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-12 merged, 9 merging, 7 queued, 6 escalate, 1 working
+12 merged, 9 merging, 7 queued, 6 escalate, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,7 +37,7 @@ Updated 2026-11-04 11:30 UTC. This page and the card in the README are regenerat
 | `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
 | `p14-apps-library-hooks` | The apps install the library's readers | merging | claude-sonnet-d |
 | `p14-cmd-icons` | library.icon: deterministic icons for items and categories, cached by content hash | merging | mai-flash-esc |
-| `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | working | mai-flash |
+| `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | gate | mai-flash |
 | `p14-cmd-furnishing-transform` | move, copy (count), rotate and mirror move furnishings by their handles | escalate |  |
 | `p14-cmd-paint` | paint.material, paint.object and the eyedropper | escalate |  |
 | `p14-inspect` | arch.inspect: furnishings, surfaces and the cabinet parts | merging | claude-sonnet-b |
@@ -72,8 +72,8 @@ Updated 2026-11-04 11:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 866 |
-| bonsai-b | bonsai2-27b | agent | 803 |
-| bonsai-ws2-a | bonsai2-27b | gate | 877 |
+| bonsai-b | bonsai2-27b | gate | 803 |
+| bonsai-ws2-a | bonsai2-27b | agent | 878 |
 | bonsai-ws2-b | bonsai2-27b | gate | 854 |
 | claude-sonnet-a | sonnet | merging | 76 |
 | claude-sonnet-b | sonnet | merging | 80 |
@@ -81,7 +81,7 @@ Updated 2026-11-04 11:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-d | sonnet | merging | 19 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 741 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 56 |
+| mai-flash | mai-code-1.1-flash | gate | 56 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 20 |
 | tturbo-mac | tturbo-ultraheretic | merging | 607 |
 | tturbo-mac2 | tturbo-ultraheretic | down | 348 |
