@@ -18,7 +18,9 @@ rc, rr, so, se = run(['library {}',
                       cmd('library', {"back": True}),
                       cmd('library', {"back": True}),
                       cmd('library', {"forward": True}),
-                      cmd('library', {"chips": [{"kind": "category", "value": "Furniture"}]})])
+                      cmd('library', {"chips": [{"kind": "category", "value": "Furniture"}]}),
+                      cmd('library', {"text": "dining", "chips": [CHAIR]}),
+                      cmd('library', {"text": "dining"})])
 all_items = {i['id']: i for i in lib_reply(rr, 0)['items']}
 
 
@@ -43,12 +45,23 @@ if len(dining) < 2:
     fail(f"fewer than two sample dining chairs: {dining}")
 got3 = ids_of(lib_reply(rr, 3)['items'])
 want3 = ids_of([i for i in all_items.values() if words_match(i, ['chair', 'dining'])])
-if got3 != want3 or not set(got2) <= set(got3) or len(got3) <= len(got2):
-    fail(f"removing the chip should widen {got2} to {want3}; got {got3}")
+# Removing the chip from 'chair dining' gives what the words alone match. In the sample set every item that mentions
+# "chair" is a chair/stool, so that is the same list; the widening shows on "dining" below (chairs, then chairs, tables
+# and the oak finish).
+if got3 != want3 or not set(got2) <= set(got3):
+    fail(f"removing the chip from 'chair dining' should give what the words match, {want3}; got {got3}")
+d_chip, d_all = ids_of(lib_reply(rr, 9)['items']), ids_of(lib_reply(rr, 10)['items'])
+want_dc = ids_of([i for i in all_items.values() if i.get('symbolType') == 'chair/stool' and words_match(i, ['dining'])])
+want_d = ids_of([i for i in all_items.values() if words_match(i, ['dining'])])
+if d_chip != want_dc or not d_chip:
+    fail(f"'dining' + symbolType chair/stool: {d_chip}, expected {want_dc}")
+if d_all != want_d or not set(d_chip) <= set(d_all) or len(d_all) <= len(d_chip):
+    fail(f"removing the chip should widen {d_chip} to {want_d}; got {d_all}")
 z = lib_reply(rr, 4)
 if z.get('items') != [] or z.get('total') != 0:
     fail(f"a chip with no match must return 0 items: {z.get('total')} {ids_of(z.get('items', []))[:5]}")
-print(f"ok: chair -> {len(got1)}, + dining -> {len(got2)}, chip removed -> {len(got3)}, sofa on the ceiling -> 0")
+print(f"ok: chair -> {len(got1)}, + dining -> {len(got2)}, chip removed -> {len(got3)}; dining {len(d_chip)} -> {len(d_all)} "
+      f"without the chip; sofa on the ceiling -> 0")
 
 b1, b2, f1 = lib_reply(rr, 5), lib_reply(rr, 6), lib_reply(rr, 7)
 if ids_of(b1['items']) != got3 or ids_of(b2['items']) != got2 or ids_of(f1['items']) != got3:
@@ -57,7 +70,7 @@ if b2.get('forward') is not True or not isinstance(b2.get('back'), bool):
     fail(f"the history flags after two steps back: back {b2.get('back')!r}, forward {b2.get('forward')!r}")
 print("ok: back and forward walk the filter history")
 
-fur = lib_reply(rr, 9)
+fur = lib_reply(rr, 8)      # library.filter {save} carries no listing, so the Furniture chip is the 9th library reply
 folders = {f.get('name'): f.get('items') for f in fur.get('folders') or []}
 if not folders or sum(v for v in folders.values() if isinstance(v, int)) != fur.get('total'):
     fail(f"Furniture's folders {folders} do not add up to its {fur.get('total')} items")
