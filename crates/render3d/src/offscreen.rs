@@ -611,13 +611,44 @@ impl Offscreen {
 /// unaffected. Debug builds would also turn on wgpu's DEBUG flag, which names every labelled
 /// object through the Vulkan loader; that call crashed the render3d test binary (SIGSEGV, about
 /// one run in three on cgynb4, 2026-10-30) while another test thread created its own instance, so
-/// headless instances leave it out. Instances are made one at a time: two threads in
-/// `vkCreateInstance` at once crashed the cadcraft-cli test binary inside the Vulkan loader (SIGSEGV at
-/// address 0, loader 1.4.341 on cgynb4, about one run in six, 2026-11-01).
+/// headless instances leave it out. Two threads in `vkCreateInstance` at once crashed the cadcraft-cli
+/// test binary inside the Vulkan loader (SIGSEGV at address 0, loader 1.4.341 on cgynb4, about one run
+/// in six, 2026-11-01), and with creation serialized a `render::tests` thread still crashed inside the
+/// loader (SIGSEGV at 0x400001, 2026-11-03): making and destroying instances while other threads use
+/// the loader is the unsafe part. So a process makes one headless instance, the first time it is
+/// asked for, and every caller shares it (a `wgpu::Instance` clone is a handle to the same instance);
+/// it is never destroyed.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn headless_instance() -> wgpu::Instance {
-    static MAKING: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _one_at_a_time = MAKING.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    static SHARED: std::sync::OnceLock<wgpu::Instance> = std::sync::OnceLock::new();
+    SHARED.get_or_init(|| wgpu::Instance::new(headless_descriptor())).clone()
+}
+
+/// The web build has no threads (and wgpu's handles are not `Send` there), so it makes an instance
+/// per call.
+#[cfg(target_arch = "wasm32")]
+pub fn headless_instance() -> wgpu::Instance {
     wgpu::Instance::new(headless_descriptor())
+}
+
+/// Keep a headless device until the process exits, and return it. The 2026-11-03 crash was in the
+/// loader's `loader_get_icd_and_device` (libvulkan 1.4.341): every `vkGetDeviceProcAddr`, hundreds of
+/// them as wgpu opens a device, walks every device the process has open while holding
+/// `loader_global_instance_list_lock`, but `vkDestroyDevice` unlinks and frees its entry while holding
+/// only `loader_lock`. One thread opening a device while another dropped one could therefore read a
+/// freed entry. Devices that are never destroyed cannot be freed under the walk. A process opens few of
+/// them (the CLI one per adapter choice, a test binary one per test that asks), so this costs little.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn kept_for_the_process(device: wgpu::Device) -> wgpu::Device {
+    static KEPT: std::sync::Mutex<Vec<wgpu::Device>> = std::sync::Mutex::new(Vec::new());
+    KEPT.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(device.clone());
+    device
+}
+
+/// The web build has no threads, so nothing can walk the device list while a device is dropped.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn kept_for_the_process(device: wgpu::Device) -> wgpu::Device {
+    device
 }
 
 /// The descriptor behind [`headless_instance`].
@@ -748,6 +779,35 @@ mod offscreen_behavior_tests {
         for t in threads {
             assert!(t.join().is_ok(), "a thread making instances panicked");
         }
+    }
+
+    /// 2026-11-03: a cadcraft-cli `render::tests` thread crashed inside libvulkan 1.4.341
+    /// (`loader_get_icd_and_device`, SIGSEGV at 0x400001, kernel log 20:06:59); the integrator refused
+    /// p14-arch-place for the cut-short run. Every `vkGetDeviceProcAddr` walks the process's open
+    /// devices, and a device destroyed on another thread could be freed under that walk. With 40 devices
+    /// open (a long walk), threads opening devices through `request_device` and dropping them must not
+    /// crash.
+    #[test]
+    fn opening_and_dropping_devices_from_many_threads_does_not_crash() {
+        let instance = headless_instance();
+        let held: Vec<_> = (0..40)
+            .filter_map(|_| futures::executor::block_on(crate::adapter::request_device(&instance, crate::adapter::AdapterChoice::Fallback)).ok())
+            .collect();
+        let threads: Vec<_> = (0..24)
+            .map(|i| {
+                std::thread::spawn(move || {
+                    let choice = if i % 2 == 0 { crate::adapter::AdapterChoice::Fallback } else { crate::adapter::AdapterChoice::Auto };
+                    for _ in 0..8 {
+                        let instance = headless_instance();
+                        let _ = futures::executor::block_on(crate::adapter::request_device(&instance, choice));
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            assert!(t.join().is_ok(), "a thread opening devices panicked");
+        }
+        drop(held);
     }
 
     fn with_offscreen<F>(size: (u32, u32), f: F)

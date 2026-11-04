@@ -14,7 +14,7 @@ pub(crate) fn device_and_queue() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = crate::offscreen::headless_instance();
     let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions::default()).now_or_never()?.ok()?;
     let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor::default()).now_or_never()?.ok()?;
-    Some((device, queue))
+    Some((crate::offscreen::kept_for_the_process(device), queue))
 }
 
 /// One device for every GPU test in this binary, created once on a helper thread and given
