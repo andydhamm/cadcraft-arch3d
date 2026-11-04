@@ -16,7 +16,6 @@ use crate::types::Scene3d;
 use bytemuck::Pod;
 use cadcraft_doc::arch::ImageRgba;
 use cadcraft_doc::arch::backdrop::{Backdrop, Projection};
-use std::cmp;
 use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
@@ -515,7 +514,7 @@ impl PathTracer {
         let lum: Vec<f32> = (0..pixels)
             .map(|i| {
                 let b = i * 4;
-                luminance([rgba[b] as f32 / 255.0, rgba[b + 1] as f32 / 255.0, rgba[b + 2] as f32 / 255.0])
+                super::luminance([rgba[b] as f32 / 255.0, rgba[b + 1] as f32 / 255.0, rgba[b + 2] as f32 / 255.0])
             })
             .collect();
 
@@ -536,7 +535,7 @@ impl PathTracer {
             if n == 0 { 0.0f32 } else { (sum / n as f64) as f32 }
         };
         // Threshold: anything brighter than the average miss level is a real hit, not a miss.
-        let threshold = if miss_lum > 1e-4 { cmp::min(0.9 * miss_lum, miss_lum) } else { 0.0f32 };
+        let threshold = if miss_lum > 1e-4 { 0.9 * miss_lum } else { 0.0f32 };
         let threshold = threshold.max(1e-6);
 
         for i in 0..pixels {
