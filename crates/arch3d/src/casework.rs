@@ -42,8 +42,14 @@ fn level_elevation(model: &ArchModel, level: u32) -> f64 {
         .unwrap_or_else(|| model.levels.last().map(|l| l.elevation).unwrap_or(0.0))
 }
 
-/// Meshes for a cabinet: carcass, front faces and optional counter.
+/// Meshes for a cabinet: carcass, front faces, pulls and optional counter.
 pub fn cabinet_meshes(model: &ArchModel, c: &Cabinet) -> Vec<Mesh> {
+    cabinet_meshes_in(model, c, &counter_runs(model))
+}
+
+/// [`cabinet_meshes`] with the model's counter runs already worked out (`runs` is
+/// `counter_runs(model)`): a scene build works them out once, not once per cabinet.
+pub(crate) fn cabinet_meshes_in(model: &ArchModel, c: &Cabinet, runs: &[CounterRun]) -> Vec<Mesh> {
     let level_z = level_elevation(model, c.level) + c.elevation;
     let toe = if c.toe_kick { 0.1 } else { 0.0 };
     let mut meshes = Vec::new();
@@ -79,11 +85,11 @@ pub fn cabinet_meshes(model: &ArchModel, c: &Cabinet) -> Vec<Mesh> {
 
     meshes.extend(pull_meshes(model, c, &layout));
 
-    let run = counter_runs(model).into_iter().find(|r| r.cabinets.contains(&c.id));
+    let run = runs.iter().find(|r| r.cabinets.contains(&c.id));
     match run {
         Some(run) => {
             if run.owner == c.id
-                && let Some(counter) = run_counter(model, &run)
+                && let Some(counter) = run_counter(model, run)
             {
                 meshes.push(counter);
             }
@@ -258,8 +264,12 @@ fn pull_meshes(model: &ArchModel, c: &Cabinet, layout: &[FrontInfo]) -> Vec<Mesh
     out
 }
 
+/// The most cut-outs one counter run takes (in model order). A real run has a few; the cell split
+/// grows with the square of their count, so a crowd of them in a hostile file must not.
+const MAX_COUNTER_HOLES: usize = 64;
+
 /// The counter of a run, in the owner's frame, with a hole for every cut-out furnishing hosted on
-/// a cabinet of the run or in one of its bridged gaps.
+/// a cabinet of the run or in one of its bridged gaps (the first [`MAX_COUNTER_HOLES`] of them).
 fn run_counter(model: &ArchModel, run: &CounterRun) -> Option<Mesh> {
     let floor = level_elevation(model, run.level);
     // `run.top` is the cabinets' top (elevation + height): the counter sits on it, as a lone one always did.
@@ -272,7 +282,9 @@ fn run_counter(model: &ArchModel, run: &CounterRun) -> Option<Mesh> {
     for f in &model.furnishings {
         let hosted = match f.host {
             FurnishingHost::Cabinet { cabinet } => run.cabinets.contains(&cabinet),
-            _ => run.bridged.contains(&f.id),
+            // The id alone is not enough: a furnishing elsewhere could share a bridged one's id.
+            FurnishingHost::Gap { left, right } => run.bridged.contains(&f.id) && run.cabinets.contains(&left) && run.cabinets.contains(&right),
+            FurnishingHost::None | FurnishingHost::Wall { .. } | FurnishingHost::Sink { .. } => false,
         };
         let Some(co) = f.cutout.filter(|_| hosted) else { continue };
         if !(f.at.iter().chain(co.iter()).chain([&f.rotation]).all(|v| v.is_finite()) && co[0] > 0.0 && co[1] > 0.0) {
@@ -284,6 +296,9 @@ fn run_counter(model: &ArchModel, run: &CounterRun) -> Option<Mesh> {
         let h = [(rel.x - w / 2.0).max(u0), (rel.y - d / 2.0).max(y0), (rel.x + w / 2.0).min(u1), (rel.y + d / 2.0).min(y1)];
         if h[2] - h[0] > 1e-6 && h[3] - h[1] > 1e-6 {
             holes.push(h);
+            if holes.len() >= MAX_COUNTER_HOLES {
+                break;
+            }
         }
     }
     let mut mesh = Mesh::new("counter", run.owner);
@@ -303,18 +318,18 @@ fn run_counter(model: &ArchModel, run: &CounterRun) -> Option<Mesh> {
         mesh.push_prism_with_holes(&outer, &hs, z0, z1);
     } else {
         // Split along every hole edge and keep the cells outside the holes.
+        // The ends always stay: a hole edge within eps of one is not a cut (it would drop the end
+        // or leave a sliver).
         let cuts = |lo: f64, hi: f64, pick: fn(&[f64; 4]) -> [f64; 2]| {
-            let mut v = vec![lo, hi];
-            for h in &holes {
-                v.extend(pick(h));
-            }
-            v.sort_by(|a, b| a.total_cmp(b));
-            let mut out: Vec<f64> = Vec::new();
-            for x in v {
-                if out.last().is_none_or(|l| x - l > eps) {
+            let mut inner: Vec<f64> = holes.iter().flat_map(pick).filter(|&x| x > lo + eps && x < hi - eps).collect();
+            inner.sort_by(f64::total_cmp);
+            let mut out = vec![lo];
+            for x in inner {
+                if out.last().is_some_and(|l| x - l > eps) {
                     out.push(x);
                 }
             }
+            out.push(hi);
             out
         };
         let us = cuts(u0, u1, |h| [h[0], h[2]]);
@@ -771,6 +786,89 @@ mod tests {
     }
 
     #[test]
+    fn a_cut_out_edge_just_inside_the_counter_end_keeps_its_length() {
+        // The hole crosses the back edge (so the counter is built from cells) and its right edge
+        // lies 5e-7 inside the counter's end: the end stays at u = 0.3, front at y = 0.625.
+        let mut model = model_with_sink();
+        model.furnishings[0].cutout = Some([0.3 - 5e-7, 0.3]);
+        model.furnishings[0].at = [0.15 - 2.5e-7, 0.1];
+        let b = counters(&model)[0].1.bounds();
+        assert!((b.max[0] - 0.3).abs() < 1e-7 && (b.min[0] + 0.3).abs() < 1e-7, "{b:?}");
+        model.furnishings[0].cutout = Some([0.2, 0.3]);
+        model.furnishings[0].at = [0.0, 0.625 - 5e-7 - 0.15];
+        let b = counters(&model)[0].1.bounds();
+        assert!((b.max[1] - 0.625).abs() < 1e-7, "{b:?}");
+    }
+
+    #[test]
+    fn only_hosted_cut_outs_cut_the_counter() {
+        // A furnishing on no host that shares its id with the furnishing bridging the gap is not
+        // the bridged one: it leaves the counter whole.
+        let mut model = model_of(vec![cab(0, 0.0, Fronts::Doors), cab(1, 1.0, Fronts::Doors)]);
+        let bridge = Furnishing {
+            id: ArchId(0),
+            at: [0.5, 0.3],
+            size: [0.4, 0.6, 0.85],
+            host: FurnishingHost::Gap { left: ArchId(0), right: ArchId(1) },
+            ..Furnishing::default()
+        };
+        model.furnishings.push(bridge);
+        model.furnishings.push(sink_on(FurnishingHost::None, [0.0, 0.3]));
+        let all = counters(&model);
+        assert_eq!(all.len(), 1);
+        let area = top_area(&all[0].1);
+        assert!((area - 1.6 * 0.625).abs() < 1e-6, "{area}");
+    }
+
+    #[test]
+    fn several_cut_outs_on_a_run_are_closed_holes() {
+        let mut model = model_of(vec![cab(0, 0.0, Fronts::Doors), cab(1, 0.6, Fronts::Doors), cab(2, 1.2, Fronts::Doors)]);
+        for (k, x) in [0.0, 0.6, 1.2].into_iter().enumerate() {
+            let mut s = sink_on(FurnishingHost::Cabinet { cabinet: ArchId(k as u32) }, [x, 0.3]);
+            s.id = ArchId(k as u32);
+            model.furnishings.push(s);
+        }
+        let all = counters(&model);
+        assert_eq!(all.len(), 1);
+        assert!(all[0].1.is_manifold());
+        let area = top_area(&all[0].1);
+        assert!((area - (1.8 * 0.625 - 3.0 * 0.4 * 0.3)).abs() < 1e-6, "{area}");
+    }
+
+    #[test]
+    fn a_crowd_of_cut_outs_keeps_the_counter_bounded() {
+        // 200 overlapping cut-outs, each offset 0.1 mm along u and y, force the cell split; the
+        // counter takes at most MAX_COUNTER_HOLES of them, so it stays within that split's cells.
+        let mut model = model_of(vec![cab(0, 0.0, Fronts::Doors)]);
+        for k in 0..200u32 {
+            let d = f64::from(k) * 1e-4;
+            let mut s = sink_on(FurnishingHost::Cabinet { cabinet: ArchId(0) }, [d, 0.3 + d]);
+            s.id = ArchId(k);
+            model.furnishings.push(s);
+        }
+        let all = counters(&model);
+        assert_eq!(all.len(), 1);
+        let cells = (2 * MAX_COUNTER_HOLES + 1).pow(2);
+        assert!(all[0].1.triangle_count() <= 12 * cells, "{} triangles", all[0].1.triangle_count());
+    }
+
+    #[test]
+    fn a_full_level_of_cabinets_builds_in_seconds() {
+        // MAX_CABINETS touching base cabinets (one run) and MAX_FURNISHINGS furnishings: the counter
+        // runs are worked out once per build, not once per cabinet (that took over a minute).
+        let n = cadcraft_doc::arch::MAX_CABINETS;
+        let mut model = model_of((0..n).map(|i| cab(i as u32, i as f64 * 0.6, Fronts::Doors)).collect());
+        for i in 0..cadcraft_doc::arch::MAX_FURNISHINGS {
+            model.furnishings.push(Furnishing { id: ArchId(i as u32), at: [i as f64, 5.0], size: [0.5, 0.5, 0.5], ..Furnishing::default() });
+        }
+        let t = std::time::Instant::now();
+        let scene = crate::Scene3d::build(&model);
+        let took = t.elapsed();
+        assert_eq!(scene.meshes.iter().filter(|m| m.material == "counter").count(), 1);
+        assert!(took < std::time::Duration::from_secs(10), "{n} cabinets built in {took:?}");
+    }
+
+    #[test]
     fn casework_part_edits_keep_the_cache_exact() {
         let mut model = model_of(vec![cab(0, 0.0, Fronts::Doors), cab(1, 0.6, Fronts::Doors)]);
         let (mut cache, _) = crate::SceneCache::new(&model);
@@ -784,6 +882,13 @@ mod tests {
             Box::new(|m| m.cabinets[1].position.x = 1.0),
             Box::new(|m| m.furnishings.push(sink_on(FurnishingHost::Cabinet { cabinet: ArchId(0) }, [0.0, 0.3]))),
             Box::new(|m| m.furnishings[0].cutout = Some([0.3, 0.2])),
+            Box::new(|m| {
+                let host = FurnishingHost::Gap { left: ArchId(0), right: ArchId(1) };
+                m.furnishings.push(Furnishing { id: ArchId(1), at: [0.5, 0.3], size: [0.4, 0.6, 0.85], host, ..Furnishing::default() });
+            }),
+            Box::new(|m| {
+                m.symbols.remove("bar");
+            }),
             Box::new(|m| m.cabinets[0].counter = false),
         ];
         for edit in edits {
