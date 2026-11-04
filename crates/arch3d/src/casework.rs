@@ -589,7 +589,7 @@ mod tests {
                 roughness: 0.5,
                 ..SymbolPart::default()
             }],
-            textures: Vec::new(),
+            ..Default::default()
         }
     }
 
