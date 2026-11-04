@@ -508,14 +508,7 @@ impl PathTracer {
             if aov[2 * i][3] <= 0.5 {
                 let x = i % w as usize;
                 let y = i / w as usize;
-                let (r, g, b) = backdrop_colour(
-                    x as f64,
-                    y as f64,
-                    w as f64,
-                    h as f64,
-                    backdrop,
-                    &self.backdrop_images,
-                );
+                let (r, g, b) = backdrop_colour(x as f64, y as f64, w as f64, h as f64, backdrop, &self.backdrop_images);
                 rgba[i * 4] = r;
                 rgba[i * 4 + 1] = g;
                 rgba[i * 4 + 2] = b;
@@ -858,14 +851,7 @@ pub struct SceneBuffers {
 /// lerp(top, bottom, t) per channel in sRGB with t = (y + 0.5) / h; for Image Flat: bilinear
 /// sample at u = (x + 0.5) / w, v = (y + 0.5) / h; for Image Equirect: the camera ray d
 /// through the pixel centre (u = 0.5 + atan2(d.y, d.x) / 2π, v = 0.5 − asin(d.z) / π).
-fn backdrop_colour(
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    backdrop: &Backdrop,
-    backdrop_images: &BTreeMap<String, crate::types::ImageRgba>,
-) -> ([u8; 3]) {
+fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop_images: &BTreeMap<String, crate::types::ImageRgba>) -> ([u8; 3]) {
     match backdrop {
         Backdrop::Colour { colour } => *colour,
         Backdrop::Gradient { top, bottom } => {
@@ -876,9 +862,7 @@ fn backdrop_colour(
                 (top[2] as f64 * (1.0 - t) + bottom[2] as f64 * t).clamp(0.0, 255.0).round() as u8,
             ]
         }
-        Backdrop::Image { item, projection: BackdropProjection::Equirect } => {
-            [128, 128, 128]
-        }
+        Backdrop::Image { item, projection: BackdropProjection::Equirect } => [128, 128, 128],
         Backdrop::Image { item, projection: BackdropProjection::Flat } => {
             if let Some(img) = backdrop_images.get(item) {
                 let u = ((x + 0.5) / w).clamp(0.0, 1.0);
@@ -896,9 +880,10 @@ fn backdrop_colour(
         }
     }
 }
+fn storage<T: Copy + Pod>(d: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
     let one = [T::default()];
     let data: &[T] = if items.is_empty() { &one } else { items };
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(label),
         contents: bytemuck::cast_slice(data),
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -1057,6 +1042,7 @@ mod tests {
     use crate::camera::{Camera, Orbit};
     use crate::lit_frame::Lighting;
     use crate::types::{ArchId, Mesh, Scene3d};
+    use cadcraft_doc::arch::backdrop::Backdrop;
     use cadcraft_geom::Vec2;
 
     fn floor() -> Mesh {
@@ -1451,5 +1437,72 @@ mod tests {
                 other => panic!("unexpected status: {other:?}"),
             }
         }
+    }
+
+    /// Render `scene` with the given options, returning (rgba bytes, stats).
+    fn render_to_rgba_scene(gpu: &ComputeGpu, scene: &Scene3d, opts: &PathOptions) -> (Vec<u8>, PathStats) {
+        let c = camera();
+        let l = Lighting::default();
+        let mut t = PathTracer::new(gpu, scene, &c, &l, false, (16, 16), opts, None).unwrap();
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => return (rgba, t.stats()),
+                PathStatus::Cancelled => panic!("unexpected cancel"),
+                PathStatus::Failed(e) => panic!("failed: {e}"),
+            }
+        }
+    }
+
+    #[test]
+    fn path_traced_misses_show_the_backdrop() {
+        let Some(gpu) = compute() else { return };
+        let backdrop = Backdrop::Colour { colour: [255, 0, 0] };
+        let m = floor();
+        let scene = Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), backdrop: Some(backdrop), ..Default::default() };
+        let opts = PathOptions { spp: 4, denoise: false, ..Default::default() };
+        let (rgba, _) = render_to_rgba_scene(&gpu, &scene, &opts);
+        let n = rgba.len() / 4;
+        let mut found_red = false;
+        let mut found_not_red = false;
+        for i in 0..n {
+            let (r, g, b) = (rgba[i * 4] as f32, rgba[i * 4 + 1] as f32, rgba[i * 4 + 2] as f32);
+            if (r - 255.0).abs() < 5.0 && (g - 0.0).abs() < 5.0 && (b - 0.0).abs() < 5.0 {
+                found_red = true;
+            } else {
+                found_not_red = true;
+            }
+        }
+        assert!(found_red, "expected some backdrop (red) pixels for missed rays");
+        assert!(found_not_red, "expected some floor (non-red) pixels for hit rays");
+    }
+
+    #[test]
+    fn path_traced_hits_are_unchanged() {
+        let Some(gpu) = compute() else { return };
+        let m = floor();
+        let backdrop = Backdrop::Colour { colour: [255, 0, 0] };
+        let scene_no_bg = Scene3d { bounds: m.bounds(), meshes: vec![m.clone()], lights: Vec::new(), ..Default::default() };
+        let scene_with_bg = Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), backdrop: Some(backdrop), ..Default::default() };
+        let opts = PathOptions { spp: 4, seed: 42, denoise: false, ..Default::default() };
+        let (rgba1, _) = render_to_rgba_scene(&gpu, &scene_no_bg, &opts);
+        let (rgba2, _) = render_to_rgba_scene(&gpu, &scene_with_bg, &opts);
+        let n = rgba1.len() / 4;
+        let mut compared = 0;
+        let mut mismatch = 0;
+        for i in 0..n {
+            let lum = luminance([rgba1[i * 4] as f32 / 255.0, rgba1[i * 4 + 1] as f32 / 255.0, rgba1[i * 4 + 2] as f32 / 255.0]);
+            if lum > 0.02 {
+                let dr = (rgba1[i * 4] as i32 - rgba2[i * 4] as i32).abs() as f32;
+                let dg = (rgba1[i * 4 + 1] as i32 - rgba2[i * 4 + 1] as i32).abs() as f32;
+                let db = (rgba1[i * 4 + 2] as i32 - rgba2[i * 4 + 2] as i32).abs() as f32;
+                if (dr + dg + db) / 3.0 > 2.0 {
+                    mismatch += 1;
+                }
+                compared += 1;
+            }
+        }
+        assert!(compared > 0, "no hit pixels to compare");
+        assert!(mismatch == 0, "hit pixels changed: {mismatch} of {compared} differ");
     }
 }
