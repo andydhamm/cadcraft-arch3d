@@ -15,6 +15,7 @@ pub mod finish;
 pub mod fixture;
 pub mod floors;
 pub mod hlr;
+pub mod icon;
 pub mod incremental;
 pub mod light;
 pub mod mesh;
