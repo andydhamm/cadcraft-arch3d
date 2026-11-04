@@ -612,6 +612,33 @@ mod tests {
     }
 
     #[test]
+    fn finalize_shows_the_backdrop() {
+        let Some(mut o) = off() else { return };
+        let mut plain = scene(false);
+        plain.meshes = vec![prism(1, "wall", (-1.0, -1.0), (1.0, 1.0), (0.0, 2.0))];
+        plain.bounds = plain.meshes[0].bounds();
+        plain.lights.clear();
+        let mut with = plain.clone();
+        with.backdrop = Some(cadcraft_doc::arch::Backdrop::Colour { colour: [32, 64, 96] });
+        let a = still(&mut o, &plain, 1);
+        let b = still(&mut o, &with, 2);
+        assert_eq!(a.len(), (SIZE.0 * SIZE.1 * 4) as usize);
+        assert_eq!(b.len(), a.len());
+        let clear = |p: &[u8]| p.iter().take(3).zip([39u8, 44, 52]).all(|(x, y)| x.abs_diff(y) <= 1);
+        let mut background = 0;
+        for (pa, pb) in a.chunks_exact(4).zip(b.chunks_exact(4)) {
+            if clear(pa) {
+                background += 1;
+                assert!(pb.iter().take(3).zip([32u8, 64, 96]).all(|(x, y)| x.abs_diff(y) <= 1), "background pixel {pb:?}");
+            }
+        }
+        assert!(background > 100, "the still must show background ({background})");
+        let at = ((SIZE.1 / 2 * SIZE.0 + SIZE.0 / 2) * 4) as usize;
+        assert_eq!(a.get(at..at + 4), b.get(at..at + 4), "a pixel covered by the mesh is unchanged");
+        assert!(!clear(&a[at..at + 4]) && a[at..at + 3] != [32, 64, 96], "the centre pixel must be on the mesh");
+    }
+
+    #[test]
     fn final_render_leaves_the_interactive_cache_alone() {
         let Some(mut o) = off() else { return };
         let s = scene(false);

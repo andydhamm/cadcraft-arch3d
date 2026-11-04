@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use crate::Render3dError;
 use crate::adapter::{AdapterChoice, DeviceInfo, request_device};
+use crate::backdrop::BackdropPass;
 
 /// Alias of [`DeviceInfo`] for the accessor signature.
 type Info = DeviceInfo;
@@ -160,6 +161,7 @@ pub struct Offscreen {
     slots: Option<Slots>,
     pub(crate) meshes: Option<((u64, bool), GpuMeshes)>,
     edges: Option<EdgePass>,
+    pub(crate) backdrop: Option<BackdropPass>,
     shadowed: Option<ShadowPipelines>,
     pub(crate) shadows_built: u64,
     uploads: u64,
@@ -223,6 +225,7 @@ impl Offscreen {
             slots: None,
             meshes: None,
             edges: None,
+            backdrop: None,
             shadowed: None,
             shadows_built: 0,
             uploads: 0,
@@ -407,6 +410,17 @@ impl Offscreen {
             let edges = self.edges.get_or_insert_with(|| EdgePass::new(&self.device, 1));
             edges.prepare(&self.device, &self.queue, scene, scene_key, vp, EDGE_COLOR);
         }
+        // The backdrop (every style but hidden-line) is drawn first; a missing image leaves the clear colour.
+        let with_backdrop = match (&scene.backdrop, opts.style) {
+            (Some(b), style) if style != Style::HiddenLine => {
+                let pass = match &mut self.backdrop {
+                    Some(p) => p,
+                    slot => slot.insert(BackdropPass::new(&self.device, &self.queue)),
+                };
+                pass.prepare(&self.device, &self.queue, b, &scene.textures, (self.targets.width, self.targets.height), &vp)
+            }
+            _ => false,
+        };
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("render3d scene"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -424,6 +438,9 @@ impl Offscreen {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        if with_backdrop && let Some(p) = &self.backdrop {
+            p.draw(&mut pass);
+        }
         let Some(slots) = &self.slots else { return };
         if meshes.draws.is_empty() {
             return;
