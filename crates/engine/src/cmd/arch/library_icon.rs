@@ -53,7 +53,7 @@ fn render_item_icon(lib: &mut Library, item: &ItemRecord, view: &IconView) -> Re
             let name = item.id.strip_prefix("finish:").or_else(|| item.symbol_type.strip_prefix("finish:")).unwrap_or(item.symbol_type.as_str());
             let finish = Finish::parse(name).ok_or_else(|| EngineError::Other(format!("`{}` is not a finish", item.id)))?;
             let texture = cadcraft_arch3d::texture::texture(finish);
-            let img = ImageRgba { width: texture.width, height: texture.height, rgba: texture.rgba };
+            let img = ImageRgba { width: texture.width, height: texture.height, rgba: texture.rgba, ..Default::default() };
             Ok(render_sphere(Some(&img), [1.0, 1.0, 1.0], view))
         }
         _ => {
