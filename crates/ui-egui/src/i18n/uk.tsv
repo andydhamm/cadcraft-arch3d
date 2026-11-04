@@ -1453,6 +1453,9 @@
 	Match case	Match case
 	Replace	Replace
 	Replace All	Replace All
+	Material Painter	Малювання матеріалом
+	Object Painter	Малювання об'єктом
+	Material Eyedropper	Піпетка матеріалу
 	Replace with:	Replace with:
 	Replacement text	Replacement text
 	Results	Results
