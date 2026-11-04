@@ -33,6 +33,13 @@ pub(crate) fn shared_compute() -> Option<crate::pathtrace::ComputeGpu> {
     SHARED.get_or_init(|| crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, false).ok().flatten()).clone()
 }
 
+/// One compute device on the software adapter with ray queries asked for (llvmpipe offers them), for the
+/// hardware-ray-query path's tests; `None` without one. Its `ray_query` is false where the adapter has none.
+pub(crate) fn shared_compute_rq() -> Option<crate::pathtrace::ComputeGpu> {
+    static SHARED: std::sync::OnceLock<Option<crate::pathtrace::ComputeGpu>> = std::sync::OnceLock::new();
+    SHARED.get_or_init(|| crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, true).ok().flatten()).clone()
+}
+
 /// How long [`shared_device`] waits for the adapter and device.
 pub(crate) const SHARED_DEVICE_BUDGET: Duration = Duration::from_secs(30);
 

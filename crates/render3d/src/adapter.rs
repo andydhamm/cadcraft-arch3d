@@ -61,7 +61,16 @@ impl DeviceInfo {
 /// Request an adapter per `choice` and a device on it with the downlevel WebGL2 limits
 /// (weakened to the adapter's own limits where it is weaker).
 /// [`Render3dError::NoAdapter`] when there is no adapter.
+///
+/// One device per adapter choice is made per process and shared by every caller (all headless callers
+/// use [`crate::offscreen::headless_instance`]): devices are never destroyed (the loader race, see
+/// `offscreen::kept_for_the_process`), and a device per request held a 256 MB memory block each, which ran
+/// the 4 GB T1000 out of memory under the render3d tests (2026-11-04).
 pub async fn request_device(instance: &wgpu::Instance, choice: AdapterChoice) -> Result<(wgpu::Device, wgpu::Queue, DeviceInfo), Render3dError> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(hit) = shared_device(choice) {
+        return Ok(hit);
+    }
     let options = match choice {
         AdapterChoice::Auto => wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, ..Default::default() },
         AdapterChoice::Fallback => wgpu::RequestAdapterOptions { force_fallback_adapter: true, ..Default::default() },
@@ -74,10 +83,36 @@ pub async fn request_device(instance: &wgpu::Instance, choice: AdapterChoice) ->
         .request_device(&wgpu::DeviceDescriptor { label: Some("render3d"), required_limits, ..Default::default() })
         .await
         .map_err(|e| Render3dError::Wgpu(e.to_string()))?;
-    let device = crate::offscreen::kept_for_the_process(device);
     let info = adapter.get_info();
     let info = DeviceInfo { name: info.name, backend: format!("{:?}", info.backend), adapter_type: format!("{:?}", info.device_type), downlevel };
+    #[cfg(not(target_arch = "wasm32"))]
+    return Ok(share_device(choice, (device, queue, info)));
+    #[cfg(target_arch = "wasm32")]
     Ok((device, queue, info))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+type Shared = (wgpu::Device, wgpu::Queue, DeviceInfo);
+
+#[cfg(not(target_arch = "wasm32"))]
+static SHARED: std::sync::Mutex<Vec<(AdapterChoice, Shared)>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(not(target_arch = "wasm32"))]
+fn shared_device(choice: AdapterChoice) -> Option<Shared> {
+    SHARED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter().find(|(c, _)| *c == choice).map(|(_, d)| d.clone())
+}
+
+/// Record `made` as `choice`'s device, or, when another thread recorded one first, keep `made` open (it is
+/// never dropped) and return that one.
+#[cfg(not(target_arch = "wasm32"))]
+fn share_device(choice: AdapterChoice, made: Shared) -> Shared {
+    let mut shared = SHARED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((_, first)) = shared.iter().find(|(c, _)| *c == choice) {
+        let _ = crate::offscreen::kept_for_the_process(made.0);
+        return first.clone();
+    }
+    shared.push((choice, made.clone()));
+    made
 }
 
 #[cfg(test)]
@@ -125,6 +160,17 @@ mod tests {
             assert_eq!(got.max_bind_groups, web.max_bind_groups);
             assert!(info.line().ends_with("limits=downlevel_webgl2"));
         }
+    }
+
+    /// 2026-11-04: keeping every device for the process (3a50c117, the loader race) let a render3d test
+    /// binary hold a device per test: the T1000 peaked at 3614 of 4096 MiB and the integrator refused
+    /// harden-p13-arch3d-incremental on "Not enough memory left". One device per adapter choice is
+    /// shared instead, so the count stays at a handful and none is destroyed.
+    #[test]
+    fn one_device_per_adapter_choice_is_shared() {
+        let Some((a, _)) = device(AdapterChoice::Fallback) else { return };
+        let Some((b, _)) = device(AdapterChoice::Fallback) else { return };
+        assert!(a == b, "two requests for the software adapter must share one device");
     }
 
     #[test]

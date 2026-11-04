@@ -159,6 +159,9 @@ pub struct PathStats {
     pub denoised: bool,
     /// Hardware ray queries were used.
     pub rt: bool,
+    /// Why `rt` was asked for on a device with ray queries but the compute path rendered instead (the
+    /// ray-query pipelines failed to build); `None` when they were used or not asked for.
+    pub rt_error: Option<String>,
     pub pipeline_cache: CacheOutcome,
     /// The display exposure used for the final image.
     pub exposure: f32,

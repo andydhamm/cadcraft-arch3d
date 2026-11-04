@@ -22,8 +22,13 @@ pub fn kernel_source() -> String {
 
 /// The ray-query kernel module's source: same modules as [`kernel_source`] but the ray-query
 /// traversal replaces the compute traversal. Everything else (bsdf, lights, kernel) is byte-identical.
+///
+/// WGSL directives (`enable wgpu_ray_query;`) must open a module, before every declaration, so the
+/// traversal's directive lines move to the top and the rest of it keeps its place after common.wgsl.
 pub fn rq_kernel_source() -> String {
-    [COMMON_WGSL, RQ_TRAVERSE_WGSL, BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
+    let (directives, traversal): (Vec<&str>, Vec<&str>) = RQ_TRAVERSE_WGSL.lines().partition(|l| l.trim_start().starts_with("enable "));
+    let traversal = traversal.join("\n");
+    [directives.join("\n").as_str(), COMMON_WGSL, traversal.as_str(), BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
 }
 
 /// Every compute pipeline and the layouts their bind groups follow.
