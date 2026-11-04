@@ -3,7 +3,7 @@
 //! The scene types are owned by `cadcraft_arch3d`; this module re-exports them so the
 //! renderer and its callers use one source of truth.
 
-pub use cadcraft_arch3d::{ArchId, Bounds3, Mesh, Scene3d};
+pub use cadcraft_arch3d::{ArchId, Bounds3, MaterialDef, Mesh, Scene3d};
 
 #[cfg(test)]
 mod tests {
