@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 11 of 35 segments merged · 0 of 13 acceptance checks**
 
@@ -24,17 +24,17 @@ Updated 2026-11-04 08:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 12.8 h so far · expected done Nov 05 13:03–Nov 07 02:11 UTC |
+| 14 | The library | building | 0 / 13 | 13.0 h so far · expected done Nov 05 13:18–Nov 07 02:26 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-11 merged, 9 merging, 8 queued, 7 gate
+11 merged, 10 merging, 8 queued, 6 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p14-arch3d-cabinet-parts` | Front styles, pulls, counter runs and cut-outs in 3D | merging | bonsai-a |
-| `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | gate | claude-sonnet-b |
+| `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
 | `p14-arch-place` | Where a library item goes: floor, wall, ceiling, counter, gap, swap | merging | claude-sonnet-c |
 | `p14-apps-library-hooks` | The apps install the library's readers | merging | claude-sonnet-d |
 | `p14-cmd-icons` | library.icon: deterministic icons for items and categories, cached by content hash | gate | bonsai-b |
@@ -72,16 +72,16 @@ Updated 2026-11-04 08:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 866 |
-| bonsai-b | bonsai2-27b | gate | 798 |
+| bonsai-b | bonsai2-27b | gate | 799 |
 | bonsai-ws2-a | bonsai2-27b | gate | 876 |
 | bonsai-ws2-b | bonsai2-27b | gate | 851 |
 | claude-sonnet-a | sonnet | merging | 76 |
-| claude-sonnet-b | sonnet | gate | 79 |
+| claude-sonnet-b | sonnet | merging | 80 |
 | claude-sonnet-c | sonnet | gate | 31 |
 | claude-sonnet-d | sonnet | merging | 19 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 738 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | gate | 55 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 18 |
-| tturbo-mac | tturbo-ultraheretic | gate | 606 |
-| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
+| tturbo-mac | tturbo-ultraheretic | merging | 607 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
