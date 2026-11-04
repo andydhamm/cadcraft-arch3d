@@ -15,6 +15,7 @@
 //! [`Library::with_user_dir`].
 
 pub mod catalog;
+pub mod user;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
@@ -285,6 +286,12 @@ impl Library {
     /// The item `id`.
     pub fn item(&self, id: &str) -> Option<&ItemRecord> {
         self.items.binary_search_by(|r| r.id.as_str().cmp(id)).ok().and_then(|i| self.items.get(i))
+    }
+
+    /// Mutable access to the item `id` in the merged item list.
+    pub fn item_mut(&mut self, id: &str) -> Option<&mut ItemRecord> {
+        let idx = self.items.binary_search_by(|r| r.id.as_str().cmp(id)).ok()?;
+        self.items.get_mut(idx)
     }
 
     /// The user dir, if there is one.
