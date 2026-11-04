@@ -236,8 +236,54 @@ fn run_library_place(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(CMD, "a material is painted: use paint.material"));
     }
 
+    let placement = match field(m, "placement") {
+        Some(Value::String(s)) => Placement::parse(s).ok_or_else(|| bad(CMD, format!("unknown placement `{s}`")))?,
+        Some(_) => return Err(bad(CMD, "`placement` must be a string")),
+        None => item.placement.as_deref().and_then(Placement::parse).unwrap_or(Placement::Floor),
+    };
+
     if item.kind == ItemKind::Group {
         return crate::library::user::place_group(s, &item, Vec2::new(point[0], point[1]), rotation);
+    }
+
+    if item.kind == ItemKind::FrontStyle {
+        let req = PlaceRequest {
+            placement,
+            symbol_type: item.symbol_type.clone(),
+            kind: item.kind,
+            size,
+            elevation: Some(elevation),
+            cutout: item.cutout,
+            at: [point[0], point[1]],
+            level,
+            rotation: Some(rotation),
+            ..Default::default()
+        };
+        let out = {
+            let doc = s.doc()?;
+            place(&doc.arch, &req).map_err(|e| bad(CMD, e))?
+        };
+        let mut doc = s.doc_mut()?;
+        let PlaceOutcome::Swap { cabinet, part } = out else {
+            return Err(bad(CMD, "front-style items swap onto cabinets"));
+        };
+        let Some(cab) = doc.arch.cabinets.iter_mut().find(|c| c.id == cabinet) else {
+            return Err(bad(CMD, "a front-style swap matched no cabinet"));
+        };
+        match part {
+            CabinetPart::Front => {
+                if item.id.starts_with("frontstyle:door-") {
+                    cab.door_style = item.style.as_deref().and_then(cadcraft_doc::arch::FrontStyle::parse).unwrap_or_default();
+                } else if item.id.starts_with("frontstyle:drawer-") {
+                    cab.drawer_style = item.style.as_deref().and_then(cadcraft_doc::arch::FrontStyle::parse).unwrap_or_default();
+                }
+            }
+            _ => {}
+        }
+        doc.touch_arch();
+        return Ok(
+            json!({ "swapped": { "cabinet": cabinet_label(cabinet), "part": if item.id.starts_with("frontstyle:door-") { "door" } else { "drawer" } } }),
+        );
     }
 
     if item.kind == ItemKind::Door || item.kind == ItemKind::Window {
@@ -262,7 +308,7 @@ fn run_library_place(s: &mut Session, p: &Value) -> Result<Value> {
             let d = (Vec2::new(point[0], point[1]) - p).len();
             if d <= 0.3 {
                 wall = Some(w.id);
-                offset = ((Vec2::new(point[0], point[1]) - w.start).dot(axis.normalized())) / axis.len();
+                offset = (Vec2::new(point[0], point[1]) - w.start).dot(axis.normalized());
                 break;
             }
         }
@@ -295,7 +341,6 @@ fn run_library_place(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "via": "backdrop", "result": r }));
     }
 
-    let placement = item.placement.as_deref().and_then(Placement::parse).unwrap_or(Placement::Floor);
     let mesh = s.library.symbol(item_id).map_err(|e| bad(CMD, e))?;
     let req = PlaceRequest {
         placement,
@@ -307,6 +352,7 @@ fn run_library_place(s: &mut Session, p: &Value) -> Result<Value> {
         at: [point[0], point[1]],
         level,
         rotation: Some(rotation),
+        ..Default::default()
     };
     let out = {
         let doc = s.doc()?;
@@ -534,11 +580,13 @@ mod tests {
                         metallic: 0.0,
                         roughness: 1.0,
                         texture: None,
+                        ..Default::default()
                     }],
                     textures: vec![],
+                    ..Default::default()
                 })
             },
-            read_image: |_, _| Ok(cadcraft_doc::arch::ImageRgba { width: 1, height: 1, rgba: vec![0, 0, 0, 255] }),
+            read_image: |_, _| Ok(cadcraft_doc::arch::ImageRgba { width: 1, height: 1, rgba: vec![0, 0, 0, 255], ..Default::default() }),
             encode_png: |_| Vec::new(),
             sample: || &[],
         });

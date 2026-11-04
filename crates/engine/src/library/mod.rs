@@ -447,6 +447,11 @@ impl Library {
         if catalog_name == "local" {
             return catalog::read_item_file(std::path::Path::new(&r.source));
         }
+        if catalog_name == "user" && self.user_dir.is_none() {
+            if file.is_none() {
+                return Ok(Vec::new());
+            }
+        }
         let dir = self.user_dir.as_ref().ok_or_else(|| format!("`{id}`'s catalog has no folder"))?;
         let file = file.filter(|f| catalog::safe_relative(f)).ok_or_else(|| format!("`{id}` has no file"))?;
         if let Some(name) = catalog_name.strip_prefix("installed:") {
