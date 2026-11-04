@@ -6,15 +6,16 @@ use crate::texture::texture;
 use crate::uv::face_uvs;
 use cadcraft_doc::Wall;
 use cadcraft_doc::arch::Finish;
+use cadcraft_doc::arch::paint::Side;
 
-/// Maximum angle (degrees) between a triangle's plan normal and the wall's right normal.
-const FACE_ANGLE_DEG: f64 = 5.0;
-/// How far (metres) a triangle's centroid may lie off the exterior plane.
-const PLANE_TOL: f64 = 0.002;
+/// Maximum angle (degrees) between a triangle's plan normal and the wall's side normal.
+pub(crate) const FACE_ANGLE_DEG: f64 = 5.0;
+/// How far (metres) a triangle's centroid may lie off the side plane.
+pub(crate) const PLANE_TOL: f64 = 0.002;
 
 /// The mesh with only the triangles whose `keep` flag equals `want` (all vertices kept, so vertex
 /// order is unchanged).
-fn pick(mesh: &Mesh, keep: &[bool], want: bool) -> Mesh {
+pub(crate) fn pick(mesh: &Mesh, keep: &[bool], want: bool) -> Mesh {
     let mut out = Mesh { indices: Vec::new(), ..mesh.clone() };
     for (tri, k) in mesh.indices.chunks_exact(3).zip(keep) {
         if *k == want {
@@ -24,21 +25,21 @@ fn pick(mesh: &Mesh, keep: &[bool], want: bool) -> Mesh {
     out
 }
 
-/// Split a wall's mesh in two when the wall has a finish: the triangles of the exterior face (right
-/// of start -> end, at +thickness/2, facing the right normal) go to a second mesh with material
-/// `wall-<finish>` and face-aligned UVs; everything else keeps the mesh's material. Without a finish
-/// (or a finish that is not a wall finish) the mesh comes back unchanged. Every triangle lands in
-/// exactly one of the two meshes.
-pub fn split_exterior_face(wall: &Wall, mesh: Mesh) -> (Mesh, Option<Mesh>) {
-    let Some(finish) = wall.finish.filter(|f| f.for_walls()) else {
-        return (mesh, None);
-    };
+/// Split a wall mesh into the triangles facing `side` (left or right of start -> end, at
+/// ±thickness/2) and the rest. Every triangle lands in exactly one of the two meshes. If no triangle
+/// faces `side` the side mesh is empty and the rest is the original mesh.
+pub(crate) fn split_side(wall: &Wall, mesh: &Mesh, side: Side) -> (Mesh, Mesh) {
     let (dx, dy) = (wall.end.x - wall.start.x, wall.end.y - wall.start.y);
     let len = (dx * dx + dy * dy).sqrt();
     if !(len.is_finite() && len > 1e-9 && wall.thickness.is_finite()) {
-        return (mesh, None);
+        return (Mesh { indices: Vec::new(), ..mesh.clone() }, mesh.clone());
     }
-    let (rx, ry) = (dy / len, -dx / len);
+    let (rx, ry) = match side {
+        Side::Right => (dy / len, -dx / len),
+        Side::Left => (-dy / len, dx / len),
+    };
+    // Each face lies half a thickness out along its own side normal.
+    let target = wall.thickness / 2.0;
     let cos_max = FACE_ANGLE_DEG.to_radians().cos();
     let pos = |i: u32| mesh.positions.get(i as usize).map(|p| [f64::from(p[0]), f64::from(p[1]), f64::from(p[2])]);
     let mut keep = Vec::with_capacity(mesh.indices.len() / 3);
@@ -59,14 +60,32 @@ pub fn split_exterior_face(wall: &Wall, mesh: Mesh) -> (Mesh, Option<Mesh>) {
         let facing = plan.is_finite() && plan > 1e-18 && (nx * rx + ny * ry) / plan >= cos_max;
         let (cx, cy) = ((a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0);
         let dist = (cx - wall.start.x) * rx + (cy - wall.start.y) * ry;
-        keep.push(facing && (dist - wall.thickness / 2.0).abs() <= PLANE_TOL);
+        keep.push(facing && (dist - target).abs() <= PLANE_TOL);
     }
     if !keep.iter().any(|&k| k) {
+        return (Mesh { indices: Vec::new(), ..mesh.clone() }, mesh.clone());
+    }
+    let side = pick(mesh, &keep, true);
+    let rest = pick(mesh, &keep, false);
+    (side, rest)
+}
+
+/// Split a wall's mesh in two when the wall has a finish: the triangles of the exterior face (right
+/// of start -> end, at +thickness/2, facing the right normal) go to a second mesh with material
+/// `wall-<finish>` and face-aligned UVs; everything else keeps the mesh's material. Without a finish
+/// (or a finish that is not a wall finish) the mesh comes back unchanged. Every triangle lands in
+/// exactly one of the two meshes.
+pub fn split_exterior_face(wall: &Wall, mesh: Mesh) -> (Mesh, Option<Mesh>) {
+    let Some(finish) = wall.finish.filter(|f| f.for_walls()) else {
+        return (mesh, None);
+    };
+    let (side, rest) = split_side(wall, &mesh, Side::Right);
+    if side.indices.is_empty() {
         return (mesh, None);
     }
-    let mut outer = face_uvs(&pick(&mesh, &keep, true), texture(finish).tile);
+    let mut outer = face_uvs(&side, texture(finish).tile);
     outer.material = format!("wall-{}", finish.name());
-    (pick(&mesh, &keep, false), Some(outer))
+    (rest, Some(outer))
 }
 
 /// A roof plane's mesh under `covering`: material `roof-<finish>` and face-aligned UVs.
