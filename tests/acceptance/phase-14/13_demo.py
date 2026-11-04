@@ -36,6 +36,9 @@ KITCHEN = [cmd('cabinet', {"kind": "base", "wall": "w1", "offset": 0.6, "width":
            P('chair-dining-wood', [5.6, 2.3], rotation=180),            # f15
            P('chair-dining-wood', [5.6, 3.7]),                          # f16
            P('light-ceiling', [5.6, 3.0])]                              # f17
+# The phase-1 house has no openings and the library's light items carry no emitter, so without a phase-10 fixture the
+# path-traced kitchen gets no light at all and renders black (the raster Finalize lights it with ambient).
+LIGHTS = [cmd('lightfixture', {"type": "LED panel 600", "at": [6.6, 2.0]})]  # lf0, on the kitchen ceiling
 PAINT = [cmd('paint.material', {"material": "material-oak", "target": "wall/w5/left", "scope": "room"}),
          cmd('paint.material', {"material": "#c8a070", "target": "wall/w5/left", "scope": "room", "mode": "blend"}),
          cmd('paint.material', {"material": "#e8e0d0", "target": "wall/w1/left", "scope": "room"}),
@@ -44,7 +47,7 @@ PAINT = [cmd('paint.material', {"material": "material-oak", "target": "wall/w5/l
          cmd('paint.material', {"material": "wood", "target": "room/r1/floor", "scope": "component"}),
          cmd('paint.object', {"item": "own:pull-knob-32", "target": "cabinet/cb0/pull", "scope": "room"}),
          cmd('backdrop', {"kind": "image", "item": "own:backdrop-sky", "projection": "equirect"})]
-DEMO = HOUSE1 + LIVING + KITCHEN + PAINT
+DEMO = HOUSE1 + LIVING + KITCHEN + LIGHTS + PAINT
 saved = os.path.join(tmp, 'demo.dxf')
 living, kitchen, traced = (os.path.join(tmp, n) for n in ('demo-living.png', 'demo-kitchen.png', 'demo-kitchen-path.png'))
 LCAM = {"kind": "full", "eye": [3.7, 0.4, 1.6], "target": [0.5, 3.6, 0.7], "fov": 70}
