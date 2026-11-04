@@ -690,7 +690,7 @@ mod tests {
 
     #[test]
     fn materialdef_meshes_use_their_base_colour() {
-        use cadcraft_doc::arch::MaterialDef;
+        use crate::types::MaterialDef;
         use std::collections::BTreeMap;
 
         let mut scene = Scene3d::default();

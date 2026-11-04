@@ -721,7 +721,8 @@ mod tests {
 
     #[test]
     fn path_tracer_uses_material_means() {
-        use cadcraft_doc::arch::{ImageRgba, MaterialDef};
+        use crate::types::MaterialDef;
+        use cadcraft_doc::arch::ImageRgba;
         use std::collections::BTreeMap;
 
         let mut scene = Scene3d::default();
@@ -749,7 +750,8 @@ mod tests {
 
     #[test]
     fn tint_multiplies_the_texture() {
-        use cadcraft_doc::arch::{ImageRgba, MaterialDef};
+        use crate::types::MaterialDef;
+        use cadcraft_doc::arch::ImageRgba;
         use std::collections::BTreeMap;
 
         let mut scene = Scene3d::default();
@@ -1007,15 +1009,16 @@ mod tests {
     #[test]
     fn an_opening_part_is_its_part_material() {
         // arch3d names an opening's meshes `<window|door>-<part>` (openings.rs).
+        let scene = Scene3d::default();
         for name in ["window-glass", "door-glass", "Window-Glass"] {
-            let m = material_for(name);
+            let m = material_for(name, &scene);
             assert_eq!(m.flags & MAT_GLASS, MAT_GLASS, "{name} lets light through");
-            assert_eq!(m.transmission, material_for("glass").transmission, "{name}");
+            assert_eq!(m.transmission, material_for("glass", &scene).transmission, "{name}");
         }
         for (name, part) in [("window-frame", "frame"), ("window-sill", "sill"), ("door-leaf", "leaf"), ("door-casing", "casing")] {
-            let m = material_for(name);
+            let m = material_for(name, &scene);
             assert_eq!(m.flags & MAT_GLASS, 0, "{name} is opaque");
-            assert_eq!((m.albedo, m.roughness), (material_for(part).albedo, material_for(part).roughness), "{name}");
+            assert_eq!((m.albedo, m.roughness), (material_for(part, &scene).albedo, material_for(part, &scene).roughness), "{name}");
         }
     }
 
@@ -1148,7 +1151,7 @@ mod tests {
         let with = build_gpu_scene(&scene, true, None);
         assert_eq!(with.tris.len(), without.tris.len() + 2);
         assert_eq!(with.materials.len(), without.materials.len() + 1);
-        assert_eq!(with.materials[3], material_for("ground"));
+        assert_eq!(with.materials[3], material_for("ground", &scene));
         let ground: Vec<&GpuTri> = with.tris.iter().filter(|t| t.material == 3).collect();
         assert_eq!(ground.len(), 2);
         for t in ground {
