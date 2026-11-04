@@ -13,6 +13,7 @@ pub const DEFAULT_INT_THICKNESS: f64 = 0.1;
 pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 
 pub mod archdetect;
+pub mod backdrop;
 pub mod build3d;
 pub mod casework;
 pub mod deck;
@@ -89,6 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(archdetect::specs());
     v.extend(site::specs());
     v.extend(terrain::specs());
+    v.extend(backdrop::specs());
     v.extend(terrain_modify::specs());
     v.extend(terrain_query::specs());
     v.extend(plant::specs());
