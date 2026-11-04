@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 16:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 22 of 34 segments merged · 0 of 13 acceptance checks**
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 16:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 20.8 h so far · expected done Nov 05 14:24–Nov 07 16:31 UTC |
+| 14 | The library | building | 0 / 13 | 21.0 h so far · expected done Nov 05 14:39–Nov 07 16:47 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-22 merged, 6 queued, 4 merging, 1 escalate, 1 working, 1 abandoned
+22 merged, 6 queued, 5 merging, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Updated 2026-11-04 16:15 UTC. This page and the card in the README are regenerat
 | `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | escalate |  |
 | `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
 | `p14-r3d-backdrop` | Backdrops behind the 3D view and the raster Finalize | merging | claude-sonnet-d |
-| `p14-ui-library-panel` | The Library side panel: categories, folders, search, chips, history, tags, details | working | claude-sonnet-a |
+| `p14-ui-library-panel` | The Library side panel: categories, folders, search, chips, history, tags, details | merging | claude-sonnet-a |
 
 ## Recent merges
 
@@ -62,14 +62,14 @@ Updated 2026-11-04 16:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 868 |
-| bonsai-b | bonsai2-27b | gate | 806 |
-| bonsai-ws2-a | bonsai2-27b | gate | 881 |
+| bonsai-b | bonsai2-27b | idle | 807 |
+| bonsai-ws2-a | bonsai2-27b | agent | 882 |
 | bonsai-ws2-b | bonsai2-27b | idle | 857 |
-| claude-sonnet-a | sonnet | agent | 76 |
+| claude-sonnet-a | sonnet | merging | 77 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 32 |
 | claude-sonnet-d | sonnet | idle | 19 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 743 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 744 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 58 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 20 |
