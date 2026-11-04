@@ -89,17 +89,17 @@ def room_at(insp, x, y):
 
 
 def drawing_box(j, name):
-    """A GLB node's box in drawing axes: glTF (x, y, z) is drawing (x, z, -y)."""
-    lo, hi = node_box(j, name)
-    return [lo[0], -hi[2], lo[1]], [hi[0], -lo[2], hi[1]]
+    """A GLB node's box in drawing axes. The writer keeps the positions in drawing axes (x, y, z up) and turns the
+    scene Y-up with the root node's rotation alone (io glb.rs ROOT_ROTATION), so the accessors already are drawing axes."""
+    return node_box(j, name)
 
 
 def node_positions(j, binc, name):
-    """Every vertex of a node's primitives in drawing axes."""
+    """Every vertex of a node's primitives in drawing axes (the accessors' own axes, see drawing_box)."""
     out = []
     for m in node_meshes(j, name):
         for prim in m['primitives']:
-            out += [(p[0], -p[2], p[1]) for p in _acc(j, binc, prim['attributes']['POSITION'])]
+            out += [(p[0], p[1], p[2]) for p in _acc(j, binc, prim['attributes']['POSITION'])]
     if not out:
         fail(f"GLB node '{name}' has no vertices; nodes: {[n.get('name') for n in j.get('nodes', [])][:50]}")
     return out
