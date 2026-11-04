@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-04 22:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 30 of 35 segments merged · 7 of 13 acceptance checks**
+**Phase 14 of 15: The library — 31 of 35 segments merged · 7 of 13 acceptance checks**
 
-7,352 workspace tests passing at the last merge · 747 segments merged in all · 0 of 14 seats working · PAUSED
+7,357 workspace tests passing at the last merge · 748 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -24,24 +24,24 @@ Updated 2026-11-04 22:00 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 7 / 13 | 26.5 h so far · expected done Nov 05 03:20–Nov 06 00:56 UTC |
+| 14 | The library | building | 7 / 13 | 26.8 h so far · expected done Nov 05 02:05–Nov 05 21:00 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-30 merged, 3 merging, 1 gate, 1 queued, 1 abandoned
+31 merged, 2 merging, 1 gate, 1 queued, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p14-cmd-user-catalog` | The user catalog: add, copy, edit, delete, Trash, placing groups | gate | bonsai-ws2-a |
 | `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | merging | bonsai-b |
-| `p14-ui-library-place` | Placing from the library, the preview, the property panel's library button, the painter tools | merging | claude-sonnet-a |
 | `upstream-sync-5f8999f30-v2` | merge upstream upstream/main up to 5f8999f30 (39 commits) | merging | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 04 22:02 | `p14-ui-library-place` | merged | 7,357 pass | claude-sonnet-a |
 | Nov 04 21:39 | `p14-cache-furnishing-edits` | merged | 7,352 pass | claude-sonnet-c |
 | Nov 04 21:13 | `p14-cmd-defaults` | merged | 7,351 pass | claude-sonnet-d |
 | Nov 04 20:37 | `p14-ui-library-panel` | merged | 7,344 pass | claude-sonnet-a |
@@ -53,7 +53,6 @@ Updated 2026-11-04 22:00 UTC. This page and the card in the README are regenerat
 | Nov 04 16:30 | `p14-arch3d-cabinet-parts` | refused | 7,271 pass | bonsai-a |
 | Nov 04 15:43 | `p14-cmd-icons` | merged | 7,261 pass | mai-flash-esc |
 | Nov 04 15:10 | `p14-cmd-casework-parts` | merged | 7,254 pass | claude-sonnet-a |
-| Nov 04 14:36 | `p14-apps-library-hooks` | merged | 7,250 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -61,9 +60,9 @@ Updated 2026-11-04 22:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 876 |
 | bonsai-b | bonsai2-27b | merging | 816 |
-| bonsai-ws2-a | bonsai2-27b | gate | 896 |
+| bonsai-ws2-a | bonsai2-27b | gate | 897 |
 | bonsai-ws2-b | bonsai2-27b | idle | 863 |
-| claude-sonnet-a | sonnet | merging | 78 |
+| claude-sonnet-a | sonnet | idle | 78 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 33 |
 | claude-sonnet-d | sonnet | idle | 20 |
