@@ -72,6 +72,12 @@ pub struct State {
     textures: Textures,
     /// Requests that failed, not repeated.
     no_icon: std::collections::BTreeSet<String>,
+    /// The details' preview turned by dragging: yaw and pitch (degrees) and zoom.
+    yaw: f64,
+    pitch: f64,
+    zoom: f64,
+    /// The preview shows the top-down plan view.
+    plan: bool,
 }
 
 /// What a click asks for, run once the panel is drawn.
@@ -131,14 +137,123 @@ fn refresh_filters(app: &mut CadApp, st: &mut State) {
     }
 }
 
+/// Select item `id` for the details and arm it: a material or finish arms the Material Painter,
+/// anything else arms `library.place`, whose point the next click in the plan canvas or the 3D
+/// pane gives. Esc disarms.
 fn select(app: &mut CadApp, st: &mut State, id: &str) {
+    if refresh_detail(app, st, id) {
+        st.yaw = -30.0;
+        st.pitch = 25.0;
+        st.zoom = 1.0;
+        st.plan = false;
+        arm(app, st, id);
+    }
+}
+
+/// Reload the details of `id` without arming it.
+fn refresh_detail(app: &mut CadApp, st: &mut State, id: &str) -> bool {
     match app.run("library.item", json!({"id": id})) {
         Ok(r) => {
             st.selected = Some(id.to_owned());
             st.detail = r.get("item").cloned();
+            true
         }
-        Err(e) => st.note = e,
+        Err(e) => {
+            st.note = e;
+            false
+        }
     }
+}
+
+/// Arm item `id` (see [`select`]).
+fn arm(app: &mut CadApp, st: &mut State, id: &str) {
+    use crate::pane3d::PaintTool;
+    let kind = st.detail.as_ref().map_or("", |d| str_of(d, "kind")).to_owned();
+    app.pane3d.paint_item = Some(id.to_owned());
+    if app.session.prompting() {
+        let _ = app.session.input(cadcraft_engine::Input::Cancel);
+    }
+    app.pane3d.armed = None;
+    if kind == "material" || kind == "finish" {
+        app.pane3d.tool = PaintTool::Material;
+        return;
+    }
+    app.pane3d.tool = PaintTool::Off;
+    app.start("library.place");
+    if !app.session.prompting() {
+        st.note = crate::tl!("Cannot place that here").to_owned();
+        return;
+    }
+    match app.session.input(cadcraft_engine::Input::Text(id.to_owned())) {
+        Ok(_) if app.session.prompting() => app.pane3d.armed = Some(id.to_owned()),
+        Ok(_) => {}
+        Err(e) => {
+            st.note = e.to_string();
+            let _ = app.session.input(cadcraft_engine::Input::Cancel);
+        }
+    }
+}
+
+/// Run `library {for: key}` and show its answer in the Library panel, opening the panel.
+pub fn narrow(app: &mut CadApp, key: &str) -> Result<(), String> {
+    let reply = app.run("library", json!({"for": key}))?;
+    adopt(&mut app.ui.library, reply);
+    let _ = app.run("ui.dock", json!({"operation": "open", "panel": "library"}));
+    Ok(())
+}
+
+/// Ask `library.icon` for an image and decode its PNG, with the icon's hash.
+fn fetch_icon(app: &mut CadApp, params: Value) -> Option<(String, image::RgbaImage)> {
+    let r = app.run("library.icon", params).ok()?;
+    let hash = str_of(&r, "hash").to_owned();
+    let png = cadcraft_engine::cmd::file::base64_decode(r.get("png")?.as_str()?)?;
+    let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()?.to_rgba8();
+    Some((hash, img))
+}
+
+/// Size of the details' preview image.
+const PREVIEW_PX: f32 = 256.0;
+
+/// The 256 px preview of the selected item: drag to turn it, the wheel zooms, "Plan" shows it
+/// from above.
+fn preview(app: &mut CadApp, st: &mut State, ui: &mut egui::Ui) {
+    let Some(id) = st.selected.clone() else { return };
+    if st.zoom <= 0.0 {
+        (st.yaw, st.pitch, st.zoom) = (-30.0, 25.0, 1.0);
+    }
+    let pitch = if st.plan { 89.9 } else { st.pitch };
+    let key = format!("{id}|{:.0}|{:.0}|{:.2}|{}", st.yaw, pitch, st.zoom, st.plan);
+    if st.textures.get("preview").is_none_or(|(k, _)| *k != key) {
+        let params = json!({"item": id, "size": PREVIEW_PX as u32, "yaw": st.yaw.round(), "pitch": pitch.round().clamp(-89.9, 89.9), "zoom": st.zoom, "cache": false});
+        if let Some((_, img)) = fetch_icon(app, params) {
+            let size = [img.width() as usize, img.height() as usize];
+            let tex =
+                ui.ctx().load_texture("library-preview", egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw()), egui::TextureOptions::LINEAR);
+            st.textures.insert("preview".into(), (key, tex));
+        }
+    }
+    ui.horizontal(|ui| {
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(PREVIEW_PX, PREVIEW_PX), egui::Sense::click_and_drag());
+        if let Some((_, tex)) = st.textures.get("preview") {
+            ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+        }
+        if response.dragged() && !st.plan {
+            let d = response.drag_delta();
+            st.yaw = (st.yaw - f64::from(d.x) * 0.5 + 180.0).rem_euclid(360.0) - 180.0;
+            st.pitch = (st.pitch + f64::from(d.y) * 0.5).clamp(-85.0, 85.0);
+        }
+        if response.hovered() {
+            let wheel = ui.input(|i| i.smooth_scroll_delta.y);
+            if wheel != 0.0 {
+                st.zoom = (st.zoom * (f64::from(wheel) / 400.0).exp()).clamp(0.25, 4.0);
+            }
+        }
+        ui.vertical(|ui| {
+            if ui.selectable_label(st.plan, crate::tl!("Plan")).clicked() {
+                st.plan = !st.plan;
+            }
+        });
+    });
 }
 
 /// The texture for an icon request, asking the engine for it the first time.
@@ -155,13 +270,7 @@ fn icon(app: &mut CadApp, st: &mut State, ctx: &egui::Context, key: &str, budget
         Some(("item", id)) => json!({"item": id, "size": ICON_PX}),
         _ => return None,
     };
-    let decoded = app.run("library.icon", params).ok().and_then(|r| {
-        let hash = str_of(&r, "hash").to_owned();
-        let png = cadcraft_engine::cmd::file::base64_decode(r.get("png")?.as_str()?)?;
-        let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()?.to_rgba8();
-        Some((hash, img))
-    });
-    let Some((hash, img)) = decoded else {
+    let Some((hash, img)) = fetch_icon(app, params) else {
         st.no_icon.insert(key.to_owned());
         return None;
     };
@@ -295,12 +404,14 @@ fn star(ui: &mut egui::Ui, item: &Value, act: &mut Option<Act>) {
     }
 }
 
-fn details(st: &State, ui: &mut egui::Ui, act: &mut Option<Act>) {
+fn details(app: &mut CadApp, st: &mut State, ui: &mut egui::Ui, act: &mut Option<Act>) {
     let t = crate::theme::Tokens::get();
-    let Some(item) = st.detail.as_ref() else { return };
+    let Some(item) = st.detail.clone() else { return };
+    let item = &item;
     ui.separator();
     ui.label(RichText::new(crate::tl!("Details")).strong());
     ui.heading(str_of(item, "name"));
+    preview(app, st, ui);
     let row = |ui: &mut egui::Ui, label: &str, value: &str| {
         if !value.is_empty() {
             ui.horizontal_wrapped(|ui| {
@@ -430,7 +541,7 @@ pub fn section(app: &mut CadApp, ui: &mut egui::Ui) {
     });
     ui.separator();
     results(app, &mut st, ui, &mut act, &mut budget);
-    details(&st, ui, &mut act);
+    details(app, &mut st, ui, &mut act);
     if budget < ICONS_PER_FRAME || st.reply.as_ref().is_some_and(|r| !list(r, "items").is_empty() && budget == 0) {
         ui.ctx().request_repaint();
     }
@@ -466,7 +577,7 @@ pub fn section(app: &mut CadApp, ui: &mut egui::Ui) {
             Ok(_) => {
                 search_keep(app, &mut st);
                 if st.selected.as_deref() == Some(id.as_str()) {
-                    select(app, &mut st, &id);
+                    refresh_detail(app, &mut st, &id);
                 }
             }
             Err(e) => st.note = e,
@@ -623,5 +734,80 @@ mod tests {
         let id = str_of(&first, "id").to_owned();
         let _ = h.state_mut().run("library.tag", json!({"item": id, "tag": FAVORITES, "on": true}));
         h.run_steps(2);
+    }
+
+    /// Search for chairs, click the first one and return its id.
+    fn click_first_chair(h: &mut Harness<'_, CadApp>) -> String {
+        search_for(h, "chair");
+        let first = list(h.state().ui.library.reply.as_ref().unwrap_or(&Value::Null), "items").first().cloned().unwrap_or_default();
+        h.get_by_label(str_of(&first, "name")).click();
+        h.run_steps(3);
+        str_of(&first, "id").to_owned()
+    }
+
+    #[test]
+    fn clicking_an_item_arms_placement() {
+        let mut h = harness();
+        assert!(!h.state().session.prompting());
+        let id = click_first_chair(&mut h);
+        let app = h.state();
+        assert!(app.session.prompting(), "library.place waits for its point: {}", app.ui.library.note);
+        assert_eq!(app.session.running.as_ref().map(|r| r.id.to_string()), Some("library.place".to_owned()));
+        assert_eq!(app.pane3d.armed.as_deref(), Some(id.as_str()));
+        // The details show the preview.
+        assert!(app.ui.library.textures.contains_key("preview"), "no preview texture");
+    }
+
+    #[test]
+    fn a_canvas_click_places_the_armed_item() {
+        use cadcraft_engine::Input;
+        use cadcraft_geom::Vec2;
+        let mut h = harness();
+        let id = click_first_chair(&mut h);
+        let before = h.state().session.doc().map(|d| d.arch.furnishings.len()).unwrap_or(0);
+        // What a click in the plan canvas sends.
+        let app = h.state_mut();
+        app.session.input(Input::Point(Vec2::new(2.0, 3.0))).expect("the point places the item");
+        let doc = app.session.doc().expect("a drawing");
+        assert_eq!(doc.arch.furnishings.len(), before + 1, "{id} placed");
+        let f = doc.arch.furnishings.last().expect("the furnishing");
+        assert!((f.at[0] - 2.0).abs() < 1e-9 && (f.at[1] - 3.0).abs() < 1e-9, "placed at the clicked point: {:?}", f.at);
+        assert!(!app.session.prompting(), "the prompt ended");
+        // Armed again, a click in the 3D pane places it at the struck point.
+        let mut h = harness();
+        let _ = click_first_chair(&mut h);
+        let app = h.state_mut();
+        app.pane3d.click = Some(crate::pane3d::Click {
+            object: cadcraft_doc::ArchId(0),
+            part: "floor".into(),
+            material: "floor".into(),
+            normal: [0.0, 0.0, 1.0],
+            point: cadcraft_geom::Vec3::new(4.0, 5.0, 0.0),
+            level: f64::NAN,
+        });
+        crate::pane3d::apply_pick(&mut app.pane3d, &mut app.session);
+        let doc = app.session.doc().expect("a drawing");
+        let f = doc.arch.furnishings.last().expect("the furnishing from the 3D click");
+        assert!((f.at[0] - 4.0).abs() < 1e-9 && (f.at[1] - 5.0).abs() < 1e-9, "placed at the struck point: {:?}", f.at);
+        assert!(app.pane3d.armed.is_none() && !app.session.prompting());
+    }
+
+    #[test]
+    fn property_panel_library_button_narrows() {
+        let mut app = app();
+        app.session.execute("cabinet", &json!({"kind": "base", "at": [1.0, 1.0]})).expect("a cabinet");
+        let id = app.session.doc().expect("doc").arch.cabinets.last().expect("cabinet").id;
+        app.session.set_selection(vec![cadcraft_doc::arch::cabinet_handle(id)]);
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(420.0, 900.0))
+            .build_ui_state(|ui, app: &mut CadApp| crate::palettes::properties_section(app, ui), app);
+        h.run_steps(3);
+        h.get_all_by_label("Library…").next().expect("the Library… button").click();
+        h.run_steps(3);
+        let st = &h.state().ui.library;
+        assert!(st.chips.contains(&("folder".to_owned(), "Front styles".to_owned())), "narrowed to the front styles: {:?} {}", st.chips, st.note);
+        h.get_by_label("Pull Library…").click();
+        h.run_steps(3);
+        assert!(h.state().ui.library.chips.contains(&("symbolType".to_owned(), "pull".to_owned())));
     }
 }

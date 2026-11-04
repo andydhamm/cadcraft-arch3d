@@ -14,6 +14,7 @@
 use std::sync::Arc;
 
 use egui_wgpu::wgpu;
+use serde_json::json;
 
 /// Orbit-camera parameters for the 3D pane.
 #[derive(Clone, Copy, Debug)]
@@ -104,6 +105,9 @@ pub fn proxy_handle(id: cadcraft_doc::ArchId, part: &str) -> cadcraft_doc::Handl
         "leaf" | "frame" | "casing" | "glass" | "sill" | "header" => a::opening_handle(id),
         "floor" | "ceiling" | "deck" => a::room_handle(id),
         "roof" => a::roof_handle(id),
+        "cabinet" | "counter" | "pull" => a::cabinet_handle(id),
+        "fixture" => a::fixture_handle(id),
+        "furnishing" => a::furnishing_handle(id),
         "stair" => a::stair_handle(id),
         "railing" => a::railing_handle(id),
         _ => a::arch_handle(id),
@@ -281,6 +285,83 @@ pub struct Pane3d {
     sun_valid: bool,
     /// Finalize Render state shared with the paint callback.
     finalize: Arc<std::sync::Mutex<FinalUi>>,
+    /// The painter tool armed in the pane ([`PaintTool::Off`]: clicks select).
+    pub tool: PaintTool,
+    /// The painters' scope, an index into [`SCOPES`].
+    pub scope: usize,
+    /// The Material Painter blends with the paint already there rather than replacing it.
+    pub blend: bool,
+    /// The library item (or material) the painters apply: the last one clicked in the Library.
+    pub paint_item: Option<String>,
+    /// The library item armed for `library.place`, until the next click in the pane places it.
+    pub armed: Option<String>,
+    /// What the last painter or placement command reported.
+    pub paint_note: String,
+    /// What the last click in the pane struck, until [`apply_pick`] takes it.
+    pub click: Option<Click>,
+    /// Esc was pressed over the pane; [`apply_pick`] disarms.
+    escaped: bool,
+}
+
+/// The painter tools of the pane.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PaintTool {
+    /// No painter: a click selects.
+    #[default]
+    Off,
+    /// `paint.material`.
+    Material,
+    /// `paint.object`.
+    Object,
+    /// `paint.pick`.
+    Eyedropper,
+}
+
+impl PaintTool {
+    /// The three painters.
+    pub const ALL: [PaintTool; 3] = [PaintTool::Material, PaintTool::Object, PaintTool::Eyedropper];
+
+    /// The tool's label, which is also its command's.
+    pub fn label(self) -> &'static str {
+        match self {
+            PaintTool::Off => "Select",
+            PaintTool::Material => "Material Painter",
+            PaintTool::Object => "Object Painter",
+            PaintTool::Eyedropper => "Material Eyedropper",
+        }
+    }
+}
+
+/// The painters' scopes, as `paint.material` spells them.
+pub const SCOPES: [&str; 5] = ["component", "object", "room", "floor", "plan"];
+
+/// The label of scope `scope` (an index into [`SCOPES`]).
+fn scope_label(scope: usize) -> &'static str {
+    match scope {
+        0 => "Component",
+        1 => "Object",
+        2 => "Room",
+        3 => "Floor",
+        _ => "Plan",
+    }
+}
+
+/// What a click in the pane struck: the object and part, the mesh's material name, the surface
+/// normal (turned to face the viewer), the point and the level elevation (NaN when unknown).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Click {
+    /// The arch object owning the struck mesh.
+    pub object: cadcraft_doc::ArchId,
+    /// Part name (`"wall"`, `"floor"`, `"cabinet"`, `"furnishing"`, ...).
+    pub part: String,
+    /// The struck mesh's material name (`sym:<key>:<i>` for a furnishing).
+    pub material: String,
+    /// Unit normal of the struck face.
+    pub normal: [f64; 3],
+    /// World-space hit point.
+    pub point: cadcraft_geom::Vec3,
+    /// Elevation of the level the mesh belongs to.
+    pub level: f64,
 }
 
 impl Pane3d {
@@ -312,6 +393,14 @@ impl Pane3d {
             lighting_inputs: None,
             sun_valid: true,
             finalize: Arc::default(),
+            tool: PaintTool::Off,
+            scope: 0,
+            blend: false,
+            paint_item: None,
+            armed: None,
+            paint_note: String::new(),
+            click: None,
+            escaped: false,
         }
     }
 
@@ -446,9 +535,19 @@ impl Pane3d {
     /// Click at `pixel`: remember the struck object's handle for the app to select. A miss
     /// leaves the earlier pick (and the selection) alone.
     pub fn pick(&mut self, size: (u32, u32), pixel: [f32; 2]) -> Option<cadcraft_doc::Handle> {
+        self.click = self.click_at(size, pixel);
         let h = self.pick_handle_at(size, pixel)?;
         self.picked = Some(h);
         Some(h)
+    }
+
+    /// What the ray through `pixel` strikes (see [`Click`]).
+    pub fn click_at(&self, size: (u32, u32), pixel: [f32; 2]) -> Option<Click> {
+        let scene = self.scene.as_ref()?;
+        let (origin, dir) = cadcraft_render3d::camera::ray_at(&self.camera(), size, pixel)?;
+        let hit = scene.pick(origin, dir)?;
+        let (material, normal, level) = locate(scene, &hit, dir);
+        Some(Click { object: hit.object, part: hit.part.to_owned(), material, normal, point: hit.point, level })
     }
 
     /// Take the handle of the last 3D pick, for the app to add to the selection the 2D pane uses.
@@ -601,6 +700,7 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
             pane.use_orbit();
         }
     });
+    tool_row(ui, pane);
     let lighting = pane.lighting();
     let finalize = pane.finalize.clone();
     ui.horizontal(|ui| {
@@ -679,6 +779,10 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
     {
         let px = [(p.x - rect.min.x) * ppp, (p.y - rect.min.y) * ppp];
         pane.pick(size, px);
+    }
+    if (response.hovered() || response.has_focus()) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        pane.tool = PaintTool::Off;
+        pane.escaped = true;
     }
     if response.hovered() {
         let wheel = ui.input(|i| i.smooth_scroll_delta.y);
@@ -1062,10 +1166,221 @@ pub fn zoom_by_wheel(pane: &mut Pane3d, delta: f64) {
 /// same proxy handle as a click in the 2D pane (phase-6 carry-over). Takes the pending handle
 /// and replaces the selection with it, returning it so the caller can repaint. A miss (or no
 /// pending pick) leaves the selection alone.
+///
+/// With a painter armed the click runs the painter's command instead, and with a library item
+/// armed (`library.place` waiting for its point) it places the item at the struck point on the
+/// struck level; neither changes the selection. Esc over the pane disarms.
 pub fn apply_pick(pane: &mut Pane3d, session: &mut cadcraft_engine::Session) -> Option<cadcraft_doc::Handle> {
+    let placing = session.running.as_ref().is_some_and(|r| r.id == PLACE);
+    if std::mem::take(&mut pane.escaped) {
+        pane.armed = None;
+        pane.click = None;
+        if placing {
+            let _ = session.input(cadcraft_engine::Input::Cancel);
+        }
+        return None;
+    }
+    if !placing {
+        pane.armed = None;
+    }
+    if let Some(click) = pane.click.take() {
+        let handle = proxy_handle(click.object, &click.part);
+        if pane.tool != PaintTool::Off {
+            pane.picked = None;
+            paint_click(pane, session, &click);
+            return Some(handle);
+        }
+        if placing && let Some(item) = pane.armed.clone() {
+            pane.picked = None;
+            place_click(pane, session, &click, &item);
+            return Some(handle);
+        }
+    }
     let h = pane.take_picked()?;
     session.set_selection(vec![h]);
     Some(h)
+}
+
+/// The command a library item is placed with.
+const PLACE: &str = "library.place";
+
+/// The tool row above the pane: the three painters with their scope and mode.
+fn tool_row(ui: &mut egui::Ui, pane: &mut Pane3d) {
+    ui.horizontal(|ui| {
+        for tool in PaintTool::ALL {
+            let on = pane.tool == tool;
+            if ui.selectable_label(on, crate::i18n::t(tool.label())).clicked() {
+                pane.tool = if on { PaintTool::Off } else { tool };
+            }
+        }
+        if pane.tool != PaintTool::Off {
+            egui::ComboBox::from_id_salt("paint-scope").selected_text(crate::i18n::t(scope_label(pane.scope))).show_ui(ui, |ui| {
+                for i in 0..SCOPES.len() {
+                    ui.selectable_value(&mut pane.scope, i, crate::i18n::t(scope_label(i)));
+                }
+            });
+        }
+        if pane.tool == PaintTool::Material {
+            ui.selectable_value(&mut pane.blend, false, crate::i18n::t("Paint"));
+            ui.selectable_value(&mut pane.blend, true, crate::i18n::t("Blend"));
+        }
+        if let Some(item) = pane.paint_item.as_ref().filter(|_| pane.tool != PaintTool::Off) {
+            ui.label(item.as_str());
+        }
+        if !pane.paint_note.is_empty() {
+            ui.label(pane.paint_note.as_str());
+        }
+    });
+}
+
+/// Run the armed painter on the surface `click` struck: one command, so one undo step.
+fn paint_click(pane: &mut Pane3d, session: &mut cadcraft_engine::Session, click: &Click) {
+    use serde_json::Value;
+    let surface = session.doc().ok().and_then(|d| surface_of(&d.arch, click.object, &click.part, &click.material, click.normal));
+    let Some(surface) = surface else {
+        pane.paint_note = "Nothing paintable there".into();
+        return;
+    };
+    let target = surface.key();
+    let scope = SCOPES.get(pane.scope).copied().unwrap_or("component");
+    let item = pane.paint_item.clone();
+    let result: Result<Value, String> = match (pane.tool, item) {
+        (PaintTool::Eyedropper, _) => session.execute("paint.pick", &json!({ "target": target })).map_err(|e| e.to_string()),
+        (PaintTool::Material, Some(item)) => {
+            let mode = if pane.blend { "blend" } else { "paint" };
+            session.execute("paint.material", &json!({ "material": item, "target": target, "scope": scope, "mode": mode })).map_err(|e| e.to_string())
+        }
+        (PaintTool::Object, Some(item)) => {
+            session.execute("paint.object", &json!({ "item": item, "target": target, "scope": scope })).map_err(|e| e.to_string())
+        }
+        (PaintTool::Material | PaintTool::Object, None) => Err("Pick a library item first".into()),
+        (PaintTool::Off, _) => return,
+    };
+    match result {
+        Ok(v) if pane.tool == PaintTool::Eyedropper => match v.get("material").and_then(Value::as_str).filter(|m| !m.starts_with("default:")) {
+            Some(m) => {
+                pane.paint_item = Some(m.to_owned());
+                pane.tool = PaintTool::Material;
+                pane.paint_note.clear();
+            }
+            None => pane.paint_note = "That surface has the default material".into(),
+        },
+        Ok(_) => pane.paint_note.clear(),
+        Err(e) => {
+            pane.paint_note = e.clone();
+            session.echo(e);
+        }
+    }
+}
+
+/// Place `item` at the point `click` struck, on the level it struck, ending the prompt that was
+/// waiting for the point.
+fn place_click(pane: &mut Pane3d, session: &mut cadcraft_engine::Session, click: &Click, item: &str) {
+    let level = session.doc().ok().and_then(|d| d.arch.levels.iter().find(|l| (l.elevation - click.level).abs() < 1e-6).map(|l| l.index));
+    let _ = session.input(cadcraft_engine::Input::Cancel);
+    pane.armed = None;
+    let mut params = json!({ "item": item, "at": [click.point.x, click.point.y] });
+    if let Some(level) = level {
+        params["level"] = json!(level);
+    }
+    if let Err(e) = session.execute(PLACE, &params) {
+        pane.paint_note = e.to_string();
+        session.echo(e.to_string());
+    } else {
+        pane.paint_note.clear();
+    }
+}
+
+/// The paintable surface of the part `part` of object `object` that a click struck: `material`
+/// is the struck mesh's material name and `normal` the face normal (facing the viewer). A wall's
+/// side comes from the normal against the wall's direction (left of start to end, or right); the
+/// wall's top and ends are no surface.
+pub fn surface_of(
+    model: &cadcraft_doc::ArchModel,
+    object: cadcraft_doc::ArchId,
+    part: &str,
+    material: &str,
+    normal: [f64; 3],
+) -> Option<cadcraft_doc::arch::Surface> {
+    use cadcraft_doc::arch::{CabinetPart, Side, Surface};
+    match part {
+        "wall" => {
+            let w = model.wall(object)?;
+            let dir = (w.end - w.start).normalized();
+            let along = normal[0] * dir.x + normal[1] * dir.y;
+            let across = -normal[0] * dir.y + normal[1] * dir.x;
+            if !(across.abs() > along.abs() && across.abs() > normal[2].abs()) {
+                return None;
+            }
+            Some(Surface::WallSide { wall: object, side: if across > 0.0 { Side::Left } else { Side::Right } })
+        }
+        "floor" => model.room(object).map(|_| Surface::RoomFloor(object)),
+        "ceiling" => model.room(object).map(|_| Surface::RoomCeiling(object)),
+        "roof" => model.roof(object).map(|_| Surface::Roof(object)),
+        "cabinet" | "counter" | "pull" => {
+            model.cabinets.iter().find(|c| c.id == object)?;
+            let part = if material.starts_with("pull:") {
+                CabinetPart::Pull
+            } else if material == "cabinet-front" {
+                CabinetPart::Front
+            } else if material == "counter" || material.starts_with("counter-") {
+                CabinetPart::Counter
+            } else {
+                CabinetPart::Carcass
+            };
+            Some(Surface::Cabinet { cabinet: object, part })
+        }
+        "fixture" => model.fixtures.iter().find(|f| f.id == object).map(|_| Surface::Fixture(object)),
+        "furnishing" => {
+            model.furnishing(object)?;
+            let index = material.rsplit_once(':')?.1.parse::<u32>().ok()?;
+            Some(Surface::Furnishing { furnishing: object, part: index })
+        }
+        _ => None,
+    }
+}
+
+/// The material, face normal (facing the viewer, whose ray runs along `dir`) and level elevation
+/// of the triangle of `hit`'s object and part that contains the hit point.
+fn locate(scene: &cadcraft_render3d::Scene3d, hit: &cadcraft_arch3d::pick::PickHit, dir: cadcraft_geom::Vec3) -> (String, [f64; 3], f64) {
+    let p = [hit.point.x, hit.point.y, hit.point.z];
+    let mut best: Option<(f64, &cadcraft_arch3d::mesh::Mesh, [f64; 3])> = None;
+    for mesh in scene.meshes.iter().filter(|m| m.object == hit.object && cadcraft_arch3d::probe::part_of(m) == hit.part) {
+        for t in mesh.indices.chunks_exact(3) {
+            let v = |i: u32| mesh.positions.get(i as usize).map(|v| [f64::from(v[0]), f64::from(v[1]), f64::from(v[2])]);
+            let (Some(a), Some(b), Some(c)) = (v(t[0]), v(t[1]), v(t[2])) else { continue };
+            let sub = |x: [f64; 3], y: [f64; 3]| [x[0] - y[0], x[1] - y[1], x[2] - y[2]];
+            let dot = |x: [f64; 3], y: [f64; 3]| x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+            let (e1, e2, ap) = (sub(b, a), sub(c, a), sub(p, a));
+            let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+            let len = dot(n, n).sqrt();
+            if !(len > 1e-12) {
+                continue;
+            }
+            let n = [n[0] / len, n[1] / len, n[2] / len];
+            let off = dot(n, ap).abs();
+            // Barycentric coordinates of the point in the triangle.
+            let (d11, d12, d22, d1p, d2p) = (dot(e1, e1), dot(e1, e2), dot(e2, e2), dot(e1, ap), dot(e2, ap));
+            let den = d11 * d22 - d12 * d12;
+            if !(den.abs() > 1e-18) {
+                continue;
+            }
+            let u = (d22 * d1p - d12 * d2p) / den;
+            let w = (d11 * d2p - d12 * d1p) / den;
+            let eps = 1e-4;
+            if off > 1e-3 || u < -eps || w < -eps || u + w > 1.0 + eps {
+                continue;
+            }
+            if best.is_none_or(|(d, _, _)| off < d) {
+                best = Some((off, mesh, n));
+            }
+        }
+    }
+    let Some((_, mesh, mut n)) = best else { return (String::new(), [0.0, 0.0, 1.0], f64::NAN) };
+    if n[0] * dir.x + n[1] * dir.y + n[2] * dir.z > 0.0 {
+        n = [-n[0], -n[1], -n[2]];
+    }
+    (mesh.material.clone(), n, mesh.level_elevation)
 }
 
 #[cfg(test)]
@@ -1128,6 +1443,77 @@ mod tests {
         let (cam, _) = front_camera();
         pane.full = Some(cam);
         (pane, session)
+    }
+
+    fn wall_click(normal: [f64; 3]) -> Click {
+        Click {
+            object: cadcraft_doc::ArchId(0),
+            part: "wall".into(),
+            material: "wall".into(),
+            normal,
+            point: cadcraft_geom::Vec3::new(5.0, 0.0, 1.0),
+            level: 0.0,
+        }
+    }
+
+    #[test]
+    fn a_picked_wall_face_maps_to_its_side() {
+        use cadcraft_doc::arch::{Side, Surface};
+        let session = house_session();
+        let st = session.state().expect("session state");
+        let model = &st.doc.arch;
+        let w = ArchIdWall::first(model);
+        // w0 runs from (0, 0) to (10, 0): its left is +y.
+        let side = |n: [f64; 3]| surface_of(model, w, "wall", "wall", n);
+        assert_eq!(side([0.0, 1.0, 0.0]), Some(Surface::WallSide { wall: w, side: Side::Left }));
+        assert_eq!(side([0.0, -1.0, 0.0]), Some(Surface::WallSide { wall: w, side: Side::Right }));
+        assert_eq!(side([0.0, 1.0, 0.0]).map(|s| s.key()), Some("wall/w0/left".to_owned()));
+        // The top and the ends belong to no side.
+        assert_eq!(side([0.0, 0.0, 1.0]), None);
+        assert_eq!(side([1.0, 0.0, 0.0]), None);
+        // No such wall, no such surface.
+        assert_eq!(surface_of(model, cadcraft_doc::ArchId(99), "wall", "wall", [0.0, 1.0, 0.0]), None);
+        assert_eq!(surface_of(model, w, "terrain", "terrain", [0.0, 1.0, 0.0]), None);
+    }
+
+    /// The id of the model's first wall.
+    struct ArchIdWall;
+    impl ArchIdWall {
+        fn first(model: &cadcraft_doc::ArchModel) -> cadcraft_doc::ArchId {
+            model.walls.first().map(|w| w.id).expect("a wall")
+        }
+    }
+
+    #[test]
+    fn painter_click_runs_one_command() {
+        let mut session = house_session();
+        let mut pane = Pane3d::new();
+        let undo = |s: &Session| s.state().map(|st| st.undo.len()).unwrap_or_default();
+        // Without an armed item the painter refuses and changes nothing.
+        pane.tool = PaintTool::Material;
+        pane.click = Some(wall_click([0.0, 1.0, 0.0]));
+        let before = undo(&session);
+        apply_pick(&mut pane, &mut session);
+        assert_eq!(undo(&session), before);
+        assert!(!pane.paint_note.is_empty());
+        // Armed, one click is one command and one undo step.
+        pane.paint_item = Some("siding".into());
+        pane.click = Some(wall_click([0.0, 1.0, 0.0]));
+        apply_pick(&mut pane, &mut session);
+        assert_eq!(undo(&session), before + 1, "one undo step: {}", pane.paint_note);
+        assert!(session.doc().expect("doc").arch.paints.contains_key("wall/w0/left"));
+        // The eyedropper reads it back and arms the Material Painter with it.
+        pane.tool = PaintTool::Eyedropper;
+        pane.paint_item = None;
+        pane.click = Some(wall_click([0.0, 1.0, 0.0]));
+        apply_pick(&mut pane, &mut session);
+        assert_eq!(pane.tool, PaintTool::Material, "{}", pane.paint_note);
+        assert_eq!(pane.paint_item.as_deref(), Some("finish:siding"));
+        // A click that struck no surface does nothing.
+        pane.click = Some(wall_click([0.0, 0.0, 1.0]));
+        let n = undo(&session);
+        apply_pick(&mut pane, &mut session);
+        assert_eq!(undo(&session), n);
     }
 
     #[test]
