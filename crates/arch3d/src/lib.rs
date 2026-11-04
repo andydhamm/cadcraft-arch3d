@@ -13,8 +13,13 @@ pub mod casework;
 pub mod edges;
 pub mod finish;
 pub mod fixture;
+
+pub mod furnishing;
+pub mod paint;
+
 pub mod floors;
 pub mod hlr;
+pub mod icon;
 pub mod incremental;
 pub mod light;
 pub mod mesh;
@@ -33,6 +38,7 @@ pub mod uv;
 pub mod views;
 pub mod walls;
 
+pub use crate::furnishing::FurnishingBox;
 pub use crate::incremental::{ObjectKey, ObjectKind, RebuildStats, SceneCache, changed_objects, object_key};
 pub use crate::mesh::{Bounds3, Mesh};
 pub use cadcraft_doc::ArchId;
@@ -43,7 +49,7 @@ use crate::roof::roof_meshes;
 use crate::walls::{RoofClip, WallProfile, elevation_profile, extrude_profile_slab, extrude_wall_profile, roof_top_polyline};
 use cadcraft_arch::join::solve_joins;
 use cadcraft_arch::wall::wall_bounds as arch_wall_bounds;
-use cadcraft_doc::arch::Opening;
+use cadcraft_doc::arch::{Backdrop, ImageRgba, Opening};
 use cadcraft_doc::{ArchModel, Wall};
 use cadcraft_geom::{Bounds2, Vec2, Vec3};
 
@@ -203,6 +209,63 @@ pub struct Scene3d {
     pub lights: Vec<light::SceneLight>,
     /// Fixture housings built (one per fixture, on or off).
     pub fixtures: usize,
+    /// Phase 14: how named mesh materials look. A mesh whose `material` is a key here takes that
+    /// definition; every other material name keeps its phase-1..13 meaning.
+    pub materials: BTreeMap<String, MaterialDef>,
+    /// The pixels [`MaterialDef::texture`] and an image backdrop name: `sym:<key>:t<i>` (symbol
+    /// textures), `finish:<name>` (finishes), `item:<id>` (library images).
+    pub textures: BTreeMap<String, ImageRgba>,
+    /// The model's backdrop.
+    pub backdrop: Option<Backdrop>,
+    /// Furnishings built.
+    pub furnishings: usize,
+    /// The placed box of every furnishing built, in build order: [`probe::probe`] tests these
+    /// instead of the symbol meshes, which need not be closed.
+    pub furnishing_boxes: Vec<FurnishingBox>,
+}
+
+/// How a named mesh material looks (phase 14): base colour, metallic and roughness, an optional
+/// texture and how it repeats, and the tint already multiplied into the base colour.
+///
+/// Build one with `MaterialDef { base_color, ..Default::default() }` outside this file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MaterialDef {
+    /// Linear RGBA.
+    pub base_color: [f32; 4],
+    pub metallic: f32,
+    pub roughness: f32,
+    /// Key into [`Scene3d::textures`].
+    pub texture: Option<String>,
+    /// Metres per repeat for face-aligned UVs; `[1, 1]` means the mesh's UVs are texture
+    /// coordinates.
+    pub tile: [f32; 2],
+    /// The sRGB tint a paint gave (already multiplied into `base_color`).
+    pub tint: Option<[u8; 3]>,
+}
+
+impl Default for MaterialDef {
+    /// White, not metallic, roughness 0.8, untextured, tile [1, 1], no tint.
+    fn default() -> Self {
+        MaterialDef { base_color: [1.0; 4], metallic: 0.0, roughness: 0.8, texture: None, tile: [1.0, 1.0], tint: None }
+    }
+}
+
+/// Clear and refill `scene`'s materials and textures from `model` (the symbols' parts, then the
+/// paints), and copy its backdrop, with an image backdrop's pixels under `item:<id>` so the
+/// renderers find them. The last step of [`Scene3d::build`] and of [`SceneCache`]'s builds and
+/// updates, so the incremental scene equals the full one.
+pub(crate) fn fill_materials(model: &ArchModel, scene: &mut Scene3d) {
+    scene.materials.clear();
+    scene.textures.clear();
+    furnishing::symbol_materials(model, scene);
+    paint::materials(model, scene);
+    scene.backdrop = model.backdrop.clone();
+    if let Some(Backdrop::Image { item, .. }) = &model.backdrop
+        && let Some(image) = model.images.get(item)
+        && image.is_valid()
+    {
+        scene.textures.insert(format!("item:{item}"), image.clone());
+    }
 }
 
 impl Scene3d {
@@ -233,11 +296,14 @@ impl Scene3d {
     ///
     /// Solves joins once, then makes each object's meshes (walls, falling back to a raw
     /// rectangular mesh when the join solver produced no shape for a wall; openings; room floors
-    /// and ceilings; roofs; stairs; railings; decks; the site; light fixtures) in that order, each
-    /// from the inputs [`incremental::Sections`] records, so [`SceneCache`] can rebuild only the
-    /// objects an edit changed and still match this build exactly.
+    /// and ceilings; roofs; stairs; railings; decks; the site; light fixtures; cabinets; casework
+    /// fixtures; furnishings) in that order, each from the inputs [`incremental::Sections`] records,
+    /// so [`SceneCache`] can rebuild only the objects an edit changed and still match this build
+    /// exactly. It ends by filling the materials, textures and backdrop from the model.
     pub fn build(model: &ArchModel) -> Scene3d {
-        incremental::Sections::make(model, None).into_scene(model)
+        let mut scene = incremental::Sections::make(model, None).into_scene(model);
+        fill_materials(model, &mut scene);
+        scene
     }
 
     /// Incremental rebuild: reuses meshes for ids not in `dirty`, recomputes bounds.
@@ -557,6 +623,7 @@ impl Scene3d {
             plants,
             lights,
             fixtures,
+            ..Default::default()
         }
     }
 }

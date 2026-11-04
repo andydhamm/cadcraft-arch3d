@@ -22,6 +22,7 @@ mod finite;
 pub mod grip_dims;
 pub mod grips;
 mod guard;
+pub mod library;
 pub mod lisp;
 pub mod mtext_edit;
 pub mod pointmod;
@@ -157,6 +158,8 @@ pub struct Session {
     /// ([`Session::input_object`]): a pick at exactly that point picks that object
     /// ([`Session::pick_object`]).
     pick_hint: Option<(Handle, Vec2)>,
+    /// The library (phase 14): every catalog's items, tags, saved filters and the search history.
+    pub library: library::Library,
 }
 
 impl Default for Session {
@@ -211,6 +214,7 @@ impl Session {
             lisp_last: None,
             hatch_picks: None,
             pick_hint: None,
+            library: library::Library::new(),
         }
     }
 

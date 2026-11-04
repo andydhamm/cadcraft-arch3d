@@ -103,6 +103,7 @@ pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoi
         ..Default::default()
     };
     let (device, queue) = adapter.request_device(&desc).await.map_err(|e| Render3dError::Wgpu(e.to_string()))?;
+    let device = crate::offscreen::kept_for_the_process(device);
     let a = adapter.get_info();
     let adapter_key =
         format!("{:04x}-{:04x}-{}-{}-app{}", a.vendor, a.device, key_part(&a.driver), key_part(&a.driver_info), key_part(env!("CARGO_PKG_VERSION")));

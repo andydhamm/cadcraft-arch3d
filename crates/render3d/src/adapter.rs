@@ -74,6 +74,7 @@ pub async fn request_device(instance: &wgpu::Instance, choice: AdapterChoice) ->
         .request_device(&wgpu::DeviceDescriptor { label: Some("render3d"), required_limits, ..Default::default() })
         .await
         .map_err(|e| Render3dError::Wgpu(e.to_string()))?;
+    let device = crate::offscreen::kept_for_the_process(device);
     let info = adapter.get_info();
     let info = DeviceInfo { name: info.name, backend: format!("{:?}", info.backend), adapter_type: format!("{:?}", info.device_type), downlevel };
     Ok((device, queue, info))
