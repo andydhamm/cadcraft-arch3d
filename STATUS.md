@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 22 of 34 segments merged · 0 of 13 acceptance checks**
 
@@ -24,16 +24,16 @@ Updated 2026-11-04 16:30 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 21.0 h so far · expected done Nov 05 14:39–Nov 07 16:47 UTC |
+| 14 | The library | building | 0 / 13 | 21.3 h so far · expected done Nov 05 14:54–Nov 07 17:02 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-22 merged, 6 queued, 5 merging, 1 escalate, 1 abandoned
+22 merged, 6 queued, 4 merging, 2 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p14-arch3d-cabinet-parts` | Front styles, pulls, counter runs and cut-outs in 3D | merging | bonsai-a |
+| `p14-arch3d-cabinet-parts` | Front styles, pulls, counter runs and cut-outs in 3D | escalate |  |
 | `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
 | `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | escalate |  |
 | `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
@@ -44,6 +44,7 @@ Updated 2026-11-04 16:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 04 16:30 | `p14-arch3d-cabinet-parts` | refused | 7,271 pass | bonsai-a |
 | Nov 04 15:43 | `p14-cmd-icons` | merged | 7,261 pass | mai-flash-esc |
 | Nov 04 15:10 | `p14-cmd-casework-parts` | merged | 7,254 pass | claude-sonnet-a |
 | Nov 04 14:36 | `p14-apps-library-hooks` | merged | 7,250 pass | claude-sonnet-d |
@@ -55,21 +56,20 @@ Updated 2026-11-04 16:30 UTC. This page and the card in the README are regenerat
 | Nov 04 07:48 | `harden-p13-arch3d-incremental` | refused | 7,175 pass, 3 fail | tturbo-mac |
 | Nov 04 04:47 | `p14-arch-paint` | merged | 7,129 pass | claude-sonnet-a |
 | Nov 04 03:13 | `p14-io-gltf-read` | merged | 7,117 pass | claude-sonnet-b |
-| Nov 04 02:16 | `p14-arch-place` | refused | 0 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 868 |
-| bonsai-b | bonsai2-27b | idle | 807 |
-| bonsai-ws2-a | bonsai2-27b | agent | 882 |
+| bonsai-a | bonsai2-27b | gate | 868 |
+| bonsai-b | bonsai2-27b | agent | 807 |
+| bonsai-ws2-a | bonsai2-27b | agent | 884 |
 | bonsai-ws2-b | bonsai2-27b | idle | 857 |
 | claude-sonnet-a | sonnet | merging | 77 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 32 |
 | claude-sonnet-d | sonnet | idle | 19 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 744 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 744 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 58 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 20 |
