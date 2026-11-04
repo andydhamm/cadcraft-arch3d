@@ -118,7 +118,7 @@ pub fn valid_sample_count(n: u32) -> u32 {
 /// table is used.
 pub fn material_pbr(material: &str, scene: &Scene3d) -> ([f32; 3], f32, f32, f32) {
     if let Some(def) = scene.materials.get(material) {
-        let mut albedo = def.base_color;
+        let mut albedo = [def.base_color[0], def.base_color[1], def.base_color[2]];
         if let Some(tint) = def.tint {
             let t = [f32::from(tint[0]) / 255.0, f32::from(tint[1]) / 255.0, f32::from(tint[2]) / 255.0];
             albedo[0] *= t[0];
@@ -536,7 +536,7 @@ impl GpuPipeline {
     /// `sample_count` is 1 or 4 (anything else is 1).
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, sample_count: u32) -> Self {
         let Built { opaque, blended, bgl, pbr_bgl, tex_bgl } = create_all(device, sample_count);
-        let tex_bind_group = crate::textures::MaterialTextures::new(device, queue, &tex_bgl).bind_group;
+        let tex_bind_group = crate::textures::MaterialTextures::new(device, queue, &tex_bgl, None).bind_group;
 
         let uniform = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("render3d uniform buffer"),

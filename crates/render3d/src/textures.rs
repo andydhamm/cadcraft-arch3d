@@ -15,6 +15,8 @@ use wgpu::util::DeviceExt;
 pub const BASE_LAYERS: u32 = 1 + Finish::ALL.len() as u32;
 /// Max extra layers from library textures.
 pub const MAX_EXTRA_LAYERS: u32 = 251;
+/// Total layers in the texture array.
+pub const LAYERS: u32 = BASE_LAYERS + MAX_EXTRA_LAYERS;
 /// Mip levels of every layer (256 down to 1).
 pub const MIP_LEVELS: u32 = TEXTURE_SIZE.ilog2() + 1;
 /// Texture format of the array.
