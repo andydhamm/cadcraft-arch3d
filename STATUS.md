@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-04 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 28 of 35 segments merged · 7 of 13 acceptance checks**
+**Phase 14 of 15: The library — 29 of 35 segments merged · 7 of 13 acceptance checks**
 
-7,344 workspace tests passing at the last merge · 745 segments merged in all · 0 of 14 seats working
+7,351 workspace tests passing at the last merge · 746 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -24,19 +24,18 @@ Updated 2026-11-04 21:00 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 7 / 13 | 25.5 h so far · expected done Nov 05 05:24–Nov 06 07:03 UTC |
+| 14 | The library | building | 7 / 13 | 25.8 h so far · expected done Nov 05 03:39–Nov 06 01:51 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-28 merged, 3 gate, 2 merging, 1 working, 1 queued, 1 abandoned
+29 merged, 4 gate, 1 merging, 1 queued, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p14-cmd-user-catalog` | The user catalog: add, copy, edit, delete, Trash, placing groups | gate | bonsai-ws2-a |
-| `p14-cmd-defaults` | Set as Default for cabinets, doors, windows and furnishings | merging | claude-sonnet-d |
 | `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | gate | bonsai-b |
-| `p14-ui-library-place` | Placing from the library, the preview, the property panel's library button, the painter tools | working | claude-sonnet-a |
+| `p14-ui-library-place` | Placing from the library, the preview, the property panel's library button, the painter tools | gate | claude-sonnet-a |
 | `p14-cache-furnishing-edits` | The scene cache stays the full build under furnishing, paint and casework-part edits | merging | claude-sonnet-c |
 | `upstream-sync-5f8999f30-v2` | merge upstream upstream/main up to 5f8999f30 (39 commits) | gate | mai-flash |
 
@@ -44,6 +43,7 @@ Updated 2026-11-04 21:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 04 21:13 | `p14-cmd-defaults` | merged | 7,351 pass | claude-sonnet-d |
 | Nov 04 20:37 | `p14-ui-library-panel` | merged | 7,344 pass | claude-sonnet-a |
 | Nov 04 20:10 | `harden-p14-inspect` | merged | 7,340 pass | tturbo-mac |
 | Nov 04 19:35 | `p14-cmd-backdrop` | merged | 7,334 pass | claude-sonnet-c |
@@ -55,23 +55,22 @@ Updated 2026-11-04 21:00 UTC. This page and the card in the README are regenerat
 | Nov 04 15:10 | `p14-cmd-casework-parts` | merged | 7,254 pass | claude-sonnet-a |
 | Nov 04 14:36 | `p14-apps-library-hooks` | merged | 7,250 pass | claude-sonnet-d |
 | Nov 04 13:36 | `p14-inspect` | refused | 7,199 pass | claude-sonnet-b |
-| Nov 04 12:57 | `p14-io-dxf-furnishing` | refused | 7,199 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 875 |
+| bonsai-a | bonsai2-27b | gate | 875 |
 | bonsai-b | bonsai2-27b | gate | 815 |
-| bonsai-ws2-a | bonsai2-27b | gate | 894 |
+| bonsai-ws2-a | bonsai2-27b | gate | 895 |
 | bonsai-ws2-b | bonsai2-27b | idle | 863 |
-| claude-sonnet-a | sonnet | agent | 77 |
+| claude-sonnet-a | sonnet | gate | 77 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | merging | 33 |
-| claude-sonnet-d | sonnet | merging | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 746 |
+| claude-sonnet-d | sonnet | idle | 20 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 747 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | gate | 58 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 20 |
-| tturbo-mac | tturbo-ultraheretic | gate | 608 |
+| tturbo-mac | tturbo-ultraheretic | agent | 609 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
