@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-04 13:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 12 of 34 segments merged · 0 of 13 acceptance checks**
 
-7,194 workspace tests passing at the last merge · 727 segments merged in all · 0 of 14 seats working
+7,194 workspace tests passing at the last merge · 727 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -24,7 +24,7 @@ Updated 2026-11-04 13:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 17.8 h so far · expected done Nov 06 13:15–Nov 10 06:04 UTC |
+| 14 | The library | building | 0 / 13 | 18.0 h so far · expected done Nov 06 13:30–Nov 10 06:18 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
@@ -71,16 +71,16 @@ Updated 2026-11-04 13:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 866 |
-| bonsai-b | bonsai2-27b | gate | 804 |
+| bonsai-b | bonsai2-27b | idle | 805 |
 | bonsai-ws2-a | bonsai2-27b | idle | 879 |
 | bonsai-ws2-b | bonsai2-27b | idle | 855 |
 | claude-sonnet-a | sonnet | merging | 76 |
 | claude-sonnet-b | sonnet | merging | 80 |
 | claude-sonnet-c | sonnet | merging | 32 |
 | claude-sonnet-d | sonnet | merging | 19 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 742 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 743 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 57 |
+| mai-flash | mai-code-1.1-flash | gate | 58 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 20 |
 | tturbo-mac | tturbo-ultraheretic | merging | 607 |
 | tturbo-mac2 | tturbo-ultraheretic | down | 348 |
