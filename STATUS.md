@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 11 of 35 segments merged · 0 of 13 acceptance checks**
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 09:00 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 13.5 h so far · expected done Nov 05 13:48–Nov 07 02:56 UTC |
+| 14 | The library | building | 0 / 13 | 13.8 h so far · expected done Nov 05 18:10–Nov 07 12:36 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-11 merged, 10 merging, 8 queued, 4 escalate, 1 working, 1 gate
+11 merged, 11 merging, 8 queued, 4 escalate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -42,7 +42,7 @@ Updated 2026-11-04 09:00 UTC. This page and the card in the README are regenerat
 | `p14-cmd-paint` | paint.material, paint.object and the eyedropper | escalate |  |
 | `p14-inspect` | arch.inspect: furnishings, surfaces and the cabinet parts | merging | claude-sonnet-b |
 | `p14-cmd-casework-parts` | cabinet and cabinet.edit take door and drawer styles and a pull | merging | claude-sonnet-a |
-| `p14-cmd-backdrop` | The backdrop command | gate | claude-sonnet-c |
+| `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
 | `p14-io-glb-furnishing` | GLB: furnishing nodes, pull nodes, painted faces, symbol and paint materials | escalate |  |
 | `p14-io-obj-ifc-furnishing` | OBJ groups and IFC elements for furnishings | escalate |  |
 | `p14-io-dxf-furnishing` | DXF: furnishing proxies and the round trip | merging | claude-sonnet-d |
@@ -77,11 +77,11 @@ Updated 2026-11-04 09:00 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-b | bonsai2-27b | gate | 851 |
 | claude-sonnet-a | sonnet | merging | 76 |
 | claude-sonnet-b | sonnet | merging | 80 |
-| claude-sonnet-c | sonnet | gate | 31 |
+| claude-sonnet-c | sonnet | merging | 32 |
 | claude-sonnet-d | sonnet | merging | 19 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 739 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 739 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 55 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 18 |
 | tturbo-mac | tturbo-ultraheretic | merging | 607 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
+| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
