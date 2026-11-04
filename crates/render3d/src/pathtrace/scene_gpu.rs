@@ -153,13 +153,11 @@ pub struct GpuScene {
     pub ies: Vec<f32>,
 }
 
-/// `rgb / luminance(rgb)`, or white for a black or non-finite colour.
-pub fn luminance_rgb(rgb: [f64; 3]) -> [f32; 3] {
-    let y = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-    if !y.is_finite() || y <= 1e-9 {
-        return [1.0; 3];
-    }
-    [(rgb[0] / y) as f32, (rgb[1] / y) as f32, (rgb[2] / y) as f32]
+/// The material of an arch3d mesh material name (no scene / no `MaterialDef`): albedo, metalness
+/// and roughness from `pipeline::material_pbr` with the default scene, so the original one-argument
+/// `material_for` behaviour is preserved.
+pub fn material_for(material: &str) -> GpuMaterial {
+    material_for_scene(material, &Scene3d::default())
 }
 
 /// The material of an arch3d mesh material name: albedo, metalness and roughness from
@@ -170,7 +168,7 @@ pub fn luminance_rgb(rgb: [f64; 3]) -> [f32; 3] {
 ///
 /// If the material is a `MaterialDef` (library/paint), its base colour (with tint) and texture
 /// mean are used.
-pub fn material_for(material: &str, scene: &Scene3d) -> GpuMaterial {
+pub fn material_for_scene(material: &str, scene: &Scene3d) -> GpuMaterial {
     if let Some(def) = scene.materials.get(material) {
         let mut albedo = def.base_color;
         if let Some(tint) = def.tint {
@@ -260,9 +258,9 @@ const MAX_BVH_DEPTH: u32 = 64;
 /// an index out of range or a zero area are skipped; more than [`MAX_GPU_TRIANGLES`] gives an
 /// empty scene. The tree is empty (no nodes) for a scene without triangles.
 pub fn build_gpu_scene(scene: &Scene3d, ground: bool, furnace: Option<Furnace>) -> GpuScene {
-    let mut materials: Vec<GpuMaterial> = scene.meshes.iter().map(|m| material_for(&m.material, scene)).collect();
+    let mut materials: Vec<GpuMaterial> = scene.meshes.iter().map(|m| material_for_scene(&m.material, scene)).collect();
     if ground {
-        materials.push(material_for("ground", scene));
+        materials.push(material_for_scene("ground", scene));
     }
     if let Some(f) = furnace {
         materials.iter_mut().for_each(|m| *m = furnace_material(f));
@@ -711,12 +709,12 @@ mod tests {
         for f in Finish::ALL {
             let mean = mean_linear(&texture(f));
             for prefix in ["wall", "roof", "floor"] {
-                assert_eq!(material_for(&format!("{prefix}-{}", f.name()), &scene).albedo, mean, "{prefix}-{}", f.name());
+                assert_eq!(material_for_scene(&format!("{prefix}-{}", f.name()), &scene).albedo, mean, "{prefix}-{}", f.name());
             }
         }
         // Unfinished materials keep their flat albedo.
-        assert_eq!(material_for("wall", &scene).albedo, crate::pipeline::material_albedo("wall"));
-        assert_eq!(material_for("roof", &scene).albedo, crate::pipeline::material_albedo("roof"));
+        assert_eq!(material_for_scene("wall", &scene).albedo, crate::pipeline::material_albedo("wall"));
+        assert_eq!(material_for_scene("roof", &scene).albedo, crate::pipeline::material_albedo("roof"));
     }
 
     #[test]
@@ -741,7 +739,7 @@ mod tests {
         scene.materials = materials;
         scene.textures = textures;
 
-        let m = material_for("sym:test:0", &scene);
+        let m = material_for_scene("sym:test:0", &scene);
         // Red srgb (1.0, 0, 0) -> linear (1.0, 0, 0)
         assert!((m.albedo[0] - 1.0).abs() < 1e-5);
         assert!((m.albedo[1] - 0.0).abs() < 1e-5);
@@ -785,8 +783,8 @@ mod tests {
     #[test]
     fn untouched_scenes_are_unchanged() {
         let scene = Scene3d::default();
-        let m1 = material_for("wall", &scene);
-        let m2 = material_for("wall", &scene);
+        let m1 = material_for_scene("wall", &scene);
+        let m2 = material_for_scene("wall", &scene);
         assert_eq!(m1, m2);
     }
 
