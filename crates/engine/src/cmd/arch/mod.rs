@@ -24,6 +24,7 @@ pub mod inspect;
 pub mod level;
 pub mod library;
 pub mod library_icon;
+pub mod library_user;
 pub(crate) mod light_inspect;
 pub mod lightfixture;
 pub mod material;
@@ -90,6 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(views::specs());
     v.extend(roofauto::specs());
     v.extend(deck::specs());
+    v.extend(library_user::specs());
     v.extend(railing::specs());
     v.extend(sun::specs());
     v.extend(sheet::specs());
