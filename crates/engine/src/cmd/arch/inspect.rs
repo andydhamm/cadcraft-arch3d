@@ -2484,6 +2484,149 @@ mod tests {
         assert!(f["pull"].is_null() && f["hinge"].is_null());
     }
 
+    /// All five furnishing host types serialize correctly.
+    #[test]
+    fn inspect_furnishing_all_host_types() {
+        use cadcraft_doc::arch::{Furnishing, FurnishingHost};
+        let mut s = session_with(|m| {
+            let w = m.push_wall(Wall { start: Vec2::ZERO, end: Vec2::new(5.0, 0.0), ..Wall::default() });
+            let cb = m.push_cabinet(kitchen_cabinet());
+            let f0 = m.push_furnishing(Furnishing { host: FurnishingHost::None, ..Furnishing::default() });
+            m.push_furnishing(Furnishing { host: FurnishingHost::Wall { wall: w }, ..Furnishing::default() });
+            m.push_furnishing(Furnishing { host: FurnishingHost::Cabinet { cabinet: cb }, ..Furnishing::default() });
+            m.push_furnishing(Furnishing { host: FurnishingHost::Sink { furnishing: f0 }, ..Furnishing::default() });
+            m.push_furnishing(Furnishing { host: FurnishingHost::Gap { left: cb, right: cb }, ..Furnishing::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "furnishings": true }));
+        let list = v["furnishings"].as_array().expect("furnishings array");
+        assert_eq!(list.len(), 5);
+        assert!(list[0]["host"].is_null());
+        assert_eq!(list[1]["host"], json!({"kind": "wall", "wall": "w0"}));
+        assert_eq!(list[2]["host"], json!({"kind": "cabinet", "cabinet": "cb0"}));
+        assert_eq!(list[3]["host"], json!({"kind": "sink", "furnishing": "f0"}));
+        assert_eq!(list[4]["host"], json!({"kind": "gap", "left": "cb0", "right": "cb0"}));
+    }
+
+    /// Furnishings with NaN or infinite coordinates serialize without crashing.
+    #[test]
+    fn inspect_furnishings_with_non_finite_coords() {
+        use cadcraft_doc::arch::Furnishing;
+        let mut s = session_with(|m| {
+            m.push_furnishing(Furnishing {
+                at: [f64::NAN, 2.0],
+                rotation: f64::INFINITY,
+                elevation: f64::NEG_INFINITY,
+                size: [1.0, f64::NAN, 0.5],
+                ..Furnishing::default()
+            });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "furnishings": true }));
+        let list = v["furnishings"].as_array().expect("furnishings array");
+        assert_eq!(list.len(), 1);
+        // NaN serializes to null in serde_json
+        assert!(list[0]["at"][0].is_null());
+        assert!((list[0]["at"][1].as_f64().expect("y") - 2.0).abs() < 1e-9);
+        assert!(list[0]["size"][1].is_null());
+    }
+
+    /// A cabinet with no pull reports pull as null and front pulls as null.
+    #[test]
+    fn inspect_cabinet_null_pull() {
+        let mut s = session_with(|m| {
+            let mut c = kitchen_cabinet();
+            c.pull = None;
+            m.push_cabinet(c);
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        let c = &v["cabinets"][0];
+        assert!(c["pull"].is_null());
+        let fronts = c["frontParts"].as_array().expect("frontParts");
+        for f in fronts {
+            assert!(f["pull"].is_null(), "front pull should be null when cabinet has no pull");
+        }
+    }
+
+    /// Hostile JSON: non-boolean flags are ignored, not errors.
+    #[test]
+    fn inspect_hostile_non_boolean_flags() {
+        let mut s = session_with(|m| {
+            m.push_wall(Wall { start: Vec2::ZERO, end: Vec2::new(5.0, 0.0), ..Wall::default() });
+        });
+        let v = exec(
+            &mut s,
+            "arch.inspect",
+            &json!({
+                "furnishings": "yes",
+                "surfaces": 1,
+                "cabinets": null,
+                "poche": "true",
+                "rooms": [],
+            }),
+        );
+        assert!(v.get("furnishings").is_none());
+        assert!(v.get("surfaces").is_none());
+        assert!(v.get("cabinets").is_none());
+        assert!(v["walls"].is_array());
+    }
+
+    /// Surfaces report null tint when no tint is set; material is always a string.
+    #[test]
+    fn inspect_surfaces_null_tint() {
+        let mut s = session_with(|m| {
+            m.push_wall(Wall { start: Vec2::ZERO, end: Vec2::new(5.0, 0.0), ..Wall::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "surfaces": true }));
+        let list = v["surfaces"].as_array().expect("surfaces array");
+        for row in list {
+            assert!(row.get("tint").is_some(), "tint key must be present");
+            assert!(row["material"].is_string());
+            assert!(row["surface"].is_string());
+        }
+    }
+
+    /// Multiple cabinets with different front styles and pull configurations.
+    #[test]
+    fn inspect_multiple_cabinets_varied_styles() {
+        use cadcraft_doc::arch::{Cabinet, CabinetKind, FrontStyle, Fronts};
+        let mut s = session_with(|m| {
+            m.push_cabinet(Cabinet {
+                kind: CabinetKind::Base,
+                width: 0.6,
+                fronts: Fronts::Doors,
+                doors: 1,
+                door_style: FrontStyle::Slab,
+                ..Cabinet::default()
+            });
+            m.push_cabinet(Cabinet {
+                kind: CabinetKind::Wall,
+                width: 0.9,
+                fronts: Fronts::Drawers,
+                drawers: 2,
+                drawer_style: FrontStyle::RaisedPanel,
+                pull: Some("bar".into()),
+                ..Cabinet::default()
+            });
+            m.push_cabinet(Cabinet {
+                kind: CabinetKind::Tall,
+                width: 0.6,
+                fronts: Fronts::Doors,
+                doors: 2,
+                door_style: FrontStyle::Shaker,
+                pull: Some("cup".into()),
+                ..Cabinet::default()
+            });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        let list = v["cabinets"].as_array().expect("cabinets array");
+        assert_eq!(list.len(), 3);
+        assert_eq!(list[0]["doorStyle"], "slab");
+        assert!(list[0]["pull"].is_null());
+        assert_eq!(list[1]["drawerStyle"], "raised-panel");
+        assert_eq!(list[1]["pull"], "bar");
+        assert_eq!(list[2]["doorStyle"], "shaker");
+        assert_eq!(list[2]["pull"], "cup");
+    }
+
     #[test]
     fn inspect_without_flags_is_unchanged() {
         let mut s = session_with(|m| {
