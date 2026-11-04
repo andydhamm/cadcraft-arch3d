@@ -972,7 +972,11 @@ mod tests {
             doors: 1,
             ..Cabinet::default()
         });
-        let bounds = cabinet_meshes(&model, &model.cabinets[0])[0].bounds();
+        let meshes = cabinet_meshes(&model, &model.cabinets[0]);
+        let mut bounds = meshes[0].bounds();
+        for m in &meshes[1..] {
+            bounds.extend(&m.bounds());
+        }
         // With rotation 180, the cabinet extends from x=1.7 to x=2.3 and y=2.4 to y=3.0
         assert!((bounds.min[0] - 1.7).abs() < 1e-2, "min x {}", bounds.min[0]);
         assert!((bounds.max[0] - 2.3).abs() < 1e-2, "max x {}", bounds.max[0]);
