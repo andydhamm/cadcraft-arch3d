@@ -167,12 +167,45 @@ pub fn luminance_rgb(rgb: [f64; 3]) -> [f32; 3] {
 /// 1 − alpha; `light-lens-lit` emits [`LENS_NITS`] in its fixture's white with
 /// [`MAT_EMIT_CAMERA_ONLY`]; every `light-…` material gets [`MAT_NO_SHADOW`]; `mirror…` is
 /// metallic 1, roughness 0.02, albedo 0.95. Everything else IOR 1.5, no emission.
-pub fn material_for(material: &str) -> GpuMaterial {
+///
+/// If the material is a `MaterialDef` (library/paint), its base colour (with tint) and texture
+/// mean are used.
+pub fn material_for(material: &str, scene: &Scene3d) -> GpuMaterial {
+    if let Some(def) = scene.materials.get(material) {
+        let mut albedo = def.base_color;
+        if let Some(tint) = def.tint {
+            let t = [f32::from(tint[0]) / 255.0, f32::from(tint[1]) / 255.0, f32::from(tint[2]) / 255.0];
+            albedo[0] *= t[0];
+            albedo[1] *= t[1];
+            albedo[2] *= t[2];
+        }
+        if let Some(tex_key) = &def.texture {
+            if let Some(img) = scene.textures.get(tex_key) {
+                let mean = img.mean_srgb();
+                let linear = [
+                    srgb_to_linear(f32::from(mean[0]) / 255.0),
+                    srgb_to_linear(f32::from(mean[1]) / 255.0),
+                    srgb_to_linear(f32::from(mean[2]) / 255.0),
+                ];
+                albedo[0] *= linear[0];
+                albedo[1] *= linear[1];
+                albedo[2] *= linear[2];
+            }
+        }
+        return GpuMaterial {
+            albedo: [albedo[0], albedo[1], albedo[2]],
+            metallic: def.metallic,
+            roughness: def.roughness,
+            ior: 1.5,
+            ..Default::default()
+        };
+    }
+
     let name = material.to_ascii_lowercase();
     // An opening's meshes are `<window|door>-<part>` (arch3d openings.rs): each is its part's
     // material, so window glass lets the sun through.
     let part = name.strip_prefix("window-").or_else(|| name.strip_prefix("door-")).filter(|p| !p.is_empty()).unwrap_or(&name);
-    let (mut albedo, metallic, roughness, alpha) = material_pbr(part);
+    let (mut albedo, metallic, roughness, alpha) = material_pbr(part, scene);
     // The path tracer does not sample textures: a finished surface is its texture's mean colour.
     if let Some(finish) = crate::textures::finish_of(part) {
         albedo = finish_mean_linear(finish);
@@ -195,6 +228,10 @@ pub fn material_for(material: &str) -> GpuMaterial {
         m.roughness = 0.02;
     }
     m
+}
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
 }
 
 /// The mean linear colour of a finish texture, computed once per finish.
@@ -223,9 +260,9 @@ const MAX_BVH_DEPTH: u32 = 64;
 /// an index out of range or a zero area are skipped; more than [`MAX_GPU_TRIANGLES`] gives an
 /// empty scene. The tree is empty (no nodes) for a scene without triangles.
 pub fn build_gpu_scene(scene: &Scene3d, ground: bool, furnace: Option<Furnace>) -> GpuScene {
-    let mut materials: Vec<GpuMaterial> = scene.meshes.iter().map(|m| material_for(&m.material)).collect();
+    let mut materials: Vec<GpuMaterial> = scene.meshes.iter().map(|m| material_for(&m.material, scene)).collect();
     if ground {
-        materials.push(material_for("ground"));
+        materials.push(material_for("ground", scene));
     }
     if let Some(f) = furnace {
         materials.iter_mut().for_each(|m| *m = furnace_material(f));
@@ -670,15 +707,85 @@ mod tests {
     fn path_tracer_uses_the_texture_mean() {
         use cadcraft_arch3d::texture::{mean_linear, texture};
         use cadcraft_doc::arch::Finish;
+        let scene = Scene3d::default();
         for f in Finish::ALL {
             let mean = mean_linear(&texture(f));
             for prefix in ["wall", "roof", "floor"] {
-                assert_eq!(material_for(&format!("{prefix}-{}", f.name())).albedo, mean, "{prefix}-{}", f.name());
+                assert_eq!(material_for(&format!("{prefix}-{}", f.name()), &scene).albedo, mean, "{prefix}-{}", f.name());
             }
         }
         // Unfinished materials keep their flat albedo.
-        assert_eq!(material_for("wall").albedo, crate::pipeline::material_albedo("wall"));
-        assert_eq!(material_for("roof").albedo, crate::pipeline::material_albedo("roof"));
+        assert_eq!(material_for("wall", &scene).albedo, crate::pipeline::material_albedo("wall"));
+        assert_eq!(material_for("roof", &scene).albedo, crate::pipeline::material_albedo("roof"));
+    }
+
+    #[test]
+    fn path_tracer_uses_material_means() {
+        use cadcraft_doc::arch::{ImageRgba, MaterialDef};
+        use std::collections::BTreeMap;
+
+        let mut scene = Scene3d::default();
+        let mut materials = BTreeMap::new();
+        let mut textures = BTreeMap::new();
+
+        // A red texture
+        textures.insert("sym:test:t0".to_string(), ImageRgba { width: 1, height: 1, rgba: vec![255, 0, 0, 255] });
+
+        // A white material with the red texture
+        materials.insert(
+            "sym:test:0".to_string(),
+            MaterialDef { base_color: [1.0, 1.0, 1.0, 1.0], texture: Some("sym:test:t0".to_string()), ..Default::default() },
+        );
+
+        scene.materials = materials;
+        scene.textures = textures;
+
+        let m = material_for("sym:test:0", &scene);
+        // Red srgb (1.0, 0, 0) -> linear (1.0, 0, 0)
+        assert!((m.albedo[0] - 1.0).abs() < 1e-5);
+        assert!((m.albedo[1] - 0.0).abs() < 1e-5);
+        assert!((m.albedo[2] - 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn tint_multiplies_the_texture() {
+        use cadcraft_doc::arch::{ImageRgba, MaterialDef};
+        use std::collections::BTreeMap;
+
+        let mut scene = Scene3d::default();
+        let mut materials = BTreeMap::new();
+        let mut textures = BTreeMap::new();
+
+        // A white texture
+        textures.insert("sym:test:t0".to_string(), ImageRgba { width: 1, height: 1, rgba: vec![255, 255, 255, 255] });
+
+        // A green material with the white texture and a red tint
+        materials.insert(
+            "sym:test:0".to_string(),
+            MaterialDef {
+                base_color: [0.0, 1.0, 0.0, 1.0],
+                texture: Some("sym:test:t0".to_string()),
+                tint: Some([255, 0, 0]), // Red tint
+                ..Default::default()
+            },
+        );
+
+        scene.materials = materials;
+        scene.textures = textures;
+
+        let m = material_for("sym:test:0", &scene);
+        // Green (0, 1, 0) * Red tint (1, 0, 0) = Black (0, 0, 0)
+        assert!((m.albedo[0] - 0.0).abs() < 1e-5);
+        assert!((m.albedo[1] - 0.0).abs() < 1e-5);
+        assert!((m.albedo[2] - 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn untouched_scenes_are_unchanged() {
+        let scene = Scene3d::default();
+        let m1 = material_for("wall", &scene);
+        let m2 = material_for("wall", &scene);
+        assert_eq!(m1, m2);
     }
 
     #[test]
@@ -914,21 +1021,22 @@ mod tests {
 
     #[test]
     fn materials_follow_material_pbr() {
-        let (albedo, metallic, roughness, _) = material_pbr("wall");
-        let wall = material_for("wall");
+        let scene = Scene3d::default();
+        let (albedo, metallic, roughness, _) = material_pbr("wall", &scene);
+        let wall = material_for("wall", &scene);
         assert_eq!((wall.albedo, wall.metallic, wall.roughness, wall.flags), (albedo, metallic, roughness, 0));
         assert_eq!((wall.ior, wall.emission, wall.transmission), (1.5, [0.0; 3], 0.0));
-        let glass = material_for("glass");
+        let glass = material_for("glass", &scene);
         assert_eq!(glass.flags, MAT_GLASS);
         assert_eq!(glass.ior, 1.5);
         assert!((glass.transmission - 0.65).abs() < 1e-6);
-        assert_eq!(glass.roughness, material_pbr("glass").2);
-        let lens = material_for("light-lens-lit");
+        assert_eq!(glass.roughness, material_pbr("glass", &scene).2);
+        let lens = material_for("light-lens-lit", &scene);
         assert_eq!(lens.flags, MAT_EMIT_CAMERA_ONLY | MAT_NO_SHADOW);
         assert_eq!(lens.emission, [LENS_NITS; 3]);
-        let housing = material_for("light-housing");
+        let housing = material_for("light-housing", &scene);
         assert_eq!((housing.flags, housing.emission), (MAT_NO_SHADOW, [0.0; 3]));
-        let mirror = material_for("mirror-x");
+        let mirror = material_for("mirror-x", &scene);
         assert_eq!((mirror.albedo, mirror.metallic, mirror.roughness, mirror.flags), ([0.95; 3], 1.0, 0.02, 0));
         assert_eq!(mirror.ior, 1.5);
     }

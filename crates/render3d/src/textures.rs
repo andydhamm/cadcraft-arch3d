@@ -1,15 +1,20 @@
-//! The finish textures of the mesh pipelines (phase 13): one `texture_2d_array` bound as group 3.
+//! The finish and library textures of the mesh pipelines (phase 13/14): one `texture_2d_array` bound as group 3.
 //!
 //! Layer 0 is white (every untextured mesh samples it, so its image is unchanged); layers 1..=4 are
-//! [`cadcraft_arch3d::texture::texture`] for [`Finish::ALL`] in order. The chain of mip levels is
+//! [`cadcraft_arch3d::texture::texture`] for [`Finish::ALL`] in order. Subsequent layers are
+//! library textures from `Scene3d.textures` (resampled to 256x256). The chain of mip levels is
 //! built on the CPU with a box filter, and one sampler repeats, filters linearly and blends mips.
 
+use crate::types::Scene3d;
 use cadcraft_arch3d::texture::{TEXTURE_SIZE, texture};
-use cadcraft_doc::arch::Finish;
+use cadcraft_doc::arch::{Finish, ImageRgba};
+use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
 /// Layers in the array: white plus one per finish.
-pub const LAYERS: u32 = 1 + Finish::ALL.len() as u32;
+pub const BASE_LAYERS: u32 = 1 + Finish::ALL.len() as u32;
+/// Max extra layers from library textures.
+pub const MAX_EXTRA_LAYERS: u32 = 251;
 /// Mip levels of every layer (256 down to 1).
 pub const MIP_LEVELS: u32 = TEXTURE_SIZE.ilog2() + 1;
 /// Texture format of the array.
@@ -22,10 +27,65 @@ pub fn finish_of(material: &str) -> Option<Finish> {
     Finish::parse(name)
 }
 
-/// Array layer of a material: 1 + the finish index for `wall-<f>` / `roof-<f>` / `floor-<f>`, else 0
-/// (white).
-pub fn layer_for(material: &str) -> u32 {
-    finish_of(material).and_then(|f| Finish::ALL.iter().position(|a| *a == f)).map_or(0, |i| i as u32 + 1)
+/// The texture key a material uses, if any.
+///
+/// Returns `Some(key)` if the material is a `MaterialDef` with a texture, or if it is a finish.
+/// Returns `None` if the material uses no texture or falls back to white.
+pub fn texture_key_for(material: &str, scene: &Scene3d) -> Option<String> {
+    if let Some(def) = scene.materials.get(material) {
+        return def.texture.clone();
+    }
+    // Finishes are handled by layer_for directly, but we can map them to keys if needed for consistency
+    // For now, finishes are static layers 1-4.
+    None
+}
+
+/// Array layer of a material: 1 + the finish index for `wall-<f>` / `roof-<f>` / `floor-<f>`,
+/// or the index of its library texture, else 0 (white).
+pub fn layer_for(material: &str, texture_layers: &BTreeMap<String, u32>) -> u32 {
+    if let Some(&layer) = texture_layers.get(material) {
+        return layer;
+    }
+    if let Some(f) = finish_of(material) {
+        return Finish::ALL.iter().position(|a| *a == f).map_or(0, |i| i as u32 + 1);
+    }
+    0
+}
+
+/// Compute the texture layers for a scene.
+///
+/// Returns a map from material name (or texture key) to array layer index.
+/// Layer 0 is white. Layers 1-4 are finishes. Layers 5+ are library textures.
+pub fn layers_for_scene(scene: &Scene3d) -> BTreeMap<String, u32> {
+    let mut map = BTreeMap::new();
+
+    // Map finishes to their static layers
+    for (i, f) in Finish::ALL.iter().enumerate() {
+        for prefix in ["wall-", "roof-", "floor-"] {
+            map.insert(format!("{prefix}{}", f.name()), (i as u32) + 1);
+        }
+    }
+
+    // Map library textures
+    let mut next_layer = BASE_LAYERS;
+    for (key, _img) in scene.textures.iter() {
+        if next_layer >= BASE_LAYERS + MAX_EXTRA_LAYERS {
+            break;
+        }
+        map.insert(key.clone(), next_layer);
+        next_layer += 1;
+    }
+
+    // Map materials that reference these textures
+    for (mat_name, def) in scene.materials.iter() {
+        if let Some(tex_key) = &def.texture {
+            if let Some(&layer) = map.get(tex_key) {
+                map.insert(mat_name.clone(), layer);
+            }
+        }
+    }
+
+    map
 }
 
 /// The next mip level of an RGBA8 image of side `side` (box filter over 2 x 2 texels).
@@ -59,11 +119,86 @@ fn mip_chain(base: Vec<u8>) -> Vec<Vec<u8>> {
     levels
 }
 
+/// Resample an image to 256x256 bilinearly.
+fn resample_to_256(img: &ImageRgba) -> Vec<u8> {
+    let w = img.width as usize;
+    let h = img.height as usize;
+    let mut out = vec![0u8; TEXTURE_SIZE as usize * TEXTURE_SIZE as usize * 4];
+
+    if w == 0 || h == 0 {
+        return out;
+    }
+
+    let scale_x = (w as f32) / (TEXTURE_SIZE as f32);
+    let scale_y = (h as f32) / (TEXTURE_SIZE as f32);
+
+    for y in 0..TEXTURE_SIZE as usize {
+        for x in 0..TEXTURE_SIZE as usize {
+            let src_x = (x as f32) * scale_x;
+            let src_y = (y as f32) * scale_y;
+
+            let x0 = src_x.floor() as usize;
+            let y0 = src_y.floor() as usize;
+            let x1 = (x0 + 1).min(w - 1);
+            let y1 = (y0 + 1).min(h - 1);
+
+            let fx = src_x - x0 as f32;
+            let fy = src_y - y0 as f32;
+
+            let get_px = |ix: usize, iy: usize| -> [u8; 4] {
+                let idx = (iy * w + ix) * 4;
+                [
+                    img.rgba.get(idx).copied().unwrap_or(0),
+                    img.rgba.get(idx + 1).copied().unwrap_or(0),
+                    img.rgba.get(idx + 2).copied().unwrap_or(0),
+                    img.rgba.get(idx + 3).copied().unwrap_or(0),
+                ]
+            };
+
+            let p00 = get_px(x0, y0);
+            let p10 = get_px(x1, y0);
+            let p01 = get_px(x0, y1);
+            let p11 = get_px(x1, y1);
+
+            let lerp = |a: u8, b: u8, t: f32| -> u8 { (a as f32 * (1.0 - t) + b as f32 * t).round() as u8 };
+
+            let r = lerp(lerp(p00[0], p10[0], fx), lerp(p01[0], p11[0], fx), fy);
+            let g = lerp(lerp(p00[1], p10[1], fx), lerp(p01[1], p11[1], fx), fy);
+            let b = lerp(lerp(p00[2], p10[2], fx), lerp(p01[2], p11[2], fx), fy);
+            let a = lerp(lerp(p00[3], p10[3], fx), lerp(p01[3], p11[3], fx), fy);
+
+            let out_idx = (y * TEXTURE_SIZE as usize + x) * 4;
+            out[out_idx] = r;
+            out[out_idx + 1] = g;
+            out[out_idx + 2] = b;
+            out[out_idx + 3] = a;
+        }
+    }
+    out
+}
+
 /// The texel data in `LayerMajor` order: for each layer, its mips from the largest down.
-pub fn array_data() -> Vec<u8> {
+pub fn array_data(scene: &Scene3d) -> Vec<u8> {
     let side = TEXTURE_SIZE as usize;
     let mut layers = vec![vec![255u8; side * side * 4]];
     layers.extend(Finish::ALL.iter().map(|f| texture(*f).rgba));
+
+    let texture_layers = layers_for_scene(scene);
+    let mut next_layer = BASE_LAYERS;
+
+    for (key, _img) in scene.textures.iter() {
+        if next_layer >= BASE_LAYERS + MAX_EXTRA_LAYERS {
+            break;
+        }
+        if let Some(img) = scene.textures.get(key) {
+            let resampled = resample_to_256(img);
+            layers.push(resampled);
+        } else {
+            layers.push(vec![0u8; side * side * 4]);
+        }
+        next_layer += 1;
+    }
+
     layers.into_iter().flat_map(mip_chain).flatten().collect()
 }
 
@@ -94,20 +229,44 @@ pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 
 /// The uploaded array and the group-3 bind group over it and its sampler.
 pub struct MaterialTextures {
-    /// The `LAYERS`-layer array texture.
+    /// The array texture.
     pub texture: wgpu::Texture,
     /// Group 3 over the array and the sampler.
     pub bind_group: wgpu::BindGroup,
+    /// The keys of the textures in the array (excluding white and finishes), used for cache invalidation.
+    keys: Vec<String>,
 }
 
 impl MaterialTextures {
     /// Upload the array (all mips) and build the bind group over `layout`.
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout) -> Self {
+    ///
+    /// If `scene` is provided, library textures are included. If `None`, only white and finishes.
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout, scene: Option<&Scene3d>) -> Self {
+        let (keys, layer_count) = if let Some(s) = scene {
+            let layers = layers_for_scene(s);
+            let mut keys: Vec<String> = s.textures.keys().cloned().collect();
+            keys.sort();
+            let count = BASE_LAYERS + keys.len().min(MAX_EXTRA_LAYERS as usize) as u32;
+            (keys, count)
+        } else {
+            (Vec::new(), BASE_LAYERS)
+        };
+
+        let data = if let Some(s) = scene {
+            array_data(s)
+        } else {
+            // Static data for no scene
+            let side = TEXTURE_SIZE as usize;
+            let mut layers = vec![vec![255u8; side * side * 4]];
+            layers.extend(Finish::ALL.iter().map(|f| texture(*f).rgba));
+            layers.into_iter().flat_map(mip_chain).flatten().collect()
+        };
+
         let texture = device.create_texture_with_data(
             queue,
             &wgpu::TextureDescriptor {
                 label: Some("render3d material textures"),
-                size: wgpu::Extent3d { width: TEXTURE_SIZE, height: TEXTURE_SIZE, depth_or_array_layers: LAYERS },
+                size: wgpu::Extent3d { width: TEXTURE_SIZE, height: TEXTURE_SIZE, depth_or_array_layers: layer_count },
                 mip_level_count: MIP_LEVELS,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -116,7 +275,7 @@ impl MaterialTextures {
                 view_formats: &[],
             },
             wgpu::util::TextureDataOrder::LayerMajor,
-            &array_data(),
+            &data,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -137,7 +296,14 @@ impl MaterialTextures {
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
             ],
         });
-        MaterialTextures { texture, bind_group }
+        MaterialTextures { texture, bind_group, keys }
+    }
+
+    /// Check if the texture array needs to be rebuilt for the given scene.
+    pub fn needs_rebuild(&self, scene: &Scene3d) -> bool {
+        let mut keys: Vec<String> = scene.textures.keys().cloned().collect();
+        keys.sort();
+        self.keys != keys
     }
 }
 
@@ -148,19 +314,61 @@ mod tests {
     #[test]
     fn texture_array_has_five_layers_with_mips() {
         let per_layer: usize = (0..MIP_LEVELS).map(|l| (256usize >> l).pow(2) * 4).sum();
-        assert_eq!(LAYERS, 5);
+        assert_eq!(BASE_LAYERS, 5);
         assert_eq!(MIP_LEVELS, 9);
-        let data = array_data();
+        let scene = Scene3d::default();
+        let data = array_data(&scene);
         assert_eq!(data.len(), per_layer * 5);
         assert!(data.iter().take(per_layer).all(|&b| b == 255), "layer 0 is white at every mip");
-        assert_eq!(array_data(), data, "deterministic");
+        assert_eq!(array_data(&scene), data, "deterministic");
         if let Some((device, queue)) = crate::gputest::shared_device() {
             let layout = bind_group_layout(&device);
-            let t = MaterialTextures::new(&device, &queue, &layout);
+            let t = MaterialTextures::new(&device, &queue, &layout, Some(&scene));
             assert_eq!(t.texture.depth_or_array_layers(), 5);
             assert_eq!(t.texture.mip_level_count(), 9);
             assert_eq!(t.texture.width(), 256);
             assert_eq!(t.texture.format(), TEXTURE_FORMAT);
+        }
+    }
+
+    #[test]
+    fn symbol_textures_get_array_layers() {
+        use cadcraft_doc::arch::ImageRgba;
+        use std::collections::BTreeMap;
+
+        let mut scene = Scene3d::default();
+        let mut textures = BTreeMap::new();
+        textures.insert(
+            "sym:test:t0".to_string(),
+            ImageRgba { width: 2, height: 2, rgba: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255] },
+        );
+        scene.textures = textures;
+
+        let layers = layers_for_scene(&scene);
+        assert_eq!(layers.get("sym:test:t0"), Some(&5));
+
+        let data = array_data(&scene);
+        let per_layer: usize = (0..MIP_LEVELS).map(|l| (256usize >> l).pow(2) * 4).sum();
+        assert_eq!(data.len(), per_layer * 6); // 5 base + 1 texture
+    }
+
+    #[test]
+    fn texture_array_rebuilds_only_on_new_keys() {
+        use cadcraft_doc::arch::ImageRgba;
+        use std::collections::BTreeMap;
+
+        let mut scene = Scene3d::default();
+        let mut textures = BTreeMap::new();
+        textures.insert("sym:test:t0".to_string(), ImageRgba { width: 1, height: 1, rgba: vec![0, 0, 0, 255] });
+        scene.textures = textures;
+
+        if let Some((device, queue)) = crate::gputest::shared_device() {
+            let layout = bind_group_layout(&device);
+            let t = MaterialTextures::new(&device, &queue, &layout, Some(&scene));
+            assert!(!t.needs_rebuild(&scene));
+
+            scene.textures.insert("sym:test:t1".to_string(), ImageRgba { width: 1, height: 1, rgba: vec![255, 255, 255, 255] });
+            assert!(t.needs_rebuild(&scene));
         }
     }
 

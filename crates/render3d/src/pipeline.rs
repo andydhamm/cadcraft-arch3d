@@ -111,9 +111,24 @@ pub fn valid_sample_count(n: u32) -> u32 {
     if n == 4 { 4 } else { 1 }
 }
 
-/// PBR parameters for an arch3d material name: `(albedo, metallic, roughness, alpha)`. Albedo is
-/// [`material_albedo`]; unknown names are a neutral matte dielectric `([0.75; 3], 0.0, 0.5, 1.0)`.
-pub fn material_pbr(material: &str) -> ([f32; 3], f32, f32, f32) {
+/// PBR parameters for an arch3d material name: `(albedo, metallic, roughness, alpha)`.
+///
+/// If the material is a key in `scene.materials` (a `MaterialDef` from the library or paint),
+/// its base colour (with tint applied) and properties are used. Otherwise, the phase 1-13
+/// table is used.
+pub fn material_pbr(material: &str, scene: &Scene3d) -> ([f32; 3], f32, f32, f32) {
+    if let Some(def) = scene.materials.get(material) {
+        let mut albedo = def.base_color;
+        if let Some(tint) = def.tint {
+            let t = [f32::from(tint[0]) / 255.0, f32::from(tint[1]) / 255.0, f32::from(tint[2]) / 255.0];
+            albedo[0] *= t[0];
+            albedo[1] *= t[1];
+            albedo[2] *= t[2];
+        }
+        // Alpha is 1.0 for library materials unless explicitly glass-like (not handled by MaterialDef yet)
+        return (albedo, def.metallic, def.roughness, 1.0);
+    }
+
     let m = material.to_ascii_lowercase();
     if let Some(f) = crate::textures::finish_of(&m) {
         // The texture is the colour; the finish sets the roughness.
@@ -314,6 +329,9 @@ pub fn upload(device: &wgpu::Device, scene: &Scene3d) -> GpuMeshes {
     let mut vertex_offset: u32 = 0;
     let mut draws = Vec::new();
 
+    // Determine texture layers for this scene.
+    let texture_layers = crate::textures::layers_for_scene(scene);
+
     for mesh in &scene.meshes {
         for i in 0..mesh.positions.len() {
             let position = mesh.positions.get(i).copied().unwrap_or([0.0, 0.0, 0.0]);
@@ -334,10 +352,10 @@ pub fn upload(device: &wgpu::Device, scene: &Scene3d) -> GpuMeshes {
         }
         let index_count = indices.len() as u32 - first_index;
         if index_count > 0 {
-            let (albedo, metallic, roughness, alpha) = material_pbr(&mesh.material);
+            let (albedo, metallic, roughness, alpha) = material_pbr(&mesh.material, scene);
             let casts_shadow = crate::shadow_atlas::casts_fixture_shadow(&mesh.material);
             let emissive = if mesh.material.eq_ignore_ascii_case("light-lens-lit") { 1.0 } else { 0.0 };
-            let layer = crate::textures::layer_for(&mesh.material);
+            let layer = crate::textures::layer_for(&mesh.material, &texture_layers);
             draws.push(Draw { first_index, index_count, albedo, metallic, roughness, alpha, casts_shadow, emissive, layer });
         }
         vertex_offset += n;
@@ -649,12 +667,13 @@ mod tests {
 
     #[test]
     fn material_pbr_gives_glass_alpha_below_one() {
-        let (_, metallic, roughness, alpha) = material_pbr("glass");
+        let scene = Scene3d::default();
+        let (_, metallic, roughness, alpha) = material_pbr("glass", &scene);
         assert_eq!(alpha, 0.35);
         assert_eq!(roughness, 0.05);
         assert_eq!(metallic, 0.0);
         for name in ["wall", "floor", "ceiling", "roof", "frame", "casing", "leaf", "sill", "header", "stair", "railing", "deck", "ground"] {
-            let (_, m, r, a) = material_pbr(name);
+            let (_, m, r, a) = material_pbr(name, &scene);
             assert_eq!((m, a), (0.0, 1.0), "{name}");
             assert!((0.6..=0.95).contains(&r), "{name} roughness {r}");
         }
@@ -662,10 +681,29 @@ mod tests {
 
     #[test]
     fn material_pbr_falls_back_to_neutral_for_unknown_names() {
-        assert_eq!(material_pbr("unobtainium"), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
-        assert_eq!(material_pbr(""), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
+        let scene = Scene3d::default();
+        assert_eq!(material_pbr("unobtainium", &scene), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
+        assert_eq!(material_pbr("", &scene), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
         let d = Draw::default();
         assert_eq!((d.metallic, d.roughness, d.alpha), (0.0, 0.5, 1.0));
+    }
+
+    #[test]
+    fn materialdef_meshes_use_their_base_colour() {
+        use cadcraft_doc::arch::MaterialDef;
+        use std::collections::BTreeMap;
+
+        let mut scene = Scene3d::default();
+        let mut materials = BTreeMap::new();
+        materials
+            .insert("sym:test:0".to_string(), MaterialDef { base_color: [1.0, 0.0, 0.0, 1.0], metallic: 0.5, roughness: 0.2, ..Default::default() });
+        scene.materials = materials;
+
+        let (albedo, metallic, roughness, alpha) = material_pbr("sym:test:0", &scene);
+        assert_eq!(albedo, [1.0, 0.0, 0.0]);
+        assert_eq!(metallic, 0.5);
+        assert_eq!(roughness, 0.2);
+        assert_eq!(alpha, 1.0);
     }
 
     #[test]
