@@ -27,21 +27,19 @@ pub(crate) fn pick(mesh: &Mesh, keep: &[bool], want: bool) -> Mesh {
 
 /// Split a wall mesh into the triangles facing `side` (left or right of start -> end, at
 /// ±thickness/2) and the rest. Every triangle lands in exactly one of the two meshes. If no triangle
-/// faces `side` the original mesh is returned unchanged and the empty side mesh is the original.
+/// faces `side` the side mesh is empty and the rest is the original mesh.
 pub(crate) fn split_side(wall: &Wall, mesh: &Mesh, side: Side) -> (Mesh, Mesh) {
     let (dx, dy) = (wall.end.x - wall.start.x, wall.end.y - wall.start.y);
     let len = (dx * dx + dy * dy).sqrt();
     if !(len.is_finite() && len > 1e-9 && wall.thickness.is_finite()) {
-        return (mesh.clone(), Mesh::new("wall", wall.id));
+        return (Mesh { indices: Vec::new(), ..mesh.clone() }, mesh.clone());
     }
     let (rx, ry) = match side {
         Side::Right => (dy / len, -dx / len),
         Side::Left => (-dy / len, dx / len),
     };
-    let target = match side {
-        Side::Right => wall.thickness / 2.0,
-        Side::Left => -wall.thickness / 2.0,
-    };
+    // Each face lies half a thickness out along its own side normal.
+    let target = wall.thickness / 2.0;
     let cos_max = FACE_ANGLE_DEG.to_radians().cos();
     let pos = |i: u32| mesh.positions.get(i as usize).map(|p| [f64::from(p[0]), f64::from(p[1]), f64::from(p[2])]);
     let mut keep = Vec::with_capacity(mesh.indices.len() / 3);
@@ -65,7 +63,7 @@ pub(crate) fn split_side(wall: &Wall, mesh: &Mesh, side: Side) -> (Mesh, Mesh) {
         keep.push(facing && (dist - target).abs() <= PLANE_TOL);
     }
     if !keep.iter().any(|&k| k) {
-        return (mesh.clone(), Mesh::new("wall", wall.id));
+        return (Mesh { indices: Vec::new(), ..mesh.clone() }, mesh.clone());
     }
     let side = pick(mesh, &keep, true);
     let rest = pick(mesh, &keep, false);
@@ -82,8 +80,7 @@ pub fn split_exterior_face(wall: &Wall, mesh: Mesh) -> (Mesh, Option<Mesh>) {
         return (mesh, None);
     };
     let (side, rest) = split_side(wall, &mesh, Side::Right);
-    if side.indices.is_empty() || side.indices.len() != mesh.indices.len() {
-        // No triangles on the right: fall back to the pre-generalisation behaviour.
+    if side.indices.is_empty() {
         return (mesh, None);
     }
     let mut outer = face_uvs(&side, texture(finish).tile);

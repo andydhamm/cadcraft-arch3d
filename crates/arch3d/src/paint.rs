@@ -7,604 +7,427 @@
 //! and `item:` textures into `scene.textures` as it goes. Objects without paints are byte-identical
 //! to the pre-paint build.
 
-use std::collections::BTreeMap;
-
 use cadcraft_doc::ArchModel;
-use cadcraft_doc::arch::paint::{CabinetPart, MaterialRef, Paint, Surface};
-use cadcraft_doc::arch::{Finish, ImageRgba, Side};
+use cadcraft_doc::arch::paint::{CabinetPart, MaterialRef, Paint, Side, Surface};
+use cadcraft_doc::arch::{Finish, ImageRgba};
 
+use crate::furnishing::{pull_material, symbol_material};
+use crate::texture::{mean_linear, texture};
 use crate::uv::face_uvs;
-use crate::{Mesh, Scene3d, finish, texture};
+use crate::{MaterialDef, Mesh, Scene3d, finish};
 
 const TILE_DEFAULT: [f32; 2] = [1.0, 1.0];
 
-/// SRGB [u8; 3] to linear [f32; 3].
+/// sRGB bytes to linear light.
 fn srgb_to_linear(c: [u8; 3]) -> [f32; 3] {
-    let f = |v: f32| {
-        let v = v / 255.0;
-        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(1.0 / 2.2) }
+    c.map(|v| {
+        let v = f32::from(v) / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    })
+}
+
+/// The base colour (RGBA, as the GLB writer shows it) of an unpainted `part`: `wall`, `floor`,
+/// `ceiling`, `roof`, `cabinet`, `counter`, `pull`, `fixture` or `furnishing`.
+pub fn default_colour(part: &str) -> [f32; 4] {
+    let rgb = match part {
+        "wall" | "floor" | "ceiling" => [0.85, 0.85, 0.85],
+        "roof" => [151.0 / 255.0, 84.0 / 255.0, 74.0 / 255.0],
+        "cabinet" => [222.0 / 255.0, 184.0 / 255.0, 135.0 / 255.0],
+        "counter" => [160.0 / 255.0, 160.0 / 255.0, 160.0 / 255.0],
+        "pull" => [192.0 / 255.0, 192.0 / 255.0, 192.0 / 255.0],
+        "fixture" => [240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0],
+        _ => [0.7, 0.7, 0.7],
     };
-    [f(c[0] as f32), f(c[1] as f32), f(c[2] as f32)]
+    [rgb[0], rgb[1], rgb[2], 1.0]
 }
 
-/// Multiply a linear base colour by a linear tint.
-fn tint_color(base: [f32; 4], tint: [u8; 3]) -> [f32; 4] {
-    let t = srgb_to_linear(tint);
-    [base[0] * t[0], base[1] * t[1], base[2] * t[2], base[3]]
-}
-
-/// Default (unpainted) material colour for a surface part, linear, alpha 1.0.
-fn default_colour(part: &str) -> [f32; 4] {
-    match part {
-        "wall" => [0.85, 0.85, 0.85, 1.0],
-        "floor" => [0.6, 0.45, 0.35, 1.0],
-        "ceiling" => [0.95, 0.95, 0.95, 1.0],
-        "roof" => [0.3, 0.25, 0.2, 1.0],
-        "cabinet" | "counter" => [0.55, 0.4, 0.3, 1.0],
-        "pull" => [0.6, 0.6, 0.6, 1.0],
-        "fixture" => [0.55, 0.55, 0.55, 1.0],
-        "furnishing" => [0.7, 0.7, 0.7, 1.0],
-        _ => [1.0, 1.0, 1.0, 1.0],
-    }
-}
-
-/// The `MaterialDef` for a [`MaterialRef`]. Textures are not inserted here; the caller inserts
-/// them into `scene.textures`.
-fn def_from_material_ref(model: &ArchModel, ref_: &MaterialRef) -> MaterialDef {
-    match ref_ {
-        MaterialRef::Finish(f) => {
-            let img = crate::texture::texture(f);
-            MaterialDef {
-                base_color: img.mean_linear,
-                metallic: 0.0,
-                roughness: 0.8,
-                texture: Some(format!("finish:{}", f.name())),
-                tile: img.tile,
-                tint: None,
-            }
-        }
-        MaterialRef::Item(id) => {
-            let img = model.images.get(id).map(|i| i.mean_srgb().iter().map(|c| srgb_to_linear([*c, 0, 0, 0])[..3] as f32).collect::<[f32; 3]>());
-            MaterialDef {
-                base_color: [img.unwrap_or(0.5), img.unwrap_or(0.5), img.unwrap_or(0.5), 1.0],
-                metallic: 0.0,
-                roughness: 0.8,
-                texture: Some(format!("item:{}", id)),
-                tile: TILE_DEFAULT,
-                tint: None,
-            }
-        }
-        MaterialRef::Colour(c) => MaterialDef {
-            base_color: [srgb_to_linear(c)[0], srgb_to_linear(c)[1], srgb_to_linear(c)[2], 1.0],
-            metallic: 0.0,
-            roughness: 0.8,
-            texture: None,
-            tile: TILE_DEFAULT,
-            tint: None,
-        },
-    }
-}
-
-/// The unpainted (pre-paint) material for a surface. For symbol parts, reads from
-/// `model.symbols`. Otherwise a reasonable per-part default.
-fn unpainted_material(model: &ArchModel, surface: &Surface) -> MaterialDef {
+/// The part name of an unpainted surface, for [`default_colour`].
+fn part_name(surface: &Surface) -> &'static str {
     match surface {
-        Surface::Furnishing { furnishing, part } => {
-            let furn = model.furnishings.iter().find(|f| f.id == *furnishing);
-            if let Some(furn) = furn {
-                if let Some(sym) = model.symbols.get(&furn.symbol) {
-                    if let Some(p) = sym.parts.get(*part) {
-                        let tex_key = if let Some(t) = p.texture { Some(format!("sym:{}:t{}", sym.key, t)) } else { None };
-                        MaterialDef {
-                            base_color: p.base_color,
-                            metallic: p.metallic,
-                            roughness: p.roughness,
-                            texture: tex_key,
-                            tile: TILE_DEFAULT,
-                            tint: None,
-                        }
-                    } else {
-                        default_colour("furnishing")
-                    }
-                } else {
-                    default_colour("furnishing")
-                }
-            } else {
-                default_colour("furnishing")
-            }
-        }
-        Surface::Cabinet { cabinet, part } => match part {
-            CabinetPart::Carcass => default_colour("cabinet"),
-            CabinetPart::Front => default_colour("cabinet"),
-            CabinetPart::Counter => default_colour("counter"),
-            CabinetPart::Pull => default_colour("pull"),
-        },
-        Surface::Fixture(_) => default_colour("fixture"),
-        _ => match surface {
-            Surface::WallSide { .. } => default_colour("wall"),
-            Surface::RoomFloor(_) => default_colour("floor"),
-            Surface::RoomCeiling(_) => default_colour("ceiling"),
-            Surface::Roof(_) => default_colour("roof"),
-            _ => default_colour("wall"),
-        },
+        Surface::WallSide { .. } => "wall",
+        Surface::RoomFloor(_) => "floor",
+        Surface::RoomCeiling(_) => "ceiling",
+        Surface::Roof(_) => "roof",
+        Surface::Cabinet { part: CabinetPart::Counter, .. } => "counter",
+        Surface::Cabinet { part: CabinetPart::Pull, .. } => "pull",
+        Surface::Cabinet { .. } => "cabinet",
+        Surface::Fixture(_) => "fixture",
+        Surface::Furnishing { .. } => "furnishing",
     }
 }
 
-/// Build a `MaterialDef` for a paint. If the paint's material is `None`, fall back to the
-/// unpainted material for the surface. The tint is applied on top.
-fn material_def_for_paint(model: &ArchModel, paint: &Paint, surface: &Surface) -> MaterialDef {
-    let base = match paint.material {
-        Some(ref m) => def_from_material_ref(model, m),
-        None => unpainted_material(model, surface),
+/// The definition of built-in finish `f`.
+fn finish_def(f: Finish) -> MaterialDef {
+    let t = texture(f);
+    let m = mean_linear(&t);
+    MaterialDef {
+        base_color: [m[0], m[1], m[2], 1.0],
+        texture: Some(format!("finish:{}", f.name())),
+        tile: [t.tile[0] as f32, t.tile[1] as f32],
+        ..Default::default()
+    }
+}
+
+/// The definition of a [`MaterialRef`].
+fn ref_def(model: &ArchModel, m: &MaterialRef) -> MaterialDef {
+    match m {
+        MaterialRef::Finish(f) => finish_def(*f),
+        MaterialRef::Item(id) => match model.images.get(id).filter(|i| i.is_valid()) {
+            Some(img) => {
+                let c = srgb_to_linear(img.mean_srgb());
+                MaterialDef { base_color: [c[0], c[1], c[2], 1.0], texture: Some(format!("item:{id}")), tile: TILE_DEFAULT, ..Default::default() }
+            }
+            None => MaterialDef { base_color: [0.5, 0.5, 0.5, 1.0], ..Default::default() },
+        },
+        MaterialRef::Colour(c) => {
+            let l = srgb_to_linear(*c);
+            MaterialDef { base_color: [l[0], l[1], l[2], 1.0], ..Default::default() }
+        }
+    }
+}
+
+/// The material a surface shows unpainted. Symbol parts need `scene` (their definitions are
+/// already in it); without it they fall back to the default colour.
+fn unpainted_def(model: &ArchModel, scene: Option<&Scene3d>, surface: &Surface) -> MaterialDef {
+    let finish_of = |f: Option<Finish>, ok: fn(Finish) -> bool| f.filter(|f| ok(*f)).map(finish_def);
+    let from_scene = |name: String| scene.and_then(|s| s.materials.get(&name)).cloned();
+    let found = match surface {
+        Surface::WallSide { wall, side: Side::Right } => {
+            model.walls.iter().find(|w| w.id == *wall).and_then(|w| finish_of(w.finish, Finish::for_walls))
+        }
+        Surface::RoomFloor(r) => model.rooms.iter().find(|x| x.id == *r).and_then(|x| finish_of(x.floor_finish, Finish::for_floors)),
+        Surface::Roof(r) => model.roofs.iter().find(|x| x.id == *r).and_then(|x| finish_of(x.covering, Finish::for_roofs)),
+        Surface::Furnishing { furnishing, part } => model.furnishings.iter().find(|f| f.id == *furnishing).and_then(|f| {
+            let part = usize::try_from(*part).ok()?;
+            from_scene(symbol_material(&f.symbol, part))
+        }),
+        Surface::Cabinet { cabinet, part: CabinetPart::Pull } => {
+            model.cabinets.iter().find(|c| c.id == *cabinet).and_then(|c| c.pull_symbol.as_deref()).and_then(|key| from_scene(pull_material(key, 0)))
+        }
+        _ => None,
     };
-    let mut out = base;
-    if let Some(t) = paint.tint {
-        out.base_color = tint_color(out.base_color, t);
-    }
-    out
+    found.unwrap_or_else(|| MaterialDef { base_color: default_colour(part_name(surface)), ..Default::default() })
 }
 
-/// Split a wall mesh on `side`, and re-style the side triangles as a `paint:` mesh when the
-/// model has a paint for that side.
-fn paint_wall_side(model: &ArchModel, wall: &cadcraft_doc::arch::Wall, mesh: &Mesh, side: Side, out: &mut Vec<Mesh>) {
-    let key = format!("wall/{}/{}", side, wall.id);
-    let paint_key = format!("paint:{}", key);
-    if model.paints.contains_key(&paint_key) {
-        let (side_mesh, rest) = finish::split_side(wall, mesh, side);
-        if !side_mesh.indices.is_empty() {
-            let tile = model.paints.get(&paint_key).map_or(TILE_DEFAULT, |p| {
-                p.material
-                    .as_ref()
-                    .and_then(|m| match m {
-                        MaterialRef::Finish(f) => {
-                            let img = crate::texture::texture(f);
-                            Some(img.tile)
-                        }
-                        _ => Some(TILE_DEFAULT),
-                    })
-                    .or_else(|| {
-                        match side {
-                            Side::Right => {
-                                // wall may have a finish
-                                if let Some(f) = wall.finish.filter(|f| f.for_walls()) {
-                                    let img = crate::texture::texture(f);
-                                    Some(img.tile)
-                                } else {
-                                    None
-                                }
-                            }
-                            Side::Left => None,
-                        }
-                    })
-                    .unwrap_or(TILE_DEFAULT)
-            });
-            let mut side_mesh = face_uvs(&side_mesh, tile);
-            side_mesh.material = paint_key;
-            out.push(side_mesh);
-        }
-        out.push(rest);
+/// The tile (metres per repeat) that face-aligned UVs on `surface` take.
+fn tile_of(model: &ArchModel, paint: &Paint, surface: &Surface) -> [f64; 2] {
+    let def = match &paint.material {
+        Some(m) => ref_def(model, m),
+        None => unpainted_def(model, None, surface),
+    };
+    [f64::from(def.tile[0]), f64::from(def.tile[1])]
+}
+
+/// Split `side` of `wall` out of `mesh` when that side is painted, pushing the paint mesh to
+/// `out`; returns the rest.
+fn paint_side(model: &ArchModel, wall: &cadcraft_doc::arch::Wall, mesh: Mesh, side: Side, out: &mut Vec<Mesh>) -> Mesh {
+    let surface = Surface::WallSide { wall: wall.id, side };
+    let Some(paint) = model.paints.get(&surface.key()) else {
+        return mesh;
+    };
+    let (part, rest) = finish::split_side(wall, &mesh, side);
+    if part.indices.is_empty() || rest.indices.len() == mesh.indices.len() {
+        return mesh;
+    }
+    let mut painted = face_uvs(&part, tile_of(model, paint, &surface));
+    painted.material = format!("paint:{}", surface.key());
+    out.push(painted);
+    rest
+}
+
+/// The surface a non-wall mesh shows.
+fn surface_of(mesh: &Mesh) -> Option<Surface> {
+    let id = mesh.object;
+    let m = mesh.material.as_str();
+    let kind = |p: &str| m == p || m.strip_prefix(p).is_some_and(|r| r.starts_with('-'));
+    if kind("floor") {
+        Some(Surface::RoomFloor(id))
+    } else if m == "ceiling" {
+        Some(Surface::RoomCeiling(id))
+    } else if kind("roof") {
+        Some(Surface::Roof(id))
+    } else if m == "cabinet-box" {
+        Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Carcass })
+    } else if m == "cabinet-front" {
+        Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Front })
+    } else if m == "counter" {
+        Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Counter })
+    } else if m.starts_with("pull:") {
+        Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Pull })
+    } else if m.starts_with("fixture-") {
+        Some(Surface::Fixture(id))
+    } else if let Some(rest) = m.strip_prefix("sym:") {
+        let part = rest.rsplit(':').next()?.parse::<u32>().ok()?;
+        Some(Surface::Furnishing { furnishing: id, part })
     } else {
-        out.push(mesh.clone());
-    }
-}
-
-/// Determine the surface key for a non-wall mesh. Returns `None` when the mesh has no
-/// identifiable surface.
-fn surface_key_for(mesh: &Mesh, model: &ArchModel) -> Option<String> {
-    if mesh.material.starts_with("floor") {
-        let id = model.rooms.iter().find(|r| r.id == mesh.object);
-        if id.is_some() {
-            return Some(format!("room/{}/floor", mesh.object));
-        }
-    }
-    if mesh.material == "ceiling" {
-        if model.rooms.iter().any(|r| r.id == mesh.object) {
-            return Some(format!("room/{}/ceiling", mesh.object));
-        }
-    }
-    if mesh.material.starts_with("roof") {
-        if model.roofs.iter().any(|r| r.id == mesh.object) {
-            return Some(format!("roof/{}", mesh.object));
-        }
-    }
-    if matches!(mesh.material, "cabinet-box" | "cabinet-front" | "counter") {
-        let part = match mesh.material.as_str() {
-            "cabinet-box" => "carcass",
-            "cabinet-front" => "front",
-            "counter" => "counter",
-            _ => return None,
-        };
-        if model.cabinets.iter().any(|c| c.id == mesh.object) {
-            return Some(format!("cabinet/{}/{}", mesh.object, part));
-        }
-    }
-    if mesh.material.starts_with("fixture") {
-        if model.fixtures.iter().any(|f| f.id == mesh.object) {
-            return Some(format!("fixture/{}", mesh.object));
-        }
-    }
-    if mesh.material.starts_with("pull:") {
-        if model.cabinets.iter().any(|c| c.id == mesh.object) {
-            return Some(format!("cabinet/{}/pull", mesh.object));
-        }
-    }
-    if mesh.material.starts_with("sym:") {
-        // sym:<key>:<part> — object is the furnishing id
-        let furn = model.furnishings.iter().find(|f| f.id == mesh.object);
-        if furn.is_some() {
-            // part is the last numeric component
-            if let Some(tail) = mesh.material.strip_prefix("sym:") {
-                if let Some(part_str) = tail.rsplit(':').next() {
-                    let part = part_str.parse::<u32>().unwrap_or(0);
-                    return Some(format!("furnishing/{}/{}", mesh.object, part));
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Rename a mesh to `paint:<key>` and push it if there is a paint for that key; otherwise push
-/// the original.
-fn rename_or_keep(mesh: &Mesh, key: &str, model: &ArchModel, out: &mut Vec<Mesh>) {
-    let paint_key = format!("paint:{}", key);
-    if model.paints.contains_key(&paint_key) {
-        let mut m = mesh.clone();
-        m.material = paint_key;
-        out.push(m);
-    } else {
-        out.push(mesh.clone());
+        None
     }
 }
 
 /// Split out or rename the painted surfaces among one part's `meshes` as `paint:<surface key>`
-/// meshes.
-#[allow(clippy::ptr_arg)] // The final signature: painting splits a mesh into several.
+/// meshes. Meshes without a paint are untouched.
 pub fn apply(model: &ArchModel, meshes: &mut Vec<Mesh>) {
-    let mut new_meshes: Vec<Mesh> = Vec::with_capacity(meshes.len());
-
-    for mesh in meshes.iter() {
-        if mesh.material == "wall" || mesh.material.starts_with("wall-") {
-            // Wall mesh: check for paints on left/right
-            if let Some(wall) = model.walls.iter().find(|w| w.id == mesh.object) {
-                let left_key = format!("wall/{}/left", wall.id);
-                let right_key = format!("wall/{}/right", wall.id);
-                let has_left = model.paints.contains_key(&left_key);
-                let has_right = model.paints.contains_key(&right_key);
-                let is_exterior = mesh.material.starts_with("wall-");
-
-                if is_exterior {
-                    // This is the exterior (right) face from finish splitting
-                    if has_right {
-                        let mut m = mesh.clone();
-                        m.material = right_key.clone();
-                        new_meshes.push(m);
-                    } else {
-                        new_meshes.push(mesh.clone());
-                    }
-                } else {
-                    // Combined wall mesh — split as needed
-                    if has_left {
-                        let (side, rest) = finish::split_side(wall, mesh, Side::Left);
-                        if !side.indices.is_empty() {
-                            let tile = model.paints.get(&left_key).map_or(TILE_DEFAULT, |p| {
-                                p.material
-                                    .as_ref()
-                                    .and_then(|m| match m {
-                                        MaterialRef::Finish(f) => {
-                                            let img = crate::texture::texture(f);
-                                            Some(img.tile)
-                                        }
-                                        _ => Some(TILE_DEFAULT),
-                                    })
-                                    .unwrap_or(TILE_DEFAULT)
-                            });
-                            let mut side_mesh = face_uvs(&side, tile);
-                            side_mesh.material = left_key.clone();
-                            new_meshes.push(side_mesh);
-                        }
-                        if has_right {
-                            let (side_r, rest_r) = finish::split_side(wall, &rest, Side::Right);
-                            if !side_r.indices.is_empty() {
-                                let tile = model.paints.get(&right_key).map_or(TILE_DEFAULT, |p| {
-                                    p.material
-                                        .as_ref()
-                                        .and_then(|m| match m {
-                                            MaterialRef::Finish(f) => {
-                                                let img = crate::texture::texture(f);
-                                                Some(img.tile)
-                                            }
-                                            _ => Some(TILE_DEFAULT),
-                                        })
-                                        .unwrap_or(TILE_DEFAULT)
-                                });
-                                let mut side_mesh = face_uvs(&side_r, tile);
-                                side_mesh.material = right_key.clone();
-                                new_meshes.push(side_mesh);
-                            }
-                            new_meshes.push(rest_r);
-                        } else {
-                            new_meshes.push(rest);
-                        }
-                    } else if has_right {
-                        let (side_r, rest_r) = finish::split_side(wall, mesh, Side::Right);
-                        if !side_r.indices.is_empty() {
-                            let tile = model.paints.get(&right_key).map_or(TILE_DEFAULT, |p| {
-                                p.material
-                                    .as_ref()
-                                    .and_then(|m| match m {
-                                        MaterialRef::Finish(f) => {
-                                            let img = crate::texture::texture(f);
-                                            Some(img.tile)
-                                        }
-                                        _ => Some(TILE_DEFAULT),
-                                    })
-                                    .unwrap_or(TILE_DEFAULT)
-                            });
-                            let mut side_mesh = face_uvs(&side_r, tile);
-                            side_mesh.material = right_key.clone();
-                            new_meshes.push(side_mesh);
-                        }
-                        new_meshes.push(rest_r);
-                    } else {
-                        new_meshes.push(mesh.clone());
+    if model.paints.is_empty() {
+        return;
+    }
+    let mut out: Vec<Mesh> = Vec::with_capacity(meshes.len());
+    for mut mesh in std::mem::take(meshes) {
+        let wall = model.walls.iter().find(|w| w.id == mesh.object);
+        match wall {
+            Some(wall) if mesh.material == "wall" => {
+                let rest = paint_side(model, wall, mesh, Side::Left, &mut out);
+                let rest = paint_side(model, wall, rest, Side::Right, &mut out);
+                out.push(rest);
+            }
+            Some(wall) if mesh.material.starts_with("wall-") => {
+                // The finish's exterior face (the right side): the paint replaces it.
+                let key = Surface::WallSide { wall: wall.id, side: Side::Right }.key();
+                if model.paints.contains_key(&key) {
+                    mesh.material = format!("paint:{key}");
+                }
+                out.push(mesh);
+            }
+            _ => {
+                if let Some(surface) = surface_of(&mesh) {
+                    let key = surface.key();
+                    if model.paints.contains_key(&key) {
+                        mesh.material = format!("paint:{key}");
                     }
                 }
-            } else {
-                new_meshes.push(mesh.clone());
-            }
-        } else {
-            // Non-wall mesh
-            if let Some(key) = surface_key_for(mesh, model) {
-                rename_or_keep(mesh, &key, model, &mut new_meshes);
-            } else {
-                new_meshes.push(mesh.clone());
+                out.push(mesh);
             }
         }
     }
-
-    *meshes = new_meshes;
+    *meshes = out;
 }
 
 /// Add the [`MaterialDef`] (and texture) of every `paint:` mesh in `scene`.
 pub fn materials(model: &ArchModel, scene: &mut Scene3d) {
-    for mesh in scene.meshes.iter() {
-        if let Some(key) = mesh.material.strip_prefix("paint:") {
-            if let Some(surface) = Surface::parse(key) {
-                let paint_key = format!("paint:{}", key);
-                let def =
-                    model.paints.get(&paint_key).map_or_else(|| unpainted_material(model, &surface), |p| material_def_for_paint(model, p, &surface));
-                scene.materials.insert(mesh.material.clone(), def);
-
-                // Insert textures into scene.textures
-                if let Some(tex_key) = &def.texture {
-                    if tex_key.starts_with("finish:") {
-                        let f_name = tex_key.trim_start_matches("finish:");
-                        if let Some(f) = Finish::by_name(f_name) {
-                            if !scene.textures.contains_key(tex_key) {
-                                scene.textures.insert(tex_key.clone(), crate::texture::texture(f));
-                            }
-                        }
-                    } else if tex_key.starts_with("item:") {
-                        let item_id = tex_key.trim_start_matches("item:");
-                        if let Some(img) = model.images.get(item_id) {
-                            if img.is_valid() && !scene.textures.contains_key(tex_key) {
-                                scene.textures.insert(tex_key.clone(), img.clone());
-                            }
-                        }
-                    }
-                }
+    let mut names: Vec<String> = scene.meshes.iter().filter(|m| m.material.starts_with("paint:")).map(|m| m.material.clone()).collect();
+    names.sort_unstable();
+    names.dedup();
+    for name in names {
+        let Some(surface) = name.strip_prefix("paint:").and_then(Surface::parse) else {
+            continue;
+        };
+        let Some(paint) = model.paints.get(&surface.key()) else {
+            continue;
+        };
+        let mut def = match &paint.material {
+            Some(m) => ref_def(model, m),
+            None => unpainted_def(model, Some(scene), &surface),
+        };
+        if let Some(t) = paint.tint {
+            let l = srgb_to_linear(t);
+            def.base_color = [def.base_color[0] * l[0], def.base_color[1] * l[1], def.base_color[2] * l[2], def.base_color[3]];
+            def.tint = Some(t);
+        }
+        if let Some(key) = def.texture.clone()
+            && !scene.textures.contains_key(&key)
+        {
+            if let Some(f) = key.strip_prefix("finish:").and_then(Finish::parse) {
+                let t = texture(f);
+                scene.textures.insert(key, ImageRgba { width: t.width, height: t.height, rgba: t.rgba });
+            } else if let Some(img) = key.strip_prefix("item:").and_then(|id| model.images.get(id)) {
+                scene.textures.insert(key, img.clone());
             }
         }
+        scene.materials.insert(name, def);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Scene3d;
     use cadcraft_doc::ArchId;
-    use cadcraft_doc::arch::*;
+    use cadcraft_doc::arch::{Cabinet, Fixture, Furnishing, Roof, RoofPlane, Room, SymbolMesh, SymbolPart, Wall};
+    use cadcraft_geom::Vec2;
 
-    fn make_walls() -> ArchModel {
-        let pts = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)];
+    fn ring(finish: Option<Finish>) -> ArchModel {
+        let pts = [(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0)];
         let mut model = ArchModel::default();
         for i in 0..4usize {
             let (a, b) = (pts[i], pts[(i + 1) % 4]);
             model.walls.push(Wall {
                 id: ArchId(i as u32),
-                start: cadcraft_geom::Vec2::new(a.0, a.1),
-                end: cadcraft_geom::Vec2::new(b.0, b.1),
+                start: Vec2::new(a.0, a.1),
+                end: Vec2::new(b.0, b.1),
                 thickness: 0.2,
                 height: 2.4,
+                finish,
                 ..Default::default()
             });
         }
         model
     }
 
+    fn paint(model: &mut ArchModel, key: &str, material: Option<MaterialRef>, tint: Option<[u8; 3]>) {
+        model.paints.insert(key.to_string(), Paint { material, tint });
+    }
+
     #[test]
     fn unpainted_scene_is_unchanged() {
-        let model = make_walls();
-        let scene_before = Scene3d::build(&model);
-        let mut meshes = scene_before.meshes.clone();
+        let model = ring(None);
+        let scene = Scene3d::build(&model);
+        let mut meshes = scene.meshes.clone();
         apply(&model, &mut meshes);
-        let scene_after = Scene3d::build(&model);
-        // Same number of meshes
-        assert_eq!(scene_before.meshes.len(), scene_after.meshes.len());
-        // Same materials
-        assert_eq!(scene_before.materials, scene_after.materials);
-        // Same digest
-        assert_eq!(scene_before.digest(), scene_after.digest());
+        assert_eq!(meshes.len(), scene.meshes.len());
+        for (a, b) in meshes.iter().zip(&scene.meshes) {
+            assert_eq!((&a.material, &a.indices, &a.positions), (&b.material, &b.indices, &b.positions));
+        }
+        assert!(scene.meshes.iter().all(|m| m.material == "wall"));
+        assert!(scene.materials.is_empty());
     }
 
     #[test]
     fn a_painted_wall_side_is_its_own_mesh() {
-        let mut model = make_walls();
-        let key = format!("paint:wall/w0/right");
-        model.paints.insert(key.clone(), Paint { material: Some(MaterialRef::Colour([200, 50, 50])), tint: None });
+        let plain = Scene3d::build(&ring(None));
+        let whole: usize = plain.meshes.iter().filter(|m| m.object == ArchId(0)).map(|m| m.indices.len()).sum();
+        let mut model = ring(None);
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Colour([200, 50, 50])), None);
         let scene = Scene3d::build(&model);
-        let painted = scene.meshes.iter().find(|m| m.material == key).expect("paint mesh should exist");
-        assert!(painted.indices.len() > 0);
-        // The paint mesh has fewer triangles than the original wall mesh
-        let wall_mesh = Scene3d::build(&{
-            let m = make_walls();
-            m
-        })
-        .meshes
-        .find(|m| m.object == ArchId(0) && m.material == "wall")
-        .expect("wall mesh");
-        assert!(painted.indices.len() < wall_mesh.indices.len());
+        let painted = scene.meshes.iter().find(|m| m.material == "paint:wall/w0/right").expect("paint mesh");
+        assert!(!painted.indices.is_empty());
+        assert_eq!(painted.uvs.len(), painted.positions.len());
+        let total: usize = scene.meshes.iter().filter(|m| m.object == ArchId(0)).map(|m| m.indices.len()).sum();
+        assert_eq!(total, whole);
+        assert!(scene.meshes.iter().any(|m| m.object == ArchId(0) && m.material == "wall"));
+        assert!(scene.meshes.iter().all(|m| crate::probe::part_of(m) == "wall" || m.object != ArchId(0)));
     }
 
     #[test]
     fn both_sides_of_a_partition_paint_apart() {
-        let mut model = make_walls();
-        let left_key = format!("paint:wall/w0/left");
-        let right_key = format!("paint:wall/w0/right");
-        model.paints.insert(left_key.clone(), Paint { material: Some(MaterialRef::Colour([50, 200, 50])), tint: None });
-        model.paints.insert(right_key.clone(), Paint { material: Some(MaterialRef::Colour([200, 50, 200])), tint: None });
+        let mut model = ring(None);
+        paint(&mut model, "wall/w0/left", Some(MaterialRef::Colour([50, 200, 50])), None);
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Colour([200, 50, 200])), None);
         let scene = Scene3d::build(&model);
-        let left = scene.meshes.iter().find(|m| m.material == left_key).expect("left paint mesh");
-        let right = scene.meshes.iter().find(|m| m.material == right_key).expect("right paint mesh");
-        assert!(left.indices.len() > 0 && right.indices.len() > 0);
+        let left = scene.meshes.iter().find(|m| m.material == "paint:wall/w0/left").expect("left");
+        let right = scene.meshes.iter().find(|m| m.material == "paint:wall/w0/right").expect("right");
+        assert!(!left.indices.is_empty() && !right.indices.is_empty());
+        // Opposite sides: the normals point opposite ways in y (the wall runs along +x).
+        let ny = |m: &Mesh| m.normals.first().map_or(0.0, |n| n[1]);
+        assert!(ny(left) * ny(right) < 0.0);
     }
 
     #[test]
     fn a_painted_exterior_replaces_the_finish_face() {
-        let mut model = make_walls();
-        model.walls[0].finish = Some(Finish::Brick);
-        let key = format!("paint:wall/w0/right");
-        model.paints.insert(key, Paint { material: None, tint: None });
+        let mut model = ring(Some(Finish::Brick));
+        paint(&mut model, "wall/w0/right", None, None);
         let scene = Scene3d::build(&model);
-        // The right side should be the paint mesh (replacing the finish face)
-        assert!(scene.meshes.iter().any(|m| m.material == key));
-        // No separate wall-brick mesh for wall 0
+        assert!(scene.meshes.iter().any(|m| m.object == ArchId(0) && m.material == "paint:wall/w0/right"));
         assert!(!scene.meshes.iter().any(|m| m.object == ArchId(0) && m.material == "wall-brick"));
+        assert!(scene.meshes.iter().any(|m| m.object == ArchId(1) && m.material == "wall-brick"));
+        // Unpainted material of a finished exterior is the finish's.
+        let def = scene.materials.get("paint:wall/w0/right").expect("def");
+        assert_eq!(def.texture.as_deref(), Some("finish:brick"));
+        assert!(scene.textures.contains_key("finish:brick"));
     }
 
     #[test]
     fn painted_floor_ceiling_roof_cabinet_and_furnishing_parts_are_renamed() {
-        let mut model = make_walls();
-        // Add a room
-        model.rooms.push(cadcraft_doc::arch::Room {
+        let mut model = ArchModel::default();
+        model.rooms.push(Room {
             id: ArchId(0),
-            polygon: vec![
-                cadcraft_geom::Vec2::new(0.5, 0.5),
-                cadcraft_geom::Vec2::new(3.5, 0.5),
-                cadcraft_geom::Vec2::new(3.5, 3.5),
-                cadcraft_geom::Vec2::new(0.5, 3.5),
-            ],
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
             ..Default::default()
         });
-        // Add a roof
-        model.roofs.push(Roof { id: ArchId(0), level: 0, ..Default::default() });
-        // Add a cabinet
+        let plane = RoofPlane {
+            ring: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 3.0), Vec2::new(0.0, 3.0)],
+            slope: 0.5,
+            thickness: 0.2,
+            eave_z: 2.4,
+            fascia_depth: 0.1,
+            soffit_depth: 0.1,
+            base_edge: [0.0, 0.0, 6.0, 0.0],
+            ..Default::default()
+        };
+        model.roofs.push(Roof { id: ArchId(0), planes: vec![plane], ..Default::default() });
         model.cabinets.push(Cabinet { id: ArchId(0), ..Default::default() });
-        // Add a fixture
         model.fixtures.push(Fixture { id: ArchId(0), ..Default::default() });
-        // Add a furnishing with a symbol
-        model.symbols.insert(
-            "sym_test_0".to_string(),
-            SymbolMesh {
-                key: "sym_test_0",
-                parts: vec![SymbolPart {
-                    name: "part".to_string(),
-                    positions: vec![[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [0.5, 0.5, 0.0], [0.0, 0.5, 0.0]],
-                    normals: vec![],
-                    uvs: vec![],
-                    indices: vec![0, 1, 2, 0, 2, 3],
-                    base_color: [0.5, 0.5, 0.5, 1.0],
-                    metallic: 0.0,
-                    roughness: 0.8,
-                    texture: None,
-                }],
-                textures: vec![],
-            },
-        );
+        let part = SymbolPart {
+            name: "part".to_string(),
+            positions: vec![[-0.25, -0.25, 0.0], [0.25, -0.25, 0.0], [0.25, 0.25, 0.5], [-0.25, 0.25, 0.5]],
+            normals: vec![[0.0, 0.0, 1.0]; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            base_color: [0.5, 0.5, 0.5, 1.0],
+            metallic: 0.0,
+            roughness: 0.8,
+            ..Default::default()
+        };
+        model.symbols.insert("0123456789abcdef".to_string(), SymbolMesh { key: "0123456789abcdef".to_string(), parts: vec![part], textures: vec![] });
         model.furnishings.push(Furnishing {
             id: ArchId(0),
             item: "test".to_string(),
-            symbol: "sym_test_0".to_string(),
-            name: "test".to_string(),
-            category: "test".to_string(),
-            symbol_type: "test".to_string(),
-            placement: Placement::Floor,
-            level: 0,
-            at: [2.0, 2.0],
-            rotation: 0.0,
-            elevation: 0.0,
+            symbol: "0123456789abcdef".to_string(),
+            at: [2.0, 1.5],
             size: [0.5, 0.5, 0.5],
-            mirrored: false,
-            host: FurnishingHost::None,
-            cutout: None,
             ..Default::default()
         });
-
-        // Paint all surfaces
-        for key in [
-            format!("paint:room/r0/floor"),
-            format!("paint:room/r0/ceiling"),
-            format!("paint:roof/r0"),
-            format!("paint:cabinet/cb0/carcass"),
-            format!("paint:fixture/fx0"),
-            format!("paint:furnishing/f0/0"),
-        ] {
-            model.paints.insert(key.clone(), Paint { material: None, tint: None });
+        let keys = ["room/r0/floor", "room/r0/ceiling", "roof/r0", "cabinet/cb0/carcass", "fixture/fx0", "furnishing/f0/0"];
+        let before = Scene3d::build(&model);
+        for k in keys {
+            paint(&mut model, k, None, None);
         }
-
         let scene = Scene3d::build(&model);
-        for key in [
-            format!("paint:room/r0/floor"),
-            format!("paint:room/r0/ceiling"),
-            format!("paint:roof/r0"),
-            format!("paint:cabinet/cb0/carcass"),
-            format!("paint:fixture/fx0"),
-            format!("paint:furnishing/f0/0"),
-        ] {
-            assert!(scene.meshes.iter().any(|m| m.material == key), "expected paint mesh for {}", key);
+        for k in keys {
+            let name = format!("paint:{k}");
+            let had = before.meshes.iter().any(|m| surface_of(m).is_some_and(|s| s.key() == k));
+            assert_eq!(scene.meshes.iter().any(|m| m.material == name), had, "{name}");
         }
+        assert!(before.meshes.iter().any(|m| surface_of(m).is_some_and(|s| s.key() == "furnishing/f0/0")));
+        assert!(before.meshes.iter().any(|m| surface_of(m).is_some_and(|s| s.key() == "room/r0/floor")));
+        assert!(before.meshes.iter().any(|m| surface_of(m).is_some_and(|s| s.key() == "roof/r0")));
+        // Same meshes, only renamed.
+        assert_eq!(scene.meshes.len(), before.meshes.len());
+        // The furnishing part keeps its symbol material.
+        let def = scene.materials.get("paint:furnishing/f0/0").expect("def");
+        assert_eq!(def.base_color, [0.5, 0.5, 0.5, 1.0]);
     }
 
     #[test]
     fn paint_materials_carry_texture_tile_and_tint() {
-        let mut model = make_walls();
-        let key = format!("paint:wall/w0/right");
-        model.paints.insert(key, Paint { material: Some(MaterialRef::Finish(Finish::Siding)), tint: Some([255, 200, 200]) });
+        let mut model = ring(None);
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Finish(Finish::Siding)), Some([255, 200, 200]));
         let scene = Scene3d::build(&model);
-        let def = scene.materials.get(&key).expect("material def should exist");
-        // Texture should be finish:siding
+        let def = scene.materials.get("paint:wall/w0/right").expect("def");
         assert_eq!(def.texture.as_deref(), Some("finish:siding"));
-        // Tile should be from the siding texture
-        assert!(def.tile[0] > 0.0 && def.tile[1] > 0.0);
-        // Base colour should be the siding mean linear coloured by the tint
-        let siding = crate::texture::texture(&Finish::Siding);
-        let linear_tint = srgb_to_linear([255, 200, 200]);
-        assert!((def.base_color[0] - siding.mean_linear[0] * linear_tint[0]).abs() < 0.01);
+        assert_eq!(def.tint, Some([255, 200, 200]));
+        let t = texture(Finish::Siding);
+        assert_eq!(def.tile, [t.tile[0] as f32, t.tile[1] as f32]);
+        let (m, l) = (mean_linear(&t), srgb_to_linear([255, 200, 200]));
+        for c in 0..3 {
+            assert!((def.base_color[c] - m[c] * l[c]).abs() < 1e-6);
+        }
+        assert!(scene.textures.contains_key("finish:siding"));
     }
 
     #[test]
     fn a_tint_only_paint_keeps_the_texture() {
-        let mut model = make_walls();
-        let key = format!("paint:wall/w0/right");
-        model.paints.insert(key, Paint { material: None, tint: Some([100, 100, 200]) });
-        // Wall has no finish, so unpainted material has no texture
+        let mut model = ring(Some(Finish::Brick));
+        paint(&mut model, "wall/w0/right", None, Some([100, 100, 200]));
         let scene = Scene3d::build(&model);
-        let def = scene.materials.get(&key).expect("material def should exist");
+        let def = scene.materials.get("paint:wall/w0/right").expect("def");
+        assert_eq!(def.texture.as_deref(), Some("finish:brick"));
+        assert_eq!(def.tint, Some([100, 100, 200]));
+        let m = mean_linear(&texture(Finish::Brick));
+        assert!((def.base_color[0] - m[0] * srgb_to_linear([100, 100, 200])[0]).abs() < 1e-6);
+        // Without a finish the tint multiplies the default wall colour.
+        let mut bare = ring(None);
+        paint(&mut bare, "wall/w0/left", None, Some([100, 100, 200]));
+        let scene = Scene3d::build(&bare);
+        let def = scene.materials.get("paint:wall/w0/left").expect("def");
         assert!(def.texture.is_none());
-        // Base colour should be the default wall colour tinted by blue
-        let default = default_colour("wall");
-        let linear_tint = srgb_to_linear([100, 100, 200]);
-        assert!((def.base_color[0] - default[0] * linear_tint[0]).abs() < 0.01);
+        assert!((def.base_color[0] - default_colour("wall")[0] * srgb_to_linear([100, 100, 200])[0]).abs() < 1e-6);
     }
 
     #[test]
     fn colour_paint_is_untextured() {
-        let mut model = make_walls();
-        let key = format!("paint:wall/w0/right");
-        model.paints.insert(key, Paint { material: Some(MaterialRef::Colour([255, 0, 0])), tint: None });
+        let mut model = ring(Some(Finish::Brick));
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Colour([255, 0, 0])), None);
         let scene = Scene3d::build(&model);
-        let def = scene.materials.get(&key).expect("material def should exist");
+        let def = scene.materials.get("paint:wall/w0/right").expect("def");
         assert!(def.texture.is_none());
+        assert_eq!(def.base_color, [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(def.tile, [1.0, 1.0]);
     }
 }
