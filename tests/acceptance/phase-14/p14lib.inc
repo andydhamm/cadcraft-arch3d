@@ -89,17 +89,18 @@ def room_at(insp, x, y):
 
 
 def drawing_box(j, name):
-    """A GLB node's box in drawing axes: glTF (x, y, z) is drawing (x, z, -y)."""
-    lo, hi = node_box(j, name)
-    return [lo[0], -hi[2], lo[1]], [hi[0], -lo[2], hi[1]]
+    """A GLB node's box in drawing axes. The writer stores positions in drawing axes (x right, y up the plan, z up) and
+    turns the whole scene Y-up with the `arch3d-root` node's rotation (-90 degrees about x), so the accessors' min/max are
+    already drawing axes (wall-w0 of a 2.4 m wall spans z 0..2.4). (11-04: this helper converted a second time.)"""
+    return node_box(j, name)
 
 
 def node_positions(j, binc, name):
-    """Every vertex of a node's primitives in drawing axes."""
+    """Every vertex of a node's primitives in drawing axes (the accessors store drawing axes; see drawing_box)."""
     out = []
     for m in node_meshes(j, name):
         for prim in m['primitives']:
-            out += [(p[0], -p[2], p[1]) for p in _acc(j, binc, prim['attributes']['POSITION'])]
+            out += [(p[0], p[1], p[2]) for p in _acc(j, binc, prim['attributes']['POSITION'])]   # stored in drawing axes
     if not out:
         fail(f"GLB node '{name}' has no vertices; nodes: {[n.get('name') for n in j.get('nodes', [])][:50]}")
     return out
