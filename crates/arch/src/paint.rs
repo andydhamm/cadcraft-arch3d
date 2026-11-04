@@ -277,7 +277,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use cadcraft_doc::arch::{Cabinet, Fixture, Furnishing, MaterialRef, Paint, Roof};
+    use cadcraft_doc::arch::{Cabinet, Fixture, Furnishing, MaterialRef, Paint, Roof, SymbolMesh, SymbolPart};
     use cadcraft_doc::{Room, Wall};
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
@@ -490,5 +490,191 @@ mod tests {
         assert!(finish_fits(&Surface::RoomFloor(ArchId(0)), Finish::Wood));
         assert!(!finish_fits(&Surface::RoomFloor(ArchId(0)), Finish::Siding));
         assert!(finish_fits(&Surface::Fixture(ArchId(0)), Finish::Brick));
+    }
+
+    #[test]
+    fn surfaces_of_empty_model_is_empty() {
+        let m = ArchModel::default();
+        assert!(surfaces(&m).is_empty());
+    }
+
+    #[test]
+    fn nan_wall_coordinates_do_not_crash() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, f64::NAN), 0.2));
+        let all = surfaces(&m);
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].room, None);
+        assert_eq!(all[1].room, None);
+    }
+
+    #[test]
+    fn zero_length_wall_still_has_two_sides() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(1.0, 1.0), Vec2::new(1.0, 1.0), 0.2));
+        let all = surfaces(&m);
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn select_room_scope_on_roof_returns_only_roof() {
+        let (mut m, _, _) = boxed();
+        let roof = m.push_roof(Roof::default());
+        let t = Surface::Roof(roof);
+        assert_eq!(select(&m, &t, Scope::Room).unwrap(), vec![t]);
+    }
+
+    #[test]
+    fn furnishing_without_symbol_has_one_part() {
+        let mut m = ArchModel::default();
+        let f = m.push_furnishing(Furnishing { symbol: "missing".into(), at: [0.0, 0.0], ..Default::default() });
+        let all = surfaces(&m);
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].surface, Surface::Furnishing { furnishing: f, part: 0 });
+    }
+
+    #[test]
+    fn surfaces_are_deterministic() {
+        let (mut m, _, _) = boxed();
+        m.push_cabinet(Cabinet { pull: Some("p".into()), ..Default::default() });
+        m.push_furnishing(Furnishing { symbol: "s".into(), ..Default::default() });
+        let a = surfaces(&m);
+        let b = surfaces(&m);
+        assert_eq!(a.len(), b.len());
+        for (x, y) in a.iter().zip(b.iter()) {
+            assert_eq!(x.surface.key(), y.surface.key());
+        }
+    }
+
+    #[test]
+    fn object_scope_wall_returns_both_sides() {
+        let (m, w, _) = boxed();
+        let t = wall_side(w, Side::Left);
+        let got = select(&m, &t, Scope::Object).unwrap();
+        assert_eq!(got.len(), 2);
+        assert!(got.contains(&wall_side(w, Side::Left)));
+        assert!(got.contains(&wall_side(w, Side::Right)));
+    }
+
+    #[test]
+    fn object_scope_room_returns_floor_and_ceiling() {
+        let (m, _, r) = boxed();
+        let t = Surface::RoomFloor(r);
+        let got = select(&m, &t, Scope::Object).unwrap();
+        assert_eq!(got.len(), 2);
+        assert!(got.contains(&Surface::RoomFloor(r)));
+        assert!(got.contains(&Surface::RoomCeiling(r)));
+    }
+
+    #[test]
+    fn cabinet_in_room_finds_room() {
+        let (mut m, _, r) = boxed();
+        let c = m.push_cabinet(Cabinet { position: Vec2::new(2.0, 2.0), depth: 0.6, ..Default::default() });
+        let cab_surface = Surface::Cabinet { cabinet: c, part: CabinetPart::Carcass };
+        assert_eq!(info_of(&m, &cab_surface).room, Some(r));
+    }
+
+    #[test]
+    fn fixture_in_room_finds_room() {
+        let (mut m, _, r) = boxed();
+        let f = m.push_fixture(Fixture { position: Vec2::new(2.0, 2.0), depth: 0.5, ..Default::default() });
+        assert_eq!(info_of(&m, &Surface::Fixture(f)).room, Some(r));
+    }
+
+    #[test]
+    fn furnishing_in_room_finds_room() {
+        let (mut m, _, r) = boxed();
+        let f = m.push_furnishing(Furnishing { at: [2.0, 2.0], ..Default::default() });
+        let surf = Surface::Furnishing { furnishing: f, part: 0 };
+        assert_eq!(info_of(&m, &surf).room, Some(r));
+    }
+
+    #[test]
+    fn room_with_hole_excludes_hole() {
+        let mut m = ArchModel::default();
+        let w = wall(&mut m, (0.0, 0.0), (4.0, 0.0));
+        let r = m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 4.0), holes: vec![rect(1.5, 1.5, 2.5, 2.5)], level: 0, ..Default::default() });
+        // Probe point is inside the room but outside the hole.
+        let dir = Vec2::new(1.0, 0.0);
+        let n = dir.perp();
+        let mid = Vec2::new(2.0, 0.0);
+        let probe = mid + n * (0.2 / 2.0 + PROBE);
+        assert!(point_in_polygon(&m.rooms[0].polygon, probe));
+        assert!(!point_in_polygon(&m.rooms[0].holes[0], probe));
+        assert_eq!(info_of(&m, &wall_side(w, Side::Left)).room, Some(r));
+        // A point inside the hole:
+        let hole_center = Vec2::new(2.0, 2.0);
+        assert_eq!(room_at(&m, 0, hole_center), None);
+    }
+
+    #[test]
+    fn roof_covering_effective_material() {
+        let (mut m, _, _) = boxed();
+        let roof = m.push_roof(Roof::default());
+        assert_eq!(effective_material(&m, &Surface::Roof(roof)), "default:roof");
+        m.roofs[0].covering = Some(Finish::Shingles);
+        assert_eq!(effective_material(&m, &Surface::Roof(roof)), "finish:shingles");
+    }
+
+    #[test]
+    fn cabinet_front_style_material() {
+        let (mut m, _, _) = boxed();
+        let c = m.push_cabinet(Cabinet { door_style: cadcraft_doc::arch::FrontStyle::Shaker, ..Default::default() });
+        let surf = Surface::Cabinet { cabinet: c, part: CabinetPart::Front };
+        assert_eq!(effective_material(&m, &surf), "frontstyle:shaker");
+    }
+
+    #[test]
+    fn cabinet_pull_material() {
+        let (mut m, _, _) = boxed();
+        let c = m.push_cabinet(Cabinet { pull: Some("pull-bar".into()), ..Default::default() });
+        let surf = Surface::Cabinet { cabinet: c, part: CabinetPart::Pull };
+        assert_eq!(effective_material(&m, &surf), "item:pull-bar");
+    }
+
+    #[test]
+    fn select_objects_falls_through_for_walls() {
+        let (m, w, _) = boxed();
+        let t = wall_side(w, Side::Left);
+        let mat = select(&m, &t, Scope::Plan).unwrap();
+        let obj = select_objects(&m, &t, Scope::Plan).unwrap();
+        assert_eq!(mat, obj);
+    }
+
+    #[test]
+    fn nan_cabinet_position_no_room() {
+        let (mut m, _, _) = boxed();
+        let c = m.push_cabinet(Cabinet { position: Vec2::new(f64::NAN, f64::NAN), ..Default::default() });
+        let surf = Surface::Cabinet { cabinet: c, part: CabinetPart::Carcass };
+        assert_eq!(info_of(&m, &surf).room, None);
+    }
+
+    #[test]
+    fn huge_coordinates() {
+        let mut m = ArchModel::default();
+        let big = 1e12;
+        let w = wall(&mut m, (0.0, 0.0), (big, 0.0));
+        let r = room(&mut m, rect(0.0, 0.0, big, big), 0);
+        assert_eq!(info_of(&m, &wall_side(w, Side::Left)).room, Some(r));
+        assert_eq!(info_of(&m, &wall_side(w, Side::Right)).room, None);
+    }
+
+    #[test]
+    fn select_objects_furnishing_part_one_includes_target() {
+        let mut m = ArchModel::default();
+        let sym = SymbolMesh {
+            key: "sym1".into(),
+            parts: vec![SymbolPart { name: "a".into(), ..Default::default() }, SymbolPart { name: "b".into(), ..Default::default() }],
+            ..Default::default()
+        };
+        m.symbols.insert("sym1".into(), sym);
+        let f0 = m.push_furnishing(Furnishing { item: "chair".into(), symbol: "sym1".into(), ..Default::default() });
+        let f1 = m.push_furnishing(Furnishing { item: "chair".into(), symbol: "sym1".into(), ..Default::default() });
+        let part1_f0 = Surface::Furnishing { furnishing: f0, part: 1 };
+        let got = select_objects(&m, &part1_f0, Scope::Plan).unwrap();
+        assert!(got.contains(&Surface::Furnishing { furnishing: f0, part: 0 }));
+        assert!(got.contains(&Surface::Furnishing { furnishing: f1, part: 0 }));
+        assert!(got.contains(&part1_f0));
+        assert_eq!(got.len(), 3);
     }
 }
