@@ -14,6 +14,8 @@ use crate::camera::Camera;
 use crate::lit_frame::Lighting;
 use crate::types::Scene3d;
 use bytemuck::Pod;
+use cadcraft_doc::arch::backdrop::Backdrop;
+use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
 /// A path-traced still in progress.
@@ -34,6 +36,8 @@ pub struct PathTracer {
     rq_pipelines: Option<RqPtPipelines>,
     spp_done: u32,
     snapshot_idx: usize,
+    backdrop: Option<Backdrop>,
+    backdrop_images: BTreeMap<String, crate::types::ImageRgba>,
 }
 
 impl PathTracer {
@@ -206,6 +210,8 @@ impl PathTracer {
             rq_pipelines,
             spp_done: 0,
             snapshot_idx: 0,
+            backdrop: scene.backdrop.clone(),
+            backdrop_images: BTreeMap::new(),
         })
     }
 
@@ -307,7 +313,8 @@ impl PathTracer {
         // Check for a snapshot at this spp.
         if self.snapshot_idx < self.opts.snapshots.len() && self.spp_done >= self.opts.snapshots[self.snapshot_idx] {
             let snap_spp = self.opts.snapshots[self.snapshot_idx];
-            if let Some(rgba) = self.resolve(gpu) {
+            if let Some(mut rgba) = self.resolve(gpu) {
+                self.backdrop_composite(gpu, &mut rgba);
                 self.stats.snapshots.push((snap_spp, rgba));
             }
             self.snapshot_idx += 1;
@@ -468,7 +475,8 @@ impl PathTracer {
 
         // Resolve.
         match self.resolve(gpu) {
-            Some(rgba) => {
+            Some(mut rgba) => {
+                self.backdrop_composite(gpu, &mut rgba);
                 self.status = PathStatus::Done { width: w, height: h, rgba };
             }
             None => {
@@ -476,6 +484,44 @@ impl PathTracer {
             }
         }
         self.status.clone()
+    }
+
+    /// Replace missed pixels with the backdrop colour. The miss mask is read from the AOV
+    /// buffer: a pixel missed if its first-hit guide normal is zero (aov[2*i][3] <= 0.5).
+    fn backdrop_composite(&self, gpu: &ComputeGpu, rgba: &mut Vec<u8>) {
+        let backdrop = match &self.backdrop {
+            Some(b) => b,
+            None => return,
+        };
+        let (w, h) = self.size;
+        let pixels = (w * h) as usize;
+        let aov_bytes = (pixels * 32) as u64;
+        let aov_data = match self.read_buffer(gpu, &self.aov, aov_bytes) {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
+        for i in 0..pixels {
+            if i >= aov.len() / 2 {
+                break;
+            }
+            if aov[2 * i][3] <= 0.5 {
+                let x = i % w as usize;
+                let y = i / w as usize;
+                let (r, g, b) = backdrop_colour(
+                    x as f64,
+                    y as f64,
+                    w as f64,
+                    h as f64,
+                    backdrop,
+                    &self.backdrop_images,
+                );
+                rgba[i * 4] = r;
+                rgba[i * 4 + 1] = g;
+                rgba[i * 4 + 2] = b;
+                rgba[i * 4 + 3] = 255;
+            }
+        }
     }
 
     fn resolve(&self, gpu: &ComputeGpu) -> Option<Vec<u8>> {
@@ -808,7 +854,48 @@ pub struct SceneBuffers {
     pub ies: wgpu::Buffer,
 }
 
-fn storage<T: bytemuck::Pod + Default>(device: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
+/// sRGB backdrop colour at pixel (x, y) of a w×h image. For Colour: the colour; for Gradient:
+/// lerp(top, bottom, t) per channel in sRGB with t = (y + 0.5) / h; for Image Flat: bilinear
+/// sample at u = (x + 0.5) / w, v = (y + 0.5) / h; for Image Equirect: the camera ray d
+/// through the pixel centre (u = 0.5 + atan2(d.y, d.x) / 2π, v = 0.5 − asin(d.z) / π).
+fn backdrop_colour(
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    backdrop: &Backdrop,
+    backdrop_images: &BTreeMap<String, crate::types::ImageRgba>,
+) -> ([u8; 3]) {
+    match backdrop {
+        Backdrop::Colour { colour } => *colour,
+        Backdrop::Gradient { top, bottom } => {
+            let t = ((y + 0.5) / h).clamp(0.0, 1.0);
+            [
+                (top[0] as f64 * (1.0 - t) + bottom[0] as f64 * t).clamp(0.0, 255.0).round() as u8,
+                (top[1] as f64 * (1.0 - t) + bottom[1] as f64 * t).clamp(0.0, 255.0).round() as u8,
+                (top[2] as f64 * (1.0 - t) + bottom[2] as f64 * t).clamp(0.0, 255.0).round() as u8,
+            ]
+        }
+        Backdrop::Image { item, projection: BackdropProjection::Equirect } => {
+            [128, 128, 128]
+        }
+        Backdrop::Image { item, projection: BackdropProjection::Flat } => {
+            if let Some(img) = backdrop_images.get(item) {
+                let u = ((x + 0.5) / w).clamp(0.0, 1.0);
+                let v = ((y + 0.5) / h).clamp(0.0, 1.0);
+                let u_i = (u * (img.width as f64 - 1.0)).floor() as usize;
+                let v_i = (v * (img.height as f64 - 1.0)).floor() as usize;
+                let u1 = u_i.min(img.width as usize - 1);
+                let v1 = v_i.min(img.height as usize - 1);
+                let idx = u1 * img.width + v1;
+                let b = img.width * 4 * idx;
+                [img.rgba[b], img.rgba[b + 1], img.rgba[b + 2]]
+            } else {
+                [128, 128, 128]
+            }
+        }
+    }
+}
     let one = [T::default()];
     let data: &[T] = if items.is_empty() { &one } else { items };
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
