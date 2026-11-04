@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-04 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 23 of 34 segments merged · 1 of 13 acceptance checks**
 
-7,268 workspace tests passing at the last merge · 738 segments merged in all · 0 of 14 seats working
+7,287 workspace tests passing at the last merge · 739 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 17:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 1 / 13 | 22.3 h so far · expected done Nov 05 14:03–Nov 07 14:54 UTC |
+| 14 | The library | building | 1 / 13 | 22.5 h so far · expected done Nov 05 14:18–Nov 07 15:09 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-23 merged, 5 queued, 3 merging, 2 escalate, 1 gate, 1 abandoned
+23 merged, 5 queued, 3 merging, 2 escalate, 1 working, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,13 +37,14 @@ Updated 2026-11-04 17:45 UTC. This page and the card in the README are regenerat
 | `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
 | `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | escalate |  |
 | `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
-| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | gate | bonsai-b |
+| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | working | bonsai-b |
 | `p14-ui-library-panel` | The Library side panel: categories, folders, search, chips, history, tags, details | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 04 17:56 | `harden-p14-arch-paint` | merged | 7,287 pass | tturbo-mac |
 | Nov 04 17:22 | `p14-r3d-backdrop` | merged | 7,268 pass | claude-sonnet-d |
 | Nov 04 16:30 | `p14-arch3d-cabinet-parts` | refused | 7,271 pass | bonsai-a |
 | Nov 04 15:43 | `p14-cmd-icons` | merged | 7,261 pass | mai-flash-esc |
@@ -55,16 +56,15 @@ Updated 2026-11-04 17:45 UTC. This page and the card in the README are regenerat
 | Nov 04 09:45 | `upstream-sync-5f8999f30` | refused | 0 pass | mai-flash |
 | Nov 04 09:45 | `p14-arch-place` | merged | 7,194 pass | claude-sonnet-c |
 | Nov 04 07:48 | `harden-p13-arch3d-incremental` | refused | 7,175 pass, 3 fail | tturbo-mac |
-| Nov 04 04:47 | `p14-arch-paint` | merged | 7,129 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 871 |
-| bonsai-b | bonsai2-27b | gate | 809 |
-| bonsai-ws2-a | bonsai2-27b | gate | 888 |
-| bonsai-ws2-b | bonsai2-27b | gate | 858 |
+| bonsai-a | bonsai2-27b | idle | 872 |
+| bonsai-b | bonsai2-27b | agent | 811 |
+| bonsai-ws2-a | bonsai2-27b | gate | 890 |
+| bonsai-ws2-b | bonsai2-27b | agent | 860 |
 | claude-sonnet-a | sonnet | merging | 77 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 32 |
