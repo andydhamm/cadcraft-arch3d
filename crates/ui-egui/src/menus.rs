@@ -110,6 +110,10 @@ fn route_ui_subsystems(app: &mut CadApp, id: &str, params: &Value) -> Option<Res
         let panel = if id == "ui.panel.properties" { "properties" } else { "layers" };
         return Some(crate::docking::command(app, false, &json!({"operation":"open", "panel":panel})));
     }
+    // `library` typed or picked without parameters opens the panel; JSON calls get the reply.
+    if id == "library" && params.is_null() {
+        return Some(crate::docking::command(app, false, &json!({"operation":"open","panel":"library"})));
+    }
     if id == "archdetect.review" {
         return Some(crate::docking::command(app, false, &json!({"operation":"open","panel":"detection-review"})));
     }

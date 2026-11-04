@@ -42,6 +42,7 @@ pub mod spacemouse;
 pub mod switch;
 // The External References palette.
 pub mod archdetect_review;
+pub mod library_panel;
 pub mod xrefs;
 
 pub mod dyngrips;
@@ -103,6 +104,9 @@ pub struct UiState {
     /// Where the Detection Review panel was last drawn.
     #[serde(skip)]
     pub archdetect_rect: Option<egui::Rect>,
+    /// The Library panel's state.
+    #[serde(skip)]
+    pub library: library_panel::State,
 
     pub interface_language: i18n::Preference,
     pub show_toolsets: bool,
@@ -203,6 +207,7 @@ impl Default for UiState {
             archdetect_checked: Default::default(),
             archdetect_note: String::new(),
             archdetect_rect: None,
+            library: Default::default(),
 
             interface_language: i18n::Preference::default(),
             show_toolsets: true,
