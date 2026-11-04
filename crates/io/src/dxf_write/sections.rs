@@ -206,12 +206,25 @@ fn write_layer_table(w: &mut W, d: &Drawing) {
         .map(|name| Layer { name: name.into(), ..Layer::default() })
         .collect::<Vec<_>>()
     });
+    let extra_furnishing_layers: Vec<Layer> = crate::dxf_furnishing::proxy_layers(&d.arch)
+        .into_iter()
+        .filter(|name| !d.layers.iter().any(|l| l.name.eq_ignore_ascii_case(name)))
+        .map(|name| Layer { name, ..Layer::default() })
+        .collect();
     let layer_count = d.layers.len()
+        + extra_furnishing_layers.len()
         + usize::from(extra_room_layer.is_some())
         + usize::from(extra_roof_layer.is_some())
         + extra_view_layers.as_ref().map_or(0, Vec::len);
     let th = table_head(w, "LAYER", layer_count);
-    for l in d.layers.iter().chain(extra_room_layer.iter()).chain(extra_roof_layer.iter()).chain(extra_view_layers.iter().flatten()) {
+    for l in d
+        .layers
+        .iter()
+        .chain(extra_room_layer.iter())
+        .chain(extra_roof_layer.iter())
+        .chain(extra_view_layers.iter().flatten())
+        .chain(extra_furnishing_layers.iter())
+    {
         let lh = record_head(w, "LAYER", &th, "AcDbLayerTableRecord");
         w.layers.insert(l.name.to_ascii_uppercase(), lh);
         w.s(2, &l.name);
@@ -431,6 +444,9 @@ fn write_entities(w: &mut W, d: &Drawing, ms_br: &str, ps_brs: &[(String, String
             proxy(&kind, &layer, tags);
         }
         for (kind, layer, tags) in crate::dxf_casework::proxy_casework_entities(&d.arch) {
+            proxy(&kind, &layer, tags);
+        }
+        for (kind, layer, tags) in crate::dxf_furnishing::proxy_furnishing_entities(&d.arch) {
             proxy(&kind, &layer, tags);
         }
     }
