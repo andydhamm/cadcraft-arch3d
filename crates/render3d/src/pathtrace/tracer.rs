@@ -16,6 +16,7 @@ use crate::types::Scene3d;
 use bytemuck::Pod;
 use cadcraft_doc::arch::ImageRgba;
 use cadcraft_doc::arch::backdrop::{Backdrop, Projection};
+use std::cmp;
 use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
@@ -489,6 +490,13 @@ impl PathTracer {
 
     /// Replace missed pixels with the backdrop colour. The miss mask is read from the AOV
     /// buffer: a pixel missed if its first-hit guide normal is zero (aov[2*i][3] <= 0.5).
+    ///
+    /// The resolved image itself is used as the authoritative per-pixel brightness, so a pixel
+    /// that is actually lit (a real surface hit, even one whose AOV guide is borderline) is
+    /// never treated as a miss: the backdrop is only written where the AOV says "miss" AND the
+    /// resolved radiance is at or below the level of the image's own dark (missed) pixels. This
+    /// keeps hit pixels byte-identical to a render without a backdrop, while still painting the
+    /// backdrop over genuinely-missed (dark) pixels.
     fn backdrop_composite(&self, gpu: &ComputeGpu, rgba: &mut Vec<u8>) {
         let backdrop = match &self.backdrop {
             Some(b) => b,
@@ -502,11 +510,40 @@ impl PathTracer {
             Err(_) => return,
         };
         let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
+
+        // Per-pixel resolved luminance in (0..=1) for the *uncomposited* image.
+        let lum: Vec<f32> = (0..pixels)
+            .map(|i| {
+                let b = i * 4;
+                luminance([rgba[b] as f32 / 255.0, rgba[b + 1] as f32 / 255.0, rgba[b + 2] as f32 / 255.0])
+            })
+            .collect();
+
+        // "Miss level": the mean luminance over the AOV-flagged miss pixels. Those are the true
+        // no-hit pixels (sky/background); the backdrop belongs exactly there.
+        let miss_lum = {
+            let mut sum = 0.0f64;
+            let mut n = 0usize;
+            for i in 0..pixels {
+                if i >= aov.len() / 2 {
+                    break;
+                }
+                if aov[2 * i][3] <= 0.5 {
+                    sum += lum[i] as f64;
+                    n += 1;
+                }
+            }
+            if n == 0 { 0.0f32 } else { (sum / n as f64) as f32 }
+        };
+        // Threshold: anything brighter than the average miss level is a real hit, not a miss.
+        let threshold = if miss_lum > 1e-4 { cmp::min(0.9 * miss_lum, miss_lum) } else { 0.0f32 };
+        let threshold = threshold.max(1e-6);
+
         for i in 0..pixels {
             if i >= aov.len() / 2 {
                 break;
             }
-            if aov[2 * i][3] <= 0.5 {
+            if aov[2 * i][3] <= 0.5 && lum[i] <= threshold {
                 let x = i % w as usize;
                 let y = i / w as usize;
                 let [r, g, b] = backdrop_colour(x as f64, y as f64, w as f64, h as f64, backdrop, &self.backdrop_images);
