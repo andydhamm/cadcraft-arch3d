@@ -156,6 +156,18 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
     names
 }
 
+/// Separates a node name from a mesh index in `build_bin`'s node keys; never part of a node name.
+const NODE_KEY_SEP: char = '\u{1}';
+
+/// Whether a mesh of `material` joins the other meshes of its node: a furnishing's parts (`sym:`, its paints) and a
+/// cabinet's pulls (`pull:`, `paint:cabinet/cb<n>/pull`).
+fn shares_a_node(material: &str) -> bool {
+    material.starts_with("sym:")
+        || material.starts_with("pull:")
+        || material.starts_with("paint:furnishing/")
+        || (material.starts_with("paint:cabinet/") && material.ends_with("/pull"))
+}
+
 fn paint_node_name(material: &str, object: cadcraft_doc::ArchId) -> String {
     let key = material.strip_prefix("paint:").unwrap_or(material);
     let Some(surface) = cadcraft_doc::arch::Surface::parse(key) else {
@@ -213,8 +225,6 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
     let mut bin: Vec<u8> = Vec::new();
     let mut buffer_views: Vec<Value> = Vec::new();
     let mut accessors: Vec<Value> = Vec::new();
-    let mut meshes: Vec<Value> = Vec::new();
-    let mut nodes: Vec<Value> = Vec::new();
 
     let mut materials: Vec<Value> = Vec::new();
     let mut material_index: HashMap<String, u32> = HashMap::new();
@@ -484,27 +494,31 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
             "indices": acc_idx,
             "material": mat_idx
         });
-        if !node_meshes.contains_key(&name) {
-            node_order.push(name.clone());
+        // Only a furnishing's parts and a cabinet's pulls share one node (a primitive each); every other mesh keeps a
+        // node of its own, as before phase 14, even when it shares its name (a fixture of two materials).
+        let key = if shares_a_node(&m.material) { name.clone() } else { format!("{name}{NODE_KEY_SEP}{i}") };
+        if !node_meshes.contains_key(&key) {
+            node_order.push(key.clone());
         }
-        node_meshes.entry(name.clone()).or_default().push(primitive);
+        node_meshes.entry(key).or_default().push(primitive);
     }
 
-    for name in &node_order {
+    let shown = |key: &str| key.split(NODE_KEY_SEP).next().unwrap_or(key).to_string();
+    for key in &node_order {
         let mesh = json!({
-            "name": name,
-            "primitives": node_meshes.get(name).cloned().unwrap_or_default()
+            "name": shown(key),
+            "primitives": node_meshes.get(key).cloned().unwrap_or_default()
         });
         let mesh_index_for_name = primitive_meshes.len() as u32;
-        mesh_index.insert(name.clone(), mesh_index_for_name);
+        mesh_index.insert(key.clone(), mesh_index_for_name);
         primitive_meshes.push(mesh);
     }
 
     let mut gltf_nodes: Vec<Value> = Vec::new();
-    for name in &node_order {
+    for key in &node_order {
         gltf_nodes.push(json!({
-            "name": name,
-            "mesh": mesh_index.get(name).cloned().unwrap_or_default(),
+            "name": shown(key),
+            "mesh": mesh_index.get(key).cloned().unwrap_or_default(),
         }));
     }
 
@@ -966,6 +980,25 @@ mod tests {
         assert!(mesh_names.contains(&"furnishing-f2"));
         let f1 = json["meshes"].as_array().unwrap().iter().find(|m| m["name"] == "furnishing-f1").unwrap();
         assert_eq!(f1["primitives"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn only_furnishings_and_pulls_share_a_node() {
+        // A fixture of two materials was two nodes before phase 14 (the OBJ groups match them); it stays two.
+        let mut scene = Scene3d::default();
+        scene.meshes = ["fixture-chrome", "fixture-ceramic", "pull:bar", "pull:bar"]
+            .iter()
+            .map(|mat| {
+                let mut m = wall_mesh();
+                m.material = (*mat).to_string();
+                m.object = ArchId(3);
+                m
+            })
+            .collect();
+        let json = glb_json_chunk(&write(&scene));
+        let names: Vec<&str> = json["nodes"].as_array().unwrap().iter().filter_map(|n| n["name"].as_str()).collect();
+        assert_eq!(names.iter().filter(|n| **n == "fixture-fx3").count(), 2, "{names:?}");
+        assert_eq!(names.iter().filter(|n| **n == "cabinet-cb3-pull").count(), 1, "{names:?}");
     }
 
     #[test]
