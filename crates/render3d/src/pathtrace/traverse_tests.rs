@@ -1,5 +1,5 @@
 use crate::pathtrace::scene_gpu::{GpuFrame, GpuProbe, build_gpu_scene};
-use crate::pathtrace::tracer::{run_entry, upload_scene};
+use crate::pathtrace::tracer::{run_entry, run_entry_rq, upload_scene};
 use crate::types::{ArchId, Mesh, Scene3d};
 
 struct Rng(u64);
@@ -128,6 +128,127 @@ mod traverse_tests {
             assert!(out[0][0..3].iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-5), "expected {expected:?}, got {:?}", out[0]);
             assert_eq!(out[0][3], 0.0);
         }
+    }
+
+    /// 2026-11-03: `trace` took the first triangle of a leaf whatever its distance, so a wall past the light
+    /// (beyond `t_max`) shadowed it whenever that wall shared a leaf whose box starts before the light.
+    /// `trace_cpu` only keeps hits nearer than `t_max`; the GPU must agree.
+    #[test]
+    fn visibility_ignores_a_wall_beyond_t_max_in_the_same_leaf() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        let mut wall = Mesh::new("wall", ArchId(1));
+        // A wall at x = 2 across the ray, and a sliver near the ray's origin but off its line (y 4..5): one leaf
+        // whose box begins at x = -1.9, well before t_max.
+        wall.positions =
+            vec![[2.0, -1.0, -1.0], [2.0, 1.0, -1.0], [2.0, 1.0, 1.0], [2.0, -1.0, 1.0], [-1.9, 4.0, 0.0], [-1.8, 5.0, 0.0], [-1.9, 5.0, 0.5]];
+        wall.indices = vec![0, 1, 2, 0, 2, 3, 4, 5, 6];
+        let scene = Scene3d { meshes: vec![wall], ..Default::default() };
+        let gpu_scene = build_gpu_scene(&scene, false, None);
+        let (o, d, t_max) = ([-2.0f32, 0.0, 0.0], [1.0f32, 0.0, 0.0], 1.0f32);
+        assert_eq!(gpu_scene.trace_cpu(o, d, t_max), None, "the CPU reference sees nothing nearer than t_max");
+        let buffers = upload_scene(&gpu, &gpu_scene);
+        let probes = vec![GpuProbe { point: o, normal: d, _a: t_max, ..Default::default() }];
+        let frame = GpuFrame { probe_count: 1, ..Default::default() };
+        let out = run_entry(&gpu, &buffers, "visibility_test_main", &frame, &probes).unwrap();
+        assert!(out[0][0..3].iter().all(|v| (v - 1.0).abs() < 1e-6), "the wall 4 m away is past t_max 1 m: {:?}", out[0]);
+    }
+
+    /// The ray-query device the gates have (llvmpipe offers ray queries); `None` to skip the test.
+    fn rq_gpu() -> Option<crate::pathtrace::ComputeGpu> {
+        match crate::gputest::shared_compute_rq() {
+            Some(g) if g.ray_query => Some(g),
+            Some(g) => {
+                eprintln!("SKIP: no ray queries on {}", g.info.name);
+                None
+            }
+            None => {
+                eprintln!("SKIP: no compute device");
+                None
+            }
+        }
+    }
+
+    fn random_rays(rng: &mut Rng, n: usize, t_max: impl Fn(&mut Rng) -> f32) -> Vec<GpuProbe> {
+        (0..n)
+            .map(|_| {
+                let origin = [rng.between(-12.0, 12.0), rng.between(-12.0, 12.0), rng.between(-12.0, 12.0)];
+                let target = [rng.between(-10.0, 10.0), rng.between(-10.0, 10.0), rng.between(-10.0, 10.0)];
+                let d = [target[0] - origin[0], target[1] - origin[1], target[2] - origin[2]];
+                let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(1e-6);
+                GpuProbe { point: origin, normal: [d[0] / len, d[1] / len, d[2] / len], _a: t_max(rng), ..Default::default() }
+            })
+            .collect()
+    }
+
+    /// The hardware ray-query traversal finds what `trace_cpu` finds (same t, same triangle, same barycentrics
+    /// as the compute path's `trace`).
+    #[test]
+    fn rq_traversal_matches_trace_cpu() {
+        let Some(gpu) = rq_gpu() else { return };
+        let mut rng = Rng(42);
+        let scene = random_prisms(&mut rng, 40);
+        let gpu_scene = build_gpu_scene(&scene, false, None);
+        let buffers = upload_scene(&gpu, &gpu_scene);
+        let probes = random_rays(&mut rng, 256, |_| 0.0);
+        let frame = GpuFrame { probe_count: probes.len() as u32, ..Default::default() };
+        let rq = run_entry_rq(&gpu, &gpu_scene, &buffers, "traverse_test_main", &frame, &probes).unwrap();
+        let compute = run_entry(&gpu, &buffers, "traverse_test_main", &frame, &probes).unwrap();
+        let mut hits = 0;
+        for ((probe, got), comp) in probes.iter().zip(rq.iter()).zip(compute.iter()) {
+            match gpu_scene.trace_cpu(probe.point, probe.normal, 1e30) {
+                Some(w) => {
+                    hits += 1;
+                    assert!((got[0] - w.t).abs() < 1e-3, "ray {:?}: rq t {}, cpu {}", probe.point, got[0], w.t);
+                    if (got[0] - w.t).abs() > 1e-5 {
+                        assert_eq!(got[1].to_bits(), w.tri, "ray {:?}: rq tri", probe.point);
+                    }
+                    if got[1].to_bits() == comp[1].to_bits() {
+                        assert!((got[2] - comp[2]).abs() < 1e-3 && (got[3] - comp[3]).abs() < 1e-3, "barycentrics rq {got:?} vs compute {comp:?}");
+                    }
+                }
+                None => assert!(got[0] < 0.0, "miss expected, rq gave {got:?}"),
+            }
+        }
+        assert!(hits > 50, "the rays hit something: {hits}");
+    }
+
+    /// As visibility_ignores_a_wall_beyond_t_max_in_the_same_leaf, through the ray-query traversal.
+    #[test]
+    fn rq_visibility_ignores_a_wall_beyond_t_max() {
+        let Some(gpu) = rq_gpu() else { return };
+        let mut wall = Mesh::new("wall", ArchId(1));
+        wall.positions =
+            vec![[2.0, -1.0, -1.0], [2.0, 1.0, -1.0], [2.0, 1.0, 1.0], [2.0, -1.0, 1.0], [-1.9, 4.0, 0.0], [-1.8, 5.0, 0.0], [-1.9, 5.0, 0.5]];
+        wall.indices = vec![0, 1, 2, 0, 2, 3, 4, 5, 6];
+        let gpu_scene = build_gpu_scene(&Scene3d { meshes: vec![wall], ..Default::default() }, false, None);
+        let buffers = upload_scene(&gpu, &gpu_scene);
+        let probes = vec![
+            GpuProbe { point: [-2.0, 0.0, 0.0], normal: [1.0, 0.0, 0.0], _a: 1.0, ..Default::default() },
+            GpuProbe { point: [-2.0, 0.0, 0.0], normal: [1.0, 0.0, 0.0], _a: 10.0, ..Default::default() },
+        ];
+        let frame = GpuFrame { probe_count: 2, ..Default::default() };
+        let out = run_entry_rq(&gpu, &gpu_scene, &buffers, "visibility_test_main", &frame, &probes).unwrap();
+        assert!(out[0][0..3].iter().all(|v| (v - 1.0).abs() < 1e-6), "the wall is past t_max 1 m: {:?}", out[0]);
+        assert!(out[1][0..3].iter().all(|v| v.abs() < 1e-6), "the wall is within t_max 10 m: {:?}", out[1]);
+    }
+
+    /// Shadow rays through glass, housings and walls: the ray-query visibility equals the compute path's.
+    #[test]
+    fn rq_visibility_matches_the_compute_path() {
+        let Some(gpu) = rq_gpu() else { return };
+        let mut rng = Rng(7);
+        let scene = random_prisms(&mut rng, 40);
+        let gpu_scene = build_gpu_scene(&scene, false, None);
+        let buffers = upload_scene(&gpu, &gpu_scene);
+        let probes = random_rays(&mut rng, 256, |r| r.between(0.5, 30.0));
+        let frame = GpuFrame { probe_count: probes.len() as u32, ..Default::default() };
+        let rq = run_entry_rq(&gpu, &gpu_scene, &buffers, "visibility_test_main", &frame, &probes).unwrap();
+        let compute = run_entry(&gpu, &buffers, "visibility_test_main", &frame, &probes).unwrap();
+        let differ: Vec<_> = rq.iter().zip(compute.iter()).enumerate().filter(|(_, (a, b))| (0..3).any(|k| (a[k] - b[k]).abs() > 1e-4)).collect();
+        assert!(differ.len() <= 2, "rq and compute visibility differ on {} of 256 rays, e.g. {:?}", differ.len(), differ.first());
     }
 
     #[test]
