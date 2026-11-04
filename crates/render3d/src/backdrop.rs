@@ -223,7 +223,7 @@ fn fit(img: &ImageRgba, max: u32) -> ImageRgba {
             rgba.extend(sum.iter().map(|s| ((s + f * f / 2) / (f * f)) as u8));
         }
     }
-    ImageRgba { width: w, height: h, rgba }
+    ImageRgba { width: w, height: h, rgba, ..Default::default() }
 }
 
 struct Resident {
@@ -328,7 +328,7 @@ impl BackdropPass {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let dummy = make_texture(device, queue, &ImageRgba { width: 1, height: 1, rgba: vec![0, 0, 0, 255] });
+        let dummy = make_texture(device, queue, &ImageRgba { width: 1, height: 1, rgba: vec![0, 0, 0, 255], ..Default::default() });
         BackdropPass { pipeline, bgl, uniform, dummy, image: None, bind_group: None, uploads: 0 }
     }
 
@@ -428,7 +428,7 @@ mod tests {
         assert_eq!(backdrop_rgb(&g, &none(), 0, 0, 1, 2, up), [25, 100, 150]);
         assert_eq!(backdrop_rgb(&g, &none(), 0, 1, 1, 2, up), [75, 100, 50]);
         // Flat: a 2x1 black/white image over 4 columns, bilinear and clamped.
-        let img = ImageRgba { width: 2, height: 1, rgba: vec![0, 0, 0, 255, 255, 255, 255, 255] };
+        let img = ImageRgba { width: 2, height: 1, rgba: vec![0, 0, 0, 255, 255, 255, 255, 255], ..Default::default() };
         let flat = Backdrop::Image { item: "pic".into(), projection: Projection::Flat };
         let t = with("pic", img);
         let row: Vec<u8> = (0..4).map(|x| backdrop_rgb(&flat, &t, x, 0, 4, 1, up)[0]).collect();
@@ -441,7 +441,7 @@ mod tests {
             }
         }
         let eq = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect };
-        let t = with("sky", ImageRgba { width: 4, height: 2, rgba });
+        let t = with("sky", ImageRgba { width: 4, height: 2, rgba, ..Default::default() });
         let red = |d: [f32; 3]| backdrop_rgb(&eq, &t, 0, 0, 1, 1, d)[0];
         assert_eq!(red([1.0, 0.0, 0.0]), 80);
         assert_eq!(red([-1.0, 0.0, 0.0]), 80, "u wraps across the seam");
@@ -502,7 +502,7 @@ mod tests {
                 rgba.extend_from_slice(&[(x * 3) as u8, (y * 6) as u8, 120, 255]);
             }
         }
-        ImageRgba { width: 64, height: 32, rgba }
+        ImageRgba { width: 64, height: 32, rgba, ..Default::default() }
     }
 
     #[test]
@@ -511,7 +511,8 @@ mod tests {
         let plain = shot(&mut off, &scene(None, none()), Style::Shaded);
         let missed: Vec<bool> = plain.chunks_exact(4).map(|p| plain_is_background(p)).collect();
         assert!(missed.iter().any(|m| *m) && missed.iter().any(|m| !*m), "the test scene needs both background and mesh");
-        let flat_img = ImageRgba { width: 2, height: 2, rgba: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255] };
+        let flat_img =
+            ImageRgba { width: 2, height: 2, rgba: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255], ..Default::default() };
         let cases = [
             (Backdrop::Colour { colour: [32, 64, 96] }, none()),
             (Backdrop::Gradient { top: [250, 200, 20], bottom: [10, 20, 240] }, none()),
@@ -572,7 +573,7 @@ mod tests {
             let b = Backdrop::Image { item: "nowhere".into(), projection };
             assert_eq!(shot(&mut off, &scene(Some(b), none()), Style::Shaded), plain);
         }
-        let bad = ImageRgba { width: 4, height: 4, rgba: vec![1, 2, 3] };
+        let bad = ImageRgba { width: 4, height: 4, rgba: vec![1, 2, 3], ..Default::default() };
         let b = Backdrop::Image { item: "bad".into(), projection: Projection::Flat };
         assert_eq!(shot(&mut off, &scene(Some(b), with("bad", bad)), Style::Shaded), plain);
     }
