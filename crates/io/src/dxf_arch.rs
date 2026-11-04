@@ -562,7 +562,7 @@ mod tests {
         // house wrote 9.6 MB, and an 8 MiB limit here reopened it with no walls, rooms or furnishings at all.
         let mut d = Drawing::new_metric();
         d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
-        let image = cadcraft_doc::arch::ImageRgba { width: 1024, height: 768, rgba: vec![200; 1024 * 768 * 4] };
+        let image = cadcraft_doc::arch::ImageRgba { width: 1024, height: 768, rgba: vec![200; 1024 * 768 * 4], ..Default::default() };
         d.arch.images.insert("material-big".into(), image.clone());
         let payload: usize = arch_chunks(&d.arch).map(|c| c.iter().map(String::len).sum()).unwrap_or(0);
         assert!(payload > 8 << 20, "the test payload is {payload} bytes");
