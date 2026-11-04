@@ -8,8 +8,8 @@
 use cadcraft_arch::casework::{cabinet_defaults, cabinet_layer, fixture_defaults, fixture_layer, on_wall, validate_cabinet, validate_fixture};
 use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::{
-    ArchId, ArchModel, Cabinet, CabinetKind, Fixture, FixtureKind, Fronts, FrontStyle, SymbolMesh, MAX_CABINETS, MAX_FIXTURES, cabinet_handle, cabinet_label,
-    fixture_handle, fixture_label, handle_json,
+    ArchId, ArchModel, Cabinet, CabinetKind, Fixture, FixtureKind, FrontStyle, Fronts, MAX_CABINETS, MAX_FIXTURES, SymbolMesh, cabinet_handle,
+    cabinet_label, fixture_handle, fixture_label, handle_json,
 };
 use cadcraft_geom::Vec2;
 use serde_json::{Map, Value, json};
@@ -73,9 +73,9 @@ fn kind_name_fixture(k: FixtureKind) -> &'static str {
 fn parse_front_style(cmd: &str, p: &Value, key: &str) -> Result<Option<FrontStyle>> {
     match text(cmd, p, key)? {
         None => Ok(None),
-        Some(s) => FrontStyle::parse(s)
-            .map(Some)
-            .ok_or_else(|| bad(cmd, format!("`{key}` must be \"slab\", \"shaker\" or \"raised-panel\"; got `{s}`"))),
+        Some(s) => {
+            FrontStyle::parse(s).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be \"slab\", \"shaker\" or \"raised-panel\"; got `{s}`")))
+        }
     }
 }
 
@@ -288,7 +288,7 @@ fn run_cabinet(session: &mut Session, params: &Value) -> Result<Value> {
     set(&mut base.fronts, parse_fronts(CMD, params)?);
     set(&mut base.door_style, parse_front_style(CMD, params, "doorStyle")?);
     set(&mut base.drawer_style, parse_front_style(CMD, params, "drawerStyle")?);
-    set(&mut base.pull, pull_raw.map(String::from));
+    base.pull = pull_raw.map(String::from);
     base.pull_symbol = pull_symbol;
     let doors = count(CMD, params, "doors")?;
     set(&mut base.drawers, count(CMD, params, "drawers")?);
@@ -366,10 +366,7 @@ fn run_cabinet_edit(session: &mut Session, params: &Value) -> Result<Value> {
             new_pull = None;
         }
         Some(v) => {
-            let raw_pull = v
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| bad(CMD, "`pull` must be a string or null"))?;
+            let raw_pull = v.as_str().map(String::from).ok_or_else(|| bad(CMD, "`pull` must be a string or null"))?;
             let mesh = resolve_pull(CMD, session, &raw_pull)?;
             pull_mesh = Some(mesh);
             clear_pull = false;
@@ -641,6 +638,133 @@ mod tests {
 
     fn cabinets(s: &Session) -> Vec<Cabinet> {
         s.doc().map(|d| d.arch.cabinets.clone()).unwrap_or_default()
+    }
+
+    /// A session on a 4 m wall whose library holds a "pull" item `own:bar` and a non-pull `own:chair`.
+    fn pull_session(dir: &crate::temp_dir::TempDir) -> Session {
+        use cadcraft_arch::library::{ItemKind, ItemRecord};
+        std::fs::create_dir_all(dir.join("user")).ok();
+        dir.file("user/bar.glb", crate::library::testing::glb([0.1, 0.02, 0.02]));
+        dir.file("user/chair.glb", crate::library::testing::glb([0.5, 0.5, 0.9]));
+        let mut s = crate::library::testing::session(dir);
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+            d.touch_arch();
+        }
+        for (id, ty, file) in [("own:bar", "pull", "bar.glb"), ("own:chair", "chair", "chair.glb")] {
+            s.library.add_user_item(ItemRecord {
+                id: id.into(),
+                name: id.into(),
+                kind: ItemKind::Symbol,
+                symbol_type: ty.into(),
+                licence: "CC0-1.0".into(),
+                file: Some(file.into()),
+                ..Default::default()
+            });
+        }
+        s
+    }
+
+    fn symbol_keys(s: &Session) -> Vec<String> {
+        s.doc().map(|d| d.arch.symbols.keys().cloned().collect()).unwrap_or_default()
+    }
+
+    #[test]
+    fn cabinet_takes_styles_and_a_pull() {
+        let dir = crate::temp_dir::TempDir::new("casework-pull");
+        let mut s = pull_session(&dir);
+        let r = run(
+            &mut s,
+            "cabinet",
+            json!({ "kind": "base", "wall": "w0", "offset": 1.0, "doorStyle": "shaker", "drawerStyle": "raised-panel", "pull": "own:bar" }),
+        );
+        assert!(r.is_ok(), "{r:?}");
+        let c = cabinets(&s).first().cloned().unwrap_or_default();
+        assert_eq!(c.door_style, FrontStyle::Shaker);
+        assert_eq!(c.drawer_style, FrontStyle::RaisedPanel);
+        assert_eq!(c.pull.as_deref(), Some("own:bar"));
+        let key = c.pull_symbol.clone().unwrap_or_default();
+        assert!(!key.is_empty());
+        assert_eq!(symbol_keys(&s), vec![key]);
+        // Without the fields the defaults hold.
+        let r = run(&mut s, "cabinet", json!({ "kind": "wall", "wall": "w0", "offset": 3.0 }));
+        assert!(r.is_ok(), "{r:?}");
+        let c = cabinets(&s).get(1).cloned().unwrap_or_default();
+        assert_eq!((c.door_style, c.drawer_style, c.pull), (FrontStyle::Slab, FrontStyle::Slab, None));
+    }
+
+    #[test]
+    fn cabinet_edit_changes_and_clears_the_pull() {
+        let dir = crate::temp_dir::TempDir::new("casework-pull-edit");
+        let mut s = pull_session(&dir);
+        assert!(run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 1.0 })).is_ok());
+        let r = run(&mut s, "cabinet.edit", json!({ "id": "cb0", "pull": "own:bar", "doorStyle": "shaker" }));
+        assert!(r.is_ok(), "{r:?}");
+        let c = cabinets(&s).first().cloned().unwrap_or_default();
+        assert_eq!(c.pull.as_deref(), Some("own:bar"));
+        assert!(c.pull_symbol.is_some());
+        assert_eq!(c.door_style, FrontStyle::Shaker);
+        assert_eq!(c.drawer_style, FrontStyle::Slab);
+        // Editing something else keeps the pull.
+        assert!(run(&mut s, "cabinet.edit", json!({ "id": "cb0", "drawerStyle": "shaker" })).is_ok());
+        let c = cabinets(&s).first().cloned().unwrap_or_default();
+        assert_eq!((c.pull.as_deref(), c.drawer_style), (Some("own:bar"), FrontStyle::Shaker));
+        // null removes it.
+        assert!(run(&mut s, "cabinet.edit", json!({ "id": "cb0", "pull": null })).is_ok());
+        let c = cabinets(&s).first().cloned().unwrap_or_default();
+        assert_eq!((c.pull, c.pull_symbol), (None, None));
+    }
+
+    #[test]
+    fn a_run_shares_its_parts() {
+        let dir = crate::temp_dir::TempDir::new("casework-pull-run");
+        let mut s = pull_session(&dir);
+        let r = run(
+            &mut s,
+            "cabinet",
+            json!({ "kind": "base", "wall": "w0", "offset": 0.5, "widths": [0.6, 0.9, 0.45], "doorStyle": "raised-panel", "drawerStyle": "shaker", "pull": "own:bar" }),
+        );
+        assert!(r.is_ok(), "{r:?}");
+        let cs = cabinets(&s);
+        assert_eq!(cs.len(), 3);
+        let first = cs.first().and_then(|c| c.pull_symbol.clone());
+        for c in &cs {
+            assert_eq!(c.door_style, FrontStyle::RaisedPanel);
+            assert_eq!(c.drawer_style, FrontStyle::Shaker);
+            assert_eq!(c.pull.as_deref(), Some("own:bar"));
+            assert_eq!(c.pull_symbol, first);
+        }
+        assert_eq!(symbol_keys(&s).len(), 1);
+    }
+
+    #[test]
+    fn unknown_styles_and_pulls_are_refused_before_any_change() {
+        let dir = crate::temp_dir::TempDir::new("casework-pull-refused");
+        let mut s = pull_session(&dir);
+        assert!(run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 1.0 })).is_ok());
+        let before = s.doc().map(|d| d.arch.clone()).ok();
+        for p in [
+            json!({ "kind": "base", "wall": "w0", "offset": 2.0, "doorStyle": "arched" }),
+            json!({ "kind": "base", "wall": "w0", "offset": 2.0, "drawerStyle": 3 }),
+            json!({ "kind": "base", "wall": "w0", "offset": 2.0, "pull": "nope" }),
+            json!({ "kind": "base", "wall": "w0", "offset": 2.0, "pull": "own:chair" }),
+            json!({ "kind": "base", "wall": "w0", "offset": 2.0, "pull": 5 }),
+            json!({ "kind": "base", "wall": "w0", "offset": 2.0, "pull": "own:bar", "doorStyle": "arched" }),
+        ] {
+            assert!(run(&mut s, "cabinet", p.clone()).is_err(), "{p}");
+        }
+        for p in [
+            json!({ "id": "cb0", "doorStyle": "Shaker" }),
+            json!({ "id": "cb0", "pull": "nope" }),
+            json!({ "id": "cb0", "pull": "own:chair" }),
+            json!({ "id": "cb0", "pull": "own:bar", "drawerStyle": "fancy" }),
+            json!({ "id": "cb0", "pull": 7 }),
+        ] {
+            assert!(run(&mut s, "cabinet.edit", p.clone()).is_err(), "{p}");
+        }
+        let after = s.doc().map(|d| d.arch.clone()).ok();
+        assert_eq!(before, after);
+        assert!(symbol_keys(&s).is_empty());
     }
 
     #[test]
