@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 11 of 35 segments merged · 0 of 13 acceptance checks**
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 07:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 12.3 h so far · expected done Nov 05 12:33–Nov 07 01:41 UTC |
+| 14 | The library | building | 0 / 13 | 12.5 h so far · expected done Nov 05 12:48–Nov 07 01:56 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-11 merged, 10 gate, 8 queued, 6 merging
+11 merged, 9 gate, 8 queued, 7 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -41,7 +41,7 @@ Updated 2026-11-04 07:45 UTC. This page and the card in the README are regenerat
 | `p14-cmd-furnishing-transform` | move, copy (count), rotate and mirror move furnishings by their handles | merging | mai-flash-esc |
 | `p14-cmd-paint` | paint.material, paint.object and the eyedropper | gate | bonsai-ws2-a |
 | `p14-inspect` | arch.inspect: furnishings, surfaces and the cabinet parts | merging | claude-sonnet-b |
-| `p14-cmd-casework-parts` | cabinet and cabinet.edit take door and drawer styles and a pull | gate | claude-sonnet-a |
+| `p14-cmd-casework-parts` | cabinet and cabinet.edit take door and drawer styles and a pull | merging | claude-sonnet-a |
 | `p14-cmd-backdrop` | The backdrop command | gate | claude-sonnet-c |
 | `p14-io-glb-furnishing` | GLB: furnishing nodes, pull nodes, painted faces, symbol and paint materials | gate | mai-flash |
 | `p14-io-obj-ifc-furnishing` | OBJ groups and IFC elements for furnishings | gate | darwin-ws3 |
@@ -54,6 +54,7 @@ Updated 2026-11-04 07:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 04 07:48 | `harden-p13-arch3d-incremental` | refused | 7,175 pass, 3 fail | tturbo-mac |
 | Nov 04 04:47 | `p14-arch-paint` | merged | 7,129 pass | claude-sonnet-a |
 | Nov 04 03:13 | `p14-io-gltf-read` | merged | 7,117 pass | claude-sonnet-b |
 | Nov 04 02:16 | `p14-arch-place` | refused | 0 pass | claude-sonnet-c |
@@ -65,7 +66,6 @@ Updated 2026-11-04 07:45 UTC. This page and the card in the README are regenerat
 | Nov 03 21:49 | `p14-arch-library` | merged | 7,074 pass | darwin-ws3 |
 | Nov 03 21:14 | `p14-doc-cabinet-parts` | merged | 7,063 pass | mai-flash |
 | Nov 03 20:02 | `harden-p13-arch-casework-symbols` | merged | 7,059 pass | tturbo-mac |
-| Nov 03 19:28 | `harden-p13-dxf-casework` | merged | 7,051 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -74,12 +74,12 @@ Updated 2026-11-04 07:45 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | gate | 865 |
 | bonsai-b | bonsai2-27b | gate | 798 |
 | bonsai-ws2-a | bonsai2-27b | gate | 875 |
-| bonsai-ws2-b | bonsai2-27b | gate | 850 |
-| claude-sonnet-a | sonnet | gate | 75 |
+| bonsai-ws2-b | bonsai2-27b | gate | 851 |
+| claude-sonnet-a | sonnet | merging | 76 |
 | claude-sonnet-b | sonnet | gate | 79 |
 | claude-sonnet-c | sonnet | gate | 31 |
 | claude-sonnet-d | sonnet | gate | 18 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 737 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 738 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | gate | 55 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 18 |
