@@ -29,14 +29,17 @@ struct PbrUniforms {
 };
 @group(1) @binding(1) var<uniform> p: PbrUniforms;
 
-// The finish textures (group 3): layer 0 is white, so an untextured draw is unchanged.
+// The material textures (group 3): layer 0 is white, so an untextured draw is unchanged; 1..=4 the
+// finishes; then the scene's textures (phase 14).
 @group(3) @binding(0) var mat_tex: texture_2d_array<f32>;
 @group(3) @binding(1) var mat_samp: sampler;
 
-// Albedo of the draw at `uv`: the draw colour times its texture layer (`_p6.y`). Samples, so call
-// it from uniform control flow only.
+// Albedo of the draw at `uv`: the draw colour times its texture layer (`_p6.y`), the UVs divided by
+// the draw's tile (`_p6.zw` holds 1 / tile; [1, 1] multiplies them by exactly one, and a zeroed
+// block counts as [1, 1]). Samples, so call it from uniform control flow only.
 fn base_albedo(uv: vec2<f32>) -> vec3<f32> {
-    return u.albedo * textureSample(mat_tex, mat_samp, uv, i32(p._p6.y)).rgb;
+    let per_repeat = select(vec2<f32>(1.0), p._p6.zw, p._p6.zw > vec2<f32>(0.0));
+    return u.albedo * textureSample(mat_tex, mat_samp, uv * per_repeat, i32(p._p6.y)).rgb;
 }
 
 const PI: f32 = 3.14159265;

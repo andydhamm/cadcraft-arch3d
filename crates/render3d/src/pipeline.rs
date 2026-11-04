@@ -1,6 +1,8 @@
 //! GPU mesh upload and render pipeline for the 3D viewport.
 
-use crate::types::Scene3d;
+use crate::textures::SceneLayers;
+use crate::types::{MaterialDef, Scene3d};
+use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
 /// Depth format used by the 3D viewport.
@@ -69,7 +71,8 @@ pub struct PbrUniform {
     /// Shadow-map depth range end.
     pub shadow_max: f32,
     pub _p1: [f32; 3],
-    /// `[emissive, texture layer, 0, 0]` (WGSL `_p6`; emissive is read by the lit pipelines only).
+    /// `[emissive, texture layer, 1 / tile u, 1 / tile v]` (WGSL `_p6`; emissive is read by the lit
+    /// pipelines only; the UVs are multiplied by the last two before sampling).
     pub _p2: [f32; 4],
 }
 /// Byte size of [`PbrUniform`].
@@ -77,11 +80,13 @@ pub const PBR_SIZE: u64 = 96;
 
 impl PbrUniform {
     /// Build the block from a light, a draw and a style, replacing every non-finite value and
-    /// clamping `metallic`, `roughness`, `alpha` to 0..=1 and `ambient` to 0..=1.
+    /// clamping `metallic`, `roughness`, `alpha` to 0..=1 and `ambient` to 0..=1. A tile that is not
+    /// positive and finite (or whose inverse is not finite) is 1.
     pub fn new(light: &crate::light::Light, sun_intensity: f32, draw: &Draw, style: u32, camera_pos: [f32; 3]) -> Self {
         let l = light.normalized();
         // Replace only NaN; infinity is allowed through to be clamped by the caller.
         let fin = |v: f32, d: f32| if v.is_nan() { d } else { v };
+        let per_repeat = |t: f32| if t.is_finite() && t > 0.0 && (1.0 / t).is_finite() { 1.0 / t } else { 1.0 };
         let mut cam = camera_pos;
         for c in cam.iter_mut() {
             if !c.is_finite() {
@@ -101,7 +106,12 @@ impl PbrUniform {
             shadow_min: 0.0,
             shadow_max: 0.0,
             _p1: [0.0; 3],
-            _p2: [fin(draw.emissive, 0.0).clamp(0.0, 100.0), draw.layer.min(crate::textures::LAYERS - 1) as f32, 0.0, 0.0],
+            _p2: [
+                fin(draw.emissive, 0.0).clamp(0.0, 100.0),
+                draw.layer.min(crate::textures::MAX_LAYERS - 1) as f32,
+                per_repeat(draw.tile[0]),
+                per_repeat(draw.tile[1]),
+            ],
         }
     }
 }
@@ -111,24 +121,9 @@ pub fn valid_sample_count(n: u32) -> u32 {
     if n == 4 { 4 } else { 1 }
 }
 
-/// PBR parameters for an arch3d material name: `(albedo, metallic, roughness, alpha)`.
-///
-/// If the material is a key in `scene.materials` (a `MaterialDef` from the library or paint),
-/// its base colour (with tint applied) and properties are used. Otherwise, the phase 1-13
-/// table is used.
-pub fn material_pbr(material: &str, scene: &Scene3d) -> ([f32; 3], f32, f32, f32) {
-    if let Some(def) = scene.materials.get(material) {
-        let mut albedo = [def.base_color[0], def.base_color[1], def.base_color[2]];
-        if let Some(tint) = def.tint {
-            let t = [f32::from(tint[0]) / 255.0, f32::from(tint[1]) / 255.0, f32::from(tint[2]) / 255.0];
-            albedo[0] *= t[0];
-            albedo[1] *= t[1];
-            albedo[2] *= t[2];
-        }
-        // Alpha is 1.0 for library materials unless explicitly glass-like (not handled by MaterialDef yet)
-        return (albedo, def.metallic, def.roughness, 1.0);
-    }
-
+/// PBR parameters for an arch3d material name: `(albedo, metallic, roughness, alpha)`. Albedo is
+/// [`material_albedo`]; unknown names are a neutral matte dielectric `([0.75; 3], 0.0, 0.5, 1.0)`.
+pub fn material_pbr(material: &str) -> ([f32; 3], f32, f32, f32) {
     let m = material.to_ascii_lowercase();
     if let Some(f) = crate::textures::finish_of(&m) {
         // The texture is the colour; the finish sets the roughness.
@@ -163,6 +158,45 @@ pub fn material_pbr(material: &str, scene: &Scene3d) -> ([f32; 3], f32, f32, f32
         return (albedo, 0.0, 0.5, 1.0);
     };
     (albedo, 0.0, rough, 1.0)
+}
+
+/// PBR parameters of mesh material `material` in `scene`: a key of [`Scene3d::materials`] takes its
+/// [`MaterialDef`] ([`material_def_pbr`]), every other name [`material_pbr`] as in phases 1..13.
+pub fn scene_material_pbr(scene: &Scene3d, material: &str) -> ([f32; 3], f32, f32, f32) {
+    scene.materials.get(material).map_or_else(|| material_pbr(material), material_def_pbr)
+}
+
+/// PBR parameters of a [`MaterialDef`]: its base colour (which already carries a paint's tint,
+/// `arch3d::paint::materials`), metallic and roughness, opaque. A non-finite value takes
+/// [`MaterialDef::default`]'s.
+pub fn material_def_pbr(def: &MaterialDef) -> ([f32; 3], f32, f32, f32) {
+    let d = MaterialDef::default();
+    let finite = |v: f32, fallback: f32| if v.is_finite() { v } else { fallback };
+    let albedo = [0, 1, 2].map(|c| finite(def.base_color[c], d.base_color[c]));
+    (albedo, finite(def.metallic, d.metallic), finite(def.roughness, d.roughness), 1.0)
+}
+
+/// How a mesh of `material` in `scene` draws, as a [`Draw`] without its index range, shadow and
+/// emission. A key of [`Scene3d::materials`] takes [`material_def_pbr`], its texture's layer in
+/// `layers` and its tile (face-aligned UVs are divided by it; [1, 1] uses them as given); a valid
+/// texture without a layer (past [`crate::textures::MAX_SCENE_LAYERS`]) multiplies its mean colour
+/// into the albedo and draws white, and a missing one draws the base colour alone. Every other name
+/// is [`material_pbr`] with [`crate::textures::layer_for`] and tile [1, 1].
+pub fn material_draw(scene: &Scene3d, layers: &SceneLayers, material: &str) -> Draw {
+    let Some(def) = scene.materials.get(material) else {
+        let (albedo, metallic, roughness, alpha) = material_pbr(material);
+        return Draw { albedo, metallic, roughness, alpha, layer: crate::textures::layer_for(material), ..Default::default() };
+    };
+    let (mut albedo, metallic, roughness, alpha) = material_def_pbr(def);
+    let mut layer = 0;
+    if let Some(key) = def.texture.as_deref() {
+        if let Some(l) = layers.layer_of(key) {
+            layer = l;
+        } else if let Some(mean) = scene.textures.get(key).and_then(crate::textures::mean_linear) {
+            albedo = [albedo[0] * mean[0], albedo[1] * mean[1], albedo[2] * mean[2]];
+        }
+    }
+    Draw { albedo, metallic, roughness, alpha, layer, tile: def.tile, ..Default::default() }
 }
 
 /// Linear albedo for an arch3d material name. Unknown names are a neutral grey, so a new
@@ -279,8 +313,11 @@ pub struct Draw {
     /// Self-lit strength (phase 10: 1 for the lens of a fixture that is on, `light-lens-lit`);
     /// carried to the shader in `PbrUniform::_p2[0]` and used by the lit pipelines only.
     pub emissive: f32,
-    /// Layer of the material texture array ([`crate::textures::layer_for`]); 0 is white.
+    /// Layer of the material texture array ([`material_draw`]); 0 is white.
     pub layer: u32,
+    /// Metres per texture repeat of a [`MaterialDef`]'d mesh's face-aligned UVs ([1, 1]: the UVs
+    /// are texture coordinates); carried to the shader as its inverse in `PbrUniform::_p2[2..4]`.
+    pub tile: [f32; 2],
 }
 
 impl Default for Draw {
@@ -295,6 +332,7 @@ impl Default for Draw {
             casts_shadow: true,
             emissive: 0.0,
             layer: 0,
+            tile: [1.0, 1.0],
         }
     }
 }
@@ -328,9 +366,10 @@ pub fn upload(device: &wgpu::Device, scene: &Scene3d) -> GpuMeshes {
     let mut indices: Vec<u32> = Vec::new();
     let mut vertex_offset: u32 = 0;
     let mut draws = Vec::new();
-
-    // Determine texture layers for this scene.
-    let texture_layers = crate::textures::layers_for_scene(scene);
+    // The layers the texture array has for this scene (`GpuPipeline::prepare_textures`), and each
+    // material's look once (a texture's mean colour is not cheap).
+    let layers = SceneLayers::of(scene);
+    let mut looks: BTreeMap<&str, Draw> = BTreeMap::new();
 
     for mesh in &scene.meshes {
         for i in 0..mesh.positions.len() {
@@ -352,11 +391,10 @@ pub fn upload(device: &wgpu::Device, scene: &Scene3d) -> GpuMeshes {
         }
         let index_count = indices.len() as u32 - first_index;
         if index_count > 0 {
-            let (albedo, metallic, roughness, alpha) = material_pbr(&mesh.material, scene);
+            let look = *looks.entry(mesh.material.as_str()).or_insert_with(|| material_draw(scene, &layers, &mesh.material));
             let casts_shadow = crate::shadow_atlas::casts_fixture_shadow(&mesh.material);
             let emissive = if mesh.material.eq_ignore_ascii_case("light-lens-lit") { 1.0 } else { 0.0 };
-            let layer = crate::textures::layer_for(&mesh.material, &texture_layers);
-            draws.push(Draw { first_index, index_count, albedo, metallic, roughness, alpha, casts_shadow, emissive, layer });
+            draws.push(Draw { first_index, index_count, casts_shadow, emissive, ..look });
         }
         vertex_offset += n;
     }
@@ -386,12 +424,14 @@ pub fn upload(device: &wgpu::Device, scene: &Scene3d) -> GpuMeshes {
     GpuMeshes { vertex_buffer, index_buffer, vertex_count, index_count, draws }
 }
 
+/// The blending of a mesh pipeline as the tests describe it (only the glass-house one blends).
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BlendMode {
-    Opaque,
     GlassHouse,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MeshPipelineDescriptor {
     pub(crate) sample_count: u32,
@@ -414,10 +454,12 @@ fn glass_blend_state() -> wgpu::BlendState {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn pipeline_descriptor(sample_count: u32, depth_write: bool, blend: Option<BlendMode>) -> MeshPipelineDescriptor {
     MeshPipelineDescriptor { sample_count: valid_sample_count(sample_count), depth_write, blend }
 }
 
+#[cfg(test)]
 pub(crate) fn glass_pipeline_descriptor(sample_count: u32) -> MeshPipelineDescriptor {
     pipeline_descriptor(sample_count, false, Some(BlendMode::GlassHouse))
 }
@@ -520,10 +562,14 @@ pub struct GpuPipeline {
     pub bgl: wgpu::BindGroupLayout,
     /// Layout of group 1 (PBR block, binding 1, dynamic offset).
     pub pbr_bgl: wgpu::BindGroupLayout,
-    /// Layout of group 3 (the finish texture array and its sampler).
+    /// Layout of group 3 (the material texture array and its sampler).
     pub tex_bgl: wgpu::BindGroupLayout,
-    /// Group 3, bound once per pass.
+    /// Group 3, bound once per pass: the array for [`GpuPipeline::texture_layers`].
     pub tex_bind_group: wgpu::BindGroup,
+    /// The scene texture layers the array holds ([`GpuPipeline::prepare_textures`]).
+    texture_layers: SceneLayers,
+    /// How many times the array was rebuilt for a scene's textures.
+    texture_builds: u64,
     pub uniform: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
     /// Slot-0 PBR block buffer and its group-1 bind group.
@@ -536,7 +582,7 @@ impl GpuPipeline {
     /// `sample_count` is 1 or 4 (anything else is 1).
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, sample_count: u32) -> Self {
         let Built { opaque, blended, bgl, pbr_bgl, tex_bgl } = create_all(device, sample_count);
-        let tex_bind_group = crate::textures::MaterialTextures::new(device, queue, &tex_bgl, None).bind_group;
+        let tex_bind_group = crate::textures::MaterialTextures::new(device, queue, &tex_bgl).bind_group;
 
         let uniform = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("render3d uniform buffer"),
@@ -571,11 +617,39 @@ impl GpuPipeline {
             pbr_bgl,
             tex_bgl,
             tex_bind_group,
+            texture_layers: SceneLayers::default(),
+            texture_builds: 0,
             uniform,
             bind_group,
             pbr_uniform,
             pbr_bind_group,
         }
+    }
+
+    /// Make the texture array hold `scene`'s textures ([`SceneLayers::of`], the layers
+    /// [`upload`] gives its draws): rebuilt, with a new group-3 bind group, only when the scene's
+    /// layered texture keys differ from the array's, never on every frame. Keys name their pixels
+    /// (`sym:<content hash>:t<i>`, `finish:<f>`, `item:<id>`), so an unchanged key keeps its layer.
+    /// Returns whether the array was rebuilt.
+    pub fn prepare_textures(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scene: &Scene3d) -> bool {
+        let layers = SceneLayers::of(scene);
+        if layers == self.texture_layers {
+            return false;
+        }
+        self.tex_bind_group = crate::textures::MaterialTextures::with_layers(device, queue, &self.tex_bgl, scene, &layers).bind_group;
+        self.texture_layers = layers;
+        self.texture_builds += 1;
+        true
+    }
+
+    /// The scene texture layers the array holds.
+    pub fn texture_layers(&self) -> &SceneLayers {
+        &self.texture_layers
+    }
+
+    /// How many times [`GpuPipeline::prepare_textures`] rebuilt the array.
+    pub fn texture_builds(&self) -> u64 {
+        self.texture_builds
     }
 
     /// Upload a new uniform to the GPU (slot 0; bind with dynamic offset 0).
@@ -667,13 +741,12 @@ mod tests {
 
     #[test]
     fn material_pbr_gives_glass_alpha_below_one() {
-        let scene = Scene3d::default();
-        let (_, metallic, roughness, alpha) = material_pbr("glass", &scene);
+        let (_, metallic, roughness, alpha) = material_pbr("glass");
         assert_eq!(alpha, 0.35);
         assert_eq!(roughness, 0.05);
         assert_eq!(metallic, 0.0);
         for name in ["wall", "floor", "ceiling", "roof", "frame", "casing", "leaf", "sill", "header", "stair", "railing", "deck", "ground"] {
-            let (_, m, r, a) = material_pbr(name, &scene);
+            let (_, m, r, a) = material_pbr(name);
             assert_eq!((m, a), (0.0, 1.0), "{name}");
             assert!((0.6..=0.95).contains(&r), "{name} roughness {r}");
         }
@@ -681,29 +754,49 @@ mod tests {
 
     #[test]
     fn material_pbr_falls_back_to_neutral_for_unknown_names() {
-        let scene = Scene3d::default();
-        assert_eq!(material_pbr("unobtainium", &scene), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
-        assert_eq!(material_pbr("", &scene), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
+        assert_eq!(material_pbr("unobtainium"), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
+        assert_eq!(material_pbr(""), ([0.75, 0.75, 0.75], 0.0, 0.5, 1.0));
         let d = Draw::default();
         assert_eq!((d.metallic, d.roughness, d.alpha), (0.0, 0.5, 1.0));
     }
 
     #[test]
     fn materialdef_meshes_use_their_base_colour() {
-        use crate::types::MaterialDef;
-        use std::collections::BTreeMap;
-
         let mut scene = Scene3d::default();
-        let mut materials = BTreeMap::new();
-        materials
-            .insert("sym:test:0".to_string(), MaterialDef { base_color: [1.0, 0.0, 0.0, 1.0], metallic: 0.5, roughness: 0.2, ..Default::default() });
-        scene.materials = materials;
+        let def = |base_color: [f32; 4], metallic: f32, roughness: f32| MaterialDef { base_color, metallic, roughness, ..Default::default() };
+        scene.materials.insert("sym:k:0".into(), def([0.8, 0.1, 0.05, 1.0], 0.3, 0.4));
+        // A paint's tint is already in its base colour (arch3d::paint::materials): it is not applied again.
+        let painted = MaterialDef { tint: Some([128, 200, 255]), ..def([0.2, 0.4, 0.6, 1.0], 0.0, 0.8) };
+        scene.materials.insert("paint:wall/w1/left".into(), painted);
+        // A MaterialDef'd finish name is its definition, not the finish texture.
+        scene.materials.insert("wall-brick".into(), def([0.5, 0.5, 0.5, 1.0], 0.0, 0.7));
+        scene.materials.insert("sym:nan:0".into(), def([f32::NAN, 0.5, f32::INFINITY, 1.0], f32::NAN, f32::NEG_INFINITY));
+        assert_eq!(scene_material_pbr(&scene, "sym:k:0"), ([0.8, 0.1, 0.05], 0.3, 0.4, 1.0));
+        assert_eq!(scene_material_pbr(&scene, "paint:wall/w1/left"), ([0.2, 0.4, 0.6], 0.0, 0.8, 1.0));
+        assert_eq!(scene_material_pbr(&scene, "sym:nan:0"), ([1.0, 0.5, 1.0], 0.0, 0.8, 1.0), "non-finite values take the defaults");
+        // Every other name keeps its phase-1..13 meaning; keys match exactly.
+        for name in ["wall", "glass", "sym:k:1", "SYM:K:0", "pull:k:0", "paint:wall/w1/right"] {
+            assert_eq!(scene_material_pbr(&scene, name), material_pbr(name), "{name}");
+        }
+        let layers = SceneLayers::of(&scene);
+        let d = material_draw(&scene, &layers, "sym:k:0");
+        assert_eq!((d.albedo, d.metallic, d.roughness, d.alpha, d.layer, d.tile), ([0.8, 0.1, 0.05], 0.3, 0.4, 1.0, 0, [1.0, 1.0]));
+        assert_eq!(material_draw(&scene, &layers, "wall-brick").layer, 0);
+        assert_eq!(material_draw(&scene, &layers, "floor-brick").layer, crate::textures::layer_for("floor-brick"));
 
-        let (albedo, metallic, roughness, alpha) = material_pbr("sym:test:0", &scene);
-        assert_eq!(albedo, [1.0, 0.0, 0.0]);
-        assert_eq!(metallic, 0.5);
-        assert_eq!(roughness, 0.2);
-        assert_eq!(alpha, 1.0);
+        // upload gives every MaterialDef'd mesh its definition and every other mesh the table.
+        let tri = |material: &str| {
+            let mut m = Mesh::new(material, ArchId(1));
+            m.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+            m.indices = vec![0, 1, 2];
+            m
+        };
+        scene.meshes = vec![tri("sym:k:0"), tri("wall"), tri("paint:wall/w1/left"), tri("sym:k:0")];
+        let Some((device, _queue)) = crate::gputest::shared_device() else { return };
+        let meshes = upload(&device, &scene);
+        let looks: Vec<([f32; 3], f32, f32)> = meshes.draws.iter().map(|d| (d.albedo, d.metallic, d.roughness)).collect();
+        let (wall, _, wall_rough, _) = material_pbr("wall");
+        assert_eq!(looks, vec![([0.8, 0.1, 0.05], 0.3, 0.4), (wall, 0.0, wall_rough), ([0.2, 0.4, 0.6], 0.0, 0.8), ([0.8, 0.1, 0.05], 0.3, 0.4)]);
     }
 
     #[test]
