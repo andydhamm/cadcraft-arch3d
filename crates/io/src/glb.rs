@@ -102,6 +102,7 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
     let mut names = Vec::new();
     for m in scene.meshes.iter().filter(|m| !m.positions.is_empty()) {
         let name = match m.material.as_str() {
+            mat if mat.starts_with("sym:") => format!("furnishing-f{}", m.object.0),
             "roof" => {
                 let plane = match roof_planes.entry(m.object.0) {
                     Entry::Occupied(mut e) => {
@@ -146,7 +147,6 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
             "cabinet-front" => format!("cabinet-cb{}-front", m.object.0),
             "counter" => format!("cabinet-cb{}-counter", m.object.0),
             mat if mat.starts_with("fixture-") => format!("fixture-fx{}", m.object.0),
-            mat if mat.starts_with("sym:") => format!("furnishing-f{}", m.object.0),
             _ => format!("{}-o{}", m.material, m.object.0),
         };
         names.push(name);
@@ -703,7 +703,7 @@ mod tests {
         assert_eq!(le32(&bytes, 16), 0x4E4F534A);
         let json_pad = (4 - json_len as usize % 4) % 4;
         let bin_start = 12 + 8 + json_len as usize + json_pad;
-        let bin_len = le32(&bytes, bin_start);
+        let _bin_len = le32(&bytes, bin_start);
         assert_eq!(le32(&bytes, bin_start + 4), 0x004E4942);
     }
 
@@ -1098,7 +1098,7 @@ mod tests {
         let mut chunk_count = 0;
         while offset < bytes.len() {
             let chunk_len = le32(&bytes, offset) as usize;
-            let chunk_type = le32(&bytes, offset + 4);
+            let _chunk_type = le32(&bytes, offset + 4);
             assert_eq!(chunk_len % 4, 0, "chunk {chunk_count} length {chunk_len} not multiple of 4");
             offset += 8 + chunk_len;
             chunk_count += 1;

@@ -4,7 +4,8 @@
 //! body is the 3D view's geometry ([`geometry::body`]), contained in its level's storey; ids come
 //! from [`guid::global_id`], so two exports of one model are byte-identical given one timestamp
 //! (`SOURCE_DATE_EPOCH`). The elements are written by one module each, in this order: walls,
-//! openings (which need the walls), slabs, roofs, stairs, spaces, site, lights.
+//! openings (which need the walls), slabs, roofs, stairs, spaces, site, lights, casework (cabinets
+//! and fixtures), furnishings (library items, phase 14).
 
 mod casework;
 mod furnishing;
@@ -275,10 +276,16 @@ impl<'a> Ctx<'a> {
     /// …tail)` where `tail` is everything after `IfcProduct`'s seven attributes (for `IfcElement`s
     /// the `Tag` first), and contain it in the storey.
     pub(crate) fn element(&mut self, entity: &str, key: &str, name: &str, slot: usize, meshes: &[&Mesh], tail: Vec<P>) -> Ref {
+        self.element_described(entity, key, [P::str(name), P::Null, P::Null], slot, meshes, tail)
+    }
+
+    /// [`Ctx::element`] with its `Name`, `Description` and `ObjectType` given (`text`, in that order).
+    pub(crate) fn element_described(&mut self, entity: &str, key: &str, text: [P; 3], slot: usize, meshes: &[&Mesh], tail: Vec<P>) -> Ref {
         let placement = self.placement_in_storey(slot);
         let z0 = self.storeys.get(slot).map_or(0.0, |s| s.elevation);
         let body = self.body(meshes, z0).map_or(P::Null, P::Ref);
-        let mut params = vec![P::str(global_id(key)), P::Null, P::str(name), P::Null, P::Null, P::Ref(placement), body];
+        let [name, description, object_type] = text;
+        let mut params = vec![P::str(global_id(key)), P::Null, name, description, object_type, P::Ref(placement), body];
         params.extend(tail);
         let r = self.w.add(entity, params);
         self.contain(slot, r);
