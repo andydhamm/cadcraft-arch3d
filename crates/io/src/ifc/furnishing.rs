@@ -24,12 +24,13 @@ fn emit_one(ctx: &mut Ctx, f: &Furnishing) {
     let slot = ctx.storey_for(f.level);
 
     // Gather meshes for this furnishing from the scene pieces.
-    // Pieces are keyed by (kind, id). Furnishings use ObjectKind::Furnishing.
-    // We need to collect all meshes belonging to this furnishing id.
-    let meshes: Vec<&cadcraft_arch3d::Mesh> = ctx.pieces.iter_for(cadcraft_arch3d::incremental::ObjectKind::Furnishing, f.id).collect();
+    // Pieces are keyed by (kind, id). Furnishings use kind "furnishing".
+    let meshes: Vec<&cadcraft_arch3d::Mesh> = ctx.pieces.get("furnishing", f.id).to_vec();
+    if meshes.is_empty() {
+        return;
+    }
 
     let mut tail = Vec::new();
-    let mut predefined_type = P::Null;
 
     match class {
         "IfcFurniture" => {
@@ -40,25 +41,25 @@ fn emit_one(ctx: &mut Ctx, f: &Furnishing) {
         }
         "IfcSanitaryTerminal" => {
             // IfcSanitaryTerminal: PredefinedType (enum), ObjectType (string)
-            predefined_type = match f.symbol_type.as_str() {
-                "sink" | "lavatory" => P::Enum("SINK"),
-                "toilet" => P::Enum("TOILETPAN"),
-                "bathtub" => P::Enum("BATH"),
-                "shower" => P::Enum("SHOWER"),
-                _ => P::Enum("USERDEFINED"),
+            let predef = match f.symbol_type.as_str() {
+                "sink" | "lavatory" => "SINK",
+                "toilet" => "TOILETPAN",
+                "bathtub" => "BATH",
+                "shower" => "SHOWER",
+                _ => "USERDEFINED",
             };
-            tail.push(predefined_type);
+            tail.push(P::Enum(predef));
             tail.push(P::Null); // ObjectType
         }
         "IfcElectricAppliance" => {
             // IfcElectricAppliance: PredefinedType (enum), ObjectType (string)
-            predefined_type = match f.symbol_type.as_str() {
-                "refrigerator" => P::Enum("REFRIGERATOR"),
-                "dishwasher" => P::Enum("DISHWASHER"),
-                "range" | "cooktop" | "oven" => P::Enum("ELECTRICCOOKER"),
-                _ => P::Enum("USERDEFINED"),
+            let predef = match f.symbol_type.as_str() {
+                "refrigerator" => "REFRIGERATOR",
+                "dishwasher" => "DISHWASHER",
+                "range" | "cooktop" | "oven" => "ELECTRICCOOKER",
+                _ => "USERDEFINED",
             };
-            tail.push(predefined_type);
+            tail.push(P::Enum(predef));
             tail.push(P::Null); // ObjectType
         }
         "IfcLightFixture" => {
@@ -89,24 +90,9 @@ fn emit_one(ctx: &mut Ctx, f: &Furnishing) {
     let entity = ctx.element(class, &key, &name, slot, &meshes, tail);
 
     // Property set CADCraft_Library
-    let props = vec![
-        ("Item", P::str(&f.item)),
-        ("Licence", P::str(&f.category)), // Using category as placeholder for licence if not in Furnishing struct, but Furnishing has no licence field directly.
-                                          // Wait, Furnishing struct in doc doesn't have licence. ItemRecord has it.
-                                          // The prompt says: "a property set CADCraft_Library with Item (id), Licence, Source".
-                                          // Furnishing struct has `item` (id), but not licence/source.
-                                          // We might need to look up the item record? But io doesn't have access to the library catalog easily here without passing it.
-                                          // However, the prompt says "Description = the item's name". Furnishing has `name`.
-                                          // For Licence and Source, if they aren't on Furnishing, we might have to leave them empty or assume they are stored in `notes` or similar?
-                                          // Actually, looking at Furnishing struct: `pub item: String`, `pub name: String`. No licence/source.
-                                          // The prompt implies we should carry them. If they are not on the object, we can't export them unless we look them up.
-                                          // But `io` crate doesn't have the library catalog.
-                                          // Let's check if `Furnishing` has more fields in the prompt description.
-                                          // `pub struct Furnishing { ... pub item: String, ... }`. No licence.
-                                          // Maybe `item` is enough? Or maybe we just export what we have.
-                                          // The prompt says "with Item (id), Licence, Source".
-                                          // If the data isn't there, we export empty strings.
-    ];
+    // Furnishing struct does not carry licence or source directly; they are in the library catalog.
+    // We export empty strings for them as we cannot access the catalog here.
+    let props = vec![("Item", P::str(&f.item)), ("Licence", P::str("")), ("Source", P::str(""))];
 
     ctx.pset("CADCraft_Library", &key, props, &[entity]);
 }

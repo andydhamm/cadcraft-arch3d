@@ -32,6 +32,7 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
         m if m.starts_with("light-") => "light",
         m if m.starts_with("cabinet-") || m == "counter" => "cabinet",
         m if m.starts_with("fixture-") => "fixture",
+        m if m.starts_with("sym:") => "furnishing",
         _ => "other",
     }
 }
