@@ -269,6 +269,8 @@ impl Offscreen {
     /// Upload `scene` (plus the ground quad when `ground`) unless `scene_key` is already resident.
     fn ensure_meshes(&mut self, scene: &Scene3d, scene_key: u64, ground: bool) {
         if self.meshes.as_ref().is_none_or(|(k, _)| *k != (scene_key, ground)) {
+            // The texture array follows the scene's texture keys; the draws' layers index into it.
+            self.gpu.prepare_textures(&self.device, &self.queue, scene);
             let uploaded = if ground {
                 let mut with_ground = scene.clone();
                 with_ground.meshes.push(crate::shadow::ground_mesh(&scene.bounds));

@@ -102,6 +102,9 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
     let mut names = Vec::new();
     for m in scene.meshes.iter().filter(|m| !m.positions.is_empty()) {
         let name = match m.material.as_str() {
+            mat if mat.starts_with("sym:") => format!("furnishing-f{}", m.object.0),
+            mat if mat.starts_with("pull:") => format!("cabinet-cb{}-pull", m.object.0),
+            mat if mat.starts_with("paint:") => paint_node_name(mat, m.object),
             "roof" => {
                 let plane = match roof_planes.entry(m.object.0) {
                     Entry::Occupied(mut e) => {
@@ -153,33 +156,157 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
     names
 }
 
+/// Separates a node name from a mesh index in `build_bin`'s node keys; never part of a node name.
+const NODE_KEY_SEP: char = '\u{1}';
+
+/// Whether a mesh of `material` joins the other meshes of its node: a furnishing's parts (`sym:`, its paints) and a
+/// cabinet's pulls (`pull:`, `paint:cabinet/cb<n>/pull`).
+fn shares_a_node(material: &str) -> bool {
+    material.starts_with("sym:")
+        || material.starts_with("pull:")
+        || material.starts_with("paint:furnishing/")
+        || (material.starts_with("paint:cabinet/") && material.ends_with("/pull"))
+}
+
+fn paint_node_name(material: &str, object: cadcraft_doc::ArchId) -> String {
+    let key = material.strip_prefix("paint:").unwrap_or(material);
+    let Some(surface) = cadcraft_doc::arch::Surface::parse(key) else {
+        return format!("{}-o{}", material, object.0);
+    };
+    match surface {
+        cadcraft_doc::arch::Surface::WallSide { wall, side } => {
+            format!("wall-w{}-{}", wall.0, if side == cadcraft_doc::arch::Side::Left { "left" } else { "right" })
+        }
+        cadcraft_doc::arch::Surface::RoomFloor(r) => format!("floor-r{}", r.0),
+        cadcraft_doc::arch::Surface::RoomCeiling(r) => format!("ceiling-r{}", r.0),
+        cadcraft_doc::arch::Surface::Roof(r) => format!("roof-r{}p0", r.0),
+        cadcraft_doc::arch::Surface::Cabinet { cabinet, part } => {
+            let base = format!("cabinet-cb{}", cabinet.0);
+            match part {
+                cadcraft_doc::arch::CabinetPart::Carcass => base,
+                cadcraft_doc::arch::CabinetPart::Front => format!("{base}-front"),
+                cadcraft_doc::arch::CabinetPart::Counter => format!("{base}-counter"),
+                cadcraft_doc::arch::CabinetPart::Pull => format!("{base}-pull"),
+            }
+        }
+        cadcraft_doc::arch::Surface::Fixture(fx) => format!("fixture-fx{}", fx.0),
+        cadcraft_doc::arch::Surface::Furnishing { furnishing, .. } => format!("furnishing-f{}", furnishing.0),
+    }
+}
+
+fn texture_image_name(key: &str) -> String {
+    if let Some(rest) = key.strip_prefix("sym:") {
+        format!("sym-{}", rest.replace(':', "-"))
+    } else if let Some(rest) = key.strip_prefix("item:") {
+        rest.to_string()
+    } else if let Some(rest) = key.strip_prefix("finish:") {
+        rest.to_string()
+    } else {
+        key.replace(':', "-")
+    }
+}
+
+fn uv_for_mesh(m: &Mesh, scene: &Scene3d) -> Vec<[f32; 2]> {
+    let Some(def) = scene.materials.get(&m.material) else { return m.uvs.clone() };
+    let [u, v] = def.tile;
+    if !u.is_finite() || !v.is_finite() || u <= 0.0 || v <= 0.0 {
+        return m.uvs.clone();
+    }
+    if u == 1.0 && v == 1.0 {
+        return m.uvs.clone();
+    }
+    let factor_u = 1.0 / u;
+    let factor_v = 1.0 / v;
+    m.uvs.iter().map(|uv| [uv[0] * factor_u, uv[1] * factor_v]).collect()
+}
+
 /// Build the JSON text plus the single binary buffer (with all views/accessors) for `scene`.
 fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
     let mut bin: Vec<u8> = Vec::new();
     let mut buffer_views: Vec<Value> = Vec::new();
     let mut accessors: Vec<Value> = Vec::new();
-    let mut meshes: Vec<Value> = Vec::new();
-    let mut nodes: Vec<Value> = Vec::new();
 
     let mut materials: Vec<Value> = Vec::new();
     let mut material_index: HashMap<String, u32> = HashMap::new();
     let names = node_names(scene);
 
     let written_meshes: Vec<&Mesh> = scene.meshes.iter().filter(|m| !m.positions.is_empty()).collect();
-    // One PNG per finish used, in Finish::ALL order.
-    let mut pngs: Vec<(Finish, Vec<u8>)> = Vec::new();
+    let mut pngs: Vec<(String, Vec<u8>, String)> = Vec::new();
+    let mut png_index: HashMap<String, u32> = HashMap::new();
+    let mut texture_order: Vec<String> = Vec::new();
+    let mut texture_seen: HashMap<String, ()> = HashMap::new();
+
+    let add_png = |pngs: &mut Vec<(String, Vec<u8>, String)>,
+                   png_index: &mut HashMap<String, u32>,
+                   texture_order: &mut Vec<String>,
+                   texture_seen: &mut HashMap<String, ()>,
+                   key: String,
+                   bytes: Vec<u8>,
+                   name: String| {
+        if texture_seen.contains_key(&key) {
+            return;
+        }
+        texture_seen.insert(key.clone(), ());
+        texture_order.push(key.clone());
+        let idx = pngs.len() as u32;
+        png_index.insert(key.clone(), idx);
+        pngs.push((key.clone(), bytes, name));
+    };
+
     for f in Finish::ALL {
         if written_meshes.iter().any(|m| finish_of(&m.material) == Some(f)) {
             let t = texture::texture(f);
             if let Ok(bytes) = crate::png::encode_rgba8(t.width, t.height, &t.rgba) {
-                pngs.push((f, bytes));
+                add_png(
+                    &mut pngs,
+                    &mut png_index,
+                    &mut texture_order,
+                    &mut texture_seen,
+                    format!("finish:{}", f.name()),
+                    bytes,
+                    f.name().to_string(),
+                );
             }
         }
     }
+
+    for m in &written_meshes {
+        if let Some(def) = scene.materials.get(&m.material) {
+            if let Some(tex) = &def.texture {
+                if let Some(image) = scene.textures.get(tex) {
+                    if image.is_valid() {
+                        let key = tex.clone();
+                        if !texture_seen.contains_key(&key) {
+                            if let Ok(bytes) = crate::png::encode_rgba8(image.width, image.height, &image.rgba) {
+                                add_png(
+                                    &mut pngs,
+                                    &mut png_index,
+                                    &mut texture_order,
+                                    &mut texture_seen,
+                                    key.clone(),
+                                    bytes,
+                                    texture_image_name(&key),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut group_order: Vec<String> = Vec::new();
+    let mut grouped: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, m) in written_meshes.iter().enumerate() {
+        let name = names.get(i).cloned().unwrap_or_default();
+        if !grouped.contains_key(&name) {
+            group_order.push(name.clone());
+        }
+        grouped.entry(name.clone()).or_default().push(i);
         let mat_idx = if let Some(idx) = material_index.get(&m.material) {
             *idx
         } else {
+            let def = scene.materials.get(&m.material);
             let is_roof = m.material == "roof";
             let rgb = base_color_for(&m.material);
             let is_glass = m.material.contains("glass");
@@ -188,6 +315,8 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                 "pbrMetallicRoughness": {
                     "baseColorFactor": if is_roof {
                         [ROOF_ALBEDO[0], ROOF_ALBEDO[1], ROOF_ALBEDO[2], 1.0]
+                    } else if let Some(d) = def {
+                        [d.base_color[0] as f64, d.base_color[1] as f64, d.base_color[2] as f64, d.base_color[3] as f64]
                     } else {
                         [
                             rgb.0 as f64 / 255.0,
@@ -196,18 +325,36 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                             if is_glass { 0.35 } else { 1.0 }
                         ]
                     },
-                    "metallicFactor": 0.0,
-                    "roughnessFactor": if is_roof { 0.9 } else if is_glass { 0.05 } else { 1.0 },
+                    "metallicFactor": if let Some(d) = def { d.metallic as f64 } else { 0.0 },
+                    "roughnessFactor": if let Some(d) = def { d.roughness as f64 } else if is_roof { 0.9 } else if is_glass { 0.05 } else { 1.0 },
                 },
             });
-            let textured = finish_of(&m.material).and_then(|f| pngs.iter().position(|(g, _)| *g == f).map(|t| (f, t)));
-            if let Some((f, t)) = textured {
-                mat["pbrMetallicRoughness"] = json!({
-                    "baseColorTexture": { "index": t },
-                    "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
-                    "metallicFactor": 0.0,
-                    "roughnessFactor": finish_roughness(f),
-                });
+            if let Some(d) = def {
+                if let Some(tex) = &d.texture {
+                    if let Some(image) = scene.textures.get(tex) {
+                        if image.is_valid() {
+                            if let Some(index) = png_index.get(tex) {
+                                mat["pbrMetallicRoughness"] = json!({
+                                    "baseColorTexture": { "index": *index },
+                                    "baseColorFactor": [d.base_color[0] as f64, d.base_color[1] as f64, d.base_color[2] as f64, d.base_color[3] as f64],
+                                    "metallicFactor": d.metallic as f64,
+                                    "roughnessFactor": d.roughness as f64,
+                                });
+                            }
+                        }
+                    }
+                }
+            } else {
+                let textured =
+                    finish_of(&m.material).and_then(|f| pngs.iter().position(|(k, _, _)| k == &format!("finish:{}", f.name())).map(|t| (f, t)));
+                if let Some((f, t)) = textured {
+                    mat["pbrMetallicRoughness"] = json!({
+                        "baseColorTexture": { "index": t },
+                        "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+                        "metallicFactor": 0.0,
+                        "roughnessFactor": finish_roughness(f),
+                    });
+                }
             }
             if is_glass {
                 mat["alphaMode"] = json!("BLEND");
@@ -217,10 +364,19 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
             material_index.insert(m.material.clone(), idx);
             idx
         };
+        let _ = mat_idx;
+    }
 
+    let mut primitive_meshes: Vec<Value> = Vec::new();
+    let mut mesh_index: HashMap<String, u32> = HashMap::new();
+    let mut node_order: Vec<String> = Vec::new();
+    let mut node_meshes: HashMap<String, Vec<Value>> = HashMap::new();
+
+    for (i, m) in written_meshes.iter().enumerate() {
         let name = names.get(i).cloned().unwrap_or_default();
+        let mat_idx = *material_index.get(&m.material).unwrap_or(&0);
+        let uv_data = uv_for_mesh(m, scene);
 
-        // POSITION (VEC3, f32).
         let pos_start = bin.len();
         for p in &m.positions {
             push_f32(&mut bin, p[0]);
@@ -248,7 +404,6 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         }));
         let acc_pos = accessors.len() - 1;
 
-        // NORMAL (VEC3, f32).
         let n_start = bin.len();
         for n in &m.normals {
             push_f32(&mut bin, n[0]);
@@ -273,15 +428,13 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         }));
         let acc_norm = accessors.len() - 1;
 
-        // TEXCOORD_0 (VEC2, f32). glTF 2.0 names the first UV set TEXCOORD_0;
-        // application-specific semantics must instead start with an underscore.
         let uv_start = bin.len();
-        for uv in &m.uvs {
+        for uv in &uv_data {
             push_f32(&mut bin, uv[0]);
             push_f32(&mut bin, uv[1]);
         }
         align4(&mut bin);
-        let uv_len = (m.uvs.len() * 8) as u32;
+        let uv_len = (uv_data.len() * 8) as u32;
         let bv_uv = buffer_views.len();
         buffer_views.push(json!({
             "buffer": 0,
@@ -292,13 +445,13 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         let mut uv_acc = json!({
             "bufferView": bv_uv,
             "byteOffset": 0,
-            "count": m.uvs.len() as u32,
+            "count": uv_data.len() as u32,
             "type": "VEC2",
             "componentType": 5126,
         });
-        if let Some(first) = m.uvs.first() {
+        if let Some(first) = uv_data.first() {
             let (mut lo, mut hi) = (*first, *first);
-            for uv in &m.uvs {
+            for uv in &uv_data {
                 for k in 0..2 {
                     lo[k] = lo[k].min(uv[k]);
                     hi[k] = hi[k].max(uv[k]);
@@ -310,7 +463,6 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         accessors.push(uv_acc);
         let acc_uv = accessors.len() - 1;
 
-        // INDICES (SCALAR, uint32).
         let idx_start = bin.len();
         for idx in &m.indices {
             push_u32(&mut bin, *idx);
@@ -333,54 +485,62 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         }));
         let acc_idx = accessors.len() - 1;
 
-        meshes.push(json!({
-            "name": name,
-            "primitives": [
-                {
-                    "attributes": {
-                        "POSITION": acc_pos,
-                        "NORMAL": acc_norm,
-                        "TEXCOORD_0": acc_uv
-                    },
-                    "indices": acc_idx,
-                    "material": mat_idx
-                }
-            ]
-        }));
+        let primitive = json!({
+            "attributes": {
+                "POSITION": acc_pos,
+                "NORMAL": acc_norm,
+                "TEXCOORD_0": acc_uv
+            },
+            "indices": acc_idx,
+            "material": mat_idx
+        });
+        // Only a furnishing's parts and a cabinet's pulls share one node (a primitive each); every other mesh keeps a
+        // node of its own, as before phase 14, even when it shares its name (a fixture of two materials).
+        let key = if shares_a_node(&m.material) { name.clone() } else { format!("{name}{NODE_KEY_SEP}{i}") };
+        if !node_meshes.contains_key(&key) {
+            node_order.push(key.clone());
+        }
+        node_meshes.entry(key).or_default().push(primitive);
+    }
 
-        // Per-mesh node. The mesh is placed under a single root node that
-        // rotates the Z-up arch3d scene into glTF's Y-up convention
-        // (-90 degrees about X: (x, y, z) -> (x, z, -y)).
-        nodes.push(json!({
-            "name": name,
-            "mesh": i as u32
+    let shown = |key: &str| key.split(NODE_KEY_SEP).next().unwrap_or(key).to_string();
+    for key in &node_order {
+        let mesh = json!({
+            "name": shown(key),
+            "primitives": node_meshes.get(key).cloned().unwrap_or_default()
+        });
+        let mesh_index_for_name = primitive_meshes.len() as u32;
+        mesh_index.insert(key.clone(), mesh_index_for_name);
+        primitive_meshes.push(mesh);
+    }
+
+    let mut gltf_nodes: Vec<Value> = Vec::new();
+    for key in &node_order {
+        gltf_nodes.push(json!({
+            "name": shown(key),
+            "mesh": mesh_index.get(key).cloned().unwrap_or_default(),
         }));
     }
 
-    // Images: each PNG is its own bufferView after the mesh data.
     let mut images: Vec<Value> = Vec::new();
     let mut textures: Vec<Value> = Vec::new();
-    for (k, (f, png)) in pngs.iter().enumerate() {
+    for (key, (name, png)) in pngs.iter().enumerate().map(|(i, (_, bytes, name))| (i, (name, bytes))) {
+        let _ = key;
         let start = bin.len();
         bin.extend_from_slice(png);
         align4(&mut bin);
         buffer_views.push(json!({ "buffer": 0, "byteOffset": start, "byteLength": png.len() as u32 }));
-        images.push(json!({ "bufferView": buffer_views.len() - 1, "mimeType": "image/png", "name": f.name() }));
-        textures.push(json!({ "sampler": 0, "source": k, "name": f.name() }));
+        images.push(json!({ "bufferView": buffer_views.len() - 1, "mimeType": "image/png", "name": name }));
+        textures.push(json!({ "sampler": 0, "source": images.len() - 1, "name": name }));
     }
 
     let buffers: Vec<Value> = if bin.is_empty() { Vec::new() } else { vec![json!({ "byteLength": bin.len() as u32 })] };
     let (light_defs, light_nodes) = crate::glb_lights::punctual_lights(scene);
-    // Root node carries the Z-up -> Y-up rotation; its children are the per-mesh
-    // nodes. An empty scene keeps an empty node list.
     let root = if written_meshes.is_empty() {
         Vec::new()
     } else {
-        // Per-mesh nodes are the children; the root is node 0, so mesh nodes are
-        // renumbered 1..=n to sit after it in the node list.
-        let mut children: Vec<u32> = (1..=written_meshes.len() as u32).collect();
-        // Phase 10: light nodes follow the mesh nodes, also under the root.
-        children.extend((0..light_nodes.len() as u32).map(|k| written_meshes.len() as u32 + 1 + k));
+        let mut children: Vec<u32> = (1..=gltf_nodes.len() as u32).collect();
+        children.extend((0..light_nodes.len() as u32).map(|k| gltf_nodes.len() as u32 + 1 + k));
         vec![json!({
             "name": "arch3d-root",
             "rotation": [ROOT_ROTATION[0], ROOT_ROTATION[1], ROOT_ROTATION[2], ROOT_ROTATION[3]],
@@ -388,14 +548,14 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         })]
     };
     let has_root = !root.is_empty();
-    let all_nodes: Vec<Value> = root.into_iter().chain(nodes).chain(if has_root { light_nodes } else { Vec::new() }).collect();
+    let all_nodes: Vec<Value> = root.into_iter().chain(gltf_nodes).chain(if has_root { light_nodes } else { Vec::new() }).collect();
     let scene_nodes: Vec<Value> = if written_meshes.is_empty() { Vec::new() } else { vec![json!(0)] };
     let mut value = json!({
         "asset": { "version": "2.0", "generator": "CADCraft arch3d" },
         "scene": 0,
         "scenes": [ { "name": "arch3d", "nodes": scene_nodes } ],
         "nodes": all_nodes,
-        "meshes": meshes,
+        "meshes": primitive_meshes,
         "materials": materials,
         "buffers": buffers,
         "bufferViews": buffer_views,
@@ -482,8 +642,9 @@ fn json_string(v: Value) -> String {
 mod tests {
     use super::*;
 
-    use cadcraft_arch3d::{Mesh, Scene3d};
+    use cadcraft_arch3d::{MaterialDef, Mesh, Scene3d};
     use cadcraft_doc::ArchId;
+    use cadcraft_doc::arch::ImageRgba;
     use serde_json::Value;
 
     /// One triangle, one triangle's indices, and a known material/id.
@@ -702,7 +863,7 @@ mod tests {
         assert_eq!(le32(&bytes, 16), 0x4E4F534A);
         let json_pad = (4 - json_len as usize % 4) % 4;
         let bin_start = 12 + 8 + json_len as usize + json_pad;
-        let bin_len = le32(&bytes, bin_start);
+        let _bin_len = le32(&bytes, bin_start);
         assert_eq!(le32(&bytes, bin_start + 4), 0x004E4942);
     }
 
@@ -788,6 +949,162 @@ mod tests {
         assert_eq!(meshes[0]["name"], "wall-w1");
         assert_eq!(meshes[1]["name"], "wall-w2");
         assert_eq!(meshes[2]["name"], "wall-w3");
+    }
+
+    #[test]
+    fn one_node_per_furnishing_with_a_primitive_per_part() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:thing:0".to_string();
+                m.object = ArchId(1);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:thing:1".to_string();
+                m.object = ArchId(1);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:other:0".to_string();
+                m.object = ArchId(2);
+                m
+            },
+        ];
+        let json = glb_json_chunk(&write(&scene));
+        let mesh_names: Vec<&str> = json["meshes"].as_array().unwrap().iter().map(|m| m["name"].as_str().unwrap()).collect();
+        assert!(mesh_names.contains(&"furnishing-f1"));
+        assert!(mesh_names.contains(&"furnishing-f2"));
+        let f1 = json["meshes"].as_array().unwrap().iter().find(|m| m["name"] == "furnishing-f1").unwrap();
+        assert_eq!(f1["primitives"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn only_furnishings_and_pulls_share_a_node() {
+        // A fixture of two materials was two nodes before phase 14 (the OBJ groups match them); it stays two.
+        let mut scene = Scene3d::default();
+        scene.meshes = ["fixture-chrome", "fixture-ceramic", "pull:bar", "pull:bar"]
+            .iter()
+            .map(|mat| {
+                let mut m = wall_mesh();
+                m.material = (*mat).to_string();
+                m.object = ArchId(3);
+                m
+            })
+            .collect();
+        let json = glb_json_chunk(&write(&scene));
+        let names: Vec<&str> = json["nodes"].as_array().unwrap().iter().filter_map(|n| n["name"].as_str()).collect();
+        assert_eq!(names.iter().filter(|n| **n == "fixture-fx3").count(), 2, "{names:?}");
+        assert_eq!(names.iter().filter(|n| **n == "cabinet-cb3-pull").count(), 1, "{names:?}");
+    }
+
+    #[test]
+    fn cabinet_pulls_are_one_node() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "pull:bar:0".to_string();
+                m.object = ArchId(7);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "paint:cabinet/cb7/pull".to_string();
+                m.object = ArchId(7);
+                m
+            },
+        ];
+        let json = glb_json_chunk(&write(&scene));
+        let names: Vec<&str> = json["meshes"].as_array().unwrap().iter().map(|m| m["name"].as_str().unwrap()).collect();
+        assert!(names.contains(&"cabinet-cb7-pull"));
+        assert_eq!(names.iter().filter(|n| **n == "cabinet-cb7-pull").count(), 1);
+    }
+
+    #[test]
+    fn painted_wall_sides_are_named_nodes() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "paint:wall/w3/left".to_string();
+                m.object = ArchId(3);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "paint:wall/w3/right".to_string();
+                m.object = ArchId(3);
+                m
+            },
+        ];
+        let json = glb_json_chunk(&write(&scene));
+        let names: Vec<&str> = json["meshes"].as_array().unwrap().iter().map(|m| m["name"].as_str().unwrap()).collect();
+        assert!(names.contains(&"wall-w3-left"));
+        assert!(names.contains(&"wall-w3-right"));
+    }
+
+    #[test]
+    fn symbol_textures_embed_once_as_png() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:demo:0".to_string();
+                m.object = ArchId(9);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:demo:1".to_string();
+                m.object = ArchId(9);
+                m
+            },
+        ];
+        scene.materials.insert("sym:demo:0".to_string(), MaterialDef { texture: Some("sym:demo:t0".to_string()), ..Default::default() });
+        scene.materials.insert("sym:demo:1".to_string(), MaterialDef { texture: Some("sym:demo:t0".to_string()), ..Default::default() });
+        let mut rgba = vec![0_u8; 2 * 2 * 4];
+        for p in rgba.chunks_exact_mut(4) {
+            p[3] = 255;
+        }
+        scene.textures.insert("sym:demo:t0".to_string(), ImageRgba { width: 2, height: 2, rgba, ..Default::default() });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let image_names: Vec<&str> = json["images"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap()).collect();
+        assert_eq!(image_names, ["sym-demo-t0"]);
+    }
+
+    #[test]
+    fn paint_tints_reach_base_color_factor() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![{
+            let mut m = wall_mesh();
+            m.material = "paint:wall/w4/left".to_string();
+            m.object = ArchId(4);
+            m
+        }];
+        let tint = [0x20, 0x40, 0x80];
+        scene
+            .materials
+            .insert("paint:wall/w4/left".to_string(), MaterialDef { base_color: [0.38, 0.46, 0.62, 1.0], tint: Some(tint), ..Default::default() });
+        let json = glb_json_chunk(&write(&scene));
+        let factor = &json["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"];
+        let values = factor.as_array().unwrap();
+        assert!((values[0].as_f64().unwrap() - 0.38).abs() < 1e-6);
+        assert!((values[1].as_f64().unwrap() - 0.46).abs() < 1e-6);
+        assert!((values[2].as_f64().unwrap() - 0.62).abs() < 1e-6);
+        assert!((values[3].as_f64().unwrap() - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn unpainted_scenes_write_the_same_glb() {
+        let scene = scene_with(2);
+        let a = write(&scene);
+        let b = write(&scene);
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -1097,7 +1414,7 @@ mod tests {
         let mut chunk_count = 0;
         while offset < bytes.len() {
             let chunk_len = le32(&bytes, offset) as usize;
-            let chunk_type = le32(&bytes, offset + 4);
+            let _chunk_type = le32(&bytes, offset + 4);
             assert_eq!(chunk_len % 4, 0, "chunk {chunk_count} length {chunk_len} not multiple of 4");
             offset += 8 + chunk_len;
             chunk_count += 1;
