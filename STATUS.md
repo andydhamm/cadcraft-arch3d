@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 12 of 35 segments merged · 0 of 13 acceptance checks**
 
@@ -24,7 +24,7 @@ Updated 2026-11-04 11:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 16.3 h so far · expected done Nov 06 06:12–Nov 08 22:21 UTC |
+| 14 | The library | building | 0 / 13 | 16.5 h so far · expected done Nov 06 14:11–Nov 10 08:56 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
@@ -73,8 +73,8 @@ Updated 2026-11-04 11:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 866 |
 | bonsai-b | bonsai2-27b | gate | 803 |
-| bonsai-ws2-a | bonsai2-27b | agent | 878 |
-| bonsai-ws2-b | bonsai2-27b | gate | 854 |
+| bonsai-ws2-a | bonsai2-27b | gate | 878 |
+| bonsai-ws2-b | bonsai2-27b | idle | 855 |
 | claude-sonnet-a | sonnet | merging | 76 |
 | claude-sonnet-b | sonnet | merging | 80 |
 | claude-sonnet-c | sonnet | merging | 32 |
