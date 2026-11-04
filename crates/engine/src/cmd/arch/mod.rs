@@ -19,6 +19,7 @@ pub mod deck;
 pub mod illuminance;
 pub mod inspect;
 pub mod level;
+pub mod library;
 pub(crate) mod light_inspect;
 pub mod lightfixture;
 pub mod material;
@@ -69,6 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(wall::specs());
     v.extend(opening::specs());
     v.extend(room::specs());
+    v.extend(library::specs());
     v.extend(roomdetect::specs());
     v.extend(inspect::specs());
     v.extend(pick::specs());

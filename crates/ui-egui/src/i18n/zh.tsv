@@ -1475,6 +1475,12 @@
 	Plant	植物
 	Plant Species	植物品种
 	Railing	栏杆
+	Library	库
+	Library Item	库项目
+	Tag Library Item	标记库项目
+	Library Filters	库筛选器
+	Install Catalog	安装目录
+	Local Catalog	本地目录
 	Render 3D	三维渲染
 	Roof	屋顶
 	Roof Automatic	自动屋顶
