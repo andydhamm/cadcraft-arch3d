@@ -683,7 +683,7 @@ mod tests {
         assert_eq!(cabs.len(), 2, "{v}");
         assert_eq!(cabs[0]["id"], "cb0");
         assert_eq!(cabs[0]["kind"], "base");
-        assert_eq!(cabs[0]["frontsMode"], "drawerOverDoor");
+        assert_eq!(cabs[0]["fronts"], "drawerOverDoor");
         assert_eq!(cabs[0]["layer"], "A-FLOR-CASE");
         assert!((cabs[0]["counterTop"].as_f64().unwrap_or(0.0) - 0.914).abs() < 1e-9, "{v}");
         assert!(cabs[1]["counterTop"].is_null());

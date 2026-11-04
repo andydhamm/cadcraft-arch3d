@@ -43,9 +43,11 @@ for cid, pull in (('cb0', 'own:pull-bar-128'), ('cb1', 'own:pull-knob-32')):
     c = cabs[cid]
     if c.get('pull') != pull:
         fail(f"{cid} pull {c.get('pull')!r}, expected {pull}")
-    fronts = c.get('fronts')
+    fronts = c.get('frontParts')   # `fronts` stays the phase-13 mode name (phase-13/04 reads it)
     if not isinstance(fronts, list) or not fronts:
-        fail(f"{cid} lists no fronts: {c}")
+        fail(f"{cid} lists no frontParts: {c}")
+    if not isinstance(c.get('fronts'), str):
+        fail(f"{cid}: fronts must stay the cabinet's mode name: {c}")
     for fr in fronts:
         u0, v0, u1, v1 = [num(x, f'{cid} front rect') for x in fr.get('rect', [])]
         p = fr.get('pull')

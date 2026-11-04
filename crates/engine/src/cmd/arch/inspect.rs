@@ -411,10 +411,9 @@ fn inspect_cabinet_parts(model: &ArchModel, out: &mut JsonMap<String, Value>) {
         obj.insert("pull".to_string(), json!(c.pull));
         obj.insert("falseFront".to_string(), json!(false_front));
         obj.insert("cutout".to_string(), json!(casework_layout::hosted_cutout(model, c).map(|(_, _, size)| size)));
-        // The layout list takes the `fronts` key; the older mode name moves to `frontsMode`.
-        if let Some(mode) = obj.insert("fronts".to_string(), Value::Array(list)) {
-            obj.insert("frontsMode".to_string(), mode);
-        }
+        // `fronts` stays the phase-13 mode name (the cabinet command's own parameter, which phase-13 check 04 and
+        // Set as Default read); the layout of the doors and drawers is `frontParts`.
+        obj.insert("frontParts".to_string(), Value::Array(list));
     }
 }
 
@@ -2453,7 +2452,9 @@ mod tests {
         assert_eq!(c["pull"], "bar");
         assert_eq!(c["falseFront"], false);
         assert!(c["cutout"].is_null());
-        let fronts = c["fronts"].as_array().expect("fronts");
+        // `fronts` stays the phase-13 mode (the cabinet command's own parameter); the layout is `frontParts`.
+        assert_eq!(c["fronts"], "doors");
+        let fronts = c["frontParts"].as_array().expect("frontParts");
         assert_eq!(fronts.len(), 2);
         assert_eq!(fronts[0]["kind"], "door");
         assert_eq!(fronts[0]["hinge"], "left");
@@ -2478,7 +2479,7 @@ mod tests {
         let c = &v["cabinets"][0];
         assert_eq!(c["falseFront"], true);
         assert_eq!(c["cutout"], json!([0.5, 0.4]));
-        let fronts = c["fronts"].as_array().expect("fronts");
+        let fronts = c["frontParts"].as_array().expect("frontParts");
         let f = fronts.iter().find(|f| f["kind"] == "false").expect("a false front");
         assert!(f["pull"].is_null() && f["hinge"].is_null());
     }
@@ -2493,6 +2494,7 @@ mod tests {
         assert!(v.get("surfaces").is_none());
         assert!(v.get("cabinets").is_none());
         let rows = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
-        assert!(rows["cabinets"][0].get("fronts").is_some());
+        assert!(rows["cabinets"][0]["frontParts"].is_array());
+        assert!(rows["cabinets"][0].get("frontsMode").is_none());
     }
 }
