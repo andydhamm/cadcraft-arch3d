@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 27 of 35 segments merged · 7 of 13 acceptance checks**
 
@@ -24,21 +24,21 @@ Updated 2026-11-04 20:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 7 / 13 | 24.8 h so far · expected done Nov 05 07:13–Nov 06 13:19 UTC |
+| 14 | The library | building | 7 / 13 | 25.0 h so far · expected done Nov 05 07:28–Nov 06 13:34 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-27 merged, 2 gate, 2 merging, 2 working, 2 queued, 1 abandoned
+27 merged, 3 gate, 2 merging, 2 queued, 1 working, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p14-cmd-user-catalog` | The user catalog: add, copy, edit, delete, Trash, placing groups | gate | bonsai-ws2-a |
+| `p14-cmd-user-catalog` | The user catalog: add, copy, edit, delete, Trash, placing groups | working | bonsai-ws2-a |
 | `p14-cmd-defaults` | Set as Default for cabinets, doors, windows and furnishings | merging | claude-sonnet-d |
-| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | working | bonsai-b |
+| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | gate | bonsai-b |
 | `p14-ui-library-panel` | The Library side panel: categories, folders, search, chips, history, tags, details | merging | claude-sonnet-a |
 | `p14-cache-furnishing-edits` | The scene cache stays the full build under furnishing, paint and casework-part edits | gate | claude-sonnet-c |
-| `upstream-sync-5f8999f30-v2` | merge upstream upstream/main up to 5f8999f30 (39 commits) | working | mai-flash |
+| `upstream-sync-5f8999f30-v2` | merge upstream upstream/main up to 5f8999f30 (39 commits) | gate | mai-flash |
 
 ## Recent merges
 
@@ -62,16 +62,16 @@ Updated 2026-11-04 20:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 874 |
-| bonsai-b | bonsai2-27b | agent | 815 |
-| bonsai-ws2-a | bonsai2-27b | gate | 893 |
-| bonsai-ws2-b | bonsai2-27b | gate | 862 |
+| bonsai-b | bonsai2-27b | gate | 815 |
+| bonsai-ws2-a | bonsai2-27b | agent | 894 |
+| bonsai-ws2-b | bonsai2-27b | idle | 863 |
 | claude-sonnet-a | sonnet | merging | 77 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | gate | 32 |
 | claude-sonnet-d | sonnet | merging | 20 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 746 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 58 |
+| mai-flash | mai-code-1.1-flash | gate | 58 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 20 |
 | tturbo-mac | tturbo-ultraheretic | agent | 608 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
