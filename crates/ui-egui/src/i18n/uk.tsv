@@ -1398,6 +1398,12 @@
 	Stair	Сходи
 	Deck	Тераса
 	Railing	Огорожа
+	Library	Бібліотека
+	Library Item	Елемент бібліотеки
+	Tag Library Item	Позначити елемент бібліотеки
+	Library Filters	Фільтри бібліотеки
+	Install Catalog	Встановити каталог
+	Local Catalog	Локальний каталог
 	cmd.stair	Сходи
 	cmd.railing	Огорожа
 	cmd.deck	Тераса
