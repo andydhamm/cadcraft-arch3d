@@ -277,7 +277,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use cadcraft_doc::arch::{Cabinet, Fixture, Furnishing, MaterialRef, Paint, Roof};
+    use cadcraft_doc::arch::{Cabinet, Fixture, Furnishing, MaterialRef, Paint, Roof, SymbolMesh, SymbolPart};
     use cadcraft_doc::{Room, Wall};
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
@@ -490,5 +490,101 @@ mod tests {
         assert!(finish_fits(&Surface::RoomFloor(ArchId(0)), Finish::Wood));
         assert!(!finish_fits(&Surface::RoomFloor(ArchId(0)), Finish::Siding));
         assert!(finish_fits(&Surface::Fixture(ArchId(0)), Finish::Brick));
+    }
+
+    #[test]
+    fn surfaces_of_empty_model_is_empty() {
+        let m = ArchModel::default();
+        assert!(surfaces(&m).is_empty());
+    }
+
+    #[test]
+    fn nan_wall_coordinates_do_not_crash() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, f64::NAN), 0.2));
+        let all = surfaces(&m);
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].room, None);
+        assert_eq!(all[1].room, None);
+    }
+
+    #[test]
+    fn zero_length_wall_still_has_two_sides() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(1.0, 1.0), Vec2::new(1.0, 1.0), 0.2));
+        let all = surfaces(&m);
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn select_room_scope_on_roof_returns_only_roof() {
+        let (mut m, _, _) = boxed();
+        let roof = m.push_roof(Roof::default());
+        let t = Surface::Roof(roof);
+        assert_eq!(select(&m, &t, Scope::Room).unwrap(), vec![t]);
+    }
+
+    #[test]
+    fn furnishing_without_symbol_has_one_part() {
+        let mut m = ArchModel::default();
+        let f = m.push_furnishing(Furnishing { symbol: "missing".into(), at: [0.0, 0.0], ..Default::default() });
+        let all = surfaces(&m);
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].surface, Surface::Furnishing { furnishing: f, part: 0 });
+    }
+
+    #[test]
+    fn surfaces_are_deterministic() {
+        let (mut m, _, _) = boxed();
+        m.push_cabinet(Cabinet { pull: Some("p".into()), ..Default::default() });
+        m.push_furnishing(Furnishing { symbol: "s".into(), ..Default::default() });
+        let a = surfaces(&m);
+        let b = surfaces(&m);
+        assert_eq!(a.len(), b.len());
+        for (x, y) in a.iter().zip(b.iter()) {
+            assert_eq!(x.surface.key(), y.surface.key());
+        }
+    }
+
+    #[test]
+    fn select_objects_furnishing_part_one_includes_target() {
+        let mut m = ArchModel::default();
+        let sym = SymbolMesh {
+            key: "sym1".into(),
+            parts: vec![
+                SymbolPart {
+                    name: "a".into(),
+                    positions: vec![],
+                    normals: vec![],
+                    uvs: vec![],
+                    indices: vec![],
+                    base_color: [1.0, 1.0, 1.0, 1.0],
+                    metallic: 0.0,
+                    roughness: 1.0,
+                    texture: None,
+                },
+                SymbolPart {
+                    name: "b".into(),
+                    positions: vec![],
+                    normals: vec![],
+                    uvs: vec![],
+                    indices: vec![],
+                    base_color: [1.0, 1.0, 1.0, 1.0],
+                    metallic: 0.0,
+                    roughness: 1.0,
+                    texture: None,
+                },
+            ],
+            textures: vec![],
+        };
+        m.symbols.insert("sym1".into(), sym);
+        let f0 = m.push_furnishing(Furnishing { item: "chair".into(), symbol: "sym1".into(), ..Default::default() });
+        let f1 = m.push_furnishing(Furnishing { item: "chair".into(), symbol: "sym1".into(), ..Default::default() });
+        let part1_f0 = Surface::Furnishing { furnishing: f0, part: 1 };
+        let got = select_objects(&m, &part1_f0, Scope::Plan).unwrap();
+        assert!(got.contains(&Surface::Furnishing { furnishing: f0, part: 0 }));
+        assert!(got.contains(&Surface::Furnishing { furnishing: f1, part: 0 }));
+        assert!(got.contains(&part1_f0));
+        assert_eq!(got.len(), 3);
     }
 }
