@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 17:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 23 of 34 segments merged · 1 of 13 acceptance checks**
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 17:30 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 1 / 13 | 22.0 h so far · expected done Nov 05 13:48–Nov 07 14:39 UTC |
+| 14 | The library | building | 1 / 13 | 22.3 h so far · expected done Nov 05 14:03–Nov 07 14:54 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-23 merged, 5 queued, 3 merging, 2 escalate, 1 working, 1 abandoned
+23 merged, 5 queued, 3 merging, 2 escalate, 1 gate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,7 +37,7 @@ Updated 2026-11-04 17:30 UTC. This page and the card in the README are regenerat
 | `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
 | `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | escalate |  |
 | `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
-| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | working | bonsai-b |
+| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | gate | bonsai-b |
 | `p14-ui-library-panel` | The Library side panel: categories, folders, search, chips, history, tags, details | merging | claude-sonnet-a |
 
 ## Recent merges
@@ -61,10 +61,10 @@ Updated 2026-11-04 17:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 871 |
-| bonsai-b | bonsai2-27b | agent | 809 |
-| bonsai-ws2-a | bonsai2-27b | gate | 886 |
-| bonsai-ws2-b | bonsai2-27b | gate | 857 |
+| bonsai-a | bonsai2-27b | gate | 871 |
+| bonsai-b | bonsai2-27b | gate | 809 |
+| bonsai-ws2-a | bonsai2-27b | gate | 888 |
+| bonsai-ws2-b | bonsai2-27b | gate | 858 |
 | claude-sonnet-a | sonnet | merging | 77 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 32 |
