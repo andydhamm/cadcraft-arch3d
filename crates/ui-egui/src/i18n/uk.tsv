@@ -1453,6 +1453,12 @@
 	Match case	Match case
 	Replace	Replace
 	Replace All	Replace All
+	Architecture>Material Painter	Архітектура>Малювання матеріалом
+	Architecture>Object Painter	Архітектура>Малювання об'єктом
+	Architecture>Material Eyedropper	Архітектура>Піпетка матеріалу
+	Material Painter	Малювання матеріалом
+	Object Painter	Малювання об'єктом
+	Material Eyedropper	Піпетка матеріалу
 	Replace with:	Replace with:
 	Replacement text	Replacement text
 	Results	Results
