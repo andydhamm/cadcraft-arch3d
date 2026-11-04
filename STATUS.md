@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-04 14:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 19 of 34 segments merged · 0 of 13 acceptance checks**
+**Phase 14 of 15: The library — 20 of 34 segments merged · 0 of 13 acceptance checks**
 
-7,194 workspace tests passing at the last merge · 734 segments merged in all · 0 of 14 seats working
+7,250 workspace tests passing at the last merge · 735 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -24,18 +24,17 @@ Updated 2026-11-04 14:30 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 19.0 h so far · expected done Nov 06 06:30–Nov 11 03:30 UTC |
+| 14 | The library | building | 0 / 13 | 19.3 h so far · expected done Nov 05 21:18–Nov 08 22:34 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-19 merged, 7 merging, 7 queued, 1 escalate, 1 abandoned
+20 merged, 7 queued, 6 merging, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p14-arch3d-cabinet-parts` | Front styles, pulls, counter runs and cut-outs in 3D | merging | bonsai-a |
 | `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
-| `p14-apps-library-hooks` | The apps install the library's readers | merging | claude-sonnet-d |
 | `p14-cmd-icons` | library.icon: deterministic icons for items and categories, cached by content hash | merging | mai-flash-esc |
 | `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | escalate |  |
 | `p14-cmd-casework-parts` | cabinet and cabinet.edit take door and drawer styles and a pull | merging | claude-sonnet-a |
@@ -46,6 +45,7 @@ Updated 2026-11-04 14:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 04 14:36 | `p14-apps-library-hooks` | merged | 7,250 pass | claude-sonnet-d |
 | Nov 04 13:36 | `p14-inspect` | refused | 7,199 pass | claude-sonnet-b |
 | Nov 04 12:57 | `p14-io-dxf-furnishing` | refused | 7,199 pass | claude-sonnet-d |
 | Nov 04 11:07 | `p14-cmd-furnishing-transform` | refused | 7,200 pass | mai-flash-esc |
@@ -57,15 +57,14 @@ Updated 2026-11-04 14:30 UTC. This page and the card in the README are regenerat
 | Nov 04 02:16 | `p14-arch-place` | refused | 0 pass | claude-sonnet-c |
 | Nov 04 01:55 | `p14-arch-furnishing-plan` | merged | 7,104 pass | claude-sonnet-d |
 | Nov 04 00:40 | `harden-p13-arch3d-incremental` | refused | 7,100 pass, 2 fail | tturbo-mac |
-| Nov 03 23:57 | `p14-arch-casework-layout` | merged | 7,098 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 867 |
+| bonsai-a | bonsai2-27b | gate | 867 |
 | bonsai-b | bonsai2-27b | idle | 805 |
-| bonsai-ws2-a | bonsai2-27b | agent | 880 |
+| bonsai-ws2-a | bonsai2-27b | gate | 880 |
 | bonsai-ws2-b | bonsai2-27b | idle | 855 |
 | claude-sonnet-a | sonnet | idle | 76 |
 | claude-sonnet-b | sonnet | idle | 80 |
