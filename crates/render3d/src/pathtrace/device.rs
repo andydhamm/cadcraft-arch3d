@@ -65,7 +65,21 @@ pub fn request_compute(choice: AdapterChoice, ray_query: bool) -> Result<Option<
 }
 
 /// [`request_compute`] on an existing instance.
+///
+/// One compute device per (adapter choice, ray queries asked for) is made per process and shared, as
+/// [`crate::adapter::request_device`] does for render devices (none is destroyed; a device per request ran
+/// the T1000 out of memory, 2026-11-04).
 pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoice, ray_query: bool) -> Result<Option<ComputeGpu>, Render3dError> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(hit) = SHARED_COMPUTE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .find(|(k, _)| *k == (choice, ray_query))
+        .map(|(_, g)| g.clone())
+    {
+        return Ok(Some(hit));
+    }
     let options = match choice {
         AdapterChoice::Auto => wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, ..Default::default() },
         AdapterChoice::Fallback => wgpu::RequestAdapterOptions { force_fallback_adapter: true, ..Default::default() },
@@ -103,17 +117,39 @@ pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoi
         ..Default::default()
     };
     let (device, queue) = adapter.request_device(&desc).await.map_err(|e| Render3dError::Wgpu(e.to_string()))?;
-    let device = crate::offscreen::kept_for_the_process(device);
     let a = adapter.get_info();
     let adapter_key =
         format!("{:04x}-{:04x}-{}-{}-app{}", a.vendor, a.device, key_part(&a.driver), key_part(&a.driver_info), key_part(env!("CARGO_PKG_VERSION")));
     let info =
         DeviceInfo { name: a.name, backend: format!("{:?}", a.backend), adapter_type: format!("{:?}", a.device_type), ..DeviceInfo::unknown(false) };
-    Ok(Some(ComputeGpu::new(device, queue, info, rq, features.contains(wgpu::Features::PIPELINE_CACHE), adapter_key)))
+    let gpu = ComputeGpu::new(device, queue, info, rq, features.contains(wgpu::Features::PIPELINE_CACHE), adapter_key);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut shared = SHARED_COMPUTE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((_, first)) = shared.iter().find(|(k, _)| *k == (choice, ray_query)) {
+            // Another thread made one first: keep ours open (never dropped) and share theirs.
+            let _ = crate::offscreen::kept_for_the_process(gpu.device.clone());
+            return Ok(Some(first.clone()));
+        }
+        shared.push(((choice, ray_query), gpu.clone()));
+    }
+    Ok(Some(gpu))
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+static SHARED_COMPUTE: std::sync::Mutex<Vec<((AdapterChoice, bool), ComputeGpu)>> = std::sync::Mutex::new(Vec::new());
 
 #[cfg(test)]
 mod tests {
+    /// As adapter's one_device_per_adapter_choice_is_shared, for the path tracer's compute devices.
+    #[test]
+    fn one_compute_device_per_choice_and_ray_query_is_shared() {
+        let (Ok(Some(a)), Ok(Some(b))) = (request_compute(AdapterChoice::Fallback, false), request_compute(AdapterChoice::Fallback, false)) else {
+            return;
+        };
+        assert!(a.device == b.device, "two compute requests must share one device");
+    }
+
     use super::*;
 
     #[test]

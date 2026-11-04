@@ -107,7 +107,13 @@ impl PathTracer {
 
         let pipelines = PtPipelines::new(gpu, cache)?;
         let rq_build = if opts.rt && gpu.ray_query { RqBuild::build(gpu, &gpu_scene) } else { None };
-        let rq_pipelines = if rq_build.is_some() { build_rq_pipelines(gpu, cache).ok() } else { None };
+        // A ray-query kernel that does not build renders the compute path, and says why (rt_error): until
+        // 2026-11-03 `.ok()` dropped the error and the kernel had never compiled on any adapter.
+        let (rq_pipelines, rt_error) = match rq_build.as_ref().map(|_| build_rq_pipelines(gpu, cache)) {
+            Some(Ok(p)) => (Some(p), None),
+            Some(Err(e)) => (None, Some(e)),
+            None => (None, None),
+        };
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
         let d = &gpu.device;
 
@@ -186,7 +192,7 @@ impl PathTracer {
         Ok(PathTracer {
             size,
             status: PathStatus::Running { progress: 0.0, spp: 0 },
-            stats: PathStats { rt: rq_pipelines.is_some(), exposure, ..PathStats::default() },
+            stats: PathStats { rt: rq_pipelines.is_some(), rt_error, exposure, ..PathStats::default() },
             cancelled: false,
             opts: opts.clone(),
             frame,
@@ -829,22 +835,56 @@ pub fn upload_scene(gpu: &ComputeGpu, scene: &GpuScene) -> SceneBuffers {
 /// `frame` and `probes`, and read back `accum[0..probes.len()]` (zeroed before the dispatch).
 /// The pipeline is built for the call (tests; the driver keeps `PtPipelines`).
 pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &GpuFrame, probes: &[GpuProbe]) -> Result<Vec<[f32; 4]>, String> {
+    run_entry_on(gpu, buffers, entry, frame, probes, None)
+}
+
+/// [`run_entry`] on the ray-query kernel module, with `scene`'s acceleration structure bound as group 1
+/// (tests of the ray-query traversal against `trace_cpu`). Needs a device with ray queries.
+#[cfg(test)]
+pub(crate) fn run_entry_rq(
+    gpu: &ComputeGpu,
+    scene: &super::scene_gpu::GpuScene,
+    buffers: &SceneBuffers,
+    entry: &str,
+    frame: &GpuFrame,
+    probes: &[GpuProbe],
+) -> Result<Vec<[f32; 4]>, String> {
+    run_entry_on(gpu, buffers, entry, frame, probes, Some(scene))
+}
+
+fn run_entry_on(
+    gpu: &ComputeGpu,
+    buffers: &SceneBuffers,
+    entry: &str,
+    frame: &GpuFrame,
+    probes: &[GpuProbe],
+    rq_scene: Option<&super::scene_gpu::GpuScene>,
+) -> Result<Vec<[f32; 4]>, String> {
     let d = &gpu.device;
     let n = probes.len().max(1);
     let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
     let pipelines = super::shaders::PtPipelines::new(gpu, None)?;
-    let module = d.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("pt test kernel"),
-        source: wgpu::ShaderSource::Wgsl(super::shaders::kernel_source().into()),
-    });
-    let layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+    // With a ray-query scene: the rq module, its two-group layout and the scene's TLAS as group 1.
+    let rq = match rq_scene {
+        Some(scene) => {
+            let build = RqBuild::build(gpu, scene).ok_or("no acceleration structure for this scene (empty, or no ray queries)")?;
+            Some((build, build_rq_pipelines(gpu, None)?))
+        }
+        None => None,
+    };
+    let source = if rq.is_some() { super::shaders::rq_kernel_source() } else { super::shaders::kernel_source() };
+    let module =
+        d.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("pt test kernel"), source: wgpu::ShaderSource::Wgsl(source.into()) });
+    let plain_layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pt test"),
         bind_group_layouts: &[Some(&pipelines.kernel_layout)],
         immediate_size: 0,
     });
+    let layout = rq.as_ref().map_or(&plain_layout, |(_, p)| &p.rq_pipeline_layout);
+    let kernel_layout = rq.as_ref().map_or(&pipelines.kernel_layout, |(_, p)| &p.kernel_bind_group_layout);
     let pipeline = d.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: Some(entry),
-        layout: Some(&layout),
+        layout: Some(layout),
         module: &module,
         entry_point: Some(entry),
         compilation_options: Default::default(),
@@ -873,7 +913,7 @@ pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &
     });
     let bind = d.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("pt test"),
-        layout: &pipelines.kernel_layout,
+        layout: kernel_layout,
         entries: &[
             wgpu::BindGroupEntry { binding: 0, resource: frame_buf.as_entire_binding() },
             wgpu::BindGroupEntry { binding: 1, resource: buffers.nodes.as_entire_binding() },
@@ -891,6 +931,16 @@ pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &
         let mut pass = enc.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some(entry), timestamp_writes: None });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind, &[]);
+        let acc = rq.as_ref().map(|(build, p)| {
+            d.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("pt test acc"),
+                layout: &p.acc_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry { binding: 0, resource: build.tlas.as_binding() }],
+            })
+        });
+        if let Some(acc) = acc.as_ref() {
+            pass.set_bind_group(1, acc, &[]);
+        }
         pass.dispatch_workgroups((n as u32).div_ceil(64), 1, 1);
     }
     enc.copy_buffer_to_buffer(&accum_src, 0, &read, 0, (n * 32) as u64);
@@ -936,6 +986,16 @@ mod tests {
 
     fn camera() -> Camera {
         Camera::Orbit(Orbit::at_origin(0.0, 30.0, 20.0, 45.0))
+    }
+
+    /// The software adapter's device with ray queries asked for (llvmpipe has them); `None` (the test skips)
+    /// when there is no compute device, `ray_query` false when the adapter offers none.
+    fn compute_rq() -> Option<ComputeGpu> {
+        let gpu = crate::gputest::shared_compute_rq();
+        if gpu.is_none() {
+            eprintln!("SKIP: no compute device");
+        }
+        gpu
     }
 
     fn compute() -> Option<ComputeGpu> {
@@ -1205,7 +1265,7 @@ mod tests {
 
     #[test]
     fn rt_image_matches_the_compute_path_within_noise() {
-        let Some(gpu) = compute() else {
+        let Some(gpu) = compute_rq() else {
             eprintln!("SKIP: no compute device");
             return;
         };
@@ -1221,6 +1281,22 @@ mod tests {
         let l1 = mean_luminance(&rgba_rt, 16, 16);
         let l2 = mean_luminance(&rgba_comp, 16, 16);
         assert!((l1 - l2).abs() < 2.0, "rt mean {l1} vs compute {l2} (diff {:.3} exceeds 2 levels)", (l1 - l2).abs());
+    }
+
+    /// 2026-11-03: the ray-query kernel never compiled (its `enable` directive came after common.wgsl, then
+    /// attributes after the type and an invented ray-query API) and `.ok()` hid it, so `rt` silently rendered
+    /// the compute path on every adapter. The software adapter used by the gates (llvmpipe) offers ray
+    /// queries; its pipelines must build.
+    #[test]
+    fn rq_pipelines_build_on_a_ray_query_device() {
+        let Some(gpu) = compute_rq() else { return };
+        if !gpu.ray_query {
+            eprintln!("SKIP: the software adapter offers no ray queries ({})", gpu.info.name);
+            return;
+        }
+        if let Err(e) = super::super::shaders::build_rq_pipelines(&gpu, None) {
+            panic!("the ray-query pipelines must build: {e}");
+        }
     }
 
     #[test]
@@ -1239,19 +1315,20 @@ mod tests {
 
     #[test]
     fn rq_stats_rt_is_true_when_ray_queries_used() {
-        let Some(gpu) = compute() else { return };
+        let Some(gpu) = compute_rq() else { return };
         if !gpu.ray_query {
             eprintln!("SKIP: no ray queries on this device");
             return;
         }
         let opts = PathOptions { spp: 4, spp_per_step: 4, rt: true, denoise: false, ..Default::default() };
         let mut t = PathTracer::new(&gpu, &scene(), &camera(), &Lighting::default(), false, (8, 8), &opts, None).unwrap();
+        assert_eq!(t.stats().rt_error, None, "the ray-query pipelines must build");
         assert!(t.stats().rt, "stats.rt must be true when ray queries are available");
     }
 
     #[test]
     fn rq_path_works_with_empty_scene() {
-        let Some(gpu) = compute() else { return };
+        let Some(gpu) = compute_rq() else { return };
         if !gpu.ray_query {
             eprintln!("SKIP: no ray queries on this device");
             return;
@@ -1270,7 +1347,7 @@ mod tests {
 
     #[test]
     fn rq_path_works_with_single_triangle() {
-        let Some(gpu) = compute() else { return };
+        let Some(gpu) = compute_rq() else { return };
         if !gpu.ray_query {
             eprintln!("SKIP: no ray queries on this device");
             return;
