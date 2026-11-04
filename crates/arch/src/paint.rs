@@ -594,13 +594,13 @@ mod tests {
         let mut m = ArchModel::default();
         let w = wall(&mut m, (0.0, 0.0), (4.0, 0.0));
         let r = m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 4.0), holes: vec![rect(1.5, 1.5, 2.5, 2.5)], level: 0, ..Default::default() });
-        // Probe point inside the hole should not be in the room.
+        // Probe point is inside the room but outside the hole.
         let dir = Vec2::new(1.0, 0.0);
         let n = dir.perp();
         let mid = Vec2::new(2.0, 0.0);
         let probe = mid + n * (0.2 / 2.0 + PROBE);
         assert!(point_in_polygon(&m.rooms[0].polygon, probe));
-        assert!(point_in_polygon(&m.rooms[0].holes[0], probe));
+        assert!(!point_in_polygon(&m.rooms[0].holes[0], probe));
         assert_eq!(info_of(&m, &wall_side(w, Side::Left)).room, Some(r));
         // A point inside the hole:
         let hole_center = Vec2::new(2.0, 2.0);
@@ -664,31 +664,8 @@ mod tests {
         let mut m = ArchModel::default();
         let sym = SymbolMesh {
             key: "sym1".into(),
-            parts: vec![
-                SymbolPart {
-                    name: "a".into(),
-                    positions: vec![],
-                    normals: vec![],
-                    uvs: vec![],
-                    indices: vec![],
-                    base_color: [1.0, 1.0, 1.0, 1.0],
-                    metallic: 0.0,
-                    roughness: 1.0,
-                    texture: None,
-                },
-                SymbolPart {
-                    name: "b".into(),
-                    positions: vec![],
-                    normals: vec![],
-                    uvs: vec![],
-                    indices: vec![],
-                    base_color: [1.0, 1.0, 1.0, 1.0],
-                    metallic: 0.0,
-                    roughness: 1.0,
-                    texture: None,
-                },
-            ],
-            textures: vec![],
+            parts: vec![SymbolPart { name: "a".into(), ..Default::default() }, SymbolPart { name: "b".into(), ..Default::default() }],
+            ..Default::default()
         };
         m.symbols.insert("sym1".into(), sym);
         let f0 = m.push_furnishing(Furnishing { item: "chair".into(), symbol: "sym1".into(), ..Default::default() });
