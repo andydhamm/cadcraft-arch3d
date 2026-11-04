@@ -146,6 +146,7 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
             "cabinet-front" => format!("cabinet-cb{}-front", m.object.0),
             "counter" => format!("cabinet-cb{}-counter", m.object.0),
             mat if mat.starts_with("fixture-") => format!("fixture-fx{}", m.object.0),
+            mat if mat.starts_with("sym:") => format!("furnishing-f{}", m.object.0),
             _ => format!("{}-o{}", m.material, m.object.0),
         };
         names.push(name);

@@ -23,9 +23,13 @@ fn emit_one(ctx: &mut Ctx, f: &Furnishing) {
     let key = format!("furnishing/{}", f.id.0);
     let slot = ctx.storey_for(f.level);
 
-    // Gather meshes for this furnishing from the scene pieces.
-    // Pieces are keyed by (kind, id). Furnishings use kind "furnishing".
-    let meshes: Vec<&cadcraft_arch3d::Mesh> = ctx.pieces.get("furnishing", f.id).to_vec();
+    // Gather meshes for this furnishing.
+    // Prefer the pieces map, but fall back to scanning the scene if it's empty
+    // (e.g. if kind_of doesn't recognize the material).
+    let mut meshes: Vec<&cadcraft_arch3d::Mesh> = ctx.pieces.get("furnishing", f.id).to_vec();
+    if meshes.is_empty() {
+        meshes = ctx.pieces.scene().meshes.iter().filter(|m| m.object == f.id && m.material.starts_with("sym:")).collect();
+    }
     if meshes.is_empty() {
         return;
     }
@@ -112,15 +116,7 @@ mod tests {
             name: format!("Furnishing {id}"),
             category: category.to_string(),
             symbol_type: symbol_type.to_string(),
-            placement: Placement::Floor,
-            level: 0,
-            at: [0.0, 0.0],
-            rotation: 0.0,
-            elevation: 0.0,
-            size: [1.0, 1.0, 1.0],
-            mirrored: false,
-            host: Default::default(),
-            cutout: None,
+            ..Default::default()
         }
     }
 
@@ -132,7 +128,22 @@ mod tests {
         model.furnishings.push(make_furnishing(2, "Appliances and plumbing fixtures", "refrigerator"));
         model.furnishings.push(make_furnishing(3, "Lighting and electrical", "ceiling light"));
 
-        let scene = Scene3d::default();
+        let mut scene = Scene3d::default();
+        // Add meshes for each furnishing so they are exported
+        for f in &model.furnishings {
+            let m = cadcraft_arch3d::Mesh {
+                positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                normals: vec![[0.0, 0.0, 1.0]; 3],
+                uvs: vec![[0.0, 0.0]; 3],
+                indices: vec![0, 1, 2],
+                material: format!("sym:{}:0", f.symbol),
+                object: f.id,
+                level_elevation: 0.0,
+                ..cadcraft_arch3d::Mesh::default()
+            };
+            scene.meshes.push(m);
+        }
+
         let opts = IfcOptions { timestamp: 0, file_name: "test.ifc".into() };
         let text = write_model(&model, &scene, &opts);
 
@@ -147,7 +158,20 @@ mod tests {
         let mut model = ArchModel::default();
         model.furnishings.push(make_furnishing(0, "Furniture", "chair"));
 
-        let scene = Scene3d::default();
+        let mut scene = Scene3d::default();
+        let f = &model.furnishings[0];
+        let m = cadcraft_arch3d::Mesh {
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            material: format!("sym:{}:0", f.symbol),
+            object: f.id,
+            level_elevation: 0.0,
+            ..cadcraft_arch3d::Mesh::default()
+        };
+        scene.meshes.push(m);
+
         let opts = IfcOptions { timestamp: 0, file_name: "test.ifc".into() };
         let text = write_model(&model, &scene, &opts);
 
@@ -173,7 +197,20 @@ mod tests {
         let mut model = ArchModel::default();
         model.furnishings.push(make_furnishing(0, "Furniture", "chair"));
 
-        let scene = Scene3d::default();
+        let mut scene = Scene3d::default();
+        let f = &model.furnishings[0];
+        let m = cadcraft_arch3d::Mesh {
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            material: format!("sym:{}:0", f.symbol),
+            object: f.id,
+            level_elevation: 0.0,
+            ..cadcraft_arch3d::Mesh::default()
+        };
+        scene.meshes.push(m);
+
         let opts = IfcOptions { timestamp: 0, file_name: "test.ifc".into() };
         let text = write_model(&model, &scene, &opts);
 
