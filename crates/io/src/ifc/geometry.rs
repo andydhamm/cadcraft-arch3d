@@ -10,7 +10,8 @@ use std::collections::BTreeMap;
 /// The kind of object a mesh's material belongs to: `wall`, `opening` (every `window-…` and
 /// `door-…` part), `floor`, `ceiling`, `roof` (roof planes), `fascia`, `soffit`, `stair`,
 /// `railing`, `deck`, `terrain`, `plant` (crown and trunk), `path` (`path-…`), `light` (`light-…`),
-/// `cabinet` (`cabinet-…`, `counter`), `fixture` (`fixture-…`), else `other`.
+/// `cabinet` (`cabinet-…`, `counter`), `fixture` (`fixture-…`), `furnishing` (a furnishing's symbol
+/// parts `sym:…` and its painted parts `paint:furnishing/…`), else `other`.
 pub(crate) fn kind_of(material: &str) -> &'static str {
     match material {
         "wall" => "wall",
@@ -32,6 +33,7 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
         m if m.starts_with("light-") => "light",
         m if m.starts_with("cabinet-") || m == "counter" => "cabinet",
         m if m.starts_with("fixture-") => "fixture",
+        m if m.starts_with("sym:") || m.starts_with("paint:furnishing/") => "furnishing",
         _ => "other",
     }
 }
@@ -129,6 +131,9 @@ mod tests {
         assert_eq!(kind_of("roof"), "roof");
         assert_eq!(kind_of("fascia"), "fascia");
         assert_eq!(kind_of("terrain"), "terrain");
+        assert_eq!(kind_of("sym:0123456789abcdef:1"), "furnishing");
+        assert_eq!(kind_of("sym:missing:0"), "furnishing");
+        assert_eq!(kind_of("paint:furnishing/f2/0"), "furnishing");
         assert_eq!(kind_of("something"), "other");
     }
 

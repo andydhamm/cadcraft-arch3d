@@ -863,7 +863,7 @@ mod tests {
         assert_eq!(le32(&bytes, 16), 0x4E4F534A);
         let json_pad = (4 - json_len as usize % 4) % 4;
         let bin_start = 12 + 8 + json_len as usize + json_pad;
-        let bin_len = le32(&bytes, bin_start);
+        let _bin_len = le32(&bytes, bin_start);
         assert_eq!(le32(&bytes, bin_start + 4), 0x004E4942);
     }
 
@@ -1414,7 +1414,7 @@ mod tests {
         let mut chunk_count = 0;
         while offset < bytes.len() {
             let chunk_len = le32(&bytes, offset) as usize;
-            let chunk_type = le32(&bytes, offset + 4);
+            let _chunk_type = le32(&bytes, offset + 4);
             assert_eq!(chunk_len % 4, 0, "chunk {chunk_count} length {chunk_len} not multiple of 4");
             offset += 8 + chunk_len;
             chunk_count += 1;
