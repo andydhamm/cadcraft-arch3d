@@ -265,3 +265,199 @@ fn a_level_edit_rebuilds_everything() {
     assert!(!stats.incremental && stats.rebuilt == stats.objects, "{stats:?}");
     assert_eq!(signature(cache.scene()), signature(&Scene3d::build(&m)));
 }
+
+// ---------- phase 14: furnishings, paint and casework parts ----------
+
+/// The next seeded number.
+fn next(state: &mut u64) -> usize {
+    *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    (*state >> 33) as usize
+}
+
+/// `list[r % len]`, or `None` for an empty list.
+fn pick<T: Clone>(list: &[T], r: usize) -> Option<T> {
+    list.get(r.checked_rem(list.len())?).cloned()
+}
+
+fn arch_of(s: &Session) -> ArchModel {
+    s.doc().expect("a drawing").arch.clone()
+}
+
+/// How many furnishings, cabinets and painted surfaces differ between two models (added, removed or changed).
+fn touched(a: &ArchModel, b: &ArchModel) -> usize {
+    let mut n = 0;
+    for f in &a.furnishings {
+        n += usize::from(b.furnishing(f.id) != Some(f));
+    }
+    n += b.furnishings.iter().filter(|f| a.furnishing(f.id).is_none()).count();
+    for c in &a.cabinets {
+        n += usize::from(b.cabinets.iter().find(|x| x.id == c.id) != Some(c));
+    }
+    n += b.cabinets.iter().filter(|c| !a.cabinets.iter().any(|x| x.id == c.id)).count();
+    for (k, p) in &a.paints {
+        n += usize::from(b.paints.get(k) != Some(p));
+    }
+    n += b.paints.keys().filter(|k| !a.paints.contains_key(*k)).count();
+    n
+}
+
+/// One seeded edit of the furnished house through the commands; returns its name and whether it was accepted.
+fn furnished_edit(s: &mut Session, state: &mut u64) -> (&'static str, bool) {
+    let r = next(state);
+    let r2 = next(state);
+    let m = arch_of(s);
+    let ids: Vec<usize> = m.furnishings.iter().map(|f| f.id.0 as usize).collect();
+    let handles: Vec<String> = m.furnishings.iter().map(|f| cadcraft_doc::arch::furnishing_handle(f.id).hex()).collect();
+    let cabs: Vec<usize> = m.cabinets.iter().map(|c| c.id.0 as usize).collect();
+    let f_id = pick(&ids, r2).map(|i| format!("f{i}"));
+    let f_handle = pick(&handles, r2);
+    let unit = |k: usize| (k % 9) as f64 / 4.0 - 1.0;
+    let at = [1.0 + (r2 % 80) as f64 / 10.0, 0.5 + (r2 / 80 % 60) as f64 / 10.0];
+    let (name, cmd, params): (&'static str, &str, Option<Value>) = match r % 15 {
+        0 => ("furnishing at", "furnishing.edit", f_id.map(|id| json!({"id": id, "at": at}))),
+        1 => ("furnishing rotation", "furnishing.edit", f_id.map(|id| json!({"id": id, "rotation": (r2 % 4) as f64 * 90.0 + 15.0}))),
+        2 => {
+            let size = [0.4 + (r2 % 5) as f64 / 10.0, 0.5, 0.6 + (r2 % 3) as f64 / 10.0];
+            ("furnishing size", "furnishing.edit", f_id.map(|id| json!({"id": id, "size": size})))
+        }
+        3 => ("furnishing mirrored", "furnishing.edit", f_id.map(|id| json!({"id": id, "mirrored": r2 % 2 == 0}))),
+        4 => ("furnishing delete", "furnishing.delete", f_id.map(|id| json!({"id": id}))),
+        5 => {
+            let items = [
+                "armchair",
+                "plant-small",
+                "table-coffee-90",
+                "bookcase",
+                "own:dishwasher-60",
+                "towel-rack",
+                "light-pendant",
+                "faucet-kitchen-chrome",
+                "own:sink-kitchen",
+            ];
+            ("place another", "library.place", pick(&items, r2 / 7).map(|i| json!({"item": i, "at": at, "level": "Level 1"})))
+        }
+        6..=8 => {
+            let side = if r2 % 2 == 0 { "left" } else { "right" };
+            let wall_ids: Vec<u32> = m.walls.iter().filter(|w| w.base_level == 1).map(|w| w.id.0).collect();
+            let room_ids: Vec<u32> = m.rooms.iter().map(|x| x.id.0).collect();
+            let roof_ids: Vec<u32> = m.roofs.iter().map(|x| x.id.0).collect();
+            let cab_ids: Vec<u32> = m.cabinets.iter().map(|c| c.id.0).collect();
+            let (target, materials): (String, &[&str]) = match r2 % 5 {
+                0 => (format!("wall/w{}/{side}", pick(&wall_ids, r2 / 5).unwrap_or(0)), &["brick", "siding", "#c04020", "material-oak"]),
+                1 => (
+                    format!("room/r{}/{}", pick(&room_ids, r2 / 5).unwrap_or(0), if r2 % 2 == 0 { "floor" } else { "ceiling" }),
+                    &["material-marble", "#3060a0", "material-oak"],
+                ),
+                2 => (
+                    format!("cabinet/cb{}/{}", pick(&cab_ids, r2 / 5).unwrap_or(0), ["carcass", "front", "counter", "pull"][r2 / 3 % 4]),
+                    &["material-oak", "material-marble", "#808080"],
+                ),
+                3 => (format!("furnishing/f{}/0", pick(&ids, r2 / 5).unwrap_or(0)), &["#c04020", "material-oak", "material-fabric"]),
+                _ => (format!("roof/r{}", pick(&roof_ids, r2 / 5).unwrap_or(0)), &["shingles", "#404040"]),
+            };
+            let material = pick(materials, r2 / 11).unwrap_or("#c04020");
+            let scope = ["component", "object", "room", "floor", "plan"][r / 15 % 5];
+            let mut p = json!({"material": material, "target": target, "scope": scope});
+            if r / 75 % 3 == 0 {
+                p["mode"] = json!("blend");
+            }
+            ("paint material", "paint.material", Some(p))
+        }
+        9 => {
+            let items = ["own:pull-knob-32", "own:pull-bar-128", "frontstyle:door-shaker", "frontstyle:drawer-raised-panel"];
+            let scope = ["component", "room", "plan"][r / 15 % 3];
+            let p = pick(&items, r2 / 3)
+                .zip(pick(&cabs, r2 / 17))
+                .map(|(i, c)| json!({"item": i, "target": format!("cabinet/cb{c}/pull"), "scope": scope}));
+            ("paint object", "paint.object", p)
+        }
+        10..=12 => {
+            let styles = ["slab", "shaker", "raised-panel"];
+            let key = ["doorStyle", "drawerStyle", "pull"][r % 3];
+            let value = if key == "pull" { json!(["own:pull-knob-32", "own:pull-bar-128"][r2 % 2]) } else { json!(styles[r2 % 3]) };
+            ("cabinet part", "cabinet.edit", pick(&cabs, r2 / 3).map(|c| json!({"id": format!("cb{c}"), key: value})))
+        }
+        13 => {
+            let h = f_handle.map(|h| json!([h]));
+            match r2 % 3 {
+                0 => ("move furnishing", "move", h.map(|h| json!({"handles": h, "delta": [unit(r2 / 3) * 0.5, 0.25]}))),
+                1 => ("copy furnishing", "copy", h.map(|h| json!({"handles": h, "delta": [0.3, unit(r2 / 3) * 0.5 + 0.6]}))),
+                _ => ("mirror furnishing", "mirror", h.map(|h| json!({"handles": h, "p1": [5.0, 0.0], "p2": [5.0, 8.0]}))),
+            }
+        }
+        _ => ("undo", "undo", Some(json!({}))),
+    };
+    match params {
+        Some(p) => (name, s.execute(cmd, &p).is_ok()),
+        None => (name, false),
+    }
+}
+
+#[test]
+fn furnishing_paint_and_part_edits_keep_the_cache_exact() {
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    // A library that keeps nothing on disk: the built-in and the embedded sample items only.
+    s.library = cadcraft_engine::library::Library::with_user_dir(None);
+    let setup: Vec<(&str, Value)> = vec![
+        ("arch.sample", json!({"house2": true})),
+        ("roofauto", json!({"pitchRise": 6, "pitchRun": 12})),
+        ("lightfixture", json!({"room": "r0", "rows": 2, "cols": 2})),
+        ("stair", json!({"start": [1.0, 1.0], "direction": 90.0})),
+        // Level 1's south wall is w5: two base cabinets with a 0.6 m gap between, and a wider one for the sink.
+        ("cabinet", json!({"kind": "base", "wall": "w5", "offset": 1.0, "width": 0.6})),
+        ("cabinet", json!({"kind": "base", "wall": "w5", "offset": 2.2, "width": 0.6})),
+        ("cabinet", json!({"kind": "base", "wall": "w5", "offset": 4.0, "width": 0.9})),
+    ];
+    for (cmd, p) in &setup {
+        s.execute(cmd, p).unwrap_or_else(|e| panic!("{cmd} {p}: {e:?}"));
+    }
+    let mut hosts = Vec::new();
+    for p in [
+        json!({"item": "armchair", "at": [6.0, 5.0], "level": "Level 1"}),
+        json!({"item": "towel-rack", "at": [7.0, 0.2], "level": "Level 1"}),
+        json!({"item": "light-pendant", "at": [6.0, 3.0], "level": "Level 1"}),
+        json!({"item": "own:sink-kitchen", "at": [4.0, 0.4], "level": "Level 1"}),
+        json!({"item": "own:dishwasher-60", "at": [1.6, 0.4], "level": "Level 1"}),
+        json!({"item": "faucet-kitchen-chrome", "at": [4.0, 0.3], "level": "Level 1"}),
+    ] {
+        let r = s.execute("library.place", &p).unwrap_or_else(|e| panic!("library.place {p}: {e:?}"));
+        hosts.push(r["host"]["kind"].as_str().unwrap_or("none").to_string());
+    }
+    assert_eq!(hosts, ["none", "wall", "none", "cabinet", "gap", "sink"], "where the six furnishings went");
+    let mut m = arch_of(&s);
+    assert_eq!(m.furnishings.len(), 6);
+    let (mut cache, full) = SceneCache::new(&m);
+    assert!(!full.incremental);
+    assert_eq!(signature(cache.scene()), signature(&Scene3d::build(&m)));
+    let mut state = 2014;
+    let mut accepted: BTreeMap<&'static str, usize> = BTreeMap::new();
+    for k in 0..120 {
+        let before = m;
+        let (what, ok) = furnished_edit(&mut s, &mut state);
+        m = arch_of(&s);
+        let stats = cache.update(&m);
+        let full = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&full), "edit {k} ({what}, accepted: {ok}): the cache is not the full build; {stats:?}");
+        assert_eq!(cache.scene().digest(), full.digest(), "edit {k} ({what}): digests differ");
+        let allowed = touched(&before, &m) + m.cabinets.len();
+        assert!(
+            stats.incremental && stats.rebuilt <= allowed,
+            "edit {k} ({what}): rebuilt {} of {}, at most {allowed} expected; {stats:?}",
+            stats.rebuilt,
+            stats.objects
+        );
+        if ok {
+            *accepted.entry(what).or_default() += 1;
+        }
+    }
+    for what in ["furnishing at", "furnishing delete", "place another", "paint material", "paint object", "cabinet part", "undo"] {
+        assert!(accepted.get(what).is_some_and(|&n| n >= 1), "no accepted {what}: {accepted:?}");
+    }
+}
