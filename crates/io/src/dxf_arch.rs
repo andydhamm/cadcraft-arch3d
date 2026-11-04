@@ -57,8 +57,11 @@ pub(crate) const ARCH_SECT_MCUT_LAYER: &str = "A-SECT-MCUT";
 /// Layer for generated dimension linework and text.
 pub(crate) const ARCH_ANNO_DIMS_LAYER: &str = "A-ANNO-DIMS";
 
-/// Rejects payloads larger than this before they are even parsed.
-const MAX_ARCH_PAYLOAD: usize = 8 << 20;
+/// Rejects payloads larger than this before they are even parsed: the limit every CADCraft XRECORD reader shares
+/// (`xrecord_text` stops collecting there too). A furnished drawing carries its symbols' meshes and library images
+/// here, so the payload grows with what is placed; the phase-14 demo house wrote 9.6 MB, and the 8 MiB this used to be
+/// reopened it with no architectural model at all.
+const MAX_ARCH_PAYLOAD: usize = crate::dxf_ext::MAX_PAYLOAD;
 
 /// The record serialized into the `CADCRAFT_ARCH` XRECORD.
 ///
@@ -549,8 +552,23 @@ mod tests {
 
     #[test]
     fn parse_arch_rejects_oversize_payload() {
-        let big = "a".repeat((8 << 20) + 1);
+        let big = "a".repeat(MAX_ARCH_PAYLOAD + 1);
         assert!(parse_arch(&big).is_none());
+    }
+
+    #[test]
+    fn a_model_whose_payload_passes_8_mib_reopens() {
+        // A furnished drawing carries its symbols' meshes and its library images in the payload: the phase-14 demo
+        // house wrote 9.6 MB, and an 8 MiB limit here reopened it with no walls, rooms or furnishings at all.
+        let mut d = Drawing::new_metric();
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let image = cadcraft_doc::arch::ImageRgba { width: 1024, height: 768, rgba: vec![200; 1024 * 768 * 4] };
+        d.arch.images.insert("material-big".into(), image.clone());
+        let payload: usize = arch_chunks(&d.arch).map(|c| c.iter().map(String::len).sum()).unwrap_or(0);
+        assert!(payload > 8 << 20, "the test payload is {payload} bytes");
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        assert_eq!(back.arch.walls.len(), 1, "the wall is lost when the payload passes 8 MiB");
+        assert_eq!(back.arch.images.get("material-big"), Some(&image));
     }
 
     #[test]
