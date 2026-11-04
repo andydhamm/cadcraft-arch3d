@@ -1037,7 +1037,7 @@ mod tests {
         for p in rgba.chunks_exact_mut(4) {
             p[3] = 255;
         }
-        scene.textures.insert("sym:demo:t0".to_string(), ImageRgba { width: 2, height: 2, rgba });
+        scene.textures.insert("sym:demo:t0".to_string(), ImageRgba { width: 2, height: 2, rgba, ..Default::default() });
         let bytes = write(&scene);
         let json = glb_json_chunk(&bytes);
         let image_names: Vec<&str> = json["images"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap()).collect();
