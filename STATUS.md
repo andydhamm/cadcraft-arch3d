@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 15:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 15:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 21 of 34 segments merged · 0 of 13 acceptance checks**
 
@@ -24,7 +24,7 @@ Updated 2026-11-04 15:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 19.8 h so far · expected done Nov 05 19:36–Nov 08 18:56 UTC |
+| 14 | The library | building | 0 / 13 | 20.0 h so far · expected done Nov 05 19:52–Nov 08 19:11 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
@@ -64,7 +64,7 @@ Updated 2026-11-04 15:15 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | idle | 868 |
 | bonsai-b | bonsai2-27b | gate | 805 |
 | bonsai-ws2-a | bonsai2-27b | idle | 881 |
-| bonsai-ws2-b | bonsai2-27b | gate | 855 |
+| bonsai-ws2-b | bonsai2-27b | agent | 856 |
 | claude-sonnet-a | sonnet | idle | 76 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 32 |
