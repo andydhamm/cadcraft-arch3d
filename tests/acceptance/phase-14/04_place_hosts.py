@@ -74,7 +74,7 @@ EDIT = [cmd('furnishing.edit', {"id": "f1", "size": [0.8, 0.7, 1.0], "elevation"
         cmd('move', {"handles": [h1], "delta": [0.5, 0.0]}),
         cmd('copy', {"handles": [h1], "delta": [0.0, 0.6], "count": 3}),
         cmd('rotate', {"handles": [h1], "base": [1.5, 1.0], "angle": 90}),
-        cmd('mirror', {"handles": [h1], "p1": [0, 2], "p2": [4, 2]}),
+        cmd('mirror', {"handles": [h1], "p1": [0, 2], "p2": [4, 2], "erase": True}),   # mirror keeps the source unless erase
         INSPECT14]
 rc, rr, so, se = run(TWO + PLACE + EDIT)
 fs = {f['id']: f for f in furnishings_of(inspected(rr))}

@@ -20,10 +20,14 @@ for n in ['cabinet-cb0', 'cabinet-cb0-front', 'cabinet-cb0-counter', 'cabinet-cb
         fail(f"GLB node {n}; casework/wall nodes: {sorted(x for x in names if x.startswith(('cabinet', 'fixture', 'wall')))}")
 if 'cabinet-cb3-counter' in names:
     fail("the wall cabinet has no counter node")
+# Since phase 14 the touching run cb0+cb1+cb2 has one counter, its owner cb0's, 0.6 + 0.9 + 0.6 = 2.1 m long.
+for n in ('cabinet-cb1-counter', 'cabinet-cb2-counter'):
+    if n in names:
+        fail(f"the run cb0+cb1+cb2 has one counter node, cabinet-cb0-counter, but also {n}")
 lo, hi = node_box(j, 'cabinet-cb0-counter')
 spans = sorted(round(hi[k] - lo[k], 3) for k in range(3))
-if abs(spans[0] - 0.038) > 0.002 or abs(spans[1] - 0.6) > 0.002 or abs(spans[2] - 0.625) > 0.002:
-    fail(f"cb0's counter is 0.6 wide, 0.625 deep (overhang 0.025), 0.038 thick: spans {spans}")
+if abs(spans[0] - 0.038) > 0.002 or abs(spans[1] - 0.625) > 0.002 or abs(spans[2] - 2.1) > 0.002:
+    fail(f"cb0's counter runs over cb0, cb1 and cb2: 2.1 long, 0.625 deep (overhang 0.025), 0.038 thick: spans {spans}")
 groups = [l[2:].strip() for l in open(o, encoding='utf-8') if l.startswith('o ')]
 if sorted(groups) != sorted(names):
     fail(f"the OBJ's groups are the GLB's mesh nodes: only OBJ {sorted(set(groups) - set(names))[:6]}, "

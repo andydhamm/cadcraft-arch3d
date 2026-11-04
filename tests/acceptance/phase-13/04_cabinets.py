@@ -18,7 +18,7 @@ P = [[0.9, 0.3, 0.895],    # 0  inside cb0's counter (0.876-0.914)
      [0.9, 0.15, 2.12],    # 10 its top
      [3.7, 0.9, 2.1],      # 11 the tall cabinet cb4 on w1 (x 3.4-4.0, y 0.6-1.2, z 0-2.134)
      [3.7, 0.9, 2.16],     # 12 above it: nothing
-     [2.4, 0.3, 0.895]]    # 13 cb2's counter (the third of the run)
+     [2.4, 0.3, 0.895]]    # 13 over cb2, the third of the run: the run's one counter, owned by cb0 (since phase 14)
 rc, rr, so, se = run(ROOM + KITCHEN + [INSPECT_ALL, cmd('build3d', {"probe": P})])
 placed = replies_with_list(rr, 'cabinets')
 if [p['cabinets'] for p in placed] != [['cb0', 'cb1', 'cb2'], ['cb3'], ['cb4']]:
@@ -52,7 +52,7 @@ print("ok: five cabinets where they belong, counters at 0.914 m")
 hits = probes(rr)['probe']
 expect = {0: ('cb0', 'counter'), 1: None, 2: ('cb0', 'cabinet'), 3: ('cb0', 'counter'), 4: None, 5: ('cb0', 'cabinet'),
           6: None, 7: ('cb0', 'cabinet'), 8: ('cb3', 'cabinet'), 9: None, 10: ('cb3', 'cabinet'), 11: ('cb4', 'cabinet'),
-          12: None, 13: ('cb2', 'counter')}
+          12: None, 13: ('cb0', 'counter')}
 for i, e in expect.items():
     h = hits[i] if i < len(hits) else 'missing'
     got = None if h is None else (h.get('id'), h.get('part')) if isinstance(h, dict) else h

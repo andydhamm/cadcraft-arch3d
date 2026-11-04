@@ -109,14 +109,16 @@ pub fn fronts(model: &ArchModel, c: &Cabinet) -> Vec<FrontInfo> {
         }
         Fronts::DrawerOverDoor => {
             let h = 0.15_f64.min(usable / n_drawers as f64);
-            let door_h = (usable - h * n_drawers as f64) / n_doors as f64;
+            // The doors stand side by side under the drawers, each up to the lowest drawer (phase 13
+            // divided this by the door count, so two doors were half height under a bare band).
+            let door_top = usable - h * n_drawers as f64;
             for i in 0..n_drawers {
                 let kind = if i == 0 && cutout { FrontKind::False } else { FrontKind::Drawer };
                 push(kind, l, r, usable - (i as f64 + 1.0) * h, usable - i as f64 * h, None);
             }
             for i in 0..n_doors {
                 let x0 = -c.width / 2.0 + GAP + i as f64 * (door_w + GAP);
-                push(FrontKind::Door, x0, x0 + door_w, toe, door_h, Some(hinge_of(i, n_doors)));
+                push(FrontKind::Door, x0, x0 + door_w, toe, door_top, Some(hinge_of(i, n_doors)));
             }
         }
     }
@@ -376,9 +378,26 @@ mod tests {
         c.doors = 2;
         let f = fronts(&m, &c);
         assert_eq!(f.iter().map(|x| x.kind).collect::<Vec<_>>(), vec![FrontKind::Drawer, FrontKind::Door, FrontKind::Door]);
-        assert!((f[0].rect[1] - 0.626).abs() < 1e-12 && (f[1].rect[3] - 0.313).abs() < 1e-12);
+        // Phase 13 put two doors' tops at 0.313 (half the space); they reach the drawer.
+        assert!((f[0].rect[1] - 0.626).abs() < 1e-12 && (f[1].rect[3] - 0.626).abs() < 1e-12);
         c.elevation = 1.4;
         assert!((fronts(&m, &c)[0].rect[3] - 2.176).abs() < 1e-12);
+    }
+
+    #[test]
+    fn doors_under_a_drawer_reach_it_however_many() {
+        // The doors stand side by side: two or three of them are as tall as one.
+        let m = ArchModel::default();
+        for doors in 1..=3 {
+            let mut c = cab(0, 0.0, Fronts::DrawerOverDoor);
+            c.width = 0.9;
+            c.doors = doors;
+            let f = fronts(&m, &c);
+            let drawer_bottom = f[0].rect[1];
+            for d in f.iter().filter(|x| x.kind == FrontKind::Door) {
+                assert!((d.rect[1] - 0.1).abs() < 1e-12 && (d.rect[3] - drawer_bottom).abs() < 1e-12, "{doors} doors: {:?}", d.rect);
+            }
+        }
     }
 
     #[test]
