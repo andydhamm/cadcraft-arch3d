@@ -269,6 +269,12 @@ fn set<T>(target: &mut T, value: Option<T>) {
 
 fn run_cabinet(session: &mut Session, params: &Value) -> Result<Value> {
     const CMD: &str = "cabinet";
+    // The kind's Set as Default parameters fill in what this call leaves out.
+    let merged_params = match params.get("kind").and_then(Value::as_str) {
+        Some(k) => super::defaults::merged(session, &format!("cabinet.{k}"), params),
+        None => params.clone(),
+    };
+    let params = &merged_params;
     let kind = parse_cabinet_kind(CMD, params)?.ok_or_else(|| bad(CMD, "`kind` is required"))?;
 
     let pull_raw = text(CMD, params, "pull")?;
