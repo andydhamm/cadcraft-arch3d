@@ -1383,6 +1383,11 @@
 	Match case	区分大小写
 	Replace	替换
 	Replace All	全部替换
+	Add to User Catalog	添加到用户目录
+	Copy to User Catalog	复制到用户目录
+	Edit Library Item	编辑库项目
+	Delete Library Item	删除库项目
+	Library Trash	库垃圾桶
 	Architecture>Material Painter	建筑>材质涂刷
 	Architecture>Object Painter	建筑>对象涂刷
 	Architecture>Material Eyedropper	建筑>材质吸管
