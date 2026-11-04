@@ -30,7 +30,9 @@ grep -q 'forbid(unsafe_code)' crates/io/src/lib.rs || { echo "FAIL: io must stil
 unsafe_sites=$(grep -rn "unsafe {\|unsafe fn\|unsafe impl" crates apps --include=*.rs | grep -v "^crates/gpu-optin/" | head -5)
 [ -z "$unsafe_sites" ] || { echo "FAIL: unsafe code outside crates/gpu-optin: $unsafe_sites"; exit 1; }
 [ -f crates/arch/src/library/search.rs ] || { echo "FAIL: the library search lives in crates/arch/src/library/search.rs"; exit 1; }
-if grep -rqn "fn search\b\|fn matches_chip" crates/ui-egui/src; then echo "FAIL: search logic in the UI crate"; exit 1; fi
+# The library search stays out of the UI crate. finddlg.rs is FIND's Find and Replace window (#2607): it searches the
+# drawing's text, not the library, so its `fn search` is not library search logic.
+if grep -rqn --exclude=finddlg.rs "fn search\b\|fn matches_chip" crates/ui-egui/src; then echo "FAIL: search logic in the UI crate"; exit 1; fi
 stray=$(git ls-files | grep -E '(^|/)[^/]*(_tmp\.rs|\.tmp)$' | head -5)
 [ -z "$stray" ] || { echo "FAIL: stray files: $stray"; exit 1; }
 echo "PASS 12"
