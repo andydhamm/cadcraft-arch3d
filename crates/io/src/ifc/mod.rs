@@ -7,6 +7,7 @@
 //! openings (which need the walls), slabs, roofs, stairs, spaces, site, lights.
 
 mod casework;
+mod furnishing;
 pub mod geometry;
 pub mod guid;
 mod lights;
@@ -69,6 +70,7 @@ pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> Str
     site::emit(&mut ctx);
     lights::emit(&mut ctx);
     casework::emit(&mut ctx);
+    furnishing::emit(&mut ctx);
     ctx.finish(opts)
 }
 

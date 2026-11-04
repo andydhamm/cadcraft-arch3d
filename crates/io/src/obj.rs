@@ -60,13 +60,48 @@ pub fn write_mtl(scene: &Scene3d) -> String {
             continue;
         }
         seen.push(m.material.as_str());
-        let c = match glb::finish_of(&m.material) {
-            Some(f) => {
-                let [r, g, b] = texture::mean_srgb(&texture::texture(f));
-                [f64::from(r) / 255.0, f64::from(g) / 255.0, f64::from(b) / 255.0, 1.0]
+
+        let c = if let Some(def) = scene.materials.get(&m.material) {
+            // Use MaterialDef
+            let mut r = def.base_color[0];
+            let mut g = def.base_color[1];
+            let mut b = def.base_color[2];
+            let a = def.base_color[3];
+
+            // Apply tint if present
+            if let Some([tr, tg, tb]) = def.tint {
+                r *= f32::from(tr) / 255.0;
+                g *= f32::from(tg) / 255.0;
+                b *= f32::from(tb) / 255.0;
             }
-            None => glb::material_rgba(&m.material),
+
+            // If textured, use mean color of texture
+            if let Some(tex_key) = &def.texture {
+                if let Some(img) = scene.textures.get(tex_key) {
+                    let [mr, mg, mb] = img.mean_srgb();
+                    r = f32::from(mr) / 255.0;
+                    g = f32::from(mg) / 255.0;
+                    b = f32::from(mb) / 255.0;
+                    // Apply tint to texture mean
+                    if let Some([tr, tg, tb]) = def.tint {
+                        r *= f32::from(tr) / 255.0;
+                        g *= f32::from(tg) / 255.0;
+                        b *= f32::from(tb) / 255.0;
+                    }
+                }
+            }
+
+            [r as f64, g as f64, b as f64, a as f64]
+        } else {
+            match glb::finish_of(&m.material) {
+                Some(f) => {
+                    let [r, g, b] = texture::mean_srgb(&texture::texture(f));
+                    [f64::from(r) / 255.0, f64::from(g) / 255.0, f64::from(b) / 255.0, 1.0]
+                }
+                None => glb::material_rgba(&m.material),
+            }
         };
+
         let _ = writeln!(out, "newmtl {}", m.material);
         let _ = writeln!(out, "Kd {} {} {}", num(c[0] as f32), num(c[1] as f32), num(c[2] as f32));
         let _ = writeln!(out, "d {}", num(c[3] as f32));
@@ -189,5 +224,52 @@ mod tests {
         assert!(!obj.contains("o "));
         assert!(!obj.contains("v "));
         assert!(!obj.contains("f "));
+    }
+
+    #[test]
+    fn obj_groups_furnishings_by_node_name() {
+        let mut s = Scene3d::default();
+        // Add a furnishing mesh
+        let m = Mesh {
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            material: "sym:key1:0".into(),
+            object: ArchId(5),
+            level_elevation: 0.0,
+            ..Mesh::default()
+        };
+        s.meshes.push(m);
+
+        let obj = write_obj(&s, "x.mtl");
+        let groups: Vec<&str> = obj.lines().filter_map(|l| l.strip_prefix("o ")).collect();
+        // glb::node_names should produce "furnishing-f5"
+        assert_eq!(groups, ["furnishing-f5"]);
+    }
+
+    #[test]
+    fn obj_mtl_has_part_colours() {
+        let mut s = Scene3d::default();
+        let m = Mesh {
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            material: "sym:key1:0".into(),
+            object: ArchId(5),
+            level_elevation: 0.0,
+            ..Mesh::default()
+        };
+        s.meshes.push(m);
+
+        // Add a material definition
+        let mut def = cadcraft_arch3d::MaterialDef::default();
+        def.base_color = [1.0, 0.0, 0.0, 1.0]; // Red
+        s.materials.insert("sym:key1:0".into(), def);
+
+        let mtl = write_mtl(&s);
+        assert!(mtl.contains("newmtl sym:key1:0"));
+        assert!(mtl.contains("Kd 1 0 0"));
     }
 }
