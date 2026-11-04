@@ -385,11 +385,11 @@ mod tests {
         assert_eq!(effective_material(&m, &wall_side(w, Side::Left)), "default:wall");
         assert_eq!(effective_material(&m, &Surface::RoomFloor(r)), "finish:wood");
         let s = wall_side(w, Side::Right);
-        m.paints.insert(s.key(), Paint { material: Some(MaterialRef::Colour([0xc0, 0x40, 0x20])), tint: Some([1, 2, 3]) });
+        m.paints.insert(s.key(), Paint { material: Some(MaterialRef::Colour([0xc0, 0x40, 0x20])), tint: Some([1, 2, 3]), ..Default::default() });
         assert_eq!(effective_material(&m, &s), "colour:#c04020");
         assert_eq!(info_of(&m, &s).tint, Some([1, 2, 3]));
         // A tint alone keeps the material.
-        m.paints.insert(s.key(), Paint { material: None, tint: Some([9, 9, 9]) });
+        m.paints.insert(s.key(), Paint { material: None, tint: Some([9, 9, 9]), ..Default::default() });
         assert_eq!(effective_material(&m, &s), "finish:brick");
     }
 
@@ -413,7 +413,7 @@ mod tests {
         assert_eq!(select(&m, &t, Scope::Room).unwrap(), vec![t.clone()]);
         // Painting the ceiling and the wall alike makes them join.
         let ceiling = Surface::RoomCeiling(ArchId(0));
-        let red = Paint { material: MaterialRef::parse("#c04020"), tint: None };
+        let red = Paint { material: MaterialRef::parse("#c04020"), tint: None, ..Default::default() };
         m.paints.insert(ceiling.key(), red.clone());
         m.paints.insert(t.key(), red);
         let got = select(&m, &t, Scope::Room).unwrap();
