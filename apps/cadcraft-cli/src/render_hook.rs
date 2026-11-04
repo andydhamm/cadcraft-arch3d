@@ -28,8 +28,11 @@ struct State {
     off: Offscreen,
     /// The `arch_revision` the scene below was built for, and the scene.
     scene: Option<(u64, Scene3d)>,
-    /// The compute device, requested once on the first path request (`Some(None)`: none available).
+    /// The compute device, requested once on the first path request (`Some(None)`: none available);
+    /// replaced once by a device with ray queries on the first `rt` request (see `compute_of`).
     compute: Option<Option<ComputeGpu>>,
+    /// A device with ray queries was asked for already (granted or not), so `rt` never asks again.
+    rt_asked: bool,
     /// The pipeline cache and what opening it reported, kept for the process.
     cache: Option<(Option<wgpu::PipelineCache>, CacheOutcome)>,
     /// Whether the cache file was written after a miss.
@@ -77,7 +80,7 @@ fn gpu(e: cadcraft_render3d::Render3dError) -> String {
 fn ready<'a>(guard: &'a mut Option<State>, drawing: &cadcraft_engine::doc::Drawing, size: (u32, u32)) -> Result<&'a mut State, String> {
     if guard.is_none() {
         let off = Offscreen::create_with(adapter_choice(), size).map_err(gpu)?;
-        *guard = Some(State { off, scene: None, compute: None, cache: None, cache_saved: false, path_traces: 0 });
+        *guard = Some(State { off, scene: None, compute: None, rt_asked: false, cache: None, cache_saved: false, path_traces: 0 });
     }
     let state = guard.as_mut().ok_or("renderer unavailable")?;
     let key = drawing.arch_revision;
@@ -111,11 +114,22 @@ fn path_options(p: &PathParams) -> PathOptions {
     }
 }
 
-/// The compute device, requested on the first call (a later `rt` request keeps the device made
-/// before and renders the compute path).
+/// The compute device, requested on the first call. The first `rt` request on a device without ray
+/// queries asks once for one that has them and, when the adapter grants it, uses it from then on (with its
+/// own pipeline cache; compute-path renders run on it unchanged). Until 2026-11-03 a later `rt` request kept
+/// the first device, so `rt` after a compute render never used ray queries (phase-11 check 10 skipped on
+/// every adapter). Devices live for the process, so the request is never repeated.
 fn compute_of(state: &mut State, rt: bool) -> Result<Option<ComputeGpu>, String> {
     if state.compute.is_none() {
+        state.rt_asked = rt;
         state.compute = Some(request_compute(adapter_choice(), rt).map_err(gpu)?);
+    } else if rt && !state.rt_asked && matches!(&state.compute, Some(Some(g)) if !g.ray_query) {
+        state.rt_asked = true;
+        if let Some(g) = request_compute(adapter_choice(), true).map_err(gpu)?.filter(|g| g.ray_query) {
+            state.compute = Some(Some(g));
+            state.cache = None;
+            state.cache_saved = false;
+        }
     }
     Ok(state.compute.clone().flatten())
 }
@@ -189,6 +203,9 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                 path_info.insert("seed".into(), json!(opts.seed));
                 path_info.insert("denoised".into(), json!(st.denoised));
                 path_info.insert("rt".into(), json!(st.rt));
+                if let Some(e) = &st.rt_error {
+                    path_info.insert("rtError".into(), json!(e));
+                }
                 path_info.insert("exposure".into(), json!(st.exposure));
                 path_info.insert("pipelineCache".into(), json!(outcome.name()));
                 path_info.insert("radiance".into(), st.radiance.map_or(Value::Null, |r| json!({ "min": r.min, "max": r.max, "mean": r.mean })));
@@ -563,6 +580,35 @@ mod tests {
         assert!(v["pipelineCache"].is_string(), "{v}");
         assert_eq!(v["shadowedLights"], 4, "{v}");
         assert_eq!(stats().path_traces, 1);
+    }
+
+    /// 2026-11-03: the session's compute device was made by its first path render and kept, so `rt` asked for
+    /// after a compute render rendered the compute path (`rt: false`) even where the adapter has ray queries;
+    /// phase-11 check 10 does exactly that and so skipped on every adapter. The software adapter (llvmpipe)
+    /// offers ray queries; a later `rt` render must use them.
+    #[test]
+    fn a_later_rt_render_in_the_session_uses_ray_queries() {
+        let _g = reset();
+        let offered = cadcraft_render3d::pathtrace::request_compute(AdapterChoice::Fallback, true).ok().flatten().is_some_and(|g| g.ray_query);
+        let d = room();
+        let first = match render_one(&path_request(&d, None, quick(4))) {
+            Ok(v) => v,
+            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
+            Err(e) => panic!("render failed: {e}"),
+        };
+        if first["finalMode"] != "path" {
+            return eprintln!("SKIP: no compute device");
+        }
+        assert_eq!(first["rt"], false, "{first}");
+        let rt = render_one(&path_request(&d, None, PathParams { rt: true, ..quick(4) })).unwrap_or_else(|e| panic!("rt render failed: {e}"));
+        if !offered {
+            assert_eq!(rt["rt"], false, "{rt}");
+            return eprintln!("SKIP: the software adapter offers no ray queries");
+        }
+        assert_eq!(rt["rt"], true, "a later rt render uses ray queries: {rt}");
+        assert!(rt.get("rtError").is_none(), "{rt}");
+        let again = render_one(&path_request(&d, None, quick(4))).unwrap_or_else(|e| panic!("render failed: {e}"));
+        assert_eq!(again["rt"], false, "a render without rt still runs the compute path: {again}");
     }
 
     #[test]
