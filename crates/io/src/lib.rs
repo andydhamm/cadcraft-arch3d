@@ -26,7 +26,8 @@ pub mod library;
 pub mod obj;
 pub mod pdf;
 pub mod plotter;
-pub mod png;
+/// Raster image files (PNG, JPEG, BMP, TIFF) decoded to pixels.
+pub mod raster;
 /// Open → save → reopen comparison and the real-file corpus harness (gaps FF1, FF5).
 pub mod roundtrip;
 pub mod step;
