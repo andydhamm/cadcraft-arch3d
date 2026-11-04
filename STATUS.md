@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-04 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 13:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 12 of 34 segments merged · 0 of 13 acceptance checks**
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 13:30 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 18.0 h so far · expected done Nov 06 13:30–Nov 10 06:18 UTC |
+| 14 | The library | building | 0 / 13 | 18.3 h so far · expected done Nov 06 13:45–Nov 10 06:34 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-12 merged, 8 merging, 7 queued, 6 escalate, 1 gate, 1 abandoned
+12 merged, 9 queued, 7 merging, 6 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,10 +37,8 @@ Updated 2026-11-04 13:30 UTC. This page and the card in the README are regenerat
 | `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
 | `p14-apps-library-hooks` | The apps install the library's readers | merging | claude-sonnet-d |
 | `p14-cmd-icons` | library.icon: deterministic icons for items and categories, cached by content hash | merging | mai-flash-esc |
-| `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | gate | mai-flash |
 | `p14-cmd-furnishing-transform` | move, copy (count), rotate and mirror move furnishings by their handles | escalate |  |
 | `p14-cmd-paint` | paint.material, paint.object and the eyedropper | escalate |  |
-| `p14-inspect` | arch.inspect: furnishings, surfaces and the cabinet parts | merging | claude-sonnet-b |
 | `p14-cmd-casework-parts` | cabinet and cabinet.edit take door and drawer styles and a pull | merging | claude-sonnet-a |
 | `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
 | `p14-io-glb-furnishing` | GLB: furnishing nodes, pull nodes, painted faces, symbol and paint materials | escalate |  |
@@ -53,6 +51,7 @@ Updated 2026-11-04 13:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 04 13:36 | `p14-inspect` | refused | 7,199 pass | claude-sonnet-b |
 | Nov 04 12:57 | `p14-io-dxf-furnishing` | refused | 7,199 pass | claude-sonnet-d |
 | Nov 04 11:07 | `p14-cmd-furnishing-transform` | refused | 7,200 pass | mai-flash-esc |
 | Nov 04 09:45 | `upstream-sync-5f8999f30` | refused | 0 pass | mai-flash |
@@ -64,23 +63,22 @@ Updated 2026-11-04 13:30 UTC. This page and the card in the README are regenerat
 | Nov 04 01:55 | `p14-arch-furnishing-plan` | merged | 7,104 pass | claude-sonnet-d |
 | Nov 04 00:40 | `harden-p13-arch3d-incremental` | refused | 7,100 pass, 2 fail | tturbo-mac |
 | Nov 03 23:57 | `p14-arch-casework-layout` | merged | 7,098 pass | claude-sonnet-c |
-| Nov 03 22:56 | `p14-io-library-files` | merged | 7,086 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 866 |
+| bonsai-a | bonsai2-27b | idle | 866 |
 | bonsai-b | bonsai2-27b | idle | 805 |
 | bonsai-ws2-a | bonsai2-27b | idle | 879 |
 | bonsai-ws2-b | bonsai2-27b | idle | 855 |
-| claude-sonnet-a | sonnet | merging | 76 |
-| claude-sonnet-b | sonnet | merging | 80 |
-| claude-sonnet-c | sonnet | merging | 32 |
-| claude-sonnet-d | sonnet | merging | 19 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 743 |
-| kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 58 |
-| mai-flash-esc | mai-code-1.1-flash | merging | 20 |
-| tturbo-mac | tturbo-ultraheretic | merging | 607 |
-| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
+| claude-sonnet-a | sonnet | idle | 76 |
+| claude-sonnet-b | sonnet | idle | 80 |
+| claude-sonnet-c | sonnet | idle | 32 |
+| claude-sonnet-d | sonnet | idle | 19 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 743 |
+| kimi-k31 | k3.1-pro-highspeed | idle | 111 |
+| mai-flash | mai-code-1.1-flash | idle | 58 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 20 |
+| tturbo-mac | tturbo-ultraheretic | idle | 607 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
