@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-04 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 12 of 34 segments merged · 0 of 13 acceptance checks**
+**Phase 14 of 15: The library — 19 of 34 segments merged · 0 of 13 acceptance checks**
 
-7,194 workspace tests passing at the last merge · 727 segments merged in all · 0 of 14 seats working · PAUSED
+7,194 workspace tests passing at the last merge · 734 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -24,12 +24,12 @@ Updated 2026-11-04 14:00 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 0 / 13 | 18.5 h so far · expected done Nov 07 00:40–Nov 12 21:00 UTC |
+| 14 | The library | building | 0 / 13 | 18.8 h so far · expected done Nov 06 06:15–Nov 11 03:15 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-12 merged, 9 queued, 7 merging, 6 escalate, 1 abandoned
+19 merged, 7 merging, 7 queued, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,14 +37,9 @@ Updated 2026-11-04 14:00 UTC. This page and the card in the README are regenerat
 | `p14-arch3d-paint` | Painted surfaces in 3D: split faces, paint materials, tints | merging | claude-sonnet-b |
 | `p14-apps-library-hooks` | The apps install the library's readers | merging | claude-sonnet-d |
 | `p14-cmd-icons` | library.icon: deterministic icons for items and categories, cached by content hash | merging | mai-flash-esc |
-| `p14-cmd-furnishing-transform` | move, copy (count), rotate and mirror move furnishings by their handles | escalate |  |
-| `p14-cmd-paint` | paint.material, paint.object and the eyedropper | escalate |  |
+| `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | escalate |  |
 | `p14-cmd-casework-parts` | cabinet and cabinet.edit take door and drawer styles and a pull | merging | claude-sonnet-a |
 | `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
-| `p14-io-glb-furnishing` | GLB: furnishing nodes, pull nodes, painted faces, symbol and paint materials | escalate |  |
-| `p14-io-obj-ifc-furnishing` | OBJ groups and IFC elements for furnishings | escalate |  |
-| `p14-io-dxf-furnishing` | DXF: furnishing proxies and the round trip | escalate |  |
-| `p14-r3d-symbol-materials` | render3d draws symbol and paint materials: base colours, textures, tints | escalate |  |
 | `p14-r3d-backdrop` | Backdrops behind the 3D view and the raster Finalize | merging | claude-sonnet-d |
 
 ## Recent merges
@@ -68,17 +63,17 @@ Updated 2026-11-04 14:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 866 |
+| bonsai-a | bonsai2-27b | gate | 866 |
 | bonsai-b | bonsai2-27b | idle | 805 |
-| bonsai-ws2-a | bonsai2-27b | idle | 879 |
+| bonsai-ws2-a | bonsai2-27b | gate | 879 |
 | bonsai-ws2-b | bonsai2-27b | idle | 855 |
 | claude-sonnet-a | sonnet | idle | 76 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 32 |
 | claude-sonnet-d | sonnet | idle | 19 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 743 |
-| kimi-k31 | k3.1-pro-highspeed | idle | 111 |
+| kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 58 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 20 |
-| tturbo-mac | tturbo-ultraheretic | idle | 607 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
+| tturbo-mac | tturbo-ultraheretic | agent | 607 |
+| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
