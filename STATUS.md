@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-04 18:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-04 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 24 of 34 segments merged · 2 of 13 acceptance checks**
+**Phase 14 of 15: The library — 26 of 34 segments merged · 2 of 13 acceptance checks**
 
-7,295 workspace tests passing at the last merge · 740 segments merged in all · 0 of 14 seats working · PAUSED
+7,295 workspace tests passing at the last merge · 742 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -24,20 +24,21 @@ Updated 2026-11-04 18:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 2 / 13 | 23.3 h so far · expected done Nov 05 10:45–Nov 06 23:40 UTC |
+| 14 | The library | building | 2 / 13 | 23.5 h so far · expected done Nov 05 07:48–Nov 06 18:55 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-24 merged, 5 queued, 2 escalate, 2 merging, 1 gate, 1 abandoned
+26 merged, 3 working, 2 merging, 2 queued, 1 gate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p14-arch3d-cabinet-parts` | Front styles, pulls, counter runs and cut-outs in 3D | escalate |  |
-| `p14-cmd-place` | library.place, furnishing.edit / .delete / .centre | escalate |  |
+| `p14-cmd-user-catalog` | The user catalog: add, copy, edit, delete, Trash, placing groups | gate | bonsai-ws2-a |
+| `p14-cmd-defaults` | Set as Default for cabinets, doors, windows and furnishings | working | claude-sonnet-d |
 | `p14-cmd-backdrop` | The backdrop command | merging | claude-sonnet-c |
-| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | gate | bonsai-b |
+| `p14-r3d-pt-backdrop` | The path tracer shows the backdrop where camera rays miss | working | bonsai-b |
 | `p14-ui-library-panel` | The Library side panel: categories, folders, search, chips, history, tags, details | merging | claude-sonnet-a |
+| `p14-cache-furnishing-edits` | The scene cache stays the full build under furnishing, paint and casework-part edits | working | claude-sonnet-c |
 
 ## Recent merges
 
@@ -60,14 +61,14 @@ Updated 2026-11-04 18:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 873 |
-| bonsai-b | bonsai2-27b | gate | 813 |
+| bonsai-a | bonsai2-27b | agent | 873 |
+| bonsai-b | bonsai2-27b | agent | 813 |
 | bonsai-ws2-a | bonsai2-27b | gate | 892 |
 | bonsai-ws2-b | bonsai2-27b | gate | 861 |
 | claude-sonnet-a | sonnet | merging | 77 |
 | claude-sonnet-b | sonnet | idle | 80 |
-| claude-sonnet-c | sonnet | idle | 32 |
-| claude-sonnet-d | sonnet | idle | 19 |
+| claude-sonnet-c | sonnet | agent | 32 |
+| claude-sonnet-d | sonnet | agent | 19 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 746 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 58 |
