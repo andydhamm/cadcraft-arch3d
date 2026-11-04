@@ -14,7 +14,8 @@ use crate::camera::Camera;
 use crate::lit_frame::Lighting;
 use crate::types::Scene3d;
 use bytemuck::Pod;
-use cadcraft_doc::arch::backdrop::Backdrop;
+use cadcraft_doc::arch::ImageRgba;
+use cadcraft_doc::arch::backdrop::{Backdrop, Projection};
 use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
@@ -37,7 +38,7 @@ pub struct PathTracer {
     spp_done: u32,
     snapshot_idx: usize,
     backdrop: Option<Backdrop>,
-    backdrop_images: BTreeMap<String, crate::types::ImageRgba>,
+    backdrop_images: BTreeMap<String, ImageRgba>,
 }
 
 impl PathTracer {
@@ -508,7 +509,7 @@ impl PathTracer {
             if aov[2 * i][3] <= 0.5 {
                 let x = i % w as usize;
                 let y = i / w as usize;
-                let (r, g, b) = backdrop_colour(x as f64, y as f64, w as f64, h as f64, backdrop, &self.backdrop_images);
+                let [r, g, b] = backdrop_colour(x as f64, y as f64, w as f64, h as f64, backdrop, &self.backdrop_images);
                 rgba[i * 4] = r;
                 rgba[i * 4 + 1] = g;
                 rgba[i * 4 + 2] = b;
@@ -851,7 +852,7 @@ pub struct SceneBuffers {
 /// lerp(top, bottom, t) per channel in sRGB with t = (y + 0.5) / h; for Image Flat: bilinear
 /// sample at u = (x + 0.5) / w, v = (y + 0.5) / h; for Image Equirect: the camera ray d
 /// through the pixel centre (u = 0.5 + atan2(d.y, d.x) / 2π, v = 0.5 − asin(d.z) / π).
-fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop_images: &BTreeMap<String, crate::types::ImageRgba>) -> ([u8; 3]) {
+fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop_images: &BTreeMap<String, ImageRgba>) -> [u8; 3] {
     match backdrop {
         Backdrop::Colour { colour } => *colour,
         Backdrop::Gradient { top, bottom } => {
@@ -862,8 +863,8 @@ fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop
                 (top[2] as f64 * (1.0 - t) + bottom[2] as f64 * t).clamp(0.0, 255.0).round() as u8,
             ]
         }
-        Backdrop::Image { item, projection: BackdropProjection::Equirect } => [128, 128, 128],
-        Backdrop::Image { item, projection: BackdropProjection::Flat } => {
+        Backdrop::Image { item, projection: Projection::Equirect } => [128, 128, 128],
+        Backdrop::Image { item, projection: Projection::Flat } => {
             if let Some(img) = backdrop_images.get(item) {
                 let u = ((x + 0.5) / w).clamp(0.0, 1.0);
                 let v = ((y + 0.5) / h).clamp(0.0, 1.0);
@@ -880,7 +881,7 @@ fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop
         }
     }
 }
-fn storage<T: Copy + Pod>(d: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
+fn storage<T: Copy + Pod + Default>(d: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
     let one = [T::default()];
     let data: &[T] = if items.is_empty() { &one } else { items };
     d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
