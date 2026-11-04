@@ -706,6 +706,27 @@ fn properties_header(app: &mut CadApp, ui: &mut egui::Ui) {
 }
 
 /// Properties palette: the selection's common properties, or the current defaults when nothing is selected; formats lengths per drawing units and dispatches setter commands.
+/// The Library buttons for the selected arch object `h`, as `(label, surface key)`: a cabinet's
+/// fronts and its pull, a furnishing's part 0, a room's ceiling, a roof.
+fn library_targets(model: &cadcraft_doc::ArchModel, h: Option<cadcraft_doc::Handle>) -> Vec<(&'static str, String)> {
+    use cadcraft_doc::arch::{CabinetPart, Surface, cabinet_handle, furnishing_handle, roof_handle, room_handle};
+    let Some(h) = h else { return Vec::new() };
+    if let Some(c) = model.cabinets.iter().find(|c| cabinet_handle(c.id) == h) {
+        let key = |part| Surface::Cabinet { cabinet: c.id, part }.key();
+        return vec![("Library…", key(CabinetPart::Front)), ("Pull Library…", key(CabinetPart::Pull))];
+    }
+    if let Some(f) = model.furnishings.iter().find(|f| furnishing_handle(f.id) == h) {
+        return vec![("Library…", Surface::Furnishing { furnishing: f.id, part: 0 }.key())];
+    }
+    if let Some(r) = model.rooms.iter().find(|r| room_handle(r.id) == h) {
+        return vec![("Library…", Surface::RoomCeiling(r.id).key())];
+    }
+    if let Some(r) = model.roofs.iter().find(|r| roof_handle(r.id) == h) {
+        return vec![("Library…", Surface::Roof(r.id).key())];
+    }
+    Vec::new()
+}
+
 pub(crate) fn properties_section(app: &mut CadApp, ui: &mut egui::Ui) {
     let t = Tokens::get();
     properties_header(app, ui);
@@ -869,7 +890,21 @@ pub(crate) fn properties_section(app: &mut CadApp, ui: &mut egui::Ui) {
     }
     // Selected objects: common + geometry for a single object.
     let first = sel.first().and_then(|h| d.entity(*h)).map(|e| (**e).clone());
-    let Some(e) = first else { return };
+    // A selected cabinet, furnishing, room or roof offers the Library, narrowed to what fits it.
+    let mut library_key: Option<String> = None;
+    for (label, key) in library_targets(&d.arch, sel.first().copied()) {
+        if ui.button(crate::i18n::t(label)).clicked() {
+            library_key = Some(key);
+        }
+    }
+    let Some(e) = first else {
+        if let Some(key) = library_key
+            && let Err(e) = crate::library_panel::narrow(app, &key)
+        {
+            app.session.echo(e);
+        }
+        return;
+    };
     let same = |f: &dyn Fn(&cadcraft_doc::Entity) -> String| -> String {
         let vals: Vec<String> = sel.iter().filter_map(|h| d.entity(*h)).map(|e| f(e)).collect();
         match vals.first() {
