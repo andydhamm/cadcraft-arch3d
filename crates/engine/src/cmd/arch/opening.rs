@@ -469,11 +469,13 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
 }
 
 fn run_door(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
-    place_from_params("door", OpeningKind::Door, s, p)
+    let p = super::defaults::merged(s, "door", p);
+    place_from_params("door", OpeningKind::Door, s, &p)
 }
 
 fn run_window(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
-    place_from_params("window", OpeningKind::Window, s, p)
+    let p = super::defaults::merged(s, "window", p);
+    place_from_params("window", OpeningKind::Window, s, &p)
 }
 
 fn run_garagedoor(s: &mut Session, p: &Value) -> Result<Value, EngineError> {

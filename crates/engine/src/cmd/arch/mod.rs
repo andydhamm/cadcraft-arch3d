@@ -99,6 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(terrain_modify::specs());
     v.extend(terrain_query::specs());
     v.extend(plant::specs());
+    v.extend(defaults::specs());
     v.extend(lightfixture::specs());
     v.extend(casework::specs());
     v.extend(material::specs());
