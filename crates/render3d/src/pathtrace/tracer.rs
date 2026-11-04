@@ -865,15 +865,17 @@ fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop
         }
         Backdrop::Image { item, projection: Projection::Equirect } => [128, 128, 128],
         Backdrop::Image { item, projection: Projection::Flat } => {
-            if let Some(img) = backdrop_images.get(item) {
-                let u = ((x + 0.5) / w).clamp(0.0, 1.0);
-                let v = ((y + 0.5) / h).clamp(0.0, 1.0);
-                let u_i = (u * (img.width as f64 - 1.0)).floor() as usize;
-                let v_i = (v * (img.height as f64 - 1.0)).floor() as usize;
-                let u1 = u_i.min(img.width as usize - 1);
-                let v1 = v_i.min(img.height as usize - 1);
-                let idx = u1 * img.width + v1;
-                let b = img.width * 4 * idx;
+            if let Some(img) = backdrop_images.get(item)
+                && img.is_valid()
+            {
+                let w = img.width as usize;
+                let h = img.height as usize;
+                let u = ((x + 0.5) / (w as f64)).clamp(0.0, 1.0);
+                let v = ((y + 0.5) / (h as f64)).clamp(0.0, 1.0);
+                let u1 = ((u * (w as f64 - 1.0)).floor() as usize).min(w - 1);
+                let v1 = ((v * (h as f64 - 1.0)).floor() as usize).min(h - 1);
+                let idx = u1 * w + v1;
+                let b = w * 4 * idx;
                 [img.rgba[b], img.rgba[b + 1], img.rgba[b + 2]]
             } else {
                 [128, 128, 128]
