@@ -1,85 +1,86 @@
-use cadcraft_doc::arch::{Furnishing, FurnishingHost, Surface};
-use cadcraft_geom::{Vec2, Vec3, norm_angle};
+use cadcraft_doc::arch::{ArchId, Furnishing, FurnishingHost, MAX_FURNISHINGS, Surface, furnishing_handle, furnishing_id_of_handle};
+use cadcraft_geom::{Vec2, Vec3};
 
 use super::{Entity, Handle, Mat3, Result, Session, Value, bad, bool_or, erase_kept, f64_req, json, point_param, point_req, targets};
 
 // ---------------- core operations ----------------
 
+/// Move, copy, rotate or mirror `hs` by `m`. Furnishings are arch data, not entities: their handles are split off and
+/// edited in the same command (so in its one undo step); the rest go through `edit_entities` as before.
 pub(crate) fn transform_entities(s: &mut Session, hs: &[Handle], m: &Mat3, copy: bool) -> Result<Vec<Handle>> {
-    let mut ordinary = Vec::new();
-    let mut furnishing = Vec::new();
-    {
-        let d = s.doc()?;
-        for (idx, h) in hs.iter().copied().enumerate() {
-            if cadcraft_doc::arch::is_furnishing_handle(h) {
-                if let Some(id) = cadcraft_doc::arch::furnishing_id_of_handle(h) {
-                    if d.arch.furnishing(id).is_some() {
-                        furnishing.push((idx, id));
-                        continue;
-                    }
-                }
+    let furnishings = furnishings_of(s, hs)?;
+    if copy {
+        room_for_furnishings(s, furnishings.len())?;
+    }
+    let ordinary: Vec<Handle> = hs.iter().copied().filter(|h| !furnishings.iter().any(|(fh, _)| fh == h)).collect();
+    let mut out = if ordinary.is_empty() { Vec::new() } else { edit_entities(s, &ordinary, copy, |e| e.kind.transform(m))? };
+    if furnishings.is_empty() {
+        return Ok(out);
+    }
+    // The angle of m's x axis, and whether m mirrors (then the image of the x axis is at twice the mirror line's angle).
+    let turn = m.rotation().to_degrees();
+    let mirror = m.is_mirroring();
+    let d = s.doc_mut()?;
+    for (_, id) in furnishings {
+        let Some(f) = d.arch.furnishing(id) else { continue };
+        let p = m.apply(Vec2::new(f.at[0], f.at[1]));
+        let at = [p.x, p.y];
+        let rotation = norm_degrees(if mirror { turn - f.rotation } else { f.rotation + turn });
+        let mirrored = f.mirrored != mirror;
+        if copy {
+            let fresh = Furnishing { at, rotation, mirrored, host: FurnishingHost::None, ..f.clone() };
+            let paints: Vec<_> = d
+                .arch
+                .paints
+                .iter()
+                .filter_map(|(key, paint)| match Surface::parse(key)? {
+                    Surface::Furnishing { furnishing, part } if furnishing == id => Some((part, paint.clone())),
+                    _ => None,
+                })
+                .collect();
+            let nid = d.arch.push_furnishing(fresh);
+            for (part, paint) in paints {
+                d.arch.paints.insert(Surface::Furnishing { furnishing: nid, part }.key(), paint);
             }
-            ordinary.push((idx, h));
+            out.push(furnishing_handle(nid));
+        } else if let Some(f) = d.arch.furnishing_mut(id) {
+            f.at = at;
+            f.rotation = rotation;
+            f.mirrored = mirrored;
+            f.host = FurnishingHost::None;
+            out.push(furnishing_handle(id));
         }
     }
+    d.touch_arch();
+    Ok(out)
+}
 
-    let mut out = vec![None; hs.len()];
-    if !ordinary.is_empty() {
-        let ordinary_hs: Vec<Handle> = ordinary.iter().map(|(_, h)| *h).collect();
-        let ordinary_out = edit_entities(s, &ordinary_hs, copy, |e| e.kind.transform(m))?;
-        for ((idx, _), handle) in ordinary.iter().zip(ordinary_out) {
-            out[*idx] = Some(handle);
+/// The handles in `hs` naming a furnishing of the active drawing, each once, with its id.
+fn furnishings_of(s: &Session, hs: &[Handle]) -> Result<Vec<(Handle, ArchId)>> {
+    let d = s.doc()?;
+    let mut out: Vec<(Handle, ArchId)> = Vec::new();
+    for h in hs {
+        if let Some(id) = furnishing_id_of_handle(*h).filter(|id| d.arch.furnishing(*id).is_some())
+            && !out.iter().any(|(fh, _)| fh == h)
+        {
+            out.push((*h, id));
         }
     }
+    Ok(out)
+}
 
-    if !furnishing.is_empty() {
-        let mut doc = s.doc_mut()?;
-        for (idx, id) in furnishing {
-            let mut f = doc.arch.furnishing_mut(id).cloned().unwrap();
-            let new_at = m.apply(Vec2::new(f.at[0], f.at[1]));
-            let old_rotation = f.rotation.to_radians();
-            let mirror = m.det() < 0.0;
-            let mut new_rotation = norm_angle(old_rotation + m.rotation());
-            let mut mirrored = f.mirrored;
-            if mirror {
-                mirrored = !mirrored;
-                let line_angle = 0.5 * m.rotation();
-                new_rotation = norm_angle(2.0 * line_angle - old_rotation);
-            }
-
-            if copy {
-                let mut fresh = f.clone();
-                fresh.at = [new_at.x, new_at.y];
-                fresh.rotation = new_rotation.to_degrees();
-                fresh.mirrored = mirrored;
-                fresh.host = FurnishingHost::None;
-                let new_id = doc.arch.push_furnishing(fresh);
-                let mut cloned = Vec::new();
-                for (key, paint) in doc.arch.paints.iter() {
-                    let Some(surface) = Surface::parse(key) else { continue };
-                    if let Surface::Furnishing { furnishing: old, part } = surface {
-                        if old == id {
-                            cloned.push((Surface::Furnishing { furnishing: new_id, part }.key(), paint.clone()));
-                        }
-                    }
-                }
-                for (key, paint) in cloned {
-                    doc.arch.paints.insert(key, paint);
-                }
-                out[idx] = Some(cadcraft_doc::arch::furnishing_handle(new_id));
-            } else {
-                let f = doc.arch.furnishing_mut(id).unwrap();
-                f.at = [new_at.x, new_at.y];
-                f.rotation = new_rotation.to_degrees();
-                f.mirrored = mirrored;
-                f.host = FurnishingHost::None;
-                out[idx] = Some(cadcraft_doc::arch::furnishing_handle(id));
-            }
-        }
-        doc.touch_arch();
+/// Refuse a command that would take the drawing past `MAX_FURNISHINGS`, before it changes anything.
+fn room_for_furnishings(s: &Session, more: usize) -> Result<()> {
+    if more > 0 && s.doc()?.arch.furnishings.len().saturating_add(more) > MAX_FURNISHINGS {
+        return Err(bad("copy", format!("at most {MAX_FURNISHINGS} furnishings are allowed")));
     }
+    Ok(())
+}
 
-    Ok(out.into_iter().flatten().collect())
+/// `deg` in [0, 360); 0 when not finite.
+fn norm_degrees(deg: f64) -> f64 {
+    let r = if deg.is_finite() { deg.rem_euclid(360.0) } else { 0.0 };
+    if r >= 360.0 { 0.0 } else { r + 0.0 }
 }
 
 /// Scale `hs` by `f` about `base` in 3D, as AutoCAD 2024's SCALE does: about the base point's XY,
@@ -189,6 +190,59 @@ mod tests {
         s.execute("move", &json!({"handles": [h.hex()], "delta": [10.0, 0.0]})).unwrap();
         assert_eq!(s.state().unwrap().undo.len(), before + 1);
     }
+
+    #[test]
+    fn a_line_and_a_furnishing_move_together_in_one_undo_step() {
+        let mut s = Session::new();
+        let l = s.execute("line", &json!({"points": [[0, 0], [1, 0]]})).unwrap();
+        let line = Handle::parse_hex(l["handles"][0].as_str().unwrap()).unwrap();
+        let id = add_furnishing(&mut s, [2.0, 0.0], 0.0);
+        let before = s.state().unwrap().undo.len();
+        let out = s.execute("move", &json!({"handles": [line.hex(), furnishing_handle(id).hex()], "delta": [0.0, 5.0]})).unwrap();
+        assert_eq!(out["moved"], 2);
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, [2.0, 5.0]);
+        assert!(s.doc().unwrap().entity(line).unwrap().kind.grips()[0].near(Vec2::new(0.0, 5.0), 1e-9));
+        assert_eq!(s.state().unwrap().undo.len(), before + 1);
+    }
+
+    #[test]
+    fn rotating_clockwise_keeps_the_rotation_in_0_to_360() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 0.0], 30.0);
+        transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::rotate_about(Vec2::new(0.0, 0.0), -std::f64::consts::FRAC_PI_2), false).unwrap();
+        let r = s.doc().unwrap().arch.furnishing(id).unwrap().rotation;
+        assert!((r - 300.0).abs() < 1e-9, "{r}");
+    }
+
+    #[test]
+    fn copy_past_the_furnishing_cap_is_refused_and_changes_nothing() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [0.0, 0.0], 0.0);
+        for _ in 1..cadcraft_doc::arch::MAX_FURNISHINGS - 2 {
+            add_furnishing(&mut s, [0.0, 0.0], 0.0);
+        }
+        let before = s.doc().unwrap().arch.furnishings.len();
+        let err = s.execute("copy", &json!({"handles": [furnishing_handle(id).hex()], "delta": [1.0, 0.0], "count": 3})).unwrap_err();
+        assert!(err.to_string().contains("at most 4096 furnishings"), "{err}");
+        assert_eq!(s.doc().unwrap().arch.furnishings.len(), before);
+        // Two more fit.
+        s.execute("copy", &json!({"handles": [furnishing_handle(id).hex()], "delta": [1.0, 0.0], "count": 2})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.furnishings.len(), cadcraft_doc::arch::MAX_FURNISHINGS);
+    }
+
+    #[test]
+    fn a_hosted_furnishing_copied_or_moved_has_no_host() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [0.0, 0.0], 0.0);
+        s.doc_mut().unwrap().arch.furnishing_mut(id).unwrap().host = cadcraft_doc::arch::FurnishingHost::Wall { wall: ArchId(0) };
+        let out = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::translate(Vec2::new(1.0, 0.0)), true).unwrap();
+        let copy = cadcraft_doc::arch::furnishing_id_of_handle(out[0]).unwrap();
+        assert_ne!(copy, id);
+        assert_eq!(s.doc().unwrap().arch.furnishing(copy).unwrap().host, cadcraft_doc::arch::FurnishingHost::None);
+        assert!(matches!(s.doc().unwrap().arch.furnishing(id).unwrap().host, cadcraft_doc::arch::FurnishingHost::Wall { .. }));
+        transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::translate(Vec2::new(1.0, 0.0)), false).unwrap();
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().host, cadcraft_doc::arch::FurnishingHost::None);
+    }
 }
 
 /// `p` at the current elevation (ELEVATION), the Z AutoCAD gives a point entered without one.
@@ -262,6 +316,8 @@ pub(super) fn run_copy(s: &mut Session, p: &Value) -> Result<Value> {
         None => 1,
         Some(v) => v.as_u64().filter(|n| (1..=10_000).contains(n)).ok_or_else(|| bad("copy", "`count` must be an integer from 1 to 10000"))?,
     };
+    // All `count` copies of the furnishings must fit, or none is made.
+    room_for_furnishings(s, furnishings_of(s, &hs)?.len().saturating_mul(usize::try_from(n).unwrap_or(usize::MAX)))?;
     let mut out = Vec::new();
     for k in 1..=n {
         out.extend(transform_entities(s, &hs, &Mat3::translate(d * k as f64), true)?.into_iter().map(|h| h.hex()));
