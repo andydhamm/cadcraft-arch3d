@@ -15,6 +15,7 @@
 //! [`Library::with_user_dir`].
 
 pub mod catalog;
+pub mod user;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
