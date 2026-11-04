@@ -16,6 +16,8 @@ pub mod archdetect;
 pub mod build3d;
 pub mod casework;
 pub mod deck;
+pub(crate) mod defaults;
+pub mod furnish;
 pub mod illuminance;
 pub mod inspect;
 pub mod level;
@@ -82,6 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(build3d::specs());
     v.extend(sample::specs());
     v.extend(stretch::specs());
+    v.extend(furnish::specs());
     v.extend(view::specs());
     v.extend(views::specs());
     v.extend(roofauto::specs());

@@ -21,6 +21,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use cadcraft_arch::casework_layout::counter_runs;
 use cadcraft_arch::join::{WallShape, solve_joins};
 use cadcraft_arch::roof::{Footprint, outer_footprint};
 use cadcraft_doc::arch::{
@@ -580,7 +581,10 @@ impl Sections {
                 (c.id, input)
             })
             .collect();
-        let cabinets = parts(pc, cabinet_items, |i| painted(model, casework::cabinet_meshes(model, &i.cabinet)));
+        // The counter runs, worked out once (and only when a cabinet is rebuilt) for every cabinet.
+        let runs = std::cell::OnceCell::new();
+        let cabinets =
+            parts(pc, cabinet_items, |i| painted(model, casework::cabinet_meshes_in(model, &i.cabinet, runs.get_or_init(|| counter_runs(model)))));
 
         let casework_fixture_items = model
             .fixtures

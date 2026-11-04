@@ -16,7 +16,7 @@ def covered(j, binc, name, x, y):
     """Whether a node's triangles, seen from above, cover (x, y)."""
     for m in node_meshes(j, name):
         for prim in m['primitives']:
-            pos = [(p[0], -p[2]) for p in _acc(j, binc, prim['attributes']['POSITION'])]
+            pos = [(p[0], p[1]) for p in _acc(j, binc, prim['attributes']['POSITION'])]   # drawing axes, seen from above
             idx = [t[0] for t in _acc(j, binc, prim['indices'])] if 'indices' in prim else list(range(len(pos)))
             for t in range(0, len(idx) - 2, 3):
                 (ax, ay), (bx, by), (cx, cy) = pos[idx[t]], pos[idx[t + 1]], pos[idx[t + 2]]

@@ -171,7 +171,8 @@ pub fn place(model: &ArchModel, r: &PlaceRequest) -> Result<PlaceOutcome, String
             .collect();
         cabs.sort_by_key(|c| c.id);
         if let Some(c) = cabs.into_iter().find(|c| cabinet_contains(c, at, 0.0)) {
-            let top = c.elevation + c.height;
+            // Cabinet.height is the carcass; the counter sits on top of it (inspect's counterTop).
+            let top = c.elevation + c.height + c.counter_thickness;
             let elevation = if r.cutout.is_some() { top - r.size[2] + 0.01 } else { top };
             return Ok(PlaceOutcome::Place {
                 at: cabinet_point(c, 0.0, c.depth / 2.0),
@@ -190,7 +191,8 @@ pub fn place(model: &ArchModel, r: &PlaceRequest) -> Result<PlaceOutcome, String
                 continue;
             }
             let Some(left) = model.cabinets.iter().find(|c| c.id == g.left) else { continue };
-            let underside = left.elevation + left.height - if left.counter { left.counter_thickness } else { 0.0 };
+            // The counter's underside is the top of the carcass (Cabinet.height does not include the counter).
+            let underside = left.elevation + left.height;
             if r.size[2] > underside + EPS || (r.size[1] - g.depth).abs() > 0.1 + EPS {
                 continue;
             }
@@ -379,7 +381,8 @@ mod tests {
         let (at, rot, el, host) = placed(place(&m, &sink_req([0.1, 0.2])));
         assert!((at[0]).abs() < 1e-9 && (at[1] - 0.3).abs() < 1e-9, "{at:?}");
         assert!((rot - 180.0).abs() < 1e-9);
-        assert!((el - (0.876 - 0.2 + 0.01)).abs() < 1e-9, "{el}");
+        // The counter top is the carcass (0.876) plus the counter (0.038): 0.914, as inspect's counterTop.
+        assert!((el - (0.914 - 0.2 + 0.01)).abs() < 1e-9, "{el}");
         assert_eq!(host, FurnishingHost::Cabinet { cabinet: ArchId(0) });
     }
 
@@ -407,6 +410,24 @@ mod tests {
         assert!((frot - 180.0).abs() < 1e-9);
         assert!((fel - (el + 0.2)).abs() < 1e-9);
         assert_eq!(fhost, FurnishingHost::Sink { furnishing: ArchId(0) });
+    }
+
+    #[test]
+    fn a_counter_item_stands_on_the_counter_top() {
+        // Cabinet.height is the carcass only; the counter sits on it (inspect: counterTop = elevation + height + thickness).
+        let m = model_with(vec![cab(0, 0.0)]);
+        let (.., el, host) = placed(place(&m, &req(Placement::Counter, "lamp", [0.2, 0.2, 0.4], [0.1, 0.3])));
+        assert!((el - 0.914).abs() < 1e-9, "{el}");
+        assert_eq!(host, FurnishingHost::Cabinet { cabinet: ArchId(0) });
+    }
+
+    #[test]
+    fn a_dishwasher_as_tall_as_the_carcass_fits_under_the_counter() {
+        // The sample dishwasher is 0.876 m, the carcass height: the counter's underside is 0.876, not 0.876 - 0.038.
+        let m = model_with(vec![cab(0, 0.0), cab(1, 1.2)]);
+        let r = req(Placement::Floor, "dishwasher", [0.6, 0.6, 0.876], [0.6, 0.3]);
+        let (.., host) = placed(place(&m, &r));
+        assert_eq!(host, FurnishingHost::Gap { left: ArchId(0), right: ArchId(1) });
     }
 
     #[test]

@@ -247,10 +247,11 @@ struct Fallback {
     next: usize,
     files: usize,
     bytes: usize,
-    /// Faces of the loaded candidates, in candidate order.
+    /// Faces of the loaded candidates, in candidate order. Only the general search adds to it,
+    /// so which face comes first never depends on the characters looked up before.
     faces: Vec<Face>,
-    /// Character → index in `faces` (None: nothing covers it).
-    by_char: HashMap<char, Option<usize>>,
+    /// Character → the face that draws it (None: nothing covers it).
+    by_char: HashMap<char, Option<Face>>,
 }
 
 /// Where a font file's bytes come from.
@@ -422,9 +423,10 @@ impl Db {
         }
     }
 
-    /// Index in `fallback.faces` of a face of a font known to cover `c`'s script (loaded and
-    /// added on demand), if one is installed and has `c`.
-    fn search_script_fallback(&mut self, c: char) -> Option<usize> {
+    /// A face of a font known to cover `c`'s script (loaded on demand) that has `c`, if one is
+    /// installed. It stays out of `fallback.faces`: there it would come before the candidates
+    /// loaded after it, for every character looked up later.
+    fn search_script_fallback(&mut self, c: char) -> Option<Face> {
         let names = script_fallback(c);
         if names.is_empty() {
             return None;
@@ -432,40 +434,40 @@ impl Db {
         let stems: Vec<String> = self.paths.keys().chain(self.files.keys()).cloned().collect();
         for stem in script_candidates(&stems, names).into_iter().take(MAX_SCRIPT_FILES) {
             let Some(bytes) = self.file(&stem) else { continue };
-            let Some(face) = faces(&bytes).into_iter().find(|f| f.has_glyph(c)) else { continue };
-            if let Some(i) = self.fallback.faces.iter().position(|f| f.same(&face)) {
-                return Some(i);
+            if let Some(face) = faces(&bytes).into_iter().find(|f| f.has_glyph(c)) {
+                return Some(face);
             }
-            if self.fallback.faces.len() >= MAX_FALLBACK_FACES {
-                return None;
-            }
-            self.fallback.faces.push(face);
-            return Some(self.fallback.faces.len() - 1);
         }
         None
     }
 
-    /// Index in `fallback.faces` of the first face that has `c`.
-    fn search_fallback(&mut self, c: char) -> Option<usize> {
-        if let Some(r) = self.fallback.by_char.get(&c) {
-            return *r;
-        }
-        let mut found = self.search_script_fallback(c);
-        let mut i = 0;
-        while found.is_none() && i < MAX_FALLBACK_FACES {
+    /// The first face of the general search's candidates (loaded in order, on demand) that has
+    /// `c`.
+    fn search_general_fallback(&mut self, c: char) -> Option<Face> {
+        for i in 0..MAX_FALLBACK_FACES {
             if i >= self.fallback.faces.len() && !self.load_next_fallback() {
-                break;
+                return None;
             }
-            if self.fallback.faces.get(i).is_some_and(|f| f.has_glyph(c)) {
-                found = Some(i);
-                break;
+            if let Some(f) = self.fallback.faces.get(i).filter(|f| f.has_glyph(c)) {
+                return Some(f.clone());
             }
-            i += 1;
         }
+        None
+    }
+
+    /// The face that draws `c` for text whose font lacks it: a font known to cover its script,
+    /// else the first candidate of the general search that has it. Cached. The answer depends on
+    /// the fonts alone, not on which characters were looked up before: registering a font resets
+    /// the search, and the lookups after it come from every thread laying text out, in any order.
+    fn fallback_face(&mut self, c: char) -> Option<Face> {
+        if let Some(r) = self.fallback.by_char.get(&c) {
+            return r.clone();
+        }
+        let found = self.search_script_fallback(c).or_else(|| self.search_general_fallback(c));
         if self.fallback.by_char.len() >= MAX_CACHED_CHARS {
             self.fallback.by_char.clear();
         }
-        self.fallback.by_char.insert(c, found);
+        self.fallback.by_char.insert(c, found.clone());
         found
     }
 }
@@ -636,9 +638,7 @@ pub fn fallback_for(c: char) -> Option<Face> {
             return Some(f);
         }
     }
-    let mut g = lock();
-    let i = g.search_fallback(c)?;
-    g.fallback.faces.get(i).cloned()
+    lock().fallback_face(c)
 }
 
 /// A glyph outline in font units (at 1000 units per em), flattened, plus its advance and the
@@ -1029,6 +1029,106 @@ mod family_tests {
         assert!(family_candidates(&stems, &norm("gost type a"), "go").is_empty(), "too short a word matches nothing");
         let many: Vec<String> = (0..100).map(|i| format!("gost{i:03}")).collect();
         assert!(family_candidates(&many, "gosttypea", "gost").len() <= MAX_FAMILY_FILES + MAX_FIRST_WORD_FILES);
+    }
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use super::*;
+
+    /// A font file, made here (no font file is committed), whose character map sends each of
+    /// `chars` to its one empty glyph.
+    fn font_mapping(chars: &[char]) -> Vec<u8> {
+        let mut codes: Vec<u32> = chars.iter().map(|c| u32::from(*c)).collect();
+        codes.sort_unstable();
+        let groups = u32::try_from(codes.len()).unwrap();
+        // One Windows Unicode (3, 10) record pointing at a format 12 subtable.
+        let mut cmap: Vec<u8> = [0_u16, 1, 3, 10].iter().flat_map(|v| v.to_be_bytes()).collect();
+        cmap.extend(12_u32.to_be_bytes());
+        cmap.extend(12_u16.to_be_bytes());
+        cmap.extend(0_u16.to_be_bytes());
+        for v in [16 + 12 * groups, 0, groups] {
+            cmap.extend(v.to_be_bytes());
+        }
+        for code in codes {
+            for v in [code, code, 1] {
+                cmap.extend(v.to_be_bytes());
+            }
+        }
+        let mut head = vec![0_u8; 54];
+        head[..4].copy_from_slice(&0x0001_0000_u32.to_be_bytes());
+        head[18..20].copy_from_slice(&1000_u16.to_be_bytes());
+        let mut hhea = vec![0_u8; 36];
+        hhea[..4].copy_from_slice(&0x0001_0000_u32.to_be_bytes());
+        hhea[4..6].copy_from_slice(&800_i16.to_be_bytes());
+        hhea[6..8].copy_from_slice(&(-200_i16).to_be_bytes());
+        hhea[34..36].copy_from_slice(&2_u16.to_be_bytes());
+        // Tables in tag order, as the table directory is searched.
+        let tables = [
+            (*b"cmap", cmap),
+            (*b"head", head),
+            (*b"hhea", hhea),
+            (*b"hmtx", vec![1, 244, 0, 0, 1, 244, 0, 0]), // Advances 500, side bearings 0.
+            (*b"maxp", vec![0, 0, 80, 0, 0, 2]),          // Version 0.5, two glyphs.
+        ];
+        let mut bytes = vec![0_u8; 12 + tables.len() * 16];
+        bytes[..4].copy_from_slice(&0x0001_0000_u32.to_be_bytes());
+        bytes[4..6].copy_from_slice(&u16::try_from(tables.len()).unwrap().to_be_bytes());
+        for (i, (tag, data)) in tables.into_iter().enumerate() {
+            while !bytes.len().is_multiple_of(4) {
+                bytes.push(0);
+            }
+            let record = 12 + i * 16;
+            let offset = u32::try_from(bytes.len()).unwrap();
+            let len = u32::try_from(data.len()).unwrap();
+            bytes[record..record + 4].copy_from_slice(&tag);
+            bytes[record + 8..record + 12].copy_from_slice(&offset.to_be_bytes());
+            bytes[record + 12..record + 16].copy_from_slice(&len.to_be_bytes());
+            bytes.extend(data);
+        }
+        bytes
+    }
+
+    /// The stem of the file `face` is a face of.
+    fn stem_of(db: &Db, face: Option<Face>) -> Option<String> {
+        let face = face?;
+        db.files.iter().find(|(_, b)| Arc::ptr_eq(b, &face.bytes)).map(|(s, _)| s.clone())
+    }
+
+    /// The face a character falls back to depends on the fonts only, not on which characters
+    /// were looked up before. A font registered meanwhile (on another thread, or by another test)
+    /// resets the search, and the lookups after it come in any order: the digits of a line in a
+    /// Thai font without Latin came from an Arabic font in one layout and from the wide-coverage
+    /// font in the next, so a width measured before the reset (MTEXT measures its words before
+    /// drawing them) disagreed with the line drawn after it, and
+    /// `thai_marks_stack_in_an_installed_font` failed about one run in ten. This test has its own
+    /// font table, so it changes nothing for the others: two fonts that both have the digit 5,
+    /// the wide-coverage one the general search tries first and an Arabic one the search for
+    /// Arabic letters tries first.
+    #[test]
+    fn a_fallback_face_does_not_depend_on_earlier_lookups() {
+        let table = || {
+            let mut db = Db { scanned: true, ..Db::default() };
+            db.files.insert("notosanscjk-test".into(), Arc::new(font_mapping(&['5', 'x', '\u{4E2D}'])));
+            db.files.insert("notonaskharabic-test".into(), Arc::new(font_mapping(&['5', '\u{0633}'])));
+            db
+        };
+        let mut fresh = table();
+        let digit = fresh.fallback_face('5');
+        assert_eq!(stem_of(&fresh, digit).as_deref(), Some("notosanscjk-test"));
+        // An Arabic letter looked up first loads the Arabic font; the digit still comes from the
+        // general search.
+        let mut arabic_first = table();
+        let letter = arabic_first.fallback_face('\u{0633}');
+        assert_eq!(stem_of(&arabic_first, letter).as_deref(), Some("notonaskharabic-test"));
+        let digit = arabic_first.fallback_face('5');
+        assert_eq!(stem_of(&arabic_first, digit).as_deref(), Some("notosanscjk-test"), "the digit after an Arabic letter");
+        // And across a reset (what registering a font does), whatever comes first after it.
+        arabic_first.fallback = Fallback::default();
+        let letter = arabic_first.fallback_face('\u{0633}');
+        assert_eq!(stem_of(&arabic_first, letter).as_deref(), Some("notonaskharabic-test"));
+        let digit = arabic_first.fallback_face('5');
+        assert_eq!(stem_of(&arabic_first, digit).as_deref(), Some("notosanscjk-test"), "the digit after a reset");
     }
 }
 
