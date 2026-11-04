@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod dxf_casework;
+mod dxf_furnishing;
 mod dxf_light;
 /// What a DXF file holds that CADCraft doesn't model, kept and written back (#528).
 mod dxf_raw;
