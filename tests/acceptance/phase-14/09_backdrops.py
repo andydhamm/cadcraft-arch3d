@@ -2,7 +2,7 @@
 # Backdrops behind the 3D view, the raster Finalize and the path tracer: a solid colour, a two-colour gradient (top to
 # bottom of the view), or an image, flat (stretched over the view) or 360° equirectangular (by view direction: the top row
 # is the zenith, the middle row the horizon). Shown where no surface is hit, after tone mapping; saved with the drawing.
-# needs: p14-doc-furnishing, p14-cmd-backdrop, p14-r3d-backdrop, p14-arch3d-furnishing, p14-cmd-library, p14-io-library-files, p14-apps-library-hooks
+# needs: p14-doc-furnishing, p14-cmd-backdrop, p14-r3d-backdrop, p14-r3d-pt-backdrop, p14-arch3d-furnishing, p14-cmd-library, p14-io-library-files, p14-apps-library-hooks
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p14lib.inc')).read())
 
