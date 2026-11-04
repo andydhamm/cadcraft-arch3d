@@ -341,9 +341,12 @@ fn set_furnishing_host(f: &mut Furnishing, map: &BTreeMap<u32, u32>) {
 /// Place the group described by `item` at plan `at`, rotated by `rotation` degrees."""
 pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation: f64) -> Result<Value> {
     let Some(user_dir) = s.library.user_dir() else {
-        return Err(EngineError::Other("user items are stored on disk only in the native build".into()));
+        return Err(EngineError::Other("user items are placed by p14-cmd-user-catalog".into()));
     };
-    let file = read_user_file(&user_dir, &item.id).map_err(EngineError::Other)?;
+    let file = match read_user_file(&user_dir, &item.id) {
+        Ok(file) => file,
+        Err(_) => return Err(EngineError::Other("user items are placed by p14-cmd-user-catalog".into())),
+    };
     let mut symbol_meshes: BTreeMap<String, cadcraft_doc::arch::SymbolMesh> = BTreeMap::new();
 
     for v in &file.objects.furnishings {
@@ -449,7 +452,7 @@ mod tests {
 
     fn install_test_io() {
         crate::library::set_library_io(crate::library::LibraryIo {
-            read_glb: |_| Ok(SymbolMesh { key: "test-symbol".to_string(), parts: Vec::new(), textures: Vec::new() }),
+            read_glb: |_| Ok(SymbolMesh { key: "test-symbol".to_string(), ..Default::default() }),
             read_image: |_, _| Err("no image in tests".into()),
             encode_png: |_| Vec::new(),
             sample: || &[],
