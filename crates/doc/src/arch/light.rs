@@ -136,6 +136,9 @@ pub struct LightFixture {
     /// An off fixture keeps its housing and emits nothing.
     #[serde(default = "default_on")]
     pub on: bool,
+    /// Dimmer level (0..=1); 1 = full brightness.
+    #[serde(default = "default_brightness")]
+    pub brightness: f64,
     /// An area light's size (m): `width` along the fixture's `rotation`, `length` across it. Zero
     /// for a point or spot light.
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -184,6 +187,10 @@ fn default_on() -> bool {
     true
 }
 
+fn default_brightness() -> f64 {
+    1.0
+}
+
 impl LightFixture {
     /// A fixture at `position` with the recessed pot light's values (spot, 60° cone, 800 lm,
     /// 3000 K, ceiling, aimed straight down); set the rest with struct update syntax.
@@ -204,6 +211,7 @@ impl LightFixture {
             cone: 60.0,
             falloff: 60.0,
             on: true,
+            brightness: 1.0,
             width: 0.0,
             length: 0.0,
             ies: None,
@@ -250,5 +258,13 @@ mod tests {
         assert_eq!((f.cone, f.falloff), (60.0, 60.0));
         assert_eq!(f.height, None);
         assert_eq!(serde_json::to_string(&f).map(|s| s.contains("height")).ok(), Some(false));
+    }
+
+    #[test]
+    fn light_brightness_defaults_to_one() {
+        let json = r#"{"id":0,"fixture":"Pendant","shape":"pendant","kind":"point","mount":"ceiling","position":{"x":1.0,"y":2.0},"lumens":1100.0,"kelvin":2700.0}"#;
+        let f: LightFixture = serde_json::from_str(json).unwrap_or_else(|_| LightFixture::new(ArchId(9), "x", Vec2::new(0.0, 0.0)));
+        assert_eq!(f.brightness, 1.0);
+        assert_eq!(LightFixture::new(ArchId(1), "x", Vec2::new(0.0, 0.0)).brightness, 1.0);
     }
 }
