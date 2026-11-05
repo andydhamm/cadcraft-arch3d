@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 0 of 31 segments merged · 0 of 13 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 1 of 31 segments merged · 0 of 13 acceptance checks**
 
-7,473 workspace tests passing at the last merge · 758 segments merged in all · 0 of 14 seats working
+7,474 workspace tests passing at the last merge · 759 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,25 +25,25 @@ Updated 2026-11-05 11:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 2.6 h so far · expected done Nov 05 18:42–Nov 09 12:20 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 2.8 h so far · expected done Nov 06 21:05–Nov 17 13:25 UTC |
 
 ## Phase 15 segments
 
-25 queued, 3 gate, 2 merging, 1 working
+25 queued, 2 gate, 2 merging, 1 working, 1 merged
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-doc-electrical` | doc: electrical devices, connections, light sets, light brightness | gate | bonsai-ws2-b |
+| `p15-doc-electrical` | doc: electrical devices, connections, light sets, light brightness | working | bonsai-ws2-b |
 | `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | gate | bonsai-a |
-| `p15-i18n-labels` | ui-egui: translations for every phase-15 command and menu entry | merging | claude-sonnet-a |
 | `p15-cmd-export-view` | engine: export one view or one level's plan | merging | claude-sonnet-b |
-| `p15-render3d-clay` | render3d: the clay style | gate | darwin-ws3 |
-| `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | working | bonsai-b |
+| `p15-render3d-clay` | render3d: the clay style | merging | darwin-ws3 |
+| `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | gate | bonsai-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 11:12 | `p15-i18n-labels` | merged | 7,474 pass | claude-sonnet-a |
 | Nov 05 09:01 | `harden-p14-docs-user-guide` | merged | 7,473 pass | tturbo-mac |
 | Nov 05 07:46 | `upstream-sync-c4d9e6ac6` | merged | 7,468 pass | bonsai-b |
 | Nov 05 07:14 | `harden-p14-cache-furnishing-edits` | merged | 7,453 pass | tturbo-mac |
@@ -55,21 +55,20 @@ Updated 2026-11-05 11:00 UTC. This page and the card in the README are regenerat
 | Nov 04 23:49 | `harden-p14-arch3d-cabinet-parts` | merged | 7,365 pass | tturbo-mac |
 | Nov 04 22:43 | `p14-r3d-pt-backdrop` | merged | 7,359 pass | bonsai-b |
 | Nov 04 22:02 | `p14-ui-library-place` | merged | 7,357 pass | claude-sonnet-a |
-| Nov 04 21:39 | `p14-cache-furnishing-edits` | merged | 7,352 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 884 |
-| bonsai-b | bonsai2-27b | agent | 824 |
-| bonsai-ws2-a | bonsai2-27b | gate | 913 |
-| bonsai-ws2-b | bonsai2-27b | gate | 877 |
-| claude-sonnet-a | sonnet | merging | 79 |
+| bonsai-a | bonsai2-27b | gate | 885 |
+| bonsai-b | bonsai2-27b | gate | 824 |
+| bonsai-ws2-a | bonsai2-27b | agent | 914 |
+| bonsai-ws2-b | bonsai2-27b | agent | 878 |
+| claude-sonnet-a | sonnet | idle | 79 |
 | claude-sonnet-b | sonnet | merging | 81 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 771 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 772 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
