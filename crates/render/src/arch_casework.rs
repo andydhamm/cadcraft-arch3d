@@ -7,7 +7,7 @@ use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::{cabinet_handle, fixture_handle};
 
 use crate::DisplayList;
-use crate::arch::{arch_layer_skipped, push_polyline};
+use crate::arch::{arch_layer_skipped, on_shown_level, push_polyline};
 
 fn ink_for(d: &Drawing, layer: &str) -> crate::Ink {
     crate::ink(Color::ByLayer, d.layer(layer).map(|l| l.color).unwrap_or(Color::Index(7)), Color::Index(7))
@@ -16,6 +16,9 @@ fn ink_for(d: &Drawing, layer: &str) -> crate::Ink {
 /// Append every cabinet's and fixture's plan symbol to `list`.
 pub(crate) fn push_casework(d: &Drawing, list: &mut DisplayList, plotting: bool) {
     for c in &d.arch.cabinets {
+        if !on_shown_level(d, c.level) {
+            continue;
+        }
         let layer = cabinet_layer(c.kind);
         if arch_layer_skipped(d, layer, plotting) {
             continue;
@@ -28,6 +31,9 @@ pub(crate) fn push_casework(d: &Drawing, list: &mut DisplayList, plotting: bool)
         }
     }
     for f in &d.arch.fixtures {
+        if !on_shown_level(d, f.level) {
+            continue;
+        }
         let layer = fixture_layer(f.kind);
         if arch_layer_skipped(d, layer, plotting) {
             continue;

@@ -26,6 +26,23 @@ pub(crate) fn arch_layer_skipped(d: &Drawing, layer: &str, plotting: bool) -> bo
     d.layer(layer).map_or(false, |l| !l.on || l.frozen || (plotting && !l.plot))
 }
 
+/// Whether an object on `level` is drawn by the plan: always when no level is shown
+/// (`plan_level` is `None`), else only when `level` is the shown one.
+pub(crate) fn on_shown_level(d: &Drawing, level: u32) -> bool {
+    d.arch.plan_level.map_or(true, |shown| shown == level)
+}
+
+/// Whether the plan draws `wall`: it spans the shown level (see [`Wall::spans_level`]).
+fn wall_on_shown_level(d: &Drawing, wall: &Wall) -> bool {
+    match d.arch.plan_level {
+        None => true,
+        Some(shown) => match d.arch.level(shown) {
+            Some(l) => wall.spans_level(l, &d.arch.levels),
+            None => wall.base_level == shown,
+        },
+    }
+}
+
 /// The poché (2D cross-section) primitives for `d.arch`, in wall order. The caller merges
 /// the returned list into the main one. `_opts` is unused but kept as the caller's hook.
 ///
@@ -44,6 +61,9 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     // whole loop is skipped when the wall's layer is off or frozen (or no-plot while plotting).
     if !arch_layer_skipped(d, "A-WALL", plotting) {
         for wall in &d.arch.walls {
+            if !wall_on_shown_level(d, wall) {
+                continue;
+            }
             if !wall.start.is_finite() || !wall.end.is_finite() {
                 continue;
             }
@@ -168,6 +188,11 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     // Opening symbols: each opening emits its generated 2D plan symbol,
     // tagged with the opening's proxy handle so picking and selection work.
     for o in &d.arch.openings {
+        // An opening sits on its host wall's base level.
+        let host_level = d.arch.wall(o.host).map_or(0, |w| w.base_level);
+        if !on_shown_level(d, host_level) {
+            continue;
+        }
         if let Some(sym) = cadcraft_arch::symbol::opening_symbol(&d.arch, o) {
             if arch_layer_skipped(d, &sym.layer, plotting) {
                 continue;
@@ -205,7 +230,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     // primitives tagged with the room's proxy handle on layer A-ROOM.
     if !arch_layer_skipped(d, "A-ROOM", plotting) {
         for r in &d.arch.rooms {
-            if r.polygon.len() < 3 {
+            if r.polygon.len() < 3 || !on_shown_level(d, r.level) {
                 continue;
             }
             if !r.polygon.iter().all(|p| p.is_finite()) {
@@ -285,6 +310,9 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
         let layer_color = d.layer("A-STAIR").map(|l| l.color).unwrap_or(Color::Index(7));
         let stair_ink = crate::ink(Color::ByLayer, layer_color, Color::Index(7));
         for s in &d.arch.stairs {
+            if !on_shown_level(d, s.from_level) && !on_shown_level(d, s.to_level) {
+                continue;
+            }
             let handle = stair_handle(s.id);
             let Some(outline) = flight_outline(s) else { continue };
             push_polyline(&mut list, handle, &stair_ink, &outline);
@@ -311,7 +339,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
         let layer_color = d.layer("A-RAIL").map(|l| l.color).unwrap_or(Color::Index(7));
         let rail_ink = crate::ink(Color::ByLayer, layer_color, Color::Index(7));
         for r in &d.arch.railings {
-            if r.path.len() < 2 || !r.path.iter().all(|p| p.is_finite()) {
+            if r.path.len() < 2 || !on_shown_level(d, r.level) || !r.path.iter().all(|p| p.is_finite()) {
                 continue;
             }
             push_polyline(&mut list, railing_handle(r.id), &rail_ink, &r.path);
@@ -484,6 +512,60 @@ mod tests {
 
     fn wall(start: Vec2, end: Vec2, thickness: f64) -> Wall {
         Wall { start, end, thickness, height: 3.0, ..Wall::default() }
+    }
+
+    /// Two levels; a ground wall, an upper wall, a spanning wall, a room per level.
+    fn two_level_drawing() -> Drawing {
+        use cadcraft_doc::arch::Level;
+        let mut d = Drawing::new_metric();
+        d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }, Level { index: 1, elevation: 2.7, ..Default::default() }];
+        d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        d.arch.add_wall(Wall { base_level: 1, ..wall(Vec2::new(0.0, 5.0), Vec2::new(4.0, 5.0), 0.2) });
+        let sq = |x: f64| vec![Vec2::new(x, 1.0), Vec2::new(x + 2.0, 1.0), Vec2::new(x + 2.0, 3.0), Vec2::new(x, 3.0)];
+        d.arch.rooms.push(Room { id: ArchId(100), name: "Down".into(), level: 0, polygon: sq(0.0), ..Default::default() });
+        d.arch.rooms.push(Room { id: ArchId(101), name: "Up".into(), level: 1, polygon: sq(10.0), ..Default::default() });
+        d
+    }
+
+    fn handles(list: &DisplayList) -> std::collections::BTreeSet<Handle> {
+        list.prims.iter().map(|p| p.handle).collect()
+    }
+
+    #[test]
+    fn the_plan_draws_only_the_shown_level() {
+        let mut d = two_level_drawing();
+        d.arch.plan_level = Some(1);
+        let h = handles(&build_arch(&d, &Options::default(), false));
+        assert!(h.contains(&room_handle(ArchId(101))));
+        assert!(!h.contains(&room_handle(ArchId(100))));
+        let upper = d.arch.walls.iter().find(|w| w.base_level == 1).map(|w| w.id);
+        let lower = d.arch.walls.iter().find(|w| w.base_level == 0).map(|w| w.id);
+        assert!(h.contains(&arch_handle(upper.unwrap())));
+        assert!(!h.contains(&arch_handle(lower.unwrap())));
+    }
+
+    #[test]
+    fn a_spanning_wall_draws_on_each_level_it_spans() {
+        let mut d = two_level_drawing();
+        let id = d.arch.add_wall(Wall { top_level: Some(1), ..wall(Vec2::new(0.0, 9.0), Vec2::new(4.0, 9.0), 0.2) });
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 2, elevation: 5.4, ..Default::default() });
+        for shown in [0, 1] {
+            d.arch.plan_level = Some(shown);
+            let h = handles(&build_arch(&d, &Options::default(), false));
+            assert!(h.contains(&arch_handle(id)), "level {shown}");
+        }
+        d.arch.plan_level = Some(2);
+        assert!(!handles(&build_arch(&d, &Options::default(), false)).contains(&arch_handle(id)));
+    }
+
+    #[test]
+    fn no_shown_level_draws_everything() {
+        let mut d = two_level_drawing();
+        let all = handles(&build_arch(&d, &Options::default(), false));
+        assert!(all.contains(&room_handle(ArchId(100))) && all.contains(&room_handle(ArchId(101))));
+        assert_eq!(d.arch.plan_level, None);
+        d.arch.plan_level = Some(0);
+        assert!(handles(&build_arch(&d, &Options::default(), false)).len() < all.len());
     }
 
     #[test]
