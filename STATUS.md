@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 36 of 37 segments merged · 11 of 13 acceptance checks**
+**Phase 14 of 15: The library — 37 of 37 segments merged · 11 of 13 acceptance checks**
 
-7,453 workspace tests passing at the last merge · 756 segments merged in all · 0 of 14 seats working · PAUSED
+7,468 workspace tests passing at the last merge · 757 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -24,21 +24,19 @@ Updated 2026-11-05 07:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 11 / 13 | 36.3 h so far · expected done Nov 05 08:57–Nov 06 06:34 UTC |
+| 14 | The library | building | 11 / 13 | 36.5 h so far · expected done Nov 05 08:00–Nov 06 02:37 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-36 merged, 1 abandoned, 1 merging
+37 merged, 1 abandoned
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `upstream-sync-c4d9e6ac6` | merge upstream upstream/main up to c4d9e6ac6 (12 commits) | merging | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 07:46 | `upstream-sync-c4d9e6ac6` | merged | 7,468 pass | bonsai-b |
 | Nov 05 07:14 | `harden-p14-cache-furnishing-edits` | merged | 7,453 pass | tturbo-mac |
 | Nov 05 05:59 | `upstream-sync-5bfcee629` | merged | 7,449 pass | claude-sonnet-c |
 | Nov 05 04:42 | `harden-p14-cmd-user-catalog` | merged | 7,457 pass | tturbo-mac |
@@ -50,14 +48,13 @@ Updated 2026-11-05 07:45 UTC. This page and the card in the README are regenerat
 | Nov 04 22:02 | `p14-ui-library-place` | merged | 7,357 pass | claude-sonnet-a |
 | Nov 04 21:39 | `p14-cache-furnishing-edits` | merged | 7,352 pass | claude-sonnet-c |
 | Nov 04 21:13 | `p14-cmd-defaults` | merged | 7,351 pass | claude-sonnet-d |
-| Nov 04 20:37 | `p14-ui-library-panel` | merged | 7,344 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 883 |
-| bonsai-b | bonsai2-27b | merging | 822 |
+| bonsai-b | bonsai2-27b | idle | 822 |
 | bonsai-ws2-a | bonsai2-27b | idle | 913 |
 | bonsai-ws2-b | bonsai2-27b | idle | 876 |
 | claude-sonnet-a | sonnet | idle | 78 |
