@@ -31,8 +31,13 @@ unsafe_sites=$(grep -rn "unsafe {\|unsafe fn\|unsafe impl" crates apps --include
 [ -z "$unsafe_sites" ] || { echo "FAIL: unsafe code outside crates/gpu-optin: $unsafe_sites"; exit 1; }
 [ -f crates/arch/src/library/search.rs ] || { echo "FAIL: the library search lives in crates/arch/src/library/search.rs"; exit 1; }
 # The library search stays out of the UI crate. finddlg.rs is FIND's Find and Replace window (#2607): it searches the
-# drawing's text, not the library, so its `fn search` is not library search logic.
-if grep -rqn --exclude=finddlg.rs "fn search\b\|fn matches_chip" crates/ui-egui/src; then echo "FAIL: search logic in the UI crate"; exit 1; fi
+# drawing's text, not the library, so its `fn search` is not library search logic. A UI `fn search` may only hand the
+# panel's text and chips to the `library` command (library_panel.rs does, 11-04); matching them is crates/arch's job.
+if grep -rqn "fn matches_chip" crates/ui-egui/src; then echo "FAIL: search logic in the UI crate (fn matches_chip)"; exit 1; fi
+for f in $(grep -rlE --exclude=finddlg.rs 'fn search\b' crates/ui-egui/src); do
+  body=$(awk '/fn search[ (<]/{n=12} n>0{print; n--}' "$f")
+  case "$body" in *'run("library"'*) ;; *) echo "FAIL: search logic in the UI crate ($f: its fn search does not run the library command)"; exit 1;; esac
+done
 stray=$(git ls-files | grep -E '(^|/)[^/]*(_tmp\.rs|\.tmp)$' | head -5)
 [ -z "$stray" ] || { echo "FAIL: stray files: $stray"; exit 1; }
 echo "PASS 12"
