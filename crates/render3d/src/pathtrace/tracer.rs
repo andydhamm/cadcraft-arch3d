@@ -38,6 +38,7 @@ pub struct PathTracer {
     spp_done: u32,
     snapshot_idx: usize,
     backdrop: Option<Backdrop>,
+    /// The image an image backdrop shows, under its `Scene3d.textures` key (`item:<id>`); empty otherwise.
     backdrop_images: BTreeMap<String, ImageRgba>,
 }
 
@@ -212,7 +213,7 @@ impl PathTracer {
             spp_done: 0,
             snapshot_idx: 0,
             backdrop: scene.backdrop.clone(),
-            backdrop_images: BTreeMap::new(),
+            backdrop_images: crate::backdrop::image_textures(scene.backdrop.as_ref(), &scene.textures),
         })
     }
 
@@ -487,71 +488,27 @@ impl PathTracer {
         self.status.clone()
     }
 
-    /// Replace missed pixels with the backdrop colour. The miss mask is read from the AOV
-    /// buffer: a pixel missed if its first-hit guide normal is zero (aov[2*i][3] <= 0.5).
+    /// Paint the backdrop over the pixels whose camera ray hit nothing on every sample (the hit count the kernel keeps
+    /// in `accum[w * h + i].y`, kernel.wgsl `trace_main`). The colours are the shared CPU reference
+    /// (`crate::backdrop::composite_misses`), with the unjittered ray through each pixel centre for an equirect image.
+    /// A pixel any sample hit keeps its shading, and lighting never sees the backdrop.
     ///
-    /// The resolved image itself is used as the authoritative per-pixel brightness, so a pixel
-    /// that is actually lit (a real surface hit, even one whose AOV guide is borderline) is
-    /// never treated as a miss: the backdrop is only written where the AOV says "miss" AND the
-    /// resolved radiance is at or below the level of the image's own dark (missed) pixels. This
-    /// keeps hit pixels byte-identical to a render without a backdrop, while still painting the
-    /// backdrop over genuinely-missed (dark) pixels.
-    fn backdrop_composite(&self, gpu: &ComputeGpu, rgba: &mut Vec<u8>) {
-        let backdrop = match &self.backdrop {
-            Some(b) => b,
-            None => return,
-        };
+    /// 11-04: this painted only the misses darker than 0.9 x the mean miss, so under a sunlit sky (every miss about
+    /// as bright as the others) the sky stayed and phase-14 check 09 read (108, 108, 108) for "#204060"; images had
+    /// their own sampler, which read the wrong texel (flat) or a fixed grey (equirect), with no image ever passed in.
+    /// The first sample's AOV hit flag is not the mask: its jittered ray misses on some edge pixels other samples hit.
+    fn backdrop_composite(&self, gpu: &ComputeGpu, rgba: &mut [u8]) {
+        let Some(backdrop) = &self.backdrop else { return };
         let (w, h) = self.size;
-        let pixels = (w * h) as usize;
-        let aov_bytes = (pixels * 32) as u64;
-        let aov_data = match self.read_buffer(gpu, &self.aov, aov_bytes) {
-            Ok(d) => d,
-            Err(_) => return,
-        };
-        let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
-
-        // Per-pixel resolved luminance in (0..=1) for the *uncomposited* image.
-        let lum: Vec<f32> = (0..pixels)
-            .map(|i| {
-                let b = i * 4;
-                super::luminance([rgba[b] as f32 / 255.0, rgba[b + 1] as f32 / 255.0, rgba[b + 2] as f32 / 255.0])
-            })
-            .collect();
-
-        // "Miss level": the mean luminance over the AOV-flagged miss pixels. Those are the true
-        // no-hit pixels (sky/background); the backdrop belongs exactly there.
-        let miss_lum = {
-            let mut sum = 0.0f64;
-            let mut n = 0usize;
-            for i in 0..pixels {
-                if i >= aov.len() / 2 {
-                    break;
-                }
-                if aov[2 * i][3] <= 0.5 {
-                    sum += lum[i] as f64;
-                    n += 1;
-                }
-            }
-            if n == 0 { 0.0f32 } else { (sum / n as f64) as f32 }
-        };
-        // Threshold: anything brighter than the average miss level is a real hit, not a miss.
-        let threshold = if miss_lum > 1e-4 { 0.9 * miss_lum } else { 0.0f32 };
-        let threshold = threshold.max(1e-6);
-
-        for i in 0..pixels {
-            if i >= aov.len() / 2 {
-                break;
-            }
-            if aov[2 * i][3] <= 0.5 && lum[i] <= threshold {
-                let x = i % w as usize;
-                let y = i / w as usize;
-                let [r, g, b] = backdrop_colour(x as f64, y as f64, w as f64, h as f64, backdrop, &self.backdrop_images);
-                rgba[i * 4] = r;
-                rgba[i * 4 + 1] = g;
-                rgba[i * 4 + 2] = b;
-                rgba[i * 4 + 3] = 255;
-            }
-        }
+        let pixels = (w as usize) * (h as usize);
+        let Ok(data) = self.read_buffer(gpu, &self.accum, (pixels * 32) as u64) else { return };
+        let Ok(accum) = bytemuck::try_cast_slice::<u8, [f32; 4]>(&data) else { return };
+        // The first half may hold the denoised colours by now (`finish`); the hit counts are in the second.
+        let sampled = self.spp_done > 0;
+        let missed: Vec<bool> = (0..pixels).map(|i| sampled && accum.get(pixels + i).is_some_and(|a| a[1] < 0.5)).collect();
+        let inv_vp = self.frame.inv_view_proj;
+        let ray_of = move |x: u32, y: u32| pixel_ray(&inv_vp, x, y, w, h);
+        crate::backdrop::composite_misses(rgba, w, h, &missed, backdrop, &self.backdrop_images, &ray_of);
     }
 
     fn resolve(&self, gpu: &ComputeGpu) -> Option<Vec<u8>> {
@@ -884,41 +841,31 @@ pub struct SceneBuffers {
     pub ies: wgpu::Buffer,
 }
 
-/// sRGB backdrop colour at pixel (x, y) of a w×h image. For Colour: the colour; for Gradient:
-/// lerp(top, bottom, t) per channel in sRGB with t = (y + 0.5) / h; for Image Flat: bilinear
-/// sample at u = (x + 0.5) / w, v = (y + 0.5) / h; for Image Equirect: the camera ray d
-/// through the pixel centre (u = 0.5 + atan2(d.y, d.x) / 2π, v = 0.5 − asin(d.z) / π).
-fn backdrop_colour(x: f64, y: f64, w: f64, h: f64, backdrop: &Backdrop, backdrop_images: &BTreeMap<String, ImageRgba>) -> [u8; 3] {
-    match backdrop {
-        Backdrop::Colour { colour } => *colour,
-        Backdrop::Gradient { top, bottom } => {
-            let t = ((y + 0.5) / h).clamp(0.0, 1.0);
-            [
-                (top[0] as f64 * (1.0 - t) + bottom[0] as f64 * t).clamp(0.0, 255.0).round() as u8,
-                (top[1] as f64 * (1.0 - t) + bottom[1] as f64 * t).clamp(0.0, 255.0).round() as u8,
-                (top[2] as f64 * (1.0 - t) + bottom[2] as f64 * t).clamp(0.0, 255.0).round() as u8,
-            ]
-        }
-        Backdrop::Image { item, projection: Projection::Equirect } => [128, 128, 128],
-        Backdrop::Image { item, projection: Projection::Flat } => {
-            if let Some(img) = backdrop_images.get(item)
-                && img.is_valid()
-            {
-                let w = img.width as usize;
-                let h = img.height as usize;
-                let u = ((x + 0.5) / (w as f64)).clamp(0.0, 1.0);
-                let v = ((y + 0.5) / (h as f64)).clamp(0.0, 1.0);
-                let u1 = ((u * (w as f64 - 1.0)).floor() as usize).min(w - 1);
-                let v1 = ((v * (h as f64 - 1.0)).floor() as usize).min(h - 1);
-                let idx = u1 * w + v1;
-                let b = w * 4 * idx;
-                [img.rgba[b], img.rgba[b + 1], img.rgba[b + 2]]
-            } else {
-                [128, 128, 128]
+/// The unit camera ray through the centre of pixel (x, y) of a w x h still: the kernel's primary ray (kernel.wgsl
+/// `trace_main`) without its jitter. Straight up when the matrix gives no direction.
+fn pixel_ray(inv_vp: &[[f32; 4]; 4], x: u32, y: u32, w: u32, h: u32) -> [f32; 3] {
+    let ndc_x = 2.0 * (f64::from(x) + 0.5) / f64::from(w.max(1)) - 1.0;
+    let ndc_y = 1.0 - 2.0 * (f64::from(y) + 0.5) / f64::from(h.max(1));
+    // Column-major, as WGSL reads it: out[r] = sum over c of m[c][r] * v[c].
+    let at = |z: f64| {
+        let v = [ndc_x, ndc_y, z, 1.0];
+        let mut o = [0.0f64; 4];
+        for (c, vc) in v.iter().enumerate() {
+            for (r, or) in o.iter_mut().enumerate() {
+                *or += f64::from(inv_vp[c][r]) * vc;
             }
         }
+        [o[0] / o[3], o[1] / o[3], o[2] / o[3]]
+    };
+    let (near, far) = (at(0.0), at(1.0));
+    let d = [far[0] - near[0], far[1] - near[1], far[2] - near[2]];
+    let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+    if !(len.is_finite() && len > 0.0) {
+        return [0.0, 0.0, 1.0];
     }
+    [(d[0] / len) as f32, (d[1] / len) as f32, (d[2] / len) as f32]
 }
+
 fn storage<T: Copy + Pod + Default>(d: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
     let one = [T::default()];
     let data: &[T] = if items.is_empty() { &one } else { items };
@@ -1082,7 +1029,7 @@ mod tests {
     use crate::lit_frame::Lighting;
     use crate::types::{ArchId, Mesh, Scene3d};
     use cadcraft_doc::arch::backdrop::Backdrop;
-    use cadcraft_geom::Vec2;
+    use cadcraft_geom::{Vec2, Vec3};
 
     fn floor() -> Mesh {
         let mut m = Mesh::new("floor", ArchId(1));
@@ -1543,5 +1490,121 @@ mod tests {
         }
         assert!(compared > 0, "no hit pixels to compare");
         assert!(mismatch == 0, "hit pixels changed: {mismatch} of {compared} differ");
+    }
+
+    /// A path-traced 4-spp still of `scene` from `camera` at `size`, under the default (sunlit) lighting: camera
+    /// rays that miss see the sky, so a miss is as bright as the sky there, not black.
+    fn sunlit_still(gpu: &ComputeGpu, scene: &Scene3d, camera: &Camera, size: (u32, u32)) -> Vec<u8> {
+        let opts = PathOptions { spp: 4, seed: 7, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(gpu, scene, camera, &Lighting::default(), false, size, &opts, None).unwrap();
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => return rgba,
+                s => panic!("{s:?}"),
+            }
+        }
+    }
+
+    /// From 1.5 m above the floor, looking straight up (40° field of view): every camera ray misses.
+    fn looking_up() -> Camera {
+        Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, 0.0, 1.5), Vec3::new(0.0, 0.001, 30.0), 40.0))
+    }
+
+    /// From 1.2 m above the floor, looking level along +y (40° field of view): the floor below the middle, the sky
+    /// above it.
+    fn looking_level() -> Camera {
+        Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, -6.0, 1.2), Vec3::new(0.0, 6.0, 1.2), 40.0))
+    }
+
+    fn with_backdrop(backdrop: Backdrop, textures: BTreeMap<String, ImageRgba>) -> Scene3d {
+        let m = floor();
+        Scene3d { bounds: m.bounds(), meshes: vec![m], backdrop: Some(backdrop), textures, ..Default::default() }
+    }
+
+    /// Phase-14 check 09 at 11-04 18:16: a "#204060" backdrop behind a sunlit room read back (108, 108, 108), the
+    /// sky. Every miss under a sky is about as bright as the others, and the composite only painted misses darker
+    /// than 0.9 × their mean.
+    #[test]
+    fn path_traced_sky_misses_show_the_colour_backdrop() {
+        let Some(gpu) = compute() else { return };
+        let rgba = sunlit_still(&gpu, &with_backdrop(Backdrop::Colour { colour: [32, 64, 96] }, BTreeMap::new()), &looking_up(), (16, 12));
+        let wrong: Vec<usize> = (0..16 * 12).filter(|i| rgba[i * 4..i * 4 + 4] != [32, 64, 96, 255]).collect();
+        assert!(wrong.is_empty(), "{} of 192 sky pixels are not the backdrop, e.g. {:?}", wrong.len(), &rgba[wrong[0] * 4..wrong[0] * 4 + 4]);
+    }
+
+    /// The same with the denoiser on (the CLI's default): the denoised colours replace the radiance sums before the
+    /// composite, and the misses still show the backdrop.
+    #[test]
+    fn path_traced_sky_misses_show_the_colour_backdrop_when_denoised() {
+        let Some(gpu) = compute() else { return };
+        let scene = with_backdrop(Backdrop::Colour { colour: [32, 64, 96] }, BTreeMap::new());
+        let opts = PathOptions { spp: 4, seed: 7, denoise: true, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &scene, &looking_up(), &Lighting::default(), false, (16, 12), &opts, None).unwrap();
+        let rgba = loop {
+            match t.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+        assert!(t.stats().denoised, "the denoiser ran");
+        let wrong = (0..16 * 12).filter(|i| rgba[i * 4..i * 4 + 4] != [32, 64, 96, 255]).count();
+        assert_eq!(wrong, 0, "sky pixels that are not the backdrop, e.g. {:?}", &rgba[0..4]);
+    }
+
+    #[test]
+    fn path_traced_misses_beside_a_sunlit_floor_show_the_backdrop_and_hits_keep_their_shading() {
+        let Some(gpu) = compute() else { return };
+        let (w, h) = (32u32, 24u32);
+        let with = sunlit_still(&gpu, &with_backdrop(Backdrop::Colour { colour: [32, 64, 96] }, BTreeMap::new()), &looking_level(), (w, h));
+        let without = sunlit_still(&gpu, &scene(), &looking_level(), (w, h));
+        for x in [0, w / 2, w - 1] {
+            let i = x as usize * 4;
+            assert_eq!(&with[i..i + 4], &[32, 64, 96, 255], "top row pixel {x}: the sky shows through");
+            let j = ((h - 1) * w + x) as usize * 4;
+            assert_eq!(&with[j..j + 4], &without[j..j + 4], "bottom row pixel {x} sees the floor: unchanged by the backdrop");
+            assert_ne!(&with[j..j + 3], &[32, 64, 96], "bottom row pixel {x} is the floor, not the backdrop");
+        }
+    }
+
+    /// A flat image is stretched over the view: every pixel of an all-miss still is the shared CPU reference
+    /// (`crate::backdrop::backdrop_rgb`), which the raster backdrop pass matches too.
+    #[test]
+    fn path_traced_flat_image_backdrop_is_the_shared_reference() {
+        let Some(gpu) = compute() else { return };
+        let img = ImageRgba { width: 2, height: 2, rgba: vec![255, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 255, 255, 255, 255, 255], ..Default::default() };
+        let textures = BTreeMap::from([("item:pic".to_string(), img)]);
+        let b = Backdrop::Image { item: "pic".into(), projection: Projection::Flat };
+        let (w, h) = (16u32, 12u32);
+        let rgba = sunlit_still(&gpu, &with_backdrop(b.clone(), textures.clone()), &looking_up(), (w, h));
+        for y in 0..h {
+            for x in 0..w {
+                let i = (y * w + x) as usize * 4;
+                let want = crate::backdrop::backdrop_rgb(&b, &textures, x, y, w, h, [0.0, 0.0, 1.0]);
+                assert_eq!(&rgba[i..i + 3], &want, "pixel ({x}, {y})");
+            }
+        }
+        assert_eq!(&rgba[0..3], &[255, 0, 0], "top-left is the image's top-left");
+    }
+
+    /// An equirect image is looked up by view direction: looking up, the centre is the zenith (the image's top row);
+    /// looking level, the top-centre pixel is 20° above the horizon (v = 0.5 - 20/180).
+    #[test]
+    fn path_traced_equirect_image_backdrop_follows_the_view() {
+        let Some(gpu) = compute() else { return };
+        // 4 x 4, every row one red level: 240, 160, 80, 0 from the top.
+        let rgba: Vec<u8> = [240u8, 160, 80, 0].iter().flat_map(|&r| [r, 0, 0, 255].repeat(4)).collect();
+        let textures = BTreeMap::from([("item:sky".to_string(), ImageRgba { width: 4, height: 4, rgba, ..Default::default() })]);
+        let b = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect };
+        let (w, h) = (32u32, 24u32);
+        let up = sunlit_still(&gpu, &with_backdrop(b.clone(), textures.clone()), &looking_up(), (w, h));
+        let c = ((h / 2) * w + w / 2) as usize * 4;
+        assert!(up[c] >= 238 && up[c + 1] == 0, "looking up, the centre is the zenith row: {:?}", &up[c..c + 3]);
+        let level = sunlit_still(&gpu, &with_backdrop(b, textures), &looking_level(), (w, h));
+        let t = (w / 2) as usize * 4;
+        // v = 0.5 - 20/180 = 0.3889: texel row 4v - 0.5 = 1.056, between rows 1 (160) and 2 (80).
+        let want = 160.0 - 80.0 * (4.0 * (0.5 - 20.0 / 180.0) - 1.5);
+        assert!((f64::from(level[t]) - want).abs() <= 3.0, "looking level, top centre: {:?}, expected red {want:.0}", &level[t..t + 3]);
     }
 }
