@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 3 of 31 segments merged · 0 of 13 acceptance checks**
 
-7,481 workspace tests passing at the last merge · 761 segments merged in all · 0 of 14 seats working
+7,486 workspace tests passing at the last merge · 762 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-05 14:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 5.6 h so far · expected done Nov 07 00:40–Nov 10 03:06 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 5.8 h so far · expected done Nov 07 02:27–Nov 10 08:10 UTC |
 
 ## Phase 15 segments
 
@@ -44,6 +44,7 @@ Updated 2026-11-05 14:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 14:00 | `harden-p14-cmd-backdrop` | merged | 7,486 pass | tturbo-mac |
 | Nov 05 13:00 | `p15-doc-electrical` | merged | 7,481 pass | bonsai-ws2-a |
 | Nov 05 11:59 | `p15-render3d-clay` | merged | 7,477 pass | darwin-ws3 |
 | Nov 05 11:12 | `p15-i18n-labels` | merged | 7,474 pass | claude-sonnet-a |
@@ -55,7 +56,6 @@ Updated 2026-11-05 14:00 UTC. This page and the card in the README are regenerat
 | Nov 05 01:23 | `harden-p14-r3d-pt-backdrop` | refused | 0 pass | tturbo-mac |
 | Nov 05 01:00 | `upstream-sync-5f8999f30-v2` | merged | 7,447 pass | mai-flash |
 | Nov 05 00:16 | `p14-cmd-user-catalog` | merged | 7,374 pass | mai-flash-esc |
-| Nov 04 23:49 | `harden-p14-arch3d-cabinet-parts` | merged | 7,365 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -73,5 +73,5 @@ Updated 2026-11-05 14:00 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 29 |
-| tturbo-mac | tturbo-ultraheretic | merging | 619 |
+| tturbo-mac | tturbo-ultraheretic | agent | 619 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
