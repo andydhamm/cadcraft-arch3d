@@ -611,7 +611,7 @@ fn commands_file(path: &str) -> Result<Vec<CmdStep>, String> {
         let params = step.as_object().and_then(|o| o.get("params")).cloned().unwrap_or(Value::Object(serde_json::Map::new()));
         out.push(CmdStep { id: cmd.to_string(), params });
     }
-    out
+    Ok(out)
 }
 
 impl FramingArgs {
