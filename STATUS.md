@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 13:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 2 of 31 segments merged · 0 of 13 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 3 of 31 segments merged · 0 of 13 acceptance checks**
 
-7,477 workspace tests passing at the last merge · 760 segments merged in all · 0 of 14 seats working
+7,481 workspace tests passing at the last merge · 761 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,16 +25,17 @@ Updated 2026-11-05 12:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 4.3 h so far · expected done Nov 07 00:32–Nov 11 20:33 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 4.6 h so far · expected done Nov 06 17:27–Nov 09 06:34 UTC |
 
 ## Phase 15 segments
 
-24 queued, 3 merging, 2 gate, 2 merged
+22 queued, 3 merged, 3 working, 2 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-doc-electrical` | doc: electrical devices, connections, light sets, light brightness | merging | bonsai-ws2-b |
-| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | gate | mai-flash-esc |
+| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | working | mai-flash-esc |
+| `p15-arch-electrical` | arch: where a device sits, its plan symbol, its validation | working | bonsai-ws2-a |
+| `p15-arch3d-light-brightness` | arch3d: a light's brightness scales its output | working | claude-sonnet-a |
 | `p15-cmd-export-view` | engine: export one view or one level's plan | merging | claude-sonnet-b |
 | `p15-render3d-technical` | render3d: technical illustration (optional) | gate | darwin-ws3 |
 | `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | merging | bonsai-b |
@@ -43,6 +44,7 @@ Updated 2026-11-05 12:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 13:00 | `p15-doc-electrical` | merged | 7,481 pass | bonsai-ws2-a |
 | Nov 05 11:59 | `p15-render3d-clay` | merged | 7,477 pass | darwin-ws3 |
 | Nov 05 11:12 | `p15-i18n-labels` | merged | 7,474 pass | claude-sonnet-a |
 | Nov 05 09:01 | `harden-p14-docs-user-guide` | merged | 7,473 pass | tturbo-mac |
@@ -54,7 +56,6 @@ Updated 2026-11-05 12:45 UTC. This page and the card in the README are regenerat
 | Nov 05 01:00 | `upstream-sync-5f8999f30-v2` | merged | 7,447 pass | mai-flash |
 | Nov 05 00:16 | `p14-cmd-user-catalog` | merged | 7,374 pass | mai-flash-esc |
 | Nov 04 23:49 | `harden-p14-arch3d-cabinet-parts` | merged | 7,365 pass | tturbo-mac |
-| Nov 04 22:43 | `p14-r3d-pt-backdrop` | merged | 7,359 pass | bonsai-b |
 
 ## Seats active in the last hour
 
@@ -62,15 +63,15 @@ Updated 2026-11-05 12:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 891 |
 | bonsai-b | bonsai2-27b | merging | 826 |
-| bonsai-ws2-a | bonsai2-27b | merging | 916 |
+| bonsai-ws2-a | bonsai2-27b | agent | 916 |
 | bonsai-ws2-b | bonsai2-27b | merging | 882 |
-| claude-sonnet-a | sonnet | idle | 79 |
+| claude-sonnet-a | sonnet | agent | 79 |
 | claude-sonnet-b | sonnet | merging | 81 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 773 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 774 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 26 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 27 |
 | tturbo-mac | tturbo-ultraheretic | merging | 619 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
