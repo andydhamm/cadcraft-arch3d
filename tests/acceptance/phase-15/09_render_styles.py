@@ -10,7 +10,7 @@ tmp = tempfile.mkdtemp()
 SCENE = ROOM64 + [cmd('paint.material', {"material": "#c04020", "target": "wall/w1/left", "scope": "component"}),
                   cmd('paint.material', {"material": "#2060c0", "target": "wall/w2/left", "scope": "component"}),
                   cmd('library.place', {"item": "sofa-futon", "at": [3.0, 2.0]})]
-CAM = {"kind": "orbit", "target": [3, 2, 1], "azimuth": 210, "elevation": 35, "distance": 11}
+CAM = {"kind": "full", "eye": [0.6, 0.5, 1.5], "target": [6, 4, 1.2], "fov": 75}   # inside, facing the painted w1/w2 corner
 sh, cl, te = (os.path.join(tmp, n) for n in ('shaded.png', 'clay.png', 'technical.png'))
 rc, rr, so, se = run(SCENE + [cmd('render', {"out": sh, "size": [240, 180], "camera": CAM}),
                               cmd('render', {"out": cl, "size": [240, 180], "camera": CAM, "style": "clay"})])
