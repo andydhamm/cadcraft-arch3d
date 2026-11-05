@@ -46,7 +46,6 @@ fn slugify(name: &str) -> String {
     }
     let out = out.trim_matches('-');
     let slug = if out.is_empty() { "item" } else { out };
-    let bytes = slug.as_bytes();
     let mut s = String::new();
     for (i, ch) in slug.chars().enumerate() {
         if i >= 48 {
@@ -409,7 +408,7 @@ pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation
             }
         }
         let p = c.position;
-        let rotated = apply_rotation([p.x - at.x, p.y - at.y], rotation);
+        let rotated = apply_rotation([p.x, p.y], rotation);
         c.position = Vec2::new(at.x + rotated[0], at.y + rotated[1]);
         c.rotation += rotation;
         let new_id = doc.arch.push_cabinet(c.clone());
@@ -422,7 +421,7 @@ pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation
         let mut x: Fixture = serde_json::from_value(v).map_err(|e| EngineError::Other(format!("bad stored fixture: {e}")))?;
         let old = x.id.0;
         let p = x.position;
-        let rotated = apply_rotation([p.x - at.x, p.y - at.y], rotation);
+        let rotated = apply_rotation([p.x, p.y], rotation);
         x.position = Vec2::new(at.x + rotated[0], at.y + rotated[1]);
         x.rotation += rotation;
         let new_id = doc.arch.push_fixture(x.clone());
@@ -446,7 +445,7 @@ mod tests {
     use std::path::PathBuf;
 
     use cadcraft_arch::library::ItemKind;
-    use cadcraft_doc::arch::{ArchId, Furnishing, Placement, SymbolMesh};
+    use cadcraft_doc::arch::{ArchId, Cabinet, Fixture, Furnishing, Placement, SymbolMesh};
 
     use super::*;
 
@@ -758,5 +757,106 @@ mod tests {
         let b = save_group_item(&dir, "Kitchen Table", StoredObjects::default(), None).unwrap();
         assert_ne!(a.record.id, b.record.id);
         assert!(a.record.id.ends_with("-2") == false || b.record.id.ends_with("-2") == false);
+    }
+
+    #[test]
+    fn slugify_handles_special_characters() {
+        assert_eq!(slugify("Hello World"), "hello-world");
+        assert_eq!(slugify("Café au lait"), "caf-au-lait");
+        assert_eq!(slugify("  spaced  "), "spaced");
+        assert_eq!(slugify("a---b"), "a-b");
+        assert_eq!(slugify("123"), "123");
+        assert_eq!(slugify("$$$"), "item");
+    }
+
+    #[test]
+    fn slugify_truncates_long_names() {
+        let long = "a".repeat(100);
+        let s = slugify(&long);
+        assert_eq!(s.len(), 48);
+        let long_hyphen = "a-".repeat(60);
+        let s2 = slugify(&long_hyphen);
+        assert!(s2.len() <= 48);
+        assert!(!s2.ends_with('-'));
+    }
+
+    #[test]
+    fn place_group_empty_objects_errors() {
+        install_test_io();
+        let dir = temp_dir();
+        let rec = ItemRecord {
+            id: "user:empty".into(),
+            name: "Empty".into(),
+            category: "User catalog".into(),
+            catalog: "user".into(),
+            kind: ItemKind::Group,
+            ..Default::default()
+        };
+        let item = UserItemFile { record: rec.clone(), objects: StoredObjects::default(), symbols: BTreeMap::new(), source_item: None };
+        write_user_file(&dir, &item).unwrap();
+
+        let lib = crate::library::Library::with_user_dir(Some(dir.clone()));
+        let mut s = crate::Session::new();
+        s.library = lib;
+        let r = place_group(&mut s, &rec, Vec2::ZERO, 0.0);
+        assert!(r.is_err(), "empty group should error");
+    }
+
+    #[test]
+    fn place_group_rotates_cabinets_correctly() {
+        install_test_io();
+        let dir = temp_dir();
+        let rec = ItemRecord {
+            id: "user:rot".into(),
+            name: "Rot".into(),
+            category: "User catalog".into(),
+            catalog: "user".into(),
+            kind: ItemKind::Group,
+            ..Default::default()
+        };
+        let mut group = StoredObjects::default();
+        let c = Cabinet { id: ArchId(0), position: Vec2::new(1.0, 0.0), rotation: 0.0, ..Default::default() };
+        group.cabinets.push(serde_json::to_value(&c).unwrap());
+        let item = UserItemFile { record: rec.clone(), objects: group, symbols: BTreeMap::new(), source_item: None };
+        write_user_file(&dir, &item).unwrap();
+
+        let lib = crate::library::Library::with_user_dir(Some(dir.clone()));
+        let mut s = crate::Session::new();
+        s.library = lib;
+        let r = place_group(&mut s, &rec, Vec2::new(5.0, 0.0), 90.0).unwrap();
+        let doc = s.doc().unwrap();
+        let cab = doc.arch.cabinets.first().unwrap();
+        // (1,0) rotated 90 CCW = (0,1), translated to (5,1)
+        assert!((cab.position.x - 5.0).abs() < 1e-9, "cabinet x: {}", cab.position.x);
+        assert!((cab.position.y - 1.0).abs() < 1e-9, "cabinet y: {}", cab.position.y);
+    }
+
+    #[test]
+    fn place_group_rotates_fixtures_correctly() {
+        install_test_io();
+        let dir = temp_dir();
+        let rec = ItemRecord {
+            id: "user:rotx".into(),
+            name: "RotX".into(),
+            category: "User catalog".into(),
+            catalog: "user".into(),
+            kind: ItemKind::Group,
+            ..Default::default()
+        };
+        let mut group = StoredObjects::default();
+        let f = Fixture { id: ArchId(0), position: Vec2::new(0.0, 2.0), rotation: 0.0, ..Default::default() };
+        group.fixtures.push(serde_json::to_value(&f).unwrap());
+        let item = UserItemFile { record: rec.clone(), objects: group, symbols: BTreeMap::new(), source_item: None };
+        write_user_file(&dir, &item).unwrap();
+
+        let lib = crate::library::Library::with_user_dir(Some(dir.clone()));
+        let mut s = crate::Session::new();
+        s.library = lib;
+        let r = place_group(&mut s, &rec, Vec2::new(0.0, 0.0), 180.0).unwrap();
+        let doc = s.doc().unwrap();
+        let fix = doc.arch.fixtures.first().unwrap();
+        // (0,2) rotated 180 = (0,-2)
+        assert!((fix.position.x - 0.0).abs() < 1e-9, "fixture x: {}", fix.position.x);
+        assert!((fix.position.y - (-2.0)).abs() < 1e-9, "fixture y: {}", fix.position.y);
     }
 }
