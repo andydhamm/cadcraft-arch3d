@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-05 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 9 of 32 segments merged · 0 of 13 acceptance checks**
 
@@ -25,15 +25,15 @@ Updated 2026-11-05 19:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 10.6 h so far · expected done Nov 06 19:19–Nov 08 03:26 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 10.8 h so far · expected done Nov 06 20:07–Nov 08 04:59 UTC |
 
 ## Phase 15 segments
 
-15 queued, 9 merged, 4 gate, 4 merging
+15 queued, 9 merged, 4 merging, 3 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-arch-connections` | arch: connection arcs and circuits | gate | bonsai-b |
+| `p15-arch-connections` | arch: connection arcs and circuits | working | bonsai-b |
 | `p15-arch-outlets-auto` | arch: auto-placed outlets and the spacing rule | gate | bonsai-ws2-b |
 | `p15-arch-spanning-walls` | arch: walls spanning levels in rooms, footprints, roofs, areas and placement | merging | claude-sonnet-b |
 | `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | gate | darwin-ws3 |
@@ -63,15 +63,15 @@ Updated 2026-11-05 19:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 900 |
-| bonsai-b | bonsai2-27b | gate | 830 |
+| bonsai-a | bonsai2-27b | agent | 901 |
+| bonsai-b | bonsai2-27b | agent | 831 |
 | bonsai-ws2-a | bonsai2-27b | gate | 927 |
 | bonsai-ws2-b | bonsai2-27b | gate | 888 |
 | claude-sonnet-a | sonnet | idle | 81 |
 | claude-sonnet-b | sonnet | merging | 82 |
 | claude-sonnet-c | sonnet | merging | 35 |
 | claude-sonnet-d | sonnet | merging | 21 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 775 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 777 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 62 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 31 |
