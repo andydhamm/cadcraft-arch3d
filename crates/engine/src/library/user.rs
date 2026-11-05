@@ -869,6 +869,94 @@ mod tests {
         assert_eq!(trash["trash"], json!([]), "{trash}");
     }
 
+    fn session_with_library() -> crate::Session {
+        install_test_io();
+        let mut s = crate::Session::new();
+        s.library = crate::library::Library::with_user_dir(Some(temp_dir()));
+        s.new_drawing(true);
+        s
+    }
+
+    #[test]
+    fn a_copied_stock_item_places_as_its_source_under_the_copys_name() {
+        let mut s = session_with_library();
+        let copy = s.execute("library.copy", &json!({"item": "sofa-futon"})).unwrap();
+        let id = copy["item"].as_str().unwrap().to_string();
+        s.execute("library.edit", &json!({"item": id, "name": "Guest futon"})).unwrap();
+        let r = s.execute("library.place", &json!({"item": id, "at": [2.0, 2.0]})).unwrap();
+        assert_eq!(r["furnishing"], json!("f0"), "{r}");
+        let stock = s.execute("library.place", &json!({"item": "sofa-futon", "at": [5.0, 2.0]})).unwrap();
+        let doc = s.doc().unwrap();
+        let (f, g) = (&doc.arch.furnishings[0], &doc.arch.furnishings[1]);
+        assert_eq!((f.item.as_str(), f.name.as_str()), ("sofa-futon", "Guest futon"), "{r} {stock}");
+        assert_eq!(f.size, g.size);
+        assert_eq!((&f.symbol_type, &f.category, &f.symbol), (&g.symbol_type, &g.category, &g.symbol));
+        assert_eq!(f.placement, g.placement);
+    }
+
+    #[test]
+    fn an_edited_copys_size_is_the_placed_size() {
+        let mut s = session_with_library();
+        let id = s.execute("library.copy", &json!({"item": "sofa-futon"})).unwrap()["item"].as_str().unwrap().to_string();
+        s.execute("library.edit", &json!({"item": id, "size": [1.1, 0.9, 0.8]})).unwrap();
+        s.execute("library.place", &json!({"item": id, "at": [2.0, 2.0]})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.furnishings[0].size, [1.1, 0.9, 0.8]);
+    }
+
+    #[test]
+    fn a_copied_sink_drops_into_the_counter_like_the_stock_sink() {
+        let mut s = session_with_library();
+        let ring = json!([[-0.1, -0.1], [4.1, -0.1], [4.1, 4.1], [-0.1, 4.1], [-0.1, -0.1]]);
+        s.execute("wall", &json!({"points": ring, "thickness": 0.2, "exterior": true})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        s.execute("cabinet", &json!({"kind": "base", "wall": "w0", "offset": 1.0, "width": 0.9, "fronts": "drawerOverDoor"})).unwrap();
+        let id = s.execute("library.copy", &json!({"item": "own:sink-kitchen"})).unwrap()["item"].as_str().unwrap().to_string();
+        let r = s.execute("library.place", &json!({"item": id, "at": [0.95, 0.35]})).unwrap();
+        assert_eq!(r["host"], json!({"kind": "cabinet", "cabinet": "cb0"}), "{r}");
+        let f = s.doc().unwrap().arch.furnishings[0].clone();
+        assert_eq!(f.placement, cadcraft_doc::arch::Placement::Counter);
+        assert_eq!(f.item, "own:sink-kitchen");
+        assert!(f.cutout.is_some());
+        assert!((f.at[0] - 0.9).abs() < 1e-9 && (f.at[1] - 0.3).abs() < 1e-9, "{:?}", f.at);
+    }
+
+    #[test]
+    fn a_copy_of_a_copy_places_as_the_same_source() {
+        let mut s = session_with_library();
+        let a = s.execute("library.copy", &json!({"item": "sofa-futon"})).unwrap()["item"].as_str().unwrap().to_string();
+        s.execute("library.edit", &json!({"item": a, "name": "Den futon", "size": [1.9, 0.95, 0.85]})).unwrap();
+        let b = s.execute("library.copy", &json!({"item": a})).unwrap()["item"].as_str().unwrap().to_string();
+        assert_ne!(a, b);
+        s.execute("library.delete", &json!({"item": a})).unwrap();
+        s.execute("library.place", &json!({"item": b, "at": [2.0, 2.0]})).unwrap();
+        let f = s.doc().unwrap().arch.furnishings[0].clone();
+        assert_eq!((f.item.as_str(), f.name.as_str(), f.size), ("sofa-futon", "Den futon", [1.9, 0.95, 0.85]));
+    }
+
+    #[test]
+    fn a_copy_of_a_group_keeps_its_objects() {
+        let mut s = session_with_library();
+        s.execute("library.place", &json!({"item": "table-dining-150", "at": [2.0, 2.0]})).unwrap();
+        s.execute("library.place", &json!({"item": "chair-dining-wood", "at": [2.0, 1.4]})).unwrap();
+        s.execute("library.add", &json!({"objects": ["f0", "f1"], "name": "Pair", "insertionPoint": [2.0, 2.0]})).unwrap();
+        let c = s.execute("library.copy", &json!({"item": "user:pair"})).unwrap()["item"].as_str().unwrap().to_string();
+        s.execute("library.delete", &json!({"item": "user:pair"})).unwrap();
+        let r = s.execute("library.place", &json!({"item": c, "at": [7.0, 2.0]})).unwrap();
+        assert_eq!(r["furnishings"], json!(["f2", "f3"]), "{r}");
+    }
+
+    #[test]
+    fn a_copy_whose_source_is_gone_is_refused() {
+        let mut s = session_with_library();
+        let dir = s.library.user_dir().unwrap();
+        let rec = ItemRecord { id: "user:orphan".into(), name: "Orphan".into(), catalog: "user".into(), kind: ItemKind::Group, ..Default::default() };
+        write_user_file(&dir, &UserItemFile { record: rec, source_item: Some("no-such-item".into()), ..Default::default() }).unwrap();
+        s.library.reload();
+        let e = s.execute("library.place", &json!({"item": "user:orphan", "at": [1.0, 1.0]})).unwrap_err().to_string();
+        assert!(e.contains("user:orphan") && e.contains("no-such-item"), "{e}");
+        assert!(s.doc().unwrap().arch.furnishings.is_empty());
+    }
+
     #[test]
     fn place_group_rotates_cabinets_correctly() {
         install_test_io();
