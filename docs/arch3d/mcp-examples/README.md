@@ -12,7 +12,7 @@ These JSONL files are example sessions for agents using the CADCraft MCP server.
 - `06-exports.jsonl`: Exporting the model to IFC, OBJ, and glTF.
 - `07-site-and-lights.jsonl`: Site location, terrain, plants, and lighting.
 - `08-detect-a-plan.jsonl`: Detecting arch objects from a DXF plan.
-- `09-library.jsonl`: Searching the library, placing furniture, painting surfaces, and exporting.
+- `09-library.jsonl`: Searching the library, placing three items, painting a room, and exporting a GLB.
 
 ## Replaying
 
