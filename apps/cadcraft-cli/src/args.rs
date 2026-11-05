@@ -343,6 +343,12 @@ pub(crate) struct RunArgs {
     /// An engine command and its JSON parameters (default {}); see "--cmd chaining" in --help
     #[arg(long, value_name = "id {json}", action = ArgAction::Append, value_parser = cmd_step)]
     pub(crate) cmd: Vec<CmdStep>,
+    /// Steps from a JSON file (repeatable, in command-line order with --cmd/--script). The file is
+    /// an array of {"cmd": id, "params": {...}} (params default {}); each runs as a --cmd step. A
+    /// file that is not such an array, or a step without a string cmd, is refused naming the step
+    /// index
+    #[arg(long, value_name = "FILE.json", action = ArgAction::Append, value_parser = commands_file)]
+    pub(crate) commands: Vec<Vec<CmdStep>>,
     #[arg(long, value_name = "OUT.dxf", help = save_help())]
     pub(crate) save: Option<PathBuf>,
     #[arg(long, value_name = "OUT.png", help = export_help())]
@@ -584,6 +590,30 @@ fn cmd_step(s: &str) -> Result<CmdStep, ValueError> {
     Ok(CmdStep { id: id.to_string(), params: serde_json::from_str(json)? })
 }
 
+/// `run --commands FILE.json`: a JSON array of `{"cmd": id, "params": {...}}` steps, each run as a
+/// `--cmd` step. `params` default to `{}`. Refused (exit 2, naming the step index) when the file
+/// is not such an array or a step has no string `cmd`.
+fn commands_file(path: &str) -> Result<Vec<CmdStep>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("can't read commands file `{}`: {}", path, e))?;
+    let value: Value = serde_json::from_str(&text).map_err(|e| format!("commands file `{}` is not valid JSON: {}", path, e))?;
+    let steps = match value {
+        Value::Array(a) => a,
+        _ => return Err(format!("commands file `{}` is not a JSON array of steps", path)),
+    };
+    let mut out = Vec::with_capacity(steps.len());
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = match step {
+            Value::Object(o) => {
+                o.get("cmd").and_then(|c| c.as_str()).ok_or_else(|| format!("commands file `{}` step {} has no string `cmd`", path, i))?
+            }
+            _ => return Err(format!("commands file `{}` step {} is not an object", path, i)),
+        };
+        let params = step.as_object().and_then(|o| o.get("params")).cloned().unwrap_or(Value::Object(serde_json::Map::new()));
+        out.push(CmdStep { id: cmd.to_string(), params });
+    }
+    Ok(out)
+}
+
 impl FramingArgs {
     /// The framing `--window` or `--view` asks for (clap refuses both together).
     pub(crate) fn framing(&self) -> Framing {
@@ -688,6 +718,7 @@ fn run_order(m: &ArgMatches) -> (Vec<Drawing>, Vec<Step>) {
     let mut steps: Vec<(usize, Step)> = indexed(m, "script").map(|(i, s): (_, &String)| (i, Step::Script(s.clone()))).collect();
     steps.extend(indexed(m, "script_file").map(|(i, s): (_, &PathBuf)| (i, Step::ScriptFile(s.clone()))));
     steps.extend(indexed(m, "cmd").map(|(i, c): (_, &CmdStep)| (i, Step::Cmd(c.clone()))));
+    steps.extend(indexed(m, "commands").flat_map(|(i, cs): (_, &Vec<CmdStep>)| cs.iter().map(move |c| (i, Step::Cmd(c.clone())))));
     steps.sort_by_key(|s| s.0);
     (drawings.into_iter().map(|d| d.1).collect(), steps.into_iter().map(|s| s.1).collect())
 }

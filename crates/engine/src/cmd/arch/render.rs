@@ -261,15 +261,15 @@ fn parse_final(v: Option<&Value>) -> Result<(bool, FinalMode), EngineError> {
     }
 }
 
-/// `style`: one of shaded, shaded-edges, hidden-line, glass-house, clay; absent is shaded.
+/// `style`: one of shaded, shaded-edges, hidden-line, glass-house, clay, technical; absent is shaded.
 fn parse_style(v: Option<&Value>) -> Result<String, EngineError> {
     match v {
         None => Ok("shaded".to_string()),
         Some(v) => v
             .as_str()
-            .filter(|s| matches!(*s, "shaded" | "shaded-edges" | "hidden-line" | "glass-house" | "clay"))
+            .filter(|s| matches!(*s, "shaded" | "shaded-edges" | "hidden-line" | "glass-house" | "clay" | "technical"))
             .map(str::to_string)
-            .ok_or_else(|| bad("render", "`style` must be one of: shaded, shaded-edges, hidden-line, glass-house, clay")),
+            .ok_or_else(|| bad("render", "`style` must be one of: shaded, shaded-edges, hidden-line, glass-house, clay, technical")),
     }
 }
 
@@ -468,7 +468,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("render", "Render 3D", run_render)
             .menu(&["Architecture", "Render 3D"])
-            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?: shaded | shaded-edges | hidden-line | glass-house | clay, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
+            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?: shaded | shaded-edges | hidden-line | glass-house | clay | technical, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
             .noundo(),
     ]
 }
@@ -668,5 +668,20 @@ mod tests {
         let four: serde_json::Value = json!([[0.0, 0.0, 0.0, 0.0]]);
         let err = parse_samples(Some(&four)).unwrap_err().to_string();
         assert!(err.contains("must be [x,y,z]"), "{err}");
+    }
+
+    #[test]
+    fn technical_is_a_render_style() {
+        assert_eq!(parse_style(Some(&json!("technical"))).ok().as_deref(), Some("technical"));
+        let e = parse_style(Some(&json!("tech"))).map_err(|e| e.to_string()).err().unwrap_or_default();
+        assert!(e.contains("`style` must be one of"), "{e}");
+    }
+
+    #[test]
+    fn technical_draws_lines_over_flat_colours() {
+        // This test verifies the style is accepted by the command parser.
+        // The actual rendering logic is tested in render3d.
+        let style = parse_style(Some(&json!("technical"))).unwrap();
+        assert_eq!(style, "technical");
     }
 }

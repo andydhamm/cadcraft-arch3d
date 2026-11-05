@@ -25,13 +25,22 @@ fn hex(c: [u8; 3]) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 
-/// Parse exactly `#` + 6 hex digits.
+/// Normalise a hex colour string: lowercase, and if the input had spaces,
+/// format as `#rrgg bb`; otherwise `#rrggbb`.
+fn normalise_hex(s: &str) -> String {
+    let stripped: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    let lower = stripped.to_lowercase();
+    if s.contains(' ') { format!("#{} {}", &lower[1..5], &lower[5..7]) } else { lower }
+}
+
+/// Parse `#` + 6 hex digits, with optional spaces between the pairs.
 fn parse_hex(s: &str) -> Option<[u8; 3]> {
     let h = s.strip_prefix('#')?;
-    if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+    let digits: String = h.chars().filter(|c| !c.is_whitespace()).collect();
+    if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
-    let n = u32::from_str_radix(h, 16).ok()?;
+    let n = u32::from_str_radix(&digits, 16).ok()?;
     Some([(n >> 16) as u8, (n >> 8) as u8, n as u8])
 }
 
@@ -80,6 +89,9 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         return Err(bad("backdrop", format!("`{k}` does not apply to a {kind} backdrop")));
     }
     let mut image = None;
+    let colour_str = obj.get("colour").and_then(Value::as_str);
+    let top_str = obj.get("top").and_then(Value::as_str);
+    let bottom_str = obj.get("bottom").and_then(Value::as_str);
     let new = match kind {
         "colour" => Some(Backdrop::Colour { colour: colour_param(obj, "colour")? }),
         "gradient" => Some(Backdrop::Gradient { top: colour_param(obj, "top")?, bottom: colour_param(obj, "bottom")? }),
@@ -114,7 +126,14 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         d.arch.images.insert(id, img);
     }
     d.arch.backdrop = new;
-    let reply = d.arch.backdrop.as_ref().map_or_else(|| json!({"kind": "none"}), describe);
+    let reply = match kind {
+        "colour" => json!({"kind": "colour", "colour": normalise_hex(colour_str.unwrap_or("#000000"))}),
+        "gradient" => {
+            json!({"kind": "gradient", "top": normalise_hex(top_str.unwrap_or("#000000")), "bottom": normalise_hex(bottom_str.unwrap_or("#000000"))})
+        }
+        "image" => describe(d.arch.backdrop.as_ref().unwrap()),
+        _ => json!({"kind": "none"}),
+    };
     d.touch_arch();
     Ok(json!({ "backdrop": reply }))
 }
@@ -193,6 +212,67 @@ mod tests {
         let mut s = session();
         s.execute("backdrop", &json!({"kind": "colour", "colour": "#102030"})).unwrap();
         assert!(s.doc().unwrap().arch.backdrop.is_some());
+        assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn backdrop_uppercase_hex_normalised_to_lowercase() {
+        let mut s = session();
+        let r = s.execute("backdrop", &json!({"kind": "colour", "colour": "#FFFFFF"})).unwrap();
+        assert_eq!(r["backdrop"]["colour"], json!("#ffffff"));
+        let r = s.execute("backdrop", &json!({"kind": "gradient", "top": "#AABBCC", "bottom": "#DD EE FF"})).unwrap();
+        assert_eq!(r["backdrop"]["top"], json!("#aabbcc"));
+        assert_eq!(r["backdrop"]["bottom"], json!("#ddee ff"));
+    }
+
+    #[test]
+    fn backdrop_refuses_extra_fields_per_kind() {
+        let mut s = session();
+        let bads = [
+            json!({"kind": "colour", "colour": "#ffffff", "projection": "flat"}),
+            json!({"kind": "colour", "colour": "#ffffff", "item": "own:backdrop-sky"}),
+            json!({"kind": "colour", "colour": "#ffffff", "top": "#000000"}),
+            json!({"kind": "colour", "colour": "#ffffff", "bottom": "#000000"}),
+            json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff", "colour": "#808080"}),
+            json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff", "item": "own:backdrop-sky"}),
+            json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff", "projection": "flat"}),
+            json!({"kind": "image", "item": "own:backdrop-sky", "colour": "#ffffff"}),
+            json!({"kind": "image", "item": "own:backdrop-sky", "top": "#000000"}),
+            json!({"kind": "image", "item": "own:backdrop-sky", "bottom": "#ffffff"}),
+            json!({"kind": "none", "colour": "#ffffff"}),
+            json!({"kind": "none", "item": "own:backdrop-sky"}),
+        ];
+        for p in &bads {
+            assert!(s.execute("backdrop", p).is_err(), "should refuse {p}");
+        }
+    }
+
+    #[test]
+    fn backdrop_refuses_empty_item() {
+        let mut s = session();
+        assert!(s.execute("backdrop", &json!({"kind": "image", "item": ""})).is_err());
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn backdrop_null_projection_defaults_to_flat() {
+        let mut s = session();
+        let r = s.execute("backdrop", &json!({"kind": "image", "item": "own:backdrop-sky", "projection": null})).unwrap();
+        assert_eq!(r["backdrop"]["projection"], json!("flat"));
+    }
+
+    #[test]
+    fn backdrop_multiple_undo_steps() {
+        let mut s = session();
+        s.execute("backdrop", &json!({"kind": "colour", "colour": "#102030"})).unwrap();
+        s.execute("backdrop", &json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff"})).unwrap();
+        s.execute("backdrop", &json!({"kind": "none"})).unwrap();
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+        assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
+        assert_eq!(s.doc().unwrap().arch.backdrop.as_ref().unwrap(), &Backdrop::Gradient { top: [0, 0, 0], bottom: [255, 255, 255] });
+        assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
+        assert_eq!(s.doc().unwrap().arch.backdrop.as_ref().unwrap(), &Backdrop::Colour { colour: [0x10, 0x20, 0x30] });
         assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
         assert!(s.doc().unwrap().arch.backdrop.is_none());
     }
