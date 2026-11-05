@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 6 of 32 segments merged · 0 of 13 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 7 of 32 segments merged · 0 of 13 acceptance checks**
 
-7,493 workspace tests passing at the last merge · 765 segments merged in all · 0 of 14 seats working · PAUSED
+7,496 workspace tests passing at the last merge · 766 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -25,23 +25,23 @@ Updated 2026-11-05 16:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 8.3 h so far · expected done Nov 06 21:34–Nov 08 09:08 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 8.6 h so far · expected done Nov 06 17:28–Nov 08 00:19 UTC |
 
 ## Phase 15 segments
 
-22 queued, 6 merged, 3 merging, 1 escalate
+22 queued, 7 merged, 2 merging, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | escalate |  |
 | `p15-arch-electrical` | arch: where a device sits, its plan symbol, its validation | merging | mai-flash-esc |
-| `p15-arch3d-light-brightness` | arch3d: a light's brightness scales its output | merging | claude-sonnet-a |
 | `upstream-sync-df6597445` | merge upstream upstream/main up to df6597445 (12 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 16:48 | `p15-arch3d-light-brightness` | merged | 7,496 pass | claude-sonnet-a |
 | Nov 05 16:19 | `p15-render3d-technical` | merged | 7,493 pass | darwin-ws3 |
 | Nov 05 15:51 | `p15-cli-commands-file` | merged | 7,491 pass | bonsai-b |
 | Nov 05 15:03 | `p15-cmd-export-view` | merged | 7,489 pass | claude-sonnet-b |
@@ -53,7 +53,6 @@ Updated 2026-11-05 16:45 UTC. This page and the card in the README are regenerat
 | Nov 05 07:46 | `upstream-sync-c4d9e6ac6` | merged | 7,468 pass | bonsai-b |
 | Nov 05 07:14 | `harden-p14-cache-furnishing-edits` | merged | 7,453 pass | tturbo-mac |
 | Nov 05 05:59 | `upstream-sync-5bfcee629` | merged | 7,449 pass | claude-sonnet-c |
-| Nov 05 04:42 | `harden-p14-cmd-user-catalog` | merged | 7,457 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -63,7 +62,7 @@ Updated 2026-11-05 16:45 UTC. This page and the card in the README are regenerat
 | bonsai-b | bonsai2-27b | idle | 829 |
 | bonsai-ws2-a | bonsai2-27b | idle | 925 |
 | bonsai-ws2-b | bonsai2-27b | idle | 886 |
-| claude-sonnet-a | sonnet | merging | 81 |
+| claude-sonnet-a | sonnet | idle | 81 |
 | claude-sonnet-b | sonnet | idle | 81 |
 | claude-sonnet-c | sonnet | merging | 35 |
 | claude-sonnet-d | sonnet | idle | 20 |
