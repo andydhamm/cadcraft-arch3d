@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-05 20:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 9 of 33 segments merged · 0 of 13 acceptance checks**
 
@@ -25,15 +25,15 @@ Updated 2026-11-05 20:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 11.6 h so far · expected done Nov 06 23:46–Nov 08 11:35 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 11.8 h so far · expected done Nov 07 00:37–Nov 08 13:12 UTC |
 
 ## Phase 15 segments
 
-15 queued, 9 merged, 4 merging, 3 gate, 1 working, 1 escalate
+15 queued, 9 merged, 4 gate, 4 merging, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-arch-connections` | arch: connection arcs and circuits | working | bonsai-b |
+| `p15-arch-connections` | arch: connection arcs and circuits | gate | bonsai-b |
 | `p15-arch-outlets-auto` | arch: auto-placed outlets and the spacing rule | escalate |  |
 | `p15-arch-spanning-walls` | arch: walls spanning levels in rooms, footprints, roofs, areas and placement | merging | claude-sonnet-b |
 | `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | gate | darwin-ws3 |
@@ -64,10 +64,10 @@ Updated 2026-11-05 20:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 902 |
-| bonsai-b | bonsai2-27b | agent | 832 |
-| bonsai-ws2-a | bonsai2-27b | gate | 929 |
-| bonsai-ws2-b | bonsai2-27b | gate | 890 |
+| bonsai-a | bonsai2-27b | gate | 903 |
+| bonsai-b | bonsai2-27b | gate | 832 |
+| bonsai-ws2-a | bonsai2-27b | agent | 930 |
+| bonsai-ws2-b | bonsai2-27b | gate | 891 |
 | claude-sonnet-a | sonnet | gate | 81 |
 | claude-sonnet-b | sonnet | merging | 82 |
 | claude-sonnet-c | sonnet | merging | 35 |
@@ -76,5 +76,5 @@ Updated 2026-11-05 20:00 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 62 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 31 |
-| tturbo-mac | tturbo-ultraheretic | gate | 620 |
+| tturbo-mac | tturbo-ultraheretic | agent | 621 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
