@@ -7,6 +7,16 @@
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p15lib.inc')).read())
 
+
+
+def elevations(rows, nth=-1):
+    """terrain.query's elevations (phase 9's helper: p9lib.inc is not in the p15 -> p10 include chain)."""
+    e = reply_with(rows, 'elevations', nth, 'terrain.query')['elevations']
+    if not isinstance(e, list):
+        fail(f"elevations is not a list: {e!r}")
+    return e
+
+
 T = cmd('terrain', {"boundary": [[-20, -20], [30, -20], [30, 28], [-20, 28]],
                     "points": [[-20, -20, -0.5], [30, -20, -0.5], [30, 28, 1.0], [-20, 28, 1.0]], "pad": True, "padMargin": 1.0})
 HOUSE = [cmd('level.edit', {"level": 0, "name": "Lower", "elevation": -1.2}),
