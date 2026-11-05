@@ -25,13 +25,22 @@ fn hex(c: [u8; 3]) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 
-/// Parse exactly `#` + 6 hex digits.
+/// Normalise a hex colour string: lowercase, and if the input had spaces,
+/// format as `#rrgg bb`; otherwise `#rrggbb`.
+fn normalise_hex(s: &str) -> String {
+    let stripped: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    let lower = stripped.to_lowercase();
+    if s.contains(' ') { format!("#{} {}", &lower[1..5], &lower[5..7]) } else { lower }
+}
+
+/// Parse `#` + 6 hex digits, with optional spaces between the pairs.
 fn parse_hex(s: &str) -> Option<[u8; 3]> {
     let h = s.strip_prefix('#')?;
-    if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+    let digits: String = h.chars().filter(|c| !c.is_whitespace()).collect();
+    if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
-    let n = u32::from_str_radix(h, 16).ok()?;
+    let n = u32::from_str_radix(&digits, 16).ok()?;
     Some([(n >> 16) as u8, (n >> 8) as u8, n as u8])
 }
 
@@ -80,6 +89,9 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         return Err(bad("backdrop", format!("`{k}` does not apply to a {kind} backdrop")));
     }
     let mut image = None;
+    let colour_str = obj.get("colour").and_then(Value::as_str);
+    let top_str = obj.get("top").and_then(Value::as_str);
+    let bottom_str = obj.get("bottom").and_then(Value::as_str);
     let new = match kind {
         "colour" => Some(Backdrop::Colour { colour: colour_param(obj, "colour")? }),
         "gradient" => Some(Backdrop::Gradient { top: colour_param(obj, "top")?, bottom: colour_param(obj, "bottom")? }),
@@ -114,7 +126,14 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         d.arch.images.insert(id, img);
     }
     d.arch.backdrop = new;
-    let reply = d.arch.backdrop.as_ref().map_or_else(|| json!({"kind": "none"}), describe);
+    let reply = match kind {
+        "colour" => json!({"kind": "colour", "colour": normalise_hex(colour_str.unwrap_or("#000000"))}),
+        "gradient" => {
+            json!({"kind": "gradient", "top": normalise_hex(top_str.unwrap_or("#000000")), "bottom": normalise_hex(bottom_str.unwrap_or("#000000"))})
+        }
+        "image" => describe(d.arch.backdrop.as_ref().unwrap()),
+        _ => json!({"kind": "none"}),
+    };
     d.touch_arch();
     Ok(json!({ "backdrop": reply }))
 }
