@@ -171,13 +171,25 @@ fn inside_room(r: &Room, p: Vec2) -> bool {
     true
 }
 
+/// Whether wall `w` bounds `level` (a `Level::index`): it stands on it, or it spans it
+/// (see `Wall::spans_level`). A level index with no `Level` only matches the base level.
+pub fn wall_on_level(model: &ArchModel, w: &cadcraft_doc::Wall, level: u32) -> bool {
+    if w.base_level == level {
+        return true;
+    }
+    if w.top_level.is_none() {
+        return false;
+    }
+    model.levels.iter().any(|l| l.index == level && w.spans_level(l, &model.levels))
+}
+
 /// Detect rooms on one building level from the solved poché and divider walls.
 ///
 /// `level` is the `Level::index`. Walls on other levels are ignored. Returns an
 /// empty `Vec` when the level has no walls or no enclosed area.
 pub fn detect_rooms_at_level(model: &ArchModel, level: u32) -> Vec<Room> {
     // Step 1: collect walls on this level.
-    let level_has_walls = model.walls.iter().any(|w| w.base_level == level);
+    let level_has_walls = model.walls.iter().any(|w| wall_on_level(model, w, level));
     if !level_has_walls {
         return Vec::new();
     }
@@ -190,7 +202,7 @@ pub fn detect_rooms_at_level(model: &ArchModel, level: u32) -> Vec<Room> {
     // polyline.
     let mut temp = ArchModel::default();
     for w in &model.walls {
-        if w.base_level == level && !w.divider {
+        if wall_on_level(model, w, level) && !w.divider {
             temp.push_wall((*w).clone());
         }
     }
@@ -210,7 +222,7 @@ pub fn detect_rooms_at_level(model: &ArchModel, level: u32) -> Vec<Room> {
     // Divider walls (thickness 0, no poché): push the 2-point centre line as an
     // open polyline. They enclose rooms but produce no poché.
     for w in &model.walls {
-        if w.base_level == level && w.divider && w.start.is_finite() && w.end.is_finite() {
+        if wall_on_level(model, w, level) && w.divider && w.start.is_finite() && w.end.is_finite() {
             soup.push(vec![w.start, w.end]);
         }
     }
