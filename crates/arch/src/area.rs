@@ -95,7 +95,7 @@ pub fn edge_standard_offset(model: &ArchModel, level: u32, a: Vec2, b: Vec2, out
     }
     let mut best: f64 = 0.0;
     for w in &model.walls {
-        if w.base_level != level || !w.thickness.is_finite() || w.thickness <= 0.0 || w.divider {
+        if !crate::room::wall_on_level(model, w, level) || !w.thickness.is_finite() || w.thickness <= 0.0 || w.divider {
             continue;
         }
         let Some(faces) = crate::join::face_lines(w) else {

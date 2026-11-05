@@ -239,7 +239,7 @@ fn wall_item(model: &ArchModel, r: &PlaceRequest) -> Result<PlaceOutcome, String
     let p = Vec2::new(r.at[0], r.at[1]);
     // (distance, wall id, side index, foot, outward normal)
     let mut best: Option<(f64, ArchId, usize, Vec2, Vec2)> = None;
-    for w in model.walls.iter().filter(|w| w.base_level == r.level && !w.divider) {
+    for w in model.walls.iter().filter(|w| crate::room::wall_on_level(model, w, r.level) && !w.divider) {
         let Some(faces) = crate::join::face_lines(w) else { continue };
         let Some(dir) = crate::wall::wall_dir(w) else { continue };
         for (i, (a, b)) in faces.iter().enumerate() {

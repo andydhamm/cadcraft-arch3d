@@ -36,9 +36,24 @@ pub struct Footprint {
 /// the merged ring is not simple, any point is non-finite, or the ring has more than
 /// 256 edges.
 pub fn outer_footprint(model: &ArchModel, level: u32) -> Option<Footprint> {
+    footprint_of(model, level, false)
+}
+
+/// Whether `w` is an eave wall of `level`'s roof: a wall standing on the level, or one whose
+/// top is the level's ceiling. A wall spanning past the level is not.
+fn is_eave_wall(model: &ArchModel, w: &Wall, level: u32) -> bool {
+    if w.top_level.is_none() {
+        return w.base_level == level;
+    }
+    model.levels.iter().find(|l| l.index == level).is_some_and(|l| (w.top_z(&model.levels) - (l.elevation + l.ceiling_height)).abs() <= 1e-6)
+}
+
+/// The footprint ring of `level`; with `eaves` only walls that carry the level's roof count.
+fn footprint_of(model: &ArchModel, level: u32, eaves: bool) -> Option<Footprint> {
+    let on = |w: &Wall| if eaves { is_eave_wall(model, w, level) } else { crate::room::wall_on_level(model, w, level) };
     // 1. Exterior, non-divider walls on the level.
     let candidates: Vec<&Wall> =
-        model.walls.iter().filter(|w| w.exterior && !w.divider && w.base_level == level && w.start.is_finite() && w.end.is_finite()).collect();
+        model.walls.iter().filter(|w| w.exterior && !w.divider && on(w) && w.start.is_finite() && w.end.is_finite()).collect();
     if candidates.len() < 3 {
         return None;
     }
@@ -100,9 +115,7 @@ pub fn outer_footprint(model: &ArchModel, level: u32) -> Option<Footprint> {
         })
     };
     let mut pruned = model.clone();
-    pruned
-        .walls
-        .retain(|w| w.base_level == level && (!candidates.iter().any(|c| c.id == w.id) || live.iter().any(|e| e.wall == w.id) || along_another(w)));
+    pruned.walls.retain(|w| on(w) && (!candidates.iter().any(|c| c.id == w.id) || live.iter().any(|e| e.wall == w.id) || along_another(w)));
     let shapes = crate::join::solve_joins(&pruned);
 
     // 4. One outer-face edge per wall.
@@ -567,7 +580,7 @@ pub fn wall_slopes(model: &ArchModel, level: u32, fp: &Footprint, roof: &Roof) -
 
 /// Highest level index owning an exterior wall, else the last level's index.
 pub fn top_level(model: &ArchModel) -> u32 {
-    let highest = model.walls.iter().filter(|w| w.exterior && !w.divider).map(|w| w.base_level).max();
+    let highest = model.walls.iter().filter(|w| w.exterior && !w.divider).map(|w| w.top_level.map_or(w.base_level, |t| t.max(w.base_level))).max();
     match highest {
         Some(h) => h,
         None => model.levels.last().map(|l| l.index).unwrap_or(0),
@@ -638,10 +651,10 @@ pub fn roof_geometry(model: &ArchModel, level: u32, roof: &Roof) -> Result<RoofG
     if !roof.pitch_rise.is_finite() || !roof.pitch_run.is_finite() || !roof.overhang.is_finite() || !roof.thickness.is_finite() {
         return Err(RoofError::Degenerate);
     }
-    let fp = match outer_footprint(model, level) {
+    let fp = match footprint_of(model, level, true) {
         Some(fp) => fp,
         None => {
-            if !model.walls.iter().any(|w| w.exterior && w.base_level == level) {
+            if !model.walls.iter().any(|w| w.exterior && is_eave_wall(model, w, level)) {
                 return Err(RoofError::NoWalls);
             }
             return Err(RoofError::BadFootprint);
@@ -1940,5 +1953,76 @@ mod tests {
         let origin = ring_origin(&edges);
         let result = walk_ring(&edges, origin);
         assert!(result.is_none(), "edge with equal end keys must be rejected");
+    }
+
+    /// Two levels (0 at 0.0 m, 1 at 2.7 m, ceilings 2.4 m) and a 10 × 8 ring on each; the south
+    /// wall is one wall from level 0's floor to level 1's ceiling when `spanning`.
+    fn two_level_house(spanning: bool) -> ArchModel {
+        use cadcraft_doc::Level;
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+        m.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Level::default() });
+        let pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)];
+        for level in 0..2u32 {
+            for i in 0..4 {
+                let (a, b) = (pts[i], pts[(i + 1) % 4]);
+                if i == 0 && spanning {
+                    if level == 0 {
+                        let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+                        w.base_level = 0;
+                        w.top_level = Some(1);
+                        m.push_wall(w);
+                    }
+                    continue;
+                }
+                let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+                w.base_level = level;
+                w.height = 2.4;
+                m.push_wall(w);
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn a_spanning_wall_bounds_rooms_on_every_level_it_spans() {
+        let m = two_level_house(true);
+        for level in 0..2 {
+            let rooms = crate::room::detect_rooms_at_level(&m, level);
+            assert_eq!(rooms.len(), 1, "level {level} should have one room");
+        }
+    }
+
+    #[test]
+    fn a_spanning_wall_is_in_each_levels_footprint() {
+        let m = two_level_house(true);
+        let span = m.walls.iter().find(|w| w.top_level.is_some()).map(|w| w.id).expect("spanning wall");
+        for level in 0..2 {
+            let fp = outer_footprint(&m, level).expect("footprint");
+            assert!(fp.edges.iter().any(|e| e.wall == span), "level {level} footprint lacks the spanning wall");
+        }
+    }
+
+    #[test]
+    fn roofauto_on_the_top_level_uses_the_spanning_wall_as_an_eave() {
+        let m = two_level_house(true);
+        let span = m.walls.iter().find(|w| w.top_level.is_some()).map(|w| w.id).expect("spanning wall");
+        let fp = footprint_of(&m, 1, true).expect("eave footprint");
+        assert!(fp.edges.iter().any(|e| e.wall == span));
+        // Its top is not level 0's ceiling, so it carries no eave there.
+        assert!(footprint_of(&m, 0, true).is_none());
+        assert!(roof_geometry(&m, 1, &test_roof()).is_ok());
+        assert_eq!(top_level(&m), 1);
+    }
+
+    #[test]
+    fn single_level_models_are_unchanged() {
+        let mut m = ArchModel::default();
+        house_10_8(&mut m);
+        let a = outer_footprint(&m, 0).expect("footprint");
+        let b = footprint_of(&m, 0, true).expect("eave footprint");
+        assert_eq!(a, b);
+        assert_eq!(crate::room::detect_rooms_at_level(&m, 0).len(), 1);
+        assert!(crate::room::detect_rooms_at_level(&m, 1).is_empty());
     }
 }

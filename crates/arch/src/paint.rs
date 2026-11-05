@@ -84,7 +84,12 @@ fn wall_side_room(model: &ArchModel, wall: &cadcraft_doc::Wall, side: Side) -> O
         Side::Right => -dir.perp(),
     };
     let mid = wall.start.mid(wall.end);
-    room_at(model, wall.base_level, mid + n * (wall.thickness / 2.0 + PROBE))
+    let p = mid + n * (wall.thickness / 2.0 + PROBE);
+    if let Some(r) = room_at(model, wall.base_level, p) {
+        return Some(r);
+    }
+    // A wall spanning several levels also bounds the rooms on the levels it passes.
+    model.levels.iter().filter(|l| l.index != wall.base_level && wall.spans_level(l, &model.levels)).find_map(|l| room_at(model, l.index, p))
 }
 
 /// The material a surface has before any paint.
