@@ -3926,9 +3926,9 @@ mod tests {
         let wall = Wall { base_level: 0, top_level: Some(1), height: 2.0, ..Wall::default() };
         let top = wall.top_z(&levels);
         assert!((top - 5.1).abs() < 1e-12);
-        // A level at exactly top - 0.01 should span
+        // A level at exactly top - 0.01 should NOT span (the interval is half-open: [bottom, top - 0.01))
         let at_boundary = Level { index: 99, elevation: top - 0.01, ceiling_height: 2.4, ..Level::default() };
-        assert!(wall.spans_level(&at_boundary, &levels), "level at top-0.01 should span");
+        assert!(!wall.spans_level(&at_boundary, &levels), "level at top-0.01 should not span");
         // A level at exactly top should not span
         let at_top = Level { index: 98, elevation: top, ceiling_height: 2.4, ..Level::default() };
         assert!(!wall.spans_level(&at_top, &levels), "level at top should not span");
