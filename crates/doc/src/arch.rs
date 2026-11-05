@@ -403,6 +403,10 @@ pub struct Wall {
     /// Eave height above the level floor; `None` means derive from level.
     #[serde(default)]
     pub eave_height: Option<f64>,
+    /// Level index the wall spans to: a spanning wall runs from its base level's floor to
+    /// `t`'s ceiling, and its own `height` is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_level: Option<u32>,
     /// A retaining wall: a terrain breakline whose top and bottom follow the ground on each side
     /// (phase 9). Its top is the high side's grade plus `freeboard`, its bottom the low side's
     /// grade minus `footing`.
@@ -452,11 +456,44 @@ impl Wall {
             roof_pitch: None,
             roof_overhang: None,
             eave_height: None,
+            top_level: None,
             retaining: false,
             freeboard: None,
             footing: None,
             finish: None,
         }
+    }
+
+    /// Elevation of the floor at which this wall sits (its base level's elevation).
+    /// Returns 0.0 when the base level is not found in `levels`.
+    pub fn bottom_z(&self, levels: &[Level]) -> f64 {
+        level_by_index(levels, self.base_level).map_or(0.0, |l| l.elevation)
+    }
+
+    /// Elevation of this wall's top. A spanning wall (`top_level` set) reaches that level's
+    /// ceiling; otherwise it is base floor plus `height`.
+    pub fn top_z(&self, levels: &[Level]) -> f64 {
+        match self.top_level {
+            Some(t) => match level_by_index(levels, t) {
+                Some(l) => l.elevation + l.ceiling_height,
+                None => self.bottom_z(levels) + self.height,
+            },
+            None => self.bottom_z(levels) + self.height,
+        }
+    }
+
+    /// Whether `level` falls within the wall's vertical extent. Always true for the base level;
+    /// for a spanning wall, also true for every level whose floor lies in [bottom_z, top_z - 0.01).
+    pub fn spans_level(&self, level: &Level, levels: &[Level]) -> bool {
+        if level.index == self.base_level {
+            return true;
+        }
+        if self.top_level.is_none() {
+            return false;
+        }
+        let bottom = self.bottom_z(levels);
+        let top = self.top_z(levels);
+        level.elevation >= bottom && level.elevation < top - 0.01
     }
 }
 
@@ -480,6 +517,7 @@ impl Default for Wall {
             roof_pitch: None,
             roof_overhang: None,
             eave_height: None,
+            top_level: None,
             retaining: false,
             freeboard: None,
             footing: None,
@@ -568,6 +606,24 @@ pub enum Swing {
     Out,
 }
 
+/// The kind of a building level.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LevelKind {
+    /// A full floor level.
+    #[default]
+    Floor,
+    /// A landing level (e.g. reached by stairs between floors).
+    Landing,
+}
+
+impl LevelKind {
+    /// True for [`LevelKind::Floor`], the default (used to skip it when serializing).
+    pub fn is_floor(&self) -> bool {
+        *self == LevelKind::Floor
+    }
+}
+
 /// A building level (floor plate).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -577,11 +633,14 @@ pub struct Level {
     pub elevation: f64,
     pub ceiling_height: f64,
     pub structure: f64,
+    /// Floor or landing. Not written for a floor, so a drawing without landings keeps its old payload.
+    #[serde(default, skip_serializing_if = "LevelKind::is_floor")]
+    pub kind: LevelKind,
 }
 
 impl Default for Level {
     fn default() -> Self {
-        Level { index: 0, name: String::new(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3 }
+        Level { index: 0, name: String::new(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::default() }
     }
 }
 
@@ -595,6 +654,11 @@ impl Level {
             0.0
         }
     }
+}
+
+/// Look up a level by its index in `levels`. Returns `None` when no level has that index.
+pub fn level_by_index(levels: &[Level], index: u32) -> Option<&Level> {
+    levels.iter().find(|l| l.index == index)
 }
 
 /// An architectural opening (door, window, garage door, or cased opening).
@@ -710,6 +774,10 @@ pub enum RoomType {
     Bath,
     Closet,
     Utility,
+    Dining,
+    Family,
+    Entry,
+    Laundry,
     Garage,
     Porch,
     Deck,
@@ -1493,6 +1561,9 @@ pub struct ArchModel {
     pub cameras: Vec<Camera3d>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_camera: Option<String>,
+    /// The one level the plan draws; `None` = all levels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_level: Option<u32>,
     // Skipped when empty, so a model without views writes the same payload it did before views existed.
     #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "deserialize_views")]
     pub views: Vec<ArchView>,
@@ -1575,6 +1646,7 @@ impl Default for ArchModel {
             next_railing_id: 0,
             cameras: Vec::new(),
             active_camera: None,
+            plan_level: None,
             views: Vec::new(),
             next_view_id: 0,
             site: None,
@@ -1600,7 +1672,7 @@ impl Default for ArchModel {
             backdrop: None,
             defaults: Default::default(),
             plant_species: Vec::new(),
-            levels: vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3 }],
+            levels: vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::Floor }],
             types: vec![
                 WallType {
                     name: "Exterior".into(),
@@ -1692,6 +1764,13 @@ impl ArchModel {
             && self.paints.is_empty()
             && self.backdrop.is_none()
             && self.defaults.is_empty()
+    }
+
+    /// Ensure there is always a ground level at index 0 for plan operations.
+    pub fn ensure_ground_level(&mut self) {
+        if self.levels.is_empty() {
+            self.levels.push(Level { index: 0, name: "Level 1".to_string(), elevation: 0.0, ..Default::default() });
+        }
     }
 
     /// Add a furnishing and return its new id.
@@ -2646,6 +2725,68 @@ mod tests {
         assert_eq!(level.elevation, 0.0);
         assert_eq!(level.ceiling_height, 2.4);
         assert_eq!(level.structure, 0.3);
+    }
+
+    #[test]
+    fn level_kind_defaults_to_floor() {
+        assert_eq!(LevelKind::default(), LevelKind::Floor);
+        assert_eq!(Level::default().kind, LevelKind::Floor);
+    }
+
+    #[test]
+    fn a_floor_level_serializes_as_before_and_a_landing_keeps_its_kind() {
+        // A drawing without landings writes the payload it wrote before level kinds existed.
+        let floor = serde_json::to_value(Level::default()).unwrap();
+        assert!(floor.get("kind").is_none(), "a floor level writes no kind: {floor}");
+        let landing = Level { index: 1, elevation: 1.35, kind: LevelKind::Landing, ..Level::default() };
+        let v = serde_json::to_value(&landing).unwrap();
+        assert_eq!(v.get("kind").and_then(|k| k.as_str()), Some("landing"));
+        let back: Level = serde_json::from_value(v).unwrap();
+        assert_eq!(back, landing);
+    }
+
+    #[test]
+    fn a_wall_spanning_two_levels_reaches_the_upper_ceiling() {
+        let levels = vec![
+            Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() },
+            Level { index: 1, elevation: 3.0, ceiling_height: 2.8, ..Level::default() },
+        ];
+        let wall = Wall { base_level: 0, top_level: Some(1), height: 2.0, ..Wall::default() };
+        assert!((wall.bottom_z(&levels) - 0.0).abs() < 1e-12);
+        assert!((wall.top_z(&levels) - 5.8).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_plain_wall_spans_only_its_level() {
+        let levels = vec![
+            Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() },
+            Level { index: 1, elevation: 3.0, ceiling_height: 2.8, ..Level::default() },
+        ];
+        let wall = Wall { base_level: 0, height: 2.4, ..Wall::default() };
+        assert!(wall.spans_level(&levels[0], &levels));
+        assert!(!wall.spans_level(&levels[1], &levels));
+    }
+
+    #[test]
+    fn new_room_types_round_trip() {
+        for room_type in [RoomType::Dining, RoomType::Family, RoomType::Entry, RoomType::Laundry] {
+            let json = serde_json::to_string(&room_type).unwrap();
+            let back: RoomType = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, room_type);
+        }
+    }
+
+    #[test]
+    fn ensure_ground_level_adds_level_one_once() {
+        let mut m = ArchModel::default();
+        m.levels.clear();
+        m.ensure_ground_level();
+        assert_eq!(m.levels.len(), 1);
+        assert_eq!(m.levels[0].index, 0);
+        assert_eq!(m.levels[0].name, "Level 1");
+        assert_eq!(m.levels[0].elevation, 0.0);
+        m.ensure_ground_level();
+        assert_eq!(m.levels.len(), 1);
     }
 
     #[test]
