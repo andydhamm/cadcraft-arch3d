@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-05 10:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 0 of 31 segments merged · 0 of 13 acceptance checks**
 
@@ -25,16 +25,16 @@ Updated 2026-11-05 10:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 1.8 h so far · expected done Nov 05 17:57–Nov 09 11:35 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 2.1 h so far · expected done Nov 05 18:12–Nov 09 11:50 UTC |
 
 ## Phase 15 segments
 
-25 queued, 3 gate, 2 working, 1 merging
+25 queued, 4 gate, 1 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-doc-electrical` | doc: electrical devices, connections, light sets, light brightness | gate | bonsai-ws2-b |
-| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | working | bonsai-a |
+| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | gate | bonsai-a |
 | `p15-i18n-labels` | ui-egui: translations for every phase-15 command and menu entry | merging | claude-sonnet-a |
 | `p15-cmd-export-view` | engine: export one view or one level's plan | gate | claude-sonnet-b |
 | `p15-render3d-clay` | render3d: the clay style | gate | darwin-ws3 |
@@ -61,7 +61,7 @@ Updated 2026-11-05 10:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 884 |
+| bonsai-a | bonsai2-27b | gate | 884 |
 | bonsai-b | bonsai2-27b | agent | 823 |
 | bonsai-ws2-a | bonsai2-27b | gate | 913 |
 | bonsai-ws2-b | bonsai2-27b | gate | 877 |
@@ -69,7 +69,7 @@ Updated 2026-11-05 10:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | gate | 80 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 770 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 771 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
