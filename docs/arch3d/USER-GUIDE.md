@@ -501,12 +501,29 @@ which restores or empties. The user catalog lives outside the drawing, in `CADCR
 
 Set as Default on a cabinet, door, window or furnishing (`arch.default {"id"}`) makes the next one of its kind match.
 
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points": [[0,0],[4,0],[4,3],[0,3],[0,0]], "thickness": 0.2, "height": 2.4, "exterior": true}' \
+  --cmd 'cabinet {"kind": "base", "wall": "w0", "offset": 0.5, "width": 0.6}' \
+  --cmd 'arch.default {"id": "cb0"}' \
+  --cmd 'cabinet {"kind": "base", "wall": "w0", "offset": 1.5}' \
+  --cmd 'arch.inspect {"cabinets": true}'
+```
+
 ### Backdrops
 
 `backdrop` sets what the 3D view, the raster Finalize and the path tracer show behind the model: a solid colour
 (`{"kind": "colour", "colour": "#204060"}`), a two-colour sky gradient (`{"kind": "gradient", "top", "bottom"}`), an
 image, flat or 360-degree equirectangular (`{"kind": "image", "item", "projection"}`), or none. A backdrop never lights
 the scene.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points": [[0,0],[4,0],[4,3],[0,3],[0,0]], "thickness": 0.2, "height": 2.4, "exterior": true}' \
+  --cmd 'backdrop {"kind": "colour", "colour": "#204060"}' \
+  --cmd 'backdrop {"kind": "gradient", "top": "#87CEEB", "bottom": "#E0F0FF"}' \
+  --cmd 'backdrop {"kind": "none"}'
+```
 
 ### Installing catalogs
 
@@ -531,9 +548,9 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'library.place {"item": "rug-oriental", "at": [1.8, 2.5], "rotation": 90}' \
   --cmd 'cabinet {"kind": "base", "wall": "w1", "offset": 0.6, "width": 0.6}' \
   --cmd 'cabinet {"kind": "base", "wall": "w1", "offset": 1.4, "width": 0.9}' \
-  --cmd 'cabinet {"kind": "base", "wall": "w1", "offset": 2.75, "width": 0.6}' \
+  --cmd 'cabinet {"kind": "base", "wall": "w1", "offset": 3.0, "width": 0.6}' \
   --cmd 'library.place {"item": "own:sink-kitchen", "at": [5.4, 0.4]}' \
-  --cmd 'library.place {"item": "own:dishwasher-60", "at": [6.15, 0.4]}' \
+  --cmd 'library.place {"item": "own:dishwasher-60", "at": [6.65, 0.4]}' \
   --cmd 'paint.material {"material": "material-oak", "target": "wall/w5/left", "scope": "room"}' \
   --cmd 'paint.material {"material": "#e8e0d0", "target": "wall/w1/left", "scope": "room"}' \
   --cmd 'backdrop {"kind": "colour", "colour": "#204060"}' \
