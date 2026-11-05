@@ -1550,3 +1550,32 @@ menu	View	视图
 	Walkthrough	漫游
 	Wall	墙
 	Material	材质
+# Phase 15: electrical, split levels, showcase house.
+	240 V Outlet	240 伏插座
+	Auto Outlets	自动插座
+	Circuit Brightness	回路亮度
+	Clay	黏土
+	Connection	连接
+	Delete Connection	删除连接
+	Delete Electrical	删除电气
+	Dimmer Switch	调光开关
+	Dining	餐厅
+	Duplex Outlet	双联插座
+	Edit Connection	编辑连接
+	Edit Electrical	编辑电气
+	Edit Level	编辑楼层
+	Electrical	电气
+	Electrical View	电气视图
+	Entry	入口
+	Family	家庭室
+	GFCI Outlet	漏电保护插座
+	Landing	平台
+	Laundry	洗衣房
+	Light Set	灯组
+	Outlet	插座
+	Planting Bed	种植床
+	Show Level	显示楼层
+	Single-Pole Switch	单极开关
+	Switch	开关
+	Technical Illustration	技术插图
+	Three-Way Switch	三向开关
