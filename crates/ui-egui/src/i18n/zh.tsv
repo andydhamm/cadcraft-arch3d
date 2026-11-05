@@ -1454,6 +1454,35 @@
 	Selection area opacity:	选择区域不透明度：
 	Selection effect color	选择效果颜色
 	Selection modes	选择模式
+	Selection preview	选择预览
+	Show grips	显示夹点
+	Tables	表格
+	Text color	文字颜色
+	This drawing	此图形
+	Type an alias name.	输入别名名称。
+	Underline	下划线
+	Units of new drawings	新图形的单位
+	Unsaved changes	未保存的更改
+	Visual Effect Settings	视觉效果设置
+	Visual Effect Settings...	视觉效果设置...
+	When a command is active	命令处于活动状态时
+	When no command is active	无活动命令时
+	Window selection color:	窗口选择颜色：
+	X	X
+	Xrefs	外部参照
+	Y	Y
+	built-in	内置
+	contains authoring elements. Open in Block Editor?	包含编写元素。在块编辑器中打开吗？
+	overrides built-in	覆盖内置
+	{alias} is already defined; select it and use Edit.	{alias} 已定义；请选择它并使用编辑。
+	{command} is an unknown command.	{command} 是未知命令。
+menu	Dimension	标注
+menu	Draw	绘图
+menu	Modify	修改
+menu	View	视图
+	Clip Xref	剪裁外部参照
+	Xref	外部参照
+	Xref Clip Frame	外部参照剪裁边框
 	3D View	三维视图
 	Arch Inspect	建筑检查
 	Arch Sample	建筑示例
@@ -1475,13 +1504,6 @@
 	Garage Door	车库门
 	Illuminance	照度
 	Level	楼层
-	Library…	库…
-	Pull Library…	拉手库…
-	Component	构件
-	Floor	楼层面
-	Plan	平面
-	Paint	涂刷
-	Cannot place that here	无法在此处放置
 	Light Fixture	灯具
 	Light Fixture Types	灯具类型
 	Cabinet	橱柜
@@ -1528,20 +1550,3 @@
 	Walkthrough	漫游
 	Wall	墙
 	Material	材质
-	Back	后退
-	Forward	前进
-	Favorites	收藏
-	Details	详细信息
-	Search	搜索
-	Folders	文件夹
-	Folder	文件夹
-	Tags	标签
-	Source	来源
-	Licence	许可证
-	Author	作者
-	Attribution	署名
-	Notes	备注
-	Size	尺寸
-	Category	类别
-	Grid	网格
-	No items match	没有匹配的项目
