@@ -1,0 +1,11 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent","version":"1.0"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"new_drawing","arguments":{"metric":true}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"execute","arguments":{"command":"wall","params":{"points":[[0,0],[4,0],[8,0],[8,5],[4,5],[0,5],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"execute","arguments":{"command":"wall","params":{"points":[[4,0],[4,5]],"thickness":0.1,"height":2.4,"exterior":false}}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"execute","arguments":{"command":"roomdetect","params":{}}}}
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"execute","arguments":{"command":"library","params":{"text":"chair","chips":[{"kind":"symbolType","value":"chair/stool"}]}}}}
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"execute","arguments":{"command":"library.place","params":{"item":"sofa-futon","at":[0.55,2.5],"rotation":90}}}}
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"execute","arguments":{"command":"library.place","params":{"item":"rug-oriental","at":[1.8,2.5],"rotation":90}}}}
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"execute","arguments":{"command":"library.place","params":{"item":"armchair","at":[2.9,2.5],"rotation":270}}}}
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"execute","arguments":{"command":"paint.material","params":{"material":"material-oak","target":"wall/w5/left","scope":"room"}}}}
+{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"execute","arguments":{"command":"export","params":{"format":"glb"}}}}
