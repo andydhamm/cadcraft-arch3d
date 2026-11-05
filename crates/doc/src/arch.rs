@@ -1718,15 +1718,6 @@ impl ArchModel {
         self.walls.iter().map(|w| w.id)
     }
 
-    /// Ensure a ground level exists: when `levels` is empty, push a single level with index 0,
-    /// name "Level 1", elevation 0.0 and default ceiling/structure. The engine calls this before
-    /// any level command.
-    pub fn ensure_ground_level(&mut self) {
-        if self.levels.is_empty() {
-            self.levels.push(Level { index: 0, name: "Level 1".into(), ..Level::default() });
-        }
-    }
-
     /// Whether the model has no walls, openings, rooms, roofs, stairs, railings, cameras or views.
     pub fn is_empty(&self) -> bool {
         self.walls.is_empty()
