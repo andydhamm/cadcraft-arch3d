@@ -48,7 +48,7 @@ fn parse_light_states(doc: &cadcraft_doc::Drawing, value: &Value, cmd: &str) -> 
                 .filter(|n| n.is_finite() && (0.0..=1.0).contains(n))
                 .ok_or_else(|| bad(cmd, format!("light `{key}` brightness must be a finite number in [0, 1]")))?,
         };
-        out.insert(key.to_string(), LightState { on, brightness });
+        out.insert(key.to_string(), LightState { on, brightness, ..Default::default() });
     }
     Ok(out)
 }
@@ -89,7 +89,7 @@ fn run_lightset(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     if let Some(pos) = doc.arch.light_sets.iter().position(|set| set.name == name) {
         doc.arch.light_sets[pos].lights = parsed;
     } else {
-        doc.arch.light_sets.push(LightSet { name: name.clone(), lights: parsed });
+        doc.arch.light_sets.push(LightSet { name: name.clone(), lights: parsed, ..Default::default() });
     }
     doc.touch_arch();
     Ok(json!({ "lightSet": name, "lights": doc.arch.light_sets.iter().find(|set| set.name == name).map_or(0, |set| set.lights.len()) }))
@@ -117,7 +117,10 @@ mod tests {
         let doc = s.doc().unwrap();
         assert_eq!(doc.arch.lights[0].brightness, 1.0);
         assert!(!doc.arch.light_sets[0].lights["lf0"].on);
-        let overrides = std::collections::BTreeMap::from([("lf0".to_string(), cadcraft_doc::arch::LightState { on: false, brightness: 0.25 })]);
+        let overrides = std::collections::BTreeMap::from([(
+            "lf0".to_string(),
+            cadcraft_doc::arch::LightState { on: false, brightness: 0.25, ..Default::default() },
+        )]);
         let scene = cadcraft_arch3d::light::scene_lights_with(&doc.arch, &overrides);
         assert!(scene.is_empty());
     }
