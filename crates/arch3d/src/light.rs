@@ -406,7 +406,7 @@ mod tests {
         assert_eq!(scene_lights(&m)[0].intensity, full);
         m.lights[0].brightness = 1.0;
         let mut o = BTreeMap::new();
-        o.insert("lf0".to_string(), LightState { on: true, brightness: 0.25 });
+        o.insert("lf0".to_string(), LightState { brightness: 0.25, ..Default::default() });
         assert!((scene_lights_with(&m, &o)[0].intensity - full * 0.25).abs() < 1e-9);
     }
 
@@ -414,7 +414,7 @@ mod tests {
     fn an_override_turns_a_light_off() {
         let m = room();
         let mut o = BTreeMap::new();
-        o.insert("lf1".to_string(), LightState { on: false, brightness: 1.0 });
+        o.insert("lf1".to_string(), LightState { on: false, ..Default::default() });
         let lights = scene_lights_with(&m, &o);
         assert_eq!(lights.len(), 3);
         assert!(lights.iter().all(|l| l.id != ArchId(1)));
