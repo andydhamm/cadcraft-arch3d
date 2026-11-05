@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house**
 
-7,468 workspace tests passing at the last merge · 757 segments merged in all · 0 of 14 seats working
+7,473 workspace tests passing at the last merge · 758 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-05 09:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | planning | — | 0.6 h so far · expected done Nov 05 12:53–Nov 27 07:32 UTC |
+| 15 | Electrical, technical illustration and the showcase house | planning | — | 0.8 h so far · expected done Nov 05 12:53–Nov 27 07:32 UTC |
 
 ## Phase 15 segments
 
@@ -36,6 +36,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 09:01 | `harden-p14-docs-user-guide` | merged | 7,473 pass | tturbo-mac |
 | Nov 05 07:46 | `upstream-sync-c4d9e6ac6` | merged | 7,468 pass | bonsai-b |
 | Nov 05 07:14 | `harden-p14-cache-furnishing-edits` | merged | 7,453 pass | tturbo-mac |
 | Nov 05 05:59 | `upstream-sync-5bfcee629` | merged | 7,449 pass | claude-sonnet-c |
@@ -47,7 +48,6 @@ none yet
 | Nov 04 22:43 | `p14-r3d-pt-backdrop` | merged | 7,359 pass | bonsai-b |
 | Nov 04 22:02 | `p14-ui-library-place` | merged | 7,357 pass | claude-sonnet-a |
 | Nov 04 21:39 | `p14-cache-furnishing-edits` | merged | 7,352 pass | claude-sonnet-c |
-| Nov 04 21:13 | `p14-cmd-defaults` | merged | 7,351 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -65,5 +65,5 @@ none yet
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
-| tturbo-mac | tturbo-ultraheretic | merging | 617 |
+| tturbo-mac | tturbo-ultraheretic | agent | 617 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
