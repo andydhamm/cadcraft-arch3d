@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 34 of 36 segments merged · 10 of 13 acceptance checks**
+**Phase 14 of 15: The library — 35 of 36 segments merged · 10 of 13 acceptance checks**
 
-7,457 workspace tests passing at the last merge · 753 segments merged in all · 0 of 14 seats working · PAUSED
+7,449 workspace tests passing at the last merge · 754 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -24,22 +24,22 @@ Updated 2026-11-05 05:45 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 10 / 13 | 34.3 h so far · expected done Nov 05 07:53–Nov 06 03:42 UTC |
+| 14 | The library | building | 10 / 13 | 34.5 h so far · expected done Nov 05 06:58–Nov 06 00:15 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-34 merged, 1 escalate, 1 abandoned, 1 merging
+35 merged, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p14-docs-user-guide` | USER-GUIDE: the library; an MCP example | escalate |  |
-| `upstream-sync-5bfcee629` | merge upstream upstream/main up to 5bfcee629 (28 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 05:59 | `upstream-sync-5bfcee629` | merged | 7,449 pass | claude-sonnet-c |
 | Nov 05 04:42 | `harden-p14-cmd-user-catalog` | merged | 7,457 pass | tturbo-mac |
 | Nov 05 01:23 | `harden-p14-r3d-pt-backdrop` | refused | 0 pass | tturbo-mac |
 | Nov 05 01:00 | `upstream-sync-5f8999f30-v2` | merged | 7,447 pass | mai-flash |
@@ -51,7 +51,6 @@ Updated 2026-11-05 05:45 UTC. This page and the card in the README are regenerat
 | Nov 04 21:13 | `p14-cmd-defaults` | merged | 7,351 pass | claude-sonnet-d |
 | Nov 04 20:37 | `p14-ui-library-panel` | merged | 7,344 pass | claude-sonnet-a |
 | Nov 04 20:10 | `harden-p14-inspect` | merged | 7,340 pass | tturbo-mac |
-| Nov 04 19:35 | `p14-cmd-backdrop` | merged | 7,334 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
@@ -59,8 +58,8 @@ Updated 2026-11-05 05:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 883 |
 | bonsai-b | bonsai2-27b | idle | 821 |
-| bonsai-ws2-a | bonsai2-27b | gate | 912 |
-| bonsai-ws2-b | bonsai2-27b | gate | 875 |
+| bonsai-ws2-a | bonsai2-27b | gate | 913 |
+| bonsai-ws2-b | bonsai2-27b | gate | 876 |
 | claude-sonnet-a | sonnet | idle | 78 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 34 |
