@@ -24,6 +24,7 @@ pub mod casework_symbol;
 pub mod detect;
 pub mod electrical;
 pub mod furnishing;
+pub mod grade;
 pub mod graph;
 pub mod ies;
 pub mod join;
