@@ -609,7 +609,7 @@ pub enum Swing {
 
 /// The kind of a building level.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub enum LevelKind {
     /// A full floor level.
     #[default]
