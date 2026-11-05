@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 11 of 33 segments merged · 0 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 12 of 33 segments merged · 0 of 14 acceptance checks**
 
-7,524 workspace tests passing at the last merge · 771 segments merged in all · 0 of 14 seats working
+7,527 workspace tests passing at the last merge · 772 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,11 +25,11 @@ Updated 2026-11-05 22:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 14 | 13.8 h so far · expected done Nov 06 19:22–Nov 08 00:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 14 | 14.1 h so far · expected done Nov 06 16:50–Nov 07 18:22 UTC |
 
 ## Phase 15 segments
 
-12 queued, 11 merged, 6 merging, 3 escalate, 1 working
+12 merged, 11 queued, 5 merging, 3 escalate, 2 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,16 +38,17 @@ Updated 2026-11-05 22:15 UTC. This page and the card in the README are regenerat
 | `p15-arch-grade` | arch: grade classes and the above-grade area | merging | claude-sonnet-b |
 | `p15-arch-pad-split` | arch: the pad follows each level and the entry landing | merging | claude-sonnet-c |
 | `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | escalate |  |
-| `p15-render-plan-level` | render: the plan draws the shown level | merging | claude-sonnet-d |
+| `p15-arch3d-spanning-walls` | arch3d: walls from one level's floor to another's ceiling, offset levels | gate | claude-sonnet-d |
 | `p15-cmd-light-sets` | engine: lightset, a camera's light set, render with a light set | merging | mai-flash |
 | `p15-cmd-electrical-view` | engine: view.electrical and level.show | merging | mai-flash-esc |
-| `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | working | bonsai-ws2-b |
+| `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | gate | bonsai-ws2-b |
 | `p15-cmd-library-copy-place` | engine: a copied library item places like its source | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 22:18 | `p15-render-plan-level` | merged | 7,527 pass | claude-sonnet-d |
 | Nov 05 21:17 | `p15-arch-spanning-walls` | merged | 7,524 pass | claude-sonnet-b |
 | Nov 05 20:17 | `upstream-sync-df6597445` | merged | 7,520 pass | claude-sonnet-c |
 | Nov 05 19:19 | `harden-p15-i18n-labels` | merged | 7,512 pass | tturbo-mac |
@@ -59,7 +60,6 @@ Updated 2026-11-05 22:15 UTC. This page and the card in the README are regenerat
 | Nov 05 14:00 | `harden-p14-cmd-backdrop` | merged | 7,486 pass | tturbo-mac |
 | Nov 05 13:00 | `p15-doc-electrical` | merged | 7,481 pass | bonsai-ws2-a |
 | Nov 05 11:59 | `p15-render3d-clay` | merged | 7,477 pass | darwin-ws3 |
-| Nov 05 11:12 | `p15-i18n-labels` | merged | 7,474 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
@@ -67,13 +67,13 @@ Updated 2026-11-05 22:15 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 908 |
 | bonsai-b | bonsai2-27b | gate | 837 |
-| bonsai-ws2-a | bonsai2-27b | agent | 934 |
-| bonsai-ws2-b | bonsai2-27b | agent | 896 |
+| bonsai-ws2-a | bonsai2-27b | gate | 934 |
+| bonsai-ws2-b | bonsai2-27b | gate | 896 |
 | claude-sonnet-a | sonnet | merging | 82 |
 | claude-sonnet-b | sonnet | merging | 83 |
 | claude-sonnet-c | sonnet | merging | 36 |
-| claude-sonnet-d | sonnet | merging | 21 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 783 |
+| claude-sonnet-d | sonnet | gate | 21 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 783 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 62 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 32 |
