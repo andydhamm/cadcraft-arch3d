@@ -1573,7 +1573,8 @@ mod tests {
     #[test]
     fn path_traced_flat_image_backdrop_is_the_shared_reference() {
         let Some(gpu) = compute() else { return };
-        let img = ImageRgba { width: 2, height: 2, rgba: vec![255, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 255, 255, 255, 255, 255], ..Default::default() };
+        let img =
+            ImageRgba { width: 2, height: 2, rgba: vec![255, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 255, 255, 255, 255, 255], ..Default::default() };
         let textures = BTreeMap::from([("item:pic".to_string(), img)]);
         let b = Backdrop::Image { item: "pic".into(), projection: Projection::Flat };
         let (w, h) = (16u32, 12u32);
