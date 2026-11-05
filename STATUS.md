@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-05 18:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 9 of 32 segments merged · 0 of 13 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-05 18:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 10.3 h so far · expected done Nov 06 18:29–Nov 08 01:50 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 10.6 h so far · expected done Nov 06 19:19–Nov 08 03:26 UTC |
 
 ## Phase 15 segments
 
-15 queued, 9 merged, 5 gate, 3 merging
+15 queued, 9 merged, 4 gate, 4 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Updated 2026-11-05 18:45 UTC. This page and the card in the README are regenerat
 | `p15-arch-spanning-walls` | arch: walls spanning levels in rooms, footprints, roofs, areas and placement | merging | claude-sonnet-b |
 | `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | gate | darwin-ws3 |
 | `p15-render-plan-level` | render: the plan draws the shown level | merging | claude-sonnet-d |
-| `p15-cmd-light-sets` | engine: lightset, a camera's light set, render with a light set | gate | mai-flash |
+| `p15-cmd-light-sets` | engine: lightset, a camera's light set, render with a light set | merging | mai-flash |
 | `p15-cmd-electrical-view` | engine: view.electrical and level.show | gate | bonsai-ws2-a |
 | `upstream-sync-df6597445` | merge upstream upstream/main up to df6597445 (12 commits) | merging | claude-sonnet-c |
 
@@ -66,14 +66,14 @@ Updated 2026-11-05 18:45 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | gate | 900 |
 | bonsai-b | bonsai2-27b | gate | 830 |
 | bonsai-ws2-a | bonsai2-27b | gate | 927 |
-| bonsai-ws2-b | bonsai2-27b | gate | 887 |
+| bonsai-ws2-b | bonsai2-27b | gate | 888 |
 | claude-sonnet-a | sonnet | idle | 81 |
 | claude-sonnet-b | sonnet | merging | 82 |
 | claude-sonnet-c | sonnet | merging | 35 |
 | claude-sonnet-d | sonnet | merging | 21 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 775 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 61 |
+| mai-flash | mai-code-1.1-flash | merging | 62 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 31 |
 | tturbo-mac | tturbo-ultraheretic | merging | 620 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
