@@ -127,11 +127,21 @@ pub fn wall_span(model: &ArchModel, w: &Wall) -> Option<(f64, f64)> {
     let level = model.levels.iter().rev().find(|l| l.index == w.base_level).or(model.levels.last());
     let base = level.map(|l| l.elevation).unwrap_or(0.0);
     let h = if w.to_ceiling { level.map(|l| l.ceiling_height).unwrap_or(w.height) } else { w.height };
-    let top = base + h;
+    // A spanning wall is one solid from its base level's floor to its top level's ceiling.
+    let top = match w.top_level.and_then(|t| model.levels.iter().rev().find(|l| l.index == t)) {
+        Some(t) => t.elevation + t.ceiling_height,
+        None => base + h,
+    };
     if !base.is_finite() || !top.is_finite() || top <= base {
         return None;
     }
     Some((base, top))
+}
+
+/// Whether `w` counts as standing on `level` for the roof: it starts there, or spans up to that
+/// level's ceiling.
+pub(crate) fn wall_reaches_level(w: &Wall, level: u32) -> bool {
+    w.base_level == level || w.top_level == Some(level)
 }
 
 /// Rounded (centroid.x, centroid.y, |area|) of a ring, used to spot duplicate holes.
@@ -491,7 +501,7 @@ impl Scene3d {
                 let level = level_for(model, roof.level);
                 let mut max_wall_height = 0.0;
                 for wall in &model.walls {
-                    if wall.base_level == roof.level {
+                    if wall_reaches_level(wall, roof.level) {
                         if let Some((_, top)) = wall_span(model, wall) {
                             let h = top - level.elevation;
                             if h > max_wall_height {
@@ -1039,6 +1049,98 @@ mod tests {
         let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
         assert!((z_min - 3.0f32).abs() < 1e-3f32, "z_min = {z_min}, expected 3.0");
         assert!((z_max - 5.0f32).abs() < 1e-3f32, "z_max = {z_max}, expected 5.0");
+    }
+
+    fn split_level_model(top_level: Option<u32>) -> ArchModel {
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, name: "Main".into(), elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level {
+            index: 2,
+            name: "Entry".into(),
+            elevation: 1.35,
+            ceiling_height: 2.4,
+            kind: cadcraft_doc::arch::LevelKind::Landing,
+            ..Default::default()
+        });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level,
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            ..Default::default()
+        });
+        model
+    }
+
+    fn z_range(mesh: &Mesh) -> (f32, f32) {
+        let lo = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let hi = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        (lo, hi)
+    }
+
+    #[test]
+    fn a_spanning_wall_is_one_solid_from_floor_to_upper_ceiling() {
+        let model = split_level_model(Some(1));
+        let scene = Scene3d::build(&model);
+        let walls: Vec<&Mesh> = scene.meshes.iter().filter(|m| m.object == ArchId(1) && m.material == "wall").collect();
+        assert_eq!(walls.len(), 1, "one solid");
+        let (lo, hi) = z_range(walls[0]);
+        assert!(lo.abs() < 1e-3, "bottom {lo}");
+        assert!((hi - 5.1).abs() < 1e-3, "top {hi}, expected Main's ceiling 2.7 + 2.4");
+    }
+
+    #[test]
+    fn a_door_on_a_landing_opens_at_the_landing() {
+        let mut model = split_level_model(Some(1));
+        model.openings.push(Opening { id: ArchId(2), host: ArchId(1), offset: 3.0, width: 0.9, height: 2.1, sill: 1.35, ..Default::default() });
+        let scene = Scene3d::build(&model);
+        let wall = scene.meshes.iter().find(|m| m.object == ArchId(1) && m.material == "wall").expect("wall mesh");
+        assert!(wall.positions.iter().any(|p| (p[2] - 1.35).abs() < 1e-3 && (p[0] - 3.0).abs() < 0.6), "no door sill edge at the landing height");
+        assert!(!wall.positions.iter().any(|p| p[2] > 1e-3 && p[2] < 1.34 && (p[0] - 3.0).abs() < 0.4), "the wall below the landing is open");
+        let door = scene.meshes.iter().filter(|m| m.object == ArchId(2)).flat_map(|m| m.positions.iter()).map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        assert!((door - 1.35).abs() < 1e-3, "door frame starts at {door}");
+    }
+
+    #[test]
+    fn moving_a_level_rebuilds_its_spanning_walls() {
+        let model = split_level_model(Some(1));
+        let (mut cache, _) = SceneCache::new(&model);
+        let mut moved = model.clone();
+        if let Some(l) = moved.levels.iter_mut().find(|l| l.index == 1) {
+            l.elevation = 3.0;
+        }
+        cache.update(&moved);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&moved).digest());
+        let wall = cache.scene().meshes.iter().find(|m| m.object == ArchId(1) && m.material == "wall").expect("wall mesh");
+        assert!((z_range(wall).1 - 5.4).abs() < 1e-3, "top follows the moved level: {}", z_range(wall).1);
+    }
+
+    #[test]
+    fn stacked_models_build_identical_scenes() {
+        let mut model = split_level_model(None);
+        model.levels.retain(|l| l.index != 2);
+        model.walls.push(Wall {
+            id: ArchId(3),
+            base_level: 1,
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            ..Default::default()
+        });
+        let a = Scene3d::build(&model).digest();
+        let b = Scene3d::build(&model.clone()).digest();
+        assert_eq!(a, b);
+        let (cache, _) = SceneCache::new(&model);
+        assert_eq!(cache.scene().digest(), a);
+        let scene = Scene3d::build(&model);
+        let upper = scene.meshes.iter().find(|m| m.object == ArchId(3)).expect("upper wall");
+        assert!((z_range(upper).0 - 2.7).abs() < 1e-3 && (z_range(upper).1 - 5.1).abs() < 1e-3);
     }
 
     #[test]

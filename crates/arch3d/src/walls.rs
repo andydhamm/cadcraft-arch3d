@@ -300,6 +300,10 @@ pub fn elevation_profile(
         vec![Vec2::new(0.0, 0.0), Vec2::new(len, 0.0), Vec2::new(len, max_v), Vec2::new(0.0, max_v)]
     };
 
+    // A spanning wall's openings measure their sill from the wall's bottom (a door on a landing
+    // carries the landing's height as its sill), so the profile's `v` is the sill itself. Single-level
+    // walls keep their historical arithmetic so existing scenes stay byte-identical.
+    let base = if wall.top_level.is_some() { 0.0 } else { base };
     let notches = bottom_door_notches(openings, base, len);
     let outer = if notches.is_empty() { outer } else { outer_with_bottom_door_notches(&outer, len, &notches) };
     let door_holes: Vec<&Opening> = openings
@@ -397,7 +401,7 @@ pub fn roof_top_polyline_in(model: &ArchModel, fp: Option<&cadcraft_arch::roof::
         let mut roof_center = Vec2::ZERO;
         let mut count = 0usize;
         for roof in &model.roofs {
-            if roof.level != wall.base_level {
+            if !crate::wall_reaches_level(wall, roof.level) {
                 continue;
             }
             for plane in &roof.planes {
@@ -422,7 +426,7 @@ pub fn roof_top_polyline_in(model: &ArchModel, fp: Option<&cadcraft_arch::roof::
     // Candidate `u` values: 0, len, and each roof plane ring vertex projected.
     let mut us: Vec<f64> = vec![0.0, len];
     for roof in &model.roofs {
-        if roof.level != wall.base_level {
+        if !crate::wall_reaches_level(wall, roof.level) {
             continue;
         }
         for plane in &roof.planes {
@@ -453,7 +457,7 @@ pub fn roof_top_polyline_in(model: &ArchModel, fp: Option<&cadcraft_arch::roof::
         for side in [-1.0, 1.0] {
             let p = wall.start + dir * u + out * (wall.thickness / 2.0) * side;
             for roof in &model.roofs {
-                if roof.level != wall.base_level {
+                if !crate::wall_reaches_level(wall, roof.level) {
                     continue;
                 }
                 for plane in &roof.planes {
