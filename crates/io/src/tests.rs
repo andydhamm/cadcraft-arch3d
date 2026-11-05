@@ -1511,7 +1511,12 @@ fn hostile_arch_xrecord_never_panics() {
     let full = chunks.join("");
     let payloads = vec!["{", "\"version\": 99}", &full[..full.len() / 3], "{\"version\":99,\"model\":{\"walls\":[]}}"];
     for p in payloads {
-        let bad = text.replace(&chunks[0], p);
+        // The whole record becomes `p`: chunk 0 carries it and the later chunks are emptied. (Replacing chunk 0
+        // alone splices `p` onto the rest of the payload, which can be valid JSON by chance.)
+        let mut bad = text.replace(&chunks[0], p);
+        for c in &chunks[1..] {
+            bad = bad.replace(c.as_str(), "");
+        }
         let back = read_dxf(bad.as_bytes()).unwrap();
         assert!(back.arch.is_empty());
         assert_eq!(back.arch_revision, 0);
