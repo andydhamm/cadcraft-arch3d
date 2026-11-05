@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 12 of 33 segments merged · 0 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 13 of 33 segments merged · 0 of 14 acceptance checks**
 
-7,527 workspace tests passing at the last merge · 772 segments merged in all · 0 of 14 seats working
+7,530 workspace tests passing at the last merge · 773 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,11 +25,11 @@ Updated 2026-11-05 23:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 14 | 14.8 h so far · expected done Nov 06 19:24–Nov 07 23:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 14 | 15.1 h so far · expected done Nov 06 16:57–Nov 07 18:00 UTC |
 
 ## Phase 15 segments
 
-12 merged, 11 queued, 6 merging, 4 escalate
+13 merged, 11 queued, 5 merging, 4 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -39,7 +39,6 @@ Updated 2026-11-05 23:15 UTC. This page and the card in the README are regenerat
 | `p15-arch-pad-split` | arch: the pad follows each level and the entry landing | merging | claude-sonnet-c |
 | `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | escalate |  |
 | `p15-arch3d-spanning-walls` | arch3d: walls from one level's floor to another's ceiling, offset levels | merging | claude-sonnet-d |
-| `p15-cmd-light-sets` | engine: lightset, a camera's light set, render with a light set | merging | mai-flash |
 | `p15-cmd-electrical-view` | engine: view.electrical and level.show | merging | mai-flash-esc |
 | `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | escalate |  |
 | `p15-cmd-library-copy-place` | engine: a copied library item places like its source | merging | claude-sonnet-a |
@@ -48,6 +47,7 @@ Updated 2026-11-05 23:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 23:19 | `p15-cmd-light-sets` | merged | 7,530 pass | mai-flash |
 | Nov 05 22:18 | `p15-render-plan-level` | merged | 7,527 pass | claude-sonnet-d |
 | Nov 05 21:17 | `p15-arch-spanning-walls` | merged | 7,524 pass | claude-sonnet-b |
 | Nov 05 20:17 | `upstream-sync-df6597445` | merged | 7,520 pass | claude-sonnet-c |
@@ -59,23 +59,22 @@ Updated 2026-11-05 23:15 UTC. This page and the card in the README are regenerat
 | Nov 05 15:03 | `p15-cmd-export-view` | merged | 7,489 pass | claude-sonnet-b |
 | Nov 05 14:00 | `harden-p14-cmd-backdrop` | merged | 7,486 pass | tturbo-mac |
 | Nov 05 13:00 | `p15-doc-electrical` | merged | 7,481 pass | bonsai-ws2-a |
-| Nov 05 11:59 | `p15-render3d-clay` | merged | 7,477 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 910 |
-| bonsai-b | bonsai2-27b | idle | 839 |
-| bonsai-ws2-a | bonsai2-27b | gate | 935 |
-| bonsai-ws2-b | bonsai2-27b | agent | 898 |
+| bonsai-b | bonsai2-27b | gate | 839 |
+| bonsai-ws2-a | bonsai2-27b | gate | 936 |
+| bonsai-ws2-b | bonsai2-27b | gate | 898 |
 | claude-sonnet-a | sonnet | merging | 82 |
 | claude-sonnet-b | sonnet | merging | 83 |
 | claude-sonnet-c | sonnet | merging | 36 |
 | claude-sonnet-d | sonnet | merging | 22 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 785 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 786 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | merging | 62 |
+| mai-flash | mai-code-1.1-flash | idle | 62 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 32 |
 | tturbo-mac | tturbo-ultraheretic | merging | 622 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
