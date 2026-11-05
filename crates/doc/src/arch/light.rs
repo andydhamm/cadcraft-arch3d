@@ -138,7 +138,7 @@ pub struct LightFixture {
     pub on: bool,
     /// Dimmer level (0..=1); 1 = full brightness.
     #[serde(default = "default_brightness")]
-    pub brightness: f64;
+    pub brightness: f64,
     /// An area light's size (m): `width` along the fixture's `rotation`, `length` across it. Zero
     /// for a point or spot light.
     #[serde(default, skip_serializing_if = "is_zero")]

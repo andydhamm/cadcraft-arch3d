@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod backdrop;
 pub mod casework;
+pub mod electrical;
 pub mod finish;
 pub mod furnishing;
 pub mod light;
@@ -17,6 +18,7 @@ pub mod paint;
 pub mod site;
 pub use backdrop::*;
 pub use casework::*;
+pub use electrical::*;
 pub use finish::*;
 pub use furnishing::*;
 pub use light::*;
