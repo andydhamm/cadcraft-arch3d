@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("export", "Export...", run_export)
             .menu(&["File", "Export..."])
             .alias(&["exp"])
-            .params("{path? (else returns base64 `data`), format?: dxf|dwg|svg|png|pdf (default: the path's extension)} → {format, bytes, path? | data}")
+            .params("{path? (else returns base64 `data`), format?: dxf|dwg|svg|png|pdf (default: the path's extension), view?: \"v<n>\" (png/svg/pdf of that elevation or section only, framed with a 5 % margin), level?: name|index (the plan of that level; the shown level is restored)} → {format, bytes, path? | data}")
             .noundo(),
         CommandSpec::new("preview", "Plot Preview", run_preview)
             .menu(&["File", "Plot Preview"])
@@ -111,7 +111,143 @@ pub(super) fn deliver_file(cmd: &str, path: &str, bytes: &[u8], hook: Option<sup
 
 // ---------- EXPORT ----------
 
+/// Fraction of a view's extents left empty on every side of a view export.
+const VIEW_MARGIN: f64 = 0.05;
+/// Most entities one view export draws (the view geometry itself is capped far above any real view).
+const MAX_VIEW_ENTITIES: usize = 400_000;
+
 fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
+    let view = match p.get("view") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_str().ok_or_else(|| bad("export", "`view` must be a view id such as \"v0\""))?),
+    };
+    let level = match p.get("level") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v),
+    };
+    if view.is_none() && level.is_none() {
+        return export_inner(s, p);
+    }
+    if view.is_some() && level.is_some() {
+        return Err(bad("export", "give `view` or `level`, not both"));
+    }
+    // The scoped drawing replaces the session's for the export only; the original is put back
+    // whatever the outcome, so the shown level and the entities are untouched.
+    let scoped = match (view, level) {
+        (Some(v), _) => view_drawing(s, p, v)?,
+        (None, Some(l)) => level_drawing(s, l)?,
+        (None, None) => return export_inner(s, p),
+    };
+    let saved = s.state()?.doc.clone();
+    s.state_mut()?.doc = Arc::new(scoped);
+    let r = export_inner(s, p);
+    if let Ok(st) = s.state_mut() {
+        st.doc = saved;
+    }
+    r
+}
+
+/// A drawing holding only the generated geometry of view `label`, framed to its extents plus a 5 % margin.
+fn view_drawing(s: &mut Session, p: &Value, label: &str) -> Result<Drawing> {
+    use cadcraft_doc::arch::DimKind;
+    use cadcraft_doc::{Common, Line, LwPolyline};
+    use cadcraft_geom::{PolyVertex, Vec3};
+
+    let format = str_param(p, "format")
+        .map(|f| f.trim().trim_start_matches('.').to_ascii_lowercase())
+        .or_else(|| str_param(p, "path").map(extension))
+        .unwrap_or_default();
+    if !["png", "svg", "pdf"].contains(&format.as_str()) {
+        return Err(bad("export", "`view` exports an image: `format` must be png, svg or pdf"));
+    }
+    super::arch::views::refresh_views(s);
+    let doc = s.doc()?;
+    let v = doc.arch.view_by_label(label).ok_or_else(|| bad("export", format!("no view `{label}`")))?;
+    let g = v.generated.as_ref().ok_or_else(|| bad("export", format!("view `{label}` has no geometry yet")))?;
+    if let Some(e) = &g.error {
+        return Err(bad("export", format!("view `{label}` could not be generated: {e}")));
+    }
+    if g.lines.len().saturating_add(g.rings.len()).saturating_add(g.dims.len().saturating_mul(3)) > MAX_VIEW_ENTITIES {
+        return Err(bad("export", format!("view `{label}` is too large to export")));
+    }
+    let finite = |a: [f64; 2]| a[0].is_finite() && a[1].is_finite();
+    let mut segs: Vec<([f64; 2], [f64; 2])> = Vec::new();
+    let mut rings: Vec<Vec<[f64; 2]>> = Vec::new();
+    for l in &g.lines {
+        if finite(l.a) && finite(l.b) {
+            segs.push((l.a, l.b));
+        }
+    }
+    for r in &g.rings {
+        if r.points.len() >= 3 && r.points.iter().all(|q| finite(*q)) {
+            rings.push(r.points.clone());
+        }
+    }
+    for d in &g.dims {
+        if !(finite(d.a) && finite(d.b) && finite(d.at)) {
+            continue;
+        }
+        // The dimension line through `at`, with its two extension lines.
+        let (a2, b2) = match d.kind {
+            DimKind::Width => ([d.a[0], d.at[1]], [d.b[0], d.at[1]]),
+            DimKind::Height => ([d.at[0], d.a[1]], [d.at[0], d.b[1]]),
+        };
+        segs.push((a2, b2));
+        segs.push((d.a, a2));
+        segs.push((d.b, b2));
+    }
+    let mut b = Bounds2::EMPTY;
+    for (a, c) in &segs {
+        b.add(Vec2::new(a[0], a[1]));
+        b.add(Vec2::new(c[0], c[1]));
+    }
+    for q in rings.iter().flatten() {
+        b.add(Vec2::new(q[0], q[1]));
+    }
+    if b.is_empty() {
+        return Err(bad("export", format!("view `{label}` has no geometry to export")));
+    }
+    let (w, h) = (b.max.x - b.min.x, b.max.y - b.min.y);
+    let m = w.max(h).max(1e-6) * VIEW_MARGIN;
+
+    let mut out = Drawing::new_metric();
+    let common = Common::default();
+    let add = |out: &mut Drawing, k: EntityKind| out.add(&Space::Model, common.clone(), k).map(|_| ()).map_err(|e| bad("export", e.to_string()));
+    for (a, c) in segs {
+        add(&mut out, EntityKind::Line(Line { a: Vec3::new(a[0], a[1], 0.0), b: Vec3::new(c[0], c[1], 0.0) }))?;
+    }
+    for r in rings {
+        let vertices = r.iter().map(|q| PolyVertex::new(Vec2::new(q[0], q[1]))).collect();
+        add(&mut out, EntityKind::LwPolyline(LwPolyline { vertices, closed: true, const_width: 0.0, elevation: 0.0, plinegen: false }))?;
+    }
+    // Zero-length marks at the margin corners make the drawing's extents the framed rectangle.
+    for (x, y) in [(b.min.x - m, b.min.y - m), (b.max.x + m, b.max.y + m)] {
+        add(&mut out, EntityKind::Line(Line { a: Vec3::new(x, y, 0.0), b: Vec3::new(x, y, 0.0) }))?;
+    }
+    Ok(out)
+}
+
+/// A copy of the drawing whose plan shows level `l` (a name or an index); the session's drawing is not touched.
+fn level_drawing(s: &Session, l: &Value) -> Result<Drawing> {
+    let doc = s.doc()?;
+    let index = match l {
+        Value::String(n) => doc.arch.levels.iter().position(|x| x.name == *n),
+        Value::Number(n) => n.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < doc.arch.levels.len()),
+        _ => return Err(bad("export", "`level` must be a level name or index")),
+    }
+    .ok_or_else(|| bad("export", format!("no level {l}")))?;
+    // `plan_level` is the one level the plan draws; set it on a copy through the model's own serde form.
+    let mut model = serde_json::to_value(&doc.arch).map_err(|e| bad("export", e.to_string()))?;
+    let obj = model.as_object_mut().ok_or_else(|| bad("export", "the architectural model can't be read"))?;
+    obj.insert("plan_level".into(), json!(index));
+    let mut arch: cadcraft_doc::arch::ArchModel = serde_json::from_value(model).map_err(|e| bad("export", e.to_string()))?;
+    arch.views = doc.arch.views.clone();
+    let mut d = doc.clone();
+    d.arch = arch;
+    Ok(d)
+}
+
+fn export_inner(s: &mut Session, p: &Value) -> Result<Value> {
     let hooks = io().ok_or_else(|| bad("export", "file formats are not available in this build"))?;
     let path = str_param(p, "path");
     let format = match str_param(p, "format") {
@@ -622,6 +758,78 @@ mod tests {
             plot: Some(fake_plot),
         });
         io().is_some_and(|h| (h.write)(&Drawing::new_imperial(), "probe.test").is_ok_and(|b| b == b"exchange"))
+    }
+
+    fn view_session() -> Session {
+        use cadcraft_doc::arch::{ArchId, ArchView, ViewGeometry, ViewLine, ViewRing};
+        let mut s = session();
+        let mut g = ViewGeometry { extent: [0.0, 0.0, 4.0, 3.0], ..Default::default() };
+        g.lines.push(ViewLine { a: [0.0, 0.0], b: [4.0, 0.0], ..Default::default() });
+        g.lines.push(ViewLine { a: [4.0, 0.0], b: [4.0, 3.0], ..Default::default() });
+        g.rings.push(ViewRing { points: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], ..Default::default() });
+        let d = s.doc_mut().unwrap();
+        d.arch.views.push(ArchView { id: ArchId(0), name: "front".into(), generated: Some(g), ..Default::default() });
+        // Keep the generated geometry current so the export does not regenerate it.
+        let rev = d.arch_revision;
+        if let Some(v) = d.arch.views.first_mut().and_then(|v| v.generated.as_mut()) {
+            v.revision = rev;
+        }
+        s
+    }
+
+    #[test]
+    fn export_of_a_view_holds_only_that_view() {
+        let ours = our_hooks();
+        let mut s = view_session();
+        if !ours {
+            return;
+        }
+        let before = s.doc().unwrap().model.len();
+        let r = s.execute("export", &json!({ "format": "svg", "view": "v0" })).unwrap();
+        // 2 lines + 1 ring + the two margin marks; the drawing's own entities are not exported.
+        assert_eq!(base64_decode(r["data"].as_str().unwrap()).unwrap(), b"export.svg:5");
+        assert_eq!(s.doc().unwrap().model.len(), before, "the drawing is untouched");
+        let r = s.execute("export", &json!({ "format": "svg" })).unwrap();
+        assert_eq!(base64_decode(r["data"].as_str().unwrap()).unwrap(), format!("export.svg:{before}").into_bytes());
+        assert!(s.execute("export", &json!({ "format": "dxf", "view": "v0" })).is_err(), "a view exports as an image");
+        assert!(s.execute("export", &json!({ "format": "svg", "view": 3 })).is_err());
+        assert!(s.execute("export", &json!({ "format": "svg", "view": "v0", "level": 0 })).is_err());
+    }
+
+    #[test]
+    fn a_missing_view_is_refused() {
+        let ours = our_hooks();
+        let mut s = view_session();
+        if !ours {
+            return;
+        }
+        let e = s.execute("export", &json!({ "format": "png", "view": "v9" })).unwrap_err().to_string();
+        assert!(e.contains("v9"), "{e}");
+        assert!(s.execute("export", &json!({ "format": "png", "view": "" })).is_err());
+    }
+
+    #[test]
+    fn export_of_a_level_plan_restores_the_shown_level() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, name: "Main".into(), ..Default::default() });
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 1, name: "Upper".into(), elevation: 3.0, ..Default::default() });
+        let before = serde_json::to_value(&s.doc().unwrap().arch).unwrap();
+        let doc = s.state().unwrap().doc.clone();
+        for level in [json!("Upper"), json!(0)] {
+            let r = s.execute("export", &json!({ "format": "svg", "level": level })).unwrap();
+            assert_eq!(r["format"], "svg");
+        }
+        assert!(Arc::ptr_eq(&doc, &s.state().unwrap().doc), "the session's drawing is put back");
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().arch).unwrap(), before);
+        assert!(s.execute("export", &json!({ "format": "svg", "level": "Attic" })).is_err());
+        assert!(s.execute("export", &json!({ "format": "svg", "level": 7 })).is_err());
+        assert!(s.execute("export", &json!({ "format": "svg", "level": -1 })).is_err());
+        assert!(Arc::ptr_eq(&doc, &s.state().unwrap().doc));
     }
 
     fn session() -> Session {
