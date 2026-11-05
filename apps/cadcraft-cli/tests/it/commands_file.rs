@@ -24,12 +24,7 @@ fn commands_file_runs_its_steps_in_order() {
         ]"#,
     )
     .unwrap();
-    let (code, _) = run_and_stderr(&[
-        "run",
-        "--sample",
-        "--commands",
-        &file.display().to_string(),
-    ]);
+    let (code, _) = run_and_stderr(&["run", "--sample", "--commands", &file.display().to_string()]);
     assert_eq!(code, 0, "commands file with valid steps should run without error");
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -49,16 +44,8 @@ fn a_bad_commands_file_names_the_step() {
         ]"#,
     )
     .unwrap();
-    let (code, stderr) = run_and_stderr(&[
-        "run",
-        "--sample",
-        "--commands",
-        &file.display().to_string(),
-    ]);
+    let (code, stderr) = run_and_stderr(&["run", "--sample", "--commands", &file.display().to_string()]);
     assert_eq!(code, 2, "a commands file with a bad step should be a usage error (exit 2)");
-    assert!(
-        stderr.contains("step 0"),
-        "error should name the offending step index: {stderr}"
-    );
+    assert!(stderr.contains("step 0"), "error should name the offending step index: {stderr}");
     let _ = std::fs::remove_dir_all(&dir);
 }

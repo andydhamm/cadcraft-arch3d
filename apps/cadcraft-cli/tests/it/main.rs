@@ -1,4 +1,5 @@
 mod cli;
+mod commands_file;
 mod drafting_spacing;
 mod help;
 mod mcp_connect;
