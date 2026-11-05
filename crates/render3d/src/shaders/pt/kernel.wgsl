@@ -233,6 +233,7 @@ fn trace_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let i = id.y * frame.size.x + id.x;
     var sum = vec3<f32>(0.0);
     var sq = 0.0;
+    var hits = 0u;
     for (var k = 0u; k < frame.spp_this_pass; k = k + 1u) {
         let s = frame.sample_base + k;
         var r = rng_new(i, s, frame.seed);
@@ -243,6 +244,7 @@ fn trace_main(@builtin(global_invocation_id) id: vec3<u32>) {
         let near4 = frame.inv_view_proj * vec4<f32>(ndc, 0.0, 1.0);
         let dir = normalize(far4.xyz / far4.w - near4.xyz / near4.w);
         let res = path_radiance(frame.eye.xyz, dir, 0u, AREA_SEEN, 0.0, &r);
+        hits = hits + res.hit;
         if (finite_rgb(res.radiance)) {
             let l = dot(res.radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
             sum = sum + res.radiance;
@@ -255,6 +257,9 @@ fn trace_main(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     accum[i] = accum[i] + vec4<f32>(sum, f32(frame.spp_this_pass));
     accum[frame.size.x * frame.size.y + i].x = accum[frame.size.x * frame.size.y + i].x + sq;
+    // The samples whose camera ray hit a surface: a pixel still at 0 missed on every sample, and only such a pixel
+    // shows the backdrop (tracer.rs `backdrop_composite`), so an edge pixel some samples hit keeps its shading.
+    accum[frame.size.x * frame.size.y + i].y = accum[frame.size.x * frame.size.y + i].y + f32(hits);
 }
 
 @compute @workgroup_size(64)
