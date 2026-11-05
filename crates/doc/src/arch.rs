@@ -3842,4 +3842,110 @@ mod tests {
         assert!(!json.contains("\"connections\""));
         assert!(!json.contains("\"light_sets\""));
     }
+
+    #[test]
+    fn wall_spanning_three_levels_spans_all() {
+        let levels = vec![
+            Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() },
+            Level { index: 1, elevation: 3.0, ceiling_height: 2.8, ..Level::default() },
+            Level { index: 2, elevation: 6.0, ceiling_height: 2.5, ..Level::default() },
+        ];
+        // Wall from level 0 to level 2
+        let wall = Wall { base_level: 0, top_level: Some(2), height: 2.0, ..Wall::default() };
+        assert!(wall.spans_level(&levels[0], &levels), "should span base level");
+        assert!(wall.spans_level(&levels[1], &levels), "should span intermediate level");
+        assert!(wall.spans_level(&levels[2], &levels), "should span top level");
+        // top_z should be level 2's ceiling
+        assert!((wall.top_z(&levels) - 8.5).abs() < 1e-12, "top_z should be 6.0 + 2.5 = 8.5");
+    }
+
+    #[test]
+    fn wall_with_missing_top_level_falls_back_to_height() {
+        let levels = vec![Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() }];
+        // Wall says top_level is 5, but only level 0 exists
+        let wall = Wall { base_level: 0, top_level: Some(5), height: 3.0, ..Wall::default() };
+        // Should fall back to bottom_z + height = 0.0 + 3.0 = 3.0
+        assert!((wall.top_z(&levels) - 3.0).abs() < 1e-12, "should fall back to height when top_level missing");
+        // Should not span a non-existent level 5
+        let phantom = Level { index: 5, elevation: 15.0, ceiling_height: 2.4, ..Level::default() };
+        assert!(!wall.spans_level(&phantom, &levels), "should not span missing top level");
+    }
+
+    #[test]
+    fn wall_with_missing_base_level_returns_zero() {
+        let levels = vec![Level { index: 1, elevation: 3.0, ceiling_height: 2.4, ..Level::default() }];
+        // Wall's base_level is 0, but only level 1 exists
+        let wall = Wall { base_level: 0, height: 2.4, ..Wall::default() };
+        assert!((wall.bottom_z(&levels) - 0.0).abs() < 1e-12, "bottom_z should be 0 when base_level missing");
+        assert!((wall.top_z(&levels) - 2.4).abs() < 1e-12, "top_z should be height when base_level missing");
+    }
+
+    #[test]
+    fn level_by_index_returns_none_for_missing() {
+        let levels = vec![Level { index: 0, elevation: 0.0, ..Level::default() }, Level { index: 2, elevation: 6.0, ..Level::default() }];
+        assert!(level_by_index(&levels, 0).is_some());
+        assert!(level_by_index(&levels, 1).is_none(), "should return None for missing index");
+        assert!(level_by_index(&levels, 2).is_some());
+        assert!(level_by_index(&levels, 99).is_none());
+    }
+
+    #[test]
+    fn level_by_index_returns_first_for_duplicates() {
+        let levels = vec![
+            Level { index: 0, elevation: 0.0, name: "first".into(), ..Level::default() },
+            Level { index: 0, elevation: 1.0, name: "second".into(), ..Level::default() },
+        ];
+        let found = level_by_index(&levels, 0).expect("should find index 0");
+        assert_eq!(found.name, "first", "should return the first level with the given index");
+        assert!((found.elevation - 0.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn ensure_ground_level_does_not_duplicate() {
+        let mut m = ArchModel::default();
+        // Default model already has a level at index 0
+        assert_eq!(m.levels.len(), 1);
+        assert_eq!(m.levels[0].index, 0);
+        // Calling ensure_ground_level again should not add another
+        m.ensure_ground_level();
+        assert_eq!(m.levels.len(), 1, "should not add a duplicate level");
+        // But if we clear levels, it should add one back
+        m.levels.clear();
+        m.ensure_ground_level();
+        assert_eq!(m.levels.len(), 1);
+        assert_eq!(m.levels[0].index, 0);
+    }
+
+    #[test]
+    fn wall_spans_level_at_exact_boundary() {
+        let levels = vec![
+            Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() },
+            Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Level::default() },
+        ];
+        // Wall from level 0 to level 1: top_z = 2.7 + 2.4 = 5.1
+        let wall = Wall { base_level: 0, top_level: Some(1), height: 2.0, ..Wall::default() };
+        let top = wall.top_z(&levels);
+        assert!((top - 5.1).abs() < 1e-12);
+        // A level at exactly top - 0.01 should span
+        let at_boundary = Level { index: 99, elevation: top - 0.01, ceiling_height: 2.4, ..Level::default() };
+        assert!(wall.spans_level(&at_boundary, &levels), "level at top-0.01 should span");
+        // A level at exactly top should not span
+        let at_top = Level { index: 98, elevation: top, ceiling_height: 2.4, ..Level::default() };
+        assert!(!wall.spans_level(&at_top, &levels), "level at top should not span");
+        // A level just below top - 0.01 should span
+        let just_below = Level { index: 97, elevation: top - 0.02, ceiling_height: 2.4, ..Level::default() };
+        assert!(wall.spans_level(&just_below, &levels), "level just below top-0.01 should span");
+    }
+
+    #[test]
+    fn level_kind_serializes_as_camel_case() {
+        let floor = LevelKind::Floor;
+        let landing = LevelKind::Landing;
+        assert_eq!(serde_json::to_string(&floor).unwrap(), "\"floor\"");
+        assert_eq!(serde_json::to_string(&landing).unwrap(), "\"landing\"");
+        let back_floor: LevelKind = serde_json::from_str("\"floor\"").unwrap();
+        let back_landing: LevelKind = serde_json::from_str("\"landing\"").unwrap();
+        assert_eq!(back_floor, LevelKind::Floor);
+        assert_eq!(back_landing, LevelKind::Landing);
+    }
 }
