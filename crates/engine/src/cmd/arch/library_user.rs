@@ -257,7 +257,21 @@ fn run_copy(s: &mut Session, p: &Value) -> Result<Value> {
     copy.folder = rec.category.clone();
     copy.category = cadcraft_arch::library::Category::User.name().to_string();
     copy.kind = ItemKind::Group;
-    let file = UserItemFile { record: copy, objects: StoredObjects::default(), symbols: Default::default(), source_item: Some(item.to_string()) };
+    let (mut objects, mut symbols, mut source_item) = (StoredObjects::default(), Default::default(), Some(item.to_string()));
+    // A copy of a user item takes what places it: a group its objects and symbols, a copy its source (so deleting the
+    // copy in between changes nothing).
+    if item.starts_with("user:") {
+        if let Ok(file) = crate::library::user::read_user_file(&dir, item) {
+            copy.folder = rec.folder.clone();
+            let o = &file.objects;
+            if !(o.furnishings.is_empty() && o.cabinets.is_empty() && o.fixtures.is_empty()) {
+                (objects, symbols, source_item) = (file.objects, file.symbols, file.source_item);
+            } else if file.source_item.is_some() {
+                source_item = file.source_item;
+            }
+        }
+    }
+    let file = UserItemFile { record: copy, objects, symbols, source_item };
     write_user_file(&dir, &file).map_err(|e| bad(COPY, e))?;
     s.library.reload();
     Ok(json!({ "item": file.record.id }))

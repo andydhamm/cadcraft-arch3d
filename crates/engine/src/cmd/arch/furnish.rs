@@ -196,26 +196,57 @@ fn run_place(s: &mut Session, p: &Value) -> Result<Value> {
         elevation: elevation(PLACE, m)?,
         size: size(PLACE, m)?,
     };
+    // A copy of a library item places as the item it copies, under the copy's name.
+    let item = resolve_copy(s, item)?;
+    place_record(s, &item, &req, m)
+}
+
+/// A user item that is a copy of another item (no stored objects, a `source_item`) as the record it
+/// places: the source's record with the copy's `name` and `size`. Any other item comes back as it is.
+fn resolve_copy(s: &Session, item: ItemRecord) -> Result<ItemRecord> {
+    if item.kind != ItemKind::Group || !item.id.starts_with("user:") {
+        return Ok(item);
+    }
+    let Some(dir) = s.library.user_dir() else { return Ok(item) };
+    let Ok(file) = crate::library::user::read_user_file(&dir, &item.id) else { return Ok(item) };
+    let o = &file.objects;
+    let Some(source) = file.source_item.filter(|_| o.furnishings.is_empty() && o.cabinets.is_empty() && o.fixtures.is_empty()) else {
+        return Ok(item);
+    };
+    let mut rec = s
+        .library
+        .item(&source)
+        .cloned()
+        .ok_or_else(|| bad(PLACE, format!("`{}` is a copy of `{source}`, which is not in the library any more", item.id)))?;
+    rec.name = item.name;
+    if item.size.is_some() {
+        rec.size = item.size;
+    }
+    Ok(rec)
+}
+
+/// Place `item` by its kind: the rules for stock items, shared by a copy through its source.
+fn place_record(s: &mut Session, item: &ItemRecord, req: &Request, m: Option<&Map<String, Value>>) -> Result<Value> {
     match item.kind {
-        ItemKind::Symbol => place_symbol(s, &item, &req),
-        ItemKind::FrontStyle => swap_front_style(s, &item, &req),
-        ItemKind::Door | ItemKind::Window => place_opening(s, &item, &req),
+        ItemKind::Symbol => place_symbol(s, item, req),
+        ItemKind::FrontStyle => swap_front_style(s, item, req),
+        ItemKind::Door | ItemKind::Window => place_opening(s, item, req),
         ItemKind::Plant => {
-            let species = built_in_name(&item, "plant:")?;
+            let species = built_in_name(item, "plant:")?;
             via(s, "plant", json!({ "species": species, "at": req.at }))
         }
         ItemKind::LightFixture => {
-            let mut q = json!({ "type": built_in_name(&item, "lightfixture:")?, "at": req.at, "level": req.level });
+            let mut q = json!({ "type": built_in_name(item, "lightfixture:")?, "at": req.at, "level": req.level });
             if let Some(r) = req.rotation {
                 q["rotation"] = json!(r);
             }
             via(s, "lightfixture", q)
         }
-        ItemKind::Cabinet => via(s, "cabinet", casework_params(built_in_name(&item, "cabinet:")?, &req)),
-        ItemKind::Fixture => via(s, "fixture", casework_params(built_in_name(&item, "fixture:")?, &req)),
-        ItemKind::Backdrop => via(s, "backdrop", backdrop_params(&item, m)),
+        ItemKind::Cabinet => via(s, "cabinet", casework_params(built_in_name(item, "cabinet:")?, req)),
+        ItemKind::Fixture => via(s, "fixture", casework_params(built_in_name(item, "fixture:")?, req)),
+        ItemKind::Backdrop => via(s, "backdrop", backdrop_params(item, m)),
         ItemKind::Finish | ItemKind::Material => Err(bad(PLACE, "a material is painted: use paint.material")),
-        ItemKind::Group => crate::library::user::place_group(s, &item, Vec2::new(req.at[0], req.at[1]), req.rotation.unwrap_or(0.0)),
+        ItemKind::Group => crate::library::user::place_group(s, item, Vec2::new(req.at[0], req.at[1]), req.rotation.unwrap_or(0.0)),
     }
 }
 
