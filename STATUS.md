@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-05 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 37 of 37 segments merged · 11 of 13 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house**
 
 7,468 workspace tests passing at the last merge · 757 segments merged in all · 0 of 14 seats working
 
@@ -24,12 +24,12 @@ Updated 2026-11-05 08:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 11 / 13 | 36.8 h so far · expected done Nov 05 08:15–Nov 06 02:51 UTC |
-| 15 | Electrical, technical illustration and the showcase house | planned | — | — |
+| 14 | The library | done | 13 / 13 | 36.9 h |
+| 15 | Electrical, technical illustration and the showcase house | planning | — | 0.1 h so far · expected done Nov 05 12:53–Nov 27 07:32 UTC |
 
-## Phase 14 segments
+## Phase 15 segments
 
-37 merged, 1 abandoned
+none yet
 
 
 ## Recent merges
@@ -61,9 +61,9 @@ Updated 2026-11-05 08:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 769 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 769 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
-| tturbo-mac | tturbo-ultraheretic | gate | 615 |
+| tturbo-mac | tturbo-ultraheretic | agent | 616 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
