@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-05 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 02:59 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 34 of 36 segments merged · 9 of 13 acceptance checks**
 
@@ -24,16 +24,16 @@ Updated 2026-11-05 02:30 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 9 / 13 | 31.0 h so far · expected done Nov 05 03:58–Nov 05 17:41 UTC |
+| 14 | The library | building | 9 / 13 | 31.5 h so far · expected done Nov 05 04:35–Nov 05 19:27 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-34 merged, 1 working, 1 abandoned, 1 merging
+34 merged, 1 escalate, 1 abandoned, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p14-docs-user-guide` | USER-GUIDE: the library; an MCP example | working | mai-flash-esc |
+| `p14-docs-user-guide` | USER-GUIDE: the library; an MCP example | escalate |  |
 | `upstream-sync-5bfcee629` | merge upstream upstream/main up to 5bfcee629 (28 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
@@ -57,17 +57,17 @@ Updated 2026-11-05 02:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 882 |
-| bonsai-b | bonsai2-27b | gate | 820 |
-| bonsai-ws2-a | bonsai2-27b | idle | 907 |
-| bonsai-ws2-b | bonsai2-27b | agent | 871 |
+| bonsai-a | bonsai2-27b | down | 883 |
+| bonsai-b | bonsai2-27b | down | 821 |
+| bonsai-ws2-a | bonsai2-27b | down | 907 |
+| bonsai-ws2-b | bonsai2-27b | down | 872 |
 | claude-sonnet-a | sonnet | idle | 78 |
 | claude-sonnet-b | sonnet | idle | 80 |
-| claude-sonnet-c | sonnet | merging | 34 |
+| claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 766 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | down | 768 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 59 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 24 |
-| tturbo-mac | tturbo-ultraheretic | merging | 613 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 25 |
+| tturbo-mac | tturbo-ultraheretic | agent | 613 |
+| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
