@@ -3558,6 +3558,7 @@ mod tests {
             eye: Some([5.0, -15.0]),
             eye_height: Some(1.7),
             fov_deg: Some(50.0),
+            light_set: None,
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: Camera3d = serde_json::from_str(&json).unwrap();

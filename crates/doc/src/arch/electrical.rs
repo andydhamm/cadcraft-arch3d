@@ -89,6 +89,7 @@ impl ElectricalKind {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WallSide {
+    #[default]
     Left,
     Right,
 }
@@ -147,7 +148,7 @@ impl Default for Connection {
 }
 
 /// The state of one light in a light set.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LightState {
     pub on: bool,
@@ -204,14 +205,14 @@ pub fn connection_label(id: ArchId) -> String {
 pub fn parse_electrical_label(s: &str) -> Option<ArchId> {
     let s = s.trim();
     let digits = if s.starts_with("el") || s.starts_with("EL") { &s[2..] } else { s };
-    u32::from_str_radix(digits, 10).map(ArchId)
+    u32::from_str_radix(digits, 10).ok().map(ArchId)
 }
 
 /// Parse a connection label `cn{n}` into an `ArchId`.
 pub fn parse_connection_label(s: &str) -> Option<ArchId> {
     let s = s.trim();
     let digits = if s.starts_with("cn") || s.starts_with("CN") { &s[2..] } else { s };
-    u32::from_str_radix(digits, 10).map(ArchId)
+    u32::from_str_radix(digits, 10).ok().map(ArchId)
 }
 
 #[cfg(test)]
