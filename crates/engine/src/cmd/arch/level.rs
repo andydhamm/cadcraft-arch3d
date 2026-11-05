@@ -189,7 +189,44 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("level", "Level", run_level)
             .menu(&["Architecture", "Level"])
             .params("{above?: name|index, below?: name|index, index?: n, name?: s, ceiling?: f, structure?: f}"),
+        CommandSpec::new("level.show", "Show Level", run_level_show).menu(&["Architecture", "Show Level"]).params("{level: name|index|\"all\"}"),
     ]
+}
+
+fn resolve_level_show(arch: &cadcraft_doc::arch::ArchModel, value: &Value) -> Result<Option<usize>, crate::EngineError> {
+    match value {
+        Value::String(n) if n.eq_ignore_ascii_case("all") => Ok(None),
+        Value::String(n) => {
+            if let Ok(i) = n.parse::<u64>() {
+                if i < arch.levels.len() as u64 {
+                    return Ok(Some(i as usize));
+                }
+                return Err(crate::EngineError::Other(format!("level.show: no level index {i}")));
+            }
+            arch.levels
+                .iter()
+                .position(|l| l.name.eq_ignore_ascii_case(n))
+                .ok_or_else(|| crate::EngineError::Other(format!("level.show: no level named '{n}'")))
+                .map(Some)
+        }
+        Value::Number(n) => {
+            let i = n.as_u64().ok_or_else(|| crate::EngineError::Other("level.show: level index must be a whole number".to_string()))?;
+            if i < arch.levels.len() as u64 {
+                Ok(Some(i as usize))
+            } else {
+                Err(crate::EngineError::Other(format!("level.show: no level index {i}")))
+            }
+        }
+        _ => Err(crate::EngineError::Other("level.show: `level` must be a name, index or \"all\"".into())),
+    }
+}
+
+pub fn run_level_show(s: &mut Session, p: &Value) -> Result<Value, crate::EngineError> {
+    let level = p.get("level").ok_or_else(|| crate::EngineError::Other("level.show: `level` is required".to_string()))?;
+    let doc = s.doc_mut()?;
+    let index = resolve_level_show(&doc.arch, level)?;
+    doc.arch.plan_level = index.map(|i| i as u32);
+    Ok(serde_json::json!({ "shown": index.map(|i| i as u64) }))
 }
 
 #[cfg(test)]
@@ -741,6 +778,37 @@ mod tests {
             doc.arch.levels.clear();
         }
         let result = s.execute("level", &json!({"below": "Level 1"}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn level_show_sets_the_plan_level() {
+        let mut s = setup_session();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "Level 1".into(), ..Default::default() });
+            doc.arch.levels.push(Level { index: 1, name: "Upper".into(), elevation: 2.7, ..Default::default() });
+        }
+
+        let result = s.execute("level.show", &json!({ "level": "Upper" })).unwrap();
+        assert_eq!(result["shown"], 1);
+        assert_eq!(s.doc().unwrap().arch.plan_level, Some(1));
+
+        s.execute("level.show", &json!({ "level": "all" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.plan_level, None);
+    }
+
+    #[test]
+    fn a_missing_level_is_refused() {
+        let mut s = setup_session();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "Level 1".into(), ..Default::default() });
+        }
+
+        let result = s.execute("level.show", &json!({ "level": "Attic" }));
         assert!(result.is_err());
     }
 }
