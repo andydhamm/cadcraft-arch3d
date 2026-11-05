@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 35 of 36 segments merged · 10 of 13 acceptance checks**
+**Phase 14 of 15: The library — 36 of 37 segments merged · 10 of 13 acceptance checks**
 
-7,449 workspace tests passing at the last merge · 754 segments merged in all · 0 of 14 seats working · PAUSED
+7,449 workspace tests passing at the last merge · 755 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -24,16 +24,16 @@ Updated 2026-11-05 06:15 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 10 / 13 | 34.8 h so far · expected done Nov 05 07:13–Nov 06 00:30 UTC |
+| 14 | The library | building | 10 / 13 | 35.0 h so far · expected done Nov 05 07:27–Nov 06 00:45 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-35 merged, 1 escalate, 1 abandoned
+36 merged, 1 abandoned, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p14-docs-user-guide` | USER-GUIDE: the library; an MCP example | escalate |  |
+| `upstream-sync-c4d9e6ac6` | merge upstream upstream/main up to c4d9e6ac6 (12 commits) | working | mai-flash |
 
 ## Recent merges
 
@@ -57,16 +57,16 @@ Updated 2026-11-05 06:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 883 |
-| bonsai-b | bonsai2-27b | idle | 821 |
-| bonsai-ws2-a | bonsai2-27b | gate | 913 |
-| bonsai-ws2-b | bonsai2-27b | gate | 876 |
+| bonsai-b | bonsai2-27b | gate | 821 |
+| bonsai-ws2-a | bonsai2-27b | idle | 913 |
+| bonsai-ws2-b | bonsai2-27b | idle | 876 |
 | claude-sonnet-a | sonnet | idle | 78 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 768 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 768 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 59 |
+| mai-flash | mai-code-1.1-flash | agent | 59 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
 | tturbo-mac | tturbo-ultraheretic | merging | 614 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
