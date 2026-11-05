@@ -39,7 +39,7 @@ print(f"ok: the rug keeps its texture ({len(textured)} textured material(s))")
 before = node_positions(j, binc, 'furnishing-f2')
 rr, (j2, binc2) = export_glb(cmds + [cmd('furnishing.edit', {"id": "f2", "mirrored": True})], tmp, 'b.glb')
 after = node_positions(j2, binc2, 'furnishing-f2')
-if geometry_key([(2 * 6.0 - x, y, z) for x, y, z in before]) != geometry_key(after):
+if not same_geometry([(2 * 6.0 - x, y, z) for x, y, z in before], after):
     fail("a mirrored armchair is not its mesh reflected across its own x = 6 plane")
 print("ok: mirrored is the mesh reflected")
 
