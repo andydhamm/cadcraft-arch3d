@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 14 of 15: The library — 34 of 36 segments merged · 10 of 13 acceptance checks**
 
-7,457 workspace tests passing at the last merge · 753 segments merged in all · 0 of 14 seats working
+7,457 workspace tests passing at the last merge · 753 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -24,7 +24,7 @@ Updated 2026-11-05 05:30 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 10 / 13 | 34.0 h so far · expected done Nov 05 07:38–Nov 06 03:26 UTC |
+| 14 | The library | building | 10 / 13 | 34.3 h so far · expected done Nov 05 07:53–Nov 06 03:42 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
@@ -59,13 +59,13 @@ Updated 2026-11-05 05:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 883 |
 | bonsai-b | bonsai2-27b | idle | 821 |
-| bonsai-ws2-a | bonsai2-27b | agent | 912 |
-| bonsai-ws2-b | bonsai2-27b | agent | 875 |
+| bonsai-ws2-a | bonsai2-27b | gate | 912 |
+| bonsai-ws2-b | bonsai2-27b | gate | 875 |
 | claude-sonnet-a | sonnet | idle | 78 |
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | down | 768 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 768 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 59 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
