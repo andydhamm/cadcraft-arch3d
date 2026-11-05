@@ -19,7 +19,7 @@ These JSONL files are example sessions for agents using the CADCraft MCP server.
 To replay a session, run:
 
 ```sh
-cadcraft-cli mcp < docs/arch3d/mcp-examples/01-walls-and-openings.jsonl
+cargo run -q -p cadcraft-cli -- mcp < docs/arch3d/mcp-examples/09-library.jsonl
 ```
 
 Ensure you are in a directory where the output files (e.g., `house.dxf`) can be written. The `examples/` directory should be accessible relative to the working directory for the detection example.
