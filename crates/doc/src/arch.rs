@@ -1392,6 +1392,10 @@ pub struct Camera3d {
     pub eye_height: Option<f64>,
     /// Field of view, in degrees.
     pub fov_deg: Option<f64>,
+    /// The light set to apply to this camera's lights (a name into
+    /// [`ArchModel::light_sets`]); `None` = no set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub light_set: Option<String>,
 }
 
 impl Default for Camera3d {
@@ -1406,6 +1410,7 @@ impl Default for Camera3d {
             eye: Some([0.0, -10.0]),
             eye_height: Some(1.6),
             fov_deg: Some(45.0),
+            light_set: None,
         }
     }
 }
@@ -1509,6 +1514,17 @@ pub struct ArchModel {
     pub lights: Vec<LightFixture>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub next_light_id: u32,
+    // Phase 15: electrical devices, connections and light sets, skipped when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub electrical: Vec<ElectricalDevice>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_electrical_id: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub connections: Vec<Connection>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_connection_id: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub light_sets: Vec<LightSet>,
     // Phase 13: cabinets and fixtures, skipped when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cabinets: Vec<Cabinet>,
@@ -1565,6 +1581,11 @@ impl Default for ArchModel {
             next_plant_id: 0,
             lights: Vec::new(),
             next_light_id: 0,
+            electrical: Vec::new(),
+            next_electrical_id: 0,
+            connections: Vec::new(),
+            next_connection_id: 0,
+            light_sets: Vec::new(),
             cabinets: Vec::new(),
             next_cabinet_id: 0,
             fixtures: Vec::new(),
@@ -1658,6 +1679,9 @@ impl ArchModel {
             && self.plants.is_empty()
             && self.plant_species.is_empty()
             && self.lights.is_empty()
+            && self.electrical.is_empty()
+            && self.connections.is_empty()
+            && self.light_sets.is_empty()
             && self.cabinets.is_empty()
             && self.fixtures.is_empty()
             && self.furnishings.is_empty()
@@ -1702,6 +1726,24 @@ impl ArchModel {
         self.next_fixture_id = self.next_fixture_id.saturating_add(1);
         f.id = id;
         self.fixtures.push(f);
+        id
+    }
+
+    /// Add an electrical device and return its new id.
+    pub fn push_electrical(&mut self, mut d: ElectricalDevice) -> ArchId {
+        let id = ArchId(self.next_electrical_id);
+        self.next_electrical_id = self.next_electrical_id.saturating_add(1);
+        d.id = id;
+        self.electrical.push(d);
+        id
+    }
+
+    /// Add a connection and return its new id.
+    pub fn push_connection(&mut self, mut c: Connection) -> ArchId {
+        let id = ArchId(self.next_connection_id);
+        self.next_connection_id = self.next_connection_id.saturating_add(1);
+        c.id = id;
+        self.connections.push(c);
         id
     }
 
@@ -3646,5 +3688,14 @@ mod tests {
         );
         assert_eq!(m.set_camera(Camera3d { name: "inf3".into(), fov_deg: Some(f64::INFINITY), ..Camera3d::default() }), Err(CameraError::NotFinite));
         assert_eq!(m.cameras.len(), 0);
+    }
+
+    #[test]
+    fn a_drawing_without_electrical_serializes_as_before() {
+        let d = Drawing::new_metric();
+        let json = serde_json::to_string(&d.arch).unwrap();
+        assert!(!json.contains("\"electrical\""));
+        assert!(!json.contains("\"connections\""));
+        assert!(!json.contains("\"light_sets\""));
     }
 }
