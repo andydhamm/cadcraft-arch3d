@@ -617,6 +617,13 @@ pub enum LevelKind {
     Landing,
 }
 
+impl LevelKind {
+    /// True for [`LevelKind::Floor`], the default (used to skip it when serializing).
+    pub fn is_floor(&self) -> bool {
+        *self == LevelKind::Floor
+    }
+}
+
 /// A building level (floor plate).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -626,7 +633,8 @@ pub struct Level {
     pub elevation: f64,
     pub ceiling_height: f64,
     pub structure: f64,
-    #[serde(default)]
+    /// Floor or landing. Not written for a floor, so a drawing without landings keeps its old payload.
+    #[serde(default, skip_serializing_if = "LevelKind::is_floor")]
     pub kind: LevelKind,
 }
 
@@ -2723,6 +2731,18 @@ mod tests {
     fn level_kind_defaults_to_floor() {
         assert_eq!(LevelKind::default(), LevelKind::Floor);
         assert_eq!(Level::default().kind, LevelKind::Floor);
+    }
+
+    #[test]
+    fn a_floor_level_serializes_as_before_and_a_landing_keeps_its_kind() {
+        // A drawing without landings writes the payload it wrote before level kinds existed.
+        let floor = serde_json::to_value(Level::default()).unwrap();
+        assert!(floor.get("kind").is_none(), "a floor level writes no kind: {floor}");
+        let landing = Level { index: 1, elevation: 1.35, kind: LevelKind::Landing, ..Level::default() };
+        let v = serde_json::to_value(&landing).unwrap();
+        assert_eq!(v.get("kind").and_then(|k| k.as_str()), Some("landing"));
+        let back: Level = serde_json::from_value(v).unwrap();
+        assert_eq!(back, landing);
     }
 
     #[test]
