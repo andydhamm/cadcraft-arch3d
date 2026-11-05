@@ -36,6 +36,18 @@ fn image_key(item: &str) -> String {
     format!("item:{item}")
 }
 
+/// The one texture an image backdrop `b` needs out of `textures` (`Scene3d.textures`), under its own key, for a
+/// renderer that keeps a copy (the path tracer); empty for a colour, a gradient, none or a missing image.
+pub fn image_textures(b: Option<&Backdrop>, textures: &BTreeMap<String, ImageRgba>) -> BTreeMap<String, ImageRgba> {
+    match b {
+        Some(Backdrop::Image { item, .. }) => {
+            let key = image_key(item);
+            textures.get(&key).map(|img| BTreeMap::from([(key, img.clone())])).unwrap_or_default()
+        }
+        _ => BTreeMap::new(),
+    }
+}
+
 /// The usable image of `b` in `textures`, with its projection.
 fn image_of<'a>(b: &Backdrop, textures: &'a BTreeMap<String, ImageRgba>) -> Option<(&'a ImageRgba, Projection)> {
     match b {
