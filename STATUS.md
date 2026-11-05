@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-05 09:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 10:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 0 of 31 segments merged · 0 of 13 acceptance checks**
 
@@ -25,20 +25,20 @@ Updated 2026-11-05 09:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 1.3 h so far · expected done Nov 05 17:27–Nov 09 11:05 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 1.6 h so far · expected done Nov 05 17:42–Nov 09 11:20 UTC |
 
 ## Phase 15 segments
 
-25 queued, 5 working, 1 gate
+25 queued, 6 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-doc-electrical` | doc: electrical devices, connections, light sets, light brightness | gate | bonsai-ws2-b |
-| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | working | bonsai-a |
-| `p15-i18n-labels` | ui-egui: translations for every phase-15 command and menu entry | working | claude-sonnet-a |
-| `p15-cmd-export-view` | engine: export one view or one level's plan | working | claude-sonnet-b |
-| `p15-render3d-clay` | render3d: the clay style | working | darwin-ws3 |
-| `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | working | bonsai-b |
+| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | gate | bonsai-a |
+| `p15-i18n-labels` | ui-egui: translations for every phase-15 command and menu entry | gate | claude-sonnet-a |
+| `p15-cmd-export-view` | engine: export one view or one level's plan | gate | claude-sonnet-b |
+| `p15-render3d-clay` | render3d: the clay style | gate | darwin-ws3 |
+| `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | gate | bonsai-b |
 
 ## Recent merges
 
@@ -61,17 +61,17 @@ Updated 2026-11-05 09:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 883 |
-| bonsai-b | bonsai2-27b | agent | 822 |
-| bonsai-ws2-a | bonsai2-27b | agent | 913 |
+| bonsai-a | bonsai2-27b | gate | 883 |
+| bonsai-b | bonsai2-27b | gate | 822 |
+| bonsai-ws2-a | bonsai2-27b | gate | 913 |
 | bonsai-ws2-b | bonsai2-27b | gate | 876 |
-| claude-sonnet-a | sonnet | agent | 78 |
-| claude-sonnet-b | sonnet | agent | 80 |
+| claude-sonnet-a | sonnet | gate | 78 |
+| claude-sonnet-b | sonnet | gate | 80 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 769 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 770 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
-| tturbo-mac | tturbo-ultraheretic | agent | 618 |
+| tturbo-mac | tturbo-ultraheretic | gate | 618 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
