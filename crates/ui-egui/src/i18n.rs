@@ -632,6 +632,172 @@ mod uk_tests {
             assert_ne!(t("cmd.deck"), "cmd.deck");
         });
     }
+
+    #[test]
+    fn uk_phase15_labels_exist() {
+        let source = uk_source();
+        let required = [
+            "Outlet",
+            "Switch",
+            "Edit Electrical",
+            "Delete Electrical",
+            "Connection",
+            "Edit Connection",
+            "Delete Connection",
+            "Circuit Brightness",
+            "Auto Outlets",
+            "Light Set",
+            "Electrical View",
+            "Show Level",
+            "Edit Level",
+            "Electrical",
+            "Duplex Outlet",
+            "GFCI Outlet",
+            "240 V Outlet",
+            "Single-Pole Switch",
+            "Three-Way Switch",
+            "Dimmer Switch",
+            "Clay",
+            "Technical Illustration",
+            "Landing",
+            "Dining",
+            "Family",
+            "Entry",
+            "Laundry",
+            "Planting Bed",
+        ];
+        for key in required {
+            assert!(source.contains(key), "missing Ukrainian translation for: {}", key);
+        }
+    }
+
+    #[test]
+    fn uk_phase15_labels_translated() {
+        with_language("uk", || {
+            let labels = [
+                "Outlet",
+                "Switch",
+                "Edit Electrical",
+                "Delete Electrical",
+                "Connection",
+                "Edit Connection",
+                "Delete Connection",
+                "Circuit Brightness",
+                "Auto Outlets",
+                "Light Set",
+                "Electrical View",
+                "Show Level",
+                "Edit Level",
+                "Electrical",
+                "Duplex Outlet",
+                "GFCI Outlet",
+                "240 V Outlet",
+                "Single-Pole Switch",
+                "Three-Way Switch",
+                "Dimmer Switch",
+                "Clay",
+                "Technical Illustration",
+                "Landing",
+                "Dining",
+                "Family",
+                "Entry",
+                "Laundry",
+                "Planting Bed",
+            ];
+            for source in labels {
+                let translated = t(source);
+                assert_ne!(translated, source, "phase-15 label not translated: {source}");
+                assert!(translated.chars().any(|c| !c.is_ascii()), "{source}: translation has no Cyrillic characters: {translated}");
+            }
+        });
+    }
+}
+
+#[cfg(test)]
+mod zh_tests {
+    use super::*;
+
+    fn zh_source() -> &'static str {
+        include_str!("i18n/zh.tsv")
+    }
+
+    #[test]
+    fn zh_phase15_labels_exist() {
+        let source = zh_source();
+        let required = [
+            "Outlet",
+            "Switch",
+            "Edit Electrical",
+            "Delete Electrical",
+            "Connection",
+            "Edit Connection",
+            "Delete Connection",
+            "Circuit Brightness",
+            "Auto Outlets",
+            "Light Set",
+            "Electrical View",
+            "Show Level",
+            "Edit Level",
+            "Electrical",
+            "Duplex Outlet",
+            "GFCI Outlet",
+            "240 V Outlet",
+            "Single-Pole Switch",
+            "Three-Way Switch",
+            "Dimmer Switch",
+            "Clay",
+            "Technical Illustration",
+            "Landing",
+            "Dining",
+            "Family",
+            "Entry",
+            "Laundry",
+            "Planting Bed",
+        ];
+        for key in required {
+            assert!(source.contains(key), "missing Chinese translation for: {}", key);
+        }
+    }
+
+    #[test]
+    fn zh_phase15_labels_translated() {
+        with_language("zh", || {
+            let labels = [
+                "Outlet",
+                "Switch",
+                "Edit Electrical",
+                "Delete Electrical",
+                "Connection",
+                "Edit Connection",
+                "Delete Connection",
+                "Circuit Brightness",
+                "Auto Outlets",
+                "Light Set",
+                "Electrical View",
+                "Show Level",
+                "Edit Level",
+                "Electrical",
+                "Duplex Outlet",
+                "GFCI Outlet",
+                "240 V Outlet",
+                "Single-Pole Switch",
+                "Three-Way Switch",
+                "Dimmer Switch",
+                "Clay",
+                "Technical Illustration",
+                "Landing",
+                "Dining",
+                "Family",
+                "Entry",
+                "Laundry",
+                "Planting Bed",
+            ];
+            for source in labels {
+                let translated = t(source);
+                assert_ne!(translated, source, "phase-15 label not translated: {source}");
+            }
+        });
+    }
 }
 
 /// `name` lowercased with the Latin accents that occur in language names folded away, so a
