@@ -681,3 +681,41 @@ fn vietnamese_takes_one_form_and_needs_a_font_with_its_letters() {
         assert_eq!(Preference::Vietnamese.name(), "Vietnamese");
     }
 }
+
+#[test]
+fn uk_rows_for_phase15_labels_exist() {
+    with_language("uk", || {
+        for source in [
+            "Outlet",
+            "Switch",
+            "Edit Electrical",
+            "Delete Electrical",
+            "Connection",
+            "Edit Connection",
+            "Delete Connection",
+            "Circuit Brightness",
+            "Auto Outlets",
+            "Light Set",
+            "Electrical View",
+            "Show Level",
+            "Edit Level",
+            "Electrical",
+            "Duplex Outlet",
+            "GFCI Outlet",
+            "240 V Outlet",
+            "Single-Pole Switch",
+            "Three-Way Switch",
+            "Dimmer Switch",
+            "Clay",
+            "Technical Illustration",
+            "Landing",
+            "Dining",
+            "Family",
+            "Entry",
+            "Laundry",
+            "Planting Bed",
+        ] {
+            assert_ne!(t(source), source, "uk row missing for {source}");
+        }
+    });
+}
