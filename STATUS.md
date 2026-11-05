@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 1 of 31 segments merged · 0 of 13 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 2 of 31 segments merged · 0 of 13 acceptance checks**
 
-7,474 workspace tests passing at the last merge · 759 segments merged in all · 0 of 14 seats working
+7,477 workspace tests passing at the last merge · 760 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,24 +25,25 @@ Updated 2026-11-05 11:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 3.3 h so far · expected done Nov 07 03:32–Nov 19 17:03 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 3.6 h so far · expected done Nov 06 17:35–Nov 10 17:29 UTC |
 
 ## Phase 15 segments
 
-25 queued, 3 merging, 2 working, 1 merged
+24 queued, 3 merging, 2 merged, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-doc-electrical` | doc: electrical devices, connections, light sets, light brightness | working | bonsai-ws2-b |
-| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | working | mai-flash-esc |
+| `p15-doc-electrical` | doc: electrical devices, connections, light sets, light brightness | merging | bonsai-ws2-b |
+| `p15-doc-levels` | doc: level kinds, walls spanning levels, room types, planting beds, the shown plan level | gate | mai-flash-esc |
 | `p15-cmd-export-view` | engine: export one view or one level's plan | merging | claude-sonnet-b |
-| `p15-render3d-clay` | render3d: the clay style | merging | darwin-ws3 |
+| `p15-render3d-technical` | render3d: technical illustration (optional) | working | darwin-ws3 |
 | `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | merging | bonsai-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 11:59 | `p15-render3d-clay` | merged | 7,477 pass | darwin-ws3 |
 | Nov 05 11:12 | `p15-i18n-labels` | merged | 7,474 pass | claude-sonnet-a |
 | Nov 05 09:01 | `harden-p14-docs-user-guide` | merged | 7,473 pass | tturbo-mac |
 | Nov 05 07:46 | `upstream-sync-c4d9e6ac6` | merged | 7,468 pass | bonsai-b |
@@ -54,23 +55,22 @@ Updated 2026-11-05 11:45 UTC. This page and the card in the README are regenerat
 | Nov 05 00:16 | `p14-cmd-user-catalog` | merged | 7,374 pass | mai-flash-esc |
 | Nov 04 23:49 | `harden-p14-arch3d-cabinet-parts` | merged | 7,365 pass | tturbo-mac |
 | Nov 04 22:43 | `p14-r3d-pt-backdrop` | merged | 7,359 pass | bonsai-b |
-| Nov 04 22:02 | `p14-ui-library-place` | merged | 7,357 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 888 |
+| bonsai-a | bonsai2-27b | gate | 888 |
 | bonsai-b | bonsai2-27b | merging | 826 |
 | bonsai-ws2-a | bonsai2-27b | merging | 916 |
-| bonsai-ws2-b | bonsai2-27b | agent | 881 |
+| bonsai-ws2-b | bonsai2-27b | merging | 882 |
 | claude-sonnet-a | sonnet | idle | 79 |
 | claude-sonnet-b | sonnet | merging | 81 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 772 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 772 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 25 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 25 |
 | tturbo-mac | tturbo-ultraheretic | merging | 619 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
