@@ -300,8 +300,7 @@ mod tests {
         crate::library::testing::install_io();
         let mut s = crate::Session::new();
         for c in Category::ALL {
-            let r = run_library_icon(&mut s, &json!({"category": c.name(), "cache": false}))
-                .unwrap_or_else(|e| panic!("{}: {e}", c.name()));
+            let r = run_library_icon(&mut s, &json!({"category": c.name(), "cache": false})).unwrap_or_else(|e| panic!("{}: {e}", c.name()));
             assert!(r["png"].as_str().is_some_and(|p| !p.is_empty()), "{}", c.name());
         }
     }

@@ -506,7 +506,7 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'wall {"points": [[0,0],[4,0],[4,3],[0,3],[0,0]], "thickness": 0.2, "height": 2.4, "exterior": true}' \
   --cmd 'cabinet {"kind": "base", "wall": "w0", "offset": 0.5, "width": 0.6}' \
   --cmd 'arch.default {"id": "cb0"}' \
-  --cmd 'cabinet {"wall": "w0", "offset": 1.5}' \
+  --cmd 'cabinet {"kind": "base", "wall": "w0", "offset": 1.5}' \
   --cmd 'arch.inspect {"cabinets": true}'
 ```
 
