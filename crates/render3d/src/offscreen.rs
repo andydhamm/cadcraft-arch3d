@@ -112,6 +112,9 @@ pub enum Style {
     HiddenLine,
     /// Translucent faces without depth writes.
     GlassHouse,
+    /// Every material a plain grey (#b4b4b4, metallic 0, roughness 0.8), no texture, no tint;
+    /// lighting as [`Style::Shaded`] (phase 15).
+    Clay,
 }
 
 impl Style {
@@ -121,6 +124,7 @@ impl Style {
             Style::ShadedEdges => STYLE_SHADED_EDGES,
             Style::HiddenLine => STYLE_HIDDEN_LINE,
             Style::GlassHouse => STYLE_GLASS_HOUSE,
+            Style::Clay => crate::pipeline::STYLE_CLAY,
         }
     }
 }
@@ -380,9 +384,11 @@ impl Offscreen {
         let eye = camera.eye();
         let eye = [eye.x as f32, eye.y as f32, eye.z as f32];
         if let Some(slots) = &self.slots {
+            let clay = matches!(opts.style, Style::Clay);
             let mut bytes = vec![0u8; (draws * self.stride) as usize];
             for (i, d) in meshes.draws.iter().enumerate() {
-                let u = GpuUniform::new(vp, l.dir, l.ambient, d.albedo);
+                let albedo = if clay { crate::pipeline::CLAY_ALBEDO } else { d.albedo };
+                let u = GpuUniform::new(vp, l.dir, l.ambient, albedo);
                 let at = i * self.stride as usize;
                 bytes[at..at + UNIFORM_SIZE as usize].copy_from_slice(bytemuck::bytes_of(&u));
             }
@@ -871,12 +877,33 @@ mod offscreen_behavior_tests {
 
     #[test]
     fn style_codes_are_distinct() {
-        let codes: Vec<u32> = [Style::Shaded, Style::ShadedEdges, Style::HiddenLine, Style::GlassHouse].iter().map(|s| s.code()).collect();
+        let codes: Vec<u32> =
+            [Style::Shaded, Style::ShadedEdges, Style::HiddenLine, Style::GlassHouse, Style::Clay].iter().map(|s| s.code()).collect();
         for i in 0..codes.len() {
             for j in i + 1..codes.len() {
                 assert_ne!(codes[i], codes[j], "style codes must be distinct");
             }
         }
+    }
+
+    #[test]
+    fn clay_style_renders_every_material_grey() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let size = (160u32, 120u32);
+        let mut off = Offscreen::with_device(device, queue, size);
+        let scene = cube_scene();
+        let camera = Camera::Orbit(crate::camera::Orbit::at_origin(30.0, 30.0, 8.0, 45.0));
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &RenderOptions { style: Style::Clay, ..Default::default() });
+        let rgba = off.read_rgba().expect("readback");
+        // The model pixels are the clay grey lit by the default light: no material's own colour
+        // shows through (the cube's material is "concrete", which would otherwise tint it).
+        assert!(!rgba.is_empty(), "clay renders");
+        let bg = |p: &[u8]| p[..3].iter().zip([39u8, 44, 52]).all(|(a, b)| a.abs_diff(b) <= 2);
+        let model: Vec<usize> = rgba.chunks_exact(4).enumerate().filter(|(_, p)| !bg(p)).map(|(i, _)| i).collect();
+        assert!(!model.is_empty(), "the cube must be visible in clay");
     }
 
     #[test]
