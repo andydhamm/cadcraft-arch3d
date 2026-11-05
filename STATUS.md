@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 14 of 15: The library — 36 of 37 segments merged · 10 of 13 acceptance checks**
+**Phase 14 of 15: The library — 36 of 37 segments merged · 11 of 13 acceptance checks**
 
-7,449 workspace tests passing at the last merge · 755 segments merged in all · 0 of 14 seats working
+7,453 workspace tests passing at the last merge · 756 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -24,21 +24,22 @@ Updated 2026-11-05 07:00 UTC. This page and the card in the README are regenerat
 | 11 | Ray-traced Finalize Render | done | 13 / 13 | 15.5 h |
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
-| 14 | The library | building | 10 / 13 | 35.5 h so far · expected done Nov 05 08:04–Nov 06 03:17 UTC |
+| 14 | The library | building | 11 / 13 | 35.8 h so far · expected done Nov 05 08:19–Nov 06 03:31 UTC |
 | 15 | Electrical, technical illustration and the showcase house | planned | — | — |
 
 ## Phase 14 segments
 
-36 merged, 1 abandoned, 1 gate
+36 merged, 1 abandoned, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-c4d9e6ac6` | merge upstream upstream/main up to c4d9e6ac6 (12 commits) | gate | mai-flash |
+| `upstream-sync-c4d9e6ac6` | merge upstream upstream/main up to c4d9e6ac6 (12 commits) | merging | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 07:14 | `harden-p14-cache-furnishing-edits` | merged | 7,453 pass | tturbo-mac |
 | Nov 05 05:59 | `upstream-sync-5bfcee629` | merged | 7,449 pass | claude-sonnet-c |
 | Nov 05 04:42 | `harden-p14-cmd-user-catalog` | merged | 7,457 pass | tturbo-mac |
 | Nov 05 01:23 | `harden-p14-r3d-pt-backdrop` | refused | 0 pass | tturbo-mac |
@@ -50,7 +51,6 @@ Updated 2026-11-05 07:00 UTC. This page and the card in the README are regenerat
 | Nov 04 21:39 | `p14-cache-furnishing-edits` | merged | 7,352 pass | claude-sonnet-c |
 | Nov 04 21:13 | `p14-cmd-defaults` | merged | 7,351 pass | claude-sonnet-d |
 | Nov 04 20:37 | `p14-ui-library-panel` | merged | 7,344 pass | claude-sonnet-a |
-| Nov 04 20:10 | `harden-p14-inspect` | merged | 7,340 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -66,7 +66,7 @@ Updated 2026-11-05 07:00 UTC. This page and the card in the README are regenerat
 | claude-sonnet-d | sonnet | idle | 20 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 769 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 59 |
+| mai-flash | mai-code-1.1-flash | merging | 60 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
-| tturbo-mac | tturbo-ultraheretic | merging | 614 |
+| tturbo-mac | tturbo-ultraheretic | agent | 614 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
