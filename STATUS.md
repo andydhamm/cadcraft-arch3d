@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-05 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 10:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 0 of 31 segments merged · 0 of 13 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-05 10:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 2.1 h so far · expected done Nov 05 18:12–Nov 09 11:50 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 2.3 h so far · expected done Nov 05 18:27–Nov 09 12:05 UTC |
 
 ## Phase 15 segments
 
-25 queued, 4 gate, 1 merging, 1 working
+25 queued, 5 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Updated 2026-11-05 10:30 UTC. This page and the card in the README are regenerat
 | `p15-i18n-labels` | ui-egui: translations for every phase-15 command and menu entry | merging | claude-sonnet-a |
 | `p15-cmd-export-view` | engine: export one view or one level's plan | gate | claude-sonnet-b |
 | `p15-render3d-clay` | render3d: the clay style | gate | darwin-ws3 |
-| `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | working | bonsai-b |
+| `p15-cli-commands-file` | cadcraft-cli: run --commands FILE.json | gate | bonsai-b |
 
 ## Recent merges
 
@@ -62,7 +62,7 @@ Updated 2026-11-05 10:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 884 |
-| bonsai-b | bonsai2-27b | agent | 823 |
+| bonsai-b | bonsai2-27b | gate | 823 |
 | bonsai-ws2-a | bonsai2-27b | gate | 913 |
 | bonsai-ws2-b | bonsai2-27b | gate | 877 |
 | claude-sonnet-a | sonnet | merging | 79 |
