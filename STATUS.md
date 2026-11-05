@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 09:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house**
 
-7,473 workspace tests passing at the last merge · 758 segments merged in all · 0 of 14 seats working
+7,473 workspace tests passing at the last merge · 758 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-05 09:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | planning | — | 0.8 h so far · expected done Nov 05 12:53–Nov 27 07:32 UTC |
+| 15 | Electrical, technical illustration and the showcase house | planning | — | 1.1 h so far · expected done Nov 05 12:53–Nov 27 07:32 UTC |
 
 ## Phase 15 segments
 
@@ -61,9 +61,8 @@ none yet
 | claude-sonnet-b | sonnet | idle | 80 |
 | claude-sonnet-c | sonnet | idle | 34 |
 | claude-sonnet-d | sonnet | idle | 20 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 769 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 60 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 25 |
-| tturbo-mac | tturbo-ultraheretic | agent | 617 |
+| tturbo-mac | tturbo-ultraheretic | agent | 618 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
