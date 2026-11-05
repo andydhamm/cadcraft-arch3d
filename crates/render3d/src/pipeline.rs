@@ -227,26 +227,6 @@ pub fn clay_draw() -> Draw {
     Draw { albedo, metallic, roughness, alpha, layer: 0, tile: [1.0, 1.0], ..Default::default() }
 }
 
-/// The clay [`Draw`] of a mesh: [`clay_pbr`], no texture layer, tile [1, 1].
-pub fn clay_draw() -> Draw {
-    let (albedo, metallic, roughness, alpha) = clay_pbr();
-    Draw { albedo, metallic, roughness, alpha, layer: 0, tile: [1.0, 1.0], ..Default::default() }
-}
-        let (albedo, metallic, roughness, alpha) = material_pbr(material);
-        return Draw { albedo, metallic, roughness, alpha, layer: crate::textures::layer_for(material), ..Default::default() };
-    };
-    let (mut albedo, metallic, roughness, alpha) = material_def_pbr(def);
-    let mut layer = 0;
-    if let Some(key) = def.texture.as_deref() {
-        if let Some(l) = layers.layer_of(key) {
-            layer = l;
-        } else if let Some(mean) = scene.textures.get(key).and_then(crate::textures::mean_linear) {
-            albedo = [albedo[0] * mean[0], albedo[1] * mean[1], albedo[2] * mean[2]];
-        }
-    }
-    Draw { albedo, metallic, roughness, alpha, layer, tile: def.tile, ..Default::default() }
-}
-
 /// Linear albedo for an arch3d material name. Unknown names are a neutral grey, so a new
 /// material still renders lit; names are matched by prefix (`wall-exterior` is a wall).
 pub fn material_albedo(material: &str) -> [f32; 3] {
@@ -1309,8 +1289,18 @@ mod tests {
         assert_eq!((d.albedo, d.metallic, d.roughness, d.alpha, d.layer, d.tile), (albedo, 0.0, 0.8, 1.0, 0, [1.0, 1.0]));
 
         // A textured MaterialDef and a plain material both take the clay look in the uniform.
-        let def = MaterialDef { base_color: [0.1, 0.9, 0.2, 1.0], metallic: 1.0, roughness: 0.1, texture: Some("sym:k:t0".into()), ..Default::default() };
-        let textured = Draw { albedo: def.base_color[..3].try_into().unwrap_or([0.0; 3]), metallic: def.metallic, roughness: def.roughness, alpha: 1.0, layer: 3, tile: [2.0, 3.0], emissive: 1.0, ..Default::default() };
+        let def =
+            MaterialDef { base_color: [0.1, 0.9, 0.2, 1.0], metallic: 1.0, roughness: 0.1, texture: Some("sym:k:t0".into()), ..Default::default() };
+        let textured = Draw {
+            albedo: def.base_color[..3].try_into().unwrap_or([0.0; 3]),
+            metallic: def.metallic,
+            roughness: def.roughness,
+            alpha: 1.0,
+            layer: 3,
+            tile: [2.0, 3.0],
+            emissive: 1.0,
+            ..Default::default()
+        };
         let plain = Draw { albedo: [0.5, 0.3, 0.1], roughness: 0.9, layer: crate::textures::layer_for("wall"), ..Default::default() };
         for draw in [&textured, &plain] {
             let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, draw, STYLE_CLAY, [0.0; 3]);

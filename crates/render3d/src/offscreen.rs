@@ -877,7 +877,8 @@ mod offscreen_behavior_tests {
 
     #[test]
     fn style_codes_are_distinct() {
-        let codes: Vec<u32> = [Style::Shaded, Style::ShadedEdges, Style::HiddenLine, Style::GlassHouse, Style::Clay].iter().map(|s| s.code()).collect();
+        let codes: Vec<u32> =
+            [Style::Shaded, Style::ShadedEdges, Style::HiddenLine, Style::GlassHouse, Style::Clay].iter().map(|s| s.code()).collect();
         for i in 0..codes.len() {
             for j in i + 1..codes.len() {
                 assert_ne!(codes[i], codes[j], "style codes must be distinct");
