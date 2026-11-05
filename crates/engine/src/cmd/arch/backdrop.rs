@@ -196,4 +196,65 @@ mod tests {
         assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
         assert!(s.doc().unwrap().arch.backdrop.is_none());
     }
+
+    #[test]
+    fn backdrop_uppercase_hex_normalised_to_lowercase() {
+        let mut s = session();
+        let r = s.execute("backdrop", &json!({"kind": "colour", "colour": "#FFFFFF"})).unwrap();
+        assert_eq!(r["backdrop"]["colour"], json!("#ffffff"));
+        let r = s.execute("backdrop", &json!({"kind": "gradient", "top": "#AABBCC", "bottom": "#DD EE FF"})).unwrap();
+        assert_eq!(r["backdrop"]["top"], json!("#aabbcc"));
+        assert_eq!(r["backdrop"]["bottom"], json!("#ddee ff"));
+    }
+
+    #[test]
+    fn backdrop_refuses_extra_fields_per_kind() {
+        let mut s = session();
+        let bads = [
+            json!({"kind": "colour", "colour": "#ffffff", "projection": "flat"}),
+            json!({"kind": "colour", "colour": "#ffffff", "item": "own:backdrop-sky"}),
+            json!({"kind": "colour", "colour": "#ffffff", "top": "#000000"}),
+            json!({"kind": "colour", "colour": "#ffffff", "bottom": "#000000"}),
+            json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff", "colour": "#808080"}),
+            json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff", "item": "own:backdrop-sky"}),
+            json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff", "projection": "flat"}),
+            json!({"kind": "image", "item": "own:backdrop-sky", "colour": "#ffffff"}),
+            json!({"kind": "image", "item": "own:backdrop-sky", "top": "#000000"}),
+            json!({"kind": "image", "item": "own:backdrop-sky", "bottom": "#ffffff"}),
+            json!({"kind": "none", "colour": "#ffffff"}),
+            json!({"kind": "none", "item": "own:backdrop-sky"}),
+        ];
+        for p in &bads {
+            assert!(s.execute("backdrop", p).is_err(), "should refuse {p}");
+        }
+    }
+
+    #[test]
+    fn backdrop_refuses_empty_item() {
+        let mut s = session();
+        assert!(s.execute("backdrop", &json!({"kind": "image", "item": ""})).is_err());
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn backdrop_null_projection_defaults_to_flat() {
+        let mut s = session();
+        let r = s.execute("backdrop", &json!({"kind": "image", "item": "own:backdrop-sky", "projection": null})).unwrap();
+        assert_eq!(r["backdrop"]["projection"], json!("flat"));
+    }
+
+    #[test]
+    fn backdrop_multiple_undo_steps() {
+        let mut s = session();
+        s.execute("backdrop", &json!({"kind": "colour", "colour": "#102030"})).unwrap();
+        s.execute("backdrop", &json!({"kind": "gradient", "top": "#000000", "bottom": "#ffffff"})).unwrap();
+        s.execute("backdrop", &json!({"kind": "none"})).unwrap();
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+        assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
+        assert_eq!(s.doc().unwrap().arch.backdrop.as_ref().unwrap(), &Backdrop::Gradient { top: [0, 0, 0], bottom: [255, 255, 255] });
+        assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
+        assert_eq!(s.doc().unwrap().arch.backdrop.as_ref().unwrap(), &Backdrop::Colour { colour: [0x10, 0x20, 0x30] });
+        assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
 }
