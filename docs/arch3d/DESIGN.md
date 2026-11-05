@@ -23,16 +23,16 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 
 | Crate | L | Contents | Deps |
 |---|---|---|---|
-| `doc/src/arch.rs` | L1 | `ArchModel{walls,openings,rooms,levels,roofs,stairs,railings,cameras,active_camera,types,next_id,next_room_id,next_roof_id,next_stair_id,next_railing_id}`, `ArchId`, `Wall`, `Opening`, `Room`, `RoomType`, `Level`, `WallType`, `Roof`, `RoofPlane`, `RoofEdge`, `Stair`, `Railing`, `RailingStyle`, `StairShape`, **`Camera3d`, `CameraKind` (Orbit | Full)**; `ARCH_HANDLE_BASE=0xA000_0000`, `ROOM_HANDLE_OFFSET=0x10000`, `ROOF_HANDLE_OFFSET=0x18000`, `STAIR_HANDLE_OFFSET=0x20000`, `RAILING_HANDLE_OFFSET=0x28000`; caps `MAX_WALLS 4096`, `MAX_OPENINGS 8192`, `MAX_ROOMS 1024`, `MAX_ROOF_EDGES 256`, `MAX_STAIRS`, `MAX_RAILINGS`, `MIN_ROOM_AREA 0.05`, **`MAX_CAMERAS 64`**. On `Drawing::arch` with `arch_revision`/`touch_arch()`. **Phase 9: `doc/src/arch/site.rs` — `SiteLocation` (+ `SiteReference`), `Terrain`, `ElevationLine`, `TerrainModifier`/`ModifierKind` (Flat | Hill | Path), `PathKind`, `Plant`, `PlantSpecies`, `PlantForm`, `CrownShape`; `ArchModel.site/terrain/plants/plant_species`; `Wall.retaining/freeboard/footing`; `TERRAIN_HANDLE_OFFSET 0x38000`, `PLANT_HANDLE_OFFSET 0x40000`.** **Phase 13: `arch/finish.rs` `Finish` (`for_walls`/`for_roofs`/`for_floors`), `Wall.finish`, `Roof.covering`, `Room.floor_finish`; `arch/casework.rs` `Cabinet`, `CabinetKind`, `Fronts`, `Fixture`, `FixtureKind`, `ArchModel.cabinets/fixtures`, `CABINET_HANDLE_OFFSET 0x50000`, `FIXTURE_HANDLE_OFFSET 0x58000`, `MAX_CABINETS`/`MAX_FIXTURES` 1024.** | geom,color |
+| `doc/src/arch.rs` | L1 | **Phase 14: `furnishing` (`Furnishing`, f<n> at +0x60000, `SymbolMesh`, `ArchModel.symbols`/`images`), `paint` (`Paint`, `MaterialRef`, `ArchModel.paints`), `backdrop`, `ArchModel.defaults`.** `ArchModel{walls,openings,rooms,levels,roofs,stairs,railings,cameras,active_camera,types,next_id,next_room_id,next_roof_id,next_stair_id,next_railing_id}`, `ArchId`, `Wall`, `Opening`, `Room`, `RoomType`, `Level`, `WallType`, `Roof`, `RoofPlane`, `RoofEdge`, `Stair`, `Railing`, `RailingStyle`, `StairShape`, **`Camera3d`, `CameraKind` (Orbit | Full)**; `ARCH_HANDLE_BASE=0xA000_0000`, `ROOM_HANDLE_OFFSET=0x10000`, `ROOF_HANDLE_OFFSET=0x18000`, `STAIR_HANDLE_OFFSET=0x20000`, `RAILING_HANDLE_OFFSET=0x28000`; caps `MAX_WALLS 4096`, `MAX_OPENINGS 8192`, `MAX_ROOMS 1024`, `MAX_ROOF_EDGES 256`, `MAX_STAIRS`, `MAX_RAILINGS`, `MIN_ROOM_AREA 0.05`, **`MAX_CAMERAS 64`**. On `Drawing::arch` with `arch_revision`/`touch_arch()`. **Phase 9: `doc/src/arch/site.rs` — `SiteLocation` (+ `SiteReference`), `Terrain`, `ElevationLine`, `TerrainModifier`/`ModifierKind` (Flat | Hill | Path), `PathKind`, `Plant`, `PlantSpecies`, `PlantForm`, `CrownShape`; `ArchModel.site/terrain/plants/plant_species`; `Wall.retaining/freeboard/footing`; `TERRAIN_HANDLE_OFFSET 0x38000`, `PLANT_HANDLE_OFFSET 0x40000`.** **Phase 13: `arch/finish.rs` `Finish` (`for_walls`/`for_roofs`/`for_floors`), `Wall.finish`, `Roof.covering`, `Room.floor_finish`; `arch/casework.rs` `Cabinet`, `CabinetKind`, `Fronts`, `Fixture`, `FixtureKind`, `ArchModel.cabinets/fixtures`, `CABINET_HANDLE_OFFSET 0x50000`, `FIXTURE_HANDLE_OFFSET 0x58000`, `MAX_CABINETS`/`MAX_FIXTURES` 1024.** | geom,color |
 | `geom` | L0 | **Phase 9: `tin` (Delaunay TIN, `elevation_at`, per-triangle `contours`; lifted, see Building blocks), `cdt` (`triangulate_constrained`: constraints become edges, crossings split; cavities refilled in index order since phase 12), `tin_ops` (`TinIndex` grid location, `retain_inside`, `chain_contours`).** Older: `skeleton`, `region::Arrangement`. | — |
-| `arch` | L2 | `wall`,`graph`,`join`(`solve_joins`,`face_lines`,`stretch_wall`),`opening`,`symbol`,`room`,`poly`(area/perimeter/`offset_polygon`),`area`,`label`,`roof`(footprint, skeleton driver, `RoofError`), `roofedge`, **`stair`(`plan_stair`,`headroom_ok`,`well_start`,`flight_polygon`,`well_polygon`,`well_guard_path`, code limits), `railing`(`validate_height`,`baluster_spacing`,`path_length`)**, **`sun`(`sun_position(lat, date, time)`, `sun_dir`, `day_of_year`; NOAA fractional-year form)**, **`detect`(`detect(drawing, opts) -> Detection`; stages `flatten`, `arcs`, `walls`, `junctions`, `openings`, `rooms`, `layers`; `score` against a truth file — phase 8)**, **`terrain` (`surface::SiteSurface`, `mesh::site_mesh`, `contour::site_contours`, `volume::cut_fill`, `csv`, `pad`, `retaining`), `plant` (catalogue of 14, `plant_size`, `plan_symbol`), `site` (`north_direction`, `true_to_drawing`, `north_arrow`) — phase 9**; **`casework` (catalogue sizes, validation, wall placement, layers) — phase 13**. | geom,color,doc |
-| `arch3d` | L2 | `build`/`build_dirty`→`Scene3d`; `mesh`(ear clip, `push_prism_with_holes`, profile prism), `walls`(elevation profiles + holes), `openings`, `floors`(slabs, ceilings, deck boards), `roof`(planes, fascia, soffit), **`stairs`(stepped prism, landing), `railing`(handrail + panel/balusters)**, `probe`+`ray`; **`camera`(`Orbit`, `FullCamera`, `project_point`, `ray_at`, `fit`, `projected_scene_bounds` — moved here from `render3d` in phase 6), `pick`(median-split BVH, `Bvh::ray`/`pick`)**; `edges`/`hlr`/`section` (assisted, phases 6–7); **`site` (terrain solid, draped paths, `site_meshes`), `plant` (trunk + crown) — phase 9**; **phase 13: `incremental` (`SceneCache`, `ObjectKey`/`ObjectKind`, `Sections`, `Scene3d::digest`; `build` is made of its parts), `finish` (finished-face meshes), `uv` (`face_uvs`), `texture` (256² procedural finishes, `mean_srgb`/`mean_linear`), `casework` (cabinets and casework fixtures)**. | geom,color,doc,arch |
-| `render` | L2 | `arch.rs`: arch geometry → DisplayList tagged with proxy handles; layer bands; opening holes; room labels on `A-ROOM`; roof plan on `A-ROOF`; **stair plan (outline, riser lines, well ring) on `A-STAIR`; railing path on `A-RAIL`**; **`arch_site.rs`: the site plan on `C-TOPO-BNDY/MINR/MAJR/TEXT/GRAD`, `C-ROAD`, `L-PLNT`, `A-ANNO-NRTH` (phase 9)**; **`arch_casework.rs`: cabinet and fixture symbols on `A-FLOR-CASE`, `A-FLOR-CASE-UPPR`, `P-FLOR-FIXT`, `A-FLOR-APPL` (phase 13)**. | arch |
-| `io` | L3 | `dxf_arch.rs` (`CADCRAFT_ARCH` XRECORD **v9**, accepts 1–9 (v6 cameras, v7 views, v8 site, terrain and plants, v9 light fixtures; phase-11 area lights and IES ride in the v9 model), + save-time proxies on `A-WALL`/`A-DOOR`/`A-GLAZ`/`A-ROOM`/`A-ROOF`; opening proxies carry the whole plan symbol since phase 8; reading a record makes the drawing metric), **`dxf_site.rs` (site proxies marked `CADCRAFT-SITE`, phase 9)**, `glb.rs` (own GLTF 2.0; `node_names`, shared with OBJ); **phase 12: `step` (ISO 10303-21 text), `ifc` (`mod`: header, units, contexts, spatial structure; `guid`; `geometry`; one module per element kind: `walls`, `openings`, `slabs`, `roofs`, `stairs`, `spaces`, `site`, `lights`), `obj` (OBJ + MTL)**; **phase 13: `png` (RGBA8 encoder on `miniz_oxide`), finish textures in `glb`, `dxf_casework` (CADCRAFT-CASEWORK proxies), `ifc::casework`**. | arch,arch3d,dxf |
-| `render3d` | L5 | `camera` (re-exports `arch3d::camera`), `pipeline` (PBR metallic-roughness: GGX, Smith, Schlick; per-material albedo/metallic/roughness/alpha; MSAA 4 or 1), `light`, **`shadow`** (one 1024² `Depth32Float` sun map, read with `textureLoad`; `ground_mesh`, `GROUND_OBJECT`), **`edges`** (line pipeline over `arch3d::edges`), **`adapter`** (`AdapterChoice` auto|fallback, devices always requested with `downlevel_webgl2_defaults`), `offscreen` (`Style` shaded | shaded-edges | hidden-line | glass-house; `create`/`with_device`/`encode`/`render`/`read_png`; `headless_instance`, made one at a time), `gputest`, `types`; **phase 10: `shadow_atlas`, `final_render::FinalRender` (raster steps); phase 11: `pathtrace` (`device` (own compute device), `scene_gpu` (flattened BVH, materials, lights, IES), `tracer` (progressive passes, stats, snapshots, denoise, resolve), `denoise`, `rt` (BLAS/TLAS for ray queries), `cache` (pipeline cache file), `shaders` + WGSL `pt/{common,traverse,traverse_rq,bsdf,lights,kernel,denoise,resolve}`), `FinalRender::start_path`; phase 12: `pathtrace::Exposure` (Auto | Fixed), `auto_exposure_from_luminances`; phase 13: `textures` (the finish `texture_2d_array`, bind group 3).** | geom,color,arch3d,wgpu,gpu-optin |
+| `arch` | L2 | **Phase 14: `library` (`record`: `ItemRecord`, `Category`, `layer_for`; `search`, `history`, `fits`, `place`), `furnishing` (plan outline, layers, IFC classes), `casework_layout` (fronts, pulls, counter runs, gaps), `paint` (surface keys, scopes).** `wall`,`graph`,`join`(`solve_joins`,`face_lines`,`stretch_wall`),`opening`,`symbol`,`room`,`poly`(area/perimeter/`offset_polygon`),`area`,`label`,`roof`(footprint, skeleton driver, `RoofError`), `roofedge`, **`stair`(`plan_stair`,`headroom_ok`,`well_start`,`flight_polygon`,`well_polygon`,`well_guard_path`, code limits), `railing`(`validate_height`,`baluster_spacing`,`path_length`)**, **`sun`(`sun_position(lat, date, time)`, `sun_dir`, `day_of_year`; NOAA fractional-year form)**, **`detect`(`detect(drawing, opts) -> Detection`; stages `flatten`, `arcs`, `walls`, `junctions`, `openings`, `rooms`, `layers`; `score` against a truth file — phase 8)**, **`terrain` (`surface::SiteSurface`, `mesh::site_mesh`, `contour::site_contours`, `volume::cut_fill`, `csv`, `pad`, `retaining`), `plant` (catalogue of 14, `plant_size`, `plan_symbol`), `site` (`north_direction`, `true_to_drawing`, `north_arrow`) — phase 9**; **`casework` (catalogue sizes, validation, wall placement, layers) — phase 13**. | geom,color,doc |
+| `arch3d` | L2 | **Phase 14: `furnishing` (symbol meshes in the build), `paint` (painted surfaces, `MaterialDef`), `icon` (the CPU icon rasterizer).** `build`/`build_dirty`→`Scene3d`; `mesh`(ear clip, `push_prism_with_holes`, profile prism), `walls`(elevation profiles + holes), `openings`, `floors`(slabs, ceilings, deck boards), `roof`(planes, fascia, soffit), **`stairs`(stepped prism, landing), `railing`(handrail + panel/balusters)**, `probe`+`ray`; **`camera`(`Orbit`, `FullCamera`, `project_point`, `ray_at`, `fit`, `projected_scene_bounds` — moved here from `render3d` in phase 6), `pick`(median-split BVH, `Bvh::ray`/`pick`)**; `edges`/`hlr`/`section` (assisted, phases 6–7); **`site` (terrain solid, draped paths, `site_meshes`), `plant` (trunk + crown) — phase 9**; **phase 13: `incremental` (`SceneCache`, `ObjectKey`/`ObjectKind`, `Sections`, `Scene3d::digest`; `build` is made of its parts), `finish` (finished-face meshes), `uv` (`face_uvs`), `texture` (256² procedural finishes, `mean_srgb`/`mean_linear`), `casework` (cabinets and casework fixtures)**. | geom,color,doc,arch |
+| `render` | L2 | **Phase 14: `arch_furnishing.rs` (furnishing plan outlines on their layers).** `arch.rs`: arch geometry → DisplayList tagged with proxy handles; layer bands; opening holes; room labels on `A-ROOM`; roof plan on `A-ROOF`; **stair plan (outline, riser lines, well ring) on `A-STAIR`; railing path on `A-RAIL`**; **`arch_site.rs`: the site plan on `C-TOPO-BNDY/MINR/MAJR/TEXT/GRAD`, `C-ROAD`, `L-PLNT`, `A-ANNO-NRTH` (phase 9)**; **`arch_casework.rs`: cabinet and fixture symbols on `A-FLOR-CASE`, `A-FLOR-CASE-UPPR`, `P-FLOR-FIXT`, `A-FLOR-APPL` (phase 13)**. | arch |
+| `io` | L3 | **Phase 14: `gltf_read` (plain glTF 2.0 binary), `image_read`, `library` (the embedded sample set), `dxf_furnishing` (proxies), `ifc/furnishing`; `dxf_arch` payload up to 64 MiB.** `dxf_arch.rs` (`CADCRAFT_ARCH` XRECORD **v9**, accepts 1–9 (v6 cameras, v7 views, v8 site, terrain and plants, v9 light fixtures; phase-11 area lights and IES ride in the v9 model), + save-time proxies on `A-WALL`/`A-DOOR`/`A-GLAZ`/`A-ROOM`/`A-ROOF`; opening proxies carry the whole plan symbol since phase 8; reading a record makes the drawing metric), **`dxf_site.rs` (site proxies marked `CADCRAFT-SITE`, phase 9)**, `glb.rs` (own GLTF 2.0; `node_names`, shared with OBJ); **phase 12: `step` (ISO 10303-21 text), `ifc` (`mod`: header, units, contexts, spatial structure; `guid`; `geometry`; one module per element kind: `walls`, `openings`, `slabs`, `roofs`, `stairs`, `spaces`, `site`, `lights`), `obj` (OBJ + MTL)**; **phase 13: `png` (RGBA8 encoder on `miniz_oxide`), finish textures in `glb`, `dxf_casework` (CADCRAFT-CASEWORK proxies), `ifc::casework`**. | arch,arch3d,dxf |
+| `render3d` | L5 | **Phase 14: `backdrop` (the shared CPU composite), symbol and image textures, the path tracer's per-pixel hit count.** `camera` (re-exports `arch3d::camera`), `pipeline` (PBR metallic-roughness: GGX, Smith, Schlick; per-material albedo/metallic/roughness/alpha; MSAA 4 or 1), `light`, **`shadow`** (one 1024² `Depth32Float` sun map, read with `textureLoad`; `ground_mesh`, `GROUND_OBJECT`), **`edges`** (line pipeline over `arch3d::edges`), **`adapter`** (`AdapterChoice` auto|fallback, devices always requested with `downlevel_webgl2_defaults`), `offscreen` (`Style` shaded | shaded-edges | hidden-line | glass-house; `create`/`with_device`/`encode`/`render`/`read_png`; `headless_instance`, made one at a time), `gputest`, `types`; **phase 10: `shadow_atlas`, `final_render::FinalRender` (raster steps); phase 11: `pathtrace` (`device` (own compute device), `scene_gpu` (flattened BVH, materials, lights, IES), `tracer` (progressive passes, stats, snapshots, denoise, resolve), `denoise`, `rt` (BLAS/TLAS for ray queries), `cache` (pipeline cache file), `shaders` + WGSL `pt/{common,traverse,traverse_rq,bsdf,lights,kernel,denoise,resolve}`), `FinalRender::start_path`; phase 12: `pathtrace::Exposure` (Auto | Fixed), `auto_exposure_from_luminances`; phase 13: `textures` (the finish `texture_2d_array`, bind group 3).** | geom,color,arch3d,wgpu,gpu-optin |
 | `gpu-optin` | — | **Phase 11:** the workspace's only unsafe code: wgpu's experimental-feature token for ray queries, and a pipeline cache read from disk. | wgpu |
-| `engine/src/cmd/arch/*` | L4 | `wall`,`wall.stretch`,`inspect`,`opening`,`build3d`,`sample`,`view`,`room`,`roomdetect`,`level`,`roofauto`,`roofplane`,`stair`,`railing`,`deck`, **`sun`, `camera` (save/use/delete/list), `walkthrough`, `pick3d`**, `views` (`elevation`, `section`, `view.delete`), `sheet` (`viewsheet`), **`archdetect`, `units` (`convert_drawing_to_metres`)**, **`site`, `site_inspect`, `terrain` (+ `terrain.contours`, `terrain.volumes`, `terrain.delete`), `terrain_modify`, `terrain_query`, `plant` (+ `plant.species`) — phase 9**; **`export` (`exchange.rs`) writes glb, obj (+ mtl) and ifc by extension or returns them as data — phase 12**; **`material`, `casework` (`cabinet`, `fixture` + `.edit`/`.delete`, `fixture.types`), `build3d {incremental}` on the document's `SceneCache` (`DocState`), `sample {house}` — phase 13**; grip routing; `snap::arch`. | arch,arch3d,io |
-| `ui-egui` | L5 | `pane3d.rs` (dockable, orbit, revision-gated rebuild, show-3D toggle, no-adapter placeholder; phase 6: style switcher, full camera + WASD/arrow walkthrough, loads the active saved camera, click-to-pick via `proxy_handle`; phase 7: a 3D pick becomes the 2D selection), **`archdetect_review.rs` (Detection Review panel, phase 8)**; **phase 11: Finalize chooses Path traced or Raster with a sample count, refines on screen (`{spp} / {total} samples`), cancels, and falls back to the raster still with a note without compute shaders**; **phase 13: the pane keeps its own `SceneCache`**. | render3d,arch3d |
+| `engine/src/cmd/arch/*` | L4 | **Phase 14: `library`, `library_icon`, `library_user`, `furnish` (`library.place`, transforms), `paint`, `backdrop`, `defaults`; `engine::library` (catalogs, `LibraryIo`, the user dir, `user` groups and copies).** `wall`,`wall.stretch`,`inspect`,`opening`,`build3d`,`sample`,`view`,`room`,`roomdetect`,`level`,`roofauto`,`roofplane`,`stair`,`railing`,`deck`, **`sun`, `camera` (save/use/delete/list), `walkthrough`, `pick3d`**, `views` (`elevation`, `section`, `view.delete`), `sheet` (`viewsheet`), **`archdetect`, `units` (`convert_drawing_to_metres`)**, **`site`, `site_inspect`, `terrain` (+ `terrain.contours`, `terrain.volumes`, `terrain.delete`), `terrain_modify`, `terrain_query`, `plant` (+ `plant.species`) — phase 9**; **`export` (`exchange.rs`) writes glb, obj (+ mtl) and ifc by extension or returns them as data — phase 12**; **`material`, `casework` (`cabinet`, `fixture` + `.edit`/`.delete`, `fixture.types`), `build3d {incremental}` on the document's `SceneCache` (`DocState`), `sample {house}` — phase 13**; grip routing; `snap::arch`. | arch,arch3d,io |
+| `ui-egui` | L5 | **Phase 14: `library_panel.rs` (the dockable Library panel, painter and eyedropper tools).** `pane3d.rs` (dockable, orbit, revision-gated rebuild, show-3D toggle, no-adapter placeholder; phase 6: style switcher, full camera + WASD/arrow walkthrough, loads the active saved camera, click-to-pick via `proxy_handle`; phase 7: a 3D pick becomes the 2D selection), **`archdetect_review.rs` (Detection Review panel, phase 8)**; **phase 11: Finalize chooses Path traced or Raster with a sample count, refines on screen (`{spp} / {total} samples`), cancels, and falls back to the raster still with a note without compute shaders**; **phase 13: the pane keeps its own `SceneCache`**. | render3d,arch3d |
 | `cadcraft-cli` | — | `convert` (runs `archdetect` first when there are no arch objects; `--no-detect`; **to `.ifc`, `.obj` (+ `.mtl`) and `.glb` since phase 12**), `run --export`, `render FILE OUT.png --camera orbit,…[,target=x,y,z] | full,eye=…,target=…[,eyeHeight=h][,fov=f] --style --sun --ground --adapter auto|fallback --size` (prints `PROJECTED`, `DEVICE … limits=downlevel_webgl2`, `SHADOW size=1024 built=1`; exit 3 `NO_ADAPTER`); `--sun` takes the site's latitude and true north (phase 9); **`--final [raster|path] --spp --bounces --seed --no-denoise --rt` (phase 11; stderr `FINAL renders=1 size=WxH mode=path spp=N cache=hit|miss|unsupported`); the session renderer (`render_hook`) serves `render` and `illuminance` for `run`**. | all |
 
 ## Decisions
@@ -71,6 +71,9 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 32. **A writer of a text format is tested by parsing what it wrote.** Substring assertions let `..TERRAIN..` and a bare three-real `IfcCartesianPoint` through, both refused by STEP readers; `crates/engine/tests/ifc_step_grammar.rs` parses every instance of the demo house's export against the STEP grammar and IFC4's attribute counts, and an IFC entity added later adds its count there.
 33. **An incremental build is the full build, cached by its inputs.** `Scene3d::build` is made of parts, each a pure function of inputs it records (`incremental::Sections`); `SceneCache::update` makes again only the parts whose inputs changed and moves the others over in order, so the cached scene equals the full build by construction, and `rebuilt` counts the objects whose parts were made. A cache that patches a scene beside the build drifts: the first SceneCache passed its walls-only tests and grew from 45 meshes to 262 200 on a house with rooms, lights and a roof. A new 3D object kind adds its section and its inputs, and its edits to `crates/engine/tests/scene_cache_equals_full.rs`.
 34. **A timing bar measures the work, not the host.** The swarm host runs at load 10 to 40, so a bar takes the lesser of wall time and the CPU time of the processes it ran (phase-9 check 10), or measures once more after a miss (phase-13 check 08); a performance check also bounds the work done (check 08's 10 % rebuilt), so a fast host cannot pass a slow design.
+35. **A process-wide hook has one installer.** `LibraryIo` (like `IoHooks`) is a `OnceLock`: the first installation wins for the whole process, so a test that installs its own stub decides, by test order, what every later test sees. Phase 14 hit this twice (the furnish tests, then `library/user.rs`). Unit tests call `library::testing::install_io`; the apps install the real readers once at start.
+36. **Coverage comes from what the kernel knows.** Whether a pixel shows the backdrop is the path tracer's own per-pixel count of samples whose camera ray hit a surface (`accum[W·H + i].y`), never inferred from brightness: a mask of "misses darker than the mean miss" passed on dark test scenes and left a sunlit sky in place of the backdrop. Tests of compositing render under the default sun.
+37. **Meshes compare within a tolerance.** GLB stores positions as f32 (about 5e-7 at x = 7), so two copies of a mesh at different places never round to the same grid everywhere; a rounded key made equal meshes differ and stopped check 08 at its first step, hiding four bugs behind it. Checks match each vertex to an unused vertex within 1e-5 (`p14lib.same_geometry`).
 
 ## Phase 1 — walls, joins, poché, first 3D (landed)
 
@@ -457,13 +460,209 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
   - harden-p13-arch3d-casework and harden-p13-render3d-textures were abandoned;
   - harden-p13-dxf-casework was merging at the checkpoint.
 
+## Phase 14 — the library (landed)
+
+13/13 checks (152/152 overall) on 2026-11-05 02:16, with no fix cycle.
+- **What merged:** 34 segments and 3 upstream syncs (79 upstream commits), plus 5 harden passes.
+- **Landed by the operator:** 13 of the 34, in 9 landings (operator fixes under Building blocks). 12 were finished at level 2, and p14-io-dxf-furnishing landed after the integrator refused it on a timing bar at load 54.
+
+It builds on the operator groundwork: the sample set `assets/library/sample/` (49 items, its `catalog.json` and `ATTRIBUTION.md`) and `tools/library/`.
+
+### One library, nine categories
+- **The categories,** in this order: Furniture; Appliances and plumbing fixtures; Cabinet parts; Lighting and electrical; Materials; Doors and windows; Plants; Backdrops; User catalog.
+- **The record:** every item is an `ItemRecord` in `arch::library` (id, name, category, folder, kind, symbolType, placement, size, keywords, tags, style, source, licence, author, attribution, catalog, readOnly, file, elevation, cutout, notes).
+- **Each catalog contributes items:**
+  - `builtin`: the existing catalogues as items:
+    - door:/window:<style>, plant:<species>, lightfixture:<type>;
+    - finish:<name>, cabinet:<kind>, fixture:<kind>;
+    - frontstyle:door-/drawer-<style>;
+    - backdrop:colour/gradient.
+  - `sample`: embedded in every binary by `io::library::sample_files`, so the web build has it too;
+  - `installed:<name>`: copied into the user dir by `library.install`; read-only, and installing again updates it;
+  - `local`: a folder of .glb files with one licence, sizes from the mesh bounds, categories from folder names; remembered, never committed;
+  - `user`: see the user catalog below.
+- **Licences:** an item with no licence never loads.
+- **Where it lives:** the engine's `Session.library` holds the catalogs. The file readers reach it through `engine::library::LibraryIo` (read_glb, read_image, encode_png, sample), which the apps install, as they do for IoHooks.
+- **In tests:** `LibraryIo` is a process-wide `OnceLock`, so unit tests install it only through `library::testing::install_io` (decision 35). The engine's guide tests install the same readers as the CLI.
+
+### The user dir
+- **Where:** `CADCRAFT_LIBRARY_USER_DIR`, else `$XDG_DATA_HOME/cadcraft/library`, else `$HOME/.local/share/cadcraft/library`.
+- **What it holds:** `state.json` (tags, saved filters, local catalogs), `installed/`, `user/<slug>.json`, `trash/` and `icons/<hash>.png`.
+- **In the checks:** they point it at a temporary folder.
+
+### Search
+- **Text:** every word must be a substring of the name, a keyword or the folder.
+- **Chips:** category, folder, symbolType, placement, source (the item's catalog), style and tag combine with AND. Zero results is a valid answer.
+- **History and saved state:** `FilterHistory` gives Back and Forward. Saved filters persist, and Favorites is a built-in tag.
+- **Folders** come from catalog.json or `folder_for(symbolType)`.
+- **Targets:** `library {"for": surface key}` uses `query_for`:
+  - a pull gives pulls, and a front gives front styles;
+  - a carcass gives in-cabinet items;
+  - a wall, floor, ceiling or roof gives Materials.
+
+### 3D symbols
+- **The reader:** `io::gltf_read` is our own, on serde_json and image, never the gltf crate. It accepts plain glTF 2.0 binary only:
+  - an `extensionsRequired` entry, a URI or a sparse accessor is refused, and the reason names the extension (Draco, meshopt, KTX2);
+  - textures are PNG or JPEG, decoded to RGBA at up to 256 px.
+- **Axes:** the mesh turns Y up to Z up, (x, y, z) → (x, −z, y), and is bottom-centred.
+- **The mesh:** a `SymbolMesh` (parts with base colour, metallic, roughness and texture) is keyed by the FNV-1a 64 of its file.
+- **Stored in the drawing:** symbols go in `ArchModel.symbols` and library images in `ArchModel.images`. A drawing therefore opens anywhere with its furniture, and undo and DXF carry it.
+- **The DXF payload limit:** the arch XRECORD payload takes up to the shared 64 MiB `MAX_PAYLOAD`. The demo house writes 9.6 MB, and under the old 8 MiB limit it reopened with no model at all.
+
+### Furnishings
+- **The object:** a `Furnishing` arch object has the handle f<n> at +0x60000. It records:
+  - item, symbol key, name, category and symbol type;
+  - placement, level, `at` (the footprint centre), rotation, elevation (its bottom above the level's floor) and size;
+  - mirrored, host and cut-out.
+- **Placing a mesh:** `Furnishing::local_to_plan` scales to the size, mirrors x, rotates, then moves. A symbol's front is its local −y (glTF +z).
+- **Layers** come from `layer_for`:
+  - I-FURN;
+  - P-FLOR-FIXT for sinks, lavatories, faucets, toilets, tubs and showers, else A-FLOR-APPL;
+  - E-LITE;
+  - L-PLNT.
+
+  The layer follows the furnishing's own category, not the item record's.
+- **IFC classes** come from `ifc_class_for`: IfcFurniture, IfcSanitaryTerminal, IfcElectricAppliance, IfcLightFixture.
+- **In plan:** the symbol is the convex hull of the placed mesh, seen from above.
+- **Replies:** every placing command returns `handle` in `Handle::hex()` form, which `move`, `rotate` and `mirror` take. A placed user group returns its objects' handles in `handles` and its labels per kind (`furnishings`, `cabinets`, `fixtures`).
+
+### Placing
+`arch::library::place` tries these rules in order:
+1. A cabinet-part item over a cabinet swaps its pull or front style, and nothing is placed.
+2. A faucet on a sink takes the sink's back centre.
+3. A cut-out item over a base cabinet is centred in it, its top 1 cm above the counter, facing the room (cabinet rotation + 180).
+   - The cabinet then gets a cut-out hole and a false top front.
+   - The counter top is elevation + carcass height + counter thickness (`Cabinet.height` is the carcass).
+   - Without a cabinet, the item stands at counter height.
+4. An under-counter appliance clicked in a gap of its depth between two base cabinets takes the gap (host Gap), and the counter is carried over it.
+5. A wall item puts its back on the nearest wall face within 0.3 m, at its catalog elevation, facing out.
+6. A ceiling item hangs with its top at the level's ceiling.
+7. Anything else stands at the click.
+
+`library.place` takes the defaults first, checks every parameter before any change, and is one undo step. Typed items (doors, windows, plants, light fixtures, cabinets, fixtures, backdrops) go through their own commands.
+
+### Cabinet parts
+- **The layout:** `arch::casework_layout` is the one front layout. It gives fronts, hinges and pull positions:
+  - door pulls 0.05 m from the free edge and 0.075 m from the top, or from the bottom on wall cabinets;
+  - drawer pulls centred.
+- **Counters:** it also gives false fronts, counter runs and gaps:
+  - touching in-line base cabinets share one counter, owned by the first and built once per build;
+  - a bridged gap joins the run;
+  - a run has at most 64 cut-outs, and only hosted ones.
+- **Front styles** (slab, shaker, raised panel) have the same outer box, and their triangle counts grow in that order. A pair of doors keeps the full door height.
+- **Pulls:** a cabinet's pulls are one mesh group, `pull:<key>:<i>`, and export as node `cabinet-cb<n>-pull`.
+- **Inspect:** `arch.inspect` lists the layout as `frontParts`. `fronts` stays the phase-13 mode string.
+
+### Materials and painters
+- **Surface keys:**
+  - wall/w3/left|right, room/r0/floor|ceiling, roof/r0;
+  - cabinet/cb0/carcass|front|counter|pull;
+  - fixture/fx0, furnishing/f2/<part>.
+- **Paints:** `ArchModel.paints` maps a surface key to `Paint { material: Option<MaterialRef>, tint }`. A `MaterialRef` is a Finish, a library item (an image) or a colour.
+- **Effective materials:** `arch::paint` gives every surface its room and its effective material key: finish:<f>, item:<id>, colour:#rrggbb, default:<what>, frontstyle:<s> or sym:<key>:<i>. A wall side's room is found 0.05 m off its face, and exterior sides have none.
+- **Scopes** select surfaces that have the clicked surface's material:
+  - component: the clicked surface;
+  - object: every surface of its object;
+  - room: that material in the clicked surface's room;
+  - floor: that material on its level;
+  - plan: that material everywhere.
+- **`paint.object`** selects like items instead: like pulls, front styles or symbols.
+- **Modes:** `blend` keeps the material and sets a tint.
+- **Undo:** each painter call is one undo step, and the eyedropper's last pick is kept per drawing.
+
+### The user catalog
+- **`library.add {"objects", "name", "insertionPoint"?}`** stores the objects relative to the insertion point as a group item `user:<slug of the name>`. It places as a group: the same meshes moved, equal once moved back.
+- **`library.copy {"item"}`** (Copy to User Catalog) takes a stock item, the very thing it exists for. The copy:
+  - is named after the item's id (`sofa-futon` → `user:sofa-futon`, then `-2`, `-3`);
+  - is filed in the User catalog under its source's category as the folder;
+  - records `source_item`.
+- **Editing and deleting:** `library.edit` and `library.delete` take only `user:` ids. A bare stock id would map to the same slug as its copy. `library.trash {"action": list|restore|empty}` manages the Trash.
+- **Scope:** native only. The web build has the sample set.
+
+### The 3D build
+- **Mesh material names:**
+  - `sym:<key>:<i>` for furnishing parts;
+  - `pull:<key>:<i>` for pulls;
+  - `paint:<surface key>` for painted surfaces. A painted wall side is split out as its own mesh, as the phase-13 exterior faces are.
+- **`Scene3d` gains:**
+  - `materials` (MaterialDef: base colour, metallic, roughness, texture key, tile, tint);
+  - `textures` (sym:<key>:t<i>, finish:<f>, item:<id>);
+  - `backdrop`.
+
+  Every renderer and exporter reads `materials` first. Textures reach the GPU, and the tint is applied once.
+- **The scene cache** gains a furnishings section:
+  - every object's inputs include its paints;
+  - a cabinet's inputs include its level's base cabinets, the furnishings they host and its pull symbol.
+
+  So the cache stays the full build (`scene_cache_equals_full` covers furnishing, paint and casework-part edits).
+- **Probing:** furnishings probe by their placed box, since symbol meshes need not be closed.
+
+### Exports
+- **GLB:** one node `furnishing-f<n>` per furnishing, one primitive per part. Textures are embedded once as PNG, and the tint goes into baseColorFactor.
+- **OBJ:** groups by node name, with mean colours.
+- **IFC:** elements by category, named as the nodes, with `CADCraft_Library` (Item, Licence, Source).
+- **DXF:** LWPOLYLINE proxies marked CADCRAFT-FURNISHING. Everything else rides in the v9 record's serialized model.
+
+### Icons
+- **The renderer:** `arch3d::icon` is a software rasterizer: fixed camera (yaw −30°, pitch 25°), fixed light, 128 × 128.
+  - Its sin, cos and sRGB are our own, for byte-identity.
+  - Kinds: materials on a UV sphere, backdrops as thumbnails, gradients and solids.
+- **Determinism:** icons are byte-identical every time and cached by content hash.
+- **`library.icon {"category"}`** takes only one of the nine names:
+  - an unknown name is refused;
+  - a real category with no items (an empty User catalog) gets a grey tile.
+
+### Backdrops
+- **Kinds:** a colour, a gradient (top to bottom of the view), or an image, flat or equirectangular (the top row is the zenith, the middle row the horizon).
+- **Where drawn:** the 3D view, the raster Finalize and the path tracer draw it where no surface is hit, in display colours. All three use the shared CPU reference `render3d::backdrop::composite_misses`.
+- **The path tracer's misses:**
+  - The kernel counts, per pixel, the samples whose camera ray hit a surface (`accum[W·H + i].y`), and the backdrop goes on exactly the 0-hit pixels (decision 36). An edge pixel some samples hit keeps its shading.
+  - The image reaches the tracer under its `item:<id>` key, and an equirect image is read along each pixel centre's unjittered ray.
+- **Lighting:** a backdrop never lights the scene.
+
+### The UI
+- **The panel:** a dockable on-demand Library panel (`Panel::Library`) with:
+  - tiles, folder tree, grid or list, text and chips;
+  - Back and Forward, saved filters, Favorites, details;
+  - a preview that turns and zooms.
+- **Placing:** click an item, then click in the plan or the 3D pane. The property panel's "Library…" button runs `library {for}`.
+- **Tools:** the painter and eyedropper work in the 3D pane.
+- **Where search lives:** the panel's `fn search` only runs the `library` command. Matching stays in `arch::library::search` (check 12).
+
+### Set as Default
+`arch.default {id}` stores the command parameters per kind in `ArchModel.defaults`: cabinet.<kind>, door, window, furnishing.<item>. `cabinet`, `door`, `window` and `library.place` fill in the parameters they omit from it.
+
+### Docs
+- **USER-GUIDE.md** gained "The library": the nine categories, search, placing rules, both painters and the eyedropper, the user catalog and Trash, Set as Default, backdrops, installed and local catalogs. It has a search block and a furnished two-room house that exports `library.glb`.
+- **MCP examples:** `docs/arch3d/mcp-examples/09-library.jsonl` is the ninth session.
+
+### Phase-14 gaps
+- **Out of scope by the brief:**
+  - online catalogs and accounts, manufacturer catalogs;
+  - reading OpenUSD (SimReady and SimHome are converted outside);
+  - the tile and wood material builders, the texture editor;
+  - outlets, switches, wiring (phase 15).
+- **Ours, the user catalog:** a copied stock item cannot be placed. `library.copy` stores it as a group with no objects ("user item has no objects"). It should become a one-object group whose furnishing keeps the source's category, so a copied sink stays on P-FLOR-FIXT.
+- **Ours, commands:**
+  - `move` with handles it cannot resolve moves nothing without an error, which hid the group bug;
+  - `arch.inspect` prints furnishing handles in the short form (`a0060000`), which `move` does not take;
+  - `library.add`'s `relative_value` unwraps the stored objects' arrays (a production `unwrap`).
+- **Ours, furnishings:**
+  - symbol lights do not emit (their catalog `light` is data only, for phase 15);
+  - a ceiling item does not find a soffit under it;
+  - the plan outline is a convex hull, so an L-shaped sofa's notch is filled.
+- **Ours, rendering:**
+  - the path tracer uses texture means;
+  - icons are flat-shaded.
+- **Harden passes:** one was in its gate at the checkpoint, and harden-p14-r3d-pt-backdrop was retired as superseded.
+
 ## Open items vs Chief Architect
 
-sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFAULT`); site materials in the renderer; SSAO/TAA/cascaded shadows; arc walls and their openings; main-layer joins and the standard-area basis; pony walls, `reversed`; framing; terrain/plant tools, grips and a site panel in the UI; electrical/plumbing/HVAC (10); sheet title blocks and view titles; dormers/crickets/roof returns/skylights/gutters; interactive roof-plane joining; curtain walls; dynamic roof topology; IFC materials and colours, parametric IFC bodies (extrusions, type objects, material layer sets); `ARCHDETECT` on real plans (the two Moorfields plans find 1 and 0 walls; check 07 reports, does not gate), scale from dimensions, editing candidates before accept; phase-2 opening sub-items (mullions, jambs, hardware, display states, schedules); room boxes, reference display, dynamic defaults, split levels, moldings; door classification; the phase-5 stair/railing items above; the phase-6 items above; the phase-7, phase-8, phase-9, phase-12 and phase-13 items above (finish colours and scales, interior finishes, textures in the path tracer, OBJ and IFC; corner cabinets, hardware, backsplashes); **phase 11:** raster window glass is opaque, hardware ray-query parity unverified on hardware, Russian roulette without a survival floor.
+sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFAULT`); site materials in the renderer; SSAO/TAA/cascaded shadows; arc walls and their openings; main-layer joins and the standard-area basis; pony walls, `reversed`; framing; terrain/plant tools, grips and a site panel in the UI; electrical/plumbing/HVAC (10); sheet title blocks and view titles; dormers/crickets/roof returns/skylights/gutters; interactive roof-plane joining; curtain walls; dynamic roof topology; IFC materials and colours, parametric IFC bodies (extrusions, type objects, material layer sets); `ARCHDETECT` on real plans (the two Moorfields plans find 1 and 0 walls; check 07 reports, does not gate), scale from dimensions, editing candidates before accept; phase-2 opening sub-items (mullions, jambs, hardware, display states, schedules); room boxes, reference display, dynamic defaults, split levels, moldings; door classification; the phase-5 stair/railing items above; the phase-6 items above; the phase-7, phase-8, phase-9, phase-12 and phase-13 items above (finish colours and scales, interior finishes, textures in the path tracer, OBJ and IFC; corner cabinets, hardware, backsplashes); **phase 11:** raster window glass is opaque, hardware ray-query parity unverified on hardware, Russian roulette without a survival floor; phase 14: a copied library item that places (a one-object group on its source's layer), `move` refusing handles it cannot resolve, `arch.inspect` handles in the form commands take, furnishing plan outlines beyond the convex hull, soffits under ceiling items, emitting symbol lights (phase 15), textures in the path tracer, shaded icons.
 
 ## Phase plan
 
-0 ✅ → 1 ✅ → 2 ✅ → 3 ✅ → 4 ✅ → 5 ✅ → 6 ✅ → 7 ✅ → 8 ✅ → 9 ✅ → 10 ✅ → 11 ✅ → 12 ✅ → 13 ✅ → **14 the library** → 15 electrical, technical illustration and the showcase house.
+0 ✅ → 1 ✅ → 2 ✅ → 3 ✅ → 4 ✅ → 5 ✅ → 6 ✅ → 7 ✅ → 8 ✅ → 9 ✅ → 10 ✅ → 11 ✅ → 12 ✅ → 13 ✅ → 14 ✅ → **15 electrical, technical illustration and the showcase house**.
 
 ## Building blocks added outside the swarm (assisted)
 
@@ -484,141 +683,13 @@ sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFA
 - **Phase-12 operator fixes (2026-11-02).** p12-ifc-site landed at level 2 with its enum fix (`P::Enum` adds the dots; it wrote `..TERRAIN..`) and `geom::cdt` cavities as BTreeSets (76307a4d, merge 4fb65e16); IFC coordinates at the model's decimals (0dd4b9b1, same merge); the stray `IFCCARTESIANPOINT(x,y,z)` a racer wrote per space only to satisfy its own `contains("2.55")` test removed (0a563f4b, merge 0e87b75d). All three slipped past unit tests that asserted substrings malformed output also contains (decision 32).
 - **Phase-13 operator fixes (2026-11-02/03).** The exact incremental rebuild (66063a44, decision 33), `xtask literals` reading a `-> &Scene3d {` return type as a literal (cba772a4) and phase-9 check 10's bar as min(wall, CPU) (35b30cdd, decision 34), landed with p13-arch3d-incremental at level 2 (merge 5931a657); the benchmark-house generator rebuilt (310 walls, L 40 T 116 X 80; 2c7aa167, merge 14799b78); p13-arch3d-casework landed at level 2 with 120 seeded casework edits in scene_cache_equals_full, check 08's reply count and `material` refusing numeric ids (merge c5cff184); IFC cabinet ObjectType by kind and the toe kick in the carcass mesh (a21ab50d, merge 06a445ee); phase-12 check 12 accepting upstream #2260's made-and-named folder and check 10's `--manifest-path` (7e445008, merge bbb9dd7c).
 - **Phase-14 groundwork (2026-11-03).** The library sample set `assets/library/sample/` (49 items, CC0 and CC-BY, 5.5 MB): plain glTF 2.0 `.glb` symbols and texture images. **Every symbol is bottom-centred at its catalog size in metres** (glTF Y up: x and z centred on 0, lowest y at 0, extents = size; front towards +Z as Sweet Home 3D stores its models), so a reader only turns Y-up to Z-up and places the box; base-colour factors and PNG/JPEG textures, smoothing groups averaged, 16- or 32-bit indices, no extensions. `catalog.json` = `{"version": 1, "items": [{id, name, category, symbolType, placement (floor, wall, ceiling, counter, in-cabinet; null for images), size [w, d, h] metres Z up, keywords, source, licence (SPDX), author, attribution (the full CC credit line), file, elevation (wall items: metres to the bottom), light (lights: position in metres from the bottom centre, x across, y back to front, z up; diameter; colour), cutout [w, d] (sinks, cooktops, the basin)}]}`, every file in `ATTRIBUTION.md`. Doors and windows come from the existing door and window catalogue, not as mesh symbols. The kitchen sink (0.8 x 0.55) and the dishwasher (0.6 x 0.6 x 0.876, no top) are made at the phase-13 casework sizes. Made by `tools/library/` (Python standard library, run by the operator, never by the swarm): `fetch.py` downloads the Sweet Home 3D CC0 and CC-BY libraries (links, licences and whom to credit read from their pages, LICENSE files and catalogs), `curate.py` converts `picks.json` with `sh3d.py` and adds `own.py`'s items (two pulls, a 30-inch range, the sink, the dishwasher, a sky backdrop), `check_sample.py` checks the set against the brief. Also in: CHIEF-REFERENCE §6 (the library, from Chief's training videos) and the SimHome note in §5 (a local catalog, never committed).
-
-## Phase 14 plan
-
-Phase 14 (the library) builds on the operator groundwork, which was the sample set `assets/library/sample/` (49 items, its `catalog.json` and `ATTRIBUTION.md`) and `tools/library/`.
-
-The DAG opens with four kinds of segment: the data segments (p14-doc-furnishing, p14-doc-cabinet-parts), the pure library records (p14-arch-library), the embedded sample files (p14-io-library-files) and the glTF reader (p14-io-gltf-read). The decisions follow.
-
-**One library, nine categories.**
-- The categories, in this order: Furniture; Appliances and plumbing fixtures; Cabinet parts; Lighting and electrical; Materials; Doors and windows; Plants; Backdrops; User catalog.
-- Every item is an `ItemRecord` in `arch::library` (id, name, category, folder, kind, symbolType, placement, size, keywords, tags, style, source, licence, author, attribution, catalog, readOnly, file, elevation, cutout, notes).
-- Each catalog contributes items:
-  - `builtin`: the existing catalogues as items:
-    - door:/window:<style>, plant:<species>, lightfixture:<type>;
-    - finish:<name>, cabinet:<kind>, fixture:<kind>;
-    - frontstyle:door-/drawer-<style>;
-    - backdrop:colour/gradient.
-  - `sample`: embedded in every binary by `io::library::sample_files`, so the web build has it too.
-  - `installed:<name>`: copied into the user dir by `library.install`; read-only, and installing again updates it.
-  - `local`: a folder of .glb files with one licence, sizes from the mesh bounds, categories from folder names; remembered, never committed.
-  - `user`: see the user catalog below.
-- An item with no licence never loads. The engine's `Session.library` holds the catalogs.
-- The file readers reach it through `engine::library::LibraryIo` (read_glb, read_image, encode_png, sample), which the apps install, as they do for IoHooks.
-
-**The user dir.**
-- It is CADCRAFT_LIBRARY_USER_DIR, else $XDG_DATA_HOME/cadcraft/library.
-- It holds `state.json` (tags, saved filters, local catalogs), `installed/`, `user/`, `trash/` and `icons/<hash>.png`.
-- The checks point the user dir at a temporary folder.
-
-**Search.**
-- Every word of the text must be a substring of the name, a keyword or the folder.
-- Chips (category, folder, symbolType, placement, source = the item's catalog, style, tag) combine with AND. Zero results is a valid answer.
-- `FilterHistory` gives Back and Forward. Saved filters persist; Favorites is a built-in tag.
-- Folders come from catalog.json or `folder_for(symbolType)`.
-- `library {"for": surface key}` uses `query_for`: a pull gives pulls, a front gives front styles, a carcass gives in-cabinet items, a wall, floor, ceiling or roof gives Materials.
-
-**3D symbols.**
-- `io::gltf_read` is our own reader on serde_json and image, never the gltf crate. It accepts plain glTF 2.0 binary only:
-  - an `extensionsRequired` entry, a URI or a sparse accessor is refused, and the reason names the extension (Draco, meshopt, KTX2);
-  - textures are PNG or JPEG, decoded to RGBA at up to 256 px.
-- The mesh turns Y up to Z up, (x, y, z) → (x, −z, y), and is bottom-centred.
-- A `SymbolMesh` (parts with base colour, metallic, roughness and texture) is keyed by the FNV-1a 64 of its file.
-- Symbols are stored in the drawing (`ArchModel.symbols`), as are library images (`ArchModel.images`). A drawing therefore opens anywhere with its furniture, and undo and DXF carry it.
-
-**Furnishings.**
-- A `Furnishing` arch object has the handle f<n> at +0x60000. It records:
-  - item, symbol key, name, category and symbol type;
-  - placement, level, `at` (the footprint centre), rotation, elevation (its bottom above the level's floor) and size;
-  - mirrored, host and cut-out.
-- `Furnishing::local_to_plan` scales to the size, mirrors x, rotates, then moves. A symbol's front is its local −y (glTF +z).
-- Layers come from `layer_for`: I-FURN; P-FLOR-FIXT for sinks, lavatories, faucets, toilets, tubs and showers, else A-FLOR-APPL; E-LITE; L-PLNT.
-- IFC classes come from `ifc_class_for`: IfcFurniture, IfcSanitaryTerminal, IfcElectricAppliance, IfcLightFixture.
-- The plan symbol is the convex hull of the placed mesh, seen from above.
-
-**Placing** (`arch::library::place`, rules tried in order):
-1. A cabinet-part item over a cabinet swaps its pull or front style, and nothing is placed.
-2. A faucet on a sink takes the sink's back centre.
-3. A cut-out item over a base cabinet is centred in it, its top 1 cm above the counter, facing the room (cabinet rotation + 180). The cabinet then has a cut-out hole and a false top front. Without a cabinet, it stands at counter height.
-4. An under-counter appliance clicked in a gap of its depth between two base cabinets takes the gap (host Gap), and the counter is carried over it.
-5. A wall item puts its back on the nearest wall face within 0.3 m, at its catalog elevation, facing out.
-6. A ceiling item hangs with its top at the level's ceiling.
-7. Anything else stands at the click.
-
-**Cabinet parts.**
-- `arch::casework_layout` is the one front layout. It gives fronts, hinges and pull positions:
-  - door pulls 0.05 m from the free edge and 0.075 m from the top, or from the bottom on wall cabinets;
-  - drawer pulls centred.
-- It also gives false fronts, counter runs and gaps:
-  - touching in-line base cabinets share one counter, owned by the first;
-  - a bridged gap joins the run.
-- Front styles (slab, shaker, raised panel) have the same outer box; their triangle counts grow in that order.
-- A cabinet's pulls are one mesh group, `pull:<key>:<i>`, and export as node `cabinet-cb<n>-pull`.
-
-**Materials and painters.**
-- Surfaces have string keys:
-  - wall/w3/left|right, room/r0/floor|ceiling, roof/r0;
-  - cabinet/cb0/carcass|front|counter|pull;
-  - fixture/fx0, furnishing/f2/<part>.
-- `ArchModel.paints` maps a surface key to `Paint { material: Option<MaterialRef>, tint }`. A `MaterialRef` is a Finish, a library item (an image) or a colour.
-- `arch::paint` gives every surface its room and its effective material key: finish:<f>, item:<id>, colour:#rrggbb, default:<what>, frontstyle:<s> or sym:<key>:<i>. A wall side's room is found 0.05 m off its face; exterior sides have none.
-- Scopes select surfaces with the clicked surface's material:
-  - component: the clicked surface;
-  - object: every surface of its object;
-  - room: that material in the clicked surface's room;
-  - floor: that material on its level;
-  - plan: that material everywhere.
-- `paint.object` selects like items instead: like pulls, front styles or symbols.
-- `blend` keeps the material and sets a tint.
-- Each painter call is one undo step.
-
-**The 3D build.**
-- Mesh material names:
-  - `sym:<key>:<i>` for furnishing parts;
-  - `pull:<key>:<i>` for pulls;
-  - `paint:<surface key>` for painted surfaces. A painted wall side is split out as its own mesh, as the phase-13 exterior faces are.
-- `Scene3d` gains:
-  - `materials` (MaterialDef: base colour, metallic, roughness, texture key, tile, tint);
-  - `textures` (sym:<key>:t<i>, finish:<f>, item:<id>);
-  - `backdrop`.
-  Every renderer and exporter reads `materials` first.
-- The scene cache gains a furnishings section. Every object's inputs include its paints. A cabinet's inputs include its level's base cabinets, the furnishings they host and its pull symbol, so the cache stays the full build.
-- Furnishings probe by their placed box, since symbol meshes need not be closed.
-
-**Exports.**
-- GLB: one node `furnishing-f<n>` per furnishing, one primitive per part. Textures are embedded once as PNG; the tint goes into baseColorFactor.
-- OBJ: groups by node name, with mean colours.
-- IFC: elements by category, named as the nodes, with `CADCraft_Library` (Item, Licence, Source).
-- DXF: LWPOLYLINE proxies marked CADCRAFT-FURNISHING. Everything else rides in the v9 record's serialized model.
-
-**Icons.**
-- `arch3d::icon` is a software rasterizer: fixed camera (yaw −30°, pitch 25°), fixed light, 128 × 128.
-- Kinds: materials on a UV sphere, backdrops as thumbnails, gradients and solids.
-- Icons are byte-identical every time and cached by content hash.
-
-**Backdrops.**
-- Colour, a gradient (top to bottom of the view), or an image, flat or equirectangular (the top row is the zenith, the middle row the horizon).
-- Drawn where no surface is hit by the 3D view, the raster Finalize and the path tracer (after the resolve), in display colours.
-- A backdrop never lights the scene.
-
-**The UI.**
-- A dockable Library panel (Panel::Library): tiles, folder tree, grid or list, text and chips, Back and Forward, saved filters, Favorites, details, and a preview that turns and zooms.
-- Click an item, then click in the plan or 3D to place it. The property panel's "Library…" button runs `library {for}`.
-- Painter and eyedropper tools in the 3D pane.
-
-**Set as Default.** `arch.default {id}` stores the command parameters per kind in `ArchModel.defaults`: cabinet.<kind>, door, window, furnishing.<item>. `cabinet`, `door`, `window` and `library.place` fill in the parameters they omit from it.
-
-**Left out.**
-- Out of scope by the brief:
-  - online catalogs and accounts, manufacturer catalogs;
-  - reading OpenUSD (SimReady and SimHome are converted outside);
-  - the tile and wood material builders, the texture editor;
-  - outlets, switches, wiring (phase 15).
-- Ours:
-  - symbol lights do not emit light (their catalog `light` is data only, for phase 15);
-  - a ceiling item does not find a soffit under it;
-  - the plan outline is a convex hull, so an L-shaped sofa's notch is filled;
-  - the path tracer uses texture means;
-  - icons are flat-shaded.
-
+- **Phase-14 operator fixes (2026-11-03/05).** Nine landings on arch3d:
+  - **op/p14-land1 (3a50c117):** p14-arch3d-furnishing, p14-arch3d-icon and p14-cmd-library at level 2; render3d keeps every headless device for the process and shares one instance (a Vulkan-loader crash on device teardown) and one device per adapter choice.
+  - **op/rt-ray-query (c03fac9f):** hardware ray queries work (the WGSL used an invented API, and `.ok()` hid the error, so phase-11 check 10 had passed by skipping); the compute trace stops at `t_max`.
+  - **op/p14-land2 (722f1477):** furnishing transforms (no `unwrap` warning in every cargo reply), glb, obj-ifc, symbol-materials, paint and p14-inspect (`frontParts`) at level 2; p14-io-dxf-furnishing after the integrator refused it on phase-8 check 08's 2 s bar at load 54; check 12 excludes the Find dialog.
+  - **op/p14-check03 (118cd185):** check 03 shows the chip's widening on "dining".
+  - **op/p14-land3 (51603f8c):** p14-cmd-place (rewritten to the brief; its tests had poisoned the library-io `OnceLock`) and p14-arch3d-cabinet-parts at level 2; the counter top is elevation + carcass + thickness; the check helpers read GLB positions in drawing axes; phase-13 checks 04 and 06 revised for counter runs; the font fallback no longer depends on earlier lookups.
+  - **op/p14-demo-fixes (572880ac):** the demo kitchen gets an LED panel (its path-traced render was black); the arch payload limit is the shared 64 MiB.
+  - **op/p14-pt-backdrop (6f78f5fe):** the path tracer paints the backdrop on the pixels no sample hit (decision 36).
+  - **op/p14-docs-user-guide (23d0d1a7):** p14-docs-user-guide at level 2. Its 32 rounds had never run a test, because the swarm's gate built `-p docs` (fixed in CompleXiti 9547ec1d). Its examples rewritten to the real commands, the engine guide tests given the library readers, check 12's search rule made behavioural.
+  - **op/p14-icon-category (bcdfd934):** `library.icon` refuses unknown categories; the checks compare meshes within a tolerance (decision 37); a placed group returns object handles; Copy to User Catalog copies stock items into the User catalog under their id; edit and delete refuse a stock id; `library/user.rs` tests use the shared readers (decision 35).
