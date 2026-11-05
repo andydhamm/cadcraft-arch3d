@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 6 of 32 segments merged · 0 of 13 acceptance checks**
 
-7,493 workspace tests passing at the last merge · 765 segments merged in all · 0 of 14 seats working
+7,493 workspace tests passing at the last merge · 765 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-05 16:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 8.1 h so far · expected done Nov 06 20:28–Nov 08 06:58 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 8.3 h so far · expected done Nov 06 21:34–Nov 08 09:08 UTC |
 
 ## Phase 15 segments
 
