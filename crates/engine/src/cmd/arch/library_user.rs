@@ -242,18 +242,20 @@ fn run_copy(s: &mut Session, p: &Value) -> Result<Value> {
     let Some(rec) = s.library.item(item).cloned() else {
         return Err(bad(COPY, format!("no library item `{item}`")));
     };
-    if rec.read_only {
-        return Err(bad(COPY, format!("a stock item is read-only: Copy to User Catalog first")));
-    }
-    let name = rec.name.clone();
+    // Copy to User Catalog is how a stock (read-only) item becomes editable, so a stock item is exactly what it takes
+    // (11-04 it refused one). The copy is named after the item it copies (`sofa-futon` -> `user:sofa-futon`, then -2,
+    // -3...), not after its display name.
     let Some(dir) = s.library.user_dir() else {
         return Err(bad(COPY, "there is no library folder"));
     };
-    let slug = unique_slug(&name, &dir).map_err(|e| bad(COPY, e))?;
+    let slug = unique_slug(item.strip_prefix("user:").unwrap_or(item), &dir).map_err(|e| bad(COPY, e))?;
     let mut copy = rec.clone();
     copy.id = format!("user:{slug}");
     copy.catalog = "user".to_string();
     copy.read_only = false;
+    // A copy belongs to the User catalog, filed under its source's category (as library.add's groups belong to it).
+    copy.folder = rec.category.clone();
+    copy.category = cadcraft_arch::library::Category::User.name().to_string();
     copy.kind = ItemKind::Group;
     let file = UserItemFile { record: copy, objects: StoredObjects::default(), symbols: Default::default(), source_item: Some(item.to_string()) };
     write_user_file(&dir, &file).map_err(|e| bad(COPY, e))?;
@@ -267,6 +269,11 @@ fn run_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let Some(dir) = s.library.user_dir() else {
         return Err(bad(EDIT, "there is no library folder"));
     };
+    // Only a user item (`user:<slug>`) is edited or deleted: read_user_file maps a bare stock id to the same slug, so
+    // `sofa-futon` would reach the user's copy `user:sofa-futon` (11-05).
+    if !item.starts_with("user:") {
+        return Err(bad(EDIT, "a stock item is read-only: Copy to User Catalog first"));
+    }
     let mut file = read_user_file(&dir, item).map_err(|e| bad(EDIT, e))?;
     if file.record.read_only || !file.record.id.starts_with("user:") {
         return Err(bad(EDIT, "a stock item is read-only: Copy to User Catalog first"));
@@ -305,6 +312,11 @@ fn run_delete(s: &mut Session, p: &Value) -> Result<Value> {
     let Some(dir) = s.library.user_dir() else {
         return Err(bad(DELETE, "there is no library folder"));
     };
+    // Only a user item (`user:<slug>`) is edited or deleted: read_user_file maps a bare stock id to the same slug, so
+    // `sofa-futon` would reach the user's copy `user:sofa-futon` (11-05).
+    if !item.starts_with("user:") {
+        return Err(bad(DELETE, "a stock item is read-only: Copy to User Catalog first"));
+    }
     let file = read_user_file(&dir, item).map_err(|e| bad(DELETE, e))?;
     if file.record.read_only || !file.record.id.starts_with("user:") {
         return Err(bad(DELETE, "a stock item is read-only: Copy to User Catalog first"));

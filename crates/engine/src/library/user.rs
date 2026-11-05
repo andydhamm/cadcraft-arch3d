@@ -4,7 +4,10 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use cadcraft_arch::library::{ItemKind, ItemRecord};
-use cadcraft_doc::arch::{ArchId, Cabinet, Fixture, Furnishing, FurnishingHost, cabinet_label, fixture_label, furnishing_label};
+use cadcraft_doc::arch::{
+    ArchId, Cabinet, Fixture, Furnishing, FurnishingHost, cabinet_handle, cabinet_label, fixture_handle, fixture_label, furnishing_handle,
+    furnishing_label, handle_json,
+};
 use cadcraft_geom::Vec2;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -367,7 +370,9 @@ pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation
 
     let mut doc = s.doc_mut().map_err(|e| EngineError::Other(e.to_string()))?;
     let mut map: BTreeMap<u32, u32> = BTreeMap::new();
-    let mut handles = Vec::new();
+    // Labels per kind for the reply, and the object handles every command takes (as library.place, cabinet and fixture
+    // return them): 11-04 the reply's `handles` were the labels, so `move` on a placed group moved nothing.
+    let (mut furnishings, mut cabinets, mut fixtures, mut handles) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let mut placed = 0usize;
 
     for v in file.objects.furnishings {
@@ -389,7 +394,8 @@ pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation
         let mut last = doc.arch.furnishings[last_idx].clone();
         set_furnishing_host(&mut last, &map);
         doc.arch.furnishings[last_idx] = last;
-        handles.push(furnishing_label(new_id));
+        furnishings.push(furnishing_label(new_id));
+        handles.push(furnishing_handle(new_id).hex());
         placed += 1;
     }
 
@@ -413,7 +419,8 @@ pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation
         c.rotation += rotation;
         let new_id = doc.arch.push_cabinet(c.clone());
         map.insert(old, new_id.0);
-        handles.push(cabinet_label(new_id));
+        cabinets.push(cabinet_label(new_id));
+        handles.push(handle_json(cabinet_handle(new_id)));
         placed += 1;
     }
 
@@ -426,7 +433,8 @@ pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation
         x.rotation += rotation;
         let new_id = doc.arch.push_fixture(x.clone());
         map.insert(old, new_id.0);
-        handles.push(fixture_label(new_id));
+        fixtures.push(fixture_label(new_id));
+        handles.push(handle_json(fixture_handle(new_id)));
         placed += 1;
     }
 
@@ -434,9 +442,7 @@ pub(crate) fn place_group(s: &mut Session, item: &ItemRecord, at: Vec2, rotation
         return Err(EngineError::Other(format!("user item `{}` has no objects", item.id)));
     }
 
-    Ok(
-        json!({ "furnishings": handles.iter().filter(|h| h.starts_with('f')).cloned().collect::<Vec<_>>(), "cabinets": handles.iter().filter(|h| h.starts_with("cb")).cloned().collect::<Vec<_>>(), "fixtures": handles.iter().filter(|h| h.starts_with("fx")).cloned().collect::<Vec<_>>(), "handles": handles }),
-    )
+    Ok(json!({ "furnishings": furnishings, "cabinets": cabinets, "fixtures": fixtures, "handles": handles }))
 }
 
 #[cfg(test)]
@@ -445,17 +451,14 @@ mod tests {
     use std::path::PathBuf;
 
     use cadcraft_arch::library::ItemKind;
-    use cadcraft_doc::arch::{ArchId, Cabinet, Fixture, Furnishing, Placement, SymbolMesh};
+    use cadcraft_doc::arch::{ArchId, Cabinet, Fixture, Furnishing, Placement};
 
     use super::*;
 
+    /// The shared test readers (library::testing): a `OnceLock` keeps the first installation for the whole test binary,
+    /// so a stub here (no sample set) left every later test without the sample items, depending on test order.
     fn install_test_io() {
-        crate::library::set_library_io(crate::library::LibraryIo {
-            read_glb: |_| Ok(SymbolMesh { key: "test-symbol".to_string(), ..Default::default() }),
-            read_image: |_, _| Err("no image in tests".into()),
-            encode_png: |_| Vec::new(),
-            sample: || &[],
-        });
+        crate::library::testing::install_io();
     }
 
     fn temp_dir() -> PathBuf {
@@ -584,7 +587,7 @@ mod tests {
 
         let symbol_file = dir.join("user").join("armchair.glb");
         fs::create_dir_all(symbol_file.parent().unwrap()).unwrap();
-        fs::write(&symbol_file, b"stub").unwrap();
+        fs::write(&symbol_file, b"glTF").unwrap();
         let mut lib = crate::library::Library::with_user_dir(Some(dir.clone()));
         lib.add_user_item(ItemRecord {
             id: "armchair".to_string(),
@@ -646,7 +649,7 @@ mod tests {
 
         let symbol_file = dir.join("user").join("armchair.glb");
         fs::create_dir_all(symbol_file.parent().unwrap()).unwrap();
-        fs::write(&symbol_file, b"stub").unwrap();
+        fs::write(&symbol_file, b"glTF").unwrap();
         let mut lib = crate::library::Library::with_user_dir(Some(dir.clone()));
         lib.add_user_item(ItemRecord {
             id: "armchair".to_string(),
@@ -800,6 +803,70 @@ mod tests {
         s.library = lib;
         let r = place_group(&mut s, &rec, Vec2::ZERO, 0.0);
         assert!(r.is_err(), "empty group should error");
+    }
+
+    #[test]
+    fn a_placed_group_returns_handles_that_move_takes() {
+        // 11-04: phase-14 check 08 moved a placed dining set back by the `handles` its placement returned and nothing
+        // moved: they were the labels (`f3`, ...), which no command takes.
+        install_test_io();
+        let dir = temp_dir();
+        let mut s = crate::Session::new();
+        s.library = crate::library::Library::with_user_dir(Some(dir.clone()));
+        s.new_drawing(true);
+        s.execute("library.place", &json!({"item": "table-dining-150", "at": [2.0, 2.0]})).unwrap();
+        s.execute("library.place", &json!({"item": "chair-dining-wood", "at": [2.0, 1.4]})).unwrap();
+        s.execute("library.add", &json!({"objects": ["f0", "f1"], "name": "Pair", "insertionPoint": [2.0, 2.0]})).unwrap();
+        let r = s.execute("library.place", &json!({"item": "user:pair", "at": [7.0, 2.0]})).unwrap();
+        assert_eq!(r["furnishings"], json!(["f2", "f3"]), "{r}");
+        let moved = s.execute("move", &json!({"handles": r["handles"].clone(), "delta": [-5.0, 0.0]})).unwrap();
+        assert_eq!(moved["moved"], json!(2), "placed {r}, moved {moved}");
+        let doc = s.doc().unwrap();
+        for (a, b) in [(0, 2), (1, 3)] {
+            let (fa, fb) = (&doc.arch.furnishings[a], &doc.arch.furnishings[b]);
+            assert!((fa.at[0] - fb.at[0]).abs() < 1e-9 && (fa.at[1] - fb.at[1]).abs() < 1e-9, "{:?} / {:?}", fa.at, fb.at);
+        }
+    }
+
+    #[test]
+    fn copy_to_user_catalog_takes_a_stock_item_and_keeps_its_id() {
+        // 11-04: phase-14 check 08's `library.copy {"item": "sofa-futon"}` was refused ("a stock item is read-only: Copy
+        // to User Catalog first"), and a copy took its id from the name ("Futon couch"), not the item.
+        install_test_io();
+        let dir = temp_dir();
+        let mut s = crate::Session::new();
+        s.library = crate::library::Library::with_user_dir(Some(dir.clone()));
+        s.new_drawing(true);
+        let r = s.execute("library.copy", &json!({"item": "sofa-futon"})).unwrap();
+        assert_eq!(r["item"], json!("user:sofa-futon"), "{r}");
+        s.execute("library.edit", &json!({"item": "user:sofa-futon", "name": "Guest futon", "notes": "for the den"})).unwrap();
+        let copy = s.execute("library.item", &json!({"id": "user:sofa-futon"})).unwrap();
+        assert_eq!(copy["item"]["name"], json!("Guest futon"), "{copy}");
+        assert_eq!(copy["item"]["readOnly"], json!(false), "{copy}");
+        assert_eq!(copy["item"]["category"], json!("User catalog"), "the copy is in the User catalog: {copy}");
+        let stock = s.execute("library.item", &json!({"id": "sofa-futon"})).unwrap();
+        assert_eq!(stock["item"]["name"], json!("Futon couch"), "{stock}");
+        assert_eq!(stock["item"]["readOnly"], json!(true), "{stock}");
+        let again = s.execute("library.copy", &json!({"item": "sofa-futon"})).unwrap();
+        assert_eq!(again["item"], json!("user:sofa-futon-2"), "{again}");
+    }
+
+    #[test]
+    fn editing_or_deleting_a_stock_id_never_touches_its_copy() {
+        // 11-05: with the copy stored as user/sofa-futon.json, `library.delete {"item": "sofa-futon"}` read that file (the
+        // stock id with no `user:` prefix maps to the same slug) and trashed the user's copy instead of refusing.
+        install_test_io();
+        let dir = temp_dir();
+        let mut s = crate::Session::new();
+        s.library = crate::library::Library::with_user_dir(Some(dir.clone()));
+        s.new_drawing(true);
+        s.execute("library.copy", &json!({"item": "sofa-futon"})).unwrap();
+        assert!(s.execute("library.edit", &json!({"item": "sofa-futon", "name": "Renamed"})).is_err(), "editing a stock item is refused");
+        assert!(s.execute("library.delete", &json!({"item": "sofa-futon"})).is_err(), "deleting a stock item is refused");
+        let copy = s.execute("library.item", &json!({"id": "user:sofa-futon"})).unwrap();
+        assert_eq!(copy["item"]["name"], json!("Futon couch"), "the copy is untouched: {copy}");
+        let trash = s.execute("library.trash", &json!({"action": "list"})).unwrap();
+        assert_eq!(trash["trash"], json!([]), "{trash}");
     }
 
     #[test]
