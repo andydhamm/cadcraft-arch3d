@@ -27,6 +27,7 @@ pub mod library_icon;
 pub mod library_user;
 pub(crate) mod light_inspect;
 pub mod lightfixture;
+pub mod lightset;
 pub mod material;
 pub mod opening;
 pub mod paint;
@@ -105,6 +106,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(plant::specs());
     v.extend(defaults::specs());
     v.extend(lightfixture::specs());
+    v.extend(lightset::specs());
     v.extend(casework::specs());
     v.extend(material::specs());
     v.extend(illuminance::specs());

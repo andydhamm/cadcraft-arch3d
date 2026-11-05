@@ -38,6 +38,8 @@ pub struct RenderRequest<'a> {
     pub drawing: &'a Drawing,
     /// `None`: the active saved camera, else the orbit fitted to the scene.
     pub camera: Option<Camera>,
+    /// Lights to apply only for this render; `None` = no override.
+    pub light_set: Option<String>,
     /// Pixels, each side 1..=8192.
     pub size: (u32, u32),
     /// Where to write the PNG; `None` renders without writing (the reply still reports).
@@ -131,6 +133,7 @@ impl<'a> RenderRequest<'a> {
         Self {
             drawing,
             camera,
+            light_set: None,
             size,
             out,
             final_render,
@@ -142,6 +145,12 @@ impl<'a> RenderRequest<'a> {
             final_mode: FinalMode::default(),
             path: PathParams::default(),
         }
+    }
+
+    /// The same request with an override light set for this render only.
+    pub fn with_light_set(mut self, name: Option<String>) -> Self {
+        self.light_set = name;
+        self
     }
 
     /// The same request with a Finalize mode and path-tracer settings (phase 11).
@@ -428,16 +437,40 @@ fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
     }
 }
 
-fn camera_from_params(v: Option<&Value>, doc: &Drawing) -> Result<Option<Camera>, EngineError> {
+fn camera_from_params(v: Option<&Value>, doc: &Drawing) -> Result<(Option<Camera>, Option<String>), EngineError> {
     match v {
         None | Some(Value::Null) => match &doc.arch.active_camera {
             Some(name) => match doc.arch.camera_by_name(name) {
-                Some(c) => Ok(Some(camera_from_saved(c)?)),
-                None => Ok(None),
+                Some(c) => Ok((Some(camera_from_saved(c)?), c.light_set.clone())),
+                None => Ok((None, None)),
             },
-            None => Ok(None),
+            None => Ok((None, None)),
         },
-        Some(cv) => Ok(Some(parse_camera(cv)?)),
+        Some(Value::String(name)) => {
+            let name = name.trim();
+            match doc.arch.camera_by_name(name) {
+                Some(c) => Ok((Some(camera_from_saved(c)?), c.light_set.clone())),
+                None => Err(bad("render", format!("no camera named `{name}`"))),
+            }
+        }
+        Some(cv) => Ok((Some(parse_camera(cv)?), None)),
+    }
+}
+
+fn parse_light_set(v: Option<&Value>, doc: &Drawing, cmd: &str) -> Result<Option<String>, EngineError> {
+    match v {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(name)) => {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(bad(cmd, "`lightSet` must be a non-empty string or null"));
+            }
+            if !doc.arch.light_sets.iter().any(|set| set.name == name) {
+                return Err(bad(cmd, format!("unknown light set `{name}`")));
+            }
+            Ok(Some(name.to_string()))
+        }
+        Some(_) => Err(bad(cmd, "`lightSet` must be a string name or null")),
     }
 }
 
@@ -448,7 +481,11 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let doc = s.doc()?;
 
     let size = parse_size(params.get("size"))?;
-    let camera = camera_from_params(params.get("camera"), doc)?;
+    let (camera, camera_light_set) = camera_from_params(params.get("camera"), doc)?;
+    let light_set = match params.get("lightSet") {
+        Some(_) => parse_light_set(params.get("lightSet"), doc, "render")?,
+        None => camera_light_set,
+    };
     let (final_render, final_mode) = parse_final(params.get("final"))?;
     let sun = parse_sun(params.get("sun"), doc)?;
     let style = parse_style(params.get("style"))?;
@@ -458,7 +495,9 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let out = params.get("out").and_then(Value::as_str).map(PathBuf::from);
 
     let path = parse_path_params(params)?;
-    let request = RenderRequest::new(&doc, camera, size, out, final_render, sun, style, ground, budget, samples).with_final(final_mode, path);
+    let request = RenderRequest::new(&doc, camera, size, out, final_render, sun, style, ground, budget, samples)
+        .with_light_set(light_set)
+        .with_final(final_mode, path);
 
     (hooks.render)(&request).map_err(|e| bad("render", e))
 }
@@ -468,7 +507,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("render", "Render 3D", run_render)
             .menu(&["Architecture", "Render 3D"])
-            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?: shaded | shaded-edges | hidden-line | glass-house | clay | technical, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
+            .params("{out?: path, size?: [w,h], camera?: name|{…}, lightSet?: name, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?: shaded | shaded-edges | hidden-line | glass-house | clay | technical, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
             .noundo(),
     ]
 }

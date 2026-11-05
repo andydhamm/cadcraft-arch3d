@@ -186,6 +186,7 @@ fn camera_save(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     cam.fov_deg = None;
     cam.eye = None;
     cam.eye_height = None;
+    cam.light_set = None;
 
     if let Some(t) = opt_vec::<3>(params, "target")? {
         cam.target = Some(t);
@@ -264,6 +265,22 @@ fn camera_save(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         }
         cam.fov_deg = Some(f);
     }
+    if let Some(raw) = params.get("lightSet") {
+        if raw.is_null() {
+            cam.light_set = None;
+        } else {
+            let name = raw
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| bad("camera", "`lightSet` must be a non-empty string or null"))?;
+            let doc = s.doc()?;
+            if !doc.arch.light_sets.iter().any(|set| set.name == name) {
+                return Err(bad("camera", format!("unknown light set `{name}`")));
+            }
+            cam.light_set = Some(name.to_string());
+        }
+    }
     if kind == CameraKind::Orbit {
         if cam.azimuth_deg.is_none() {
             return Err(bad("camera", "an `orbit` camera needs `azimuth`"));
@@ -320,6 +337,7 @@ fn cameras_json(s: &Session) -> Result<Value, EngineError> {
                 "eye": eye,
                 "eyeHeight": c.eye_height,
                 "fov": c.fov_deg,
+                "lightSet": c.light_set,
             })
         })
         .collect();
@@ -417,6 +435,24 @@ mod tests {
         s.execute("camera", &json!({ "list": true })).unwrap();
         assert_eq!(s.doc().unwrap().arch_revision, rev);
         assert_eq!(s.doc().unwrap().arch.cameras, cams);
+    }
+
+    #[test]
+    fn a_cameras_light_set_applies_to_its_renders() {
+        let mut s = Session::new();
+        let mut doc = s.doc_mut().unwrap();
+        doc.arch.lights.push(cadcraft_doc::arch::LightFixture::new(
+            cadcraft_doc::arch::ArchId(0),
+            "Recessed can",
+            cadcraft_geom::Vec2::new(0.0, 0.0),
+        ));
+        doc.touch_arch();
+        s.execute("lightset", &json!({ "name": "night", "lights": { "lf0": { "on": false, "brightness": 0.25 } } })).unwrap();
+        s.execute("camera", &json!({ "save": "front", "azimuth": 0.0, "lightSet": "night" })).unwrap();
+        let camera = s.doc().unwrap().arch.camera_by_name("front").unwrap();
+        assert_eq!(camera.light_set.as_deref(), Some("night"));
+        let set = s.doc().unwrap().arch.light_sets.iter().find(|set| set.name == "night").unwrap();
+        assert!(!set.lights["lf0"].on);
     }
 
     #[test]
