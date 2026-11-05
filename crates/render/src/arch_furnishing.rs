@@ -7,11 +7,14 @@ use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::furnishing_handle;
 
 use crate::DisplayList;
-use crate::arch::{arch_layer_skipped, push_polyline};
+use crate::arch::{arch_layer_skipped, on_shown_level, push_polyline};
 
 /// Append every furnishing's plan outline to `list`.
 pub(crate) fn push_furnishings(d: &Drawing, list: &mut DisplayList, plotting: bool) {
     for f in &d.arch.furnishings {
+        if !on_shown_level(d, f.level) {
+            continue;
+        }
         let layer = furnishing_layer(f);
         if arch_layer_skipped(d, layer, plotting) {
             continue;
