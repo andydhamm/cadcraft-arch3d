@@ -410,7 +410,8 @@ impl Offscreen {
                 }
                 let p = if matches!(opts.style, Style::Technical) {
                     // Flat shading: ambient 1.0, sun 0.0
-                    PbrUniform::new(&Light { ambient: 1.0, dir: [0.0, 0.0, 1.0] }, 0.0, &draw, opts.style.code(), eye)
+                    let light = Light { ambient: 1.0, dir: [0.0, 0.0, 1.0], ..Default::default() };
+                    PbrUniform::new(&light, 0.0, &draw, opts.style.code(), eye)
                 } else {
                     match lit {
                         Some((frame, _)) => {

@@ -1167,8 +1167,8 @@ mod tests {
         assert_eq!(p.roughness, 0.5);
         // -Inf alpha clamped to 0.0.
         assert_eq!(p.alpha, 0.0);
-        // u32::MAX style clamped to STYLE_CLAY.
-        assert_eq!(p.style, STYLE_CLAY);
+        // u32::MAX style clamped to STYLE_TECHNICAL.
+        assert_eq!(p.style, STYLE_TECHNICAL);
         // Non-finite camera components zeroed.
         assert_eq!(p.camera_pos, [0.0, 0.0, 0.0]);
     }
@@ -1229,7 +1229,7 @@ mod tests {
 
         // Any value above the max style is clamped down.
         let p100 = PbrUniform::new(&light, 1.0, &draw, 100, [0.0; 3]);
-        assert_eq!(p100.style, STYLE_CLAY);
+        assert_eq!(p100.style, STYLE_TECHNICAL);
     }
 
     #[test]
