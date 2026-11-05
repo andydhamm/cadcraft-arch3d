@@ -147,6 +147,11 @@ fn run_library_icon(s: &mut Session, p: &Value) -> Result<Value> {
 
     let source = match (item_id, category_id) {
         (Some(id), None) => s.library.item(id).ok_or_else(|| bad(CMD, format!("no library item `{id}`")))?.clone(),
+        // One of the nine categories, or refused: only a real category with no items gets the grey icon.
+        (None, Some(name)) if Category::parse(name).is_none() => {
+            let names: Vec<&str> = Category::ALL.iter().map(|c| c.name()).collect();
+            return Err(bad(CMD, format!("unknown category `{name}`: one of {}", names.join(", "))));
+        }
         (None, Some(name)) => match item_for_category(&s.library, name) {
             Ok(item) => item.clone(),
             Err(_) => {
@@ -279,6 +284,26 @@ mod tests {
         let item_id = item_for_category(&s.library, category).unwrap().id.clone();
         let response = run_library_icon(&mut s, &json!({"category": category, "cache": false})).unwrap();
         assert_eq!(response["item"], item_id);
+    }
+
+    #[test]
+    fn an_unknown_category_is_refused() {
+        // 11-04: phase-14 check 11 sent `library.icon {"category": "Spaceships"}` and got a grey PNG back.
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        let err = run_library_icon(&mut s, &json!({"category": "Spaceships", "cache": false})).unwrap_err();
+        assert!(err.to_string().contains("Spaceships"), "{err}");
+    }
+
+    #[test]
+    fn every_real_category_gets_an_icon() {
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        for c in Category::ALL {
+            let r = run_library_icon(&mut s, &json!({"category": c.name(), "cache": false}))
+                .unwrap_or_else(|e| panic!("{}: {e}", c.name()));
+            assert!(r["png"].as_str().is_some_and(|p| !p.is_empty()), "{}", c.name());
+        }
     }
 
     #[test]
