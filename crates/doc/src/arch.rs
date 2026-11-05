@@ -1643,10 +1643,34 @@ impl Default for ArchModel {
             backdrop: None,
             defaults: Default::default(),
             plant_species: Vec::new(),
-            levels: Vec::new(),
-            types: Vec::new(),
+            levels: vec![Level { index: 0, name: "Level 1".into(), ..Level::default() }],
+            types: default_wall_types(),
         }
     }
+}
+
+fn default_wall_types() -> Vec<WallType> {
+    vec![
+        WallType {
+            name: "Exterior".into(),
+            layers: vec![
+                WallLayer { name: "Finish".into(), thickness: 0.013, material: "plaster".into() },
+                WallLayer { name: "Sheathing".into(), thickness: 0.032, material: "wood".into() },
+                WallLayer { name: "Stud".into(), thickness: 0.061, material: "timber".into() },
+                WallLayer { name: "Lining".into(), thickness: 0.032, material: "plaster".into() },
+            ],
+            reference: RefSide::Left,
+        },
+        WallType {
+            name: "Interior".into(),
+            layers: vec![
+                WallLayer { name: "Lining".into(), thickness: 0.012, material: "plaster".into() },
+                WallLayer { name: "Stud".into(), thickness: 0.089, material: "timber".into() },
+                WallLayer { name: "Lining".into(), thickness: 0.012, material: "plaster".into() },
+            ],
+            reference: RefSide::Left,
+        },
+    ]
 }
 
 impl ArchModel {
@@ -1703,8 +1727,6 @@ impl ArchModel {
         self.walls.is_empty()
             && self.openings.is_empty()
             && self.rooms.is_empty()
-            && self.levels.is_empty()
-            && self.types.is_empty()
             && self.roofs.is_empty()
             && self.stairs.is_empty()
             && self.railings.is_empty()
