@@ -6,6 +6,7 @@ use super::draw::entity;
 use super::pipeline::PARALLEL_CHUNK;
 use super::pipeline::{Options, style_table, top_ctx, with_point_view};
 use super::{Bounds2, Builder, Ctx, Drawing, Entity, EntityKind, Handle, MAX_BLOCK_EXPANSION, Mat3, Pen, Space, Vec2, clip, paper, pen, plotstyle};
+use cadcraft_doc::{is_opening_handle, is_railing_handle, is_roof_handle, is_room_handle, is_stair_handle};
 
 /// Upper bound on viewports drawn per layout (hostile files).
 pub(crate) const MAX_VIEWPORTS: usize = 256;
