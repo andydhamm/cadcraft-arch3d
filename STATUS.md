@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 9 of 33 segments merged · 0 of 13 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 10 of 33 segments merged · 0 of 14 acceptance checks**
 
-7,512 workspace tests passing at the last merge · 769 segments merged in all · 0 of 14 seats working
+7,520 workspace tests passing at the last merge · 770 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,28 +25,28 @@ Updated 2026-11-05 20:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 11.8 h so far · expected done Nov 07 00:37–Nov 08 13:12 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 14 | 12.1 h so far · expected done Nov 06 21:02–Nov 08 05:26 UTC |
 
 ## Phase 15 segments
 
-15 queued, 9 merged, 4 gate, 4 merging, 1 escalate
+15 queued, 10 merged, 4 merging, 2 escalate, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-arch-connections` | arch: connection arcs and circuits | gate | bonsai-b |
+| `p15-arch-connections` | arch: connection arcs and circuits | escalate |  |
 | `p15-arch-outlets-auto` | arch: auto-placed outlets and the spacing rule | escalate |  |
 | `p15-arch-spanning-walls` | arch: walls spanning levels in rooms, footprints, roofs, areas and placement | merging | claude-sonnet-b |
-| `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | gate | darwin-ws3 |
+| `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | working | darwin-ws3 |
 | `p15-render-plan-level` | render: the plan draws the shown level | merging | claude-sonnet-d |
 | `p15-cmd-light-sets` | engine: lightset, a camera's light set, render with a light set | merging | mai-flash |
 | `p15-cmd-electrical-view` | engine: view.electrical and level.show | gate | mai-flash-esc |
-| `upstream-sync-df6597445` | merge upstream upstream/main up to df6597445 (12 commits) | merging | claude-sonnet-c |
-| `p15-cmd-library-copy-place` | engine: a copied library item places like its source | gate | claude-sonnet-a |
+| `p15-cmd-library-copy-place` | engine: a copied library item places like its source | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 05 20:17 | `upstream-sync-df6597445` | merged | 7,520 pass | claude-sonnet-c |
 | Nov 05 19:19 | `harden-p15-i18n-labels` | merged | 7,512 pass | tturbo-mac |
 | Nov 05 18:12 | `p15-arch-electrical` | merged | 7,508 pass | mai-flash-esc |
 | Nov 05 16:48 | `p15-arch3d-light-brightness` | merged | 7,496 pass | claude-sonnet-a |
@@ -58,23 +58,22 @@ Updated 2026-11-05 20:15 UTC. This page and the card in the README are regenerat
 | Nov 05 11:59 | `p15-render3d-clay` | merged | 7,477 pass | darwin-ws3 |
 | Nov 05 11:12 | `p15-i18n-labels` | merged | 7,474 pass | claude-sonnet-a |
 | Nov 05 09:01 | `harden-p14-docs-user-guide` | merged | 7,473 pass | tturbo-mac |
-| Nov 05 07:46 | `upstream-sync-c4d9e6ac6` | merged | 7,468 pass | bonsai-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 903 |
-| bonsai-b | bonsai2-27b | gate | 832 |
-| bonsai-ws2-a | bonsai2-27b | agent | 930 |
-| bonsai-ws2-b | bonsai2-27b | gate | 891 |
-| claude-sonnet-a | sonnet | gate | 81 |
+| bonsai-b | bonsai2-27b | gate | 833 |
+| bonsai-ws2-a | bonsai2-27b | gate | 930 |
+| bonsai-ws2-b | bonsai2-27b | gate | 892 |
+| claude-sonnet-a | sonnet | merging | 82 |
 | claude-sonnet-b | sonnet | merging | 82 |
-| claude-sonnet-c | sonnet | merging | 35 |
+| claude-sonnet-c | sonnet | idle | 35 |
 | claude-sonnet-d | sonnet | merging | 21 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 777 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 778 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 62 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 31 |
-| tturbo-mac | tturbo-ultraheretic | agent | 621 |
+| tturbo-mac | tturbo-ultraheretic | gate | 621 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
