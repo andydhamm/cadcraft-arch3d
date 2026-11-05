@@ -693,3 +693,50 @@ sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFA
   - **op/p14-pt-backdrop (6f78f5fe):** the path tracer paints the backdrop on the pixels no sample hit (decision 36).
   - **op/p14-docs-user-guide (23d0d1a7):** p14-docs-user-guide at level 2. Its 32 rounds had never run a test, because the swarm's gate built `-p docs` (fixed in CompleXiti 9547ec1d). Its examples rewritten to the real commands, the engine guide tests given the library readers, check 12's search rule made behavioural.
   - **op/p14-icon-category (bcdfd934):** `library.icon` refuses unknown categories; the checks compare meshes within a tolerance (decision 37); a placed group returns object handles; Copy to User Catalog copies stock items into the User catalog under their id; edit and delete refuse a stock id; `library/user.rs` tests use the shared readers (decision 35).
+
+## Phase 15 plan
+
+## Phase 15 plan
+
+Phase 15 (electrical, split levels, the showcase house) needs no groundwork outside the swarm. Six segments open the DAG: the two data segments (p15-doc-electrical, p15-doc-levels), every phase-15 translation row (p15-i18n-labels, so no command segment edits the .tsv files), `export {view|level}`, the clay style and `cadcraft-cli run --commands`. The decisions follow.
+
+**Electrical devices.**
+- `ElectricalDevice` (handle el<n> at +0x68000): kind (duplex, GFCI, 240 V; single-pole, three-way, dimmer), wall, side (left/right, the surface-key sides), offset (wall start to plate centre), height (plate centre above the level's floor), counter, level.
+- Standard heights: outlets 0.3 m, switches 1.2 m; a counter outlet 0.15 m above the counter top in front (elevation + carcass + counter thickness, which arch.inspect reports as `counterTop`).
+- Layers: outlets E-POWR, switches and connection arcs E-LITE. Plates are 0.07 x 0.115 m, 0.006 m proud of the face (probe part `electrical`, GLB node `electrical-el<n>`, IfcOutlet / IfcSwitchingDevice).
+- A device in a doorway (an opening with sill 0) or past a wall's end is refused.
+
+**Connections and circuits.**
+- `Connection` (cn<n> at +0x70000): from a switch to light fixtures, with a bulge (-1..1, the arc's sagitta over half the chord) that the plan's grip reshapes.
+- Switches that share a light are one circuit (so two three-way switches make one). `circuit.brightness` sets `LightFixture.brightness` (0..=1, default 1) on every light of the circuit, and arch3d scales lumens by it.
+
+**Auto-placed outlets.**
+- Usable wall is the room's boundary along the faces that face it, broken at doorways (sill 0; windows do not break it). Distance is measured along the wall.
+- Duplex outlets so that no point is farther than 1.8 m from one. In a kitchen, GFCI over every counter run (at most 1.2 m apart, within 0.6 m of each end), and the wall behind a counter is served by the counter rule.
+
+**Light sets.** Named sets of {on, brightness} per light, stored in the drawing; a camera stores its set; a render applies a set to its lights for that render only (the model never changes).
+
+**Levels and split levels.**
+- A level's elevation is free (`level {elevation}`, `level.edit`), and its kind is floor or landing. A new drawing's level 0 always exists (`ensure_ground_level`).
+- A wall with `top_level` runs from its base level's floor to the top level's ceiling. Every crate selects a level's walls with `Wall::spans_level`, and heights come from `bottom_z`/`top_z`. A wall spanning Lower to Main bounds rooms on Lower, the landing and Main, and carries Main's roof.
+- An opening's sill is measured from its own level, so the front door opens from the landing.
+- `level.show` sets `ArchModel.plan_level`, the one level the plan draws; the site draws on every level.
+
+**Grade classes.** A level is above grade when its floor is at or above the finished grade (the terrain with its pads; 0 with no terrain) 0.3 m outside every exterior wall that spans it, sampled every 0.5 m; otherwise it is a basement. The above-grade area is the interior area of the rooms on floor levels classed above grade (landings and basements never count).
+
+**Pads.** The first floor is the lowest level at or above 0, landings included. Its pad and the basement cuts stay as in phase 9. New:
+- a floor level reaching past the footprints below it (a side split) gets its own pad there;
+- a door on a landing gets a flat apron one 0.15 m step below the landing (door width + 1.2 m wide, 1.5 m deep), applied last.
+
+**Views.**
+- The Electrical view is the layer state "Electrical": E-* layers on, every other layer at transparency 70.
+- `render {style: clay}` renders every material #b4b4b4. Technical illustration (flat colours with phase 7's silhouette and crease lines) is optional and built last; until it lands the style is refused as "not available yet", and check 09 counts that as a SKIP.
+- `export {view}` frames one elevation or section; `export {level}` gives one level's plan.
+
+**The showcase house.** `docs/arch3d/showcase/bilevel.json` is a JSON array of {cmd, params} replayed by `cadcraft-cli run --commands`:
+- Lower at -1.2 (a basement), the Entry landing at 0.15 with the front door and half flights, Main at 1.5 (above grade, at least 371.6 m² of rooms);
+- a sloping graded site with a driveway, sidewalks, trees, shrubs and planting beds (`PathKind::Bed`);
+- four cameras, a light set and the views.
+
+`tools/showcase/render_all.py` renders every view style, the exports and a contact sheet with a manifest. `crates/engine/tests/showcase.rs` replays the script through the engine and asserts the brief's numbers.
+
