@@ -38,6 +38,18 @@ pub fn edge_lines(scene: &Scene3d) -> Vec<[f32; 3]> {
     out
 }
 
+/// Line-list vertices including silhouette edges for the given view direction.
+pub fn edge_lines_with_view(scene: &Scene3d, view_dir: [f32; 3]) -> Vec<[f32; 3]> {
+    let edges = scene_feature_edges(scene, CREASE_DEG);
+    let mut out = Vec::with_capacity(edges.len().saturating_mul(2));
+    for e in edges.iter().filter(|e| matches!(e.kind, EdgeKind::Boundary | EdgeKind::Crease | EdgeKind::NonManifold | EdgeKind::Silhouette)) {
+        for p in [e.a, e.b] {
+            out.push([p[0] as f32, p[1] as f32, p[2] as f32]);
+        }
+    }
+    out
+}
+
 /// The line pipeline and its resident vertex buffer.
 pub struct EdgePass {
     pipeline: wgpu::RenderPipeline,
@@ -121,9 +133,10 @@ impl EdgePass {
         scene_key: u64,
         view_proj: [[f32; 4]; 4],
         color: [f32; 4],
+        view_dir: [f32; 3],
     ) {
         if self.vertices.as_ref().is_none_or(|(k, _, _)| *k != scene_key) {
-            let lines = edge_lines(scene);
+            let lines = edge_lines_with_view(scene, view_dir);
             let count = u32::try_from(lines.len()).unwrap_or(u32::MAX);
             let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("render3d edge vertices"),

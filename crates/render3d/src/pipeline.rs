@@ -45,6 +45,9 @@ pub const STYLE_GLASS_HOUSE: u32 = 3;
 /// Shading style: every material a plain grey (#b4b4b4, metallic 0, roughness 0.8), no texture,
 /// no tint; lighting as `STYLE_SHADED` (phase 15, the clay style).
 pub const STYLE_CLAY: u32 = 4;
+/// Shading style: flat material base colours (no lighting, no shadows) with silhouette and crease
+/// lines drawn dark over them (phase 15, technical illustration).
+pub const STYLE_TECHNICAL: u32 = 5;
 /// Linear albedo of the clay style: #b4b4b4.
 pub const CLAY_ALBEDO: [f32; 3] = [180.0 / 255.0; 3];
 /// Roughness of the clay style.
@@ -105,21 +108,22 @@ impl PbrUniform {
             }
         }
         let clay = style_is_clay(style);
+        let technical = style == STYLE_TECHNICAL;
         PbrUniform {
             light_dir: l.dir,
             sun_intensity: fin(sun_intensity, 1.0).max(0.0),
             ambient: l.ambient,
-            metallic: if clay { 0.0 } else { fin(draw.metallic, 0.0).clamp(0.0, 1.0) },
+            metallic: if clay || technical { 0.0 } else { fin(draw.metallic, 0.0).clamp(0.0, 1.0) },
             roughness: if clay { CLAY_ROUGHNESS } else { fin(draw.roughness, 0.5).clamp(0.0, 1.0) },
             alpha: fin(draw.alpha, 1.0).clamp(0.0, 1.0),
-            style: style.min(STYLE_CLAY),
+            style: style.min(STYLE_TECHNICAL),
             _p0: [0; 3],
             camera_pos: cam,
             shadow_min: 0.0,
             shadow_max: 0.0,
             _p1: [0.0; 3],
-            _p2: if clay {
-                // Clay: no emissive, no texture (layer 0 is white).
+            _p2: if clay || technical {
+                // Clay and Technical: no emissive, no texture (layer 0 is white).
                 [0.0, 0.0, 1.0, 1.0]
             } else {
                 [
@@ -1163,8 +1167,8 @@ mod tests {
         assert_eq!(p.roughness, 0.5);
         // -Inf alpha clamped to 0.0.
         assert_eq!(p.alpha, 0.0);
-        // u32::MAX style clamped to STYLE_CLAY.
-        assert_eq!(p.style, STYLE_CLAY);
+        // u32::MAX style clamped to STYLE_TECHNICAL.
+        assert_eq!(p.style, STYLE_TECHNICAL);
         // Non-finite camera components zeroed.
         assert_eq!(p.camera_pos, [0.0, 0.0, 0.0]);
     }
@@ -1225,7 +1229,7 @@ mod tests {
 
         // Any value above the max style is clamped down.
         let p100 = PbrUniform::new(&light, 1.0, &draw, 100, [0.0; 3]);
-        assert_eq!(p100.style, STYLE_CLAY);
+        assert_eq!(p100.style, STYLE_TECHNICAL);
     }
 
     #[test]
