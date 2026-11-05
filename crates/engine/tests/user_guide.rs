@@ -155,9 +155,16 @@ fn stand_in_plot(_: &cadcraft_doc::Drawing, _: &cadcraft_doc::Space, _: &serde_j
 }
 
 /// Installs the stand-in file hooks (the first installation in the process wins): no reader, a writer that
-/// answers with a few bytes so `export` runs, and the stand-in plotter.
+/// answers with a few bytes so `export` runs, and the stand-in plotter. Also the library's readers, as the CLI
+/// installs them, so the guide's library blocks (`library`, `library.place` of sample items) run here too.
 fn install_io() {
     set_io(IoHooks { read: |_, _| Err("no reader in this test".into()), write: |_, _| Ok(b"stand-in export".to_vec()), plot: Some(stand_in_plot) });
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
 }
 
 /// Every `run` line of every ```sh block executes through the engine as the CLI runs it: a fresh session per line,

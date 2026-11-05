@@ -441,6 +441,105 @@ cargo run -q -p cadcraft-cli -- run --metric \
 
 The `docs/arch3d/mcp-examples/` directory contains JSONL sessions that demonstrate how to use the MCP server to build houses, detect plans, and export models. Each file is a sequence of JSON-RPC requests that can be replayed with `cadcraft-cli mcp < FILE.jsonl`. See the README in that directory for details.
 
+## The library
+
+One library holds everything you can place. It opens on nine categories: Furniture; Appliances and plumbing fixtures;
+Cabinet parts (door and drawer styles, pulls, counters); Lighting and electrical; Materials; Doors and windows; Plants;
+Backdrops; and the User catalog with its Trash. Under each are folders, then items with a preview. The older catalogues
+(door and window sizes, plants, light fixtures, materials, cabinet and fixture kinds) appear in it as items, and their
+commands keep working. The 3D symbols are `.glb` meshes from the committed sample set (`assets/library/sample/`), each
+with a source and a licence; an item with no licence does not load. Every size is in metres.
+
+### Searching
+
+The Library panel searches text over item names, keywords and folder names, plus filter chips (category, symbol type,
+placement, source, style, tag) that combine with AND; remove a chip to widen the search again. Zero results is a valid
+answer. Back and Forward step through the filter history; a filter can be saved and reopened, and items can be tagged,
+with Favorites as a built-in tag. The same search is the `library` command:
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'library {"text": "chair", "chips": [{"kind": "symbolType", "value": "chair/stool"}]}'
+```
+
+### Placing
+
+Click an item, move into a plan or 3D view and click to place it (`library.place {"item", "at": [x,y], "rotation"?,
+"level"?}` does the same headless). The placed symbol is a furnishing on the layer of its category. Where it lands
+depends on its placement and what you clicked:
+
+- a floor item stands on the level's floor at the click;
+- a wall item puts its back on the nearest wall face within 0.3 m of the click;
+- a ceiling item hangs with its top at the room's ceiling;
+- a sink or cooktop clicked over a base cabinet goes into it, with a counter cut-out and a false top drawer, and a
+  faucet snaps to its sink's back centre;
+- an appliance such as a 0.6 m dishwasher clicked in the gap between two base cabinets takes the gap, and the counter
+  runs on over it;
+- a cabinet-part item (a door style or a pull) clicked over a cabinet's front or pull swaps that style instead of
+  placing anything.
+
+Afterwards size, elevation, rotation and materials edit in place, and furnishings move, copy, reflect and centre like
+other objects.
+
+### The painters and the eyedropper
+
+`paint.material {"material", "target", "scope", "mode"}` puts a material (a library material, a finish or a colour) on
+the clicked surface; `paint.object {"item", "target", "scope"}` swaps like items, such as every bar pull for a knob.
+The scope says how far a click reaches: `component` (the clicked part), `object`, `room` (every surface or like item in
+the clicked one's room that has the clicked material or item), `floor` or `plan`. Mode `paint` replaces the material;
+`blend` keeps the texture and tints it. The eyedropper picks a material up from the model for the next paint, and each
+painter click is one undo step.
+
+### The user catalog and the Trash
+
+`library.add {"objects": [...], "name", "insertionPoint"?}` turns objects you built into a user item that places as a
+group, and Copy to User Catalog makes an editable copy of a stock item. Deleting a user item moves it to the Trash,
+which restores or empties. The user catalog lives outside the drawing, in `CADCRAFT_LIBRARY_USER_DIR`, else
+`$XDG_DATA_HOME/cadcraft/library`, else `~/.local/share/cadcraft/library`; the web build has the sample set only.
+
+### Set as Default
+
+Set as Default on a cabinet, door, window or furnishing (`arch.default {"id"}`) makes the next one of its kind match.
+
+### Backdrops
+
+`backdrop` sets what the 3D view, the raster Finalize and the path tracer show behind the model: a solid colour
+(`{"kind": "colour", "colour": "#204060"}`), a two-colour sky gradient (`{"kind": "gradient", "top", "bottom"}`), an
+image, flat or 360-degree equirectangular (`{"kind": "image", "item", "projection"}`), or none. A backdrop never lights
+the scene.
+
+### Installing catalogs
+
+`tools/library/` downloads the Sweet Home 3D CC-0 and CC-BY libraries and converts them to `.glb`, outside the Rust
+code. `library.install {"from": dir}` adds such a converted folder as an installed catalog (read-only; install it again
+to update it). `library.local {"path": dir, "licence", "category"?}` reads `.glb` items from a folder outside the
+repository with one licence for the whole folder, sizes from the mesh bounds and categories from folder names where it
+has them. The licence is yours to give: never commit a local catalog.
+
+### A furnished house
+
+This block builds the two-room house, places a sofa and a rug in the living room, a run of three base cabinets in the
+kitchen with a sink in the middle one and a dishwasher in the gap, paints both rooms' walls, sets a backdrop and exports
+`library.glb`:
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points": [[0,0],[4,0],[8,0],[8,5],[4,5],[0,5],[0,0]], "thickness": 0.2, "height": 2.4, "exterior": true}' \
+  --cmd 'wall {"points": [[4,0],[4,5]], "thickness": 0.1, "height": 2.4, "exterior": false}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'library.place {"item": "sofa-futon", "at": [0.55, 2.5], "rotation": 90}' \
+  --cmd 'library.place {"item": "rug-oriental", "at": [1.8, 2.5], "rotation": 90}' \
+  --cmd 'cabinet {"kind": "base", "wall": "w1", "offset": 0.6, "width": 0.6}' \
+  --cmd 'cabinet {"kind": "base", "wall": "w1", "offset": 1.4, "width": 0.9}' \
+  --cmd 'cabinet {"kind": "base", "wall": "w1", "offset": 2.75, "width": 0.6}' \
+  --cmd 'library.place {"item": "own:sink-kitchen", "at": [5.4, 0.4]}' \
+  --cmd 'library.place {"item": "own:dishwasher-60", "at": [6.15, 0.4]}' \
+  --cmd 'paint.material {"material": "material-oak", "target": "wall/w5/left", "scope": "room"}' \
+  --cmd 'paint.material {"material": "#e8e0d0", "target": "wall/w1/left", "scope": "room"}' \
+  --cmd 'backdrop {"kind": "colour", "colour": "#204060"}' \
+  --cmd 'export {"path": "library.glb"}'
+```
+
 ## Out of scope
 
 Not part of arch3d so far: SSAO, TAA, cascaded shadows, switches, outlets, circuits, animated walkthrough paths,

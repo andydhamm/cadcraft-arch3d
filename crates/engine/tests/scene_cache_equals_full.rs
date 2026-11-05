@@ -461,3 +461,130 @@ fn furnishing_paint_and_part_edits_keep_the_cache_exact() {
         assert!(accepted.get(what).is_some_and(|&n| n >= 1), "no accepted {what}: {accepted:?}");
     }
 }
+
+#[test]
+fn undo_of_a_furnishing_edit_restores_the_previous_scene() {
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    s.library = cadcraft_engine::library::Library::with_user_dir(None);
+    s.execute("arch.sample", &json!({"house2": true})).unwrap();
+    s.execute("library.place", &json!({"item": "armchair", "at": [6.0, 5.0], "level": "Level 1"})).unwrap();
+    let m_before = arch_of(&s);
+    let (mut cache, _) = SceneCache::new(&m_before);
+    let before = signature(cache.scene());
+    // Move the furnishing.
+    s.execute("furnishing.edit", &json!({"id": "f0", "at": [7.0, 6.0]})).unwrap();
+    let m_after = arch_of(&s);
+    cache.update(&m_after);
+    let after = signature(cache.scene());
+    assert_ne!(before, after, "moving the furnishing should change the scene");
+    // Undo.
+    s.execute("undo", &json!({})).unwrap();
+    let m_restored = arch_of(&s);
+    cache.update(&m_restored);
+    let restored = signature(cache.scene());
+    assert_eq!(restored, before, "undo should restore the previous scene");
+    assert_eq!(restored, signature(&Scene3d::build(&m_restored)), "cache must equal the full build after undo");
+}
+
+#[test]
+fn hostile_furnishing_edits_are_refused_and_leave_the_cache_unchanged() {
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    s.library = cadcraft_engine::library::Library::with_user_dir(None);
+    s.execute("arch.sample", &json!({"house2": true})).unwrap();
+    s.execute("library.place", &json!({"item": "armchair", "at": [6.0, 5.0], "level": "Level 1"})).unwrap();
+    let m = arch_of(&s);
+    let (mut cache, _) = SceneCache::new(&m);
+    let before = signature(cache.scene());
+    // Non-existent furnishing id.
+    assert!(s.execute("furnishing.edit", &json!({"id": "f999", "at": [1.0, 1.0]})).is_err());
+    // Delete a non-existent furnishing.
+    assert!(s.execute("furnishing.delete", &json!({"id": "f999"})).is_err());
+    // Paint a non-existent wall.
+    assert!(s.execute("paint.material", &json!({"material": "oak", "target": "wall/w999/left", "scope": "component"})).is_err());
+    // Edit a non-existent cabinet.
+    assert!(s.execute("cabinet.edit", &json!({"id": "cb999", "doorStyle": "shaker"})).is_err());
+    // The cache must be unchanged.
+    let after = signature(cache.scene());
+    assert_eq!(after, before, "hostile edits must not change the cache");
+    assert_eq!(after, signature(&Scene3d::build(&arch_of(&s))), "cache must equal the full build");
+}
+
+#[test]
+fn copying_one_furnishing_twenty_times_rebuilds_one_object_each_time() {
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    s.library = cadcraft_engine::library::Library::with_user_dir(None);
+    s.execute("arch.sample", &json!({"house2": true})).unwrap();
+    s.execute("library.place", &json!({"item": "armchair", "at": [6.0, 5.0], "level": "Level 1"})).unwrap();
+    let m0 = arch_of(&s);
+    let f = &m0.furnishings[0];
+    let handle = cadcraft_doc::arch::furnishing_handle(f.id).hex();
+    let (mut cache, _) = SceneCache::new(&m0);
+    for i in 0..20 {
+        let dx = 0.5 + (i as f64) * 0.1;
+        s.execute("copy", &json!({"handles": [handle], "delta": [dx, 0.0]})).unwrap();
+        let m = arch_of(&s);
+        let stats = cache.update(&m);
+        assert_eq!(signature(cache.scene()), signature(&Scene3d::build(&m)), "copy {i}: cache must equal the full build");
+        assert!(stats.incremental, "copy {i} must be incremental");
+        // Only the new furnishing should be rebuilt.
+        assert!(stats.rebuilt <= 2, "copy {i} rebuilt {} objects, expected at most 2", stats.rebuilt);
+    }
+}
+
+#[test]
+fn deleting_all_furnishings_removes_their_meshes_from_the_scene() {
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    s.library = cadcraft_engine::library::Library::with_user_dir(None);
+    s.execute("arch.sample", &json!({"house2": true})).unwrap();
+    for item in ["armchair", "bookcase", "table-coffee-90"] {
+        s.execute("library.place", &json!({"item": item, "at": [6.0, 5.0], "level": "Level 1"})).unwrap();
+    }
+    let m = arch_of(&s);
+    assert_eq!(m.furnishings.len(), 3);
+    let (mut cache, _) = SceneCache::new(&m);
+    let before = cache.scene().meshes.len();
+    // Delete all three furnishings.
+    let ids: Vec<String> = m.furnishings.iter().map(|f| format!("f{}", f.id.0)).collect();
+    for id in &ids {
+        s.execute("furnishing.delete", &json!({"id": id})).unwrap();
+    }
+    let m2 = arch_of(&s);
+    assert_eq!(m2.furnishings.len(), 0);
+    let stats = cache.update(&m2);
+    let after = cache.scene().meshes.len();
+    assert!(after < before, "deleting furnishings must remove meshes: {} -> {}", before, after);
+    assert_eq!(signature(cache.scene()), signature(&Scene3d::build(&m2)), "cache must equal the full build after deletion");
+    // No mesh should have a furnishing material.
+    for mesh in &cache.scene().meshes {
+        assert!(!mesh.material.starts_with("sym:"), "furnishing mesh remains: {}", mesh.material);
+    }
+    assert!(stats.incremental, "deletion must be incremental");
+}

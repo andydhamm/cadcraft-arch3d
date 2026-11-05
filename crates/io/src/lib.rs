@@ -9,7 +9,9 @@ mod dxf_light;
 mod dxf_raw;
 mod dxf_site;
 
+/// XCLIP boundaries as SPATIAL_FILTER objects.
 mod dxf_arch;
+mod dxf_clip;
 mod dxf_ext;
 mod dxf_image;
 mod dxf_mleader;
