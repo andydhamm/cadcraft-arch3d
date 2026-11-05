@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-05 18:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-05 18:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 9 of 32 segments merged · 0 of 13 acceptance checks**
 
-7,508 workspace tests passing at the last merge · 768 segments merged in all · 0 of 14 seats working
+7,508 workspace tests passing at the last merge · 768 segments merged in all · 0 of 14 seats working · PAUSED
 
 ## Phases
 
@@ -25,21 +25,21 @@ Updated 2026-11-05 18:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 9.8 h so far · expected done Nov 06 16:50–Nov 07 22:41 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 0 / 13 | 10.1 h so far · expected done Nov 06 17:39–Nov 08 00:14 UTC |
 
 ## Phase 15 segments
 
-15 queued, 9 merged, 5 working, 3 merging
+15 queued, 9 merged, 4 gate, 3 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-arch-connections` | arch: connection arcs and circuits | working | bonsai-b |
-| `p15-arch-outlets-auto` | arch: auto-placed outlets and the spacing rule | working | bonsai-ws2-b |
+| `p15-arch-connections` | arch: connection arcs and circuits | gate | bonsai-b |
+| `p15-arch-outlets-auto` | arch: auto-placed outlets and the spacing rule | gate | bonsai-ws2-b |
 | `p15-arch-spanning-walls` | arch: walls spanning levels in rooms, footprints, roofs, areas and placement | merging | claude-sonnet-b |
 | `p15-arch3d-electrical` | arch3d: cover plates for outlets and switches | working | darwin-ws3 |
 | `p15-render-plan-level` | render: the plan draws the shown level | merging | claude-sonnet-d |
-| `p15-cmd-light-sets` | engine: lightset, a camera's light set, render with a light set | working | mai-flash |
-| `p15-cmd-electrical-view` | engine: view.electrical and level.show | working | bonsai-ws2-a |
+| `p15-cmd-light-sets` | engine: lightset, a camera's light set, render with a light set | gate | mai-flash |
+| `p15-cmd-electrical-view` | engine: view.electrical and level.show | gate | bonsai-ws2-a |
 | `upstream-sync-df6597445` | merge upstream upstream/main up to df6597445 (12 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
@@ -63,17 +63,17 @@ Updated 2026-11-05 18:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 900 |
-| bonsai-b | bonsai2-27b | agent | 830 |
-| bonsai-ws2-a | bonsai2-27b | agent | 926 |
-| bonsai-ws2-b | bonsai2-27b | agent | 887 |
+| bonsai-a | bonsai2-27b | gate | 900 |
+| bonsai-b | bonsai2-27b | gate | 830 |
+| bonsai-ws2-a | bonsai2-27b | gate | 926 |
+| bonsai-ws2-b | bonsai2-27b | gate | 887 |
 | claude-sonnet-a | sonnet | idle | 81 |
 | claude-sonnet-b | sonnet | merging | 82 |
 | claude-sonnet-c | sonnet | merging | 35 |
 | claude-sonnet-d | sonnet | merging | 21 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 775 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 61 |
+| mai-flash | mai-code-1.1-flash | gate | 61 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 31 |
 | tturbo-mac | tturbo-ultraheretic | merging | 620 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
