@@ -1454,94 +1454,32 @@
 	Selection area opacity:	选择区域不透明度：
 	Selection effect color	选择效果颜色
 	Selection modes	选择模式
-	3D View	三维视图
-	Arch Inspect	建筑检查
-	Arch Sample	建筑示例
-	Architecture	建筑
-	Automatic	自动
-	Build 3D	生成三维
-	Camera	相机
-	Contours	等高线
-	Cut and Fill	挖填方
-	Deck	平台
-	Delete Light Fixture	删除灯具
-	Delete Terrain	删除地形
-	Set as Default	设为默认
-	Delete View	删除视图
-	Detect from Linework	从线条检测
-	Detection Review	检测复核
-	Door	门
-	Edit Light Fixture	编辑灯具
-	Garage Door	车库门
-	Illuminance	照度
-	Level	楼层
-	Library…	库…
-	Pull Library…	拉手库…
-	Component	构件
-	Floor	楼层面
-	Plan	平面
-	Paint	涂刷
-	Cannot place that here	无法在此处放置
-	Light Fixture	灯具
-	Light Fixture Types	灯具类型
-	Cabinet	橱柜
-	Edit Cabinet	编辑橱柜
-	Delete Cabinet	删除橱柜
-	Fixture	设备
-	Edit Fixture	编辑设备
-	Delete Fixture	删除设备
-	Fixture Types	设备类型
-	Move Opening	移动洞口
-	Pick 3D	三维拾取
-	Plane	平面
-	Plant	植物
-	Plant Species	植物品种
-	Railing	栏杆
-	Library	库
-	Library Item	库项目
-	Library Icon	库图标
-	Tag Library Item	标记库项目
-	Library Filters	库筛选器
-	Install Catalog	安装目录
-	Local Catalog	本地目录
-	Render 3D	三维渲染
-	Roof	屋顶
-	Roof Automatic	自动屋顶
-	Roof Plane	屋顶面
-	Room	房间
-	Place From Library	从库中放置
-	Edit Furnishing	编辑家具
-	Delete Furnishing	删除家具
-	Center Furnishing	家具居中
-	Room Detect	房间检测
-	Section	剖面
-	Site Location	场地位置
-	Backdrop	背景
-	Stair	楼梯
-	Stretch Wall	拉伸墙
-	Sun	太阳
-	Sun Study	日照分析
-	Terrain	地形
-	Terrain Elevation	地形标高
-	Terrain Modifier	地形修改器
-	View Sheet	视图图纸
-	Walkthrough	漫游
-	Wall	墙
-	Material	材质
-	Back	后退
-	Forward	前进
-	Favorites	收藏
-	Details	详细信息
-	Search	搜索
-	Folders	文件夹
-	Folder	文件夹
-	Tags	标签
-	Source	来源
-	Licence	许可证
-	Author	作者
-	Attribution	署名
-	Notes	备注
-	Size	尺寸
-	Category	类别
-	Grid	网格
-	No items match	没有匹配的项目
+	Selection preview	选择预览
+	Show grips	显示夹点
+	Tables	表格
+	Text color	文字颜色
+	This drawing	此图形
+	Type an alias name.	输入别名名称。
+	Underline	下划线
+	Units of new drawings	新图形的单位
+	Unsaved changes	未保存的更改
+	Visual Effect Settings	视觉效果设置
+	Visual Effect Settings...	视觉效果设置...
+	When a command is active	命令处于活动状态时
+	When no command is active	无活动命令时
+	Window selection color:	窗口选择颜色：
+	X	X
+	Xrefs	外部参照
+	Y	Y
+	built-in	内置
+	contains authoring elements. Open in Block Editor?	包含编写元素。在块编辑器中打开吗？
+	overrides built-in	覆盖内置
+	{alias} is already defined; select it and use Edit.	{alias} 已定义；请选择它并使用编辑。
+	{command} is an unknown command.	{command} 是未知命令。
+menu	Dimension	标注
+menu	Draw	绘图
+menu	Modify	修改
+menu	View	视图
+	Clip Xref	剪裁外部参照
+	Xref	外部参照
+	Xref Clip Frame	外部参照剪裁边框
