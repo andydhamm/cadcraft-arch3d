@@ -154,6 +154,8 @@ pub enum PathKind {
     Road,
     Driveway,
     Sidewalk,
+    /// A planted bed: thin, decorative, ground-following (mulch, shrubs).
+    Bed,
 }
 
 impl PathKind {
@@ -163,6 +165,7 @@ impl PathKind {
             PathKind::Road => "road",
             PathKind::Driveway => "driveway",
             PathKind::Sidewalk => "sidewalk",
+            PathKind::Bed => "bed",
         }
     }
 
@@ -171,6 +174,17 @@ impl PathKind {
         match self {
             PathKind::Road => "asphalt",
             PathKind::Driveway | PathKind::Sidewalk => "concrete",
+            PathKind::Bed => "mulch",
+        }
+    }
+
+    /// The draped thickness a new path of this kind gets when none is given.
+    ///
+    /// Beds sit close to the ground (mulch); the others take [`DEFAULT_PATH_THICKNESS`].
+    pub fn default_thickness(self) -> f64 {
+        match self {
+            PathKind::Bed => 0.05,
+            _ => DEFAULT_PATH_THICKNESS,
         }
     }
 }
@@ -314,5 +328,12 @@ mod tests {
         let t = Terrain::default();
         assert_eq!((t.contour_minor, t.contour_major, t.pad, t.pad_margin), (0.25, 1.0, true, 0.3));
         assert_eq!(serde_json::from_str::<PlantForm>("\"evergreen-tree\"").ok(), Some(PlantForm::EvergreenTree));
+    }
+
+    #[test]
+    fn bed_paths_default_to_mulch() {
+        assert_eq!(PathKind::Bed.name(), "bed");
+        assert_eq!(PathKind::Bed.default_material(), "mulch");
+        assert_eq!(PathKind::Bed.default_thickness(), 0.05);
     }
 }
