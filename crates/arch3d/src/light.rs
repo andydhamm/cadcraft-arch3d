@@ -8,9 +8,10 @@
 
 use crate::Scene3d;
 use cadcraft_doc::ArchId;
-use cadcraft_doc::arch::ArchModel;
 pub use cadcraft_doc::arch::LightKind;
+use cadcraft_doc::arch::{ArchModel, LightState};
 use cadcraft_geom::Vec3;
+use std::collections::BTreeMap;
 
 /// A light in the scene, in world coordinates (metres, +Z up). Build it with
 /// `SceneLight { …, ..Default::default() }` outside this file.
@@ -108,13 +109,33 @@ pub fn is_light_material(material: &str) -> bool {
 /// One [`SceneLight`] per fixture that is on and has a light point
 /// (`arch::light::light_point`), in fixture order.
 pub fn scene_lights(model: &ArchModel) -> Vec<SceneLight> {
+    scene_lights_with(model, &BTreeMap::new())
+}
+
+/// A brightness as a factor: non-finite or negative counts as 0, above 1 as 1.
+fn brightness_factor(b: f64) -> f64 {
+    if b.is_finite() { b.clamp(0.0, 1.0) } else { 0.0 }
+}
+
+/// [`scene_lights`] with `overrides` (keyed by light label `lf{n}`) applied: an overridden light
+/// is on or off as its [`LightState`] says and uses its brightness (a light set). A light's
+/// output is its lumens × brightness. Brightness 1 and no overrides give exactly [`scene_lights`].
+pub fn scene_lights_with(model: &ArchModel, overrides: &BTreeMap<String, LightState>) -> Vec<SceneLight> {
     let mut out = Vec::new();
-    for f in model.lights.iter().filter(|f| f.on) {
+    for f in model.lights.iter() {
+        let (on, brightness) = match overrides.get(&cadcraft_doc::arch::light_label(f.id)) {
+            Some(s) => (s.on, s.brightness),
+            None => (f.on, f.brightness),
+        };
+        if !on {
+            continue;
+        }
+        let b = brightness_factor(brightness);
         let Some(position) = cadcraft_arch::light::light_point(model, f) else {
             continue;
         };
         let aim = cadcraft_arch::light::aim_direction(f);
-        let intensity = cadcraft_arch::light::intensity_cd(f);
+        let intensity = cadcraft_arch::light::intensity_cd(f) * b;
         let color = cadcraft_arch::light::kelvin_to_rgb(f.kelvin);
         if !position.is_finite() || !aim.is_finite() || aim.len() < 1e-12 || !intensity.is_finite() || !color.iter().all(|c| c.is_finite()) {
             continue;
@@ -130,7 +151,7 @@ pub fn scene_lights(model: &ArchModel) -> Vec<SceneLight> {
         let direction = aim.normalized();
         let size = if f.kind == LightKind::Area { [f.width, f.length] } else { [0.0, 0.0] };
         let (intensity, ies) = if let Some(p) = &f.ies {
-            let scaled = cadcraft_arch::ies::scaled(p, f.lumens);
+            let scaled = cadcraft_arch::ies::scaled(p, f.lumens * b);
             let peak = cadcraft_arch::ies::peak_candela(&scaled);
             if peak.is_finite() && peak > 0.0 { (peak, Some(std::sync::Arc::new(scaled))) } else { (intensity, None) }
         } else {
@@ -371,6 +392,39 @@ mod tests {
         }
         m.next_light_id = 4;
         m
+    }
+
+    #[test]
+    fn brightness_scales_a_lights_output() {
+        let mut m = room();
+        let full = scene_lights(&m)[0].intensity;
+        m.lights[0].brightness = 0.5;
+        assert!((scene_lights(&m)[0].intensity - full * 0.5).abs() < 1e-9);
+        m.lights[0].brightness = f64::NAN;
+        assert_eq!(scene_lights(&m)[0].intensity, 0.0);
+        m.lights[0].brightness = 7.0;
+        assert_eq!(scene_lights(&m)[0].intensity, full);
+        m.lights[0].brightness = 1.0;
+        let mut o = BTreeMap::new();
+        o.insert("lf0".to_string(), LightState { brightness: 0.25, ..Default::default() });
+        assert!((scene_lights_with(&m, &o)[0].intensity - full * 0.25).abs() < 1e-9);
+    }
+
+    #[test]
+    fn an_override_turns_a_light_off() {
+        let m = room();
+        let mut o = BTreeMap::new();
+        o.insert("lf1".to_string(), LightState { on: false, ..Default::default() });
+        let lights = scene_lights_with(&m, &o);
+        assert_eq!(lights.len(), 3);
+        assert!(lights.iter().all(|l| l.id != ArchId(1)));
+    }
+
+    #[test]
+    fn no_overrides_give_the_phase10_lights() {
+        let m = room();
+        assert_eq!(scene_lights_with(&m, &BTreeMap::new()), scene_lights(&m));
+        assert_eq!(scene_lights(&m).len(), 4);
     }
 
     fn up() -> Vec3 {
