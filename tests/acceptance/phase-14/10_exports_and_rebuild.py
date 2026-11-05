@@ -56,7 +56,7 @@ for k in IDS:
     for f in ('item', 'at', 'rotation', 'elevation', 'size', 'layer'):
         if after[k].get(f) != before[k].get(f):
             fail(f"{k}.{f} after the round trip: {after[k].get(f)!r}, before {before[k].get(f)!r}")
-    if geometry_key(node_positions(j, binc, f'furnishing-{k}')) != geometry_key(node_positions(j2, binc2, f'furnishing-{k}')):
+    if not same_geometry(node_positions(j, binc, f'furnishing-{k}'), node_positions(j2, binc2, f'furnishing-{k}')):
         fail(f"furnishing-{k}'s mesh changed across the DXF round trip")
 print("ok: DXF proxies on I-FURN, P-FLOR-FIXT, A-FLOR-APPL, E-LITE, L-PLNT; the round trip keeps every furnishing and mesh")
 

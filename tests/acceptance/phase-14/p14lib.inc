@@ -29,7 +29,7 @@
 #   Surface keys: wall/w3/left, wall/w3/right, room/r0/floor, room/r0/ceiling, roof/r0, cabinet/cb0/{carcass,front,counter,pull},
 #   fixture/fx0, furnishing/f2/<part>. Material keys in replies: finish:<name>, item:<id>, colour:#rrggbb, default:<what>,
 #   sym:<symbol key>:<part>. The GLB: nodes furnishing-f<n>, wall-w<n>-left / -right (painted faces), cabinet-cb<n>-pull.
-import os, tempfile, base64, hashlib
+import math, os, tempfile, base64, hashlib
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'phase-13', 'p13lib.inc')).read())
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
@@ -109,6 +109,34 @@ def node_positions(j, binc, name):
 def geometry_key(points, dx=0.0, dy=0.0, q=1e-4):
     """A node's vertices moved by (dx, dy), rounded to q and sorted: equal for equal meshes in any vertex order."""
     return sorted((round((x + dx) / q), round((y + dy) / q), round(z / q)) for x, y, z in points)
+
+
+def same_geometry(a, b, dx=0.0, dy=0.0, tol=1e-5):
+    """Whether vertex list `a` moved by (dx, dy) is vertex list `b` in any order, each vertex within `tol`. Not a rounded
+    key: GLB positions are f32 (a coordinate near x = 7 carries ~5e-7), so rounding two copies to a grid puts the odd
+    vertex that sits on a half-step in different cells (11-04: check 08 failed 4 of 1747 chair vertices that matched
+    within 2.4e-7)."""
+    if len(a) != len(b):
+        return False
+    cell = lambda p: tuple(math.floor(c / tol) for c in p)
+    grid = {}
+    for p in b:
+        grid.setdefault(cell(p), []).append(p)
+    for x, y, z in a:
+        q = (x + dx, y + dy, z)
+        cq, best = cell(q), None
+        for i in (-1, 0, 1):
+            for j in (-1, 0, 1):
+                for k in (-1, 0, 1):
+                    key = (cq[0] + i, cq[1] + j, cq[2] + k)
+                    for c in grid.get(key, ()):
+                        d = max(abs(u - v) for u, v in zip(q, c))
+                        if d <= tol and (best is None or d < best[0]):
+                            best = (d, key, c)
+        if best is None:
+            return False
+        grid[best[1]].remove(best[2])
+    return True
 
 
 def node_names(j):

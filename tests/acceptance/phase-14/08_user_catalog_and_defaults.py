@@ -33,7 +33,7 @@ pairs = list(zip(['f0', 'f1', 'f2'], new))
 for a, b in pairs:
     if fs[b]['item'] != fs[a]['item'] or abs(fs[b]['at'][0] - fs[a]['at'][0] - 5) > 1e-6 or abs(fs[b]['at'][1] - fs[a]['at'][1]) > 1e-6:
         fail(f"{b} should be {a} moved 5 m: {fs[a]} / {fs[b]}")
-    if geometry_key(node_positions(j, binc, f'furnishing-{a}'), 5.0) != geometry_key(node_positions(j, binc, f'furnishing-{b}')):
+    if not same_geometry(node_positions(j, binc, f'furnishing-{a}'), node_positions(j, binc, f'furnishing-{b}'), 5.0):
         fail(f"furnishing-{b} is not furnishing-{a}'s mesh moved 5 m")
 handles = [h for h in g.get('handles', [])]
 if len(handles) != 3:
@@ -41,7 +41,7 @@ if len(handles) != 3:
 rr, (j2, binc2) = export_glb(BIG + SET + [cmd('library.place', {"item": "user:dining-set", "at": [7, 2]}),
                                           cmd('move', {"handles": handles, "delta": [-5, 0]})], tmp, 'back.glb')
 for a, b in pairs:
-    if geometry_key(node_positions(j2, binc2, f'furnishing-{a}')) != geometry_key(node_positions(j2, binc2, f'furnishing-{b}')):
+    if not same_geometry(node_positions(j2, binc2, f'furnishing-{a}'), node_positions(j2, binc2, f'furnishing-{b}')):
         fail(f"moved back, furnishing-{b} differs from furnishing-{a}")
 print("ok: the user item persists, places as a group of the same meshes, equal once moved back")
 
