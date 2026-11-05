@@ -42,6 +42,17 @@ pub const STYLE_SHADED_EDGES: u32 = 1;
 pub const STYLE_HIDDEN_LINE: u32 = 2;
 /// Shading style: translucent (alpha 0.35), no depth write.
 pub const STYLE_GLASS_HOUSE: u32 = 3;
+/// Shading style: every material a plain grey (#b4b4b4, metallic 0, roughness 0.8), no texture,
+/// no tint; lighting as `STYLE_SHADED` (phase 15, the clay style).
+pub const STYLE_CLAY: u32 = 4;
+/// Linear albedo of the clay style: #b4b4b4.
+pub const CLAY_ALBEDO: [f32; 3] = [180.0 / 255.0; 3];
+/// Roughness of the clay style.
+pub const CLAY_ROUGHNESS: f32 = 0.8;
+/// Whether a style draws every material as the plain clay grey.
+pub fn style_is_clay(style: u32) -> bool {
+    style == STYLE_CLAY
+}
 
 /// Material and sun uniforms uploaded to the GPU (WGSL `PbrUniforms`, group 1 binding 1).
 ///
@@ -93,25 +104,31 @@ impl PbrUniform {
                 *c = 0.0;
             }
         }
+        let clay = style_is_clay(style);
         PbrUniform {
             light_dir: l.dir,
             sun_intensity: fin(sun_intensity, 1.0).max(0.0),
             ambient: l.ambient,
-            metallic: fin(draw.metallic, 0.0).clamp(0.0, 1.0),
-            roughness: fin(draw.roughness, 0.5).clamp(0.0, 1.0),
+            metallic: if clay { 0.0 } else { fin(draw.metallic, 0.0).clamp(0.0, 1.0) },
+            roughness: if clay { CLAY_ROUGHNESS } else { fin(draw.roughness, 0.5).clamp(0.0, 1.0) },
             alpha: fin(draw.alpha, 1.0).clamp(0.0, 1.0),
-            style: style.min(STYLE_GLASS_HOUSE),
+            style: style.min(STYLE_CLAY),
             _p0: [0; 3],
             camera_pos: cam,
             shadow_min: 0.0,
             shadow_max: 0.0,
             _p1: [0.0; 3],
-            _p2: [
-                fin(draw.emissive, 0.0).clamp(0.0, 100.0),
-                draw.layer.min(crate::textures::MAX_LAYERS - 1) as f32,
-                per_repeat(draw.tile[0]),
-                per_repeat(draw.tile[1]),
-            ],
+            _p2: if clay {
+                // Clay: no emissive, no texture (layer 0 is white).
+                [0.0, 0.0, 1.0, 1.0]
+            } else {
+                [
+                    fin(draw.emissive, 0.0).clamp(0.0, 100.0),
+                    draw.layer.min(crate::textures::MAX_LAYERS - 1) as f32,
+                    per_repeat(draw.tile[0]),
+                    per_repeat(draw.tile[1]),
+                ]
+            },
         }
     }
 }
@@ -176,6 +193,11 @@ pub fn material_def_pbr(def: &MaterialDef) -> ([f32; 3], f32, f32, f32) {
     (albedo, finite(def.metallic, d.metallic), finite(def.roughness, d.roughness), 1.0)
 }
 
+/// The clay look: every material the same plain grey, opaque, no texture.
+pub fn clay_pbr() -> ([f32; 3], f32, f32, f32) {
+    (CLAY_ALBEDO, 0.0, CLAY_ROUGHNESS, 1.0)
+}
+
 /// How a mesh of `material` in `scene` draws, as a [`Draw`] without its index range, shadow and
 /// emission. A key of [`Scene3d::materials`] takes [`material_def_pbr`], its texture's layer in
 /// `layers` and its tile (face-aligned UVs are divided by it; [1, 1] uses them as given); a valid
@@ -184,6 +206,32 @@ pub fn material_def_pbr(def: &MaterialDef) -> ([f32; 3], f32, f32, f32) {
 /// is [`material_pbr`] with [`crate::textures::layer_for`] and tile [1, 1].
 pub fn material_draw(scene: &Scene3d, layers: &SceneLayers, material: &str) -> Draw {
     let Some(def) = scene.materials.get(material) else {
+        let (albedo, metallic, roughness, alpha) = material_pbr(material);
+        return Draw { albedo, metallic, roughness, alpha, layer: crate::textures::layer_for(material), ..Default::default() };
+    };
+    let (mut albedo, metallic, roughness, alpha) = material_def_pbr(def);
+    let mut layer = 0;
+    if let Some(key) = def.texture.as_deref() {
+        if let Some(l) = layers.layer_of(key) {
+            layer = l;
+        } else if let Some(mean) = scene.textures.get(key).and_then(crate::textures::mean_linear) {
+            albedo = [albedo[0] * mean[0], albedo[1] * mean[1], albedo[2] * mean[2]];
+        }
+    }
+    Draw { albedo, metallic, roughness, alpha, layer, tile: def.tile, ..Default::default() }
+}
+
+/// The clay [`Draw`] of a mesh: [`clay_pbr`], no texture layer, tile [1, 1].
+pub fn clay_draw() -> Draw {
+    let (albedo, metallic, roughness, alpha) = clay_pbr();
+    Draw { albedo, metallic, roughness, alpha, layer: 0, tile: [1.0, 1.0], ..Default::default() }
+}
+
+/// The clay [`Draw`] of a mesh: [`clay_pbr`], no texture layer, tile [1, 1].
+pub fn clay_draw() -> Draw {
+    let (albedo, metallic, roughness, alpha) = clay_pbr();
+    Draw { albedo, metallic, roughness, alpha, layer: 0, tile: [1.0, 1.0], ..Default::default() }
+}
         let (albedo, metallic, roughness, alpha) = material_pbr(material);
         return Draw { albedo, metallic, roughness, alpha, layer: crate::textures::layer_for(material), ..Default::default() };
     };
@@ -1249,5 +1297,31 @@ mod tests {
         let desc = glass_pipeline_descriptor(1);
         assert!(!desc.depth_write, "glass pipeline must not write depth");
         assert_eq!(desc.blend, Some(BlendMode::GlassHouse), "glass pipeline must blend");
+    }
+
+    #[test]
+    fn clay_renders_every_material_grey() {
+        // The clay look is one grey for every material, textured or not.
+        let (albedo, metallic, roughness, alpha) = clay_pbr();
+        assert_eq!(albedo, [180.0 / 255.0; 3], "clay albedo is #b4b4b4");
+        assert_eq!((metallic, roughness, alpha), (0.0, 0.8, 1.0));
+        let d = clay_draw();
+        assert_eq!((d.albedo, d.metallic, d.roughness, d.alpha, d.layer, d.tile), (albedo, 0.0, 0.8, 1.0, 0, [1.0, 1.0]));
+
+        // A textured MaterialDef and a plain material both take the clay look in the uniform.
+        let def = MaterialDef { base_color: [0.1, 0.9, 0.2, 1.0], metallic: 1.0, roughness: 0.1, texture: Some("sym:k:t0".into()), ..Default::default() };
+        let textured = Draw { albedo: def.base_color[..3].try_into().unwrap_or([0.0; 3]), metallic: def.metallic, roughness: def.roughness, alpha: 1.0, layer: 3, tile: [2.0, 3.0], emissive: 1.0, ..Default::default() };
+        let plain = Draw { albedo: [0.5, 0.3, 0.1], roughness: 0.9, layer: crate::textures::layer_for("wall"), ..Default::default() };
+        for draw in [&textured, &plain] {
+            let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, draw, STYLE_CLAY, [0.0; 3]);
+            assert_eq!(p.style, STYLE_CLAY);
+            assert_eq!(p.metallic, 0.0, "clay is never metal");
+            assert_eq!(p.roughness, CLAY_ROUGHNESS);
+            assert_eq!(p._p2, [0.0, 0.0, 1.0, 1.0], "clay has no emissive and no texture");
+        }
+        // A non-clay style keeps the draw's own values.
+        let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, &textured, STYLE_SHADED, [0.0; 3]);
+        assert_eq!((p.metallic, p.roughness), (1.0, 0.1));
+        assert_eq!(p._p2[1], 3.0, "the texture layer survives a non-clay style");
     }
 }

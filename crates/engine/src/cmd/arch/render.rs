@@ -261,15 +261,15 @@ fn parse_final(v: Option<&Value>) -> Result<(bool, FinalMode), EngineError> {
     }
 }
 
-/// `style`: one of shaded, shaded-edges, hidden-line, glass-house; absent is shaded.
+/// `style`: one of shaded, shaded-edges, hidden-line, glass-house, clay; absent is shaded.
 fn parse_style(v: Option<&Value>) -> Result<String, EngineError> {
     match v {
         None => Ok("shaded".to_string()),
         Some(v) => v
             .as_str()
-            .filter(|s| matches!(*s, "shaded" | "shaded-edges" | "hidden-line" | "glass-house"))
+            .filter(|s| matches!(*s, "shaded" | "shaded-edges" | "hidden-line" | "glass-house" | "clay"))
             .map(str::to_string)
-            .ok_or_else(|| bad("render", "`style` must be one of: shaded, shaded-edges, hidden-line, glass-house")),
+            .ok_or_else(|| bad("render", "`style` must be one of: shaded, shaded-edges, hidden-line, glass-house, clay")),
     }
 }
 
@@ -468,7 +468,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("render", "Render 3D", run_render)
             .menu(&["Architecture", "Render 3D"])
-            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
+            .params("{out?: path, size?: [w,h], camera?, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?: shaded | shaded-edges | hidden-line | glass-house | clay, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
             .noundo(),
     ]
 }
@@ -650,6 +650,14 @@ mod tests {
         let not_a_number: serde_json::Value = json!([["nan", 0.0, 0.0]]);
         let err = parse_samples(Some(&not_a_number)).unwrap_err().to_string();
         assert!(err.contains("finite"), "{err}");
+    }
+
+    #[test]
+    fn clay_is_a_render_style() {
+        assert_eq!(parse_style(Some(&json!("clay"))).ok().as_deref(), Some("clay"));
+        assert_eq!(parse_style(None).ok().as_deref(), Some("shaded"));
+        let e = parse_style(Some(&json!("clay-ish"))).map_err(|e| e.to_string()).err().unwrap_or_default();
+        assert!(e.contains("`style` must be one of"), "{e}");
     }
 
     #[test]
