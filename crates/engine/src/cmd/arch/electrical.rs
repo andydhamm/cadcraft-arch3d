@@ -135,7 +135,7 @@ fn build_device(
     if !wall.spans_level(level_def, &doc.arch.levels) {
         return Err(bad(cmd, format!("level `{level}` does not fall within wall `{}`'s span", wall_label(wall_id))));
     }
-    let device = ElectricalDevice { id: ArchId(0), kind, wall: wall_id, side, offset, height, counter, level };
+    let device = ElectricalDevice { id: ArchId(0), kind, wall: wall_id, side, offset, height, counter, level, ..Default::default() };
     let place = place_device(&doc.arch, &device).map_err(|e| bad(cmd, e))?;
     Ok((device, place))
 }
@@ -190,7 +190,7 @@ fn run_device(s: &mut Session, cmd: &str, kind_allowed: &[ElectricalKind], allow
     if !allow_counter && kind.is_switch() {
         // no-op
     }
-    let device = ElectricalDevice { id: ArchId(0), kind, wall: wall, side, offset, height, counter, level };
+    let device = ElectricalDevice { id: ArchId(0), kind, wall: wall, side, offset, height, counter, level, ..Default::default() };
     let place = place_device(&d.arch, &device).map_err(|e| bad(cmd, e))?;
     let mut doc = s.doc_mut()?;
     ensure_electrical_layers(&mut doc);
@@ -409,9 +409,15 @@ mod tests {
         s.execute("switch", &json!({ "kind": "single-pole", "wall": "w0", "offset": 1.0, "side": "left" })).unwrap();
         let switch_id = ArchId(0);
         let mut doc = s.doc_mut().unwrap();
-        let conn = cadcraft_doc::arch::Connection { id: ArchId(0), from: switch_id, to: vec![ArchId(0)], bulge: 0.5 };
+        let conn = cadcraft_doc::arch::Connection { id: ArchId(0), from: switch_id, to: vec![ArchId(0)], bulge: 0.5, ..Default::default() };
         doc.arch.connections.push(conn);
-        doc.arch.connections.push(cadcraft_doc::arch::Connection { id: ArchId(1), from: ArchId(0), to: vec![ArchId(1)], bulge: -0.5 });
+        doc.arch.connections.push(cadcraft_doc::arch::Connection {
+            id: ArchId(1),
+            from: ArchId(0),
+            to: vec![ArchId(1)],
+            bulge: -0.5,
+            ..Default::default()
+        });
         drop(doc);
         assert_eq!(s.execute("electrical.delete", &json!({ "id": "el0" })).unwrap()["deleted"], "el0");
         assert!(s.doc().unwrap().arch.connections.iter().all(|c| c.from != switch_id));
