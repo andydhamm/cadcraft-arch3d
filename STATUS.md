@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 33 of 42 segments merged · 2 of 14 acceptance checks**
 
-7,618 workspace tests passing at the last merge · 796 segments merged in all · 0 of 14 seats working
+7,627 workspace tests passing at the last merge · 797 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-06 19:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 34.6 h so far · expected done Nov 07 01:39–Nov 07 18:16 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 34.8 h so far · expected done Nov 07 01:53–Nov 07 18:31 UTC |
 
 ## Phase 15 segments
 
@@ -43,6 +43,7 @@ Updated 2026-11-06 19:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 19:01 | `harden-p15-cmd-wall-span` | merged | 7,627 pass | tturbo-mac |
 | Nov 06 17:37 | `p15-cmd-electrical` | merged | 7,618 pass | mai-flash |
 | Nov 06 16:38 | `p15-arch-outlet-gaps` | merged | 7,612 pass | claude-sonnet-a |
 | Nov 06 16:09 | `p15-cli-render-styles` | merged | 7,609 pass | claude-sonnet-d |
@@ -54,7 +55,6 @@ Updated 2026-11-06 19:00 UTC. This page and the card in the README are regenerat
 | Nov 06 12:52 | `p15-cmd-wall-span` | merged | 7,591 pass | claude-sonnet-b |
 | Nov 06 11:56 | `p15-arch-outlet-place` | merged | 7,587 pass | claude-sonnet-a |
 | Nov 06 11:08 | `p15-io-electrical-node` | merged | 7,583 pass | mai-flash |
-| Nov 06 10:41 | `p15-arch3d-electrical-scene` | merged | 7,582 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
@@ -63,7 +63,7 @@ Updated 2026-11-06 19:00 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | gate | 924 |
 | bonsai-b | bonsai2-27b | agent | 852 |
 | bonsai-ws2-a | bonsai2-27b | gate | 959 |
-| bonsai-ws2-b | bonsai2-27b | gate | 920 |
+| bonsai-ws2-b | bonsai2-27b | agent | 921 |
 | claude-sonnet-a | sonnet | merging | 86 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
@@ -72,5 +72,5 @@ Updated 2026-11-06 19:00 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 67 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 35 |
-| tturbo-mac | tturbo-ultraheretic | merging | 627 |
+| tturbo-mac | tturbo-ultraheretic | agent | 627 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
