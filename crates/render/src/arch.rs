@@ -349,6 +349,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     push_views(d, &mut list, plotting);
     crate::arch_site::push_site(d, &mut list, plotting);
     crate::arch_light::push_lights(d, &mut list, plotting);
+    crate::arch_electrical::push_electrical(d, &mut list, plotting);
     crate::arch_casework::push_casework(d, &mut list, plotting);
     crate::arch_furnishing::push_furnishings(d, &mut list, plotting);
 
