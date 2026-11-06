@@ -193,7 +193,7 @@ fn bare_final(args: &[OsString]) -> Vec<OsString> {
 }
 
 fn parse_style_arg(s: &str) -> Result<cadcraft_render3d::Style, String> {
-    crate::render::parse_style(s).ok_or_else(|| format!("`{s}` is not one of shaded, shaded-edges, hidden-line, glass-house"))
+    crate::render::parse_style(s).ok_or_else(|| format!("`{s}` is not one of {}", crate::render::STYLE_NAMES))
 }
 
 fn parse_sun_arg(s: &str) -> Result<(Option<f64>, String, String), String> {

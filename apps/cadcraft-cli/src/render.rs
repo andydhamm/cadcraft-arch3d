@@ -68,9 +68,14 @@ pub(crate) fn parse_size(v: &str) -> Result<(u32, u32), RenderError> {
     Ok((num("width", w)?, num("height", h)?))
 }
 
-/// Parse `--style`: exactly `shaded`, `shaded-edges`, `hidden-line` or `glass-house`.
+/// The six style names, for error messages.
+pub(crate) const STYLE_NAMES: &str = "shaded, shaded-edges, hidden-line, glass-house, clay, technical";
+
+/// Parse `--style`: exactly one of the six names in `STYLE_NAMES`.
 pub(crate) fn parse_style(s: &str) -> Option<Style> {
     match s {
+        "clay" => Some(Style::Clay),
+        "technical" => Some(Style::Technical),
         "shaded" => Some(Style::Shaded),
         "shaded-edges" => Some(Style::ShadedEdges),
         "hidden-line" => Some(Style::HiddenLine),
@@ -361,7 +366,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_style_accepts_only_the_four_names() {
+    fn parse_style_accepts_the_six_names() {
+        assert_eq!(parse_style("clay"), Some(Style::Clay));
+        assert_eq!(parse_style("technical"), Some(Style::Technical));
         assert_eq!(parse_style("shaded"), Some(Style::Shaded));
         assert_eq!(parse_style("shaded-edges"), Some(Style::ShadedEdges));
         assert_eq!(parse_style("hidden-line"), Some(Style::HiddenLine));
