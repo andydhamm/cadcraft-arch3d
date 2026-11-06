@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 19 of 39 segments merged · 1 of 14 acceptance checks**
 
@@ -25,17 +25,17 @@ Updated 2026-11-06 06:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 21.6 h so far · expected done Nov 06 23:27–Nov 08 00:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 21.8 h so far · expected done Nov 07 01:27–Nov 08 05:00 UTC |
 
 ## Phase 15 segments
 
-19 merged, 13 queued, 4 merging, 3 replaced, 2 gate, 1 stuck
+19 merged, 13 queued, 6 merging, 3 replaced, 1 stuck
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-io-split-levels` | io: offset levels and spanning walls in IFC | merging | claude-sonnet-d |
-| `p15-arch3d-electrical-scene` | arch3d: electrical plates in the scene, the cache and the probe | gate | claude-sonnet-c |
-| `p15-io-electrical-node` | io: GLB/OBJ node names for electrical cover plates | gate | mai-flash |
+| `p15-arch3d-electrical-scene` | arch3d: electrical plates in the scene, the cache and the probe | merging | claude-sonnet-c |
+| `p15-io-electrical-node` | io: GLB/OBJ node names for electrical cover plates | merging | mai-flash |
 | `p15-arch-outlet-runs` | arch: usable wall runs of a room (openings and counters break them) | merging | claude-sonnet-a |
 | `p15-arch-connection-arcs` | arch: connection validation and bulged connection arcs | merging | bonsai-ws2-b |
 | `upstream-sync-fc157ea91` | merge upstream upstream/main up to fc157ea91 (4 commits) | merging | bonsai-a |
@@ -62,16 +62,16 @@ Updated 2026-11-06 06:00 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 920 |
-| bonsai-b | bonsai2-27b | held | 845 |
+| bonsai-b | bonsai2-27b | gate | 845 |
 | bonsai-ws2-a | bonsai2-27b | merging | 955 |
 | bonsai-ws2-b | bonsai2-27b | merging | 912 |
 | claude-sonnet-a | sonnet | merging | 83 |
 | claude-sonnet-b | sonnet | idle | 83 |
-| claude-sonnet-c | sonnet | gate | 36 |
+| claude-sonnet-c | sonnet | merging | 37 |
 | claude-sonnet-d | sonnet | merging | 23 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 788 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 63 |
+| mai-flash | mai-code-1.1-flash | merging | 64 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
 | tturbo-mac | tturbo-ultraheretic | merging | 623 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
