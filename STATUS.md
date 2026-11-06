@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 34 of 42 segments merged · 2 of 14 acceptance checks**
 
@@ -25,16 +25,16 @@ Updated 2026-11-06 20:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 36.3 h so far · expected done Nov 07 03:09–Nov 07 20:42 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 36.6 h so far · expected done Nov 07 03:24–Nov 07 20:57 UTC |
 
 ## Phase 15 segments
 
-34 merged, 4 replaced, 4 queued, 2 merging, 1 gate, 1 working, 1 abandoned
+34 merged, 4 replaced, 4 queued, 3 merging, 1 gate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | gate | mai-flash-esc |
-| `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | working | bonsai-b |
+| `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | merging | mai-flash-esc |
+| `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | gate | bonsai-b |
 | `p15-cmd-outlets-auto` | engine: outlets.auto | merging | mai-flash |
 | `p15-inspect` | engine: arch.inspect for phase 15 | merging | claude-sonnet-a |
 
@@ -59,17 +59,17 @@ Updated 2026-11-06 20:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 928 |
-| bonsai-b | bonsai2-27b | agent | 854 |
+| bonsai-a | bonsai2-27b | idle | 929 |
+| bonsai-b | bonsai2-27b | gate | 854 |
 | bonsai-ws2-a | bonsai2-27b | idle | 960 |
 | bonsai-ws2-b | bonsai2-27b | idle | 922 |
 | claude-sonnet-a | sonnet | merging | 86 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | idle | 25 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 805 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 806 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 67 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 36 |
+| mai-flash-esc | mai-code-1.1-flash | merging | 37 |
 | tturbo-mac | tturbo-ultraheretic | merging | 628 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
+| tturbo-mac2 | tturbo-ultraheretic | held | 348 |
