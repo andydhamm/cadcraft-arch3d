@@ -149,6 +149,7 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
             "cabinet-front" => format!("cabinet-cb{}-front", m.object.0),
             "counter" => format!("cabinet-cb{}-counter", m.object.0),
             mat if mat.starts_with("fixture-") => format!("fixture-fx{}", m.object.0),
+            mat if mat.starts_with("electrical:") => format!("electrical-el{}", m.object.0),
             _ => format!("{}-o{}", m.material, m.object.0),
         };
         names.push(name);
@@ -847,6 +848,34 @@ mod tests {
         let mut scene = scene_with(0);
         scene.meshes = vec![finished("wall-siding", 4), finished("roof-wood", 2), finished("roof-wood", 2), finished("floor-wood", 5)];
         assert_eq!(node_names(&scene), ["wall-w4-exterior", "roof-r2p0", "roof-r2p1", "floor-r5"]);
+    }
+
+    #[test]
+    fn glb_nodes_are_named_electrical_el() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:duplex".to_string();
+                m.object = ArchId(0);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:gfci".to_string();
+                m.object = ArchId(3);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:dimmer".to_string();
+                m.object = ArchId(7);
+                m
+            },
+        ];
+        let names = node_names(&scene);
+        assert_eq!(names, ["electrical-el0", "electrical-el3", "electrical-el7"]);
+        assert!(names.iter().all(|n| !n.contains(':')));
     }
 
     #[test]
