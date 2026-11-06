@@ -32,6 +32,7 @@ pub mod library;
 pub mod light;
 pub mod light_symbol;
 pub mod opening;
+pub mod outlets;
 pub mod paint;
 pub mod plant;
 pub mod poly;
