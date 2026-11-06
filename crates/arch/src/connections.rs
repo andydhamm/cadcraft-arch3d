@@ -28,7 +28,7 @@ pub fn device_plan(model: &ArchModel, id: ArchId) -> Option<Vec2> {
 
 /// The light's on-plan point, if it exists and its position is finite.
 pub fn light_plan(model: &ArchModel, id: ArchId) -> Option<Vec2> {
-    model.lights.iter().find(|l| l.id == id).map(|l| l.position).filter(|p| p.is_finite()).copied()
+    model.lights.iter().find(|l| l.id == id).map(|l| l.position.clone()).filter(|p| p.is_finite())
 }
 
 /// Validate a connection, in this order, first failure wins. Never clamps.
@@ -59,7 +59,8 @@ pub fn check_connection(model: &ArchModel, from: ArchId, to: &[ArchId], bulge: f
     }
 
     for id in to {
-        if model.lights.iter().none(|l| l.id == *id) {
+        let exists = model.lights.iter().any(|l| l.id == *id);
+        if !exists {
             return Err(format!("light {} does not exist", cadcraft_doc::arch::light_label(*id)));
         }
     }
