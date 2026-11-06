@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 19:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 20:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 33 of 42 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 34 of 42 segments merged · 2 of 14 acceptance checks**
 
-7,627 workspace tests passing at the last merge · 797 segments merged in all · 0 of 14 seats working
+7,630 workspace tests passing at the last merge · 798 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,16 +25,15 @@ Updated 2026-11-06 19:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 35.3 h so far · expected done Nov 07 02:57–Nov 07 20:57 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 35.6 h so far · expected done Nov 07 01:54–Nov 07 18:07 UTC |
 
 ## Phase 15 segments
 
-33 merged, 4 replaced, 4 merging, 4 queued, 1 gate, 1 abandoned
+34 merged, 4 replaced, 4 queued, 2 merging, 1 working, 1 gate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-render-electrical` | render: electrical plan symbols and connection arcs | merging | mai-flash-esc |
-| `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | merging | darwin-ws3 |
+| `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | working | mai-flash-esc |
 | `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | gate | bonsai-b |
 | `p15-cmd-outlets-auto` | engine: outlets.auto | merging | mai-flash |
 | `p15-inspect` | engine: arch.inspect for phase 15 | merging | claude-sonnet-a |
@@ -43,6 +42,8 @@ Updated 2026-11-06 19:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 19:58 | `p15-io-electrical` | refused | 0 pass | darwin-ws3 |
+| Nov 06 19:54 | `p15-render-electrical` | merged | 7,630 pass | mai-flash-esc |
 | Nov 06 19:01 | `harden-p15-cmd-wall-span` | merged | 7,627 pass | tturbo-mac |
 | Nov 06 17:37 | `p15-cmd-electrical` | merged | 7,618 pass | mai-flash |
 | Nov 06 16:38 | `p15-arch-outlet-gaps` | merged | 7,612 pass | claude-sonnet-a |
@@ -53,14 +54,12 @@ Updated 2026-11-06 19:45 UTC. This page and the card in the README are regenerat
 | Nov 06 14:07 | `upstream-sync-2611bc5f5` | refused | 7,599 pass | bonsai-ws2-a |
 | Nov 06 13:19 | `harden-p15-arch-pad-split` | merged | 7,597 pass | tturbo-mac |
 | Nov 06 12:52 | `p15-cmd-wall-span` | merged | 7,591 pass | claude-sonnet-b |
-| Nov 06 11:56 | `p15-arch-outlet-place` | merged | 7,587 pass | claude-sonnet-a |
-| Nov 06 11:08 | `p15-io-electrical-node` | merged | 7,583 pass | mai-flash |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 925 |
+| bonsai-a | bonsai2-27b | gate | 926 |
 | bonsai-b | bonsai2-27b | gate | 852 |
 | bonsai-ws2-a | bonsai2-27b | idle | 960 |
 | bonsai-ws2-b | bonsai2-27b | gate | 921 |
@@ -68,9 +67,9 @@ Updated 2026-11-06 19:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | idle | 25 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 803 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 803 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 67 |
-| mai-flash-esc | mai-code-1.1-flash | merging | 35 |
-| tturbo-mac | tturbo-ultraheretic | gate | 627 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 35 |
+| tturbo-mac | tturbo-ultraheretic | merging | 628 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
