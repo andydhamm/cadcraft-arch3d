@@ -29,7 +29,18 @@ fn finite_or(value: f64, fallback: f64) -> f64 {
 }
 
 fn level_first_floor(model: &ArchModel) -> Option<&Level> {
-    model.levels.iter().filter(|level| level.elevation.is_finite() && level.elevation >= 0.0).min_by(|a, b| {
+    let at_or_above_zero: Vec<&Level> = model.levels.iter().filter(|level| level.elevation.is_finite() && level.elevation >= 0.0).collect();
+    if let Some(first) = at_or_above_zero.iter().min_by(|a, b| match a.elevation.partial_cmp(&b.elevation).unwrap_or(Ordering::Equal) {
+        Ordering::Equal => a.index.cmp(&b.index),
+        other => other,
+    }) {
+        // If the lowest level at or above 0 is within one floor height of 0, use it.
+        // Otherwise (e.g. a split level with no landing at grade), use the lowest level overall.
+        if first.elevation <= 1.0 {
+            return Some(*first);
+        }
+    }
+    model.levels.iter().filter(|level| level.elevation.is_finite()).min_by(|a, b| {
         match a.elevation.partial_cmp(&b.elevation).unwrap_or(Ordering::Equal) {
             Ordering::Equal => a.index.cmp(&b.index),
             other => other,
