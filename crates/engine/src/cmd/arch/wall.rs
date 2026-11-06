@@ -1863,4 +1863,119 @@ mod tests {
         assert_eq!(d.arch.walls.len(), before);
         assert_eq!(d.arch_revision, before_rev);
     }
+
+    #[test]
+    fn wall_level_accepts_numeric_index() {
+        let mut s = two_level_session(2.7);
+        // Use numeric index 1 for the "Main" level
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"level":1});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        assert_eq!(d.arch.walls[0].base_level, 1);
+    }
+
+    #[test]
+    fn wall_level_accepts_numeric_string_index() {
+        let mut s = two_level_session(2.7);
+        // Use numeric string "1" for the "Main" level
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"level":"1"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        assert_eq!(d.arch.walls[0].base_level, 1);
+    }
+
+    #[test]
+    fn wall_top_level_accepts_numeric_index() {
+        let mut s = two_level_session(2.7);
+        // Use numeric index 1 for topLevel
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"level":"Lower","topLevel":1});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        assert_eq!(d.arch.walls[0].base_level, 0);
+        assert_eq!(d.arch.walls[0].top_level, Some(1));
+        // Height should be 2.7 + 2.4 - 0.0 = 5.1
+        assert!((d.arch.walls[0].height - 5.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wall_top_level_equal_elevation_is_refused() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(Level { index: 0, name: "A".into(), elevation: 2.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.arch.levels.push(Level { index: 1, name: "B".into(), elevation: 2.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.touch_arch();
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"level":"A","topLevel":"B"});
+        assert!(matches!(s.execute("wall", &p), Err(EngineError::BadParams { .. })));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 0);
+    }
+
+    #[test]
+    fn wall_top_level_with_zero_structure_on_top() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.arch.levels.push(Level { index: 1, name: "Upper".into(), elevation: 2.7, ceiling_height: 2.4, structure: 0.0, ..Default::default() });
+        d.touch_arch();
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"level":"Lower","topLevel":"Upper"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        // Height = 2.7 + 2.4 + 0.0 - 0.0 = 5.1
+        assert!((d.arch.walls[0].height - 5.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wall_top_level_with_negative_elevation_base() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(Level { index: 0, name: "Basement".into(), elevation: -3.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.arch.levels.push(Level { index: 1, name: "Ground".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.touch_arch();
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"level":"Basement","topLevel":"Ground"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        // Height = 0.0 + 2.4 - (-3.0) = 5.4
+        assert!((d.arch.walls[0].height - 5.4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wall_top_level_unknown_numeric_index_refused() {
+        let mut s = two_level_session(2.7);
+        let before_undo = s.state().unwrap().undo.len();
+        // Index 5 doesn't exist
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"level":"Lower","topLevel":5});
+        assert!(matches!(s.execute("wall", &p), Err(EngineError::BadParams { .. })));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 0);
+        assert_eq!(s.state().unwrap().undo.len(), before_undo);
+    }
+
+    #[test]
+    fn wall_level_unknown_numeric_index_refused() {
+        let mut s = two_level_session(2.7);
+        let before_undo = s.state().unwrap().undo.len();
+        // Index 5 doesn't exist
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"level":5});
+        assert!(matches!(s.execute("wall", &p), Err(EngineError::BadParams { .. })));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 0);
+        assert_eq!(s.state().unwrap().undo.len(), before_undo);
+    }
+
+    #[test]
+    fn wall_top_level_huge_elevation_difference() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(Level { index: 0, name: "Low".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.arch.levels.push(Level { index: 1, name: "High".into(), elevation: 1e6, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.touch_arch();
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"level":"Low","topLevel":"High"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        // Height = 1e6 + 2.4 - 0.0
+        assert!((d.arch.walls[0].height - 1_000_002.4).abs() < 1e-3);
+    }
 }
