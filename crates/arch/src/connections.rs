@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn a_connection_from_an_outlet_is_refused() {
-        let (m, sw) = fixture();
+        let (mut m, sw) = fixture();
         let outlet = m.push_electrical(ElectricalDevice {
             wall: m.walls[0].id,
             kind: ElectricalKind::Duplex,
