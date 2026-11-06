@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 22 of 42 segments merged · 1 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-06 08:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 24.3 h so far · expected done Nov 07 00:45–Nov 07 23:42 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 24.6 h so far · expected done Nov 07 01:00–Nov 07 23:57 UTC |
 
 ## Phase 15 segments
 
-22 merged, 11 queued, 5 merging, 4 replaced, 4 gate
+22 merged, 11 queued, 5 merging, 4 replaced, 3 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -40,7 +40,7 @@ Updated 2026-11-06 08:45 UTC. This page and the card in the README are regenerat
 | `p15-arch-circuits` | arch: circuit grouping by shared lights | gate | bonsai-ws2-b |
 | `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | gate | darwin-ws3 |
 | `p15-cmd-wall-span` | wall: level and topLevel params, derived spanning height | merging | claude-sonnet-b |
-| `p15-cmd-room-bed` | room type keys and the terrain planting bed | gate | bonsai-a |
+| `p15-cmd-room-bed` | room type keys and the terrain planting bed | working | bonsai-a |
 | `upstream-sync-2611bc5f5` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | gate | bonsai-ws2-a |
 
 ## Recent merges
@@ -64,7 +64,7 @@ Updated 2026-11-06 08:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 921 |
+| bonsai-a | bonsai2-27b | agent | 922 |
 | bonsai-b | bonsai2-27b | merging | 846 |
 | bonsai-ws2-a | bonsai2-27b | gate | 955 |
 | bonsai-ws2-b | bonsai2-27b | gate | 912 |
@@ -76,5 +76,5 @@ Updated 2026-11-06 08:45 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 64 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
-| tturbo-mac | tturbo-ultraheretic | agent | 625 |
+| tturbo-mac | tturbo-ultraheretic | gate | 625 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
