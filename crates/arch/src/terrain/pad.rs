@@ -29,7 +29,18 @@ fn finite_or(value: f64, fallback: f64) -> f64 {
 }
 
 fn level_first_floor(model: &ArchModel) -> Option<&Level> {
-    model.levels.iter().filter(|level| level.elevation.is_finite() && level.elevation >= 0.0).min_by(|a, b| {
+    let at_or_above_zero: Vec<&Level> = model.levels.iter().filter(|level| level.elevation.is_finite() && level.elevation >= 0.0).collect();
+    if let Some(first) = at_or_above_zero.iter().min_by(|a, b| match a.elevation.partial_cmp(&b.elevation).unwrap_or(Ordering::Equal) {
+        Ordering::Equal => a.index.cmp(&b.index),
+        other => other,
+    }) {
+        // If the lowest level at or above 0 is within one floor height of 0, use it.
+        // Otherwise (e.g. a split level with no landing at grade), use the lowest level overall.
+        if first.elevation <= 1.0 {
+            return Some(*first);
+        }
+    }
+    model.levels.iter().filter(|level| level.elevation.is_finite()).min_by(|a, b| {
         match a.elevation.partial_cmp(&b.elevation).unwrap_or(Ordering::Equal) {
             Ordering::Equal => a.index.cmp(&b.index),
             other => other,
@@ -685,5 +696,115 @@ mod tests {
         assert_eq!(regions.len(), 2);
         assert_eq!((regions[0].kind, regions[0].elevation, regions[0].margin), (PadKind::Pad, -0.3, Terrain::default().pad_margin));
         assert_eq!((regions[1].kind, regions[1].elevation), (PadKind::Basement, -3.0));
+    }
+
+    #[test]
+    fn multiple_side_split_levels_each_get_a_pad() {
+        let mut model = ArchModel::default();
+        model.terrain = Some(Terrain { pad: true, pad_margin: 0.5, ..Terrain::default() });
+        model.levels = vec![
+            Level { index: 0, name: "Lower".into(), elevation: -1.2, ..Default::default() },
+            Level { index: 1, name: "Main".into(), elevation: 1.5, ..Default::default() },
+            Level { index: 2, name: "Upper".into(), elevation: 4.2, ..Default::default() },
+        ];
+        // Lower: 0..10 x 0..8
+        ring_walls(&mut model, &[(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)], 0, true);
+        // Main: 0..14 x 0..8 (extends past Lower on the right)
+        ring_walls(&mut model, &[(0.0, 0.0), (14.0, 0.0), (14.0, 8.0), (0.0, 8.0)], 1, true);
+        // Upper: 0..14 x 0..12 (extends past Main on the top)
+        ring_walls(&mut model, &[(0.0, 0.0), (14.0, 0.0), (14.0, 12.0), (0.0, 12.0)], 2, true);
+
+        let regions = pad_regions(&model);
+        // Lower pad, Main side split, Upper side split
+        let pads: Vec<&PadRegion> = regions.iter().filter(|r| r.kind == PadKind::Pad).collect();
+        assert_eq!(pads.len(), 3, "expected 3 pads, got {}", pads.len());
+        // Main's side split should be at elevation 1.5 - 0.3 = 1.2
+        let main_split = pads.iter().find(|r| (r.elevation - 1.2).abs() < 1e-9);
+        assert!(main_split.is_some(), "no Main side split pad");
+        // Upper's side split should be at elevation 4.2 - 0.3 = 3.9
+        let upper_split = pads.iter().find(|r| (r.elevation - 3.9).abs() < 1e-9);
+        assert!(upper_split.is_some(), "no Upper side split pad");
+    }
+
+    #[test]
+    fn side_split_with_no_extension_gets_no_pad() {
+        let mut model = ArchModel::default();
+        model.terrain = Some(Terrain { pad: true, pad_margin: 0.5, ..Terrain::default() });
+        model.levels = vec![
+            Level { index: 0, name: "Lower".into(), elevation: -1.2, ..Default::default() },
+            Level { index: 1, name: "Main".into(), elevation: 1.5, ..Default::default() },
+        ];
+        // Both levels have the same footprint
+        ring_walls(&mut model, &[(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)], 0, true);
+        ring_walls(&mut model, &[(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)], 1, true);
+
+        let regions = pad_regions(&model);
+        // Only the Lower pad, no Main side split
+        let pads: Vec<&PadRegion> = regions.iter().filter(|r| r.kind == PadKind::Pad).collect();
+        assert_eq!(pads.len(), 1, "expected 1 pad, got {}", pads.len());
+        assert!((pads[0].elevation - (-1.5)).abs() < 1e-9, "wrong elevation {}", pads[0].elevation);
+    }
+
+    #[test]
+    fn multiple_doors_on_the_same_landing_get_aprons() {
+        let mut model = split_house();
+        // Add two doors on the same wall
+        model.openings.push(cadcraft_doc::arch::Opening {
+            id: cadcraft_doc::ArchId(100),
+            host: cadcraft_doc::ArchId(0),
+            offset: 4.6,
+            width: 0.9,
+            sill: 1.35,
+            ..Default::default()
+        });
+        model.openings.push(cadcraft_doc::arch::Opening {
+            id: cadcraft_doc::ArchId(101),
+            host: cadcraft_doc::ArchId(0),
+            offset: 7.0,
+            width: 0.9,
+            sill: 1.35,
+            ..Default::default()
+        });
+
+        let regions = pad_regions(&model);
+        // Two aprons (elevation 0.0)
+        let aprons: Vec<&PadRegion> = regions.iter().filter(|r| r.kind == PadKind::Pad && r.elevation.abs() < 1e-9).collect();
+        assert_eq!(aprons.len(), 2, "expected 2 aprons, got {}", aprons.len());
+    }
+
+    #[test]
+    fn pad_follows_l_shaped_footprint() {
+        let mut model = ArchModel::default();
+        model.terrain = Some(Terrain { pad: true, pad_margin: 0.3, ..Terrain::default() });
+        model.levels = vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ..Default::default() }];
+        // L-shaped footprint: (0,0) to (10,0) to (10,4) to (6,4) to (6,8) to (0,8)
+        ring_walls(&mut model, &[(0.0, 0.0), (10.0, 0.0), (10.0, 4.0), (6.0, 4.0), (6.0, 8.0), (0.0, 8.0)], 0, true);
+
+        let regions = pad_regions(&model);
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].kind, PadKind::Pad);
+        // The pad ring should have 6 vertices (same as the footprint)
+        assert_eq!(regions[0].ring.len(), 6, "expected 6 vertices, got {}", regions[0].ring.len());
+    }
+
+    #[test]
+    fn apron_for_a_wide_door_extends_past_the_wall() {
+        let mut model = split_house();
+        // A door wider than the wall (wall is 10m wide, door is 12m wide)
+        model.openings.push(cadcraft_doc::arch::Opening {
+            id: cadcraft_doc::ArchId(100),
+            host: cadcraft_doc::ArchId(0),
+            offset: 5.0,
+            width: 12.0,
+            sill: 1.35,
+            ..Default::default()
+        });
+
+        let regions = pad_regions(&model);
+        let apron = regions.last().expect("apron");
+        assert_eq!(apron.kind, PadKind::Pad);
+        // The apron should be 12 + 1.2 = 13.2m wide
+        let (min_x, max_x) = apron.ring.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.x), hi.max(p.x)));
+        assert!((max_x - min_x - 13.2).abs() < 1e-9, "apron width {}", max_x - min_x);
     }
 }

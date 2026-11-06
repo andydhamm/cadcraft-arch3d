@@ -1129,4 +1129,53 @@ mod tests {
         let mesh = site_mesh(&surf).unwrap();
         assert_closed(&mesh, &boundary, "small pad");
     }
+
+    #[test]
+    fn site_mesh_with_side_split_pad_is_closed() {
+        let boundary = vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)];
+        let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 2.0), Vec3::new(40.0, 30.0, 2.0), Vec3::new(0.0, 30.0, 0.0)];
+        let mut model = make_house_site(boundary.clone(), points);
+        // Add a second level with a larger footprint (side split)
+        model.levels.push(Level { index: 1, name: "Main".into(), elevation: 1.5, ..Level::default() });
+        model.walls.push(Wall {
+            id: ArchId(5),
+            start: Vec2::new(15.0, 11.0),
+            end: Vec2::new(30.0, 11.0),
+            base_level: 1,
+            thickness: 0.2,
+            exterior: true,
+            ..Wall::default()
+        });
+        model.walls.push(Wall {
+            id: ArchId(6),
+            start: Vec2::new(30.0, 11.0),
+            end: Vec2::new(30.0, 19.0),
+            base_level: 1,
+            thickness: 0.2,
+            exterior: true,
+            ..Wall::default()
+        });
+        model.walls.push(Wall {
+            id: ArchId(7),
+            start: Vec2::new(30.0, 19.0),
+            end: Vec2::new(15.0, 19.0),
+            base_level: 1,
+            thickness: 0.2,
+            exterior: true,
+            ..Wall::default()
+        });
+        model.walls.push(Wall {
+            id: ArchId(8),
+            start: Vec2::new(15.0, 19.0),
+            end: Vec2::new(15.0, 11.0),
+            base_level: 1,
+            thickness: 0.2,
+            exterior: true,
+            ..Wall::default()
+        });
+
+        let surf = SiteSurface::new(&model).unwrap();
+        let mesh = site_mesh(&surf).unwrap();
+        assert_closed(&mesh, &boundary, "side split pad");
+    }
 }
