@@ -133,7 +133,7 @@ mod tests {
     fn a_bulged_arc_bows_to_the_left() {
         let (m, sw) = fixture();
 
-        let c = Connection { id: ArchId(0), from: sw, to: vec![ArchId(0)], bulge: 0.5 };
+        let c = Connection { from: sw, to: vec![ArchId(0)], bulge: 0.5, ..Default::default() };
         let arcs = connection_arcs(&m, &c);
         assert_eq!(arcs.len(), 1);
         let a = &arcs[0];
@@ -145,12 +145,12 @@ mod tests {
         assert!((a[8].x - 2.0).abs() <= 1e-9);
         assert!((a[8].y - 0.6).abs() <= 1e-9); // sagitta 0.5 to the left of +x
 
-        let c0 = Connection { id: ArchId(0), from: sw, to: vec![ArchId(0)], bulge: 0.0 };
+        let c0 = Connection { from: sw, to: vec![ArchId(0)], bulge: 0.0, ..Default::default() };
         let arcs0 = connection_arcs(&m, &c0);
         assert_eq!(arcs0.len(), 1);
         assert_eq!(arcs0[0].len(), 2); // no bulge -> straight line segment
 
-        let cn = Connection { id: ArchId(0), from: sw, to: vec![ArchId(0)], bulge: -0.5 };
+        let cn = Connection { from: sw, to: vec![ArchId(0)], bulge: -0.5, ..Default::default() };
         let arcsn = connection_arcs(&m, &cn);
         assert_eq!(arcsn.len(), 1);
         assert!((arcsn[0][8].x - 2.0).abs() <= 1e-9);
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn connection_arcs_are_deterministic() {
         let (m, sw) = fixture();
-        let c = Connection { id: ArchId(0), from: sw, to: vec![ArchId(1), ArchId(0)], bulge: 0.25 };
+        let c = Connection { from: sw, to: vec![ArchId(1), ArchId(0)], bulge: 0.25, ..Default::default() };
 
         let a = connection_arcs(&m, &c);
         let b = connection_arcs(&m, &c);
