@@ -45,7 +45,7 @@ fn wall_level<'a>(model: &'a ArchModel, d: &ElectricalDevice) -> Result<(&'a Wal
     Ok((wall, level))
 }
 
-fn floor_reaching_opening(o: &Opening) -> bool {
+pub(crate) fn floor_reaching_opening(o: &Opening) -> bool {
     matches!(o.kind, OpeningKind::Door | OpeningKind::GarageDoor | OpeningKind::CasedOpening) && o.sill <= 1e-9
 }
 
