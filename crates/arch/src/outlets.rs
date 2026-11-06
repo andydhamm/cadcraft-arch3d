@@ -409,3 +409,106 @@ pub fn auto_outlets(model: &ArchModel, room: ArchId) -> Vec<cadcraft_doc::arch::
     out.sort_by(|a, b| a.wall.cmp(&b.wall).then((a.side == WallSide::Right).cmp(&(b.side == WallSide::Right))).then(a.offset.total_cmp(&b.offset)));
     out
 }
+
+/// Counter-run outlet spacing found in a kitchen room.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct CounterGaps {
+    /// Largest gap between consecutive counter GFCI outlets (0 when a run has one).
+    pub max_spacing: f64,
+    /// Largest distance from a counter run's start to its first GFCI.
+    pub start_distance: f64,
+    /// Largest distance from a counter run's last GFCI to its end.
+    pub end_distance: f64,
+}
+
+/// How well a room's usable walls are covered by outlets.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Gaps {
+    /// Largest distance from a point on a usable run to the nearest serving outlet.
+    pub max_gap: f64,
+    /// Counter spacing; `Some` only for kitchens.
+    pub counter: Option<CounterGaps>,
+}
+
+/// Sampling step along runs (metres).
+const SAMPLE: f64 = 0.05;
+/// Most samples taken along one run.
+const MAX_SAMPLES: usize = 100_000;
+
+fn fin(v: f64) -> f64 {
+    if v.is_finite() { v } else { 0.0 }
+}
+
+/// Measures the outlet spacing of `room` with its existing devices plus what [`auto_outlets`] would add.
+pub fn outlet_gaps(model: &ArchModel, room: ArchId) -> Gaps {
+    use cadcraft_doc::arch::{ElectricalDevice, ElectricalKind};
+    let Some(r) = model.room(room) else { return Gaps::default() };
+    let level = r.level;
+    let kitchen = r.room_type == RoomType::Kitchen;
+    let mut served: Vec<ElectricalDevice> = model.electrical.iter().filter(|d| d.offset.is_finite()).cloned().collect();
+    for d in auto_outlets(model, room) {
+        let same = |e: &ElectricalDevice| e.wall == d.wall && e.side == d.side && (e.offset - d.offset).abs() <= 1e-9;
+        if !served.iter().any(same) {
+            served.push(d);
+        }
+    }
+
+    let mut max_gap = 0.0f64;
+    for run in usable_runs(model, room) {
+        let mut at: Vec<f64> = Vec::new();
+        let mut cum = 0.0;
+        for &(w, s, a, b) in &run.wall_spans {
+            at.extend(
+                served.iter().filter(|d| d.wall == w && d.side == s && d.offset >= a - 1e-9 && d.offset <= b + 1e-9).map(|d| cum + d.offset - a),
+            );
+            cum += b - a;
+        }
+        let l = run.length;
+        if !(l.is_finite() && l > SAMPLE) {
+            continue;
+        }
+        if at.is_empty() {
+            max_gap = f64::INFINITY;
+            continue;
+        }
+        let n = ((l / SAMPLE).floor().min(MAX_SAMPLES as f64)) as usize;
+        let step = if n == 0 { 0.0 } else { l / n as f64 };
+        let mut worst = 0.0f64;
+        for i in 0..=n {
+            let p = i as f64 * step;
+            worst = worst.max(at.iter().map(|q| (q - p).abs()).fold(f64::INFINITY, f64::min));
+        }
+        max_gap = max_gap.max(fin(worst));
+    }
+
+    let counter = kitchen.then(|| {
+        let faces = collect_faces(model, room, level);
+        let mut out = CounterGaps::default();
+        for cr in crate::casework_layout::counter_runs(model).into_iter().filter(|c| c.level == level) {
+            let rad = cr.rotation.to_radians();
+            let cd = Vec2::new(rad.cos(), rad.sin());
+            let (a, b) = (cr.origin + cd * cr.u0, cr.origin + cd * cr.u1);
+            if !(a.is_finite() && b.is_finite()) {
+                continue;
+            }
+            let Some(f) = faces.iter().find(|f| cd.cross(f.dir).abs() <= 1e-6 && (a - f.start).cross(f.dir).abs() <= 1e-6) else { continue };
+            let (sa, sb) = ((a - f.start).dot(f.dir), (b - f.start).dot(f.dir));
+            let (s0, s1) = (sa.min(sb), sa.max(sb));
+            let mut g: Vec<f64> = served
+                .iter()
+                .filter(|d| {
+                    d.kind == ElectricalKind::Gfci && d.wall == f.wall && d.side == side_of(f.side) && d.offset >= s0 - 1e-6 && d.offset <= s1 + 1e-6
+                })
+                .map(|d| d.offset)
+                .collect();
+            g.sort_by(|x, y| x.total_cmp(y));
+            let (Some(&first), Some(&last)) = (g.first(), g.last()) else { continue };
+            let spacing = g.windows(2).map(|w| w[1] - w[0]).fold(0.0, f64::max);
+            out.max_spacing = out.max_spacing.max(fin(spacing));
+            out.start_distance = out.start_distance.max(fin(first - s0));
+            out.end_distance = out.end_distance.max(fin(s1 - last));
+        }
+        out
+    });
+    Gaps { max_gap, counter }
+}
