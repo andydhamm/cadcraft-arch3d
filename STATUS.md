@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 12:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 26 of 43 segments merged · 1 of 14 acceptance checks**
 
@@ -25,16 +25,16 @@ Updated 2026-11-06 12:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 28.1 h so far · expected done Nov 07 02:06–Nov 07 23:42 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 28.3 h so far · expected done Nov 07 02:21–Nov 07 23:57 UTC |
 
 ## Phase 15 segments
 
-26 merged, 9 queued, 6 merging, 4 replaced, 1 working, 1 gate
+26 merged, 9 queued, 7 merging, 4 replaced, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-cmd-electrical` | engine: outlet, switch, electrical.edit, electrical.delete | working | mai-flash |
-| `p15-arch-outlet-gaps` | arch: outlet_gaps — the spacing rule measured back | gate | claude-sonnet-a |
+| `p15-cmd-electrical` | engine: outlet, switch, electrical.edit, electrical.delete | gate | mai-flash |
+| `p15-arch-outlet-gaps` | arch: outlet_gaps — the spacing rule measured back | merging | claude-sonnet-a |
 | `p15-arch-circuits` | arch: circuit grouping by shared lights | merging | bonsai-ws2-b |
 | `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | merging | mai-flash-esc |
 | `p15-cmd-wall-span` | wall: level and topLevel params, derived spanning height | merging | claude-sonnet-b |
@@ -64,16 +64,16 @@ Updated 2026-11-06 12:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 923 |
-| bonsai-b | bonsai2-27b | gate | 848 |
+| bonsai-b | bonsai2-27b | agent | 850 |
 | bonsai-ws2-a | bonsai2-27b | merging | 956 |
 | bonsai-ws2-b | bonsai2-27b | merging | 915 |
-| claude-sonnet-a | sonnet | gate | 84 |
+| claude-sonnet-a | sonnet | merging | 85 |
 | claude-sonnet-b | sonnet | merging | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | merging | 25 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 794 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 65 |
+| mai-flash | mai-code-1.1-flash | gate | 65 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 34 |
 | tturbo-mac | tturbo-ultraheretic | merging | 626 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
