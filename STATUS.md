@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 02:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 15 of 37 segments merged · 1 of 14 acceptance checks**
 
-7,539 workspace tests passing at the last merge · 775 segments merged in all · 0 of 14 seats working
+7,548 workspace tests passing at the last merge · 776 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,26 +25,26 @@ Updated 2026-11-06 02:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 17.8 h so far · expected done Nov 06 21:27–Nov 07 23:28 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 18.1 h so far · expected done Nov 06 21:42–Nov 07 23:43 UTC |
 
 ## Phase 15 segments
 
-15 merged, 15 queued, 4 merging, 2 escalate, 2 replaced, 1 gate
+15 merged, 15 queued, 5 merging, 2 replaced, 1 stuck, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-arch-connections` | arch: connection arcs and circuits | escalate |  |
 | `p15-arch-grade` | arch: grade classes and the above-grade area | merging | claude-sonnet-b |
 | `p15-arch-pad-split` | arch: the pad follows each level and the entry landing | merging | claude-sonnet-c |
 | `p15-arch3d-spanning-walls` | arch3d: walls from one level's floor to another's ceiling, offset levels | merging | claude-sonnet-d |
 | `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | escalate |  |
 | `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | merging | mai-flash |
-| `p15-arch-outlet-runs` | arch: usable wall runs of a room (openings and counters break them) | gate | claude-sonnet-a |
+| `p15-arch-outlet-runs` | arch: usable wall runs of a room (openings and counters break them) | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 02:23 | `harden-p15-doc-levels` | merged | 7,548 pass | tturbo-mac |
 | Nov 06 01:02 | `p15-cmd-electrical-view` | merged | 7,539 pass | mai-flash-esc |
 | Nov 06 00:14 | `p15-cmd-library-copy-place` | merged | 7,536 pass | claude-sonnet-a |
 | Nov 05 23:19 | `p15-cmd-light-sets` | merged | 7,530 pass | mai-flash |
@@ -56,17 +56,16 @@ Updated 2026-11-06 02:15 UTC. This page and the card in the README are regenerat
 | Nov 05 16:48 | `p15-arch3d-light-brightness` | merged | 7,496 pass | claude-sonnet-a |
 | Nov 05 16:19 | `p15-render3d-technical` | merged | 7,493 pass | darwin-ws3 |
 | Nov 05 15:51 | `p15-cli-commands-file` | merged | 7,491 pass | bonsai-b |
-| Nov 05 15:03 | `p15-cmd-export-view` | merged | 7,489 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 917 |
+| bonsai-a | bonsai2-27b | agent | 918 |
 | bonsai-b | bonsai2-27b | merging | 845 |
-| bonsai-ws2-a | bonsai2-27b | gate | 945 |
+| bonsai-ws2-a | bonsai2-27b | agent | 948 |
 | bonsai-ws2-b | bonsai2-27b | gate | 905 |
-| claude-sonnet-a | sonnet | gate | 82 |
+| claude-sonnet-a | sonnet | merging | 83 |
 | claude-sonnet-b | sonnet | merging | 83 |
 | claude-sonnet-c | sonnet | merging | 36 |
 | claude-sonnet-d | sonnet | merging | 22 |
@@ -74,5 +73,5 @@ Updated 2026-11-06 02:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 63 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
-| tturbo-mac | tturbo-ultraheretic | merging | 622 |
+| tturbo-mac | tturbo-ultraheretic | agent | 622 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
