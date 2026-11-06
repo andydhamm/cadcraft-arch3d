@@ -379,6 +379,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_style_accepts_only_the_four_names() {
+        // The original four names still map; the phase-15 styles are additions.
+        assert_eq!(parse_style("shaded"), Some(Style::Shaded));
+        assert_eq!(parse_style("shaded-edges"), Some(Style::ShadedEdges));
+        assert_eq!(parse_style("hidden-line"), Some(Style::HiddenLine));
+        assert_eq!(parse_style("glass-house"), Some(Style::GlassHouse));
+        for bad in ["", "Shaded", "SHADED", "shaded_edges", "wireframe", " shaded", "glass"] {
+            assert_eq!(parse_style(bad), None, "`{bad}`");
+        }
+    }
+
+    #[test]
     fn orbit_camera_spec_accepts_a_target() {
         let Ok(Camera::Orbit(o)) = parse_camera("orbit,target=5,4,0", base()) else {
             panic!("target camera");
