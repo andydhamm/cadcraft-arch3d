@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 20 of 39 segments merged · 1 of 14 acceptance checks**
 
-7,566 workspace tests passing at the last merge · 781 segments merged in all · 0 of 13 seats working
+7,570 workspace tests passing at the last merge · 782 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-06 06:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 22.3 h so far · expected done Nov 06 23:20–Nov 07 23:53 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 22.6 h so far · expected done Nov 06 23:35–Nov 08 00:08 UTC |
 
 ## Phase 15 segments
 
@@ -44,6 +44,7 @@ Updated 2026-11-06 06:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 06:55 | `harden-p15-cmd-library-copy-place` | merged | 7,570 pass | tturbo-mac |
 | Nov 06 06:22 | `p15-arch-outlet-runs` | merged | 7,566 pass | claude-sonnet-a |
 | Nov 06 05:27 | `p15-arch3d-plate-mesh` | merged | 7,563 pass | mai-flash |
 | Nov 06 04:47 | `p15-arch3d-spanning-walls` | merged | 7,560 pass | claude-sonnet-d |
@@ -55,7 +56,6 @@ Updated 2026-11-06 06:45 UTC. This page and the card in the README are regenerat
 | Nov 05 23:19 | `p15-cmd-light-sets` | merged | 7,530 pass | mai-flash |
 | Nov 05 22:18 | `p15-render-plan-level` | merged | 7,527 pass | claude-sonnet-d |
 | Nov 05 21:17 | `p15-arch-spanning-walls` | merged | 7,524 pass | claude-sonnet-b |
-| Nov 05 20:17 | `upstream-sync-df6597445` | merged | 7,520 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
@@ -72,5 +72,5 @@ Updated 2026-11-06 06:45 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 64 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
-| tturbo-mac | tturbo-ultraheretic | merging | 623 |
+| tturbo-mac | tturbo-ultraheretic | agent | 623 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
