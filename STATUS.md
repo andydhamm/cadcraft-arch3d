@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 15:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 15:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 30 of 43 segments merged · 1 of 14 acceptance checks**
 
@@ -25,15 +25,15 @@ Updated 2026-11-06 15:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 31.1 h so far · expected done Nov 07 00:25–Nov 07 17:24 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 31.3 h so far · expected done Nov 07 00:40–Nov 07 17:38 UTC |
 
 ## Phase 15 segments
 
-30 merged, 7 queued, 4 replaced, 3 merging, 2 working, 1 escalate
+30 merged, 7 queued, 4 replaced, 4 merging, 1 working, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-render-electrical` | render: electrical plan symbols and connection arcs | working | mai-flash-esc |
+| `p15-render-electrical` | render: electrical plan symbols and connection arcs | merging | mai-flash-esc |
 | `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | working | darwin-ws3 |
 | `p15-cmd-electrical` | engine: outlet, switch, electrical.edit, electrical.delete | merging | mai-flash |
 | `p15-arch-outlet-gaps` | arch: outlet_gaps — the spacing rule measured back | merging | claude-sonnet-a |
@@ -69,9 +69,9 @@ Updated 2026-11-06 15:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | merging | 25 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 795 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 797 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 66 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 34 |
+| mai-flash-esc | mai-code-1.1-flash | merging | 35 |
 | tturbo-mac | tturbo-ultraheretic | merging | 627 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
