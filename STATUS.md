@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 31 of 43 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 32 of 43 segments merged · 2 of 14 acceptance checks**
 
-7,609 workspace tests passing at the last merge · 794 segments merged in all · 0 of 14 seats working
+7,612 workspace tests passing at the last merge · 795 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,24 +25,25 @@ Updated 2026-11-06 16:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 32.1 h so far · expected done Nov 07 00:43–Nov 07 17:19 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 32.3 h so far · expected done Nov 06 23:47–Nov 07 14:55 UTC |
 
 ## Phase 15 segments
 
-31 merged, 7 queued, 4 replaced, 4 merging, 1 escalate
+32 merged, 6 queued, 4 replaced, 3 merging, 1 working, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-render-electrical` | render: electrical plan symbols and connection arcs | merging | mai-flash-esc |
 | `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | merging | darwin-ws3 |
 | `p15-cmd-electrical` | engine: outlet, switch, electrical.edit, electrical.delete | merging | mai-flash |
-| `p15-arch-outlet-gaps` | arch: outlet_gaps — the spacing rule measured back | merging | claude-sonnet-a |
+| `p15-inspect` | engine: arch.inspect for phase 15 | working | claude-sonnet-a |
 | `upstream-sync-2611bc5f5` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | escalate |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 16:38 | `p15-arch-outlet-gaps` | merged | 7,612 pass | claude-sonnet-a |
 | Nov 06 16:09 | `p15-cli-render-styles` | merged | 7,609 pass | claude-sonnet-d |
 | Nov 06 15:27 | `p15-cmd-level-free` | merged | 7,607 pass | mai-flash-esc |
 | Nov 06 14:52 | `p15-arch-circuits` | merged | 7,602 pass | bonsai-ws2-b |
@@ -54,7 +55,6 @@ Updated 2026-11-06 16:30 UTC. This page and the card in the README are regenerat
 | Nov 06 11:08 | `p15-io-electrical-node` | merged | 7,583 pass | mai-flash |
 | Nov 06 10:41 | `p15-arch3d-electrical-scene` | merged | 7,582 pass | claude-sonnet-c |
 | Nov 06 09:40 | `p15-io-split-levels` | merged | 7,579 pass | claude-sonnet-d |
-| Nov 06 08:34 | `p15-arch-connection-arcs` | merged | 7,576 pass | bonsai-ws2-b |
 
 ## Seats active in the last hour
 
@@ -62,9 +62,9 @@ Updated 2026-11-06 16:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 923 |
 | bonsai-b | bonsai2-27b | merging | 851 |
-| bonsai-ws2-a | bonsai2-27b | idle | 956 |
-| bonsai-ws2-b | bonsai2-27b | idle | 918 |
-| claude-sonnet-a | sonnet | merging | 85 |
+| bonsai-ws2-a | bonsai2-27b | gate | 956 |
+| bonsai-ws2-b | bonsai2-27b | gate | 918 |
+| claude-sonnet-a | sonnet | agent | 85 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | idle | 25 |
