@@ -384,6 +384,6 @@ mod tests {
         let r = s.execute(CMD, &json!({"path": {"kind": "moat", "polygon": [[0, 1], [10, 1], [10, 2], [0, 2]]}}));
         assert!(r.is_err());
         assert!(mods(&s).is_empty());
-        assert_eq!(s.undo(), Ok(None));
+        assert!(matches!(s.undo(), Ok(None)));
     }
 }
