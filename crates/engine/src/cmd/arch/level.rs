@@ -1,18 +1,32 @@
 //! LEVEL command: add a level above/below another, or edit a level's heights.
-use crate::cmd::{CommandSpec, Session, f64_or};
-use serde_json::Value;
+use crate::cmd::{CommandSpec, Session, bad, f64_or};
+use cadcraft_doc::arch::{Level, LevelKind};
+use serde_json::{Value, json};
+
+fn ensure_ground(s: &mut Session) {
+    if s.doc().is_ok_and(|d| d.arch.levels.is_empty())
+        && let Ok(d) = s.doc_mut()
+    {
+        d.arch.ensure_ground_level();
+    }
+}
+
+fn kind_key(k: LevelKind) -> &'static str {
+    match k {
+        LevelKind::Floor => "floor",
+        LevelKind::Landing => "landing",
+    }
+}
 
 /// Find a level by name (string) or index (number). Returns the position in the levels vec.
 fn find_level(arch: &cadcraft_doc::arch::ArchModel, ref_val: &Value) -> Result<usize, crate::EngineError> {
     if let Some(n) = ref_val.as_str() {
-        // Try as index first
         if let Some(i) = n.parse::<u64>().ok() {
             if i < arch.levels.len() as u64 {
                 return Ok(i as usize);
             }
         }
-        // Then as name
-        if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == n) {
+        if let Some((i, _)) = arch.levels.iter().enumerate().find(|(_, l)| l.name.eq_ignore_ascii_case(n)) {
             return Ok(i);
         }
         return Err(crate::EngineError::Other(format!("level: unknown level '{n}'")));
@@ -54,7 +68,7 @@ fn auto_level_name(levels: &[cadcraft_doc::arch::Level], neighbour: &str, fallba
 
     let mut name = format!("Level {n}");
     let mut count = 0;
-    while levels.iter().any(|l| l.name == name) {
+    while levels.iter().any(|l| l.name.eq_ignore_ascii_case(&name)) {
         n += 1;
         name = format!("Level {n}");
         count += 1;
@@ -65,97 +79,193 @@ fn auto_level_name(levels: &[cadcraft_doc::arch::Level], neighbour: &str, fallba
     name
 }
 
+fn parse_level_kind(value: &Value) -> Result<LevelKind, crate::EngineError> {
+    match value {
+        Value::String(s) => match s.trim().to_ascii_lowercase().as_str() {
+            "floor" => Ok(LevelKind::Floor),
+            "landing" => Ok(LevelKind::Landing),
+            _ => Err(bad("level", "level: `kind` must be \"floor\" or \"landing\"")),
+        },
+        _ => Err(bad("level", "level: `kind` must be \"floor\" or \"landing\"")),
+    }
+}
+
+fn parse_finite_range(value: &Value, min: f64, max: f64, err: &str) -> Result<f64, crate::EngineError> {
+    let n = value.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad("level", err))?;
+    if !(min..=max).contains(&n) {
+        return Err(bad("level", err));
+    }
+    Ok(n)
+}
+
+fn level_reply(level: &cadcraft_doc::arch::Level) -> Value {
+    json!({
+        "index": level.index,
+        "name": level.name,
+        "elevation": level.elevation,
+        "kind": kind_key(level.kind),
+    })
+}
+
+fn validate_duplicate_name(levels: &[cadcraft_doc::arch::Level], name: &str, skip_idx: Option<usize>) -> Result<(), crate::EngineError> {
+    if levels.iter().enumerate().any(|(idx, other)| skip_idx != Some(idx) && other.name.eq_ignore_ascii_case(name)) {
+        return Err(bad("level", format!("level: level name '{name}' already exists")));
+    }
+    Ok(())
+}
+
 /// Run the `level` command.
 ///
 /// JSON: `{above: "Level 1" | index}` — add a level above.
 /// `{below: "Level 1" | index}` — add a level below (renumbers walls).
 /// `{index: n, ceiling?, structure?}` or `{name: "Level 1", ceiling?, structure?}` — edit.
 pub fn run_level(s: &mut Session, p: &Value) -> Result<Value, crate::EngineError> {
-    let doc = s.doc_mut()?;
-    let arch = &mut doc.arch;
-
     let above = p.get("above");
     let below = p.get("below");
-    let index = p.get("index").and_then(|v| v.as_u64());
-    let name = p.get("name").and_then(|v| v.as_str());
-    let ceiling = p.get("ceiling").and_then(|v| v.as_f64());
-    let structure = p.get("structure").and_then(|v| v.as_f64());
+    let index = p.get("index");
+    let name = p.get("name");
+    let elevation = p.get("elevation");
 
-    if above.is_none() && below.is_none() && index.is_none() && name.is_none() {
+    if above.is_none() && below.is_none() && index.is_none() && name.is_none() && elevation.is_none() {
         return Err(crate::EngineError::Other("level: specify above, below, index or name".into()));
     }
 
+    ensure_ground(s);
+
+    if above.is_none() && below.is_none() && elevation.is_some() {
+        let doc = s.doc()?;
+        let arch = &doc.arch;
+        let free_elev =
+            elevation.and_then(Value::as_f64).filter(|v| v.is_finite()).ok_or_else(|| bad("level", "level: `elevation` must be a finite number"))?;
+        if let Some(name_val) = name.and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()) {
+            validate_duplicate_name(&arch.levels, name_val, None)?;
+        }
+        if let Some(v) = p.get("ceiling") {
+            parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
+        }
+        if let Some(v) = p.get("structure") {
+            parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
+        }
+        let kind = p.get("kind").map(parse_level_kind).transpose()?.unwrap_or_default();
+        let mut new_level = Level {
+            index: arch.levels.len() as u32,
+            name: name
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string)
+                .unwrap_or_else(|| auto_level_name(&arch.levels, "", arch.levels.len() + 1)),
+            elevation: free_elev,
+            kind,
+            ..Default::default()
+        };
+        if let Some(v) = p.get("ceiling") {
+            new_level.ceiling_height = parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
+        }
+        if let Some(v) = p.get("structure") {
+            new_level.structure = parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
+        }
+        let mut doc = s.doc_mut()?;
+        doc.arch.levels.push(new_level);
+        doc.touch_arch();
+        return Ok(level_reply(doc.arch.levels.last().unwrap()));
+    }
+
     if let Some(above_ref) = above {
+        if elevation.is_some() {
+            return Err(bad("level", "level: `elevation` cannot be given with `above` or `below`"));
+        }
+        let doc = s.doc()?;
+        let arch = &doc.arch;
         let i = find_level(arch, above_ref)?;
         let base = &arch.levels[i];
         let new_elev = base.elevation + base.floor_to_floor();
-        // A new level takes `Level::default()`'s ceiling height and floor structure.
-        let name_str = name.map(|n| n.trim()).filter(|n| !n.is_empty()).map(String::from);
-        let auto_name = auto_level_name(&arch.levels, &base.name, arch.levels.len() + 1);
-        let mut new_level = cadcraft_doc::arch::Level {
+        let name_val = name.and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty());
+        if let Some(name_val) = name_val {
+            validate_duplicate_name(&arch.levels, name_val, None)?;
+        }
+        if let Some(v) = p.get("ceiling") {
+            parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
+        }
+        if let Some(v) = p.get("structure") {
+            parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
+        }
+        let kind = p.get("kind").map(parse_level_kind).transpose()?.unwrap_or_default();
+        let mut new_level = Level {
             index: arch.levels.len() as u32,
-            name: name_str.unwrap_or(auto_name),
+            name: name_val.map(str::to_string).unwrap_or_else(|| auto_level_name(&arch.levels, &base.name, arch.levels.len() + 1)),
             elevation: new_elev,
+            kind,
             ..Default::default()
         };
-        if let Some(c) = ceiling {
-            if !c.is_finite() || c <= 0.0 {
-                return Err(crate::EngineError::Other("level: ceiling must be finite and positive".into()));
-            }
-            new_level.ceiling_height = c;
+        if let Some(v) = p.get("ceiling") {
+            new_level.ceiling_height = parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
         }
-        if let Some(s) = structure {
-            if !s.is_finite() || s <= 0.0 {
-                return Err(crate::EngineError::Other("level: structure must be finite and positive".into()));
-            }
-            new_level.structure = s;
+        if let Some(v) = p.get("structure") {
+            new_level.structure = parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
         }
-        arch.levels.push(new_level);
+        let mut doc = s.doc_mut()?;
+        doc.arch.levels.push(new_level);
         doc.touch_arch();
-        return Ok(Value::from("ok"));
+        return Ok(level_reply(doc.arch.levels.last().unwrap()));
     }
 
     if let Some(below_ref) = below {
+        if elevation.is_some() {
+            return Err(bad("level", "level: `elevation` cannot be given with `above` or `below`"));
+        }
+        let doc = s.doc()?;
+        let arch = &doc.arch;
         let i = find_level(arch, below_ref)?;
         let base = &arch.levels[i];
         let new_elev = base.elevation - base.floor_to_floor();
-        let name_str = name.map(|n| n.trim()).filter(|n| !n.is_empty()).map(String::from);
-
-        let auto_name = if i == 0 && name_str.is_none() { "Basement".to_string() } else { auto_level_name(&arch.levels, &base.name, i + 1) };
-
-        let mut new_level =
-            cadcraft_doc::arch::Level { index: i as u32, name: name_str.unwrap_or(auto_name), elevation: new_elev, ..Default::default() };
-        if let Some(c) = ceiling {
-            if !c.is_finite() || c <= 0.0 {
-                return Err(crate::EngineError::Other("level: ceiling must be finite and positive".into()));
-            }
-            new_level.ceiling_height = c;
+        let name_val = name.and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty());
+        if let Some(name_val) = name_val {
+            validate_duplicate_name(&arch.levels, name_val, None)?;
         }
-        if let Some(s) = structure {
-            if !s.is_finite() || s <= 0.0 {
-                return Err(crate::EngineError::Other("level: structure must be finite and positive".into()));
-            }
-            new_level.structure = s;
+        if let Some(v) = p.get("ceiling") {
+            parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
         }
+        if let Some(v) = p.get("structure") {
+            parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
+        }
+        let kind = p.get("kind").map(parse_level_kind).transpose()?.unwrap_or_default();
+        let mut new_level = Level {
+            index: i as u32,
+            name: name_val
+                .map(str::to_string)
+                .unwrap_or_else(|| if i == 0 { "Basement".to_string() } else { auto_level_name(&arch.levels, &base.name, i + 1) }),
+            elevation: new_elev,
+            kind,
+            ..Default::default()
+        };
+        if let Some(v) = p.get("ceiling") {
+            new_level.ceiling_height = parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
+        }
+        if let Some(v) = p.get("structure") {
+            new_level.structure = parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
+        }
+        let mut doc = s.doc_mut()?;
+        let arch = &mut doc.arch;
         arch.levels.insert(i, new_level);
-        // Renumber levels above the insertion point
-        for l in arch.levels.iter_mut().skip(i + 1) {
-            l.index += 1;
+        for level in arch.levels.iter_mut().skip(i + 1) {
+            level.index += 1;
         }
-        // Renumber walls: increment base_level for walls at or above the insertion point
-        for w in arch.walls.iter_mut() {
-            if w.base_level >= (i as u32) {
-                w.base_level = w.base_level.saturating_add(1);
+        for wall in arch.walls.iter_mut() {
+            if wall.base_level >= i as u32 {
+                wall.base_level = wall.base_level.saturating_add(1);
             }
         }
+        let reply = level_reply(&doc.arch.levels[i]);
         doc.touch_arch();
-        return Ok(Value::from("ok"));
+        return Ok(reply);
     }
 
-    // Edit mode
-    let i = if let Some(n) = name {
-        find_level(arch, &Value::from(n))?
-    } else if let Some(i) = index {
+    let doc = s.doc()?;
+    let arch = &doc.arch;
+    let target_index = if let Some(n) = name {
+        find_level(arch, n)?
+    } else if let Some(i) = index.and_then(Value::as_u64) {
         if i < arch.levels.len() as u64 {
             i as usize
         } else {
@@ -164,23 +274,43 @@ pub fn run_level(s: &mut Session, p: &Value) -> Result<Value, crate::EngineError
     } else {
         return Err(crate::EngineError::Other("level: no level specified".into()));
     };
-    let l = arch.levels.get_mut(i).ok_or_else(|| crate::EngineError::Other("level: not found".into()))?;
-    if p.get("ceiling").is_some() {
-        let c = ceiling.ok_or_else(|| crate::EngineError::Other("level: ceiling must be a number".into()))?;
-        if !c.is_finite() || c <= 0.0 {
-            return Err(crate::EngineError::Other("level: ceiling must be finite and positive".into()));
-        }
-        l.ceiling_height = c;
+
+    if let Some(name_val) = name.and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()) {
+        validate_duplicate_name(&arch.levels, name_val, Some(target_index))?;
     }
-    if p.get("structure").is_some() {
-        let s = structure.ok_or_else(|| crate::EngineError::Other("level: structure must be a number".into()))?;
-        if !s.is_finite() || s <= 0.0 {
-            return Err(crate::EngineError::Other("level: structure must be finite and positive".into()));
-        }
-        l.structure = s;
+    if let Some(v) = p.get("ceiling") {
+        parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
     }
+    if let Some(v) = p.get("structure") {
+        parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
+    }
+    if let Some(v) = p.get("elevation") {
+        let _ = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: `elevation` must be a finite number"))?;
+    }
+    if let Some(v) = p.get("kind") {
+        parse_level_kind(v)?;
+    }
+
+    let mut doc = s.doc_mut()?;
+    let level = &mut doc.arch.levels[target_index];
+    if let Some(name_val) = name.and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()) {
+        level.name = name_val.to_string();
+    }
+    if let Some(v) = p.get("elevation") {
+        level.elevation = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: `elevation` must be a finite number"))?;
+    }
+    if let Some(v) = p.get("ceiling") {
+        level.ceiling_height = parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?;
+    }
+    if let Some(v) = p.get("structure") {
+        level.structure = parse_finite_range(v, 0.05, 1.5, "level: structure must be between 0.05 and 1.5 m")?;
+    }
+    if let Some(v) = p.get("kind") {
+        level.kind = parse_level_kind(v)?;
+    }
+    let reply = level_reply(&doc.arch.levels[target_index]);
     doc.touch_arch();
-    Ok(Value::from("ok"))
+    Ok(reply)
 }
 
 /// Command specs for the level module.
@@ -188,9 +318,75 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("level", "Level", run_level)
             .menu(&["Architecture", "Level"])
-            .params("{above?: name|index, below?: name|index, index?: n, name?: s, ceiling?: f, structure?: f}"),
+            .params("{above?: name|index, below?: name|index, index?: n, name?: s, elevation?: m, ceiling?: f, structure?: f, kind?: floor|landing}"),
+        CommandSpec::new("level.edit", "Edit Level", run_level_edit)
+            .menu(&["Architecture", "Edit Level"])
+            .params("{level: name|index, elevation?, ceiling?, structure?, name?, kind?}"),
         CommandSpec::new("level.show", "Show Level", run_level_show).menu(&["Architecture", "Show Level"]).params("{level: name|index|\"all\"}"),
     ]
+}
+
+fn run_level_edit(s: &mut Session, p: &Value) -> Result<Value, crate::EngineError> {
+    let level_ref = p.get("level").ok_or_else(|| crate::EngineError::Other("level.edit: `level` is required".into()))?;
+    ensure_ground(s);
+
+    let doc = s.doc()?;
+    let arch = &doc.arch;
+    let idx = find_level(arch, level_ref)?;
+
+    let new_name = p.get("name").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty());
+    if let Some(name_val) = new_name {
+        if arch.levels.iter().enumerate().any(|(other_idx, other)| other_idx != idx && other.name.eq_ignore_ascii_case(name_val)) {
+            return Err(bad("level", format!("level: level name '{name_val}' already exists")));
+        }
+    }
+    if let Some(v) = p.get("elevation") {
+        let _ = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: `elevation` must be a finite number"))?;
+    }
+    if let Some(v) = p.get("ceiling") {
+        let c = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: ceiling must be between 1.8 and 6 m"))?;
+        if !(1.8..=6.0).contains(&c) {
+            return Err(bad("level", "level: ceiling must be between 1.8 and 6 m"));
+        }
+    }
+    if let Some(v) = p.get("structure") {
+        let s = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: structure must be between 0.05 and 1.5 m"))?;
+        if !(0.05..=1.5).contains(&s) {
+            return Err(bad("level", "level: structure must be between 0.05 and 1.5 m"));
+        }
+    }
+    if let Some(v) = p.get("kind") {
+        parse_level_kind(v)?;
+    }
+
+    let mut doc = s.doc_mut()?;
+    let level = &mut doc.arch.levels[idx];
+    if let Some(name_val) = new_name {
+        level.name = name_val.to_string();
+    }
+    if let Some(v) = p.get("elevation") {
+        level.elevation = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: `elevation` must be a finite number"))?;
+    }
+    if let Some(v) = p.get("ceiling") {
+        let c = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: ceiling must be between 1.8 and 6 m"))?;
+        if !(1.8..=6.0).contains(&c) {
+            return Err(bad("level", "level: ceiling must be between 1.8 and 6 m"));
+        }
+        level.ceiling_height = c;
+    }
+    if let Some(v) = p.get("structure") {
+        let s = v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad("level", "level: structure must be between 0.05 and 1.5 m"))?;
+        if !(0.05..=1.5).contains(&s) {
+            return Err(bad("level", "level: structure must be between 0.05 and 1.5 m"));
+        }
+        level.structure = s;
+    }
+    if let Some(v) = p.get("kind") {
+        level.kind = parse_level_kind(v)?;
+    }
+    let reply = level_reply(&doc.arch.levels[idx]);
+    doc.touch_arch();
+    Ok(reply)
 }
 
 fn resolve_level_show(arch: &cadcraft_doc::arch::ArchModel, value: &Value) -> Result<Option<usize>, crate::EngineError> {
@@ -766,8 +962,9 @@ mod tests {
             let doc = s.doc_mut().unwrap();
             doc.arch.levels.clear();
         }
-        let result = s.execute("level", &json!({"above": "Level 1"}));
-        assert!(result.is_err());
+        let result = s.execute("level", &json!({"above": 0}));
+        assert!(result.is_ok());
+        assert_eq!(s.doc().unwrap().arch.levels.len(), 2);
     }
 
     #[test]
@@ -777,8 +974,9 @@ mod tests {
             let doc = s.doc_mut().unwrap();
             doc.arch.levels.clear();
         }
-        let result = s.execute("level", &json!({"below": "Level 1"}));
-        assert!(result.is_err());
+        let result = s.execute("level", &json!({"below": 0}));
+        assert!(result.is_ok());
+        assert_eq!(s.doc().unwrap().arch.levels.len(), 2);
     }
 
     #[test]
@@ -797,6 +995,116 @@ mod tests {
 
         s.execute("level.show", &json!({ "level": "all" })).unwrap();
         assert_eq!(s.doc().unwrap().arch.plan_level, None);
+    }
+
+    #[test]
+    fn level_takes_a_free_elevation() {
+        let mut s = setup_session();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ..Default::default() });
+        }
+
+        let result = s.execute("level", &json!({"name":"Entry","elevation":1.35,"kind":"landing"})).unwrap();
+        assert_eq!(result["index"], 1);
+        assert_eq!(result["name"], "Entry");
+        assert_eq!(result["elevation"], 1.35);
+        assert_eq!(result["kind"], "landing");
+
+        let doc = s.doc().unwrap();
+        let arch = &doc.arch;
+        assert_eq!(arch.levels.len(), 2);
+        assert_eq!(arch.levels[1].index, 1);
+        assert_eq!(arch.levels[1].name, "Entry");
+        assert!((arch.levels[1].elevation - 1.35).abs() < 1e-9);
+        assert_eq!(arch.levels[1].kind, cadcraft_doc::arch::LevelKind::Landing);
+
+        s.execute("level", &json!({"name":"Entry 2","elevation":1.35})).unwrap();
+        let err = s.execute("level", &json!({"name":"Entry","elevation":1.35}));
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn level_edit_moves_a_level() {
+        let mut s = setup_session();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ..Default::default() });
+            doc.arch.levels.push(Level { index: 1, name: "Entry".into(), elevation: 1.35, ..Default::default() });
+        }
+
+        s.execute("level.edit", &json!({"level":"Entry","elevation":1.4})).unwrap();
+        let doc = s.doc().unwrap();
+        assert!((doc.arch.levels[1].elevation - 1.4).abs() < 1e-9);
+
+        s.execute("level.edit", &json!({"level":0,"name":"Lower"})).unwrap();
+        let doc = s.doc().unwrap();
+        assert_eq!(doc.arch.levels[0].name, "Lower");
+
+        s.execute("level.edit", &json!({"level":"Lower","name":"Lower"})).unwrap();
+        let err = s.execute("level.edit", &json!({"level":"Lower","name":"Entry"}));
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn a_new_drawing_has_level_zero() {
+        let mut s = Session::new();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.levels.clear();
+        }
+        assert!(s.doc().unwrap().arch.levels.is_empty());
+        s.execute("level", &json!({"name":"Main","elevation":2.7})).unwrap();
+        let doc = s.doc().unwrap();
+        let arch = &doc.arch;
+        assert_eq!(arch.levels.len(), 2);
+        assert_eq!(arch.levels[0].index, 0);
+        assert_eq!(arch.levels[0].name, "Level 1");
+        assert!((arch.levels[0].elevation - 0.0).abs() < 1e-9);
+        assert_eq!(arch.levels[1].index, 1);
+        assert_eq!(arch.levels[1].name, "Main");
+        assert!((arch.levels[1].elevation - 2.7).abs() < 1e-9);
+    }
+
+    #[test]
+    fn level_edit_refuses_bad_values_without_an_undo_step() {
+        let mut s = setup_session();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ..Default::default() });
+        }
+
+        for params in [
+            json!({"level":9,"elevation":1.0}),
+            json!({"level":0,"ceiling":-2.0}),
+            json!({"level":0,"ceiling":7.0}),
+            json!({"level":0,"structure":0.0}),
+            json!({"level":0,"kind":"attic"}),
+            json!({"level":0,"elevation":"1.5"}),
+        ] {
+            let before = s.state().unwrap().undo.len();
+            let result = s.execute("level.edit", &params);
+            assert!(result.is_err());
+            assert_eq!(s.state().unwrap().undo.len(), before);
+        }
+    }
+
+    #[test]
+    fn level_free_elevation_is_refused_with_above() {
+        let mut s = setup_session();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ..Default::default() });
+        }
+
+        let result = s.execute("level", &json!({"above":0,"elevation":5.0}));
+        assert!(result.is_err());
+        let doc = s.doc().unwrap();
+        assert_eq!(doc.arch.levels.len(), 1);
     }
 
     #[test]
