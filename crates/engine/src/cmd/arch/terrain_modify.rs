@@ -98,7 +98,8 @@ fn path_kind(p: &Value) -> Result<PathKind> {
         Some("road") => Ok(PathKind::Road),
         Some("driveway") => Ok(PathKind::Driveway),
         Some("sidewalk") => Ok(PathKind::Sidewalk),
-        _ => Err(bad(CMD, "`path.kind` (road, driveway or sidewalk) is required")),
+        Some("bed") => Ok(PathKind::Bed),
+        _ => Err(bad(CMD, "`path.kind` (road, driveway, sidewalk or bed) is required")),
     }
 }
 
@@ -156,7 +157,7 @@ fn run_modify(s: &mut Session, p: &Value) -> Result<Value> {
                     let width = positive(arg, "width")?;
                     widen(&line, width).ok_or_else(|| bad(CMD, "`path.polyline` cannot be widened"))?
                 };
-                let thickness = size_param(CMD, arg, "thickness", false)?.unwrap_or(DEFAULT_PATH_THICKNESS);
+                let thickness = size_param(CMD, arg, "thickness", false)?.unwrap_or(kind.default_thickness());
                 let material = match arg.get("material") {
                     None | Some(Value::Null) => kind.default_material().to_string(),
                     Some(Value::String(m)) if !m.is_empty() => m.clone(),
@@ -358,5 +359,31 @@ mod tests {
         assert_eq!(m.len(), 2);
         assert_eq!(m[0].id, 0);
         assert_eq!(m[1].id, 1);
+    }
+
+    #[test]
+    fn a_terrain_path_can_be_a_bed() {
+        let mut s = session();
+        let r = s.execute(CMD, &json!({"path": {"kind": "bed", "polygon": [[0, 1], [10, 1], [10, 2], [0, 2]]}})).unwrap();
+        assert_eq!(r["modifier"].as_str().unwrap(), "tm0");
+        let m = mods(&s);
+        assert_eq!(m.len(), 1);
+        match &m[0].kind {
+            ModifierKind::Path { kind, thickness, material, .. } => {
+                assert_eq!(*kind, PathKind::Bed);
+                assert_eq!(*thickness, 0.05);
+                assert_eq!(material, "mulch");
+            }
+            k => panic!("expected a path, got {k:?}"),
+        }
+    }
+
+    #[test]
+    fn path_kind_rejects_an_unknown_kind() {
+        let mut s = session();
+        let r = s.execute(CMD, &json!({"path": {"kind": "moat", "polygon": [[0, 1], [10, 1], [10, 2], [0, 2]]}}));
+        assert!(r.is_err());
+        assert!(mods(&s).is_empty());
+        assert_eq!(s.undo(), Ok(None));
     }
 }
