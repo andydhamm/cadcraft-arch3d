@@ -23,9 +23,9 @@
 //!   model is written, and an edit that changes nothing is refused. Areas are
 //!   not recomputed; the detector/area pass owns them.
 //!
-//! Returns `{"id": "r0", "handle": "...", "interiorArea": n, "standardArea": n}`
-//! for create; `{"id": "r0", "name": ..., "type": ..., "interiorArea": n}` for
-//! edit.
+//! Returns `{"id": "r0", "handle": "...", "type": ..., "interiorArea": n,
+//! "standardArea": n}` for create; `{"id": "r0", "name": ..., "type": ...,
+//! "interiorArea": n}` for edit.
 
 use std::str::FromStr;
 
@@ -116,9 +116,10 @@ fn parse_room_id(v: &Value) -> Option<ArchId> {
     Some(ArchId(n64 as u32))
 }
 
-/// The lowerCamelCase name of a [`RoomType`], matching the JSON output names
-/// (`openbelow` in input maps to `openBelow` in output).
-fn room_type_name(t: RoomType) -> &'static str {
+/// The lowerCamelCase key of a [`RoomType`], matching the JSON output names
+/// (`openbelow` in input maps to `openBelow` in output). Single table of type
+/// keys, shared by `room_type_name` and the `room` command replies.
+pub(crate) fn room_type_key(t: RoomType) -> &'static str {
     match t {
         RoomType::Living => "living",
         RoomType::Bedroom => "bedroom",
@@ -138,8 +139,24 @@ fn room_type_name(t: RoomType) -> &'static str {
     }
 }
 
+/// The lowerCamelCase name of a [`RoomType`], matching the JSON output names
+/// (`openbelow` in input maps to `openBelow` in output).
+#[allow(dead_code)]
+fn room_type_name(t: RoomType) -> &'static str {
+    room_type_key(t)
+}
+
 /// Run the `room` command from JSON parameters. Never opens a dialog.
 fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
+    // If a level is requested but the model has no levels yet, make sure the
+    // ground level exists so `find_room_level` can resolve index 0. This runs
+    // before the edit path and never commits on its own (no `touch_arch`), so a
+    // refused call leaves no undo step.
+    if p.get("level").is_some_and(|v| !v.is_null()) && s.doc().is_ok_and(|d| d.arch.levels.is_empty()) {
+        let d = s.doc_mut()?;
+        d.arch.ensure_ground_level();
+    }
+
     let d = s.doc_mut()?;
 
     // --- Edit path: modify an existing room by `id`. Every field is validated
@@ -180,7 +197,7 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({
             "id": format!("r{}", id.0),
             "name": room.name,
-            "type": room_type_name(room.room_type),
+            "type": room_type_key(room.room_type),
             "interiorArea": room.interior_area,
             "standardArea": room.standard_area,
         }));
@@ -272,6 +289,7 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({
         "id": format!("r{}", id.0),
         "handle": cadcraft_doc::arch::handle_json(cadcraft_arch::room_handle(id)),
+        "type": room_type_key(room_type),
         "interiorArea": interior_area,
         "standardArea": standard_area,
     }))
@@ -388,6 +406,34 @@ mod tests {
         assert_eq!(d.arch.room(d.arch.rooms.last().unwrap().id).unwrap().polygon.len(), 4);
         assert_eq!(d.arch.room(d.arch.rooms.last().unwrap().id).unwrap().level, 0);
         assert_eq!(d.arch.room(d.arch.rooms.last().unwrap().id).unwrap().room_type, RoomType::Other);
+    }
+
+    /// The new room types ("dining", "family", "entry", "laundry") parse and
+    /// report by key; parsing is trim- and case-insensitive; "attic" is
+    /// refused.
+    #[test]
+    fn new_room_types_parse() {
+        let types = [("dining", RoomType::Dining), ("family", RoomType::Family), ("entry", RoomType::Entry), ("laundry", RoomType::Laundry)];
+        for (input, want) in types {
+            assert_eq!(parse_room_type(input), Some(want));
+            assert_eq!(room_type_key(want), input);
+            let mut s = new_session();
+            let r = s.execute("room", &json!({ "points": square_points(), "type": input })).unwrap();
+            assert_eq!(r["type"].as_str().unwrap(), input);
+            assert_eq!(s.doc().unwrap().arch.rooms[0].room_type, want);
+        }
+        // Trim + case-insensitive.
+        assert_eq!(parse_room_type("DINING"), Some(RoomType::Dining));
+        assert_eq!(parse_room_type(" dining "), Some(RoomType::Dining));
+        let mut s = new_session();
+        let r = s.execute("room", &json!({ "points": square_points(), "type": " dining " })).unwrap();
+        assert_eq!(r["type"].as_str().unwrap(), "dining");
+        assert_eq!(s.doc().unwrap().arch.rooms[0].room_type, RoomType::Dining);
+        // "attic" is refused.
+        let mut s = new_session();
+        let r = s.execute("room", &json!({ "points": square_points(), "type": "attic" }));
+        assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })));
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
     }
 
     #[test]
