@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 21 of 42 segments merged · 1 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-06 08:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 23.8 h so far · expected done Nov 07 01:03–Nov 08 00:27 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 24.1 h so far · expected done Nov 07 02:50–Nov 08 04:22 UTC |
 
 ## Phase 15 segments
 
-21 merged, 13 queued, 6 merging, 4 replaced, 2 gate
+21 merged, 13 queued, 6 merging, 4 replaced, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Updated 2026-11-06 08:15 UTC. This page and the card in the README are regenerat
 | `p15-io-electrical-node` | io: GLB/OBJ node names for electrical cover plates | merging | mai-flash |
 | `p15-arch-outlet-place` | arch: auto_outlets — duplex rule and kitchen GFCI counters | merging | claude-sonnet-a |
 | `p15-arch-connection-arcs` | arch: connection validation and bulged connection arcs | merging | bonsai-ws2-b |
-| `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | gate | darwin-ws3 |
+| `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | working | darwin-ws3 |
 | `p15-cmd-wall-span` | wall: level and topLevel params, derived spanning height | merging | claude-sonnet-b |
 | `p15-cmd-room-bed` | room type keys and the terrain planting bed | gate | bonsai-a |
 
@@ -63,7 +63,7 @@ Updated 2026-11-06 08:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 920 |
+| bonsai-a | bonsai2-27b | gate | 921 |
 | bonsai-b | bonsai2-27b | merging | 846 |
 | bonsai-ws2-a | bonsai2-27b | merging | 955 |
 | bonsai-ws2-b | bonsai2-27b | merging | 912 |
@@ -71,9 +71,9 @@ Updated 2026-11-06 08:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | merging | 84 |
 | claude-sonnet-c | sonnet | merging | 37 |
 | claude-sonnet-d | sonnet | merging | 23 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 789 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 790 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 64 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
-| tturbo-mac | tturbo-ultraheretic | gate | 624 |
+| tturbo-mac | tturbo-ultraheretic | agent | 625 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
