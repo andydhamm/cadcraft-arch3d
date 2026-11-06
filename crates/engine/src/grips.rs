@@ -4,8 +4,8 @@
 //! The UI calls [`Session::grip_edit`]; every edit runs through a `grip.*` command so it is
 //! undoable and reachable from scripts, the control channel and MCP.
 
-use cadcraft_doc::arch::Opening;
 use cadcraft_doc::arch::ROOM_HANDLE_OFFSET;
+use cadcraft_doc::arch::{CONNECTION_HANDLE_OFFSET, ELECTRICAL_HANDLE_OFFSET, Opening, is_connection_handle, is_electrical_handle};
 use cadcraft_doc::{
     ARCH_HANDLE_BASE, ArchId, DimKind, EntityKind, Handle, LwPolyline, OPENING_HANDLE_OFFSET, is_arch_handle, is_opening_handle, is_room_handle,
 };
@@ -548,16 +548,18 @@ pub enum ArchTarget {
     Opening(ArchId),
     /// A room, resolved through `ArchModel::room`.
     Room(ArchId),
+    /// An electrical device, resolved through `ArchModel::electrical`.
+    Electrical(ArchId),
+    /// A switch connection, resolved through `ArchModel::connections`.
+    Connection(ArchId),
     /// A view, resolved through `ArchModel::view`.
     View(ArchId),
 }
 
 /// Resolve an arch proxy handle to its target, or `None` if `h` is not an arch proxy handle.
 ///
-/// Opening ranges resolve to `ArchTarget::Opening`, room ranges resolve to `ArchTarget::Room`;
-/// everything else in the arch range resolves to `ArchTarget::Wall`. Because a wall id, an
-/// opening id, and a room id can share a number, this is the single place that disambiguates
-/// them.
+/// Electrical and connection ranges are disambiguated before the generic wall range so their ids do
+/// not collide with wall handles. Other ranges resolve to their corresponding arch target.
 pub fn arch_id_from_handle(h: Handle) -> Option<ArchTarget> {
     if cadcraft_doc::arch::is_view_handle(h) {
         return Some(ArchTarget::View(ArchId((h.0 - ARCH_HANDLE_BASE - cadcraft_doc::arch::VIEW_HANDLE_OFFSET) as u32)));
@@ -567,6 +569,12 @@ pub fn arch_id_from_handle(h: Handle) -> Option<ArchTarget> {
     }
     if is_room_handle(h) {
         return Some(ArchTarget::Room(ArchId((h.0 - ARCH_HANDLE_BASE - ROOM_HANDLE_OFFSET) as u32)));
+    }
+    if is_electrical_handle(h) {
+        return Some(ArchTarget::Electrical(ArchId((h.0 - ARCH_HANDLE_BASE - ELECTRICAL_HANDLE_OFFSET) as u32)));
+    }
+    if is_connection_handle(h) {
+        return Some(ArchTarget::Connection(ArchId((h.0 - ARCH_HANDLE_BASE - CONNECTION_HANDLE_OFFSET) as u32)));
     }
     if is_arch_handle(h) {
         return Some(ArchTarget::Wall(ArchId((h.0 - ARCH_HANDLE_BASE) as u32)));
@@ -590,20 +598,20 @@ impl Session {
             return Ok(());
         }
         if let Some(target) = arch_id_from_handle(handle) {
-            if matches!(target, ArchTarget::Room(_) | ArchTarget::View(_)) {
-                // Rooms are not drag-editable yet; a grip drag is a silent no-op for every mode.
+            if matches!(target, ArchTarget::Room(_) | ArchTarget::View(_) | ArchTarget::Electrical(_) | ArchTarget::Connection(_)) {
+                // Rooms and electrical proxy handles are not drag-editable yet; a grip drag is a silent no-op for every mode.
                 return Ok(());
             }
             if mode != GripMode::Stretch {
                 return match target {
-                    ArchTarget::Room(_) | ArchTarget::View(_) => Ok(()),
+                    ArchTarget::Room(_) | ArchTarget::View(_) | ArchTarget::Electrical(_) | ArchTarget::Connection(_) => Ok(()),
                     ArchTarget::Opening(_) => Err(EngineError::Other("arch openings support only the stretch grip".into())),
                     ArchTarget::Wall(_) => Err(EngineError::Other("arch walls support only the stretch grip".into())),
                 };
             }
             let d = self.doc()?;
             return match target {
-                ArchTarget::Room(_) | ArchTarget::View(_) => Ok(()),
+                ArchTarget::Room(_) | ArchTarget::View(_) | ArchTarget::Electrical(_) | ArchTarget::Connection(_) => Ok(()),
                 ArchTarget::Opening(id) => {
                     if !new_point.is_finite() {
                         return Err(EngineError::Other("non-finite point".into()));
@@ -691,6 +699,7 @@ impl Session {
                     let room = d.arch.room(id).ok_or_else(|| EngineError::Other("no such object".into()))?;
                     Ok(cadcraft_arch::label::label_point(&room.polygon, &room.holes).into_iter().collect())
                 }
+                ArchTarget::Electrical(_) | ArchTarget::Connection(_) => Ok(Vec::new()),
                 ArchTarget::View(id) => {
                     let v = d.arch.view(id).ok_or_else(|| EngineError::Other("no such object".into()))?;
                     Ok(vec![Vec2::new(v.insert[0], v.insert[1])])

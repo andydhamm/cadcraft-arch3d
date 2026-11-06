@@ -29,6 +29,8 @@ fn house() -> ArchModel {
         ("lightfixture", json!({"at": [1.5, 2.0], "type": "Recessed pot light"})),
         ("stair", json!({"start": [1.0, 1.0], "direction": 90.0})),
         ("terrain", json!({"boundary": [[-10.0, -10.0], [25.0, -10.0], [25.0, 20.0], [-10.0, 20.0]], "elevation": -0.3})),
+        ("outlet", json!({"kind": "duplex", "wall": "w0", "offset": 1.5, "side": "left"})),
+        ("switch", json!({"kind": "single-pole", "wall": "w0", "offset": 5.0, "side": "right"})),
     ])
 }
 
@@ -46,7 +48,7 @@ fn edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
     *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
     let r = (*state >> 33) as usize;
     let d = if r & 1 == 0 { 0.15 } else { -0.15 };
-    match r % 11 {
+    match r % 12 {
         0 if !m.walls.is_empty() => {
             let i = r % m.walls.len();
             m.walls[i].end.x += d;
@@ -89,7 +91,12 @@ fn edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             m.stairs[i].width = (m.stairs[i].width + d).max(0.6);
             "widen the stair"
         }
-        8 if m.walls.len() > 4 => {
+        8 if !m.electrical.is_empty() => {
+            let i = r % m.electrical.len();
+            m.electrical[i].offset = (m.electrical[i].offset + d).clamp(0.2, 8.0);
+            "move an electrical device"
+        }
+        9 if m.walls.len() > 4 => {
             let mut w = m.walls[r % m.walls.len()].clone();
             w.id = ArchId(m.next_id);
             m.next_id += 1;
@@ -98,7 +105,7 @@ fn edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             m.walls.push(w);
             "add a wall"
         }
-        9 if m.walls.len() > 4 => {
+        10 if m.walls.len() > 4 => {
             let id = m.walls.remove(r % m.walls.len()).id;
             m.openings.retain(|o| o.host != id);
             "remove a wall"

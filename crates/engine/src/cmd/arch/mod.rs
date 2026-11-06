@@ -18,6 +18,7 @@ pub mod build3d;
 pub mod casework;
 pub mod deck;
 pub(crate) mod defaults;
+pub mod electrical;
 pub mod electrical_view;
 pub mod furnish;
 pub mod illuminance;
@@ -90,6 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(stretch::specs());
     v.extend(furnish::specs());
     v.extend(view::specs());
+    v.extend(electrical::specs());
     v.extend(electrical_view::specs());
     v.extend(views::specs());
     v.extend(roofauto::specs());

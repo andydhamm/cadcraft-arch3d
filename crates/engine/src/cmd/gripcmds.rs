@@ -88,7 +88,7 @@ fn stretch(s: &mut Session, cmd: &str, p: &Value) -> Result<Value> {
                     }),
                 )
             }
-            ArchTarget::Room(_) | ArchTarget::View(_) => Ok(Value::Null),
+            ArchTarget::Room(_) | ArchTarget::View(_) | ArchTarget::Electrical(_) | ArchTarget::Connection(_) => Ok(Value::Null),
         };
     }
     if curves::is_locked(s, h) {
