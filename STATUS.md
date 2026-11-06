@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 25 of 43 segments merged · 1 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 26 of 43 segments merged · 1 of 14 acceptance checks**
 
-7,583 workspace tests passing at the last merge · 787 segments merged in all · 0 of 14 seats working
+7,587 workspace tests passing at the last merge · 788 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,16 +25,16 @@ Updated 2026-11-06 11:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 27.3 h so far · expected done Nov 07 02:09–Nov 08 00:12 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 27.6 h so far · expected done Nov 07 00:33–Nov 07 20:30 UTC |
 
 ## Phase 15 segments
 
-25 merged, 10 queued, 7 merging, 4 replaced, 1 gate
+26 merged, 9 queued, 6 merging, 4 replaced, 2 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-cmd-electrical` | engine: outlet, switch, electrical.edit, electrical.delete | gate | mai-flash |
-| `p15-arch-outlet-place` | arch: auto_outlets — duplex rule and kitchen GFCI counters | merging | claude-sonnet-a |
+| `p15-cmd-electrical` | engine: outlet, switch, electrical.edit, electrical.delete | working | mai-flash |
+| `p15-arch-outlet-gaps` | arch: outlet_gaps — the spacing rule measured back | working | claude-sonnet-a |
 | `p15-arch-circuits` | arch: circuit grouping by shared lights | merging | bonsai-ws2-b |
 | `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | merging | mai-flash-esc |
 | `p15-cmd-wall-span` | wall: level and topLevel params, derived spanning height | merging | claude-sonnet-b |
@@ -46,6 +46,7 @@ Updated 2026-11-06 11:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 11:56 | `p15-arch-outlet-place` | merged | 7,587 pass | claude-sonnet-a |
 | Nov 06 11:08 | `p15-io-electrical-node` | merged | 7,583 pass | mai-flash |
 | Nov 06 10:41 | `p15-arch3d-electrical-scene` | merged | 7,582 pass | claude-sonnet-c |
 | Nov 06 09:40 | `p15-io-split-levels` | merged | 7,579 pass | claude-sonnet-d |
@@ -57,23 +58,22 @@ Updated 2026-11-06 11:45 UTC. This page and the card in the README are regenerat
 | Nov 06 04:47 | `p15-arch3d-spanning-walls` | merged | 7,560 pass | claude-sonnet-d |
 | Nov 06 04:08 | `p15-arch-pad-split` | merged | 7,556 pass | claude-sonnet-c |
 | Nov 06 03:16 | `p15-arch-grade` | merged | 7,552 pass | claude-sonnet-b |
-| Nov 06 02:23 | `harden-p15-doc-levels` | merged | 7,548 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 923 |
-| bonsai-b | bonsai2-27b | gate | 847 |
+| bonsai-b | bonsai2-27b | agent | 848 |
 | bonsai-ws2-a | bonsai2-27b | merging | 956 |
 | bonsai-ws2-b | bonsai2-27b | merging | 915 |
-| claude-sonnet-a | sonnet | merging | 84 |
+| claude-sonnet-a | sonnet | agent | 84 |
 | claude-sonnet-b | sonnet | merging | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | merging | 25 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 794 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 64 |
+| mai-flash | mai-code-1.1-flash | agent | 65 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 34 |
 | tturbo-mac | tturbo-ultraheretic | merging | 626 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
