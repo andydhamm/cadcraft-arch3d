@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 14 of 35 segments merged · 1 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-06 00:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 16.3 h so far · expected done Nov 06 19:04–Nov 07 20:36 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 16.6 h so far · expected done Nov 06 21:09–Nov 08 01:15 UTC |
 
 ## Phase 15 segments
 
-14 merged, 13 queued, 4 merging, 3 escalate, 1 replaced, 1 gate
+14 merged, 13 queued, 5 merging, 3 escalate, 1 replaced
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -40,7 +40,7 @@ Updated 2026-11-06 00:45 UTC. This page and the card in the README are regenerat
 | `p15-arch3d-spanning-walls` | arch3d: walls from one level's floor to another's ceiling, offset levels | merging | claude-sonnet-d |
 | `p15-cmd-electrical-view` | engine: view.electrical and level.show | merging | mai-flash-esc |
 | `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | escalate |  |
-| `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | gate | mai-flash |
+| `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | merging | mai-flash |
 
 ## Recent merges
 
@@ -63,17 +63,17 @@ Updated 2026-11-06 00:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 914 |
-| bonsai-b | bonsai2-27b | gate | 841 |
-| bonsai-ws2-a | bonsai2-27b | gate | 939 |
-| bonsai-ws2-b | bonsai2-27b | gate | 902 |
+| bonsai-a | bonsai2-27b | agent | 915 |
+| bonsai-b | bonsai2-27b | agent | 843 |
+| bonsai-ws2-a | bonsai2-27b | gate | 940 |
+| bonsai-ws2-b | bonsai2-27b | agent | 904 |
 | claude-sonnet-a | sonnet | idle | 82 |
 | claude-sonnet-b | sonnet | merging | 83 |
 | claude-sonnet-c | sonnet | merging | 36 |
 | claude-sonnet-d | sonnet | merging | 22 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 787 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 62 |
+| mai-flash | mai-code-1.1-flash | merging | 63 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 32 |
 | tturbo-mac | tturbo-ultraheretic | merging | 622 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
