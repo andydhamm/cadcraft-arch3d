@@ -823,7 +823,7 @@ fn wall_base_mesh(i: &WallIn) -> Option<Mesh> {
 fn eave_z(model: &ArchModel, level: u32) -> f64 {
     let lv = level_for(model, level);
     let mut max_wall_height = 0.0;
-    for wall in model.walls.iter().filter(|w| w.base_level == level) {
+    for wall in model.walls.iter().filter(|w| crate::wall_reaches_level(w, level)) {
         if let Some((_, top)) = wall_span(model, wall) {
             let h = top - lv.elevation;
             if h > max_wall_height {
