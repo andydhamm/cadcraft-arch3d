@@ -195,7 +195,9 @@ impl<'a> Ctx<'a> {
             ],
         );
         let mut levels: Vec<Level> = model.levels.clone();
-        levels.sort_by_key(|l| l.index);
+        // Storeys run bottom to top by their own elevation (landings sit between floors); a tie, or
+        // a non-finite elevation, falls back to the index so the order stays deterministic.
+        levels.sort_by(|a, b| a.elevation.total_cmp(&b.elevation).then(a.index.cmp(&b.index)));
         if levels.is_empty() {
             levels.push(Level::default());
         }
@@ -441,6 +443,81 @@ mod tests {
         let mut model = ArchModel::default();
         model.levels = vec![Level::default()];
         assert_eq!(export(&model), export(&model));
+    }
+
+    /// Ground, a landing at 1.5 m and an upper floor at 4.2 m, listed out of order.
+    fn split_levels() -> Vec<Level> {
+        vec![
+            Level { index: 2, name: "Upper".into(), elevation: 4.2, ..Level::default() },
+            Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() },
+            Level { index: 1, name: "Landing".into(), elevation: 1.5, kind: cadcraft_doc::arch::LevelKind::Landing, ..Level::default() },
+        ]
+    }
+
+    fn spanning_model() -> ArchModel {
+        let mut model = ArchModel::default();
+        model.levels = split_levels();
+        model.push_wall(cadcraft_doc::arch::Wall {
+            start: cadcraft_geom::Vec2::new(0.0, 0.0),
+            end: cadcraft_geom::Vec2::new(5.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 0,
+            top_level: Some(2),
+            ..cadcraft_doc::arch::Wall::default()
+        });
+        model
+    }
+
+    #[test]
+    fn ifc_storeys_sit_at_their_level_elevations() {
+        let text = export(&ArchModel { levels: split_levels(), ..ArchModel::default() });
+        let inst = instances(&text);
+        let storeys: Vec<&String> = inst.values().filter(|(n, _)| n == "IFCBUILDINGSTOREY").map(|(_, p)| p).collect();
+        assert_eq!(storeys.len(), 3);
+        for (p, (name, elevation)) in storeys.iter().zip([("Ground", "0."), ("Landing", "1.5"), ("Upper", "4.2")]) {
+            assert!(p.contains(&format!(",'{name}',$,$,")), "{name} in order: {p}");
+            assert!(p.ends_with(&format!(",.ELEMENT.,{elevation}")), "{name} at {elevation}: {p}");
+        }
+    }
+
+    #[test]
+    fn a_spanning_wall_is_one_ifc_wall() {
+        let model = spanning_model();
+        let scene = Scene3d::build(&model);
+        let text = write_model(&model, &scene, &IfcOptions::default());
+        assert_eq!(text.matches("=IFCWALL(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(), 1);
+        let inst = instances(&text);
+        let storey_of = |level: u32| {
+            inst.iter()
+                .find(|(_, (e, p))| e == "IFCBUILDINGSTOREY" && p.starts_with(&format!("'{}'", global_id(&format!("storey/{level}")))))
+                .map(|(n, _)| *n)
+        };
+        let wall = inst.iter().find(|(_, (e, _))| e == "IFCWALL").map(|(n, _)| *n);
+        let holder = inst.values().find(|(e, _)| e == "IFCRELCONTAINEDINSPATIALSTRUCTURE").map(|(_, p)| refs_in(p));
+        let (Some(wall), Some(base), Some(holder)) = (wall, storey_of(0), holder) else {
+            return assert!(false, "missing wall, storey or containment");
+        };
+        assert!(holder.contains(&wall) && holder.contains(&base), "the wall is contained in its base level's storey");
+        // Its body runs from the base floor (0) to the upper ceiling (4.2 + 2.4).
+        let top =
+            scene.meshes.iter().filter(|m| m.material == "wall").flat_map(|m| m.positions.iter().map(|p| f64::from(p[2]))).fold(f64::MIN, f64::max);
+        assert!((top - 6.6).abs() < 1e-3, "extrusion top {top}");
+    }
+
+    #[test]
+    fn a_spanning_walls_glb_box_reaches_the_upper_ceiling() {
+        let model = spanning_model();
+        let bytes = crate::glb::write(&Scene3d::build(&model));
+        let json_len = u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]) as usize;
+        let json: serde_json::Value = serde_json::from_slice(&bytes[20..20 + json_len]).unwrap_or_default();
+        let meshes = json["meshes"].as_array().cloned().unwrap_or_default();
+        let at = meshes.iter().position(|m| m["name"] == "wall-w0" || m["name"] == "wall-w1");
+        let Some(at) = at else { return assert!(false, "no wall node: {json}") };
+        let acc = meshes[at]["primitives"][0]["attributes"]["POSITION"].as_u64().unwrap_or(u64::MAX) as usize;
+        let max_z = json["accessors"][acc]["max"][2].as_f64().unwrap_or(f64::NAN);
+        assert!((max_z - 6.6).abs() < 1e-3, "GLB wall box top {max_z}");
     }
 
     #[test]
