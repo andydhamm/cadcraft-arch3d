@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-06 10:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 10:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 23 of 42 segments merged · 1 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 23 of 43 segments merged · 1 of 14 acceptance checks**
 
 7,579 workspace tests passing at the last merge · 785 segments merged in all · 0 of 14 seats working
 
@@ -25,11 +25,11 @@ Updated 2026-11-06 10:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 25.6 h so far · expected done Nov 07 01:12–Nov 07 23:42 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 25.8 h so far · expected done Nov 07 02:15–Nov 08 01:12 UTC |
 
 ## Phase 15 segments
 
-23 merged, 11 queued, 5 merging, 4 replaced, 2 gate, 1 working
+23 merged, 11 queued, 6 merging, 4 replaced, 2 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,10 +37,11 @@ Updated 2026-11-06 10:00 UTC. This page and the card in the README are regenerat
 | `p15-io-electrical-node` | io: GLB/OBJ node names for electrical cover plates | merging | mai-flash |
 | `p15-arch-outlet-place` | arch: auto_outlets — duplex rule and kitchen GFCI counters | merging | claude-sonnet-a |
 | `p15-arch-circuits` | arch: circuit grouping by shared lights | gate | bonsai-ws2-b |
-| `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | working | mai-flash-esc |
+| `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | gate | mai-flash-esc |
 | `p15-cmd-wall-span` | wall: level and topLevel params, derived spanning height | merging | claude-sonnet-b |
-| `p15-cmd-room-bed` | room type keys and the terrain planting bed | gate | bonsai-a |
+| `p15-cmd-room-bed` | room type keys and the terrain planting bed | merging | bonsai-a |
 | `upstream-sync-2611bc5f5` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | merging | bonsai-ws2-a |
+| `p15-cli-render-styles` | cli: the clay and technical render styles reach the renderer | working | claude-sonnet-d |
 
 ## Recent merges
 
@@ -63,17 +64,17 @@ Updated 2026-11-06 10:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 922 |
+| bonsai-a | bonsai2-27b | merging | 923 |
 | bonsai-b | bonsai2-27b | merging | 846 |
 | bonsai-ws2-a | bonsai2-27b | merging | 956 |
 | bonsai-ws2-b | bonsai2-27b | gate | 914 |
 | claude-sonnet-a | sonnet | merging | 84 |
 | claude-sonnet-b | sonnet | merging | 84 |
 | claude-sonnet-c | sonnet | merging | 37 |
-| claude-sonnet-d | sonnet | idle | 23 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 793 |
+| claude-sonnet-d | sonnet | agent | 23 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 793 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 64 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 33 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 33 |
 | tturbo-mac | tturbo-ultraheretic | merging | 626 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
