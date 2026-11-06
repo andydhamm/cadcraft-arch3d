@@ -32,6 +32,9 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("pull:") {
         return "pull";
     }
+    if m.starts_with("electrical:") {
+        return "electrical";
+    }
     if let Some(key) = m.strip_prefix("paint:") {
         return Surface::parse(key).map_or("wall", |s| unpainted_part(&s));
     }
@@ -292,8 +295,11 @@ pub fn probe(scene: &Scene3d, p: Vec3) -> Option<Hit> {
     if let Some(b) = scene.furnishing_boxes.iter().find(|b| b.contains(p)) {
         return Some(Hit { id: cadcraft_doc::arch::furnishing_label(b.id), part: "furnishing".to_string(), level: b.level });
     }
+    if let Some(b) = scene.electrical_boxes.iter().find(|b| b.contains(p)) {
+        return Some(Hit { id: cadcraft_doc::arch::electrical_label(b.id), part: "electrical".to_string(), level: b.level });
+    }
     for mesh in &scene.meshes {
-        if probe_mesh(mesh, p) && part_of(mesh) != "furnishing" {
+        if probe_mesh(mesh, p) && part_of(mesh) != "furnishing" && part_of(mesh) != "electrical" {
             return Some(Hit { id: mesh_label(mesh), part: part_of(mesh).to_string(), level: mesh_level(mesh) });
         }
     }

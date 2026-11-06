@@ -39,6 +39,7 @@ pub mod uv;
 pub mod views;
 pub mod walls;
 
+pub use crate::electrical::PlateBox;
 pub use crate::furnishing::FurnishingBox;
 pub use crate::incremental::{ObjectKey, ObjectKind, RebuildStats, SceneCache, changed_objects, object_key};
 pub use crate::mesh::{Bounds3, Mesh};
@@ -233,6 +234,11 @@ pub struct Scene3d {
     /// The placed box of every furnishing built, in build order: [`probe::probe`] tests these
     /// instead of the symbol meshes, which need not be closed.
     pub furnishing_boxes: Vec<FurnishingBox>,
+    /// Electrical cover plates built.
+    pub electrical: usize,
+    /// The placed box of every plate built, in build order: [`probe::probe`] tests these instead
+    /// of the plate meshes.
+    pub electrical_boxes: Vec<crate::electrical::PlateBox>,
 }
 
 /// How a named mesh material looks (phase 14): base colour, metallic and roughness, an optional
