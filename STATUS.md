@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 15 of 35 segments merged · 1 of 14 acceptance checks**
 
@@ -25,20 +25,19 @@ Updated 2026-11-06 01:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 17.1 h so far · expected done Nov 06 18:57–Nov 07 20:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 17.3 h so far · expected done Nov 06 19:12–Nov 07 20:15 UTC |
 
 ## Phase 15 segments
 
-15 merged, 13 queued, 4 merging, 2 escalate, 1 replaced, 1 working
+15 merged, 13 queued, 4 merging, 1 escalate, 1 stuck, 1 replaced, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-arch-connections` | arch: connection arcs and circuits | escalate |  |
-| `p15-arch-outlets-auto` | arch: auto-placed outlets and the spacing rule | escalate |  |
 | `p15-arch-grade` | arch: grade classes and the above-grade area | merging | claude-sonnet-b |
 | `p15-arch-pad-split` | arch: the pad follows each level and the entry landing | merging | claude-sonnet-c |
 | `p15-arch3d-spanning-walls` | arch3d: walls from one level's floor to another's ceiling, offset levels | merging | claude-sonnet-d |
-| `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | working | mai-flash-esc |
+| `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | gate | mai-flash-esc |
 | `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | merging | mai-flash |
 
 ## Recent merges
@@ -62,9 +61,9 @@ Updated 2026-11-06 01:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 916 |
-| bonsai-b | bonsai2-27b | gate | 844 |
-| bonsai-ws2-a | bonsai2-27b | agent | 943 |
+| bonsai-a | bonsai2-27b | gate | 916 |
+| bonsai-b | bonsai2-27b | merging | 845 |
+| bonsai-ws2-a | bonsai2-27b | gate | 945 |
 | bonsai-ws2-b | bonsai2-27b | idle | 905 |
 | claude-sonnet-a | sonnet | idle | 82 |
 | claude-sonnet-b | sonnet | merging | 83 |
@@ -73,6 +72,6 @@ Updated 2026-11-06 01:30 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 787 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 63 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 32 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 32 |
 | tturbo-mac | tturbo-ultraheretic | merging | 622 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
