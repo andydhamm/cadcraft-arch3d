@@ -16,6 +16,7 @@ pub mod archdetect;
 pub mod backdrop;
 pub mod build3d;
 pub mod casework;
+pub mod connections;
 pub mod deck;
 pub(crate) mod defaults;
 pub mod electrical;
@@ -113,6 +114,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(defaults::specs());
     v.extend(lightfixture::specs());
     v.extend(lightset::specs());
+    v.extend(connections::specs());
     v.extend(casework::specs());
     v.extend(material::specs());
     v.extend(illuminance::specs());

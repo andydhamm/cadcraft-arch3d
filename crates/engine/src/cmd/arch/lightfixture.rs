@@ -380,6 +380,10 @@ fn run_lightfixture_delete(session: &mut Session, params: &Value) -> Result<Valu
     let mut doc = session.doc_mut()?;
     let idx = doc.arch.lights.iter().position(|f| f.id == id).ok_or_else(|| bad("lightfixture.delete", format!("unknown light `{raw}`")))?;
     doc.arch.lights.remove(idx);
+    doc.arch.connections.retain_mut(|c| {
+        c.to.retain(|light| *light != id);
+        !c.to.is_empty()
+    });
     doc.touch_arch();
     Ok(json!({ "light": light_label(id) }))
 }
