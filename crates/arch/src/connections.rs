@@ -207,7 +207,7 @@ pub fn circuits(model: &ArchModel) -> Vec<Circuit> {
     let mut root_to_group: BTreeMap<usize, usize> = BTreeMap::new();
     for (i, &sw) in switches.iter().enumerate() {
         let gid = root_to_group.entry(uf.find(i)).or_insert(groups.len());
-        groups[gid].push(sw);
+        groups[*gid].push(sw);
     }
     for g in groups.iter_mut() {
         g.sort();
