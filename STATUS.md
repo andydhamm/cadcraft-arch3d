@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 18 of 39 segments merged · 1 of 14 acceptance checks**
 
@@ -25,15 +25,15 @@ Updated 2026-11-06 05:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 20.6 h so far · expected done Nov 07 01:09–Nov 08 05:15 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 20.8 h so far · expected done Nov 07 01:24–Nov 08 05:30 UTC |
 
 ## Phase 15 segments
 
-18 merged, 15 queued, 4 merging, 3 replaced, 1 gate, 1 stuck
+18 merged, 15 queued, 5 merging, 3 replaced, 1 stuck
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-io-split-levels` | io: offset levels and spanning walls in IFC | gate | claude-sonnet-d |
+| `p15-io-split-levels` | io: offset levels and spanning walls in IFC | merging | claude-sonnet-d |
 | `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | merging | mai-flash |
 | `p15-arch-outlet-runs` | arch: usable wall runs of a room (openings and counters break them) | merging | claude-sonnet-a |
 | `p15-arch-connection-arcs` | arch: connection validation and bulged connection arcs | merging | bonsai-ws2-b |
@@ -67,8 +67,8 @@ Updated 2026-11-06 05:00 UTC. This page and the card in the README are regenerat
 | claude-sonnet-a | sonnet | merging | 83 |
 | claude-sonnet-b | sonnet | idle | 83 |
 | claude-sonnet-c | sonnet | idle | 36 |
-| claude-sonnet-d | sonnet | gate | 22 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 787 |
+| claude-sonnet-d | sonnet | merging | 23 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 787 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 63 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
