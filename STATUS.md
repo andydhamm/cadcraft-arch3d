@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 09:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 22 of 42 segments merged · 1 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-06 09:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 24.8 h so far · expected done Nov 07 01:15–Nov 08 00:12 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 25.1 h so far · expected done Nov 07 02:57–Nov 08 04:00 UTC |
 
 ## Phase 15 segments
 
@@ -67,14 +67,14 @@ Updated 2026-11-06 09:15 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | gate | 922 |
 | bonsai-b | bonsai2-27b | merging | 846 |
 | bonsai-ws2-a | bonsai2-27b | gate | 955 |
-| bonsai-ws2-b | bonsai2-27b | gate | 912 |
+| bonsai-ws2-b | bonsai2-27b | gate | 913 |
 | claude-sonnet-a | sonnet | merging | 84 |
 | claude-sonnet-b | sonnet | merging | 84 |
 | claude-sonnet-c | sonnet | merging | 37 |
 | claude-sonnet-d | sonnet | merging | 23 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 791 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 792 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 64 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 33 |
-| tturbo-mac | tturbo-ultraheretic | gate | 625 |
+| tturbo-mac | tturbo-ultraheretic | merging | 626 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
