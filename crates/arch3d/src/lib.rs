@@ -11,6 +11,7 @@
 pub mod camera;
 pub mod casework;
 pub mod edges;
+pub mod electrical;
 pub mod finish;
 pub mod fixture;
 
@@ -268,6 +269,7 @@ pub(crate) fn fill_materials(model: &ArchModel, scene: &mut Scene3d) {
     scene.materials.clear();
     scene.textures.clear();
     furnishing::symbol_materials(model, scene);
+    electrical::plate_materials(model, scene);
     paint::materials(model, scene);
     scene.backdrop = model.backdrop.clone();
     if let Some(Backdrop::Image { item, .. }) = &model.backdrop
