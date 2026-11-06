@@ -25,8 +25,8 @@ use cadcraft_arch::casework_layout::counter_runs;
 use cadcraft_arch::join::{WallShape, solve_joins};
 use cadcraft_arch::roof::{Footprint, outer_footprint};
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, CabinetPart, Fixture, Furnishing, FurnishingHost, Level, LightFixture, Opening, Paint, Plant, PlantSpecies, Railing, Roof,
-    Room, RoomType, Side, Stair, Surface, Terrain, WallType,
+    Cabinet, CabinetKind, CabinetPart, ElectricalDevice, Fixture, Furnishing, FurnishingHost, Level, LightFixture, Opening, Paint, Plant,
+    PlantSpecies, Railing, Roof, Room, RoomType, Side, Stair, Surface, Terrain, WallType,
 };
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
@@ -59,6 +59,8 @@ pub enum ObjectKind {
     Fixture,
     /// Phase 14: a placed library item (`f<n>`).
     Furnishing,
+    /// Phase 15: an outlet or switch cover plate (`el{n}`).
+    Electrical,
 }
 
 impl ObjectKind {
@@ -76,6 +78,7 @@ impl ObjectKind {
             "cabinet" | "counter" | "pull" => ObjectKind::Cabinet,
             "fixture" => ObjectKind::Fixture,
             "furnishing" => ObjectKind::Furnishing,
+            "electrical" => ObjectKind::Electrical,
             _ => ObjectKind::Wall,
         }
     }
@@ -121,6 +124,7 @@ pub fn changed_objects(prev: &ArchModel, next: &ArchModel) -> Option<BTreeSet<Ob
     diff(&prev.cabinets, &next.cabinets, |c| c.id, ObjectKind::Cabinet, &mut changes);
     diff(&prev.fixtures, &next.fixtures, |f| f.id, ObjectKind::Fixture, &mut changes);
     diff(&prev.furnishings, &next.furnishings, |f| f.id, ObjectKind::Furnishing, &mut changes);
+    diff(&prev.electrical, &next.electrical, |d| d.id, ObjectKind::Electrical, &mut changes);
     if prev.terrain != next.terrain {
         changes.insert(ObjectKey { kind: ObjectKind::Terrain, id: ArchId(0) });
     }
@@ -392,6 +396,15 @@ struct FurnishingIn {
     has_symbol: bool,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct ElectricalIn {
+    device: ElectricalDevice,
+    /// Where the device sits on its wall (`None` when the placement fails).
+    place: Option<cadcraft_arch::electrical::DevicePlace>,
+    /// The elevation of the device's level.
+    level: f64,
+}
+
 /// The parts of a scene, section by section in the order [`Scene3d::build`] emits them.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Sections {
@@ -407,6 +420,7 @@ pub(crate) struct Sections {
     cabinets: Vec<Part<CabinetIn>>,
     casework_fixtures: Vec<Part<CaseworkFixtureIn>>,
     furnishings: Vec<Part<FurnishingIn>>,
+    electrical: Vec<Part<ElectricalIn>>,
     /// The join shapes, for the walls and wall types they were solved for.
     joins: Option<(Vec<Wall>, Vec<WallType>, Vec<WallShape>)>,
     /// Per level: its walls, and the outer footprint they make (it joins every wall on the level).
@@ -429,6 +443,7 @@ impl Sections {
             cabinets: pc,
             casework_fixtures: pfx,
             furnishings: pfu,
+            electrical: pel,
             joins,
             footprints: mut old_footprints,
         } = prev.unwrap_or_default();
@@ -611,6 +626,20 @@ impl Sections {
             .collect();
         let furnishings = parts(pfu, furnishing_items, |i| painted(model, furnishing::furnishing_meshes(model, &i.furnishing)));
 
+        let electrical_items = model
+            .electrical
+            .iter()
+            .map(|d| {
+                let input = ElectricalIn {
+                    device: d.clone(),
+                    place: cadcraft_arch::electrical::place_device(model, d).ok(),
+                    level: level_for(model, d.level).elevation,
+                };
+                (d.id, input)
+            })
+            .collect();
+        let electrical = parts(pel, electrical_items, |i| crate::electrical::plate_meshes(&i.device, i.place.as_ref()));
+
         let joins = Some((model.walls.clone(), model.types.clone(), shapes));
         Sections {
             walls,
@@ -625,6 +654,7 @@ impl Sections {
             cabinets,
             casework_fixtures,
             furnishings,
+            electrical,
             joins,
             footprints,
         }
@@ -639,7 +669,22 @@ impl Sections {
     /// The scene these parts make, moving their meshes into it.
     pub(crate) fn into_scene(self, model: &ArchModel) -> Scene3d {
         let counts = self.counts(model);
-        let Sections { walls, openings, rooms, roofs, stairs, railings, decks, site, fixtures, cabinets, casework_fixtures, furnishings, .. } = self;
+        let Sections {
+            walls,
+            openings,
+            rooms,
+            roofs,
+            stairs,
+            railings,
+            decks,
+            site,
+            fixtures,
+            cabinets,
+            casework_fixtures,
+            furnishings,
+            electrical,
+            ..
+        } = self;
         fn meshes<I>(list: Vec<Part<I>>) -> impl Iterator<Item = Mesh> {
             list.into_iter().flat_map(|p| p.meshes)
         }
@@ -654,7 +699,8 @@ impl Sections {
             .chain(meshes(fixtures))
             .chain(meshes(cabinets))
             .chain(meshes(casework_fixtures))
-            .chain(meshes(furnishings));
+            .chain(meshes(furnishings))
+            .chain(meshes(electrical));
         with_meshes(counts, all.filter(keep).collect())
     }
 
@@ -685,6 +731,13 @@ impl Sections {
                 .filter(|p| !p.meshes.is_empty())
                 .filter_map(|p| furnishing::placed_box(&p.input.furnishing, p.input.level.elevation))
                 .collect(),
+            electrical: made(&self.electrical),
+            electrical_boxes: self
+                .electrical
+                .iter()
+                .filter(|p| !p.meshes.is_empty())
+                .filter_map(|p| Some(crate::electrical::plate_box(&p.input.device, p.input.place.as_ref()?, p.input.level)))
+                .collect(),
             ..Default::default()
         };
         scene
@@ -706,6 +759,7 @@ impl Sections {
             .chain(self.cabinets.iter().map(|p| &p.meshes))
             .chain(self.casework_fixtures.iter().map(|p| &p.meshes))
             .chain(self.furnishings.iter().map(|p| &p.meshes))
+            .chain(self.electrical.iter().map(|p| &p.meshes))
     }
 
     /// The objects of the parts made in the last build.
@@ -728,6 +782,7 @@ impl Sections {
         self.cabinets.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.casework_fixtures.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.furnishings.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.electrical.iter().for_each(|p| add(p.fresh, &p.meshes));
         out
     }
 }
