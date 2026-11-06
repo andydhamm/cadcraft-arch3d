@@ -263,3 +263,149 @@ pub fn usable_runs(model: &ArchModel, room: ArchId) -> Vec<Run> {
     });
     runs
 }
+
+/// Candidates closer than this (metres along a wall face) are duplicates.
+const DEDUPE: f64 = 0.3;
+/// How far from a run's ends and internal breaks an outlet stays.
+const EDGE: f64 = 0.05;
+/// Most outlets one run or counter may get (guards hostile lengths).
+const MAX_PER_RUN: usize = 4096;
+
+fn device(
+    kind: cadcraft_doc::arch::ElectricalKind,
+    wall: ArchId,
+    side: WallSide,
+    offset: f64,
+    counter: bool,
+    level: u32,
+) -> cadcraft_doc::arch::ElectricalDevice {
+    cadcraft_doc::arch::ElectricalDevice { kind, wall, side, offset, height: if counter { 0.15 } else { 0.3 }, counter, level, ..Default::default() }
+}
+
+/// Duplex positions along a run of `length` metres.
+fn duplex_positions(length: f64) -> Vec<f64> {
+    let mut v = Vec::new();
+    if !(length.is_finite() && length > 0.0) {
+        return v;
+    }
+    let mut p = (length / 2.0).min(1.8);
+    let mut last = p;
+    v.push(p);
+    while v.len() < MAX_PER_RUN {
+        p += 3.6;
+        if p > length - 1.8 {
+            break;
+        }
+        v.push(p);
+        last = p;
+    }
+    if length - last > 1.8 {
+        // Clamping the end pulls it in; keep every point within 1.8 m of an outlet.
+        let gap = length - EDGE - v.last().copied().unwrap_or(0.0);
+        if gap > 3.6 {
+            v.push(v.last().copied().unwrap_or(0.0) + gap / 2.0);
+        }
+        v.push(length);
+    }
+    v
+}
+
+/// Maps a position along `run` to `(wall, side, offset)`.
+fn locate(run: &Run, pos: f64) -> Option<(ArchId, WallSide, f64)> {
+    let mut cum = 0.0;
+    let n = run.wall_spans.len();
+    for (i, &(w, s, a, b)) in run.wall_spans.iter().enumerate() {
+        let len = b - a;
+        if pos <= cum + len || i + 1 == n {
+            return Some((w, s, a + (pos - cum).clamp(0.0, len.max(0.0))));
+        }
+        cum += len;
+    }
+    None
+}
+
+/// Auto-placed outlets for `room` (ids left as `ArchId(0)`; the caller assigns them).
+pub fn auto_outlets(model: &ArchModel, room: ArchId) -> Vec<cadcraft_doc::arch::ElectricalDevice> {
+    use cadcraft_doc::arch::ElectricalKind;
+    let Some(r) = model.room(room) else { return Vec::new() };
+    let level = r.level;
+    let kitchen = r.room_type == RoomType::Kitchen;
+    let mut cands: Vec<cadcraft_doc::arch::ElectricalDevice> = Vec::new();
+
+    if kitchen {
+        let faces = collect_faces(model, room, level);
+        for cr in crate::casework_layout::counter_runs(model).into_iter().filter(|c| c.level == level) {
+            let rad = cr.rotation.to_radians();
+            let cd = Vec2::new(rad.cos(), rad.sin());
+            let (a, b) = (cr.origin + cd * cr.u0, cr.origin + cd * cr.u1);
+            if !(a.is_finite() && b.is_finite()) {
+                continue;
+            }
+            let Some(f) = faces.iter().find(|f| cd.cross(f.dir).abs() <= 1e-6 && (a - f.start).cross(f.dir).abs() <= 1e-6) else { continue };
+            let (sa, sb) = ((a - f.start).dot(f.dir), (b - f.start).dot(f.dir));
+            let (s0, s1) = (sa.min(sb), sa.max(sb));
+            let mut pos = vec![s0 + 0.3];
+            let mut p = s0 + 0.3;
+            while pos.len() < MAX_PER_RUN && p + 1.2 <= s1 - 0.6 {
+                p += 1.2;
+                pos.push(p);
+            }
+            if s1 - 0.3 > p {
+                pos.push(s1 - 0.3);
+            }
+            let cutouts: Vec<(f64, f64)> = cr
+                .cabinets
+                .iter()
+                .filter_map(|id| model.cabinets.iter().find(|c| c.id == *id))
+                .filter_map(|c| crate::casework_layout::hosted_cutout(model, c))
+                .filter_map(|(_, at, co)| {
+                    let c = (Vec2::new(at[0], at[1]) - f.start).dot(f.dir);
+                    (c.is_finite() && co[0].is_finite()).then_some((c, co[0].abs()))
+                })
+                .collect();
+            for mut p in pos {
+                for &(c, w) in &cutouts {
+                    if (p - c).abs() < w / 2.0 {
+                        let moved = (c + w / 2.0 + EDGE).clamp(s0, s1);
+                        p = if (moved - c).abs() < w / 2.0 { (c - w / 2.0 - EDGE).clamp(s0, s1) } else { moved };
+                    }
+                }
+                cands.push(device(ElectricalKind::Gfci, f.wall, side_of(f.side), p, true, level));
+            }
+        }
+    }
+
+    for run in usable_runs(model, room) {
+        let l = run.length;
+        let mut breaks = Vec::new();
+        let mut cum = 0.0;
+        for &(_, _, a, b) in run.wall_spans.iter().take(run.wall_spans.len().saturating_sub(1)) {
+            cum += b - a;
+            breaks.push(cum);
+        }
+        for p in duplex_positions(l) {
+            let mut p = p.min(l - EDGE).max(EDGE);
+            for &c in &breaks {
+                if (p - c).abs() < EDGE - 1e-12 {
+                    p = if c < l / 2.0 { c + EDGE } else { c - EDGE };
+                }
+            }
+            if let Some((w, s, o)) = locate(&run, p) {
+                cands.push(device(ElectricalKind::Duplex, w, s, o, false, level));
+            }
+        }
+    }
+
+    let mut out: Vec<cadcraft_doc::arch::ElectricalDevice> = Vec::new();
+    for c in cands {
+        let near = |d: &cadcraft_doc::arch::ElectricalDevice| d.wall == c.wall && d.side == c.side && (d.offset - c.offset).abs() <= DEDUPE;
+        if model.electrical.iter().any(near) || out.iter().any(near) {
+            continue;
+        }
+        if crate::electrical::place_device(model, &c).is_ok() {
+            out.push(c);
+        }
+    }
+    out.sort_by(|a, b| a.wall.cmp(&b.wall).then((a.side == WallSide::Right).cmp(&(b.side == WallSide::Right))).then(a.offset.total_cmp(&b.offset)));
+    out
+}
