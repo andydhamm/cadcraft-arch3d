@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-06 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 32 of 43 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 32 of 42 segments merged · 2 of 14 acceptance checks**
 
 7,612 workspace tests passing at the last merge · 795 segments merged in all · 0 of 14 seats working
 
@@ -25,19 +25,18 @@ Updated 2026-11-06 17:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 32.6 h so far · expected done Nov 07 00:33–Nov 07 16:45 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 32.8 h so far · expected done Nov 07 00:06–Nov 07 15:55 UTC |
 
 ## Phase 15 segments
 
-32 merged, 6 queued, 4 replaced, 3 merging, 1 working, 1 escalate
+32 merged, 6 queued, 4 replaced, 3 merging, 1 gate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-render-electrical` | render: electrical plan symbols and connection arcs | merging | mai-flash-esc |
 | `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | merging | darwin-ws3 |
 | `p15-cmd-electrical` | engine: outlet, switch, electrical.edit, electrical.delete | merging | mai-flash |
-| `p15-inspect` | engine: arch.inspect for phase 15 | working | claude-sonnet-a |
-| `upstream-sync-2611bc5f5` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | escalate |  |
+| `p15-inspect` | engine: arch.inspect for phase 15 | gate | claude-sonnet-a |
 
 ## Recent merges
 
@@ -62,9 +61,9 @@ Updated 2026-11-06 17:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 923 |
 | bonsai-b | bonsai2-27b | merging | 851 |
-| bonsai-ws2-a | bonsai2-27b | gate | 956 |
-| bonsai-ws2-b | bonsai2-27b | gate | 918 |
-| claude-sonnet-a | sonnet | agent | 85 |
+| bonsai-ws2-a | bonsai2-27b | gate | 957 |
+| bonsai-ws2-b | bonsai2-27b | agent | 919 |
+| claude-sonnet-a | sonnet | gate | 85 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | idle | 25 |
