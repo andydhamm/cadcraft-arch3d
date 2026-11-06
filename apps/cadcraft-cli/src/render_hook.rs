@@ -12,7 +12,7 @@ use cadcraft_render3d::camera::{Camera, Orbit};
 use cadcraft_render3d::final_render::render_final_with;
 use cadcraft_render3d::light::{Light, Sun};
 use cadcraft_render3d::lights::DEFAULT_EXPOSURE;
-use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, Style, png_rgba};
+use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, png_rgba};
 use cadcraft_render3d::pathtrace::cache;
 use cadcraft_render3d::pathtrace::{CacheOutcome, ComputeGpu, Exposure, Furnace, PathOptions, irradiance, luminance, request_compute};
 use cadcraft_render3d::{Lighting, Scene3d, render_final};
@@ -159,6 +159,7 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
 }
 
 fn render_one(req: &RenderRequest) -> Result<Value, String> {
+    let style = crate::render::parse_style(&req.style).ok_or_else(|| format!("`{}` is not one of {}", req.style, crate::render::STYLE_NAMES))?;
     let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
     let state = ready(&mut guard, req.drawing, req.size)?;
     let key = req.drawing.arch_revision;
@@ -239,7 +240,6 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         (rgba, req.size, scene.lights.len(), scene.lights.len(), Some(png))
     } else {
         let frame = off.lit_frame(scene, key, [eye.x, eye.y, eye.z], &lighting, req.ground);
-        let style = crate::render::parse_style(&req.style).unwrap_or(Style::Shaded);
         let light = lighting.sun.unwrap_or(Light::DEFAULT);
         let opts = RenderOptions { lit: frame.as_ref(), style, ground: req.ground, ..RenderOptions::default() };
         off.render_with(scene, key, &camera, &light, &opts);
@@ -429,6 +429,18 @@ mod tests {
         // Start from a fresh renderer so the shadow-map counts begin at zero.
         *STATE.lock().unwrap_or_else(|e| e.into_inner()) = None;
         g
+    }
+
+    #[test]
+    fn render_hook_refuses_an_unknown_style() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.style = "wireframe".into();
+        let Err(e) = render_one(&req) else { panic!("an unknown style must be refused") };
+        for name in ["shaded", "shaded-edges", "hidden-line", "glass-house", "clay", "technical"] {
+            assert!(e.contains(name), "{e}");
+        }
     }
 
     #[test]
