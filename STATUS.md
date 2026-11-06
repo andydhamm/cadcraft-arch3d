@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-06 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 15 of 37 segments merged · 1 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 15 of 39 segments merged · 1 of 14 acceptance checks**
 
 7,548 workspace tests passing at the last merge · 776 segments merged in all · 0 of 14 seats working
 
@@ -25,11 +25,11 @@ Updated 2026-11-06 02:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 18.1 h so far · expected done Nov 06 21:42–Nov 07 23:43 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 18.3 h so far · expected done Nov 06 23:42–Nov 08 02:42 UTC |
 
 ## Phase 15 segments
 
-15 merged, 15 queued, 5 merging, 2 replaced, 1 stuck, 1 escalate
+16 queued, 15 merged, 5 merging, 3 replaced, 2 gate, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -39,6 +39,8 @@ Updated 2026-11-06 02:30 UTC. This page and the card in the README are regenerat
 | `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | escalate |  |
 | `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | merging | mai-flash |
 | `p15-arch-outlet-runs` | arch: usable wall runs of a room (openings and counters break them) | merging | claude-sonnet-a |
+| `p15-arch-connection-arcs` | arch: connection validation and bulged connection arcs | gate | bonsai-ws2-b |
+| `upstream-sync-fc157ea91` | merge upstream upstream/main up to fc157ea91 (4 commits) | gate | bonsai-a |
 
 ## Recent merges
 
@@ -61,10 +63,10 @@ Updated 2026-11-06 02:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 918 |
+| bonsai-a | bonsai2-27b | gate | 919 |
 | bonsai-b | bonsai2-27b | merging | 845 |
-| bonsai-ws2-a | bonsai2-27b | agent | 948 |
-| bonsai-ws2-b | bonsai2-27b | gate | 905 |
+| bonsai-ws2-a | bonsai2-27b | agent | 949 |
+| bonsai-ws2-b | bonsai2-27b | gate | 907 |
 | claude-sonnet-a | sonnet | merging | 83 |
 | claude-sonnet-b | sonnet | merging | 83 |
 | claude-sonnet-c | sonnet | merging | 36 |
@@ -73,5 +75,5 @@ Updated 2026-11-06 02:30 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 63 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
-| tturbo-mac | tturbo-ultraheretic | agent | 622 |
+| tturbo-mac | tturbo-ultraheretic | gate | 622 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
