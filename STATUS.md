@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 35 of 42 segments merged · 2 of 14 acceptance checks**
 
-7,633 workspace tests passing at the last merge · 799 segments merged in all · 0 of 14 seats working
+7,638 workspace tests passing at the last merge · 800 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-06 23:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 38.8 h so far · expected done Nov 07 05:58–Nov 08 02:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 39.1 h so far · expected done Nov 07 06:13–Nov 08 02:45 UTC |
 
 ## Phase 15 segments
 
@@ -41,6 +41,7 @@ Updated 2026-11-06 23:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 23:25 | `harden-p15-arch-outlet-gaps` | merged | 7,638 pass | tturbo-mac |
 | Nov 06 22:23 | `p15-cmd-outlets-auto` | merged | 7,633 pass | mai-flash |
 | Nov 06 21:33 | `p15-inspect` | refused | 7,635 pass | claude-sonnet-a |
 | Nov 06 19:58 | `p15-io-electrical` | refused | 0 pass | darwin-ws3 |
@@ -52,7 +53,6 @@ Updated 2026-11-06 23:15 UTC. This page and the card in the README are regenerat
 | Nov 06 15:27 | `p15-cmd-level-free` | merged | 7,607 pass | mai-flash-esc |
 | Nov 06 14:52 | `p15-arch-circuits` | merged | 7,602 pass | bonsai-ws2-b |
 | Nov 06 14:25 | `p15-cmd-room-bed` | merged | 7,600 pass | bonsai-a |
-| Nov 06 14:07 | `upstream-sync-2611bc5f5` | refused | 7,599 pass | bonsai-ws2-a |
 
 ## Seats active in the last hour
 
@@ -60,15 +60,15 @@ Updated 2026-11-06 23:15 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 931 |
 | bonsai-b | bonsai2-27b | gate | 857 |
-| bonsai-ws2-a | bonsai2-27b | gate | 964 |
-| bonsai-ws2-b | bonsai2-27b | agent | 924 |
+| bonsai-ws2-a | bonsai2-27b | gate | 965 |
+| bonsai-ws2-b | bonsai2-27b | gate | 924 |
 | claude-sonnet-a | sonnet | idle | 86 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | idle | 25 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 809 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 809 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 67 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 37 |
-| tturbo-mac | tturbo-ultraheretic | merging | 628 |
+| tturbo-mac | tturbo-ultraheretic | agent | 628 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
