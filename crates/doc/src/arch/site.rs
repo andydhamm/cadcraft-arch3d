@@ -336,4 +336,12 @@ mod tests {
         assert_eq!(PathKind::Bed.default_material(), "mulch");
         assert_eq!(PathKind::Bed.default_thickness(), 0.05);
     }
+
+    #[test]
+    fn path_kind_bed_serializes_as_bed() {
+        let bed = PathKind::Bed;
+        assert_eq!(serde_json::to_string(&bed).unwrap(), "\"bed\"");
+        let back: PathKind = serde_json::from_str("\"bed\"").unwrap();
+        assert_eq!(back, PathKind::Bed);
+    }
 }
