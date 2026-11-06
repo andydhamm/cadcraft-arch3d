@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 27 of 43 segments merged · 1 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-06 14:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 29.6 h so far · expected done Nov 07 02:48–Nov 07 23:57 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 29.8 h so far · expected done Nov 07 03:03–Nov 08 00:12 UTC |
 
 ## Phase 15 segments
 
-27 merged, 9 queued, 7 merging, 4 replaced
+27 merged, 9 queued, 6 merging, 4 replaced, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,13 +38,14 @@ Updated 2026-11-06 14:00 UTC. This page and the card in the README are regenerat
 | `p15-arch-circuits` | arch: circuit grouping by shared lights | merging | bonsai-ws2-b |
 | `p15-cmd-level-free` | level: free elevations, kinds, and level.edit | merging | mai-flash-esc |
 | `p15-cmd-room-bed` | room type keys and the terrain planting bed | merging | bonsai-a |
-| `upstream-sync-2611bc5f5` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | merging | bonsai-ws2-a |
+| `upstream-sync-2611bc5f5` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | escalate |  |
 | `p15-cli-render-styles` | cli: the clay and technical render styles reach the renderer | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 14:07 | `upstream-sync-2611bc5f5` | refused | 7,599 pass | bonsai-ws2-a |
 | Nov 06 13:19 | `harden-p15-arch-pad-split` | merged | 7,597 pass | tturbo-mac |
 | Nov 06 12:52 | `p15-cmd-wall-span` | merged | 7,591 pass | claude-sonnet-b |
 | Nov 06 11:56 | `p15-arch-outlet-place` | merged | 7,587 pass | claude-sonnet-a |
@@ -56,7 +57,6 @@ Updated 2026-11-06 14:00 UTC. This page and the card in the README are regenerat
 | Nov 06 06:55 | `harden-p15-cmd-library-copy-place` | merged | 7,570 pass | tturbo-mac |
 | Nov 06 06:22 | `p15-arch-outlet-runs` | merged | 7,566 pass | claude-sonnet-a |
 | Nov 06 05:27 | `p15-arch3d-plate-mesh` | merged | 7,563 pass | mai-flash |
-| Nov 06 04:47 | `p15-arch3d-spanning-walls` | merged | 7,560 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -64,7 +64,7 @@ Updated 2026-11-06 14:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 923 |
 | bonsai-b | bonsai2-27b | merging | 851 |
-| bonsai-ws2-a | bonsai2-27b | merging | 956 |
+| bonsai-ws2-a | bonsai2-27b | idle | 956 |
 | bonsai-ws2-b | bonsai2-27b | merging | 915 |
 | claude-sonnet-a | sonnet | merging | 85 |
 | claude-sonnet-b | sonnet | idle | 84 |
