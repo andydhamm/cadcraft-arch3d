@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 16 of 39 segments merged · 1 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 17 of 39 segments merged · 1 of 14 acceptance checks**
 
-7,552 workspace tests passing at the last merge · 777 segments merged in all · 0 of 14 seats working
+7,556 workspace tests passing at the last merge · 778 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,26 +25,26 @@ Updated 2026-11-06 04:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 19.6 h so far · expected done Nov 07 02:04–Nov 08 07:15 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 19.8 h so far · expected done Nov 06 23:27–Nov 08 01:28 UTC |
 
 ## Phase 15 segments
 
-16 merged, 16 queued, 5 merging, 3 replaced, 1 escalate, 1 working
+17 merged, 16 queued, 5 merging, 3 replaced, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-arch-pad-split` | arch: the pad follows each level and the entry landing | merging | claude-sonnet-c |
 | `p15-arch3d-spanning-walls` | arch3d: walls from one level's floor to another's ceiling, offset levels | merging | claude-sonnet-d |
 | `p15-cmd-levels` | engine: free level elevations, level kinds, spanning walls, room types, beds | escalate |  |
 | `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | merging | mai-flash |
 | `p15-arch-outlet-runs` | arch: usable wall runs of a room (openings and counters break them) | merging | claude-sonnet-a |
-| `p15-arch-connection-arcs` | arch: connection validation and bulged connection arcs | working | bonsai-ws2-b |
+| `p15-arch-connection-arcs` | arch: connection validation and bulged connection arcs | merging | bonsai-ws2-b |
 | `upstream-sync-fc157ea91` | merge upstream upstream/main up to fc157ea91 (4 commits) | merging | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 04:08 | `p15-arch-pad-split` | merged | 7,556 pass | claude-sonnet-c |
 | Nov 06 03:16 | `p15-arch-grade` | merged | 7,552 pass | claude-sonnet-b |
 | Nov 06 02:23 | `harden-p15-doc-levels` | merged | 7,548 pass | tturbo-mac |
 | Nov 06 01:02 | `p15-cmd-electrical-view` | merged | 7,539 pass | mai-flash-esc |
@@ -56,7 +56,6 @@ Updated 2026-11-06 04:00 UTC. This page and the card in the README are regenerat
 | Nov 05 19:19 | `harden-p15-i18n-labels` | merged | 7,512 pass | tturbo-mac |
 | Nov 05 18:12 | `p15-arch-electrical` | merged | 7,508 pass | mai-flash-esc |
 | Nov 05 16:48 | `p15-arch3d-light-brightness` | merged | 7,496 pass | claude-sonnet-a |
-| Nov 05 16:19 | `p15-render3d-technical` | merged | 7,493 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
@@ -64,11 +63,11 @@ Updated 2026-11-06 04:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 920 |
 | bonsai-b | bonsai2-27b | merging | 845 |
-| bonsai-ws2-a | bonsai2-27b | gate | 951 |
-| bonsai-ws2-b | bonsai2-27b | agent | 911 |
+| bonsai-ws2-a | bonsai2-27b | gate | 952 |
+| bonsai-ws2-b | bonsai2-27b | merging | 912 |
 | claude-sonnet-a | sonnet | merging | 83 |
 | claude-sonnet-b | sonnet | idle | 83 |
-| claude-sonnet-c | sonnet | merging | 36 |
+| claude-sonnet-c | sonnet | idle | 36 |
 | claude-sonnet-d | sonnet | merging | 22 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 787 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
