@@ -112,18 +112,20 @@ fn run_modify(s: &mut Session, p: &Value) -> Result<Value> {
     let key = *key;
     let arg = p.get(key).unwrap_or(&Value::Null);
 
-    let d = s.doc_mut()?;
-    let Some(mut t) = d.arch.terrain.clone() else {
+    // Read the terrain read-only so a refused call (bad kind, bad values, no
+    // matching modifier) leaves no undo step.
+    let doc = s.doc()?;
+    let Some(t) = doc.arch.terrain.as_ref() else {
         return Err(bad(CMD, "there is no terrain; create one with `terrain` first"));
     };
 
-    let reply;
-    if key == "delete" {
+    let (new_t, reply) = if key == "delete" {
         let label = arg.as_str().ok_or_else(|| bad(CMD, "`delete` must be a modifier label such as \"tm0\""))?;
         let id = parse_label(label).ok_or_else(|| bad(CMD, format!("`{label}` is not a modifier label")))?;
         let at = t.modifiers.iter().position(|m| m.id == id).ok_or_else(|| bad(CMD, format!("no terrain modifier `{label}`")))?;
-        t.modifiers.remove(at);
-        reply = json!({ "deleted": format!("tm{id}") });
+        let mut new_t = t.clone();
+        new_t.modifiers.remove(at);
+        (new_t, json!({ "deleted": format!("tm{id}") }))
     } else {
         if !arg.is_object() {
             return Err(bad(CMD, format!("`{key}` must be an object")));
@@ -170,13 +172,16 @@ fn run_modify(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(CMD, format!("at most {MAX_TERRAIN_MODIFIERS} terrain modifiers")));
         }
         let id = t.next_modifier_id;
-        t.next_modifier_id = id.checked_add(1).ok_or_else(|| bad(CMD, "modifier ids exhausted"))?;
-        t.modifiers.push(TerrainModifier { id, kind });
-        reply = json!({ "modifier": format!("tm{id}") });
-    }
+        let mut new_t = t.clone();
+        new_t.next_modifier_id = id.checked_add(1).ok_or_else(|| bad(CMD, "modifier ids exhausted"))?;
+        new_t.modifiers.push(TerrainModifier { id, kind });
+        (new_t, json!({ "modifier": format!("tm{id}") }))
+    };
 
-    validate_terrain(&t).map_err(|e| bad(CMD, e.to_string()))?;
-    d.arch.terrain = Some(t);
+    validate_terrain(&new_t).map_err(|e| bad(CMD, e.to_string()))?;
+
+    let d = s.doc_mut()?;
+    d.arch.terrain = Some(new_t);
     d.touch_arch();
     Ok(reply)
 }
