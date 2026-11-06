@@ -12,12 +12,69 @@
 //! switch→light; the sagitta at the arc midpoint is `bulge * half_chord` in the
 //! perpendicular direction.
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
 use cadcraft_doc::arch::{Connection, ElectricalKind, LightFixture};
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::Vec2;
 
 /// A connection drives at most 64 lights.
 pub const MAX_CONNECTION_LIGHTS: usize = 64;
+
+/// A group of switches transitively linked by the lights they drive.
+///
+/// Pure, derived data — never stored on a [`Drawing`]. A circuit is a transitive
+/// group of switches connected through shared lights. Outside this module it must be
+/// built with [`Circuit::default`] or [`Circuit::new`], never an exhaustive literal.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Circuit {
+    /// The switch ids in the circuit, sorted ascending.
+    pub switches: Vec<ArchId>,
+    /// The light ids the circuit drives, sorted ascending and deduplicated.
+    pub lights: Vec<ArchId>,
+    /// Circuit brightness: the common brightness when all the lights agree, or their
+    /// mean when they differ (1.0 when the circuit drives no readable light).
+    pub brightness: f64,
+}
+
+impl Circuit {
+    /// A circuit with no switches, no lights and brightness 1.0.
+    pub fn new() -> Self {
+        Circuit { switches: Vec::new(), lights: Vec::new(), brightness: 1.0 }
+    }
+}
+
+/// A small union-find over the switch list used to merge switches sharing a light.
+struct UnionFind {
+    parent: Vec<usize>,
+}
+
+impl UnionFind {
+    /// `n` elements, each its own root.
+    fn new(n: usize) -> Self {
+        UnionFind { parent: (0..n).collect() }
+    }
+
+    /// Root of `i` with path halving (iterative, no recursion).
+    fn find(&mut self, i: usize) -> usize {
+        let mut x = i;
+        while self.parent[x] != x {
+            self.parent[x] = self.parent[self.parent[x]];
+            x = self.parent[x];
+        }
+        x
+    }
+
+    /// Merge the sets containing `a` and `b`.
+    fn union(&mut self, a: usize, b: usize) {
+        let ra = self.find(a);
+        let rb = self.find(b);
+        if ra != rb {
+            self.parent[ra] = rb;
+        }
+    }
+}
 
 /// The device's on-plan point (the centre of its wall plate), if the device can be
 /// resolved and placed on the wall. Returns `None` when the device is missing or
@@ -98,6 +155,102 @@ pub fn connection_arcs(model: &ArchModel, c: &Connection) -> Vec<Vec<Vec2>> {
     let mut to: Vec<ArchId> = c.to.clone();
     to.sort();
     to.iter().filter_map(|&id| light_plan(model, id)).map(|light| bulged_polyline(from, light, c.bulge)).collect()
+}
+
+/// Group switches that share any light into circuits.
+///
+/// Two switches are in the same circuit when they are transitively linked by a light
+/// they both drive (switch A — light L — switch B — light M — switch C is one circuit).
+/// Only switches that drive at least one light take part: an outlet, a GFCI or a 240 V
+/// device never forms a circuit. Returns one [`Circuit`] per transitive group, sorted
+/// by the smallest switch id in each.
+pub fn circuits(model: &ArchModel) -> Vec<Circuit> {
+    // switch id -> lights it drives (only switches that drive a light).
+    let mut per_switch: BTreeMap<ArchId, BTreeSet<ArchId>> = BTreeMap::new();
+    for c in &model.connections {
+        let is_switch = model.electrical.iter().find(|d| d.id == c.from).map_or(false, |d| d.kind.is_switch());
+        if !is_switch {
+            continue;
+        }
+        for &light in &c.to {
+            per_switch.entry(c.from).or_default().insert(light);
+        }
+    }
+
+    // Ordered switch list and its index into that list.
+    let switches: Vec<ArchId> = per_switch.keys().copied().collect();
+    let index: BTreeMap<ArchId, usize> = switches.iter().enumerate().map(|(i, &sw)| (sw, i)).collect();
+
+    // light -> switches driving it (the link used by the union-find).
+    let mut light_to_switches: BTreeMap<ArchId, BTreeSet<ArchId>> = BTreeMap::new();
+    for (sw, lights) in &per_switch {
+        for &light in lights {
+            light_to_switches.entry(light).or_default().insert(*sw);
+        }
+    }
+
+    let mut uf = UnionFind::new(switches.len());
+    for sws in light_to_switches.values() {
+        let mut first: Option<usize> = None;
+        for &sw in sws {
+            if let Some(i) = index.get(&sw) {
+                match first {
+                    None => first = Some(*i),
+                    Some(fi) => uf.union(fi, *i),
+                }
+            }
+        }
+    }
+
+    // Group by union-find root.
+    let mut groups: Vec<Vec<ArchId>> = Vec::new();
+    let mut root_to_group: BTreeMap<usize, usize> = BTreeMap::new();
+    for (i, &sw) in switches.iter().enumerate() {
+        let root = uf.find(i);
+        let gid = match root_to_group.get(&root) {
+            Some(&g) => g,
+            None => {
+                let gid = groups.len();
+                groups.push(Vec::new());
+                root_to_group.insert(root, gid);
+                gid
+            }
+        };
+        groups[gid].push(sw);
+    }
+    for g in groups.iter_mut() {
+        g.sort();
+    }
+    groups.sort_by_key(|g| g[0]);
+
+    // One circuit per group.
+    groups
+        .into_iter()
+        .map(|switches| {
+            let mut lights: BTreeSet<ArchId> = BTreeSet::new();
+            for &sw in &switches {
+                if let Some(ls) = per_switch.get(&sw) {
+                    lights.extend(ls);
+                }
+            }
+            let (mut sum, mut n) = (0.0f64, 0usize);
+            for &light in &lights {
+                if let Some(f) = model.lights.iter().find(|f2| f2.id == light) {
+                    if f.brightness.is_finite() {
+                        sum += f.brightness;
+                        n += 1;
+                    }
+                }
+            }
+            Circuit { switches, lights: lights.into_iter().collect(), brightness: if n == 0 { 1.0 } else { sum / n as f64 } }
+        })
+        .collect()
+}
+
+/// The circuit a switch belongs to, or `None` when the switch drives no lights
+/// (no connection, an outlet, or a model with no circuits at all).
+pub fn circuit_of(model: &ArchModel, switch: ArchId) -> Option<Circuit> {
+    circuits(model).into_iter().find(|c| c.switches.contains(&switch))
 }
 
 #[cfg(test)]
@@ -203,5 +356,75 @@ mod tests {
 
         // No switch -> empty, no panic.
         assert!(connection_arcs(&ArchModel::default(), &c).is_empty());
+    }
+
+    #[test]
+    fn two_switches_sharing_lights_are_one_circuit() {
+        let (mut m, s0) = fixture();
+
+        let s1 = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::ThreeWay,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 1.2,
+            ..Default::default()
+        });
+        let outlet = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::Duplex,
+            side: WallSide::Left,
+            offset: 3.0,
+            height: 0.3,
+            ..Default::default()
+        });
+
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0), ArchId(1)], ..Default::default() });
+        m.push_connection(Connection { from: s1, to: vec![ArchId(1), ArchId(0)], bulge: 0.25, ..Default::default() });
+
+        let cs = circuits(&m);
+        assert_eq!(cs.len(), 1);
+        assert_eq!(cs[0].switches, vec![s0, s1]);
+        assert_eq!(cs[0].lights, vec![ArchId(0), ArchId(1)]);
+        assert!((cs[0].brightness - 1.0).abs() <= 1e-9);
+        assert_eq!(circuit_of(&m, s1), Some(cs[0].clone()));
+        assert!(circuit_of(&m, outlet).is_none());
+        assert!(circuits(&ArchModel::default()).is_empty());
+
+        // A switch with no connection drives no lights.
+        let none = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::SinglePole,
+            side: WallSide::Left,
+            offset: 0.5,
+            height: 1.2,
+            ..Default::default()
+        });
+        assert!(circuit_of(&m, none).is_none());
+    }
+
+    #[test]
+    fn a_circuit_of_differing_lights_averages() {
+        let (mut m, s0) = fixture();
+
+        let s1 = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::ThreeWay,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 1.2,
+            ..Default::default()
+        });
+
+        m.lights[0].brightness = 0.4;
+        m.lights[1].brightness = 0.2;
+
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0), ArchId(1)], ..Default::default() });
+        m.push_connection(Connection { from: s1, to: vec![ArchId(1), ArchId(0)], bulge: 0.25, ..Default::default() });
+
+        let cs = circuits(&m);
+        assert_eq!(cs.len(), 1);
+        assert!((cs[0].brightness - 0.3).abs() <= 1e-9);
+        assert_eq!(circuit_of(&m, s0), Some(cs[0].clone()));
     }
 }
