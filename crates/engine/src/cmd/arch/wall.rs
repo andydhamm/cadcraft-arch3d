@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("wall", "Wall", run_wall)
             .menu(&["Architecture", "Wall"])
             .alias(&["wal"])
-            .params("{points: [[x,y],...], thickness?, height?, exterior?, closed?, level?, type?, toCeiling?, divider?, retaining?, freeboard?, footing?}")
+            .params("{points: [[x,y],...], thickness?, height?, exterior?, closed?, level?, topLevel?, type?, toCeiling?, divider?, retaining?, freeboard?, footing?}")
             .interactive(|_| Ok(Box::new(WallM::default()))),
     ]
 }
@@ -234,6 +234,23 @@ fn retaining_length(p: &Value, key: &str, retaining: bool) -> Result<Option<f64>
     }
 }
 
+/// A level named by a JSON string (name or numeric index) or number (index).
+fn level_ref_param(p: &Value, key: &str) -> Option<String> {
+    match p.get(key)? {
+        Value::String(t) => Some(t.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+/// Position in `levels` of the level called `r`, else of the level whose index is `r`.
+fn resolve_level(levels: &[Level], r: &str) -> Option<usize> {
+    levels.iter().position(|l| l.name == r).or_else(|| {
+        let i = r.trim().parse::<u32>().ok()?;
+        levels.iter().position(|l| l.index == i)
+    })
+}
+
 /// Run the `wall` command from JSON parameters. Never opens a dialog.
 fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
     // --- Parse and validate points ---
@@ -250,7 +267,8 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
 
     // --- Parse remaining parameters ---
     let closed = bool_or(p, "closed", false);
-    let level_name = str_param(p, "level").map(|s| s.to_string());
+    let level_ref = level_ref_param(p, "level");
+    let top_ref = level_ref_param(p, "topLevel");
     let type_str = str_param(p, "type").map(|s| s.to_string());
     let divider = bool_or(p, "divider", false);
     let to_ceiling = bool_or(p, "toCeiling", false);
@@ -258,6 +276,12 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
     let retaining = bool_or(p, "retaining", false);
     let freeboard = retaining_length(p, "freeboard", retaining)?;
     let footing = retaining_length(p, "footing", retaining)?;
+
+    // A fresh drawing has no level yet: create level 0 only when one was named.
+    if p.get("level").is_some_and(|v| !v.is_null()) && s.doc().is_ok_and(|d| d.arch.levels.is_empty()) {
+        let d = s.doc_mut()?;
+        d.arch.ensure_ground_level();
+    }
 
     // Validate on read-only doc first to avoid empty undo steps on failure
     let d_read = s.doc()?;
@@ -325,20 +349,37 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
     let wall_type = type_str.clone().unwrap_or_else(|| if exterior { "exterior".to_string() } else { "interior".to_string() });
 
     // Level: from param, or the first level in the model when absent
-    let level_idx = if let Some(ref name) = level_name {
-        d_read.arch.levels.iter().position(|l| l.name == *name).ok_or_else(|| bad("wall", format!("unknown level `{name}`")))?
-    } else {
-        0
+    let level_idx = match &level_ref {
+        Some(r) => resolve_level(&d_read.arch.levels, r).ok_or_else(|| bad("wall", format!("unknown level `{r}`")))?,
+        None => 0,
     };
 
-    // Height: explicit or the level's derived floor-to-floor (ceiling + structure)
+    // Height: `topLevel` derives it (and refuses a given height); otherwise
+    // explicit, or the level's derived floor-to-floor (ceiling + structure)
     let has_height = p.as_object().is_some_and(|o| o.contains_key("height"));
-    let height = if has_height {
+    let mut top_level: Option<u32> = None;
+    let height = if let Some(r) = &top_ref {
+        if has_height {
+            return Err(bad("wall", "`height` cannot be given with `topLevel`"));
+        }
+        let t = resolve_level(&d_read.arch.levels, r).ok_or_else(|| bad("wall", format!("unknown level `{r}`")))?;
+        let base_elev = d_read.arch.levels.get(level_idx).map(|l| l.elevation).ok_or_else(|| bad("wall", "no base level"))?;
+        let top = d_read.arch.levels.get(t).ok_or_else(|| bad("wall", format!("unknown level `{r}`")))?;
+        if !(top.elevation > base_elev) {
+            return Err(bad("wall", "`topLevel` must be above the base level"));
+        }
+        top_level = Some(top.index);
+        top.elevation + top.ceiling_height - base_elev
+    } else if has_height {
         size_param("wall", p, "height", false)?.unwrap_or(f64::NAN)
     } else {
         d_read.arch.levels.get(level_idx).map(|l| l.ceiling_height + l.structure).unwrap_or(super::DEFAULT_WALL_HEIGHT)
     };
-    if !height.is_finite() || height <= 0.0 {
+    if top_level.is_some() {
+        if !height.is_finite() || height <= 0.0 {
+            return Err(bad("wall", "the span from the base level to `topLevel` is not a positive height"));
+        }
+    } else if !height.is_finite() || height <= 0.0 {
         return Err(bad("wall", "`height` must be a positive finite number"));
     }
 
@@ -409,6 +450,7 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
             thickness,
             height,
             base_level: base_level_idx,
+            top_level,
             to_ceiling,
             divider,
             retaining,
@@ -451,6 +493,58 @@ mod tests {
     use super::*;
     use crate::Session;
     use serde_json::json;
+
+    fn two_level_session(main_elev: f64) -> Session {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.clear();
+        d.arch.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.arch.levels.push(Level { index: 1, name: "Main".into(), elevation: main_elev, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.touch_arch();
+        s
+    }
+
+    #[test]
+    fn a_wall_spans_to_its_top_level() {
+        let mut s = two_level_session(2.7);
+        let p = json!({"points":[[0,0],[10,0]],"thickness":0.2,"exterior":true,"level":"Lower","topLevel":"Main"});
+        s.execute("wall", &p).unwrap();
+        let w = &s.doc().unwrap().arch.walls[0];
+        assert_eq!(w.base_level, 0);
+        assert_eq!(w.top_level, Some(1));
+        assert!((w.height - 5.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn height_with_top_level_is_refused() {
+        let mut s = two_level_session(2.7);
+        let before = s.state().unwrap().undo.len();
+        let p = json!({"points":[[0,0],[10,0]],"thickness":0.2,"exterior":true,"level":"Lower","topLevel":"Main","height":2.4});
+        assert!(matches!(s.execute("wall", &p), Err(EngineError::BadParams { .. })));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 0);
+        assert_eq!(s.state().unwrap().undo.len(), before);
+    }
+
+    #[test]
+    fn wall_top_level_must_be_above_the_base_level() {
+        let mut s = two_level_session(2.7);
+        let p = json!({"points":[[0,0],[10,0]],"level":"Main","topLevel":"Lower"});
+        assert!(matches!(s.execute("wall", &p), Err(EngineError::BadParams { .. })));
+        let mut s = two_level_session(0.0);
+        let p = json!({"points":[[0,0],[10,0]],"level":"Lower","topLevel":"Main"});
+        assert!(matches!(s.execute("wall", &p), Err(EngineError::BadParams { .. })));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 0);
+    }
+
+    #[test]
+    fn wall_top_level_unknown_is_refused_without_an_undo_step() {
+        let mut s = two_level_session(2.7);
+        let before = s.state().unwrap().undo.len();
+        let p = json!({"points":[[0,0],[10,0]],"level":"Lower","topLevel":"Nowhere"});
+        assert!(matches!(s.execute("wall", &p), Err(EngineError::BadParams { .. })));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 0);
+        assert_eq!(s.state().unwrap().undo.len(), before);
+    }
 
     fn new_session_with_level() -> Session {
         let mut s = Session::new();
