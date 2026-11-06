@@ -987,6 +987,66 @@ mod tests {
     }
 
     #[test]
+    fn a_copied_wall_item_hosts_on_its_wall() {
+        let mut s = session_with_library();
+        let ring = json!([[-0.1, -0.1], [4.1, -0.1], [4.1, 4.1], [-0.1, 4.1], [-0.1, -0.1]]);
+        s.execute("wall", &json!({"points": ring, "thickness": 0.2, "exterior": true})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        let copy = s.execute("library.copy", &json!({"item": "towel-rack"})).unwrap();
+        let id = copy["item"].as_str().unwrap().to_string();
+        // Clicked 0.2 m off w0's inner face (y = 0): its back on the face, at its catalog elevation.
+        let r = s.execute("library.place", &json!({"item": id, "at": [2.0, 0.2]})).unwrap();
+        assert_eq!(r["host"], json!({"kind": "wall", "wall": "w0"}), "{r}");
+        let f = s.doc().unwrap().arch.furnishings[0].clone();
+        assert_eq!(f.host, cadcraft_doc::arch::FurnishingHost::Wall { wall: cadcraft_doc::arch::ArchId(0) });
+        assert_eq!(f.item, "towel-rack", "the placed furnishing's item is the source id");
+    }
+
+    #[test]
+    fn a_copied_door_item_runs_the_door_command() {
+        let mut s = session_with_library();
+        let ring = json!([[-0.1, -0.1], [4.1, -0.1], [4.1, 4.1], [-0.1, 4.1], [-0.1, -0.1]]);
+        s.execute("wall", &json!({"points": ring, "thickness": 0.2, "exterior": true})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        let copy = s.execute("library.copy", &json!({"item": "door:hinged"})).unwrap();
+        let id = copy["item"].as_str().unwrap().to_string();
+        // 0.2 m from w0's centre line (y = -0.1), 1.1 m along it from its start (-0.1, -0.1).
+        let r = s.execute("library.place", &json!({"item": id, "at": [1.0, 0.1]})).unwrap();
+        assert_eq!(r["via"], "door", "{r}");
+        assert_eq!(r["openings"][0]["host"], "w0", "{r}");
+        let o = s.doc().unwrap().arch.openings[0].clone();
+        assert_eq!(o.style, "hinged");
+    }
+
+    #[test]
+    fn a_chain_of_copies_places_as_the_original_source() {
+        let mut s = session_with_library();
+        let a = s.execute("library.copy", &json!({"item": "sofa-futon"})).unwrap()["item"].as_str().unwrap().to_string();
+        let b = s.execute("library.copy", &json!({"item": a.clone()})).unwrap()["item"].as_str().unwrap().to_string();
+        let c = s.execute("library.copy", &json!({"item": b.clone()})).unwrap()["item"].as_str().unwrap().to_string();
+        assert_ne!(a, b);
+        assert_ne!(b, c);
+        s.execute("library.delete", &json!({"item": a.clone()})).unwrap();
+        s.execute("library.delete", &json!({"item": b.clone()})).unwrap();
+        let r = s.execute("library.place", &json!({"item": c, "at": [2.0, 2.0]})).unwrap();
+        assert_eq!(r["furnishing"], json!("f0"), "{r}");
+        let f = s.doc().unwrap().arch.furnishings[0].clone();
+        assert_eq!(f.item, "sofa-futon", "the chain resolves to the original source");
+    }
+
+    #[test]
+    fn a_copied_item_places_with_rotation() {
+        let mut s = session_with_library();
+        let copy = s.execute("library.copy", &json!({"item": "armchair"})).unwrap();
+        let id = copy["item"].as_str().unwrap().to_string();
+        let r = s.execute("library.place", &json!({"item": id, "at": [2.0, 2.0], "rotation": 45})).unwrap();
+        assert_eq!(r["furnishing"], json!("f0"), "{r}");
+        let f = s.doc().unwrap().arch.furnishings[0].clone();
+        assert_eq!(f.rotation, 45.0, "rotation applies to copied items");
+        assert_eq!(f.item, "armchair");
+    }
+
+    #[test]
     fn place_group_rotates_fixtures_correctly() {
         install_test_io();
         let dir = temp_dir();
