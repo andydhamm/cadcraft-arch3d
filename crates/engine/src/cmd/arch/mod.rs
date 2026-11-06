@@ -32,6 +32,7 @@ pub mod lightfixture;
 pub mod lightset;
 pub mod material;
 pub mod opening;
+pub mod outlets_auto;
 pub mod paint;
 pub mod pick;
 pub mod plant;
@@ -92,6 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(furnish::specs());
     v.extend(view::specs());
     v.extend(electrical::specs());
+    v.extend(outlets_auto::specs());
     v.extend(electrical_view::specs());
     v.extend(views::specs());
     v.extend(roofauto::specs());
