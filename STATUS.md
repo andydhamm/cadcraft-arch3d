@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-06 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-06 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 18 of 39 segments merged · 1 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 19 of 39 segments merged · 1 of 14 acceptance checks**
 
-7,560 workspace tests passing at the last merge · 779 segments merged in all · 0 of 14 seats working
+7,563 workspace tests passing at the last merge · 780 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,16 +25,17 @@ Updated 2026-11-06 05:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 20.8 h so far · expected done Nov 07 01:24–Nov 08 05:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 1 / 14 | 21.1 h so far · expected done Nov 06 22:57–Nov 08 00:00 UTC |
 
 ## Phase 15 segments
 
-18 merged, 15 queued, 5 merging, 3 replaced, 1 stuck
+19 merged, 13 queued, 4 merging, 3 replaced, 2 working, 1 stuck
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-io-split-levels` | io: offset levels and spanning walls in IFC | merging | claude-sonnet-d |
-| `p15-arch3d-plate-mesh` | arch3d: the electrical cover-plate mesh, box and material | merging | mai-flash |
+| `p15-arch3d-electrical-scene` | arch3d: electrical plates in the scene, the cache and the probe | working | claude-sonnet-c |
+| `p15-io-electrical-node` | io: GLB/OBJ node names for electrical cover plates | working | mai-flash |
 | `p15-arch-outlet-runs` | arch: usable wall runs of a room (openings and counters break them) | merging | claude-sonnet-a |
 | `p15-arch-connection-arcs` | arch: connection validation and bulged connection arcs | merging | bonsai-ws2-b |
 | `upstream-sync-fc157ea91` | merge upstream upstream/main up to fc157ea91 (4 commits) | merging | bonsai-a |
@@ -43,6 +44,7 @@ Updated 2026-11-06 05:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 05:27 | `p15-arch3d-plate-mesh` | merged | 7,563 pass | mai-flash |
 | Nov 06 04:47 | `p15-arch3d-spanning-walls` | merged | 7,560 pass | claude-sonnet-d |
 | Nov 06 04:08 | `p15-arch-pad-split` | merged | 7,556 pass | claude-sonnet-c |
 | Nov 06 03:16 | `p15-arch-grade` | merged | 7,552 pass | claude-sonnet-b |
@@ -54,23 +56,22 @@ Updated 2026-11-06 05:15 UTC. This page and the card in the README are regenerat
 | Nov 05 21:17 | `p15-arch-spanning-walls` | merged | 7,524 pass | claude-sonnet-b |
 | Nov 05 20:17 | `upstream-sync-df6597445` | merged | 7,520 pass | claude-sonnet-c |
 | Nov 05 19:19 | `harden-p15-i18n-labels` | merged | 7,512 pass | tturbo-mac |
-| Nov 05 18:12 | `p15-arch-electrical` | merged | 7,508 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 920 |
-| bonsai-b | bonsai2-27b | merging | 845 |
+| bonsai-b | bonsai2-27b | held | 845 |
 | bonsai-ws2-a | bonsai2-27b | merging | 955 |
 | bonsai-ws2-b | bonsai2-27b | merging | 912 |
 | claude-sonnet-a | sonnet | merging | 83 |
 | claude-sonnet-b | sonnet | idle | 83 |
-| claude-sonnet-c | sonnet | idle | 36 |
+| claude-sonnet-c | sonnet | agent | 36 |
 | claude-sonnet-d | sonnet | merging | 23 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 787 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 788 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | merging | 63 |
+| mai-flash | mai-code-1.1-flash | agent | 63 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 33 |
 | tturbo-mac | tturbo-ultraheretic | merging | 623 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
