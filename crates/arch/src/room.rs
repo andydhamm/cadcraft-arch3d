@@ -614,6 +614,46 @@ mod tests {
         let _ = result;
     }
 
+    #[test]
+    fn room_at_point_on_hole_boundary() {
+        let mut m = ArchModel::default();
+        // Room 0..10 x 0..10 with a hole 4..6 x 4..6
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 10.0, 10.0), vec![square(4.0, 4.0, 6.0, 6.0)]));
+        // Point on the hole's boundary (x=4, y=5)
+        let on_hole_edge = room_at(&m, 0, Vec2::new(4.0, 5.0));
+        // Point just outside the hole
+        assert_eq!(room_at(&m, 0, Vec2::new(3.0, 5.0)), Some(ArchId(1)));
+        // Point just inside the hole
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), None);
+        let _ = on_hole_edge;
+    }
+
+    #[test]
+    fn room_at_room_with_duplicate_vertices() {
+        let mut m = ArchModel::default();
+        // Square with a repeated vertex: (0,0), (10,0), (10,10), (10,10), (0,10)
+        let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)];
+        m.rooms.push(room_in(1, 0, poly, vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), Some(ArchId(1)));
+    }
+
+    #[test]
+    fn room_at_point_at_origin() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 0, square(-5.0, -5.0, 5.0, 5.0), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(0.0, 0.0)), Some(ArchId(1)));
+    }
+
+    #[test]
+    fn room_at_very_small_room() {
+        let mut m = ArchModel::default();
+        // A tiny room: 0.001 x 0.001 m
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 0.001, 0.001), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(0.0005, 0.0005)), Some(ArchId(1)));
+        // Point just outside
+        assert_eq!(room_at(&m, 0, Vec2::new(0.002, 0.0005)), None);
+    }
+
     /// A non-divider wall on `level` with the given thickness.
     #[inline]
     fn wall(id: u32, level: u32, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) -> Wall {
