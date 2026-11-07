@@ -104,9 +104,10 @@ pub fn object_key(mesh: &Mesh) -> ObjectKey {
 
 /// The objects whose data differ between `prev` and `next` (added, removed or changed, compared by
 /// id per kind; a changed paint counts for the object it paints, an added or removed symbol for the
-/// furnishings and cabinets that use it, a changed tray for its room before and after); `None` when something not owned by one object differs
-/// (levels, wall types, the site location, the plant species, a paint key that names no surface, a
-/// symbol whose content changed under the same key), and the caller rebuilds everything.
+/// furnishings and cabinets that use it, a changed tray for its room before and after the edit);
+/// `None` when something not owned by one object differs (levels, wall types, the site location,
+/// the plant species, a paint key that names no surface, a symbol whose content changed under the
+/// same key), and the caller rebuilds everything.
 ///
 /// Images, the backdrop and the defaults belong to no object: they change only the materials,
 /// textures and backdrop, which every update fills again.

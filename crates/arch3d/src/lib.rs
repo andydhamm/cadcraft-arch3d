@@ -321,7 +321,7 @@ impl Scene3d {
     /// Solves joins once, then makes each object's meshes (walls, falling back to a raw
     /// rectangular mesh when the join solver produced no shape for a wall; openings; room floors
     /// and ceilings; roofs; stairs; railings; decks; the site; light fixtures; cabinets; casework
-    /// fixtures; furnishings) in that order, each from the inputs [`incremental::Sections`] records,
+    /// fixtures; furnishings; electrical plates; interior soffits; foundations) in that order, each from the inputs [`incremental::Sections`] records,
     /// so [`SceneCache`] can rebuild only the objects an edit changed and still match this build
     /// exactly. It ends by filling the materials, textures and backdrop from the model.
     pub fn build(model: &ArchModel) -> Scene3d {
