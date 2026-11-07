@@ -360,7 +360,10 @@ mod tests {
         let mut s = Session::new();
         room64(&mut s);
         // Place a device on the bottom wall, inside the room.
-        s.execute("outlet", &json!({ "kind": "duplex", "wall": "w0", "offset": 3.0, "side": "right" })).unwrap();
+        // Wall w0 goes from (-0.1, -0.1) to (6.1, -0.1) (left to right), so the
+        // left side is above the wall (inside the room) and the right side is
+        // below (outside the room).
+        s.execute("outlet", &json!({ "kind": "duplex", "wall": "w0", "offset": 3.0, "side": "left" })).unwrap();
         let r = inspect(&mut s, json!({ "electrical": true }));
         let devs = r["electrical"].as_array().unwrap();
         assert_eq!(devs.len(), 1);
