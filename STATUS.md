@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 37 of 53 segments merged · 2 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-07 07:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 46.8 h so far · expected done Nov 08 18:09–Nov 11 23:18 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 47.1 h so far · expected done Nov 08 18:24–Nov 11 23:34 UTC |
 
 ## Phase 15 segments
 
-37 merged, 8 merging, 6 replaced, 6 queued, 1 abandoned, 1 gate, 1 escalate
+37 merged, 9 merging, 6 replaced, 6 queued, 1 abandoned, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -37,7 +37,7 @@ Updated 2026-11-07 07:15 UTC. This page and the card in the README are regenerat
 | `p15-inspect-site-paths-plants` | engine: arch.inspect site lists paths and plants with their form | merging | bonsai-a |
 | `p15-render-light-set` | render: a render uses its light set (on/off and brightness of each light) | merging | mai-flash-esc |
 | `p15-door-on-level` | engine: an opening placed with `level` sits on that level (sill from the wall bottom) | merging | claude-sonnet-a |
-| `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | gate | mai-flash-esc |
+| `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | merging | mai-flash-esc |
 | `p15-inspect-levels-walls` | engine: arch.inspect level grade classes and wall z spans | merging | mai-flash |
 | `upstream-sync-2611bc5f5-v2` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | escalate |  |
 | `p15-io-ifc-electrical` | io: outlets and switches as IfcOutlet / IfcSwitchingDevice | merging | claude-sonnet-b |
@@ -76,6 +76,6 @@ Updated 2026-11-07 07:15 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 40 |
-| tturbo-mac | tturbo-ultraheretic | agent | 635 |
+| mai-flash-esc | mai-code-1.1-flash | merging | 41 |
+| tturbo-mac | tturbo-ultraheretic | merging | 636 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
