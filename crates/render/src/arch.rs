@@ -60,6 +60,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     // Poché gaps from openings are only meaningful while the wall poché is drawn, so the
     // whole loop is skipped when the wall's layer is off or frozen (or no-plot while plotting).
     if !arch_layer_skipped(d, "A-WALL", plotting) {
+        let wall_t = layer_transparency(d, "A-WALL");
         for wall in &d.arch.walls {
             if !wall_on_shown_level(d, wall) {
                 continue;
@@ -113,7 +114,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: ink.rgb,
                     aci7: ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: wall_t,
                     kind: Kind::Tris,
                     start,
                     len: u32::try_from(tris.len()).unwrap_or(u32::MAX),
@@ -135,7 +136,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                 color: ink.rgb,
                 aci7: ink.aci7,
                 lw: 0.0,
-                transparency: 0,
+                transparency: wall_t,
                 kind: Kind::Polyline,
                 start,
                 len: u32::try_from(closed.len()).unwrap_or(u32::MAX),
@@ -156,7 +157,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                         color: ink.rgb,
                         aci7: ink.aci7,
                         lw: 0.0,
-                        transparency: 0,
+                        transparency: wall_t,
                         kind: Kind::Polyline,
                         start,
                         len: 2,
@@ -175,7 +176,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                         color: ink.rgb,
                         aci7: ink.aci7,
                         lw: 0.0,
-                        transparency: 0,
+                        transparency: wall_t,
                         kind: Kind::Polyline,
                         start,
                         len: 2,
@@ -203,6 +204,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
             }
             let sym_layer = d.layer(&sym.layer).map(|l| l.color).unwrap_or(Color::Index(7));
             let sym_ink = crate::ink(Color::ByLayer, sym_layer, Color::Index(7));
+            let sym_t = layer_transparency(d, &sym.layer);
             for poly in &sym.polylines {
                 if poly.len() < 2 {
                     continue;
@@ -217,7 +219,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: sym_ink.rgb,
                     aci7: sym_ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: sym_t,
                     kind: Kind::Polyline,
                     start,
                     len: u32::try_from(poly.len()).unwrap_or(u32::MAX),
@@ -245,6 +247,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
             let (sh, _) = place(&TextFont::Stroke, &label_text, &params);
             let room_layer = d.layer("A-ROOM").map(|l| l.color).unwrap_or(Color::Index(7));
             let room_ink = crate::ink(Color::ByLayer, room_layer, Color::Index(7));
+            let room_t = layer_transparency(d, "A-ROOM");
             for stroke in &sh.strokes {
                 if stroke.len() < 2 || !stroke.iter().all(|p| p.is_finite()) {
                     continue;
@@ -259,7 +262,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: room_ink.rgb,
                     aci7: room_ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: room_t,
                     kind: Kind::Polyline,
                     start,
                     len: u32::try_from(stroke.len()).unwrap_or(u32::MAX),
@@ -278,6 +281,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
             }
             let roof_layer = d.layer("A-ROOF").map(|l| l.color).unwrap_or(Color::Index(7));
             let roof_ink = crate::ink(Color::ByLayer, roof_layer, Color::Index(7));
+            let roof_t = layer_transparency(d, "A-ROOF");
             for edge in &roof.edges {
                 if matches!(edge.kind, RoofEdgeKind::Eave) {
                     continue;
@@ -295,7 +299,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: roof_ink.rgb,
                     aci7: roof_ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: roof_t,
                     kind: Kind::Polyline,
                     start,
                     len: 2,
