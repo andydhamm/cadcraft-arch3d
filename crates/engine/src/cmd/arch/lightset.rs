@@ -53,7 +53,7 @@ fn parse_light_states(doc: &cadcraft_doc::Drawing, value: &Value, cmd: &str) -> 
     Ok(out)
 }
 
-fn light_set_json(set: &LightSet) -> Value {
+pub(crate) fn light_set_json(set: &LightSet) -> Value {
     json!({
         "name": set.name,
         "lights": set.lights.iter().map(|(light, state)| (light.clone(), json!({ "on": state.on, "brightness": state.brightness }))).collect::<BTreeMap<_, _>>()
