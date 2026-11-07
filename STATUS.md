@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 09:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 10:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 40 of 53 segments merged · 2 of 14 acceptance checks**
 
@@ -25,15 +25,15 @@ Updated 2026-11-07 09:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 49.3 h so far · expected done Nov 08 06:33–Nov 09 22:10 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 49.6 h so far · expected done Nov 08 06:48–Nov 09 22:25 UTC |
 
 ## Phase 15 segments
 
-40 merged, 8 merging, 6 replaced, 3 queued, 1 working, 1 abandoned, 1 escalate
+40 merged, 8 merging, 6 replaced, 3 queued, 1 gate, 1 abandoned, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-ui-electrical` | ui-egui: electrical tools, connection drag, light sets, level picker | working | claude-sonnet-a |
+| `p15-ui-electrical` | ui-egui: electrical tools, connection drag, light sets, level picker | gate | claude-sonnet-a |
 | `p15-render-light-set` | render: a render uses its light set (on/off and brightness of each light) | merging | mai-flash-esc |
 | `p15-door-on-level` | engine: an opening placed with `level` sits on that level (sill from the wall bottom) | merging | claude-sonnet-a |
 | `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | merging | mai-flash-esc |
@@ -66,10 +66,10 @@ Updated 2026-11-07 09:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 938 |
-| bonsai-b | bonsai2-27b | gate | 868 |
+| bonsai-b | bonsai2-27b | gate | 869 |
 | bonsai-ws2-a | bonsai2-27b | merging | 968 |
-| bonsai-ws2-b | bonsai2-27b | gate | 932 |
-| claude-sonnet-a | sonnet | agent | 88 |
+| bonsai-ws2-b | bonsai2-27b | agent | 933 |
+| claude-sonnet-a | sonnet | gate | 88 |
 | claude-sonnet-b | sonnet | merging | 86 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | merging | 29 |
