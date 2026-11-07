@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 14:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 47 of 52 segments merged · 4 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 48 of 52 segments merged · 6 of 14 acceptance checks**
 
-7,711 workspace tests passing at the last merge · 816 segments merged in all · 0 of 14 seats working
+7,714 workspace tests passing at the last merge · 817 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,21 +25,22 @@ Updated 2026-11-07 14:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 4 / 14 | 54.1 h so far · expected done Nov 07 18:30–Nov 08 10:42 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 54.3 h so far · expected done Nov 07 17:42–Nov 08 08:15 UTC |
 
 ## Phase 15 segments
 
-47 merged, 6 replaced, 3 queued, 2 merging, 2 abandoned
+48 merged, 6 replaced, 2 queued, 2 abandoned, 1 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-ui-electrical` | ui-egui: electrical tools, connection drag, light sets, level picker | merging | claude-sonnet-a |
-| `p15-inspect-electrical` | engine: arch.inspect electrical, connections, circuits, outlet gaps and light sets | merging | claude-sonnet-b |
+| `p15-showcase-house` | the showcase house: a 4,000 sq ft split-entry bi-level script | working | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 14:45 | `p15-inspect-electrical` | merged | 7,714 pass | claude-sonnet-b |
 | Nov 07 14:18 | `p15-inspect-rooms-on-objects` | merged | 7,711 pass | bonsai-ws2-a |
 | Nov 07 13:48 | `harden-p15-cmd-level-free` | merged | 7,709 pass | tturbo-mac |
 | Nov 07 13:21 | `p15-plan-layer-transparency` | merged | 7,703 pass | mai-flash-esc |
@@ -51,7 +52,6 @@ Updated 2026-11-07 14:30 UTC. This page and the card in the README are regenerat
 | Nov 07 10:36 | `p15-door-on-level` | merged | 7,674 pass | claude-sonnet-a |
 | Nov 07 09:36 | `p15-inspect-site-paths-plants` | merged | 7,671 pass | bonsai-a |
 | Nov 07 08:32 | `p15-cmd-connections` | merged | 7,668 pass |  |
-| Nov 07 07:31 | `p15-inspect-levels-walls` | merged | 7,664 pass | mai-flash |
 
 ## Seats active in the last hour
 
@@ -62,10 +62,10 @@ Updated 2026-11-07 14:30 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-a | bonsai2-27b | idle | 968 |
 | bonsai-ws2-b | bonsai2-27b | merging | 934 |
 | claude-sonnet-a | sonnet | merging | 89 |
-| claude-sonnet-b | sonnet | merging | 86 |
+| claude-sonnet-b | sonnet | agent | 86 |
 | claude-sonnet-c | sonnet | idle | 39 |
-| claude-sonnet-d | sonnet | merging | 29 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
+| claude-sonnet-d | sonnet | idle | 29 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
