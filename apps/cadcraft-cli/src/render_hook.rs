@@ -760,104 +760,66 @@ mod tests {
     fn a_light_set_that_turns_lights_off_renders_darker() {
         let _g = reset();
         let mut d = room();
-
-        // Create a light set that turns off the first light
-        // LightSet does not have new(), use struct literal
-        // LightState field for ID is likely 'handle' based on errors about 'id'
-        let set = cadcraft_engine::doc::arch::LightSet {
-            name: "off_one".into(),
-            lights: vec![cadcraft_engine::doc::arch::LightState { handle: d.arch.lights[0].id, on: false, brightness: 1.0 }],
-        };
-        d.arch.light_sets.push(set);
+        let mut lights = std::collections::BTreeMap::new();
+        lights.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0 });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "off_one".into(), lights });
         d.touch_arch();
 
-        // Render with no light set (all lights on)
         let mut req_all = request(&d, None, None, false);
-        let v_all = match render_one(&req_all) {
-            Ok(v) => v,
-            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
-            Err(e) => panic!("render failed: {e}"),
+        let v_all = match render(&req_all) {
+            Some(v) => v,
+            None => return,
         };
+        assert_eq!(v_all["lights"], 4);
 
-        // Render with the light set (one light off)
         let mut req_set = request(&d, None, None, false);
         req_set.light_set = Some("off_one".into());
-        let v_set = match render_one(&req_set) {
-            Ok(v) => v,
-            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
-            Err(e) => panic!("render failed: {e}"),
+        let v_set = match render(&req_set) {
+            Some(v) => v,
+            None => return,
         };
-
-        // Both should have 4 lights in the model, but the scene used for rendering should differ.
-        // We can't easily check pixel darkness without a complex setup, but we can check that
-        // the renderer didn't crash and returned valid data.
-        assert_eq!(v_all["lights"], 4);
-        assert_eq!(v_set["lights"], 4);
-
-        // The key check is that the renderer didn't reuse the scene incorrectly.
-        // If the light set wasn't handled, v_set would be identical to v_all.
-        // Since we can't easily assert "darker" without reading pixels, we rely on the
-        // fact that the code path is exercised. A more robust test would check pixel values.
-        // For now, we ensure it runs and returns valid JSON.
-        assert!(v_all["ok"].is_boolean());
-        assert!(v_set["ok"].is_boolean());
+        assert_eq!(v_set["lights"], 3, "{v_set}");
+        assert!(!cadcraft_arch3d::light::scene_lights_with(&d.arch, &d.arch.light_sets[0].lights).iter().any(|l| l.id == d.arch.lights[0].id));
     }
 
     #[test]
     fn renders_with_different_light_sets_do_not_share_a_cache_key() {
         let _g = reset();
         let mut d = room();
-
-        // Create two different light sets
-        let set1 = cadcraft_engine::doc::arch::LightSet {
-            name: "set1".into(),
-            lights: vec![cadcraft_engine::doc::arch::LightState { handle: d.arch.lights[0].id, on: false, brightness: 1.0 }],
-        };
-
-        let set2 = cadcraft_engine::doc::arch::LightSet {
-            name: "set2".into(),
-            lights: vec![cadcraft_engine::doc::arch::LightState { handle: d.arch.lights[1].id, on: false, brightness: 1.0 }],
-        };
-
-        d.arch.light_sets.push(set1);
-        d.arch.light_sets.push(set2);
+        let mut set1 = std::collections::BTreeMap::new();
+        set1.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0 });
+        let mut set2 = std::collections::BTreeMap::new();
+        set2.insert("lf1".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0 });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set1".into(), lights: set1 });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set2".into(), lights: set2 });
         d.touch_arch();
 
-        // Render with set1
         let mut req1 = request(&d, None, None, false);
         req1.light_set = Some("set1".into());
-        let _v1 = match render_one(&req1) {
-            Ok(v) => v,
-            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
-            Err(e) => panic!("render failed: {e}"),
+        let v1 = match render(&req1) {
+            Some(v) => v,
+            None => return,
         };
+        assert_eq!(v1["lights"], 3, "{v1}");
 
-        // Render with set2
         let mut req2 = request(&d, None, None, false);
         req2.light_set = Some("set2".into());
-        let _v2 = match render_one(&req2) {
-            Ok(v) => v,
-            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
-            Err(e) => panic!("render failed: {e}"),
+        let v2 = match render(&req2) {
+            Some(v) => v,
+            None => return,
         };
-
-        // If they shared a cache key, the second render would reuse the first scene.
-        // We can't directly inspect the cache key from the outside, but the fact that
-        // the code compiles and runs without error implies the logic is in place.
-        // The `ready` function now checks `ls_key` in addition to `key`.
+        assert_eq!(v2["lights"], 3, "{v2}");
+        assert_ne!(v1["shadowMapsBuilt"], v2["shadowMapsBuilt"], "different light sets must not reuse the cached scene\n{v1}\n{v2}");
     }
 
     #[test]
     fn a_render_without_a_light_set_is_unchanged() {
         let _g = reset();
         let d = room();
-
-        // Render without a light set
         let req = request(&d, None, None, false);
-        let v = match render_one(&req) {
-            Ok(v) => v,
-            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
-            Err(e) => panic!("render failed: {e}"),
+        let v = match render(&req) {
+            Some(v) => v,
+            None => return,
         };
 
         assert_eq!(v["ok"], true);
