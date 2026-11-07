@@ -166,6 +166,48 @@ pub fn on_wall(model: &ArchModel, wall: ArchId, offset: f64, width: f64, depth: 
     Ok((position, dir.y.atan2(dir.x).to_degrees(), w.base_level))
 }
 
+/// The wall a cabinet stands against, and the distances of its two ends from that
+/// wall's start: `(wall, s0, s1)`. `None` for a free-standing cabinet (`at` placement),
+/// a non-finite placement, or when no wall's left face carries its back edge.
+pub fn host_wall(model: &ArchModel, c: &Cabinet) -> Option<(ArchId, f64, f64)> {
+    if !c.position.is_finite() || !c.rotation.is_finite() || !c.width.is_finite() {
+        return None;
+    }
+    let mut best: Option<(f64, ArchId, f64, f64)> = None;
+    for w in &model.walls {
+        if !w.start.is_finite() || !w.end.is_finite() || !w.thickness.is_finite() {
+            continue;
+        }
+        let length = w.start.dist(w.end);
+        if length <= 0.0 {
+            continue;
+        }
+        let Some(dir) = crate::wall::wall_dir(w) else { continue };
+        let left = dir.perp();
+        let d = (c.position - (w.start + left * (w.thickness / 2.0))).dot(left);
+        if !(d.abs() <= 1e-6) {
+            continue;
+        }
+        let turn = (c.rotation - dir.y.atan2(dir.x).to_degrees() + 180.0).rem_euclid(360.0) - 180.0;
+        if !(turn.abs() <= 1e-6) {
+            continue;
+        }
+        let s = (c.position - w.start).dot(dir);
+        let (s0, s1) = (s - c.width / 2.0, s + c.width / 2.0);
+        if !(s0 >= -1e-9 && s1 <= length + 1e-9) {
+            continue;
+        }
+        let better = match best {
+            None => true,
+            Some((bd, bid, _, _)) => d.abs() < bd || (d.abs() == bd && w.id < bid),
+        };
+        if better {
+            best = Some((d.abs(), w.id, s0, s1));
+        }
+    }
+    best.map(|(_, id, s0, s1)| (id, s0, s1))
+}
+
 /// The layer a cabinet draws on.
 pub fn cabinet_layer(kind: CabinetKind) -> &'static str {
     match kind {
@@ -240,6 +282,40 @@ mod tests {
         assert!((p.x - 1.0).abs() < 1e-9 && (p.y - 0.1).abs() < 1e-9);
         assert!(rot.abs() < 1e-9);
         assert_eq!(level, 0);
+    }
+
+    fn cabinet_at(position: Vec2, rotation: f64) -> Cabinet {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.position = position;
+        c.rotation = rotation;
+        c
+    }
+
+    #[test]
+    fn host_wall_finds_the_host_and_span() {
+        let (m, id) = model_with_wall();
+        let (p, rot, _) = on_wall(&m, id, 1.0, 0.6, 0.6).unwrap();
+        let mut c = cabinet_at(p, rot);
+        c.width = 0.6;
+        let (wid, s0, s1) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, id);
+        assert!((s0 - 0.7).abs() < 1e-9 && (s1 - 1.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn host_wall_is_none_for_a_free_standing_cabinet() {
+        let (m, _) = model_with_wall();
+        assert!(host_wall(&m, &cabinet_at(Vec2::new(2.0, 1.5), 0.0)).is_none());
+        assert!(host_wall(&m, &cabinet_at(Vec2::new(f64::NAN, 0.1), 0.0)).is_none());
+        assert!(host_wall(&m, &cabinet_at(Vec2::new(1.0, 0.1), 90.0)).is_none());
+    }
+
+    #[test]
+    fn host_wall_refuses_a_cabinet_past_the_wall_end() {
+        let (m, _) = model_with_wall();
+        let mut c = cabinet_at(Vec2::new(3.9, 0.1), 0.0);
+        c.width = 0.6;
+        assert!(host_wall(&m, &c).is_none());
     }
 
     #[test]

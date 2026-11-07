@@ -544,7 +544,10 @@ pub(crate) fn inspect_casework(model: &ArchModel, p: &Value, out: &mut Map<Strin
             .map(|c| {
                 let top = (c.counter && c.kind != CabinetKind::Wall)
                     .then(|| level_elevation(model, c.level) + c.elevation + c.height + c.counter_thickness);
+                let host = cadcraft_arch::casework::host_wall(model, c);
                 json!({
+                    "wall": host.map_or(Value::Null, |(id, _, _)| Value::String(cadcraft_doc::arch::wall_label(id))),
+                    "alongWall": host.map_or(Value::Null, |(_, s0, s1)| json!([s0, s1])),
                     "id": cabinet_label(c.id), "handle": handle_json(cabinet_handle(c.id)), "kind": kind_name_cabinet(c.kind),
                     "level": c.level, "at": [c.position.x, c.position.y], "rotation": c.rotation,
                     "width": c.width, "depth": c.depth, "height": c.height, "elevation": c.elevation,
@@ -881,6 +884,19 @@ mod tests {
             assert!(run(&mut s, "fixture", p.clone()).is_err(), "{p}");
         }
         assert!(s.doc().map(|d| d.arch.fixtures.is_empty()).unwrap_or(false));
+    }
+
+    #[test]
+    fn inspect_cabinets_report_counter_top() {
+        let mut s = session();
+        let _ = run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 1.0 }));
+        let v = run(&mut s, "arch.inspect", json!({ "cabinets": true })).unwrap_or(Value::Null);
+        let c = &v["cabinets"][0];
+        assert_eq!(c["wall"], "w0", "{v}");
+        let a = c["alongWall"].as_array().cloned().unwrap_or_default();
+        assert_eq!(a.len(), 2, "{v}");
+        assert!((a[0].as_f64().unwrap_or(0.0) - 0.7).abs() < 1e-9 && (a[1].as_f64().unwrap_or(0.0) - 1.3).abs() < 1e-9, "{v}");
+        assert!((c["counterTop"].as_f64().unwrap_or(0.0) - (0.876 + 0.038)).abs() < 1e-9, "{v}");
     }
 
     #[test]
