@@ -217,6 +217,17 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             obj.insert("standardArea".to_string(), json!(r.standard_area));
             obj.insert("livingIncluded".to_string(), json!(is_living(r, level)));
             obj.insert("ceiling".to_string(), json!(r.ceiling_height));
+            // Phase 16: flat or following the roof, the finish stack, and the rough / finished
+            // ceiling heights above the level's floor (null without a ceiling).
+            obj.insert("flatCeiling".to_string(), json!(r.flat_ceiling));
+            obj.insert("ceilingStack".to_string(), super::room::ceiling_stack_json(&r.ceiling_stack));
+            let rough = cadcraft_arch::ceiling::flat_ceiling_z_with(r, level)
+                .map(|z| z - level.map_or(0.0, |l| l.elevation))
+                .filter(|h| h.is_finite());
+            let finished = rough.map(|h| h - cadcraft_arch::ceiling::stack::thickness(&r.ceiling_stack)).filter(|h| h.is_finite());
+            obj.insert("roughCeiling".to_string(), json!(rough));
+            obj.insert("finishedCeiling".to_string(), json!(finished));
+            obj.insert("ceilingWarning".to_string(), json!(cadcraft_arch::ceiling::vault::ceiling_warning(&d.arch, r)));
             obj.insert("deckHeight".to_string(), json!(r.deck_height));
             obj.insert("floorFinish".to_string(), json!(r.floor_finish.map(cadcraft_doc::arch::Finish::name)));
             obj.insert("hasFloor".to_string(), json!(r.room_type.has_floor()));
@@ -1080,6 +1091,44 @@ mod tests {
         assert!((r["standardArea"].as_f64().unwrap() - 12.48).abs() < 1e-9);
         assert!(r["livingIncluded"].as_bool().unwrap());
         assert!((r["ceiling"].as_f64().unwrap() - 2.4).abs() < 1e-9);
+    }
+
+    /// Phase 16 room rows: the flat/vaulted flag, the finish stack, the rough and finished
+    /// ceiling heights above the level's floor, and the roof warning (null without one).
+    #[test]
+    fn inspect_room_rows_report_ceiling_fields() {
+        let mut s = session_with_one_room();
+        let v = exec(&mut s, "arch.inspect", &json!({ "rooms": true }));
+        let r = &v["rooms"][0];
+        assert_eq!(r["flatCeiling"], true);
+        assert_eq!(r["ceilingStack"], json!([]));
+        assert!((r["roughCeiling"].as_f64().unwrap() - 2.4).abs() < 1e-9);
+        assert!((r["finishedCeiling"].as_f64().unwrap() - 2.4).abs() < 1e-9);
+        assert!(r["ceilingWarning"].is_null());
+        // A stack, an upper level and a vaulted flag.
+        exec(&mut s, "room", &json!({ "id": "r0", "flatCeiling": false, "ceiling": 2.7, "ceilingStack": [
+            {"name": "drywall", "material": "drywall", "thickness": 0.0127}, {"name": "air", "material": null, "thickness": 0.2},
+            {"name": "tile", "material": "ceiling-tile", "thickness": 0.016}] }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "rooms": true }));
+        let r = &v["rooms"][0];
+        assert_eq!(r["flatCeiling"], false);
+        assert_eq!(r["ceilingStack"][1], json!({"name": "air", "material": null, "thickness": 0.2}));
+        assert!((r["roughCeiling"].as_f64().unwrap() - 2.7).abs() < 1e-9);
+        assert!((r["finishedCeiling"].as_f64().unwrap() - (2.7 - 0.2287)).abs() < 1e-9);
+        // Relative to the level: a room on a level at 2.7 still reads 2.4.
+        if let Ok(d) = s.doc_mut() {
+            d.arch.levels.push(cadcraft_doc::arch::Level { index: 1, name: "Level 2".into(), elevation: 2.7, ..Default::default() });
+            d.arch.push_room(Room { level: 1, polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0)], ..Room::default() });
+            d.arch.push_room(Room { room_type: RoomType::Deck, polygon: vec![Vec2::new(5.0, 0.0), Vec2::new(8.0, 0.0), Vec2::new(8.0, 3.0)], ..Room::default() });
+            d.touch_arch();
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "rooms": true }));
+        let up = &v["rooms"][1];
+        assert!((up["roughCeiling"].as_f64().unwrap() - 2.4).abs() < 1e-9, "{up}");
+        assert!((up["finishedCeiling"].as_f64().unwrap() - 2.4).abs() < 1e-9, "{up}");
+        // A deck has no ceiling.
+        let deck = &v["rooms"][2];
+        assert!(deck["roughCeiling"].is_null() && deck["finishedCeiling"].is_null() && deck["ceilingWarning"].is_null(), "{deck}");
     }
 
     #[test]
