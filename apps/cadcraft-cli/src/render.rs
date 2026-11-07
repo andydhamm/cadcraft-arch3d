@@ -391,6 +391,62 @@ mod tests {
     }
 
     #[test]
+    fn parse_style_is_case_sensitive() {
+        // Every style name is lower-case; capitalised or mixed-case variants are refused.
+        for bad in [
+            "Clay",
+            "CLAY",
+            "clAy",
+            "Technical",
+            "TECHNICAL",
+            "tECHNICAL",
+            "Shaded",
+            "SHADEDEDGES",
+            "Shaded-Edges",
+            "SHADEDEDGES",
+            "Hidden-Line",
+            "HIDDEN-LINE",
+            "Glass-House",
+            "GLASS-HOUSE",
+        ] {
+            assert_eq!(parse_style(bad), None, "`{bad}` should be refused");
+        }
+    }
+
+    #[test]
+    fn parse_style_refuses_whitespace() {
+        // Leading, trailing and internal whitespace are refused; parse_style does not trim.
+        for bad in [" clay", "clay ", " clay ", "technical ", " technical", "shaded ", " shaded"] {
+            assert_eq!(parse_style(bad), None, "`{bad}` should be refused");
+        }
+    }
+
+    #[test]
+    fn parse_style_refuses_similar_names() {
+        // Names that are close but not exact are refused.
+        for bad in [
+            "shade",
+            "shades",
+            "shadedd",
+            "clays",
+            "clayy",
+            "technicals",
+            "technic",
+            "hidden",
+            "line",
+            "glass",
+            "house",
+            "shaded_edges",
+            "hidden_line",
+            "glass_house",
+            "clay-style",
+            "technical-style",
+        ] {
+            assert_eq!(parse_style(bad), None, "`{bad}` should be refused");
+        }
+    }
+
+    #[test]
     fn orbit_camera_spec_accepts_a_target() {
         let Ok(Camera::Orbit(o)) = parse_camera("orbit,target=5,4,0", base()) else {
             panic!("target camera");
