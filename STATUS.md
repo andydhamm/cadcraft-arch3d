@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 49 of 52 segments merged · 6 of 14 acceptance checks**
 
-7,718 workspace tests passing at the last merge · 818 segments merged in all · 0 of 14 seats working
+7,729 workspace tests passing at the last merge · 819 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-07 16:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 56.1 h so far · expected done Nov 07 18:43–Nov 08 08:51 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 56.3 h so far · expected done Nov 07 18:58–Nov 08 09:06 UTC |
 
 ## Phase 15 segments
 
@@ -39,6 +39,7 @@ Updated 2026-11-07 16:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 16:33 | `harden-p15-plan-layer-transparency` | merged | 7,729 pass | tturbo-mac |
 | Nov 07 15:39 | `p15-ui-electrical` | merged | 7,718 pass | claude-sonnet-a |
 | Nov 07 14:45 | `p15-inspect-electrical` | merged | 7,714 pass | claude-sonnet-b |
 | Nov 07 14:18 | `p15-inspect-rooms-on-objects` | merged | 7,711 pass | bonsai-ws2-a |
@@ -50,16 +51,15 @@ Updated 2026-11-07 16:30 UTC. This page and the card in the README are regenerat
 | Nov 07 11:30 | `p15-io-ifc-electrical` | merged | 7,681 pass | claude-sonnet-b |
 | Nov 07 11:03 | `p15-io-dxf-electrical` | merged | 7,677 pass | claude-sonnet-c |
 | Nov 07 10:36 | `p15-door-on-level` | merged | 7,674 pass | claude-sonnet-a |
-| Nov 07 09:36 | `p15-inspect-site-paths-plants` | merged | 7,671 pass | bonsai-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 943 |
-| bonsai-b | bonsai2-27b | gate | 873 |
-| bonsai-ws2-a | bonsai2-27b | agent | 968 |
-| bonsai-ws2-b | bonsai2-27b | idle | 934 |
+| bonsai-b | bonsai2-27b | idle | 874 |
+| bonsai-ws2-a | bonsai2-27b | gate | 969 |
+| bonsai-ws2-b | bonsai2-27b | agent | 934 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | agent | 87 |
 | claude-sonnet-c | sonnet | idle | 39 |
@@ -68,5 +68,5 @@ Updated 2026-11-07 16:30 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | merging | 637 |
+| tturbo-mac | tturbo-ultraheretic | agent | 637 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
