@@ -358,16 +358,7 @@ mod tests {
     #[test]
     fn inspect_device_room_with_hole() {
         let mut s = Session::new();
-        // Build a 6x6 room with walls, then detect rooms.
-        for (a, b) in [((-0.1, -0.1), (6.1, -0.1)), ((6.1, -0.1), (6.1, 6.1)), ((6.1, 6.1), (-0.1, 6.1)), ((-0.1, 6.1), (-0.1, -0.1))] {
-            s.doc_mut().unwrap().arch.push_wall(cadcraft_doc::Wall {
-                start: Vec2::new(a.0, a.1),
-                end: Vec2::new(b.0, b.1),
-                thickness: 0.2,
-                ..cadcraft_doc::Wall::default()
-            });
-        }
-        s.doc_mut().unwrap().arch.rooms = cadcraft_arch::room::detect_rooms(&s.doc().unwrap().arch);
+        room64(&mut s);
         // Place a device on the bottom wall, inside the room.
         s.execute("outlet", &json!({ "kind": "duplex", "wall": "w0", "offset": 3.0, "side": "right" })).unwrap();
         let r = inspect(&mut s, json!({ "electrical": true }));
