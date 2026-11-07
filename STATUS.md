@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 36 of 53 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 37 of 53 segments merged · 2 of 14 acceptance checks**
 
-7,650 workspace tests passing at the last merge · 802 segments merged in all · 0 of 14 seats working
+7,654 workspace tests passing at the last merge · 803 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,29 +25,30 @@ Updated 2026-11-07 05:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 44.6 h so far · expected done Nov 08 18:05–Nov 12 01:11 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 44.8 h so far · expected done Nov 08 10:47–Nov 10 18:00 UTC |
 
 ## Phase 15 segments
 
-36 merged, 7 queued, 6 replaced, 5 merging, 3 gate, 1 escalate, 1 abandoned, 1 working
+37 merged, 6 replaced, 6 queued, 5 merging, 2 gate, 2 working, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | escalate |  |
 | `p15-inspect-site-paths-plants` | engine: arch.inspect site lists paths and plants with their form | merging | bonsai-a |
-| `p15-cabinet-along-wall` | arch+engine: a cabinet's host wall and its span along it | merging | claude-sonnet-d |
-| `p15-render-light-set` | render: a render uses its light set (on/off and brightness of each light) | working | darwin-ws3 |
+| `p15-render-light-set` | render: a render uses its light set (on/off and brightness of each light) | gate | darwin-ws3 |
 | `p15-door-on-level` | engine: an opening placed with `level` sits on that level (sill from the wall bottom) | merging | claude-sonnet-a |
-| `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | gate | bonsai-b |
+| `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | working | bonsai-b |
 | `p15-inspect-levels-walls` | engine: arch.inspect level grade classes and wall z spans | merging | mai-flash |
 | `upstream-sync-2611bc5f5-v2` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | merging | bonsai-ws2-a |
 | `p15-io-ifc-electrical` | io: outlets and switches as IfcOutlet / IfcSwitchingDevice | gate | claude-sonnet-b |
-| `p15-io-dxf-electrical` | io: DXF save proxies for electrical devices and connections | gate | claude-sonnet-c |
+| `p15-io-dxf-electrical` | io: DXF save proxies for electrical devices and connections | merging | claude-sonnet-c |
+| `p15-io-glb-obj-electrical` | io: GLB nodes and OBJ groups for cover plates | working | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 05:02 | `p15-cabinet-along-wall` | merged | 7,654 pass | claude-sonnet-d |
 | Nov 07 03:54 | `p15-arch-room-at` | merged | 7,650 pass | claude-sonnet-c |
 | Nov 07 02:08 | `harden-p15-render-electrical` | merged | 7,647 pass | tturbo-mac |
 | Nov 06 23:34 | `p15-io-electrical` | refused | 0 pass | mai-flash-esc |
@@ -59,21 +60,20 @@ Updated 2026-11-07 05:00 UTC. This page and the card in the README are regenerat
 | Nov 06 19:01 | `harden-p15-cmd-wall-span` | merged | 7,627 pass | tturbo-mac |
 | Nov 06 17:37 | `p15-cmd-electrical` | merged | 7,618 pass | mai-flash |
 | Nov 06 16:38 | `p15-arch-outlet-gaps` | merged | 7,612 pass | claude-sonnet-a |
-| Nov 06 16:09 | `p15-cli-render-styles` | merged | 7,609 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 936 |
-| bonsai-b | bonsai2-27b | gate | 865 |
+| bonsai-b | bonsai2-27b | agent | 866 |
 | bonsai-ws2-a | bonsai2-27b | merging | 967 |
 | bonsai-ws2-b | bonsai2-27b | merging | 929 |
 | claude-sonnet-a | sonnet | merging | 87 |
 | claude-sonnet-b | sonnet | gate | 84 |
-| claude-sonnet-c | sonnet | gate | 38 |
-| claude-sonnet-d | sonnet | merging | 27 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 814 |
+| claude-sonnet-c | sonnet | merging | 39 |
+| claude-sonnet-d | sonnet | agent | 27 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 814 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 38 |
