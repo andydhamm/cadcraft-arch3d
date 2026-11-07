@@ -407,7 +407,7 @@ mod tests {
             kind: ElectricalKind::Duplex,
             wall: wall_id,
             side: WallSide::Left,
-            offset: 1e12,
+            offset: 1000.0,
             height: 0.3,
             level: 0,
             ..Default::default()
