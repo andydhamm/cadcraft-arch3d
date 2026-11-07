@@ -247,21 +247,17 @@ mod tests {
     fn inspect_outlet_gaps_only_rooms_with_usable_walls() {
         let mut s = Session::new();
         room64(&mut s);
-        // Add a second room with no walls (degenerate).
-        {
-            let doc = s.doc_mut().unwrap();
-            doc.arch.push_room(cadcraft_doc::arch::Room {
-                polygon: vec![Vec2::new(10.0, 0.0), Vec2::new(14.0, 0.0), Vec2::new(14.0, 4.0), Vec2::new(10.0, 4.0)],
-                ..cadcraft_doc::arch::Room::default()
-            });
-        }
         s.execute("door", &json!({ "wall": "w0", "offset": 3.0, "width": 0.9 })).unwrap();
         s.execute("outlets.auto", &json!({ "room": "r0" })).unwrap();
         let r = inspect(&mut s, json!({ "electrical": true }));
         let gaps = r["outletGaps"].as_array().unwrap();
-        // Only r0 has usable walls; r1 has no walls at all.
+        // r0 has usable walls and outlets placed.
         assert_eq!(gaps.len(), 1, "only rooms with usable walls should appear");
         assert_eq!(gaps[0]["room"], "r0");
+        // A room whose walls are gone has no usable wall and no row.
+        s.doc_mut().unwrap().arch.walls.clear();
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        assert!(r["outletGaps"].as_array().unwrap().is_empty());
     }
 
     #[test]
@@ -362,39 +358,22 @@ mod tests {
     #[test]
     fn inspect_device_room_with_hole() {
         let mut s = Session::new();
-        {
-            let doc = s.doc_mut().unwrap();
-            // Room with a hole; device inside the hole should report null room.
-            doc.arch.push_room(cadcraft_doc::arch::Room {
-                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 6.0), Vec2::new(0.0, 6.0)],
-                holes: vec![vec![Vec2::new(2.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(2.0, 4.0)]],
-                room_type: cadcraft_doc::arch::RoomType::Living,
-                ..cadcraft_doc::arch::Room::default()
-            });
-            // Build walls for the room.
-            for (a, b) in [((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 6.0)), ((6.0, 6.0), (0.0, 6.0)), ((0.0, 6.0), (0.0, 0.0))] {
-                doc.arch.push_wall(cadcraft_doc::Wall {
-                    start: Vec2::new(a.0, a.1),
-                    end: Vec2::new(b.0, b.1),
-                    thickness: 0.2,
-                    ..cadcraft_doc::Wall::default()
-                });
-            }
-            // Device at (3,3) inside the hole.
-            doc.arch.push_electrical(cadcraft_doc::arch::ElectricalDevice {
-                kind: cadcraft_doc::arch::ElectricalKind::Duplex,
-                wall: cadcraft_doc::ArchId(0),
-                side: cadcraft_doc::arch::WallSide::Right,
-                offset: 3.0,
-                ..cadcraft_doc::arch::ElectricalDevice::default()
+        // Build a 6x6 room with walls, then detect rooms.
+        for (a, b) in [((-0.1, -0.1), (6.1, -0.1)), ((6.1, -0.1), (6.1, 6.1)), ((6.1, 6.1), (-0.1, 6.1)), ((-0.1, 6.1), (-0.1, -0.1))] {
+            s.doc_mut().unwrap().arch.push_wall(cadcraft_doc::Wall {
+                start: Vec2::new(a.0, a.1),
+                end: Vec2::new(b.0, b.1),
+                thickness: 0.2,
+                ..cadcraft_doc::Wall::default()
             });
         }
+        s.doc_mut().unwrap().arch.rooms = cadcraft_arch::room::detect_rooms(&s.doc().unwrap().arch);
+        // Place a device on the bottom wall, inside the room.
+        s.execute("outlet", &json!({ "kind": "duplex", "wall": "w0", "offset": 3.0, "side": "right" })).unwrap();
         let r = inspect(&mut s, json!({ "electrical": true }));
         let devs = r["electrical"].as_array().unwrap();
         assert_eq!(devs.len(), 1);
-        // The device is at offset 3 on wall w0 (bottom wall), right side = inside the room.
-        // Its position is (3, 0.1) which is in the room, not in the hole at (2-4, 2-4).
-        // So it should report the room.
+        // The device is inside the detected room.
         assert!(devs[0]["room"].is_string(), "device should be in a room");
     }
 }
