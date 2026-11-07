@@ -16,8 +16,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use cadcraft_doc::{ArchModel, Room, RoomType, Wall};
-use cadcraft_geom::{Bounds2, Vec2};
+use cadcraft_doc::{ArchId, ArchModel, Room, RoomType, Wall};
+use cadcraft_geom::{Bounds2, Vec2, point_in_polygon};
 
 use crate::poly::{ensure_ccw, region_area};
 
@@ -450,11 +450,67 @@ fn round6(v: f64) -> i64 {
     if rounded.is_finite() && rounded <= (i64::MAX as f64) && rounded >= (i64::MIN as f64) { rounded as i64 } else { 0 }
 }
 
+/// The room on `level` whose polygon contains `p` and none of whose holes do.
+/// `None` when `p` is not finite, when `level` has no such room, or when a polygon is degenerate.
+pub fn room_at(model: &ArchModel, level: u32, p: Vec2) -> Option<ArchId> {
+    if !p.is_finite() {
+        return None;
+    }
+    model
+        .rooms
+        .iter()
+        .find(|r| {
+            r.level == level
+                && r.polygon.len() >= 3
+                && point_in_polygon(&r.polygon, p)
+                && !r.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p))
+        })
+        .map(|r| r.id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use cadcraft_doc::{ArchId, JoinKind, Wall};
     use cadcraft_geom::Vec2;
+
+    fn square(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
+        vec![Vec2::new(x0, y0), Vec2::new(x1, y0), Vec2::new(x1, y1), Vec2::new(x0, y1)]
+    }
+
+    fn room_in(id: u32, level: u32, polygon: Vec<Vec2>, holes: Vec<Vec<Vec2>>) -> Room {
+        Room { id: ArchId(id), level, polygon, holes, ..Room::default() }
+    }
+
+    #[test]
+    fn room_at_finds_the_room_containing_a_point() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 4.0, 4.0), vec![]));
+        m.rooms.push(room_in(2, 0, square(5.0, 0.0, 9.0, 4.0), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(2.0, 2.0)), Some(ArchId(1)));
+        assert_eq!(room_at(&m, 0, Vec2::new(7.0, 2.0)), Some(ArchId(2)));
+        assert_eq!(room_at(&m, 0, Vec2::new(4.5, 2.0)), None);
+    }
+
+    #[test]
+    fn room_at_skips_holes_and_other_levels() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 10.0, 10.0), vec![square(4.0, 4.0, 6.0, 6.0)]));
+        m.rooms.push(room_in(2, 1, square(0.0, 0.0, 10.0, 10.0), vec![]));
+        m.rooms.push(room_in(3, 0, vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)], vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), None);
+        assert_eq!(room_at(&m, 0, Vec2::new(1.0, 5.0)), Some(ArchId(1)));
+        assert_eq!(room_at(&m, 1, Vec2::new(5.0, 5.0)), Some(ArchId(2)));
+        assert_eq!(room_at(&m, 7, Vec2::new(5.0, 5.0)), None);
+    }
+
+    #[test]
+    fn room_at_refuses_a_non_finite_point() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 4.0, 4.0), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(f64::NAN, 1.0)), None);
+        assert_eq!(room_at(&m, 0, Vec2::new(1.0, f64::INFINITY)), None);
+    }
 
     /// A non-divider wall on `level` with the given thickness.
     #[inline]
