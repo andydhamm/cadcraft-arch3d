@@ -504,6 +504,33 @@ pub(crate) fn push_polyline(list: &mut DisplayList, handle: Handle, ink: &crate:
     });
 }
 
+/// The transparency (percent, 0 = opaque) of `layer` in `d`. A missing layer contributes 0.
+/// This is the value an architectural prim drawn on `layer` carries into
+/// [`DPrim::transparency`], so the plan export dims the prim when the layer is faded and
+/// leaves fully-opaque layers untouched.
+pub(crate) fn layer_transparency(d: &Drawing, layer: &str) -> u8 {
+    d.layer(layer).map(|l| l.transparency).unwrap_or(0)
+}
+
+/// Append one polyline prim of `pts` tagged `handle`, carrying `transparency` (percent).
+pub(crate) fn push_polyline_with_transparency(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, pts: &[Vec2], transparency: u8) {
+    let start = u32::try_from(list.verts.len()).unwrap_or(u32::MAX);
+    for &p in pts {
+        list.bounds.add(p);
+        list.verts.push(p);
+    }
+    list.prims.push(DPrim {
+        handle,
+        color: ink.rgb,
+        aci7: ink.aci7,
+        lw: 0.0,
+        transparency,
+        kind: Kind::Polyline,
+        start,
+        len: u32::try_from(pts.len()).unwrap_or(u32::MAX),
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
