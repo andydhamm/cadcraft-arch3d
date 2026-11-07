@@ -4,7 +4,8 @@
 
 use cadcraft_arch::ies::{peak_candela, scaled};
 use cadcraft_arch::light::{intensity_cd, light_point};
-use cadcraft_doc::arch::{ArchModel, LightFixture, LightKind, LightMount, handle_json, light_handle};
+use cadcraft_arch::room::room_at;
+use cadcraft_doc::arch::{ArchModel, LightFixture, LightKind, LightMount, handle_json, light_handle, room_label};
 use serde_json::{Map, Value, json};
 
 fn kind_name(kind: LightKind) -> &'static str {
@@ -73,6 +74,8 @@ pub(crate) fn inspect_lights(model: &ArchModel, p: &Value, out: &mut Map<String,
                 "candela": candela(fixture),
                 "ies": ies_json(fixture),
                 "on": fixture.on,
+                "brightness": fixture.brightness,
+                "room": room_at(model, fixture.level, fixture.position).map(room_label),
             });
             if let (Some(object), LightKind::Area) = (light.as_object_mut(), fixture.kind) {
                 object.insert("width".to_string(), json!(fixture.width));
@@ -182,5 +185,32 @@ mod tests {
         let pot = inspect(&mut session)[1].clone();
         assert!(pot["ies"].is_null(), "{pot}");
         assert!((pot["candela"].as_f64().unwrap() - 2000.0 / cadcraft_arch::light::cone_solid_angle(60.0)).abs() < 1e-6, "{pot}");
+    }
+
+    #[test]
+    fn inspect_light_rows_report_brightness_and_room() {
+        let mut model = ArchModel::default();
+        model.rooms.push(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            room_type: RoomType::Living,
+            ..Room::default()
+        });
+        model.lights.push(LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(1.0, 1.0)) });
+        model.lights.push(LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(1), "Recessed pot light", Vec2::new(9.0, 9.0)) });
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        let lights = out["lights"].as_array().unwrap();
+        assert_eq!(lights[0]["brightness"], json!(1.0));
+        assert_eq!(lights[0]["room"], json!("r0"));
+        assert_eq!(lights[1]["room"], Value::Null);
+
+        // Changing brightness is reflected in the next inspect.
+        model.lights[0].brightness = 0.5;
+        let mut out2 = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out2);
+        let lights2 = out2["lights"].as_array().unwrap();
+        assert_eq!(lights2[0]["brightness"], json!(0.5));
     }
 }

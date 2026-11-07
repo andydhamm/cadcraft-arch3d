@@ -6,10 +6,11 @@
 //! (`{"cabinets":true}`, `{"fixtures":true}`) lives here too ([`inspect_casework`]).
 
 use cadcraft_arch::casework::{cabinet_defaults, cabinet_layer, fixture_defaults, fixture_layer, on_wall, validate_cabinet, validate_fixture};
+use cadcraft_arch::room::room_at;
 use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::{
     ArchId, ArchModel, Cabinet, CabinetKind, Fixture, FixtureKind, FrontStyle, Fronts, MAX_CABINETS, MAX_FIXTURES, SymbolMesh, cabinet_handle,
-    cabinet_label, fixture_handle, fixture_label, handle_json,
+    cabinet_label, fixture_handle, fixture_label, handle_json, room_label,
 };
 use cadcraft_geom::Vec2;
 use serde_json::{Map, Value, json};
@@ -567,6 +568,7 @@ pub(crate) fn inspect_casework(model: &ArchModel, p: &Value, out: &mut Map<Strin
                     "id": fixture_label(f.id), "handle": handle_json(fixture_handle(f.id)), "kind": kind_name_fixture(f.kind),
                     "level": f.level, "at": [f.position.x, f.position.y], "rotation": f.rotation,
                     "width": f.width, "depth": f.depth, "height": f.height, "elevation": f.elevation, "layer": fixture_layer(f.kind),
+                    "room": room_at(model, f.level, f.position).map(room_label),
                 })
             })
             .collect();
@@ -916,5 +918,44 @@ mod tests {
         assert!(cabs[1]["counterTop"].is_null());
         assert_eq!(v["fixtures"][0]["id"], "fx0");
         assert_eq!(v["fixtures"][0]["layer"], "A-FLOR-APPL");
+    }
+
+    #[test]
+    fn inspect_fixture_and_furnishing_rows_report_room() {
+        let mut s = Session::new();
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.rooms.push(cadcraft_doc::arch::Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+                room_type: cadcraft_doc::arch::RoomType::Living,
+                ..cadcraft_doc::arch::Room::default()
+            });
+            d.touch_arch();
+        }
+
+        // A toilet fixture inside the 6x4 room reports r0.
+        let r = run(&mut s, "fixture", json!({ "kind": "toilet", "at": [3.0, 2.0] }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v["fixtures"][0]["room"], json!("r0"));
+
+        // The same fixture moved outside the room reports null.
+        let r = run(&mut s, "fixture.edit", json!({ "id": "fx0", "at": [9.0, 9.0] }));
+        assert!(r.is_ok(), "{r:?}");
+        let v2 = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v2["fixtures"][0]["room"], Value::Null);
+
+        // A furnishing at the room's centre reports r0.
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.push_furnishing(cadcraft_doc::arch::Furnishing {
+                item: "armchair".into(),
+                at: [3.0, 2.0],
+                ..cadcraft_doc::arch::Furnishing::default()
+            });
+            d.touch_arch();
+        }
+        let v3 = run(&mut s, "arch.inspect", json!({ "furnishings": true })).unwrap_or(Value::Null);
+        assert_eq!(v3["furnishings"][0]["room"], json!("r0"));
     }
 }

@@ -7,6 +7,7 @@ use cadcraft_arch::grade::{above_grade_area, grade_class, level_above_grade_area
 use cadcraft_arch::join::solve_joins;
 use cadcraft_arch::label::label_point;
 use cadcraft_arch::opening::rough_offset;
+use cadcraft_arch::room::room_at;
 use cadcraft_arch::symbol::opening_symbol;
 use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
 use cadcraft_doc::ArchId;
@@ -485,6 +486,7 @@ fn inspect_furnishings(model: &ArchModel, p: &Value, out: &mut JsonMap<String, V
                     "host": host,
                     "layer": cadcraft_arch::library::layer_for(&f.category, &f.symbol_type),
                     "cutout": f.cutout,
+                    "room": room_at(model, f.level, Vec2::new(f.at[0], f.at[1])).map(room_label),
                 })
             })
             .collect();
