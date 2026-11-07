@@ -56,7 +56,7 @@ fn run_connection(session: &mut Session, params: &Value) -> Result<Value> {
     };
     check_connection(&doc.arch, from, &to, bulge).map_err(|e| bad(cmd, e))?;
     let mut doc_mut = session.doc_mut()?;
-    let id = doc_mut.arch.push_connection(Connection { id: ArchId(0), from, to: to.clone(), bulge });
+    let id = doc_mut.arch.push_connection(Connection { from, to: to.clone(), bulge, ..Default::default() });
     let handle = cadcraft_doc::arch::handle_json(connection_handle(id));
     Ok(
         json!({ "connection": connection_label(id), "handle": handle, "from": electrical_label(from), "to": to.iter().map(|light| light_label(*light)).collect::<Vec<_>>(), "bulge": bulge }),
