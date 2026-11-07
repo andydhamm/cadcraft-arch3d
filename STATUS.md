@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 13:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 46 of 52 segments merged · 4 of 14 acceptance checks**
 
-7,703 workspace tests passing at the last merge · 814 segments merged in all · 0 of 14 seats working
+7,709 workspace tests passing at the last merge · 815 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-07 13:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 4 / 14 | 53.3 h so far · expected done Nov 07 18:59–Nov 08 13:09 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 4 / 14 | 53.6 h so far · expected done Nov 07 19:14–Nov 08 13:24 UTC |
 
 ## Phase 15 segments
 
@@ -41,6 +41,7 @@ Updated 2026-11-07 13:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 13:48 | `harden-p15-cmd-level-free` | merged | 7,709 pass | tturbo-mac |
 | Nov 07 13:21 | `p15-plan-layer-transparency` | merged | 7,703 pass | mai-flash-esc |
 | Nov 07 12:59 | `harden-p15-arch-room-at` | merged | 7,700 pass | tturbo-mac |
 | Nov 07 12:23 | `p15-render-light-set` | merged | 7,686 pass | mai-flash-esc |
@@ -52,7 +53,6 @@ Updated 2026-11-07 13:45 UTC. This page and the card in the README are regenerat
 | Nov 07 08:32 | `p15-cmd-connections` | merged | 7,668 pass |  |
 | Nov 07 07:31 | `p15-inspect-levels-walls` | merged | 7,664 pass | mai-flash |
 | Nov 07 07:07 | `upstream-sync-2611bc5f5-v2` | refused | 7,664 pass | bonsai-ws2-a |
-| Nov 07 06:03 | `harden-p15-cli-render-styles` | merged | 7,662 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -70,5 +70,5 @@ Updated 2026-11-07 13:45 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | merging | 636 |
+| tturbo-mac | tturbo-ultraheretic | agent | 636 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
