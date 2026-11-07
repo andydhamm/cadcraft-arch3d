@@ -395,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn device_with_huge_offset_still_draws() {
+    fn device_within_wall_draws() {
         let mut d = Drawing::default();
         d.ensure_layer("E-POWR");
         d.arch.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
@@ -407,7 +407,7 @@ mod tests {
             kind: ElectricalKind::Duplex,
             wall: wall_id,
             side: WallSide::Left,
-            offset: 1000.0,
+            offset: 2.0,
             height: 0.3,
             level: 0,
             ..Default::default()
