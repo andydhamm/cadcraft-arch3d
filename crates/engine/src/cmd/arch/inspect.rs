@@ -2810,4 +2810,59 @@ mod tests {
         assert!(rows["cabinets"][0]["frontParts"].is_array());
         assert!(rows["cabinets"][0].get("frontsMode").is_none());
     }
+
+    #[test]
+    fn inspect_furnishing_in_room_hole_reports_null() {
+        use cadcraft_doc::arch::Furnishing;
+        let mut s = session_with(|m| {
+            m.push_room(Room {
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 6.0), Vec2::new(0.0, 6.0)],
+                holes: vec![vec![Vec2::new(2.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(2.0, 4.0)]],
+                room_type: RoomType::Living,
+                ..Room::default()
+            });
+            // Furnishing inside the hole.
+            m.push_furnishing(Furnishing { at: [3.0, 3.0], ..Furnishing::default() });
+            // Furnishing in the room but outside the hole.
+            m.push_furnishing(Furnishing { at: [1.0, 1.0], ..Furnishing::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "furnishings": true }));
+        let list = v["furnishings"].as_array().expect("furnishings array");
+        assert_eq!(list[0]["room"], Value::Null, "furnishing in hole should report null room");
+        assert_eq!(list[1]["room"], json!("r0"), "furnishing in room should report r0");
+    }
+
+    #[test]
+    fn inspect_furnishing_on_wrong_level_reports_null() {
+        use cadcraft_doc::arch::Furnishing;
+        let mut s = session_with(|m| {
+            m.push_room(Room {
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+                room_type: RoomType::Living,
+                ..Room::default()
+            });
+            // Furnishing on level 1, room on level 0.
+            m.push_furnishing(Furnishing { at: [2.0, 2.0], level: 1, ..Furnishing::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "furnishings": true }));
+        let list = v["furnishings"].as_array().expect("furnishings array");
+        assert_eq!(list[0]["room"], Value::Null, "furnishing on different level should report null room");
+    }
+
+    #[test]
+    fn inspect_furnishing_at_non_finite_position_reports_null_room() {
+        use cadcraft_doc::arch::Furnishing;
+        let mut s = session_with(|m| {
+            m.push_room(Room {
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+                room_type: RoomType::Living,
+                ..Room::default()
+            });
+            // Furnishing with NaN x coordinate.
+            m.push_furnishing(Furnishing { at: [f64::NAN, 2.0], ..Furnishing::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "furnishings": true }));
+        let list = v["furnishings"].as_array().expect("furnishings array");
+        assert_eq!(list[0]["room"], Value::Null, "furnishing at non-finite position should report null room");
+    }
 }
