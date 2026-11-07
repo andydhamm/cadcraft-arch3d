@@ -39,7 +39,7 @@ fn site_json(model: &ArchModel) -> Value {
     }
     let arrow = north_arrow(model).map(|a| json!({"at": pt(a.at), "direction": pt(a.direction)}));
     let paths: Vec<Value> = match model.terrain {
-        Some(t) => t
+        Some(ref t) => t
             .modifiers
             .iter()
             .filter_map(|m| match &m.kind {
