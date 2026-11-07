@@ -21,6 +21,9 @@ Generated-in-code assets are original and have no file to list:
 - the colour index palette, generated from its structure (`crates/color/src/lib.rs`);
 - the sample drawings (`crates/engine/src/sample.rs`).
 
+Lifted code (credited here, not generated in this repository):
+- the TIN/contour helpers in `crates/geom` (`src/tin.rs` and `src/tin_ops.rs`) lifted from the [`cadcraft-terrain`](https://github.com/zorgglubb/cadcraft) crate on [zorgglubb/cadcraft](https://github.com/zorgglubb/cadcraft) (`main` commit 5da6d7b; upstream `crates/terrain/src/tin.rs` and `contour.rs`) by zorgglubb; MIT OR Apache-2.0 (same as the code: `LICENSE-MIT`, `LICENSE-APACHE`).
+
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|
 | `epaint_default_fonts::EGUI_ICONS`, `epaint_default_fonts::EMOJI_ICON` (dependency font inputs) | John Slegers | [egui 173cc737](https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts), [emoji-icon-font](https://github.com/jslegers/emoji-icon-font) | MIT (Copyright (c) 2014 John Slegers; full upstream text in `NOTICE`) | egui-icons.ttf is the five-glyph subset; emoji-icon-font.ttf is the full monochrome fallback. Registered by the production default font definitions; dependency assets unmodified here, no font file copied into this repository. |
@@ -144,9 +147,4 @@ unmodified. The items made for the set are original. Regenerate rather than edit
 | `crates/ui-egui/src/i18n/tr.tsv` | @ogzhnklvz (AI-assisted) | Original Turkish translations of CADCraft English strings | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | No proprietary localization resources copied; written from the English strings, no other catalog used as a source; the running app reviewed by a native speaker |
 | `crates/ui-egui/src/i18n/el.tsv` | @Camthalion77 with ChatGPT (AI-assisted) | Original Greek translations of CADCraft English strings | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | No proprietary localization resources copied; independent native proofreading pending |
 | `crates/ui-egui/src/i18n/vi.tsv` | @2ez4gcx with Claude Code (AI-assisted) | Original Vietnamese translations of CADCraft English strings | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | No proprietary localization resources copied; terminology chosen with a native speaker, full proofreading pending |
-
-## Code lifted from other projects
-
-- `crates/geom/src/tin.rs` (`triangulate`, `Tin::elevation_at`, `Tin::elevation_range`, `contours`): from the
-  `cadcraft-terrain` crate on the `main` branch of [zorgglubb/cadcraft](https://github.com/zorgglubb/cadcraft)
-  (commit 5da6d7b, `crates/terrain/src/tin.rs` and `contour.rs`) by zorgglubb, MIT OR Apache-2.0
+| `crates/ui-egui/src/i18n/ka.tsv` | Davit Matchakhelidze (@devius), native speaker, with Claude Code | Original Georgian translations of CADCraft English strings | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | No proprietary localization resources copied; written from the English strings, no other catalog used as a source; terminology and doubtful strings decided by a native Georgian speaker; no font assets added (the Georgian face comes from craft-fonts) |
