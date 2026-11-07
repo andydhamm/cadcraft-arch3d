@@ -26,6 +26,7 @@ pub mod light;
 pub mod mesh;
 pub mod openings;
 pub mod pick;
+pub mod planar;
 pub mod plant;
 pub mod probe;
 pub mod railing;
