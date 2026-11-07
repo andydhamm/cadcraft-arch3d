@@ -1717,4 +1717,148 @@ mod tests {
         assert_eq!(prims.len(), 1, "expected 1 railing prim");
         assert_eq!(prims[0].len, 3, "railing should have 3 vertices (no dedup)");
     }
+
+    /// Opening symbols (doors, windows) carry their layer's transparency.
+    #[test]
+    fn opening_symbols_carry_layer_transparency() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-DOOR");
+        if let Some(l) = d.layer_mut("A-DOOR") {
+            l.transparency = 50;
+        }
+        let wid = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        let oid = d.arch.push_opening(Opening::new(wid, 5.0, 1.0, 2.1, OpeningKind::Door));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let handle = opening_handle(oid);
+        let symbol_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        assert!(!symbol_prims.is_empty(), "no door symbol prims");
+        assert!(symbol_prims.iter().all(|p| p.transparency == 50), "door symbols should carry A-DOOR transparency");
+    }
+
+    /// Roof edges carry the A-ROOF layer's transparency.
+    #[test]
+    fn roof_edges_carry_layer_transparency() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-ROOF");
+        if let Some(l) = d.layer_mut("A-ROOF") {
+            l.transparency = 40;
+        }
+        let rid = d.arch.push_roof(Roof {
+            edges: vec![RoofEdge { kind: RoofEdgeKind::Ridge, a: Vec2::new(0.0, 0.0), b: Vec2::new(10.0, 0.0), ..RoofEdge::default() }],
+            ..Roof::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let handle = roof_handle(rid);
+        let roof_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        assert!(!roof_prims.is_empty(), "no roof edge prims");
+        assert!(roof_prims.iter().all(|p| p.transparency == 40), "roof edges should carry A-ROOF transparency");
+    }
+
+    /// Stair plan linework carries the A-STAIR layer's transparency.
+    #[test]
+    fn stair_linework_carries_layer_transparency() {
+        use cadcraft_doc::arch::Stair;
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-STAIR");
+        if let Some(l) = d.layer_mut("A-STAIR") {
+            l.transparency = 60;
+        }
+        let sid = d.arch.push_stair(Stair { run: 1.0, tread_depth: 0.25, width: 1.0, ..Stair::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let h = stair_handle(sid);
+        let prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h).collect();
+        assert!(!prims.is_empty(), "no stair prims");
+        assert!(prims.iter().all(|p| p.transparency == 60), "stair linework should carry A-STAIR transparency");
+    }
+
+    /// Railing plan linework carries the A-RAIL layer's transparency.
+    #[test]
+    fn railing_linework_carries_layer_transparency() {
+        use cadcraft_doc::arch::Railing;
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-RAIL");
+        if let Some(l) = d.layer_mut("A-RAIL") {
+            l.transparency = 30;
+        }
+        let rid = d.arch.push_railing(Railing { path: vec![Vec2::new(0.0, 0.0), Vec2::new(3.0, 0.0)], ..Railing::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let h = railing_handle(rid);
+        let prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h).collect();
+        assert!(!prims.is_empty(), "no railing prims");
+        assert!(prims.iter().all(|p| p.transparency == 30), "railing linework should carry A-RAIL transparency");
+    }
+
+    /// Room labels carry the A-ROOM layer's transparency.
+    #[test]
+    fn room_labels_carry_layer_transparency() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-ROOM");
+        if let Some(l) = d.layer_mut("A-ROOM") {
+            l.transparency = 25;
+        }
+        let rid = d.arch.push_room(Room {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
+            name: "Living".into(),
+            ..Room::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let handle = room_handle(rid);
+        let label_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        assert!(!label_prims.is_empty(), "no room label prims");
+        assert!(label_prims.iter().all(|p| p.transparency == 25), "room labels should carry A-ROOM transparency");
+    }
+
+    /// Different layers can have different transparencies simultaneously.
+    #[test]
+    fn mixed_transparencies_across_layers() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-WALL");
+        d.ensure_layer("A-DOOR");
+        d.ensure_layer("A-ROOF");
+        if let Some(l) = d.layer_mut("A-WALL") {
+            l.transparency = 10;
+        }
+        if let Some(l) = d.layer_mut("A-DOOR") {
+            l.transparency = 50;
+        }
+        if let Some(l) = d.layer_mut("A-ROOF") {
+            l.transparency = 80;
+        }
+
+        let wid = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        let oid = d.arch.push_opening(Opening::new(wid, 5.0, 1.0, 2.1, OpeningKind::Door));
+        let rid = d.arch.push_roof(Roof {
+            edges: vec![RoofEdge { kind: RoofEdgeKind::Ridge, a: Vec2::new(0.0, 0.0), b: Vec2::new(10.0, 0.0), ..RoofEdge::default() }],
+            ..Roof::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(wid)).collect();
+        assert!(wall_prims.iter().all(|p| p.transparency == 10), "walls should be 10% transparent");
+
+        let door_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == opening_handle(oid)).collect();
+        assert!(door_prims.iter().all(|p| p.transparency == 50), "doors should be 50% transparent");
+
+        let roof_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == roof_handle(rid)).collect();
+        assert!(roof_prims.iter().all(|p| p.transparency == 80), "roof edges should be 80% transparent");
+    }
+
+    /// A missing layer gives zero transparency (fully opaque).
+    #[test]
+    fn missing_layer_gives_zero_transparency() {
+        let mut d = Drawing::new_metric();
+        // Don't create A-WALL layer — it's missing from the table.
+        let wid = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(wid)).collect();
+        assert!(!wall_prims.is_empty(), "wall should still draw with missing layer");
+        assert!(wall_prims.iter().all(|p| p.transparency == 0), "missing layer should give zero transparency");
+    }
 }
