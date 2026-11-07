@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 37 of 53 segments merged · 2 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-07 05:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 44.8 h so far · expected done Nov 08 10:47–Nov 10 18:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 45.1 h so far · expected done Nov 08 11:02–Nov 10 18:15 UTC |
 
 ## Phase 15 segments
 
-37 merged, 6 replaced, 6 queued, 5 merging, 2 gate, 2 working, 1 escalate, 1 abandoned
+37 merged, 6 replaced, 6 queued, 5 merging, 3 gate, 1 escalate, 1 abandoned, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -42,7 +42,7 @@ Updated 2026-11-07 05:15 UTC. This page and the card in the README are regenerat
 | `upstream-sync-2611bc5f5-v2` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | merging | bonsai-ws2-a |
 | `p15-io-ifc-electrical` | io: outlets and switches as IfcOutlet / IfcSwitchingDevice | gate | claude-sonnet-b |
 | `p15-io-dxf-electrical` | io: DXF save proxies for electrical devices and connections | merging | claude-sonnet-c |
-| `p15-io-glb-obj-electrical` | io: GLB nodes and OBJ groups for cover plates | working | claude-sonnet-d |
+| `p15-io-glb-obj-electrical` | io: GLB nodes and OBJ groups for cover plates | gate | claude-sonnet-d |
 
 ## Recent merges
 
@@ -72,8 +72,8 @@ Updated 2026-11-07 05:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-a | sonnet | merging | 87 |
 | claude-sonnet-b | sonnet | gate | 84 |
 | claude-sonnet-c | sonnet | merging | 39 |
-| claude-sonnet-d | sonnet | agent | 27 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 814 |
+| claude-sonnet-d | sonnet | gate | 27 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 815 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 38 |
