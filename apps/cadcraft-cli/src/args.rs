@@ -1254,4 +1254,27 @@ mod tests {
         };
         assert_eq!(r.spp, Some(1));
     }
+
+    #[test]
+    fn render_args_parse_clay_and_technical_styles() {
+        // The phase-15 styles parse through the --style flag.
+        let Ok(r) = render_of(&["--style", "clay"]) else { panic!("--style clay should parse") };
+        assert_eq!(r.style, cadcraft_render3d::Style::Clay);
+        let Ok(r) = render_of(&["--style", "technical"]) else { panic!("--style technical should parse") };
+        assert_eq!(r.style, cadcraft_render3d::Style::Technical);
+        let Ok(r) = render_of(&["--style=clay"]) else { panic!("--style=clay should parse") };
+        assert_eq!(r.style, cadcraft_render3d::Style::Clay);
+    }
+
+    #[test]
+    fn render_args_unknown_style_lists_all_six() {
+        // An unknown style is refused and the error names all six accepted styles.
+        let Err(e) = render_of(&["--style", "wireframe"]) else { panic!("--style wireframe should be refused") };
+        let msg = e.to_string();
+        for name in ["shaded", "shaded-edges", "hidden-line", "glass-house", "clay", "technical"] {
+            assert!(msg.contains(name), "error `{msg}` should name `{name}`");
+        }
+        let Err(e) = render_of(&["--style", "Clay"]) else { panic!("--style Clay should be refused") };
+        assert!(e.to_string().contains("Clay"), "error should mention the value");
+    }
 }
