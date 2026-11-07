@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 22:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 49 of 53 segments merged · 6 of 14 acceptance checks**
 
@@ -25,20 +25,21 @@ Updated 2026-11-07 22:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 61.6 h so far · expected done Nov 08 02:16–Nov 08 23:16 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 61.8 h so far · expected done Nov 08 02:31–Nov 08 23:31 UTC |
 
 ## Phase 15 segments
 
-49 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck, 1 merging
+49 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-2611bc5f5-v3` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | merging | bonsai-b |
+| `upstream-sync-2611bc5f5-v3` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | gate | bonsai-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 22:01 | `upstream-sync-2611bc5f5-v3` | refused | 7,739 pass | bonsai-b |
 | Nov 07 19:27 | `harden-p15-inspect-rooms-on-objects` | merged | 7,737 pass | tturbo-mac |
 | Nov 07 16:33 | `harden-p15-plan-layer-transparency` | merged | 7,729 pass | tturbo-mac |
 | Nov 07 15:39 | `p15-ui-electrical` | merged | 7,718 pass | claude-sonnet-a |
@@ -50,23 +51,22 @@ Updated 2026-11-07 22:00 UTC. This page and the card in the README are regenerat
 | Nov 07 12:23 | `p15-render-light-set` | merged | 7,686 pass | mai-flash-esc |
 | Nov 07 11:57 | `p15-io-glb-obj-electrical` | merged | 7,683 pass | claude-sonnet-d |
 | Nov 07 11:30 | `p15-io-ifc-electrical` | merged | 7,681 pass | claude-sonnet-b |
-| Nov 07 11:03 | `p15-io-dxf-electrical` | merged | 7,677 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 943 |
-| bonsai-b | bonsai2-27b | merging | 875 |
+| bonsai-b | bonsai2-27b | gate | 875 |
 | bonsai-ws2-a | bonsai2-27b | idle | 971 |
 | bonsai-ws2-b | bonsai2-27b | idle | 943 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | idle | 29 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 821 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | agent | 644 |
+| tturbo-mac | tturbo-ultraheretic | gate | 644 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
