@@ -408,12 +408,26 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
         };
     }
 
-    // 6. Level: accepted and validated against `d.arch.levels`; not yet
-    // stored on the opening (follow-up segment).
+    // 6. Level: the sill is measured from that level's floor, so the stored
+    // sill is `level.elevation - wall.bottom_z + sill`. The wall must span the
+    // level and the head must stay under the wall's top.
+    let mut sill = sill;
     if let Some(lv) = crate::cmd::str_param(p, "level") {
-        if !d.arch.levels.iter().any(|l| l.name == lv) {
-            return Err(crate::cmd::bad(cmd, format!("unknown level `{lv}`")));
+        let level = d.arch.levels.iter().find(|l| l.name == lv).ok_or_else(|| crate::cmd::bad(cmd, format!("unknown level `{lv}`")))?;
+        let wall = d.arch.wall(host).ok_or_else(|| crate::cmd::bad(cmd, format!("no wall {host}")))?;
+        if !wall.spans_level(level, &d.arch.levels) {
+            return Err(crate::cmd::bad(cmd, format!("wall {host} does not span level `{lv}`")));
         }
+        let bottom = wall.bottom_z(&d.arch.levels);
+        let top = wall.top_z(&d.arch.levels);
+        let total = level.elevation - bottom + sill;
+        if !total.is_finite() || total < 0.0 {
+            return Err(crate::cmd::bad(cmd, format!("sill on level `{lv}` would be below the wall bottom")));
+        }
+        if bottom + total + height > top + 1e-9 {
+            return Err(crate::cmd::bad(cmd, format!("opening on level `{lv}` would rise above the top of wall {host}")));
+        }
+        sill = total;
     }
 
     let fit = crate::cmd::bool_or(p, "fit", false);
@@ -1060,6 +1074,50 @@ mod tests {
         let r = s.execute("door", &json!({"wall": "w0", "offset": 11.0, "width": 0.9, "height": 2.1}));
         let err = r.expect_err("offset past wall end should be rejected");
         assert!(!err.to_string().is_empty(), "expected an error, got empty");
+    }
+
+    /// A session with a wall spanning Lower (-1.2) .. Main (elevation 2.7, 2.4 tall)
+    /// and an Entry landing level at 0.15.
+    fn session_with_split_levels() -> Session {
+        use cadcraft_doc::Level;
+        let mut s = Session::new();
+        let d = s.doc_mut().expect("doc");
+        d.arch.levels.clear();
+        d.arch.levels.push(Level { index: 0, name: "Lower".into(), elevation: -1.2, ceiling_height: 2.4, ..Level::default() });
+        d.arch.levels.push(Level { index: 1, name: "Entry".into(), elevation: 0.15, ceiling_height: 2.4, ..Level::default() });
+        d.arch.levels.push(Level { index: 2, name: "Main".into(), elevation: 2.7, ceiling_height: 2.4, ..Level::default() });
+        d.touch_arch();
+        s.execute("wall", &json!({"points": [[0, 0], [10, 0]], "thickness": 0.2, "level": "Lower", "topLevel": "Main"})).expect("spanning wall");
+        s
+    }
+
+    #[test]
+    fn a_door_placed_on_a_landing_level_sits_on_the_landing() {
+        let mut s = session_with_split_levels();
+        s.execute("door", &json!({"wall": "w0", "offset": 3.0, "level": "Entry"})).expect("door on Entry");
+        let d = s.doc().expect("doc");
+        let w = &d.arch.walls[0];
+        let o = &d.arch.openings[0];
+        assert!((w.bottom_z(&d.arch.levels) + o.sill - 0.15).abs() < 1e-9, "sill {}", o.sill);
+    }
+
+    #[test]
+    fn a_level_the_wall_does_not_span_is_refused() {
+        let mut s = session_with_split_levels();
+        s.execute("wall", &json!({"points": [[0, 5], [10, 5]], "thickness": 0.2, "level": "Entry"})).expect("single-level wall");
+        let r = s.execute("door", &json!({"wall": "w1", "offset": 3.0, "level": "Main"}));
+        assert!(r.is_err(), "wall not spanning Main must refuse");
+        assert!(s.doc().expect("doc").arch.openings.is_empty());
+    }
+
+    #[test]
+    fn a_door_without_level_keeps_its_sill() {
+        let mut s = session_with_split_levels();
+        s.execute("door", &json!({"wall": "w0", "offset": 3.0})).expect("door");
+        s.execute("window", &json!({"wall": "w0", "offset": 6.0})).expect("window");
+        let d = s.doc().expect("doc");
+        assert!(d.arch.openings[0].sill.abs() < 1e-9);
+        assert!((d.arch.openings[1].sill - 0.9).abs() < 1e-9);
     }
 
     /// When both offset and point are provided, offset takes precedence.
