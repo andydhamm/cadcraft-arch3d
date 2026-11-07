@@ -212,8 +212,14 @@ fn write_layer_table(w: &mut W, d: &Drawing) {
         .filter(|name| !d.layers.iter().any(|l| l.name.eq_ignore_ascii_case(name)))
         .map(|name| Layer { name, ..Layer::default() })
         .collect();
+    let extra_electrical_layers: Vec<Layer> = crate::dxf_electrical::proxy_layers(&d.arch)
+        .into_iter()
+        .filter(|name| !d.layers.iter().any(|l| l.name.eq_ignore_ascii_case(name)))
+        .map(|name| Layer { name, ..Layer::default() })
+        .collect();
     let layer_count = d.layers.len()
         + extra_furnishing_layers.len()
+        + extra_electrical_layers.len()
         + usize::from(extra_room_layer.is_some())
         + usize::from(extra_roof_layer.is_some())
         + extra_view_layers.as_ref().map_or(0, Vec::len);
@@ -225,6 +231,7 @@ fn write_layer_table(w: &mut W, d: &Drawing) {
         .chain(extra_roof_layer.iter())
         .chain(extra_view_layers.iter().flatten())
         .chain(extra_furnishing_layers.iter())
+        .chain(extra_electrical_layers.iter())
     {
         let lh = record_head(w, "LAYER", &th, "AcDbLayerTableRecord");
         w.layers.insert(l.name.to_ascii_uppercase(), lh);
@@ -448,6 +455,9 @@ fn write_entities(w: &mut W, d: &Drawing, ms_br: &str, ps_brs: &[(String, String
             proxy(&kind, &layer, tags);
         }
         for (kind, layer, tags) in crate::dxf_furnishing::proxy_furnishing_entities(&d.arch) {
+            proxy(&kind, &layer, tags);
+        }
+        for (kind, layer, tags) in crate::dxf_electrical::proxy_electrical_entities(&d.arch) {
             proxy(&kind, &layer, tags);
         }
     }
