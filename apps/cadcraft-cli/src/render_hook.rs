@@ -102,13 +102,11 @@ fn ready<'a>(
             let mut h = std::collections::hash_map::DefaultHasher::new();
             use std::hash::{Hash, Hasher};
             set.name.hash(&mut h);
-            // Sort lights by ID to ensure deterministic hashing regardless of order
-            let mut lights = set.lights.clone();
-            lights.sort_by_key(|l| l.handle); // Assuming LightState has 'handle' or 'id'
-            for l in lights {
-                l.handle.hash(&mut h);
-                l.on.hash(&mut h);
-                l.brightness.to_bits().hash(&mut h);
+            // set.lights is a BTreeMap<String, LightState> (deterministic order)
+            for (key, state) in &set.lights {
+                key.hash(&mut h);
+                state.on.hash(&mut h);
+                state.brightness.to_bits().hash(&mut h);
             }
             format!("{}-{:x}", set_name, h.finish())
         } else {
