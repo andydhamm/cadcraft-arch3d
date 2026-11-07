@@ -5,9 +5,11 @@
 //! from [`guid::global_id`], so two exports of one model are byte-identical given one timestamp
 //! (`SOURCE_DATE_EPOCH`). The elements are written by one module each, in this order: walls,
 //! openings (which need the walls), slabs, roofs, stairs, spaces, site, lights, casework (cabinets
-//! and fixtures), furnishings (library items, phase 14).
+//! and fixtures), furnishings (library items, phase 14), electrical (outlets and switches,
+//! phase 15).
 
 mod casework;
+mod electrical;
 mod furnishing;
 pub mod geometry;
 pub mod guid;
@@ -72,6 +74,7 @@ pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> Str
     lights::emit(&mut ctx);
     casework::emit(&mut ctx);
     furnishing::emit(&mut ctx);
+    electrical::emit(&mut ctx);
     ctx.finish(opts)
 }
 

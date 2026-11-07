@@ -11,7 +11,8 @@ use std::collections::BTreeMap;
 /// `door-…` part), `floor`, `ceiling`, `roof` (roof planes), `fascia`, `soffit`, `stair`,
 /// `railing`, `deck`, `terrain`, `plant` (crown and trunk), `path` (`path-…`), `light` (`light-…`),
 /// `cabinet` (`cabinet-…`, `counter`), `fixture` (`fixture-…`), `furnishing` (a furnishing's symbol
-/// parts `sym:…` and its painted parts `paint:furnishing/…`), else `other`.
+/// parts `sym:…` and its painted parts `paint:furnishing/…`), `electrical` (`electrical:…`, the plate of
+/// an outlet or switch), else `other`.
 pub(crate) fn kind_of(material: &str) -> &'static str {
     match material {
         "wall" => "wall",
@@ -34,6 +35,7 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
         m if m.starts_with("cabinet-") || m == "counter" => "cabinet",
         m if m.starts_with("fixture-") => "fixture",
         m if m.starts_with("sym:") || m.starts_with("paint:furnishing/") => "furnishing",
+        m if m.starts_with("electrical:") => "electrical",
         _ => "other",
     }
 }
@@ -135,6 +137,13 @@ mod tests {
         assert_eq!(kind_of("sym:missing:0"), "furnishing");
         assert_eq!(kind_of("paint:furnishing/f2/0"), "furnishing");
         assert_eq!(kind_of("something"), "other");
+    }
+
+    #[test]
+    fn electrical_materials_are_their_own_kind() {
+        assert_eq!(kind_of("electrical:duplex"), "electrical");
+        assert_eq!(kind_of("electrical:dimmer"), "electrical");
+        assert_eq!(kind_of("electrical"), "other");
     }
 
     #[test]
