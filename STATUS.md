@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-06 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 35 of 42 segments merged · 2 of 14 acceptance checks**
 
@@ -25,22 +25,23 @@ Updated 2026-11-06 23:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 39.1 h so far · expected done Nov 07 06:13–Nov 08 02:45 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 39.6 h so far · expected done Nov 07 07:28–Nov 08 06:16 UTC |
 
 ## Phase 15 segments
 
-35 merged, 4 replaced, 4 queued, 2 escalate, 1 merging, 1 abandoned
+35 merged, 4 replaced, 4 queued, 2 escalate, 1 gate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | merging | mai-flash-esc |
-| `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | escalate |  |
+| `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | escalate |  |
+| `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | gate | mai-flash-esc |
 | `p15-inspect` | engine: arch.inspect for phase 15 | escalate |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 06 23:34 | `p15-io-electrical` | refused | 0 pass | mai-flash-esc |
 | Nov 06 23:25 | `harden-p15-arch-outlet-gaps` | merged | 7,638 pass | tturbo-mac |
 | Nov 06 22:23 | `p15-cmd-outlets-auto` | merged | 7,633 pass | mai-flash |
 | Nov 06 21:33 | `p15-inspect` | refused | 7,635 pass | claude-sonnet-a |
@@ -52,23 +53,22 @@ Updated 2026-11-06 23:30 UTC. This page and the card in the README are regenerat
 | Nov 06 16:09 | `p15-cli-render-styles` | merged | 7,609 pass | claude-sonnet-d |
 | Nov 06 15:27 | `p15-cmd-level-free` | merged | 7,607 pass | mai-flash-esc |
 | Nov 06 14:52 | `p15-arch-circuits` | merged | 7,602 pass | bonsai-ws2-b |
-| Nov 06 14:25 | `p15-cmd-room-bed` | merged | 7,600 pass | bonsai-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 931 |
-| bonsai-b | bonsai2-27b | gate | 857 |
+| bonsai-b | bonsai2-27b | agent | 859 |
 | bonsai-ws2-a | bonsai2-27b | gate | 965 |
-| bonsai-ws2-b | bonsai2-27b | gate | 924 |
+| bonsai-ws2-b | bonsai2-27b | gate | 925 |
 | claude-sonnet-a | sonnet | idle | 86 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | idle | 25 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 809 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 810 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 67 |
-| mai-flash-esc | mai-code-1.1-flash | merging | 37 |
-| tturbo-mac | tturbo-ultraheretic | agent | 628 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 37 |
+| tturbo-mac | tturbo-ultraheretic | gate | 628 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
