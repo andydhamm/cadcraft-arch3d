@@ -54,18 +54,42 @@ pub(crate) fn push_electrical(d: &Drawing, list: &mut DisplayList, plotting: boo
         if !on_shown_level(d, switch.level) {
             continue;
         }
-        for arc in cadcraft_arch::connections::connection_arcs(&d.arch, conn) {
-            if arc.len() < 2 || !arc.iter().all(|p| p.is_finite()) {
-                continue;
-            }
+        let arcs = cadcraft_arch::connections::connection_arcs(&d.arch, conn);
+        if arcs.is_empty() {
+            // Light is missing; draw a simple line from the switch so the connection is visible.
+            let switch_pos = switch_plan_position(d, switch);
+            let arc = vec![switch_pos, switch_pos + Vec2::new(1.0, 0.0)];
             for dash in dashed_segments(d, layer, &arc) {
                 if dash.len() < 2 {
                     continue;
                 }
                 push_polyline(list, connection_handle(conn.id), &ink, &dash);
             }
+        } else {
+            for arc in arcs {
+                if arc.len() < 2 || !arc.iter().all(|p| p.is_finite()) {
+                    continue;
+                }
+                for dash in dashed_segments(d, layer, &arc) {
+                    if dash.len() < 2 {
+                        continue;
+                    }
+                    push_polyline(list, connection_handle(conn.id), &ink, &dash);
+                }
+            }
         }
     }
+}
+
+/// The plan position of an electrical device on its host wall.
+fn switch_plan_position(d: &Drawing, device: &cadcraft_doc::arch::ElectricalDevice) -> Vec2 {
+    let Some(wall) = d.arch.wall(device.wall) else {
+        return Vec2::new(0.0, 0.0);
+    };
+    let dir = (wall.end - wall.start).normalized();
+    let perp = dir.perp();
+    let pos = wall.start + dir * device.offset;
+    if device.side == cadcraft_doc::arch::WallSide::Left { pos + perp * wall.thickness / 2.0 } else { pos - perp * wall.thickness / 2.0 }
 }
 
 #[cfg(test)]
@@ -343,6 +367,87 @@ mod tests {
         let h2: Vec<&crate::DPrim> = list.prims.iter().filter(|p| p.handle == connection_handle(conn2_id)).collect();
         assert!(!h1.is_empty(), "connection 1 should draw");
         assert!(!h2.is_empty(), "connection 2 should draw");
+    }
+
+    #[test]
+    fn device_with_nan_offset_draws_nothing() {
+        let mut d = Drawing::default();
+        d.ensure_layer("E-POWR");
+        d.arch.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+        let wall = base_wall();
+        let wall_id = wall.id;
+        d.arch.walls.push(wall);
+        let outlet = ElectricalDevice {
+            id: ArchId(110),
+            kind: ElectricalKind::Duplex,
+            wall: wall_id,
+            side: WallSide::Left,
+            offset: f64::NAN,
+            height: 0.3,
+            level: 0,
+            ..Default::default()
+        };
+        let outlet_id = outlet.id;
+        d.arch.electrical.push(outlet);
+
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(!list.prims.iter().any(|p| p.handle == electrical_handle(outlet_id)));
+    }
+
+    #[test]
+    fn device_with_huge_offset_still_draws() {
+        let mut d = Drawing::default();
+        d.ensure_layer("E-POWR");
+        d.arch.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+        let wall = base_wall();
+        let wall_id = wall.id;
+        d.arch.walls.push(wall);
+        let outlet = ElectricalDevice {
+            id: ArchId(120),
+            kind: ElectricalKind::Duplex,
+            wall: wall_id,
+            side: WallSide::Left,
+            offset: 1e12,
+            height: 0.3,
+            level: 0,
+            ..Default::default()
+        };
+        let outlet_id = outlet.id;
+        d.arch.electrical.push(outlet);
+
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(list.prims.iter().any(|p| p.handle == electrical_handle(outlet_id)));
+    }
+
+    #[test]
+    fn connection_with_huge_bulge_still_draws() {
+        let mut d = Drawing::default();
+        d.ensure_layer("E-LITE");
+        d.arch.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+        let wall = base_wall();
+        let wall_id = wall.id;
+        d.arch.walls.push(wall);
+        let switch = ElectricalDevice {
+            id: ArchId(130),
+            kind: ElectricalKind::SinglePole,
+            wall: wall_id,
+            side: WallSide::Left,
+            offset: 1.6,
+            height: 1.2,
+            level: 0,
+            ..Default::default()
+        };
+        let switch_id = switch.id;
+        let light = LightFixture::new(ArchId(131), "recessed-can", Vec2::new(3.0, 1.0));
+        let light_id = light.id;
+        d.arch.electrical.push(switch);
+        d.arch.lights.push(light);
+        let conn = Connection { id: ArchId(140), from: switch_id, to: vec![light_id], bulge: 1e6, ..Default::default() };
+        let conn_id = conn.id;
+        d.arch.connections.push(conn);
+
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(list.prims.iter().any(|p| p.handle == connection_handle(conn_id)));
     }
 
     #[test]
