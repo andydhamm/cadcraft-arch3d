@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 13:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 45 of 52 segments merged · 3 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 46 of 52 segments merged · 4 of 14 acceptance checks**
 
-7,700 workspace tests passing at the last merge · 813 segments merged in all · 0 of 14 seats working
+7,703 workspace tests passing at the last merge · 814 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,16 +25,15 @@ Updated 2026-11-07 13:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 3 / 14 | 52.8 h so far · expected done Nov 07 19:58–Nov 08 16:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 4 / 14 | 53.1 h so far · expected done Nov 07 18:44–Nov 08 12:54 UTC |
 
 ## Phase 15 segments
 
-45 merged, 6 replaced, 4 merging, 3 queued, 2 abandoned
+46 merged, 6 replaced, 3 merging, 3 queued, 2 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-ui-electrical` | ui-egui: electrical tools, connection drag, light sets, level picker | merging | claude-sonnet-a |
-| `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | merging | mai-flash-esc |
 | `p15-inspect-electrical` | engine: arch.inspect electrical, connections, circuits, outlet gaps and light sets | merging | claude-sonnet-b |
 | `p15-inspect-rooms-on-objects` | engine: brightness on light rows, room on light, fixture and furnishing rows | merging | claude-sonnet-d |
 
@@ -42,6 +41,7 @@ Updated 2026-11-07 13:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 13:21 | `p15-plan-layer-transparency` | merged | 7,703 pass | mai-flash-esc |
 | Nov 07 12:59 | `harden-p15-arch-room-at` | merged | 7,700 pass | tturbo-mac |
 | Nov 07 12:23 | `p15-render-light-set` | merged | 7,686 pass | mai-flash-esc |
 | Nov 07 11:57 | `p15-io-glb-obj-electrical` | merged | 7,683 pass | claude-sonnet-d |
@@ -53,7 +53,6 @@ Updated 2026-11-07 13:15 UTC. This page and the card in the README are regenerat
 | Nov 07 07:31 | `p15-inspect-levels-walls` | merged | 7,664 pass | mai-flash |
 | Nov 07 07:07 | `upstream-sync-2611bc5f5-v2` | refused | 7,664 pass | bonsai-ws2-a |
 | Nov 07 06:03 | `harden-p15-cli-render-styles` | merged | 7,662 pass | tturbo-mac |
-| Nov 07 05:02 | `p15-cabinet-along-wall` | merged | 7,654 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -70,6 +69,6 @@ Updated 2026-11-07 13:15 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
-| mai-flash-esc | mai-code-1.1-flash | merging | 41 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 41 |
 | tturbo-mac | tturbo-ultraheretic | merging | 636 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
