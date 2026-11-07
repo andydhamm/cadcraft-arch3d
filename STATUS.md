@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 38 of 53 segments merged · 2 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-07 07:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 47.3 h so far · expected done Nov 08 11:26–Nov 10 17:23 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 47.6 h so far · expected done Nov 08 16:43–Nov 11 19:56 UTC |
 
 ## Phase 15 segments
 
-38 merged, 8 merging, 6 replaced, 4 queued, 2 working, 1 abandoned, 1 escalate
+38 merged, 8 merging, 6 replaced, 4 queued, 2 gate, 1 abandoned, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,8 +38,8 @@ Updated 2026-11-07 07:45 UTC. This page and the card in the README are regenerat
 | `p15-render-light-set` | render: a render uses its light set (on/off and brightness of each light) | merging | mai-flash-esc |
 | `p15-door-on-level` | engine: an opening placed with `level` sits on that level (sill from the wall bottom) | merging | claude-sonnet-a |
 | `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | merging | mai-flash-esc |
-| `p15-inspect-electrical` | engine: arch.inspect electrical, connections, circuits, outlet gaps and light sets | working | claude-sonnet-b |
-| `p15-inspect-rooms-on-objects` | engine: brightness on light rows, room on light, fixture and furnishing rows | working | claude-sonnet-d |
+| `p15-inspect-electrical` | engine: arch.inspect electrical, connections, circuits, outlet gaps and light sets | gate | claude-sonnet-b |
+| `p15-inspect-rooms-on-objects` | engine: brightness on light rows, room on light, fixture and furnishing rows | gate | claude-sonnet-d |
 | `upstream-sync-2611bc5f5-v2` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | escalate |  |
 | `p15-io-ifc-electrical` | io: outlets and switches as IfcOutlet / IfcSwitchingDevice | merging | claude-sonnet-b |
 | `p15-io-dxf-electrical` | io: DXF save proxies for electrical devices and connections | merging | claude-sonnet-c |
@@ -66,14 +66,14 @@ Updated 2026-11-07 07:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 936 |
-| bonsai-b | bonsai2-27b | agent | 867 |
+| bonsai-a | bonsai2-27b | gate | 936 |
+| bonsai-b | bonsai2-27b | gate | 867 |
 | bonsai-ws2-a | bonsai2-27b | gate | 967 |
 | bonsai-ws2-b | bonsai2-27b | gate | 929 |
 | claude-sonnet-a | sonnet | idle | 87 |
-| claude-sonnet-b | sonnet | agent | 85 |
+| claude-sonnet-b | sonnet | gate | 85 |
 | claude-sonnet-c | sonnet | idle | 39 |
-| claude-sonnet-d | sonnet | agent | 28 |
+| claude-sonnet-d | sonnet | gate | 28 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
