@@ -196,4 +196,205 @@ mod tests {
         assert_eq!(day["lights"]["lf1"]["brightness"], 0.5);
         assert!(inspect(&mut s, json!({})).get("lightSets").is_none());
     }
+
+    #[test]
+    fn inspect_empty_model_with_electrical_flag() {
+        let mut s = Session::new();
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let devs = r["electrical"].as_array().unwrap();
+        assert!(devs.is_empty(), "expected empty electrical array");
+        let conns = r["connections"].as_array().unwrap();
+        assert!(conns.is_empty(), "expected empty connections array");
+        let circuits = r["circuits"].as_array().unwrap();
+        assert!(circuits.is_empty(), "expected empty circuits array");
+        let gaps = r["outletGaps"].as_array().unwrap();
+        assert!(gaps.is_empty(), "expected empty outletGaps array");
+    }
+
+    #[test]
+    fn inspect_device_with_missing_wall_has_null_at_and_z() {
+        let mut s = Session::new();
+        room64(&mut s);
+        s.execute("outlet", &json!({ "kind": "duplex", "wall": "w0", "offset": 2.0, "side": "left" })).unwrap();
+        // Delete the wall the device is on.
+        s.doc_mut().unwrap().arch.walls.clear();
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let devs = r["electrical"].as_array().unwrap();
+        assert_eq!(devs.len(), 1);
+        assert!(devs[0]["at"].is_null(), "at should be null when host wall is gone");
+        assert!(devs[0]["z"].is_null(), "z should be null when host wall is gone");
+        assert!(devs[0]["room"].is_null(), "room should be null when host wall is gone");
+    }
+
+    #[test]
+    fn inspect_connection_with_empty_to_list() {
+        let mut s = Session::new();
+        room64(&mut s);
+        s.execute("switch", &json!({ "kind": "single-pole", "wall": "w0", "offset": 1.0, "side": "left" })).unwrap();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.push_connection(Connection { from: cadcraft_doc::ArchId(0), to: vec![], bulge: 0.0, ..Connection::default() });
+        }
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let conns = r["connections"].as_array().unwrap();
+        assert_eq!(conns.len(), 1);
+        assert_eq!(conns[0]["from"], "el0");
+        let to = conns[0]["to"].as_array().unwrap();
+        assert!(to.is_empty(), "to should be empty array");
+    }
+
+    #[test]
+    fn inspect_outlet_gaps_only_rooms_with_usable_walls() {
+        let mut s = Session::new();
+        room64(&mut s);
+        // Add a second room with no walls (degenerate).
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.push_room(cadcraft_doc::arch::Room {
+                polygon: vec![Vec2::new(10.0, 0.0), Vec2::new(14.0, 0.0), Vec2::new(14.0, 4.0), Vec2::new(10.0, 4.0)],
+                ..cadcraft_doc::arch::Room::default()
+            });
+        }
+        s.execute("door", &json!({ "wall": "w0", "offset": 3.0, "width": 0.9 })).unwrap();
+        s.execute("outlets.auto", &json!({ "room": "r0" })).unwrap();
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let gaps = r["outletGaps"].as_array().unwrap();
+        // Only r0 has usable walls; r1 has no walls at all.
+        assert_eq!(gaps.len(), 1, "only rooms with usable walls should appear");
+        assert_eq!(gaps[0]["room"], "r0");
+    }
+
+    #[test]
+    fn inspect_light_set_with_empty_lights() {
+        let mut s = Session::new();
+        room64(&mut s);
+        s.execute("lightfixture", &json!({ "room": "r0", "rows": 1, "cols": 1 })).unwrap();
+        s.execute("lightset", &json!({ "name": "empty", "lights": {} })).unwrap();
+        let r = inspect(&mut s, json!({ "lightSets": true }));
+        let sets = r["lightSets"].as_array().unwrap();
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0]["name"], "empty");
+        let lights = sets[0]["lights"].as_object().unwrap();
+        assert!(lights.is_empty(), "lights should be empty object");
+    }
+
+    #[test]
+    fn inspect_device_with_nan_offset() {
+        let mut s = Session::new();
+        room64(&mut s);
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.push_electrical(cadcraft_doc::arch::ElectricalDevice {
+                kind: cadcraft_doc::arch::ElectricalKind::Duplex,
+                wall: cadcraft_doc::ArchId(0),
+                side: cadcraft_doc::arch::WallSide::Left,
+                offset: f64::NAN,
+                ..cadcraft_doc::arch::ElectricalDevice::default()
+            });
+        }
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let devs = r["electrical"].as_array().unwrap();
+        assert_eq!(devs.len(), 1);
+        // NaN serializes to null in serde_json.
+        assert!(devs[0]["offset"].is_null(), "NaN offset should serialize to null");
+    }
+
+    #[test]
+    fn inspect_connection_with_nan_bulge() {
+        let mut s = Session::new();
+        room64(&mut s);
+        s.execute("switch", &json!({ "kind": "single-pole", "wall": "w0", "offset": 1.0, "side": "left" })).unwrap();
+        {
+            let doc = s.doc_mut().unwrap();
+            doc.arch.push_connection(Connection { from: cadcraft_doc::ArchId(0), to: vec![], bulge: f64::NAN, ..Connection::default() });
+        }
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let conns = r["connections"].as_array().unwrap();
+        assert_eq!(conns.len(), 1);
+        assert!(conns[0]["bulge"].is_null(), "NaN bulge should serialize to null");
+    }
+
+    #[test]
+    fn inspect_multiple_circuits() {
+        let mut s = Session::new();
+        room64(&mut s);
+        s.execute("lightfixture", &json!({ "room": "r0", "rows": 1, "cols": 4 })).unwrap();
+        s.execute("switch", &json!({ "kind": "single-pole", "wall": "w0", "offset": 1.0, "side": "left" })).unwrap();
+        s.execute("switch", &json!({ "kind": "single-pole", "wall": "w0", "offset": 2.0, "side": "left" })).unwrap();
+        {
+            let doc = s.doc_mut().unwrap();
+            // Circuit 1: el0 controls lf0.
+            doc.arch.push_connection(Connection {
+                from: cadcraft_doc::ArchId(0),
+                to: vec![cadcraft_doc::ArchId(0)],
+                bulge: 0.0,
+                ..Connection::default()
+            });
+            // Circuit 2: el1 controls lf1, lf2, lf3.
+            doc.arch.push_connection(Connection {
+                from: cadcraft_doc::ArchId(1),
+                to: vec![cadcraft_doc::ArchId(1), cadcraft_doc::ArchId(2), cadcraft_doc::ArchId(3)],
+                bulge: 0.0,
+                ..Connection::default()
+            });
+        }
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let circuits = r["circuits"].as_array().unwrap();
+        assert_eq!(circuits.len(), 2, "expected two separate circuits");
+        // circuits() sorts by first switch, so el0's circuit comes first.
+        assert_eq!(circuits[0]["switches"], json!(["el0"]));
+        assert_eq!(circuits[0]["lights"], json!(["lf0"]));
+        assert_eq!(circuits[1]["switches"], json!(["el1"]));
+        assert_eq!(circuits[1]["lights"], json!(["lf1", "lf2", "lf3"]));
+    }
+
+    #[test]
+    fn inspect_electrical_does_not_bump_revision() {
+        let mut s = Session::new();
+        room64(&mut s);
+        s.execute("outlet", &json!({ "kind": "duplex", "wall": "w0", "offset": 2.0, "side": "left" })).unwrap();
+        let before = s.doc().unwrap().arch_revision;
+        inspect(&mut s, json!({ "electrical": true }));
+        let after = s.doc().unwrap().arch_revision;
+        assert_eq!(before, after, "inspect_electrical must not bump arch_revision");
+    }
+
+    #[test]
+    fn inspect_device_room_with_hole() {
+        let mut s = Session::new();
+        {
+            let doc = s.doc_mut().unwrap();
+            // Room with a hole; device inside the hole should report null room.
+            doc.arch.push_room(cadcraft_doc::arch::Room {
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 6.0), Vec2::new(0.0, 6.0)],
+                holes: vec![vec![Vec2::new(2.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(2.0, 4.0)]],
+                room_type: cadcraft_doc::arch::RoomType::Living,
+                ..cadcraft_doc::arch::Room::default()
+            });
+            // Build walls for the room.
+            for (a, b) in [((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 6.0)), ((6.0, 6.0), (0.0, 6.0)), ((0.0, 6.0), (0.0, 0.0))] {
+                doc.arch.push_wall(cadcraft_doc::Wall {
+                    start: Vec2::new(a.0, a.1),
+                    end: Vec2::new(b.0, b.1),
+                    thickness: 0.2,
+                    ..cadcraft_doc::Wall::default()
+                });
+            }
+            // Device at (3,3) inside the hole.
+            doc.arch.push_electrical(cadcraft_doc::arch::ElectricalDevice {
+                kind: cadcraft_doc::arch::ElectricalKind::Duplex,
+                wall: cadcraft_doc::ArchId(0),
+                side: cadcraft_doc::arch::WallSide::Right,
+                offset: 3.0,
+                ..cadcraft_doc::arch::ElectricalDevice::default()
+            });
+        }
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let devs = r["electrical"].as_array().unwrap();
+        assert_eq!(devs.len(), 1);
+        // The device is at offset 3 on wall w0 (bottom wall), right side = inside the room.
+        // Its position is (3, 0.1) which is in the room, not in the hole at (2-4, 2-4).
+        // So it should report the room.
+        assert!(devs[0]["room"].is_string(), "device should be in a room");
+    }
 }
