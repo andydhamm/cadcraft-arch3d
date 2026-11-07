@@ -998,6 +998,12 @@ mod tests {
                 room_type: cadcraft_doc::arch::RoomType::Living,
                 ..cadcraft_doc::arch::Room::default()
             });
+            d.arch.levels.push(cadcraft_doc::arch::Level {
+                index: 1,
+                name: "Level 2".to_string(),
+                elevation: 3.0,
+                ..cadcraft_doc::arch::Level::default()
+            });
             d.touch_arch();
         }
 
