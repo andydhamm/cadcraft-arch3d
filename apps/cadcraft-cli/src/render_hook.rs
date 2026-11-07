@@ -444,6 +444,38 @@ mod tests {
     }
 
     #[test]
+    fn render_hook_refuses_case_variants_of_styles() {
+        let _g = reset();
+        let d = room();
+        for style in ["Clay", "CLAY", "Technical", "TECHNICAL", "Shaded", "SHADEDEDGES"] {
+            let mut req = request(&d, None, None, false);
+            req.style = style.into();
+            let Err(e) = render_one(&req) else { panic!("style `{style}` must be refused") };
+            assert!(e.contains("is not one of"), "`{style}`: {e}");
+        }
+    }
+
+    #[test]
+    fn render_hook_clay_style_renders() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.style = "clay".into();
+        let Some(v) = render(&req) else { return };
+        assert_eq!(v["ok"], true, "{v}");
+    }
+
+    #[test]
+    fn render_hook_technical_style_renders() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.style = "technical".into();
+        let Some(v) = render(&req) else { return };
+        assert_eq!(v["ok"], true, "{v}");
+    }
+
+    #[test]
     fn render_hook_first_frame_builds_four_maps() {
         let _g = reset();
         let d = room();
