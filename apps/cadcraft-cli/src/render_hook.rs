@@ -761,8 +761,8 @@ mod tests {
         let _g = reset();
         let mut d = room();
         let mut lights = std::collections::BTreeMap::new();
-        lights.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0 });
-        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "off_one".into(), lights });
+        lights.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "off_one".into(), lights, ..Default::default() });
         d.touch_arch();
 
         let mut req_all = request(&d, None, None, false);
@@ -787,11 +787,11 @@ mod tests {
         let _g = reset();
         let mut d = room();
         let mut set1 = std::collections::BTreeMap::new();
-        set1.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0 });
+        set1.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
         let mut set2 = std::collections::BTreeMap::new();
-        set2.insert("lf1".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0 });
-        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set1".into(), lights: set1 });
-        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set2".into(), lights: set2 });
+        set2.insert("lf1".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set1".into(), lights: set1, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set2".into(), lights: set2, ..Default::default() });
         d.touch_arch();
 
         let mut req1 = request(&d, None, None, false);
