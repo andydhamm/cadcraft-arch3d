@@ -47,6 +47,7 @@ pub mod xrefs;
 
 pub mod dyngrips;
 pub mod dyninput;
+pub mod electrical_tools;
 pub mod gpu;
 pub mod grip_dyn;
 pub mod i18n;
@@ -276,6 +277,8 @@ pub struct CadApp {
     pub status: Option<(String, f64)>,
     /// Drawings being read on worker threads ([`opening`]).
     pub opening: opening::Opening,
+    /// The electrical tools armed in the plan and the 3D pane.
+    pub electrical: electrical_tools::ElectricalTools,
     pub integrated_titlebar: bool,
     control_rx: Option<Receiver<ControlRequest>>,
     /// Fresh surface and identity snapshot (see [`capture`]).
@@ -369,6 +372,7 @@ impl CadApp {
             cmd: cmdline::CmdLine::default(),
             status: None,
             opening: opening::Opening::default(),
+            electrical: electrical_tools::ElectricalTools::default(),
             integrated_titlebar: false,
             control_rx: None,
             capture_geometry: None,
@@ -939,7 +943,29 @@ impl CadApp {
                     if let Ok(st) = self.session.state() {
                         self.pane3d.sync_doc(st.uid, st.doc.arch_revision, Some(&st.doc.arch));
                     }
+                    ui.horizontal(|ui| {
+                        electrical_tools::light_set_chooser(ui, &mut self.session, &mut self.electrical);
+                        for info in electrical_tools::TOOLS {
+                            let on = self.electrical.armed == Some(info.tool);
+                            if ui.selectable_label(on, i18n::t(info.label)).clicked() {
+                                self.electrical.armed = if on { None } else { Some(info.tool) };
+                            }
+                        }
+                    });
                     pane3d::draw(ui, &mut self.pane3d);
+                    // An armed outlet or switch tool takes the click: the face struck gives the side.
+                    if let Some(electrical_tools::Tool::Device(kind)) = self.electrical.armed
+                        && let Some(click) = self.pane3d.click.take()
+                    {
+                        match electrical_tools::pane_place(&mut self.session, kind, &click) {
+                            Ok(_) => self.electrical.note.clear(),
+                            Err(e) => {
+                                self.electrical.note = e.clone();
+                                self.session.echo(e);
+                            }
+                        }
+                        ui.ctx().request_repaint();
+                    }
                     // A 3D click becomes the 2D selection: take the struck handle and wake the
                     // canvas so it repaints with the new selection.
                     if pane3d::apply_pick(&mut self.pane3d, &mut self.session).is_some() {

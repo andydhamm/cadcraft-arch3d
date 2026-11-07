@@ -869,7 +869,30 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
         app.session.pending_window = None;
         app.canvas.drag_window = false;
     }
-    let pressed_primary = pressed_primary && !picked && !hatch_dialog && !idle_dbl;
+    let mut pressed_primary = pressed_primary && !picked && !hatch_dialog && !idle_dbl;
+    // The strip over the plan (level picker, Electrical tools and view), then the armed
+    // electrical tool: a press places a device or starts a Connection drag, the release ends it.
+    if app.session.doc().is_ok_and(|d| !d.arch.walls.is_empty() || !d.arch.levels.is_empty()) {
+        let strip = Rect::from_min_size(rect.left_top() + egui::vec2(8.0, 8.0), egui::vec2(420.0, 24.0));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(strip), |ui| crate::electrical_tools::plan_toolbar(app, ui));
+    }
+    if app.electrical.armed.is_some() && !app.session.prompting() && !middle_down {
+        let released = ui.input(|i| i.pointer.primary_released());
+        let over_strip = hover_pos.is_some_and(|h| h.y < rect.top() + 36.0 && h.x < rect.left() + 436.0);
+        let at = raw_world.filter(|_| inside && !over_strip);
+        let press = if pressed_primary { at } else { None };
+        let release = if released { hover_pos.map(|h| xf.to_world(h)) } else { None };
+        if crate::electrical_tools::plan_pointer(app, press, release, mods.shift) && press.is_some() {
+            pressed_primary = false;
+        }
+    }
+    if !app.session.prompting() && !middle_down && app.session.doc().is_ok_and(|d| !d.arch.connections.is_empty()) {
+        let press = if pressed_primary { raw_world.filter(|_| inside) } else { None };
+        let release = if ui.input(|i| i.pointer.primary_released()) { hover_pos.map(|h| xf.to_world(h)) } else { None };
+        if crate::electrical_tools::plan_grips(app, &painter, &xf, press, release) {
+            pressed_primary = false;
+        }
+    }
     let key: CycleKey = (
         app.session.running.as_ref().map(|r| r.id.clone()),
         app.session.current_prompt().map(|p| p.message),
