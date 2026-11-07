@@ -8,7 +8,7 @@ use cadcraft_doc::arch::{connection_handle, electrical_handle};
 use cadcraft_geom::Vec2;
 
 use crate::DisplayList;
-use crate::arch::{arch_layer_skipped, on_shown_level, push_polyline};
+use crate::arch::{arch_layer_skipped, layer_transparency, on_shown_level, push_polyline_with_transparency};
 
 fn ink_for(d: &Drawing, layer: &str, fallback: Color) -> crate::Ink {
     crate::ink(Color::ByLayer, d.layer(layer).map(|l| l.color).unwrap_or(fallback), fallback)
@@ -34,11 +34,12 @@ pub(crate) fn push_electrical(d: &Drawing, list: &mut DisplayList, plotting: boo
             continue;
         }
         let ink = ink_for(d, layer, if device.kind.is_switch() { Color::Index(2) } else { Color::Index(3) });
+        let transparency = layer_transparency(d, layer);
         for poly in cadcraft_arch::electrical::device_symbol(&d.arch, device) {
             if poly.len() < 2 || !poly.iter().all(|p| p.is_finite()) {
                 continue;
             }
-            push_polyline(list, electrical_handle(device.id), &ink, &poly);
+            push_polyline_with_transparency(list, electrical_handle(device.id), &ink, &poly, transparency);
         }
     }
 
@@ -47,6 +48,7 @@ pub(crate) fn push_electrical(d: &Drawing, list: &mut DisplayList, plotting: boo
         return;
     }
     let ink = ink_for(d, layer, Color::Index(2));
+    let transparency = layer_transparency(d, layer);
     for conn in &d.arch.connections {
         let Some(switch) = d.arch.electrical.iter().find(|device| device.id == conn.from) else {
             continue;
@@ -63,7 +65,7 @@ pub(crate) fn push_electrical(d: &Drawing, list: &mut DisplayList, plotting: boo
                 if dash.len() < 2 {
                     continue;
                 }
-                push_polyline(list, connection_handle(conn.id), &ink, &dash);
+                push_polyline_with_transparency(list, connection_handle(conn.id), &ink, &dash, transparency);
             }
         } else {
             for arc in arcs {
@@ -74,7 +76,7 @@ pub(crate) fn push_electrical(d: &Drawing, list: &mut DisplayList, plotting: boo
                     if dash.len() < 2 {
                         continue;
                     }
-                    push_polyline(list, connection_handle(conn.id), &ink, &dash);
+                    push_polyline_with_transparency(list, connection_handle(conn.id), &ink, &dash, transparency);
                 }
             }
         }

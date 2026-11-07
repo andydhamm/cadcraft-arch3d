@@ -7,7 +7,7 @@ use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::{cabinet_handle, fixture_handle};
 
 use crate::DisplayList;
-use crate::arch::{arch_layer_skipped, on_shown_level, push_polyline};
+use crate::arch::{arch_layer_skipped, layer_transparency, on_shown_level, push_polyline_with_transparency};
 
 fn ink_for(d: &Drawing, layer: &str) -> crate::Ink {
     crate::ink(Color::ByLayer, d.layer(layer).map(|l| l.color).unwrap_or(Color::Index(7)), Color::Index(7))
@@ -24,9 +24,10 @@ pub(crate) fn push_casework(d: &Drawing, list: &mut DisplayList, plotting: bool)
             continue;
         }
         let ink = ink_for(d, layer);
+        let transparency = layer_transparency(d, layer);
         for sym in cabinet_symbol(c) {
             if sym.len() >= 2 {
-                push_polyline(list, cabinet_handle(c.id), &ink, &sym);
+                push_polyline_with_transparency(list, cabinet_handle(c.id), &ink, &sym, transparency);
             }
         }
     }
@@ -39,9 +40,10 @@ pub(crate) fn push_casework(d: &Drawing, list: &mut DisplayList, plotting: bool)
             continue;
         }
         let ink = ink_for(d, layer);
+        let transparency = layer_transparency(d, layer);
         for sym in fixture_symbol(f) {
             if sym.len() >= 2 {
-                push_polyline(list, fixture_handle(f.id), &ink, &sym);
+                push_polyline_with_transparency(list, fixture_handle(f.id), &ink, &sym, transparency);
             }
         }
     }

@@ -6,7 +6,7 @@ use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::light_handle;
 
 use crate::DisplayList;
-use crate::arch::{arch_layer_skipped, push_polyline};
+use crate::arch::{arch_layer_skipped, layer_transparency, push_polyline_with_transparency};
 
 /// The layer fixture symbols are drawn on.
 pub(crate) const LIGHT_LAYER: &str = "E-LITE";
@@ -18,10 +18,11 @@ pub(crate) fn push_lights(d: &Drawing, list: &mut DisplayList, plotting: bool) {
     }
     // Colour 2 (yellow) when the drawing has no E-LITE layer of its own.
     let ink = crate::ink(Color::ByLayer, d.layer(LIGHT_LAYER).map(|l| l.color).unwrap_or(Color::Index(2)), Color::Index(2));
+    let transparency = layer_transparency(d, LIGHT_LAYER);
     for f in &d.arch.lights {
         for sym in cadcraft_arch::light::plan_symbol(f) {
             if sym.len() >= 2 && sym.iter().all(|p| p.is_finite()) {
-                push_polyline(list, light_handle(f.id), &ink, &sym);
+                push_polyline_with_transparency(list, light_handle(f.id), &ink, &sym, transparency);
             }
         }
     }
