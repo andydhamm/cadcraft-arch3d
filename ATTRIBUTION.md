@@ -21,6 +21,9 @@ Generated-in-code assets are original and have no file to list:
 - the colour index palette, generated from its structure (`crates/color/src/lib.rs`);
 - the sample drawings (`crates/engine/src/sample.rs`).
 
+Lifted code (credited here, not generated in this repository):
+- the TIN/contour helpers in `crates/geom` (`src/tin.rs` and `src/tin_ops.rs`) lifted from the [`cadcraft-terrain`](https://github.com/zorgglubb/cadcraft) crate on [zorgglubb/cadcraft](https://github.com/zorgglubb/cadcraft) (`main` commit 5da6d7b; upstream `crates/terrain/src/tin.rs` and `contour.rs`) by zorgglubb; MIT OR Apache-2.0 (same as the code: `LICENSE-MIT`, `LICENSE-APACHE`).
+
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|
 | `epaint_default_fonts::EGUI_ICONS`, `epaint_default_fonts::EMOJI_ICON` (dependency font inputs) | John Slegers | [egui 173cc737](https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts), [emoji-icon-font](https://github.com/jslegers/emoji-icon-font) | MIT (Copyright (c) 2014 John Slegers; full upstream text in `NOTICE`) | egui-icons.ttf is the five-glyph subset; emoji-icon-font.ttf is the full monochrome fallback. Registered by the production default font definitions; dependency assets unmodified here, no font file copied into this repository. |
