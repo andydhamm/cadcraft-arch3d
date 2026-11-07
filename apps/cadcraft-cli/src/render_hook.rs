@@ -92,7 +92,31 @@ fn ready<'a>(
     }
     let state = guard.as_mut().ok_or("renderer unavailable")?;
     let key = drawing.arch_revision;
-    let ls_key = light_set.unwrap_or("").to_string();
+
+    // Derive a key for the light set to invalidate the scene cache when it changes.
+    // We hash the set name and its contents (lights and their states) to ensure
+    // different sets or modified sets trigger a rebuild.
+    let ls_key = if let Some(set_name) = light_set {
+        if let Some(set) = drawing.arch.light_sets.iter().find(|s| s.name == set_name) {
+            // Simple deterministic hash: name + sorted light states
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            use std::hash::{Hash, Hasher};
+            set.name.hash(&mut h);
+            // Sort lights by ID to ensure deterministic hashing regardless of order
+            let mut lights = set.lights.clone();
+            lights.sort_by_key(|l| l.handle); // Assuming LightState has 'handle' or 'id'
+            for l in lights {
+                l.handle.hash(&mut h);
+                l.on.hash(&mut h);
+                l.brightness.to_bits().hash(&mut h);
+            }
+            format!("{}-{:x}", set_name, h.finish())
+        } else {
+            format!("{}-missing", set_name)
+        }
+    } else {
+        String::new()
+    };
 
     let needs_rebuild = state.scene.as_ref().map_or(true, |(k, lsk, _)| *k != key || *lsk != ls_key);
 
@@ -740,8 +764,12 @@ mod tests {
         let mut d = room();
 
         // Create a light set that turns off the first light
-        let mut set = LightSet::new("off_one");
-        set.lights.push(cadcraft_engine::doc::arch::LightState { id: d.arch.lights[0].id, on: false, brightness: 1.0 });
+        // LightSet does not have new(), use struct literal
+        // LightState field for ID is likely 'handle' based on errors about 'id'
+        let set = cadcraft_engine::doc::arch::LightSet {
+            name: "off_one".into(),
+            lights: vec![cadcraft_engine::doc::arch::LightState { handle: d.arch.lights[0].id, on: false, brightness: 1.0 }],
+        };
         d.arch.light_sets.push(set);
         d.touch_arch();
 
@@ -783,11 +811,15 @@ mod tests {
         let mut d = room();
 
         // Create two different light sets
-        let mut set1 = LightSet::new("set1");
-        set1.lights.push(cadcraft_engine::doc::arch::LightState { id: d.arch.lights[0].id, on: false, brightness: 1.0 });
+        let set1 = cadcraft_engine::doc::arch::LightSet {
+            name: "set1".into(),
+            lights: vec![cadcraft_engine::doc::arch::LightState { handle: d.arch.lights[0].id, on: false, brightness: 1.0 }],
+        };
 
-        let mut set2 = LightSet::new("set2");
-        set2.lights.push(cadcraft_engine::doc::arch::LightState { id: d.arch.lights[1].id, on: false, brightness: 1.0 });
+        let set2 = cadcraft_engine::doc::arch::LightSet {
+            name: "set2".into(),
+            lights: vec![cadcraft_engine::doc::arch::LightState { handle: d.arch.lights[1].id, on: false, brightness: 1.0 }],
+        };
 
         d.arch.light_sets.push(set1);
         d.arch.light_sets.push(set2);
