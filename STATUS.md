@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 36 of 53 segments merged · 2 of 14 acceptance checks**
 
@@ -25,11 +25,11 @@ Updated 2026-11-07 04:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 43.8 h so far · expected done Nov 08 11:38–Nov 10 20:08 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 44.1 h so far · expected done Nov 08 11:53–Nov 10 20:23 UTC |
 
 ## Phase 15 segments
 
-36 merged, 7 queued, 6 replaced, 5 gate, 3 merging, 1 escalate, 1 abandoned, 1 working
+36 merged, 7 queued, 6 replaced, 6 gate, 3 merging, 1 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -41,7 +41,7 @@ Updated 2026-11-07 04:15 UTC. This page and the card in the README are regenerat
 | `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | gate | bonsai-b |
 | `p15-inspect-levels-walls` | engine: arch.inspect level grade classes and wall z spans | merging | mai-flash |
 | `upstream-sync-2611bc5f5-v2` | merge upstream upstream/main up to 2611bc5f5 (44 commits) | merging | bonsai-ws2-a |
-| `p15-io-ifc-electrical` | io: outlets and switches as IfcOutlet / IfcSwitchingDevice | working | claude-sonnet-b |
+| `p15-io-ifc-electrical` | io: outlets and switches as IfcOutlet / IfcSwitchingDevice | gate | claude-sonnet-b |
 | `p15-io-dxf-electrical` | io: DXF save proxies for electrical devices and connections | gate | claude-sonnet-c |
 
 ## Recent merges
@@ -68,9 +68,9 @@ Updated 2026-11-07 04:15 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | gate | 935 |
 | bonsai-b | bonsai2-27b | gate | 865 |
 | bonsai-ws2-a | bonsai2-27b | merging | 967 |
-| bonsai-ws2-b | bonsai2-27b | gate | 928 |
+| bonsai-ws2-b | bonsai2-27b | merging | 929 |
 | claude-sonnet-a | sonnet | gate | 86 |
-| claude-sonnet-b | sonnet | agent | 84 |
+| claude-sonnet-b | sonnet | gate | 84 |
 | claude-sonnet-c | sonnet | gate | 38 |
 | claude-sonnet-d | sonnet | merging | 27 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 813 |
