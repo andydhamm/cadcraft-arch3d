@@ -3,6 +3,7 @@ use crate::cmd::CommandSpec;
 use crate::{EngineError, Session};
 use cadcraft_arch::area::is_living;
 use cadcraft_arch::casework_layout::{self, FrontKind, Hinge};
+use cadcraft_arch::grade::{above_grade_area, grade_class, level_above_grade_area};
 use cadcraft_arch::join::solve_joins;
 use cadcraft_arch::label::label_point;
 use cadcraft_arch::opening::rough_offset;
@@ -11,9 +12,9 @@ use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
 use cadcraft_doc::ArchId;
 use cadcraft_doc::Handle;
 use cadcraft_doc::arch::{
-    ArchModel, FurnishingHost, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair, StairShape, arch_handle,
-    cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle, railing_handle, railing_label, roof_handle, roof_label,
-    room_handle, room_label, stair_handle, stair_label, wall_label,
+    ArchModel, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair, StairShape,
+    arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle, railing_handle, railing_label, roof_handle,
+    roof_label, room_handle, room_label, stair_handle, stair_label, wall_label,
 };
 use std::f64::consts::PI;
 // RoofId might be ArchId or a new type. If it's not found, we might need to use ArchId or import it if it exists.
@@ -81,6 +82,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     let walls_flag = p.get("walls").and_then(Value::as_bool).unwrap_or(false);
     let railings_flag = p.get("railings").and_then(Value::as_bool).unwrap_or(false);
     let views_flag = p.get("views").and_then(Value::as_bool).unwrap_or(false);
+    let levels_flag = p.get("levels").and_then(Value::as_bool).unwrap_or(false);
 
     let shapes = solve_joins(&d.arch);
     let mut solved: std::collections::BTreeMap<ArchId, &Vec<cadcraft_geom::Vec2>> = std::collections::BTreeMap::new();
@@ -113,6 +115,19 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         }
         obj.insert("kind".to_string(), json!(w.wall_type.to_string()));
         obj.insert("level".to_string(), json!(w.base_level));
+        if walls_flag {
+            obj.insert("topLevel".to_string(), w.top_level.map(|idx| json!(idx)).unwrap_or(Value::Null));
+            match cadcraft_arch3d::wall_span(&d.arch, w) {
+                Some((bottom, top)) => {
+                    obj.insert("bottom".to_string(), json!(bottom));
+                    obj.insert("top".to_string(), json!(top));
+                }
+                None => {
+                    obj.insert("bottom".to_string(), Value::Null);
+                    obj.insert("top".to_string(), Value::Null);
+                }
+            }
+        }
         obj.insert("finish".to_string(), json!(w.finish.map(cadcraft_doc::arch::Finish::name)));
 
         if poché {
@@ -148,20 +163,39 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         json!([[0.0, 0.0], [0.0, 0.0]])
     };
 
-    let levels_json = d
-        .arch
-        .levels
-        .iter()
-        .map(|l| {
-            json!({
-                "name": l.name,
-                "elevation": l.elevation,
-                "floorToFloor": l.floor_to_floor(),
-                "ceiling": l.ceiling_height,
-                "structure": l.structure,
+    let levels_json = if levels_flag {
+        d.arch
+            .levels
+            .iter()
+            .map(|l| {
+                let mut row = JsonMap::new();
+                row.insert("name".to_string(), json!(l.name));
+                row.insert("elevation".to_string(), json!(l.elevation));
+                row.insert("floorToFloor".to_string(), json!(l.floor_to_floor()));
+                row.insert("ceiling".to_string(), json!(l.ceiling_height));
+                row.insert("structure".to_string(), json!(l.structure));
+                row.insert("index".to_string(), json!(l.index));
+                row.insert("kind".to_string(), json!(level_kind_key(l.kind)));
+                row.insert("gradeClass".to_string(), json!(grade_class(&d.arch, l).key()));
+                row.insert("aboveGradeArea".to_string(), json!(level_above_grade_area(&d.arch, l)));
+                Value::Object(row)
             })
-        })
-        .collect::<Vec<Value>>();
+            .collect::<Vec<Value>>()
+    } else {
+        d.arch
+            .levels
+            .iter()
+            .map(|l| {
+                json!({
+                    "name": l.name,
+                    "elevation": l.elevation,
+                    "floorToFloor": l.floor_to_floor(),
+                    "ceiling": l.ceiling_height,
+                    "structure": l.structure,
+                })
+            })
+            .collect::<Vec<Value>>()
+    };
 
     // Per-room objects. Read-only: no `doc_mut`, no `touch_arch`.
     let mut room_objects = Vec::new();
@@ -242,6 +276,9 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     out.insert("revision".to_string(), json!(d.arch_revision));
     out.insert("bounds".to_string(), bounds_json);
     out.insert("levels".to_string(), Value::Array(levels_json));
+    if levels_flag {
+        out.insert("aboveGradeArea".to_string(), json!(above_grade_area(&d.arch)));
+    }
     if openings_flag {
         out.insert("openings".to_string(), Value::Array(opening_objects));
     }
@@ -467,6 +504,14 @@ fn inspect_furnishings(model: &ArchModel, p: &Value, out: &mut JsonMap<String, V
             })
             .collect();
         out.insert("surfaces".to_string(), Value::Array(list));
+    }
+}
+
+/// Lower-case key for a level kind (`Floor` -> `floor`).
+fn level_kind_key(k: LevelKind) -> &'static str {
+    match k {
+        LevelKind::Floor => "floor",
+        LevelKind::Landing => "landing",
     }
 }
 
@@ -2629,6 +2674,124 @@ mod tests {
         assert_eq!(list[1]["pull"], "bar");
         assert_eq!(list[2]["doorStyle"], "shaker");
         assert_eq!(list[2]["pull"], "cup");
+    }
+
+    #[test]
+    fn inspect_reports_grade_classes_and_area() {
+        let mut s = Session::new();
+        let d = s.doc_mut().expect("doc should exist");
+        d.arch.levels.clear();
+        d.arch.levels.push(cadcraft_doc::arch::Level {
+            index: 0,
+            name: "Lower".to_string(),
+            elevation: -1.2,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            ..Default::default()
+        });
+        d.arch.levels.push(cadcraft_doc::arch::Level {
+            index: 1,
+            name: "Main".to_string(),
+            elevation: 2.7,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            ..Default::default()
+        });
+        d.arch.levels.push(cadcraft_doc::arch::Level {
+            index: 2,
+            name: "Entry".to_string(),
+            elevation: 1.35,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            kind: cadcraft_doc::arch::LevelKind::Landing,
+            ..Default::default()
+        });
+        d.touch_arch();
+
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [10.0, 0.0]], "thickness": 0.2, "exterior": true, "level": 0, "topLevel": 1 }));
+        exec(&mut s, "wall", &json!({ "points": [[10.0, 0.0], [10.0, 8.0]], "thickness": 0.2, "exterior": true, "level": 0, "topLevel": 1 }));
+        exec(&mut s, "wall", &json!({ "points": [[10.0, 8.0], [0.0, 8.0]], "thickness": 0.2, "exterior": true, "level": 0, "topLevel": 1 }));
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 8.0], [0.0, 0.0]], "thickness": 0.2, "exterior": true, "level": 0, "topLevel": 1 }));
+        exec(&mut s, "roomdetect", &json!({ "level": 1 }));
+
+        let v = exec(&mut s, "arch.inspect", &json!({ "levels": true, "rooms": true, "walls": true }));
+        let levels = v["levels"].as_array().expect("levels array missing");
+        let lower = levels.iter().find(|row| row["name"] == "Lower").expect("Lower level missing");
+        let main = levels.iter().find(|row| row["name"] == "Main").expect("Main level missing");
+        let entry = levels.iter().find(|row| row["name"] == "Entry").expect("Entry level missing");
+
+        assert_eq!(lower["kind"], "floor");
+        assert_eq!(lower["gradeClass"], "basement");
+        assert_eq!(main["kind"], "floor");
+        assert_eq!(main["gradeClass"], "aboveGrade");
+        assert_eq!(entry["kind"], "landing");
+        assert_eq!(entry["gradeClass"], "aboveGrade");
+        assert!((lower["aboveGradeArea"].as_f64().unwrap_or(-1.0) - 0.0).abs() < 1e-6);
+        assert!((entry["aboveGradeArea"].as_f64().unwrap_or(-1.0) - 0.0).abs() < 1e-6);
+
+        let rooms = v["rooms"].as_array().expect("rooms array missing");
+        let main_area: f64 = rooms.iter().filter(|r| r["level"] == "Main").map(|r| r["interiorArea"].as_f64().unwrap_or(0.0)).sum();
+        assert!(
+            (v["aboveGradeArea"].as_f64().unwrap_or(-1.0) - main_area).abs() < 1e-6,
+            "aboveGradeArea mismatch: expected {main_area}, got {}",
+            v["aboveGradeArea"]
+        );
+
+        let mut zero = Session::new();
+        let d = zero.doc_mut().unwrap();
+        d.arch.levels.clear();
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, name: "Zero".to_string(), elevation: 0.0, ..Default::default() });
+        let c = [Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0)];
+        for i in 0..4 {
+            let mut w = cadcraft_doc::Wall::new(c[i], c[(i + 1) % 4], 0.2);
+            w.exterior = true;
+            w.base_level = 0;
+            d.arch.push_wall(w);
+        }
+        d.arch.push_room(cadcraft_doc::arch::Room { level: 0, polygon: c.to_vec(), ..Default::default() });
+        d.touch_arch();
+        let zero_class = cadcraft_arch::grade::grade_class(&zero.doc().unwrap().arch, &zero.doc().unwrap().arch.levels[0]);
+        assert_eq!(zero_class, cadcraft_arch::grade::GradeClass::AboveGrade);
+    }
+
+    #[test]
+    fn inspect_walls_report_bottom_and_top() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.clear();
+        d.arch.levels.push(cadcraft_doc::arch::Level {
+            index: 0,
+            name: "Lower".to_string(),
+            elevation: 0.0,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            ..Default::default()
+        });
+        d.arch.levels.push(cadcraft_doc::arch::Level {
+            index: 1,
+            name: "Main".to_string(),
+            elevation: 2.7,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            ..Default::default()
+        });
+        d.touch_arch();
+
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [10.0, 0.0]], "thickness": 0.2, "exterior": true, "level": 0, "topLevel": 1 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        let span = find_wall_by_points(walls, [0.0, 0.0], [10.0, 0.0]).expect("wall with topLevel not found");
+        assert_eq!(span["bottom"], 0.0);
+        assert_eq!(span["top"], 5.1);
+        assert_eq!(span["topLevel"], 1);
+
+        exec(&mut s, "wall", &json!({ "points": [[10.0, 0.0], [20.0, 0.0]], "thickness": 0.2, "exterior": true, "level": 1, "height": 1.25 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        let plain = walls.iter().find(|row| row["start"] == json!([10.0, 0.0]) && row["end"] == json!([20.0, 0.0])).expect("plain wall not found");
+        assert_eq!(plain["bottom"], 2.7);
+        assert_eq!(plain["top"], 3.95);
+        assert!(plain["topLevel"].is_null());
     }
 
     #[test]
