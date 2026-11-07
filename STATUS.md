@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 43 of 52 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 44 of 52 segments merged · 2 of 14 acceptance checks**
 
-7,681 workspace tests passing at the last merge · 810 segments merged in all · 0 of 14 seats working
+7,683 workspace tests passing at the last merge · 811 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,11 +25,11 @@ Updated 2026-11-07 11:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 51.3 h so far · expected done Nov 07 22:33–Nov 09 01:33 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 51.6 h so far · expected done Nov 07 20:32–Nov 08 19:56 UTC |
 
 ## Phase 15 segments
 
-43 merged, 6 replaced, 6 merging, 3 queued, 2 abandoned
+44 merged, 6 replaced, 5 merging, 3 queued, 2 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -38,12 +38,12 @@ Updated 2026-11-07 11:45 UTC. This page and the card in the README are regenerat
 | `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | merging | mai-flash-esc |
 | `p15-inspect-electrical` | engine: arch.inspect electrical, connections, circuits, outlet gaps and light sets | merging | claude-sonnet-b |
 | `p15-inspect-rooms-on-objects` | engine: brightness on light rows, room on light, fixture and furnishing rows | merging | claude-sonnet-d |
-| `p15-io-glb-obj-electrical` | io: GLB nodes and OBJ groups for cover plates | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 11:57 | `p15-io-glb-obj-electrical` | merged | 7,683 pass | claude-sonnet-d |
 | Nov 07 11:30 | `p15-io-ifc-electrical` | merged | 7,681 pass | claude-sonnet-b |
 | Nov 07 11:03 | `p15-io-dxf-electrical` | merged | 7,677 pass | claude-sonnet-c |
 | Nov 07 10:36 | `p15-door-on-level` | merged | 7,674 pass | claude-sonnet-a |
@@ -55,7 +55,6 @@ Updated 2026-11-07 11:45 UTC. This page and the card in the README are regenerat
 | Nov 07 05:02 | `p15-cabinet-along-wall` | merged | 7,654 pass | claude-sonnet-d |
 | Nov 07 03:54 | `p15-arch-room-at` | merged | 7,650 pass | claude-sonnet-c |
 | Nov 07 02:08 | `harden-p15-render-electrical` | merged | 7,647 pass | tturbo-mac |
-| Nov 06 23:34 | `p15-io-electrical` | refused | 0 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
