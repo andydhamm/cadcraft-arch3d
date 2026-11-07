@@ -208,3 +208,29 @@ pub(crate) fn append(dst: &mut DisplayList, src: DisplayList) {
     dst.bounds = dst.bounds.union(&src.bounds);
     dst.expanded = dst.expanded.saturating_add(src.expanded);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alpha_zero_transparency_is_opaque() {
+        assert_eq!(alpha(0), 255);
+    }
+
+    #[test]
+    fn alpha_max_transparency() {
+        assert_eq!(alpha(90), 26);
+    }
+
+    #[test]
+    fn alpha_clamps_above_max() {
+        assert_eq!(alpha(100), 26);
+        assert_eq!(alpha(255), 26);
+    }
+
+    #[test]
+    fn alpha_midpoint() {
+        assert_eq!(alpha(50), 128);
+    }
+}
