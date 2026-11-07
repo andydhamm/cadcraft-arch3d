@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 41 of 52 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 42 of 52 segments merged · 2 of 14 acceptance checks**
 
-7,674 workspace tests passing at the last merge · 808 segments merged in all · 0 of 14 seats working
+7,677 workspace tests passing at the last merge · 809 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,11 +25,11 @@ Updated 2026-11-07 11:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 50.6 h so far · expected done Nov 08 04:36–Nov 09 18:25 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 50.8 h so far · expected done Nov 08 00:57–Nov 09 08:36 UTC |
 
 ## Phase 15 segments
 
-41 merged, 8 merging, 6 replaced, 3 queued, 2 abandoned
+42 merged, 7 merging, 6 replaced, 3 queued, 2 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -39,13 +39,13 @@ Updated 2026-11-07 11:00 UTC. This page and the card in the README are regenerat
 | `p15-inspect-electrical` | engine: arch.inspect electrical, connections, circuits, outlet gaps and light sets | merging | claude-sonnet-b |
 | `p15-inspect-rooms-on-objects` | engine: brightness on light rows, room on light, fixture and furnishing rows | merging | claude-sonnet-d |
 | `p15-io-ifc-electrical` | io: outlets and switches as IfcOutlet / IfcSwitchingDevice | merging | claude-sonnet-b |
-| `p15-io-dxf-electrical` | io: DXF save proxies for electrical devices and connections | merging | claude-sonnet-c |
 | `p15-io-glb-obj-electrical` | io: GLB nodes and OBJ groups for cover plates | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 11:03 | `p15-io-dxf-electrical` | merged | 7,677 pass | claude-sonnet-c |
 | Nov 07 10:36 | `p15-door-on-level` | merged | 7,674 pass | claude-sonnet-a |
 | Nov 07 09:36 | `p15-inspect-site-paths-plants` | merged | 7,671 pass | bonsai-a |
 | Nov 07 08:32 | `p15-cmd-connections` | merged | 7,668 pass |  |
@@ -57,7 +57,6 @@ Updated 2026-11-07 11:00 UTC. This page and the card in the README are regenerat
 | Nov 07 02:08 | `harden-p15-render-electrical` | merged | 7,647 pass | tturbo-mac |
 | Nov 06 23:34 | `p15-io-electrical` | refused | 0 pass | mai-flash-esc |
 | Nov 06 23:25 | `harden-p15-arch-outlet-gaps` | merged | 7,638 pass | tturbo-mac |
-| Nov 06 22:23 | `p15-cmd-outlets-auto` | merged | 7,633 pass | mai-flash |
 
 ## Seats active in the last hour
 
