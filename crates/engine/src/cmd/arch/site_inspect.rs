@@ -4,7 +4,7 @@
 use cadcraft_arch::plant::{find_species, plant_size};
 use cadcraft_arch::site::north_arrow;
 use cadcraft_arch::terrain::original_tin;
-use cadcraft_doc::arch::{ArchModel, ModifierKind, handle_json, plant_handle, plant_label, terrain_handle, terrain_label};
+use cadcraft_doc::arch::{ArchModel, ModifierKind, PlantForm, handle_json, plant_handle, plant_label, terrain_handle, terrain_label};
 use cadcraft_geom::Vec2;
 use serde_json::{Map, Value, json};
 
@@ -38,6 +38,18 @@ fn site_json(model: &ArchModel) -> Value {
         return Value::Null;
     }
     let arrow = north_arrow(model).map(|a| json!({"at": pt(a.at), "direction": pt(a.direction)}));
+    let paths: Vec<Value> = match model.terrain {
+        Some(ref t) => t
+            .modifiers
+            .iter()
+            .filter_map(|m| match &m.kind {
+                ModifierKind::Path { kind, .. } => Some(json!({"id": terrain_label(Some(m.id)), "kind": kind.name()})),
+                _ => None,
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+    let plants = plants_json(model);
     match &model.site {
         Some(s) => {
             let reference = s.reference.as_ref().map(|r| json!({"point": pt(r.point), "easting": r.easting, "northing": r.northing, "crs": r.crs}));
@@ -48,6 +60,8 @@ fn site_json(model: &ArchModel) -> Value {
                 "trueNorth": s.true_north,
                 "reference": reference,
                 "northArrow": arrow,
+                "paths": paths,
+                "plants": plants,
             })
         }
         // A terrain without a site location: only the north arrow is known.
@@ -58,6 +72,8 @@ fn site_json(model: &ArchModel) -> Value {
             "trueNorth": Value::Null,
             "reference": Value::Null,
             "northArrow": arrow,
+            "paths": paths,
+            "plants": plants,
         }),
     }
 }
@@ -115,12 +131,24 @@ fn terrain_json(model: &ArchModel) -> Value {
     })
 }
 
+/// The plant's catalogue form as a phase-15 key: `"tree"` (deciduous or evergreen),
+/// `"shrub"` or `"groundCover"`.
+fn plant_form_key(form: PlantForm) -> &'static str {
+    match form {
+        PlantForm::DeciduousTree | PlantForm::EvergreenTree => "tree",
+        PlantForm::Shrub => "shrub",
+        PlantForm::GroundCover => "groundCover",
+    }
+}
+
 fn plants_json(model: &ArchModel) -> Value {
     let list: Vec<Value> = model
         .plants
         .iter()
         .map(|pl| {
-            let size = find_species(model, &pl.species).map(|sp| plant_size(&sp, pl));
+            let species = find_species(model, &pl.species);
+            let size = species.as_ref().map(|sp| plant_size(sp, pl));
+            let form = species.as_ref().map_or(Value::Null, |sp| json!(plant_form_key(sp.form)));
             json!({
                 "id": plant_label(pl.id),
                 "handle": handle_json(plant_handle(pl.id)),
@@ -129,6 +157,7 @@ fn plants_json(model: &ArchModel) -> Value {
                 "age": pl.age,
                 "height": size.map(|s| s.0),
                 "spread": size.map(|s| s.1),
+                "form": form,
             })
         })
         .collect();
@@ -338,5 +367,56 @@ mod tests {
         assert_eq!(mods[2]["thickness"], json!(0.15));
         assert_eq!(mods[2]["material"], json!("concrete"));
         assert!(mods[2]["polygon"].is_array());
+    }
+
+    #[test]
+    fn inspect_site_lists_paths_and_plants() {
+        let mut m = ArchModel::default();
+        m.terrain = Some(Terrain {
+            modifiers: vec![
+                TerrainModifier {
+                    id: 0,
+                    kind: ModifierKind::Path { kind: PathKind::Road, polygon: square(1.0), thickness: 0.1, material: "asphalt".into() },
+                },
+                TerrainModifier { id: 1, kind: ModifierKind::Hill { center: Vec2::new(5.0, 5.0), height: 1.0, radius: 2.0 } },
+            ],
+            next_modifier_id: 2,
+            ..Terrain::default()
+        });
+        m.plants.push(Plant { id: ArchId(0), species: "boxwood".into(), position: Vec2::new(1.0, 2.0), age: 100.0, planted_height: None });
+        let out = run(&m, json!({"site": true}));
+        let s = &out["site"];
+        let paths = s["paths"].as_array().cloned().unwrap_or_default();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0]["id"], json!("tm0"));
+        assert_eq!(paths[0]["kind"], json!("road"));
+        let plants = s["plants"].as_array().cloned().unwrap_or_default();
+        assert_eq!(plants.len(), 1);
+        assert_eq!(plants[0]["id"], json!("pl0"));
+        assert_eq!(plants[0]["at"], json!([1.0, 2.0]));
+    }
+
+    #[test]
+    fn inspect_plant_rows_report_form() {
+        let mut m = ArchModel::default();
+        m.plants.push(Plant { id: ArchId(0), species: "boxwood".into(), position: Vec2::new(1.0, 1.0), age: 100.0, planted_height: None });
+        m.plants.push(Plant { id: ArchId(1), species: "Nonesuch".into(), position: Vec2::new(2.0, 2.0), age: 100.0, planted_height: None });
+        let out = run(&m, json!({"plants": true}));
+        let list = out["plants"].as_array().cloned().unwrap_or_default();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["form"], json!("shrub"));
+        assert!(list[1]["form"].is_null());
+    }
+
+    #[test]
+    fn inspect_site_paths_are_empty_without_a_terrain() {
+        let mut m = ArchModel::default();
+        m.site = Some(SiteLocation { latitude: 40.0, longitude: -80.0, elevation: 100.0, true_north: 0.0, reference: None, north_arrow_at: None });
+        let out = run(&m, json!({"site": true}));
+        let s = &out["site"];
+        let paths = s["paths"].as_array().cloned().unwrap_or_default();
+        assert!(paths.is_empty());
+        let plants = s["plants"].as_array().cloned().unwrap_or_default();
+        assert!(plants.is_empty());
     }
 }
