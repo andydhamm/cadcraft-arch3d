@@ -414,3 +414,145 @@ Chief's catalog content belongs to its vendor and manufacturers: arch3d ships it
   watercolor, hand-drawn lines, duotone, clay (a plain grey model) and physically based ray trace
   (kitchenandbathbootcamp 84:50–86:39). Watercolor and glass house are not required (Andy 2026-11-02); technical
   illustration is optional.
+
+## 7. Beyond the library: what the training videos show (2026-11-07)
+
+The same 29 videos (§6), read again on 2026-11-07 for everything other than the library and compared with the brief.
+Behaviour only, in our own words, cited as (video mm:ss). Each subsection feeds one brief phase; where the brief puts
+something out of scope, the brief wins.
+
+### 7.1 Ceilings, foundations, stairs, decks and openings (brief phases 16 and 17)
+- **Rough and finished ceilings.** A room has a rough ceiling (structure) and a finished one, apart by the ceiling
+  finish (ceilingbasics 00:46–01:03; residentialbootcamp 14:11–15:43). A suspended ceiling is the room's ceiling raised,
+  then a finish stack of drywall, an air gap and ceiling tile, so the finished surface drops (suspendedceilings
+  00:51–02:15).
+- **Cathedral and vaulted ceilings.** Turning a room's flat ceiling off makes its ceiling follow the roof underside, and
+  re-pitching the roof re-pitches the vault (ceilingbasics 03:42–05:21). Interior walls in a vaulted room rise to the
+  sloped ceiling (ceilingvaultstraysandbarrels 07:08–07:21). Lights on a vault hang plumb, and a pendant's mount follows
+  the slope (smallspacelightingandvisualizing 51:28–55:02).
+- **Trays.** An automatic tray takes a width in from the walls, a depth, and vertical or pitched sides. It can recess up
+  into the attic instead of dropping the surrounding ceiling (ceilingvaultstraysandbarrels 08:02–08:55;
+  kitchenandbathbootcamp 72:47–74:51). Trays nest, and a drawn outline can become one (saguarotrayceiling 00:50–03:02;
+  ceilingvaultstraysandbarrels 10:09–11:43). The outline stays editable after placing (saguarotrayceiling 05:14).
+- **Soffits.** A soffit is a box under the ceiling: above wall cabinets, as coffers, or as faux beams (interiorsoffits
+  00:07–00:21). It snaps to a wall face or a room corner and has a direction (interiorsoffits 00:32–01:27). Its height is
+  measured from the floor finish or the subfloor, and it follows later ceiling changes (interiorsoffits 03:05–03:59).
+  Lights placed under a soffit drop to its underside, and moving a soffit over lights re-seats them (ceilingbasics
+  02:38–03:09; slopedsoffits 01:04–01:26).
+- **Foundations.** A foundation is derived from the first floor's exterior walls:
+  - stem walls on footings, a grade beam on piers, or a monolithic slab, with a slab thickness;
+  - stem height taken from a basement's ceiling;
+  - footings drawn dashed in plan.
+  (residentialbootcamp 44:53–49:03.)
+- **Decks.** A deck room frames itself: joists, a ledger, a beam set back for a cantilever, posts and footings
+  (decks 02:05–04:11, 14:25–16:18). Board direction is automatic and can be set per room (decks 09:45–10:21). Border
+  boards and a centre transition board are options (decks 66:40–67:29).
+- **Railings.**
+  - Railings have newel posts at ends, corners and turns, spaced automatically up to a maximum, with top, middle and
+    bottom rails (stairsandrailings 02:41–03:57, 11:40–12:39).
+  - A railing can be set in from the edge, and a deck's posts drop onto the rim (stairsandrailings 03:47, 38:54–42:06;
+    decks 05:02–05:43).
+  - Stair railings are switched on or off per side and flight (stairsandrailings 01:49, 11:09–11:33).
+- **Stairs.**
+  - Tread thickness and nosing, open or closed risers, and stringers: two, centre, none, or a skirt against a wall
+    (stairsandrailings 01:32–01:45).
+  - A stair drawn over a wall cuts the wall off beneath it (stairsandrailings 14:14–14:23).
+  - In plan, a stair shows its treads with nosings, a walk arrow and a break line (stairsandrailings 09:19–09:43).
+- **Openings.**
+  - Divided lites set by a count across and down, for the whole window or its top part only (residentialbootcamp
+    34:50, 41:02–41:15; doorsandwindows 04:08, 07:39).
+  - Round-top windows, reflected to make a circle (doorsandwindows 10:08–10:25), and windows whose top follows the roof
+    pitch in a gable (doorsandwindows 09:16–09:27).
+  - A fixed door panel serves as a sidelight (residentialbootcamp 34:26). Sill and casing switch off per side
+    (residentialbootcamp 40:54; doorsandwindows 03:38–04:02).
+
+### 7.2 Interior finish, kitchen and bath (brief phase 18)
+- **Room-type finishes.** A room's type sets its floor build-up and finish, for example a garage slab or a tiled bath
+  (residentialbootcamp 23:38–24:18, 30:41).
+- **Moldings.**
+  - Room moldings: base, crown and chair rail, set per room. Crown wraps soffits, and a soffit can ignore room moldings
+    (kitchenandbathbootcamp 09:00; ceilingbasics 01:52–02:31; interiorsoffits 04:02–05:55).
+  - Cabinet crown comes from a profile, with a size override and an offset for face items, and follows the box front
+    when the door is removed (kitchenandbathbootcamp 25:01–27:40, 40:02).
+  - A molding polyline sweeps a profile along a drawn path (ceilingvaultstraysandbarrels 13:26–16:53;
+    kitchenandbathbootcamp 40:36–42:08). Tray moldings have horizontal and vertical offsets (saguarotrayceiling 03:05).
+- **Countertops.** A counter detaches from its cabinets and becomes a custom shape. An edge moves by a typed amount for a
+  seating overhang, turns into an arc with a radius handle, or drops to the floor as a waterfall
+  (kitchenandbathbootcamp 65:25–69:17).
+- **Backsplash.** Click a wall and the backsplash runs from the counter to the underside of the wall cabinets; drag its
+  top to the ceiling, or draw a custom shape (kitchenandbathbootcamp 47:22–48:35). It is on or off per cabinet
+  (kitchenandbathbootcamp 16:56).
+- **Cabinet fronts.**
+  - Boxes are framed or frameless, with overlay or inset fronts and a toe kick (kitchenandbathbootcamp 17:04–17:18).
+  - A face layout editor changes an item's kind (door, drawer, opening, appliance), splits items across or down,
+    equalizes them and sets their heights (kitchenandbathbootcamp 31:11–33:49; residentialbootcamp 69:45–71:13).
+  - Fronts wider than about 27 in become door pairs (kitchenandbathbootcamp 31:38; residentialbootcamp 69:20–69:42).
+- **Corners, fillers and shelves.**
+  - A cabinet pushed into a corner becomes a corner cabinet: diagonal door or lazy susan, with the cut-out shown in plan
+    (kitchenandbathbootcamp 29:17–30:05; residentialbootcamp 71:18–72:19).
+  - Fillers close a run against a wall (kitchenandbathbootcamp 16:18, 57:30, 64:26).
+  - Open shelving is a wall cabinet with no doors and an automatic or set shelf count (kitchenandbathbootcamp
+    38:27–40:00).
+- **Face appliances.** A microwave drawer or wall oven dropped on a cabinet becomes its face item, at the appliance's
+  height. Two can stack in one tall cabinet (appliancesandfixtures 05:51–09:06).
+- **Bath.** Glass walls make shower enclosures. A glass pony wall is a solid base about 42 in high with glass above, and
+  a shower door is glass with hardware (kitchenandbathbootcamp 92:42–94:01). A wall niche is an opening type: a recess
+  with a width, style and back material (kitchenandbathbootcamp 48:37–49:42; doorsandwindows 00:29).
+
+### 7.3 Light, sky and cameras (brief phase 19)
+- **Exposure and tone mapping.** Physically based views have automatic or manual exposure, a choice of tone curve,
+  separate bounce counts for opaque and transmissive surfaces, and samples (interiorraytracing 04:07–05:24).
+- **Sun.**
+  - The sun has an intensity (about 100,000 suggested for daylight) and a cast-shadows switch (exteriorraytracing
+    04:25–04:48, 13:59; backdrops 08:38).
+  - Named sun angles (several per plan) are picked per camera (interiorraytracing 01:00, 10:45–11:53).
+  - The backdrop alone can light the scene with the sun off (backdrops 06:45–07:24).
+- **Sky.** A generated sky's colour follows the sun, through twilight to a night sky with stars and a moon that has its
+  own brightness and position (backdrops 07:34–10:14).
+- **HDRI.** An HDR panorama lights the scene as well as filling the background (backdrops 05:00–06:31). A 360° backdrop
+  takes a horizon (eye-level) offset (backdrops 03:21–04:01), and backdrop intensity is set for day or night
+  (interiorraytracing 05:44–06:03; exteriorraytracing 10:01–11:28).
+- **Horizon.** Terrain can extend to the horizon so exteriors have no edge (exteriorraytracing 09:18–09:56).
+- **Strip lights.** Rope or LED strip lights run along a path at a spacing: in trays, under cabinets and in stair risers
+  (smallspacelightingandvisualizing 39:47–42:40; saguarotrayceiling 03:40–04:23; stairsandrailings 49:04–51:14;
+  kitchenandbathbootcamp 82:41).
+- **Material maps.** Bump and normal maps render and can be imported (materials 02:48–03:49).
+- **Seeing in.**
+  - Walls facing the camera hide while orbiting, together with what they host (smallspacelightingandvisualizing
+    02:18–03:13, 37:50–39:07).
+  - A 3D cross-section slider gives six live clip planes, and each camera has a near-clip distance
+    (smallspacelightingandvisualizing 07:04–10:25).
+- **Cameras.**
+  - Each camera stores its rendering technique (interiorraytracing 02:51) and can be reset to its saved state
+    (interiorraytracing 13:31–15:58; smallspacelightingandvisualizing 47:03).
+  - Floor overview can show or hide lower floors (smallspacelightingandvisualizing 01:43–02:15).
+
+### 7.4 Construction drawings (brief phases 20 and 21)
+- **Plan views.**
+  - Saved plan views are named layer sets bound to a floor or to any floor. Each remembers zoom and opens as a tab
+    (savedplanviews 00:10–03:49).
+  - Views carry their own annotation defaults (savedplanviews 04:14–07:48) and are created, duplicated and edited
+    (developingsavedplanviews 01:10–10:48).
+  - Templates ship about a dozen views, including a reflected ceiling plan (savedplanviews 01:52–02:02, 12:13–12:37).
+- **Reference display.** A plan can show another floor beneath in its own colours, saved with the view (savedplanviews
+  05:06–10:15; residentialbootcamp 48:31).
+- **Dimensions.**
+  - Dimensions locate walls by their framing and snap to wall layers, overhangs and ridges (residentialbootcamp
+    16:13–28:43).
+  - Selecting an object and typing a new value into a dimension moves that object (residentialbootcamp 16:19–17:42,
+    22:29–23:11; kitchenandbathbootcamp 05:29–06:22).
+  - Automatic exterior dimensions appear and update as walls and openings are added (residentialbootcamp 16:02, 20:03,
+    33:46).
+- **Labels and schedules.**
+  - Openings carry labels and opening indicators in elevations (doorsandwindows 10:31–13:28).
+  - Schedules choose categories and columns, number objects with callouts, find objects in the plan and update live
+    (kitchenandbathbootcamp 69:26–72:43; newfeatures 09:02–09:56).
+  - Room labels choose areas and dimensions per room (newfeatures 10:00–11:17).
+- **Interior elevations.** An elevation taken inside a room shows only that wall and what is on it, clipped to the room
+  or cropped with handles. It shows cabinet door-swing marks and takes annotations that stay with the saved view
+  (kitchenandbathbootcamp 50:37–55:20; residentialbootcamp 89:44–92:41).
+- **Material patterns.** Each material's 2D pattern appears in vector views and elevations (materials 00:15–01:11).
+- **Layouts.**
+  - Plan views go to a linked layout as live views at a scale, cropped. Camera views and schedules go too.
+  - A title block on a master page appears on every page, with page macros.
+  - All pages export to one PDF at sheet size (residentialbootcamp 96:11–110:46; kitchenandbathbootcamp 87:06–91:51).
