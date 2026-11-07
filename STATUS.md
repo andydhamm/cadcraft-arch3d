@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 02:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 02:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 35 of 42 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 35 of 45 segments merged · 2 of 14 acceptance checks**
 
-7,638 workspace tests passing at the last merge · 800 segments merged in all · 0 of 14 seats working
+7,647 workspace tests passing at the last merge · 801 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -25,21 +25,25 @@ Updated 2026-11-07 02:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 41.6 h so far · expected done Nov 07 10:24–Nov 08 12:04 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 41.8 h so far · expected done Nov 07 14:15–Nov 08 17:56 UTC |
 
 ## Phase 15 segments
 
-35 merged, 4 replaced, 4 queued, 2 escalate, 1 stuck, 1 abandoned
+35 merged, 4 replaced, 4 queued, 3 working, 2 escalate, 1 stuck, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | escalate |  |
 | `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | escalate |  |
+| `p15-arch-room-at` | arch: a public room lookup at a plan point | working | claude-sonnet-c |
+| `p15-inspect-site-paths-plants` | engine: arch.inspect site lists paths and plants with their form | working | bonsai-a |
+| `p15-cabinet-along-wall` | arch+engine: a cabinet's host wall and its span along it | working | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 02:08 | `harden-p15-render-electrical` | merged | 7,647 pass | tturbo-mac |
 | Nov 06 23:34 | `p15-io-electrical` | refused | 0 pass | mai-flash-esc |
 | Nov 06 23:25 | `harden-p15-arch-outlet-gaps` | merged | 7,638 pass | tturbo-mac |
 | Nov 06 22:23 | `p15-cmd-outlets-auto` | merged | 7,633 pass | mai-flash |
@@ -51,23 +55,21 @@ Updated 2026-11-07 02:00 UTC. This page and the card in the README are regenerat
 | Nov 06 16:38 | `p15-arch-outlet-gaps` | merged | 7,612 pass | claude-sonnet-a |
 | Nov 06 16:09 | `p15-cli-render-styles` | merged | 7,609 pass | claude-sonnet-d |
 | Nov 06 15:27 | `p15-cmd-level-free` | merged | 7,607 pass | mai-flash-esc |
-| Nov 06 14:52 | `p15-arch-circuits` | merged | 7,602 pass | bonsai-ws2-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 933 |
-| bonsai-b | bonsai2-27b | gate | 861 |
+| bonsai-a | bonsai2-27b | agent | 933 |
+| bonsai-b | bonsai2-27b | agent | 863 |
 | bonsai-ws2-a | bonsai2-27b | idle | 966 |
-| bonsai-ws2-b | bonsai2-27b | gate | 926 |
+| bonsai-ws2-b | bonsai2-27b | gate | 927 |
 | claude-sonnet-a | sonnet | idle | 86 |
 | claude-sonnet-b | sonnet | idle | 84 |
-| claude-sonnet-c | sonnet | idle | 37 |
-| claude-sonnet-d | sonnet | idle | 25 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 812 |
+| claude-sonnet-c | sonnet | agent | 37 |
+| claude-sonnet-d | sonnet | agent | 25 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 67 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 38 |
-| tturbo-mac | tturbo-ultraheretic | merging | 632 |
+| tturbo-mac | tturbo-ultraheretic | agent | 632 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
