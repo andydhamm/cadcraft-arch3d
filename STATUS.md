@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 23:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 16: Phase 16**
 
@@ -37,6 +37,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 22:53 | `upstream-sync-2611bc5f5-v3` | refused | 7,739 pass | bonsai-b |
 | Nov 07 22:01 | `upstream-sync-2611bc5f5-v3` | refused | 7,739 pass | bonsai-b |
 | Nov 07 19:27 | `harden-p15-inspect-rooms-on-objects` | merged | 7,737 pass | tturbo-mac |
 | Nov 07 16:33 | `harden-p15-plan-layer-transparency` | merged | 7,729 pass | tturbo-mac |
@@ -48,14 +49,13 @@ none yet
 | Nov 07 12:59 | `harden-p15-arch-room-at` | merged | 7,700 pass | tturbo-mac |
 | Nov 07 12:23 | `p15-render-light-set` | merged | 7,686 pass | mai-flash-esc |
 | Nov 07 11:57 | `p15-io-glb-obj-electrical` | merged | 7,683 pass | claude-sonnet-d |
-| Nov 07 11:30 | `p15-io-ifc-electrical` | merged | 7,681 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 943 |
-| bonsai-b | bonsai2-27b | merging | 876 |
+| bonsai-b | bonsai2-27b | agent | 876 |
 | bonsai-ws2-a | bonsai2-27b | idle | 971 |
 | bonsai-ws2-b | bonsai2-27b | idle | 943 |
 | claude-sonnet-a | sonnet | idle | 89 |
