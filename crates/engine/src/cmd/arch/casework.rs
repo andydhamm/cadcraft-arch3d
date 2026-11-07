@@ -958,4 +958,53 @@ mod tests {
         let v3 = run(&mut s, "arch.inspect", json!({ "furnishings": true })).unwrap_or(Value::Null);
         assert_eq!(v3["furnishings"][0]["room"], json!("r0"));
     }
+
+    #[test]
+    fn inspect_fixture_in_room_hole_reports_null() {
+        let mut s = Session::new();
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.rooms.push(cadcraft_doc::arch::Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 6.0), Vec2::new(0.0, 6.0)],
+                holes: vec![vec![Vec2::new(2.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(2.0, 4.0)]],
+                room_type: cadcraft_doc::arch::RoomType::Living,
+                ..cadcraft_doc::arch::Room::default()
+            });
+            d.touch_arch();
+        }
+
+        // Fixture inside the hole.
+        let r = run(&mut s, "fixture", json!({ "kind": "toilet", "at": [3.0, 3.0] }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v["fixtures"][0]["room"], Value::Null, "fixture in hole should report null room");
+
+        // Fixture in the room but outside the hole.
+        let r = run(&mut s, "fixture", json!({ "kind": "sink", "at": [1.0, 1.0] }));
+        assert!(r.is_ok(), "{r:?}");
+        let v2 = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v2["fixtures"][1]["room"], json!("r0"), "fixture in room should report r0");
+    }
+
+    #[test]
+    fn inspect_fixture_on_wrong_level_reports_null() {
+        let mut s = Session::new();
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.rooms.push(cadcraft_doc::arch::Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+                room_type: cadcraft_doc::arch::RoomType::Living,
+                ..cadcraft_doc::arch::Room::default()
+            });
+            d.touch_arch();
+        }
+
+        // Fixture on level 1, room on level 0.
+        let r = run(&mut s, "fixture", json!({ "kind": "toilet", "at": [3.0, 2.0], "level": 1 }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v["fixtures"][0]["room"], Value::Null, "fixture on different level should report null room");
+    }
 }

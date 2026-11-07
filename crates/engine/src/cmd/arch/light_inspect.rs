@@ -213,4 +213,64 @@ mod tests {
         let lights2 = out2["lights"].as_array().unwrap();
         assert_eq!(lights2[0]["brightness"], json!(0.5));
     }
+
+    #[test]
+    fn inspect_light_in_room_hole_reports_null() {
+        let mut model = ArchModel::default();
+        model.rooms.push(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 6.0), Vec2::new(0.0, 6.0)],
+            holes: vec![vec![Vec2::new(2.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(2.0, 4.0)]],
+            room_type: RoomType::Living,
+            ..Room::default()
+        });
+        // Light inside the hole.
+        model.lights.push(LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(3.0, 3.0)) });
+        // Light in the room but outside the hole.
+        model.lights.push(LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(1), "Recessed pot light", Vec2::new(1.0, 1.0)) });
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        let lights = out["lights"].as_array().unwrap();
+        assert_eq!(lights[0]["room"], Value::Null, "light in hole should report null room");
+        assert_eq!(lights[1]["room"], json!("r0"), "light in room should report r0");
+    }
+
+    #[test]
+    fn inspect_light_on_wrong_level_reports_null() {
+        let mut model = ArchModel::default();
+        model.rooms.push(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            room_type: RoomType::Living,
+            ..Room::default()
+        });
+        // Light on level 1, room on level 0.
+        model.lights.push(LightFixture {
+            kind: LightKind::Spot,
+            level: 1,
+            ..LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(2.0, 2.0))
+        });
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        let lights = out["lights"].as_array().unwrap();
+        assert_eq!(lights[0]["room"], Value::Null, "light on different level should report null room");
+    }
+
+    #[test]
+    fn inspect_light_brightness_extremes() {
+        let mut model = ArchModel::default();
+        let mut l0 = LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(1.0, 1.0)) };
+        l0.brightness = 0.0;
+        let mut l1 = LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(1), "Recessed pot light", Vec2::new(2.0, 2.0)) };
+        l1.brightness = 1.0;
+        model.lights.push(l0);
+        model.lights.push(l1);
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        let lights = out["lights"].as_array().unwrap();
+        assert_eq!(lights[0]["brightness"], json!(0.0));
+        assert_eq!(lights[1]["brightness"], json!(1.0));
+    }
 }
