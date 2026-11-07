@@ -639,6 +639,27 @@ fn json_string(v: Value) -> String {
     }
 }
 
+/// The parsed JSON chunk of the GLB for `scene` (shared by other modules' tests).
+#[cfg(test)]
+pub(crate) fn tests_json(scene: &Scene3d) -> Value {
+    let bytes = write(scene);
+    let len = bytes.get(12..16).map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize);
+    bytes.get(20..20 + len).and_then(|j| serde_json::from_slice(j).ok()).unwrap_or_default()
+}
+
+/// A one-wall model with a duplex (el0) and a dimmer (el1) on it (shared by tests).
+#[cfg(test)]
+pub(crate) fn wired_model() -> cadcraft_doc::arch::ArchModel {
+    use cadcraft_doc::arch::{ArchModel, ElectricalDevice, ElectricalKind, Level, Wall, WallSide};
+    use cadcraft_geom::Vec2;
+    let mut m = ArchModel::default();
+    m.levels.push(Level { index: 0, elevation: 0.0, ..Level::default() });
+    let wall = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), 0.2));
+    m.push_electrical(ElectricalDevice { kind: ElectricalKind::Duplex, wall, side: WallSide::Left, offset: 1.5, ..Default::default() });
+    m.push_electrical(ElectricalDevice { kind: ElectricalKind::Dimmer, wall, side: WallSide::Left, offset: 3.0, ..Default::default() });
+    m
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -848,6 +869,36 @@ mod tests {
         let mut scene = scene_with(0);
         scene.meshes = vec![finished("wall-siding", 4), finished("roof-wood", 2), finished("roof-wood", 2), finished("floor-wood", 5)];
         assert_eq!(node_names(&scene), ["wall-w4-exterior", "roof-r2p0", "roof-r2p1", "floor-r5"]);
+    }
+
+    #[test]
+    fn electrical_plate_materials_reach_the_glb() {
+        let scene = Scene3d::build(&wired_model());
+        let json = glb_json_chunk(&write(&scene));
+        let materials = json["materials"].as_array().cloned().unwrap_or_default();
+        let is_plate = |m: &Value| m["name"].as_str().is_some_and(|n| n.starts_with("electrical:"));
+        let plates: Vec<&str> = materials.iter().filter(|m| is_plate(m)).filter_map(|m| m["name"].as_str()).collect();
+        assert_eq!(plates, ["electrical:duplex", "electrical:dimmer"]);
+        for m in materials.iter().filter(|m| is_plate(m)) {
+            let f = m["pbrMetallicRoughness"]["baseColorFactor"].as_array().cloned().unwrap_or_default();
+            assert_eq!(f.len(), 4);
+            assert!(f.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)));
+        }
+        let meshes = json["meshes"].as_array().cloned().unwrap_or_default();
+        for (node, mat) in [("electrical-el0", "electrical:duplex"), ("electrical-el1", "electrical:dimmer")] {
+            let want = materials.iter().position(|m| m["name"] == mat);
+            assert!(want.is_some(), "{mat} missing");
+            let referenced = json["nodes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|n| n["name"] == node)
+                .filter_map(|n| n["mesh"].as_u64())
+                .filter_map(|i| meshes.get(i as usize))
+                .flat_map(|m| m["primitives"].as_array().cloned().unwrap_or_default())
+                .any(|p| p["material"].as_u64().map(|i| i as usize) == want);
+            assert!(referenced, "{node} does not reference {mat}");
+        }
     }
 
     #[test]

@@ -295,6 +295,29 @@ mod tests {
     }
 
     #[test]
+    fn electrical_nodes_are_named_by_device() {
+        let scene = Scene3d::build(&glb::wired_model());
+        let names = glb::node_names(&scene);
+        assert!(names.iter().any(|n| n == "electrical-el0"), "{names:?}");
+        assert!(names.iter().any(|n| n == "electrical-el1"), "{names:?}");
+        assert!(names.iter().all(|n| !n.contains(':')));
+
+        let obj = write_obj(&scene, "m.mtl");
+        let at0 = obj.find("o electrical-el0").unwrap_or(usize::MAX);
+        let at1 = obj.find("o electrical-el1").unwrap_or(usize::MAX);
+        assert!(at0 < at1, "groups missing or out of device order");
+        for (name, from) in [("electrical-el0", at0), ("electrical-el1", at1)] {
+            let body = obj.get(from..).unwrap_or("");
+            let mut lines = body.lines().skip(1).take_while(|l| !l.starts_with("o "));
+            assert!(lines.any(|l| l.starts_with("v ")), "{name} has no vertices");
+        }
+
+        let json = glb::tests_json(&scene);
+        let nodes: Vec<&str> = json["nodes"].as_array().map(|a| a.iter().filter_map(|n| n["name"].as_str()).collect()).unwrap_or_default();
+        assert!(nodes.contains(&"electrical-el0") && nodes.contains(&"electrical-el1"), "{nodes:?}");
+    }
+
+    #[test]
     fn obj_groups_furnishings_by_node_name() {
         let model = furnished();
         let mut s = Scene3d::build(&model);
