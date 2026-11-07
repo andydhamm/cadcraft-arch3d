@@ -5,6 +5,8 @@
 use std::sync::Mutex;
 
 use cadcraft_arch3d::camera::{project_point, ray_at};
+use cadcraft_arch3d::light::scene_lights_with;
+use cadcraft_engine::doc::arch::LightSet;
 use cadcraft_engine::{FinalMode, IlluminanceRequest, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, set_render_hooks};
 use cadcraft_geom::Vec3;
 use cadcraft_render3d::adapter::AdapterChoice;
@@ -26,8 +28,8 @@ const VISIBLE_TOLERANCE: f64 = 0.02;
 /// The renderer and the scene it last built.
 struct State {
     off: Offscreen,
-    /// The `arch_revision` the scene below was built for, and the scene.
-    scene: Option<(u64, Scene3d)>,
+    /// The `arch_revision` and light set key the scene below was built for, and the scene.
+    scene: Option<(u64, String, Scene3d)>,
     /// The compute device, requested once on the first path request (`Some(None)`: none available);
     /// replaced once by a device with ray queries on the first `rt` request (see `compute_of`).
     compute: Option<Option<ComputeGpu>>,
@@ -77,15 +79,53 @@ fn gpu(e: cadcraft_render3d::Render3dError) -> String {
 }
 
 /// The renderer state, created on first use at `size`, with the scene for `drawing` built.
-fn ready<'a>(guard: &'a mut Option<State>, drawing: &cadcraft_engine::doc::Drawing, size: (u32, u32)) -> Result<&'a mut State, String> {
+/// If `light_set` is provided, the scene's lights are modified to match that set.
+fn ready<'a>(
+    guard: &'a mut Option<State>,
+    drawing: &cadcraft_engine::doc::Drawing,
+    size: (u32, u32),
+    light_set: Option<&str>,
+) -> Result<&'a mut State, String> {
     if guard.is_none() {
         let off = Offscreen::create_with(adapter_choice(), size).map_err(gpu)?;
         *guard = Some(State { off, scene: None, compute: None, rt_asked: false, cache: None, cache_saved: false, path_traces: 0 });
     }
     let state = guard.as_mut().ok_or("renderer unavailable")?;
     let key = drawing.arch_revision;
-    if state.scene.as_ref().is_none_or(|(k, _)| *k != key) {
-        state.scene = Some((key, cadcraft_arch3d::build(&drawing.arch)));
+
+    // Derive a key for the light set to invalidate the scene cache when it changes.
+    // We hash the set name and its contents (lights and their states) to ensure
+    // different sets or modified sets trigger a rebuild.
+    let ls_key = if let Some(set_name) = light_set {
+        if let Some(set) = drawing.arch.light_sets.iter().find(|s| s.name == set_name) {
+            // Simple deterministic hash: name + sorted light states
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            use std::hash::{Hash, Hasher};
+            set.name.hash(&mut h);
+            // set.lights is a BTreeMap<String, LightState> (deterministic order)
+            for (key, state) in &set.lights {
+                key.hash(&mut h);
+                state.on.hash(&mut h);
+                state.brightness.to_bits().hash(&mut h);
+            }
+            format!("{}-{:x}", set_name, h.finish())
+        } else {
+            format!("{}-missing", set_name)
+        }
+    } else {
+        String::new()
+    };
+
+    let needs_rebuild = state.scene.as_ref().map_or(true, |(k, lsk, _)| *k != key || *lsk != ls_key);
+
+    if needs_rebuild {
+        let mut scene = cadcraft_arch3d::build(&drawing.arch);
+        if let Some(set_name) = light_set {
+            if let Some(set) = drawing.arch.light_sets.iter().find(|s| s.name == set_name) {
+                scene.lights = scene_lights_with(&drawing.arch, &set.lights);
+            }
+        }
+        state.scene = Some((key, ls_key, scene));
     }
     Ok(state)
 }
@@ -161,7 +201,7 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
 fn render_one(req: &RenderRequest) -> Result<Value, String> {
     let style = crate::render::parse_style(&req.style).ok_or_else(|| format!("`{}` is not one of {}", req.style, crate::render::STYLE_NAMES))?;
     let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
-    let state = ready(&mut guard, req.drawing, req.size)?;
+    let state = ready(&mut guard, req.drawing, req.size, req.light_set.as_deref())?;
     let key = req.drawing.arch_revision;
     let want_path = req.final_render && req.final_mode == FinalMode::Path;
     let compute = if want_path { compute_of(state, req.path.rt)? } else { None };
@@ -169,7 +209,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         state.cache = Some(cache::open(c, cache::cache_dir().as_deref()));
     }
     let State { off, scene, cache: pcache, cache_saved, path_traces, .. } = state;
-    let scene = &scene.as_ref().ok_or("renderer unavailable")?.1;
+    let scene = &scene.as_ref().ok_or("renderer unavailable")?.2;
     off.resize(req.size);
 
     let camera = req.camera.clone().unwrap_or_else(|| Camera::Orbit(Orbit::fit(&scene.bounds)));
@@ -284,11 +324,11 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
 /// are `{"probes": [...]}`.
 fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
-    let state = ready(&mut guard, req.drawing, (64, 64))?;
+    let state = ready(&mut guard, req.drawing, (64, 64), None)?;
     let Some(device) = compute_of(state, req.path.rt)? else {
         return Err("path-traced illuminance needs compute shaders on this GPU".into());
     };
-    let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.1;
+    let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
     let lighting = lighting_for(req.sun, 8);
     let opts = path_options(&req.path);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
@@ -746,5 +786,75 @@ mod tests {
         let Some(v) = render(&request(&d, None, None, false)) else { return };
         assert_eq!(v["shadowMapsBuilt"], 6, "{v}");
         assert_eq!(v["frameShadowMaps"], 1, "{v}");
+    }
+
+    #[test]
+    fn a_light_set_that_turns_lights_off_renders_darker() {
+        let _g = reset();
+        let mut d = room();
+        let mut lights = std::collections::BTreeMap::new();
+        lights.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "off_one".into(), lights, ..Default::default() });
+        d.touch_arch();
+
+        let mut req_all = request(&d, None, None, false);
+        let v_all = match render(&req_all) {
+            Some(v) => v,
+            None => return,
+        };
+        assert_eq!(v_all["lights"], 4);
+
+        let mut req_set = request(&d, None, None, false);
+        req_set.light_set = Some("off_one".into());
+        let v_set = match render(&req_set) {
+            Some(v) => v,
+            None => return,
+        };
+        assert_eq!(v_set["lights"], 3, "{v_set}");
+        assert!(!cadcraft_arch3d::light::scene_lights_with(&d.arch, &d.arch.light_sets[0].lights).iter().any(|l| l.id == d.arch.lights[0].id));
+    }
+
+    #[test]
+    fn renders_with_different_light_sets_do_not_share_a_cache_key() {
+        let _g = reset();
+        let mut d = room();
+        let mut set1 = std::collections::BTreeMap::new();
+        set1.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        let mut set2 = std::collections::BTreeMap::new();
+        set2.insert("lf1".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set1".into(), lights: set1, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set2".into(), lights: set2, ..Default::default() });
+        d.touch_arch();
+
+        let mut req1 = request(&d, None, None, false);
+        req1.light_set = Some("set1".into());
+        let v1 = match render(&req1) {
+            Some(v) => v,
+            None => return,
+        };
+        assert_eq!(v1["lights"], 3, "{v1}");
+
+        let mut req2 = request(&d, None, None, false);
+        req2.light_set = Some("set2".into());
+        let v2 = match render(&req2) {
+            Some(v) => v,
+            None => return,
+        };
+        assert_eq!(v2["lights"], 3, "{v2}");
+        assert_ne!(v1["shadowMapsBuilt"], v2["shadowMapsBuilt"], "different light sets must not reuse the cached scene\n{v1}\n{v2}");
+    }
+
+    #[test]
+    fn a_render_without_a_light_set_is_unchanged() {
+        let _g = reset();
+        let d = room();
+        let req = request(&d, None, None, false);
+        let v = match render(&req) {
+            Some(v) => v,
+            None => return,
+        };
+
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["lights"], 4);
     }
 }
