@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-07 12:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 12:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 15: Electrical, technical illustration and the showcase house — 44 of 52 segments merged · 2 of 14 acceptance checks**
+**Phase 15 of 15: Electrical, technical illustration and the showcase house — 45 of 52 segments merged · 3 of 14 acceptance checks**
 
-7,683 workspace tests passing at the last merge · 811 segments merged in all · 0 of 14 seats working
+7,686 workspace tests passing at the last merge · 812 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,16 +25,15 @@ Updated 2026-11-07 12:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 51.8 h so far · expected done Nov 07 20:47–Nov 08 20:12 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 3 / 14 | 52.1 h so far · expected done Nov 07 19:13–Nov 08 15:45 UTC |
 
 ## Phase 15 segments
 
-44 merged, 6 replaced, 5 merging, 3 queued, 2 abandoned
+45 merged, 6 replaced, 4 merging, 3 queued, 2 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-ui-electrical` | ui-egui: electrical tools, connection drag, light sets, level picker | merging | claude-sonnet-a |
-| `p15-render-light-set` | render: a render uses its light set (on/off and brightness of each light) | merging | mai-flash-esc |
 | `p15-plan-layer-transparency` | render: the plan export honours layer transparency for architectural linework (the Electrical view dims) | merging | mai-flash-esc |
 | `p15-inspect-electrical` | engine: arch.inspect electrical, connections, circuits, outlet gaps and light sets | merging | claude-sonnet-b |
 | `p15-inspect-rooms-on-objects` | engine: brightness on light rows, room on light, fixture and furnishing rows | merging | claude-sonnet-d |
@@ -43,6 +42,7 @@ Updated 2026-11-07 12:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 07 12:23 | `p15-render-light-set` | merged | 7,686 pass | mai-flash-esc |
 | Nov 07 11:57 | `p15-io-glb-obj-electrical` | merged | 7,683 pass | claude-sonnet-d |
 | Nov 07 11:30 | `p15-io-ifc-electrical` | merged | 7,681 pass | claude-sonnet-b |
 | Nov 07 11:03 | `p15-io-dxf-electrical` | merged | 7,677 pass | claude-sonnet-c |
@@ -54,7 +54,6 @@ Updated 2026-11-07 12:15 UTC. This page and the card in the README are regenerat
 | Nov 07 06:03 | `harden-p15-cli-render-styles` | merged | 7,662 pass | tturbo-mac |
 | Nov 07 05:02 | `p15-cabinet-along-wall` | merged | 7,654 pass | claude-sonnet-d |
 | Nov 07 03:54 | `p15-arch-room-at` | merged | 7,650 pass | claude-sonnet-c |
-| Nov 07 02:08 | `harden-p15-render-electrical` | merged | 7,647 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
