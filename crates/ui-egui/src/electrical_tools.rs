@@ -310,12 +310,14 @@ pub fn light_set_chooser(ui: &mut egui::Ui, session: &mut Session, tools: &mut E
         tools.light_set = None;
     }
     let shown = tools.light_set.clone().unwrap_or_else(|| crate::i18n::t("Lights as they are").to_owned());
-    egui::ComboBox::from_id_salt("light-set").selected_text(shown).show_ui(ui, |ui| {
+    let caption = ui.label(crate::i18n::t("Light set"));
+    let combo = egui::ComboBox::from_id_salt("light-set").selected_text(shown).show_ui(ui, |ui| {
         ui.selectable_value(&mut tools.light_set, None, crate::i18n::t("Lights as they are"));
         for n in names {
             ui.selectable_value(&mut tools.light_set, Some(n.clone()), n);
         }
     });
+    combo.response.labelled_by(caption.id);
 }
 
 /// The strip over the plan: the Electrical tools menu, the Electrical View toggle and the level
@@ -326,11 +328,13 @@ pub fn plan_toolbar(app: &mut crate::CadApp, ui: &mut egui::Ui) {
         if rows.0.len() > 1 {
             let mut chosen = rows.1;
             let text = rows.0.get(rows.1).map(|r| r.0.clone()).unwrap_or_default();
-            egui::ComboBox::from_id_salt("level-picker").selected_text(text).show_ui(ui, |ui| {
+            let caption = ui.label(crate::i18n::t("Level"));
+            let combo = egui::ComboBox::from_id_salt("level-picker").selected_text(text).show_ui(ui, |ui| {
                 for (i, (label, _)) in rows.0.iter().enumerate() {
                     ui.selectable_value(&mut chosen, i, label.as_str());
                 }
             });
+            combo.response.labelled_by(caption.id);
             if chosen != rows.1
                 && let Some((_, v)) = rows.0.get(chosen)
             {
