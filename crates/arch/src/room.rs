@@ -512,6 +512,148 @@ mod tests {
         assert_eq!(room_at(&m, 0, Vec2::new(1.0, f64::INFINITY)), None);
     }
 
+    #[test]
+    fn room_at_returns_none_for_empty_model() {
+        let m = ArchModel::default();
+        assert_eq!(room_at(&m, 0, Vec2::new(1.0, 1.0)), None);
+    }
+
+    #[test]
+    fn room_at_returns_none_for_level_with_no_rooms() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 5, square(0.0, 0.0, 4.0, 4.0), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(1.0, 1.0)), None);
+        assert_eq!(room_at(&m, 3, Vec2::new(1.0, 1.0)), None);
+    }
+
+    #[test]
+    fn room_at_ignores_rooms_with_degenerate_polygons() {
+        let mut m = ArchModel::default();
+        // Empty polygon
+        m.rooms.push(room_in(1, 0, vec![], vec![]));
+        // One point
+        m.rooms.push(room_in(2, 0, vec![Vec2::new(0.0, 0.0)], vec![]));
+        // Two points
+        m.rooms.push(room_in(3, 0, vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 4.0)], vec![]));
+        // Valid room
+        m.rooms.push(room_in(4, 0, square(0.0, 0.0, 10.0, 10.0), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), Some(ArchId(4)));
+    }
+
+    #[test]
+    fn room_at_point_on_boundary() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 4.0, 4.0), vec![]));
+        // Point on the edge should be inside (point_in_polygon convention)
+        let on_edge = room_at(&m, 0, Vec2::new(2.0, 0.0));
+        // Point outside should not match
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), None);
+        // Point just inside should match
+        assert_eq!(room_at(&m, 0, Vec2::new(2.0, 2.0)), Some(ArchId(1)));
+        // on_edge may be Some or None depending on point_in_polygon's edge handling;
+        // what matters is it doesn't panic and outside is definitely None
+        let _ = on_edge;
+    }
+
+    #[test]
+    fn room_at_point_at_vertex() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 4.0, 4.0), vec![]));
+        // Vertex point should not panic
+        let at_vertex = room_at(&m, 0, Vec2::new(0.0, 0.0));
+        let _ = at_vertex;
+    }
+
+    #[test]
+    fn room_at_huge_coordinates() {
+        let mut m = ArchModel::default();
+        let big = 1e12;
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, big, big), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(big * 0.5, big * 0.5)), Some(ArchId(1)));
+        assert_eq!(room_at(&m, 0, Vec2::new(big * 2.0, big * 2.0)), None);
+    }
+
+    #[test]
+    fn room_at_first_match_wins() {
+        let mut m = ArchModel::default();
+        // Two overlapping rooms on the same level
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 10.0, 10.0), vec![]));
+        m.rooms.push(room_in(2, 0, square(5.0, 5.0, 15.0, 15.0), vec![]));
+        // Point in the overlap: first room wins
+        assert_eq!(room_at(&m, 0, Vec2::new(7.0, 7.0)), Some(ArchId(1)));
+        // Point only in the second room
+        assert_eq!(room_at(&m, 0, Vec2::new(12.0, 12.0)), Some(ArchId(2)));
+    }
+
+    #[test]
+    fn room_at_ignores_holes_with_fewer_than_three_points() {
+        let mut m = ArchModel::default();
+        // Room with a degenerate hole (only 2 points) that would contain the test point
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 10.0, 10.0), vec![vec![Vec2::new(4.0, 4.0), Vec2::new(6.0, 6.0)]]));
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), Some(ArchId(1)));
+    }
+
+    #[test]
+    fn room_at_room_with_nan_in_polygon() {
+        let mut m = ArchModel::default();
+        let mut poly = square(0.0, 0.0, 10.0, 10.0);
+        poly[0] = Vec2::new(f64::NAN, 0.0);
+        m.rooms.push(room_in(1, 0, poly, vec![]));
+        // Should not panic; result depends on point_in_polygon handling of NaN
+        let result = room_at(&m, 0, Vec2::new(5.0, 5.0));
+        let _ = result;
+    }
+
+    #[test]
+    fn room_at_room_with_infinite_polygon_point() {
+        let mut m = ArchModel::default();
+        let mut poly = square(0.0, 0.0, 10.0, 10.0);
+        poly[0] = Vec2::new(f64::INFINITY, 0.0);
+        m.rooms.push(room_in(1, 0, poly, vec![]));
+        let result = room_at(&m, 0, Vec2::new(5.0, 5.0));
+        let _ = result;
+    }
+
+    #[test]
+    fn room_at_point_on_hole_boundary() {
+        let mut m = ArchModel::default();
+        // Room 0..10 x 0..10 with a hole 4..6 x 4..6
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 10.0, 10.0), vec![square(4.0, 4.0, 6.0, 6.0)]));
+        // Point on the hole's boundary (x=4, y=5)
+        let on_hole_edge = room_at(&m, 0, Vec2::new(4.0, 5.0));
+        // Point just outside the hole
+        assert_eq!(room_at(&m, 0, Vec2::new(3.0, 5.0)), Some(ArchId(1)));
+        // Point just inside the hole
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), None);
+        let _ = on_hole_edge;
+    }
+
+    #[test]
+    fn room_at_room_with_duplicate_vertices() {
+        let mut m = ArchModel::default();
+        // Square with a repeated vertex: (0,0), (10,0), (10,10), (10,10), (0,10)
+        let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)];
+        m.rooms.push(room_in(1, 0, poly, vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(5.0, 5.0)), Some(ArchId(1)));
+    }
+
+    #[test]
+    fn room_at_point_at_origin() {
+        let mut m = ArchModel::default();
+        m.rooms.push(room_in(1, 0, square(-5.0, -5.0, 5.0, 5.0), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(0.0, 0.0)), Some(ArchId(1)));
+    }
+
+    #[test]
+    fn room_at_very_small_room() {
+        let mut m = ArchModel::default();
+        // A tiny room: 0.001 x 0.001 m
+        m.rooms.push(room_in(1, 0, square(0.0, 0.0, 0.001, 0.001), vec![]));
+        assert_eq!(room_at(&m, 0, Vec2::new(0.0005, 0.0005)), Some(ArchId(1)));
+        // Point just outside
+        assert_eq!(room_at(&m, 0, Vec2::new(0.002, 0.0005)), None);
+    }
+
     /// A non-divider wall on `level` with the given thickness.
     #[inline]
     fn wall(id: u32, level: u32, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) -> Wall {
