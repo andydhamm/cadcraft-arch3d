@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 16:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 49 of 52 segments merged · 6 of 14 acceptance checks**
 
@@ -25,15 +25,15 @@ Updated 2026-11-07 16:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 55.8 h so far · expected done Nov 07 18:27–Nov 08 08:35 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 56.1 h so far · expected done Nov 07 18:43–Nov 08 08:51 UTC |
 
 ## Phase 15 segments
 
-49 merged, 6 replaced, 2 queued, 2 abandoned, 1 gate
+49 merged, 6 replaced, 2 queued, 2 abandoned, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-house` | the showcase house: a 4,000 sq ft split-entry bi-level script | gate | claude-sonnet-b |
+| `p15-showcase-house` | the showcase house: a 4,000 sq ft split-entry bi-level script | working | claude-sonnet-b |
 
 ## Recent merges
 
@@ -56,12 +56,12 @@ Updated 2026-11-07 16:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 942 |
+| bonsai-a | bonsai2-27b | idle | 943 |
 | bonsai-b | bonsai2-27b | gate | 873 |
-| bonsai-ws2-a | bonsai2-27b | idle | 968 |
+| bonsai-ws2-a | bonsai2-27b | agent | 968 |
 | bonsai-ws2-b | bonsai2-27b | idle | 934 |
 | claude-sonnet-a | sonnet | idle | 89 |
-| claude-sonnet-b | sonnet | gate | 86 |
+| claude-sonnet-b | sonnet | agent | 87 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | idle | 29 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
