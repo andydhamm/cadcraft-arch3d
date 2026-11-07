@@ -10,10 +10,12 @@
 
 pub mod camera;
 pub mod casework;
+pub(crate) mod ceiling;
 pub mod edges;
 pub mod electrical;
 pub mod finish;
 pub mod fixture;
+pub(crate) mod foundation;
 
 pub mod furnishing;
 pub mod paint;
@@ -34,10 +36,12 @@ pub mod ray;
 pub mod roof;
 pub mod section;
 pub mod site;
+pub(crate) mod soffit;
 pub mod stairs;
 pub mod texture;
 pub mod uv;
 pub mod views;
+pub(crate) mod wall_rise;
 pub mod walls;
 
 pub use crate::electrical::PlateBox;
@@ -277,6 +281,7 @@ pub(crate) fn fill_materials(model: &ArchModel, scene: &mut Scene3d) {
     scene.textures.clear();
     furnishing::symbol_materials(model, scene);
     electrical::plate_materials(model, scene);
+    soffit::materials(model, scene);
     paint::materials(model, scene);
     scene.backdrop = model.backdrop.clone();
     if let Some(Backdrop::Image { item, .. }) = &model.backdrop

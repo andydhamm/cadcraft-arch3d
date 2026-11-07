@@ -25,8 +25,8 @@ use cadcraft_arch::casework_layout::counter_runs;
 use cadcraft_arch::join::{WallShape, solve_joins};
 use cadcraft_arch::roof::{Footprint, outer_footprint};
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, CabinetPart, ElectricalDevice, Fixture, Furnishing, FurnishingHost, Level, LightFixture, Opening, Paint, Plant,
-    PlantSpecies, Railing, Roof, Room, RoomType, Side, Stair, Surface, Terrain, WallType,
+    Cabinet, CabinetKind, CabinetPart, ElectricalDevice, Fixture, FoundationKind, Furnishing, FurnishingHost, Level, LightFixture, Opening, Paint,
+    Plant, PlantSpecies, Railing, Roof, Room, RoomType, SLAB_THICKNESS, Side, Stair, Surface, Terrain, WallType,
 };
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
@@ -61,13 +61,17 @@ pub enum ObjectKind {
     Furnishing,
     /// Phase 15: an outlet or switch cover plate (`el{n}`).
     Electrical,
+    /// Phase 16: an interior soffit (`sf{n}`).
+    Soffit,
+    /// Phase 16: a foundation's stem walls, footings and slab edges (`fd{n}`).
+    Foundation,
 }
 
 impl ObjectKind {
     /// The kind owning a mesh of the [`part_of`] class `part`.
     fn from_part(part: &str) -> ObjectKind {
         match part {
-            "floor" | "ceiling" | "deck" => ObjectKind::Room,
+            "floor" | "ceiling" | "deck" | "slab" => ObjectKind::Room,
             "glass" | "frame" | "casing" | "leaf" | "sill" | "header" => ObjectKind::Opening,
             "roof" => ObjectKind::Roof,
             "stair" => ObjectKind::Stair,
@@ -79,6 +83,8 @@ impl ObjectKind {
             "fixture" => ObjectKind::Fixture,
             "furnishing" => ObjectKind::Furnishing,
             "electrical" => ObjectKind::Electrical,
+            "soffit" => ObjectKind::Soffit,
+            "foundation" | "footing" => ObjectKind::Foundation,
             _ => ObjectKind::Wall,
         }
     }
@@ -98,7 +104,7 @@ pub fn object_key(mesh: &Mesh) -> ObjectKey {
 
 /// The objects whose data differ between `prev` and `next` (added, removed or changed, compared by
 /// id per kind; a changed paint counts for the object it paints, an added or removed symbol for the
-/// furnishings and cabinets that use it); `None` when something not owned by one object differs
+/// furnishings and cabinets that use it, a changed tray for its room before and after); `None` when something not owned by one object differs
 /// (levels, wall types, the site location, the plant species, a paint key that names no surface, a
 /// symbol whose content changed under the same key), and the caller rebuilds everything.
 ///
@@ -125,6 +131,14 @@ pub fn changed_objects(prev: &ArchModel, next: &ArchModel) -> Option<BTreeSet<Ob
     diff(&prev.fixtures, &next.fixtures, |f| f.id, ObjectKind::Fixture, &mut changes);
     diff(&prev.furnishings, &next.furnishings, |f| f.id, ObjectKind::Furnishing, &mut changes);
     diff(&prev.electrical, &next.electrical, |d| d.id, ObjectKind::Electrical, &mut changes);
+    diff(&prev.soffits, &next.soffits, |s| s.id, ObjectKind::Soffit, &mut changes);
+    diff(&prev.foundations, &next.foundations, |f| f.id, ObjectKind::Foundation, &mut changes);
+    // A tray is part of its room's ceiling.
+    for id in changed_ids(&prev.trays, &next.trays, |t| t.id) {
+        for t in prev.trays.iter().chain(&next.trays).filter(|t| t.id == id) {
+            changes.insert(ObjectKey { kind: ObjectKind::Room, id: t.room });
+        }
+    }
     if prev.terrain != next.terrain {
         changes.insert(ObjectKey { kind: ObjectKind::Terrain, id: ArchId(0) });
     }
@@ -180,6 +194,11 @@ fn painted(model: &ArchModel, mut meshes: Vec<Mesh>) -> Vec<Mesh> {
 /// Add to `out` every id of `kind` whose objects differ between `prev` and `next` (all objects
 /// with that id, in order, so duplicate ids compare too).
 fn diff<T: PartialEq>(prev: &[T], next: &[T], id: impl Fn(&T) -> ArchId, kind: ObjectKind, out: &mut BTreeSet<ObjectKey>) {
+    out.extend(changed_ids(prev, next, id).into_iter().map(|id| ObjectKey { kind, id }));
+}
+
+/// The ids whose objects differ between `prev` and `next` (all objects with that id, in order).
+fn changed_ids<T: PartialEq>(prev: &[T], next: &[T], id: impl Fn(&T) -> ArchId) -> BTreeSet<ArchId> {
     fn group<'a, T>(list: &'a [T], id: &impl Fn(&T) -> ArchId) -> BTreeMap<ArchId, Vec<&'a T>> {
         let mut by: BTreeMap<ArchId, Vec<&'a T>> = BTreeMap::new();
         for x in list {
@@ -188,11 +207,7 @@ fn diff<T: PartialEq>(prev: &[T], next: &[T], id: impl Fn(&T) -> ArchId, kind: O
         by
     }
     let (a, b) = (group(prev, &id), group(next, &id));
-    for k in a.keys().chain(b.keys()) {
-        if a.get(k) != b.get(k) {
-            out.insert(ObjectKey { kind, id: *k });
-        }
-    }
+    a.keys().chain(b.keys()).filter(|k| a.get(k) != b.get(k)).copied().collect()
 }
 
 /// What a rebuild did.
@@ -301,6 +316,8 @@ struct WallIn {
     openings: Vec<Opening>,
     clip: Option<RoofClip>,
     roof_top: Option<Vec<Vec2>>,
+    /// Phase 16: the part of the wall rising to a vaulted ceiling over its room, if any.
+    rise: Option<crate::wall_rise::RiseIn>,
     paints: Vec<(String, Paint)>,
 }
 
@@ -317,8 +334,11 @@ struct RoomIn {
     level: Level,
     /// The room's holes plus the stair wells opening into its level (the floor's holes).
     wells: Vec<Vec<Vec2>>,
-    /// The ceiling openings of the recessed fixtures in it.
-    cuts: Vec<Vec<Vec2>>,
+    /// Phase 16: everything its ceiling is made from (the recessed fixtures' openings, the roofs
+    /// on its level, its trays).
+    ceiling: crate::ceiling::CeilingIn,
+    /// Phase 16: whether its level stands on a slab foundation (its floor is the slab).
+    slab: bool,
     paints: Vec<(String, Paint)>,
 }
 
@@ -421,6 +441,8 @@ pub(crate) struct Sections {
     casework_fixtures: Vec<Part<CaseworkFixtureIn>>,
     furnishings: Vec<Part<FurnishingIn>>,
     electrical: Vec<Part<ElectricalIn>>,
+    soffits: Vec<Part<crate::soffit::SoffitIn>>,
+    foundations: Vec<Part<crate::foundation::FoundationIn>>,
     /// The join shapes, for the walls and wall types they were solved for.
     joins: Option<(Vec<Wall>, Vec<WallType>, Vec<WallShape>)>,
     /// Per level: its walls, and the outer footprint they make (it joins every wall on the level).
@@ -444,6 +466,8 @@ impl Sections {
             casework_fixtures: pfx,
             furnishings: pfu,
             electrical: pel,
+            soffits: psf,
+            foundations: pfd,
             joins,
             footprints: mut old_footprints,
         } = prev.unwrap_or_default();
@@ -471,7 +495,8 @@ impl Sections {
             .map(|wall| {
                 let span = wall_span(model, wall);
                 let paints = paints_under(model, &Surface::WallSide { wall: wall.id, side: Side::Left }.object_key());
-                let mut input = WallIn { wall: wall.clone(), span, shape: None, openings: Vec::new(), clip: None, roof_top: None, paints };
+                let mut input =
+                    WallIn { wall: wall.clone(), span, shape: None, openings: Vec::new(), clip: None, roof_top: None, rise: None, paints };
                 if let Some((base, top)) = span {
                     input.shape = shape_by_id.get(&wall.id).and_then(|&i| shapes.get(i)).cloned();
                     input.openings = hosted.get(&wall.id).cloned().unwrap_or_default();
@@ -488,10 +513,17 @@ impl Sections {
                         input.roof_top = roof_top_polyline_in(model, fp.as_ref(), wall, base, top);
                     }
                 }
+                input.rise = crate::wall_rise::rise_input(model, wall, input.shape.as_ref(), span, input.roof_top.is_some());
                 (wall.id, input)
             })
             .collect();
-        let walls = parts(pw, wall_items, |i| painted(model, wall_mesh(i)));
+        let walls = parts(pw, wall_items, |i| {
+            let mut out = wall_mesh(i);
+            if let Some(rise) = &i.rise {
+                out.extend(crate::wall_rise::rise_meshes(&i.wall, rise));
+            }
+            painted(model, out)
+        });
 
         let opening_items = model
             .openings
@@ -514,8 +546,10 @@ impl Sections {
                 let level = level_for(model, room.level);
                 let wells = well_holes_for(model, room);
                 let cuts = fixture::ceiling_cutouts(model, room, &level);
+                let ceiling = crate::ceiling::ceiling_input(model, room, &level, cuts);
+                let slab = model.foundations.iter().any(|f| f.kind == FoundationKind::Slab && f.level == room.level);
                 let paints = paints_under(model, &Surface::RoomFloor(room.id).object_key());
-                (room.id, RoomIn { room: room.clone(), level, wells, cuts, paints })
+                (room.id, RoomIn { room: room.clone(), level, wells, ceiling, slab, paints })
             })
             .collect();
         let rooms = parts(pr, room_items, |i| {
@@ -523,11 +557,15 @@ impl Sections {
             if i.room.room_type != RoomType::Deck {
                 let mut floor = i.room.clone();
                 floor.holes = i.wells.clone();
-                out.extend(floors::floor_slab(&floor, &i.level, "floor").map(|m| crate::finish::finish_floor(m, i.room.floor_finish)));
+                // On a slab foundation the floor structure is the slab.
+                let slab = if i.slab {
+                    floors::floor_slab(&floor, &Level { structure: SLAB_THICKNESS, ..i.level.clone() }, "slab")
+                } else {
+                    floors::floor_slab(&floor, &i.level, "floor")
+                };
+                out.extend(slab.map(|m| crate::finish::finish_floor(m, i.room.floor_finish)));
             }
-            let mut ceiling = i.room.clone();
-            ceiling.holes.extend(i.cuts.iter().cloned());
-            out.extend(floors::ceiling_surface(&ceiling, &i.level, "ceiling"));
+            out.extend(crate::ceiling::ceiling_meshes(&i.ceiling));
             painted(model, out)
         });
 
@@ -640,6 +678,12 @@ impl Sections {
             .collect();
         let electrical = parts(pel, electrical_items, |i| crate::electrical::plate_meshes(&i.device, i.place.as_ref()));
 
+        let soffit_items = model.soffits.iter().map(|s| (s.id, crate::soffit::soffit_input(model, s))).collect();
+        let soffits = parts(psf, soffit_items, |i| painted(model, crate::soffit::soffit_meshes(i)));
+
+        let foundation_items = model.foundations.iter().map(|f| (f.id, crate::foundation::foundation_input(model, f))).collect();
+        let foundations = parts(pfd, foundation_items, |i| painted(model, crate::foundation::foundation_meshes(i)));
+
         let joins = Some((model.walls.clone(), model.types.clone(), shapes));
         Sections {
             walls,
@@ -655,6 +699,8 @@ impl Sections {
             casework_fixtures,
             furnishings,
             electrical,
+            soffits,
+            foundations,
             joins,
             footprints,
         }
@@ -683,6 +729,8 @@ impl Sections {
             casework_fixtures,
             furnishings,
             electrical,
+            soffits,
+            foundations,
             ..
         } = self;
         fn meshes<I>(list: Vec<Part<I>>) -> impl Iterator<Item = Mesh> {
@@ -700,7 +748,9 @@ impl Sections {
             .chain(meshes(cabinets))
             .chain(meshes(casework_fixtures))
             .chain(meshes(furnishings))
-            .chain(meshes(electrical));
+            .chain(meshes(electrical))
+            .chain(meshes(soffits))
+            .chain(meshes(foundations));
         with_meshes(counts, all.filter(keep).collect())
     }
 
@@ -713,8 +763,9 @@ impl Sections {
         let decks = made(&self.decks);
         let scene = Scene3d {
             openings_built: made(&self.openings),
-            floors: room_meshes().filter(|m| m.material.starts_with("floor")).count() + decks,
-            ceilings: room_meshes().filter(|m| m.material == "ceiling").count(),
+            floors: room_meshes().filter(|m| m.material.starts_with("floor") || m.material == "slab").count() + decks,
+            // One per room whose part has a ceiling mesh: stack layers and tray sides do not add any.
+            ceilings: self.rooms.iter().filter(|p| p.meshes.iter().any(|m| part_of(m) == "ceiling")).count(),
             roofs: made(&self.roofs),
             stairs: made(&self.stairs),
             railings: made(&self.railings),
@@ -760,6 +811,8 @@ impl Sections {
             .chain(self.casework_fixtures.iter().map(|p| &p.meshes))
             .chain(self.furnishings.iter().map(|p| &p.meshes))
             .chain(self.electrical.iter().map(|p| &p.meshes))
+            .chain(self.soffits.iter().map(|p| &p.meshes))
+            .chain(self.foundations.iter().map(|p| &p.meshes))
     }
 
     /// The objects of the parts made in the last build.
@@ -783,6 +836,8 @@ impl Sections {
         self.casework_fixtures.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.furnishings.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.electrical.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.soffits.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.foundations.iter().for_each(|p| add(p.fresh, &p.meshes));
         out
     }
 }
@@ -944,5 +999,44 @@ impl Scene3d {
             };
         }
         format!("{hash:016x}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square_room() -> ArchModel {
+        let mut m = ArchModel::default();
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)];
+        m.push_room(Room { polygon: ring, ..Default::default() });
+        m
+    }
+
+    #[test]
+    fn stack_layers_and_tray_sides_do_not_add_ceilings_and_slabs_are_floors() {
+        let m = square_room();
+        let mut sections = Sections::make(&m, None);
+        let before = sections.counts(&m);
+        assert_eq!((before.floors, before.ceilings), (1, 1));
+        let room = sections.rooms.first_mut().expect("the room's part");
+        // An upper stack layer and a tray side are more ceiling meshes of the same room.
+        room.meshes.push(Mesh::new("ceiling-layer", room.id));
+        room.meshes.push(Mesh::new("ceiling", room.id));
+        room.meshes.push(Mesh::new("slab", room.id));
+        let after = sections.counts(&m);
+        assert_eq!((after.floors, after.ceilings), (2, 1));
+    }
+
+    #[test]
+    fn a_room_on_a_slab_level_knows_it() {
+        let mut m = square_room();
+        assert!(Sections::make(&m, None).rooms.iter().all(|p| !p.input.slab));
+        m.push_foundation(cadcraft_doc::arch::Foundation { kind: FoundationKind::Slab, ..Default::default() });
+        let sections = Sections::make(&m, None);
+        assert!(sections.rooms.iter().all(|p| p.input.slab));
+        assert_eq!(sections.foundations.len(), 1);
+        m.foundations[0].kind = FoundationKind::Stem;
+        assert!(Sections::make(&m, None).rooms.iter().all(|p| !p.input.slab));
     }
 }
