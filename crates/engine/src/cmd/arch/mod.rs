@@ -19,6 +19,7 @@ pub mod casework;
 pub mod deck;
 pub(crate) mod defaults;
 pub mod electrical;
+pub(crate) mod electrical_inspect;
 pub mod electrical_view;
 pub mod furnish;
 pub mod illuminance;
