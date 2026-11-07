@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use cadcraft_arch3d::camera::{project_point, ray_at};
 use cadcraft_arch3d::light::scene_lights_with;
-use cadcraft_doc::arch::LightSet;
+use cadcraft_engine::doc::arch::LightSet;
 use cadcraft_engine::{FinalMode, IlluminanceRequest, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, set_render_hooks};
 use cadcraft_geom::Vec3;
 use cadcraft_render3d::adapter::AdapterChoice;
@@ -741,7 +741,7 @@ mod tests {
 
         // Create a light set that turns off the first light
         let mut set = LightSet::new("off_one");
-        set.lights.push(cadcraft_doc::arch::LightState { id: d.arch.lights[0].id, on: false, brightness: 1.0 });
+        set.lights.push(cadcraft_engine::doc::arch::LightState { id: d.arch.lights[0].id, on: false, brightness: 1.0 });
         d.arch.light_sets.push(set);
         d.touch_arch();
 
@@ -784,10 +784,10 @@ mod tests {
 
         // Create two different light sets
         let mut set1 = LightSet::new("set1");
-        set1.lights.push(cadcraft_doc::arch::LightState { id: d.arch.lights[0].id, on: false, brightness: 1.0 });
+        set1.lights.push(cadcraft_engine::doc::arch::LightState { id: d.arch.lights[0].id, on: false, brightness: 1.0 });
 
         let mut set2 = LightSet::new("set2");
-        set2.lights.push(cadcraft_doc::arch::LightState { id: d.arch.lights[1].id, on: false, brightness: 1.0 });
+        set2.lights.push(cadcraft_engine::doc::arch::LightState { id: d.arch.lights[1].id, on: false, brightness: 1.0 });
 
         d.arch.light_sets.push(set1);
         d.arch.light_sets.push(set2);
