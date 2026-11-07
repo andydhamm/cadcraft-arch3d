@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 35 of 42 segments merged · 2 of 14 acceptance checks**
 
@@ -25,17 +25,16 @@ Updated 2026-11-07 00:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 40.1 h so far · expected done Nov 07 07:58–Nov 08 06:47 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 40.3 h so far · expected done Nov 07 08:13–Nov 08 07:01 UTC |
 
 ## Phase 15 segments
 
-35 merged, 4 replaced, 4 queued, 3 escalate, 1 abandoned
+35 merged, 4 replaced, 4 queued, 2 escalate, 1 stuck, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-io-electrical` | io: electrical devices and connections in GLB, OBJ, IFC and DXF | escalate |  |
 | `p15-cmd-connections` | engine: connection, connection.edit, connection.delete, circuit.brightness | escalate |  |
-| `p15-inspect` | engine: arch.inspect for phase 15 | escalate |  |
 
 ## Recent merges
 
@@ -59,14 +58,14 @@ Updated 2026-11-07 00:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 931 |
-| bonsai-b | bonsai2-27b | gate | 859 |
+| bonsai-b | bonsai2-27b | idle | 860 |
 | bonsai-ws2-a | bonsai2-27b | idle | 966 |
 | bonsai-ws2-b | bonsai2-27b | idle | 926 |
 | claude-sonnet-a | sonnet | idle | 86 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
 | claude-sonnet-d | sonnet | idle | 25 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 810 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 811 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 67 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 38 |
