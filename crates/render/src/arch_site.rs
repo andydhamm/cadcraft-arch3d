@@ -17,7 +17,7 @@ use cadcraft_geom::Vec2;
 use cadcraft_geom::tin_ops::ContourLine;
 
 use crate::DisplayList;
-use crate::arch::{arch_layer_skipped, push_polyline};
+use crate::arch::{arch_layer_skipped, layer_transparency, push_polyline_with_transparency};
 
 /// Height of a major contour's label, in metres.
 const LABEL_HEIGHT: f64 = 0.35;
@@ -37,19 +37,21 @@ pub(crate) fn push_site(d: &Drawing, list: &mut DisplayList, plotting: bool) {
     if let Some(t) = &m.terrain {
         let ground = terrain_handle(None);
         if let Some(ink) = layer_ink(d, "C-TOPO-BNDY", 3, plotting) {
-            push_ring(list, ground, &ink, &t.boundary);
+            let transparency = layer_transparency(d, "C-TOPO-BNDY");
+            push_ring(list, ground, &ink, &t.boundary, transparency);
         }
         push_contours(d, list, plotting);
         if let Some(ink) = layer_ink(d, "C-TOPO-GRAD", 4, plotting) {
+            let transparency = layer_transparency(d, "C-TOPO-GRAD");
             for md in &t.modifiers {
                 let handle = terrain_handle(Some(md.id));
                 match &md.kind {
                     ModifierKind::Flat { polygon, margin, .. } => {
-                        push_ring(list, handle, &ink, polygon);
+                        push_ring(list, handle, &ink, polygon, transparency);
                         if margin.is_finite() && *margin > 0.0 && polygon.iter().all(|p| p.is_finite()) {
                             let dist = vec![*margin; polygon.len()];
                             if let Some(ring) = cadcraft_arch::poly::offset_polygon(polygon, &dist, true) {
-                                push_ring(list, handle, &ink, &ring);
+                                push_ring(list, handle, &ink, &ring, transparency);
                             }
                         }
                     }
@@ -58,7 +60,7 @@ pub(crate) fn push_site(d: &Drawing, list: &mut DisplayList, plotting: bool) {
                             let circle: Vec<Vec2> = (0..=HILL_CIRCLE_POINTS)
                                 .map(|i| *center + Vec2::from_angle(i as f64 * std::f64::consts::TAU / HILL_CIRCLE_POINTS as f64) * *radius)
                                 .collect();
-                            push_polyline(list, handle, &ink, &circle);
+                            push_polyline_with_transparency(list, handle, &ink, &circle, transparency);
                         }
                     }
                     ModifierKind::Path { .. } => {}
@@ -66,14 +68,16 @@ pub(crate) fn push_site(d: &Drawing, list: &mut DisplayList, plotting: bool) {
             }
         }
         if let Some(ink) = layer_ink(d, "C-ROAD", 9, plotting) {
+            let transparency = layer_transparency(d, "C-ROAD");
             for md in &t.modifiers {
                 if let ModifierKind::Path { polygon, .. } = &md.kind {
-                    push_ring(list, terrain_handle(Some(md.id)), &ink, polygon);
+                    push_ring(list, terrain_handle(Some(md.id)), &ink, polygon, transparency);
                 }
             }
         }
     }
     if let Some(ink) = layer_ink(d, "L-PLNT", 3, plotting) {
+        let transparency = layer_transparency(d, "L-PLNT");
         for pl in &m.plants {
             if !pl.position.is_finite() {
                 continue;
@@ -82,19 +86,20 @@ pub(crate) fn push_site(d: &Drawing, list: &mut DisplayList, plotting: bool) {
             let (_, spread) = cadcraft_arch::plant::plant_size(&sp, pl);
             for sym in cadcraft_arch::plant::plan_symbol(&sp, pl.position, spread) {
                 if sym.len() >= 2 && sym.iter().all(|p| p.is_finite()) {
-                    push_polyline(list, plant_handle(pl.id), &ink, &sym);
+                    push_polyline_with_transparency(list, plant_handle(pl.id), &ink, &sym, transparency);
                 }
             }
         }
     }
     if let Some(ink) = layer_ink(d, "A-ANNO-NRTH", 7, plotting) {
+        let transparency = layer_transparency(d, "A-ANNO-NRTH");
         if let Some(arrow) = cadcraft_arch::site::north_arrow(m) {
             let ground = terrain_handle(None);
             if arrow.outline.len() >= 2 && arrow.outline.iter().all(|p| p.is_finite()) {
-                push_polyline(list, ground, &ink, &arrow.outline);
+                push_polyline_with_transparency(list, ground, &ink, &arrow.outline, transparency);
             }
             let at = arrow.at + arrow.direction * NORTH_LABEL_OFFSET;
-            push_text(list, ground, &ink, "N", at, NORTH_HEIGHT, 0.0);
+            push_text(list, ground, &ink, "N", at, NORTH_HEIGHT, 0.0, transparency);
         }
     }
 }
@@ -114,20 +119,23 @@ fn push_contours(d: &Drawing, list: &mut DisplayList, plotting: bool) {
     let set = site_contours(&mesh, t.contour_minor, t.contour_major);
     let ground = terrain_handle(None);
     if let Some(ink) = &minor_ink {
+        let transparency = layer_transparency(d, "C-TOPO-MINR");
         for line in set.minor.iter().filter(|l| !is_major_level(l.elevation, t.contour_major)) {
-            push_line(list, ground, ink, line);
+            push_line(list, ground, ink, line, transparency);
         }
     }
     if let Some(ink) = &major_ink {
+        let transparency = layer_transparency(d, "C-TOPO-MAJR");
         for line in &set.major {
-            push_line(list, ground, ink, line);
+            push_line(list, ground, ink, line, transparency);
         }
     }
     if let Some(ink) = &text_ink {
+        let transparency = layer_transparency(d, "C-TOPO-TEXT");
         for line in &set.major {
             let Some(at) = label_point(line) else { continue };
             let Some(dir) = direction_at(line, at) else { continue };
-            push_text(list, ground, ink, &label_text(line.elevation), at, LABEL_HEIGHT, readable_angle(dir));
+            push_text(list, ground, ink, &label_text(line.elevation), at, LABEL_HEIGHT, readable_angle(dir), transparency);
         }
     }
 }
@@ -151,17 +159,17 @@ fn is_major_level(level: f64, major: f64) -> bool {
 
 /// A closed ring (first point not repeated) as one polyline with the closing point appended.
 /// Rings with fewer than three points or any non-finite point are skipped.
-fn push_ring(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, ring: &[Vec2]) {
+fn push_ring(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, ring: &[Vec2], transparency: u8) {
     if ring.len() < 3 || !ring.iter().all(|p| p.is_finite()) {
         return;
     }
     let mut pts = ring.to_vec();
     pts.push(ring[0]);
-    push_polyline(list, handle, ink, &pts);
+    push_polyline_with_transparency(list, handle, ink, &pts, transparency);
 }
 
 /// A contour line as one polyline, the closing point appended when it is closed.
-fn push_line(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, line: &ContourLine) {
+fn push_line(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, line: &ContourLine, transparency: u8) {
     let pts: Vec<Vec2> = line.points.iter().copied().filter(|p| p.is_finite()).collect();
     if pts.len() < 2 {
         return;
@@ -169,9 +177,9 @@ fn push_line(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, line: &Co
     if line.closed && pts.len() >= 3 {
         let mut ring = pts.clone();
         ring.push(pts[0]);
-        push_polyline(list, handle, ink, &ring);
+        push_polyline_with_transparency(list, handle, ink, &ring, transparency);
     } else {
-        push_polyline(list, handle, ink, &pts);
+        push_polyline_with_transparency(list, handle, ink, &pts, transparency);
     }
 }
 
@@ -209,14 +217,14 @@ fn readable_angle(dir: Vec2) -> f64 {
 }
 
 /// `text` as stroke polylines centred on `at`.
-fn push_text(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, text: &str, at: Vec2, height: f64, angle: f64) {
+fn push_text(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, text: &str, at: Vec2, height: f64, angle: f64, transparency: u8) {
     if !at.is_finite() || !angle.is_finite() {
         return;
     }
     let (shape, _) = place(&TextFont::Stroke, text, &TextParams::centered(at, height, angle));
     for stroke in &shape.strokes {
         if stroke.len() >= 2 && stroke.iter().all(|p| p.is_finite()) {
-            push_polyline(list, handle, ink, stroke);
+            push_polyline_with_transparency(list, handle, ink, stroke, transparency);
         }
     }
 }

@@ -60,6 +60,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     // Poché gaps from openings are only meaningful while the wall poché is drawn, so the
     // whole loop is skipped when the wall's layer is off or frozen (or no-plot while plotting).
     if !arch_layer_skipped(d, "A-WALL", plotting) {
+        let wall_t = layer_transparency(d, "A-WALL");
         for wall in &d.arch.walls {
             if !wall_on_shown_level(d, wall) {
                 continue;
@@ -113,7 +114,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: ink.rgb,
                     aci7: ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: wall_t,
                     kind: Kind::Tris,
                     start,
                     len: u32::try_from(tris.len()).unwrap_or(u32::MAX),
@@ -135,7 +136,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                 color: ink.rgb,
                 aci7: ink.aci7,
                 lw: 0.0,
-                transparency: 0,
+                transparency: wall_t,
                 kind: Kind::Polyline,
                 start,
                 len: u32::try_from(closed.len()).unwrap_or(u32::MAX),
@@ -156,7 +157,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                         color: ink.rgb,
                         aci7: ink.aci7,
                         lw: 0.0,
-                        transparency: 0,
+                        transparency: wall_t,
                         kind: Kind::Polyline,
                         start,
                         len: 2,
@@ -175,7 +176,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                         color: ink.rgb,
                         aci7: ink.aci7,
                         lw: 0.0,
-                        transparency: 0,
+                        transparency: wall_t,
                         kind: Kind::Polyline,
                         start,
                         len: 2,
@@ -203,6 +204,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
             }
             let sym_layer = d.layer(&sym.layer).map(|l| l.color).unwrap_or(Color::Index(7));
             let sym_ink = crate::ink(Color::ByLayer, sym_layer, Color::Index(7));
+            let sym_t = layer_transparency(d, &sym.layer);
             for poly in &sym.polylines {
                 if poly.len() < 2 {
                     continue;
@@ -217,7 +219,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: sym_ink.rgb,
                     aci7: sym_ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: sym_t,
                     kind: Kind::Polyline,
                     start,
                     len: u32::try_from(poly.len()).unwrap_or(u32::MAX),
@@ -245,6 +247,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
             let (sh, _) = place(&TextFont::Stroke, &label_text, &params);
             let room_layer = d.layer("A-ROOM").map(|l| l.color).unwrap_or(Color::Index(7));
             let room_ink = crate::ink(Color::ByLayer, room_layer, Color::Index(7));
+            let room_t = layer_transparency(d, "A-ROOM");
             for stroke in &sh.strokes {
                 if stroke.len() < 2 || !stroke.iter().all(|p| p.is_finite()) {
                     continue;
@@ -259,7 +262,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: room_ink.rgb,
                     aci7: room_ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: room_t,
                     kind: Kind::Polyline,
                     start,
                     len: u32::try_from(stroke.len()).unwrap_or(u32::MAX),
@@ -278,6 +281,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
             }
             let roof_layer = d.layer("A-ROOF").map(|l| l.color).unwrap_or(Color::Index(7));
             let roof_ink = crate::ink(Color::ByLayer, roof_layer, Color::Index(7));
+            let roof_t = layer_transparency(d, "A-ROOF");
             for edge in &roof.edges {
                 if matches!(edge.kind, RoofEdgeKind::Eave) {
                     continue;
@@ -295,7 +299,7 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                     color: roof_ink.rgb,
                     aci7: roof_ink.aci7,
                     lw: 0.0,
-                    transparency: 0,
+                    transparency: roof_t,
                     kind: Kind::Polyline,
                     start,
                     len: 2,
@@ -309,27 +313,28 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     if !arch_layer_skipped(d, "A-STAIR", plotting) {
         let layer_color = d.layer("A-STAIR").map(|l| l.color).unwrap_or(Color::Index(7));
         let stair_ink = crate::ink(Color::ByLayer, layer_color, Color::Index(7));
+        let transparency = layer_transparency(d, "A-STAIR");
         for s in &d.arch.stairs {
             if !on_shown_level(d, s.from_level) && !on_shown_level(d, s.to_level) {
                 continue;
             }
             let handle = stair_handle(s.id);
             let Some(outline) = flight_outline(s) else { continue };
-            push_polyline(&mut list, handle, &stair_ink, &outline);
+            push_polyline_with_transparency(&mut list, handle, &stair_ink, &outline, transparency);
             let (dir, side) = (Vec2::new(s.direction.cos(), s.direction.sin()), Vec2::new(-s.direction.sin(), s.direction.cos()));
             if s.tread_depth.is_finite() && s.tread_depth > 1e-6 {
                 let mut n = 1usize;
                 while n <= MAX_RISER_LINES && (n as f64) * s.tread_depth < s.run - 1e-9 {
                     let a = s.start + dir * (n as f64 * s.tread_depth);
                     let b = a + side * s.width;
-                    push_polyline(&mut list, handle, &stair_ink, &[a, b]);
+                    push_polyline_with_transparency(&mut list, handle, &stair_ink, &[a, b], transparency);
                     n += 1;
                 }
             }
             if s.well.len() >= 3 && s.well.iter().all(|p| p.is_finite()) {
                 let mut ring = s.well.clone();
                 ring.push(s.well[0]);
-                push_polyline(&mut list, handle, &stair_ink, &ring);
+                push_polyline_with_transparency(&mut list, handle, &stair_ink, &ring, transparency);
             }
         }
     }
@@ -338,11 +343,12 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     if !arch_layer_skipped(d, "A-RAIL", plotting) {
         let layer_color = d.layer("A-RAIL").map(|l| l.color).unwrap_or(Color::Index(7));
         let rail_ink = crate::ink(Color::ByLayer, layer_color, Color::Index(7));
+        let transparency = layer_transparency(d, "A-RAIL");
         for r in &d.arch.railings {
             if r.path.len() < 2 || !on_shown_level(d, r.level) || !r.path.iter().all(|p| p.is_finite()) {
                 continue;
             }
-            push_polyline(&mut list, railing_handle(r.id), &rail_ink, &r.path);
+            push_polyline_with_transparency(&mut list, railing_handle(r.id), &rail_ink, &r.path, transparency);
         }
     }
 
@@ -382,15 +388,17 @@ fn push_views(d: &Drawing, list: &mut DisplayList, plotting: bool) {
 
         if !arch_layer_skipped(d, &view.layer, plotting) {
             let ink = ink_of(&view.layer);
+            let transparency = layer_transparency(d, &view.layer);
             for l in g.lines.iter().take(MAX_VIEW_ITEMS) {
                 if let (Some(a), Some(b)) = (at(l.a), at(l.b)) {
-                    push_polyline(list, handle, &ink, &[a, b]);
+                    push_polyline_with_transparency(list, handle, &ink, &[a, b], transparency);
                 }
             }
         }
 
         if !arch_layer_skipped(d, "A-SECT-MCUT", plotting) {
             let ink = ink_of("A-SECT-MCUT");
+            let transparency = layer_transparency(d, "A-SECT-MCUT");
             for ring in g.rings.iter().take(MAX_VIEW_ITEMS) {
                 let pts: Vec<Vec2> = ring.points.iter().filter_map(|&p| at(p)).collect();
                 if pts.len() < 3 || pts.len() != ring.points.len() {
@@ -408,7 +416,7 @@ fn push_views(d: &Drawing, list: &mut DisplayList, plotting: bool) {
                         color: ink.rgb,
                         aci7: ink.aci7,
                         lw: 0.0,
-                        transparency: 0,
+                        transparency,
                         kind: Kind::Tris,
                         start,
                         len: u32::try_from(tris.len()).unwrap_or(u32::MAX),
@@ -416,16 +424,17 @@ fn push_views(d: &Drawing, list: &mut DisplayList, plotting: bool) {
                 }
                 let mut closed = pts;
                 closed.push(closed[0]);
-                push_polyline(list, handle, &ink, &closed);
+                push_polyline_with_transparency(list, handle, &ink, &closed, transparency);
             }
         }
 
         if !arch_layer_skipped(d, "A-ANNO-DIMS", plotting) {
             let ink = ink_of("A-ANNO-DIMS");
+            let transparency = layer_transparency(d, "A-ANNO-DIMS");
             let k = if view.scale.is_finite() && view.scale > 0.0 { view.scale / 1000.0 } else { 0.05 };
             for dim in g.dims.iter().take(MAX_VIEW_ITEMS) {
                 let (Some(a), Some(b), Some(on)) = (at(dim.a), at(dim.b), at(dim.at)) else { continue };
-                push_dim(list, handle, &ink, k, a, b, on, &dim.text);
+                push_dim(list, handle, &ink, transparency, k, a, b, on, &dim.text);
             }
         }
     }
@@ -433,7 +442,7 @@ fn push_views(d: &Drawing, list: &mut DisplayList, plotting: bool) {
 
 /// One dimension: extension lines, dimension line, 45-degree ticks and centred text.
 #[allow(clippy::too_many_arguments)]
-fn push_dim(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, k: f64, a: Vec2, b: Vec2, on: Vec2, text: &str) {
+fn push_dim(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, transparency: u8, k: f64, a: Vec2, b: Vec2, on: Vec2, text: &str) {
     let len = a.dist(b);
     if len < 1e-12 || !len.is_finite() {
         return;
@@ -443,12 +452,12 @@ fn push_dim(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, k: f64, a:
     let off = (on - a).dot(n);
     let (a2, b2) = (a + n * off, b + n * off);
     let over = n * (1.5 * k * if off < 0.0 { -1.0 } else { 1.0 });
-    push_polyline(list, handle, ink, &[a, a2 + over]);
-    push_polyline(list, handle, ink, &[b, b2 + over]);
-    push_polyline(list, handle, ink, &[a2, b2]);
+    push_polyline_with_transparency(list, handle, ink, &[a, a2 + over], transparency);
+    push_polyline_with_transparency(list, handle, ink, &[b, b2 + over], transparency);
+    push_polyline_with_transparency(list, handle, ink, &[a2, b2], transparency);
     let tick = (dir + n) * (std::f64::consts::FRAC_1_SQRT_2 * 1.5 * k);
     for p in [a2, b2] {
-        push_polyline(list, handle, ink, &[p - tick, p + tick]);
+        push_polyline_with_transparency(list, handle, ink, &[p - tick, p + tick], transparency);
     }
     if text.is_empty() {
         return;
@@ -461,7 +470,7 @@ fn push_dim(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, k: f64, a:
     let (sh, _) = place(&TextFont::Stroke, text, &params);
     for stroke in &sh.strokes {
         if stroke.len() >= 2 && stroke.iter().all(|p| p.is_finite()) {
-            push_polyline(list, handle, ink, stroke);
+            push_polyline_with_transparency(list, handle, ink, stroke, transparency);
         }
     }
 }
@@ -485,8 +494,8 @@ fn flight_outline(s: &cadcraft_doc::arch::Stair) -> Option<[Vec2; 5]> {
     Some([p0, p1, p2, p3, p0])
 }
 
-/// Append one polyline prim of `pts` tagged `handle`.
-pub(crate) fn push_polyline(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, pts: &[Vec2]) {
+/// Append one polyline prim of `pts` tagged `handle`, carrying `transparency` (percent).
+pub(crate) fn push_polyline_with_transparency(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, pts: &[Vec2], transparency: u8) {
     let start = u32::try_from(list.verts.len()).unwrap_or(u32::MAX);
     for &p in pts {
         list.bounds.add(p);
@@ -497,11 +506,19 @@ pub(crate) fn push_polyline(list: &mut DisplayList, handle: Handle, ink: &crate:
         color: ink.rgb,
         aci7: ink.aci7,
         lw: 0.0,
-        transparency: 0,
+        transparency,
         kind: Kind::Polyline,
         start,
         len: u32::try_from(pts.len()).unwrap_or(u32::MAX),
     });
+}
+
+/// The transparency (percent, 0 = opaque) of `layer` in `d`. A missing layer contributes 0.
+/// This is the value an architectural prim drawn on `layer` carries into
+/// [`DPrim::transparency`], so the plan export dims the prim when the layer is faded and
+/// leaves fully-opaque layers untouched.
+pub(crate) fn layer_transparency(d: &Drawing, layer: &str) -> u8 {
+    d.layer(layer).map(|l| l.transparency).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -530,6 +547,68 @@ mod tests {
 
     fn handles(list: &DisplayList) -> std::collections::BTreeSet<Handle> {
         list.prims.iter().map(|p| p.handle).collect()
+    }
+
+    #[test]
+    fn arch_linework_takes_its_layer_transparency() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-WALL");
+        if let Some(layer) = d.layer_mut("A-WALL") {
+            layer.transparency = 70;
+        }
+        let wall = Wall { id: ArchId(7), start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 3.0, ..Default::default() };
+        d.arch.walls.push(wall);
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let list = build_arch(&d, &Options::default(), false);
+        let t: Vec<u8> = list.prims.iter().filter(|p| p.handle == arch_handle(ArchId(7))).map(|p| p.transparency).collect();
+        assert!(!t.is_empty());
+        assert!(t.iter().all(|&v| v == 70), "wall transparencies: {t:?}");
+    }
+
+    #[test]
+    fn the_electrical_view_export_dims_non_electrical_layers() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-WALL");
+        d.ensure_layer("E-POWR");
+        d.ensure_layer("E-LITE");
+        for layer in &mut d.layers {
+            if layer.name.starts_with("E-") {
+                layer.on = true;
+                layer.frozen = false;
+                layer.transparency = 0;
+            } else {
+                layer.transparency = 70;
+            }
+        }
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let wall = Wall { id: ArchId(8), start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 3.0, ..Default::default() };
+        let wall_id = wall.id;
+        d.arch.walls.push(wall);
+        d.arch.electrical.push(cadcraft_doc::arch::ElectricalDevice {
+            id: ArchId(9),
+            kind: cadcraft_doc::arch::ElectricalKind::Duplex,
+            wall: wall_id,
+            side: cadcraft_doc::arch::WallSide::Left,
+            offset: 1.0,
+            height: 0.3,
+            level: 0,
+            ..Default::default()
+        });
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(list.prims.iter().filter(|p| p.handle == arch_handle(wall_id)).all(|p| p.transparency == 70));
+        assert!(list.prims.iter().filter(|p| p.handle == cadcraft_doc::arch::electrical_handle(ArchId(9))).all(|p| p.transparency == 0));
+    }
+
+    #[test]
+    fn opaque_layers_draw_unchanged() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-WALL");
+        d.ensure_layer("E-POWR");
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let wall = Wall { id: ArchId(10), start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 3.0, ..Default::default() };
+        d.arch.walls.push(wall);
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(list.prims.iter().all(|p| p.transparency == 0));
     }
 
     #[test]

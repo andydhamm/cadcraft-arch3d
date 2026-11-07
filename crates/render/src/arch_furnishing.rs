@@ -7,7 +7,7 @@ use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::furnishing_handle;
 
 use crate::DisplayList;
-use crate::arch::{arch_layer_skipped, on_shown_level, push_polyline};
+use crate::arch::{arch_layer_skipped, layer_transparency, on_shown_level, push_polyline_with_transparency};
 
 /// Append every furnishing's plan outline to `list`.
 pub(crate) fn push_furnishings(d: &Drawing, list: &mut DisplayList, plotting: bool) {
@@ -27,7 +27,8 @@ pub(crate) fn push_furnishings(d: &Drawing, list: &mut DisplayList, plotting: bo
         ring.push(first);
         let color = d.layer(layer).map(|l| l.color).unwrap_or(Color::Index(7));
         let ink = crate::ink(Color::ByLayer, color, Color::Index(7));
-        push_polyline(list, furnishing_handle(f.id), &ink, &ring);
+        let transparency = layer_transparency(d, layer);
+        push_polyline_with_transparency(list, furnishing_handle(f.id), &ink, &ring, transparency);
     }
 }
 
