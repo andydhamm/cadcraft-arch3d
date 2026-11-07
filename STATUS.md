@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-07 02:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 15: Electrical, technical illustration and the showcase house — 35 of 42 segments merged · 2 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-07 01:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 41.3 h so far · expected done Nov 07 10:09–Nov 08 11:49 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 2 / 14 | 41.6 h so far · expected done Nov 07 10:24–Nov 08 12:04 UTC |
 
 ## Phase 15 segments
 
@@ -58,9 +58,9 @@ Updated 2026-11-07 01:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 933 |
-| bonsai-b | bonsai2-27b | agent | 860 |
+| bonsai-b | bonsai2-27b | gate | 861 |
 | bonsai-ws2-a | bonsai2-27b | idle | 966 |
-| bonsai-ws2-b | bonsai2-27b | agent | 926 |
+| bonsai-ws2-b | bonsai2-27b | gate | 926 |
 | claude-sonnet-a | sonnet | idle | 86 |
 | claude-sonnet-b | sonnet | idle | 84 |
 | claude-sonnet-c | sonnet | idle | 37 |
