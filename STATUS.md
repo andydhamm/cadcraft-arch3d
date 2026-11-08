@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-08 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 18:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 16: Electrical, technical illustration and the showcase house — 54 of 62 segments merged · 6 of 14 acceptance checks**
+**Phase 15 of 16: Electrical, technical illustration and the showcase house — 55 of 64 segments merged · 6 of 14 acceptance checks**
 
-7,878 workspace tests passing at the last merge · 834 segments merged in all · 0 of 13 seats working
+7,879 workspace tests passing at the last merge · 835 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,22 +25,22 @@ Updated 2026-11-08 18:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 81.6 h so far · expected done Nov 09 21:25–Nov 17 03:15 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 81.8 h so far · expected done Nov 09 18:15–Nov 13 19:15 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-54 merged, 7 replaced, 5 queued, 2 abandoned, 1 stuck, 1 escalate, 1 merging
+55 merged, 8 replaced, 8 queued, 3 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-3b7eb1b7b` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | escalate |  |
-| `p15-showcase-lib-io` | showcase_shell: install the library readers so the script can use sample items | merging | bonsai-ws2-b |
+| `p15-showcase-bath-room` | bilevel.json: a Main-level bath (partitions, re-detect, re-type) | gate | bonsai-ws2-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 08 18:05 | `p15-showcase-lib-io` | merged | 7,879 pass | bonsai-ws2-b |
 | Nov 08 17:25 | `harden-p15-cmd-connections` | merged | 7,878 pass | tturbo-mac |
 | Nov 08 16:33 | `harden-p15-inspect-site-paths-plants` | merged | 7,868 pass | tturbo-mac |
 | Nov 08 15:18 | `harden-p15-door-on-level` | merged | 7,864 pass | tturbo-mac |
@@ -52,20 +52,20 @@ Updated 2026-11-08 18:00 UTC. This page and the card in the README are regenerat
 | Nov 08 06:25 | `upstream-sync-8e899eef6` | merged | 7,843 pass | mai-flash |
 | Nov 08 05:01 | `p15-outlet-gap-spacing` | merged | 7,763 pass | bonsai-ws2-a |
 | Nov 08 03:09 | `harden-p15-io-glb-obj-electrical` | merged | 7,760 pass | tturbo-mac |
-| Nov 08 02:35 | `upstream-sync-1b39fbbab` | merged | 7,754 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 955 |
-| bonsai-b | bonsai2-27b | idle | 894 |
+| bonsai-a | bonsai2-27b | gate | 955 |
+| bonsai-b | bonsai2-27b | agent | 894 |
 | bonsai-ws2-a | bonsai2-27b | idle | 980 |
-| bonsai-ws2-b | bonsai2-27b | merging | 954 |
+| bonsai-ws2-b | bonsai2-27b | gate | 954 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | idle | 30 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 837 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-esc | mai-code-1.1-flash | down | 47 |
