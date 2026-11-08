@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 01:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 16: Phase 16**
 
@@ -26,7 +26,7 @@ Updated 2026-11-08 01:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | incomplete | 6 / 14 | 62.3 h |
-| 16 | Phase 16 | pending | — |  · expected done Nov 08 06:44–Nov 13 11:17 UTC |
+| 16 | Phase 16 | pending | — |  · expected done Nov 08 06:59–Nov 13 11:31 UTC |
 
 ## Phase 16 segments
 
@@ -37,6 +37,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 08 01:19 | `harden-p15-io-glb-obj-electrical` | refused | 7,759 pass, 1 fail | tturbo-mac |
 | Nov 08 00:09 | `harden-p15-render-light-set` | merged | 7,754 pass | tturbo-mac |
 | Nov 07 23:41 | `upstream-sync-2611bc5f5-v3` | merged | 7,749 pass | bonsai-b |
 | Nov 07 23:12 | `harden-p15-inspect-electrical` | merged | 7,747 pass | tturbo-mac |
@@ -48,7 +49,6 @@ none yet
 | Nov 07 14:45 | `p15-inspect-electrical` | merged | 7,714 pass | claude-sonnet-b |
 | Nov 07 14:18 | `p15-inspect-rooms-on-objects` | merged | 7,711 pass | bonsai-ws2-a |
 | Nov 07 13:48 | `harden-p15-cmd-level-free` | merged | 7,709 pass | tturbo-mac |
-| Nov 07 13:21 | `p15-plan-layer-transparency` | merged | 7,703 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
@@ -66,5 +66,5 @@ none yet
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | merging | 648 |
+| tturbo-mac | tturbo-ultraheretic | agent | 648 |
 | tturbo-mac2 | tturbo-ultraheretic | down | 348 |
