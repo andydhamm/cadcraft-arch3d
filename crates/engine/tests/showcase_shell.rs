@@ -23,7 +23,7 @@ fn replay(session: &mut Session) -> &mut Session {
     let script = std::fs::read_to_string(showcase_path()).expect("could not read showcase shell script");
     let steps: Vec<Value> = serde_json::from_str(&script).expect("showcase shell script is not valid JSON");
     for (i, step) in steps.iter().enumerate() {
-        let cmd = step["cmd"].as_str().expect("missing cmd");
+        let cmd: &str = step["cmd"].as_str().expect("missing cmd");
         let params = step["params"].clone();
         session.execute(cmd, &params).expect(format!("showcase step {} ({}={}) failed", i, cmd, params));
     }
@@ -128,7 +128,7 @@ fn the_shell_is_a_split_entry_bilevel() {
     let main_ceiling = main_val["ceilingHeight"].as_f64().expect("main ceiling height");
     let expected_top = main_elev + main_ceiling;
     let spanning =
-        walls.iter().find(|w| w["topLevel"].is_some() || w["bottom"].as_f64().map_or(false, |b| b.abs() >= 1.0)).expect("no spanning wall");
+        walls.iter().find(|w| !w["topLevel"].is_null() || w["bottom"].as_f64().map_or(false, |b| b.abs() >= 1.0)).expect("no spanning wall");
     let bottom = spanning["bottom"].as_f64().expect("spanning wall bottom");
     let top = spanning["top"].as_f64().expect("spanning wall top");
     assert!((bottom - lower_elev).abs() < TOL, "spanning wall bottom {} != Lower elevation {}", bottom, lower_elev);
