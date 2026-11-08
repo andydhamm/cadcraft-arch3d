@@ -284,30 +284,11 @@ fn device(
 
 /// Duplex positions along a run of `length` metres.
 fn duplex_positions(length: f64) -> Vec<f64> {
-    let mut v = Vec::new();
     if !(length.is_finite() && length > 0.0) {
-        return v;
+        return Vec::new();
     }
-    let mut p = (length / 2.0).min(1.8);
-    let mut last = p;
-    v.push(p);
-    while v.len() < MAX_PER_RUN {
-        p += 3.6;
-        if p > length - 1.8 {
-            break;
-        }
-        v.push(p);
-        last = p;
-    }
-    if length - last > 1.8 {
-        // Clamping the end pulls it in; keep every point within 1.8 m of an outlet.
-        let gap = length - EDGE - v.last().copied().unwrap_or(0.0);
-        if gap > 3.6 {
-            v.push(v.last().copied().unwrap_or(0.0) + gap / 2.0);
-        }
-        v.push(length);
-    }
-    v
+    let n = ((length / 3.6).ceil() as usize).clamp(1, MAX_PER_RUN);
+    (0..n).map(|i| (i as f64 + 0.5) * length / n as f64).collect()
 }
 
 /// Maps a position along `run` to `(wall, side, offset)`.
@@ -383,13 +364,61 @@ pub fn auto_outlets(model: &ArchModel, room: ArchId) -> Vec<cadcraft_doc::arch::
             cum += b - a;
             breaks.push(cum);
         }
-        for p in duplex_positions(l) {
-            let mut p = p.min(l - EDGE).max(EDGE);
-            for &c in &breaks {
-                if (p - c).abs() < EDGE - 1e-12 {
-                    p = if c < l / 2.0 { c + EDGE } else { c - EDGE };
+        let mut positions: Vec<f64> = duplex_positions(l)
+            .into_iter()
+            .map(|p| p.min(l - EDGE).max(EDGE))
+            .map(|p| {
+                let mut q = p;
+                for &c in &breaks {
+                    if (q - c).abs() < EDGE - 1e-12 {
+                        q = if c < l / 2.0 { c + EDGE } else { c - EDGE };
+                    }
+                    q = q.min(l - EDGE).max(EDGE);
+                }
+                q
+            })
+            .collect();
+        positions.sort_by(|a, b| a.total_cmp(b));
+        let mut passes = 0u32;
+        while passes < 8 && positions.len() < MAX_PER_RUN {
+            let n = positions.len();
+            let mut best_gap = f64::NEG_INFINITY;
+            let mut best_pos = 0.0f64;
+            if n > 0 {
+                let g = positions[0] - 0.0;
+                if g > 3.6 && g > best_gap {
+                    best_gap = g;
+                    best_pos = g / 2.0;
                 }
             }
+            for i in 0..n.saturating_sub(1) {
+                let g = positions[i + 1] - positions[i];
+                if g > 3.6 && g > best_gap {
+                    best_gap = g;
+                    best_pos = positions[i] + g / 2.0;
+                }
+            }
+            if n > 0 {
+                let g = l - positions[n - 1];
+                if g > 3.6 && g > best_gap {
+                    best_gap = g;
+                    best_pos = positions[n - 1] + g / 2.0;
+                }
+            }
+            if best_gap < 3.6 {
+                break;
+            }
+            for &c in &breaks {
+                if (best_pos - c).abs() < EDGE {
+                    best_pos = if c < best_pos { c + EDGE } else { c - EDGE };
+                }
+            }
+            best_pos = best_pos.min(l - EDGE).max(EDGE);
+            positions.push(best_pos);
+            positions.sort_by(|a, b| a.total_cmp(b));
+            passes += 1;
+        }
+        for p in positions {
             if let Some((w, s, o)) = locate(&run, p) {
                 cands.push(device(ElectricalKind::Duplex, w, s, o, false, level));
             }

@@ -159,3 +159,45 @@ fn outlet_gaps_long_run() {
     let g = outlet_gaps(&m, room_id(&m));
     assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
 }
+
+fn room_of_length(len: f64) -> ArchModel {
+    let mut m = ArchModel::default();
+    let h = 0.5;
+    let c = [(-0.1, -h), (-0.1 + len, -h), (-0.1 + len, h), (-0.1, h)];
+    for i in 0..4 {
+        let (a, b) = (c[i], c[(i + 1) % 4]);
+        m.push_wall(Wall { start: Vec2::new(a.0, a.1), end: Vec2::new(b.0, b.1), thickness: 0.2, ..Default::default() });
+    }
+    m.rooms = detect_rooms(&m);
+    if let Some(r) = m.rooms.first_mut() {
+        r.room_type = RoomType::Bedroom;
+        r.name = "Room".into();
+    }
+    m
+}
+
+#[test]
+fn a_run_of_3_7_metres_gets_two_outlets() {
+    let m = room_of_length(3.9);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}
+
+#[test]
+fn duplex_positions_never_leave_a_gap_over_1_8() {
+    for len in [0.3, 1.0, 3.6, 3.7, 4.0, 7.3, 12.1, 33.0, 100.2] {
+        let m = room_of_length(len);
+        assert!(!m.rooms.is_empty(), "no room detected for length {len}");
+        let g = outlet_gaps(&m, room_id(&m));
+        assert!(g.max_gap <= 1.8 + 1e-6, "length {len}: {g:?}");
+    }
+}
+
+#[test]
+fn outlet_gaps_after_a_run_break_stays_under_1_8() {
+    let m = room_of_length(1.0);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}
