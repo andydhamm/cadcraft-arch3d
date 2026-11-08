@@ -327,4 +327,93 @@ mod tests {
         assert!(on_wall(&m, ArchId(99), 1.0, 0.6, 0.6).is_err());
         assert!(on_wall(&m, id, 0.3, 0.6, 0.6).is_ok());
     }
+
+    #[test]
+    fn host_wall_picks_closest_of_two_walls() {
+        let mut m = ArchModel::default();
+        let w1 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let w2 = m.push_wall(Wall::new(Vec2::new(0.0, 2.0), Vec2::new(4.0, 2.0), 0.2));
+        // Cabinet on w1's left face (y = 0.1), far from w2's left face (y = 2.1)
+        let (p, rot, _) = on_wall(&m, w1, 1.0, 0.6, 0.6).unwrap();
+        let c = cabinet_at(p, rot);
+        let (wid, s0, s1) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, w1);
+        assert!((s0 - 0.7).abs() < 1e-9 && (s1 - 1.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn host_wall_skips_zero_length_wall() {
+        let mut m = ArchModel::default();
+        let _zero = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), 0.2));
+        let w1 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let (p, rot, _) = on_wall(&m, w1, 1.0, 0.6, 0.6).unwrap();
+        let c = cabinet_at(p, rot);
+        let (wid, _, _) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, w1);
+    }
+
+    #[test]
+    fn host_wall_skips_non_finite_wall_endpoints() {
+        let mut m = ArchModel::default();
+        let nan_wall = Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, ..Wall::default() };
+        m.push_wall(nan_wall);
+        let w1 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let (p, rot, _) = on_wall(&m, w1, 1.0, 0.6, 0.6).unwrap();
+        let c = cabinet_at(p, rot);
+        let (wid, _, _) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, w1);
+    }
+
+    #[test]
+    fn host_wall_cabinet_at_wall_start_and_end() {
+        let (m, id) = model_with_wall();
+        // Cabinet exactly at the wall's start: offset = width/2 = 0.3
+        let (p1, rot1, _) = on_wall(&m, id, 0.3, 0.6, 0.6).unwrap();
+        let c1 = cabinet_at(p1, rot1);
+        let (wid1, s01, s11) = host_wall(&m, &c1).unwrap();
+        assert_eq!(wid1, id);
+        assert!((s01 - 0.0).abs() < 1e-9 && (s11 - 0.6).abs() < 1e-9);
+        // Cabinet exactly at the wall's end: offset = 4.0 - 0.3 = 3.7
+        let (p2, rot2, _) = on_wall(&m, id, 3.7, 0.6, 0.6).unwrap();
+        let c2 = cabinet_at(p2, rot2);
+        let (wid2, s02, s12) = host_wall(&m, &c2).unwrap();
+        assert_eq!(wid2, id);
+        assert!((s02 - 3.4).abs() < 1e-9 && (s12 - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn host_wall_on_vertical_wall() {
+        let mut m = ArchModel::default();
+        let w = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 4.0), 0.2));
+        let (p, rot, _) = on_wall(&m, w, 1.0, 0.6, 0.6).unwrap();
+        // Left face of a wall going +Y is at x = -0.1
+        assert!((p.x + 0.1).abs() < 1e-9 && (p.y - 1.0).abs() < 1e-9);
+        let c = cabinet_at(p, rot);
+        let (wid, s0, s1) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, w);
+        assert!((s0 - 0.7).abs() < 1e-9 && (s1 - 1.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn host_wall_tie_breaks_by_smaller_id() {
+        let mut m = ArchModel::default();
+        // Two coincident walls, same direction
+        let w1 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let w2 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let (p, rot, _) = on_wall(&m, w1, 1.0, 0.6, 0.6).unwrap();
+        let c = cabinet_at(p, rot);
+        let (wid, _, _) = host_wall(&m, &c).unwrap();
+        // Both walls match exactly; the smaller ArchId wins
+        assert_eq!(wid, w1);
+        assert!(w1 < w2);
+    }
+
+    #[test]
+    fn host_wall_refuses_cabinet_wider_than_wall() {
+        let (m, id) = model_with_wall();
+        // Wall is 4m; cabinet is 5m wide, placed at offset 2.0
+        let mut c = cabinet_at(Vec2::new(2.0, 0.1), 0.0);
+        c.width = 5.0;
+        assert!(host_wall(&m, &c).is_none());
+    }
 }
