@@ -118,7 +118,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         obj.insert("level".to_string(), json!(w.base_level));
         if walls_flag {
             obj.insert("topLevel".to_string(), w.top_level.map(|idx| json!(idx)).unwrap_or(Value::Null));
-            let span_valid = w.top_level.map_or(true, |idx| idx < d.arch.levels.len());
+            let span_valid = w.top_level.map_or(true, |idx| (idx as usize) < d.arch.levels.len());
             if span_valid {
                 match cadcraft_arch3d::wall_span(&d.arch, w) {
                     Some((bottom, top)) => {
