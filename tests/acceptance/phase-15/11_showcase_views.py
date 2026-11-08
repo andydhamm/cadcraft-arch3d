@@ -42,7 +42,7 @@ for k in ('glb', 'ifc', 'obj'):
     if k not in ex or not os.path.exists(os.path.join(out, ex[k])):
         fail(f"the {k} export: {ex}")
 validate_glb(os.path.join(out, ex['glb']))
-inst = step_file(os.path.join(out, ex['ifc']))
+_, inst = step_file(os.path.join(out, ex['ifc']))
 if len(of_type(inst, 'IFCBUILDINGSTOREY')) < 3 or not of_type(inst, 'IFCOUTLET') or not of_type(inst, 'IFCSWITCHINGDEVICE'):
     fail("the IFC has the storeys (lower, landing, main), IfcOutlet and IfcSwitchingDevice elements")
 print(f"ok: {len(imgs)} images ({', '.join(f'{k} {len(v)}' for k, v in sorted(kinds.items()))}), a contact sheet, GLB/IFC/OBJ")
