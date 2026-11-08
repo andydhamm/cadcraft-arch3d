@@ -159,7 +159,7 @@ fn the_shell_is_a_split_entry_bilevel() {
 
 #[test]
 fn the_shell_library_lists_sample_items() {
-    let s = showcase_session();
+    let mut s = showcase_session();
 
     // Every sample item id must be present in the library.
     let ids = [
