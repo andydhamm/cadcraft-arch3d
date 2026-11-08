@@ -59,7 +59,7 @@
 {"cmd":"fixture","params":{"kind":"toilet","at":[15.0,12.0],"level":"Lower"}},
 {"cmd":"fixture","params":{"kind":"lavatory","at":[12.0,12.0],"level":"Lower"}},
 {"cmd":"fixture","params":{"kind":"bathtub","at":[20.0,12.0],"level":"Lower"}},
-{"cmd":"library.place","params":{"item":"towel-rack","at":[20.0,14.35],"level":"Lower"}},
+{"cmd":"library.place","params":{"item":"towel-rack","at":[20.0,15.65],"level":"Lower"}},
 {"cmd":"fixture","params":{"kind":"range","at":[15.0,4.0],"level":"Lower"}},
 {"cmd":"fixture","params":{"kind":"refrigerator","at":[12.0,2.0],"level":"Lower"}},
 {"cmd":"fixture","params":{"kind":"sink","at":[20.0,4.0],"level":"Lower"}},
