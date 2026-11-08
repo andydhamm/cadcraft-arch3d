@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-08 15:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 15:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 54 of 61 segments merged · 6 of 14 acceptance checks**
 
-7,860 workspace tests passing at the last merge · 831 segments merged in all · 0 of 14 seats working
+7,864 workspace tests passing at the last merge · 832 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-08 15:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 78.8 h so far · expected done Nov 09 09:55–Nov 13 04:15 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 79.1 h so far · expected done Nov 09 10:10–Nov 13 04:30 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
@@ -41,6 +41,7 @@ Updated 2026-11-08 15:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 08 15:18 | `harden-p15-door-on-level` | merged | 7,864 pass | tturbo-mac |
 | Nov 08 14:32 | `upstream-sync-3b7eb1b7b` | refused | 7,896 pass | mai-flash-esc |
 | Nov 08 12:40 | `harden-p15-io-dxf-electrical` | merged | 7,860 pass | tturbo-mac |
 | Nov 08 10:36 | `harden-p15-outlet-gap-spacing` | merged | 7,853 pass | tturbo-mac |
@@ -52,14 +53,13 @@ Updated 2026-11-08 15:15 UTC. This page and the card in the README are regenerat
 | Nov 08 02:35 | `upstream-sync-1b39fbbab` | merged | 7,754 pass | claude-sonnet-d |
 | Nov 08 01:19 | `harden-p15-io-glb-obj-electrical` | refused | 7,759 pass, 1 fail | tturbo-mac |
 | Nov 08 00:09 | `harden-p15-render-light-set` | merged | 7,754 pass | tturbo-mac |
-| Nov 07 23:41 | `upstream-sync-2611bc5f5-v3` | merged | 7,749 pass | bonsai-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 955 |
-| bonsai-b | bonsai2-27b | agent | 892 |
+| bonsai-b | bonsai2-27b | agent | 893 |
 | bonsai-ws2-a | bonsai2-27b | idle | 980 |
 | bonsai-ws2-b | bonsai2-27b | idle | 952 |
 | claude-sonnet-a | sonnet | idle | 89 |
@@ -70,5 +70,5 @@ Updated 2026-11-08 15:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-esc | mai-code-1.1-flash | down | 47 |
-| tturbo-mac | tturbo-ultraheretic | merging | 658 |
+| tturbo-mac | tturbo-ultraheretic | gate | 658 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
