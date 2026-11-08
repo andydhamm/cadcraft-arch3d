@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-08 03:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 16: Electrical, technical illustration and the showcase house — 51 of 54 segments merged · 6 of 14 acceptance checks**
+**Phase 15 of 16: Electrical, technical illustration and the showcase house — 51 of 56 segments merged · 6 of 14 acceptance checks**
 
 7,760 workspace tests passing at the last merge · 825 segments merged in all · 0 of 13 seats working
 
@@ -25,13 +25,17 @@ Updated 2026-11-08 03:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 67.3 h so far · expected done Nov 08 14:02–Nov 14 08:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 67.6 h so far · expected done Nov 08 21:08–Nov 15 05:45 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-51 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck
+51 merged, 6 replaced, 2 queued, 2 abandoned, 2 gate, 1 stuck
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `p15-outlet-gap-spacing` | outlets.auto: never leave a usable-wall gap over 1.8 m | gate | bonsai-ws2-a |
+| `p15-showcase-shell` | bilevel.json part 1: levels, walls, openings, stairs, rooms | gate | bonsai-b |
 
 ## Recent merges
 
@@ -55,15 +59,15 @@ Updated 2026-11-08 03:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 943 |
-| bonsai-b | bonsai2-27b | idle | 877 |
-| bonsai-ws2-a | bonsai2-27b | idle | 971 |
+| bonsai-b | bonsai2-27b | gate | 877 |
+| bonsai-ws2-a | bonsai2-27b | gate | 971 |
 | bonsai-ws2-b | bonsai2-27b | idle | 943 |
 | claude-sonnet-a | sonnet | idle | 89 |
-| claude-sonnet-b | sonnet | idle | 89 |
+| claude-sonnet-b | sonnet | down | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
-| claude-sonnet-d | sonnet | idle | 30 |
+| claude-sonnet-d | sonnet | down | 30 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | gate | 649 |
+| tturbo-mac | tturbo-ultraheretic | agent | 650 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
