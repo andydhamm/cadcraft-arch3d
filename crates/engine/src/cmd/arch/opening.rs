@@ -1120,6 +1120,50 @@ mod tests {
         assert!((d.arch.openings[1].sill - 0.9).abs() < 1e-9);
     }
 
+    #[test]
+    fn a_window_on_a_level_has_sill_above_that_level_floor() {
+        let mut s = session_with_split_levels();
+        s.execute("window", &json!({"wall": "w0", "offset": 3.0, "level": "Entry"})).expect("window on Entry");
+        let d = s.doc().expect("doc");
+        let w = &d.arch.walls[0];
+        let o = &d.arch.openings[0];
+        let wall_bottom = w.bottom_z(&d.arch.levels);
+        let entry_floor = 0.15;
+        let expected_sill = entry_floor - wall_bottom + 0.9;
+        assert!((o.sill - expected_sill).abs() < 1e-9, "sill should be 0.9 above Entry floor, got {}", o.sill);
+    }
+
+    #[test]
+    fn a_door_on_a_level_with_explicit_sill() {
+        let mut s = session_with_split_levels();
+        s.execute("door", &json!({"wall": "w0", "offset": 3.0, "level": "Entry", "sill": 0.1})).expect("door on Entry with sill");
+        let d = s.doc().expect("doc");
+        let w = &d.arch.walls[0];
+        let o = &d.arch.openings[0];
+        let wall_bottom = w.bottom_z(&d.arch.levels);
+        let entry_floor = 0.15;
+        let expected_sill = entry_floor - wall_bottom + 0.1;
+        assert!((o.sill - expected_sill).abs() < 1e-9, "sill should be 0.1 above Entry floor, got {}", o.sill);
+    }
+
+    #[test]
+    fn a_door_whose_head_exceeds_the_wall_top_on_a_level_is_refused() {
+        let mut s = session_with_split_levels();
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 3.0, "level": "Main", "height": 3.0}));
+        let err = r.expect_err("door with height 3.0 on Main level should exceed wall top");
+        assert!(!err.to_string().is_empty(), "expected an error, got empty");
+        assert!(s.doc().expect("doc").arch.openings.is_empty(), "no opening should be added");
+    }
+
+    #[test]
+    fn a_door_on_a_level_with_sill_below_wall_bottom_is_refused() {
+        let mut s = session_with_split_levels();
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 3.0, "level": "Lower", "sill": -1.0}));
+        let err = r.expect_err("door with sill -1.0 on Lower level should be below wall bottom");
+        assert!(!err.to_string().is_empty(), "expected an error, got empty");
+        assert!(s.doc().expect("doc").arch.openings.is_empty(), "no opening should be added");
+    }
+
     /// When both offset and point are provided, offset takes precedence.
     #[test]
     fn door_uses_offset_when_both_offset_and_point_given() {
