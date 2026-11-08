@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-08 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 16: Electrical, technical illustration and the showcase house — 51 of 56 segments merged · 6 of 14 acceptance checks**
+**Phase 15 of 16: Electrical, technical illustration and the showcase house — 51 of 60 segments merged · 6 of 14 acceptance checks**
 
-7,760 workspace tests passing at the last merge · 825 segments merged in all · 0 of 13 seats working
+7,760 workspace tests passing at the last merge · 825 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,17 +25,18 @@ Updated 2026-11-08 04:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 68.3 h so far · expected done Nov 08 21:53–Nov 15 06:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 68.6 h so far · expected done Nov 09 11:51–Nov 17 00:45 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-51 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck, 1 merging, 1 gate
+51 merged, 7 replaced, 6 queued, 2 abandoned, 2 working, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-outlet-gap-spacing` | outlets.auto: never leave a usable-wall gap over 1.8 m | merging | bonsai-ws2-a |
-| `p15-showcase-shell` | bilevel.json part 1: levels, walls, openings, stairs, rooms | gate | bonsai-b |
+| `p15-showcase-shell` | bilevel.json part 1: levels, walls, openings, stairs, rooms | working | bonsai-b |
+| `upstream-sync-8e899eef6` | merge upstream upstream/main up to 8e899eef6 (73 commits) | working | mai-flash |
 
 ## Recent merges
 
@@ -58,16 +59,17 @@ Updated 2026-11-08 04:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 943 |
-| bonsai-b | bonsai2-27b | gate | 881 |
+| bonsai-a | bonsai2-27b | agent | 943 |
+| bonsai-b | bonsai2-27b | agent | 882 |
 | bonsai-ws2-a | bonsai2-27b | merging | 974 |
-| bonsai-ws2-b | bonsai2-27b | idle | 943 |
+| bonsai-ws2-b | bonsai2-27b | gate | 943 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | idle | 30 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 68 |
+| mai-flash | mai-code-1.1-flash | agent | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | agent | 651 |
+| tturbo-mac | tturbo-ultraheretic | agent | 652 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
