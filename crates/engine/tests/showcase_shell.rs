@@ -67,6 +67,11 @@ fn room_level_index(levels: &[Value], room: &Value) -> u32 {
     panic!("room level");
 }
 
+/// The ids of rooms of the given type in an inspect reply.
+fn room_ids_of_type(rooms: &[Value], typ: &str) -> Vec<String> {
+    rooms.iter().filter(|rm| rm["type"].as_str() == Some(typ)).filter_map(|rm| rm["id"].as_str().map(str::to_string)).collect()
+}
+
 #[test]
 fn the_shell_replays() {
     let mut s = showcase_session();
@@ -155,6 +160,18 @@ fn the_shell_is_a_split_entry_bilevel() {
     let top = spanning["top"].as_f64().expect("spanning wall top");
     assert!((bottom - lower_elev).abs() < TOL, "spanning wall bottom {} != Lower elevation {}", bottom, lower_elev);
     assert!((top - expected_top).abs() < TOL, "spanning wall top {} != Main elevation + ceiling {}", top, expected_top);
+}
+
+#[test]
+fn the_shell_has_two_bath_rooms() {
+    let mut s = showcase_session();
+    replay(&mut s);
+    let r: Value = s.execute("arch.inspect", &json!({"rooms": true})).expect("arch.inspect failed");
+    let rooms: Vec<Value> = r["rooms"].as_array().expect("rooms array").clone();
+    assert_eq!(room_ids_of_type(&rooms, "bath").len(), 2, "a bath on Lower and one on Main");
+    assert_eq!(room_ids_of_type(&rooms, "kitchen").len(), 1, "one kitchen");
+    assert_eq!(room_ids_of_type(&rooms, "living").len(), 1, "one living");
+    assert!(!room_ids_of_type(&rooms, "bedroom").is_empty(), "at least one bedroom");
 }
 
 #[test]
