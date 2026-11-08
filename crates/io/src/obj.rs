@@ -346,7 +346,7 @@ mod tests {
         let wall = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), 0.2));
         let wall2 = m.push_wall(Wall::new(Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), 0.2));
         m.push_electrical(ElectricalDevice { kind: ElectricalKind::Duplex, wall, side: WallSide::Left, offset: 1.5, ..Default::default() });
-        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Dimmer, wall2, side: WallSide::Left, offset: 1.0, ..Default::default() });
+        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Dimmer, wall: wall2, side: WallSide::Left, offset: 1.0, ..Default::default() });
         let scene = Scene3d::build(&m);
         let obj = write_obj(&scene, "m.mtl");
         assert!(obj.contains("o wall-w0"), "wall w0 group present");
