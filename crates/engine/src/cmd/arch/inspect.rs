@@ -174,6 +174,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
                 row.insert("elevation".to_string(), json!(l.elevation));
                 row.insert("floorToFloor".to_string(), json!(l.floor_to_floor()));
                 row.insert("ceiling".to_string(), json!(l.ceiling_height));
+                row.insert("ceilingHeight".to_string(), json!(l.ceiling_height));
                 row.insert("structure".to_string(), json!(l.structure));
                 row.insert("index".to_string(), json!(l.index));
                 row.insert("kind".to_string(), json!(level_kind_key(l.kind)));
@@ -208,7 +209,8 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             obj.insert("handle".to_string(), json!(handle_json(room_handle(r.id))));
             obj.insert("name".to_string(), json!(r.name));
             obj.insert("type".to_string(), json!(room_type_key(r.room_type)));
-            obj.insert("level".to_string(), json!(level.map(|l| l.name.clone()).unwrap_or_default()));
+            obj.insert("level".to_string(), json!(level.map(|l| l.index).unwrap_or_default()));
+            obj.insert("levelName".to_string(), json!(level.map(|l| l.name.clone()).unwrap_or_default()));
             obj.insert("polygon".to_string(), json_points(&r.polygon));
             // `holes` is the count (legacy, read by acceptance tests); `holeRings` is the ring geometry.
             obj.insert("holes".to_string(), json!(r.holes.len()));

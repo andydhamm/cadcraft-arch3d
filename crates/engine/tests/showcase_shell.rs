@@ -25,7 +25,7 @@ fn replay(session: &mut Session) -> &mut Session {
     for (i, step) in steps.iter().enumerate() {
         let cmd = step["cmd"].as_str().expect("missing cmd").to_string();
         let params = step["params"].clone();
-        session.execute(cmd.as_str(), &params).expect(format!("showcase step {} ({}={}) failed", i, &cmd, params));
+        session.execute(cmd.as_str(), &params).unwrap_or_else(|err| panic!("showcase step {} ({}={}) failed: {err}", i, &cmd, params));
     }
     session
 }
@@ -127,8 +127,7 @@ fn the_shell_is_a_split_entry_bilevel() {
     // The spanning wall: bottom == Lower elevation, top == Main elevation + Main ceiling.
     let main_ceiling = main_val["ceilingHeight"].as_f64().expect("main ceiling height");
     let expected_top = main_elev + main_ceiling;
-    let spanning =
-        walls.iter().find(|w| !w["topLevel"].is_null() || w["bottom"].as_f64().map_or(false, |b| b.abs() >= 1.0)).expect("no spanning wall");
+    let spanning = walls.iter().find(|w| !w["topLevel"].is_null()).expect("no spanning wall");
     let bottom = spanning["bottom"].as_f64().expect("spanning wall bottom");
     let top = spanning["top"].as_f64().expect("spanning wall top");
     assert!((bottom - lower_elev).abs() < TOL, "spanning wall bottom {} != Lower elevation {}", bottom, lower_elev);
