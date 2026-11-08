@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 15:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 16:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 54 of 61 segments merged · 6 of 14 acceptance checks**
 
@@ -25,16 +25,15 @@ Updated 2026-11-08 15:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 79.3 h so far · expected done Nov 09 10:25–Nov 13 04:45 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 79.6 h so far · expected done Nov 09 10:40–Nov 13 05:00 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-54 merged, 7 replaced, 5 queued, 2 abandoned, 2 escalate
+54 merged, 7 replaced, 5 queued, 2 abandoned, 1 stuck, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-fitout` | bilevel.json part 2: cabinets, fixtures, furnishings | escalate |  |
 | `upstream-sync-3b7eb1b7b` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | escalate |  |
 
 ## Recent merges
@@ -59,16 +58,16 @@ Updated 2026-11-08 15:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 955 |
-| bonsai-b | bonsai2-27b | gate | 893 |
+| bonsai-b | bonsai2-27b | idle | 894 |
 | bonsai-ws2-a | bonsai2-27b | idle | 980 |
 | bonsai-ws2-b | bonsai2-27b | idle | 952 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | idle | 30 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 836 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 837 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-esc | mai-code-1.1-flash | down | 47 |
-| tturbo-mac | tturbo-ultraheretic | gate | 659 |
+| tturbo-mac | tturbo-ultraheretic | merging | 660 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
