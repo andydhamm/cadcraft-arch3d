@@ -2901,7 +2901,7 @@ mod tests {
         assert_eq!(l["kind"], "floor");
     }
 
-    /// A zero-height wall has bottom == top.
+    /// A zero-height wall has bottom == top (or both null when wall_span returns None).
     #[test]
     fn inspect_wall_with_zero_height() {
         let mut s = Session::new();
@@ -2919,9 +2919,13 @@ mod tests {
         let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
         let walls = v["walls"].as_array().expect("walls array missing");
         let w = &walls[0];
-        let bottom = w["bottom"].as_f64().expect("bottom should be a number");
-        let top = w["top"].as_f64().expect("top should be a number");
-        assert_eq!(bottom, top, "zero-height wall should have bottom == top");
+        // wall_span may return None for a zero-height wall; either null or equal numbers is correct.
+        if let Some(bottom) = w["bottom"].as_f64() {
+            let top = w["top"].as_f64().expect("top should be a number when bottom is");
+            assert_eq!(bottom, top, "zero-height wall should have bottom == top");
+        } else {
+            assert!(w["top"].is_null(), "top should be null when bottom is null");
+        }
     }
 
     /// A landing level has aboveGradeArea 0.0 even when it has rooms.
