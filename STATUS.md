@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-08 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 17:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 54 of 62 segments merged · 6 of 14 acceptance checks**
 
-7,868 workspace tests passing at the last merge · 833 segments merged in all · 0 of 13 seats working
+7,878 workspace tests passing at the last merge · 834 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-08 17:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 80.8 h so far · expected done Nov 09 20:41–Nov 17 02:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 81.1 h so far · expected done Nov 09 20:55–Nov 17 02:45 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
@@ -41,6 +41,7 @@ Updated 2026-11-08 17:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 08 17:25 | `harden-p15-cmd-connections` | merged | 7,878 pass | tturbo-mac |
 | Nov 08 16:33 | `harden-p15-inspect-site-paths-plants` | merged | 7,868 pass | tturbo-mac |
 | Nov 08 15:18 | `harden-p15-door-on-level` | merged | 7,864 pass | tturbo-mac |
 | Nov 08 14:32 | `upstream-sync-3b7eb1b7b` | refused | 7,896 pass | mai-flash-esc |
@@ -52,7 +53,6 @@ Updated 2026-11-08 17:15 UTC. This page and the card in the README are regenerat
 | Nov 08 05:01 | `p15-outlet-gap-spacing` | merged | 7,763 pass | bonsai-ws2-a |
 | Nov 08 03:09 | `harden-p15-io-glb-obj-electrical` | merged | 7,760 pass | tturbo-mac |
 | Nov 08 02:35 | `upstream-sync-1b39fbbab` | merged | 7,754 pass | claude-sonnet-d |
-| Nov 08 01:19 | `harden-p15-io-glb-obj-electrical` | refused | 7,759 pass, 1 fail | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -69,5 +69,5 @@ Updated 2026-11-08 17:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-esc | mai-code-1.1-flash | down | 47 |
-| tturbo-mac | tturbo-ultraheretic | merging | 661 |
+| tturbo-mac | tturbo-ultraheretic | agent | 661 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
