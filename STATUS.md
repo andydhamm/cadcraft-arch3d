@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-08 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 16: Phase 16**
+**Phase 15 of 16: Electrical, technical illustration and the showcase house — 50 of 54 segments merged · 6 of 14 acceptance checks**
 
 7,754 workspace tests passing at the last merge · 823 segments merged in all · 0 of 14 seats working
 
@@ -25,13 +25,16 @@ Updated 2026-11-08 01:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | incomplete | 6 / 14 | 62.3 h |
-| 16 | Phase 16 | pending | — |  · expected done Nov 08 06:59–Nov 13 11:31 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 65.3 h so far · expected done Nov 08 10:28–Nov 10 16:19 UTC |
+| 16 | Phase 16 | pending | — | — |
 
-## Phase 16 segments
+## Phase 15 segments
 
-none yet
+50 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck, 1 working
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `upstream-sync-1b39fbbab` | merge upstream upstream/main up to 1b39fbbab (2 commits) | working | claude-sonnet-d |
 
 ## Recent merges
 
@@ -61,10 +64,10 @@ none yet
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
-| claude-sonnet-d | sonnet | idle | 29 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
+| claude-sonnet-d | sonnet | agent | 29 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
 | tturbo-mac | tturbo-ultraheretic | agent | 648 |
-| tturbo-mac2 | tturbo-ultraheretic | down | 348 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
