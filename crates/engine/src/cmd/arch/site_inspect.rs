@@ -168,7 +168,7 @@ fn plants_json(model: &ArchModel) -> Value {
 mod tests {
     use super::*;
     use cadcraft_doc::ArchId;
-    use cadcraft_doc::arch::{PathKind, Plant, SiteLocation, SiteReference, Terrain, TerrainModifier};
+    use cadcraft_doc::arch::{CrownShape, PathKind, Plant, PlantForm, PlantSpecies, SiteLocation, SiteReference, Terrain, TerrainModifier};
     use cadcraft_geom::Vec3;
 
     fn run(model: &ArchModel, p: Value) -> Map<String, Value> {
@@ -418,5 +418,142 @@ mod tests {
         assert!(paths.is_empty());
         let plants = s["plants"].as_array().cloned().unwrap_or_default();
         assert!(plants.is_empty());
+    }
+
+    #[test]
+    fn inspect_paths_include_all_path_kinds() {
+        let mut m = ArchModel::default();
+        m.terrain = Some(Terrain {
+            modifiers: vec![
+                TerrainModifier {
+                    id: 0,
+                    kind: ModifierKind::Path { kind: PathKind::Road, polygon: square(1.0), thickness: 0.1, material: "asphalt".into() },
+                },
+                TerrainModifier {
+                    id: 1,
+                    kind: ModifierKind::Path { kind: PathKind::Driveway, polygon: square(1.0), thickness: 0.1, material: "concrete".into() },
+                },
+                TerrainModifier {
+                    id: 2,
+                    kind: ModifierKind::Path { kind: PathKind::Sidewalk, polygon: square(1.0), thickness: 0.05, material: "concrete".into() },
+                },
+                TerrainModifier {
+                    id: 3,
+                    kind: ModifierKind::Path { kind: PathKind::Bed, polygon: square(1.0), thickness: 0.0, material: "soil".into() },
+                },
+                TerrainModifier { id: 4, kind: ModifierKind::Flat { polygon: square(2.0), elevation: 1.0, margin: 0.3 } },
+                TerrainModifier { id: 5, kind: ModifierKind::Hill { center: Vec2::new(5.0, 5.0), height: 1.0, radius: 2.0 } },
+            ],
+            next_modifier_id: 6,
+            ..Terrain::default()
+        });
+        let out = run(&m, json!({"site": true}));
+        let paths = out["site"]["paths"].as_array().cloned().unwrap_or_default();
+        assert_eq!(paths.len(), 4, "only path modifiers should be in paths: {paths:?}");
+        assert_eq!(paths[0]["id"], json!("tm0"));
+        assert_eq!(paths[0]["kind"], json!("road"));
+        assert_eq!(paths[1]["id"], json!("tm1"));
+        assert_eq!(paths[1]["kind"], json!("driveway"));
+        assert_eq!(paths[2]["id"], json!("tm2"));
+        assert_eq!(paths[2]["kind"], json!("sidewalk"));
+        assert_eq!(paths[3]["id"], json!("tm3"));
+        assert_eq!(paths[3]["kind"], json!("bed"));
+    }
+
+    #[test]
+    fn inspect_plant_forms_map_all_variants() {
+        let mut m = ArchModel::default();
+        m.plant_species.push(PlantSpecies {
+            name: "oak".into(),
+            form: PlantForm::DeciduousTree,
+            crown: CrownShape::Sphere,
+            mature_height: 20.0,
+            mature_spread: 15.0,
+            planted_height: 2.0,
+            years_to_mature: 50.0,
+        });
+        m.plant_species.push(PlantSpecies {
+            name: "pine".into(),
+            form: PlantForm::EvergreenTree,
+            crown: CrownShape::Cone,
+            mature_height: 25.0,
+            mature_spread: 10.0,
+            planted_height: 3.0,
+            years_to_mature: 60.0,
+        });
+        m.plant_species.push(PlantSpecies {
+            name: "rose".into(),
+            form: PlantForm::Shrub,
+            crown: CrownShape::Sphere,
+            mature_height: 1.5,
+            mature_spread: 1.0,
+            planted_height: 0.3,
+            years_to_mature: 5.0,
+        });
+        m.plant_species.push(PlantSpecies {
+            name: "ivy".into(),
+            form: PlantForm::GroundCover,
+            crown: CrownShape::Sphere,
+            mature_height: 0.3,
+            mature_spread: 2.0,
+            planted_height: 0.05,
+            years_to_mature: 3.0,
+        });
+        m.plants.push(Plant { id: ArchId(0), species: "oak".into(), position: Vec2::new(1.0, 1.0), age: 100.0, planted_height: None });
+        m.plants.push(Plant { id: ArchId(1), species: "pine".into(), position: Vec2::new(2.0, 2.0), age: 100.0, planted_height: None });
+        m.plants.push(Plant { id: ArchId(2), species: "rose".into(), position: Vec2::new(3.0, 3.0), age: 100.0, planted_height: None });
+        m.plants.push(Plant { id: ArchId(3), species: "ivy".into(), position: Vec2::new(4.0, 4.0), age: 100.0, planted_height: None });
+        let out = run(&m, json!({"plants": true}));
+        let list = out["plants"].as_array().cloned().unwrap_or_default();
+        assert_eq!(list.len(), 4);
+        assert_eq!(list[0]["form"], json!("tree"));
+        assert_eq!(list[1]["form"], json!("tree"));
+        assert_eq!(list[2]["form"], json!("shrub"));
+        assert_eq!(list[3]["form"], json!("groundCover"));
+    }
+
+    #[test]
+    fn inspect_plant_nan_and_huge_values() {
+        let mut m = ArchModel::default();
+        m.plants.push(Plant { id: ArchId(0), species: "boxwood".into(), position: Vec2::new(f64::NAN, 1.0), age: 100.0, planted_height: None });
+        m.plants.push(Plant {
+            id: ArchId(1),
+            species: "boxwood".into(),
+            position: Vec2::new(f64::MAX, f64::MAX),
+            age: f64::MAX,
+            planted_height: Some(f64::MAX),
+        });
+        let out = run(&m, json!({"plants": true}));
+        let list = out["plants"].as_array().cloned().unwrap_or_default();
+        assert_eq!(list.len(), 2);
+        assert!(list[0]["at"][0].is_null(), "NaN x should serialize to null: {list:?}");
+        assert!(list[1]["at"][0].as_f64().unwrap_or(0.0) > 1e300, "huge x should serialize: {list:?}");
+    }
+
+    #[test]
+    fn inspect_many_modifiers_and_plants() {
+        let mut m = ArchModel::default();
+        let mut modifiers = Vec::new();
+        for i in 0..100 {
+            modifiers.push(TerrainModifier {
+                id: i as u32,
+                kind: ModifierKind::Path { kind: PathKind::Road, polygon: square(1.0), thickness: 0.1, material: "asphalt".into() },
+            });
+        }
+        m.terrain = Some(Terrain { modifiers, next_modifier_id: 100, ..Terrain::default() });
+        for i in 0..50 {
+            m.plants.push(Plant {
+                id: ArchId(i as u32),
+                species: "boxwood".into(),
+                position: Vec2::new(i as f64, 0.0),
+                age: 100.0,
+                planted_height: None,
+            });
+        }
+        let out = run(&m, json!({"site": true}));
+        let paths = out["site"]["paths"].as_array().cloned().unwrap_or_default();
+        assert_eq!(paths.len(), 100);
+        let plants = out["site"]["plants"].as_array().cloned().unwrap_or_default();
+        assert_eq!(plants.len(), 50);
     }
 }
