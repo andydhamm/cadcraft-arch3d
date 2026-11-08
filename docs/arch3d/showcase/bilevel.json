@@ -1,0 +1,8 @@
+[
+{"cmd":"level.edit","params":{"level":0,"name":"Lower","elevation":-1.2}},
+{"cmd":"level","params":{"name":"Main","elevation":1.5}},
+{"cmd":"level","params":{"name":"Entry","elevation":0.15,"kind":"landing"}},
+{"cmd":"wall","params":{"points":[[26,0],[26,16],[0,16],[0,0]],"thickness":0.2,"exterior":true,"level":"Lower"}},
+{"cmd":"wall","params":{"points":[[0,0],[26,0]],"thickness":0.2,"exterior":true,"level":"Lower","topLevel":"Main"}},
+{"cmd":"wall","points":[[0,0],[26,0]]}
+]
