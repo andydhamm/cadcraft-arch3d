@@ -386,7 +386,7 @@ pub fn auto_outlets(model: &ArchModel, room: ArchId) -> Vec<cadcraft_doc::arch::
             let mut best_pos = 0.0f64;
             if n > 0 {
                 let g = positions[0] - 0.0;
-                if g > 3.6 && g > best_gap {
+                if g > 1.8 && g > best_gap {
                     best_gap = g;
                     best_pos = g / 2.0;
                 }
@@ -400,12 +400,12 @@ pub fn auto_outlets(model: &ArchModel, room: ArchId) -> Vec<cadcraft_doc::arch::
             }
             if n > 0 {
                 let g = l - positions[n - 1];
-                if g > 3.6 && g > best_gap {
+                if g > 1.8 && g > best_gap {
                     best_gap = g;
                     best_pos = positions[n - 1] + g / 2.0;
                 }
             }
-            if best_gap < 3.6 {
+            if best_gap < 1.8 {
                 break;
             }
             for &c in &breaks {
