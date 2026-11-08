@@ -40,5 +40,16 @@
 {"cmd":"room","params":{"id":"r7","name":"Kitchen","type":"kitchen"}},
 {"cmd":"room","params":{"id":"r8","name":"Living","type":"living"}},
 {"cmd":"room","params":{"id":"r9","name":"Bedroom 1","type":"bedroom"}},
-{"cmd":"room","params":{"id":"r10","name":"Main Bath","type":"bath"}}
+{"cmd":"room","params":{"id":"r10","name":"Main Bath","type":"bath"}},
+{"cmd":"cabinet","params":{"kind":"base","wall":"w7","offset":2.0,"width":1.4,"depth":0.6,"counter":true,"pull":"own:pull-bar-128","level":"Main"}},
+{"cmd":"cabinet","params":{"kind":"base","wall":"w7","offset":3.5,"width":1.4,"depth":0.6,"counter":true,"pull":"own:pull-bar-128","level":"Main"}},
+{"cmd":"cabinet","params":{"kind":"base","wall":"w7","offset":5.0,"width":1.4,"depth":0.6,"counter":true,"pull":"own:pull-bar-128","level":"Main"}},
+{"cmd":"cabinet","params":{"kind":"wall","wall":"w7","offset":2.0,"width":1.4,"level":"Main"}},
+{"cmd":"cabinet","params":{"kind":"wall","wall":"w7","offset":3.5,"width":1.4,"level":"Main"}},
+{"cmd":"cabinet","params":{"kind":"base","at":[4.0,8.0],"width":1.4,"depth":0.6,"counter":true,"level":"Main"}},
+{"cmd":"cabinet","params":{"kind":"base","at":[5.4,8.0],"width":1.4,"depth":0.6,"counter":true,"level":"Main"}},
+{"cmd":"fixture","params":{"kind":"sink","at":[1.0,14.0],"level":"Main"}},
+{"cmd":"fixture","params":{"kind":"dishwasher","at":[1.0,11.0],"level":"Main"}},
+{"cmd":"fixture","params":{"kind":"range","at":[1.0,12.5],"level":"Main"}},
+{"cmd":"fixture","params":{"kind":"refrigerator","at":[1.0,10.0],"level":"Main"}}
 ]

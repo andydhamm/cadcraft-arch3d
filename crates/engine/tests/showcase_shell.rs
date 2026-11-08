@@ -201,3 +201,18 @@ fn the_shell_library_lists_sample_items() {
     );
     assert!(s.library.symbol("own:pull-bar-128").is_ok(), "the symbol mesh for `own:pull-bar-128` could not be read");
 }
+
+#[test]
+fn the_kitchen_has_casework_and_appliances() {
+    let mut s = showcase_session();
+    replay(&mut s);
+    let r: Value = s.execute("arch.inspect", &json!({"cabinets": true, "fixtures": true})).expect("arch.inspect failed");
+    let cabs: Vec<Value> = r["cabinets"].as_array().expect("cabinets").clone();
+    assert!(cabs.iter().filter(|c| c["kind"].as_str() == Some("base")).count() >= 5, "five base cabinets");
+    assert!(cabs.iter().filter(|c| c["kind"].as_str() == Some("wall")).count() >= 2, "two wall cabinets");
+    assert!(cabs.iter().any(|c| c["pull"].as_str() == Some("own:pull-bar-128")), "a bar pull");
+    let kinds: Vec<&str> = r["fixtures"].as_array().expect("fixtures").iter().filter_map(|f| f["kind"].as_str()).collect();
+    for want in ["range", "refrigerator", "sink", "dishwasher"] {
+        assert!(kinds.contains(&want), "fixture `{want}` missing from {kinds:?}");
+    }
+}
