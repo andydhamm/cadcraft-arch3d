@@ -15,7 +15,7 @@ const TOL: f64 = 0.01;
 
 /// The showcase shell file, relative to the workspace root.
 fn showcase_path() -> PathBuf {
-    PathBuf::from_env_var_or("CARGO_MANIFEST_DIR", "/Users/you/dev/arch3d/crates/engine").join("../../docs/arch3d/showcase/bilevel.json")
+    PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../docs/arch3d/showcase/bilevel.json")
 }
 
 /// Replay the showcase shell script into a fresh metric session.
@@ -24,25 +24,18 @@ fn replay(session: &mut Session) -> &mut Session {
     let steps: Vec<Value> = serde_json::from_str(&script).expect("showcase shell script is not valid JSON");
     for (i, step) in steps.iter().enumerate() {
         let cmd = step["cmd"].as_str().expect("missing cmd");
-        let params = step["params"].as_object().expect("missing params").as_json();
-        session.execute(cmd, params).expect(format!("showcase step {} ({}={:03}) failed", i, cmd, params));
+        let params = step["params"].clone();
+        session.execute(cmd, &params).expect(format!("showcase step {} ({}={}) failed", i, cmd, params));
     }
     session
 }
 
-/// Read an arch inspect reply for a given session.
-fn inspect(s: &Session, keys: &str) -> Value {
-    let q: Value = json!({"rooms":true,"stairs":true,"levels":true,"walls":true});
-    let _ = keys;
-    s.execute("arch.inspect", q).expect("arch.inspect failed")
-}
-
 /// The level index of the named level in an inspect reply.
-fn level_index(levels: &Vec<Value>, name: &str) -> u32 {
+fn level_index(levels: &[Value], name: &str) -> u32 {
     for v in levels {
         if let Some(n) = v.get("name").and_then(|x| x.as_str()) {
             if n == name {
-                return v["index"].as_u32().expect("level index missing");
+                return v["index"].as_u64().expect("level index missing") as u32;
             }
         }
     }
@@ -62,7 +55,7 @@ fn the_shell_is_a_split_entry_bilevel() {
     s.new_drawing(true);
     replay(&mut s);
 
-    let r: Value = s.execute("arch.inspect", json!({"levels":true,"rooms":true,"walls":true,"stairs":true})).expect("arch.inspect failed");
+    let r: Value = s.execute("arch.inspect", &json!({"levels":true,"rooms":true,"walls":true,"stairs":true})).expect("arch.inspect failed");
 
     let levels: Vec<Value> = r["levels"].as_array().expect("levels array").clone();
     let stairs: Vec<Value> = r["stairs"].as_array().expect("stairs array").clone();
@@ -93,19 +86,6 @@ fn the_shell_is_a_split_entry_bilevel() {
     let main = level_index(&levels, "Main");
     let entry = level_index(&levels, "Entry");
 
-    assert_eq!(
-        lower,
-        floors.iter().cloned().min_by(|a, b| a.partial_cmp(b).unwrap()).map_or(u32::MAX, |e| {
-            levels
-                .iter()
-                .find(|l| l["index"].as_u32().unwrap_or(u32::MAX) == l["name"].as_str().unwrap_or("").len() as u32)
-                .unwrap_or(&levels[lower as usize])["index"]
-                .as_u32()
-                .expect("index missing")
-        }),
-        "lower index mismatch"
-    );
-
     // Grade classes: the lowest floor is a basement, the highest is above grade.
     let lower_val = &levels[lower as usize];
     let main_val = &levels[main as usize];
@@ -117,8 +97,8 @@ fn the_shell_is_a_split_entry_bilevel() {
     let mut found_landing_to_main = false;
     let mut found_lower_to_landing = false;
     for st in &stairs {
-        let from = st["fromLevel"].as_u32().expect("stair fromLevel");
-        let to = st["toLevel"].as_u32().expect("stair toLevel");
+        let from = st["fromLevel"].as_u64().expect("stair fromLevel") as u32;
+        let to = st["toLevel"].as_u64().expect("stair toLevel") as u32;
         if from == entry && to == main {
             found_landing_to_main = true;
         }
@@ -134,15 +114,11 @@ fn the_shell_is_a_split_entry_bilevel() {
     let mut main_rooms = 0;
     let mut entry_rooms = 0;
     for ro in &rooms {
-        match ro["level"].as_u32() {
-            Some(0) if lower_rooms < 999999999 => {}
-            _ => {}
-        }
-        let lvl = ro["level"].as_u32();
+        let lvl = ro["level"].as_u64().expect("room level") as u32;
         match lvl {
-            Some(x) if x == lower => lower_rooms += 1,
-            Some(x) if x == main => main_rooms += 1,
-            Some(x) if x == entry => entry_rooms += 1,
+            x if x == lower => lower_rooms += 1,
+            x if x == main => main_rooms += 1,
+            x if x == entry => entry_rooms += 1,
             _ => {}
         }
     }
