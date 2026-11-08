@@ -18,6 +18,21 @@ fn showcase_path() -> PathBuf {
     PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../docs/arch3d/showcase/bilevel.json")
 }
 
+/// A session with the library's file readers installed and a library that keeps nothing on disk
+/// (the built-in and the embedded sample items only), as `scene_cache_equals_full.rs` does.
+fn showcase_session() -> Session {
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
+    let mut s = Session::new();
+    s.new_drawing(true);
+    s.library = cadcraft_engine::library::Library::with_user_dir(None);
+    s
+}
+
 /// Replay the showcase shell script into a fresh metric session.
 fn replay(session: &mut Session) -> &mut Session {
     let script = std::fs::read_to_string(showcase_path()).expect("could not read showcase shell script");
@@ -52,17 +67,20 @@ fn room_level_index(levels: &[Value], room: &Value) -> u32 {
     panic!("room level");
 }
 
+/// The ids of rooms of the given type in an inspect reply.
+fn room_ids_of_type(rooms: &[Value], typ: &str) -> Vec<String> {
+    rooms.iter().filter(|rm| rm["type"].as_str() == Some(typ)).filter_map(|rm| rm["id"].as_str().map(str::to_string)).collect()
+}
+
 #[test]
 fn the_shell_replays() {
-    let mut s = Session::new();
-    s.new_drawing(true);
+    let mut s = showcase_session();
     replay(&mut s);
 }
 
 #[test]
 fn the_shell_is_a_split_entry_bilevel() {
-    let mut s = Session::new();
-    s.new_drawing(true);
+    let mut s = showcase_session();
     replay(&mut s);
 
     let r: Value = s.execute("arch.inspect", &json!({"levels":true,"rooms":true,"walls":true,"stairs":true})).expect("arch.inspect failed");
@@ -142,4 +160,59 @@ fn the_shell_is_a_split_entry_bilevel() {
     let top = spanning["top"].as_f64().expect("spanning wall top");
     assert!((bottom - lower_elev).abs() < TOL, "spanning wall bottom {} != Lower elevation {}", bottom, lower_elev);
     assert!((top - expected_top).abs() < TOL, "spanning wall top {} != Main elevation + ceiling {}", top, expected_top);
+}
+
+#[test]
+fn the_shell_has_two_bath_rooms() {
+    let mut s = showcase_session();
+    replay(&mut s);
+    let r: Value = s.execute("arch.inspect", &json!({"rooms": true})).expect("arch.inspect failed");
+    let rooms: Vec<Value> = r["rooms"].as_array().expect("rooms array").clone();
+    assert_eq!(room_ids_of_type(&rooms, "bath").len(), 2, "a bath on Lower and one on Main");
+    assert_eq!(room_ids_of_type(&rooms, "kitchen").len(), 1, "one kitchen");
+    assert_eq!(room_ids_of_type(&rooms, "living").len(), 1, "one living");
+    assert!(!room_ids_of_type(&rooms, "bedroom").is_empty(), "at least one bedroom");
+}
+
+#[test]
+fn the_shell_library_lists_sample_items() {
+    let mut s = showcase_session();
+
+    // Every sample item id must be present in the library.
+    let ids = [
+        "own:pull-bar-128",
+        "own:pull-knob-32",
+        "own:sink-kitchen",
+        "own:range-30",
+        "own:dishwasher-60",
+        "sofa-chaise",
+        "bed-double-wood",
+        "towel-rack",
+        "plant-small",
+    ];
+    for id in ids {
+        assert!(s.library.item(id).is_some(), "sample item `{id}` is not listed in the library");
+    }
+
+    // The bar pull is a `pull`, and its mesh can be read.
+    assert!(
+        s.library.item("own:pull-bar-128").map_or(false, |it| it.symbol_type == "pull"),
+        "item `own:pull-bar-128` should have symbol_type `pull`"
+    );
+    assert!(s.library.symbol("own:pull-bar-128").is_ok(), "the symbol mesh for `own:pull-bar-128` could not be read");
+}
+
+#[test]
+fn the_kitchen_has_casework_and_appliances() {
+    let mut s = showcase_session();
+    replay(&mut s);
+    let r: Value = s.execute("arch.inspect", &json!({"cabinets": true, "fixtures": true})).expect("arch.inspect failed");
+    let cabs: Vec<Value> = r["cabinets"].as_array().expect("cabinets").clone();
+    assert!(cabs.iter().filter(|c| c["kind"].as_str() == Some("base")).count() >= 5, "five base cabinets");
+    assert!(cabs.iter().filter(|c| c["kind"].as_str() == Some("wall")).count() >= 2, "two wall cabinets");
+    assert!(cabs.iter().any(|c| c["pull"].as_str() == Some("own:pull-bar-128")), "a bar pull");
+    let kinds: Vec<&str> = r["fixtures"].as_array().expect("fixtures").iter().filter_map(|f| f["kind"].as_str()).collect();
+    for want in ["range", "refrigerator", "sink", "dishwasher"] {
+        assert!(kinds.contains(&want), "fixture `{want}` missing from {kinds:?}");
+    }
 }
