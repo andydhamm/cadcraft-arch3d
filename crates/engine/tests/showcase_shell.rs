@@ -272,7 +272,7 @@ fn the_showcase_is_furnished() {
             continue;
         }
         let rid = rm["id"].as_str().unwrap_or("");
-        let has_item = rows_in_room(&furn, rid).is_some() || rows_in_room(&fix, rid).is_some();
+        let has_item = !rows_in_room(&furn, rid).is_empty() || !rows_in_room(&fix, rid).is_empty();
         if !has_item {
             failed.push(rid.to_string());
         }
