@@ -38,7 +38,7 @@ for name, z, kind in (("Lower", 0.0, "floor"), ("Main", 2.7, "floor"), ("Entry",
 w0 = [w for w in rows_of(ins, 'walls') if w['id'] == 'w0'][0]
 near(w0['bottom'], 0.0, 1e-9, "w0's bottom")
 near(w0['top'], 5.1, 1e-9, "w0's top (Main's ceiling)")
-hits = probes(rr)
+hits = probes(rr)['probe']
 if [part(h) for h in hits[:3]] != ['wall', 'wall', 'wall'] or part(hits[3]) == 'wall':
     fail(f"the spanning wall is solid from 0 to 5.1 m: {[part(h) for h in hits[:4]]}")
 if part(hits[4]) != 'wall' or part(hits[5]) == 'wall':
@@ -47,10 +47,10 @@ stairs = rows_of(ins, 'stairs') if 'stairs' in ins else []
 rooms = rows_of(ins, 'rooms')
 per = {}
 for r in rooms:
-    per.setdefault(r.get('level'), []).append(r)
-for idx in (lv['Lower'].get('index'), lv['Main'].get('index'), lv['Entry'].get('index')):
-    if not per.get(idx):
-        fail(f"rooms detected on level {idx}: {sorted(per)}")
+    per.setdefault(r.get('level'), []).append(r)      # a room row names its level (phase 3: "level": "Level 2")
+for name in ('Lower', 'Main', 'Entry'):
+    if not per.get(name):
+        fail(f"rooms detected on level {name}: {sorted(map(str, per))}")
 print("ok: free level elevations (0, 1.35 landing, 2.7), a wall from Lower's floor to Main's ceiling, the door on the landing, rooms on every level")
 
 rc, rr, so, se = run(HOUSE + [cmd('build3d', {}), cmd('build3d', {"digest": True})])
@@ -62,7 +62,7 @@ rc2, rr2, so2, se2 = run(HOUSE + [cmd('level.edit', {"level": "Main", "elevation
 full2 = [r for r in rr2 if isinstance(r, dict) and 'digest' in r][-1]['digest']
 if inc != full2:
     fail("after moving Main to 2.8 the incremental build is the full build")
-if part(probes(rr)[3]) != 'wall':
+if part(probes(rr)['probe'][3]) != 'wall':
     fail("the spanning wall follows Main's ceiling up to 5.2")
 print("ok: moving a level rebuilds the spanning wall; incremental == full")
 
@@ -70,7 +70,7 @@ g, i, o = (os.path.join(tmp, n) for n in ('s.glb', 's.ifc', 's.obj'))
 for path in (g, i, o):
     export(HOUSE, path)
 validate_glb(g)
-inst = step_file(i)
+_, inst = step_file(i)                               # (header, {n: (ENTITY, args)})
 storeys = sorted(float(s[1][9]) for s in of_type(inst, 'IFCBUILDINGSTOREY') if len(s[1]) > 9)
 if [round(z, 6) for z in storeys] != [0.0, 1.35, 2.7]:
     fail(f"three IFC storeys at 0, 1.35 and 2.7: {storeys}")
