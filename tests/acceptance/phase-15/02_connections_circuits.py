@@ -27,11 +27,19 @@ lights = {l['id']: l for l in lights_of(rr)}
 for k in ('lf0', 'lf1'):
     near(lights[k].get('brightness'), 0.4, 1e-9, f"{k} dimmed with its circuit")
 near(circ[0].get('brightness'), 0.4, 1e-9, "the circuit's brightness")
-text = dxf_text(saved)
-arcs = [p for p in entities(text) if any(str(c).strip() == '8' and str(v).strip() == 'E-LITE' for c, v in p)
-        and any(str(c).strip() == '0' and str(v).strip() in ('ARC', 'LWPOLYLINE') for c, v in p)]
-if len(arcs) < 4:
-    fail(f"each switch-to-light leg is an arc on E-LITE in the plan: {len(arcs)} ARC/LWPOLYLINE entities there")
+
+
+def lite_curves(path):
+    """ARC / LWPOLYLINE entities on E-LITE in a saved plan (entities() gives (kind, layer, pairs))."""
+    return [e for e in entities(dxf_text(path)) if e[1] == 'E-LITE' and e[0] in ('ARC', 'LWPOLYLINE')]
+
+
+# The switch and light symbols are on E-LITE too: count what the two connections add to the same plan without them.
+bare = os.path.join(tmp, 'bare.dxf')
+run(BASE[:-2] + [INSPECT15], save=bare)
+arcs = len(lite_curves(saved)) - len(lite_curves(bare))
+if arcs < 4:
+    fail(f"each switch-to-light leg is an arc on E-LITE in the plan: the connections add {arcs} ARC/LWPOLYLINE entities there")
 print("ok: two three-way switches share one circuit of two lights; circuit.brightness dims both; arcs on E-LITE")
 
 rc, rr, so, se = run(BASE + [cmd('connection.edit', {"id": "cn0", "bulge": -0.5}), INSPECT15])
