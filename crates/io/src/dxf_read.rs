@@ -62,6 +62,9 @@ struct Rx {
     block_arrays: HashMap<String, cadcraft_doc::ArrayParams>,
     /// LAYER record handle (upper case) → layer name (VIEWPORT group 331/341 frozen layers).
     layers: HashMap<String, String>,
+    /// Handles of arch proxy linework (wall/opening/room/roof) that was kept while reading so
+    /// the arch model can drop them in `Objects::apply` if a valid record turns out to be present.
+    arch_proxies: Vec<Handle>,
     /// Owner handle, paper flag and enclosing block (upper case) of each generated sheet viewport
     /// (PAPERVIEW) the reader dropped.
     paper_views_dropped: Vec<(Option<String>, bool, Option<String>)>,
