@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-08 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 16: Electrical, technical illustration and the showcase house — 50 of 54 segments merged · 6 of 14 acceptance checks**
+**Phase 15 of 16: Electrical, technical illustration and the showcase house — 51 of 54 segments merged · 6 of 14 acceptance checks**
 
-7,754 workspace tests passing at the last merge · 823 segments merged in all · 0 of 14 seats working
+7,754 workspace tests passing at the last merge · 824 segments merged in all · 0 of 13 seats working
 
 ## Phases
 
@@ -25,21 +25,19 @@ Updated 2026-11-08 02:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 66.1 h so far · expected done Nov 08 13:10–Nov 11 21:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 66.3 h so far · expected done Nov 08 10:45–Nov 11 15:45 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-50 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck, 1 merging
+51 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `upstream-sync-1b39fbbab` | merge upstream upstream/main up to 1b39fbbab (2 commits) | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 08 02:35 | `upstream-sync-1b39fbbab` | merged | 7,754 pass | claude-sonnet-d |
 | Nov 08 01:19 | `harden-p15-io-glb-obj-electrical` | refused | 7,759 pass, 1 fail | tturbo-mac |
 | Nov 08 00:09 | `harden-p15-render-light-set` | merged | 7,754 pass | tturbo-mac |
 | Nov 07 23:41 | `upstream-sync-2611bc5f5-v3` | merged | 7,749 pass | bonsai-b |
@@ -51,7 +49,6 @@ Updated 2026-11-08 02:30 UTC. This page and the card in the README are regenerat
 | Nov 07 15:39 | `p15-ui-electrical` | merged | 7,718 pass | claude-sonnet-a |
 | Nov 07 14:45 | `p15-inspect-electrical` | merged | 7,714 pass | claude-sonnet-b |
 | Nov 07 14:18 | `p15-inspect-rooms-on-objects` | merged | 7,711 pass | bonsai-ws2-a |
-| Nov 07 13:48 | `harden-p15-cmd-level-free` | merged | 7,709 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -64,10 +61,9 @@ Updated 2026-11-08 02:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
-| claude-sonnet-d | sonnet | merging | 30 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 821 |
+| claude-sonnet-d | sonnet | idle | 30 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | agent | 648 |
+| tturbo-mac | tturbo-ultraheretic | merging | 649 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
