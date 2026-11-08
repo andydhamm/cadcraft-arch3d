@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 22:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 57 of 64 segments merged · 6 of 14 acceptance checks**
 
@@ -25,16 +25,16 @@ Updated 2026-11-08 22:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 85.6 h so far · expected done Nov 09 16:40–Nov 13 11:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 85.8 h so far · expected done Nov 09 16:55–Nov 13 11:15 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-57 merged, 8 replaced, 6 queued, 3 abandoned, 1 working
+57 merged, 8 replaced, 6 queued, 3 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-furnish` | bilevel.json part 2b: bath fixtures, furnishings, the_showcase_is_furnished | working | bonsai-ws2-b |
+| `p15-showcase-furnish` | bilevel.json part 2b: bath fixtures, furnishings, the_showcase_is_furnished | gate | bonsai-ws2-b |
 
 ## Recent merges
 
@@ -57,10 +57,10 @@ Updated 2026-11-08 22:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 958 |
+| bonsai-a | bonsai2-27b | gate | 959 |
 | bonsai-b | bonsai2-27b | idle | 898 |
 | bonsai-ws2-a | bonsai2-27b | gate | 980 |
-| bonsai-ws2-b | bonsai2-27b | agent | 960 |
+| bonsai-ws2-b | bonsai2-27b | gate | 960 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
