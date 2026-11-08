@@ -318,6 +318,58 @@ mod tests {
     }
 
     #[test]
+    fn obj_electrical_groups_ordered_by_device() {
+        use cadcraft_doc::arch::{ArchModel, ElectricalDevice, ElectricalKind, Level, Wall, WallSide};
+        use cadcraft_geom::Vec2;
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ..Level::default() });
+        let wall = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), 0.2));
+        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Duplex, wall, side: WallSide::Left, offset: 1.0, ..Default::default() });
+        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Gfci, wall, side: WallSide::Left, offset: 2.0, ..Default::default() });
+        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Dimmer, wall, side: WallSide::Left, offset: 3.0, ..Default::default() });
+        let scene = Scene3d::build(&m);
+        let obj = write_obj(&scene, "m.mtl");
+        let at0 = obj.find("o electrical-el0").unwrap_or(usize::MAX);
+        let at1 = obj.find("o electrical-el1").unwrap_or(usize::MAX);
+        let at2 = obj.find("o electrical-el2").unwrap_or(usize::MAX);
+        assert!(at0 < at1, "el0 before el1");
+        assert!(at1 < at2, "el1 before el2");
+        assert!(at0 < usize::MAX && at1 < usize::MAX && at2 < usize::MAX, "all three groups present");
+    }
+
+    #[test]
+    fn obj_electrical_mixed_with_walls() {
+        use cadcraft_doc::arch::{ArchModel, ElectricalDevice, ElectricalKind, Level, Wall, WallSide};
+        use cadcraft_geom::Vec2;
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ..Level::default() });
+        let wall = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), 0.2));
+        let wall2 = m.push_wall(Wall::new(Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), 0.2));
+        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Duplex, wall, side: WallSide::Left, offset: 1.5, ..Default::default() });
+        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Dimmer, wall2, side: WallSide::Left, offset: 1.0, ..Default::default() });
+        let scene = Scene3d::build(&m);
+        let obj = write_obj(&scene, "m.mtl");
+        assert!(obj.contains("o wall-w0"), "wall w0 group present");
+        assert!(obj.contains("o wall-w1"), "wall w1 group present");
+        assert!(obj.contains("o electrical-el0"), "el0 group present");
+        assert!(obj.contains("o electrical-el1"), "el1 group present");
+        let json = glb::tests_json(&scene);
+        let names: Vec<String> = json["nodes"].as_array().unwrap().iter().skip(1).filter_map(|n| n["name"].as_str()).map(String::from).collect();
+        assert!(names.contains(&"wall-w0".to_string()));
+        assert!(names.contains(&"wall-w1".to_string()));
+        assert!(names.contains(&"electrical-el0".to_string()));
+        assert!(names.contains(&"electrical-el1".to_string()));
+    }
+
+    #[test]
+    fn obj_electrical_deterministic() {
+        let scene = Scene3d::build(&glb::wired_model());
+        let a = write_obj(&scene, "m.mtl");
+        let b = write_obj(&scene, "m.mtl");
+        assert_eq!(a, b);
+    }
+
+    #[test]
     fn obj_groups_furnishings_by_node_name() {
         let model = furnished();
         let mut s = Scene3d::build(&model);
