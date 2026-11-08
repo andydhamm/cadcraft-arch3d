@@ -107,4 +107,45 @@ mod tests {
         assert!(!text.contains("=IFCSWITCHINGDEVICE("));
         assert!(!text.contains("CADCraft_Electrical"));
     }
+
+    #[test]
+    fn a_repeated_electrical_id_is_written_once() {
+        let mut m = base();
+        let mut d = device(ElectricalKind::Duplex);
+        d.id = ArchId(0);
+        m.electrical.push(d);
+        let mut d2 = device(ElectricalKind::Gfci);
+        d2.id = ArchId(0);
+        m.electrical.push(d2);
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCOUTLET(").count(), 1, "duplicate id written once: {text}");
+        assert!(text.contains(",'electrical-el0',$,$,#"), "{text}");
+    }
+
+    #[test]
+    fn a_device_on_a_missing_level_falls_back_to_the_last_storey() {
+        let mut m = base();
+        m.levels.push(Level { index: 3, elevation: 3.0, ..Level::default() });
+        m.push_electrical(ElectricalDevice { level: 7, ..device(ElectricalKind::Duplex) });
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCOUTLET(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(), 1, "one storey containment: {text}");
+    }
+
+    #[test]
+    fn a_non_finite_height_writes_a_null_height_property() {
+        let mut m = base();
+        m.push_electrical(ElectricalDevice { height: f64::NAN, ..device(ElectricalKind::Duplex) });
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert!(text.contains("IFCPROPERTYSINGLEVALUE('Height',$,$,$)"), "non-finite height is $: {text}");
+    }
+
+    #[test]
+    fn a_three_way_switch_is_a_toggle_switch() {
+        let mut m = base();
+        m.push_electrical(device(ElectricalKind::ThreeWay));
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCSWITCHINGDEVICE(").count(), 1, "{text}");
+        assert_eq!(text.matches(",.TOGGLESWITCH.);").count(), 1, "{text}");
+    }
 }
