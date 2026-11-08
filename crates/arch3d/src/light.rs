@@ -270,7 +270,7 @@ pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
             .meshes
             .iter()
             .filter(|m| !is_light_material(&m.material))
-            .filter(|m| crate::probe::part_of(m) != "floor")
+            .filter(|m| !matches!(crate::probe::part_of(m), "floor" | "slab"))
             .filter(|m| crate::probe::part_of(m) != "ceiling")
             .cloned()
             .collect(),

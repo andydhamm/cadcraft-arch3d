@@ -140,7 +140,7 @@ fn surface_of(mesh: &Mesh) -> Option<Surface> {
     let id = mesh.object;
     let m = mesh.material.as_str();
     let kind = |p: &str| m == p || m.strip_prefix(p).is_some_and(|r| r.starts_with('-'));
-    if kind("floor") {
+    if kind("floor") || m == "slab" {
         Some(Surface::RoomFloor(id))
     } else if m == "ceiling" {
         Some(Surface::RoomCeiling(id))
