@@ -33,5 +33,12 @@
 {"cmd":"room","params":{"id":"r3","name":"Kitchen","type":"kitchen"}},
 {"cmd":"room","params":{"id":"r4","name":"Living","type":"living"}},
 {"cmd":"room","params":{"id":"r5","name":"Bedroom 1","type":"bedroom"}},
-{"cmd":"room","params":{"id":"r6","name":"Entry","type":"entry"}}
+{"cmd":"room","params":{"id":"r6","name":"Entry","type":"entry"}},
+{"cmd":"wall","params":{"points":[[14,0],[14,5]],"thickness":0.1,"level":"Main"}},
+{"cmd":"wall","params":{"points":[[14,5],[18,5]],"thickness":0.1,"level":"Main"}},
+{"cmd":"roomdetect","params":{"level":"Main"}},
+{"cmd":"room","params":{"id":"r7","name":"Kitchen","type":"kitchen"}},
+{"cmd":"room","params":{"id":"r8","name":"Living","type":"living"}},
+{"cmd":"room","params":{"id":"r9","name":"Bedroom 1","type":"bedroom"}},
+{"cmd":"room","params":{"id":"r10","name":"Main Bath","type":"bath"}}
 ]
