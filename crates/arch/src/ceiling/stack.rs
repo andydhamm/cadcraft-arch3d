@@ -49,12 +49,12 @@ pub fn validate(stack: &[CeilingLayer]) -> Result<(), String> {
         if !(l.thickness.is_finite() && (MIN_LAYER..=MAX_STACK).contains(&l.thickness)) {
             return Err(format!("ceiling layer {n}: the thickness must be between {MIN_LAYER} and {MAX_STACK} m"));
         }
-        if let Some(m) = &l.material {
-            if m.trim().is_empty() || m.chars().count() > MAX_MATERIAL_CHARS {
-                return Err(format!(
-                    "ceiling layer {n}: the material must be a non-empty name of at most {MAX_MATERIAL_CHARS} characters, or null for an air gap"
-                ));
-            }
+        if let Some(m) = &l.material
+            && (m.trim().is_empty() || m.chars().count() > MAX_MATERIAL_CHARS)
+        {
+            return Err(format!(
+                "ceiling layer {n}: the material must be a non-empty name of at most {MAX_MATERIAL_CHARS} characters, or null for an air gap"
+            ));
         }
         if l.name.chars().count() > MAX_NAME_CHARS {
             return Err(format!("ceiling layer {n}: the name has at most {MAX_NAME_CHARS} characters"));

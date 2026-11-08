@@ -372,7 +372,8 @@ mod tests {
         let (_, _, el, _) = placed(place(&m, &r));
         assert!((el - 2.1).abs() < 1e-9, "{el}");
         // A finish stack lowers it.
-        m.rooms[0].ceiling_stack = vec![cadcraft_doc::arch::CeilingLayer { material: Some("drywall".into()), thickness: 0.0127, ..Default::default() }];
+        m.rooms[0].ceiling_stack =
+            vec![cadcraft_doc::arch::CeilingLayer { material: Some("drywall".into()), thickness: 0.0127, ..Default::default() }];
         let (_, _, el, _) = placed(place(&m, &req(Placement::Ceiling, "light", [0.5, 0.5, 0.3], [2.0, 2.0])));
         assert!((el - (2.7 - 0.0127 - 0.3)).abs() < 1e-9, "{el}");
     }

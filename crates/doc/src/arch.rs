@@ -892,6 +892,14 @@ pub struct CeilingLayer {
     pub thickness: f64,
 }
 
+impl CeilingLayer {
+    /// A layer named `name` of `thickness` metres of `material` (`None`: an air gap). Code
+    /// outside this file builds layers with this, so a later field does not break it.
+    pub fn new(name: impl Into<String>, material: Option<&str>, thickness: f64) -> Self {
+        Self { name: name.into(), material: material.map(str::to_string), thickness }
+    }
+}
+
 fn yes() -> bool {
     true
 }
@@ -4009,6 +4017,9 @@ mod tests {
         // A layer with missing keys takes the defaults.
         let l: CeilingLayer = serde_json::from_value(serde_json::json!({"thickness": 0.1})).unwrap();
         assert_eq!(l, CeilingLayer { thickness: 0.1, ..CeilingLayer::default() });
+        // The constructor other crates use.
+        assert_eq!(CeilingLayer::new("air", None, 0.2), CeilingLayer { name: "air".into(), material: None, thickness: 0.2 });
+        assert_eq!(CeilingLayer::new("drywall", Some("drywall"), 0.0127).material.as_deref(), Some("drywall"));
     }
 
     /// A default room writes neither key, so an old drawing saves the same payload.

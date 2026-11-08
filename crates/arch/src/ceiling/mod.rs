@@ -31,15 +31,12 @@ const SEATED: f64 = 1e-6;
 
 /// The first room on `level` whose polygon holds `p` and none of whose holes does (the rule of
 /// `room::room_at`). `None` for a non-finite `p`.
-pub fn room_at_point<'a>(model: &'a ArchModel, level: u32, p: Vec2) -> Option<&'a Room> {
+pub fn room_at_point(model: &ArchModel, level: u32, p: Vec2) -> Option<&Room> {
     if !p.is_finite() {
         return None;
     }
     model.rooms.iter().find(|r| {
-        r.level == level
-            && r.polygon.len() >= 3
-            && point_in_polygon(&r.polygon, p)
-            && !r.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p))
+        r.level == level && r.polygon.len() >= 3 && point_in_polygon(&r.polygon, p) && !r.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p))
     })
 }
 
@@ -264,11 +261,11 @@ pub fn reseat(model: &mut ArchModel, items: &[ArchId]) -> usize {
         if !elevation.is_finite() {
             continue;
         }
-        if let Some(f) = model.furnishings.iter_mut().find(|f| f.id == *id) {
-            if (f.elevation - elevation).abs() > 1e-12 {
-                f.elevation = elevation;
-                moved += 1;
-            }
+        if let Some(f) = model.furnishings.iter_mut().find(|f| f.id == *id)
+            && (f.elevation - elevation).abs() > 1e-12
+        {
+            f.elevation = elevation;
+            moved += 1;
         }
     }
     moved
@@ -446,9 +443,9 @@ mod tests {
     fn finished_ceiling_subtracts_the_stack() {
         let mut m = house(false);
         let stack = vec![
-            CeilingLayer { name: "drywall".into(), material: Some("drywall".into()), thickness: 0.0127 },
-            CeilingLayer { name: "air".into(), material: None, thickness: 0.2 },
-            CeilingLayer { name: "ceiling tile".into(), material: Some("ceiling-tile".into()), thickness: 0.016 },
+            CeilingLayer::new("drywall", Some("drywall"), 0.0127),
+            CeilingLayer::new("air", None, 0.2),
+            CeilingLayer::new("ceiling tile", Some("ceiling-tile"), 0.016),
         ];
         m.rooms[2].ceiling_stack = stack;
         let ne = m.rooms[2].clone();

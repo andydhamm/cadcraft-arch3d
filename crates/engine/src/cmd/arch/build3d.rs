@@ -112,8 +112,10 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
         "parts": parts_json(&scene),
     });
     if let (Some(points), Value::Object(obj)) = (ceiling_points, &mut reply) {
-        let zs: Vec<Value> =
-            points.iter().map(|p| cadcraft_arch::ceiling::finished_ceiling_at(&arch_model, ceiling_level, *p).map_or(Value::Null, |z| json!(z))).collect();
+        let zs: Vec<Value> = points
+            .iter()
+            .map(|p| cadcraft_arch::ceiling::finished_ceiling_at(&arch_model, ceiling_level, *p).map_or(Value::Null, |z| json!(z)))
+            .collect();
         obj.insert("ceiling".to_string(), Value::Array(zs));
     }
     if show_digest {
@@ -206,10 +208,9 @@ fn parse_level_param(arch: &cadcraft_doc::arch::ArchModel, params: &Value) -> cr
     };
     match params.get("level") {
         None | Some(Value::Null) => Ok(0),
-        Some(Value::Number(n)) => n
-            .as_u64()
-            .and_then(by_index)
-            .ok_or_else(|| crate::cmd::bad("build3d", format!("unknown level `{n}` (a level index or name)"))),
+        Some(Value::Number(n)) => {
+            n.as_u64().and_then(by_index).ok_or_else(|| crate::cmd::bad("build3d", format!("unknown level `{n}` (a level index or name)")))
+        }
         Some(Value::String(name)) => {
             let t = name.trim();
             arch.levels
@@ -1501,7 +1502,7 @@ mod tests {
     /// `roomdetect`, giving S (0.1..9.9 x 0.1..2.95), NW (0.1..5.95 x 3.05..7.9) and NE
     /// (6.05..9.9 x 3.05..7.9); `level` puts the walls on that level index.
     fn house_walls(s: &mut Session, level: Option<u32>) {
-        let mut walls = vec![
+        let mut walls = [
             json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true}),
             json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"}),
             json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"}),

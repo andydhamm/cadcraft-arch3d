@@ -183,9 +183,8 @@ fn ceiling_stack_param(p: &Value) -> Result<Option<Vec<CeilingLayer>>> {
         Some(v) => v,
     };
     let layers = match v {
-        Value::String(name) => stack::template(name).ok_or_else(|| {
-            bad("room", format!("unknown ceiling stack `{name}`; known: {}", stack::template_names().join(", ")))
-        })?,
+        Value::String(name) => stack::template(name)
+            .ok_or_else(|| bad("room", format!("unknown ceiling stack `{name}`; known: {}", stack::template_names().join(", "))))?,
         Value::Array(items) => {
             if items.len() > stack::MAX_CEILING_LAYERS {
                 return Err(bad("room", format!("a ceiling stack has at most {} layers, got {}", stack::MAX_CEILING_LAYERS, items.len())));
@@ -195,13 +194,13 @@ fn ceiling_stack_param(p: &Value) -> Result<Option<Vec<CeilingLayer>>> {
                 let n = i + 1;
                 let o = item.as_object().ok_or_else(|| bad("room", format!("ceiling layer {n} must be {{\"material\", \"thickness\"}}")))?;
                 let name = match o.get("name") {
-                    None | Some(Value::Null) => String::new(),
-                    Some(Value::String(t)) => t.clone(),
+                    None | Some(Value::Null) => "",
+                    Some(Value::String(t)) => t.as_str(),
                     Some(_) => return Err(bad("room", format!("ceiling layer {n}: `name` must be a string"))),
                 };
                 let material = match o.get("material") {
                     Some(Value::Null) => None,
-                    Some(Value::String(m)) => Some(m.clone()),
+                    Some(Value::String(m)) => Some(m.as_str()),
                     None => return Err(bad("room", format!("ceiling layer {n}: `material` (a name, or null for an air gap) is required"))),
                     Some(_) => return Err(bad("room", format!("ceiling layer {n}: `material` must be a name or null"))),
                 };
@@ -210,7 +209,7 @@ fn ceiling_stack_param(p: &Value) -> Result<Option<Vec<CeilingLayer>>> {
                     .and_then(Value::as_f64)
                     .filter(|t| t.is_finite())
                     .ok_or_else(|| bad("room", format!("ceiling layer {n}: `thickness` (metres) is required")))?;
-                layers.push(CeilingLayer { name, material, thickness });
+                layers.push(CeilingLayer::new(name, material, thickness));
             }
             layers
         }
@@ -243,10 +242,10 @@ pub(crate) fn ceiling_stack_json(stack: &[CeilingLayer]) -> Value {
 /// Refuse a flat ceiling on `room` above the roof underside over it (no-op for a vaulted room or
 /// one without a ceiling).
 fn guard_flat_ceiling(arch: &cadcraft_doc::arch::ArchModel, room: &Room) -> Result<()> {
-    if room.flat_ceiling {
-        if let Some(z) = flat_ceiling_z_with(room, arch.level(room.level)) {
-            vault::check_flat_ceiling(arch, room, z).map_err(|m| bad("room", m))?;
-        }
+    if room.flat_ceiling
+        && let Some(z) = flat_ceiling_z_with(room, arch.level(room.level))
+    {
+        vault::check_flat_ceiling(arch, room, z).map_err(|m| bad("room", m))?;
     }
     Ok(())
 }
@@ -1363,7 +1362,8 @@ mod tests {
         use cadcraft_doc::arch::{Furnishing, Placement};
         let mut s = new_session();
         s.execute("room", &json!({ "points": ne_room() })).unwrap();
-        let hung = |at: [f64; 2], elevation: f64| Furnishing { placement: Placement::Ceiling, at, elevation, size: [0.4, 0.4, 0.86], ..Default::default() };
+        let hung =
+            |at: [f64; 2], elevation: f64| Furnishing { placement: Placement::Ceiling, at, elevation, size: [0.4, 0.4, 0.86], ..Default::default() };
         {
             let d = s.doc_mut().unwrap();
             d.arch.ensure_ground_level();
