@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 53 of 61 segments merged · 6 of 14 acceptance checks**
 
@@ -25,16 +25,16 @@ Updated 2026-11-08 07:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 71.3 h so far · expected done Nov 09 01:12–Nov 11 14:49 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 71.6 h so far · expected done Nov 09 01:27–Nov 11 15:03 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-53 merged, 7 replaced, 6 queued, 2 abandoned, 1 working, 1 gate
+53 merged, 7 replaced, 6 queued, 2 abandoned, 2 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-shell` | bilevel.json part 1: levels, walls, openings, stairs, rooms | working | mai-flash-esc |
+| `p15-showcase-shell` | bilevel.json part 1: levels, walls, openings, stairs, rooms | gate | mai-flash-esc |
 | `upstream-sync-3b7eb1b7b` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | gate | bonsai-b |
 
 ## Recent merges
@@ -61,7 +61,7 @@ Updated 2026-11-08 07:45 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | gate | 949 |
 | bonsai-b | bonsai2-27b | gate | 886 |
 | bonsai-ws2-a | bonsai2-27b | idle | 974 |
-| bonsai-ws2-b | bonsai2-27b | gate | 948 |
+| bonsai-ws2-b | bonsai2-27b | gate | 949 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
@@ -69,6 +69,6 @@ Updated 2026-11-08 07:45 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 43 |
-| tturbo-mac | tturbo-ultraheretic | agent | 653 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 43 |
+| tturbo-mac | tturbo-ultraheretic | gate | 653 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
