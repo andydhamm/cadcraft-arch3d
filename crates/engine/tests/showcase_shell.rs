@@ -42,6 +42,16 @@ fn level_index(levels: &[Value], name: &str) -> u32 {
     panic!("level named `{name}` not found");
 }
 
+fn room_level_index(levels: &[Value], room: &Value) -> u32 {
+    if let Some(idx) = room.get("levelIndex").and_then(|v| v.as_u64()) {
+        return idx as u32;
+    }
+    if let Some(name) = room.get("level").and_then(|v| v.as_str()) {
+        return level_index(levels, name);
+    }
+    panic!("room level");
+}
+
 #[test]
 fn the_shell_replays() {
     let mut s = Session::new();
@@ -114,7 +124,7 @@ fn the_shell_is_a_split_entry_bilevel() {
     let mut main_rooms = 0;
     let mut entry_rooms = 0;
     for ro in &rooms {
-        let lvl = ro["level"].as_u64().expect("room level") as u32;
+        let lvl = room_level_index(&levels, ro);
         match lvl {
             x if x == lower => lower_rooms += 1,
             x if x == main => main_rooms += 1,
