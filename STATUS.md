@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 54 of 62 segments merged · 6 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-08 17:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 81.3 h so far · expected done Nov 09 21:11–Nov 17 03:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 81.6 h so far · expected done Nov 09 21:25–Nov 17 03:15 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
@@ -69,5 +69,5 @@ Updated 2026-11-08 17:45 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-esc | mai-code-1.1-flash | down | 47 |
-| tturbo-mac | tturbo-ultraheretic | gate | 661 |
+| tturbo-mac | tturbo-ultraheretic | agent | 662 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
