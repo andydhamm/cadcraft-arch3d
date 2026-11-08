@@ -2869,4 +2869,132 @@ mod tests {
         let list = v["furnishings"].as_array().expect("furnishings array");
         assert_eq!(list[0]["room"], Value::Null, "furnishing at non-finite position should report null room");
     }
+
+    /// A level with NaN elevation serializes elevation as null (serde_json behavior).
+    #[test]
+    fn inspect_levels_with_non_finite_elevation() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.levels.clear();
+            d.arch.levels.push(cadcraft_doc::arch::Level {
+                index: 0,
+                name: "NaN Level".to_string(),
+                elevation: f64::NAN,
+                ceiling_height: 2.4,
+                structure: 0.3,
+                ..Default::default()
+            });
+            d.touch_arch();
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "levels": true }));
+        let levels = v["levels"].as_array().expect("levels array missing");
+        assert_eq!(levels.len(), 1);
+        let l = &levels[0];
+        assert!(l["elevation"].is_null(), "elevation should be null for NaN");
+        assert_eq!(l["name"], "NaN Level");
+        assert_eq!(l["kind"], "floor");
+    }
+
+    /// A zero-height wall has bottom == top.
+    #[test]
+    fn inspect_wall_with_zero_height() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.2, "height": 0.0 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        let w = &walls[0];
+        let bottom = w["bottom"].as_f64().expect("bottom should be a number");
+        let top = w["top"].as_f64().expect("top should be a number");
+        assert_eq!(bottom, top, "zero-height wall should have bottom == top");
+    }
+
+    /// A landing level has aboveGradeArea 0.0 even when it has rooms.
+    #[test]
+    fn inspect_landing_above_grade_area_is_zero() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.levels.clear();
+            d.arch.levels.push(cadcraft_doc::arch::Level {
+                index: 0,
+                name: "Entry".to_string(),
+                elevation: 1.0,
+                ceiling_height: 2.4,
+                structure: 0.3,
+                kind: cadcraft_doc::arch::LevelKind::Landing,
+                ..Default::default()
+            });
+            d.touch_arch();
+        }
+        if let Ok(d) = s.doc_mut() {
+            d.arch.push_room(cadcraft_doc::arch::Room {
+                name: "Hall".into(),
+                room_type: cadcraft_doc::arch::RoomType::Living,
+                level: 0,
+                polygon: vec![
+                    cadcraft_geom::Vec2::new(0.0, 0.0),
+                    cadcraft_geom::Vec2::new(4.0, 0.0),
+                    cadcraft_geom::Vec2::new(4.0, 3.0),
+                    cadcraft_geom::Vec2::new(0.0, 3.0),
+                ],
+                interior_area: 12.0,
+                standard_area: 12.0,
+                ..Default::default()
+            });
+            d.touch_arch();
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "levels": true, "rooms": true }));
+        let levels = v["levels"].as_array().expect("levels array missing");
+        let entry = levels.iter().find(|row| row["name"] == "Entry").expect("Entry level missing");
+        assert_eq!(entry["kind"], "landing");
+        assert_eq!(entry["gradeClass"], "aboveGrade");
+        assert!((entry["aboveGradeArea"].as_f64().unwrap_or(-1.0) - 0.0).abs() < 1e-9, "landing aboveGradeArea should be 0.0");
+    }
+
+    /// A wall with topLevel set to a non-existent level index has null bottom and top.
+    #[test]
+    fn inspect_wall_span_none_for_missing_top_level() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(0.0, 0.0),
+                end: cadcraft_geom::Vec2::new(5.0, 0.0),
+                thickness: 0.2,
+                height: 2.7,
+                top_level: Some(5),
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        let w = &walls[0];
+        assert_eq!(w["topLevel"], 5);
+        assert!(w["bottom"].is_null(), "bottom should be null for missing top level");
+        assert!(w["top"].is_null(), "top should be null for missing top level");
+    }
+
+    /// A wall with NaN start coordinate serializes it as null; span is still computed from the level.
+    #[test]
+    fn inspect_wall_with_non_finite_coordinates() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(f64::NAN, 0.0),
+                end: cadcraft_geom::Vec2::new(5.0, 0.0),
+                thickness: 0.2,
+                height: 2.7,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        let w = &walls[0];
+        assert!(w["start"][0].is_null(), "start x should be null for NaN");
+        // bottom and top are computed from the level, not the wall coordinates
+        assert!(w["bottom"].is_number() || w["bottom"].is_null());
+        assert!(w["top"].is_number() || w["top"].is_null());
+    }
 }
