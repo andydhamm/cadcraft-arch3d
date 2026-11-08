@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 51 of 56 segments merged · 6 of 14 acceptance checks**
 
@@ -25,16 +25,16 @@ Updated 2026-11-08 04:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 67.8 h so far · expected done Nov 08 21:24–Nov 15 06:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 68.1 h so far · expected done Nov 08 21:38–Nov 15 06:15 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-51 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck, 1 gate, 1 working
+51 merged, 6 replaced, 2 queued, 2 abandoned, 1 stuck, 1 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-outlet-gap-spacing` | outlets.auto: never leave a usable-wall gap over 1.8 m | gate | bonsai-ws2-a |
+| `p15-outlet-gap-spacing` | outlets.auto: never leave a usable-wall gap over 1.8 m | merging | bonsai-ws2-a |
 | `p15-showcase-shell` | bilevel.json part 1: levels, walls, openings, stairs, rooms | working | bonsai-b |
 
 ## Recent merges
@@ -59,8 +59,8 @@ Updated 2026-11-08 04:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 943 |
-| bonsai-b | bonsai2-27b | agent | 879 |
-| bonsai-ws2-a | bonsai2-27b | gate | 973 |
+| bonsai-b | bonsai2-27b | agent | 880 |
+| bonsai-ws2-a | bonsai2-27b | merging | 974 |
 | bonsai-ws2-b | bonsai2-27b | idle | 943 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
@@ -69,5 +69,5 @@ Updated 2026-11-08 04:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 68 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
-| tturbo-mac | tturbo-ultraheretic | agent | 650 |
+| tturbo-mac | tturbo-ultraheretic | gate | 650 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
