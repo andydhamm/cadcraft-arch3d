@@ -33,6 +33,11 @@ fn showcase_session() -> Session {
     s
 }
 
+/// Fixture or furnishing rows whose `room` equals `room_id`.
+fn rows_in_room(rows: &[Value], room_id: &str) -> Vec<Value> {
+    rows.iter().filter(|row| row["room"].as_str() == Some(room_id)).cloned().collect()
+}
+
 /// Replay the showcase shell script into a fresh metric session.
 fn replay(session: &mut Session) -> &mut Session {
     let script = std::fs::read_to_string(showcase_path()).expect("could not read showcase shell script");
@@ -215,4 +220,62 @@ fn the_kitchen_has_casework_and_appliances() {
     for want in ["range", "refrigerator", "sink", "dishwasher"] {
         assert!(kinds.contains(&want), "fixture `{want}` missing from {kinds:?}");
     }
+}
+
+#[test]
+fn the_showcase_is_furnished() {
+    let mut s = showcase_session();
+    replay(&mut s);
+
+    let r: Value = s.execute("arch.inspect", &json!({"rooms": true, "furnishings": true, "fixtures": true})).expect("arch.inspect failed");
+    let rooms: Vec<Value> = r["rooms"].as_array().expect("rooms array").clone();
+    let furn: Vec<Value> = r["furnishings"].as_array().expect("furnishings array").clone();
+    let fix: Vec<Value> = r["fixtures"].as_array().expect("fixtures array").clone();
+
+    // The kitchen's fixtures cover range, refrigerator, sink and dishwasher.
+    let kitchens = room_ids_of_type(&rooms, "kitchen");
+    assert!(!kitchens.is_empty(), "no kitchen found in {rooms:?}");
+    for kid in &kitchens {
+        let rows = rows_in_room(&fix, kid);
+        for want in ["range", "refrigerator", "sink", "dishwasher"] {
+            assert!(rows.iter().any(|row| row["kind"].as_str() == Some(want)), "kitchen {kid} missing fixture `{want}`; rows={rows:?}");
+        }
+    }
+
+    // Two bath rooms, each covering toilet, sink|lavatory and tub|bathtub|shower.
+    let baths = room_ids_of_type(&rooms, "bath");
+    assert_eq!(baths.len(), 2, "expected 2 baths, found {baths:?}");
+    for kid in &baths {
+        let rows = rows_in_room(&fix, kid);
+        let kinds: Vec<&str> = rows.iter().filter_map(|row| row["kind"].as_str()).collect();
+        assert!(kinds.iter().any(|k| *k == "toilet"), "bath {kid} missing toilet; kinds={kinds:?}");
+        assert!(kinds.iter().any(|k| *k == "sink" || *k == "lavatory"), "bath {kid} missing sink or lavatory; kinds={kinds:?}");
+        assert!(kinds.iter().any(|k| *k == "tub" || *k == "bathtub" || *k == "shower"), "bath {kid} missing tub/bathtub/shower; kinds={kinds:?}");
+    }
+
+    // Every bedroom has a furnishing whose item contains "bed".
+    let bedrooms = room_ids_of_type(&rooms, "bedroom");
+    assert!(!bedrooms.is_empty(), "no bedroom found in {rooms:?}");
+    for kid in &bedrooms {
+        let rows = rows_in_room(&furn, kid);
+        assert!(
+            rows.iter().any(|row| row["item"].as_str().map_or(false, |i| i.contains("bed"))),
+            "bedroom {kid} has no bed furnishing; items={rows:?}"
+        );
+    }
+
+    // Every room that is not a closet/openBelow has a furnishing or fixture in it.
+    let mut failed = Vec::new();
+    for rm in &rooms {
+        let typ = rm["type"].as_str().unwrap_or("");
+        if typ == "closet" || typ == "openBelow" {
+            continue;
+        }
+        let rid = rm["id"].as_str().unwrap_or("");
+        let has_item = rows_in_room(&furn, rid).is_some() || rows_in_room(&fix, rid).is_some();
+        if !has_item {
+            failed.push(rid.to_string());
+        }
+    }
+    assert!(failed.is_empty(), "rooms with no furnishing or fixture: {failed:?}");
 }
