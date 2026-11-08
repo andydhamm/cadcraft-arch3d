@@ -466,7 +466,7 @@ mod tests {
         m.plant_species.push(PlantSpecies {
             name: "oak".into(),
             form: PlantForm::DeciduousTree,
-            crown: CrownShape::Round,
+            crown: CrownShape::Sphere,
             mature_height: 20.0,
             mature_spread: 15.0,
             planted_height: 2.0,
@@ -475,7 +475,7 @@ mod tests {
         m.plant_species.push(PlantSpecies {
             name: "pine".into(),
             form: PlantForm::EvergreenTree,
-            crown: CrownShape::Conical,
+            crown: CrownShape::Cone,
             mature_height: 25.0,
             mature_spread: 10.0,
             planted_height: 3.0,
@@ -484,7 +484,7 @@ mod tests {
         m.plant_species.push(PlantSpecies {
             name: "rose".into(),
             form: PlantForm::Shrub,
-            crown: CrownShape::Round,
+            crown: CrownShape::Sphere,
             mature_height: 1.5,
             mature_spread: 1.0,
             planted_height: 0.3,
@@ -493,7 +493,7 @@ mod tests {
         m.plant_species.push(PlantSpecies {
             name: "ivy".into(),
             form: PlantForm::GroundCover,
-            crown: CrownShape::Round,
+            crown: CrownShape::Sphere,
             mature_height: 0.3,
             mature_spread: 2.0,
             planted_height: 0.05,
