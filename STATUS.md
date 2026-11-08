@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-08 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 21:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 57 of 64 segments merged · 6 of 14 acceptance checks**
 
-7,881 workspace tests passing at the last merge · 837 segments merged in all · 0 of 14 seats working
+7,886 workspace tests passing at the last merge · 838 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,21 +25,22 @@ Updated 2026-11-08 21:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 85.1 h so far · expected done Nov 09 16:10–Nov 13 10:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 85.3 h so far · expected done Nov 09 16:25–Nov 13 10:45 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-57 merged, 8 replaced, 6 queued, 3 abandoned, 1 gate
+57 merged, 8 replaced, 6 queued, 3 abandoned, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-furnish` | bilevel.json part 2b: bath fixtures, furnishings, the_showcase_is_furnished | gate | bonsai-ws2-b |
+| `p15-showcase-furnish` | bilevel.json part 2b: bath fixtures, furnishings, the_showcase_is_furnished | working | bonsai-ws2-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 08 21:37 | `harden-p15-inspect-levels-walls` | merged | 7,886 pass | tturbo-mac |
 | Nov 08 20:49 | `p15-showcase-kitchen-casework` | merged | 7,881 pass | bonsai-ws2-b |
 | Nov 08 19:35 | `p15-showcase-bath-room` | merged | 7,880 pass | bonsai-a |
 | Nov 08 18:05 | `p15-showcase-lib-io` | merged | 7,879 pass | bonsai-ws2-b |
@@ -51,16 +52,15 @@ Updated 2026-11-08 21:30 UTC. This page and the card in the README are regenerat
 | Nov 08 10:36 | `harden-p15-outlet-gap-spacing` | merged | 7,853 pass | tturbo-mac |
 | Nov 08 09:18 | `p15-showcase-shell` | merged | 7,849 pass | mai-flash-esc |
 | Nov 08 07:30 | `harden-p15-io-ifc-electrical` | merged | 7,847 pass | tturbo-mac |
-| Nov 08 06:25 | `upstream-sync-8e899eef6` | merged | 7,843 pass | mai-flash |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 957 |
+| bonsai-a | bonsai2-27b | agent | 958 |
 | bonsai-b | bonsai2-27b | gate | 897 |
 | bonsai-ws2-a | bonsai2-27b | idle | 980 |
-| bonsai-ws2-b | bonsai2-27b | gate | 958 |
+| bonsai-ws2-b | bonsai2-27b | agent | 959 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
@@ -69,5 +69,5 @@ Updated 2026-11-08 21:30 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-esc | mai-code-1.1-flash | down | 47 |
-| tturbo-mac | tturbo-ultraheretic | merging | 665 |
+| tturbo-mac | tturbo-ultraheretic | agent | 665 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
