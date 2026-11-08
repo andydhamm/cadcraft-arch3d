@@ -113,10 +113,10 @@ mod tests {
         let mut m = base();
         let mut d = device(ElectricalKind::Duplex);
         d.id = ArchId(0);
-        m.push_electrical(d);
+        m.electrical.push(d);
         let mut d2 = device(ElectricalKind::Gfci);
         d2.id = ArchId(0);
-        m.push_electrical(d2);
+        m.electrical.push(d2);
         let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
         assert_eq!(text.matches("=IFCOUTLET(").count(), 1, "duplicate id written once: {text}");
         assert!(text.contains(",'electrical-el0',$,$,#"), "{text}");
