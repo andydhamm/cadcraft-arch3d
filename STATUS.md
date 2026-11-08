@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 52 of 60 segments merged · 6 of 14 acceptance checks**
 
@@ -25,17 +25,17 @@ Updated 2026-11-08 05:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 68.8 h so far · expected done Nov 09 02:35–Nov 13 00:15 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 69.1 h so far · expected done Nov 09 02:50–Nov 13 00:30 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-52 merged, 7 replaced, 6 queued, 2 abandoned, 2 gate
+52 merged, 7 replaced, 6 queued, 2 abandoned, 1 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-showcase-shell` | bilevel.json part 1: levels, walls, openings, stairs, rooms | gate | bonsai-b |
-| `upstream-sync-8e899eef6` | merge upstream upstream/main up to 8e899eef6 (73 commits) | gate | mai-flash |
+| `upstream-sync-8e899eef6` | merge upstream upstream/main up to 8e899eef6 (73 commits) | merging | mai-flash |
 
 ## Recent merges
 
@@ -58,7 +58,7 @@ Updated 2026-11-08 05:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 943 |
+| bonsai-a | bonsai2-27b | agent | 944 |
 | bonsai-b | bonsai2-27b | gate | 882 |
 | bonsai-ws2-a | bonsai2-27b | idle | 974 |
 | bonsai-ws2-b | bonsai2-27b | gate | 944 |
@@ -68,7 +68,7 @@ Updated 2026-11-08 05:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-d | sonnet | idle | 30 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 821 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 68 |
+| mai-flash | mai-code-1.1-flash | merging | 69 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 41 |
 | tturbo-mac | tturbo-ultraheretic | gate | 652 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
