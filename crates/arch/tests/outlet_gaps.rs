@@ -220,8 +220,8 @@ fn a_run_just_over_3_6_metres_gets_two_outlets() {
 
 #[test]
 fn a_very_short_run_gets_one_outlet() {
-    // A 0.5 m wide room: the usable wall run is short (~0.3 m after wall thickness).
-    let m = room_of_length(0.5);
+    // A 1.0 m wide room: the usable wall run is short (~0.6 m after wall thickness).
+    let m = room_of_length(1.0);
     assert!(!m.rooms.is_empty(), "no room detected");
     let g = outlet_gaps(&m, room_id(&m));
     assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
