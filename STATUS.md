@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-07 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 16: Phase 16**
 
@@ -26,7 +26,7 @@ Updated 2026-11-07 23:45 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | incomplete | 6 / 14 | 62.3 h |
-| 16 | Phase 16 | pending | — |  · expected done Nov 08 05:14–Nov 13 09:47 UTC |
+| 16 | Phase 16 | pending | — |  · expected done Nov 08 05:29–Nov 13 10:02 UTC |
 
 ## Phase 16 segments
 
