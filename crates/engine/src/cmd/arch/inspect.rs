@@ -118,15 +118,21 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         obj.insert("level".to_string(), json!(w.base_level));
         if walls_flag {
             obj.insert("topLevel".to_string(), w.top_level.map(|idx| json!(idx)).unwrap_or(Value::Null));
-            match cadcraft_arch3d::wall_span(&d.arch, w) {
-                Some((bottom, top)) => {
-                    obj.insert("bottom".to_string(), json!(bottom));
-                    obj.insert("top".to_string(), json!(top));
+            let span_valid = w.top_level.map_or(true, |idx| idx < d.arch.levels.len());
+            if span_valid {
+                match cadcraft_arch3d::wall_span(&d.arch, w) {
+                    Some((bottom, top)) => {
+                        obj.insert("bottom".to_string(), json!(bottom));
+                        obj.insert("top".to_string(), json!(top));
+                    }
+                    None => {
+                        obj.insert("bottom".to_string(), Value::Null);
+                        obj.insert("top".to_string(), Value::Null);
+                    }
                 }
-                None => {
-                    obj.insert("bottom".to_string(), Value::Null);
-                    obj.insert("top".to_string(), Value::Null);
-                }
+            } else {
+                obj.insert("bottom".to_string(), Value::Null);
+                obj.insert("top".to_string(), Value::Null);
             }
         }
         obj.insert("finish".to_string(), json!(w.finish.map(cadcraft_doc::arch::Finish::name)));
@@ -2899,7 +2905,17 @@ mod tests {
     #[test]
     fn inspect_wall_with_zero_height() {
         let mut s = Session::new();
-        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.2, "height": 0.0 }));
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(0.0, 0.0),
+                end: cadcraft_geom::Vec2::new(5.0, 0.0),
+                thickness: 0.2,
+                height: 0.0,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
         let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
         let walls = v["walls"].as_array().expect("walls array missing");
         let w = &walls[0];
