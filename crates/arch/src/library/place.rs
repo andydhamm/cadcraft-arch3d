@@ -6,7 +6,7 @@ use crate::casework_layout::gaps;
 use crate::library::record::ItemKind;
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{ArchId, Cabinet, CabinetKind, CabinetPart, Furnishing, FurnishingHost, Placement};
-use cadcraft_geom::{Vec2, point_in_polygon};
+use cadcraft_geom::Vec2;
 
 /// Largest accepted item dimension in metres.
 const MAX_SIZE: f64 = 100.0;
@@ -212,23 +212,16 @@ pub fn place(model: &ArchModel, r: &PlaceRequest) -> Result<PlaceOutcome, String
     match r.placement {
         // 5. wall items back onto the nearest wall face.
         Placement::Wall => wall_item(model, r),
-        // 6. ceiling items hang from the ceiling of the room.
+        // 6. ceiling items hang from the room's finished ceiling (its own height, less its finish
+        // stack), or from a soffit's underside over the point (phase 16: `ceiling::hang_z`).
         Placement::Ceiling => {
-            let mut rooms: Vec<_> = model.rooms.iter().filter(|rm| rm.level == r.level && rm.polygon.len() >= 3).collect();
-            rooms.sort_by_key(|rm| rm.id);
-            let p = Vec2::new(at[0], at[1]);
-            let room =
-                rooms.into_iter().find(|rm| point_in_polygon(&rm.polygon, p) && !rm.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p)));
-            if room.is_none() {
+            let h = crate::ceiling::hang_z(model, r.level, Vec2::new(at[0], at[1])).ok_or("a ceiling item goes in a room")?;
+            let level = model.level(r.level).ok_or_else(|| format!("no level {}", r.level))?;
+            let elevation = h - level.elevation - r.size[2];
+            if !elevation.is_finite() {
                 return Err("a ceiling item goes in a room".into());
             }
-            let level = model.level(r.level).ok_or_else(|| format!("no level {}", r.level))?;
-            Ok(PlaceOutcome::Place {
-                at,
-                rotation: norm_deg(r.rotation.unwrap_or(0.0)),
-                elevation: level.ceiling_height - r.size[2],
-                host: FurnishingHost::None,
-            })
+            Ok(PlaceOutcome::Place { at, rotation: norm_deg(r.rotation.unwrap_or(0.0)), elevation, host: FurnishingHost::None })
         }
         // 7. otherwise at the click.
         _ => Ok(PlaceOutcome::Place { at, rotation: norm_deg(r.rotation.unwrap_or(0.0)), elevation: 0.0, host: FurnishingHost::None }),
@@ -360,6 +353,29 @@ mod tests {
         assert_eq!(at, [2.0, 2.0]);
         assert!((el - 2.1).abs() < 1e-9, "{el}");
         assert_eq!(host, FurnishingHost::None);
+    }
+
+    /// Phase 14 said a ceiling item hangs from "the room's ceiling height": a room's own height
+    /// counts (it used to take the level's), on an upper level too (elevation stays relative).
+    #[test]
+    fn ceiling_item_hangs_from_the_room_ceiling_height() {
+        let mut m = room_model();
+        m.rooms[0].ceiling_height = Some(2.7);
+        let (_, _, el, _) = placed(place(&m, &req(Placement::Ceiling, "light", [0.5, 0.5, 0.3], [2.0, 2.0])));
+        assert!((el - 2.4).abs() < 1e-9, "{el}");
+        // On a level at 2.7 the elevation is still measured from that level's floor.
+        m.levels.push(Level { index: 1, elevation: 2.7, ..Level::default() });
+        let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+        m.rooms.push(Room { id: ArchId(1), level: 1, polygon: poly, ..Default::default() });
+        let mut r = req(Placement::Ceiling, "light", [0.5, 0.5, 0.3], [2.0, 2.0]);
+        r.level = 1;
+        let (_, _, el, _) = placed(place(&m, &r));
+        assert!((el - 2.1).abs() < 1e-9, "{el}");
+        // A finish stack lowers it.
+        m.rooms[0].ceiling_stack =
+            vec![cadcraft_doc::arch::CeilingLayer { material: Some("drywall".into()), thickness: 0.0127, ..Default::default() }];
+        let (_, _, el, _) = placed(place(&m, &req(Placement::Ceiling, "light", [0.5, 0.5, 0.3], [2.0, 2.0])));
+        assert!((el - (2.7 - 0.0127 - 0.3)).abs() < 1e-9, "{el}");
     }
 
     #[test]

@@ -869,6 +869,16 @@ pub struct Room {
     /// The room's floor finish.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor_finish: Option<Finish>,
+    /// A flat ceiling at the ceiling height (the default). Off, under a roof, the ceiling
+    /// follows the underside of the roof planes over the room (a cathedral or vaulted ceiling).
+    /// `ceiling_height` is the room's ROUGH ceiling either way: the underside of the structure
+    /// above, relative to the level's floor.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub flat_ceiling: bool,
+    /// The ceiling's finish stack, top to bottom. The finished ceiling is the rough ceiling
+    /// minus the stack's total thickness; empty (the default) means no finish layers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ceiling_stack: Vec<CeilingLayer>,
 }
 
 impl Default for Room {
@@ -886,8 +896,39 @@ impl Default for Room {
             standard_area: 0.0,
             deck_height: None,
             floor_finish: None,
+            flat_ceiling: true,
+            ceiling_stack: Vec::new(),
         }
     }
+}
+
+/// One layer of a ceiling finish stack (listed top to bottom): a material and a thickness.
+/// `material: None` is an air gap (a suspended ceiling's plenum).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CeilingLayer {
+    /// A display name ("drywall", "air", "ceiling tile").
+    pub name: String,
+    /// The layer's material key or name; `None` is an air gap.
+    pub material: Option<String>,
+    /// Thickness in metres.
+    pub thickness: f64,
+}
+
+impl CeilingLayer {
+    /// A layer named `name` of `thickness` metres of `material` (`None`: an air gap). Code
+    /// outside this file builds layers with this, so a later field does not break it.
+    pub fn new(name: impl Into<String>, material: Option<&str>, thickness: f64) -> Self {
+        Self { name: name.into(), material: material.map(str::to_string), thickness }
+    }
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 /// How a roof meets a wall: auto-detected, hip, gable, or valley.
@@ -4034,6 +4075,53 @@ mod tests {
         let back_landing: LevelKind = serde_json::from_str("\"landing\"").unwrap();
         assert_eq!(back_floor, LevelKind::Floor);
         assert_eq!(back_landing, LevelKind::Landing);
+    }
+
+    /// A room saved before phase 16 (no `flat_ceiling`, no `ceiling_stack`) loads with a flat
+    /// ceiling and an empty finish stack.
+    #[test]
+    fn room_without_ceiling_fields_loads_flat_and_unstacked() {
+        let v = serde_json::json!({"id": 3, "name": "Hall", "polygon": [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 0.0}, {"x": 1.0, "y": 1.0}], "ceiling_height": 2.7});
+        let r: Room = serde_json::from_value(v).unwrap();
+        assert!(r.flat_ceiling);
+        assert!(r.ceiling_stack.is_empty());
+        assert_eq!(r.ceiling_height, Some(2.7));
+        assert!(Room::default().flat_ceiling, "Room::default is flat too");
+        let stacked = Room {
+            flat_ceiling: false,
+            ceiling_stack: vec![
+                CeilingLayer { name: "drywall".into(), material: Some("drywall".into()), thickness: 0.0127 },
+                CeilingLayer { name: "air".into(), material: None, thickness: 0.2 },
+            ],
+            ..Room::default()
+        };
+        let v = serde_json::to_value(&stacked).unwrap();
+        assert_eq!(v["flat_ceiling"], false);
+        assert_eq!(v["ceiling_stack"][1]["material"], serde_json::Value::Null);
+        assert_eq!(v["ceiling_stack"][0]["thickness"], 0.0127);
+        let back: Room = serde_json::from_value(v).unwrap();
+        assert_eq!(back, stacked);
+        // A layer with missing keys takes the defaults.
+        let l: CeilingLayer = serde_json::from_value(serde_json::json!({"thickness": 0.1})).unwrap();
+        assert_eq!(l, CeilingLayer { thickness: 0.1, ..CeilingLayer::default() });
+        // The constructor other crates use.
+        assert_eq!(CeilingLayer::new("air", None, 0.2), CeilingLayer { name: "air".into(), material: None, thickness: 0.2 });
+        assert_eq!(CeilingLayer::new("drywall", Some("drywall"), 0.0127).material.as_deref(), Some("drywall"));
+    }
+
+    /// A default room writes neither key, so an old drawing saves the same payload.
+    #[test]
+    fn default_room_writes_no_ceiling_keys() {
+        let v = serde_json::to_value(Room::default()).unwrap();
+        let o = v.as_object().unwrap();
+        assert!(!o.contains_key("flat_ceiling"), "{v}");
+        assert!(!o.contains_key("ceiling_stack"), "{v}");
+        let old = serde_json::json!({"id": 1, "name": "A", "polygon": [{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": 0.0}, {"x": 2.0, "y": 2.0}]});
+        let r: Room = serde_json::from_value(old).unwrap();
+        let again = serde_json::to_value(&r).unwrap();
+        let back: Room = serde_json::from_value(again.clone()).unwrap();
+        assert_eq!(back, r);
+        assert!(!again.as_object().unwrap().contains_key("flat_ceiling"));
     }
 
     // ---------- phase 16: trays, soffits and foundations ----------
