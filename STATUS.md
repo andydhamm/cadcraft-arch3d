@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-08 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-08 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 16: Electrical, technical illustration and the showcase house — 54 of 61 segments merged · 6 of 14 acceptance checks**
 
@@ -25,16 +25,16 @@ Updated 2026-11-08 11:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 74.6 h so far · expected done Nov 08 23:55–Nov 10 19:41 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 74.8 h so far · expected done Nov 09 00:10–Nov 10 19:56 UTC |
 | 16 | Phase 16 | pending | — | — |
 
 ## Phase 15 segments
 
-54 merged, 7 replaced, 5 queued, 2 abandoned, 2 gate
+54 merged, 7 replaced, 5 queued, 2 abandoned, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-fitout` | bilevel.json part 2: cabinets, fixtures, furnishings | gate | bonsai-ws2-a |
+| `p15-showcase-fitout` | bilevel.json part 2: cabinets, fixtures, furnishings | working | bonsai-ws2-a |
 | `upstream-sync-3b7eb1b7b` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | gate | mai-flash-esc |
 
 ## Recent merges
@@ -60,15 +60,15 @@ Updated 2026-11-08 11:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 951 |
 | bonsai-b | bonsai2-27b | idle | 890 |
-| bonsai-ws2-a | bonsai2-27b | gate | 977 |
+| bonsai-ws2-a | bonsai2-27b | agent | 978 |
 | bonsai-ws2-b | bonsai2-27b | idle | 952 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | idle | 30 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 827 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 828 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 44 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 45 |
 | tturbo-mac | tturbo-ultraheretic | gate | 656 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
