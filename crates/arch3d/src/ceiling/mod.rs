@@ -62,7 +62,7 @@ pub(crate) fn rough_pieces(i: &CeilingIn) -> Vec<Piece> {
 #[allow(dead_code)] // the phase-16 feature packages hang soffits and items from it
 pub(crate) fn finished_pieces(i: &CeilingIn) -> Vec<Piece> {
     let drop = stack::drop(i);
-    rough_pieces(i).into_iter().map(|p| Piece { plane: p.plane.offset(-drop), ..p }).collect()
+    rough_pieces(i).into_iter().map(|p| Piece::new(p.outer, p.holes, p.plane.offset(-drop))).collect()
 }
 
 /// The meshes of the room's ceiling: the stack's slabs under the rough ceiling, then the trays'
