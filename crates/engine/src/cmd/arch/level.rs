@@ -114,6 +114,27 @@ fn validate_duplicate_name(levels: &[cadcraft_doc::arch::Level], name: &str, ski
     Ok(())
 }
 
+/// Refuse raising level `idx`'s ceiling to `new_ceiling` when a flat-ceilinged room that takes its
+/// height from the level would then rise above its roof underside. Keeping or lowering the ceiling
+/// is never refused. The error names the room.
+fn guard_level_ceiling(arch: &cadcraft_doc::arch::ArchModel, idx: usize, new_ceiling: f64) -> Result<(), crate::EngineError> {
+    let Some(level) = arch.levels.get(idx) else { return Ok(()) };
+    if new_ceiling <= level.ceiling_height + 1e-9 {
+        return Ok(());
+    }
+    let mut edited = level.clone();
+    edited.ceiling_height = new_ceiling;
+    for room in arch.rooms.iter().filter(|r| r.level == level.index && r.flat_ceiling) {
+        if room.ceiling_height.is_some_and(|h| h.is_finite() && h > 0.0) {
+            continue;
+        }
+        if let Some(z) = cadcraft_arch::ceiling::flat_ceiling_z_with(room, Some(&edited)) {
+            cadcraft_arch::ceiling::vault::check_flat_ceiling(arch, room, z).map_err(|m| bad("level", m))?;
+        }
+    }
+    Ok(())
+}
+
 /// Run the `level` command.
 ///
 /// JSON: `{above: "Level 1" | index}` — add a level above.
@@ -291,6 +312,9 @@ pub fn run_level(s: &mut Session, p: &Value) -> Result<Value, crate::EngineError
         parse_level_kind(v)?;
     }
 
+    if let Some(v) = p.get("ceiling") {
+        guard_level_ceiling(arch, target_index, parse_finite_range(v, 1.8, 6.0, "level: ceiling must be between 1.8 and 6 m")?)?;
+    }
     let mut doc = s.doc_mut()?;
     let level = &mut doc.arch.levels[target_index];
     if let Some(name_val) = name.and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty()) {
@@ -359,6 +383,9 @@ fn run_level_edit(s: &mut Session, p: &Value) -> Result<Value, crate::EngineErro
         parse_level_kind(v)?;
     }
 
+    if let Some(c) = p.get("ceiling").and_then(Value::as_f64) {
+        guard_level_ceiling(arch, idx, c)?;
+    }
     let mut doc = s.doc_mut()?;
     let level = &mut doc.arch.levels[idx];
     if let Some(name_val) = new_name {
@@ -1238,5 +1265,57 @@ mod tests {
         assert!((arch.levels[0].elevation - 0.0).abs() < 1e-9);
         // Level 1 is the new level
         assert!((arch.levels[1].elevation - 1.5).abs() < 1e-9);
+    }
+
+    /// A 10 x 8 house with room r0 (0.1..9.9 x 0.1..2.95) under a 6/12 gable whose underside is
+    /// 2.5 m along y = 0.1.
+    fn gabled_house() -> Session {
+        let mut s = Session::new();
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 2.4})).ok();
+        s.execute("wall", &json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})).unwrap();
+        s.execute("room", &json!({"points": [[0.1, 0.1], [9.9, 0.1], [9.9, 2.95], [0.1, 2.95], [0.1, 0.1]]})).unwrap();
+        s.execute(
+            "roofauto",
+            &json!({"pitchRise": 6, "pitchRun": 12, "walls": [{"wall": "w1", "directive": "gable"}, {"wall": "w3", "directive": "gable"}]}),
+        )
+        .unwrap();
+        s
+    }
+
+    fn ground_ceiling(s: &Session) -> f64 {
+        s.doc().unwrap().arch.levels[0].ceiling_height
+    }
+
+    #[test]
+    fn level_edit_refuses_a_ceiling_above_the_roof() {
+        let mut s = gabled_house();
+        let e = s.execute("level.edit", &json!({"level": 0, "ceiling": 2.6})).unwrap_err().to_string();
+        assert!(e.contains("room r") && e.contains("roof underside"), "{e}");
+        assert!((ground_ceiling(&s) - 2.4).abs() < 1e-12);
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 2.45})).unwrap();
+        assert!((ground_ceiling(&s) - 2.45).abs() < 1e-12);
+    }
+
+    #[test]
+    fn level_command_edit_refuses_a_ceiling_above_the_roof() {
+        let mut s = gabled_house();
+        let e = s.execute("level", &json!({"index": 0, "ceiling": 2.6})).unwrap_err().to_string();
+        assert!(e.contains("room r") && e.contains("roof underside"), "{e}");
+        assert!((ground_ceiling(&s) - 2.4).abs() < 1e-12);
+        let e = s.execute("level", &json!({"name": "Level 1", "ceiling": 2.6})).unwrap_err().to_string();
+        assert!(e.contains("roof underside"), "{e}");
+        assert!((ground_ceiling(&s) - 2.4).abs() < 1e-12);
+    }
+
+    #[test]
+    fn level_ceiling_lowering_is_never_refused() {
+        let mut s = gabled_house();
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 2.2})).unwrap();
+        s.execute("level", &json!({"index": 0, "ceiling": 2.2})).unwrap();
+        assert!((ground_ceiling(&s) - 2.2).abs() < 1e-12);
+        // A vaulted room is never refused either.
+        s.execute("room", &json!({"id": "r0", "flatCeiling": false})).unwrap();
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 3.0})).unwrap();
+        assert!((ground_ceiling(&s) - 3.0).abs() < 1e-12);
     }
 }
