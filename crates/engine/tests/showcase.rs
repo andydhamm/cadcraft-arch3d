@@ -10,9 +10,14 @@ use cadcraft_engine::cmd::file::{IoHooks, set_io};
 use serde::Deserialize;
 use serde_json::Value;
 
+fn default_params() -> Value {
+    Value::Object(serde_json::Map::new())
+}
+
 #[derive(Debug, Deserialize)]
 struct ScriptStep {
     cmd: String,
+    #[serde(default = "default_params")]
     params: Value,
 }
 
@@ -280,10 +285,12 @@ fn meets_the_brief(reply: &Value) {
 fn the_showcase_script_replays() {
     install_io();
     let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
+    let steps: Vec<ScriptStep> = serde_json::from_str(&script).expect("script is not valid JSON");
+    let total = steps.len();
     let mut session = Session::new();
     session.new_drawing(true);
-    let steps = replay(&script, &mut session);
-    assert!(steps > 0, "the showcase script replayed no steps");
+    let replayed = replay(&script, &mut session);
+    assert_eq!(replayed, total, "expected {} steps, replayed {}", total, replayed);
 }
 
 #[test]
@@ -310,4 +317,59 @@ fn the_showcase_meets_the_brief() {
     let reply = session.execute("arch.inspect", &params).unwrap();
     println!("{}", serde_json::to_string_pretty(&reply).unwrap());
     meets_the_brief(&reply);
+}
+
+#[test]
+fn the_showcase_script_is_valid_json() {
+    let path = script_path();
+    assert!(path.exists(), "showcase script not found at {}", path.display());
+    let script = fs::read_to_string(&path).expect("cannot read the showcase script");
+    let steps: Vec<ScriptStep> = serde_json::from_str(&script).unwrap_or_else(|e| panic!("showcase script is not valid JSON: {e}"));
+    assert!(!steps.is_empty(), "showcase script has no steps");
+    for (i, step) in steps.iter().enumerate() {
+        assert!(!step.cmd.is_empty(), "step {} has an empty cmd", i);
+    }
+}
+
+#[test]
+fn the_showcase_replay_is_deterministic() {
+    install_io();
+    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
+
+    let mut s1 = Session::new();
+    s1.new_drawing(true);
+    replay(&script, &mut s1);
+    let reply1 = s1.execute("arch.inspect", &serde_json::json!({"rooms": true, "levels": true})).unwrap();
+
+    let mut s2 = Session::new();
+    s2.new_drawing(true);
+    replay(&script, &mut s2);
+    let reply2 = s2.execute("arch.inspect", &serde_json::json!({"rooms": true, "levels": true})).unwrap();
+
+    let rooms1 = reply1.get("rooms").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    let rooms2 = reply2.get("rooms").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    assert_eq!(rooms1, rooms2, "room count differs between replays: {} vs {}", rooms1, rooms2);
+
+    let levels1 = reply1.get("levels").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    let levels2 = reply2.get("levels").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    assert_eq!(levels1, levels2, "level count differs between replays: {} vs {}", levels1, levels2);
+}
+
+#[test]
+fn the_showcase_inspect_has_expected_keys() {
+    install_io();
+    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
+    let mut session = Session::new();
+    session.new_drawing(true);
+    replay(&script, &mut session);
+    let params = serde_json::json!({
+        "walls": true, "rooms": true, "levels": true, "cabinets": true,
+        "fixtures": true, "furnishings": true, "surfaces": true,
+        "electrical": true, "lights": true, "lightSets": true,
+        "stairs": true, "site": true,
+    });
+    let reply = session.execute("arch.inspect", &params).unwrap();
+    for key in ["walls", "rooms", "levels", "stairs", "lights", "site"] {
+        assert!(reply.get(key).is_some(), "arch.inspect reply missing `{}`", key);
+    }
 }
