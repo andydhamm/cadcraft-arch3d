@@ -52,8 +52,24 @@ fn is_eave_wall(model: &ArchModel, w: &Wall, level: u32) -> bool {
 fn footprint_of(model: &ArchModel, level: u32, eaves: bool) -> Option<Footprint> {
     let on = |w: &Wall| if eaves { is_eave_wall(model, w, level) } else { crate::room::wall_on_level(model, w, level) };
     // 1. Exterior, non-divider walls on the level.
-    let candidates: Vec<&Wall> =
+    let mut candidates: Vec<&Wall> =
         model.walls.iter().filter(|w| w.exterior && !w.divider && on(w) && w.start.is_finite() && w.end.is_finite()).collect();
+    // A spanning wall from a lower level that a wall of this level's own covers end to end
+    // (a split-entry front wall carried up under the upper wall) adds nothing to the ring.
+    let covered = |w: &Wall, o: &Wall| {
+        let d = o.end - o.start;
+        let l2 = d.dot(d);
+        w.top_level.is_some()
+            && o.top_level.is_none()
+            && l2 > 1e-18
+            && [w.start, w.end].iter().all(|p| {
+                let t = ((*p - o.start).dot(d) / l2).clamp(0.0, 1.0);
+                (o.start + d * t).dist(*p) < 1e-6
+            })
+    };
+    let all = candidates.clone();
+    let covered_ids: Vec<ArchId> = all.iter().filter(|w| all.iter().any(|o| o.id != w.id && covered(w, o))).map(|w| w.id).collect();
+    candidates.retain(|w| !covered_ids.contains(&w.id));
     if candidates.len() < 3 {
         return None;
     }
@@ -115,7 +131,9 @@ fn footprint_of(model: &ArchModel, level: u32, eaves: bool) -> Option<Footprint>
         })
     };
     let mut pruned = model.clone();
-    pruned.walls.retain(|w| on(w) && (!candidates.iter().any(|c| c.id == w.id) || live.iter().any(|e| e.wall == w.id) || along_another(w)));
+    pruned.walls.retain(|w| {
+        on(w) && !covered_ids.contains(&w.id) && (!candidates.iter().any(|c| c.id == w.id) || live.iter().any(|e| e.wall == w.id) || along_another(w))
+    });
     let shapes = crate::join::solve_joins(&pruned);
 
     // 4. One outer-face edge per wall.
