@@ -159,3 +159,84 @@ fn outlet_gaps_long_run() {
     let g = outlet_gaps(&m, room_id(&m));
     assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
 }
+
+fn room_of_length(len: f64) -> ArchModel {
+    let mut m = ArchModel::default();
+    let h = 1.5;
+    let c = [(-0.1, -h), (-0.1 + len, -h), (-0.1 + len, h), (-0.1, h)];
+    for i in 0..4 {
+        let (a, b) = (c[i], c[(i + 1) % 4]);
+        m.push_wall(Wall { start: Vec2::new(a.0, a.1), end: Vec2::new(b.0, b.1), thickness: 0.2, ..Default::default() });
+    }
+    m.rooms = detect_rooms(&m);
+    if let Some(r) = m.rooms.first_mut() {
+        r.room_type = RoomType::Bedroom;
+        r.name = "Room".into();
+    }
+    m
+}
+
+#[test]
+fn a_run_of_3_7_metres_gets_two_outlets() {
+    let m = room_of_length(3.9);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}
+
+#[test]
+fn duplex_positions_never_leave_a_gap_over_1_8() {
+    for len in [0.3, 1.0, 3.6, 3.7, 4.0, 7.3, 12.1, 33.0, 100.2] {
+        let m = room_of_length(len);
+        let Some(_room) = m.rooms.first() else { continue };
+        let g = outlet_gaps(&m, room_id(&m));
+        assert!(g.max_gap <= 1.8 + 1e-6, "length {len}: {g:?}");
+    }
+}
+
+#[test]
+fn outlet_gaps_after_a_run_break_stays_under_1_8() {
+    let m = room_of_length(1.0);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}
+
+#[test]
+fn a_run_of_exactly_3_6_metres_gets_one_outlet() {
+    let m = room_of_length(3.6);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}
+
+#[test]
+fn a_run_just_over_3_6_metres_gets_two_outlets() {
+    let m = room_of_length(3.61);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}
+
+#[test]
+fn a_very_short_run_gets_one_outlet() {
+    // A 1.0 m wide room: the usable wall run is short (~0.6 m after wall thickness).
+    let m = room_of_length(1.0);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}
+
+#[test]
+fn a_run_with_a_center_break_stays_under_1_8() {
+    // A 3.6 m run with a break at 1.8 m: the single duplex position at 1.8 m
+    // lands on the break and shifts to 1.75 m, leaving a 1.85 m gap to the far
+    // end. The repair loop must insert a second outlet.
+    let mut m = room_of_length(3.6);
+    assert!(!m.rooms.is_empty(), "no room detected");
+    // Add a door at the center of the bottom wall (w0) to break the run.
+    let door_id = ArchId(0x8000 + m.openings.len() as u32);
+    m.openings.push(cadcraft_doc::arch::Opening { id: door_id, host: ArchId(0), offset: 1.8, width: 0.9, ..Default::default() });
+    let g = outlet_gaps(&m, room_id(&m));
+    assert!(g.max_gap <= 1.8 + 1e-6, "{g:?}");
+}

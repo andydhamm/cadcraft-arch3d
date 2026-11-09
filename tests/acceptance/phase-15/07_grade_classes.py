@@ -34,7 +34,9 @@ for label, extra, want in (("no terrain (grade 0)", [], {"Lower": "basement", "M
     got = {n: lv[n].get('gradeClass') for n in want}
     if got != want:
         fail(f"{label}: classes {got}, expected {want}")
-    main_rooms = [r for r in rows_of(ins, 'rooms') if r.get('level') == lv['Main'].get('index')]
+    main_rooms = [r for r in rows_of(ins, 'rooms') if r.get('level') == 'Main']   # a room row names its level (phase 3)
+    if not main_rooms:
+        fail(f"{label}: rooms detected on Main: {[(r.get('id'), r.get('level')) for r in rows_of(ins, 'rooms')]}")
     expect = sum(num(r['interiorArea'], 'interiorArea') for r in main_rooms) if want['Main'] == 'aboveGrade' else 0.0
     near(num(ins.get('aboveGradeArea'), 'aboveGradeArea'), expect, 1e-6, f"{label}: the above-grade area (Main's rooms only)")
     near(num(lv['Entry'].get('aboveGradeArea', 0.0), 'Entry aboveGradeArea'), 0.0, 1e-9, f"{label}: a landing adds no area")
