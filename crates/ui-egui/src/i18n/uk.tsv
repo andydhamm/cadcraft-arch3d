@@ -1571,6 +1571,7 @@
 	Delete Foundation	Видалити фундамент
 	Edit Foundation	Редагувати фундамент
 	Foundation	Фундамент
-	Soffit	Стельовий короб
-	Edit Soffit	Редагувати стельовий короб
-	Delete Soffit	Видалити стельовий короб
+# Phase 16: ceiling trays.
+	Tray Ceiling	Ступінчаста стеля
+	Edit Tray	Редагувати ступінчасту стелю
+	Delete Tray	Видалити ступінчасту стелю
