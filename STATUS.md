@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 10:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 59 of 65 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 10:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 97.8 h so far · expected done Nov 10 06:49–Nov 16 22:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 98.1 h so far · expected done Nov 10 07:04–Nov 16 22:45 UTC |
 | 16 | Ceilings and foundations | building | 4 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -63,9 +63,9 @@ Updated 2026-11-09 10:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 973 |
-| bonsai-b | bonsai2-27b | agent | 910 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1005 |
+| bonsai-a | bonsai2-27b | idle | 975 |
+| bonsai-b | bonsai2-27b | agent | 912 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1006 |
 | bonsai-ws2-b | bonsai2-27b | idle | 995 |
 | claude-sonnet-a | sonnet | idle | 90 |
 | claude-sonnet-b | sonnet | idle | 91 |
@@ -75,6 +75,6 @@ Updated 2026-11-09 10:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | merging | 3 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 51 |
+| mai-flash-esc | mai-code-1.1-flash | merging | 52 |
 | tturbo-mac | tturbo-ultraheretic | agent | 677 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
