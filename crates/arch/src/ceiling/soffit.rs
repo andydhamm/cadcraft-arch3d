@@ -119,7 +119,8 @@ pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
                 rotations = Some(cab.rotation);
             }
         }
-        let w = model.walls.iter().find(|w| w.id == host_wid?)?;
+        let host_id = host_wid?;
+        let w = model.walls.iter().find(|w| w.id == host_id)?;
         let dir = crate::wall::wall_dir(w)?;
         let left = dir.perp();
         // Compute each cabinet's along-wall position from its back-edge centre.
@@ -138,7 +139,7 @@ pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
     } else {
         let mut ring = s.polygon.clone();
         // Drop trailing duplicate.
-        if ring.len() > 1 && ring[0] == ring.last().unwrap_or(&ring[0]) {
+        if ring.len() > 1 && ring[0] == *ring.last().unwrap_or(&ring[0]) {
             ring.pop();
         }
         if ring.len() < 3 {
@@ -166,7 +167,7 @@ pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
 /// elevation + height). `bottom`: level elevation + bottom. `depth`: min finished
 /// ceiling (over ring vertices and the interior point) minus depth.
 pub fn soffit_bottom(model: &ArchModel, s: &Soffit) -> Option<f64> {
-    let level = model.levels.get(s.level)?.elevation;
+    let level = model.levels.get(s.level as usize)?.elevation;
     if !s.over.is_empty() {
         let mut z_max = f64::NEG_INFINITY;
         for cid in &s.over {
@@ -238,22 +239,25 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
         .walls
         .iter()
         .filter(|w| w.base_level == level)
-        .filter(|w| !w.is_divider)
+        .filter(|w| !w.divider)
         .flat_map(|w| {
-            crate::join::face_lines(w).into_iter().filter_map(|fl| {
-                // Only axis-parallel lines.
-                if fl.dx.is_finite() && fl.dy.is_finite() {
-                    // Horizontal if |dy| < eps, vertical if |dx| < eps.
-                    if fl.dy.abs() < 1e-6 {
-                        Some((w.id, 0u8, fl.y, fl.x0, fl.x1))
-                    } else if fl.dx.abs() < 1e-6 {
-                        Some((w.id, 1u8, fl.x, fl.y0, fl.y1))
+            crate::join::face_lines(w).into_iter().flat_map(|fl| {
+                fl.iter().filter_map(|(p0, p1)| {
+                    let dx = p1.x - p0.x;
+                    let dy = p1.y - p0.y;
+                    if !dx.is_finite() || !dy.is_finite() {
+                        return None;
+                    }
+                    if dy.abs() < 1e-6 {
+                        // Horizontal line: y = p0.y, x in [min, max].
+                        Some((w.id, 0u8, p0.y, p0.x.min(p1.x), p0.x.max(p1.x)))
+                    } else if dx.abs() < 1e-6 {
+                        // Vertical line: x = p0.x, y in [min, max].
+                        Some((w.id, 1u8, p0.x, p0.y.min(p1.y), p0.y.max(p1.y)))
                     } else {
                         None
                     }
-                } else {
-                    None
-                }
+                })
             })
         })
         .collect();
@@ -399,15 +403,16 @@ pub fn validate(model: &ArchModel, s: &Soffit) -> Result<(), String> {
         }
     }
     if has_depth {
-        let d = s.depth.unwrap();
-        if !d.is_finite() || d < 0.01 || d > 3.0 {
-            return Err("depth must be in [0.01, 3.0]").into();
+        if let Some(d) = s.depth {
+            if !d.is_finite() || d < 0.01 || d > 3.0 {
+                return Err("depth must be in [0.01, 3.0]".to_string());
+            }
         }
     }
     // Material must be None or a non-empty string of <= 128 chars.
     if let Some(ref mat) = s.material {
         if mat.is_empty() || mat.len() > 128 {
-            return Err("material must be non-empty and <= 128 chars".into());
+            return Err("material must be non-empty and <= 128 chars".to_string());
         }
     }
     // Capacity.
