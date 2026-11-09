@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 58 of 64 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 02:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 90.1 h so far · expected done Nov 09 15:35–Nov 12 01:18 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 90.3 h so far · expected done Nov 09 15:50–Nov 12 01:34 UTC |
 | 16 | Ceilings and foundations | pending | — | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,11 +35,11 @@ Updated 2026-11-09 02:30 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-58 merged, 8 replaced, 5 queued, 3 abandoned, 1 working
+58 merged, 8 replaced, 5 queued, 3 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-empty-rooms` | bilevel.json part 2c: name and furnish the rooms the earlier steps missed | working | bonsai-a |
+| `p15-showcase-empty-rooms` | bilevel.json part 2c: name and furnish the rooms the earlier steps missed | gate | bonsai-a |
 
 ## Recent merges
 
@@ -62,9 +62,9 @@ Updated 2026-11-09 02:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 960 |
-| bonsai-b | bonsai2-27b | agent | 898 |
-| bonsai-ws2-a | bonsai2-27b | agent | 986 |
+| bonsai-a | bonsai2-27b | gate | 960 |
+| bonsai-b | bonsai2-27b | gate | 898 |
+| bonsai-ws2-a | bonsai2-27b | agent | 987 |
 | bonsai-ws2-b | bonsai2-27b | idle | 968 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
