@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-09 10:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 21: Electrical, technical illustration and the showcase house — 59 of 65 segments merged · 11 of 14 acceptance checks**
+**Phase 15 of 21: Electrical, technical illustration and the showcase house — 60 of 66 segments merged · 11 of 14 acceptance checks**
 
-8,041 workspace tests passing at the last merge · 845 segments merged in all · 0 of 15 seats working
+8,081 workspace tests passing at the last merge · 846 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 10:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 98.3 h so far · expected done Nov 10 07:19–Nov 16 23:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 98.6 h so far · expected done Nov 10 03:00–Nov 13 18:00 UTC |
 | 16 | Ceilings and foundations | building | 4 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,17 +35,18 @@ Updated 2026-11-09 10:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-59 merged, 8 replaced, 4 queued, 3 abandoned, 2 merging
+60 merged, 8 replaced, 4 queued, 3 abandoned, 1 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-showcase-services` | bilevel.json part 3: lights, wiring, roof, painting | merging | claude-sonnet-d |
-| `upstream-sync-3b7eb1b7b-v2` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | merging | mai-flash-b |
+| `upstream-sync-a655cee0c` | merge upstream upstream/main up to a655cee0c (2 commits) | working | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 09 10:57 | `upstream-sync-3b7eb1b7b-v2` | merged | 8,081 pass | mai-flash-b |
 | Nov 09 09:58 | `p16-foundation-slab` | merged | 8,041 pass | bonsai-a |
 | Nov 09 09:24 | `p16-trays` | refused | 0 pass | claude-sonnet-d |
 | Nov 09 09:24 | `p15-showcase-empty-rooms` | merged | 8,038 pass | mai-flash-esc |
@@ -57,24 +58,23 @@ Updated 2026-11-09 10:45 UTC. This page and the card in the README are regenerat
 | Nov 08 23:39 | `harden-p15-cabinet-along-wall` | merged | 7,896 pass | tturbo-mac |
 | Nov 08 21:37 | `harden-p15-inspect-levels-walls` | merged | 7,886 pass | tturbo-mac |
 | Nov 08 20:49 | `p15-showcase-kitchen-casework` | merged | 7,881 pass | bonsai-ws2-b |
-| Nov 08 19:35 | `p15-showcase-bath-room` | merged | 7,880 pass | bonsai-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 975 |
-| bonsai-b | bonsai2-27b | agent | 915 |
+| bonsai-b | bonsai2-27b | idle | 916 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1006 |
 | bonsai-ws2-b | bonsai2-27b | idle | 995 |
 | claude-sonnet-a | sonnet | idle | 90 |
-| claude-sonnet-b | sonnet | idle | 91 |
+| claude-sonnet-b | sonnet | agent | 91 |
 | claude-sonnet-c | sonnet | idle | 40 |
 | claude-sonnet-d | sonnet | merging | 35 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 865 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 867 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
-| mai-flash-b | mai-code-1.1-flash | merging | 3 |
+| mai-flash-b | mai-code-1.1-flash | idle | 3 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 52 |
-| tturbo-mac | tturbo-ultraheretic | agent | 677 |
+| tturbo-mac | tturbo-ultraheretic | agent | 678 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
