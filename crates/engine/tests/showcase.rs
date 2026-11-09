@@ -7,7 +7,14 @@ use std::path::Path;
 
 use cadcraft_engine::Session;
 use cadcraft_engine::cmd::file::{IoHooks, set_io};
+use serde::Deserialize;
 use serde_json::Value;
+
+#[derive(Debug, Deserialize)]
+struct ScriptStep {
+    cmd: String,
+    params: Value,
+}
 
 /// Install the headless I/O hooks so the engine runs without real files, the same
 /// way `crates/engine/tests/user_guide.rs::install_io` does.
@@ -69,12 +76,11 @@ fn level_index(v: &Value, levels: &[Value]) -> i64 {
 /// Replay every step of the JSON script. Panics on the first failure, naming the
 /// step index, command id and error text. Returns the number of steps replayed.
 fn replay(script: &str, session: &mut Session) -> usize {
-    let steps: Vec<Value> = serde_json::from_str::<Vec<Value>>(script).unwrap_or_else(|e| panic!("cannot parse the showcase script: {e}"));
+    let steps: Vec<ScriptStep> = serde_json::from_str(script).unwrap_or_else(|e| panic!("cannot parse the showcase script: {e}"));
     let mut n = 0;
     for (i, step) in steps.iter().enumerate() {
-        let cmd = field_text(step, "cmd");
-        let params = step.get("params").cloned().unwrap_or_default();
-        match session.execute(&cmd, &params) {
+        let cmd = &step.cmd;
+        match session.execute(cmd, &step.params) {
             Ok(_) => n += 1,
             Err(err) => panic!("showcase script step {i} `{cmd}` failed: {err}"),
         }
@@ -210,16 +216,19 @@ fn meets_the_brief(reply: &Value) {
         Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `lights` array"),
     };
-    let devices: Vec<&Value> = match reply.get("devices").and_then(|v| v.as_array()) {
+    let devices: Vec<&Value> = match reply.get("electrical").and_then(|v| v.as_array()) {
         Some(a) => a.iter().collect(),
-        _ => panic!("arch.inspect reply has no `devices` array"),
+        _ => panic!("arch.inspect reply has no `electrical` array"),
     };
     let circuits: Vec<&Value> = match reply.get("circuits").and_then(|v| v.as_array()) {
         Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `circuits` array"),
     };
-    let all_circuit_lights: HashSet<String> =
-        circuits.iter().flat_map(|c| c.get("lights").and_then(|v| v.as_array()).into_iter().flatten().map(|l| field_text(l, "id"))).collect();
+    let all_circuit_lights: HashSet<String> = circuits
+        .iter()
+        .flat_map(|c| c.get("lights").and_then(|v| v.as_array()).into_iter().flatten())
+        .filter_map(|l| l.as_str().map(str::to_owned))
+        .collect();
     for r in rooms.iter() {
         let ry = strd(r, "type", "");
         if ry == "closet" || ry == "openBelow" {
@@ -242,7 +251,7 @@ fn meets_the_brief(reply: &Value) {
         for g in gaps.iter() {
             let max_gap = num(g, "maxGap");
             assert!(max_gap <= 1.8 + 1.0e-6, "outlet gap maxGap {} exceeds 1.8", max_gap);
-            if let Some(counter) = g.get("counter") {
+            if let Some(counter) = g.get("counter").filter(|c| !c.is_null()) {
                 let spacing = num(counter, "maxSpacing");
                 assert!(spacing <= 1.2 + 1.0e-6, "outlet gap counter maxSpacing {} exceeds 1.2", spacing);
             }
@@ -299,5 +308,6 @@ fn the_showcase_meets_the_brief() {
         "site": true,
     });
     let reply = session.execute("arch.inspect", &params).unwrap();
+    println!("{}", serde_json::to_string_pretty(&reply).unwrap());
     meets_the_brief(&reply);
 }
