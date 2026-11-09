@@ -357,6 +357,8 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
     crate::arch_light::push_lights(d, &mut list, plotting);
     crate::arch_electrical::push_electrical(d, &mut list, plotting);
     crate::arch_casework::push_casework(d, &mut list, plotting);
+    crate::arch_ceiling::push_ceiling(d, &mut list, plotting);
+    crate::arch_foundation::push_foundations(d, &mut list, plotting);
     crate::arch_furnishing::push_furnishings(d, &mut list, plotting);
 
     list
@@ -1860,5 +1862,31 @@ mod tests {
         let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(wid)).collect();
         assert!(!wall_prims.is_empty(), "wall should still draw with missing layer");
         assert!(wall_prims.iter().all(|p| p.transparency == 0), "missing layer should give zero transparency");
+    }
+
+    #[test]
+    fn plan_build_runs_the_ceiling_and_foundation_passes() {
+        use cadcraft_doc::arch::{Foundation, FoundationKind, Soffit, Tray};
+        let base = two_level_drawing();
+        let before = build_arch(&base, &Options::default(), false);
+        let mut d = base.clone();
+        let sq = vec![Vec2::new(0.5, 1.5), Vec2::new(1.5, 1.5), Vec2::new(1.5, 2.5), Vec2::new(0.5, 2.5)];
+        d.arch.push_tray(Tray { room: ArchId(100), inset: 0.3, ..Default::default() });
+        d.arch.push_soffit(Soffit { polygon: sq, bottom: Some(2.1), ..Default::default() });
+        d.arch.push_foundation(Foundation::default());
+        d.arch.push_foundation(Foundation { kind: FoundationKind::Slab, level: 1, ..Default::default() });
+        // Hostile ones too: no outline, points that are not numbers, a footing depth that is not one.
+        let nan = Vec2::new(f64::NAN, 1e300);
+        d.arch.push_soffit(Soffit { polygon: vec![nan, nan, nan], bottom: Some(f64::NAN), ..Default::default() });
+        d.arch.push_tray(Tray { room: ArchId(999), polygon: vec![nan], depth: f64::INFINITY, ..Default::default() });
+        d.arch.push_foundation(Foundation { footing_depth: f64::NAN, level: 42, ..Default::default() });
+        for plotting in [false, true] {
+            let list = build_arch(&d, &Options::default(), plotting);
+            // Everything drawn before is still drawn.
+            assert!(handles(&before).is_subset(&handles(&list)), "plotting {plotting}");
+            assert!(list.prims.len() >= before.prims.len());
+        }
+        d.arch.plan_level = Some(1);
+        let _ = build_arch(&d, &Options::default(), false);
     }
 }

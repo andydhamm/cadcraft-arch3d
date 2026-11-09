@@ -14,7 +14,7 @@ fn ink_for(d: &Drawing, layer: &str, fallback: Color) -> crate::Ink {
     crate::ink(Color::ByLayer, d.layer(layer).map(|l| l.color).unwrap_or(fallback), fallback)
 }
 
-fn dashed_segments(d: &Drawing, layer: &str, pts: &[Vec2]) -> Vec<Vec<Vec2>> {
+pub(crate) fn dashed_segments(d: &Drawing, layer: &str, pts: &[Vec2]) -> Vec<Vec<Vec2>> {
     if pts.len() < 2 {
         return Vec::new();
     }

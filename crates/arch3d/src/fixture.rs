@@ -125,11 +125,14 @@ pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> 
 /// Openings in `room`'s ceiling for the recessed cans and panels mounted in it.
 ///
 /// For recessed cans, the disc of the trim. For panels, the outer rectangle.
-/// A fixture is included if its light point lies within the ceiling's 20 mm slab,
-/// it is on the room's level, and its cut shape fits entirely within the room
+/// A fixture is included if its light point lies within the 20 mm under the room's finished
+/// ceiling at its point (`cadcraft_arch::ceiling::finished_ceiling_in`: the rough ceiling, less
+/// the finish stack), it is on the room's level, and its cut shape fits entirely within the room
 /// (not crossing edges or holes) and does not overlap with previous cuts.
 pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec<Vec2>> {
-    let Some(top) = crate::floors::ceiling_top(room, level) else { return Vec::new() };
+    if crate::floors::ceiling_top(room, level).is_none() {
+        return Vec::new();
+    }
     if room.polygon.len() < 3 {
         return Vec::new();
     }
@@ -146,16 +149,16 @@ pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec
             continue;
         }
 
+        let c = f.position;
+        if !c.is_finite() {
+            continue;
+        }
+        let Some(top) = cadcraft_arch::ceiling::finished_ceiling_in(model, room, c) else { continue };
         let Some(p) = light_point(model, f) else { continue };
         if !p.is_finite() {
             continue;
         }
         if p.z > top + 1e-9 || p.z < top - 0.02 - 1e-9 {
-            continue;
-        }
-
-        let c = f.position;
-        if !c.is_finite() {
             continue;
         }
 
@@ -339,6 +342,21 @@ mod tests {
     fn a_can_hung_below_the_ceiling_or_in_another_room_gets_no_cut() {
         let mut m = pots_in_a_room(&[(1.0, 1.0), (6.0, 1.0)]);
         m.lights[0].height = Some(2.0);
+        assert!(ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]).is_empty());
+    }
+
+    /// Phase 16: a can sits at the finished ceiling (rough minus the finish stack), and the cut
+    /// compares its light point with that finished ceiling, so a stacked room still gets its cut.
+    #[test]
+    fn a_can_under_a_finish_stack_still_gets_its_cut() {
+        let mut m = pots_in_a_room(&[(1.0, 1.0)]);
+        m.rooms[0].ceiling_stack =
+            vec![cadcraft_doc::arch::CeilingLayer { material: Some("drywall".into()), thickness: 0.0127, ..Default::default() }];
+        let z = light_point(&m, &m.lights[0]).map(|p| p.z).unwrap_or(f64::NAN);
+        assert!((z - 2.3873).abs() < 1e-9, "{z}");
+        assert_eq!(ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]).len(), 1);
+        // A can hung by hand at the rough ceiling is above the finished one: no cut.
+        m.lights[0].height = Some(2.4);
         assert!(ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]).is_empty());
     }
 

@@ -341,7 +341,9 @@ pub fn light_point(model: &ArchModel, f: &LightFixture) -> Option<Vec3> {
                     FixtureShape::SurfaceDome => 0.05,
                     _ => 0.0,
                 };
-                ceiling_height - drop
+                // Phase 16: the finished ceiling over the fixture (or a soffit's underside).
+                let ceiling = crate::ceiling::hang_z(model, f.level, f.position).map_or(ceiling_height, |z| z - elevation);
+                ceiling - drop
             }
         },
     };
@@ -520,6 +522,35 @@ mod tests {
         let f = fixture_from_type(ArchId(0), &t, Vec2::new(5.0, 5.0));
         let p = light_point(&model, &f).unwrap();
         assert!((p.z - 3.0).abs() < 1e-6, "z: {}", p.z);
+    }
+
+    /// A ceiling light sits at the finished ceiling: the rough ceiling minus the room's stack.
+    #[test]
+    fn ceiling_light_uses_the_finished_ceiling() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+        model.rooms.push(Room {
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)],
+            ceiling_stack: vec![
+                cadcraft_doc::arch::CeilingLayer { material: Some("drywall".into()), thickness: 0.0127, ..Default::default() },
+                cadcraft_doc::arch::CeilingLayer { material: None, thickness: 0.2, ..Default::default() },
+                cadcraft_doc::arch::CeilingLayer { material: Some("ceiling-tile".into()), thickness: 0.016, ..Default::default() },
+            ],
+            ..Room::default()
+        });
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(5.0, 5.0));
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - 2.1713).abs() < 1e-9, "z: {}", p.z);
+        f.shape = FixtureShape::Pendant;
+        let p = light_point(&model, &f).unwrap();
+        assert!((p.z - (2.1713 - DEFAULT_PENDANT_DROP)).abs() < 1e-9, "z: {}", p.z);
+        // Outside every room it keeps the level's ceiling; an explicit height wins.
+        let out = fixture_from_type(ArchId(1), &t, Vec2::new(20.0, 20.0));
+        assert!((light_point(&model, &out).unwrap().z - 2.4).abs() < 1e-9);
+        f.height = Some(2.0);
+        assert!((light_point(&model, &f).unwrap().z - 2.0).abs() < 1e-9);
     }
 
     #[test]
