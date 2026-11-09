@@ -601,7 +601,7 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'level {"elevation":1.35,"kind":"landing"}' \
   --cmd 'level {"elevation":2.7,"kind":"floor"}' \
   --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
-  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true,"level":"Level 1","topLevel":"Level 2"}' \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"exterior":true,"level":"Level 1","topLevel":"Level 2"}' \
   --cmd 'door {"wall":"w1","offset":3.0,"width":0.9,"height":2.1,"style":"hinged","level":"Level 1"}' \
   --cmd 'stair {"start":[2,0],"direction":90,"width":1.0,"fromLevel":"Level 0","toLevel":"Level 1"}' \
   --cmd 'stair {"start":[2,2],"direction":90,"width":1.0,"fromLevel":"Level 1","toLevel":"Level 2"}' \
