@@ -71,7 +71,7 @@ pub(crate) fn soffit_meshes(i: &SoffitIn) -> Vec<Mesh> {
     mesh.level_elevation = i.level.elevation;
     for (cell, plane) in &i.cells {
         if centroid(cell).is_some_and(|c| plane.z_at(c) > bottom) {
-            push_between(&mut mesh, cell, &[], PlaneZ::flat(bottom), plane);
+            push_between(&mut mesh, cell, &[], PlaneZ::flat(bottom), *plane);
         }
     }
     if mesh.positions.is_empty() { Vec::new() } else { vec![mesh] }
