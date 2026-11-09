@@ -6,12 +6,13 @@ use std::fs;
 use std::path::Path;
 
 use cadcraft_engine::Session;
+use cadcraft_engine::cmd::file::{IoHooks, set_io};
 use serde_json::Value;
 
 /// Install the headless I/O hooks so the engine runs without real files, the same
 /// way `crates/engine/tests/user_guide.rs::install_io` does.
 fn install_io() {
-    cadcraft_engine::set_io(cadcraft_engine::IoHooks {
+    set_io(IoHooks {
         read: |_, _| Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no file reads in this test")),
         write: |_, _| Ok(b"stand-in export".to_vec()),
         plot: None,
@@ -19,7 +20,7 @@ fn install_io() {
     cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
         read_glb: cadcraft_io::gltf_read::read_glb,
         read_image: cadcraft_io::image_read::read_image,
-        encode_png: cadcraft_io::png::encode_png,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
         sample: cadcraft_io::library::sample_files,
     });
 }
@@ -59,7 +60,7 @@ fn row_text(v: &Value) -> String {
 }
 
 /// Rows (furnishing or fixture) whose "room" field matches `rid`.
-fn rows_for(rid: &str, rows: &[Value]) -> Vec<&Value> {
+fn rows_for<'a>(rid: &'a str, rows: &'a [Value]) -> Vec<&'a Value> {
     rows.iter().filter(|r| field_text(r, "room") == rid).collect()
 }
 
@@ -82,7 +83,7 @@ fn replay(script: &str, session: &mut Session) -> usize {
 /// Assert that the replayed model satisfies the showcase brief.
 fn meets_the_brief(reply: &Value) {
     let levels: Vec<&Value> = match reply.get("levels") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `levels` array"),
     };
 
@@ -92,8 +93,11 @@ fn meets_the_brief(reply: &Value) {
     let landing = landing.unwrap();
     let floors: Vec<&Value> = levels.iter().filter(|l| strd(l, "kind", "") == "floor").collect();
     assert_eq!(floors.len(), 2, "expected exactly two `floor` levels, found {}", floors.len());
-    let (lower, upper) =
-        if num(landing, "elevation") < 0.0 && num(lower, "elevation") > num(upper, "elevation") { (lower, upper) } else { (upper, lower) };
+    let (lower, upper) = if num(floors[0], "elevation") < num(floors[1], "elevation") {
+        (&floors[0], &floors[1]),
+    } else {
+        (&floors[1], &floors[0]),
+    };
     assert_eq!(
         strd(lower, "gradeClass", ""),
         "basement",
@@ -108,16 +112,16 @@ fn meets_the_brief(reply: &Value) {
         num(upper, "elevation"),
         strd(upper, "gradeClass", "")
     );
-    let lo = std::min(num(lower, "elevation"), num(upper, "elevation"));
-    let hi = std::max(num(lower, "elevation"), num(upper, "elevation"));
+    let lo = num(lower, "elevation").min(num(upper, "elevation"));
+    let hi = num(lower, "elevation").max(num(upper, "elevation"));
     let le = num(landing, "elevation");
-    assert!(lo < le && le < hi, "landing elevation {} is not strictly between the floor elevations {..}", le, lo, hi);
+    assert!(lo < le && le < hi, "landing elevation {le} is not strictly between the floor elevations {lo} and {hi}");
     let area = num(reply, "aboveGradeArea");
     assert!(area >= 371.6, "aboveGradeArea {} is below 371.6", area);
 
     // ---- Stairs ----
     let stairs: Vec<&Value> = match reply.get("stairs") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `stairs` array"),
     };
     let landing_idx = field_text(landing, "index")
@@ -140,7 +144,7 @@ fn meets_the_brief(reply: &Value) {
 
     // ---- Rooms ----
     let rooms: Vec<&Value> = match reply.get("rooms") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `rooms` array"),
     };
     let count = |ty: &str| rooms.iter().filter(|r| strd(r, "type", "") == ty).count();
@@ -149,11 +153,11 @@ fn meets_the_brief(reply: &Value) {
     }
 
     let furns: Vec<&Value> = match reply.get("furnishings") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `furnishings` array"),
     };
     let fixs: Vec<&Value> = match reply.get("fixtures") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `fixtures` array"),
     };
     // Every non-closet/openBelow room must be served by at least one furnishing or fixture row.
@@ -206,15 +210,15 @@ fn meets_the_brief(reply: &Value) {
 
     // ---- Lights / devices / circuits ----
     let lights: Vec<&Value> = match reply.get("lights") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `lights` array"),
     };
     let devices: Vec<&Value> = match reply.get("devices") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `devices` array"),
     };
     let circuits: Vec<&Value> = match reply.get("circuits") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+        Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `circuits` array"),
     };
     let all_circuit_lights: HashSet<String> = circuits
