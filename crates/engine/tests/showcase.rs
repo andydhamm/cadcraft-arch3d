@@ -55,9 +55,9 @@ fn row_text(v: &Value) -> String {
     format!("{} {}", field_text(v, "kind"), field_text(v, "item"))
 }
 
-/// Owned rows (furnishing or fixture) whose "room" field matches `rid`.
-fn rows_for(rid: &str, rows: &[Value]) -> Vec<Value> {
-    rows.iter().filter(|r| field_text(r, "room") == rid).map(|r| r.clone()).collect()
+/** Borrowed rows (furnishing or fixture) whose `"room"` field matches `rid`. */
+fn rows_for<'a>(rid: &str, rows: &'a [Value]) -> Vec<&'a Value> {
+    rows.iter().filter(|r| field_text(r, "room") == rid).collect()
 }
 
 /// A level's `index`, from its "index" field if present, otherwise its
@@ -158,14 +158,16 @@ fn meets_the_brief(reply: &Value) {
             continue;
         }
         let rid = room_id(r);
-        let served = rows_for(&rid, &furns).iter().any(|_| true) || rows_for(&rid, &fixs).iter().any(|_| true);
+        let served = !rows_for(&rid, &furns).is_empty() || !rows_for(&rid, &fixs).is_empty();
         assert!(served, "room `{}` (type `{}`) has no furnishing or fixture row", rid, ry);
     }
 
     // ---- Kitchen coverage ----
     if let Some(kit) = rooms.iter().find(|r| strd(r, "type", "") == "kitchen") {
         let rid = room_id(kit);
-        let rows: Vec<&Value> = rows_for(&rid, &furns).iter().chain(rows_for(&rid, &fixs).iter()).collect();
+        let furn_rows = rows_for(&rid, &furns);
+        let fix_rows = rows_for(&rid, &fixs);
+        let rows: Vec<&Value> = furn_rows.into_iter().chain(fix_rows).collect();
         assert!(rows.iter().any(|r| row_text(r).contains("range") || row_text(r).contains("cooktop")), "kitchen `{}` lacks a range|cooktop row", rid);
         assert!(rows.iter().any(|r| row_text(r).contains("refrigerator")), "kitchen `{}` lacks a refrigerator row", rid);
         assert!(rows.iter().any(|r| row_text(r).contains("sink")), "kitchen `{}` lacks a sink row", rid);
@@ -175,7 +177,9 @@ fn meets_the_brief(reply: &Value) {
     // ---- Bath coverage ----
     for b in rooms.iter().filter(|r| strd(r, "type", "") == "bath") {
         let rid = room_id(b);
-        let rows: Vec<&Value> = rows_for(&rid, &furns).iter().chain(rows_for(&rid, &fixs).iter()).collect();
+        let furn_rows = rows_for(&rid, &furns);
+        let fix_rows = rows_for(&rid, &fixs);
+        let rows: Vec<&Value> = furn_rows.into_iter().chain(fix_rows).collect();
         assert!(rows.iter().any(|r| row_text(r).contains("toilet")), "bath `{}` lacks a toilet row", rid);
         assert!(rows.iter().any(|r| row_text(r).contains("sink") || row_text(r).contains("lavatory")), "bath `{}` lacks a sink|lavatory row", rid);
         assert!(
@@ -188,7 +192,9 @@ fn meets_the_brief(reply: &Value) {
     // ---- Bedroom coverage ----
     for b in rooms.iter().filter(|r| strd(r, "type", "") == "bedroom") {
         let rid = room_id(b);
-        let rows: Vec<&Value> = rows_for(&rid, &furns).iter().chain(rows_for(&rid, &fixs).iter()).collect();
+        let furn_rows = rows_for(&rid, &furns);
+        let fix_rows = rows_for(&rid, &fixs);
+        let rows: Vec<&Value> = furn_rows.into_iter().chain(fix_rows).collect();
         assert!(rows.iter().any(|r| row_text(r).contains("bed")), "bedroom `{}` lacks a bed item", rid);
     }
 
