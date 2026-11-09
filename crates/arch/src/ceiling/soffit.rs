@@ -41,33 +41,26 @@ pub fn interior_point(ring: &[Vec2]) -> Option<Vec2> {
 
     let mut ymin = f64::INFINITY;
     let mut ymax = f64::NEG_INFINITY;
-    let mut xmin = f64::INFINITY;
-    let mut xmax = f64::NEG_INFINITY;
     for p in ring {
         ymin = ymin.min(p.y);
         ymax = ymax.max(p.y);
-        xmin = xmin.min(p.x);
-        xmax = xmax.max(p.x);
     }
-    let midy = (ymin + ymax) / 2.0;
+    let y = (ymin + ymax) / 2.0 + 1e-7;
     let mut xs = Vec::new();
     for (a, b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
         let y1 = a.y;
         let y2 = b.y;
         let x1 = a.x;
         let x2 = b.x;
-        if ((y1 - midy) * (y2 - midy) <= 0.0) && ((y1 - midy).abs() > 1e-12 || (y2 - midy).abs() > 1e-12) {
-            if (y1 - y2).abs() > 0.0 {
-                let t = (midy - y1) / (y2 - y1);
-                xs.push(x1 + t * (x2 - x1));
-            }
+        if (y1 > y) != (y2 > y) && (y2 - y1).abs() > 0.0 {
+            let x = x1 + (y - y1) * (x2 - x1) / (y2 - y1);
+            xs.push(x);
         }
     }
     if xs.is_empty() {
         return None;
     }
     xs.sort_by(f64::total_cmp);
-
     let mut best_width = 0.0;
     let mut best_mid = None;
     for i in (0..xs.len()).step_by(2) {
@@ -81,7 +74,7 @@ pub fn interior_point(ring: &[Vec2]) -> Option<Vec2> {
             continue;
         }
         let mid = (x0 + x1) / 2.0;
-        let pt = Vec2::new(mid, midy);
+        let pt = Vec2::new(mid, y);
         if cadcraft_geom::point_in_polygon(ring, pt) && span > best_width {
             best_width = span;
             best_mid = Some(pt);
@@ -331,7 +324,7 @@ pub fn validate(model: &ArchModel, s: &Soffit) -> Result<(), String> {
         let j = (i + 1) % ring.len();
         area2 += ring[i].x * ring[j].y - ring[j].x * ring[i].y;
     }
-    if area2.abs() < 0.02 {
+    if area2.abs() < 0.01 {
         return Err("ring area too small".into());
     }
 
