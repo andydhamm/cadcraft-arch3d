@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 65 of 69 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 20:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 107.8 h so far · expected done Nov 10 01:44–Nov 11 04:45 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 108.1 h so far · expected done Nov 10 01:59–Nov 11 05:00 UTC |
 | 16 | Ceilings and foundations | building | 6 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-09 20:15 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-65 merged, 8 replaced, 3 abandoned, 2 merging, 2 working
+65 merged, 8 replaced, 3 merging, 3 abandoned, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-showcase-render` | tools/showcase: render the showcase house in every view style | merging | claude-sonnet-b |
-| `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | working | mai-flash-esc |
+| `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | merging | mai-flash-esc |
 | `p15-check10-surfaces` | phase-15 check 10 reads the surface rows (operator fix, already on your branch) | merging | claude-sonnet-c |
 | `upstream-sync-d847eac13` | merge upstream upstream/main up to d847eac13 (38 commits) | working | claude-sonnet-d |
 
@@ -77,6 +77,6 @@ Updated 2026-11-09 20:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 61 |
+| mai-flash-esc | mai-code-1.1-flash | merging | 63 |
 | tturbo-mac | tturbo-ultraheretic | merging | 689 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
