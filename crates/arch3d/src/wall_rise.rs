@@ -117,7 +117,7 @@ pub(crate) fn rise_input(model: &ArchModel, wall: &Wall, shape: Option<&WallShap
 }
 
 /// Returns true if any edge of `room_polygon` lies on one of `face_lines`.
-fn bounds_wall(room_polygon: &[Vec2], face_lines: &[&Vec2>) -> bool {
+fn bounds_wall(room_polygon: &[Vec2], face_lines: &[&Vec2]) -> bool {
     let n = room_polygon.len();
     if n < 3 {
         return false;
