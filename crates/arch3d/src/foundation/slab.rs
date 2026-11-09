@@ -46,7 +46,7 @@ fn prism(i: &FoundationIn, material: &str, ring: &[Vec2], z0: f64, z1: f64) -> O
 }
 
 /// The thickened edges of a slab foundation.
-pub(crate) fn meshes(i: &FoundationIn) -> Vec<Mesh> {
+pub fn meshes(i: &FoundationIn) -> Vec<Mesh> {
     let mut out = Vec::new();
     for w in &i.walls {
         if w.basement {

@@ -43,7 +43,7 @@ pub(crate) fn basement_footing(i: &FoundationIn, w: &FoundationWall) -> Option<M
 
 /// The stem walls and footings of a stem foundation. A footing depth that is not finite or leaves
 /// the footing's top above the floor builds nothing on grade (the command refuses one).
-pub(crate) fn meshes(i: &FoundationIn) -> Vec<Mesh> {
+pub fn meshes(i: &FoundationIn) -> Vec<Mesh> {
     let e = i.level.elevation;
     let s = i.level.structure;
     let depth = i.foundation.footing_depth;

@@ -10,12 +10,13 @@ use cadcraft_doc::arch::{Foundation, FoundationKind, Level};
 
 use crate::mesh::Mesh;
 
-pub(crate) mod slab;
-pub(crate) mod stem;
+pub use cadcraft_arch::foundation::FoundationWall;
+pub mod slab;
+pub mod stem;
 
 /// Everything a foundation's meshes are made from.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct FoundationIn {
+pub struct FoundationIn {
     pub foundation: Foundation,
     pub level: Level,
     /// The walls it stands under (`cadcraft_arch::foundation::foundation_walls` of its level), so a

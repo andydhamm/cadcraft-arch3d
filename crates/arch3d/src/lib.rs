@@ -15,7 +15,7 @@ pub mod edges;
 pub mod electrical;
 pub mod finish;
 pub mod fixture;
-pub(crate) mod foundation;
+pub mod foundation;
 
 pub mod furnishing;
 pub mod paint;
