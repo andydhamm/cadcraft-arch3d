@@ -930,6 +930,85 @@ mod tests {
     }
 
     #[test]
+    fn glb_electrical_all_kinds_named() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:duplex".to_string();
+                m.object = ArchId(0);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:gfci".to_string();
+                m.object = ArchId(1);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:dimmer".to_string();
+                m.object = ArchId(2);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:single-pole".to_string();
+                m.object = ArchId(3);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:three-way".to_string();
+                m.object = ArchId(4);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "electrical:240v".to_string();
+                m.object = ArchId(5);
+                m
+            },
+        ];
+        let names = node_names(&scene);
+        assert_eq!(names, ["electrical-el0", "electrical-el1", "electrical-el2", "electrical-el3", "electrical-el4", "electrical-el5",]);
+        assert!(names.iter().all(|n| n.starts_with("electrical-el")));
+        assert!(names.iter().all(|n| !n.contains(':')));
+    }
+
+    #[test]
+    fn glb_electrical_large_id() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:duplex".to_string();
+            m.object = ArchId(65535);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:dimmer".to_string();
+            m.object = ArchId(1048576);
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["electrical-el65535", "electrical-el1048576"]);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let node_names: Vec<String> = json["nodes"].as_array().unwrap().iter().skip(1).filter_map(|n| n["name"].as_str()).map(String::from).collect();
+        assert!(node_names.contains(&"electrical-el65535".to_string()));
+        assert!(node_names.contains(&"electrical-el1048576".to_string()));
+    }
+
+    #[test]
+    fn glb_electrical_deterministic() {
+        let scene = Scene3d::build(&wired_model());
+        let a = write(&scene);
+        let b = write(&scene);
+        assert_eq!(a, b);
+    }
+
+    #[test]
     fn glb_is_byte_deterministic() {
         let a = write(&scene_with(2));
         let b = write(&scene_with(2));

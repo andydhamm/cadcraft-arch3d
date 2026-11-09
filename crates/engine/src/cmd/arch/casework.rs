@@ -958,4 +958,107 @@ mod tests {
         let v3 = run(&mut s, "arch.inspect", json!({ "furnishings": true })).unwrap_or(Value::Null);
         assert_eq!(v3["furnishings"][0]["room"], json!("r0"));
     }
+
+    #[test]
+    fn inspect_fixture_in_room_hole_reports_null() {
+        let mut s = Session::new();
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.rooms.push(cadcraft_doc::arch::Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 6.0), Vec2::new(0.0, 6.0)],
+                holes: vec![vec![Vec2::new(2.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(2.0, 4.0)]],
+                room_type: cadcraft_doc::arch::RoomType::Living,
+                ..cadcraft_doc::arch::Room::default()
+            });
+            d.touch_arch();
+        }
+
+        // Fixture inside the hole.
+        let r = run(&mut s, "fixture", json!({ "kind": "toilet", "at": [3.0, 3.0] }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v["fixtures"][0]["room"], Value::Null, "fixture in hole should report null room");
+
+        // Fixture in the room but outside the hole.
+        let r = run(&mut s, "fixture", json!({ "kind": "sink", "at": [1.0, 1.0] }));
+        assert!(r.is_ok(), "{r:?}");
+        let v2 = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v2["fixtures"][1]["room"], json!("r0"), "fixture in room should report r0");
+    }
+
+    #[test]
+    fn inspect_fixture_on_wrong_level_reports_null() {
+        let mut s = Session::new();
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.rooms.push(cadcraft_doc::arch::Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+                room_type: cadcraft_doc::arch::RoomType::Living,
+                ..cadcraft_doc::arch::Room::default()
+            });
+            d.arch.levels.push(cadcraft_doc::arch::Level {
+                index: 1,
+                name: "Level 2".to_string(),
+                elevation: 3.0,
+                ..cadcraft_doc::arch::Level::default()
+            });
+            d.touch_arch();
+        }
+
+        // Fixture on level 1, room on level 0.
+        let r = run(&mut s, "fixture", json!({ "kind": "toilet", "at": [3.0, 2.0], "level": 1 }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "fixtures": true })).unwrap_or(Value::Null);
+        assert_eq!(v["fixtures"][0]["room"], Value::Null, "fixture on different level should report null room");
+    }
+
+    #[test]
+    fn inspect_free_standing_cabinet_reports_null_wall() {
+        let mut s = session();
+        // Place a cabinet free-standing (not against a wall)
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "at": [2.0, 2.0] }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "cabinets": true })).unwrap_or(Value::Null);
+        let c = &v["cabinets"][0];
+        assert_eq!(c["wall"], Value::Null, "free-standing cabinet should report null wall: {v}");
+        assert_eq!(c["alongWall"], Value::Null, "free-standing cabinet should report null alongWall: {v}");
+    }
+
+    #[test]
+    fn inspect_multiple_cabinets_each_report_own_host() {
+        let mut s = Session::new();
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+            d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 10.0), 0.2));
+            d.touch_arch();
+        }
+        // Cabinet on w0 (horizontal wall)
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 1.0 }));
+        assert!(r.is_ok(), "{r:?}");
+        // Cabinet on w1 (vertical wall)
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w1", "offset": 2.0 }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "cabinets": true })).unwrap_or(Value::Null);
+        assert_eq!(v["cabinets"][0]["wall"], "w0", "{v}");
+        let a0 = v["cabinets"][0]["alongWall"].as_array().cloned().unwrap_or_default();
+        assert!((a0[0].as_f64().unwrap_or(0.0) - 0.7).abs() < 1e-9 && (a0[1].as_f64().unwrap_or(0.0) - 1.3).abs() < 1e-9, "{v}");
+        assert_eq!(v["cabinets"][1]["wall"], "w1", "{v}");
+        let a1 = v["cabinets"][1]["alongWall"].as_array().cloned().unwrap_or_default();
+        assert!((a1[0].as_f64().unwrap_or(0.0) - 1.7).abs() < 1e-9 && (a1[1].as_f64().unwrap_or(0.0) - 2.3).abs() < 1e-9, "{v}");
+    }
+
+    #[test]
+    fn inspect_cabinet_at_wall_end_reports_correct_span() {
+        let mut s = session();
+        // Wall is 4m; place cabinet at offset 3.7 so it ends exactly at the wall end
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 3.7 }));
+        assert!(r.is_ok(), "{r:?}");
+        let v = run(&mut s, "arch.inspect", json!({ "cabinets": true })).unwrap_or(Value::Null);
+        let c = &v["cabinets"][0];
+        assert_eq!(c["wall"], "w0", "{v}");
+        let a = c["alongWall"].as_array().cloned().unwrap_or_default();
+        assert!((a[0].as_f64().unwrap_or(0.0) - 3.4).abs() < 1e-9 && (a[1].as_f64().unwrap_or(0.0) - 4.0).abs() < 1e-9, "{v}");
+    }
 }

@@ -3,7 +3,7 @@
 # level (null outside every room) and every build3d reply counts the scene's parts; room rows report flatCeiling,
 # ceilingStack, roughCeiling, finishedCeiling and ceilingWarning; a ceiling item hangs from the room's own ceiling height
 # (it used to take the level's). A stub (no keys, zeros, the level's height everywhere) fails every assertion.
-# needs: p16-observables
+# needs:
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p16lib.inc')).read())
 

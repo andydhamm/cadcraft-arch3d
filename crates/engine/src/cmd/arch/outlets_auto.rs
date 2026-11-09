@@ -8,7 +8,7 @@
 use cadcraft_arch::outlets::{auto_outlets, outlet_gaps};
 use cadcraft_arch::room::wall_on_level;
 use cadcraft_doc::Drawing;
-use cadcraft_doc::arch::{ArchId, RoomType, electrical_label, room_label};
+use cadcraft_doc::arch::{ArchId, Room, RoomType, electrical_label, room_label};
 use serde_json::{Value, json};
 
 use crate::cmd::{CommandSpec, bad};
@@ -43,7 +43,6 @@ fn run_outlets_auto(s: &mut Session, params: &Value) -> Result<Value> {
     let planned = auto_outlets(&s.doc()?.arch, room);
 
     let mut staged = s.doc()?.arch.clone();
-    let would_be: Vec<String> = planned.iter().map(|_| String::new()).collect();
     let placed = if dry_run {
         let mut ids = Vec::new();
         for device in &planned {
@@ -113,6 +112,72 @@ mod tests {
         let reply = s.execute("outlets.auto", &json!({ "room": "r0", "dryRun": true })).unwrap();
         assert_eq!(s.doc().unwrap().arch.electrical.len(), before);
         assert!(!reply["placed"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn missing_room_is_refused() {
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch = room64();
+        let result = s.execute("outlets.auto", &json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_string_room_is_refused() {
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch = room64();
+        let result = s.execute("outlets.auto", &json!({ "room": 0 }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn nonexistent_room_is_refused() {
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch = room64();
+        let result = s.execute("outlets.auto", &json!({ "room": "r99" }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn room_with_no_walls_on_level_is_refused() {
+        let mut m = ArchModel::default();
+        // Walls on level 0
+        for (a, b) in [((-0.1, -0.1), (6.1, -0.1)), ((6.1, -0.1), (6.1, 4.1)), ((6.1, 4.1), (-0.1, 4.1)), ((-0.1, 4.1), (-0.1, -0.1))] {
+            m.push_wall(Wall { start: Vec2::new(a.0, a.1), end: Vec2::new(b.0, b.1), thickness: 0.2, ..Default::default() });
+        }
+        // A room on level 1 (no walls on level 1)
+        let room = Room {
+            id: ArchId(0),
+            level: 1,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(3.0, 0.0), Vec2::new(3.0, 3.0), Vec2::new(0.0, 3.0)],
+            ..Default::default()
+        };
+        m.rooms.push(room);
+
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch = m;
+        let result = s.execute("outlets.auto", &json!({ "room": "r0" }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tiny_room_places_few_or_no_outlets() {
+        let mut m = ArchModel::default();
+        // A 1x1 m room
+        for (a, b) in [((-0.1, -0.1), (1.1, -0.1)), ((1.1, -0.1), (1.1, 1.1)), ((1.1, 1.1), (-0.1, 1.1)), ((-0.1, 1.1), (-0.1, -0.1))] {
+            m.push_wall(Wall { start: Vec2::new(a.0, a.1), end: Vec2::new(b.0, b.1), thickness: 0.2, ..Default::default() });
+        }
+        m.rooms = detect_rooms(&m);
+        if let Some(r) = m.rooms.first_mut() {
+            r.room_type = RoomType::Bedroom;
+        }
+
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch = m;
+        let reply = s.execute("outlets.auto", &json!({ "room": "r0" })).unwrap();
+        let placed = reply["placed"].as_array().unwrap();
+        // A 1x1 room should need very few outlets (0, 1, or 2)
+        assert!(placed.len() <= 2, "tiny room should not need many outlets: {}", placed.len());
     }
 
     #[test]

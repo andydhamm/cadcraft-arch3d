@@ -224,4 +224,94 @@ mod tests {
         assert!(conns.iter().all(|c| !c.to.contains(&light_ids[1])));
         assert!(conns.iter().all(|c| !c.to.is_empty()));
     }
+
+    #[test]
+    fn connection_edit_updates_to_and_bulge() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0])] })).unwrap();
+        let result = s
+            .execute("connection.edit", &json!({ "id": "cn0", "to": [light_label(light_ids[0]), light_label(light_ids[1])], "bulge": 0.5 }))
+            .unwrap();
+        assert_eq!(result["bulge"], 0.5);
+        let conn = s.doc().unwrap().arch.connections.iter().find(|c| c.id == ArchId(0)).unwrap();
+        assert_eq!(conn.to.len(), 2);
+        assert_eq!(conn.bulge, 0.5);
+    }
+
+    #[test]
+    fn connection_edit_refuses_invalid_to() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0])] })).unwrap();
+        assert!(s.execute("connection.edit", &json!({ "id": "cn0", "to": ["lf99"] })).is_err());
+    }
+
+    #[test]
+    fn connection_edit_refuses_invalid_bulge() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0])] })).unwrap();
+        assert!(s.execute("connection.edit", &json!({ "id": "cn0", "bulge": 2.0 })).is_err());
+    }
+
+    #[test]
+    fn connection_delete_removes_connection() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0])] })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.connections.len(), 1);
+        s.execute("connection.delete", &json!({ "id": "cn0" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.connections.len(), 0);
+    }
+
+    #[test]
+    fn connection_delete_refuses_invalid_id() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0])] })).unwrap();
+        assert!(s.execute("connection.delete", &json!({ "id": "cn99" })).is_err());
+    }
+
+    #[test]
+    fn circuit_brightness_refuses_non_switch() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        let mut doc = s.doc_mut().unwrap();
+        let outlet = doc.arch.push_electrical(ElectricalDevice {
+            wall: doc.arch.walls[0].id,
+            kind: ElectricalKind::Duplex,
+            side: WallSide::Right,
+            offset: 2.0,
+            height: 0.3,
+            ..Default::default()
+        });
+        drop(doc);
+        assert!(s.execute("circuit.brightness", &json!({ "switch": electrical_label(outlet), "brightness": 0.5 })).is_err());
+    }
+
+    #[test]
+    fn circuit_brightness_refuses_switch_without_connection() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        assert!(s.execute("circuit.brightness", &json!({ "switch": electrical_label(switch_id), "brightness": 0.5 })).is_err());
+    }
+
+    #[test]
+    fn connection_refuses_duplicate_lights() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        assert!(
+            s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0]), light_label(light_ids[0])] }))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn connection_refuses_non_numeric_bulge() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        assert!(
+            s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0])], "bulge": "not a number" }))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn circuit_brightness_refuses_non_numeric() {
+        let (mut s, switch_id, light_ids) = make_switch_and_lights();
+        s.execute("connection", &json!({ "from": electrical_label(switch_id), "to": [light_label(light_ids[0])] })).unwrap();
+        assert!(s.execute("circuit.brightness", &json!({ "switch": electrical_label(switch_id), "brightness": "not a number" })).is_err());
+    }
 }

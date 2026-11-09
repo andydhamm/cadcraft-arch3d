@@ -166,4 +166,73 @@ mod tests {
         assert!(back.arch.electrical.is_empty());
         assert!(back.model.len() >= n, "proxies kept as ordinary linework");
     }
+
+    #[test]
+    fn connection_with_non_finite_bulge_is_skipped() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, ..Default::default() });
+        m.push_wall(Wall::new(Vec2::new(0., 0.), Vec2::new(6., 0.), 0.2));
+        let sw = m.push_electrical(ElectricalDevice { kind: ElectricalKind::Dimmer, offset: 2.5, side: WallSide::Left, ..Default::default() });
+        m.lights.push(LightFixture::new(ArchId(0), "Pot", Vec2::new(1.0, 2.0)));
+        m.connections.push(Connection { id: ArchId(4), from: sw, to: vec![ArchId(0)], bulge: f64::NAN, ..Default::default() });
+        let p = proxy_electrical_entities(&m);
+        let arcs: Vec<_> = p.iter().filter(|(_, _, t)| t.iter().any(|t| t.code == 42)).collect();
+        assert!(arcs.is_empty(), "connection with NaN bulge should be skipped");
+    }
+
+    #[test]
+    fn closed_ring_drops_repeated_vertex() {
+        let pts = vec![Vec2::new(0., 0.), Vec2::new(1., 0.), Vec2::new(1., 1.), Vec2::new(0., 1.), Vec2::new(0., 0.)];
+        let tags = ring_polyline(&pts).unwrap();
+        assert_eq!(tags.iter().find(|t| t.code == 90).unwrap().i64(), 4, "vertex count");
+        assert_eq!(tags.iter().find(|t| t.code == 70).unwrap().i64(), 1, "closed flag");
+        let x_count = tags.iter().filter(|t| t.code == 10).count();
+        assert_eq!(x_count, 4, "repeated vertex should be dropped");
+    }
+
+    #[test]
+    fn proxy_layers_without_connections_excludes_e_lite() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, ..Default::default() });
+        m.push_wall(Wall::new(Vec2::new(0., 0.), Vec2::new(6., 0.), 0.2));
+        m.push_electrical(ElectricalDevice { kind: ElectricalKind::Duplex, offset: 1.5, side: WallSide::Left, ..Default::default() });
+        let layers = proxy_layers(&m);
+        assert_eq!(layers, vec!["E-POWR".to_string()], "no connections means no E-LITE");
+    }
+
+    #[test]
+    fn is_electrical_proxy_rejects_other_markers() {
+        let tags = vec![Tag::i(90, 2), Tag::i(70, 0)];
+        assert!(!is_electrical_proxy(&tags), "no xdata");
+        let tags = vec![Tag::i(90, 2), Tag::i(70, 0), Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, "CADCRAFT-LIGHT")];
+        assert!(!is_electrical_proxy(&tags), "different marker");
+        let tags = vec![Tag::i(90, 2), Tag::i(70, 0), Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, ELECTRICAL_PROXY_MARKER)];
+        assert!(is_electrical_proxy(&tags), "correct marker");
+    }
+
+    #[test]
+    fn connection_with_missing_light_is_skipped() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, ..Default::default() });
+        m.push_wall(Wall::new(Vec2::new(0., 0.), Vec2::new(6., 0.), 0.2));
+        let sw = m.push_electrical(ElectricalDevice { kind: ElectricalKind::Dimmer, offset: 2.5, side: WallSide::Left, ..Default::default() });
+        m.connections.push(Connection { id: ArchId(4), from: sw, to: vec![ArchId(0)], bulge: 0.2, ..Default::default() });
+        let p = proxy_electrical_entities(&m);
+        let arcs: Vec<_> = p.iter().filter(|(_, _, t)| t.iter().any(|t| t.code == 42)).collect();
+        assert!(arcs.is_empty(), "connection to missing light should be skipped");
+    }
+
+    #[test]
+    fn ring_with_fewer_than_two_vertices_is_skipped() {
+        assert!(ring_polyline(&[]).is_none(), "empty ring");
+        assert!(ring_polyline(&[Vec2::new(0., 0.)]).is_none(), "single vertex");
+    }
+
+    #[test]
+    fn ring_with_non_finite_vertex_is_skipped() {
+        let pts = vec![Vec2::new(0., 0.), Vec2::new(f64::NAN, 1.), Vec2::new(1., 1.)];
+        assert!(ring_polyline(&pts).is_none(), "NaN vertex");
+        let pts = vec![Vec2::new(0., 0.), Vec2::new(f64::INFINITY, 1.), Vec2::new(1., 1.)];
+        assert!(ring_polyline(&pts).is_none(), "infinite vertex");
+    }
 }

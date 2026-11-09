@@ -857,4 +857,112 @@ mod tests {
         assert_eq!(v["ok"], true);
         assert_eq!(v["lights"], 4);
     }
+
+    #[test]
+    fn a_missing_light_set_uses_all_lights() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.light_set = Some("nonexistent".into());
+        let v = match render(&req) {
+            Some(v) => v,
+            None => return,
+        };
+        assert_eq!(v["ok"], true, "{v}");
+        assert_eq!(v["lights"], 4, "a missing set must not drop lights: {v}");
+    }
+
+    #[test]
+    fn a_light_set_with_all_lights_off_renders_zero_lights() {
+        let _g = reset();
+        let mut d = room();
+        let mut lights = std::collections::BTreeMap::new();
+        for i in 0..4 {
+            lights.insert(format!("lf{i}"), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        }
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "all_off".into(), lights, ..Default::default() });
+        d.touch_arch();
+
+        let mut req = request(&d, None, None, false);
+        req.light_set = Some("all_off".into());
+        let v = match render(&req) {
+            Some(v) => v,
+            None => return,
+        };
+        assert_eq!(v["lights"], 0, "all off must render no lights: {v}");
+    }
+
+    #[test]
+    fn a_light_set_brightness_keeps_the_light_on() {
+        let _g = reset();
+        let mut d = room();
+        let mut lights = std::collections::BTreeMap::new();
+        lights.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: true, brightness: 0.5, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "half".into(), lights, ..Default::default() });
+        d.touch_arch();
+
+        let scene_lights = cadcraft_arch3d::light::scene_lights_with(&d.arch, &d.arch.light_sets[0].lights);
+        assert_eq!(scene_lights.len(), 4, "brightness must not remove lights");
+        assert!(scene_lights.iter().any(|l| l.id == d.arch.lights[0].id), "lf0 must still be present");
+    }
+
+    #[test]
+    fn switching_light_sets_and_back_rebuilds() {
+        let _g = reset();
+        let mut d = room();
+        let mut set1 = std::collections::BTreeMap::new();
+        set1.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        let mut set2 = std::collections::BTreeMap::new();
+        set2.insert("lf1".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set1".into(), lights: set1, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "set2".into(), lights: set2, ..Default::default() });
+        d.touch_arch();
+
+        let mut req1 = request(&d, None, None, false);
+        req1.light_set = Some("set1".into());
+        let v1 = match render(&req1) {
+            Some(v) => v,
+            None => return,
+        };
+        let maps_after_set1 = v1["shadowMapsBuilt"].as_u64().unwrap();
+
+        let mut req2 = request(&d, None, None, false);
+        req2.light_set = Some("set2".into());
+        let v2 = match render(&req2) {
+            Some(v) => v,
+            None => return,
+        };
+        let maps_after_set2 = v2["shadowMapsBuilt"].as_u64().unwrap();
+
+        let v3 = match render(&req1) {
+            Some(v) => v,
+            None => return,
+        };
+        let maps_after_set1_again = v3["shadowMapsBuilt"].as_u64().unwrap();
+
+        assert!(maps_after_set2 > maps_after_set1, "set2 must rebuild: {v1} {v2}");
+        assert!(maps_after_set1_again > maps_after_set2, "set1 again must rebuild: {v2} {v3}");
+    }
+
+    #[test]
+    fn a_light_set_affects_the_path_tracer() {
+        let _g = reset();
+        let mut d = room();
+        let mut lights = std::collections::BTreeMap::new();
+        lights.insert("lf0".to_string(), cadcraft_engine::doc::arch::LightState { on: false, brightness: 1.0, ..Default::default() });
+        d.arch.light_sets.push(cadcraft_engine::doc::arch::LightSet { name: "off_one".into(), lights, ..Default::default() });
+        d.touch_arch();
+
+        let mut req = path_request(&d, None, quick(4));
+        req.light_set = Some("off_one".into());
+        let v = match render_one(&req) {
+            Ok(v) => v,
+            Err(e) if e.starts_with("NO_ADAPTER") => return eprintln!("SKIP: {e}"),
+            Err(e) => panic!("render failed: {e}"),
+        };
+        if v["finalMode"] != "path" {
+            return eprintln!("SKIP: no compute device");
+        }
+        assert_eq!(v["shadowedLights"], 3, "path tracer must honour the light set: {v}");
+    }
 }

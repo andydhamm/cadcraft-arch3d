@@ -288,6 +288,24 @@ fn apron_regions(model: &ArchModel) -> Vec<PadRegion> {
     out
 }
 
+/// The footprint the first floor's pad covers: the level's own outer footprint, or, when it has no
+/// exterior ring of its own (an entry landing whose only exterior wall is a spanning front wall),
+/// the outer footprint of the nearest level below whose exterior walls all stand past the first
+/// floor's elevation: the shell the landing sits in, where the ground meets the building.
+fn first_floor_footprint(model: &ArchModel, first: &Level) -> Option<Vec<Vec2>> {
+    if let Some(fp) = crate::roof::outer_footprint(model, first.index) {
+        return Some(fp.outer);
+    }
+    let mut below: Vec<&Level> =
+        model.levels.iter().filter(|l| l.index != first.index && l.elevation.is_finite() && l.elevation < first.elevation).collect();
+    below.sort_by(|a, b| b.elevation.partial_cmp(&a.elevation).unwrap_or(Ordering::Equal).then(a.index.cmp(&b.index)));
+    below.into_iter().find_map(|lower| {
+        let mut shell = model.walls.iter().filter(|w| w.exterior && !w.divider && crate::room::wall_on_level(model, w, lower.index)).peekable();
+        let reaches = shell.peek().is_some() && shell.all(|w| w.top_z(&model.levels) > first.elevation);
+        if reaches { crate::roof::outer_footprint(model, lower.index).map(|fp| fp.outer) } else { None }
+    })
+}
+
 /// The pad of the first floor, the pad of every side-split floor, the cut of every basement
 /// level that has a footprint, and the entry aprons (last, so they win over pad margins).
 pub fn pad_regions(model: &ArchModel) -> Vec<PadRegion> {
@@ -301,10 +319,10 @@ pub fn pad_regions(model: &ArchModel) -> Vec<PadRegion> {
     };
 
     if terrain.pad {
-        if let Some(fp) = crate::roof::outer_footprint(model, first.index) {
+        if let Some(ring) = first_floor_footprint(model, first) {
             regions.push(PadRegion {
                 kind: PadKind::Pad,
-                ring: fp.outer,
+                ring,
                 elevation: finite_or(first.elevation - first.structure, first.elevation),
                 margin: finite_or(terrain.pad_margin, 0.0),
             });
@@ -383,6 +401,15 @@ pub fn apply_pads(regions: &[PadRegion], p: Vec2, toward: Vec2, z: f64) -> f64 {
                     z = z.min(elevation);
                 }
             }
+        }
+    }
+
+    // A cut wins inside its footprint, also over the entry aprons applied after it (an apron's
+    // slope back to the ground would otherwise lift the cut under the landing).
+    let q = if toward == p { p } else { p + (toward - p) * 1e-6 };
+    for region in regions.iter().filter(|r| r.kind == PadKind::Basement && !r.ring.is_empty()) {
+        if inside_or_on_ring(q, &region.ring) {
+            z = z.min(finite_or(region.elevation, z));
         }
     }
 
@@ -670,6 +697,45 @@ mod tests {
     }
 
     #[test]
+    fn a_landing_first_floor_is_padded_inside_the_walls_around_it() {
+        // The Entry landing (0.15) is the first floor, but its only exterior wall is Lower's spanning
+        // front wall: the pad follows the shell standing at the landing's elevation (Lower's walls).
+        let model = split_house();
+        let regions = pad_regions(&model);
+        let pads: Vec<&PadRegion> = regions.iter().filter(|r| r.kind == PadKind::Pad && (r.elevation + 0.15).abs() < 1e-9).collect();
+        assert_eq!(pads.len(), 1, "{regions:?}");
+        assert_eq!(pads[0].margin, 1.0);
+        // Outside the front wall, within the margin: flat at the landing's elevation - structure.
+        assert!((grade(&regions, 2.5, -0.5, 0.109375) + 0.15).abs() < 1e-9);
+        // Inside Lower's footprint the cut still wins, and the side split keeps its own pad.
+        assert!((grade(&regions, 4.5, 1.5, 0.0) + 1.5).abs() < 1e-9);
+        assert!((grade(&regions, 12.0, 4.0, 0.25) - 1.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_landing_with_its_own_exterior_ring_keeps_its_own_pad() {
+        let mut model = split_house();
+        ring_walls(&mut model, &[(20.0, 0.0), (24.0, 0.0), (24.0, 4.0), (20.0, 4.0)], 2, true);
+        let own = crate::roof::outer_footprint(&model, 2).map(|fp| fp.outer);
+        assert!(own.is_some(), "the landing's own ring");
+        let regions = pad_regions(&model);
+        let pads: Vec<&PadRegion> = regions.iter().filter(|r| r.kind == PadKind::Pad && (r.elevation + 0.15).abs() < 1e-9).collect();
+        assert_eq!(pads.len(), 1, "{regions:?}");
+        assert_eq!(Some(pads[0].ring.clone()), own);
+    }
+
+    #[test]
+    fn a_landing_above_the_walls_below_gets_no_borrowed_pad() {
+        let mut model = split_house();
+        for w in model.walls.iter_mut().filter(|w| w.base_level == 0 && w.top_level.is_none()) {
+            w.height = 1.0;
+        }
+        // Lower's back walls stop at -0.2, under the landing: the landing borrows no footprint.
+        let regions = pad_regions(&model);
+        assert!(!regions.iter().any(|r| r.kind == PadKind::Pad && (r.elevation + 0.15).abs() < 1e-9), "{regions:?}");
+    }
+
+    #[test]
     fn a_side_split_extension_gets_its_own_pad() {
         let model = split_house();
         let regions = pad_regions(&model);
@@ -687,6 +753,19 @@ mod tests {
         // Inside Lower's footprint, within the extension's margin: the cut, not the pad.
         assert!((grade(&regions, 9.5, 4.0, 0.0) - (-1.5)).abs() < 1e-9);
         assert!((grade(&regions, 4.5, 1.5, 0.0) - (-1.5)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_basement_cut_wins_over_the_entry_apron_slope() {
+        // The apron (0.0, applied last) slopes back up 1:2 from its margin; under the landing,
+        // 1.6 m from the apron, that slope must not lift Lower's cut (-1.5).
+        let model = with_door(split_house());
+        let regions = pad_regions(&model);
+        assert!((grade(&regions, 4.5, 1.5, 0.0) + 1.5).abs() < 1e-9, "{}", grade(&regions, 4.5, 1.5, 0.0));
+        assert!((grade(&regions, 4.6, 0.5, 0.0) + 1.5).abs() < 1e-9, "{}", grade(&regions, 4.6, 0.5, 0.0));
+        // Outside the footprint the apron still wins: flat at 0.0, and over the landing pad's margin.
+        assert!(grade(&regions, 4.6, -0.8, 0.5).abs() < 1e-9);
+        assert!((grade(&regions, 2.5, -0.5, 0.109375) + 0.15).abs() < 1e-9);
     }
 
     #[test]
