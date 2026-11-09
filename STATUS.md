@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-09 13:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 63 of 66 segments merged · 11 of 14 acceptance checks**
 
-8,090 workspace tests passing at the last merge · 850 segments merged in all · 0 of 15 seats working
+8,097 workspace tests passing at the last merge · 851 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 13:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 101.3 h so far · expected done Nov 09 18:33–Nov 11 01:10 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 101.6 h so far · expected done Nov 09 18:48–Nov 11 01:25 UTC |
 | 16 | Ceilings and foundations | building | 5 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,16 +35,17 @@ Updated 2026-11-09 13:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-63 merged, 8 replaced, 3 abandoned, 2 queued, 1 working
+63 merged, 8 replaced, 3 abandoned, 2 queued, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-test` | crates/engine/tests/showcase.rs: replay the showcase and assert the brief | working | bonsai-b |
+| `p15-showcase-test` | crates/engine/tests/showcase.rs: replay the showcase and assert the brief | escalate |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 09 13:55 | `harden-p16-foundation-slab` | merged | 8,097 pass | tturbo-mac |
 | Nov 09 13:23 | `upstream-sync-a655cee0c` | merged | 8,090 pass | claude-sonnet-b |
 | Nov 09 12:51 | `p15-showcase-site` | merged | 8,090 pass | bonsai-b |
 | Nov 09 12:08 | `p16-vault-walls` | merged | 8,089 pass | mai-flash-esc |
@@ -56,16 +57,15 @@ Updated 2026-11-09 13:45 UTC. This page and the card in the README are regenerat
 | Nov 09 08:20 | `p16-soffits` | refused | 0 pass | claude-sonnet-c |
 | Nov 09 08:20 | `p16-vault-ceiling` | merged | 8,037 pass | claude-sonnet-a |
 | Nov 09 07:24 | `p16-foundation-stem` | merged | 8,016 pass | claude-sonnet-b |
-| Nov 09 02:27 | `p15-showcase-furnish` | merged | 7,906 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 982 |
-| bonsai-b | bonsai2-27b | agent | 923 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1018 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1006 |
+| bonsai-b | bonsai2-27b | agent | 928 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1020 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1009 |
 | claude-sonnet-a | sonnet | idle | 90 |
 | claude-sonnet-b | sonnet | idle | 92 |
 | claude-sonnet-c | sonnet | idle | 40 |
@@ -74,6 +74,6 @@ Updated 2026-11-09 13:45 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 3 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 52 |
-| tturbo-mac | tturbo-ultraheretic | merging | 681 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 52 |
+| tturbo-mac | tturbo-ultraheretic | agent | 681 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
