@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 57 of 64 segments merged · 6 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 00:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 87.8 h so far · expected done Nov 09 18:55–Nov 13 13:15 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 88.1 h so far · expected done Nov 09 19:10–Nov 13 13:30 UTC |
 | 16 | Ceilings and foundations | planning | — | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -39,7 +39,7 @@ Updated 2026-11-09 00:15 UTC. This page and the card in the README are regenerat
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-furnish` | bilevel.json part 2b: bath fixtures, furnishings, the_showcase_is_furnished | gate | bonsai-ws2-b |
+| `p15-showcase-furnish` | bilevel.json part 2b: bath fixtures, furnishings, the_showcase_is_furnished | gate | mai-flash-esc |
 
 ## Recent merges
 
@@ -64,8 +64,8 @@ Updated 2026-11-09 00:15 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 960 |
 | bonsai-b | bonsai2-27b | idle | 898 |
-| bonsai-ws2-a | bonsai2-27b | idle | 983 |
-| bonsai-ws2-b | bonsai2-27b | gate | 963 |
+| bonsai-ws2-a | bonsai2-27b | gate | 983 |
+| bonsai-ws2-b | bonsai2-27b | gate | 964 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
@@ -74,6 +74,6 @@ Updated 2026-11-09 00:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 0 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 47 |
-| tturbo-mac | tturbo-ultraheretic | gate | 666 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 47 |
+| tturbo-mac | tturbo-ultraheretic | merging | 667 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
