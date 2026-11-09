@@ -13,7 +13,7 @@ use serde_json::Value;
 /// way `crates/engine/tests/user_guide.rs::install_io` does.
 fn install_io() {
     set_io(IoHooks {
-        read: |_, _| Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no file reads in this test")),
+        read: |_, _| Err("no file reads in this test".to_string()),
         write: |_, _| Ok(b"stand-in export".to_vec()),
         plot: None,
     });
@@ -59,9 +59,17 @@ fn row_text(v: &Value) -> String {
     format!("{} {}", field_text(v, "kind"), field_text(v, "item"))
 }
 
-/// Rows (furnishing or fixture) whose "room" field matches `rid`.
-fn rows_for<'a>(rid: &'a str, rows: &'a [Value]) -> Vec<&'a Value> {
-    rows.iter().filter(|r| field_text(r, "room") == rid).collect()
+/// Owned rows (furnishing or fixture) whose "room" field matches `rid`.
+fn rows_for(rid: &str, rows: &[Value]) -> Vec<Value> {
+    rows.iter().filter(|r| field_text(r, "room") == rid).map(|r| r.clone()).collect()
+}
+
+/// A level's `index`, from its "index" field if present, otherwise its
+/// position in `levels`.
+fn level_index(v: &Value, levels: &[Value]) -> i64 {
+    field_text(v, "index")
+        .parse::<i64>()
+        .unwrap_or_else(|_| levels.iter().position(|l| l == v).map_or(0, |i| i as i64))
 }
 
 /// Replay every step of the JSON script. Panics on the first failure, naming the
@@ -82,21 +90,19 @@ fn replay(script: &str, session: &mut Session) -> usize {
 
 /// Assert that the replayed model satisfies the showcase brief.
 fn meets_the_brief(reply: &Value) {
-    let levels: Vec<&Value> = match reply.get("levels") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    // ---- Levels ----
+    let levels: Vec<Value> = match reply.get("levels") {
+        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
         _ => panic!("arch.inspect reply has no `levels` array"),
     };
 
-    // ---- Levels ----
-    let landing = levels.iter().find(|l| strd(l, "kind", "") == "landing");
-    assert!(landing.is_some(), "no level of kind `landing`");
-    let landing = landing.unwrap();
+    let landing = levels.iter().find(|l| strd(l, "kind", "") == "landing").expect("no level of kind `landing`");
     let floors: Vec<&Value> = levels.iter().filter(|l| strd(l, "kind", "") == "floor").collect();
     assert_eq!(floors.len(), 2, "expected exactly two `floor` levels, found {}", floors.len());
-    let (lower, upper) = if num(floors[0], "elevation") < num(floors[1], "elevation") {
-        (&floors[0], &floors[1]),
+    let (lower, upper): (&Value, &Value) = if num(floors[0], "elevation") < num(floors[1], "elevation") {
+        (floors[0], floors[1]),
     } else {
-        (&floors[1], &floors[0]),
+        (floors[1], floors[0]),
     };
     assert_eq!(
         strd(lower, "gradeClass", ""),
@@ -124,15 +130,9 @@ fn meets_the_brief(reply: &Value) {
         Some(a) if a.is_array() => a.as_array().iter().collect(),
         _ => panic!("arch.inspect reply has no `stairs` array"),
     };
-    let landing_idx = field_text(landing, "index")
-        .parse::<i64>()
-        .unwrap_or_else(|_| levels.iter().position(|l| std::ptr::eq(l as *const Value, landing as *const Value)).as_i64());
-    let lower_idx = field_text(lower, "index")
-        .parse::<i64>()
-        .unwrap_or_else(|_| levels.iter().position(|l| std::ptr::eq(l as *const Value, lower as *const Value)).as_i64());
-    let upper_idx = field_text(upper, "index")
-        .parse::<i64>()
-        .unwrap_or_else(|_| levels.iter().position(|l| std::ptr::eq(l as *const Value, upper as *const Value)).as_i64());
+    let landing_idx = level_index(landing, &levels);
+    let lower_idx = level_index(lower, &levels);
+    let upper_idx = level_index(upper, &levels);
     let up_stair = stairs.iter().any(|st| {
         field_text(st, "fromLevel").parse::<i64>().ok() == Some(landing_idx) && field_text(st, "toLevel").parse::<i64>().ok() == Some(upper_idx)
     });
@@ -152,12 +152,12 @@ fn meets_the_brief(reply: &Value) {
         assert_eq!(count(ty), want, "expected {} `{} ` room(s), found {}", want, ty, count(ty));
     }
 
-    let furns: Vec<&Value> = match reply.get("furnishings") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    let furns: Vec<Value> = match reply.get("furnishings") {
+        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
         _ => panic!("arch.inspect reply has no `furnishings` array"),
     };
-    let fixs: Vec<&Value> = match reply.get("fixtures") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    let fixs: Vec<Value> = match reply.get("fixtures") {
+        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
         _ => panic!("arch.inspect reply has no `fixtures` array"),
     };
     // Every non-closet/openBelow room must be served by at least one furnishing or fixture row.
