@@ -375,7 +375,7 @@ fn the_showcase_sits_on_a_site() {
     let r: Value = s.execute("arch.inspect", &json!({"levels": true, "site": true})).unwrap_or_else(|err| panic!("arch.inspect failed: {err}"));
 
     let levels: Vec<Value> = r["levels"].as_array().expect("levels array").clone();
-    let site: &Value = r["site"].as_object().expect("site object");
+    let site: &Value = &r["site"];
 
     let floor_idxs: Vec<usize> = levels.iter().enumerate().filter(|(_, l)| l["kind"].as_str() == Some("floor")).map(|(i, _)| i).collect();
     assert_eq!(floor_idxs.len(), 2, "expected two floor levels, found {floor_idxs:?}");
@@ -405,7 +405,8 @@ fn the_showcase_sits_on_a_site() {
     assert!(kinds.contains(&"bed"), "no bed path: {kinds:?}");
 
     let plants = site["plants"].as_array().expect("site.plants array");
-    assert!(plants.len() >= 4, "expected at least 4 plants, found {plants.len()}");
+    let plant_count = plants.len();
+    assert!(plant_count >= 4, "expected at least 4 plants, found {plant_count}");
     let forms: Vec<&str> = plants.iter().filter_map(|p| p["form"].as_str()).collect();
     assert!(forms.contains(&"tree"), "no tree plants: {forms:?}");
     assert!(forms.contains(&"shrub"), "no shrub plants: {forms:?}");
