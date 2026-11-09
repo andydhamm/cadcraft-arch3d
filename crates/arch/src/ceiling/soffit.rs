@@ -178,7 +178,7 @@ pub fn soffit_bottom(model: &ArchModel, s: &Soffit) -> Option<f64> {
         return Some(level + z_max);
     }
     if let Some(bottom) = s.bottom {
-        return level + bottom;
+        return Some(level + bottom);
     }
     if let Some(depth) = s.depth {
         let ring = soffit_ring(model, s)?;
@@ -235,33 +235,32 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
         lo: f64,
         hi: f64,
     }
-    let lines: Vec<FaceLine> = model
-        .walls
-        .iter()
-        .filter(|w| w.base_level == level)
-        .filter(|w| !w.divider)
-        .flat_map(|w| {
-            crate::join::face_lines(w).into_iter().flat_map(|fl| {
-                fl.iter().filter_map(|(p0, p1)| {
-                    let dx = p1.x - p0.x;
-                    let dy = p1.y - p0.y;
-                    if !dx.is_finite() || !dy.is_finite() {
-                        return None;
-                    }
-                    if dy.abs() < 1e-6 {
-                        // Horizontal line: y = p0.y, x in [min, max].
-                        Some((w.id, 0u8, p0.y, p0.x.min(p1.x), p0.x.max(p1.x)))
-                    } else if dx.abs() < 1e-6 {
-                        // Vertical line: x = p0.x, y in [min, max].
-                        Some((w.id, 1u8, p0.x, p0.y.min(p1.y), p0.y.max(p1.y)))
-                    } else {
-                        None
-                    }
-                })
-            })
-        })
-        .map(|(wall_id, axis, offset, lo, hi)| FaceLine { wall_id, axis, offset, lo, hi })
-        .collect();
+    let lines: Vec<FaceLine> = {
+        let mut acc: Vec<FaceLine> = Vec::new();
+        for w in model.walls.iter() {
+            if w.base_level != level {
+                continue;
+            }
+            if w.divider {
+                continue;
+            }
+            for (p0, p1) in crate::join::face_lines(w) {
+                let dx = p1.x - p0.x;
+                let dy = p1.y - p0.y;
+                if !dx.is_finite() || !dy.is_finite() {
+                    continue;
+                }
+                if dy.abs() < 1e-6 {
+                    // Horizontal line: y = p0.y, x in [min, max].
+                    acc.push(FaceLine { wall_id: w.id, axis: 0, offset: p0.y, lo: p0.x.min(p1.x), hi: p0.x.max(p1.x) });
+                } else if dx.abs() < 1e-6 {
+                    // Vertical line: x = p0.x, y in [min, max].
+                    acc.push(FaceLine { wall_id: w.id, axis: 1, offset: p0.x, lo: p0.y.min(p1.y), hi: p0.y.max(p1.y) });
+                }
+            }
+        }
+        acc
+    };
 
     // For each side of the rect, try to snap.
     // Side 0: bottom (y = r[1], x in [r[0], r[2]]) — horizontal
