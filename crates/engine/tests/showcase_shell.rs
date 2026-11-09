@@ -227,10 +227,22 @@ fn the_showcase_is_furnished() {
     let mut s = showcase_session();
     replay(&mut s);
 
-    let r: Value = s.execute("arch.inspect", &json!({"rooms": true, "furnishings": true, "fixtures": true})).expect("arch.inspect failed");
-    let rooms: Vec<Value> = r["rooms"].as_array().expect("rooms array").clone();
-    let furn: Vec<Value> = r["furnishings"].as_array().expect("furnishings array").clone();
-    let fix: Vec<Value> = r["fixtures"].as_array().expect("fixtures array").clone();
+    let r: Value = match s.execute("arch.inspect", &json!({"rooms": true, "furnishings": true, "fixtures": true})) {
+        Ok(v) => v,
+        Err(err) => panic!("arch.inspect failed: {err}"),
+    };
+    let rooms: Vec<Value> = match r["rooms"].as_array() {
+        Some(rows) => rows.clone(),
+        None => panic!("rooms array missing from arch.inspect"),
+    };
+    let furn: Vec<Value> = match r["furnishings"].as_array() {
+        Some(rows) => rows.clone(),
+        None => panic!("furnishings array missing from arch.inspect"),
+    };
+    let fix: Vec<Value> = match r["fixtures"].as_array() {
+        Some(rows) => rows.clone(),
+        None => panic!("fixtures array missing from arch.inspect"),
+    };
 
     // The kitchen's fixtures cover range, refrigerator, sink and dishwasher.
     let kitchens = room_ids_of_type(&rooms, "kitchen");
@@ -267,11 +279,17 @@ fn the_showcase_is_furnished() {
     // Every room that is not a closet/openBelow has a furnishing or fixture in it.
     let mut failed = Vec::new();
     for rm in &rooms {
-        let typ = rm["type"].as_str().unwrap_or("");
+        let typ = match rm["type"].as_str() {
+            Some(v) => v,
+            None => "",
+        };
         if typ == "closet" || typ == "openBelow" {
             continue;
         }
-        let rid = rm["id"].as_str().unwrap_or("");
+        let rid = match rm["id"].as_str() {
+            Some(v) => v,
+            None => "",
+        };
         let has_item = !rows_in_room(&furn, rid).is_empty() || !rows_in_room(&fix, rid).is_empty();
         if !has_item {
             failed.push(rid.to_string());
