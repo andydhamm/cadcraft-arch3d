@@ -69,7 +69,7 @@ fn finish_def(f: Finish) -> MaterialDef {
 }
 
 /// The definition of a [`MaterialRef`].
-fn ref_def(model: &ArchModel, m: &MaterialRef) -> MaterialDef {
+pub(crate) fn ref_def(model: &ArchModel, m: &MaterialRef) -> MaterialDef {
     match m {
         MaterialRef::Finish(f) => finish_def(*f),
         MaterialRef::Item(id) => match model.images.get(id).filter(|i| i.is_valid()) {

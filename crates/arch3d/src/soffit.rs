@@ -5,16 +5,15 @@
 //! soffit (material `soffit`) stays part `roof`.
 
 use cadcraft_doc::ArchModel;
-use cadcraft_doc::arch::{Level, Soffit};
+use cadcraft_doc::arch::{Level, MaterialRef, Soffit};
 use cadcraft_geom::Vec2;
 
 use crate::Scene3d;
 use crate::mesh::Mesh;
-use crate::planar::{PlaneZ, under_planes};
+use crate::planar::{PlaneZ, centroid, push_between, under_planes};
 
 /// Everything a soffit's meshes are made from.
 #[derive(Clone, Debug, Default, PartialEq)]
-#[allow(dead_code)] // the meshes land in p16-soffit-meshes
 pub(crate) struct SoffitIn {
     pub soffit: Soffit,
     pub level: Level,
@@ -61,12 +60,32 @@ pub(crate) fn soffit_input(model: &ArchModel, s: &Soffit) -> SoffitIn {
 
 /// The meshes of one soffit.
 pub(crate) fn soffit_meshes(i: &SoffitIn) -> Vec<Mesh> {
-    let _inputs = (&i.soffit, &i.level); // read once soffits are built
-    Vec::new()
+    let (Some(ring), Some(bottom)) = (i.ring.as_ref(), i.bottom) else {
+        return Vec::new();
+    };
+    let material = match i.soffit.material.as_deref() {
+        Some(s) => MaterialRef::parse(s).map_or("soffit-box".to_string(), |m| format!("soffit-box:{}", m.key())),
+        None => "soffit-box".to_string(),
+    };
+    let mut mesh = Mesh::new(&material, i.soffit.id);
+    mesh.level_elevation = i.level.elevation;
+    for (cell, plane) in &i.cells {
+        if centroid(cell).is_some_and(|c| plane.z_at(c) > bottom) {
+            push_between(&mut mesh, cell, &[], PlaneZ::flat(bottom), *plane);
+        }
+    }
+    if mesh.positions.is_empty() { Vec::new() } else { vec![mesh] }
 }
 
 /// Add the material definitions of the soffits' faces to `scene`.
-pub(crate) fn materials(_model: &ArchModel, _scene: &mut Scene3d) {}
+pub(crate) fn materials(model: &ArchModel, scene: &mut Scene3d) {
+    for soffit in &model.soffits {
+        let Some(material_str) = soffit.material.as_deref() else { continue };
+        let Some(m) = MaterialRef::parse(material_str) else { continue };
+        let key = format!("soffit-box:{}", m.key());
+        scene.materials.entry(key).or_insert_with(|| crate::paint::ref_def(model, &m));
+    }
+}
 
 #[cfg(test)]
 mod tests {
