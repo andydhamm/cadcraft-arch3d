@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-09 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 21: Electrical, technical illustration and the showcase house — 58 of 64 segments merged · 11 of 14 acceptance checks**
+**Phase 15 of 21: Electrical, technical illustration and the showcase house — 58 of 65 segments merged · 11 of 14 acceptance checks**
 
 7,906 workspace tests passing at the last merge · 841 segments merged in all · 0 of 15 seats working
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 05:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 93.1 h so far · expected done Nov 09 18:35–Nov 12 04:18 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 93.3 h so far · expected done Nov 09 21:01–Nov 12 08:41 UTC |
 | 16 | Ceilings and foundations | building | 0 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,11 +35,12 @@ Updated 2026-11-09 05:30 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-58 merged, 8 replaced, 5 queued, 3 abandoned, 1 gate
+58 merged, 8 replaced, 5 queued, 3 abandoned, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-showcase-empty-rooms` | bilevel.json part 2c: name and furnish the rooms the earlier steps missed | gate | bonsai-a |
+| `upstream-sync-3b7eb1b7b-v2` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | working | mai-flash-b |
 
 ## Recent merges
 
@@ -66,14 +67,14 @@ Updated 2026-11-09 05:30 UTC. This page and the card in the README are regenerat
 | bonsai-b | bonsai2-27b | gate | 900 |
 | bonsai-ws2-a | bonsai2-27b | gate | 989 |
 | bonsai-ws2-b | bonsai2-27b | gate | 970 |
-| claude-sonnet-a | sonnet | gate | 89 |
+| claude-sonnet-a | sonnet | merging | 90 |
 | claude-sonnet-b | sonnet | merging | 91 |
 | claude-sonnet-c | sonnet | gate | 39 |
 | claude-sonnet-d | sonnet | gate | 31 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 840 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
-| mai-flash-b | mai-code-1.1-flash | idle | 0 |
+| mai-flash-b | mai-code-1.1-flash | agent | 0 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 48 |
 | tturbo-mac | tturbo-ultraheretic | gate | 670 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
