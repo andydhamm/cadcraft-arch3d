@@ -718,7 +718,13 @@ fn run_order(m: &ArgMatches) -> (Vec<Drawing>, Vec<Step>) {
     let mut steps: Vec<(usize, Step)> = indexed(m, "script").map(|(i, s): (_, &String)| (i, Step::Script(s.clone()))).collect();
     steps.extend(indexed(m, "script_file").map(|(i, s): (_, &PathBuf)| (i, Step::ScriptFile(s.clone()))));
     steps.extend(indexed(m, "cmd").map(|(i, c): (_, &CmdStep)| (i, Step::Cmd(c.clone()))));
-    steps.extend(indexed(m, "commands").flat_map(|(i, cs): (_, &Vec<CmdStep>)| cs.iter().map(move |c| (i, Step::Cmd(c.clone())))));
+    let command_files: Vec<Vec<CmdStep>> = m.get_many::<Vec<CmdStep>>("commands").into_iter().flatten().map(|cs| cs.to_vec()).collect();
+    let commands: Vec<(usize, Vec<CmdStep>)> = m.indices_of("commands").into_iter().flatten().zip(command_files).collect();
+    for (i, cs) in commands {
+        for c in cs {
+            steps.push((i, Step::Cmd(c)));
+        }
+    }
     steps.sort_by_key(|s| s.0);
     (drawings.into_iter().map(|d| d.1).collect(), steps.into_iter().map(|s| s.1).collect())
 }
@@ -807,6 +813,45 @@ mod tests {
                 assert!(text.contains(f.extension()), "`{sub} {arg}` help `{text}` lacks {}", f.extension());
             }
         }
+    }
+
+    #[test]
+    fn run_order_keeps_all_steps_across_multiple_commands_files() {
+        let dir = std::env::temp_dir().join(format!("cadcraft-cli-order-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let a = dir.join("a.json");
+        let b = dir.join("b.json");
+        std::fs::write(&a, r#"[{"cmd":"circle","params":{"center":[0,0],"radius":1}},{"cmd":"circle","params":{"center":[1,1],"radius":2}}]"#)
+            .unwrap();
+        std::fs::write(&b, r#"[{"cmd":"line","params":{"points":[[0,0],[2,0]]}}]"#).unwrap();
+
+        let args = [
+            "run",
+            "--sample",
+            "--commands",
+            &a.display().to_string(),
+            "--cmd",
+            "box {\"points\":[[0,0],[2,0],[2,2],[0,2],[0,0]]}",
+            "--commands",
+            &b.display().to_string(),
+        ];
+
+        let cli = parse_args(&args).expect("parse run with two files");
+        let Command::Run(r) = cli.command else {
+            panic!("not run command");
+        };
+        let ids: Vec<_> = r
+            .steps
+            .iter()
+            .filter_map(|step| match step {
+                Step::Cmd(c) => Some(c.id.as_str()),
+                Step::Script(_) | Step::ScriptFile(_) => None,
+            })
+            .collect();
+        assert_eq!(ids, ["circle", "circle", "box", "line"], "all commands from each file and --cmd stay in order");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
