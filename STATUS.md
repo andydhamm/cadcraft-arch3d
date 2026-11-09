@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-09 01:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 21: Electrical, technical illustration and the showcase house — 57 of 64 segments merged · 6 of 14 acceptance checks**
+**Phase 15 of 21: Electrical, technical illustration and the showcase house — 57 of 64 segments merged · 11 of 14 acceptance checks**
 
-7,896 workspace tests passing at the last merge · 839 segments merged in all · 0 of 15 seats working
+7,905 workspace tests passing at the last merge · 840 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 01:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 88.8 h so far · expected done Nov 09 19:55–Nov 13 14:15 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 89.1 h so far · expected done Nov 09 20:10–Nov 13 14:30 UTC |
 | 16 | Ceilings and foundations | planning | — | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -45,6 +45,7 @@ Updated 2026-11-09 01:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 09 01:22 | `harden-p15-cmd-outlets-auto` | merged | 7,905 pass | tturbo-mac |
 | Nov 08 23:39 | `harden-p15-cabinet-along-wall` | merged | 7,896 pass | tturbo-mac |
 | Nov 08 21:37 | `harden-p15-inspect-levels-walls` | merged | 7,886 pass | tturbo-mac |
 | Nov 08 20:49 | `p15-showcase-kitchen-casework` | merged | 7,881 pass | bonsai-ws2-b |
@@ -56,7 +57,6 @@ Updated 2026-11-09 01:15 UTC. This page and the card in the README are regenerat
 | Nov 08 14:32 | `upstream-sync-3b7eb1b7b` | refused | 7,896 pass | mai-flash-esc |
 | Nov 08 12:40 | `harden-p15-io-dxf-electrical` | merged | 7,860 pass | tturbo-mac |
 | Nov 08 10:36 | `harden-p15-outlet-gap-spacing` | merged | 7,853 pass | tturbo-mac |
-| Nov 08 09:18 | `p15-showcase-shell` | merged | 7,849 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
@@ -64,8 +64,8 @@ Updated 2026-11-09 01:15 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 960 |
 | bonsai-b | bonsai2-27b | idle | 898 |
-| bonsai-ws2-a | bonsai2-27b | gate | 984 |
-| bonsai-ws2-b | bonsai2-27b | gate | 966 |
+| bonsai-ws2-a | bonsai2-27b | gate | 985 |
+| bonsai-ws2-b | bonsai2-27b | agent | 967 |
 | claude-sonnet-a | sonnet | idle | 89 |
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
@@ -75,5 +75,5 @@ Updated 2026-11-09 01:15 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 0 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 48 |
-| tturbo-mac | tturbo-ultraheretic | merging | 667 |
+| tturbo-mac | tturbo-ultraheretic | agent | 667 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
