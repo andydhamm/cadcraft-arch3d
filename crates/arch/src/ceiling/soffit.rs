@@ -244,7 +244,7 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
             if w.divider {
                 continue;
             }
-            for [p0, p1] in crate::join::face_lines(w) {
+            for (p0, p1) in crate::join::face_lines(w) {
                 let dx = p1.x - p0.x;
                 let dy = p1.y - p0.y;
                 if !dx.is_finite() || !dy.is_finite() {
