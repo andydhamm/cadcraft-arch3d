@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-09 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 13:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 21: Electrical, technical illustration and the showcase house — 61 of 66 segments merged · 11 of 14 acceptance checks**
+**Phase 15 of 21: Electrical, technical illustration and the showcase house — 62 of 66 segments merged · 11 of 14 acceptance checks**
 
-8,089 workspace tests passing at the last merge · 848 segments merged in all · 0 of 14 seats working
+8,090 workspace tests passing at the last merge · 849 segments merged in all · 0 of 14 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 12:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 100.3 h so far · expected done Nov 09 23:40–Nov 12 07:26 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 100.6 h so far · expected done Nov 09 20:23–Nov 11 12:19 UTC |
 | 16 | Ceilings and foundations | building | 5 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,17 +35,18 @@ Updated 2026-11-09 12:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-61 merged, 8 replaced, 3 queued, 3 abandoned, 2 merging
+62 merged, 8 replaced, 3 abandoned, 2 queued, 1 working, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-site` | bilevel.json part 4: site, plants, cameras, views, README | merging | claude-sonnet-d |
+| `p15-showcase-test` | crates/engine/tests/showcase.rs: replay the showcase and assert the brief | working | bonsai-b |
 | `upstream-sync-a655cee0c` | merge upstream upstream/main up to a655cee0c (2 commits) | merging | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 09 12:51 | `p15-showcase-site` | merged | 8,090 pass | bonsai-b |
 | Nov 09 12:08 | `p16-vault-walls` | merged | 8,089 pass | mai-flash-esc |
 | Nov 09 11:39 | `p15-showcase-services` | merged | 8,082 pass | claude-sonnet-d |
 | Nov 09 10:57 | `upstream-sync-3b7eb1b7b-v2` | merged | 8,081 pass | mai-flash-b |
@@ -57,20 +58,19 @@ Updated 2026-11-09 12:45 UTC. This page and the card in the README are regenerat
 | Nov 09 07:24 | `p16-foundation-stem` | merged | 8,016 pass | claude-sonnet-b |
 | Nov 09 02:27 | `p15-showcase-furnish` | merged | 7,906 pass | mai-flash-esc |
 | Nov 09 01:22 | `harden-p15-cmd-outlets-auto` | merged | 7,905 pass | tturbo-mac |
-| Nov 08 23:39 | `harden-p15-cabinet-along-wall` | merged | 7,896 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 975 |
-| bonsai-b | bonsai2-27b | merging | 919 |
+| bonsai-a | bonsai2-27b | agent | 975 |
+| bonsai-b | bonsai2-27b | agent | 919 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1014 |
-| bonsai-ws2-b | bonsai2-27b | idle | 995 |
+| bonsai-ws2-b | bonsai2-27b | agent | 997 |
 | claude-sonnet-a | sonnet | idle | 90 |
 | claude-sonnet-b | sonnet | merging | 92 |
 | claude-sonnet-c | sonnet | idle | 40 |
-| claude-sonnet-d | sonnet | merging | 37 |
+| claude-sonnet-d | sonnet | idle | 37 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 3 |
