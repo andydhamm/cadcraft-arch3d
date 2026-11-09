@@ -1391,6 +1391,47 @@
 	Edit Library Item	编辑库项目
 	Delete Library Item	删除库项目
 	Library Trash	库垃圾桶
+# Architecture (arch3d)
+	Architecture	建筑
+	Door	门
+	Window	窗口
+	Garage Door	车库门
+	Move Opening	移动开口
+	Level	标高
+	Library…	库…
+	Pull Library…	拉动库…
+	Component	组件
+	Floor	楼层
+	Plan	平面
+	Paint	绘制
+	Cannot place that here	无法在此处放置
+	Automatic	自动
+	Plane	平面
+	Room	房间
+	Room Detect	检测房间
+	Stair	楼梯
+	Deck	甲板
+	Railing	栏杆
+	Library	库
+	Library Item	库项目
+	Library Icon	库图标
+	Tag Library Item	标记库项目
+	Library Filters	库筛选器
+	Install Catalog	安装目录
+	Local Catalog	本地目录
+	Place From Library	从库中放置
+	Edit Furnishing	编辑家具
+	Delete Furnishing	删除家具
+	Center Furnishing	居中家具
+	Detect from Linework	从线稿检测
+	Architecture>Room	建筑>房间
+	Architecture>Room Detect	建筑>房间检测
+	Architecture>Level	建筑>标高
+	Architecture>Stair	建筑>楼梯
+	Architecture>Railing	建筑>栏杆
+	Architecture>Deck	建筑>甲板
+	Architecture>Detect from Linework	建筑>从线稿检测
+	Architecture>Detection Review	建筑>检测复查
 	Architecture>Material Painter	建筑>材质涂刷
 	Architecture>Object Painter	建筑>对象涂刷
 	Architecture>Material Eyedropper	建筑>材质吸管

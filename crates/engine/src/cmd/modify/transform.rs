@@ -9,7 +9,79 @@ use super::{Entity, Handle, Mat3, Result, Session, Value, bad, bool_or, erase_ke
 /// edited in the same command (so in its one undo step); the rest go through `edit_entities` as before.
 pub(crate) fn transform_entities(s: &mut Session, hs: &[Handle], m: &Mat3, copy: bool) -> Result<Vec<Handle>> {
     refuse_ole_frames(s, hs, m, copy)?;
-    edit_entities(s, hs, copy, |e| e.kind.transform(m))
+    let furnishings = furnishings_of(s, hs)?;
+    if copy {
+        room_for_furnishings(s, furnishings.len())?;
+    }
+    let ordinary: Vec<Handle> = hs.iter().copied().filter(|h| !furnishings.iter().any(|(fh, _)| fh == h)).collect();
+    let mut out = if ordinary.is_empty() { Vec::new() } else { edit_entities(s, &ordinary, copy, |e| e.kind.transform(m))? };
+    if furnishings.is_empty() {
+        return Ok(out);
+    }
+    // The angle of m's x axis, and whether m mirrors (then the image of the x axis is at twice the mirror line's angle).
+    let turn = m.rotation().to_degrees();
+    let mirror = m.is_mirroring();
+    let d = s.doc_mut()?;
+    for (_, id) in furnishings {
+        let Some(f) = d.arch.furnishing(id).cloned() else { continue };
+        let p = m.apply(Vec2::new(f.at[0], f.at[1]));
+        let at = [p.x, p.y];
+        let rotation = norm_degrees(if mirror { turn - f.rotation } else { f.rotation + turn });
+        let mirrored = f.mirrored != mirror;
+        if copy {
+            let fresh = Furnishing { at, rotation, mirrored, host: FurnishingHost::None, ..f.clone() };
+            let paints: Vec<_> = d
+                .arch
+                .paints
+                .iter()
+                .filter_map(|(key, paint)| match Surface::parse(key)? {
+                    Surface::Furnishing { furnishing, part } if furnishing == id => Some((part, paint.clone())),
+                    _ => None,
+                })
+                .collect();
+            let nid = d.arch.push_furnishing(fresh);
+            for (part, paint) in paints {
+                d.arch.paints.insert(Surface::Furnishing { furnishing: nid, part }.key(), paint);
+            }
+            out.push(furnishing_handle(nid));
+        } else if let Some(f) = d.arch.furnishing_mut(id) {
+            f.at = at;
+            f.rotation = rotation;
+            f.mirrored = mirrored;
+            f.host = FurnishingHost::None;
+            out.push(furnishing_handle(id));
+        }
+    }
+    d.touch_arch();
+    Ok(out)
+}
+
+/// The handles in `hs` naming a furnishing of the active drawing, each once, with its id.
+fn furnishings_of(s: &Session, hs: &[Handle]) -> Result<Vec<(Handle, ArchId)>> {
+    let d = s.doc()?;
+    let mut out: Vec<(Handle, ArchId)> = Vec::new();
+    for h in hs {
+        if let Some(id) = furnishing_id_of_handle(*h).filter(|id| d.arch.furnishing(*id).is_some())
+            && !out.iter().any(|(fh, _)| fh == h)
+        {
+            out.push((*h, id));
+        }
+    }
+    Ok(out)
+}
+
+/// Refuse a command that would take the drawing past `MAX_FURNISHINGS`, before it changes anything.
+fn room_for_furnishings(s: &Session, more: usize) -> Result<()> {
+    if more > 0 && s.doc()?.arch.furnishings.len().saturating_add(more) > MAX_FURNISHINGS {
+        return Err(bad("copy", format!("at most {MAX_FURNISHINGS} furnishings are allowed")));
+    }
+    Ok(())
+}
+
+/// `deg` in [0, 360); 0 when not finite.
+fn norm_degrees(deg: f64) -> f64 {
+    let r = if deg.is_finite() { deg.rem_euclid(360.0) } else { 0.0 };
+    if r >= 360.0 { 0.0 } else { r + 0.0 }
 }
 
 /// Scale `hs` by `f` about `base` in 3D, as AutoCAD 2024's SCALE does: about the base point's XY,
@@ -169,4 +241,45 @@ pub(super) fn run_mirror(s: &mut Session, p: &Value) -> Result<Value> {
     let erase_src = bool_or(p, "erase", false);
     let r = transform_entities(s, &hs, &Mat3::mirror(a, b), !erase_src)?;
     Ok(json!({ "handles": r.iter().map(|h| h.hex()).collect::<Vec<_>>() }))
+}
+
+#[cfg(test)]
+mod tests {
+    use cadcraft_doc::arch::{Furnishing, furnishing_handle};
+
+    use super::*;
+
+    fn add_furnishing(s: &mut Session, at: [f64; 2], rotation: f64) -> ArchId {
+        s.doc_mut().unwrap().arch.push_furnishing(Furnishing {
+            item: "armchair".into(),
+            symbol: "sym".into(),
+            name: "Armchair".into(),
+            category: "Seating".into(),
+            symbol_type: "chair".into(),
+            at,
+            rotation,
+            size: [1.0, 1.0, 0.9],
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn move_moves_a_furnishing() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 2.0], 15.0);
+        let moved = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::translate(Vec2::new(3.0, 4.0)), false).unwrap();
+        assert_eq!(moved, vec![furnishing_handle(id)]);
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, [4.0, 6.0]);
+    }
+
+    #[test]
+    fn mirror_mirrors_a_furnishing() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 0.0], 30.0);
+        let moved = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::mirror(Vec2::ZERO, Vec2::new(0.0, 1.0)), false).unwrap();
+        assert_eq!(moved, vec![furnishing_handle(id)]);
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert_eq!(f.at, [-3.0, 0.0]);
+        assert!(f.mirrored);
+    }
 }
