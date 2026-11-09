@@ -970,7 +970,21 @@ pub(crate) fn properties_section(app: &mut CadApp, ui: &mut egui::Ui) {
     }
     // Selected objects: common + geometry for a single object.
     let first = sel.first().and_then(|h| d.entity(*h)).map(|e| (**e).clone());
-    let Some(e) = first else { return };
+    // A selected cabinet, furnishing, room or roof offers the Library, narrowed to what fits it.
+    let mut library_key: Option<String> = None;
+    for (label, key) in library_targets(&d.arch, sel.first().copied()) {
+        if ui.button(crate::i18n::t(label)).clicked() {
+            library_key = Some(key);
+        }
+    }
+    let Some(e) = first else {
+        if let Some(key) = library_key
+            && let Err(e) = crate::library_panel::narrow(app, &key)
+        {
+            app.session.echo(e);
+        }
+        return;
+    };
     // What the palette works out from the selection is kept while the drawing and the selection
     // stay as they are: with thousands of objects selected, redoing it every frame is slow.
     let memo =
