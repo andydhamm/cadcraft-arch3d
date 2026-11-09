@@ -6,7 +6,9 @@
 
 use std::time::Instant;
 
-use cadcraft_geom::Vec3;
+use std::collections::BTreeMap;
+
+use cadcraft_geom::{Vec2, Vec3};
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -20,9 +22,19 @@ use crate::Session;
 /// The optional `probe` key is a list of at most 1024 `[x, y, z]` points;
 /// each element of the returned `probe` array is the hit (or `null`) for the
 /// corresponding input point, in the same order.
+///
+/// Phase 16: the optional `ceiling` key is a list of at most 1024 `[x, y]` plan points and
+/// `level` a level index or name (default index 0); the reply's `"ceiling"` (only when
+/// `ceiling` was given) holds, per point, the finished ceiling elevation above it on that level
+/// (`cadcraft_arch::ceiling::finished_ceiling_at`, absolute z) or `null` outside every room.
+/// `"parts"` always counts the scene's meshes by part (`cadcraft_arch3d::probe::part_of`), except
+/// `furnishing` and `electrical`, which count the furnishings and plates built; parts with no
+/// mesh are left out.
 fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
     let incremental = parse_bool_param(params, "incremental")?;
     let show_digest = parse_bool_param(params, "digest")?;
+    let ceiling_points = parse_ceiling_points(params)?;
+    let ceiling_level = parse_level_param(&s.doc()?.arch, params)?;
 
     let arch_model = s.doc()?.arch.clone();
     let arch_revision = s.doc()?.arch_revision;
@@ -97,7 +109,15 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
         "objects": stats.objects,
         "revision": arch_revision,
         "probe": probe_results,
+        "parts": parts_json(&scene),
     });
+    if let (Some(points), Value::Object(obj)) = (ceiling_points, &mut reply) {
+        let zs: Vec<Value> = points
+            .iter()
+            .map(|p| cadcraft_arch::ceiling::finished_ceiling_at(&arch_model, ceiling_level, *p).map_or(Value::Null, |z| json!(z)))
+            .collect();
+        obj.insert("ceiling".to_string(), Value::Array(zs));
+    }
     if show_digest {
         if let serde_json::Value::Object(ref mut obj) = reply {
             obj.insert("digest".to_string(), serde_json::Value::String(scene.digest()));
@@ -151,6 +171,78 @@ fn parse_probe_points(params: &Value) -> crate::Result<Vec<Vec3>> {
     }
 }
 
+/// Most points one `ceiling` query answers (as many as `probe`).
+const MAX_CEILING_POINTS: usize = 1024;
+
+/// Parse the optional `ceiling` key: a JSON array of at most 1024 `[x, y]` arrays of finite
+/// numbers. Absent or `null` is `None` (no query, no reply key); anything else is refused.
+fn parse_ceiling_points(params: &Value) -> crate::Result<Option<Vec<Vec2>>> {
+    let bad = |msg: String| crate::cmd::bad("build3d", msg);
+    let arr = match params.get("ceiling") {
+        None | Some(Value::Null) => return Ok(None),
+        Some(v) => v.as_array().ok_or_else(|| bad("`ceiling` must be an array of [x, y] arrays".into()))?,
+    };
+    if arr.len() > MAX_CEILING_POINTS {
+        return Err(bad(format!("ceiling: at most {MAX_CEILING_POINTS} points allowed")));
+    }
+    let mut pts = Vec::with_capacity(arr.len());
+    for (i, item) in arr.iter().enumerate() {
+        let sub = item.as_array().filter(|a| a.len() == 2).ok_or_else(|| bad(format!("ceiling[{i}] must be [x, y]")))?;
+        let x = sub.first().and_then(Value::as_f64).ok_or_else(|| bad(format!("ceiling[{i}][0] is not a number")))?;
+        let y = sub.get(1).and_then(Value::as_f64).ok_or_else(|| bad(format!("ceiling[{i}][1] is not a number")))?;
+        if !x.is_finite() || !y.is_finite() {
+            return Err(bad(format!("ceiling[{i}] has a non-finite coordinate")));
+        }
+        pts.push(Vec2::new(x, y));
+    }
+    Ok(Some(pts))
+}
+
+/// Parse the optional `level` key: a non-negative integer level index or a level name (a
+/// numeric string is an index too). Absent or `null` is level 0. An unknown level is refused
+/// (index 0 is always known, even before the model has levels).
+fn parse_level_param(arch: &cadcraft_doc::arch::ArchModel, params: &Value) -> crate::Result<u32> {
+    let by_index = |n: u64| -> Option<u32> {
+        let n = u32::try_from(n).ok()?;
+        (arch.level(n).is_some() || n == 0).then_some(n)
+    };
+    match params.get("level") {
+        None | Some(Value::Null) => Ok(0),
+        Some(Value::Number(n)) => {
+            n.as_u64().and_then(by_index).ok_or_else(|| crate::cmd::bad("build3d", format!("unknown level `{n}` (a level index or name)")))
+        }
+        Some(Value::String(name)) => {
+            let t = name.trim();
+            arch.levels
+                .iter()
+                .find(|l| l.name == t)
+                .or_else(|| arch.levels.iter().find(|l| l.name.eq_ignore_ascii_case(t)))
+                .map(|l| l.index)
+                .or_else(|| t.parse::<u64>().ok().and_then(by_index))
+                .ok_or_else(|| crate::cmd::bad("build3d", format!("unknown level `{name}`")))
+        }
+        Some(other) => Err(crate::cmd::bad("build3d", format!("`level` must be a level index or name, got `{other}`"))),
+    }
+}
+
+/// The scene's parts and how many there are: meshes by `probe::part_of`, except furnishings and
+/// electrical plates, counted by the boxes built (one per object); parts with none are left out.
+fn parts_json(scene: &cadcraft_arch3d::Scene3d) -> Value {
+    let mut parts: BTreeMap<&'static str, usize> = BTreeMap::new();
+    for m in &scene.meshes {
+        let part = cadcraft_arch3d::probe::part_of(m);
+        if part != "furnishing" && part != "electrical" {
+            *parts.entry(part).or_default() += 1;
+        }
+    }
+    for (part, n) in [("furnishing", scene.furnishing_boxes.len()), ("electrical", scene.electrical_boxes.len())] {
+        if n > 0 {
+            parts.insert(part, n);
+        }
+    }
+    json!(parts)
+}
+
 /// Elapsed ms since `t`. On wasm32 this is `0.0` — no `web-time` dependency so
 /// the web build keeps compiling.
 #[cfg(not(target_arch = "wasm32"))]
@@ -169,7 +261,7 @@ pub fn specs() -> Vec<crate::cmd::CommandSpec> {
         crate::cmd::CommandSpec::new("build3d", "Build 3D", run_build3d)
             .menu(&["Architecture", "Build 3D"])
             .noundo()
-            .params("{probe?: [[x, y, z], ...], incremental?: bool, digest?: bool}"),
+            .params("{probe?: [[x, y, z], ...], ceiling?: [[x, y], ...], level?: index|name, incremental?: bool, digest?: bool}"),
     );
     v
 }
@@ -1404,5 +1496,129 @@ mod tests {
         assert_eq!(r2["objects"].as_u64(), Some(0), "empty model -> 0 objects");
         assert_eq!(r2["rebuilt"].as_u64(), Some(0), "no changes -> 0 rebuilt");
         assert!(r2["incremental"].as_bool().expect("missing incremental"), "should report incremental=true");
+    }
+
+    /// The phase-1 house through the commands: three wall commands 2.4 m high (w0..w5) and
+    /// `roomdetect`, giving S (0.1..9.9 x 0.1..2.95), NW (0.1..5.95 x 3.05..7.9) and NE
+    /// (6.05..9.9 x 3.05..7.9); `level` puts the walls on that level index.
+    fn house_walls(s: &mut Session, level: Option<u32>) {
+        let mut walls = [
+            json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true}),
+            json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"}),
+            json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"}),
+        ];
+        for w in walls.iter_mut() {
+            if let Some(l) = level {
+                w["level"] = json!(l);
+            }
+            s.execute("wall", w).unwrap();
+        }
+        let detect = match level {
+            Some(l) => json!({"level": l}),
+            None => json!({}),
+        };
+        s.execute("roomdetect", &detect).unwrap();
+    }
+
+    fn house() -> Session {
+        let mut s = Session::new();
+        house_walls(&mut s, None);
+        s
+    }
+
+    fn ceilings_of(r: &Value) -> Vec<Option<f64>> {
+        r["ceiling"].as_array().expect("a `ceiling` list").iter().map(Value::as_f64).collect()
+    }
+
+    fn close(got: &[Option<f64>], want: &[Option<f64>]) -> bool {
+        got.len() == want.len()
+            && got.iter().zip(want).all(|(g, w)| match (g, w) {
+                (Some(g), Some(w)) => (g - w).abs() < 1e-9,
+                (None, None) => true,
+                _ => false,
+            })
+    }
+
+    #[test]
+    fn build3d_ceiling_query_flat_house() {
+        let mut s = house();
+        let r = s.execute("build3d", &json!({"ceiling": [[5, 1.5], [3, 5], [8, 5], [20, 20]]})).unwrap();
+        let got = ceilings_of(&r);
+        assert!(close(&got, &[Some(2.4), Some(2.4), Some(2.4), None]), "{got:?}");
+        // No `ceiling` (or null): no reply key.
+        let r = s.execute("build3d", &json!({})).unwrap();
+        assert!(r.get("ceiling").is_none());
+        let r = s.execute("build3d", &json!({"ceiling": null})).unwrap();
+        assert!(r.get("ceiling").is_none());
+        // A room's own ceiling and its finish stack show up; an empty list answers an empty list.
+        let ne = cadcraft_arch::ceiling::room_at_point(&s.doc().unwrap().arch, 0, Vec2::new(8.0, 5.0)).map(|r| r.id.0).unwrap();
+        s.execute("room", &json!({"id": ne, "ceiling": 2.7, "ceilingStack": [{"material": "drywall", "thickness": 0.0127}]})).unwrap();
+        let r = s.execute("build3d", &json!({"ceiling": [[8, 5], [5, 1.5]]})).unwrap();
+        assert!(close(&ceilings_of(&r), &[Some(2.6873), Some(2.4)]), "{:?}", ceilings_of(&r));
+        let r = s.execute("build3d", &json!({"ceiling": []})).unwrap();
+        assert_eq!(r["ceiling"], json!([]));
+    }
+
+    #[test]
+    fn build3d_ceiling_level_by_index_and_name() {
+        let mut s = house();
+        s.execute("level", &json!({"above": 0})).unwrap();
+        house_walls(&mut s, Some(1));
+        let names: Vec<String> = s.doc().unwrap().arch.levels.iter().map(|l| l.name.clone()).collect();
+        for (level, want) in [(json!(0), 2.4), (json!("Level 1"), 2.4), (json!(1), 5.1), (json!(names[1].clone()), 5.1), (json!("1"), 5.1)] {
+            let r = s.execute("build3d", &json!({"ceiling": [[5, 1.5]], "level": level})).unwrap();
+            assert!(close(&ceilings_of(&r), &[Some(want)]), "{level}: {:?}", ceilings_of(&r));
+        }
+        // The default is level 0.
+        let r = s.execute("build3d", &json!({"ceiling": [[5, 1.5]]})).unwrap();
+        assert!(close(&ceilings_of(&r), &[Some(2.4)]));
+    }
+
+    #[test]
+    fn build3d_ceiling_refuses_bad_points_and_levels() {
+        let mut s = house();
+        let rev = s.doc().unwrap().arch_revision;
+        let too_many: Vec<Value> = (0..1025).map(|_| json!([1, 1])).collect();
+        let bad = [
+            json!({"ceiling": [[1, "x"]]}),
+            json!({"ceiling": "all"}),
+            json!({"ceiling": [[1]]}),
+            json!({"ceiling": [[1, 2, 3]]}),
+            json!({"ceiling": [1, 2]}),
+            json!({"ceiling": [[null, 2]]}),
+            json!({"ceiling": {"x": 1, "y": 2}}),
+            json!({"ceiling": too_many}),
+            json!({"ceiling": [[1, 1]], "level": "Moon"}),
+            json!({"ceiling": [[1, 1]], "level": 7}),
+            json!({"ceiling": [[1, 1]], "level": -1}),
+            json!({"ceiling": [[1, 1]], "level": 0.5}),
+            json!({"ceiling": [[1, 1]], "level": true}),
+            json!({"ceiling": [[1, 1]], "level": [0]}),
+            json!({"level": "Moon"}),
+        ];
+        for p in &bad {
+            let r = s.execute("build3d", p);
+            assert!(matches!(r, Err(crate::EngineError::BadParams { .. })), "{p}: {r:?}");
+        }
+        let at_cap: Vec<Value> = (0..1024).map(|_| json!([1e300, -1e300])).collect();
+        let r = s.execute("build3d", &json!({"ceiling": at_cap})).unwrap();
+        assert_eq!(r["ceiling"].as_array().map(Vec::len), Some(1024));
+        assert_eq!(s.doc().unwrap().arch_revision, rev);
+    }
+
+    #[test]
+    fn build3d_parts_counts_meshes_by_part() {
+        let mut s = house();
+        let r = s.execute("build3d", &json!({})).unwrap();
+        assert_eq!(r["parts"], json!({"ceiling": 3, "floor": 3, "wall": 6}), "{}", r["parts"]);
+        // Electrical plates count by their boxes (one per device), not by their meshes.
+        s.execute("outlet", &json!({"kind": "duplex", "wall": "w0", "offset": 4.0, "side": "left"})).unwrap();
+        let r = s.execute("build3d", &json!({})).unwrap();
+        assert_eq!(r["parts"]["electrical"], 1, "{}", r["parts"]);
+        assert_eq!(r["parts"]["wall"], 6);
+        // An empty model has no parts.
+        let mut e = fresh_session();
+        let r = e.execute("build3d", &json!({})).unwrap();
+        assert_eq!(r["parts"], json!({}));
     }
 }

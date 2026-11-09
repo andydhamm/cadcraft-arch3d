@@ -52,6 +52,21 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("light-") {
         return "light";
     }
+    // Phase 16: slab floors, foundations and interior soffits (`soffit-box`, `soffit-box:<material>`).
+    // The roof's own soffit (`soffit`, and any other `soffit-…`) stays part of the roof.
+    let kind = |p: &str| m == p || m.strip_prefix(p).is_some_and(|r| r.starts_with('-'));
+    if kind("slab") {
+        return "slab";
+    }
+    if kind("footing") {
+        return "footing";
+    }
+    if kind("foundation") {
+        return "foundation";
+    }
+    if m.starts_with("soffit-box") {
+        return "soffit";
+    }
     // Phase 13: finished faces belong to their wall, roof or room.
     if m.starts_with("wall-") {
         return "wall";
@@ -223,6 +238,9 @@ pub fn mesh_label(mesh: &Mesh) -> String {
     let label = match part_of(mesh) {
         "furnishing" => Some(cadcraft_doc::arch::furnishing_label(mesh.object)),
         "pull" => Some(cadcraft_doc::arch::cabinet_label(mesh.object)),
+        "soffit" => Some(cadcraft_doc::arch::soffit_label(mesh.object)),
+        "foundation" | "footing" => Some(cadcraft_doc::arch::foundation_label(mesh.object)),
+        "slab" => Some(cadcraft_doc::arch::room_label(mesh.object)),
         _ => m.strip_prefix("paint:").and_then(Surface::parse).map(|s| match s {
             Surface::WallSide { .. } => cadcraft_doc::arch::wall_label(mesh.object),
             Surface::RoomFloor(_) | Surface::RoomCeiling(_) => cadcraft_doc::arch::room_label(mesh.object),
@@ -1141,5 +1159,43 @@ mod tests {
         m.push_prism(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)], 2.0, 3.0);
         m.level_elevation = 5.0;
         assert_eq!(mesh_level(&m), 5.0, "mesh_level should use recorded level_elevation when finite");
+    }
+
+    #[test]
+    fn part_of_maps_slab_footing_foundation_and_interior_soffit() {
+        let id = ArchId(6);
+        for (material, part, label) in [
+            ("slab", "slab", "r6"),
+            ("slab-thick", "slab", "r6"),
+            ("footing", "footing", "fd6"),
+            ("footing-edge", "footing", "fd6"),
+            ("foundation", "foundation", "fd6"),
+            ("foundation-stem", "foundation", "fd6"),
+            ("soffit-box", "soffit", "sf6"),
+            ("soffit-box:finish:oak", "soffit", "sf6"),
+        ] {
+            let m = Mesh::new(material, id);
+            assert_eq!(part_of(&m), part, "{material}");
+            assert_eq!(mesh_label(&m), label, "{material}");
+        }
+        // Look-alikes keep their old parts.
+        assert_eq!(part_of(&Mesh::new("slabs", id)), "wall");
+        assert_eq!(part_of(&Mesh::new("floor-slab", id)), "floor");
+        assert_eq!(part_of(&Mesh::new("ceiling-layer", id)), "ceiling");
+        assert_eq!(mesh_label(&Mesh::new("ceiling-layer", id)), "r6");
+        assert_eq!(part_of(&Mesh::new("light-trim", id)), "light");
+    }
+
+    #[test]
+    fn roof_soffit_stays_roof() {
+        let m = Mesh::new("soffit", ArchId(2));
+        assert_eq!(part_of(&m), "roof");
+        assert_eq!(part_of(&Mesh::new("soffit-panel", ArchId(2))), "roof");
+        assert_eq!(crate::object_key(&m).kind, crate::ObjectKind::Roof);
+        assert_eq!(crate::object_key(&Mesh::new("soffit-box", ArchId(2))).kind, crate::ObjectKind::Soffit);
+        assert_eq!(crate::object_key(&Mesh::new("footing", ArchId(2))).kind, crate::ObjectKind::Foundation);
+        assert_eq!(crate::object_key(&Mesh::new("foundation", ArchId(2))).kind, crate::ObjectKind::Foundation);
+        assert_eq!(crate::object_key(&Mesh::new("slab", ArchId(2))).kind, crate::ObjectKind::Room);
+        assert_eq!(cadcraft_doc::arch::ArchKind::from_part(part_of(&m)), cadcraft_doc::arch::ArchKind::Roof);
     }
 }

@@ -740,3 +740,15 @@ Phase 15 (electrical, split levels, the showcase house) needs no groundwork outs
 
 `tools/showcase/render_all.py` renders every view style, the exports and a contact sheet with a manifest. `crates/engine/tests/showcase.rs` replays the script through the engine and asserts the brief's numbers.
 
+## Phase 16 plan
+
+Phase 16 (ceilings and foundations) was planned by the operator from a reviewed plan and started on operator groundwork, landed on arch3d before the plan: room `flatCeiling`/`ceilingStack` and the ceiling finish stack (Drywall and Suspended templates); the arch ceiling point query (rough, finished, roof underside, hang height) with stubs for vault, tray and soffit; build3d `ceiling`, `probe` and `parts` queries; arch.inspect ceiling rows; the Tray/Soffit/Foundation data types with their kinds, handles and labels; the planar geometry kit; and empty soffit, foundation and wall-rise sections in the incremental build. Checks 01 (observables) and 02 (ceiling stack) pass on the groundwork.
+
+- Handle offsets (doc/src/arch): tray 0x78000 (tr<n>), soffit 0x80000 (sf<n>), foundation 0x88000 (fd<n>). Phases 17-21 choose other offsets below ARCH_HANDLE_SPAN 0x100000.
+- Part names (probe::part_of): soffit (materials starting `soffit-box`; the roof's `soffit-panel` stays roof), foundation, footing, slab; build3d `parts` counts scene meshes per part, so later phases emit one mesh per countable thing.
+- Stub ownership: arch/src/ceiling/vault.rs + arch3d/src/ceiling/vault.rs -> p16-vault-ceiling; arch/src/ceiling/tray.rs + arch3d/src/ceiling/tray.rs -> p16-trays; arch/src/ceiling/soffit.rs + arch3d/src/soffit.rs + render/src/arch_ceiling.rs -> p16-soffits; foundation code -> p16-foundation-stem, slab -> p16-foundation-slab. Signatures are fixed; segments fill them.
+- Shared registration edits are union merges: engine cmd/arch/mod.rs (tray, soffit, foundation), inspect.rs dispatch (trays, soffits, foundations), uk.tsv rows.
+- A vaulted room's ceiling follows the roof underside; a flat ceiling never rises above it (a ceiling or level edit that would is refused, naming the room; a roof edit is never refused and leaves a ceilingWarning). The walls of a vaulted room rise to the underside (wall-rise meshes); gable walls keep their phase-4 shape.
+- Foundations cover every exterior wall with no level below it; FOUNDATION creates no walls. A basement level's exterior walls become "Concrete 0.2".
+- Four segments start from earlier work (start_from): p16-vault-ceiling, p16-trays, p16-soffits and p16-foundation-stem had partial implementations from the operator's run outside the swarm; workers finish them against the checks.
+

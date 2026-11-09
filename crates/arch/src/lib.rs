@@ -21,6 +21,7 @@ pub mod area;
 pub mod casework;
 pub mod casework_layout;
 pub mod casework_symbol;
+pub mod ceiling;
 pub mod connections;
 pub mod detect;
 pub mod electrical;

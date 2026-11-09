@@ -12,25 +12,40 @@
 //! - `level`: optional, a level's name or its numeric index; absent means index 0.
 //!   Unknown names/indices are refused (never a silent default).
 //! - `ceiling` / `floor`: optional positive heights, stored as the room's
-//!   ceiling height / floor height.
+//!   ceiling height / floor height. The ceiling height is the room's ROUGH ceiling
+//!   (the underside of the structure above, from the level's floor).
+//! - `flatCeiling`: optional `true` (the default: a flat ceiling) or `false` (under a
+//!   roof the ceiling follows the roof's underside: a cathedral or vaulted ceiling).
+//!   Any other JSON value is refused.
+//! - `ceilingStack`: optional finish stack under the rough ceiling, top to bottom: a
+//!   template name (`cadcraft_arch::ceiling::stack::template_names`, case-insensitive)
+//!   or `[{"name"?, "material": string | null (an air gap), "thickness"}, ...]`,
+//!   checked by `stack::validate`. Anything else is refused.
+//! - A flat ceiling that would rise above the roof underside over the room is refused
+//!   (`cadcraft_arch::ceiling::vault::check_flat_ceiling`).
 //!
 //!
 //! JSON parameters (edit path — `id` present; `points`, `level` are ignored):
 //! - `id`: the room to edit — `"r12"` (case-insensitive, the leading `r` may be
 //!   omitted) or a plain non-negative integer; unknown ids are refused.
-//! - `name` / `type` / `ceiling` / `floor`: applied in that order; only fields
-//!   present are touched (the others stay as-is), all are validated before the
-//!   model is written, and an edit that changes nothing is refused. Areas are
-//!   not recomputed; the detector/area pass owns them.
+//! - `name` / `type` / `ceiling` / `floor` / `flatCeiling` / `ceilingStack`: only
+//!   keys present change (an absent `ceiling` or `floor` keeps the stored height,
+//!   `null` clears it, a number sets it); all are validated before the model is
+//!   written, and an edit with none of them is refused. An edit that raises a flat
+//!   ceiling (or turns `flatCeiling` on) is refused above the roof underside; one that
+//!   keeps or lowers it never is. The level's ceiling-hung items are re-seated after
+//!   the edit. Areas are refreshed by the area pass.
 //!
 //! Returns `{"id": "r0", "handle": "...", "type": ..., "interiorArea": n,
-//! "standardArea": n}` for create; `{"id": "r0", "name": ..., "type": ...,
-//! "interiorArea": n}` for edit.
+//! "standardArea": n, "flatCeiling": bool, "ceilingStack": [{name, material,
+//! thickness}]}` for create; `{"id": "r0", "name": ..., "type": ...,
+//! "interiorArea": n, "standardArea": n, "flatCeiling", "ceilingStack"}` for edit.
 
 use std::str::FromStr;
 
+use cadcraft_arch::ceiling::{flat_ceiling_z_with, reseat, seated_ceiling_items, stack, vault};
 use cadcraft_arch::poly::{ensure_ccw, is_simple, region_area, ring_area};
-use cadcraft_doc::arch::{ArchId, MAX_ROOMS, MIN_ROOM_AREA, Room, RoomType};
+use cadcraft_doc::arch::{ArchId, CeilingLayer, MAX_ROOMS, MIN_ROOM_AREA, Room, RoomType};
 use cadcraft_geom::Vec2;
 use serde_json::{Value, json};
 
@@ -44,7 +59,11 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("room", "Room", run_room)
             .menu(&["Architecture", "Room"])
             .alias(&["rm"])
-            .params("{points: closed-ring [[x,y],...], name?, type?, level?, ceiling?, floor?} | {id, name?, type?, ceiling?, floor?}")
+            .params(
+                "{points: closed-ring [[x,y],...], name?, type?, level?, ceiling?, floor?, flatCeiling?: bool, \
+                 ceilingStack?: name | [{name?, material: string|null, thickness}, ...]} \
+                 | {id, name?, type?, ceiling?: m|null, floor?: m|null, flatCeiling?: bool, ceilingStack?: name|[...]}",
+            )
             .interactive(|_| Ok(Box::new(RoomM::default()))),
     ]
 }
@@ -146,6 +165,91 @@ fn room_type_name(t: RoomType) -> &'static str {
     room_type_key(t)
 }
 
+/// `flatCeiling`: absent is `None`; `true` / `false`; any other JSON value (null included) is refused.
+fn flat_ceiling_param(p: &Value) -> Result<Option<bool>> {
+    match p.get("flatCeiling") {
+        None => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(other) => Err(bad("room", format!("`flatCeiling` must be true or false, got `{other}`"))),
+    }
+}
+
+/// `ceilingStack`: absent is `None`; a template name (case-insensitive); or a list of
+/// `{"name"?, "material": string | null, "thickness"}` layers, top to bottom, that
+/// `stack::validate` accepts. Anything else is refused.
+fn ceiling_stack_param(p: &Value) -> Result<Option<Vec<CeilingLayer>>> {
+    let v = match p.get("ceilingStack") {
+        None => return Ok(None),
+        Some(v) => v,
+    };
+    let layers = match v {
+        Value::String(name) => stack::template(name)
+            .ok_or_else(|| bad("room", format!("unknown ceiling stack `{name}`; known: {}", stack::template_names().join(", "))))?,
+        Value::Array(items) => {
+            if items.len() > stack::MAX_CEILING_LAYERS {
+                return Err(bad("room", format!("a ceiling stack has at most {} layers, got {}", stack::MAX_CEILING_LAYERS, items.len())));
+            }
+            let mut layers = Vec::with_capacity(items.len());
+            for (i, item) in items.iter().enumerate() {
+                let n = i + 1;
+                let o = item.as_object().ok_or_else(|| bad("room", format!("ceiling layer {n} must be {{\"material\", \"thickness\"}}")))?;
+                let name = match o.get("name") {
+                    None | Some(Value::Null) => "",
+                    Some(Value::String(t)) => t.as_str(),
+                    Some(_) => return Err(bad("room", format!("ceiling layer {n}: `name` must be a string"))),
+                };
+                let material = match o.get("material") {
+                    Some(Value::Null) => None,
+                    Some(Value::String(m)) => Some(m.as_str()),
+                    None => return Err(bad("room", format!("ceiling layer {n}: `material` (a name, or null for an air gap) is required"))),
+                    Some(_) => return Err(bad("room", format!("ceiling layer {n}: `material` must be a name or null"))),
+                };
+                let thickness = o
+                    .get("thickness")
+                    .and_then(Value::as_f64)
+                    .filter(|t| t.is_finite())
+                    .ok_or_else(|| bad("room", format!("ceiling layer {n}: `thickness` (metres) is required")))?;
+                layers.push(CeilingLayer::new(name, material, thickness));
+            }
+            layers
+        }
+        other => {
+            return Err(bad(
+                "room",
+                format!("`ceilingStack` must be a stack name ({}) or a list of layers, got `{other}`", stack::template_names().join(", ")),
+            ));
+        }
+    };
+    stack::validate(&layers).map_err(|m| bad("room", m))?;
+    Ok(Some(layers))
+}
+
+/// An edited height: absent is `None` (keep), `null` is `Some(None)` (clear), a positive number
+/// is `Some(Some(x))`; anything else is refused like `size_param`.
+fn edit_height_param(p: &Value, key: &str) -> Result<Option<Option<f64>>> {
+    match p.get(key) {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(_) => size_param("room", p, key, false).map(Some),
+    }
+}
+
+/// The ceiling stack as reply JSON: `[{name, material, thickness}]`, `material` null for an air gap.
+pub(crate) fn ceiling_stack_json(stack: &[CeilingLayer]) -> Value {
+    Value::Array(stack.iter().map(|l| json!({ "name": l.name, "material": l.material, "thickness": l.thickness })).collect())
+}
+
+/// Refuse a flat ceiling on `room` above the roof underside over it (no-op for a vaulted room or
+/// one without a ceiling).
+fn guard_flat_ceiling(arch: &cadcraft_doc::arch::ArchModel, room: &Room) -> Result<()> {
+    if room.flat_ceiling
+        && let Some(z) = flat_ceiling_z_with(room, arch.level(room.level))
+    {
+        vault::check_flat_ceiling(arch, room, z).map_err(|m| bad("room", m))?;
+    }
+    Ok(())
+}
+
 /// Run the `room` command from JSON parameters. Never opens a dialog.
 fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
     // If a level is requested but the model has no levels yet, make sure the
@@ -157,16 +261,13 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
         d.arch.ensure_ground_level();
     }
 
-    let d = s.doc_mut()?;
-
     // --- Edit path: modify an existing room by `id`. Every field is validated
-    // before the model is written, only present fields are touched, and the
-    // arch revision is touched exactly once. ---
+    // before the model is written (on a copy of the room, read through `doc()`, so a
+    // refusal leaves no undo step), only present fields are touched, and the arch
+    // revision is touched exactly once. ---
     if let Some(id_val) = p.get("id") {
         let label = id_val.to_string();
         let id = parse_room_id(id_val).ok_or_else(|| bad("room", format!("no such room `{label}`")))?;
-        let idx = d.arch.room_index(id).ok_or_else(|| bad("room", format!("no such room `{label}`")))?;
-
         let name = str_param(p, "name").map(|t| t.to_string());
         let room_type = match str_param(p, "type") {
             None => None,
@@ -175,34 +276,74 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
                 None => return Err(bad("room", format!("unknown room type `{t}`"))),
             },
         };
-        let ceiling = size_param("room", p, "ceiling", false)?;
-        let floor = size_param("room", p, "floor", false)?;
+        let ceiling = edit_height_param(p, "ceiling")?;
+        let floor = edit_height_param(p, "floor")?;
+        let flat = flat_ceiling_param(p)?;
+        let ceiling_stack = ceiling_stack_param(p)?;
 
-        if name.is_none() && room_type.is_none() && ceiling.is_none() && floor.is_none() {
-            return Err(bad("room", "nothing to change"));
-        }
+        let (idx, edited, seated) = {
+            let arch = &s.doc()?.arch;
+            let idx = arch.room_index(id).ok_or_else(|| bad("room", format!("no such room `{label}`")))?;
+            let stored = arch.rooms.get(idx).ok_or_else(|| bad("room", format!("no such room `{label}`")))?;
+            if name.is_none() && room_type.is_none() && ceiling.is_none() && floor.is_none() && flat.is_none() && ceiling_stack.is_none() {
+                return Err(bad("room", "nothing to change"));
+            }
+            let mut edited = stored.clone();
+            if let Some(n) = name {
+                edited.name = n;
+            }
+            if let Some(rt) = room_type {
+                edited.room_type = rt;
+            }
+            if let Some(c) = ceiling {
+                edited.ceiling_height = c;
+            }
+            if let Some(f) = floor {
+                edited.floor_height = f;
+            }
+            if let Some(f) = flat {
+                edited.flat_ceiling = f;
+            }
+            if let Some(st) = ceiling_stack {
+                edited.ceiling_stack = st;
+            }
+            // Only an edit that raises a flat ceiling is checked against the roof (turning
+            // `flatCeiling` on, a ceiling above the stored one, or a ceiling where the stored
+            // room had none), so a ceiling a roof edit left above the underside can still be
+            // renamed or lowered.
+            let new_z = if edited.flat_ceiling { flat_ceiling_z_with(&edited, arch.level(edited.level)) } else { None };
+            if let Some(z) = new_z {
+                let old_z = flat_ceiling_z_with(stored, arch.level(stored.level));
+                let raises = !stored.flat_ceiling || old_z.is_none_or(|o| z > o + 1e-9);
+                if raises {
+                    vault::check_flat_ceiling(arch, &edited, z).map_err(|m| bad("room", m))?;
+                }
+            }
+            let seated = seated_ceiling_items(arch, edited.level);
+            (idx, edited, seated)
+        };
 
-        if let Some(n) = name {
-            d.arch.rooms[idx].name = n;
+        let d = s.doc_mut()?;
+        if let Some(r) = d.arch.rooms.get_mut(idx) {
+            *r = edited;
         }
-        if let Some(rt) = room_type {
-            d.arch.rooms[idx].room_type = rt;
-        }
-        d.arch.rooms[idx].ceiling_height = ceiling;
-        d.arch.rooms[idx].floor_height = floor;
         cadcraft_arch::area::refresh_areas(&mut d.arch);
+        reseat(&mut d.arch, &seated);
         d.touch_arch();
 
-        let room = &d.arch.rooms[idx];
+        let room = d.arch.rooms.get(idx).ok_or_else(|| bad("room", format!("no such room `{label}`")))?;
         return Ok(json!({
             "id": format!("r{}", id.0),
             "name": room.name,
             "type": room_type_key(room.room_type),
             "interiorArea": room.interior_area,
             "standardArea": room.standard_area,
+            "flatCeiling": room.flat_ceiling,
+            "ceilingStack": ceiling_stack_json(&room.ceiling_stack),
         }));
     }
 
+    let d = s.doc()?;
     let arch = &d.arch;
 
     // --- Points: required, distinct, explicitly closed, >= 4, finite, simple,
@@ -255,6 +396,8 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
     // --- Ceiling / floor: optional, positive, finite (refused otherwise) ---
     let ceiling = size_param("room", p, "ceiling", false)?;
     let floor = size_param("room", p, "floor", false)?;
+    let flat_ceiling = flat_ceiling_param(p)?.unwrap_or(true);
+    let ceiling_stack = ceiling_stack_param(p)?.unwrap_or_default();
 
     // --- Name ---
     let name = str_param(p, "name").map(|s| s.to_string()).unwrap_or_default();
@@ -268,7 +411,7 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // The standard area is measured against the surrounding walls, so the room must
     // first sit in the model. `standard_area` only reads `arch`; that immutable
-    // borrow ends before `push_room` mutates `d`.
+    // borrow ends before `push_room` mutates the drawing.
     let mut room = Room {
         name,
         room_type,
@@ -278,10 +421,15 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
         floor_height: floor,
         interior_area,
         standard_area: 0.0,
+        flat_ceiling,
+        ceiling_stack,
         ..Default::default()
     };
     let standard_area = cadcraft_arch::area::standard_area(arch, &room);
     room.standard_area = standard_area;
+    guard_flat_ceiling(arch, &room)?;
+    let stack_json = ceiling_stack_json(&room.ceiling_stack);
+    let d = s.doc_mut()?;
     let id = d.arch.push_room(room);
     cadcraft_arch::area::refresh_areas(&mut d.arch);
     d.touch_arch();
@@ -292,6 +440,8 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
         "type": room_type_key(room_type),
         "interiorArea": interior_area,
         "standardArea": standard_area,
+        "flatCeiling": flat_ceiling,
+        "ceilingStack": stack_json,
     }))
 }
 
@@ -1036,12 +1186,19 @@ mod tests {
     #[test]
     fn room_edit_rejects_non_finite_ceiling() {
         let mut s = new_session();
-        let _ = s.execute("room", &json!({ "points": square_points() })).unwrap();
-        for c in [json!(f64::NAN), json!(f64::INFINITY), json!(-f64::INFINITY)] {
+        let _ = s.execute("room", &json!({ "points": square_points(), "ceiling": 3.0 })).unwrap();
+        // JSON has no NaN or infinity: `json!` turns them into null, which (phase 16) clears the
+        // room's own ceiling height. Spelled-out non-numbers are refused and change nothing.
+        for c in [json!("NaN"), json!("inf"), json!([1.0])] {
             let r = s.execute("room", &json!({ "id": "r0", "ceiling": c }));
             assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })));
+            assert_eq!(s.doc().unwrap().arch.rooms[0].ceiling_height, Some(3.0));
         }
-        assert_eq!(s.doc().unwrap().arch.rooms[0].ceiling_height, None);
+        for c in [json!(f64::NAN), json!(f64::INFINITY), json!(-f64::INFINITY)] {
+            assert!(c.is_null());
+            s.execute("room", &json!({ "id": "r0", "ceiling": c })).unwrap();
+            assert_eq!(s.doc().unwrap().arch.rooms[0].ceiling_height, None);
+        }
     }
 
     /// The edit path ignores `level` and `points` (they are create-only fields).
@@ -1067,5 +1224,159 @@ mod tests {
         assert_eq!(after.level, before_level);
         assert_eq!(after.polygon, before_polygon);
         assert_eq!(r["name"].as_str().unwrap(), "Changed");
+    }
+
+    /// The phase-1 house's NE room alone: r0 = 6.05..9.9 x 3.05..7.9 on level 0.
+    fn ne_room() -> Value {
+        json!([[6.05, 3.05], [9.9, 3.05], [9.9, 7.9], [6.05, 7.9], [6.05, 3.05]])
+    }
+
+    fn suspended() -> Value {
+        json!([
+            {"name": "drywall", "material": "drywall", "thickness": 0.0127},
+            {"name": "air", "material": null, "thickness": 0.2},
+            {"material": "ceiling-tile", "thickness": 0.016}
+        ])
+    }
+
+    #[test]
+    fn room_accepts_flat_ceiling_and_stack() {
+        let mut s = new_session();
+        // Create with both keys.
+        s.execute("room", &json!({ "points": ne_room(), "flatCeiling": false, "ceilingStack": suspended() })).unwrap();
+        let r = s.doc().unwrap().arch.rooms[0].clone();
+        assert!(!r.flat_ceiling);
+        assert_eq!(r.ceiling_stack.len(), 3);
+        assert_eq!(r.ceiling_stack[1].material, None);
+        assert_eq!(r.ceiling_stack[2].name, "");
+        assert_eq!(r.ceiling_stack[2].material.as_deref(), Some("ceiling-tile"));
+        assert!((cadcraft_arch::ceiling::finished_ceiling_at(&s.doc().unwrap().arch, 0, Vec2::new(8.0, 5.0)).unwrap() - 2.1713).abs() < 1e-9);
+        // Edit: a template name (case-insensitive) and the flag back on.
+        s.execute("room", &json!({ "id": "r0", "ceilingStack": " NONE ", "flatCeiling": true })).unwrap();
+        let r = s.doc().unwrap().arch.rooms[0].clone();
+        assert!(r.flat_ceiling && r.ceiling_stack.is_empty());
+        // Each key alone is a change.
+        s.execute("room", &json!({ "id": "r0", "flatCeiling": false })).unwrap();
+        assert!(!s.doc().unwrap().arch.rooms[0].flat_ceiling);
+        s.execute("room", &json!({ "id": "r0", "ceilingStack": [{"material": "drywall", "thickness": 0.0127}] })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].ceiling_stack.len(), 1);
+        // A fresh room is flat with no stack.
+        s.execute("room", &json!({ "points": square_points() })).unwrap();
+        let r = s.doc().unwrap().arch.rooms[1].clone();
+        assert!(r.flat_ceiling && r.ceiling_stack.is_empty());
+    }
+
+    #[test]
+    fn room_refuses_bad_ceiling_params() {
+        let mut s = new_session();
+        s.execute("room", &json!({ "points": ne_room() })).unwrap();
+        let rooms_before = s.doc().unwrap().arch.rooms.clone();
+        let nine: Vec<Value> = (0..9).map(|_| json!({"material": "drywall", "thickness": 0.01})).collect();
+        let bad_flags = [json!("no"), json!(1), json!(null), json!([true])];
+        let bad_stacks = [
+            json!("plaster"),
+            json!([{"material": "drywall", "thickness": -0.01}]),
+            json!([{"material": null, "thickness": 0.1}]),
+            json!([{"material": "drywall", "thickness": 1.5}]),
+            json!(nine),
+            json!({"material": "drywall"}),
+            json!([{"thickness": 0.1}]),
+            json!([{"material": 5, "thickness": 0.1}]),
+            json!([{"material": "drywall", "thickness": "thin"}]),
+            json!([{"material": "drywall"}]),
+            json!([{"name": 3, "material": "drywall", "thickness": 0.1}]),
+            json!(["drywall"]),
+            json!(7),
+            json!(null),
+        ];
+        for f in &bad_flags {
+            for p in [json!({ "id": "r0", "flatCeiling": f }), json!({ "points": square_points(), "flatCeiling": f })] {
+                let r = s.execute("room", &p);
+                assert!(matches!(r, Err(EngineError::BadParams { .. })), "{p}: {r:?}");
+            }
+        }
+        for st in &bad_stacks {
+            for p in [json!({ "id": "r0", "ceilingStack": st }), json!({ "points": square_points(), "ceilingStack": st })] {
+                let r = s.execute("room", &p);
+                assert!(matches!(r, Err(EngineError::BadParams { .. })), "{p}: {r:?}");
+            }
+        }
+        // An unknown template names the known ones.
+        let e = s.execute("room", &json!({ "id": "r0", "ceilingStack": "plaster" })).unwrap_err().to_string();
+        for n in cadcraft_arch::ceiling::stack::template_names() {
+            assert!(e.contains(n), "{e}");
+        }
+        assert_eq!(s.doc().unwrap().arch.rooms, rooms_before, "refused edits change nothing");
+    }
+
+    #[test]
+    fn room_edit_keeps_ceiling_when_absent() {
+        let mut s = new_session();
+        s.execute("room", &json!({ "points": square_points(), "ceiling": 3.0, "floor": 0.2 })).unwrap();
+        for p in [json!({ "id": "r0", "name": "Hall" }), json!({ "id": "r0", "type": "bedroom" }), json!({ "id": "r0", "flatCeiling": false })] {
+            s.execute("room", &p).unwrap();
+            let r = &s.doc().unwrap().arch.rooms[0];
+            assert_eq!((r.ceiling_height, r.floor_height), (Some(3.0), Some(0.2)), "{p}");
+        }
+        s.execute("room", &json!({ "id": "r0", "floor": 0.1 })).unwrap();
+        let r = &s.doc().unwrap().arch.rooms[0];
+        assert_eq!((r.ceiling_height, r.floor_height), (Some(3.0), Some(0.1)));
+    }
+
+    #[test]
+    fn room_edit_null_clears_ceiling() {
+        let mut s = new_session();
+        s.execute("room", &json!({ "points": square_points(), "ceiling": 3.0, "floor": 0.2 })).unwrap();
+        s.execute("room", &json!({ "id": "r0", "ceiling": null })).unwrap();
+        let r = &s.doc().unwrap().arch.rooms[0];
+        assert_eq!((r.ceiling_height, r.floor_height), (None, Some(0.2)));
+        s.execute("room", &json!({ "id": "r0", "floor": null })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_height, None);
+        // One undo brings the floor back.
+        s.undo().unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_height, Some(0.2));
+    }
+
+    #[test]
+    fn room_reply_reports_ceiling_fields() {
+        let mut s = new_session();
+        let r = s.execute("room", &json!({ "points": ne_room() })).unwrap();
+        assert_eq!(r["flatCeiling"], true);
+        assert_eq!(r["ceilingStack"], json!([]));
+        let r = s.execute("room", &json!({ "id": "r0", "flatCeiling": false, "ceilingStack": suspended() })).unwrap();
+        assert_eq!(r["flatCeiling"], false);
+        assert_eq!(
+            r["ceilingStack"],
+            json!([
+                {"name": "drywall", "material": "drywall", "thickness": 0.0127},
+                {"name": "air", "material": null, "thickness": 0.2},
+                {"name": "", "material": "ceiling-tile", "thickness": 0.016}
+            ])
+        );
+    }
+
+    /// A room edit that moves the ceiling re-seats the ceiling items hung from it; an item moved
+    /// off the ceiling by hand stays.
+    #[test]
+    fn room_edit_reseats_ceiling_items() {
+        use cadcraft_doc::arch::{Furnishing, Placement};
+        let mut s = new_session();
+        s.execute("room", &json!({ "points": ne_room() })).unwrap();
+        let hung =
+            |at: [f64; 2], elevation: f64| Furnishing { placement: Placement::Ceiling, at, elevation, size: [0.4, 0.4, 0.86], ..Default::default() };
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.ensure_ground_level();
+            d.arch.push_furnishing(hung([8.0, 5.0], 2.4 - 0.86));
+            d.arch.push_furnishing(hung([9.0, 6.0], 1.0));
+            d.touch_arch();
+        }
+        s.execute("room", &json!({ "id": "r0", "ceiling": 2.7 })).unwrap();
+        let f = &s.doc().unwrap().arch.furnishings;
+        assert!((f[0].elevation + f[0].size[2] - 2.7).abs() < 1e-9, "{}", f[0].elevation);
+        assert!((f[1].elevation - 1.0).abs() < 1e-12);
+        s.execute("room", &json!({ "id": "r0", "ceilingStack": [{"material": "drywall", "thickness": 0.0127}] })).unwrap();
+        let f = &s.doc().unwrap().arch.furnishings;
+        assert!((f[0].elevation + f[0].size[2] - 2.6873).abs() < 1e-9, "{}", f[0].elevation);
     }
 }
