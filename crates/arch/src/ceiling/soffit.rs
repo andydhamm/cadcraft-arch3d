@@ -4,7 +4,7 @@
 use crate::ceiling;
 use crate::poly;
 use crate::wall;
-use cadcraft_doc::arch::ArchModel;
+use cadcraft_doc::arch::{ArchId, ArchModel, CabinetKind, MAX_SOFFITS, Soffit};
 use cadcraft_geom::Vec2;
 
 /// Snap tolerance for aligning rect sides to wall face lines.
@@ -89,31 +89,27 @@ pub fn interior_point(ring: &[Vec2]) -> Option<Vec2> {
 /// sharing one host wall and rotation; the ring is the convex hull box of the cabinets
 /// against that wall. Otherwise `s.polygon` (trailing duplicate dropped, >= 3 finite,
 /// reversed if its signed area is negative).
-pub fn soffit_ring(model: &ArchModel, s: &crate::ceiling::Soffit) -> Option<Vec<Vec2>> {
+pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
     if !s.over.is_empty() {
         // Every id must resolve to a wall cabinet on this level, all on the same wall
         // with the same rotation.
-        let mut walls: Option<crate::arch::ArchId> = None;
+        let mut host_wid: Option<ArchId> = None;
         let mut rotations: Option<f64> = None;
-        let mut s_min = f64::INFINITY;
-        let mut s_max = f64::NEG_INFINITY;
-        let mut d_max = f64::NEG_INFINITY;
         for cid in &s.over {
-            let cab = model.cabinets.iter().find(|c| &c.id == cid)?;
-            if cab.kind != crate::ceiling::CabinetKind::Wall {
+            let cab = model.cabinets.iter().find(|c| c.id == *cid)?;
+            if cab.kind != CabinetKind::Wall {
                 return None;
             }
             if cab.level != s.level {
                 return None;
             }
-            let host = crate::casework::host_wall(model, cab)?;
-            let w = model.walls.iter().find(|w| w.id == host)?;
-            if let Some(wid) = walls {
-                if wid != w.id {
+            let (host_id, _, _) = crate::casework::host_wall(model, cab)?;
+            if let Some(wid) = host_wid {
+                if wid != host_id {
                     return None;
                 }
             } else {
-                walls = Some(w.id);
+                host_wid = Some(host_id);
             }
             if let Some(r0) = rotations {
                 if (cab.rotation - r0).abs() > 1e-6 {
@@ -122,16 +118,23 @@ pub fn soffit_ring(model: &ArchModel, s: &crate::ceiling::Soffit) -> Option<Vec<
             } else {
                 rotations = Some(cab.rotation);
             }
-            s_min = s_min.min(cab.offset - cab.width / 2.0);
-            s_max = s_max.max(cab.offset + cab.width / 2.0);
+        }
+        let w = model.walls.iter().find(|w| w.id == host_wid?)?;
+        let dir = crate::wall::wall_dir(w)?;
+        let left = dir.perp();
+        // Compute each cabinet's along-wall position from its back-edge centre.
+        let mut s_min = f64::INFINITY;
+        let mut s_max = f64::NEG_INFINITY;
+        let mut d_max = f64::NEG_INFINITY;
+        for cid in &s.over {
+            let cab = model.cabinets.iter().find(|c| c.id == *cid)?;
+            let t = (cab.position - w.start).dot(dir);
+            s_min = s_min.min(t - cab.width / 2.0);
+            s_max = s_max.max(t + cab.width / 2.0);
             d_max = d_max.max(cab.depth);
         }
-        let w = model.walls.iter().find(|w| w.id == walls)?;
-        let dir = crate::wall::wall_dir(w);
-        let left = dir.perp();
-        // The cabinet back-edge centre is at offset along dir from the wall start.
         let p = |t: f64, y: f64| -> Vec2 { w.start + dir * t + left * y };
-        vec![p(s_min, 0.0), p(s_max, 0.0), p(s_max, d_max), p(s_min, d_max)]
+        Some(vec![p(s_min, 0.0), p(s_max, 0.0), p(s_max, d_max), p(s_min, d_max)])
     } else {
         let mut ring = s.polygon.clone();
         // Drop trailing duplicate.
@@ -162,7 +165,7 @@ pub fn soffit_ring(model: &ArchModel, s: &crate::ceiling::Soffit) -> Option<Vec<
 /// The bottom (absolute z) of `s`. Over-cabinets: level elevation + max(cabinet
 /// elevation + height). `bottom`: level elevation + bottom. `depth`: min finished
 /// ceiling (over ring vertices and the interior point) minus depth.
-pub fn soffit_bottom(model: &ArchModel, s: &crate::ceiling::Soffit) -> Option<f64> {
+pub fn soffit_bottom(model: &ArchModel, s: &Soffit) -> Option<f64> {
     let level = model.levels.get(s.level)?.elevation;
     if !s.over.is_empty() {
         let mut z_max = f64::NEG_INFINITY;
@@ -225,7 +228,7 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
     // x in [lo, hi]) and 1 = vertical (x = offset, y in [lo, hi]).
     #[derive(Clone, PartialEq, PartialOrd)]
     struct FaceLine {
-        wall_id: crate::arch::ArchId,
+        wall_id: ArchId,
         axis: u8,
         offset: f64,
         lo: f64,
@@ -340,7 +343,7 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
 }
 
 /// Validate a soffit `s` against the model. Returns an error string when invalid.
-pub fn validate(model: &ArchModel, s: &crate::ceiling::Soffit) -> Result<(), String> {
+pub fn validate(model: &ArchModel, s: &Soffit) -> Result<(), String> {
     // Exactly one of bottom, depth, non-empty over must be set.
     let has_bottom = s.bottom.is_some();
     let has_depth = s.depth.is_some();
@@ -408,7 +411,7 @@ pub fn validate(model: &ArchModel, s: &crate::ceiling::Soffit) -> Result<(), Str
         }
     }
     // Capacity.
-    if model.soffits.len() >= crate::ceiling::MAX_SOFFITS {
+    if model.soffits.len() >= MAX_SOFFITS {
         return Err("max soffits reached".into());
     }
     Ok(())
@@ -418,57 +421,56 @@ pub fn validate(model: &ArchModel, s: &crate::ceiling::Soffit) -> Result<(), Str
 mod tests {
     use super::*;
     use crate::casework;
-    use crate::ceiling::Soffit;
     use cadcraft_doc::arch::ArchModel;
     use cadcraft_geom::Vec2;
 
     fn house() -> ArchModel {
         let mut m = ArchModel::default();
         // Level 0: elevation 0, ceiling_height 2.4, structure 0.3.
-        m.levels.push(crate::arch::Level::new(0, "Level 1", 0.0, 2.4, 0.3));
+        m.levels.push(cadcraft_doc::arch::Level::new(0, "Level 1", 0.0, 2.4, 0.3));
         // Walls (centre-line coordinates).
         let t = 0.2;
         // w0: south, y = t/2 = 0.1, x from 0.1 to 9.9
-        m.walls.push(crate::arch::Wall::new(Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), t, 2.4));
         // w1: east, x = 9.9, y from 0.1 to 7.9
-        m.walls.push(crate::arch::Wall::new(Vec2::new(9.9, 0.1), Vec2::new(9.9, 7.9), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(9.9, 0.1), Vec2::new(9.9, 7.9), t, 2.4));
         // w2: north, y = 7.9, x from 9.9 to 0.1
-        m.walls.push(crate::arch::Wall::new(Vec2::new(9.9, 7.9), Vec2::new(0.1, 7.9), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(9.9, 7.9), Vec2::new(0.1, 7.9), t, 2.4));
         // w3: west, x = 0.1, y from 7.9 to 0.1
-        m.walls.push(crate::arch::Wall::new(Vec2::new(0.1, 7.9), Vec2::new(0.1, 0.1), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.1, 7.9), Vec2::new(0.1, 0.1), t, 2.4));
         // w4: divider at y=3, x from 0 to 10
-        m.walls.push(crate::arch::Wall::new(Vec2::new(0.0, 3.0), Vec2::new(10.0, 3.0), 0.2, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.0, 3.0), Vec2::new(10.0, 3.0), 0.2, 2.4));
         // w5: divider at x=6, y from 3 to 8, at offset 0.1
-        m.walls.push(crate::arch::Wall::new(Vec2::new(6.0, 3.0), Vec2::new(6.0, 8.0), 0.2, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(6.0, 3.0), Vec2::new(6.0, 8.0), 0.2, 2.4));
         // Rooms
         // S: 0.1..9.9 x 0.1..2.95
         let mut room_poly = vec![Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), Vec2::new(9.9, 2.95), Vec2::new(0.1, 2.95)];
-        m.rooms.push(crate::arch::Room::new(crate::arch::RoomType::Living, 0, room_poly));
+        m.rooms.push(cadcraft_doc::arch::Room::new(cadcraft_doc::arch::RoomType::Living, 0, room_poly));
         // NW: 0.1..5.95 x 3.05..7.9
         let nw_poly = vec![Vec2::new(0.1, 3.05), Vec2::new(5.95, 3.05), Vec2::new(5.95, 7.9), Vec2::new(0.1, 7.9)];
-        m.rooms.push(crate::arch::Room::new(crate::arch::RoomType::Other, 0, nw_poly));
+        m.rooms.push(cadcraft_doc::arch::Room::new(cadcraft_doc::arch::RoomType::Other, 0, nw_poly));
         // NE: 6.05..9.9 x 3.05..7.9
         let ne_poly = vec![Vec2::new(6.05, 3.05), Vec2::new(9.9, 3.05), Vec2::new(9.9, 7.9), Vec2::new(6.05, 7.9)];
-        m.rooms.push(crate::arch::Room::new(crate::arch::RoomType::Other, 0, ne_poly));
+        m.rooms.push(cadcraft_doc::arch::Room::new(cadcraft_doc::arch::RoomType::Other, 0, ne_poly));
         m
     }
 
     fn make_cabinet(
         id: u32,
         wall_id: u32,
-        kind: crate::arch::CabinetKind,
-        offset: f64,
+        kind: CabinetKind,
+        position: Vec2,
         width: f64,
         depth: f64,
         height: f64,
         elevation: f64,
         level: u32,
-    ) -> crate::arch::Cabinet {
-        crate::arch::Cabinet {
+    ) -> cadcraft_doc::arch::Cabinet {
+        cadcraft_doc::arch::Cabinet {
             id,
             kind,
-            wall: crate::arch::ArchId(wall_id),
-            offset,
+            wall: ArchId(wall_id),
+            position,
             width,
             depth,
             height,
@@ -532,8 +534,8 @@ mod tests {
         let mut m = house();
         // Two wall cabinets on w2 (north wall, id=2) at offsets 1.0 and 1.6,
         // 0.6 x 0.305 x 0.762 at elevation 1.372.
-        m.cabinets.push(make_cabinet(0, 2, crate::arch::CabinetKind::Wall, 1.0, 0.6, 0.305, 0.762, 1.372, 0));
-        m.cabinets.push(make_cabinet(1, 2, crate::arch::CabinetKind::Wall, 1.6, 0.6, 0.305, 0.762, 1.372, 0));
+        m.cabinets.push(make_cabinet(0, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
+        m.cabinets.push(make_cabinet(1, 2, CabinetKind::Wall, Vec2::new(8.4, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
         let s = Soffit {
             id: crate::arch::ArchId(0),
             level: 0,
@@ -560,27 +562,16 @@ mod tests {
         let b = soffit_bottom(&m, &s).unwrap();
         assert!((b - 2.134).abs() < 1e-6, "bottom: {} != 2.134", b);
         // A base cabinet -> None
-        m.cabinets.push(make_cabinet(2, 2, crate::arch::CabinetKind::Base, 1.0, 0.6, 0.305, 0.762, 0.0, 0));
-        let s_bad =
-            Soffit { id: crate::arch::ArchId(0), level: 0, polygon: vec![], bottom: None, depth: None, over: vec![2], material: None, layer: None };
+        m.cabinets.push(make_cabinet(2, 2, CabinetKind::Base, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 0.0, 0));
+        let s_bad = Soffit { id: ArchId(0), level: 0, polygon: vec![], bottom: None, depth: None, over: vec![2], material: None, layer: None };
         assert!(soffit_ring(&m, &s_bad).is_none());
         // Other level -> None
-        m.cabinets.push(make_cabinet(3, 2, crate::arch::CabinetKind::Wall, 1.0, 0.6, 0.305, 0.762, 1.372, 1));
-        let s_bad2 =
-            Soffit { id: crate::arch::ArchId(0), level: 0, polygon: vec![], bottom: None, depth: None, over: vec![3], material: None, layer: None };
+        m.cabinets.push(make_cabinet(3, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 1));
+        let s_bad2 = Soffit { id: ArchId(0), level: 0, polygon: vec![], bottom: None, depth: None, over: vec![3], material: None, layer: None };
         assert!(soffit_ring(&m, &s_bad2).is_none());
         // Two different walls -> None
-        m.cabinets.push(make_cabinet(4, 0, crate::arch::CabinetKind::Wall, 1.0, 0.6, 0.305, 0.762, 1.372, 0));
-        let s_bad3 = Soffit {
-            id: crate::arch::ArchId(0),
-            level: 0,
-            polygon: vec![],
-            bottom: None,
-            depth: None,
-            over: vec![0, 4],
-            material: None,
-            layer: None,
-        };
+        m.cabinets.push(make_cabinet(4, 0, CabinetKind::Wall, Vec2::new(5.0, 0.1), 0.6, 0.305, 0.762, 1.372, 0));
+        let s_bad3 = Soffit { id: ArchId(0), level: 0, polygon: vec![], bottom: None, depth: None, over: vec![0, 4], material: None, layer: None };
         assert!(soffit_ring(&m, &s_bad3).is_none());
     }
 
