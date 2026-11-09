@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 57 of 64 segments merged · 6 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 00:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 87.6 h so far · expected done Nov 09 18:40–Nov 13 13:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 6 / 14 | 87.8 h so far · expected done Nov 09 18:55–Nov 13 13:15 UTC |
 | 16 | Ceilings and foundations | planning | — | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -70,7 +70,7 @@ Updated 2026-11-09 00:00 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 89 |
 | claude-sonnet-c | sonnet | idle | 39 |
 | claude-sonnet-d | sonnet | idle | 30 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 838 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 839 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 0 |
