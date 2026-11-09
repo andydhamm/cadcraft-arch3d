@@ -1258,8 +1258,8 @@ fn user_guide_electrical_and_split_level_blocks_run() {
         let cmds = cmd_args(&line);
         assert_eq!(
             cmds.len(),
-            9,
-            "split-level block should have exactly 9 commands, found {} (ids: {:?})",
+            8,
+            "split-level block should have exactly 8 commands, found {} (ids: {:?})",
             cmds.len(),
             cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect::<Vec<_>>()
         );
