@@ -160,7 +160,7 @@ fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) -> (Op
         match super::roof_underside_at(model, level, q) {
             Some(z) => {
                 if best.is_none_or(|b| z < b.z) {
-                    best = Some(super::UndersideMin { at: q, z });
+                    best = Some(super::UndersideMin { at: q, z, ..Default::default() });
                 }
             }
             None => uncovered = true,
