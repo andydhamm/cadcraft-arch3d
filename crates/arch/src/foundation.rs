@@ -229,8 +229,9 @@ pub fn footing_outline(w: &FoundationWall) -> [Vec2; 4] {
 pub fn concrete_wall_type() -> WallType {
     WallType {
         name: CONCRETE_WALL_TYPE.to_string(),
-        layers: vec![WallLayer { name: "concrete".to_string(), thickness: STEM_THICKNESS, material: "concrete".to_string() }],
+        layers: vec![WallLayer { name: "concrete".to_string(), thickness: STEM_THICKNESS, material: "concrete".to_string(), ..Default::default() }],
         reference: RefSide::Centre,
+        ..Default::default()
     }
 }
 

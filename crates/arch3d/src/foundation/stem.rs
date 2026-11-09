@@ -77,11 +77,18 @@ mod tests {
             inward: Vec2::new(0.0, 1.0),
             thickness: 0.2,
             basement: false,
+            ..Default::default()
         }
     }
 
     fn input(depth: f64, level: Level, walls: Vec<FoundationWall>) -> FoundationIn {
-        FoundationIn { foundation: Foundation { id: ArchId(3), footing_depth: depth, ..Default::default() }, level, walls, basement: false }
+        FoundationIn {
+            foundation: Foundation { id: ArchId(3), footing_depth: depth, ..Default::default() },
+            level,
+            walls,
+            basement: false,
+            ..Default::default()
+        }
     }
 
     fn z_range(m: &Mesh) -> (f64, f64) {
