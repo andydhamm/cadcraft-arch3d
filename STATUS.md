@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 61 of 66 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 11:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 99.3 h so far · expected done Nov 09 22:39–Nov 12 06:26 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 99.6 h so far · expected done Nov 09 22:54–Nov 12 06:41 UTC |
 | 16 | Ceilings and foundations | building | 4 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,11 +35,11 @@ Updated 2026-11-09 11:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-61 merged, 8 replaced, 3 queued, 3 abandoned, 1 working, 1 merging
+61 merged, 8 replaced, 3 queued, 3 abandoned, 1 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-site` | bilevel.json part 4: site, plants, cameras, views, README | working | claude-sonnet-d |
+| `p15-showcase-site` | bilevel.json part 4: site, plants, cameras, views, README | gate | claude-sonnet-d |
 | `upstream-sync-a655cee0c` | merge upstream upstream/main up to a655cee0c (2 commits) | merging | claude-sonnet-b |
 
 ## Recent merges
@@ -64,13 +64,13 @@ Updated 2026-11-09 11:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 975 |
-| bonsai-b | bonsai2-27b | agent | 916 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1006 |
+| bonsai-b | bonsai2-27b | merging | 919 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1011 |
 | bonsai-ws2-b | bonsai2-27b | idle | 995 |
 | claude-sonnet-a | sonnet | idle | 90 |
 | claude-sonnet-b | sonnet | merging | 92 |
 | claude-sonnet-c | sonnet | idle | 40 |
-| claude-sonnet-d | sonnet | agent | 35 |
+| claude-sonnet-d | sonnet | gate | 36 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 867 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
