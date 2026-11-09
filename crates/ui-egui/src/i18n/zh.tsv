@@ -1582,3 +1582,7 @@ menu	View	视图
 	Delete Foundation	删除基础
 	Edit Foundation	编辑基础
 	Foundation	基础
+# Phase 16: ceiling trays.
+	Tray Ceiling	吊顶托盘
+	Edit Tray	编辑吊顶托盘
+	Delete Tray	删除吊顶托盘
