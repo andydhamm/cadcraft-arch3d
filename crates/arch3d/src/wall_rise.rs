@@ -32,12 +32,18 @@ pub(crate) fn rise_input(model: &ArchModel, wall: &Wall, shape: Option<&WallShap
     if roof_top || wall.divider || wall.retaining {
         return None;
     }
+    if !wall.start.is_finite() || !wall.end.is_finite() || !wall.thickness.is_finite() || wall.thickness <= 0.0 {
+        return None;
+    }
     let (base, bottom) = span?;
+    if !base.is_finite() || !bottom.is_finite() || bottom <= base {
+        return None;
+    }
     let polygon = match shape {
         Some(shape) => shape.polygon.clone(),
         None => wall_rectangle(wall),
     };
-    if polygon.is_empty() || polygon.len() < 3 {
+    if polygon.is_empty() || polygon.len() < 3 || !polygon.iter().all(|p| p.is_finite()) {
         return None;
     }
 
@@ -102,14 +108,16 @@ pub(crate) fn rise_input(model: &ArchModel, wall: &Wall, shape: Option<&WallShap
 /// The wall-rise meshes for a solved rise. Each cell is extruded from the wall top to the roof
 /// underside; the exterior face split is kept, just like the wall itself.
 pub(crate) fn rise_meshes(wall: &Wall, rise: &RiseIn) -> Vec<Mesh> {
-    if rise.cells.is_empty() {
+    if rise.cells.is_empty() || !rise.base.is_finite() || !rise.bottom.is_finite() || rise.bottom <= rise.base {
         return Vec::new();
     }
 
     let mut mesh = Mesh::new("wall", wall.id);
     mesh.level_elevation = rise.base;
     for (cell, plane) in &rise.cells {
-        planar::push_between(&mut mesh, cell, &[], PlaneZ::flat(rise.bottom), *plane);
+        if cell.iter().all(|p| p.is_finite()) {
+            planar::push_between(&mut mesh, cell, &[], PlaneZ::flat(rise.bottom), *plane);
+        }
     }
     if mesh.indices.is_empty() {
         return Vec::new();
@@ -127,6 +135,9 @@ pub(crate) fn rise_meshes(wall: &Wall, rise: &RiseIn) -> Vec<Mesh> {
 }
 
 fn wall_rectangle(wall: &Wall) -> Vec<Vec2> {
+    if !wall.start.is_finite() || !wall.end.is_finite() || !wall.thickness.is_finite() || wall.thickness <= 0.0 {
+        return Vec::new();
+    }
     let dx = wall.end.x - wall.start.x;
     let dy = wall.end.y - wall.start.y;
     let len = (dx * dx + dy * dy).sqrt();
