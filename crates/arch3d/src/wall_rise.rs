@@ -3,8 +3,8 @@
 
 use cadcraft_arch::join;
 use cadcraft_arch::join::WallShape;
+use cadcraft_doc::arch::Room;
 use cadcraft_doc::{ArchId, ArchModel, Wall};
-use cadcraft_doc::WallType;
 use cadcraft_geom::Vec2;
 
 use crate::finish;
@@ -29,38 +29,34 @@ pub(crate) struct RiseIn {
 /// The inputs of `wall`'s rise, or `None` when it has none. `shape` is its join shape, `span` its
 /// base and top, `roof_top` whether a roof clips its top.
 pub(crate) fn rise_input(model: &ArchModel, wall: &Wall, shape: Option<&WallShape>, span: Option<(f64, f64)>, roof_top: bool) -> Option<RiseIn> {
-    // Gable walls already follow the roof through the roof-top polyline; no rise needed.
-    if roof_top {
-        return None;
-    }
-    // Divider and retaining walls never rise.
-    if wall.type_ == WallType::Divider || wall.retaining {
+    if roof_top || wall.divider || wall.retaining {
         return None;
     }
     let (base, bottom) = span?;
-
-    // The cross-section polygon: solved join shape, or the raw centerline.
     let polygon = match shape {
-        Some(s) => s.polygon.clone(),
-        None => wall.points.clone(),
+        Some(shape) => shape.polygon.clone(),
+        None => wall_rectangle(wall),
     };
-    if polygon.is_empty() {
+    if polygon.is_empty() || polygon.len() < 3 {
         return None;
     }
 
-    // Get the face lines of this wall (the edges that face the adjacent rooms).
-    let face_lines = join::face_lines(wall, shape);
+    let face_lines = match join::face_lines(wall) {
+        Some(lines) => lines,
+        None => return None,
+    };
 
-    // Find rooms on the same level that are vaulted (flat_ceiling false) and bound this wall.
     let mut vaulted = Vec::new();
     for room in &model.rooms {
-        if room.level != wall.base_level {
+        if room.flat_ceiling || !room.room_type.has_ceiling() {
             continue;
         }
-        if room.flat_ceiling {
+        let room_level = room.level;
+        let relevant = model.levels.iter().any(|level| level.index == room_level && wall.spans_level(level, &model.levels));
+        if !relevant {
             continue;
         }
-        if bounds_wall(&room.polygon, &face_lines) {
+        if room_bounds_wall(room, &face_lines) {
             vaulted.push(room.id);
         }
     }
@@ -68,18 +64,17 @@ pub(crate) fn rise_input(model: &ArchModel, wall: &Wall, shape: Option<&WallShap
         return None;
     }
 
-    // Collect the underside planes of roofs on this level.
     let planes: Vec<(Vec<Vec2>, PlaneZ)> = model
         .roofs
         .iter()
-        .filter(|r| r.level == wall.base_level)
+        .filter(|roof| roof.level == wall.base_level)
         .flat_map(|roof| {
-            roof.planes.iter().filter_map(|rp| {
-                if !rp.ring.is_empty() && rp.ring.iter().all(|p| p.is_finite()) {
-                    Some((rp.ring.clone(), planar::underside_plane(rp)))
-                } else {
-                    None
+            roof.planes.iter().filter_map(|plane| {
+                let ring = plane.ring.clone();
+                if ring.is_empty() || !ring.iter().all(|p| p.is_finite()) {
+                    return None;
                 }
+                planar::underside_plane(plane).map(|plane| (ring, plane))
             })
         })
         .collect();
@@ -87,97 +82,117 @@ pub(crate) fn rise_input(model: &ArchModel, wall: &Wall, shape: Option<&WallShap
         return None;
     }
 
-    // Compute the cells under each plane, keeping only those above the wall top.
     let mut cells: Vec<(Vec<Vec2>, PlaneZ)> = Vec::new();
-    for (ring, plane) in &planes {
-        if !plane.is_finite() {
+    for (cell, plane) in planar::under_planes(&polygon, &[], &planes) {
+        let Some(plane) = plane else {
             continue;
-        }
-        for cell in planar::under_planes(&polygon, ring, &[*plane]) {
-            if let Some((cell, plane)) = cell {
-                let (_, above) = planar::split_by_level(&cell, plane, bottom);
-                if !above.is_empty() {
-                    cells.push((above, plane));
-                }
-            }
+        };
+        let (_, above) = planar::split_by_level(&cell, plane, bottom);
+        if !above.is_empty() {
+            cells.push((above, plane));
         }
     }
-
     if cells.is_empty() {
         return None;
     }
 
-    Some(RiseIn {
-        polygon,
-        base,
-        bottom,
-        cells,
-        vaulted,
-    })
+    Some(RiseIn { polygon, base, bottom, cells, vaulted })
 }
 
-/// Returns true if any edge of `room_polygon` lies on one of `face_lines`.
-fn bounds_wall(room_polygon: &[Vec2], face_lines: &[&Vec2]) -> bool {
-    let n = room_polygon.len();
-    if n < 3 {
+/// The wall-rise meshes for a solved rise. Each cell is extruded from the wall top to the roof
+/// underside; the exterior face split is kept, just like the wall itself.
+pub(crate) fn rise_meshes(wall: &Wall, rise: &RiseIn) -> Vec<Mesh> {
+    if rise.cells.is_empty() {
+        return Vec::new();
+    }
+
+    let mut mesh = Mesh::new("wall", wall.id);
+    mesh.level_elevation = rise.base;
+    for (cell, plane) in &rise.cells {
+        planar::push_between(&mut mesh, cell, &[], PlaneZ::flat(rise.bottom), *plane);
+    }
+    if mesh.indices.is_empty() {
+        return Vec::new();
+    }
+
+    let (rest, exterior) = finish::split_exterior_face(wall, mesh);
+    let mut out = Vec::new();
+    if !rest.indices.is_empty() {
+        out.push(rest);
+    }
+    if let Some(exterior) = exterior.filter(|m| !m.indices.is_empty()) {
+        out.push(exterior);
+    }
+    out
+}
+
+fn wall_rectangle(wall: &Wall) -> Vec<Vec2> {
+    let dx = wall.end.x - wall.start.x;
+    let dy = wall.end.y - wall.start.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if !len.is_finite() || len <= 1e-12 {
+        return Vec::new();
+    }
+    let nx = -dy / len;
+    let ny = dx / len;
+    let half = wall.thickness / 2.0;
+    let p0 = Vec2::new(wall.start.x + nx * half, wall.start.y + ny * half);
+    let p1 = Vec2::new(wall.end.x + nx * half, wall.end.y + ny * half);
+    let p2 = Vec2::new(wall.end.x - nx * half, wall.end.y - ny * half);
+    let p3 = Vec2::new(wall.start.x - nx * half, wall.start.y - ny * half);
+    vec![p0, p1, p2, p3]
+}
+
+fn room_bounds_wall(room: &Room, face_lines: &[(Vec2, Vec2); 2]) -> bool {
+    let n = room.polygon.len();
+    if n < 2 {
         return false;
     }
     for i in 0..n {
-        let a = room_polygon[i];
-        let b = room_polygon[(i + 1) % n];
-        for fl in face_lines {
-            if overlaps_face(&a, &b, fl) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Checks whether the segment `a->b` lies on (or overlaps) the line through `fl` by more than 1e-6.
-fn overlaps_face(a: &Vec2, b: &Vec2, fl: &[&Vec2]) -> bool {
-    for (pa, pb) in [(fl[0], fl[1])].iter() {
-        let fa = pa[0];
-        let fb = pa[1];
-        let fc = pb[0];
-        let fd = pb[1];
-        // Both a and b must be within 1e-6 of the infinite line through (fa,fb)-(fc,fd)
-        let line_a = (fb - fa) * a[0] - (fc - fa) * b[1] + (fc * fa - fb * fc) / ((fb - fa) * ((fc - fa) + (fc - fa))) + 1e-6;
-        let line_a = (fc - fa).abs() > 1e-12
-            ? ((fa - fc) * (b[1] - fa) - (fb - fa) * (b[0] - fc)) / ((fc - fa).abs())
-            : (fb - fa).abs() > 1e-12
-                ? ((fb - fa) * (b[0] - fa) - (fa - fc) * (b[1] - fa)) / ((fb - fa).abs())
-                : 0.0;
-        let line_b = (fc - fa).abs() > 1e-12
-            ? ((fa - fc) * (a[1] - fa) - (fb - fa) * (a[0] - fc)) / ((fc - fa).abs())
-            : (fb - fa).abs() > 1e-12
-                ? ((fb - fa) * (a[0] - fa) - (fa - fc) * (a[1] - fa)) / ((fb - fa).abs())
-                : 0.0;
-        if line_a.abs() > 1e-6 || line_b.abs() > 1e-6 {
-            continue;
-        }
-        // The edge must overlap the face segment along the wall by more than 1e-6
-        let dx = b[0] - a[0];
-        let dy = b[1] - a[1];
-        let len = (dx * dx + dy * dy).sqrt();
-        if len < 1e-6 {
-            continue;
-        }
-        // Project the edge onto the face direction and check overlap with the face segment
-        let fdx = fc - fa;
-        let fdy = fb - fa;
-        let flen = (fdx * fdx + fdy * fdy).sqrt();
-        if flen < 1e-6 {
-            continue;
-        }
-        let t0 = ((a[0] - fa) * fdx + (a[1] - fa) * fdy) / flen;
-        let t1 = ((b[0] - fa) * fdx + (b[1] - fa) * fdy) / flen;
-        let lo = t0.min(t1);
-        let hi = t0.max(t1);
-        let overlap = hi.min(flen).max(lo.min(0.0));
-        if overlap - overlap.min(0.0) > 1e-6 {
+        let a = room.polygon[i];
+        let b = room.polygon[(i + 1) % n];
+        if room_edge_on_face(a, b, face_lines) {
             return true;
         }
     }
     false
+}
+
+fn room_edge_on_face(a: Vec2, b: Vec2, face_lines: &[(Vec2, Vec2); 2]) -> bool {
+    if !a.is_finite() || !b.is_finite() {
+        return false;
+    }
+    for &(face_a, face_b) in face_lines {
+        if !face_a.is_finite() || !face_b.is_finite() {
+            continue;
+        }
+        if point_to_segment_distance(a, face_a, face_b) > 1e-6 || point_to_segment_distance(b, face_a, face_b) > 1e-6 {
+            continue;
+        }
+        let dir = face_b - face_a;
+        let len_sq = dir.dot(dir);
+        if !len_sq.is_finite() || len_sq <= 1e-24 {
+            continue;
+        }
+        let t0 = ((a - face_a).dot(dir)) / len_sq;
+        let t1 = ((b - face_a).dot(dir)) / len_sq;
+        let lo = t0.min(t1).max(0.0);
+        let hi = t0.max(t1).min(1.0);
+        if hi - lo > 1e-6 {
+            return true;
+        }
+    }
+    false
+}
+
+fn point_to_segment_distance(p: Vec2, a: Vec2, b: Vec2) -> f64 {
+    let ab = b - a;
+    let len_sq = ab.dot(ab);
+    if !len_sq.is_finite() || len_sq <= 1e-24 {
+        return (p - a).len();
+    }
+    let t = ((p - a).dot(ab)) / len_sq;
+    let t = t.clamp(0.0, 1.0);
+    let q = a + ab * t;
+    (p - q).len()
 }
