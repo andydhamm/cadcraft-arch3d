@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 15:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 16:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 63 of 67 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 15:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 103.3 h so far · expected done Nov 09 23:08–Nov 11 15:04 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 103.6 h so far · expected done Nov 09 23:23–Nov 11 15:19 UTC |
 | 16 | Ceilings and foundations | building | 5 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-09 15:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-63 merged, 8 replaced, 3 abandoned, 2 queued, 1 working, 1 gate
+63 merged, 8 replaced, 3 abandoned, 2 queued, 1 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-showcase-test` | crates/engine/tests/showcase.rs: replay the showcase and assert the brief | working | mai-flash-esc |
-| `upstream-sync-865fa9afb` | merge upstream upstream/main up to 865fa9afb (47 commits) | gate | claude-sonnet-c |
+| `p15-showcase-test` | crates/engine/tests/showcase.rs: replay the showcase and assert the brief | gate | mai-flash-esc |
+| `upstream-sync-865fa9afb` | merge upstream upstream/main up to 865fa9afb (47 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
 
@@ -63,18 +63,18 @@ Updated 2026-11-09 15:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 986 |
+| bonsai-a | bonsai2-27b | agent | 989 |
 | bonsai-b | bonsai2-27b | idle | 945 |
 | bonsai-ws2-a | bonsai2-27b | merging | 1025 |
 | bonsai-ws2-b | bonsai2-27b | merging | 1011 |
 | claude-sonnet-a | sonnet | idle | 93 |
 | claude-sonnet-b | sonnet | merging | 96 |
-| claude-sonnet-c | sonnet | gate | 40 |
-| claude-sonnet-d | sonnet | gate | 37 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 876 |
+| claude-sonnet-c | sonnet | merging | 41 |
+| claude-sonnet-d | sonnet | merging | 41 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 879 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | merging | 6 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 56 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 56 |
 | tturbo-mac | tturbo-ultraheretic | agent | 687 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
