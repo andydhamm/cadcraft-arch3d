@@ -127,6 +127,7 @@ fn run_roofauto(s: &mut Session, p: &Value) -> Result<Value> {
     // arch layers.
     doc.ensure_layer("A-ROOF");
     let mut rebuilt = false;
+    let seated = cadcraft_arch::ceiling::seated_ceiling_items(&doc.arch, target_level);
 
     // Find existing roof for this level
     let existing_idx = doc.arch.roofs.iter().position(|r| r.level == target_level);
@@ -150,6 +151,7 @@ fn run_roofauto(s: &mut Session, p: &Value) -> Result<Value> {
         rebuilt = true;
     }
 
+    cadcraft_arch::ceiling::reseat(&mut doc.arch, &seated);
     doc.touch_arch();
 
     let handle = format!("r{}", doc.arch.roofs.iter().rev().find(|r| r.level == target_level).map(|r| r.id.0).unwrap_or(0));
@@ -177,6 +179,10 @@ fn run_roofauto(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn refresh_auto_roofs(d: &mut Drawing) -> usize {
     let mut rebuilt = 0usize;
     let mut kept: Vec<Roof> = Vec::with_capacity(d.arch.roofs.len());
+    let mut levels: Vec<u32> = d.arch.roofs.iter().map(|r| r.level).collect();
+    levels.sort_unstable();
+    levels.dedup();
+    let seated: Vec<ArchId> = levels.iter().flat_map(|l| cadcraft_arch::ceiling::seated_ceiling_items(&d.arch, *l)).collect();
 
     for roof in d.arch.roofs.iter() {
         if roof.manual || roof.hand_edited {
@@ -196,6 +202,7 @@ pub fn refresh_auto_roofs(d: &mut Drawing) -> usize {
         }
     }
     d.arch.roofs = kept;
+    cadcraft_arch::ceiling::reseat(&mut d.arch, &seated);
     rebuilt
 }
 
@@ -929,5 +936,33 @@ mod tests {
 
         assert_eq!(r["roofsRebuilt"].as_u64().unwrap(), 0, "no roofs to rebuild");
         assert_eq!(s.doc().unwrap().arch.roofs.len(), 0, "no roof should be created");
+    }
+
+    #[test]
+    fn roofauto_is_never_refused_and_reseats_ceiling_items() {
+        use cadcraft_doc::arch::{Furnishing, Placement};
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})).unwrap();
+        s.execute("room", &json!({"points": [[0.1, 0.1], [9.9, 0.1], [9.9, 2.95], [0.1, 2.95], [0.1, 0.1]]})).unwrap();
+        let gable = |rise: f64| json!({"pitchRise": rise, "pitchRun": 12, "walls": [{"wall": "w1", "directive": "gable"}, {"wall": "w3", "directive": "gable"}]});
+        s.execute("roofauto", &gable(6.0)).unwrap();
+        s.execute("room", &json!({"id": "r0", "flatCeiling": false})).unwrap();
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.push_furnishing(Furnishing {
+                placement: Placement::Ceiling,
+                at: [5.0, 2.0],
+                elevation: 3.45 - 0.5,
+                size: [0.4, 0.4, 0.5],
+                ..Default::default()
+            });
+            d.touch_arch();
+        }
+        s.execute("roofauto", &gable(8.0)).unwrap();
+        let f = &s.doc().unwrap().arch.furnishings[0];
+        assert!((f.elevation + f.size[2] - 3.8).abs() < 1e-6, "{}", f.elevation + f.size[2]);
+        // A flat ceiling the lower roof leaves above the underside: the roof edit is accepted.
+        s.execute("room", &json!({"id": "r0", "flatCeiling": true, "ceiling": 2.45})).unwrap();
+        s.execute("roofauto", &gable(2.0)).unwrap();
     }
 }
