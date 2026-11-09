@@ -542,4 +542,131 @@ mod tests {
         assert!(bottom_at(&m, 0, Vec2::new(8.0, 7.2)).is_none());
         assert!(bottom_at(&m, 1, Vec2::new(8.0, 7.6)).is_none());
     }
+
+    #[test]
+    fn interior_point_triangle_and_degenerate() {
+        let tri = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(0.0, 3.0)];
+        let p = interior_point(&tri).expect("triangle should have interior point");
+        assert!(cadcraft_geom::point_in_polygon(&tri, p), "point not in triangle");
+
+        let sq = vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 2.0), Vec2::new(0.0, 2.0)];
+        let p2 = interior_point(&sq).expect("square should have interior point");
+        assert!(cadcraft_geom::point_in_polygon(&sq, p2), "point not in square");
+
+        let collinear = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(2.0, 0.0)];
+        assert!(interior_point(&collinear).is_none(), "collinear points should have no interior point");
+
+        assert!(interior_point(&vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)]).is_none());
+        assert!(interior_point(&[]).is_none());
+
+        let nan = vec![Vec2::new(0.0, 0.0), Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 1.0)];
+        assert!(interior_point(&nan).is_none(), "non-finite point should return None");
+    }
+
+    #[test]
+    fn soffit_ring_polygon_edge_cases() {
+        let m = ArchModel::default();
+
+        let s1 = Soffit {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 2.0), Vec2::new(0.0, 2.0), Vec2::new(0.0, 0.0)],
+            ..Soffit::default()
+        };
+        let ring1 = soffit_ring(&m, &s1).expect("should handle duplicate trailing point");
+        assert_eq!(ring1.len(), 4, "trailing duplicate should be dropped");
+
+        let s2 = Soffit {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(0.0, 2.0), Vec2::new(2.0, 2.0), Vec2::new(2.0, 0.0)],
+            ..Soffit::default()
+        };
+        let ring2 = soffit_ring(&m, &s2).expect("should reverse CW polygon");
+        let mut area2 = 0.0_f64;
+        for i in 0..ring2.len() {
+            let j = (i + 1) % ring2.len();
+            area2 += ring2[i].x * ring2[j].y - ring2[j].x * ring2[i].y;
+        }
+        assert!(area2 > 0.0, "ring should be CCW (positive signed area)");
+
+        let s3 = Soffit { id: ArchId(0), level: 0, polygon: vec![], ..Soffit::default() };
+        assert!(soffit_ring(&m, &s3).is_none(), "empty polygon should return None");
+
+        let s4 = Soffit { id: ArchId(0), level: 0, polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)], ..Soffit::default() };
+        assert!(soffit_ring(&m, &s4).is_none(), "2 points should return None");
+    }
+
+    #[test]
+    fn validate_exactly_one_of_bottom_depth_over() {
+        let m = house();
+        let polygon = vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0)];
+
+        let base = Soffit { id: ArchId(0), level: 0, polygon: polygon.clone(), ..Soffit::default() };
+        assert!(validate(&m, &base).is_err(), "no bottom/depth/over should error");
+
+        let s_bottom = Soffit { bottom: Some(2.1), ..base.clone() };
+        assert!(validate(&m, &s_bottom).is_ok(), "only bottom should be ok");
+
+        let s_depth = Soffit { depth: Some(0.3), ..base.clone() };
+        assert!(validate(&m, &s_depth).is_ok(), "only depth should be ok");
+
+        let s_both = Soffit { bottom: Some(2.1), depth: Some(0.3), ..base.clone() };
+        assert!(validate(&m, &s_both).is_err(), "both bottom and depth should error");
+
+        let s_bottom_over = Soffit { bottom: Some(2.1), over: vec![ArchId(0)], ..base.clone() };
+        assert!(validate(&m, &s_bottom_over).is_err(), "bottom and over should error");
+    }
+
+    #[test]
+    fn snap_rect_non_finite_and_degenerate() {
+        let m = house();
+
+        let r = [0.0, 0.0, f64::NAN, 2.0];
+        let result = snap_rect(&m, 0, r);
+        assert!(result[2].is_nan(), "non-finite x1 should stay non-finite");
+
+        let r2 = [f64::INFINITY, 0.0, 2.0, 2.0];
+        let result2 = snap_rect(&m, 0, r2);
+        assert_eq!(result2[0], f64::INFINITY, "infinite x0 should stay infinite");
+
+        let r3 = snap_rect(&m, 0, [9.8, 7.0, 10.0, 7.95]);
+        assert!((r3[0] - 9.8).abs() < 1e-9, "x0 should not move");
+        assert!((r3[2] - 10.0).abs() < 1e-9, "x1 should not move");
+    }
+
+    #[test]
+    fn bottom_at_first_in_model_order() {
+        let mut m = house();
+        m.soffits.push(Soffit {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(7.0, 7.0), Vec2::new(9.0, 7.0), Vec2::new(9.0, 7.9), Vec2::new(7.0, 7.9), Vec2::new(7.0, 7.0)],
+            bottom: Some(2.1),
+            ..Soffit::default()
+        });
+        m.soffits.push(Soffit {
+            id: ArchId(1),
+            level: 0,
+            polygon: vec![Vec2::new(8.0, 7.5), Vec2::new(9.5, 7.5), Vec2::new(9.5, 8.0), Vec2::new(8.0, 8.0), Vec2::new(8.0, 7.5)],
+            bottom: Some(2.0),
+            ..Soffit::default()
+        });
+        let b = bottom_at(&m, 0, Vec2::new(8.5, 7.7)).unwrap();
+        assert!((b - 2.1).abs() < 1e-6, "first soffit should win: {} != 2.1", b);
+        let b2 = bottom_at(&m, 0, Vec2::new(9.2, 7.7)).unwrap();
+        assert!((b2 - 2.0).abs() < 1e-6, "second soffit: {} != 2.0", b2);
+    }
+
+    #[test]
+    fn validate_material_length() {
+        let m = house();
+        let polygon = vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0)];
+
+        let s = Soffit { id: ArchId(0), level: 0, polygon: polygon.clone(), bottom: Some(2.1), material: Some("x".repeat(129)), ..Soffit::default() };
+        assert!(validate(&m, &s).is_err(), "material > 128 chars should error");
+
+        let s2 = Soffit { id: ArchId(0), level: 0, polygon, bottom: Some(2.1), material: Some("x".repeat(128)), ..Soffit::default() };
+        assert!(validate(&m, &s2).is_ok(), "material == 128 chars should be ok");
+    }
 }

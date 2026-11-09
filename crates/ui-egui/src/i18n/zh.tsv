@@ -362,6 +362,7 @@
 	Join	合并
 	Join the ArtCraft Discord…	加入 ArtCraft Discord…
 	Join us on Discord	在 Discord 上加入我们
+	Keyboard Shortcuts...	键盘快捷键...
 	Language	语言
 	Last	最后
 	Last commit	最后提交
@@ -1586,3 +1587,6 @@ menu	View	视图
 	Tray Ceiling	吊顶托盘
 	Edit Tray	编辑吊顶托盘
 	Delete Tray	删除吊顶托盘
+	Soffit	吊顶造型
+	Edit Soffit	编辑吊顶造型
+	Delete Soffit	删除吊顶造型

@@ -49,6 +49,7 @@ pub mod sample;
 pub mod sheet;
 pub mod site;
 pub(crate) mod site_inspect;
+pub mod soffit;
 pub mod stair;
 pub mod stretch;
 pub mod sun;
@@ -125,5 +126,6 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(sunstudy::specs());
     v.extend(tray::specs());
     v.extend(foundation::specs());
+    v.extend(soffit::specs());
     v
 }
