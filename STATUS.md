@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 66 of 69 segments merged · 12 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 23:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 111.1 h so far · expected done Nov 10 04:18–Nov 11 10:55 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 111.3 h so far · expected done Nov 10 05:17–Nov 11 19:57 UTC |
 | 16 | Ceilings and foundations | building | 7 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-09 23:30 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-66 merged, 8 replaced, 3 abandoned, 2 merging, 1 gate
+66 merged, 8 replaced, 3 merging, 3 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | merging | mai-flash-esc |
-| `p15-check10-surfaces` | phase-15 check 10 reads the surface rows (operator fix, already on your branch) | gate | mai-flash-esc |
+| `p15-check10-surfaces` | phase-15 check 10 reads the surface rows (operator fix, already on your branch) | merging | mai-flash-esc |
 | `upstream-sync-d847eac13` | merge upstream upstream/main up to d847eac13 (38 commits) | merging | claude-sonnet-d |
 
 ## Recent merges
@@ -72,10 +72,10 @@ Updated 2026-11-09 23:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 98 |
 | claude-sonnet-c | sonnet | idle | 44 |
 | claude-sonnet-d | sonnet | merging | 45 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 918 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 920 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 64 |
-| tturbo-mac | tturbo-ultraheretic | agent | 697 |
+| mai-flash-esc | mai-code-1.1-flash | merging | 65 |
+| tturbo-mac | tturbo-ultraheretic | gate | 697 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
