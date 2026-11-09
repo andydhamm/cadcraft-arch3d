@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 65 of 69 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 20:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 108.1 h so far · expected done Nov 10 01:59–Nov 11 05:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 108.3 h so far · expected done Nov 10 02:14–Nov 11 05:15 UTC |
 | 16 | Ceilings and foundations | building | 6 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,14 +35,14 @@ Updated 2026-11-09 20:30 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-65 merged, 8 replaced, 3 merging, 3 abandoned, 1 working
+65 merged, 8 replaced, 3 merging, 3 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-showcase-render` | tools/showcase: render the showcase house in every view style | merging | claude-sonnet-b |
 | `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | merging | mai-flash-esc |
 | `p15-check10-surfaces` | phase-15 check 10 reads the surface rows (operator fix, already on your branch) | merging | claude-sonnet-c |
-| `upstream-sync-d847eac13` | merge upstream upstream/main up to d847eac13 (38 commits) | working | claude-sonnet-d |
+| `upstream-sync-d847eac13` | merge upstream upstream/main up to d847eac13 (38 commits) | gate | claude-sonnet-d |
 
 ## Recent merges
 
@@ -67,13 +67,13 @@ Updated 2026-11-09 20:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1006 |
 | bonsai-b | bonsai2-27b | idle | 957 |
-| bonsai-ws2-a | bonsai2-27b | idle | 1041 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1041 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1019 |
 | claude-sonnet-a | sonnet | idle | 93 |
 | claude-sonnet-b | sonnet | idle | 98 |
-| claude-sonnet-c | sonnet | idle | 43 |
-| claude-sonnet-d | sonnet | agent | 43 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 900 |
+| claude-sonnet-c | sonnet | agent | 43 |
+| claude-sonnet-d | sonnet | gate | 43 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 900 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
