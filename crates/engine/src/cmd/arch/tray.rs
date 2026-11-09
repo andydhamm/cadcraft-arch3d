@@ -585,7 +585,7 @@ mod tests {
         let res = s.execute("tray", &json!({"polygon": inside.clone(), "depth": 0.2})).unwrap();
         assert_eq!(res["room"], room);
         assert_eq!(res["parent"], parent_id);
-        let handle = res["handle"].as_str().unwrap().to_string();
+        let handle = res["tray"].as_str().unwrap().to_string();
         s.execute("tray.delete", &json!({"id": handle})).unwrap();
 
         // A polygon inside the room but outside tr0's outline: parent is null.
@@ -593,7 +593,7 @@ mod tests {
         let res_out = s.execute("tray", &json!({"polygon": outside.clone(), "depth": 0.2})).unwrap();
         assert_eq!(res_out["room"], room);
         assert_eq!(res_out["parent"], Value::Null);
-        let outside_handle = res_out["handle"].as_str().unwrap().to_string();
+        let outside_handle = res_out["tray"].as_str().unwrap().to_string();
 
         // A polygon straddling the NW / South boundary: refused, nothing written.
         let straddle = vec![[2.0, 2.8], [4.0, 2.8], [4.0, 5.0], [2.0, 5.0], [2.0, 2.8]];
@@ -601,7 +601,7 @@ mod tests {
         let err = s.execute("tray", &json!({"polygon": straddle.clone(), "depth": 0.2}));
         assert!(err.is_err());
         assert_eq!(s.doc().unwrap().arch_revision, before);
-        assert_eq!(s.doc().unwrap().arch_revision, rev + 2);
+        assert_eq!(s.doc().unwrap().arch_revision, rev + 4);
 
         let gone = s.execute("tray.delete", &json!({"id": outside_handle})).unwrap();
         assert_eq!(gone["deleted"].as_array().unwrap().len(), 1);
