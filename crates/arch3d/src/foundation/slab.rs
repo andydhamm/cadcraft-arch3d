@@ -7,10 +7,11 @@
 //! `elevation - 0.1` to `elevation`. Basement walls on a slab level get only a footing via
 //! [`stem::basement_footing`]. No stem walls are built.
 
-use cadcraft_doc::arch::FOUNDATION_EDGE_DEPTH;
-
 use super::FoundationIn;
+use crate::foundation::stem::basement_footing;
 use crate::mesh::Mesh;
+use cadcraft_arch::foundation::FoundationWall;
+use cadcraft_geom::Vec2;
 
 /// The 0.3 m strip (inward from the outer face) of the thickened edge, from `elevation - 0.3`
 /// to `elevation - 0.1`.
@@ -50,7 +51,7 @@ pub(crate) fn meshes(i: &FoundationIn) -> Vec<Mesh> {
     for w in &i.walls {
         if w.basement {
             // Basement walls on a slab level get only a footing (no stem).
-            if let Some(f) = super::basement_footing(i, w) {
+            if let Some(f) = basement_footing(i, w) {
                 out.push(f);
             }
         } else {
