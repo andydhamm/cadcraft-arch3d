@@ -196,24 +196,23 @@ fn parse_create_tray(cmd: &str, model: &ArchModel, p: &Value) -> Result<Tray> {
     t.inset = p.get("inset").filter(|v| !v.is_null()).map(|_| parse_f64(cmd, p, "inset")).transpose()?.unwrap_or(0.0);
     t.depth = parse_f64(cmd, p, "depth")?;
     t.sides = parse_sides(cmd, p)?;
+    t.polygon = polygon.clone();
 
-    let mut best: Option<(usize, ArchId)> = None;
-    for tray in model.trays.iter().filter(|t| t.room == room.id && t.level == room.level) {
-        let outline = match outline_in(&room, &model.trays, tray) {
-            Ok(outline) => outline,
-            Err(_) => continue,
-        };
-        if polygon.iter().all(|p| point_in_polygon(&outline, *p)) {
-            let depth = tray_depth(model, tray.id);
-            match best {
-                Some((best_depth, _)) if depth <= best_depth => {}
-                _ => best = Some((depth, tray.id)),
-            }
-        }
-    }
-    t.parent = best.map(|(_, id)| id);
+    // The drawn polygon becomes the parent tray's outline only when it is fully inside that tray's outline and inside the room;
+    // otherwise there is no parent.
+    t.parent = model
+        .trays.iter()
+        .filter(|cand| cand.room == room.id && cand.level == room.level && cand.id != t.id)
+        .filter_map(|cand| outline_in(room, &model.trays, cand).ok())
+        .filter_map(|outline| {
+            outline
+                .is_finite()
+                .then(|| polygon.iter().all(|p| point_in_polygon(&outline, p) && point_in_polygon(&room.polygon, p)))
+                .then_some(cand.id)
+        })
+        .max()
+        .copied();
     Ok(t)
-}
 
 fn clean_f64(value: f64) -> f64 {
     if !value.is_finite() {
