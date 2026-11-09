@@ -126,6 +126,13 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .cloned()
             .collect();
+        let old_label_points: Vec<(cadcraft_doc::arch::ArchId, u32, cadcraft_geom::Vec2)> = old_rooms
+            .iter()
+            .filter_map(|o| {
+                let p = cadcraft_arch::label::label_point(&o.polygon, &o.holes)?;
+                Some((o.id, o.level, p))
+            })
+            .collect();
         let before = d.arch.rooms.len();
         d.arch.rooms.retain(|r| match level_filter {
             Some(l) => r.level != l,
@@ -159,6 +166,24 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
                 r.ceiling_stack = o.ceiling_stack.clone();
             }
             d.arch.push_room(r);
+        }
+
+        for tray in d.arch.trays.iter_mut() {
+            if d.arch.rooms.iter().any(|r| r.id == tray.room) {
+                continue;
+            }
+            let Some((_, level, pt)) = old_label_points.iter().find(|(old_id, old_level, _)| *old_id == tray.room && *old_level == tray.level) else {
+                continue;
+            };
+            if let Some(room) = d
+                .arch
+                .rooms
+                .iter()
+                .filter(|r| r.level == tray.level)
+                .find(|r| cadcraft_geom::point_in_polygon(&r.polygon, *pt) && !r.holes.iter().any(|h| cadcraft_geom::point_in_polygon(h, *pt)))
+            {
+                tray.room = room.id;
+            }
         }
         cadcraft_arch::area::refresh_areas(&mut d.arch);
         d.touch_arch();
@@ -238,6 +263,64 @@ mod tests {
         let d = s.doc().unwrap();
         assert!(!d.arch.rooms.is_empty());
         assert!(d.arch.rooms.iter().all(|r| !r.flat_ceiling && r.ceiling_stack == stack));
+    }
+
+    /// A tray created in the NW room stays bound to the room that still contains
+    /// its label point after the room set is rebuilt.
+    #[test]
+    fn roomdetect_remaps_tray_rooms() {
+        let mut s = Session::new();
+        let house = [
+            json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2, "height": 2.4, "exterior": true}),
+            json!({"points": [[0.0, 3.0], [10.0, 3.0]], "thickness": 0.1, "height": 2.4, "type": "interior"}),
+            json!({"points": [[6.0, 3.0], [6.0, 8.0]], "thickness": 0.1, "height": 2.4, "type": "interior"}),
+        ];
+        for cmd in &house {
+            s.execute("wall", cmd).unwrap();
+        }
+        s.execute("roomdetect", &json!({})).unwrap();
+        s.execute(
+            "roofauto",
+            &json!({"pitchRise": 6, "pitchRun": 12, "walls": [{"wall": "w1", "directive": "gable"}, {"wall": "w3", "directive": "gable"}]}),
+        )
+        .unwrap();
+
+        let nw_room = s
+            .doc()
+            .unwrap()
+            .arch
+            .rooms
+            .iter()
+            .find(|r| {
+                let avg_x = r.polygon.iter().map(|p| p.x).sum::<f64>() / (r.polygon.len() as f64);
+                let avg_y = r.polygon.iter().map(|p| p.y).sum::<f64>() / (r.polygon.len() as f64);
+                avg_x < 5.0 && avg_y > 4.0
+            })
+            .cloned()
+            .unwrap();
+        let label_pt = cadcraft_arch::label::label_point(&nw_room.polygon, &nw_room.holes).unwrap();
+        s.execute("tray", &json!({"room": cadcraft_doc::arch::room_label(nw_room.id), "inset": 0.6, "depth": 0.3})).unwrap();
+        let tray_id = s.execute("arch.inspect", &json!({"trays": true})).unwrap()["trays"].as_array().unwrap()[0]["id"].as_str().unwrap().to_string();
+
+        s.execute("roomdetect", &json!({})).unwrap();
+
+        let trays = s.execute("arch.inspect", &json!({"trays": true})).unwrap();
+        let rows = trays["trays"].as_array().unwrap();
+        let row = rows.iter().find(|r| r["id"].as_str() == Some(tray_id.as_str())).unwrap();
+        let rooms = s.execute("arch.inspect", &json!({"rooms": true})).unwrap();
+        let matching_room = rooms["rooms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| {
+                let poly = r["polygon"].as_array().unwrap();
+                let pts = poly.iter().map(|p| cadcraft_geom::Vec2::new(p[0].as_f64().unwrap(), p[1].as_f64().unwrap())).collect::<Vec<_>>();
+                cadcraft_geom::point_in_polygon(&pts, label_pt)
+            })
+            .unwrap();
+        assert_eq!(row["room"], matching_room["id"]);
+        let edit = s.execute("tray.edit", &json!({"id": tray_id, "depth": 0.35})).unwrap();
+        assert_eq!(edit["depth"], 0.35);
     }
 
     /// `roomdetect` must be a single undo step: one revision bump, one labelled

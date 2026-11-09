@@ -56,6 +56,7 @@ pub mod sunstudy;
 pub mod terrain;
 pub mod terrain_modify;
 pub mod terrain_query;
+pub mod tray;
 pub(crate) mod units;
 pub mod view;
 pub mod views;
@@ -122,6 +123,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(illuminance::specs());
     v.extend(render::specs());
     v.extend(sunstudy::specs());
+    v.extend(tray::specs());
     v.extend(foundation::specs());
     v
 }
