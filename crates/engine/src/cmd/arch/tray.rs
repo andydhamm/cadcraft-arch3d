@@ -200,19 +200,31 @@ fn parse_create_tray(cmd: &str, model: &ArchModel, p: &Value) -> Result<Tray> {
 
     // The drawn polygon becomes the parent tray's outline only when it is fully inside that tray's outline and inside the room;
     // otherwise there is no parent.
-    t.parent = model
-        .trays.iter()
-        .filter(|cand| cand.room == room.id && cand.level == room.level && cand.id != t.id)
-        .filter_map(|cand| outline_in(room, &model.trays, cand).ok())
-        .filter_map(|outline| {
-            outline
-                .is_finite()
-                .then(|| polygon.iter().all(|p| point_in_polygon(&outline, p) && point_in_polygon(&room.polygon, p)))
-                .then_some(cand.id)
-        })
-        .max()
-        .copied();
+    let mut best_parent: Option<ArchId> = None;
+    let mut best_area: f64 = f64::INFINITY;
+    for cand in model.trays.iter() {
+        if cand.room != room.id || cand.level != room.level || cand.id == t.id {
+            continue;
+        }
+        if let Ok(outline) = outline_in(room, &model.trays, cand) {
+            if outline.iter().all(|p| p.is_finite()) && polygon.iter().all(|p| point_in_polygon(&outline, p) && point_in_polygon(&room.polygon, p)) {
+                let area = (0..outline.len())
+                    .fold(0.0, |acc, i| {
+                        let a = outline[i];
+                        let b = outline[(i + 1) % outline.len()];
+                        acc + 0.5 * (a.x * b.y - a.y * b.x)
+                    })
+                    .abs();
+                if area < best_area {
+                    best_area = area;
+                    best_parent = Some(cand.id);
+                }
+            }
+        }
+    }
+    t.parent = best_parent;
     Ok(t)
+}
 
 fn clean_f64(value: f64) -> f64 {
     if !value.is_finite() {
