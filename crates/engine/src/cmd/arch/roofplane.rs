@@ -218,7 +218,9 @@ fn create_roof_plane(
         ..Default::default()
     };
 
+    let seated = cadcraft_arch::ceiling::seated_ceiling_items(arch, level_idx);
     arch.roofs.push(roof);
+    cadcraft_arch::ceiling::reseat(arch, &seated);
     doc.touch_arch();
 
     let handle = format!("r{}", id);
@@ -247,6 +249,8 @@ fn edit_roof_plane(
     doc.ensure_layer("A-ROOF");
     let arch = &mut doc.arch;
 
+    let roof_level = arch.roofs.get(r_idx).map(|r| r.level);
+    let seated = roof_level.map(|l| cadcraft_arch::ceiling::seated_ceiling_items(arch, l)).unwrap_or_default();
     let roof = arch.roofs.get_mut(r_idx).ok_or_else(|| bad("roofplane", format!("roof r{} not found", r_idx)))?;
 
     let plane = roof.planes.get_mut(p_idx).ok_or_else(|| bad("roofplane", format!("plane p{} not found", p_idx)))?;
@@ -317,6 +321,7 @@ fn edit_roof_plane(
 
     roof.hand_edited = true;
     let projected_area = plane.projected_area;
+    cadcraft_arch::ceiling::reseat(&mut doc.arch, &seated);
     doc.touch_arch();
 
     let handle = format!("r{}", r_idx);
