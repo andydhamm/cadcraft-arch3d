@@ -74,5 +74,13 @@
 {"cmd":"library.place","params":{"item":"bed-double-wood","at":[5.2,8.0],"level":"Main"}},
 {"cmd":"library.place","params":{"item":"table-bedside","at":[3.6,9.8],"level":"Main"}},
 {"cmd":"library.place","params":{"item":"dresser-6-drawers","at":[7.8,12.2],"level":"Main"}},
-{"cmd":"library.place","params":{"item":"lamp-floor","at":[4.5,1.5],"level":"Entry"}}
+{"cmd":"library.place","params":{"item":"lamp-floor","at":[4.5,1.5],"level":"Entry"}},
+{"cmd":"wall","params":{"points":[[3,0],[6,0]],"thickness":0.1,"level":"Entry"}},
+{"cmd":"roomdetect","params":{"level":"Entry"}},
+{"cmd":"room","params":{"id":"r11","name":"Utility","type":"utility"}},
+{"cmd":"library.place","params":{"item":"plant-small","at":[4.5,1.5],"level":"Entry"}},
+{"cmd":"library.place","params":{"item":"lamp-floor","at":[4.5,2.0],"level":"Entry"}},
+{"cmd":"library.place","params":{"item":"washing-machine","at":[2.0,4.0],"level":"Lower"}},
+{"cmd":"library.place","params":{"item":"wardrobe-hanging","at":[15.0,13.0],"level":"Lower"}},
+{"cmd":"library.place","params":{"item":"sofa-futon","at":[6.0,8.0],"level":"Main"}}
 ]
