@@ -460,7 +460,7 @@ pub fn validate(model: &ArchModel, t: &Tray) -> Result<(), String> {
         return Err("no roof above part of the tray".to_string());
     }
     if let Some(min) = min {
-        if min.z < top - 1e-9 {
+        if min.z <= top + 1e-9 {
             return Err(format!(
                 "the tray top at {top:.3} m would rise above the roof underside ({:.3} m at {:.3}, {:.3})",
                 min.z, min.at.x, min.at.y

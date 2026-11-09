@@ -160,6 +160,7 @@ fn tray_descendants(model: &ArchModel, root: ArchId) -> Vec<ArchId> {
 
 fn parse_create_tray(cmd: &str, model: &ArchModel, p: &Value) -> Result<Tray> {
     let mut t = Tray::default();
+    t.id = ArchId(model.next_tray_id);
     let keys = [p.get("room").is_some(), p.get("tray").is_some(), p.get("polygon").is_some()];
     if keys.iter().filter(|b| **b).count() != 1 {
         return Err(bad(cmd, "exactly one of `room`, `tray` or `polygon` is required"));
@@ -214,6 +215,10 @@ fn parse_create_tray(cmd: &str, model: &ArchModel, p: &Value) -> Result<Tray> {
     Ok(t)
 }
 
+fn points_json(ring: &[Vec2]) -> Value {
+    Value::Array(ring.iter().map(|p| json!([p.x, p.y])).collect())
+}
+
 fn tray_row(model: &ArchModel, tray: &Tray) -> Value {
     let room = model.room(tray.room);
     let outline = room.and_then(|r| outline_in(r, &model.trays, tray).ok());
@@ -236,8 +241,8 @@ fn tray_row(model: &ArchModel, tray: &Tray) -> Value {
         "inset": tray.inset,
         "depth": tray.depth,
         "sides": sides,
-        "polygon": if tray.polygon.is_empty() { Value::Null } else { json!(tray.polygon) },
-        "outline": outline.map_or(Value::Null, |ring| json!(ring)),
+        "polygon": if tray.polygon.is_empty() { Value::Null } else { points_json(&tray.polygon) },
+        "outline": outline.map_or(Value::Null, |ring| points_json(&ring)),
         "ceiling": ceiling,
         "layer": tray.layer,
     })
@@ -448,6 +453,8 @@ mod tests {
 
         let err = s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": invalid_depth}));
         let msg = err.as_ref().unwrap_err().to_string();
+        println!("bad tray msg: {msg}");
+        println!("tray inspect after bad tray: {}", s.execute("arch.inspect", &json!({"trays": true})).unwrap()["trays"]);
         assert!(msg.contains("roof") || msg.contains("flat ceiling") || msg.contains("tray"));
         assert!(s.execute("arch.inspect", &json!({"trays": true})).unwrap()["trays"].as_array().unwrap().is_empty());
 
@@ -490,9 +497,15 @@ mod tests {
 
         let model = s.doc().unwrap().arch.clone();
         let parent_t = model.trays[0].clone();
-        let child = Tray { room: parent_t.room, level: parent_t.level, parent: Some(parent_t.id), inset: 0.6, depth: 0.1, ..Default::default() };
-        println!("parent tray: {:?}", parent_t);
-        println!("direct nested validate: {:?}", validate_tray(&model, &child));
+        let child = Tray {
+            id: ArchId(model.next_tray_id),
+            room: parent_t.room,
+            level: parent_t.level,
+            parent: Some(parent_t.id),
+            inset: 0.6,
+            depth: 0.1,
+            ..Default::default()
+        };
         let nested = [0.3, 0.4, 0.5, 0.6]
             .into_iter()
             .find_map(|inset| {
@@ -524,6 +537,7 @@ mod tests {
         let tray_id = s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": 0.3})).unwrap()["tray"].as_str().unwrap().to_string();
         let inspect = s.execute("arch.inspect", &json!({"trays": true})).unwrap();
         let rows = inspect["trays"].as_array().unwrap();
+        println!("tray rows: {rows:#?}");
         let row = rows.iter().find(|r| r["id"] == tray_id).unwrap();
         assert_eq!(row["parent"], Value::Null);
         assert_eq!(row["depth"], 0.3);
