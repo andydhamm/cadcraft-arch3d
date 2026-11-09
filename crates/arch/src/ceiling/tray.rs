@@ -1,5 +1,3 @@
-//! Tray ceilings (phase 16): a tray recesses part of a room's ceiling up into the attic.
-
 use std::collections::HashSet;
 
 use cadcraft_doc::arch::{ArchId, ArchModel, Level, MAX_TRAY_NESTING, Room, Tray, TraySides};
@@ -80,27 +78,6 @@ fn ring_is_convex(ring: &[Vec2]) -> bool {
     sign != 0
 }
 
-fn base_ring_in_inner(room: &Room, trays: &[Tray], t: &Tray, depth: usize, seen: &mut HashSet<ArchId>) -> Option<Vec<Vec2>> {
-    if seen.contains(&t.id) {
-        return None;
-    }
-    seen.insert(t.id);
-
-    if !t.polygon.is_empty() {
-        return Some(orient_ccw(&t.polygon));
-    }
-
-    if let Some(parent_id) = t.parent {
-        if depth >= MAX_TRAY_NESTING + 1 {
-            return None;
-        }
-        let parent = trays.iter().find(|p| p.id == parent_id)?;
-        return outline_in_inner(room, trays, parent, depth + 1, seen).ok();
-    }
-
-    Some(orient_ccw(&room.polygon))
-}
-
 fn flat_ceiling_z(model: &ArchModel, room: &Room) -> Option<f64> {
     if !room.room_type.has_ceiling() {
         return None;
@@ -115,7 +92,13 @@ fn flat_ceiling_z(model: &ArchModel, room: &Room) -> Option<f64> {
     z.is_finite().then_some(z)
 }
 
-fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) -> (Option<super::UndersideMin>, bool) {
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct UndersideMin {
+    pub at: Vec2,
+    pub z: f64,
+}
+
+fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) -> (Option<UndersideMin>, bool) {
     let rings: Vec<&[Vec2]> = model
         .roofs
         .iter()
@@ -131,7 +114,7 @@ fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) -> (Op
             for ring in &rings {
                 for (c, d) in ring_edges(ring) {
                     pairs += 1;
-                    if samples.len() >= super::MAX_UNDERSIDE_SAMPLES || pairs > super::MAX_EDGE_PAIRS {
+                    if samples.len() >= 100_000 || pairs > 4_000_000 {
                         break 'edges;
                     }
                     if let Some(x) = crossing(a, b, c, d) {
@@ -144,7 +127,7 @@ fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) -> (Op
     if polygon.len() >= 3 {
         'rings: for ring in &rings {
             for &v in ring.iter() {
-                if samples.len() >= super::MAX_UNDERSIDE_SAMPLES {
+                if samples.len() >= 100_000 {
                     break 'rings;
                 }
                 if v.is_finite() && ring_holds(polygon, v) {
@@ -154,13 +137,13 @@ fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) -> (Op
         }
     }
 
-    let mut best: Option<super::UndersideMin> = None;
+    let mut best: Option<UndersideMin> = None;
     let mut uncovered = false;
     for q in samples {
-        match super::roof_underside_at(model, level, q) {
+        match crate::ceiling::roof_underside_at(model, level, q) {
             Some(z) => {
                 if best.is_none_or(|b| z < b.z) {
-                    best = Some(super::UndersideMin { at: q, z, ..Default::default() });
+                    best = Some(UndersideMin { at: q, z });
                 }
             }
             None => uncovered = true,
@@ -169,11 +152,27 @@ fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) -> (Op
     (best, uncovered)
 }
 
+fn base_ring_in_inner(room: &Room, trays: &[Tray], t: &Tray, depth: usize, seen: &mut HashSet<ArchId>) -> Option<Vec<Vec2>> {
+    if seen.contains(&t.id) {
+        return None;
+    }
+    seen.insert(t.id);
+
+    if !t.polygon.is_empty() {
+        return Some(orient_ccw(&t.polygon));
+    }
+    if let Some(parent_id) = t.parent {
+        if depth >= MAX_TRAY_NESTING + 1 {
+            return None;
+        }
+        let parent = trays.iter().find(|p| p.id == parent_id)?;
+        return outline_in_inner(room, trays, parent, depth + 1, seen).ok();
+    }
+    Some(orient_ccw(&room.polygon))
+}
+
 fn outline_in_inner(room: &Room, trays: &[Tray], t: &Tray, depth: usize, seen: &mut HashSet<ArchId>) -> Result<Vec<Vec2>, String> {
-    let ring = match base_ring_in_inner(room, trays, t, depth, seen) {
-        Some(r) => r,
-        None => return Err("the inset leaves no tray outline".to_string()),
-    };
+    let ring = base_ring_in_inner(room, trays, t, depth, seen).ok_or_else(|| "the inset leaves no tray outline".to_string())?;
     let d = t.inset;
     if !d.is_finite() {
         return Err("the inset leaves no tray outline".to_string());
@@ -181,17 +180,15 @@ fn outline_in_inner(room: &Room, trays: &[Tray], t: &Tray, depth: usize, seen: &
     if d <= 0.0 {
         return Ok(ring);
     }
-
     let Ok(regions) = inset_region(&ring, &[], d) else {
         return Err("the inset leaves no tray outline".to_string());
     };
     if regions.is_empty() {
         return Err("the inset leaves no tray outline".to_string());
     }
-    if regions.len() != 1 || !regions.iter().all(|r| r.holes.is_empty()) {
+    if regions.len() != 1 || regions.iter().any(|r| !r.holes.is_empty()) {
         return Err("the inset splits the tray outline".to_string());
     }
-
     Ok(orient_ccw(&regions[0].outer))
 }
 
@@ -199,7 +196,6 @@ fn rise_for_tray(room: &Room, trays: &[Tray], t: &Tray, p: Vec2) -> f64 {
     if !p.is_finite() || !t.depth.is_finite() {
         return 0.0;
     }
-
     match t.sides {
         TraySides::Vertical => t.depth,
         TraySides::Pitched(deg) => {
@@ -225,8 +221,7 @@ fn rise_for_tray(room: &Room, trays: &[Tray], t: &Tray, p: Vec2) -> f64 {
             if !rise.is_finite() {
                 return 0.0;
             }
-            let w = rise * d;
-            t.depth.min(w)
+            t.depth.min(rise * d)
         }
     }
 }
@@ -271,8 +266,8 @@ pub fn top_ring_in(room: &Room, trays: &[Tray], t: &Tray) -> Result<Vec<Vec2>, S
     match t.sides {
         TraySides::Vertical => Ok(outline),
         TraySides::Pitched(deg) => {
-            if !deg.is_finite() || !(5.0..=85.0).contains(&deg) {
-                return Err("a pitched tray needs sides between 5 and 85 degrees".to_string());
+            if !deg.is_finite() || !(0.0 < deg && deg < 90.0) {
+                return Err("the pitched sides cannot be built".to_string());
             }
             let offset = t.depth / deg.to_radians().tan();
             if !offset.is_finite() {
@@ -281,14 +276,14 @@ pub fn top_ring_in(room: &Room, trays: &[Tray], t: &Tray) -> Result<Vec<Vec2>, S
             let Ok(regions) = inset_region(&outline, &[], offset) else {
                 return Err("the pitched sides cannot be built".to_string());
             };
-            if regions.len() != 1 || !regions.iter().all(|r| r.holes.is_empty()) || regions[0].outer.len() != outline.len() {
+            if regions.len() != 1 || regions.iter().any(|r| !r.holes.is_empty()) || regions[0].outer.len() != outline.len() {
                 return Err("the pitched sides cannot be built".to_string());
             }
-            let outer = orient_ccw(&regions[0].outer);
-            if !ring_is_convex(&outer) {
+            let top = orient_ccw(&regions[0].outer);
+            if !ring_is_convex(&top) {
                 return Err("pitched sides need a convex outline".to_string());
             }
-            Ok(outer)
+            Ok(top)
         }
     }
 }
@@ -316,20 +311,20 @@ pub fn lift_in(room: &Room, trays: &[Tray], p: Vec2) -> f64 {
     if !p.is_finite() {
         return 0.0;
     }
-    trays
-        .iter()
-        .filter(|t| t.room == room.id && t.level == room.level)
-        .filter_map(|t| {
-            let outline = outline_in(room, trays, t).ok()?;
-            if !ring_holds(&outline, p) {
-                return None;
-            }
-            match t.sides {
-                TraySides::Vertical => Some(t.depth),
-                TraySides::Pitched(deg) => {
-                    if !deg.is_finite() || !t.depth.is_finite() {
-                        return Some(0.0);
-                    }
+    let mut total = 0.0;
+    for t in trays.iter().filter(|t| t.room == room.id && t.level == room.level) {
+        let Ok(outline) = outline_in(room, trays, t) else {
+            continue;
+        };
+        if !ring_holds(&outline, p) {
+            continue;
+        }
+        let rise = match t.sides {
+            TraySides::Vertical => t.depth,
+            TraySides::Pitched(deg) => {
+                if !deg.is_finite() || !t.depth.is_finite() || deg <= 0.0 || deg >= 90.0 {
+                    0.0
+                } else {
                     let d = ring_edges(&outline)
                         .map(|(a, b)| {
                             let ab = b - a;
@@ -342,15 +337,15 @@ pub fn lift_in(room: &Room, trays: &[Tray], p: Vec2) -> f64 {
                         })
                         .fold(f64::INFINITY, f64::min);
                     let rise = deg.to_radians().tan();
-                    if !rise.is_finite() {
-                        return Some(0.0);
-                    }
-                    let v = t.depth.min(rise * d);
-                    Some(v)
+                    if !rise.is_finite() { 0.0 } else { t.depth.min(rise * d) }
                 }
             }
-        })
-        .sum::<f64>()
+        };
+        if rise.is_finite() {
+            total += rise;
+        }
+    }
+    total
 }
 
 /// How far the trays of `room` lift its rough ceiling at plan point `p`, in metres.
@@ -379,15 +374,15 @@ pub fn validate(model: &ArchModel, t: &Tray) -> Result<(), String> {
     top_ring_in(room, &model.trays, t)?;
 
     if !t.polygon.is_empty() {
-        let ring = &t.polygon;
+        let ring = if t.polygon.len() >= 2 && t.polygon.first() == t.polygon.last() { &t.polygon[..t.polygon.len() - 1] } else { &t.polygon };
         for i in 0..ring.len() {
             for j in i + 1..ring.len() {
-                let a = ring[i];
-                let b = ring[(i + 1) % ring.len()];
-                let c = ring[j];
-                let d = ring[(j + 1) % ring.len()];
-                let same = (i + 1) % ring.len() == j || (j + 1) % ring.len() == i;
-                if !same && crossing(a, b, c, d).is_some() {
+                let a0 = ring[i];
+                let a1 = ring[(i + 1) % ring.len()];
+                let b0 = ring[j];
+                let b1 = ring[(j + 1) % ring.len()];
+                let adjacent = (i + 1) % ring.len() == j || (j + 1) % ring.len() == i;
+                if !adjacent && crossing(a0, a1, b0, b1).is_some() {
                     return Err("the drawn tray outline is not inside the room".to_string());
                 }
             }
@@ -419,11 +414,6 @@ pub fn validate(model: &ArchModel, t: &Tray) -> Result<(), String> {
             depth += 1;
         }
         let parent_outline = outline_in(room, &model.trays, parent)?;
-        for &v in &parent_outline {
-            if !ring_holds(&parent_outline, v) {
-                return Err("the tray is not inside its parent tray".to_string());
-            }
-        }
         let outline = outline_in(room, &model.trays, t)?;
         for &v in &outline {
             if !ring_holds(&parent_outline, v) {
