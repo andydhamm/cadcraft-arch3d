@@ -1391,47 +1391,6 @@
 	Edit Library Item	编辑库项目
 	Delete Library Item	删除库项目
 	Library Trash	库垃圾桶
-# Architecture (arch3d)
-	Architecture	建筑
-	Door	门
-	Window	窗口
-	Garage Door	车库门
-	Move Opening	移动开口
-	Level	标高
-	Library…	库…
-	Pull Library…	拉动库…
-	Component	组件
-	Floor	楼层
-	Plan	平面
-	Paint	绘制
-	Cannot place that here	无法在此处放置
-	Automatic	自动
-	Plane	平面
-	Room	房间
-	Room Detect	检测房间
-	Stair	楼梯
-	Deck	甲板
-	Railing	栏杆
-	Library	库
-	Library Item	库项目
-	Library Icon	库图标
-	Tag Library Item	标记库项目
-	Library Filters	库筛选器
-	Install Catalog	安装目录
-	Local Catalog	本地目录
-	Place From Library	从库中放置
-	Edit Furnishing	编辑家具
-	Delete Furnishing	删除家具
-	Center Furnishing	居中家具
-	Detect from Linework	从线稿检测
-	Architecture>Room	建筑>房间
-	Architecture>Room Detect	建筑>房间检测
-	Architecture>Level	建筑>标高
-	Architecture>Stair	建筑>楼梯
-	Architecture>Railing	建筑>栏杆
-	Architecture>Deck	建筑>甲板
-	Architecture>Detect from Linework	建筑>从线稿检测
-	Architecture>Detection Review	建筑>检测复查
 	Architecture>Material Painter	建筑>材质涂刷
 	Architecture>Object Painter	建筑>对象涂刷
 	Architecture>Material Eyedropper	建筑>材质吸管
@@ -1524,6 +1483,102 @@ menu	View	视图
 	Clip Xref	剪裁外部参照
 	Xref	外部参照
 	Xref Clip Frame	外部参照剪裁边框
-	Ctrl+Enter to apply	Ctrl+Enter 应用
-	Edit Text	编辑文字
-	The drawing changed. Close the window and open it again.	图纸已切换。请关闭窗口后重新打开。
+	3D View	三维视图
+	Arch Inspect	建筑检查
+	Arch Sample	建筑示例
+	Architecture	建筑
+	Automatic	自动
+	Build 3D	生成三维
+	Camera	相机
+	Contours	等高线
+	Cut and Fill	挖填方
+	Deck	平台
+	Delete Light Fixture	删除灯具
+	Delete Terrain	删除地形
+	Set as Default	设为默认
+	Delete View	删除视图
+	Detect from Linework	从线条检测
+	Detection Review	检测复核
+	Door	门
+	Edit Light Fixture	编辑灯具
+	Garage Door	车库门
+	Illuminance	照度
+	Level	楼层
+	Light Fixture	灯具
+	Light Fixture Types	灯具类型
+	Cabinet	橱柜
+	Edit Cabinet	编辑橱柜
+	Delete Cabinet	删除橱柜
+	Fixture	设备
+	Edit Fixture	编辑设备
+	Delete Fixture	删除设备
+	Fixture Types	设备类型
+	Move Opening	移动洞口
+	Pick 3D	三维拾取
+	Plane	平面
+	Plant	植物
+	Plant Species	植物品种
+	Railing	栏杆
+	Library	库
+	Library Item	库项目
+	Library Icon	库图标
+	Tag Library Item	标记库项目
+	Library Filters	库筛选器
+	Install Catalog	安装目录
+	Local Catalog	本地目录
+	Render 3D	三维渲染
+	Roof	屋顶
+	Roof Automatic	自动屋顶
+	Roof Plane	屋顶面
+	Room	房间
+	Place From Library	从库中放置
+	Edit Furnishing	编辑家具
+	Delete Furnishing	删除家具
+	Center Furnishing	家具居中
+	Room Detect	房间检测
+	Section	剖面
+	Site Location	场地位置
+	Backdrop	背景
+	Stair	楼梯
+	Stretch Wall	拉伸墙
+	Sun	太阳
+	Sun Study	日照分析
+	Terrain	地形
+	Terrain Elevation	地形标高
+	Terrain Modifier	地形修改器
+	View Sheet	视图图纸
+	Walkthrough	漫游
+	Wall	墙
+	Material	材质
+# Phase 15: electrical, split levels, showcase house.
+	240 V Outlet	240 伏插座
+	Auto Outlets	自动插座
+	Circuit Brightness	回路亮度
+	Clay	黏土
+	Connection	连接
+	Delete Connection	删除连接
+	Delete Electrical	删除电气
+	Dimmer Switch	调光开关
+	Dining	餐厅
+	Duplex Outlet	双联插座
+	Edit Connection	编辑连接
+	Edit Electrical	编辑电气
+	Edit Level	编辑楼层
+	Electrical	电气
+	Electrical View	电气视图
+	Entry	入口
+	Family	家庭室
+	GFCI Outlet	漏电保护插座
+	Landing	平台
+	Laundry	洗衣房
+	Light Set	灯组
+	Outlet	插座
+	Planting Bed	种植床
+	Show Level	显示楼层
+	Single-Pole Switch	单极开关
+	Switch	开关
+	Technical Illustration	技术插图
+	Three-Way Switch	三向开关
+	Delete Foundation	删除基础
+	Edit Foundation	编辑基础
+	Foundation	基础
