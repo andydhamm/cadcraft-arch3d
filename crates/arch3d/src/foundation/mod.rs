@@ -4,6 +4,7 @@
 //! Meshes: stem walls `foundation`, footings and slab edges `footing`, slab floors `slab` (the
 //! room's floor, built in the room's part).
 
+use cadcraft_arch::foundation::{FoundationWall, foundation_walls, is_basement_level};
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{Foundation, FoundationKind, Level};
 
@@ -17,11 +18,19 @@ pub(crate) mod stem;
 pub(crate) struct FoundationIn {
     pub foundation: Foundation,
     pub level: Level,
+    /// The walls it stands under (`cadcraft_arch::foundation::foundation_walls` of its level), so a
+    /// wall edit rebuilds the foundation.
+    pub walls: Vec<FoundationWall>,
+    /// Whether its level is a basement.
+    pub basement: bool,
 }
 
 /// The inputs of foundation `f` in `model`.
 pub(crate) fn foundation_input(model: &ArchModel, f: &Foundation) -> FoundationIn {
-    FoundationIn { foundation: f.clone(), level: crate::level_for(model, f.level) }
+    let walls = foundation_walls(model, f.level);
+    // Every foundation wall carries its level's class; without walls, ask the level.
+    let basement = walls.first().map_or_else(|| is_basement_level(model, f.level), |w| w.basement);
+    FoundationIn { foundation: f.clone(), level: crate::level_for(model, f.level), walls, basement }
 }
 
 /// The meshes of one foundation, by its kind.

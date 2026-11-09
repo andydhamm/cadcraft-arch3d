@@ -22,6 +22,7 @@ pub(crate) mod defaults;
 pub mod electrical;
 pub(crate) mod electrical_inspect;
 pub mod electrical_view;
+pub mod foundation;
 pub mod furnish;
 pub mod illuminance;
 pub mod inspect;
@@ -121,5 +122,6 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(illuminance::specs());
     v.extend(render::specs());
     v.extend(sunstudy::specs());
+    v.extend(foundation::specs());
     v
 }

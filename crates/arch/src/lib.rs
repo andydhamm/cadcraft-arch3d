@@ -25,6 +25,7 @@ pub mod ceiling;
 pub mod connections;
 pub mod detect;
 pub mod electrical;
+pub mod foundation;
 pub mod furnishing;
 pub mod grade;
 pub mod graph;
