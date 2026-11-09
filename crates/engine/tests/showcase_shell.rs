@@ -314,3 +314,45 @@ fn no_room_is_left_empty() {
         .collect();
     assert!(empty.is_empty(), "rooms with nothing in them: {empty:?}");
 }
+
+#[test]
+fn the_showcase_is_lit_and_painted() {
+    let mut s = showcase_session();
+    replay(&mut s);
+    let r: Value =
+        s.execute("arch.inspect", &json!({"rooms": true, "lights": true, "electrical": true, "surfaces": true})).expect("arch.inspect failed");
+    let rooms = r["rooms"].as_array().expect("rooms");
+    let lights = r["lights"].as_array().expect("lights");
+    let devices = r["electrical"].as_array().expect("electrical");
+    let circuits = r["circuits"].as_array().expect("circuits");
+    for rm in rooms.iter().filter(|rm| !matches!(rm["type"].as_str(), Some("closet") | Some("openBelow"))) {
+        let rid = rm["id"].as_str().expect("room id");
+        let room_lights: Vec<&str> = lights.iter().filter(|l| l["room"].as_str() == Some(rid)).filter_map(|l| l["id"].as_str()).collect();
+        assert!(!room_lights.is_empty(), "room {rid} has no light");
+        assert!(
+            devices
+                .iter()
+                .any(|d| d["room"].as_str() == Some(rid) && d["layer"].as_str() == Some("E-LITE") && d["kind"].as_str() == Some("single-pole")),
+            "room {rid} has no switch on E-LITE"
+        );
+        let wired = circuits
+            .iter()
+            .any(|c| c["lights"].as_array().is_some_and(|ls| ls.iter().any(|l| l.as_str().is_some_and(|id| room_lights.contains(&id)))));
+        assert!(wired, "room {rid} has no light in a circuit");
+    }
+    for row in r["outletGaps"].as_array().expect("outletGaps") {
+        let gap = row["maxGap"].as_f64().expect("maxGap");
+        assert!(gap <= 1.8, "room {} outlet gap {gap} exceeds 1.8", row["room"]);
+        if let Some(spacing) = row["counter"]["maxSpacing"].as_f64() {
+            assert!(spacing <= 1.2, "room {} counter spacing {spacing} exceeds 1.2", row["room"]);
+        }
+    }
+    let defaults: Vec<String> = r["surfaces"]
+        .as_array()
+        .expect("surfaces")
+        .iter()
+        .filter(|x| x["material"].as_str().is_some_and(|m| m.starts_with("default:")))
+        .filter_map(|x| x["surface"].as_str().map(str::to_string))
+        .collect();
+    assert!(defaults.is_empty(), "surfaces still on a default material: {defaults:?}");
+}
