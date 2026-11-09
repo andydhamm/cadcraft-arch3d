@@ -245,8 +245,12 @@ fn level_ref_param(p: &Value, key: &str) -> Option<String> {
 
 /// Position in `levels` of the level called `r`, else of the level whose index is `r`.
 fn resolve_level(levels: &[Level], r: &str) -> Option<usize> {
-    levels.iter().position(|l| l.name == r).or_else(|| {
-        let i = r.trim().parse::<u32>().ok()?;
+    let trimmed = r.trim();
+    if trimmed.eq_ignore_ascii_case("ground") || trimmed.eq_ignore_ascii_case("level 0") {
+        return levels.iter().position(|l| l.index == 0);
+    }
+    levels.iter().position(|l| l.name.eq_ignore_ascii_case(trimmed)).or_else(|| {
+        let i = trimmed.parse::<u32>().ok()?;
         levels.iter().position(|l| l.index == i)
     })
 }

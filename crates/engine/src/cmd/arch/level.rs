@@ -21,12 +21,18 @@ fn kind_key(k: LevelKind) -> &'static str {
 /// Find a level by name (string) or index (number). Returns the position in the levels vec.
 fn find_level(arch: &cadcraft_doc::arch::ArchModel, ref_val: &Value) -> Result<usize, crate::EngineError> {
     if let Some(n) = ref_val.as_str() {
-        if let Some(i) = n.parse::<u64>().ok() {
+        let trimmed = n.trim();
+        if let Some(i) = trimmed.parse::<u64>().ok() {
             if i < arch.levels.len() as u64 {
                 return Ok(i as usize);
             }
         }
-        if let Some((i, _)) = arch.levels.iter().enumerate().find(|(_, l)| l.name.eq_ignore_ascii_case(n)) {
+        if trimmed.eq_ignore_ascii_case("ground") || trimmed.eq_ignore_ascii_case("level 0") {
+            if let Some(i) = arch.levels.iter().position(|l| l.index == 0) {
+                return Ok(i);
+            }
+        }
+        if let Some((i, _)) = arch.levels.iter().enumerate().find(|(_, l)| l.name.eq_ignore_ascii_case(trimmed)) {
             return Ok(i);
         }
         return Err(crate::EngineError::Other(format!("level: unknown level '{n}'")));

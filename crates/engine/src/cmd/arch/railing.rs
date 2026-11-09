@@ -44,12 +44,18 @@ pub fn specs() -> Vec<CommandSpec> {
 /// the arch model's levels. An unknown name/index is an error, never a silent
 /// fallback to level 0.
 fn find_level(arch: &cadcraft_doc::arch::ArchModel, ref_val: &str) -> Result<usize> {
-    if let Some(i) = ref_val.trim().parse::<u64>().ok() {
+    let trimmed = ref_val.trim();
+    if let Some(i) = trimmed.parse::<u64>().ok() {
         if i < arch.levels.len() as u64 {
             return Ok(i as usize);
         }
     }
-    if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == ref_val.trim()) {
+    if trimmed.eq_ignore_ascii_case("ground") || trimmed.eq_ignore_ascii_case("level 0") {
+        if let Some(i) = arch.levels.iter().position(|l| l.index == 0) {
+            return Ok(i);
+        }
+    }
+    if let Some((i, _)) = arch.levels.iter().enumerate().find(|(_, l)| l.name.eq_ignore_ascii_case(trimmed)) {
         return Ok(i);
     }
     Err(EngineError::Other(format!("railing: unknown level `{ref_val}`")))

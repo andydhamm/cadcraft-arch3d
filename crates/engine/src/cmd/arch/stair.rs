@@ -60,14 +60,21 @@ pub fn specs() -> Vec<CommandSpec> {
 /// error.
 fn find_level(arch: &cadcraft_doc::arch::ArchModel, ref_val: &Value) -> Result<usize> {
     if let Some(n) = ref_val.as_str() {
+        let trimmed = n.trim();
         // Try as index first.
-        if let Some(i) = n.parse::<u64>().ok() {
+        if let Some(i) = trimmed.parse::<u64>().ok() {
             if i < arch.levels.len() as u64 {
                 return Ok(i as usize);
             }
         }
-        // Then as name.
-        if let Some((i, _l)) = arch.levels.iter().enumerate().find(|(_i, l)| l.name == n) {
+        // Support the widely-used ground-level aliases alongside the auto-generated names.
+        if trimmed.eq_ignore_ascii_case("ground") || trimmed.eq_ignore_ascii_case("level 0") {
+            if let Some(i) = arch.levels.iter().position(|l| l.index == 0) {
+                return Ok(i);
+            }
+        }
+        // Then as name, case-insensitive.
+        if let Some((i, _l)) = arch.levels.iter().enumerate().find(|(_i, l)| l.name.eq_ignore_ascii_case(trimmed)) {
             return Ok(i);
         }
         return Err(EngineError::Other(format!("stair: unknown level '{n}'")));

@@ -79,7 +79,13 @@ fn run_roofauto(s: &mut Session, p: &Value) -> Result<Value> {
 
     // Determine target level
     let target_level = if let Some(name) = level_name {
-        s.doc()?.arch.levels.iter().position(|l| l.name == name).map(|i| i as u32).ok_or_else(|| bad(cmd, format!("level `{name}` not found")))?
+        let trimmed = name.trim();
+        if trimmed.eq_ignore_ascii_case("ground") || trimmed.eq_ignore_ascii_case("level 0") {
+            s.doc()?.arch.levels.iter().position(|l| l.index == 0).map(|i| i as u32)
+        } else {
+            s.doc()?.arch.levels.iter().position(|l| l.name.eq_ignore_ascii_case(trimmed)).map(|i| i as u32)
+        }
+        .ok_or_else(|| bad(cmd, format!("level `{name}` not found")))?
     } else {
         top_level(&s.doc()?.arch)
     };
