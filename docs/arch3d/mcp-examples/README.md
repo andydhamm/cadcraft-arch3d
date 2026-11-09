@@ -13,6 +13,7 @@ These JSONL files are example sessions for agents using the CADCraft MCP server.
 - `07-site-and-lights.jsonl`: Site location, terrain, plants, and lighting.
 - `08-detect-a-plan.jsonl`: Detecting arch objects from a DXF plan.
 - `09-library.jsonl`: Searching the library, placing three items, painting a room, and exporting a GLB.
+- `10-electrical.jsonl`: Outlets, switches, connections and circuits, light sets, and auto-placed outlets.
 
 ## Replaying
 
