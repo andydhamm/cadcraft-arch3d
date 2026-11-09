@@ -212,13 +212,8 @@ fn meets_the_brief(reply: &Value) {
         Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `circuits` array"),
     };
-    let all_circuit_lights: HashSet<String> = circuits
-        .iter()
-        .flat_map(|c| match c.get("lights") {
-            Some(a) if a.is_array() => a.as_array().iter().map(|l| field_text(l, "id")),
-            _ => Vec::<String>::new(),
-        })
-        .collect();
+    let all_circuit_lights: HashSet<String> =
+        circuits.iter().flat_map(|c| c.get("lights").and_then(|v| v.as_array()).into_iter().map(|l| field_text(l, "id"))).collect();
     for r in rooms.iter() {
         let ry = strd(r, "type", "");
         if ry == "closet" || ry == "openBelow" {
