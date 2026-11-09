@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Carried forward: layering, exhaustive literals (the new tray, soffit and foundation structs included), the web build,
 # assets, translations for every new command label; no GPU code below L5; unsafe only in crates/gpu-optin.
-# needs: p16-observables, p16-scene-plumbing, p16-trays, p16-soffits, p16-foundation-stem
+# needs: p16-trays, p16-soffits, p16-foundation-stem
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || { echo "FAIL: no repository root"; exit 1; }
 cargo xtask layers   || { echo "FAIL: layers"; exit 1; }

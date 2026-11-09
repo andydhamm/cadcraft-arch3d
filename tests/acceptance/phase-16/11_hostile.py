@@ -2,7 +2,7 @@
 # Hostile input to every phase-16 command is refused with an error line, and nothing changes: no room's ceiling flag,
 # stack or rough ceiling, no tray, soffit, foundation or level, and the built scene's digest is the same.
 # (Non-finite numbers cannot be sent: JSON has no NaN, and the CLI refuses a non-JSON --cmd before running anything.)
-# needs: p16-observables, p16-ceiling-stack, p16-vault-ceiling, p16-trays, p16-soffits, p16-foundation-stem
+# needs: p16-vault-ceiling, p16-trays, p16-soffits, p16-foundation-stem
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p16lib.inc')).read())
 

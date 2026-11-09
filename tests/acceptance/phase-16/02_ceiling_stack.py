@@ -5,7 +5,7 @@
 # layer is a solid of its own (the bottom one is the ceiling people see), an air gap holds nothing, and an empty stack keeps
 # today's 20 mm ceiling solid. A stub (no layers in 3D, the 20 mm solid everywhere, the rough height as the finished one)
 # fails: the tile at 2.18 and the empty gap at 2.3 need real layers, and 2.1713 needs the stack's thickness.
-# needs: p16-observables, p16-scene-plumbing, p16-ceiling-stack
+# needs:
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p16lib.inc')).read())
 
