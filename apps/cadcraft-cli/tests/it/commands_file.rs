@@ -13,7 +13,7 @@ fn run_and_stderr(args: &[&str]) -> (i32, String) {
 /// means they were in order).
 #[test]
 fn commands_file_runs_its_steps_in_order() {
-    let dir = std::env::temp_dir().join(format!("cadcraft-cli-cmds-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("cadcraft-cli-cmds-ok-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("steps.json");
     std::fs::write(
@@ -33,7 +33,7 @@ fn commands_file_runs_its_steps_in_order() {
 /// with an error that names the offending step index.
 #[test]
 fn a_bad_commands_file_names_the_step() {
-    let dir = std::env::temp_dir().join(format!("cadcraft-cli-cmds-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("cadcraft-cli-cmds-bad-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("bad.json");
     std::fs::write(
