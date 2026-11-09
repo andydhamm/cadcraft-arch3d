@@ -1212,7 +1212,7 @@ fn user_guide_electrical_and_split_level_blocks_run() {
             .map(|lines| lines.join(" "))
             .find(|l| l.contains("outlet {") && l.contains("outlets.auto"))
             .expect("the guide should contain the electrical block");
-        let cmds = cmd_args(line);
+        let cmds = cmd_args(&line);
         assert_eq!(
             cmds.len(),
             9,
@@ -1255,13 +1255,13 @@ fn user_guide_electrical_and_split_level_blocks_run() {
             .map(|lines| lines.join(" "))
             .find(|l| l.contains("split-level.dxf"))
             .expect("the guide should contain the split-level block");
-        let cmds = cmd_args(line);
+        let cmds = cmd_args(&line);
         assert_eq!(
             cmds.len(),
             9,
             "split-level block should have exactly 9 commands, found {} (ids: {:?})",
             cmds.len(),
-            cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect::<Vec<_>>()
+            cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).unwrap_or("")).collect::<Vec<_>>()
         );
         let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
         assert_eq!(ids, ["level", "level", "wall", "wall", "door", "stair", "stair", "arch.inspect"], "split-level block command order");
