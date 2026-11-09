@@ -557,8 +557,87 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'export {"path": "library.glb"}'
 ```
 
+## Electrical
+
+Outlets and switches are first-class arch objects (`el<n>`). A device lives on a wall (`wall`) on one of its two
+faces (`side`, left or right, at the wall's `start`), `offset` metres from the wall's start to the plate centre, and
+`height` above the level's floor. Kinds: `duplex`, `GFCI`, `240 V` for outlets and `single-pole`, `three-way`, `dimmer`
+for switches. Standard heights — outlets 0.3 m, switches 1.2 m — are filled in when you omit them; a `counter` outlet
+sits 0.15 m above the counter top in front of it. Plates are 0.07 × 0.115 m and stand 0.006 m proud of the wall face
+(probe part `electrical`, GLB node `electrical-el<n>`). A device in a doorway or past a wall's end is refused.
+
+A `connection` runs from a switch to one or more light fixtures; its `bulge` (-1 to 1) shapes the arc. Switches that
+share a light are one circuit, and `circuit.brightness` sets the brightness (0 to 1, default 1) of every light in the
+circuit — the 3D build scales lumens by it. `outlets.auto` fills a room with duplex outlets so no point is more than
+1.8 m from one, breaking the run at doorways (windows do not break it); over a kitchen counter it places a GFCI over
+every counter run. The Electrical view is the layer state `E-*` on with every other layer at 70% transparency, and a
+`light` set is a named {on, brightness} per fixture that a render can apply for that frame only.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'outlet {"kind":"duplex","wall":"w0","offset":1.0,"side":"left"}' \
+  --cmd 'switch {"kind":"single-pole","wall":"w0","offset":3.0,"side":"left"}' \
+  --cmd 'lightfixture {"room":"r0","rows":1,"cols":2}' \
+  --cmd 'connection {"from":"el1","to":["lf0","lf1"],"bulge":0.5}' \
+  --cmd 'circuit.brightness {"switch":"el1","brightness":0.75}' \
+  --cmd 'outlets.auto {"room":"r0"}' \
+  --cmd 'arch.inspect {"electrical":true,"lightSets":true,"lights":true}' \
+  --save electrical.dxf
+```
+
+## Split levels
+
+A level's elevation is free (`level {"elevation":…}`) and its kind is `floor` or `landing`; level 0 always exists at
+ground. A wall with `topLevel` runs from its base level's floor to the top level's ceiling, so one wall can span a
+landing and a storey. An opening's sill is measured from its own level, so a door on the landing opens from the landing.
+`level.show` picks the one level the plan draws (the site draws on every level). A level is *above grade* when its floor
+is at least 0.3 m above the finished grade outside every exterior wall that spans it, otherwise it is a basement; the
+above-grade area is the interior area of the above-grade floor levels only.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'level {"elevation":1.35,"kind":"landing"}' \
+  --cmd 'level {"elevation":2.7,"kind":"floor"}' \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true,"level":"l1","topLevel":"l2"}' \
+  --cmd 'door {"wall":"w1","offset":3.0,"width":0.9,"height":2.1,"style":"hinged","level":"l1"}' \
+  --cmd 'stair {"start":[2,0],"direction":90,"width":1.0,"fromLevel":"l0","toLevel":"l1"}' \
+  --cmd 'stair {"start":[2,2],"direction":90,"width":1.0,"fromLevel":"l1","toLevel":"l2"}' \
+  --cmd 'arch.inspect {"levels":true}' \
+  --save split-level.dxf
+```
+
+## The showcase house
+
+The showcase house is a saved script: `docs/arch3d/showcase/bilevel.json` is a JSON array of {`cmd`, `params}` entries
+replayed by `cadcraft-cli run --commands`. It builds a lower level at -1.2 (a basement), an Entry landing at 0.15 with
+the front door and two half flights, a Main level at 1.5 above grade, a sloping graded site with a driveway, sidewalks,
+trees and planting beds, and four cameras, a light set and the views. `tools/showcase/render_all.py` renders every view
+style and the exports and writes a contact sheet with a manifest, and `crates/engine/tests/showcase.rs` replays the
+script through the engine and asserts the brief's numbers.
+
+```text
+cargo run -q -p cadcraft-cli -- run --commands docs/arch3d/showcase/bilevel.json
+python3 tools/showcase/render_all.py
+```
+
 ## Out of scope
 
-Not part of arch3d so far: SSAO, TAA, cascaded shadows, switches, outlets, circuits, animated walkthrough paths,
-and gamepad or 3D-mouse input. Moldings, material regions, plan check, materials list and costing, and the contextual
-toolbar are also out of scope.
+Not part of arch3d so far: SSAO, TAA, cascaded shadows, animated walkthrough paths, and gamepad or 3D-mouse input.
+Moldings, material regions, plan check, materials list and costing, and the contextual toolbar are also out of scope.
+````
+````python
+crates/engine/tests/user_guide.rs
+<<<<<<< SEARCH
+/// Hostile camera parameters are refused with nothing written.
+#[test]
+fn user_guide_hostile_camera_params() {
+    let mut session = Session::new();
+    // kind must be orbit or full
+    let r = session.execute("camera", &serde_json::json!({"save":"test","kind":"pan","eye":[0,0,1],"target":[0,0,0],"fov":60}));
+    assert!(r.is_err(), "kind \"pan\" should be refused");
+    // save requires name
+    let r = session.execute("camera", &serde_json::json!({"save":null,"kind":"full","eye":[0,0,1],"target":[0,0,0],"fov":60}));
+    assert!(r.is_err(), "null save name should be refused");
