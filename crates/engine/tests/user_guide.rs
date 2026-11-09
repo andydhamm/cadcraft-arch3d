@@ -1261,7 +1261,7 @@ fn user_guide_electrical_and_split_level_blocks_run() {
             9,
             "split-level block should have exactly 9 commands, found {} (ids: {:?})",
             cmds.len(),
-            cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).unwrap_or("")).collect::<Vec<_>>()
+            cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect::<Vec<_>>()
         );
         let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
         assert_eq!(ids, ["level", "level", "wall", "wall", "door", "stair", "stair", "arch.inspect"], "split-level block command order");
