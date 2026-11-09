@@ -148,6 +148,16 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
                         .and_then(|o| o.floor_finish);
                 }
             }
+            // Phase 16: it keeps the replaced room's flat/vaulted ceiling and finish stack too.
+            if let Some(pt) = cadcraft_arch::label::label_point(&r.polygon, &r.holes)
+                && let Some(o) = old_rooms
+                    .iter()
+                    .filter(|o| o.level == r.level)
+                    .find(|o| cadcraft_geom::point_in_polygon(&o.polygon, pt) && !o.holes.iter().any(|h| cadcraft_geom::point_in_polygon(h, pt)))
+            {
+                r.flat_ceiling = o.flat_ceiling;
+                r.ceiling_stack = o.ceiling_stack.clone();
+            }
             d.arch.push_room(r);
         }
         cadcraft_arch::area::refresh_areas(&mut d.arch);
@@ -207,6 +217,27 @@ mod tests {
         let d = s.doc().unwrap();
         assert!(!d.arch.rooms.is_empty());
         assert!(d.arch.rooms.iter().all(|r| r.floor_finish == Some(Finish::Wood)));
+    }
+
+    /// Re-detecting rooms keeps each room's flat/vaulted ceiling and its finish stack (the
+    /// floor-finish rule: from the replaced room holding the new room's label point).
+    #[test]
+    fn roomdetect_keeps_flat_ceiling_and_stack() {
+        use cadcraft_doc::arch::CeilingLayer;
+        let mut s = Session::new();
+        build_test_wall(&mut s);
+        s.execute("roomdetect", &json!({})).unwrap();
+        assert!(!s.doc().unwrap().arch.rooms.is_empty());
+        assert!(s.doc().unwrap().arch.rooms.iter().all(|r| r.flat_ceiling && r.ceiling_stack.is_empty()));
+        let stack = vec![CeilingLayer::new("drywall", Some("drywall"), 0.0127)];
+        for r in s.doc_mut().unwrap().arch.rooms.iter_mut() {
+            r.flat_ceiling = false;
+            r.ceiling_stack = stack.clone();
+        }
+        s.execute("roomdetect", &json!({})).unwrap();
+        let d = s.doc().unwrap();
+        assert!(!d.arch.rooms.is_empty());
+        assert!(d.arch.rooms.iter().all(|r| !r.flat_ceiling && r.ceiling_stack == stack));
     }
 
     /// `roomdetect` must be a single undo step: one revision bump, one labelled

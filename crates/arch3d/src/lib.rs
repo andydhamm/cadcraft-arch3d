@@ -10,10 +10,12 @@
 
 pub mod camera;
 pub mod casework;
+pub(crate) mod ceiling;
 pub mod edges;
 pub mod electrical;
 pub mod finish;
 pub mod fixture;
+pub(crate) mod foundation;
 
 pub mod furnishing;
 pub mod paint;
@@ -26,6 +28,7 @@ pub mod light;
 pub mod mesh;
 pub mod openings;
 pub mod pick;
+pub mod planar;
 pub mod plant;
 pub mod probe;
 pub mod railing;
@@ -33,10 +36,12 @@ pub mod ray;
 pub mod roof;
 pub mod section;
 pub mod site;
+pub(crate) mod soffit;
 pub mod stairs;
 pub mod texture;
 pub mod uv;
 pub mod views;
+pub(crate) mod wall_rise;
 pub mod walls;
 
 pub use crate::electrical::PlateBox;
@@ -276,6 +281,7 @@ pub(crate) fn fill_materials(model: &ArchModel, scene: &mut Scene3d) {
     scene.textures.clear();
     furnishing::symbol_materials(model, scene);
     electrical::plate_materials(model, scene);
+    soffit::materials(model, scene);
     paint::materials(model, scene);
     scene.backdrop = model.backdrop.clone();
     if let Some(Backdrop::Image { item, .. }) = &model.backdrop
@@ -315,7 +321,7 @@ impl Scene3d {
     /// Solves joins once, then makes each object's meshes (walls, falling back to a raw
     /// rectangular mesh when the join solver produced no shape for a wall; openings; room floors
     /// and ceilings; roofs; stairs; railings; decks; the site; light fixtures; cabinets; casework
-    /// fixtures; furnishings) in that order, each from the inputs [`incremental::Sections`] records,
+    /// fixtures; furnishings; electrical plates; interior soffits; foundations) in that order, each from the inputs [`incremental::Sections`] records,
     /// so [`SceneCache`] can rebuild only the objects an edit changed and still match this build
     /// exactly. It ends by filling the materials, textures and backdrop from the model.
     pub fn build(model: &ArchModel) -> Scene3d {

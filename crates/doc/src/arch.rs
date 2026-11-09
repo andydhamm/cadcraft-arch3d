@@ -10,16 +10,20 @@ use serde::{Deserialize, Serialize};
 
 pub mod backdrop;
 pub mod casework;
+pub mod ceiling;
 pub mod electrical;
 pub mod finish;
+pub mod foundation;
 pub mod furnishing;
 pub mod light;
 pub mod paint;
 pub mod site;
 pub use backdrop::*;
 pub use casework::*;
+pub use ceiling::*;
 pub use electrical::*;
 pub use finish::*;
+pub use foundation::*;
 pub use furnishing::*;
 pub use light::*;
 pub use paint::*;
@@ -136,10 +140,12 @@ pub fn handle_json(h: Handle) -> String {
 pub fn part_handle(id: ArchId, part: &str) -> Handle {
     match part {
         "leaf" | "frame" | "casing" | "glass" | "sill" | "header" => opening_handle(id),
-        "floor" | "ceiling" | "deck" => room_handle(id),
+        "floor" | "ceiling" | "deck" | "slab" => room_handle(id),
         "roof" => roof_handle(id),
         "stair" => stair_handle(id),
         "railing" => railing_handle(id),
+        "soffit" => soffit_handle(id),
+        "foundation" | "footing" => foundation_handle(id),
         "plant" => plant_handle(id),
         "light" => light_handle(id),
         "cabinet" | "counter" => cabinet_handle(id),
@@ -275,6 +281,12 @@ pub enum ArchKind {
     Railing,
     /// A view (elevation or section).
     View,
+    /// Phase 16: a ceiling tray (`tr{n}`).
+    Tray,
+    /// Phase 16: an interior soffit (`sf{n}`).
+    Soffit,
+    /// Phase 16: a foundation (`fd{n}`).
+    Foundation,
 }
 
 impl ArchKind {
@@ -282,10 +294,12 @@ impl ArchKind {
     pub fn from_part(part: &str) -> ArchKind {
         match part {
             "leaf" | "frame" | "casing" | "glass" | "sill" | "header" => ArchKind::Opening,
-            "floor" | "ceiling" | "deck" => ArchKind::Room,
+            "floor" | "ceiling" | "deck" | "slab" => ArchKind::Room,
             "roof" => ArchKind::Roof,
             "stair" => ArchKind::Stair,
             "railing" => ArchKind::Railing,
+            "soffit" => ArchKind::Soffit,
+            "foundation" | "footing" => ArchKind::Foundation,
             _ => ArchKind::Wall,
         }
     }
@@ -300,6 +314,9 @@ impl ArchKind {
             ArchKind::Stair => "stair",
             ArchKind::Railing => "railing",
             ArchKind::View => "view",
+            ArchKind::Tray => "tray",
+            ArchKind::Soffit => "soffit",
+            ArchKind::Foundation => "foundation",
         }
     }
 
@@ -313,6 +330,9 @@ impl ArchKind {
             ArchKind::Stair => stair_handle(id),
             ArchKind::Railing => railing_handle(id),
             ArchKind::View => view_handle(id),
+            ArchKind::Tray => tray_handle(id),
+            ArchKind::Soffit => soffit_handle(id),
+            ArchKind::Foundation => foundation_handle(id),
         }
     }
 
@@ -326,6 +346,9 @@ impl ArchKind {
             ArchKind::Stair => stair_label(id),
             ArchKind::Railing => railing_label(id),
             ArchKind::View => view_label(id),
+            ArchKind::Tray => tray_label(id),
+            ArchKind::Soffit => soffit_label(id),
+            ArchKind::Foundation => foundation_label(id),
         }
     }
 }
@@ -846,6 +869,16 @@ pub struct Room {
     /// The room's floor finish.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor_finish: Option<Finish>,
+    /// A flat ceiling at the ceiling height (the default). Off, under a roof, the ceiling
+    /// follows the underside of the roof planes over the room (a cathedral or vaulted ceiling).
+    /// `ceiling_height` is the room's ROUGH ceiling either way: the underside of the structure
+    /// above, relative to the level's floor.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub flat_ceiling: bool,
+    /// The ceiling's finish stack, top to bottom. The finished ceiling is the rough ceiling
+    /// minus the stack's total thickness; empty (the default) means no finish layers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ceiling_stack: Vec<CeilingLayer>,
 }
 
 impl Default for Room {
@@ -863,8 +896,39 @@ impl Default for Room {
             standard_area: 0.0,
             deck_height: None,
             floor_finish: None,
+            flat_ceiling: true,
+            ceiling_stack: Vec::new(),
         }
     }
+}
+
+/// One layer of a ceiling finish stack (listed top to bottom): a material and a thickness.
+/// `material: None` is an air gap (a suspended ceiling's plenum).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CeilingLayer {
+    /// A display name ("drywall", "air", "ceiling tile").
+    pub name: String,
+    /// The layer's material key or name; `None` is an air gap.
+    pub material: Option<String>,
+    /// Thickness in metres.
+    pub thickness: f64,
+}
+
+impl CeilingLayer {
+    /// A layer named `name` of `thickness` metres of `material` (`None`: an air gap). Code
+    /// outside this file builds layers with this, so a later field does not break it.
+    pub fn new(name: impl Into<String>, material: Option<&str>, thickness: f64) -> Self {
+        Self { name: name.into(), material: material.map(str::to_string), thickness }
+    }
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 /// How a roof meets a wall: auto-detected, hip, gable, or valley.
@@ -1627,6 +1691,19 @@ pub struct ArchModel {
     /// Set as Default: command parameters used when a command omits them.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub defaults: std::collections::BTreeMap<String, serde_json::Value>,
+    // Phase 16: ceiling trays, interior soffits and foundations, skipped when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trays: Vec<Tray>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_tray_id: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub soffits: Vec<Soffit>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_soffit_id: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub foundations: Vec<Foundation>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_foundation_id: u32,
 }
 
 impl Default for ArchModel {
@@ -1671,6 +1748,12 @@ impl Default for ArchModel {
             paints: Default::default(),
             backdrop: None,
             defaults: Default::default(),
+            trays: Vec::new(),
+            next_tray_id: 0,
+            soffits: Vec::new(),
+            next_soffit_id: 0,
+            foundations: Vec::new(),
+            next_foundation_id: 0,
             plant_species: Vec::new(),
             levels: vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::Floor }],
             types: vec![
@@ -1764,6 +1847,9 @@ impl ArchModel {
             && self.paints.is_empty()
             && self.backdrop.is_none()
             && self.defaults.is_empty()
+            && self.trays.is_empty()
+            && self.soffits.is_empty()
+            && self.foundations.is_empty()
     }
 
     /// Ensure there is always a ground level at index 0 for plan operations.
@@ -1826,6 +1912,48 @@ impl ArchModel {
         c.id = id;
         self.connections.push(c);
         id
+    }
+
+    /// Add a ceiling tray and return its new id.
+    pub fn push_tray(&mut self, mut t: Tray) -> ArchId {
+        let id = ArchId(self.next_tray_id);
+        self.next_tray_id = self.next_tray_id.saturating_add(1);
+        t.id = id;
+        self.trays.push(t);
+        id
+    }
+
+    /// The tray with id `id`.
+    pub fn tray(&self, id: ArchId) -> Option<&Tray> {
+        self.trays.iter().find(|t| t.id == id)
+    }
+
+    /// Add an interior soffit and return its new id.
+    pub fn push_soffit(&mut self, mut s: Soffit) -> ArchId {
+        let id = ArchId(self.next_soffit_id);
+        self.next_soffit_id = self.next_soffit_id.saturating_add(1);
+        s.id = id;
+        self.soffits.push(s);
+        id
+    }
+
+    /// The soffit with id `id`.
+    pub fn soffit(&self, id: ArchId) -> Option<&Soffit> {
+        self.soffits.iter().find(|s| s.id == id)
+    }
+
+    /// Add a foundation and return its new id.
+    pub fn push_foundation(&mut self, mut f: Foundation) -> ArchId {
+        let id = ArchId(self.next_foundation_id);
+        self.next_foundation_id = self.next_foundation_id.saturating_add(1);
+        f.id = id;
+        self.foundations.push(f);
+        id
+    }
+
+    /// The foundation with id `id`.
+    pub fn foundation(&self, id: ArchId) -> Option<&Foundation> {
+        self.foundations.iter().find(|f| f.id == id)
     }
 
     /// Look up a wall type by name (case-insensitive).
@@ -3947,5 +4075,196 @@ mod tests {
         let back_landing: LevelKind = serde_json::from_str("\"landing\"").unwrap();
         assert_eq!(back_floor, LevelKind::Floor);
         assert_eq!(back_landing, LevelKind::Landing);
+    }
+
+    /// A room saved before phase 16 (no `flat_ceiling`, no `ceiling_stack`) loads with a flat
+    /// ceiling and an empty finish stack.
+    #[test]
+    fn room_without_ceiling_fields_loads_flat_and_unstacked() {
+        let v = serde_json::json!({"id": 3, "name": "Hall", "polygon": [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 0.0}, {"x": 1.0, "y": 1.0}], "ceiling_height": 2.7});
+        let r: Room = serde_json::from_value(v).unwrap();
+        assert!(r.flat_ceiling);
+        assert!(r.ceiling_stack.is_empty());
+        assert_eq!(r.ceiling_height, Some(2.7));
+        assert!(Room::default().flat_ceiling, "Room::default is flat too");
+        let stacked = Room {
+            flat_ceiling: false,
+            ceiling_stack: vec![
+                CeilingLayer { name: "drywall".into(), material: Some("drywall".into()), thickness: 0.0127 },
+                CeilingLayer { name: "air".into(), material: None, thickness: 0.2 },
+            ],
+            ..Room::default()
+        };
+        let v = serde_json::to_value(&stacked).unwrap();
+        assert_eq!(v["flat_ceiling"], false);
+        assert_eq!(v["ceiling_stack"][1]["material"], serde_json::Value::Null);
+        assert_eq!(v["ceiling_stack"][0]["thickness"], 0.0127);
+        let back: Room = serde_json::from_value(v).unwrap();
+        assert_eq!(back, stacked);
+        // A layer with missing keys takes the defaults.
+        let l: CeilingLayer = serde_json::from_value(serde_json::json!({"thickness": 0.1})).unwrap();
+        assert_eq!(l, CeilingLayer { thickness: 0.1, ..CeilingLayer::default() });
+        // The constructor other crates use.
+        assert_eq!(CeilingLayer::new("air", None, 0.2), CeilingLayer { name: "air".into(), material: None, thickness: 0.2 });
+        assert_eq!(CeilingLayer::new("drywall", Some("drywall"), 0.0127).material.as_deref(), Some("drywall"));
+    }
+
+    /// A default room writes neither key, so an old drawing saves the same payload.
+    #[test]
+    fn default_room_writes_no_ceiling_keys() {
+        let v = serde_json::to_value(Room::default()).unwrap();
+        let o = v.as_object().unwrap();
+        assert!(!o.contains_key("flat_ceiling"), "{v}");
+        assert!(!o.contains_key("ceiling_stack"), "{v}");
+        let old = serde_json::json!({"id": 1, "name": "A", "polygon": [{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": 0.0}, {"x": 2.0, "y": 2.0}]});
+        let r: Room = serde_json::from_value(old).unwrap();
+        let again = serde_json::to_value(&r).unwrap();
+        let back: Room = serde_json::from_value(again.clone()).unwrap();
+        assert_eq!(back, r);
+        assert!(!again.as_object().unwrap().contains_key("flat_ceiling"));
+    }
+
+    // ---------- phase 16: trays, soffits and foundations ----------
+
+    fn p16_model() -> ArchModel {
+        let mut m = ArchModel::default();
+        let square = vec![Vec2::new(1.0, 1.0), Vec2::new(2.0, 1.0), Vec2::new(2.0, 2.0), Vec2::new(1.0, 2.0)];
+        m.push_tray(Tray { room: ArchId(2), inset: 0.6, sides: TraySides::Pitched(30.0), ..Default::default() });
+        m.push_tray(Tray { room: ArchId(2), parent: Some(ArchId(0)), polygon: square.clone(), depth: 0.15, ..Default::default() });
+        m.push_soffit(Soffit {
+            level: 1,
+            polygon: square,
+            bottom: Some(2.1),
+            over: vec![ArchId(4)],
+            material: Some("finish:oak".into()),
+            ..Default::default()
+        });
+        m.push_foundation(Foundation { kind: FoundationKind::Slab, footing_depth: 0.9, ..Default::default() });
+        m
+    }
+
+    #[test]
+    fn tray_soffit_foundation_round_trip() {
+        let m = p16_model();
+        assert_eq!((m.trays.len(), m.next_tray_id, m.soffits.len(), m.next_soffit_id, m.foundations.len(), m.next_foundation_id), (2, 2, 1, 1, 1, 1));
+        assert_eq!(m.tray(ArchId(1)).map(|t| t.parent), Some(Some(ArchId(0))));
+        assert_eq!(m.soffit(ArchId(0)).and_then(|s| s.bottom), Some(2.1));
+        assert_eq!(m.foundation(ArchId(0)).map(|f| f.kind), Some(FoundationKind::Slab));
+        assert!(m.tray(ArchId(7)).is_none() && m.soffit(ArchId(1)).is_none() && m.foundation(ArchId(1)).is_none());
+        assert!(!m.is_empty());
+        let json = serde_json::to_string(&m).unwrap();
+        let back: ArchModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, m);
+        // Each alone keeps the model non-empty.
+        for strip in 0..3 {
+            let mut one = ArchModel { walls: Vec::new(), levels: Vec::new(), types: Vec::new(), ..p16_model() };
+            match strip {
+                0 => (one.soffits.clear(), one.foundations.clear()),
+                1 => (one.trays.clear(), one.foundations.clear()),
+                _ => (one.trays.clear(), one.soffits.clear()),
+            };
+            assert!(!one.is_empty(), "strip {strip}");
+        }
+    }
+
+    #[test]
+    fn model_without_them_writes_no_new_keys() {
+        let json = serde_json::to_value(ArchModel::default()).unwrap();
+        for key in ["trays", "next_tray_id", "soffits", "next_soffit_id", "foundations", "next_foundation_id"] {
+            assert!(json.get(key).is_none(), "{key} written for a model without it");
+        }
+        // A model saved before phase 16 loads with none of them.
+        let old = r#"{"walls":[],"openings":[],"rooms":[]}"#;
+        let m: ArchModel = serde_json::from_str(old).unwrap();
+        assert!(m.trays.is_empty() && m.soffits.is_empty() && m.foundations.is_empty());
+        assert_eq!((m.next_tray_id, m.next_soffit_id, m.next_foundation_id), (0, 0, 0));
+        let mut empty = ArchModel::default();
+        empty.walls.clear();
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn new_handle_ranges_are_disjoint_from_every_other_kind() {
+        type Pred = fn(Handle) -> bool;
+        let preds: [(&str, Pred); 16] = [
+            ("opening", is_opening_handle),
+            ("room", is_room_handle),
+            ("roof", is_roof_handle),
+            ("stair", is_stair_handle),
+            ("railing", is_railing_handle),
+            ("view", is_view_handle),
+            ("terrain", is_terrain_handle),
+            ("plant", is_plant_handle),
+            ("light", is_light_handle),
+            ("cabinet", is_cabinet_handle),
+            ("fixture", is_fixture_handle),
+            ("furnishing", is_furnishing_handle),
+            ("electrical", is_electrical_handle),
+            ("connection", is_connection_handle),
+            ("tray", is_tray_handle),
+            ("soffit", is_soffit_handle),
+        ];
+        let preds: Vec<(&str, Pred)> = preds.into_iter().chain([("foundation", is_foundation_handle as Pred)]).collect();
+        let makers: [(&str, fn(ArchId) -> Handle); 3] = [("tray", tray_handle), ("soffit", soffit_handle), ("foundation", foundation_handle)];
+        for (name, make) in makers {
+            for id in [0u32, 1, 4095, 32767] {
+                let h = make(ArchId(id));
+                let claims: Vec<&str> = preds.iter().filter(|(_, p)| p(h)).map(|(n, _)| *n).collect();
+                assert_eq!(claims, vec![name], "{name} {id}");
+                assert!(is_arch_handle(h) && is_reserved_file_handle(h), "{name} {id} outside the arch span");
+                // Not a wall either: walls sit below the opening offset.
+                assert!(h.0 - ARCH_HANDLE_BASE >= OPENING_HANDLE_OFFSET);
+            }
+        }
+        // Every other kind's handle is claimed by none of the three new ranges.
+        let others = [
+            arch_handle(ArchId(5)),
+            opening_handle(ArchId(5)),
+            room_handle(ArchId(5)),
+            roof_handle(ArchId(5)),
+            stair_handle(ArchId(5)),
+            railing_handle(ArchId(5)),
+            view_handle(ArchId(5)),
+            terrain_handle(Some(5)),
+            plant_handle(ArchId(5)),
+            light_handle(ArchId(5)),
+            cabinet_handle(ArchId(5)),
+            fixture_handle(ArchId(5)),
+            furnishing_handle(ArchId(5)),
+            electrical_handle(ArchId(32767)),
+            connection_handle(ArchId(32767)),
+        ];
+        for h in others {
+            assert!(!is_tray_handle(h) && !is_soffit_handle(h) && !is_foundation_handle(h), "{h:?}");
+        }
+    }
+
+    #[test]
+    fn arch_kind_tray_soffit_foundation_keys_labels_handles() {
+        let id = ArchId(3);
+        assert_eq!((ArchKind::Tray.key(), ArchKind::Soffit.key(), ArchKind::Foundation.key()), ("tray", "soffit", "foundation"));
+        assert_eq!(
+            (ArchKind::Tray.label(id), ArchKind::Soffit.label(id), ArchKind::Foundation.label(id)),
+            ("tr3".into(), "sf3".into(), "fd3".into())
+        );
+        assert_eq!(ArchKind::Tray.handle(id), tray_handle(id));
+        assert_eq!(ArchKind::Soffit.handle(id), soffit_handle(id));
+        assert_eq!(ArchKind::Foundation.handle(id), foundation_handle(id));
+        // The new kinds sort after every older one.
+        assert!(ArchKind::View < ArchKind::Tray && ArchKind::Tray < ArchKind::Soffit && ArchKind::Soffit < ArchKind::Foundation);
+    }
+
+    #[test]
+    fn from_part_maps_new_parts() {
+        assert_eq!(ArchKind::from_part("soffit"), ArchKind::Soffit);
+        assert_eq!(ArchKind::from_part("foundation"), ArchKind::Foundation);
+        assert_eq!(ArchKind::from_part("footing"), ArchKind::Foundation);
+        assert_eq!(ArchKind::from_part("slab"), ArchKind::Room);
+        // The roof's own soffit is part "roof".
+        assert_eq!(ArchKind::from_part("roof"), ArchKind::Roof);
+        assert_eq!(part_handle(ArchId(2), "soffit"), soffit_handle(ArchId(2)));
+        assert_eq!(part_handle(ArchId(2), "footing"), foundation_handle(ArchId(2)));
+        assert_eq!(part_handle(ArchId(2), "foundation"), foundation_handle(ArchId(2)));
+        assert_eq!(part_handle(ArchId(2), "slab"), room_handle(ArchId(2)));
     }
 }

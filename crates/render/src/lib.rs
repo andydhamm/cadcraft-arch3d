@@ -9,7 +9,9 @@
 
 mod arch;
 mod arch_casework;
+mod arch_ceiling;
 mod arch_electrical;
+mod arch_foundation;
 mod arch_furnishing;
 mod arch_light;
 mod arch_site;
