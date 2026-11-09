@@ -648,13 +648,13 @@ mod tests {
         m.soffits.push(Soffit {
             id: ArchId(1),
             level: 0,
-            polygon: vec![Vec2::new(7.5, 7.3), Vec2::new(8.5, 7.3), Vec2::new(8.5, 7.8), Vec2::new(7.5, 7.8), Vec2::new(7.5, 7.3)],
+            polygon: vec![Vec2::new(8.0, 7.5), Vec2::new(9.5, 7.5), Vec2::new(9.5, 8.0), Vec2::new(8.0, 8.0), Vec2::new(8.0, 7.5)],
             bottom: Some(2.0),
             ..Soffit::default()
         });
-        let b = bottom_at(&m, 0, Vec2::new(8.0, 7.6)).unwrap();
+        let b = bottom_at(&m, 0, Vec2::new(8.5, 7.7)).unwrap();
         assert!((b - 2.1).abs() < 1e-6, "first soffit should win: {} != 2.1", b);
-        let b2 = bottom_at(&m, 0, Vec2::new(7.6, 7.4)).unwrap();
+        let b2 = bottom_at(&m, 0, Vec2::new(9.2, 7.7)).unwrap();
         assert!((b2 - 2.0).abs() < 1e-6, "second soffit: {} != 2.0", b2);
     }
 
