@@ -4,7 +4,7 @@
 //! Meshes: stem walls `foundation`, footings and slab edges `footing`, slab floors `slab` (the
 //! room's floor, built in the room's part).
 
-use cadcraft_arch::foundation::{FoundationWall, foundation_walls, is_basement_level};
+use cadcraft_arch::foundation::{foundation_walls, is_basement_level};
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{Foundation, FoundationKind, Level};
 
