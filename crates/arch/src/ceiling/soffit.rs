@@ -244,7 +244,7 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
             if w.divider {
                 continue;
             }
-            for (p0, p1) in crate::join::face_lines(w) {
+            for [p0, p1] in crate::join::face_lines(w) {
                 let dx = p1.x - p0.x;
                 let dy = p1.y - p0.y;
                 if !dx.is_finite() || !dy.is_finite() {
@@ -432,21 +432,21 @@ mod tests {
     fn house() -> ArchModel {
         let mut m = ArchModel::default();
         // Level 0: elevation 0, ceiling_height 2.4, structure 0.3.
-        m.levels.push(cadcraft_doc::arch::Level::new(0, "Level 1", 0.0, 2.4, 0.3));
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, name: "Level 1".to_string(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3 });
         // Walls (centre-line coordinates).
         let t = 0.2;
         // w0: south, y = t/2 = 0.1, x from 0.1 to 9.9
-        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), t));
         // w1: east, x = 9.9, y from 0.1 to 7.9
-        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(9.9, 0.1), Vec2::new(9.9, 7.9), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(9.9, 0.1), Vec2::new(9.9, 7.9), t));
         // w2: north, y = 7.9, x from 9.9 to 0.1
-        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(9.9, 7.9), Vec2::new(0.1, 7.9), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(9.9, 7.9), Vec2::new(0.1, 7.9), t));
         // w3: west, x = 0.1, y from 7.9 to 0.1
-        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.1, 7.9), Vec2::new(0.1, 0.1), t, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.1, 7.9), Vec2::new(0.1, 0.1), t));
         // w4: divider at y=3, x from 0 to 10
-        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.0, 3.0), Vec2::new(10.0, 3.0), 0.2, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(0.0, 3.0), Vec2::new(10.0, 3.0), 0.2));
         // w5: divider at x=6, y from 3 to 8, at offset 0.1
-        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(6.0, 3.0), Vec2::new(6.0, 8.0), 0.2, 2.4));
+        m.walls.push(cadcraft_doc::arch::Wall::new(Vec2::new(6.0, 3.0), Vec2::new(6.0, 8.0), 0.2));
         // Rooms
         // S: 0.1..9.9 x 0.1..2.95
         let mut room_poly = vec![Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), Vec2::new(9.9, 2.95), Vec2::new(0.1, 2.95)];
