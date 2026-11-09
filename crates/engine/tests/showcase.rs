@@ -213,7 +213,7 @@ fn meets_the_brief(reply: &Value) {
         _ => panic!("arch.inspect reply has no `circuits` array"),
     };
     let all_circuit_lights: HashSet<String> =
-        circuits.iter().flat_map(|c| c.get("lights").and_then(|v| v.as_array()).into_iter().map(|l| field_text(l, "id"))).collect();
+        circuits.iter().flat_map(|c| c.get("lights").and_then(|v| v.as_array()).unwrap_or_default().iter().map(|l| field_text(l, "id"))).collect();
     for r in rooms.iter() {
         let ry = strd(r, "type", "");
         if ry == "closet" || ry == "openBelow" {
