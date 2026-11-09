@@ -83,17 +83,17 @@ fn soffit_box_probes() {
 
 #[test]
 fn soffit_top_follows_a_stack_change() {
-    let make = |stack: Option<Vec<cadcraft_doc::arch::CeilingLayer>>| {
+    let make = |stack: Vec<cadcraft_doc::arch::CeilingLayer>| {
         let mut m = house();
         m.rooms[2].ceiling_stack = stack;
         m.push_soffit(test_soffit(Some(2.1)));
         Scene3d::build(&m)
     };
-    let plain = make(None);
+    let plain = make(Vec::new());
     let top0 = part_meshes(&plain, "soffit")[0].bounds().max[2];
     assert!((top0 - 2.4).abs() < 1e-6);
     let stack = vec![cadcraft_doc::arch::CeilingLayer::new("drywall", Some("gypsum"), 0.0127)];
-    let stacked = make(Some(stack.clone()));
+    let stacked = make(stack.clone());
     let top1 = part_meshes(&stacked, "soffit")[0].bounds().max[2];
     let want = 2.4 - stack::thickness(&stack);
     assert!((top1 - want).abs() < 1e-6, "got {top1}, wanted {want}");
