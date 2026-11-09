@@ -356,3 +356,62 @@ fn the_showcase_is_lit_and_painted() {
         .collect();
     assert!(defaults.is_empty(), "surfaces still on a default material: {defaults:?}");
 }
+
+/// The level index of a level with the given `kind` in an inspect reply.
+fn level_index_by_kind(levels: &[Value], kind: &str) -> Option<usize> {
+    levels.iter().position(|l| l["kind"].as_str() == Some(kind))
+}
+
+/// The elevation of a level at the given index, or `None`.
+fn level_elevation(levels: &[Value], idx: usize) -> Option<f64> {
+    levels.get(idx).and_then(|l| l["elevation"].as_f64())
+}
+
+#[test]
+fn the_showcase_sits_on_a_site() {
+    let mut s = showcase_session();
+    replay(&mut s);
+
+    let r: Value = s.execute("arch.inspect", &json!({"levels": true, "site": true})).unwrap_or_else(|err| panic!("arch.inspect failed: {err}"));
+
+    let levels: Vec<Value> = r["levels"].as_array().expect("levels array").clone();
+    let site: &Value = r["site"].as_object().expect("site object");
+
+    let floor_idxs: Vec<usize> = levels.iter().enumerate().filter(|(_, l)| l["kind"].as_str() == Some("floor")).map(|(i, _)| i).collect();
+    assert_eq!(floor_idxs.len(), 2, "expected two floor levels, found {floor_idxs:?}");
+    let lower_idx = floor_idxs.iter().min().copied().expect("lower floor index");
+    let main_idx = floor_idxs.iter().max().copied().expect("main floor index");
+    let lower_elev = level_elevation(&levels, lower_idx).expect("lower elevation");
+    let main_elev = level_elevation(&levels, main_idx).expect("main elevation");
+
+    let landing_idx = level_index_by_kind(&levels, "landing").expect("a landing level");
+    let landing_elev = level_elevation(&levels, landing_idx).expect("landing elevation");
+    assert!(
+        landing_elev > lower_elev && landing_elev < main_elev,
+        "landing elevation {} not strictly between {} and {}",
+        landing_elev,
+        lower_elev,
+        main_elev
+    );
+
+    assert_eq!(levels[lower_idx]["gradeClass"].as_str().expect("lower gradeClass"), "basement");
+    assert_eq!(levels[main_idx]["gradeClass"].as_str().expect("main gradeClass"), "aboveGrade");
+    assert!(r["aboveGradeArea"].as_f64().expect("aboveGradeArea") >= 371.6, "aboveGradeArea too small: {:#?} >= 371.6", r["aboveGradeArea"]);
+
+    let paths = site["paths"].as_array().expect("site.paths array");
+    let kinds: Vec<&str> = paths.iter().filter_map(|p| p["kind"].as_str()).collect();
+    assert!(kinds.contains(&"driveway"), "no driveway path: {kinds:?}");
+    assert!(kinds.contains(&"sidewalk"), "no sidewalk path: {kinds:?}");
+    assert!(kinds.contains(&"bed"), "no bed path: {kinds:?}");
+
+    let plants = site["plants"].as_array().expect("site.plants array");
+    assert!(plants.len() >= 4, "expected at least 4 plants, found {plants.len()}");
+    let forms: Vec<&str> = plants.iter().filter_map(|p| p["form"].as_str()).collect();
+    assert!(forms.contains(&"tree"), "no tree plants: {forms:?}");
+    assert!(forms.contains(&"shrub"), "no shrub plants: {forms:?}");
+
+    if let Some(cam) = r["cameras"].as_array() {
+        let saved = cam.iter().filter_map(|c| c["name"].as_str()).collect::<Vec<&str>>();
+        assert!(saved.len() >= 4, "expected at least 4 saved cameras, found {saved:?}");
+    }
+}
