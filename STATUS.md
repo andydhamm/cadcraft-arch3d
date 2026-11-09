@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 58 of 65 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 07:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 95.3 h so far · expected done Nov 10 07:45–Nov 17 06:30 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 95.6 h so far · expected done Nov 10 08:00–Nov 17 06:45 UTC |
 | 16 | Ceilings and foundations | building | 3 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-09 07:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-58 merged, 8 replaced, 5 queued, 3 abandoned, 1 merging, 1 working
+58 merged, 8 replaced, 5 queued, 3 abandoned, 1 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-showcase-empty-rooms` | bilevel.json part 2c: name and furnish the rooms the earlier steps missed | merging | mai-flash-esc |
-| `upstream-sync-3b7eb1b7b-v2` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | working | mai-flash-b |
+| `upstream-sync-3b7eb1b7b-v2` | merge upstream upstream/main up to 3b7eb1b7b (52 commits) | gate | mai-flash-b |
 
 ## Recent merges
 
@@ -63,18 +63,18 @@ Updated 2026-11-09 07:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 964 |
-| bonsai-b | bonsai2-27b | agent | 901 |
+| bonsai-a | bonsai2-27b | agent | 966 |
+| bonsai-b | bonsai2-27b | agent | 902 |
 | bonsai-ws2-a | bonsai2-27b | gate | 989 |
-| bonsai-ws2-b | bonsai2-27b | agent | 973 |
+| bonsai-ws2-b | bonsai2-27b | agent | 975 |
 | claude-sonnet-a | sonnet | idle | 90 |
 | claude-sonnet-b | sonnet | idle | 91 |
 | claude-sonnet-c | sonnet | idle | 40 |
 | claude-sonnet-d | sonnet | merging | 32 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 840 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 844 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
-| mai-flash-b | mai-code-1.1-flash | agent | 1 |
+| mai-flash-b | mai-code-1.1-flash | gate | 1 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 49 |
-| tturbo-mac | tturbo-ultraheretic | gate | 670 |
+| tturbo-mac | tturbo-ultraheretic | agent | 671 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
