@@ -12,11 +12,7 @@ use serde_json::Value;
 /// Install the headless I/O hooks so the engine runs without real files, the same
 /// way `crates/engine/tests/user_guide.rs::install_io` does.
 fn install_io() {
-    set_io(IoHooks {
-        read: |_, _| Err("no file reads in this test".to_string()),
-        write: |_, _| Ok(b"stand-in export".to_vec()),
-        plot: None,
-    });
+    set_io(IoHooks { read: |_, _| Err("no file reads in this test".to_string()), write: |_, _| Ok(b"stand-in export".to_vec()), plot: None });
     cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
         read_glb: cadcraft_io::gltf_read::read_glb,
         read_image: cadcraft_io::image_read::read_image,
@@ -67,9 +63,7 @@ fn rows_for(rid: &str, rows: &[Value]) -> Vec<Value> {
 /// A level's `index`, from its "index" field if present, otherwise its
 /// position in `levels`.
 fn level_index(v: &Value, levels: &[Value]) -> i64 {
-    field_text(v, "index")
-        .parse::<i64>()
-        .unwrap_or_else(|_| levels.iter().position(|l| l == v).map_or(0, |i| i as i64))
+    field_text(v, "index").parse::<i64>().unwrap_or_else(|_| levels.iter().position(|l| l == v).map_or(0, |i| i as i64))
 }
 
 /// Replay every step of the JSON script. Panics on the first failure, naming the
@@ -91,19 +85,16 @@ fn replay(script: &str, session: &mut Session) -> usize {
 /// Assert that the replayed model satisfies the showcase brief.
 fn meets_the_brief(reply: &Value) {
     // ---- Levels ----
-    let levels: Vec<Value> = match reply.get("levels") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+    let levels: Vec<Value> = match reply.get("levels").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().cloned().collect(),
         _ => panic!("arch.inspect reply has no `levels` array"),
     };
 
     let landing = levels.iter().find(|l| strd(l, "kind", "") == "landing").expect("no level of kind `landing`");
     let floors: Vec<&Value> = levels.iter().filter(|l| strd(l, "kind", "") == "floor").collect();
     assert_eq!(floors.len(), 2, "expected exactly two `floor` levels, found {}", floors.len());
-    let (lower, upper): (&Value, &Value) = if num(floors[0], "elevation") < num(floors[1], "elevation") {
-        (floors[0], floors[1]),
-    } else {
-        (floors[1], floors[0]),
-    };
+    let (lower, upper): (&Value, &Value) =
+        if num(floors[0], "elevation") < num(floors[1], "elevation") { (floors[0], floors[1]) } else { (floors[1], floors[0]) };
     assert_eq!(
         strd(lower, "gradeClass", ""),
         "basement",
@@ -126,8 +117,8 @@ fn meets_the_brief(reply: &Value) {
     assert!(area >= 371.6, "aboveGradeArea {} is below 371.6", area);
 
     // ---- Stairs ----
-    let stairs: Vec<&Value> = match reply.get("stairs") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    let stairs: Vec<&Value> = match reply.get("stairs").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `stairs` array"),
     };
     let landing_idx = level_index(landing, &levels);
@@ -143,8 +134,8 @@ fn meets_the_brief(reply: &Value) {
     assert!(down_stair, "no stair from lower (idx {}) to landing (idx {})", lower_idx, landing_idx);
 
     // ---- Rooms ----
-    let rooms: Vec<&Value> = match reply.get("rooms") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    let rooms: Vec<&Value> = match reply.get("rooms").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `rooms` array"),
     };
     let count = |ty: &str| rooms.iter().filter(|r| strd(r, "type", "") == ty).count();
@@ -152,12 +143,12 @@ fn meets_the_brief(reply: &Value) {
         assert_eq!(count(ty), want, "expected {} `{} ` room(s), found {}", want, ty, count(ty));
     }
 
-    let furns: Vec<Value> = match reply.get("furnishings") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+    let furns: Vec<Value> = match reply.get("furnishings").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().cloned().collect(),
         _ => panic!("arch.inspect reply has no `furnishings` array"),
     };
-    let fixs: Vec<Value> = match reply.get("fixtures") {
-        Some(a) if a.is_array() => a.as_array().iter().cloned().collect(),
+    let fixs: Vec<Value> = match reply.get("fixtures").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().cloned().collect(),
         _ => panic!("arch.inspect reply has no `fixtures` array"),
     };
     // Every non-closet/openBelow room must be served by at least one furnishing or fixture row.
@@ -209,16 +200,16 @@ fn meets_the_brief(reply: &Value) {
     }
 
     // ---- Lights / devices / circuits ----
-    let lights: Vec<&Value> = match reply.get("lights") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    let lights: Vec<&Value> = match reply.get("lights").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `lights` array"),
     };
-    let devices: Vec<&Value> = match reply.get("devices") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    let devices: Vec<&Value> = match reply.get("devices").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `devices` array"),
     };
-    let circuits: Vec<&Value> = match reply.get("circuits") {
-        Some(a) if a.is_array() => a.as_array().iter().collect(),
+    let circuits: Vec<&Value> = match reply.get("circuits").and_then(|v| v.as_array()) {
+        Some(a) => a.iter().collect(),
         _ => panic!("arch.inspect reply has no `circuits` array"),
     };
     let all_circuit_lights: HashSet<String> = circuits
