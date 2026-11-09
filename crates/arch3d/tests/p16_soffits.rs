@@ -4,14 +4,14 @@
 //! `soffit`) stays part `roof`. The numbers are the house's: NE ceiling 2.4, soffit ring
 //! (7, 7.3)…(9, 7.9), bottom 2.1.
 
-use cadraft_arch::ceiling::stack;
-use cadraft_arch3d::hlr::OrthoView;
-use cadraft_arch3d::probe::part_of;
-use cadraft_arch3d::section::{Plane, section_cut};
-use cadraft_arch3d::{Mesh, Scene3d, SceneCache};
-use cadraft_doc::arch::{ArchKind, Level, Roof, RoofDirective, Room, Soffit};
-use cadraft_doc::{ArchId, ArchModel, Wall};
-use cadraft_geom::{Vec2, Vec3};
+use cadcraft_arch::ceiling::stack;
+use cadcraft_arch3d::hlr::OrthoView;
+use cadcraft_arch3d::probe::part_of;
+use cadcraft_arch3d::section::{Plane, section_cut};
+use cadcraft_arch3d::{Mesh, Scene3d, SceneCache};
+use cadcraft_doc::arch::{ArchKind, Level, Roof, RoofDirective, Room, Soffit};
+use cadcraft_doc::{ArchId, ArchModel, Wall};
+use cadcraft_geom::{Vec2, Vec3};
 
 fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
     vec![Vec2::new(x0, y0), Vec2::new(x1, y0), Vec2::new(x1, y1), Vec2::new(x0, y1)]
@@ -83,7 +83,7 @@ fn soffit_box_probes() {
 
 #[test]
 fn soffit_top_follows_a_stack_change() {
-    let make = |stack: Option<Vec<cadraft_doc::arch::CeilingLayer>>| {
+    let make = |stack: Option<Vec<cadcraft_doc::arch::CeilingLayer>>| {
         let mut m = house();
         m.rooms[2].ceiling_stack = stack;
         m.push_soffit(test_soffit(Some(2.1)));
@@ -92,7 +92,7 @@ fn soffit_top_follows_a_stack_change() {
     let plain = make(None);
     let top0 = part_meshes(&plain, "soffit")[0].bounds().max[2];
     assert!((top0 - 2.4).abs() < 1e-6);
-    let stack = vec![cadraft_doc::arch::CeilingLayer::new("drywall", Some("gypsum"), 0.0127)];
+    let stack = vec![cadcraft_doc::arch::CeilingLayer::new("drywall", Some("gypsum"), 0.0127)];
     let stacked = make(Some(stack.clone()));
     let top1 = part_meshes(&stacked, "soffit")[0].bounds().max[2];
     let want = 2.4 - stack::thickness(&stack);
@@ -100,7 +100,7 @@ fn soffit_top_follows_a_stack_change() {
     // In both states 2.35 is in the box; with the stack 2.39 is above it (in the slab band 2.38..2.4).
     assert_eq!(hit(&plain, 8.0, 7.6, 2.35), Some(("sf0".to_string(), "soffit".to_string())));
     assert_eq!(hit(&stacked, 8.0, 7.6, 2.35), Some(("sf0".to_string(), "soffit".to_string())));
-    assert_ne!(hit(&stacked, 8.0, 7.6, 2.39).map(|h| h.part).as_deref(), Some("soffit"));
+    assert_ne!(hit(&stacked, 8.0, 7.6, 2.39).map(|h| h.1).as_deref(), Some("soffit"));
 }
 
 #[test]
@@ -109,8 +109,9 @@ fn soffit_under_a_vault_has_a_sloped_top() {
     let mut m = house();
     m.walls[1].roof_directive = RoofDirective::Gable;
     m.walls[3].roof_directive = RoofDirective::Gable;
-    let roof = cadraft_arch::roof::build_roof(&m, 0, &Roof { pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, ..Default::default() })
-        .unwrap();
+    let roof =
+        cadcraft_arch::roof::build_roof(&m, 0, &Roof { pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, ..Default::default() })
+            .unwrap();
     m.push_roof(roof);
     m.rooms[2].flat_ceiling = false;
     m.push_soffit(test_soffit(Some(2.1)));
@@ -118,7 +119,7 @@ fn soffit_under_a_vault_has_a_sloped_top() {
     assert_eq!(hit(&s, 8.0, 7.6, 2.6), Some(("sf0".to_string(), "soffit".to_string())), "top 2.65");
     assert_eq!(hit(&s, 8.0, 7.35, 2.7), Some(("sf0".to_string(), "soffit".to_string())), "top 2.775");
     // Above the box at y = 7.6, z = 2.7 is inside the roof solid (2.65..2.85), not the box.
-    assert_ne!(hit(&s, 8.0, 7.6, 2.7).map(|h| h.part).as_deref(), Some("soffit"));
+    assert_ne!(hit(&s, 8.0, 7.6, 2.7).map(|h| h.1).as_deref(), Some("soffit"));
     assert_eq!(part_meshes(&s, "soffit").len(), 1);
 }
 
@@ -144,7 +145,7 @@ fn roof_soffit_and_interior_soffit_parts_differ() {
         m.walls[1].roof_directive = RoofDirective::Gable;
         m.walls[3].roof_directive = RoofDirective::Gable;
         let roof =
-            cadraft_arch::roof::build_roof(&m, 0, &Roof { pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, ..Default::default() })
+            cadcraft_arch::roof::build_roof(&m, 0, &Roof { pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, ..Default::default() })
                 .unwrap();
         m.push_roof(roof);
         m.rooms[2].flat_ceiling = false;
@@ -192,7 +193,7 @@ fn cache_equals_full_after_soffit_edits() {
         (
             "change the ceiling stack",
             Box::new(|m: &mut ArchModel| {
-                m.rooms[2].ceiling_stack = vec![cadraft_doc::arch::CeilingLayer::new("drywall", Some("gypsum"), 0.0127)];
+                m.rooms[2].ceiling_stack = vec![cadcraft_doc::arch::CeilingLayer::new("drywall", Some("gypsum"), 0.0127)];
             }),
         ),
         (
