@@ -393,12 +393,20 @@ pub fn validate(model: &ArchModel, s: &Soffit) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::arch::{ArchModel, Cabinet, CabinetKind, Level, Room, RoomType, Wall};
+    use cadcraft_doc::arch::{ArchModel, Cabinet, CabinetKind, Level, LevelKind, Room, RoomType, Wall};
     use cadcraft_geom::Vec2;
 
     fn house() -> ArchModel {
         let mut m = ArchModel::default();
-        m.levels.push(Level { index: 0, name: "Level 1".to_string(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::Floor });
+        m.levels.push(Level {
+            index: 0,
+            name: "Level 1".to_string(),
+            elevation: 0.0,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            kind: LevelKind::Floor,
+            ..Default::default()
+        });
         let t = 0.2;
         m.walls.push(Wall::new(Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), t));
         m.walls.push(Wall::new(Vec2::new(9.9, 0.1), Vec2::new(9.9, 7.9), t));
@@ -413,15 +421,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             polygon: vec![Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), Vec2::new(9.9, 2.95), Vec2::new(0.1, 2.95)],
-            holes: Vec::new(),
-            ceiling_height: None,
-            floor_height: None,
-            interior_area: 0.0,
-            standard_area: 0.0,
-            deck_height: None,
-            floor_finish: None,
-            flat_ceiling: true,
-            ceiling_stack: Vec::new(),
+            ..Room::default()
         });
         m.rooms.push(Room {
             id: ArchId(1),
@@ -429,15 +429,7 @@ mod tests {
             room_type: RoomType::Other,
             level: 0,
             polygon: vec![Vec2::new(0.1, 3.05), Vec2::new(5.95, 3.05), Vec2::new(5.95, 7.9), Vec2::new(0.1, 7.9)],
-            holes: Vec::new(),
-            ceiling_height: None,
-            floor_height: None,
-            interior_area: 0.0,
-            standard_area: 0.0,
-            deck_height: None,
-            floor_finish: None,
-            flat_ceiling: true,
-            ceiling_stack: Vec::new(),
+            ..Room::default()
         });
         m.rooms.push(Room {
             id: ArchId(2),
@@ -445,15 +437,7 @@ mod tests {
             room_type: RoomType::Other,
             level: 0,
             polygon: vec![Vec2::new(6.05, 3.05), Vec2::new(9.9, 3.05), Vec2::new(9.9, 7.9), Vec2::new(6.05, 7.9)],
-            holes: Vec::new(),
-            ceiling_height: None,
-            floor_height: None,
-            interior_area: 0.0,
-            standard_area: 0.0,
-            deck_height: None,
-            floor_finish: None,
-            flat_ceiling: true,
-            ceiling_stack: Vec::new(),
+            ..Room::default()
         });
         m
     }
@@ -469,28 +453,7 @@ mod tests {
         elevation: f64,
         level: u32,
     ) -> Cabinet {
-        Cabinet {
-            id: ArchId(id),
-            kind,
-            level,
-            position,
-            rotation: 180.0,
-            width,
-            depth,
-            height,
-            elevation,
-            fronts: cadcraft_doc::arch::Fronts::Doors,
-            door_style: cadcraft_doc::arch::FrontStyle::Slab,
-            drawer_style: cadcraft_doc::arch::FrontStyle::Slab,
-            pull: None,
-            pull_symbol: None,
-            doors: 1,
-            drawers: 0,
-            counter: false,
-            counter_thickness: 0.038,
-            counter_overhang: 0.025,
-            toe_kick: false,
-        }
+        Cabinet { id: ArchId(id), kind, level, position, rotation: 180.0, width, depth, height, elevation, ..Cabinet::default() }
     }
 
     #[test]
@@ -520,11 +483,8 @@ mod tests {
             id: ArchId(0),
             level: 0,
             polygon: vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0), Vec2::new(1.0, 1.0)],
-            bottom: None,
             depth: Some(0.3),
-            over: vec![],
-            material: None,
-            layer: "A-CLNG".to_string(),
+            ..Soffit::default()
         };
         let b = soffit_bottom(&m, &s_depth).unwrap();
         assert!((b - 2.1).abs() < 1e-6, "depth 0.3 -> {}, expected 2.1", b);
@@ -534,10 +494,7 @@ mod tests {
             level: 0,
             polygon: vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0), Vec2::new(1.0, 1.0)],
             bottom: Some(2.1),
-            depth: None,
-            over: vec![],
-            material: None,
-            layer: "A-CLNG".to_string(),
+            ..Soffit::default()
         };
         let b2 = soffit_bottom(&m, &s_bottom).unwrap();
         assert!((b2 - 2.1).abs() < 1e-6, "bottom 2.1 -> {}, expected 2.1", b2);
@@ -548,16 +505,7 @@ mod tests {
         let mut m = house();
         m.cabinets.push(make_cabinet(0, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
         m.cabinets.push(make_cabinet(1, 2, CabinetKind::Wall, Vec2::new(8.4, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
-        let s = Soffit {
-            id: ArchId(0),
-            level: 0,
-            polygon: vec![],
-            bottom: None,
-            depth: None,
-            over: vec![ArchId(0), ArchId(1)],
-            material: None,
-            layer: "A-CLNG".to_string(),
-        };
+        let s = Soffit { id: ArchId(0), level: 0, polygon: vec![], over: vec![ArchId(0), ArchId(1)], ..Soffit::default() };
         let ring = soffit_ring(&m, &s).unwrap();
         assert_eq!(ring.len(), 4);
         let xs: Vec<f64> = ring.iter().map(|v| v.x).collect();
@@ -574,42 +522,15 @@ mod tests {
         assert!((b - 2.134).abs() < 1e-6, "bottom: {} != 2.134", b);
 
         m.cabinets.push(make_cabinet(2, 2, CabinetKind::Base, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 0.0, 0));
-        let s_bad = Soffit {
-            id: ArchId(0),
-            level: 0,
-            polygon: vec![],
-            bottom: None,
-            depth: None,
-            over: vec![ArchId(2)],
-            material: None,
-            layer: "A-CLNG".to_string(),
-        };
+        let s_bad = Soffit { id: ArchId(0), level: 0, polygon: vec![], over: vec![ArchId(2)], ..Soffit::default() };
         assert!(soffit_ring(&m, &s_bad).is_none());
 
         m.cabinets.push(make_cabinet(3, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 1));
-        let s_bad2 = Soffit {
-            id: ArchId(0),
-            level: 0,
-            polygon: vec![],
-            bottom: None,
-            depth: None,
-            over: vec![ArchId(3)],
-            material: None,
-            layer: "A-CLNG".to_string(),
-        };
+        let s_bad2 = Soffit { id: ArchId(0), level: 0, polygon: vec![], over: vec![ArchId(3)], ..Soffit::default() };
         assert!(soffit_ring(&m, &s_bad2).is_none());
 
         m.cabinets.push(make_cabinet(4, 0, CabinetKind::Wall, Vec2::new(5.0, 0.1), 0.6, 0.305, 0.762, 1.372, 0));
-        let s_bad3 = Soffit {
-            id: ArchId(0),
-            level: 0,
-            polygon: vec![],
-            bottom: None,
-            depth: None,
-            over: vec![ArchId(0), ArchId(4)],
-            material: None,
-            layer: "A-CLNG".to_string(),
-        };
+        let s_bad3 = Soffit { id: ArchId(0), level: 0, polygon: vec![], over: vec![ArchId(0), ArchId(4)], ..Soffit::default() };
         assert!(soffit_ring(&m, &s_bad3).is_none());
     }
 
@@ -621,10 +542,7 @@ mod tests {
             level: 0,
             polygon: vec![Vec2::new(7.0, 7.3), Vec2::new(9.0, 7.3), Vec2::new(9.0, 7.9), Vec2::new(7.0, 7.9), Vec2::new(7.0, 7.3)],
             bottom: Some(2.1),
-            depth: None,
-            over: vec![],
-            material: None,
-            layer: "A-CLNG".to_string(),
+            ..Soffit::default()
         });
         let b = bottom_at(&m, 0, Vec2::new(8.0, 7.6)).unwrap();
         assert!((b - 2.1).abs() < 1e-6, "inside: {} != 2.1", b);
