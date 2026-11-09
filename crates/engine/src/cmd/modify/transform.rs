@@ -273,7 +273,93 @@ mod tests {
     }
 
     #[test]
-    fn mirror_mirrors_a_furnishing() {
+    fn a_hosted_furnishing_copied_or_moved_has_no_host() {
+        let mut s = Session::new();
+        let id = s.doc_mut().unwrap().arch.push_furnishing(Furnishing {
+            item: "armchair".into(),
+            symbol: "sym".into(),
+            name: "Armchair".into(),
+            category: "Seating".into(),
+            symbol_type: "chair".into(),
+            at: [2.0, 3.0],
+            rotation: 15.0,
+            size: [1.0, 1.0, 0.9],
+            host: FurnishingHost::Wall { wall: ArchId(7) },
+            ..Default::default()
+        });
+        let h = furnishing_handle(id);
+        transform_entities(&mut s, &[h], &Mat3::translate(Vec2::new(1.0, 2.0)), false).unwrap();
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().host, FurnishingHost::None);
+
+        let copy = transform_entities(&mut s, &[h], &Mat3::translate(Vec2::new(4.0, 0.0)), true).unwrap();
+        let copied = furnishing_id_of_handle(copy[0]).unwrap();
+        assert_eq!(s.doc().unwrap().arch.furnishing(copied).unwrap().host, FurnishingHost::None);
+    }
+
+    #[test]
+    fn a_line_and_a_furnishing_move_together_in_one_undo_step() {
+        let mut s = Session::new();
+        let line_handle = s
+            .doc_mut()
+            .unwrap()
+            .add(
+                &cadcraft_doc::Space::Model,
+                cadcraft_doc::Common::default(),
+                cadcraft_doc::EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(1.0, 0.0, 0.0) }),
+            )
+            .unwrap();
+        let id = add_furnishing(&mut s, [2.0, 3.0], 15.0);
+        let original_at = s.doc().unwrap().arch.furnishing(id).unwrap().at;
+        s.set_selection(vec![line_handle, furnishing_handle(id)]);
+        let moved = s.execute("move", &json!({ "handles": [line_handle.hex(), furnishing_handle(id).hex()], "delta": [2.0, 3.0] })).unwrap();
+        assert_eq!(moved["moved"], 2);
+        let before = s.doc().unwrap().arch.furnishing(id).unwrap().at;
+        assert_eq!(before, [4.0, 6.0]);
+        assert!(s.undo().unwrap().is_some());
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, original_at);
+        assert!(s.undo().unwrap().is_none());
+    }
+
+    #[test]
+    fn copy_count_makes_copies_at_the_interval() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 2.0], 0.0);
+        s.set_selection(vec![furnishing_handle(id)]);
+        let p = json!({ "handle": furnishing_handle(id).hex(), "delta": [3.0, 0.0], "count": 3 });
+        let r = run_copy(&mut s, &p).unwrap();
+        assert_eq!(r["handles"].as_array().unwrap().len(), 3);
+        let at = s.doc().unwrap().arch.furnishings.iter().map(|f| f.at).collect::<Vec<_>>();
+        assert_eq!(at.iter().filter(|x| **x == [1.0, 2.0]).count(), 1);
+        assert_eq!(at.iter().filter(|x| **x == [4.0, 2.0]).count(), 1);
+        assert_eq!(at.iter().filter(|x| **x == [7.0, 2.0]).count(), 1);
+        assert_eq!(at.iter().filter(|x| **x == [10.0, 2.0]).count(), 1);
+    }
+
+    #[test]
+    fn copy_past_the_furnishing_cap_is_refused_and_changes_nothing() {
+        let mut s = Session::new();
+        for i in 0..MAX_FURNISHINGS {
+            s.doc_mut().unwrap().arch.push_furnishing(Furnishing {
+                id: ArchId(i as u32),
+                item: format!("item-{i}"),
+                symbol: "sym".into(),
+                name: format!("Item {i}"),
+                category: "Seating".into(),
+                symbol_type: "chair".into(),
+                at: [i as f64 * 0.1, 0.0],
+                size: [1.0, 1.0, 0.9],
+                ..Default::default()
+            });
+        }
+        let id = ArchId(0);
+        let before = s.doc().unwrap().arch.furnishings.len();
+        let err = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::translate(Vec2::new(1.0, 0.0)), true).unwrap_err();
+        assert!(err.to_string().contains("at most"));
+        assert_eq!(s.doc().unwrap().arch.furnishings.len(), before);
+    }
+
+    #[test]
+    fn mirror_reflects_and_marks_mirrored() {
         let mut s = Session::new();
         let id = add_furnishing(&mut s, [3.0, 0.0], 30.0);
         let moved = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::mirror(Vec2::ZERO, Vec2::new(0.0, 1.0)), false).unwrap();
@@ -281,5 +367,98 @@ mod tests {
         let f = s.doc().unwrap().arch.furnishing(id).unwrap();
         assert_eq!(f.at, [-3.0, 0.0]);
         assert!(f.mirrored);
+    }
+
+    #[test]
+    fn rotate_about_a_base_turns_a_furnishing() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 0.0], 30.0);
+        let moved =
+            transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::rotate_about(Vec2::ZERO, std::f64::consts::FRAC_PI_2), false).unwrap();
+        assert_eq!(moved, vec![furnishing_handle(id)]);
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!((f.at[0]).abs() < 1e-9);
+        assert!((f.at[1] - 3.0).abs() < 1e-9);
+        assert!((0.0..360.0).contains(&f.rotation));
+    }
+
+    #[test]
+    fn rotating_clockwise_keeps_the_rotation_in_0_to_360() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [0.0, 0.0], 350.0);
+        transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::rotate_about(Vec2::ZERO, -std::f64::consts::FRAC_PI_2), false).unwrap();
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!(f.rotation >= 0.0 && f.rotation < 360.0);
+    }
+
+    #[test]
+    fn scale_refuses_furnishings() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 2.0], 0.0);
+        let err = scale_entities(&mut s, &[furnishing_handle(id)], Vec3::ZERO, 2.0, false).unwrap_err();
+        assert!(err.to_string().contains("scale a furnishing"));
+    }
+
+    #[test]
+    fn transforms_are_one_undo_step() {
+        let mut s = Session::new();
+        let line_handle = s
+            .doc_mut()
+            .unwrap()
+            .add(
+                &cadcraft_doc::Space::Model,
+                cadcraft_doc::Common::default(),
+                cadcraft_doc::EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(1.0, 0.0, 0.0) }),
+            )
+            .unwrap();
+        let id = add_furnishing(&mut s, [2.0, 3.0], 15.0);
+        let original = s.doc().unwrap().arch.furnishing(id).unwrap().at;
+        s.set_selection(vec![line_handle, furnishing_handle(id)]);
+        s.execute("move", &json!({ "handles": [line_handle.hex(), furnishing_handle(id).hex()], "delta": [2.0, 3.0] })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, [4.0, 6.0]);
+        assert!(s.undo().unwrap().is_some());
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, original);
+        assert!(s.undo().unwrap().is_none());
+    }
+
+    #[test]
+    fn rotating_clockwise_keeps_the_rotation_in_0_to_360_old_name() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [0.0, 0.0], 350.0);
+        transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::rotate_about(Vec2::ZERO, -std::f64::consts::FRAC_PI_2), false).unwrap();
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!(f.rotation >= 0.0 && f.rotation < 360.0);
+    }
+
+    #[test]
+    fn mirror_reflects_and_marks_mirrored_old_name() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 0.0], 30.0);
+        transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::mirror(Vec2::ZERO, Vec2::new(0.0, 1.0)), false).unwrap();
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert_eq!(f.at, [-3.0, 0.0]);
+        assert!(f.mirrored);
+    }
+
+    #[test]
+    fn move_moves_a_furnishing_old_name() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 2.0], 15.0);
+        let moved = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::translate(Vec2::new(3.0, 4.0)), false).unwrap();
+        assert_eq!(moved, vec![furnishing_handle(id)]);
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, [4.0, 6.0]);
+    }
+
+    #[test]
+    fn rotate_about_a_base_turns_a_furnishing_old_name() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 0.0], 30.0);
+        let moved =
+            transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::rotate_about(Vec2::ZERO, std::f64::consts::FRAC_PI_2), false).unwrap();
+        assert_eq!(moved, vec![furnishing_handle(id)]);
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!((f.at[0]).abs() < 1e-9);
+        assert!((f.at[1] - 3.0).abs() < 1e-9);
+        assert!((0.0..360.0).contains(&f.rotation));
     }
 }
