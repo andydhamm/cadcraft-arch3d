@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 60 of 66 segments merged · 11 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 11:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 98.6 h so far · expected done Nov 10 03:00–Nov 13 18:00 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 11 / 14 | 98.8 h so far · expected done Nov 10 03:15–Nov 13 18:15 UTC |
 | 16 | Ceilings and foundations | building | 4 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-09 11:00 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-60 merged, 8 replaced, 4 queued, 3 abandoned, 1 merging, 1 working
+60 merged, 8 replaced, 4 queued, 3 abandoned, 1 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-showcase-services` | bilevel.json part 3: lights, wiring, roof, painting | merging | claude-sonnet-d |
-| `upstream-sync-a655cee0c` | merge upstream upstream/main up to a655cee0c (2 commits) | working | claude-sonnet-b |
+| `upstream-sync-a655cee0c` | merge upstream upstream/main up to a655cee0c (2 commits) | gate | claude-sonnet-b |
 
 ## Recent merges
 
@@ -68,7 +68,7 @@ Updated 2026-11-09 11:00 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-a | bonsai2-27b | idle | 1006 |
 | bonsai-ws2-b | bonsai2-27b | idle | 995 |
 | claude-sonnet-a | sonnet | idle | 90 |
-| claude-sonnet-b | sonnet | agent | 91 |
+| claude-sonnet-b | sonnet | gate | 91 |
 | claude-sonnet-c | sonnet | idle | 40 |
 | claude-sonnet-d | sonnet | merging | 35 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 867 |
