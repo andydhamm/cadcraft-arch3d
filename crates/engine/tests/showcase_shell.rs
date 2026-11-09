@@ -297,3 +297,20 @@ fn the_showcase_is_furnished() {
     }
     assert!(failed.is_empty(), "rooms with no furnishing or fixture: {failed:?}");
 }
+
+#[test]
+fn no_room_is_left_empty() {
+    let mut s = showcase_session();
+    replay(&mut s);
+    let r: Value = s.execute("arch.inspect", &json!({"rooms": true, "furnishings": true, "fixtures": true})).expect("arch.inspect failed");
+    let rooms: Vec<Value> = r["rooms"].as_array().expect("rooms").clone();
+    let mut owned: Vec<Value> = r["furnishings"].as_array().expect("furnishings").clone();
+    owned.extend(r["fixtures"].as_array().expect("fixtures").clone());
+    let empty: Vec<String> = rooms
+        .iter()
+        .filter(|rm| !matches!(rm["type"].as_str(), Some("closet") | Some("openBelow")))
+        .filter(|rm| !owned.iter().any(|o| o["room"].as_str() == rm["id"].as_str()))
+        .filter_map(|rm| rm["id"].as_str().map(str::to_string))
+        .collect();
+    assert!(empty.is_empty(), "rooms with nothing in them: {empty:?}");
+}

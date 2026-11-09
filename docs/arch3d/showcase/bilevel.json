@@ -74,5 +74,15 @@
 {"cmd":"library.place","params":{"item":"bed-double-wood","at":[5.2,8.0],"level":"Main"}},
 {"cmd":"library.place","params":{"item":"table-bedside","at":[3.6,9.8],"level":"Main"}},
 {"cmd":"library.place","params":{"item":"dresser-6-drawers","at":[7.8,12.2],"level":"Main"}},
-{"cmd":"library.place","params":{"item":"lamp-floor","at":[4.5,1.5],"level":"Entry"}}
+{"cmd":"library.place","params":{"item":"lamp-floor","at":[4.5,1.5],"level":"Entry"}},
+{"cmd":"room","params":{"id":"r7","name":"Entry Stairwell","type":"entry"}},
+{"cmd":"room","params":{"id":"r8","name":"Entry Hall","type":"entry"}},
+{"cmd":"room","params":{"id":"r0","name":"Entry Hall","type":"entry"}},
+{"cmd":"library.place","params":{"item":"plant-small","at":[5.5,1.5],"level":"Entry"}},
+{"cmd":"library.place","params":{"item":"lamp-floor","at":[18,10],"level":"Entry"}},
+{"cmd":"room","params":{"id":"r3","name":"Family","type":"family"}},
+{"cmd":"room","params":{"id":"r4","name":"Entry Hall","type":"entry"}},
+{"cmd":"room","params":{"id":"r1","name":"Lower Utility","type":"utility"}},
+{"cmd":"room","params":{"id":"r5","name":"Lower Utility","type":"utility"}},
+{"cmd":"library.place","params":{"item":"stool-bar","at":[2,8],"level":"Lower"}}
 ]
