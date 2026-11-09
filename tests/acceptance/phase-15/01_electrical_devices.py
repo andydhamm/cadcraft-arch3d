@@ -39,7 +39,7 @@ near(devs[6]['z'], num(cab.get('counterTop'), 'counterTop') + 0.15, 1e-6, "the c
 el = rows_of(ins, 'electrical')
 if [e['id'] for e in el] != [d['device'] for d in devs]:
     fail(f"arch.inspect lists the devices: {[e.get('id') for e in el]}")
-hits = probes(rr)
+hits = probes(rr)['probe']
 if part(hits[0]) != 'electrical' or part(hits[1]) != 'electrical':
     fail(f"the cover plates probe as electrical: {hits[:2]}")
 if part(hits[2]) == 'electrical':
@@ -47,7 +47,7 @@ if part(hits[2]) == 'electrical':
 print("ok: six kinds on their wall faces at 0.3 / 1.2 m on E-POWR / E-LITE, a counter outlet 0.15 above the counter, plates probe")
 
 text = dxf_text(saved)
-layers = {str(v).strip() for p in entities(text) for c, v in p if str(c).strip() == "8"}
+layers = {lay for kind, lay, pairs in entities(text)}
 for l in ('E-POWR', 'E-LITE'):
     if l not in layers:
         fail(f"the saved plan has a proxy on {l}: layers {sorted(layers)}")
