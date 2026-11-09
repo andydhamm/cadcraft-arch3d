@@ -175,7 +175,7 @@ pub fn soffit_bottom(model: &ArchModel, s: &Soffit) -> Option<f64> {
                 z_max = z_max.max(cab.elevation + cab.height);
             }
         }
-        return level + z_max;
+        return Some(level + z_max);
     }
     if let Some(bottom) = s.bottom {
         return level + bottom;
@@ -260,6 +260,7 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
                 })
             })
         })
+        .map(|(wall_id, axis, offset, lo, hi)| FaceLine { wall_id, axis, offset, lo, hi })
         .collect();
 
     // For each side of the rect, try to snap.
@@ -386,7 +387,7 @@ pub fn validate(model: &ArchModel, s: &Soffit) -> Result<(), String> {
     // Bottom must be finite, >= level elevation + 0.5, and >= 0.01 below finished ceiling
     // at every ring vertex that has one.
     if has_bottom || has_depth {
-        let level = model.levels.get(s.level).ok_or("bad level")?.elevation;
+        let level = model.levels.get(s.level as usize).ok_or("bad level")?.elevation;
         let bottom_z = soffit_bottom(model, s).ok_or("no bottom")?;
         if !bottom_z.is_finite() {
             return Err("bottom is non-finite".into());
@@ -508,7 +509,7 @@ mod tests {
         let mut m = house();
         // depth 0.3 -> 2.1 (ceiling at 2.4, 2.4 - 0.3 = 2.1)
         let s_depth = Soffit {
-            id: crate::arch::ArchId(0),
+            id: ArchId(0),
             level: 0,
             polygon: vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0)],
             bottom: None,
@@ -521,7 +522,7 @@ mod tests {
         assert!((b - 2.1).abs() < 1e-6, "depth 0.3 -> {}, expected 2.1", b);
         // bottom 2.1 -> 2.1
         let s_bottom = Soffit {
-            id: crate::arch::ArchId(1),
+            id: ArchId(1),
             level: 0,
             polygon: vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0)],
             bottom: Some(2.1),
@@ -541,16 +542,7 @@ mod tests {
         // 0.6 x 0.305 x 0.762 at elevation 1.372.
         m.cabinets.push(make_cabinet(0, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
         m.cabinets.push(make_cabinet(1, 2, CabinetKind::Wall, Vec2::new(8.4, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
-        let s = Soffit {
-            id: crate::arch::ArchId(0),
-            level: 0,
-            polygon: vec![],
-            bottom: None,
-            depth: None,
-            over: vec![0, 1],
-            material: None,
-            layer: None,
-        };
+        let s = Soffit { id: ArchId(0), level: 0, polygon: vec![], bottom: None, depth: None, over: vec![0, 1], material: None, layer: None };
         let ring = soffit_ring(&m, &s).unwrap();
         assert_eq!(ring.len(), 4);
         // Ring x: 8.1..9.3, y: 7.595..7.9
@@ -585,7 +577,7 @@ mod tests {
         let mut m = house();
         // Soffit x 7.0..9.0, y 7.3..7.9, bottom 2.1 (level 0).
         m.soffits.push(Soffit {
-            id: crate::arch::ArchId(0),
+            id: ArchId(0),
             level: 0,
             polygon: vec![Vec2::new(7.0, 7.3), Vec2::new(9.0, 7.3), Vec2::new(9.0, 7.9), Vec2::new(7.0, 7.9)],
             bottom: Some(2.1),
