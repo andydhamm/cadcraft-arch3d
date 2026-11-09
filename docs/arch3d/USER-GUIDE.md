@@ -598,9 +598,9 @@ above-grade area is the interior area of the above-grade floor levels only.
 
 ```sh
 cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'level {"elevation":1.35,"kind":"landing"}' \
+  --cmd 'level {"elevation":2.7,"kind":"floor"}' \
   --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
-  --cmd 'level {"index":1,"elevation":1.35,"kind":"landing"}' \
-  --cmd 'level {"index":2,"elevation":2.7,"kind":"floor"}' \
   --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true,"level":"l1","topLevel":"l2"}' \
   --cmd 'door {"wall":"w1","offset":3.0,"width":0.9,"height":2.1,"style":"hinged","level":"l1"}' \
   --cmd 'stair {"start":[2,0],"direction":90,"width":1.0,"fromLevel":"l0","toLevel":"l1"}' \

@@ -372,7 +372,7 @@ fn user_guide_title_and_latitude_are_right() {
         assert!(!(line.contains("51.05") && line.to_lowercase().contains("london")), "51.05 N is Calgary, not London: {line}");
     }
     assert!(GUIDE.contains("Calgary, 51.05"), "the guide names Calgary, 51.05° N, as the examples' latitude");
-    assert!(!GUIDE.contains("--command") && !GUIDE.contains("--params"), "the guide uses an invented `--command ... --params` syntax");
+    assert!(!GUIDE.contains("--command ") && !GUIDE.contains("--params "), "the guide uses an invented `--command ... --params` syntax");
 }
 
 /// A dry run of archdetect on an empty drawing must succeed and report zero candidates.
@@ -1194,4 +1194,97 @@ fn user_guide_views_round_trip() {
     let id_before = views_before[0].get("id").and_then(serde_json::Value::as_str);
     let id_after = views_after[0].get("id").and_then(serde_json::Value::as_str);
     assert_eq!(id_before, id_after, "view id should be preserved across reload");
+}
+
+/// Runs the electrical and split-level blocks of the guide through the engine the way the CLI
+/// replays them: a fresh metric session per block, each `--cmd` in order.
+#[test]
+fn user_guide_electrical_and_split_level_blocks_run() {
+    install_io();
+    let blocks = sh_blocks(GUIDE);
+
+    // Electrical block: one room, an outlet, a switch, two lights, a connection, outlets.auto, inspect.
+    {
+        let mut session = Session::new();
+        session.new_drawing(true);
+        let line = blocks
+            .iter()
+            .map(|lines| lines.join(" "))
+            .find(|l| l.contains("outlet {") && l.contains("outlets.auto"))
+            .expect("the guide should contain the electrical block");
+        let cmds = cmd_args(line);
+        assert_eq!(
+            cmds.len(),
+            9,
+            "electrical block should have exactly 9 commands, found {} (ids: {:?})",
+            cmds.len(),
+            cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect::<Vec<_>>()
+        );
+        let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
+        assert_eq!(
+            ids,
+            ["wall", "roomdetect", "outlet", "switch", "lightfixture", "connection", "circuit.brightness", "outlets.auto", "arch.inspect"],
+            "electrical block command order"
+        );
+        for command in &cmds {
+            let Some((id, json)) = command.split_once(' ') else {
+                panic!("electrical block command `{command}` should have the form `<id> <json>`");
+            };
+            let mut params: serde_json::Value =
+                serde_json::from_str(json).unwrap_or_else(|e| panic!("electrical block command `{command}` has invalid JSON: {e}"));
+            if let Some(path) = params.get("path").and_then(serde_json::Value::as_str) {
+                if Path::new(path).is_relative() {
+                    let out_dir = std::env::temp_dir().join(format!("cadcraft-electrical-{}", std::process::id()));
+                    fs::create_dir_all(&out_dir).unwrap_or_else(|e| panic!("cannot create {}: {e}", out_dir.display()));
+                    params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
+                }
+            }
+            if let Err(error) = session.execute(id, &params) {
+                panic!("electrical block command `{command}` failed: {error:?}");
+            }
+        }
+    }
+
+    // Split-level block: levels at 0, 1.35 (landing) and 2.7 (floor), a spanning wall, a door on the
+    // landing and two half flights, then arch.inspect's levels.
+    {
+        let mut session = Session::new();
+        session.new_drawing(true);
+        let line = blocks
+            .iter()
+            .map(|lines| lines.join(" "))
+            .find(|l| l.contains("split-level.dxf"))
+            .expect("the guide should contain the split-level block");
+        let cmds = cmd_args(line);
+        assert_eq!(
+            cmds.len(),
+            9,
+            "split-level block should have exactly 9 commands, found {} (ids: {:?})",
+            cmds.len(),
+            cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect::<Vec<_>>()
+        );
+        let ids: Vec<&str> = cmds.iter().map(|c| c.split_once(' ').map(|(id, _)| id).unwrap_or("")).collect();
+        assert_eq!(ids, ["level", "level", "wall", "wall", "door", "stair", "stair", "arch.inspect"], "split-level block command order");
+        for command in &cmds {
+            let Some((id, json)) = command.split_once(' ') else {
+                panic!("split-level block command `{command}` should have the form `<id> <json>`");
+            };
+            let mut params: serde_json::Value =
+                serde_json::from_str(json).unwrap_or_else(|e| panic!("split-level block command `{command}` has invalid JSON: {e}"));
+            if let Some(path) = params.get("path").and_then(serde_json::Value::as_str) {
+                if Path::new(path).is_relative() {
+                    let out_dir = std::env::temp_dir().join(format!("cadcraft-split-level-{}", std::process::id()));
+                    fs::create_dir_all(&out_dir).unwrap_or_else(|e| panic!("cannot create {}: {e}", out_dir.display()));
+                    params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
+                }
+            }
+            if let Err(error) = session.execute(id, &params) {
+                panic!("split-level block command `{command}` failed: {error:?}");
+            }
+        }
+        // The final arch.inspect must report the three levels.
+        let inspect = session.execute("arch.inspect", &serde_json::json!({"levels":true})).expect("inspect levels should succeed");
+        let levels = inspect.get("levels").and_then(serde_json::Value::as_array);
+        assert!(levels.is_some() && levels.unwrap().len() == 3, "arch.inspect should report 3 levels (lower, landing, upper), found {:?}", levels);
+    }
 }
