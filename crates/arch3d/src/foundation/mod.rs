@@ -4,18 +4,19 @@
 //! Meshes: stem walls `foundation`, footings and slab edges `footing`, slab floors `slab` (the
 //! room's floor, built in the room's part).
 
-use cadcraft_arch::foundation::{FoundationWall, foundation_walls, is_basement_level};
+use cadcraft_arch::foundation::{foundation_walls, is_basement_level};
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{Foundation, FoundationKind, Level};
 
 use crate::mesh::Mesh;
 
-pub(crate) mod slab;
-pub(crate) mod stem;
+pub use cadcraft_arch::foundation::FoundationWall;
+pub mod slab;
+pub mod stem;
 
 /// Everything a foundation's meshes are made from.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct FoundationIn {
+pub struct FoundationIn {
     pub foundation: Foundation,
     pub level: Level,
     /// The walls it stands under (`cadcraft_arch::foundation::foundation_walls` of its level), so a
