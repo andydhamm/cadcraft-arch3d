@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-09 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 66 of 69 segments merged · 12 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 21:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 108.6 h so far · expected done Nov 10 00:36–Nov 10 23:33 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 108.8 h so far · expected done Nov 10 00:51–Nov 10 23:49 UTC |
 | 16 | Ceilings and foundations | building | 6 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -66,7 +66,7 @@ Updated 2026-11-09 21:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1006 |
 | bonsai-b | bonsai2-27b | idle | 957 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1045 |
+| bonsai-ws2-a | bonsai2-27b | merging | 1050 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1019 |
 | claude-sonnet-a | sonnet | idle | 93 |
 | claude-sonnet-b | sonnet | idle | 98 |
@@ -77,5 +77,5 @@ Updated 2026-11-09 21:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 63 |
-| tturbo-mac | tturbo-ultraheretic | agent | 689 |
+| tturbo-mac | tturbo-ultraheretic | gate | 689 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
