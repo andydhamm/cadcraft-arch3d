@@ -153,3 +153,116 @@ fn stem_to_slab_switch_rebuilds_the_foundation_and_the_levels_rooms_and_equals_f
     assert_eq!(slab_meshes.iter().filter(|m| m.material == "foundation").count(), 0);
     assert_eq!(slab_meshes.iter().filter(|m| m.material == "footing").count(), 8);
 }
+
+#[test]
+fn empty_walls_produce_no_meshes() {
+    let i = FoundationIn { walls: vec![], level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    assert!(meshes.is_empty());
+}
+
+#[test]
+fn nan_level_elevation_produces_no_meshes() {
+    let mut level = main_level();
+    level.elevation = f64::NAN;
+    let i = FoundationIn { walls: make_house_walls(), level, foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    assert!(meshes.is_empty());
+}
+
+#[test]
+fn zero_length_wall_does_not_crash() {
+    let walls = vec![FoundationWall {
+        a: Vec2::new(5.0, 5.0),
+        b: Vec2::new(5.0, 5.0),
+        inward: Vec2::new(0.0, 1.0),
+        thickness: 0.2,
+        basement: false,
+        ..Default::default()
+    }];
+    let i = FoundationIn { walls, level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    // A zero-length wall produces a degenerate ring; push_prism should handle it gracefully.
+    // The important invariant is that it does not crash.
+    for mesh in &meshes {
+        assert_eq!(mesh.material, "footing");
+    }
+}
+
+#[test]
+fn mixed_basement_and_on_grade_walls() {
+    let walls = vec![
+        FoundationWall {
+            a: Vec2::new(0.0, 0.0),
+            b: Vec2::new(10.0, 0.0),
+            inward: Vec2::new(0.0, 1.0),
+            thickness: 0.2,
+            basement: false,
+            ..Default::default()
+        },
+        FoundationWall {
+            a: Vec2::new(10.0, 0.0),
+            b: Vec2::new(10.0, 8.0),
+            inward: Vec2::new(-1.0, 0.0),
+            thickness: 0.2,
+            basement: true,
+            ..Default::default()
+        },
+    ];
+    let i = FoundationIn { walls, level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    // 1 on-grade wall → 2 footing prisms; 1 basement wall → 1 footing
+    assert_eq!(meshes.len(), 3);
+    assert_eq!(meshes.iter().filter(|m| m.material == "footing").count(), 3);
+}
+
+#[test]
+fn wall_thickness_equal_to_strip_width() {
+    let walls = vec![FoundationWall {
+        a: Vec2::new(0.0, 0.0),
+        b: Vec2::new(10.0, 0.0),
+        inward: Vec2::new(0.0, 1.0),
+        thickness: 0.3,
+        basement: false,
+        ..Default::default()
+    }];
+    let i = FoundationIn { walls, level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    assert_eq!(meshes.len(), 2);
+    // The wall strip and edge strip have the same plan extent but different z ranges.
+    let edge = &meshes[0];
+    let wall = &meshes[1];
+    let (e_lo, e_hi) = z_range(edge);
+    let (w_lo, w_hi) = z_range(wall);
+    assert!((e_lo + 0.3).abs() < 1e-6 && (e_hi + 0.1).abs() < 1e-6, "edge strip z: {e_lo}..{e_hi}");
+    assert!((w_lo + 0.1).abs() < 1e-6 && w_hi.abs() < 1e-6, "wall strip z: {w_lo}..{w_hi}");
+}
+
+#[test]
+fn very_thick_wall() {
+    let walls = vec![FoundationWall {
+        a: Vec2::new(0.0, 0.0),
+        b: Vec2::new(10.0, 0.0),
+        inward: Vec2::new(0.0, 1.0),
+        thickness: 1.0,
+        basement: false,
+        ..Default::default()
+    }];
+    let i = FoundationIn { walls, level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    assert_eq!(meshes.len(), 2);
+    // The wall strip extends 1.0m inward, well beyond the 0.3m edge strip.
+    let wall = &meshes[1];
+    let b = wall.bounds();
+    assert!((b.max[1] - 1.0).abs() < 1e-6, "wall strip should extend to y=1.0, got {}", b.max[1]);
+}
+
+#[test]
+fn footing_meshes_have_correct_object_and_level() {
+    let i = FoundationIn { walls: make_house_walls(), level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    for mesh in &meshes {
+        assert_eq!(mesh.object, i.foundation.id);
+        assert_eq!(mesh.level_elevation, i.level.elevation);
+    }
+}
