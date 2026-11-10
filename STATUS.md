@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 21: Ceilings and foundations — 17 of 33 segments merged · 9 of 13 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 18 of 33 segments merged · 10 of 20 acceptance checks**
 
-8,258 workspace tests passing at the last merge · 873 segments merged in all · 0 of 15 seats working
+8,258 workspace tests passing at the last merge · 874 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 06:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 9 / 13 | 26.5 h so far · expected done Nov 10 21:21–Nov 11 20:56 UTC |
+| 16 | Ceilings and foundations | building | 10 / 20 | 26.8 h so far · expected done Nov 10 19:20–Nov 11 16:17 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,7 +35,7 @@ Updated 2026-11-10 06:00 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-17 merged, 8 merging, 5 queued, 3 replaced, 2 abandoned, 2 working, 1 gate
+18 merged, 7 merging, 4 queued, 3 replaced, 3 working, 2 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -43,18 +43,19 @@ Updated 2026-11-10 06:00 UTC. This page and the card in the README are regenerat
 | `p16f-tray-roof-guard` | tray validate: a new tray above the roof underside is refused | merging | bonsai-ws2-b |
 | `p16f-soffit-faces` | soffit: rects snap to the room-side wall face; `over` starts at the cabinets' backs | working | bonsai-b |
 | `p16f-slab-edge-mesh` | slab foundation: one footing mesh per founded wall | merging | bonsai-ws2-a |
-| `p16f-demo-replays` | phase-16 demo: replays without refusals | merging | mai-flash |
 | `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | gate | claude-sonnet-b |
 | `p16-rw-roof-top-level` | roof: the top level is the highest by elevation | merging | mai-flash-b |
 | `p16-rw-open-below-rooms` | Open Below rooms: drawn ones cut holes, roomdetect keeps them | working | bonsai-a |
 | `p16-rw-overhead-arch` | arch: what lies over a point (the level above's floor, or an Open Below) clips ceilings and walls | merging | claude-sonnet-d |
 | `p16-rw-above-grade-living` | above-grade area: Chief's living-area convention | merging | claude-sonnet-c |
 | `p16-rw-technical-silhouettes` | technical illustration: silhouettes for the camera's view direction | merging | claude-sonnet-a |
+| `p16-rw-pane-styles` | 3D pane: Clay and Technical in the style selector | working | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 06:10 | `p16f-demo-replays` | merged | 8,258 pass | mai-flash |
 | Nov 10 03:46 | `p16-rebuild` | merged | 8,258 pass | mai-flash-b |
 | Nov 10 03:29 | `upstream-sync-a3d9348f6` | merged | 8,256 pass | claude-sonnet-b |
 | Nov 10 03:09 | `p16-exports` | merged | 8,252 pass | claude-sonnet-a |
@@ -66,24 +67,23 @@ Updated 2026-11-10 06:00 UTC. This page and the card in the README are regenerat
 | Nov 10 01:03 | `upstream-sync-d847eac13` | merged | 8,240 pass | claude-sonnet-d |
 | Nov 10 00:20 | `p15-docs-user-guide` | refused | 0 pass | mai-flash-esc |
 | Nov 10 00:20 | `harden-p15-showcase-test` | merged | 8,197 pass | tturbo-mac |
-| Nov 09 23:14 | `p15-check10-surfaces` | refused | 0 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | agent | 1019 |
-| bonsai-b | bonsai2-27b | agent | 964 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1065 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1032 |
-| claude-sonnet-a | sonnet | merging | 95 |
-| claude-sonnet-b | sonnet | gate | 99 |
-| claude-sonnet-c | sonnet | merging | 45 |
-| claude-sonnet-d | sonnet | merging | 46 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 923 |
+| bonsai-b | bonsai2-27b | agent | 965 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1065 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1032 |
+| claude-sonnet-a | sonnet | agent | 95 |
+| claude-sonnet-b | sonnet | gate | 100 |
+| claude-sonnet-c | sonnet | idle | 45 |
+| claude-sonnet-d | sonnet | idle | 46 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 923 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | merging | 71 |
-| mai-flash-b | mai-code-1.1-flash | merging | 11 |
+| mai-flash | mai-code-1.1-flash | idle | 71 |
+| mai-flash-b | mai-code-1.1-flash | idle | 11 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 65 |
-| tturbo-mac | tturbo-ultraheretic | agent | 714 |
+| tturbo-mac | tturbo-ultraheretic | gate | 714 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
