@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 10:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 10:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 21: Ceilings and foundations — 25 of 33 segments merged · 11 of 20 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 26 of 33 segments merged · 12 of 20 acceptance checks**
 
-8,296 workspace tests passing at the last merge · 882 segments merged in all · 0 of 15 seats working
+8,297 workspace tests passing at the last merge · 883 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 10:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 11 / 20 | 30.5 h so far · expected done Nov 10 15:07–Nov 11 03:58 UTC |
+| 16 | Ceilings and foundations | building | 12 / 20 | 30.8 h so far · expected done Nov 10 14:27–Nov 11 02:09 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,20 +35,20 @@ Updated 2026-11-10 10:00 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-25 merged, 5 merging, 3 replaced, 3 queued, 2 abandoned
+26 merged, 4 merging, 3 replaced, 3 queued, 2 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p16f-soffit-faces` | soffit: rects snap to the room-side wall face; `over` starts at the cabinets' backs | merging | bonsai-b |
 | `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | merging | mai-flash |
 | `p16-rw-open-below-rooms` | Open Below rooms: drawn ones cut holes, roomdetect keeps them | merging | mai-flash-esc |
-| `p16-rw-above-grade-living` | above-grade area: Chief's living-area convention | merging | claude-sonnet-c |
 | `p16-rw-pane-styles` | 3D pane: Clay and Technical in the style selector | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 10:09 | `p16-rw-above-grade-living` | merged | 8,297 pass | claude-sonnet-c |
 | Nov 10 09:50 | `p16-rw-technical-silhouettes` | merged | 8,296 pass | claude-sonnet-a |
 | Nov 10 09:33 | `p16f-slab-edge-mesh` | merged | 8,293 pass | bonsai-ws2-a |
 | Nov 10 09:15 | `p16f-tray-outline-reply` | merged | 8,292 pass | darwin-ws3 |
@@ -60,7 +60,6 @@ Updated 2026-11-10 10:00 UTC. This page and the card in the README are regenerat
 | Nov 10 06:51 | `p16-rw-roof-top-level` | merged | 8,259 pass | mai-flash-b |
 | Nov 10 06:10 | `p16f-demo-replays` | merged | 8,258 pass | mai-flash |
 | Nov 10 03:46 | `p16-rebuild` | merged | 8,258 pass | mai-flash-b |
-| Nov 10 03:29 | `upstream-sync-a3d9348f6` | merged | 8,256 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
