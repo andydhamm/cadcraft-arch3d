@@ -634,6 +634,59 @@ mod tests {
     }
 
     #[test]
+    fn snap_rect_snaps_to_the_room_side_face() {
+        let m = house();
+        // NE room: east inner face x = 9.9, north inner face y = 7.9.
+        let r = snap_rect(&m, 0, [9.0, 7.0, 9.96, 7.95]);
+        assert!((r[0] - 9.0).abs() < 1e-9, "x0: {}", r[0]);
+        assert!((r[1] - 7.0).abs() < 1e-9, "y0: {}", r[1]);
+        assert!((r[2] - 9.9).abs() < 1e-9, "x1 should snap to east inner face, got {}", r[2]);
+        assert!((r[3] - 7.9).abs() < 1e-9, "y1 should snap to north inner face, got {}", r[3]);
+
+        // A rect already inside the face span snaps outward to the inner face.
+        let r = snap_rect(&m, 0, [9.0, 7.0, 9.8, 7.8]);
+        assert!((r[2] - 9.9).abs() < 1e-9, "x1 inside-out: {}", r[2]);
+        assert!((r[3] - 7.9).abs() < 1e-9, "y1 inside-out: {}", r[3]);
+    }
+
+    #[test]
+    fn snap_rect_snaps_from_either_side_within_0_15() {
+        let m = house();
+        // 0.16 m from the face is outside SNAP, so x1 stays put (y1 still snaps).
+        let r = snap_rect(&m, 0, [9.0, 7.0, 9.74, 7.95]);
+        assert!((r[2] - 9.74).abs() < 1e-9, "x1 out of SNAP (0.16) should stay, got {}", r[2]);
+        assert!((r[3] - 7.9).abs() < 1e-9, "y1 in SNAP should snap, got {}", r[3]);
+
+        // Mid-room rect, away from every face: unchanged.
+        let r = snap_rect(&m, 0, [6.5, 3.5, 7.3, 4.3]);
+        assert!((r[0] - 6.5).abs() < 1e-9);
+        assert!((r[1] - 3.5).abs() < 1e-9);
+        assert!((r[2] - 7.3).abs() < 1e-9);
+        assert!((r[3] - 4.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn over_cabinets_ring_starts_at_the_cabinet_backs() {
+        let mut m = house();
+        m.cabinets.push(make_cabinet(0, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
+        m.cabinets.push(make_cabinet(1, 2, CabinetKind::Wall, Vec2::new(8.4, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
+        let s = Soffit { id: ArchId(0), level: 0, polygon: vec![], over: vec![ArchId(0), ArchId(1)], ..Soffit::default() };
+        let ring = soffit_ring(&m, &s).expect("over-cabinet ring");
+        let xs: Vec<f64> = ring.iter().map(|v| v.x).collect();
+        let ys: Vec<f64> = ring.iter().map(|v| v.y).collect();
+        let xmin = xs.iter().copied().fold(f64::INFINITY, f64::min);
+        let xmax = xs.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let ymin = ys.iter().copied().fold(f64::INFINITY, f64::min);
+        let ymax = ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        // The ring starts at the cabinets' back line (y = 7.9) and extends into the room
+        // by the cabinet depth (0.305), not from the wall centre line.
+        assert!((xmin - 8.1).abs() < 1e-3, "xmin: {}", xmin);
+        assert!((xmax - 9.3).abs() < 1e-3, "xmax: {}", xmax);
+        assert!((ymin - 7.595).abs() < 1e-3, "ymin (back - depth): {}", ymin);
+        assert!((ymax - 7.9).abs() < 1e-3, "ymax (cabinet backs): {}", ymax);
+    }
+
+    #[test]
     fn validate_exactly_one_of_bottom_depth_over() {
         let m = house();
         let polygon = vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0)];
