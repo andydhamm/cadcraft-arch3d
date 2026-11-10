@@ -465,8 +465,10 @@ fn pick_reports_railing_part() {
 
     let scene = Scene3d::build(&model);
     let bvh = Bvh::build(&scene);
-    // Pick the railing from above.
-    let hit = bvh.ray(v(5.0, 0.0, 2.0), v(0.0, 0.0, -1.0), 10.0);
+    // Pick the railing from above. The default post spacing (1.8) puts posts at
+    // x = 0, 2, 4, 6, 8, 10 on a 10 m path; casting between the posts at x = 4.2
+    // meets the top rail (part "railing"), not a post.
+    let hit = bvh.ray(v(4.2, 0.0, 2.0), v(0.0, 0.0, -1.0), 10.0);
     assert!(hit.is_some(), "railing should be pickable from above");
     assert_eq!(hit.unwrap().part, "railing");
 }
