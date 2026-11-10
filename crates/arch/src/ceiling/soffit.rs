@@ -97,6 +97,7 @@ pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
         let mut min_t = f64::INFINITY;
         let mut max_t = f64::NEG_INFINITY;
         let mut max_depth = 0.0_f64;
+        let mut first_side: Option<f64> = None;
 
         for cid in &s.over {
             let cab = model.cabinets.iter().find(|c| c.id == *cid)?;
@@ -125,10 +126,10 @@ pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
                 if side.abs() > w.thickness * 1.5 + 1e-6 {
                     continue;
                 }
-                found = Some((idx, s0, s1));
+                found = Some((idx, s0, s1, side));
                 break;
             }
-            let Some((idx, s0, s1)) = found else {
+            let Some((idx, s0, s1, side)) = found else {
                 return None;
             };
             if let Some(h) = host_idx {
@@ -139,6 +140,7 @@ pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
                 host_idx = Some(idx);
                 rotation = Some(cab.rotation);
             }
+            first_side = first_side.or(Some(side));
             min_t = min_t.min(s0);
             max_t = max_t.max(s1);
             max_depth = max_depth.max(cab.depth);
@@ -148,8 +150,16 @@ pub fn soffit_ring(model: &ArchModel, s: &Soffit) -> Option<Vec<Vec2>> {
         let w = &model.walls[host_idx];
         let dir = crate::wall::wall_dir(w)?;
         let left = dir.perp();
+        let side = first_side.unwrap_or(0.0);
+        let sgn = if side > 1e-12 {
+            1.0
+        } else if side < -1e-12 {
+            -1.0
+        } else {
+            1.0
+        };
         let p = |t: f64, y: f64| w.start + dir * t + left * y;
-        Some(vec![p(min_t, 0.0), p(max_t, 0.0), p(max_t, max_depth), p(min_t, max_depth)])
+        Some(vec![p(min_t, side), p(max_t, side), p(max_t, side + sgn * max_depth), p(min_t, side + sgn * max_depth)])
     } else {
         let mut ring = s.polygon.clone();
         if ring.len() > 1 && ring.first() == ring.last() {
@@ -223,16 +233,22 @@ pub fn bottom_at(model: &ArchModel, level: u32, p: Vec2) -> Option<f64> {
 /// Snap each side of `r = [x0, y0, x1, y1]` onto the nearest parallel face line of a
 /// non-divider wall on `level` when within `SNAP`. A face line counts when it is
 /// axis-parallel (within 1e-6) and its axial projection overlaps the side span
-/// (overlap > 0). Ties go to the smaller wall id. A move that degenerates the rect
-/// is skipped. Non-finite input returns `r`.
+/// (overlap > 0). For each wall, the face that looks into the rect is used: for the
+/// upper side (x1, y1) the smaller coordinate, for the lower side (x0, y0) the larger.
+/// A move that degenerates the rect is skipped. Non-finite input returns `r`.
 pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
     if !r.iter().all(|v| v.is_finite()) {
         return r;
     }
 
-    fn try_side(r: &mut [f64; 4], model: &ArchModel, level: u32, idx: usize, value: f64, axis: u8) {
+    fn try_side(r: &mut [f64; 4], model: &ArchModel, level: u32, idx: usize) {
+        let value = r[idx];
+        let axis: u8 = if idx == 0 || idx == 2 { 1 } else { 0 };
+
         let (span_lo, span_hi) = if axis == 0 { (r[0].min(r[2]), r[0].max(r[2])) } else { (r[1].min(r[3]), r[1].max(r[3])) };
-        let mut best: Option<(f64, ArchId, f64)> = None;
+
+        let mut best: Option<(f64, u32, f64)> = None;
+
         for w in &model.walls {
             if w.base_level != level || w.divider {
                 continue;
@@ -240,48 +256,68 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
             let Some(lines) = crate::join::face_lines(w) else {
                 continue;
             };
-            for line in lines {
-                let (p0, p1) = line;
-                let (proj_lo, proj_hi, candidate) = if axis == 0 {
-                    if (p0.y - p1.y).abs() > 1e-6 || !p0.x.is_finite() || !p1.x.is_finite() {
+
+            let mut coords = Vec::new();
+            let mut proj_lo = f64::INFINITY;
+            let mut proj_hi = f64::NEG_INFINITY;
+
+            for (p0, p1) in &lines {
+                if axis == 0 {
+                    if (p0.y - p1.y).abs() > 1e-6 || !p0.y.is_finite() || !p1.y.is_finite() {
                         continue;
                     }
-                    let cand = if idx == 1 { p0.y.min(p1.y) } else { p0.y.max(p1.y) };
-                    (p0.x.min(p1.x), p0.x.max(p1.x), cand)
+                    coords.push(p0.y);
+                    if p0.x.is_finite() && p1.x.is_finite() {
+                        proj_lo = proj_lo.min(p0.x.min(p1.x));
+                        proj_hi = proj_hi.max(p0.x.max(p1.x));
+                    }
                 } else {
-                    if (p0.x - p1.x).abs() > 1e-6 || !p0.y.is_finite() || !p1.y.is_finite() {
+                    if (p0.x - p1.x).abs() > 1e-6 || !p0.x.is_finite() || !p1.x.is_finite() {
                         continue;
                     }
-                    let cand = if idx == 0 { p0.x.min(p1.x) } else { p0.x.max(p1.x) };
-                    (p0.y.min(p1.y), p0.y.max(p1.y), cand)
-                };
-                let overlap = proj_hi.min(span_hi) - proj_lo.max(span_lo);
-                if overlap <= 0.0 {
-                    continue;
+                    coords.push(p0.x);
+                    if p0.y.is_finite() && p1.y.is_finite() {
+                        proj_lo = proj_lo.min(p0.y.min(p1.y));
+                        proj_hi = proj_hi.max(p0.y.max(p1.y));
+                    }
                 }
-                if !candidate.is_finite() {
-                    continue;
-                }
-                let wants_lower = matches!(idx, 0 | 1);
-                let wants_upper = matches!(idx, 2 | 3);
-                if (wants_lower && candidate >= value) || (wants_upper && candidate <= value) {
-                    continue;
-                }
-                let dist = (candidate - value).abs();
-                if dist > SNAP {
-                    continue;
-                }
-                let candidate = (dist, w.id, candidate);
-                match best {
-                    None => best = Some(candidate),
-                    Some((best_dist, best_id, _)) => {
-                        if dist < best_dist - 1e-12 || (dist <= best_dist + 1e-12 && w.id < best_id) {
-                            best = Some(candidate);
-                        }
+            }
+
+            if coords.is_empty() || proj_lo.is_finite() == false || proj_hi.is_finite() == false {
+                continue;
+            }
+
+            let candidate = if matches!(idx, 2 | 3) {
+                coords.iter().copied().fold(f64::INFINITY, f64::min)
+            } else {
+                coords.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+            };
+
+            if !candidate.is_finite() {
+                continue;
+            }
+
+            let overlap = proj_hi.min(span_hi) - proj_lo.max(span_lo);
+            if overlap <= 0.0 {
+                continue;
+            }
+
+            let dist = (candidate - value).abs();
+            if dist > SNAP {
+                continue;
+            }
+
+            let entry = (dist, w.id, candidate);
+            match best {
+                None => best = Some(entry),
+                Some((best_dist, best_id, _)) => {
+                    if dist < best_dist - 1e-12 || (dist <= best_dist + 1e-12 && w.id < best_id) {
+                        best = Some(entry);
                     }
                 }
             }
         }
+
         if let Some((_, _, new_val)) = best {
             let old = r[idx];
             r[idx] = new_val;
@@ -295,10 +331,10 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
     let r1 = r[1];
     let r2 = r[2];
     let r3 = r[3];
-    try_side(&mut r, model, level, 1, r1, 0);
-    try_side(&mut r, model, level, 3, r3, 0);
-    try_side(&mut r, model, level, 0, r0, 1);
-    try_side(&mut r, model, level, 2, r2, 1);
+    try_side(&mut r, model, level, 1);
+    try_side(&mut r, model, level, 3);
+    try_side(&mut r, model, level, 0);
+    try_side(&mut r, model, level, 2);
     r
 }
 
@@ -401,12 +437,12 @@ mod tests {
             ..Default::default()
         });
         let t = 0.2;
-        m.walls.push(Wall::new(Vec2::new(0.1, 0.1), Vec2::new(9.9, 0.1), t));
-        m.walls.push(Wall::new(Vec2::new(9.9, 0.1), Vec2::new(9.9, 7.9), t));
-        m.walls.push(Wall::new(Vec2::new(9.9, 7.9), Vec2::new(0.1, 7.9), t));
-        m.walls.push(Wall::new(Vec2::new(0.1, 7.9), Vec2::new(0.1, 0.1), t));
-        m.walls.push(Wall::new(Vec2::new(0.0, 3.0), Vec2::new(10.0, 3.0), 0.2));
-        m.walls.push(Wall::new(Vec2::new(6.0, 3.0), Vec2::new(6.0, 8.0), 0.2));
+        m.walls.push(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        m.walls.push(Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+        m.walls.push(Wall::new(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        m.walls.push(Wall::new(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        m.walls.push(Wall::new(Vec2::new(0.0, 3.0), Vec2::new(10.0, 3.0), 0.1));
+        m.walls.push(Wall::new(Vec2::new(6.0, 3.0), Vec2::new(6.0, 8.0), 0.1));
 
         m.rooms.push(Room {
             id: ArchId(0),
@@ -453,8 +489,8 @@ mod tests {
     fn snap_rect_moves_sides_onto_wall_faces_and_into_corners() {
         let m = house();
         let r = snap_rect(&m, 0, [9.0, 7.0, 9.96, 7.95]);
-        assert!((r[2] - 10.0).abs() < 1e-6, "x1: {} != 10.0", r[2]);
-        assert!((r[3] - 8.0).abs() < 1e-6, "y1: {} != 8.0", r[3]);
+        assert!((r[2] - 9.9).abs() < 1e-6, "x1: {} != 9.9", r[2]);
+        assert!((r[3] - 7.9).abs() < 1e-6, "y1: {} != 7.9", r[3]);
         assert!((r[0] - 9.0).abs() < 1e-6, "x0 should not move");
         assert!((r[1] - 7.0).abs() < 1e-6, "y0 should not move");
 
@@ -464,9 +500,9 @@ mod tests {
         assert!((r2[2] - 7.3).abs() < 1e-9);
         assert!((r2[3] - 4.3).abs() < 1e-9);
 
-        assert!((snap_rect(&m, 0, [9.0, 7.0, 9.86, 7.95])[2] - 10.0).abs() < 1e-6, "0.14 snapped");
+        assert!((snap_rect(&m, 0, [9.0, 7.0, 9.86, 7.95])[2] - 9.9).abs() < 1e-6, "0.14 snapped");
         let r3 = snap_rect(&m, 0, [9.0, 7.0, 9.84, 7.95]);
-        assert!((r3[2] - 9.84).abs() < 1e-9, "0.16 does not snap");
+        assert!((r3[2] - 9.9).abs() < 1e-9, "0.06 snaps outward");
     }
 
     #[test]
@@ -632,7 +668,7 @@ mod tests {
 
         let r3 = snap_rect(&m, 0, [9.8, 7.0, 10.0, 7.95]);
         assert!((r3[0] - 9.8).abs() < 1e-9, "x0 should not move");
-        assert!((r3[2] - 10.0).abs() < 1e-9, "x1 should not move");
+        assert!((r3[2] - 9.9).abs() < 1e-6, "x1 snaps to inner face 9.9");
     }
 
     #[test]
