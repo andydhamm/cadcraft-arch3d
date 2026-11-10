@@ -12,7 +12,11 @@
 //!   `panel`. Unknown values are refused.
 //! - `thickness`: optional, metres; default 0.05. Must be positive and finite.
 //!
-//! Returns `{"id":"ra0","handle":"...","height":h,"style":s,"balusterGap":g}`.
+//! - `postSpacing`: optional, number in `[0.3, 3.0]`, default 1.8 m.
+//! - `inset`: optional, number with `|inset| <= 0.5`, default 0; positive is left of travel.
+//!
+//! Returns `{"id":"ra0","handle":"...","height":h,"style":s,"balusterGap":g,"postSpacing":sp,
+//! "inset":i,"posts":[[x,y],...]}`.
 
 use cadcraft_arch::railing::{GUARD_HEIGHT, baluster_spacing, path_length};
 use cadcraft_doc::arch::{MAX_RAILINGS, Railing, RailingStyle};
@@ -29,13 +33,20 @@ const MAX_POINTS: usize = 512;
 /// Default railing thickness (metres).
 const DEFAULT_THICKNESS: f64 = 0.05;
 
+/// Post spacing limits (metres).
+const MIN_POST_SPACING: f64 = 0.3;
+const MAX_POST_SPACING: f64 = 3.0;
+
+/// Largest horizontal offset of the built railing from its path (metres).
+const MAX_INSET: f64 = 0.5;
+
 /// Command specs for the railing module.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("railing", "Railing", run_railing)
             .menu(&["Architecture", "Railing"])
             .alias(&["rl"])
-            .params("{path:[[x,y],...], level?, height?, style?: panel|balusters, thickness?}")
+            .params("{path:[[x,y],...], level?, height?, style?: panel|balusters, thickness?, postSpacing?, inset?}")
             .interactive(|_| Ok(Box::new(RailingM::default()))),
     ]
 }
@@ -131,6 +142,22 @@ fn run_railing(s: &mut Session, p: &Value) -> Result<Value> {
     // --- Thickness: optional, default 0.05 m ---
     let thickness = size_param("railing", p, "thickness", false)?.unwrap_or(DEFAULT_THICKNESS);
 
+    // --- Post spacing in [0.3, 3.0] (default 1.8) and inset |i| <= 0.5 (default 0); never clamped ---
+    let post_spacing = match p.get("postSpacing").filter(|v| !v.is_null()) {
+        None => Railing::default().post_spacing,
+        Some(v) => match v.as_f64().filter(|x| (MIN_POST_SPACING..=MAX_POST_SPACING).contains(x)) {
+            Some(x) => x,
+            None => return Err(bad("railing", format!("`postSpacing` must be a number in [{MIN_POST_SPACING}, {MAX_POST_SPACING}]"))),
+        },
+    };
+    let inset = match p.get("inset").filter(|v| !v.is_null()) {
+        None => 0.0,
+        Some(v) => match v.as_f64().filter(|x| x.is_finite() && x.abs() <= MAX_INSET) {
+            Some(x) => x,
+            None => return Err(bad("railing", format!("`inset` must be a number with |inset| <= {MAX_INSET}"))),
+        },
+    };
+
     // --- Baluster gap from path length and thickness; 0.0 when degenerate ---
     let gap = baluster_spacing(path_length(&pts), thickness).map(|(g, _)| g).unwrap_or(0.0);
 
@@ -138,11 +165,18 @@ fn run_railing(s: &mut Session, p: &Value) -> Result<Value> {
     if d.arch.railings.len() >= MAX_RAILINGS {
         return Err(bad("railing", "railing limit reached"));
     }
-    let mut railing = Railing { path: pts, level: level as u32, height, style, thickness, baluster_gap: gap, ..Railing::default() };
+    let railing = Railing { path: pts, level: level as u32, height, style, thickness, baluster_gap: gap, post_spacing, inset, ..Railing::default() };
+    let posts: Vec<[f64; 2]> = cadcraft_arch::railing::post_points(&cadcraft_arch::railing::built_path(&railing.path, inset), post_spacing)
+        .iter()
+        .map(|v| [v.x, v.y])
+        .collect();
     let id = d.arch.push_railing(railing);
     d.touch_arch();
 
     Ok(json!({
+        "postSpacing": post_spacing,
+        "inset": inset,
+        "posts": posts,
         "id": format!("ra{}", id.0),
         "handle": cadcraft_doc::arch::handle_json(cadcraft_doc::arch::railing_handle(id)),
         "height": height,
@@ -248,6 +282,57 @@ mod tests {
     /// A simple 2-point path (3 m long).
     fn simple_path() -> Value {
         json!([[0.0, 0.0], [3.0, 0.0]])
+    }
+
+    #[test]
+    fn railing_accepts_post_spacing_and_inset_and_reports_posts() {
+        let mut s = new_session();
+        let r = s.execute("railing", &json!({ "path": [[12.0, 0.0], [16.0, 0.0]], "postSpacing": 1.0, "inset": 0.1 })).unwrap();
+        assert_eq!(r["postSpacing"], json!(1.0));
+        assert_eq!(r["inset"], json!(0.1));
+        let posts = r["posts"].as_array().unwrap();
+        assert_eq!(posts.len(), 5);
+        for (i, p) in posts.iter().enumerate() {
+            assert!((p[0].as_f64().unwrap() - (12.0 + i as f64)).abs() < 1e-6, "{p}");
+            assert!((p[1].as_f64().unwrap() - 0.1).abs() < 1e-6, "{p}");
+        }
+        let ra = &s.doc().unwrap().arch.railings[0];
+        assert_eq!((ra.post_spacing, ra.inset), (1.0, 0.1));
+        // A negative inset is right of travel.
+        let r = s.execute("railing", &json!({ "path": [[0.0, 0.0], [2.0, 0.0]], "inset": -0.5 })).unwrap();
+        assert!((r["posts"][0][1].as_f64().unwrap() + 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn railing_default_spacing_is_1_8() {
+        let mut s = new_session();
+        let r = s.execute("railing", &json!({ "path": simple_path() })).unwrap();
+        assert_eq!(r["postSpacing"], json!(1.8));
+        assert_eq!(r["inset"], json!(0.0));
+        assert_eq!(s.doc().unwrap().arch.railings[0].post_spacing, 1.8);
+        assert!(r["posts"].as_array().is_some_and(|p| p.len() >= 2));
+    }
+
+    #[test]
+    fn railing_refuses_spacing_0_2_and_3_5_and_inset_0_6() {
+        for extra in [
+            json!({"postSpacing": 0.2}),
+            json!({"postSpacing": 3.5}),
+            json!({"postSpacing": "1"}),
+            json!({"inset": 0.6}),
+            json!({"inset": -0.6}),
+            json!({"inset": 1e308}),
+        ] {
+            let mut s = new_session();
+            let mut p = json!({ "path": simple_path() });
+            if let (Some(a), Some(b)) = (p.as_object_mut(), extra.as_object()) {
+                for (k, v) in b {
+                    a.insert(k.clone(), v.clone());
+                }
+            }
+            assert!(s.execute("railing", &p).is_err(), "{extra}");
+            assert!(s.doc().unwrap().arch.railings.is_empty());
+        }
     }
 
     #[test]

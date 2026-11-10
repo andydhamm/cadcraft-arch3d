@@ -30,14 +30,27 @@
 //! `Open Below` room on the upper level ringed by a guard railing that follows
 //! the stair, and is cut as a hole into the upper room that contains it.
 //!
+//! - `openRisers` (bool), `stringers` (`two|centre|center|none`), `underside`
+//!   (metres in `[MIN_UNDERSIDE, MAX_UNDERSIDE]`), `railLeft` / `railRight`
+//!   (`auto|on|off`), `planCut` (metres in `[0.3, 3.0]`): optional detail; wrong
+//!   types and out-of-range values are refused before anything is written.
+//!
 //! Returns `{"id":"s0","handle":"...","risers":n,"riserHeight":h,"run":r,
-//! "well":bool}`.
+//! "well":bool,"openRisers":..,"stringers":..,"underside":..,"railLeft":..,
+//! "railRight":..,"planCut":..,"railings":[labels]}`.
+//!
+//! `stair.edit` changes only the detail values given on an existing stair
+//! (never its geometry) as one undo step.
 
 use std::f64::consts::PI;
 
 use cadcraft_arch::poly::ring_area;
+use cadcraft_arch::railing_auto::{RailHostRef, regenerate};
 use cadcraft_arch::stair::{GUARD_HEIGHT, MAX_RISER, MIN_HEADROOM, MIN_TREAD, plan_stair, well_guard_path, well_polygon};
-use cadcraft_doc::arch::{Railing, Room, RoomType, Stair, StairShape, stair_handle};
+use cadcraft_doc::arch::{
+    MAX_UNDERSIDE, MIN_UNDERSIDE, RailSetting, Railing, RailingHost, Room, RoomType, Stair, StairShape, Stringers, stair_handle,
+};
+use cadcraft_doc::{ArchId, railing_label};
 use cadcraft_geom::Vec2;
 use serde_json::{Value, json};
 
@@ -54,9 +67,168 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("stair", "Stair", run_stair)
             .menu(&["Architecture", "Stair"])
             .alias(&["st"])
-            .params("{start:[x,y], direction:deg, width?, fromLevel?|toLevel?|rise?, shape?, tread?, maxRiser?, minTread?}")
+            .params(
+                "{start:[x,y], direction:deg, width?, fromLevel?|toLevel?|rise?, shape?, tread?, maxRiser?, minTread?, openRisers?, \
+                 stringers?: two|centre|none, underside?, railLeft?|railRight?: auto|on|off, planCut?}",
+            )
             .interactive(|_| Ok(Box::new(StairM::default()))),
+        CommandSpec::new("stair.edit", "Edit Stair", run_stair_edit)
+            .menu(&["Architecture", "Edit Stair"])
+            .params("{id: \"s0\", openRisers?, stringers?, underside?, railLeft?, railRight?, planCut?}"),
     ]
+}
+
+/// Plan cut height limits (metres above the from-level floor).
+const MIN_PLAN_CUT: f64 = 0.3;
+const MAX_PLAN_CUT: f64 = 3.0;
+
+/// The phase-17 detail values a `stair` or `stair.edit` call gave; `None` is absent.
+#[derive(Default)]
+struct Detail {
+    open_risers: Option<bool>,
+    stringers: Option<Stringers>,
+    underside: Option<f64>,
+    rail_left: Option<RailSetting>,
+    rail_right: Option<RailSetting>,
+    plan_cut: Option<f64>,
+}
+
+impl Detail {
+    fn any(&self) -> bool {
+        self.open_risers.is_some()
+            || self.stringers.is_some()
+            || self.underside.is_some()
+            || self.rail_left.is_some()
+            || self.rail_right.is_some()
+            || self.plan_cut.is_some()
+    }
+
+    /// Parse and validate every detail key (null = absent); nothing is written.
+    fn parse(cmd: &str, p: &Value) -> Result<Detail> {
+        let present = |k: &str| p.get(k).filter(|v| !v.is_null());
+        let name = |k: &str, what: &str| -> Result<Option<String>> {
+            match present(k) {
+                None => Ok(None),
+                Some(Value::String(t)) => Ok(Some(t.clone())),
+                Some(_) => Err(bad(cmd, format!("`{k}` must be a string ({what})"))),
+            }
+        };
+        let ranged = |k: &str, lo: f64, hi: f64| -> Result<Option<f64>> {
+            match present(k) {
+                None => Ok(None),
+                Some(v) => match v.as_f64().filter(|x| x.is_finite() && *x >= lo && *x <= hi) {
+                    Some(x) => Ok(Some(x)),
+                    None => Err(bad(cmd, format!("`{k}` must be a number in [{lo}, {hi}]"))),
+                },
+            }
+        };
+        let rail = |k: &str| -> Result<Option<RailSetting>> {
+            match name(k, "auto, on or off")? {
+                None => Ok(None),
+                Some(t) => RailSetting::parse(&t).map(Some).ok_or_else(|| bad(cmd, format!("`{k}` `{t}` must be auto, on or off"))),
+            }
+        };
+        let open_risers = match present("openRisers") {
+            None => None,
+            Some(Value::Bool(b)) => Some(*b),
+            Some(_) => return Err(bad(cmd, "`openRisers` must be true or false")),
+        };
+        let stringers = match name("stringers", "two, centre or none")? {
+            None => None,
+            Some(t) => Some(Stringers::parse(&t).ok_or_else(|| bad(cmd, format!("`stringers` `{t}` must be two, centre or none")))?),
+        };
+        Ok(Detail {
+            open_risers,
+            stringers,
+            underside: ranged("underside", MIN_UNDERSIDE, MAX_UNDERSIDE)?,
+            rail_left: rail("railLeft")?,
+            rail_right: rail("railRight")?,
+            plan_cut: ranged("planCut", MIN_PLAN_CUT, MAX_PLAN_CUT)?,
+        })
+    }
+
+    /// Set the given values on a stair.
+    fn apply(&self, st: &mut Stair) {
+        if let Some(v) = self.open_risers {
+            st.open_risers = v;
+        }
+        if let Some(v) = self.stringers {
+            st.stringers = v;
+        }
+        if let Some(v) = self.underside {
+            st.underside = v;
+        }
+        if let Some(v) = self.rail_left {
+            st.rail_left = v;
+        }
+        if let Some(v) = self.rail_right {
+            st.rail_right = v;
+        }
+        if let Some(v) = self.plan_cut {
+            st.plan_cut = v;
+        }
+    }
+}
+
+/// Labels of the automatic railings along a stair's flight, in model order.
+fn auto_rail_labels(arch: &cadcraft_doc::arch::ArchModel, id: ArchId) -> Vec<String> {
+    arch.railings
+        .iter()
+        .filter(|r| r.auto && r.follows == Some(id) && matches!(r.host, RailingHost::StairLeft | RailingHost::StairRight))
+        .map(|r| railing_label(r.id))
+        .collect()
+}
+
+/// The six detail values of a stair as reply JSON members.
+fn detail_json(st: &Stair) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    m.insert("openRisers".into(), json!(st.open_risers));
+    m.insert("stringers".into(), json!(st.stringers.name()));
+    m.insert("underside".into(), json!(st.underside));
+    m.insert("railLeft".into(), json!(st.rail_left.name()));
+    m.insert("railRight".into(), json!(st.rail_right.name()));
+    m.insert("planCut".into(), json!(st.plan_cut));
+    m
+}
+
+/// Parse a stair id: `"s3"` or the bare number (string or JSON number).
+fn parse_stair_id(cmd: &str, p: &Value) -> Result<ArchId> {
+    let err = || bad(cmd, "`id` must name a stair, like \"s0\"");
+    let raw = match p.get("id") {
+        Some(Value::String(t)) => t.trim().to_ascii_lowercase(),
+        Some(Value::Number(n)) => n.as_u64().ok_or_else(err)?.to_string(),
+        _ => return Err(err()),
+    };
+    let digits = raw.strip_prefix('s').unwrap_or(&raw);
+    digits.parse::<u32>().map(ArchId).map_err(|_| err())
+}
+
+/// Run `stair.edit`: change the detail values given on an existing stair.
+fn run_stair_edit(s: &mut Session, p: &Value) -> Result<Value> {
+    let id = parse_stair_id("stair.edit", p)?;
+    let detail = Detail::parse("stair.edit", p)?;
+    if !detail.any() {
+        return Err(bad("stair.edit", "nothing to change: give openRisers, stringers, underside, railLeft, railRight or planCut"));
+    }
+    let d = s.doc_mut()?;
+    let pos = d.arch.stair_index(id).ok_or_else(|| bad("stair.edit", format!("unknown stair `s{}`", id.0)))?;
+    let rails_changed = {
+        let st = d.arch.stairs.get_mut(pos).ok_or_else(|| bad("stair.edit", "unknown stair"))?;
+        let before = (st.rail_left, st.rail_right);
+        detail.apply(st);
+        before != (st.rail_left, st.rail_right)
+    };
+    if rails_changed {
+        let made = regenerate(&mut d.arch, RailHostRef::Stair(id));
+        if !made.is_empty() {
+            d.ensure_layer("A-RAIL");
+        }
+    }
+    d.touch_arch();
+    let mut m = d.arch.stairs.get(pos).map(detail_json).unwrap_or_default();
+    m.insert("stair".into(), json!(format!("s{}", id.0)));
+    m.insert("railings".into(), json!(auto_rail_labels(&d.arch, id)));
+    Ok(Value::Object(m))
 }
 
 /// Find a level by name (string) or index (number) and return its position in
@@ -128,6 +300,9 @@ fn run_stair(s: &mut Session, p: &Value) -> Result<Value> {
         },
         Some(_) => return Err(bad("stair", "shape must be a string")),
     };
+
+    // --- phase-17 detail: validated before anything is written ---
+    let detail = Detail::parse("stair", p)?;
 
     // --- levels: optional (first / last); a present unknown level -> error ---
     let from_ref = p.get("fromLevel").filter(|v| !v.is_null());
@@ -206,6 +381,7 @@ fn run_stair(s: &mut Session, p: &Value) -> Result<Value> {
         layer: "A-STAIR".into(),
         ..Stair::default()
     };
+    detail.apply(&mut stair);
     let slab_underside = to_level.elevation - to_level.structure;
     // Levels are ordered by elevation above, so the upper level is always
     // higher; riser tops are counted from the lower level's elevation.
@@ -259,17 +435,24 @@ fn run_stair(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
 
+    // The side railings the stair should have (the well guard above stays).
+    let rails = regenerate(&mut d.arch, RailHostRef::Stair(stair_id));
+    if !rails.is_empty() {
+        d.ensure_layer("A-RAIL");
+    }
+
     cadcraft_arch::area::refresh_areas(&mut d.arch);
     d.touch_arch();
 
-    Ok(json!({
-        "id": format!("s{}", stair_id.0),
-        "handle": cadcraft_doc::arch::handle_json(stair_handle(stair_id)),
-        "risers": plan.risers,
-        "riserHeight": plan.riser_height,
-        "run": plan.run,
-        "well": has_well,
-    }))
+    let mut m = d.arch.stair(stair_id).map(detail_json).unwrap_or_default();
+    m.insert("id".into(), json!(format!("s{}", stair_id.0)));
+    m.insert("handle".into(), json!(cadcraft_doc::arch::handle_json(stair_handle(stair_id))));
+    m.insert("risers".into(), json!(plan.risers));
+    m.insert("riserHeight".into(), json!(plan.riser_height));
+    m.insert("run".into(), json!(plan.run));
+    m.insert("well".into(), json!(has_well));
+    m.insert("railings".into(), json!(rails.iter().map(|r| railing_label(*r)).collect::<Vec<_>>()));
+    Ok(Value::Object(m))
 }
 
 /// Interactive `stair` machine: collect the start point, then direction,
@@ -499,7 +682,7 @@ mod tests {
         let d = s.doc().unwrap();
         assert_eq!(d.arch.stairs.len(), 1);
         assert!(d.arch.stairs[0].well.is_empty());
-        assert!(d.arch.railings.is_empty());
+        assert!(d.arch.railings.iter().all(|r| !(r.host == RailingHost::Well && !r.auto)));
         assert!(d.arch.rooms.iter().all(|r| r.room_type != RoomType::OpenBelow));
         // Without a rise, equal elevations still have nothing to climb.
         assert!(s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0 })).is_err());
@@ -639,8 +822,122 @@ mod tests {
         let room = d.arch.rooms.last().unwrap();
         assert_eq!(room.room_type, RoomType::OpenBelow);
         assert!(!room.polygon.is_empty());
-        assert_eq!(d.arch.railings.len(), 1);
-        assert_eq!(d.arch.railings[0].follows, Some(d.arch.stairs[0].id));
+        let guards: Vec<_> = d.arch.railings.iter().filter(|r| r.host == RailingHost::Well && !r.auto).collect();
+        assert_eq!(guards.len(), 1);
+        assert_eq!(guards[0].follows, Some(d.arch.stairs[0].id));
+    }
+
+    fn detail_stair(extra: Value) -> Value {
+        let mut m = json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 0, "toLevel": 1 });
+        if let (Some(a), Some(b)) = (m.as_object_mut(), extra.as_object()) {
+            for (k, v) in b {
+                a.insert(k.clone(), v.clone());
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn stair_accepts_the_detail_params() {
+        let mut s = two_level_session();
+        let r = s
+            .execute(
+                "stair",
+                &detail_stair(json!({
+                    "openRisers": true, "stringers": "Center", "underside": 0.4, "railLeft": "ON", "railRight": "off", "planCut": 1.5
+                })),
+            )
+            .unwrap();
+        assert_eq!(r["openRisers"], json!(true));
+        assert_eq!(r["stringers"], json!("centre"));
+        assert_eq!(r["underside"], json!(0.4));
+        assert_eq!(r["railLeft"], json!("on"));
+        assert_eq!(r["railRight"], json!("off"));
+        assert_eq!(r["planCut"], json!(1.5));
+        assert!(r["railings"].is_array());
+        let st = &s.doc().unwrap().arch.stairs[0];
+        assert!(st.open_risers);
+        assert_eq!(st.stringers, Stringers::Centre);
+        assert_eq!((st.rail_left, st.rail_right), (RailSetting::On, RailSetting::Off));
+        // Defaults when absent.
+        let mut s = two_level_session();
+        let r = s.execute("stair", &detail_stair(json!({}))).unwrap();
+        assert_eq!(r["stringers"], json!("two"));
+        assert_eq!(r["railLeft"], json!("auto"));
+    }
+
+    #[test]
+    fn stair_refuses_bad_detail_params() {
+        for bad_params in [
+            json!({"openRisers": "yes"}),
+            json!({"stringers": "three"}),
+            json!({"stringers": 2}),
+            json!({"underside": 0.1}),
+            json!({"underside": 1.5}),
+            json!({"underside": "0.4"}),
+            json!({"railLeft": "maybe"}),
+            json!({"railRight": true}),
+            json!({"planCut": 0.2}),
+            json!({"planCut": 3.5}),
+            json!({"planCut": 1e308}),
+        ] {
+            let mut s = two_level_session();
+            assert!(s.execute("stair", &detail_stair(bad_params.clone())).is_err(), "{bad_params}");
+            let a = &s.doc().unwrap().arch;
+            assert!(a.stairs.is_empty() && a.rooms.is_empty() && a.railings.is_empty(), "{bad_params}");
+        }
+    }
+
+    #[test]
+    fn stair_edit_changes_only_given_fields_and_is_one_undo_step() {
+        let mut s = two_level_session();
+        s.execute("stair", &detail_stair(json!({"openRisers": true, "stringers": "centre"}))).unwrap();
+        let r = s.execute("stair.edit", &json!({"id": "s0", "stringers": "none", "planCut": 2.0})).unwrap();
+        assert_eq!(r["stair"], json!("s0"));
+        assert_eq!(r["stringers"], json!("none"));
+        assert_eq!(r["openRisers"], json!(true));
+        assert_eq!(r["planCut"], json!(2.0));
+        assert!(r["railings"].is_array());
+        let st = &s.doc().unwrap().arch.stairs[0];
+        assert_eq!((st.stringers, st.open_risers, st.plan_cut), (Stringers::None, true, 2.0));
+        assert_eq!(s.undo().unwrap(), Some("Edit Stair".to_string()));
+        let st = &s.doc().unwrap().arch.stairs[0];
+        assert_eq!((st.stringers, st.open_risers, st.plan_cut), (Stringers::Centre, true, 1.2));
+        // The bare number names the stair too.
+        s.execute("stair.edit", &json!({"id": 0, "underside": 0.5})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.stairs[0].underside, 0.5);
+    }
+
+    #[test]
+    fn stair_edit_refuses_unknown_ids_and_empty_edits() {
+        let mut s = two_level_session();
+        s.execute("stair", &detail_stair(json!({}))).unwrap();
+        let before = s.doc().unwrap().arch.stairs.clone();
+        for bad_params in [
+            json!({"id": "s9", "stringers": "none"}),
+            json!({"id": "w0", "stringers": "none"}),
+            json!({"stringers": "none"}),
+            json!({"id": "s0"}),
+            json!({"id": "s0", "colour": "red"}),
+            json!({"id": "s0", "stringers": "none", "underside": 9.0}),
+        ] {
+            assert!(s.execute("stair.edit", &bad_params).is_err(), "{bad_params}");
+            assert_eq!(s.doc().unwrap().arch.stairs, before, "{bad_params}");
+        }
+    }
+
+    #[test]
+    fn stair_edit_of_a_rail_setting_keeps_drawn_railings_and_the_well_guard() {
+        let mut s = two_level_session();
+        s.execute("stair", &detail_stair(json!({}))).unwrap();
+        s.execute("railing", &json!({"path": [[10.0, 0.0], [14.0, 0.0]]})).unwrap();
+        let before: Vec<_> = s.doc().unwrap().arch.railings.iter().filter(|r| !r.auto).cloned().collect();
+        assert_eq!(before.len(), 2);
+        let r = s.execute("stair.edit", &json!({"id": "s0", "railLeft": "off"})).unwrap();
+        assert!(r["railings"].is_array());
+        let after: Vec<_> = s.doc().unwrap().arch.railings.iter().filter(|r| !r.auto).cloned().collect();
+        assert_eq!(before, after);
+        assert_eq!(s.doc().unwrap().arch.stairs[0].rail_left, RailSetting::Off);
     }
 
     #[test]
