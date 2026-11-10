@@ -92,7 +92,7 @@ fn ring_area(p: &[[f64; 2]]) -> f64 {
 pub fn section_cut(scene: &Scene3d, plane: &Plane, view: &OrthoView) -> SectionCut {
     let mut cut = SectionCut::default();
     for mesh in &scene.meshes {
-        let kind = ArchKind::from_part(crate::probe::part_of(mesh));
+        let kind = crate::probe::arch_kind(mesh);
         let w = weld(mesh);
         let d: Vec<f64> = w.points.iter().map(|&p| plane.distance(p)).collect();
         let front = |i: u32| d.get(i as usize).is_some_and(|&x| x >= 0.0);

@@ -350,7 +350,7 @@ pub(crate) fn visible_lines_beyond(scene: &Scene3d, view: &OrthoView, keep: Opti
     let mut tris: Vec<Tri> = Vec::new();
     let mut edges: Vec<([f64; 3], [f64; 3], ArchKind, ArchId)> = Vec::new();
     for mesh in &scene.meshes {
-        let kind = ArchKind::from_part(crate::probe::part_of(mesh));
+        let kind = crate::probe::arch_kind(mesh);
         let w = weld(mesh);
         for t in &w.tris {
             let c = w.corners(t);

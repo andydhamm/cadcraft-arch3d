@@ -113,14 +113,14 @@ pub const TURN_STEP_DEG: f64 = 5.0;
 pub fn proxy_handle(id: cadcraft_doc::ArchId, part: &str) -> cadcraft_doc::Handle {
     use cadcraft_doc::arch as a;
     match part {
-        "leaf" | "frame" | "casing" | "glass" | "sill" | "header" => a::opening_handle(id),
-        "floor" | "ceiling" | "deck" => a::room_handle(id),
+        "leaf" | "frame" | "casing" | "glass" | "sill" | "header" | "grille" => a::opening_handle(id),
+        "floor" | "ceiling" | "deck" | "ledger" | "joist" | "rim" | "beam" => a::room_handle(id),
         "roof" => a::roof_handle(id),
         "cabinet" | "counter" | "pull" => a::cabinet_handle(id),
         "fixture" => a::fixture_handle(id),
         "furnishing" => a::furnishing_handle(id),
-        "stair" => a::stair_handle(id),
-        "railing" => a::railing_handle(id),
+        "stair" | "tread" | "riser" | "stringer" | "skirt" => a::stair_handle(id),
+        "railing" | "post" => a::railing_handle(id),
         _ => a::arch_handle(id),
     }
 }
@@ -1356,7 +1356,7 @@ pub fn surface_of(
 fn locate(scene: &cadcraft_render3d::Scene3d, hit: &cadcraft_arch3d::pick::PickHit, dir: cadcraft_geom::Vec3) -> (String, [f64; 3], f64) {
     let p = [hit.point.x, hit.point.y, hit.point.z];
     let mut best: Option<(f64, &cadcraft_arch3d::mesh::Mesh, [f64; 3])> = None;
-    for mesh in scene.meshes.iter().filter(|m| m.object == hit.object && cadcraft_arch3d::probe::part_of(m) == hit.part) {
+    for mesh in scene.meshes.iter().filter(|m| m.object == hit.object && cadcraft_arch3d::probe::pick_part(m) == hit.part) {
         for t in mesh.indices.chunks_exact(3) {
             let v = |i: u32| mesh.positions.get(i as usize).map(|v| [f64::from(v[0]), f64::from(v[1]), f64::from(v[2])]);
             let (Some(a), Some(b), Some(c)) = (v(t[0]), v(t[1]), v(t[2])) else { continue };
@@ -1397,6 +1397,37 @@ fn locate(scene: &cadcraft_render3d::Scene3d, hit: &cadcraft_arch3d::pick::PickH
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proxy_handle_maps_the_phase17_parts() {
+        use cadcraft_doc::arch as a;
+        let id = cadcraft_doc::ArchId(3);
+        for p in ["tread", "riser", "stringer", "skirt"] {
+            assert_eq!(proxy_handle(id, p), a::stair_handle(id), "{p}");
+        }
+        assert_eq!(proxy_handle(id, "post"), a::railing_handle(id));
+        assert_eq!(proxy_handle(id, "grille"), a::opening_handle(id));
+        for p in ["ledger", "joist", "rim", "beam"] {
+            assert_eq!(proxy_handle(id, p), a::room_handle(id), "{p}");
+        }
+        assert_eq!(proxy_handle(id, "wall"), a::arch_handle(id));
+    }
+
+    #[test]
+    fn locate_matches_by_pick_part() {
+        use cadcraft_arch3d::mesh::Mesh;
+        use cadcraft_geom::{Vec2, Vec3};
+        let mut mesh = Mesh::new("deck-joist", cadcraft_doc::ArchId(1));
+        let ring = [Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        mesh.push_prism(&ring, 0.0, 0.2);
+        let scene = cadcraft_render3d::Scene3d { meshes: vec![mesh], ..Default::default() };
+        let (origin, dir) = (Vec3::new(0.5, 0.5, 2.0), Vec3::new(0.0, 0.0, -1.0));
+        let hit = scene.pick(origin, dir).expect("hit");
+        assert_eq!(hit.part, "deck");
+        let (material, n, _) = locate(&scene, &hit, dir);
+        assert_eq!(material, "deck-joist");
+        assert!(n[2] > 0.9, "{n:?}");
+    }
 
     use cadcraft_engine::Session;
     use serde_json::json;

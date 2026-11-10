@@ -128,11 +128,11 @@ fn parse_pixel(v: Option<&Value>, size: (u32, u32)) -> Result<[f32; 2], EngineEr
 /// Label and proxy handle (lower-case hex, as `arch.inspect` reports) of a hit object.
 fn label_and_handle(id: ArchId, part: &str) -> (String, String) {
     let label = match part {
-        "floor" | "ceiling" | "deck" => room_label(id),
-        "leaf" | "frame" | "glass" | "casing" | "sill" | "header" => opening_label(id),
+        "floor" | "ceiling" | "deck" | "ledger" | "joist" | "rim" | "beam" => room_label(id),
+        "leaf" | "frame" | "glass" | "casing" | "sill" | "header" | "grille" => opening_label(id),
         "roof" => roof_label(id),
-        "stair" => stair_label(id),
-        "railing" => railing_label(id),
+        "stair" | "tread" | "riser" | "stringer" | "skirt" => stair_label(id),
+        "railing" | "post" => railing_label(id),
         "plant" => cadcraft_doc::arch::plant_label(id),
         "light" => cadcraft_doc::arch::light_label(id),
         "cabinet" | "counter" => cadcraft_doc::arch::cabinet_label(id),
@@ -188,6 +188,20 @@ mod tests {
 
     fn front() -> Value {
         json!({ "kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": 45 })
+    }
+
+    #[test]
+    fn label_and_handle_for_new_parts() {
+        use cadcraft_doc::arch::{handle_json, opening_handle, railing_handle, room_handle, stair_handle};
+        let id = ArchId(2);
+        for p in ["tread", "riser", "stringer", "skirt"] {
+            assert_eq!(label_and_handle(id, p), ("s2".to_owned(), handle_json(stair_handle(id))), "{p}");
+        }
+        assert_eq!(label_and_handle(id, "post"), ("ra2".to_owned(), handle_json(railing_handle(id))));
+        assert_eq!(label_and_handle(id, "grille"), ("o2".to_owned(), handle_json(opening_handle(id))));
+        for p in ["ledger", "joist", "rim", "beam"] {
+            assert_eq!(label_and_handle(id, p), ("r2".to_owned(), handle_json(room_handle(id))), "{p}");
+        }
     }
 
     #[test]
