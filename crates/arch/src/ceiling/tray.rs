@@ -598,9 +598,9 @@ mod tests {
         let m = house(Some(6.0));
         let room_id = m.rooms[1].id;
         let room_level = m.rooms[1].level;
-        let above = Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.5, ..Default::default() };
+        let above = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.5, ..Default::default() };
         assert!(validate(&m, &above).is_err(), "a new tray above the roof underside should be refused");
-        let below = Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() };
+        let below = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() };
         assert!(validate(&m, &below).is_ok(), "a new tray under the roof underside should be accepted");
     }
 
@@ -610,9 +610,9 @@ mod tests {
         let room_id = m.rooms[1].id;
         let room_level = m.rooms[1].level;
         let parent_id = m.push_tray(Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() });
-        let ok = Tray { room: room_id, level: room_level, parent: Some(parent_id), inset: 0.6, depth: 0.15, ..Default::default() };
+        let ok = Tray { id: ArchId(1), room: room_id, level: room_level, parent: Some(parent_id), inset: 0.6, depth: 0.15, ..Default::default() };
         assert!(validate(&m, &ok).is_ok(), "a new nested tray with parent lift under the roof should be accepted");
-        let over = Tray { room: room_id, level: room_level, parent: Some(parent_id), inset: 0.6, depth: 0.75, ..Default::default() };
+        let over = Tray { id: ArchId(1), room: room_id, level: room_level, parent: Some(parent_id), inset: 0.6, depth: 0.75, ..Default::default() };
         assert!(validate(&m, &over).is_err(), "a new nested tray with parent lift above the roof should be refused");
     }
 
