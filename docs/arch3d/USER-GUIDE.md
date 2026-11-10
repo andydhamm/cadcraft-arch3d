@@ -557,8 +557,112 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'export {"path": "library.glb"}'
 ```
 
+## Electrical
+
+Outlets and switches are arch objects with ids `el0`, `el1`, … A device sits on a wall (`wall`), on one of its two
+faces (`side`, `left` or `right` looking from the wall's start to its end), `offset` metres along the wall from its
+start to the plate's centre (or `point`, a plan point projected onto the wall), and `height` metres above its level's
+floor. Outlet kinds are `duplex`, `gfci` and `240v`; switch kinds are `single-pole`, `three-way` and `dimmer`. The
+standard heights are filled in when `height` is omitted: outlets 0.3 m, switches 1.2 m; an outlet with `"counter":
+true` sits 0.15 m above the counter top of the base cabinet in front of it and is refused where there is none. A
+device in a doorway or past the wall's end is refused. Outlets draw on layer `E-POWR` and switches on `E-LITE`; in 3D
+every device is a 0.07 × 0.115 m plate standing 0.006 m proud of the wall face (glTF node `electrical-el<n>`).
+`electrical.edit {"id", "offset"?, "height"?, "side"?, "kind"?}` moves or retypes one, `electrical.delete {"id"}`
+removes it.
+
+A `connection` runs from a switch (`from`) to one or more light fixtures (`to`); `bulge` (-1 to 1, default 0) bows the
+arc the plan draws. Switches that reach the same light form one circuit, and `circuit.brightness {"switch",
+"brightness"}` (0 to 1) sets the brightness of every light in that switch's circuit; the 3D build scales the lights'
+lumens by it. `outlets.auto {"room"}` fills a room with duplex outlets so that no point of a usable wall run is more
+than 1.8 m along the wall from an outlet. Runs break at floor-reaching openings (doors, not windows) and, in a kitchen,
+at the wall behind a counter, where a `gfci` outlet goes over every counter run instead; `"dryRun": true` only reports
+the labels it would place. The reply names the placed devices and the largest remaining gap.
+
+`view.electrical {}` is the Electrical view: a layer state that keeps every `E-*` layer on and draws every other layer
+at 70% transparency. A light set is a named selection of fixtures with a state for each,
+`lightset {"name": "Evening", "lights": {"lf0": {"on": true, "brightness": 0.5}, "lf1": {"on": false}}}`; a
+`camera` saved with `"lightSet"` or a `render` given one applies it to that frame only, and the fixtures themselves
+keep their state. `lightset {"list": true}` lists the sets, `lightset {"delete": name}` removes one.
+`arch.inspect {"electrical": true}` reports the devices, the connections, the circuits with their brightness and each
+room's largest outlet gap; `{"lightSets": true}` adds the light sets and `{"lights": true}` the fixtures with their
+brightness.
+
+A room with an outlet, a switch, two lights wired to the switch at three-quarter brightness, and the rest of the
+outlets placed automatically:
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points": [[0,0],[6,0],[6,4],[0,4],[0,0]], "thickness": 0.2, "height": 2.4, "exterior": true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'outlet {"kind": "duplex", "wall": "w0", "offset": 1.0, "side": "left"}' \
+  --cmd 'switch {"kind": "single-pole", "wall": "w0", "offset": 3.0, "side": "left"}' \
+  --cmd 'lightfixture {"room": "r0", "rows": 1, "cols": 2}' \
+  --cmd 'connection {"from": "el1", "to": ["lf0", "lf1"], "bulge": 0.5}' \
+  --cmd 'circuit.brightness {"switch": "el1", "brightness": 0.75}' \
+  --cmd 'outlets.auto {"room": "r0"}' \
+  --cmd 'arch.inspect {"electrical": true, "lights": true}' \
+  --save electrical.dxf
+```
+
+## Split levels
+
+A level's elevation is free: `level {"name", "elevation", "kind"?}` adds one at any height, and `kind` is `floor`
+(the default) or `landing`. Level 0 always exists, at elevation 0; `level {"above": 0}` still stacks a storey on it.
+Commands name a level by its name or its index (`"level": "Landing"` or `"level": 1`); a door's or window's `level`
+takes the name. A wall with `topLevel` runs from its own level's floor to the top level's ceiling, so one wall can
+stand beside both a landing and the storey above it; `arch.inspect {"walls": true}` shows each wall's `level`,
+`topLevel`, `bottom` and `top`. An opening's sill is measured from the floor of the level you give, so a door with
+`"level": "Landing"` on a spanning wall opens from the landing, and it is refused on a wall that does not span that
+level. A stair's `fromLevel` and `toLevel` can be any two levels, so a split level is two half flights that meet on the
+landing; `arch.inspect {"stairs": true}` lists each flight's rise. `level.show {"level": name|index|"all"}` picks the
+one level the plan draws, the site drawing on every level. `level.edit` changes a level's name, elevation, ceiling,
+structure or kind.
+
+Each level has a grade class: it is *above grade* when its floor is at or above the finished grade at every sample
+taken 0.3 m outside every exterior wall that spans it (every 0.5 m along the wall and at both ends), otherwise it is a
+*basement*. `arch.inspect {"levels": true}` reports each level's `gradeClass` and `aboveGradeArea`, and the reply's
+`aboveGradeArea` sums the interior room area of the floor levels classed above grade; landings do not count.
+
+The split-level test house: a lower storey, a landing 1.35 m up with the door, an upper storey at 2.7 m, one wall
+spanning the lower storey and the landing, and two half flights:
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'level {"name": "Landing", "elevation": 1.35, "kind": "landing"}' \
+  --cmd 'level {"name": "Upper", "elevation": 2.7, "kind": "floor"}' \
+  --cmd 'wall {"points": [[0,0],[6,0],[6,4],[0,4],[0,0]], "thickness": 0.2, "height": 2.4, "exterior": true}' \
+  --cmd 'wall {"points": [[6,0],[6,4]], "thickness": 0.2, "exterior": false, "level": 0, "topLevel": "Landing"}' \
+  --cmd 'door {"wall": "w4", "offset": 2.0, "width": 0.9, "height": 2.1, "level": "Landing"}' \
+  --cmd 'stair {"start": [2,0.5], "direction": 90, "width": 1.0, "fromLevel": 0, "toLevel": "Landing"}' \
+  --cmd 'stair {"start": [8,0.5], "direction": 90, "width": 1.0, "fromLevel": "Landing", "toLevel": "Upper"}' \
+  --cmd 'arch.inspect {"levels": true}' \
+  --save split-level.dxf
+```
+
+## The showcase house
+
+The showcase house is a saved command script: `docs/arch3d/showcase/bilevel.json` is a JSON array of
+`{"cmd", "params"}` steps, each run like a `--cmd` step. It builds a split-entry bi-level: a Lower level at -1.2 m (a
+basement), an Entry landing at 0.15 m with the front door and the two half flights, a Main level at 1.5 m that stays
+above grade on a lot sloping 1.5 m from front to back, a driveway, sidewalks and planting beds draped on the terrain,
+trees and shrubs, the kitchen casework and baths, four saved cameras, the Evening light set, four elevations and two
+sections. `cadcraft-cli run --metric` replays the file through its JSON steps-file flag (`cadcraft-cli run --help`
+lists it; `docs/arch3d/showcase/README.md` shows the exact command line and describes the house), and
+`crates/engine/tests/showcase.rs` replays it through the engine and asserts the brief's numbers.
+
+`tools/showcase/render_all.py` (Python 3, standard library only) replays the script once into `bilevel.dxf` and then
+renders every view style from it: a plan per level, the Electrical view of two levels, the four elevations, the two
+sections, the four cameras, a night render with the Evening light set, the path-traced final, clay and technical
+illustration, the glTF, IFC and OBJ exports, and a contact sheet with a `manifest.json`:
+
+```sh
+python3 tools/showcase/render_all.py --out target/showcase
+```
+
+`--size WxH` and `--spp N` set the 3D renders' size and samples; `tools/showcase/README.md` lists every file it
+writes.
+
 ## Out of scope
 
-Not part of arch3d so far: SSAO, TAA, cascaded shadows, switches, outlets, circuits, animated walkthrough paths,
-and gamepad or 3D-mouse input. Moldings, material regions, plan check, materials list and costing, and the contextual
-toolbar are also out of scope.
+Not part of arch3d so far: SSAO, TAA, cascaded shadows, animated walkthrough paths, and gamepad or 3D-mouse input.
+Moldings, material regions, plan check, materials list and costing, and the contextual toolbar are also out of scope.

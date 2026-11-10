@@ -1195,3 +1195,108 @@ fn user_guide_views_round_trip() {
     let id_after = views_after[0].get("id").and_then(serde_json::Value::as_str);
     assert_eq!(id_before, id_after, "view id should be preserved across reload");
 }
+
+/// Runs one logical `run` line of the guide through the engine as the CLI would: a fresh metric session, each
+/// `--cmd` in order; a relative `path` is redirected to a temp dir. Returns the session and the command ids.
+fn run_guide_line(line: &str, tag: &str) -> (Session, Vec<String>) {
+    let mut session = Session::new();
+    session.new_drawing(true);
+    let cmds = cmd_args(line);
+    assert_eq!(cmds.len(), line.matches("--cmd ").count(), "{tag} block: every --cmd is read: {line}");
+    let mut ids = Vec::new();
+    for command in &cmds {
+        let Some((id, json)) = command.split_once(' ') else {
+            panic!("{tag} block command `{command}` should have the form `<id> <json>`");
+        };
+        let mut params: serde_json::Value =
+            serde_json::from_str(json).unwrap_or_else(|e| panic!("{tag} block command `{command}` has invalid JSON: {e}"));
+        if let Some(path) = params.get("path").and_then(serde_json::Value::as_str) {
+            if Path::new(path).is_relative() {
+                let out_dir = std::env::temp_dir().join(format!("cadcraft-{tag}-{}", std::process::id()));
+                fs::create_dir_all(&out_dir).unwrap_or_else(|e| panic!("cannot create {}: {e}", out_dir.display()));
+                params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
+            }
+        }
+        if let Err(error) = session.execute(id, &params) {
+            panic!("{tag} block command `{command}` failed: {error:?}");
+        }
+        ids.push(id.to_string());
+    }
+    (session, ids)
+}
+
+/// The one logical line of the guide's ```sh blocks that contains every needle.
+fn guide_line_with(needles: &[&str]) -> String {
+    let lines: Vec<String> = sh_blocks(GUIDE).into_iter().flatten().filter(|l| needles.iter().all(|n| l.contains(n))).collect();
+    assert_eq!(lines.len(), 1, "the guide should hold exactly one sh line with {needles:?}, found {}", lines.len());
+    lines.into_iter().next().unwrap_or_default()
+}
+
+/// The Electrical and Split levels blocks of the guide run through the engine (phase 15): the electrical block
+/// builds a room with an outlet, a switch, two lights, a connection and `outlets.auto`; the split-level block builds
+/// the test house (levels at 0, a 1.35 landing and 2.7, a spanning wall, the door on the landing, two half flights)
+/// and `arch.inspect` reports its three levels.
+#[test]
+fn user_guide_electrical_and_split_level_blocks_run() {
+    install_io();
+
+    let (mut session, ids) = run_guide_line(&guide_line_with(&["'outlet ", "'switch ", "outlets.auto"]), "electrical");
+    assert_eq!(
+        ids,
+        ["wall", "roomdetect", "outlet", "switch", "lightfixture", "connection", "circuit.brightness", "outlets.auto", "arch.inspect"],
+        "electrical block command order"
+    );
+    let inspect = session.execute("arch.inspect", &serde_json::json!({"electrical": true, "lights": true})).unwrap_or_default();
+    let devices = inspect.get("electrical").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert!(devices.len() >= 3, "the outlet, the switch and at least one auto-placed outlet: {inspect}");
+    assert_eq!(
+        devices.iter().filter(|d| d.get("kind").and_then(serde_json::Value::as_str) == Some("single-pole")).count(),
+        1,
+        "one switch: {inspect}"
+    );
+    let connections = inspect.get("connections").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert_eq!(connections.len(), 1, "one connection: {inspect}");
+    assert_eq!(connections[0].get("to").and_then(serde_json::Value::as_array).map_or(0, Vec::len), 2, "wired to two lights: {inspect}");
+    let circuits = inspect.get("circuits").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert_eq!(circuits.len(), 1, "one circuit: {inspect}");
+    assert_eq!(
+        circuits[0].get("brightness").and_then(serde_json::Value::as_f64),
+        Some(0.75),
+        "the circuit is at three-quarter brightness: {inspect}"
+    );
+    let lights = inspect.get("lights").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert_eq!(lights.len(), 2, "two light fixtures: {inspect}");
+    assert!(lights.iter().all(|l| l.get("brightness").and_then(serde_json::Value::as_f64) == Some(0.75)), "both lights at 0.75: {inspect}");
+    let gaps = inspect.get("outletGaps").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert_eq!(gaps.len(), 1, "one room's outlet gap: {inspect}");
+    let max_gap = gaps[0].get("maxGap").and_then(serde_json::Value::as_f64).unwrap_or(f64::INFINITY);
+    assert!(max_gap <= 1.8 + 1e-6, "no point of the room's walls is more than 1.8 m from an outlet, gap {max_gap}: {inspect}");
+
+    let (mut session, ids) =
+        run_guide_line(&guide_line_with(&["\"kind\": \"landing\"", "'stair ", "arch.inspect {\"levels\": true}"]), "split-level");
+    assert_eq!(ids, ["level", "level", "wall", "wall", "door", "stair", "stair", "arch.inspect"], "split-level block command order");
+    let inspect = session.execute("arch.inspect", &serde_json::json!({"levels": true, "walls": true, "stairs": true})).unwrap_or_default();
+    let levels = inspect.get("levels").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert_eq!(levels.len(), 3, "arch.inspect reports the lower storey, the landing and the upper storey: {inspect}");
+    let elevations: Vec<f64> = levels.iter().filter_map(|l| l.get("elevation").and_then(serde_json::Value::as_f64)).collect();
+    assert_eq!(elevations, [0.0, 1.35, 2.7], "level elevations: {inspect}");
+    let kinds: Vec<&str> = levels.iter().filter_map(|l| l.get("kind").and_then(serde_json::Value::as_str)).collect();
+    assert_eq!(kinds, ["floor", "landing", "floor"], "level kinds: {inspect}");
+    assert!(
+        levels.iter().all(|l| l.get("gradeClass").is_some() && l.get("aboveGradeArea").is_some()),
+        "every level row has a grade class and an above-grade area: {inspect}"
+    );
+    let walls = inspect.get("walls").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    let spanning = walls
+        .iter()
+        .find(|w| w.get("topLevel").and_then(serde_json::Value::as_u64) == Some(1))
+        .unwrap_or_else(|| panic!("a wall spans up to the landing: {inspect}"));
+    assert_eq!(spanning.get("level").and_then(serde_json::Value::as_u64), Some(0), "the spanning wall starts on level 0: {inspect}");
+    let stairs = inspect.get("stairs").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    let flights: Vec<(u64, u64)> = stairs.iter().filter_map(|s| Some((s.get("fromLevel")?.as_u64()?, s.get("toLevel")?.as_u64()?))).collect();
+    assert_eq!(flights, [(0, 1), (1, 2)], "two half flights meeting on the landing: {inspect}");
+    for (stair, rise) in stairs.iter().zip([1.35, 1.35]) {
+        let got = stair.get("rise").and_then(serde_json::Value::as_f64).unwrap_or(f64::NAN);
+        assert!((got - rise).abs() < 1e-6, "each half flight rises 1.35 m, got {got}: {inspect}");
+    }
+}
