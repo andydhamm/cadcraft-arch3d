@@ -33,8 +33,16 @@ fn write_tables(w: &mut W, plan: TableWritePlan<'_>) -> HashMap<String, String> 
     // in the STYLE table below: (tag position, style name, is a shape) are filled in there.
     let mut ltype_handles: HashMap<String, String> = HashMap::new();
     let mut ltype_style_refs: Vec<(usize, Option<String>, bool)> = Vec::new();
-    let th = table_head(w, "LTYPE", d.linetypes.len());
-    for lt in &d.linetypes {
+    // Dashed stair proxies need a DASHED linetype; add the library one for this save only.
+    let extra_dashed: Option<cadcraft_doc::Linetype> = if d.linetypes.iter().any(|l| l.name.eq_ignore_ascii_case("DASHED"))
+        || !crate::dxf_stair::needs_dashed(&crate::dxf_stair::proxy_stair_entities(&d.arch))
+    {
+        None
+    } else {
+        cadcraft_doc::library::standard_linetypes().into_iter().find(|l| l.name.eq_ignore_ascii_case("DASHED"))
+    };
+    let th = table_head(w, "LTYPE", d.linetypes.len() + usize::from(extra_dashed.is_some()));
+    for lt in d.linetypes.iter().chain(extra_dashed.iter()) {
         let h = record_head(w, "LTYPE", &th, "AcDbLinetypeTableRecord");
         ltype_handles.entry(lt.name.to_ascii_uppercase()).or_insert(h.clone());
         cx.ltypes.entry(lt.name.to_ascii_uppercase()).or_insert(h);
@@ -421,7 +429,8 @@ fn write_entities(w: &mut W, d: &Drawing, ms_br: &str, ps_brs: &[(String, String
             entity(w, d, e, h, true, cx);
         }
     }
-    if !d.arch.is_empty() || !d.arch.rooms.is_empty() || !d.arch.roofs.is_empty() || !d.arch.views.is_empty() {
+    let stair_proxies = crate::dxf_stair::proxy_stair_entities(&d.arch);
+    if !d.arch.is_empty() || !d.arch.rooms.is_empty() || !d.arch.roofs.is_empty() || !d.arch.views.is_empty() || !stair_proxies.is_empty() {
         let mut proxy = |kind: &str, layer: &str, tags: Vec<Tag>| {
             w.s(0, kind);
             let h = w.h();
@@ -468,6 +477,9 @@ fn write_entities(w: &mut W, d: &Drawing, ms_br: &str, ps_brs: &[(String, String
             proxy(&kind, &layer, tags);
         }
         for (kind, layer, tags) in crate::dxf_ceiling::proxy_ceiling_entities(&d.arch) {
+            proxy(&kind, &layer, tags);
+        }
+        for (kind, layer, tags) in stair_proxies {
             proxy(&kind, &layer, tags);
         }
     }

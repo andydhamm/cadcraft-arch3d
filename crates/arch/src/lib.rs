@@ -51,6 +51,7 @@ pub mod room;
 pub mod site;
 pub mod stair;
 pub mod stair_geom;
+pub mod stair_symbol;
 pub mod sun;
 pub mod symbol;
 pub mod terrain;
