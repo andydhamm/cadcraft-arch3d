@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 33 of 35 segments merged · 16 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 21:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 41.8 h so far · expected done Nov 10 22:59–Nov 11 13:33 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 42.0 h so far · expected done Nov 10 23:25–Nov 11 15:26 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 5 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-10 21:15 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-33 merged, 3 replaced, 2 abandoned, 1 merging, 1 gate
+33 merged, 3 replaced, 2 abandoned, 2 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p16-rw-showcase-test` | showcase test: the house is where the brief puts it | merging | mai-flash |
-| `upstream-sync-2f8f18618` | merge upstream upstream/main up to 2f8f18618 (1 commits) | gate | mai-flash-b |
+| `upstream-sync-2f8f18618` | merge upstream upstream/main up to 2f8f18618 (1 commits) | merging | mai-flash-b |
 
 ## Recent merges
 
@@ -63,18 +63,18 @@ Updated 2026-11-10 21:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1060 |
-| bonsai-b | bonsai2-27b | agent | 1009 |
+| bonsai-a | bonsai2-27b | gate | 1060 |
+| bonsai-b | bonsai2-27b | agent | 1010 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1119 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1057 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1059 |
 | claude-sonnet-a | sonnet | idle | 104 |
 | claude-sonnet-b | sonnet | merging | 107 |
 | claude-sonnet-c | sonnet | merging | 54 |
 | claude-sonnet-d | sonnet | merging | 49 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 944 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 946 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 75 |
-| mai-flash-b | mai-code-1.1-flash | gate | 12 |
+| mai-flash-b | mai-code-1.1-flash | merging | 13 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 83 |
 | tturbo-mac | tturbo-ultraheretic | merging | 731 |
 | tturbo-mac2 | tturbo-ultraheretic | held | 348 |
