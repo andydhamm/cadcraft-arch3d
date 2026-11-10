@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 21: Ceilings and foundations — 19 of 33 segments merged · 10 of 20 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 20 of 33 segments merged · 10 of 20 acceptance checks**
 
-8,259 workspace tests passing at the last merge · 875 segments merged in all · 0 of 15 seats working
+8,261 workspace tests passing at the last merge · 876 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 07:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 10 / 20 | 27.8 h so far · expected done Nov 10 19:28–Nov 11 15:55 UTC |
+| 16 | Ceilings and foundations | building | 10 / 20 | 28.0 h so far · expected done Nov 10 17:54–Nov 11 12:12 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,12 +35,11 @@ Updated 2026-11-10 07:15 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-19 merged, 10 merging, 4 queued, 3 replaced, 2 abandoned
+20 merged, 9 merging, 4 queued, 3 replaced, 2 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p16f-tray-outline-reply` | tray: the reply's outline is a ring of [x, y] points | merging | darwin-ws3 |
-| `p16f-tray-roof-guard` | tray validate: a new tray above the roof underside is refused | merging | bonsai-ws2-b |
 | `p16f-soffit-faces` | soffit: rects snap to the room-side wall face; `over` starts at the cabinets' backs | merging | bonsai-b |
 | `p16f-slab-edge-mesh` | slab foundation: one footing mesh per founded wall | merging | bonsai-ws2-a |
 | `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | merging | claude-sonnet-b |
@@ -54,6 +53,7 @@ Updated 2026-11-10 07:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 07:18 | `p16f-tray-roof-guard` | merged | 8,261 pass | bonsai-ws2-b |
 | Nov 10 06:51 | `p16-rw-roof-top-level` | merged | 8,259 pass | mai-flash-b |
 | Nov 10 06:10 | `p16f-demo-replays` | merged | 8,258 pass | mai-flash |
 | Nov 10 03:46 | `p16-rebuild` | merged | 8,258 pass | mai-flash-b |
@@ -65,16 +65,15 @@ Updated 2026-11-10 07:15 UTC. This page and the card in the README are regenerat
 | Nov 10 02:10 | `p16-trays-check` | merged | 8,242 pass | bonsai-a |
 | Nov 10 01:37 | `p16-render3d-adapter-turns` | merged | 8,241 pass | claude-sonnet-d |
 | Nov 10 01:03 | `upstream-sync-d847eac13` | merged | 8,240 pass | claude-sonnet-d |
-| Nov 10 00:20 | `p15-docs-user-guide` | refused | 0 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1024 |
-| bonsai-b | bonsai2-27b | agent | 967 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1071 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1037 |
+| bonsai-a | bonsai2-27b | idle | 1026 |
+| bonsai-b | bonsai2-27b | agent | 968 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1072 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1038 |
 | claude-sonnet-a | sonnet | idle | 98 |
 | claude-sonnet-b | sonnet | idle | 102 |
 | claude-sonnet-c | sonnet | merging | 48 |
@@ -84,5 +83,5 @@ Updated 2026-11-10 07:15 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 71 |
 | mai-flash-b | mai-code-1.1-flash | idle | 11 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 66 |
-| tturbo-mac | tturbo-ultraheretic | gate | 715 |
+| tturbo-mac | tturbo-ultraheretic | agent | 716 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
