@@ -10,6 +10,11 @@ fn make(r: &Railing, surface: &RailSurface) -> Vec<cadcraft_arch3d::Mesh> {
     cadcraft_arch3d::railing_parts::railing_meshes(r, surface)
 }
 
+fn centre(m: &cadcraft_arch3d::Mesh) -> [f64; 2] {
+    let b = m.bounds();
+    [(b.min[0] + b.max[0]) / 2.0, (b.min[1] + b.max[1]) / 2.0]
+}
+
 #[test]
 fn brief_railing_posts() {
     let r = Railing {
@@ -21,19 +26,8 @@ fn brief_railing_posts() {
     let flat = RailSurface::Flat { z: 0.0 };
     let meshes = make(&r, &flat);
     // One mesh per post. A 4x3 path at the default 1.8 spacing has 8 posts.
-    let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
+    let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(centre).collect();
     assert_eq!(posts.len(), 8, "expected 8 posts: {posts:?}");
-    let want = [0.0, 1.5, 3.0, 1.3333, 2.6667, 3.0, 3.0, 0.0];
-    // The eight post centres lie on the rectangle: x in {0, 1.3333, 2.6667, 4},
-    // y in {0, 1.5, 3}; corners appear exactly once each.
-    let mut got: Vec<(f64, f64)> = vec![];
-    for p in &posts {
-        got.push((p[0] as f64, p[1] as f64));
-    }
-    let mut got = got;
-    got.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.partial_cmp(&b.1).unwrap()));
-    assert_eq!(posts.len(), 8, "post count {posts:?}");
-    // Verify each post is within tolerance of one of the eight expected centres.
     let expected = [
         Vec2::new(0.0, 0.0),
         Vec2::new(0.0, 1.5),
@@ -48,7 +42,7 @@ fn brief_railing_posts() {
     for p in &posts {
         let mut best: Option<usize> = None;
         for (i, e) in unmatched.iter().enumerate() {
-            if (p[0] as f64 - e.x).abs() < 1e-3 && (p[1] as f64 - e.y).abs() < 1e-3 {
+            if (p[0] - e.x).abs() < 1e-3 && (p[1] - e.y).abs() < 1e-3 {
                 best = Some(i);
                 break;
             }
@@ -111,7 +105,7 @@ fn inset_moves_everything() {
     let flat = RailSurface::Flat { z: 0.0 };
     let meshes = make(&r, &flat);
     // Inset moves the posts (and everything on the built path) to y = 0.2.
-    let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
+    let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(centre).collect();
     for p in &posts {
         assert!((p[1] - 0.2).abs() < 1e-3, "post y={:?}, want 0.2", p);
     }

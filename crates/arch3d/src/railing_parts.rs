@@ -423,16 +423,7 @@ mod tests {
         r.inset = -0.045;
         r.post_spacing = 1.0;
         let surface = RailSurface::Flight {
-            line: cadcraft_arch::stair_geom::FlightLine {
-                origin: Vec2::new(2.0, 1.5),
-                dir: Vec2::new(1.0, 0.0),
-                base: 0.0,
-                riser: 0.16875,
-                tread: 0.254,
-                treads: 15,
-                run: 3.81,
-                rise: 2.7,
-            },
+            line: cadcraft_arch::stair_geom::FlightLine { origin: Vec2::new(2.0, 1.5), dir: Vec2::new(1.0, 0.0), base: 0.0, ..Default::default() },
         };
         let meshes = railing_meshes(&r, &surface);
         let rails: Vec<_> = meshes.iter().filter(|m| m.material == "railing-rail").collect();
@@ -457,16 +448,7 @@ mod tests {
         r.thickness = 0.05;
         r.post_spacing = 4.0;
         let surface = RailSurface::Flight {
-            line: cadcraft_arch::stair_geom::FlightLine {
-                origin: Vec2::ZERO,
-                dir: Vec2::new(1.0, 0.0),
-                base: 0.0,
-                riser: 0.16875,
-                tread: 0.254,
-                treads: 15,
-                run: 3.81,
-                rise: 2.7,
-            },
+            line: cadcraft_arch::stair_geom::FlightLine { origin: Vec2::ZERO, dir: Vec2::new(1.0, 0.0), base: 0.0, ..Default::default() },
         };
         let meshes = railing_meshes(&r, &surface);
         let newels: Vec<_> = meshes.iter().filter(|m| m.material == "railing-newel").collect();
