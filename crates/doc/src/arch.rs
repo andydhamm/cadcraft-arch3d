@@ -141,11 +141,11 @@ pub fn handle_json(h: Handle) -> String {
 /// belongs to; unknown parts are walls.
 pub fn part_handle(id: ArchId, part: &str) -> Handle {
     match part {
-        "leaf" | "frame" | "casing" | "glass" | "sill" | "header" => opening_handle(id),
-        "floor" | "ceiling" | "deck" | "slab" => room_handle(id),
+        "leaf" | "frame" | "casing" | "glass" | "sill" | "header" | "grille" => opening_handle(id),
+        "floor" | "ceiling" | "deck" | "slab" | "ledger" | "joist" | "rim" | "beam" => room_handle(id),
         "roof" => roof_handle(id),
-        "stair" => stair_handle(id),
-        "railing" => railing_handle(id),
+        "stair" | "tread" | "riser" | "stringer" | "skirt" => stair_handle(id),
+        "railing" | "post" => railing_handle(id),
         "soffit" => soffit_handle(id),
         "foundation" | "footing" => foundation_handle(id),
         "plant" => plant_handle(id),
@@ -295,11 +295,11 @@ impl ArchKind {
     /// Map a part string (from `arch3d::probe::part_of`) to an `ArchKind`.
     pub fn from_part(part: &str) -> ArchKind {
         match part {
-            "leaf" | "frame" | "casing" | "glass" | "sill" | "header" => ArchKind::Opening,
-            "floor" | "ceiling" | "deck" | "slab" => ArchKind::Room,
+            "leaf" | "frame" | "casing" | "glass" | "sill" | "header" | "grille" => ArchKind::Opening,
+            "floor" | "ceiling" | "deck" | "slab" | "ledger" | "joist" | "rim" | "beam" => ArchKind::Room,
             "roof" => ArchKind::Roof,
-            "stair" => ArchKind::Stair,
-            "railing" => ArchKind::Railing,
+            "stair" | "tread" | "riser" | "stringer" | "skirt" => ArchKind::Stair,
+            "railing" | "post" => ArchKind::Railing,
             "soffit" => ArchKind::Soffit,
             "foundation" | "footing" => ArchKind::Foundation,
             _ => ArchKind::Wall,
