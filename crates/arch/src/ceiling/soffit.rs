@@ -398,8 +398,8 @@ pub fn validate(model: &ArchModel, s: &Soffit) -> Result<(), String> {
         }
     }
     let bottom_z = soffit_bottom(model, s).ok_or("no bottom")?;
-    if !bottom_z.is_finite() || bottom_z < level_elev + 0.5 {
-        return Err("bottom must be finite and at least level elevation + 0.5".into());
+    if !bottom_z.is_finite() {
+        return Err("bottom must be finite".into());
     }
     for v in &ring {
         if let Some(ceil_z) = ceiling::finished_ceiling_at(model, s.level, *v) {
