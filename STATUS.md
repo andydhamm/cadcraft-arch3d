@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 23:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 34 of 35 segments merged · 16 of 20 acceptance checks**
 
-8,539 workspace tests passing at the last merge · 908 segments merged in all · 0 of 15 seats working
+8,544 workspace tests passing at the last merge · 909 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 23:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 43.5 h so far · expected done Nov 11 00:51–Nov 12 09:12 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 43.8 h so far · expected done Nov 11 01:06–Nov 12 09:26 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -45,6 +45,7 @@ Updated 2026-11-10 23:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 23:08 | `harden-p17-scene-plumbing-export` | merged | 8,544 pass | tturbo-mac |
 | Nov 10 22:52 | `p17-railing-auto` | merged | 8,539 pass | darwin-ws3 |
 | Nov 10 22:31 | `p17-window-tops` | merged | 8,527 pass | claude-sonnet-c |
 | Nov 10 22:11 | `p16-rw-showcase-test` | merged | 8,504 pass | mai-flash |
@@ -56,7 +57,6 @@ Updated 2026-11-10 23:00 UTC. This page and the card in the README are regenerat
 | Nov 10 19:27 | `p17-grilles-doors` | merged | 8,432 pass | mai-flash-esc |
 | Nov 10 19:00 | `p17-stair-flight` | merged | 8,421 pass | claude-sonnet-b |
 | Nov 10 18:30 | `p16-rw-showcase-renders` | merged | 8,402 pass | mai-flash-b |
-| Nov 10 18:00 | `p17-commands` | merged | 8,402 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
@@ -75,5 +75,5 @@ Updated 2026-11-10 23:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | merging | 13 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 84 |
-| tturbo-mac | tturbo-ultraheretic | merging | 731 |
+| tturbo-mac | tturbo-ultraheretic | agent | 731 |
 | tturbo-mac2 | tturbo-ultraheretic | held | 348 |
