@@ -349,7 +349,7 @@ fn stair_sides_against_walls(model: &ArchModel, stair: &cadcraft_doc::arch::Stai
 fn dist_to_segment(p: Vec2, a: Vec2, b: Vec2) -> f64 {
     let ab = b - a;
     let ap = p - a;
-    let len_sq = ab.len_sq();
+    let len_sq = ab.dot(ab);
     if len_sq == 0.0 {
         return ap.len();
     }
