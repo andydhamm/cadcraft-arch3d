@@ -170,7 +170,7 @@ fn shaped_frame_glass_and_casing_follow_the_top() {
 #[test]
 fn grille_bars_are_clipped_to_a_round_top() {
     let mut o = window(OpeningTop::Round, 0.9, 1.5, 0.6, 0.0);
-    o.grille = Some(Grille { across: 3, down: 4, top_only: false });
+    o.grille = Some(Grille { across: 3, down: 4, ..Default::default() });
     let model = with(flat_wall(), o.clone());
     let ms = meshes_of(&model, &o, None);
     let bars = ms.iter().find(|m| m.material == "window-grille").expect("grille bars");
