@@ -2,7 +2,7 @@
 //! `arch3d::edges` (crease over 20° and boundary edges); nothing is detected in a shader.
 
 use cadcraft_arch3d::Scene3d;
-use cadcraft_arch3d::edges::{CREASE_DEG, EdgeKind, scene_feature_edges};
+use cadcraft_arch3d::edges::{CREASE_DEG, EdgeKind, EdgeSet, scene_edge_set, scene_feature_edges};
 use wgpu::util::DeviceExt;
 
 use crate::pipeline::{COLOR_FORMAT, DEPTH_FORMAT, valid_sample_count};
@@ -38,16 +38,21 @@ pub fn edge_lines(scene: &Scene3d) -> Vec<[f32; 3]> {
     out
 }
 
-/// Line-list vertices including silhouette edges for the given view direction.
-pub fn edge_lines_with_view(scene: &Scene3d, view_dir: [f32; 3]) -> Vec<[f32; 3]> {
-    let edges = scene_feature_edges(scene, CREASE_DEG);
-    let mut out = Vec::with_capacity(edges.len().saturating_mul(2));
-    for e in edges.iter().filter(|e| matches!(e.kind, EdgeKind::Boundary | EdgeKind::Crease | EdgeKind::NonManifold | EdgeKind::Silhouette)) {
+/// Line-list vertices of an [`EdgeSet`]: its fixed edges plus the silhouettes seen along `view_dir`.
+fn set_lines(set: &EdgeSet, view_dir: [f32; 3]) -> Vec<[f32; 3]> {
+    let sil = set.silhouettes(view_dir.map(f64::from));
+    let mut out = Vec::with_capacity(set.fixed.len().saturating_add(sil.len()).saturating_mul(2));
+    for e in set.fixed.iter().chain(sil.iter()) {
         for p in [e.a, e.b] {
             out.push([p[0] as f32, p[1] as f32, p[2] as f32]);
         }
     }
     out
+}
+
+/// Line-list vertices including silhouette edges for the given view direction.
+pub fn edge_lines_with_view(scene: &Scene3d, view_dir: [f32; 3]) -> Vec<[f32; 3]> {
+    set_lines(&scene_edge_set(scene, CREASE_DEG), view_dir)
 }
 
 /// The line pipeline and its resident vertex buffer.
@@ -56,6 +61,10 @@ pub struct EdgePass {
     uniform: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     vertices: Option<(u64, wgpu::Buffer, u32)>,
+    /// The welded edges of the resident scene, keyed by scene key.
+    set: Option<(u64, EdgeSet)>,
+    /// The view direction of the uploaded silhouettes (`None` when none are drawn).
+    uploaded_dir: Option<[f32; 3]>,
 }
 
 impl EdgePass {
@@ -120,11 +129,13 @@ impl EdgePass {
             layout: &bgl,
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniform.as_entire_binding() }],
         });
-        EdgePass { pipeline, uniform, bind_group, vertices: None }
+        EdgePass { pipeline, uniform, bind_group, vertices: None, set: None, uploaded_dir: None }
     }
 
-    /// Upload the edge lines of `scene` unless `scene_key` is already resident, and write the
-    /// uniform for this frame.
+    /// Upload the edge lines of `scene` unless `scene_key` (and, with `silhouettes`, the view direction) is
+    /// already resident, and write the uniform for this frame. The scene is welded once per key; a moving
+    /// view only re-classifies the smooth edges.
+    #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
         device: &wgpu::Device,
@@ -134,9 +145,22 @@ impl EdgePass {
         view_proj: [[f32; 4]; 4],
         color: [f32; 4],
         view_dir: [f32; 3],
+        silhouettes: bool,
     ) {
-        if self.vertices.as_ref().is_none_or(|(k, _, _)| *k != scene_key) {
-            let lines = edge_lines_with_view(scene, view_dir);
+        let key_changed = self.vertices.as_ref().is_none_or(|(k, _, _)| *k != scene_key);
+        let dir = silhouettes.then_some(view_dir);
+        let dir_moved = match (dir, self.uploaded_dir) {
+            (Some(a), Some(b)) => a.iter().zip(b.iter()).any(|(x, y)| (x - y).abs() > 1e-4),
+            (a, b) => a.is_some() != b.is_some(),
+        };
+        if key_changed || dir_moved {
+            if self.set.as_ref().is_none_or(|(k, _)| *k != scene_key) {
+                self.set = Some((scene_key, scene_edge_set(scene, CREASE_DEG)));
+            }
+            let lines = match &self.set {
+                Some((_, set)) => set_lines(set, dir.unwrap_or([0.0; 3])),
+                None => Vec::new(),
+            };
             let count = u32::try_from(lines.len()).unwrap_or(u32::MAX);
             let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("render3d edge vertices"),
@@ -144,6 +168,7 @@ impl EdgePass {
                 usage: wgpu::BufferUsages::VERTEX,
             });
             self.vertices = Some((scene_key, buffer, count));
+            self.uploaded_dir = dir;
         }
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&LineUniform { view_proj, color }));
     }
@@ -200,6 +225,35 @@ mod tests {
             let d = [(seg[0][0] - seg[1][0]).abs(), (seg[0][1] - seg[1][1]).abs()];
             assert!(d[0] < 1e-6 || d[1] < 1e-6, "diagonal segment {seg:?}");
         }
+    }
+
+    #[test]
+    fn edge_lines_with_view_adds_only_silhouettes() {
+        let mut m = Mesh::new("cyl", ArchId(1));
+        let sides = 32usize;
+        for k in 0..sides {
+            let a = std::f64::consts::TAU * k as f64 / sides as f64;
+            let (x, y) = (a.cos() as f32, a.sin() as f32);
+            m.positions.push([x, y, 0.0]);
+            m.positions.push([x, y, 1.0]);
+        }
+        for k in 0..sides {
+            let (b0, t0) = (2 * k as u32, 2 * k as u32 + 1);
+            let n = (k + 1) % sides;
+            let (b1, t1) = (2 * n as u32, 2 * n as u32 + 1);
+            m.indices.extend([b0, b1, t1, b0, t1, t0]);
+        }
+        m.normals = vec![[0.0, 0.0, 1.0]; m.positions.len()];
+        m.uvs = vec![[0.0, 0.0]; m.positions.len()];
+        let scene = Scene3d { meshes: vec![m], ..Default::default() };
+        let base = edge_lines(&scene);
+        let with = edge_lines_with_view(&scene, [0.0, 1.0, 0.0]);
+        assert!(with.len() > base.len());
+        assert_eq!(&with[..base.len()], &base[..]);
+        for seg in with[base.len()..].chunks(2) {
+            assert!((seg[0][0].abs() - 1.0).abs() < 0.02, "{seg:?}");
+        }
+        assert_eq!(edge_lines_with_view(&scene, [0.0, 0.0, 0.0]), base);
     }
 
     #[test]
