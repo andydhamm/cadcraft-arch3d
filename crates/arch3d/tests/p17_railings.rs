@@ -7,7 +7,7 @@ use cadcraft_doc::arch::Railing;
 use cadcraft_geom::Vec2;
 
 fn make(r: &Railing, surface: &RailSurface) -> Vec<cadcraft_arch3d::Mesh> {
-    crate::railing_parts::railing_meshes(r, surface)
+    cadcraft_arch3d::railing_parts::railing_meshes(r, surface)
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn brief_railing_posts() {
     // y in {0, 1.5, 3}; corners appear exactly once each.
     let mut got: Vec<(f64, f64)> = vec![];
     for p in &posts {
-        got.push((p[0], p[1]));
+        got.push((p[0] as f64, p[1] as f64));
     }
     let mut got = got;
     got.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.partial_cmp(&b.1).unwrap()));
@@ -44,11 +44,11 @@ fn brief_railing_posts() {
         Vec2::new(4.0, 1.5),
         Vec2::new(4.0, 0.0),
     ];
-    let mut unmatched = expected;
+    let mut unmatched: Vec<Vec2> = expected.to_vec();
     for p in &posts {
         let mut best: Option<usize> = None;
         for (i, e) in unmatched.iter().enumerate() {
-            if (p[0] - e.x).abs() < 1e-3 && (p[1] - e.y).abs() < 1e-3 {
+            if (p[0] as f64 - e.x).abs() < 1e-3 && (p[1] as f64 - e.y).abs() < 1e-3 {
                 best = Some(i);
                 break;
             }
@@ -73,7 +73,7 @@ fn rails_and_panel_probes() {
     let scene = cadcraft_arch3d::Scene3d { meshes, ..cadcraft_arch3d::Scene3d::default() };
 
     fn part(scene: &cadcraft_arch3d::Scene3d, x: f64, y: f64, z: f64) -> Option<String> {
-        crate::probe::probe(scene, cadcraft_geom::Vec3::new(x, y, z)).map(|h| h.part.to_string())
+        cadcraft_arch3d::probe::probe(scene, cadcraft_geom::Vec3::new(x, y, z)).map(|h| h.part.to_string())
     }
 
     assert_eq!(part(&scene, 1.3333, 3.0, 0.5), Some("post".to_string()), "post");
@@ -142,9 +142,9 @@ fn closed_path_has_no_double_post() {
     let meshes = make(&r, &flat);
     // A closed path must not place a post twice at the join; 8 posts total.
     let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
-    let mut seen = vec![];
+    let mut seen: Vec<[f32; 3]> = vec![];
     for p in &posts {
-        if !seen.iter().any(|q| (q[0] - p[0]).abs() < 1e-4 && (q[1] - p[1]).abs() < 1e-4) {
+        if !seen.iter().any(|q: &&[f32; 3]| (q[0] - p[0]).abs() < 1e-4 && (q[1] - p[1]).abs() < 1e-4) {
             seen.push(*p);
         }
     }
@@ -159,7 +159,7 @@ fn deck_surface_posts_reach_the_rim_bottom() {
     r.height = 1.0;
     r.thickness = 0.05;
     r.post_spacing = 4.0;
-    let deck = RailSurface::Deck { top: 1.0, ..DeckStub::default() };
+    let deck: RailSurface = RailSurface::Deck { top: 1.0, ..Default::default() };
     let meshes = make(&r, &deck);
     let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m).collect();
     let mut min_z = f64::INFINITY;
@@ -185,7 +185,7 @@ fn stair_surface_slopes_the_rails() {
     r.post_spacing = 1.0;
     // Use the Flight surface with a base matching the phase-5 stair.
     // We rely on the Flight walk_z to give base + nosing_v(u), which slopes.
-    let scene = crate::Scene3d::default();
+    let scene = cadcraft_arch3d::Scene3d::default();
     // We cannot easily build the full Flight surface without the stair; instead
     // we just assert that rails exist and their z varies with position.
     let _ = scene;

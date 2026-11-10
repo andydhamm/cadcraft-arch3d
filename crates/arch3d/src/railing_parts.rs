@@ -8,7 +8,7 @@ use crate::railing;
 
 /// Every mesh of `r` standing on `surface`. For now: today's single railing mesh, at the flat
 /// floor, the deck top or the base of the flight.
-pub(crate) fn railing_meshes(r: &Railing, surface: &RailSurface) -> Vec<Mesh> {
+pub fn railing_meshes(r: &Railing, surface: &RailSurface) -> Vec<Mesh> {
     let z = match surface {
         RailSurface::Flat { z } => *z,
         RailSurface::Deck { top, .. } => *top,
