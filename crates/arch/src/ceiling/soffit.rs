@@ -758,4 +758,95 @@ mod tests {
         let s2 = Soffit { id: ArchId(0), level: 0, polygon, bottom: Some(2.1), material: Some("x".repeat(128)), ..Soffit::default() };
         assert!(validate(&m, &s2).is_ok(), "material == 128 chars should be ok");
     }
+
+    #[test]
+    fn interior_point_c_shaped_polygon() {
+        // C-shape opening to the right; centroid falls in the opening, so the
+        // widest-span fallback must find a point inside.
+        let ring = vec![
+            Vec2::new(0.0, 0.0),
+            Vec2::new(4.0, 0.0),
+            Vec2::new(4.0, 1.0),
+            Vec2::new(2.0, 1.0),
+            Vec2::new(2.0, 3.0),
+            Vec2::new(4.0, 3.0),
+            Vec2::new(4.0, 4.0),
+            Vec2::new(0.0, 4.0),
+        ];
+        let p = interior_point(&ring).expect("C-shape should have interior point");
+        assert!(cadcraft_geom::point_in_polygon(&ring, p), "point not in C-shape");
+    }
+
+    #[test]
+    fn soffit_ring_single_cabinet() {
+        let mut m = house();
+        m.cabinets.push(make_cabinet(0, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
+        let s = Soffit { id: ArchId(0), level: 0, polygon: vec![], over: vec![ArchId(0)], ..Soffit::default() };
+        let ring = soffit_ring(&m, &s).expect("single cabinet ring");
+        assert_eq!(ring.len(), 4);
+        let xs: Vec<f64> = ring.iter().map(|v| v.x).collect();
+        let ys: Vec<f64> = ring.iter().map(|v| v.y).collect();
+        let xmin = xs.iter().copied().fold(f64::INFINITY, f64::min);
+        let xmax = xs.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let ymin = ys.iter().copied().fold(f64::INFINITY, f64::min);
+        let ymax = ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        assert!((xmin - 8.7).abs() < 1e-3, "xmin: {}", xmin);
+        assert!((xmax - 9.3).abs() < 1e-3, "xmax: {}", xmax);
+        assert!((ymin - 7.595).abs() < 1e-3, "ymin: {}", ymin);
+        assert!((ymax - 7.9).abs() < 1e-3, "ymax: {}", ymax);
+    }
+
+    #[test]
+    fn soffit_ring_cabinets_different_depths() {
+        let mut m = house();
+        m.cabinets.push(make_cabinet(0, 2, CabinetKind::Wall, Vec2::new(9.0, 7.9), 0.6, 0.305, 0.762, 1.372, 0));
+        m.cabinets.push(make_cabinet(1, 2, CabinetKind::Wall, Vec2::new(8.4, 7.9), 0.6, 0.355, 0.762, 1.372, 0));
+        let s = Soffit { id: ArchId(0), level: 0, polygon: vec![], over: vec![ArchId(0), ArchId(1)], ..Soffit::default() };
+        let ring = soffit_ring(&m, &s).expect("different depth ring");
+        let ys: Vec<f64> = ring.iter().map(|v| v.y).collect();
+        let ymin = ys.iter().copied().fold(f64::INFINITY, f64::min);
+        // Max depth is 0.355, so ymin should be 7.9 - 0.355 = 7.545
+        assert!((ymin - 7.545).abs() < 1e-3, "ymin should use max depth: {}", ymin);
+    }
+
+    #[test]
+    fn snap_rect_already_on_face() {
+        let m = house();
+        // Rect already exactly on the inner faces; nothing should move.
+        let r = snap_rect(&m, 0, [9.0, 7.0, 9.9, 7.9]);
+        assert!((r[0] - 9.0).abs() < 1e-9, "x0: {}", r[0]);
+        assert!((r[1] - 7.0).abs() < 1e-9, "y0: {}", r[1]);
+        assert!((r[2] - 9.9).abs() < 1e-9, "x1 should stay at 9.9, got {}", r[2]);
+        assert!((r[3] - 7.9).abs() < 1e-9, "y1 should stay at 7.9, got {}", r[3]);
+    }
+
+    #[test]
+    fn validate_bottom_at_boundary() {
+        let m = house();
+        let polygon = vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0)];
+        // Level 0 elevation is 0.0, so bottom must be >= 0.5
+        let s = Soffit { id: ArchId(0), level: 0, polygon: polygon.clone(), bottom: Some(0.5), ..Soffit::default() };
+        assert!(validate(&m, &s).is_ok(), "bottom exactly at level + 0.5 should be ok");
+
+        let s2 = Soffit { id: ArchId(0), level: 0, polygon, bottom: Some(0.49), ..Soffit::default() };
+        assert!(validate(&m, &s2).is_err(), "bottom below level + 0.5 should error");
+    }
+
+    #[test]
+    fn validate_depth_boundaries() {
+        let m = house();
+        let polygon = vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 1.0), Vec2::new(5.0, 5.0), Vec2::new(1.0, 5.0)];
+
+        let s_min = Soffit { id: ArchId(0), level: 0, polygon: polygon.clone(), depth: Some(0.01), ..Soffit::default() };
+        assert!(validate(&m, &s_min).is_ok(), "depth 0.01 should be ok");
+
+        let s_max = Soffit { id: ArchId(0), level: 0, polygon: polygon.clone(), depth: Some(3.0), ..Soffit::default() };
+        assert!(validate(&m, &s_max).is_ok(), "depth 3.0 should be ok");
+
+        let s_low = Soffit { id: ArchId(0), level: 0, polygon: polygon.clone(), depth: Some(0.009), ..Soffit::default() };
+        assert!(validate(&m, &s_low).is_err(), "depth 0.009 should error");
+
+        let s_high = Soffit { id: ArchId(0), level: 0, polygon: polygon.clone(), depth: Some(3.01), ..Soffit::default() };
+        assert!(validate(&m, &s_high).is_err(), "depth 3.01 should error");
+    }
 }
