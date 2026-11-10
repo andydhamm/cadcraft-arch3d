@@ -1,10 +1,12 @@
 //! Slab foundations (phase 16; owner: p16-foundation-slab): the thickened edge under a slab on
 //! grade (the slab itself is the room's floor).
 //!
-//! Per on-grade foundation wall the thickened edge is one closed "footing" mesh made of two
-//! adjacent, non-overlapping prisms: a 0.3 m strip (inward from the outer face) from
-//! `elevation - 0.3` to `elevation - 0.1`, and the strip under the wall (wall thickness) from
-//! `elevation - 0.1` to `elevation`. Basement walls on a slab level get only a footing via
+//! Per on-grade foundation wall the thickened edge is ONE closed "footing" mesh built from two
+//! adjacent, non-overlapping prisms that share a face: a 0.3 m strip (inward from the outer
+//! face) from `elevation - 0.3` to `elevation - 0.1`, and the strip under the wall (wall
+//! thickness) from `elevation - 0.1` to `elevation`. Because the union is closed, an upward-ray
+//! probe counts each prism's crossings and a point in either prism stays inside (odd); the shared
+//! face never opens a gap. Basement walls on a slab level get only a footing via
 //! [`stem::basement_footing`]. No stem walls are built.
 
 use super::FoundationIn;
@@ -13,36 +15,14 @@ use crate::mesh::Mesh;
 use cadcraft_arch::foundation::FoundationWall;
 use cadcraft_geom::Vec2;
 
-/// The 0.3 m strip (inward from the outer face) of the thickened edge, from `elevation - 0.3`
-/// to `elevation - 0.1`.
-fn edge_strip(i: &FoundationIn, w: &FoundationWall) -> Option<Mesh> {
-    let e = i.level.elevation;
-    let z0 = e - 0.3;
-    let z1 = e - 0.1;
-    let ring = [w.a, w.b, w.b + w.inward * 0.3, w.a + w.inward * 0.3];
-    prism(i, "footing", &ring, z0, z1)
-}
-
-/// The strip under the wall (wall thickness) of the thickened edge, from `elevation - 0.1`
-/// to `elevation`.
-fn wall_strip(i: &FoundationIn, w: &FoundationWall) -> Option<Mesh> {
-    let e = i.level.elevation;
-    let z0 = e - 0.1;
-    let z1 = e;
-    let ring = [w.a, w.b, w.b + w.inward * w.thickness, w.a + w.inward * w.thickness];
-    prism(i, "footing", &ring, z0, z1)
-}
-
-/// A closed prism of `material` over `ring` from `z0` to `z1`, owned by the foundation, or `None`
-/// when the heights are not finite, the prism has no height or the ring builds nothing.
-fn prism(i: &FoundationIn, material: &str, ring: &[Vec2], z0: f64, z1: f64) -> Option<Mesh> {
+/// Appends a closed prism over `ring` from `z0` to `z1` to `m` when the heights are finite, the
+/// prism has a height and the ring points are finite; a degenerate ring appends nothing.
+fn prism_into(m: &mut Mesh, i: &FoundationIn, ring: &[Vec2], z0: f64, z1: f64) {
     if !(z0.is_finite() && z1.is_finite() && z1 > z0 + 1e-9) || !ring.iter().all(|p| p.is_finite()) {
-        return None;
+        return;
     }
-    let mut mesh = Mesh::new(material, i.foundation.id);
-    mesh.push_prism(ring, z0, z1);
-    mesh.level_elevation = i.level.elevation;
-    (!mesh.positions.is_empty()).then_some(mesh)
+    m.push_prism(ring, z0, z1);
+    m.level_elevation = i.level.elevation;
 }
 
 /// The thickened edges of a slab foundation.
@@ -55,12 +35,16 @@ pub fn meshes(i: &FoundationIn) -> Vec<Mesh> {
                 out.push(f);
             }
         } else {
-            // On-grade walls: the thickened edge is two adjacent, non-overlapping prisms.
-            if let Some(s) = edge_strip(i, w) {
-                out.push(s);
-            }
-            if let Some(s) = wall_strip(i, w) {
-                out.push(s);
+            // On-grade walls: one closed footing mesh per wall, built from two adjacent prisms
+            // (edge strip and wall strip) that share a face.
+            let mut mesh = Mesh::new("footing", i.foundation.id);
+            let e = i.level.elevation;
+            let edge_ring = [w.a, w.b, w.b + w.inward * 0.3, w.a + w.inward * 0.3];
+            prism_into(&mut mesh, i, &edge_ring, e - 0.3, e - 0.1);
+            let wall_ring = [w.a, w.b, w.b + w.inward * w.thickness, w.a + w.inward * w.thickness];
+            prism_into(&mut mesh, i, &wall_ring, e - 0.1, e);
+            if !mesh.positions.is_empty() {
+                out.push(mesh);
             }
         }
     }
