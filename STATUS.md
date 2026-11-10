@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 16:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 16:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 30 of 34 segments merged · 15 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 16:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 15 / 20 | 36.5 h so far · expected done Nov 10 18:57–Nov 11 08:06 UTC |
+| 16 | Ceilings and foundations | building | 15 / 20 | 36.8 h so far · expected done Nov 10 19:12–Nov 11 08:21 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -62,18 +62,18 @@ Updated 2026-11-10 16:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1045 |
+| bonsai-a | bonsai2-27b | agent | 1045 |
 | bonsai-b | bonsai2-27b | idle | 986 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1091 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1054 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1055 |
 | claude-sonnet-a | sonnet | idle | 101 |
 | claude-sonnet-b | sonnet | idle | 102 |
 | claude-sonnet-c | sonnet | idle | 51 |
 | claude-sonnet-d | sonnet | idle | 46 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 937 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 939 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 73 |
 | mai-flash-b | mai-code-1.1-flash | idle | 11 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 77 |
-| tturbo-mac | tturbo-ultraheretic | agent | 724 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
+| tturbo-mac | tturbo-ultraheretic | agent | 726 |
+| tturbo-mac2 | tturbo-ultraheretic | held | 348 |
