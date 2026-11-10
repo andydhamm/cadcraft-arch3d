@@ -221,11 +221,8 @@ fn deck_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
                 curr = (curr + 1) % n;
             }
 
-            // Pull back ends if they meet an unrailed edge touching a wall
-            // Start end: edge start_idx-1 (mod n). If it exists, is unrailed, and has wall, pull back.
-            let prev_edge_idx = (start_idx + n - 1) % n;
-            if !railed[prev_edge_idx] && edges[prev_edge_idx].wall.is_some() {
-                // Pull back start point along the first edge of the run
+            // Pull back the start end by the inset so the end post stands inside the deck.
+            {
                 let p0 = path[0];
                 let p1 = path[1];
                 let dir = (p1 - p0).normalized();
@@ -234,10 +231,8 @@ fn deck_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
                 }
             }
 
-            // End end: edge end_idx+1 (mod n). If it exists, is unrailed, and has wall, pull back.
-            let next_edge_idx = (end_idx + 1) % n;
-            if !railed[next_edge_idx] && edges[next_edge_idx].wall.is_some() {
-                // Pull back end point along the last edge of the run
+            // Pull back the end end by the inset.
+            {
                 let p_last = *path.last().unwrap();
                 let p_prev = path[path.len() - 2];
                 let dir = (p_prev - p_last).normalized();
