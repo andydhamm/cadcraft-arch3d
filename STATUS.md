@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 68 of 70 segments merged · 12 of 14 acceptance checks**
 
-8,240 workspace tests passing at the last merge · 866 segments merged in all · 0 of 15 seats working
+8,241 workspace tests passing at the last merge · 867 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-10 01:30 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 113.1 h so far · expected done Nov 10 05:52–Nov 12 07:49 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 113.3 h so far · expected done Nov 10 06:07–Nov 12 08:04 UTC |
 | 16 | Ceilings and foundations | building | 7 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -46,6 +46,7 @@ Updated 2026-11-10 01:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 01:37 | `p16-render3d-adapter-turns` | merged | 8,241 pass | claude-sonnet-d |
 | Nov 10 01:03 | `upstream-sync-d847eac13` | merged | 8,240 pass | claude-sonnet-d |
 | Nov 10 00:20 | `p15-docs-user-guide` | refused | 0 pass | mai-flash-esc |
 | Nov 10 00:20 | `harden-p15-showcase-test` | merged | 8,197 pass | tturbo-mac |
@@ -57,7 +58,6 @@ Updated 2026-11-10 01:30 UTC. This page and the card in the README are regenerat
 | Nov 09 21:23 | `p16-tray-arch3d` | merged | 8,181 pass | mai-flash-esc |
 | Nov 09 20:56 | `p15-showcase-render` | merged | 8,175 pass | claude-sonnet-b |
 | Nov 09 19:56 | `harden-p16-soffit-arch` | merged | 8,175 pass | tturbo-mac |
-| Nov 09 19:11 | `upstream-sync-865fa9afb` | merged | 8,169 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
@@ -76,5 +76,5 @@ Updated 2026-11-10 01:30 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 65 |
-| tturbo-mac | tturbo-ultraheretic | gate | 703 |
+| tturbo-mac | tturbo-ultraheretic | gate | 704 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
