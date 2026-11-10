@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 03:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 69 of 70 segments merged · 14 of 14 acceptance checks**
 
-8,243 workspace tests passing at the last merge · 869 segments merged in all · 0 of 15 seats working
+8,243 workspace tests passing at the last merge · 870 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-10 02:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 14 / 14 | 114.3 h so far · expected done Nov 10 04:36–Nov 11 16:43 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 14 / 14 | 114.6 h so far · expected done Nov 10 04:51–Nov 11 16:57 UTC |
 | 16 | Ceilings and foundations | building | 8 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -45,6 +45,7 @@ Updated 2026-11-10 02:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 02:49 | `p16-demo` | merged | 8,243 pass | mai-flash |
 | Nov 10 02:32 | `p16-demo` | refused | 0 pass | darwin-ws3 |
 | Nov 10 02:32 | `p15-docs-user-guide` | merged | 8,243 pass |  |
 | Nov 10 02:10 | `p16-trays-check` | merged | 8,242 pass | bonsai-a |
@@ -56,24 +57,23 @@ Updated 2026-11-10 02:45 UTC. This page and the card in the README are regenerat
 | Nov 09 23:14 | `p16-soffit-meshes` | merged | 8,194 pass | bonsai-b |
 | Nov 09 22:33 | `p16-tray-commands` | merged | 8,188 pass | mai-flash-esc |
 | Nov 09 21:58 | `p16-soffit-input` | merged | 8,183 pass | claude-sonnet-c |
-| Nov 09 21:23 | `p16-tray-commands` | refused | 0 pass | mai-flash-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1016 |
+| bonsai-a | bonsai2-27b | merging | 1018 |
 | bonsai-b | bonsai2-27b | idle | 963 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1060 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1029 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1062 |
+| bonsai-ws2-b | bonsai2-27b | merging | 1030 |
 | claude-sonnet-a | sonnet | merging | 94 |
 | claude-sonnet-b | sonnet | merging | 99 |
 | claude-sonnet-c | sonnet | idle | 44 |
 | claude-sonnet-d | sonnet | idle | 45 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 922 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | merging | 70 |
-| mai-flash-b | mai-code-1.1-flash | agent | 9 |
+| mai-flash | mai-code-1.1-flash | idle | 70 |
+| mai-flash-b | mai-code-1.1-flash | merging | 10 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 65 |
-| tturbo-mac | tturbo-ultraheretic | agent | 706 |
+| tturbo-mac | tturbo-ultraheretic | gate | 706 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
