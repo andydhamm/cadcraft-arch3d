@@ -2,7 +2,7 @@
 //! replaces the host's previous automatic ones. Drawn railings and a stair's well guard are never
 //! touched.
 
-use cadcraft_arch::stair::GUARD_HEIGHT;
+use crate::stair::{GUARD_HEIGHT, MAX_RISER, MIN_TREAD, plan_stair};
 use cadcraft_doc::arch::{MAX_RAILINGS, RailSetting, Railing, RailingHost, RailingStyle, Room};
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::Vec2;
@@ -63,13 +63,7 @@ fn stair_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
 
     // Check if the stair has a flight (geometry exists)
     // We use the flight polygon to verify existence and get run/width
-    let plan = cadcraft_arch::stair::plan_stair(
-        stair.rise,
-        stair.width,
-        Some(stair.tread_depth),
-        cadcraft_arch::stair::MAX_RISER,
-        cadcraft_arch::stair::MIN_TREAD,
-    );
+    let plan = plan_stair(stair.rise, stair.width, Some(stair.tread_depth), MAX_RISER, MIN_TREAD);
     let Some(plan) = plan else {
         return Vec::new();
     };
@@ -236,7 +230,7 @@ fn deck_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
                 // Pull back start point along the first edge of the run
                 let p0 = path[0];
                 let p1 = path[1];
-                let dir = (p1 - p0).normalize();
+                let dir = (p1 - p0).normalized();
                 if dir.is_finite() {
                     path[0] = p0 + dir * 0.045;
                 }
@@ -248,7 +242,7 @@ fn deck_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
                 // Pull back end point along the last edge of the run
                 let p_last = *path.last().unwrap();
                 let p_prev = path[path.len() - 2];
-                let dir = (p_prev - p_last).normalize();
+                let dir = (p_prev - p_last).normalized();
                 if dir.is_finite() {
                     let new_last = p_last + dir * 0.045;
                     path.pop();
@@ -260,7 +254,7 @@ fn deck_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
             if path.len() >= 2 {
                 let mut valid = true;
                 for i in 0..path.len() - 1 {
-                    if (path[i + 1] - path[i]).length() < 0.05 {
+                    if (path[i + 1] - path[i]).len() < 0.05 {
                         valid = false;
                         break;
                     }
@@ -355,14 +349,14 @@ fn stair_sides_against_walls(model: &ArchModel, stair: &cadcraft_doc::arch::Stai
 fn dist_to_segment(p: Vec2, a: Vec2, b: Vec2) -> f64 {
     let ab = b - a;
     let ap = p - a;
-    let len_sq = ab.length_sq();
+    let len_sq = ab.len_sq();
     if len_sq == 0.0 {
-        return ap.length();
+        return ap.len();
     }
     let mut t = ap.dot(ab) / len_sq;
     t = t.clamp(0.0, 1.0);
     let proj = a + ab * t;
-    (p - proj).length()
+    (p - proj).len()
 }
 
 /// Deck edge info.
@@ -388,7 +382,7 @@ fn deck_edges(model: &ArchModel, room: &Room) -> Vec<DeckEdge> {
             // Simplified check: midpoint distance
             let mid = (p1 + p2) * 0.5;
             let w_mid = (wall.start + wall.end) * 0.5;
-            if (mid - w_mid).length() < 0.1 {
+            if (mid - w_mid).len() < 0.1 {
                 wall_id = Some(wall.id);
                 break;
             }
