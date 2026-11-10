@@ -101,7 +101,7 @@ fn opening_rows_report_top_grille_sides_and_glass() {
         m.push_opening(Opening {
             sill: 0.9,
             top: OpeningTop::Round,
-            grille: Some(Grille { across: 3, down: 2, top_only: true }),
+            grille: Some(Grille { across: 3, down: 2, top_only: true, ..Grille::default() }),
             sill_sides: OpeningSides::BOTH,
             ..Opening::new(w, 2.0, 0.9, 1.2, OpeningKind::Window)
         });
