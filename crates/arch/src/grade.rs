@@ -215,6 +215,7 @@ mod tests {
     #[test]
     fn multiple_levels_sum_only_above_grade() {
         let mut m = ArchModel::default();
+        m.levels.clear();
         m.levels.push(Level { index: 0, elevation: -1.0, kind: LevelKind::Floor, ..Default::default() });
         m.levels.push(Level { index: 1, elevation: 1.0, kind: LevelKind::Floor, ..Default::default() });
 
@@ -244,6 +245,7 @@ mod tests {
     #[test]
     fn nan_elevation_is_basement() {
         let mut m = ArchModel::default();
+        m.levels.clear();
         m.levels.push(Level { index: 0, elevation: f64::NAN, kind: LevelKind::Floor, ..Default::default() });
         assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::Basement);
         assert_eq!(above_grade_area(&m), 0.0);
@@ -258,6 +260,7 @@ mod tests {
     #[test]
     fn rooms_on_other_levels_are_not_counted() {
         let mut m = ArchModel::default();
+        m.levels.clear();
         m.levels.push(Level { index: 0, elevation: 0.0, kind: LevelKind::Floor, ..Default::default() });
         m.levels.push(Level { index: 1, elevation: 3.0, kind: LevelKind::Floor, ..Default::default() });
 
