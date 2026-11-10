@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 01:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 21: Electrical, technical illustration and the showcase house — 66 of 69 segments merged · 12 of 14 acceptance checks**
+**Phase 15 of 21: Electrical, technical illustration and the showcase house — 68 of 70 segments merged · 12 of 14 acceptance checks**
 
-8,197 workspace tests passing at the last merge · 864 segments merged in all · 0 of 15 seats working
+8,240 workspace tests passing at the last merge · 866 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-10 01:00 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 112.6 h so far · expected done Nov 10 07:33–Nov 12 11:26 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 112.8 h so far · expected done Nov 10 04:56–Nov 11 18:19 UTC |
 | 16 | Ceilings and foundations | building | 7 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,18 +35,18 @@ Updated 2026-11-10 01:00 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-66 merged, 8 replaced, 3 abandoned, 2 merging, 1 escalate
+68 merged, 8 replaced, 3 abandoned, 1 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | escalate |  |
-| `p15-check10-surfaces` | phase-15 check 10 reads the surface rows (operator fix, already on your branch) | merging | mai-flash-esc |
-| `upstream-sync-d847eac13` | merge upstream upstream/main up to d847eac13 (38 commits) | merging | claude-sonnet-d |
+| `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | merging |  |
+| `upstream-sync-a3d9348f6` | merge upstream upstream/main up to a3d9348f6 (21 commits) | working | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 01:03 | `upstream-sync-d847eac13` | merged | 8,240 pass | claude-sonnet-d |
 | Nov 10 00:20 | `p15-docs-user-guide` | refused | 0 pass | mai-flash-esc |
 | Nov 10 00:20 | `harden-p15-showcase-test` | merged | 8,197 pass | tturbo-mac |
 | Nov 09 23:14 | `p15-check10-surfaces` | refused | 0 pass | claude-sonnet-c |
@@ -58,24 +58,23 @@ Updated 2026-11-10 01:00 UTC. This page and the card in the README are regenerat
 | Nov 09 20:56 | `p15-showcase-render` | merged | 8,175 pass | claude-sonnet-b |
 | Nov 09 19:56 | `harden-p16-soffit-arch` | merged | 8,175 pass | tturbo-mac |
 | Nov 09 19:11 | `upstream-sync-865fa9afb` | merged | 8,169 pass | claude-sonnet-c |
-| Nov 09 18:24 | `p16-soffit-commands` | merged | 8,114 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 1012 |
+| bonsai-a | bonsai2-27b | idle | 1012 |
 | bonsai-b | bonsai2-27b | idle | 961 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1056 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1027 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1056 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1027 |
 | claude-sonnet-a | sonnet | idle | 93 |
-| claude-sonnet-b | sonnet | idle | 98 |
+| claude-sonnet-b | sonnet | agent | 98 |
 | claude-sonnet-c | sonnet | idle | 44 |
-| claude-sonnet-d | sonnet | merging | 45 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 920 |
+| claude-sonnet-d | sonnet | idle | 45 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 920 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
-| mai-flash-esc | mai-code-1.1-flash | merging | 65 |
-| tturbo-mac | tturbo-ultraheretic | gate | 702 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 65 |
+| tturbo-mac | tturbo-ultraheretic | agent | 703 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
