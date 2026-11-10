@@ -199,6 +199,41 @@ cargo run -q -p cadcraft-cli -- convert examples/apartment.dxf apartment.glb
 The **Detection Review** panel (Architecture > Detection Review) lets you inspect, check and accept candidates
 interactively.
 
+## Ceilings and foundations
+
+Ceilings are built from the room's rough underlying level, then optionally trimmed by a finish stack. Use
+`flatCeiling` to let a room follow the roof underside instead of a flat plane, and set `ceilingStack` to a named
+stack such as `drywall` or `suspended` to model the finished underside. The stack is top-to-bottom, and the
+finished ceiling is the rough ceiling minus the total stack thickness. Trays recess the ceiling inside a room,
+soffits create a boxed underside under cabinets or a drawn outline, and `foundation {"type":"stem"}` adds
+concrete stem walls and footings beneath the level's exterior walls when no lower level exists.
+
+The phase-16 showcase in `docs/arch3d/showcase/phase-16-demo.json` builds a small house with a vaulted living
+room, a tray in the dining room, soffits over kitchen wall cabinets, a suspended utility ceiling and a basement
+with stem foundations. The same commands can be replayed directly with the CLI and then inspected by `arch.inspect`.
+
+```json
+[
+  {"cmd": "level", "params": {"name": "Level 1", "elevation": 0}},
+  {"cmd": "level", "params": {"name": "Basement", "elevation": -2.7}},
+  {"cmd": "wall", "params": {"points": [[0, 0], [12, 0], [12, 4], [12, 9], [0, 9], [0, 4], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true}},
+  {"cmd": "wall", "params": {"points": [[0, 4], [12, 4]], "thickness": 0.1, "height": 2.4, "type": "interior"}},
+  {"cmd": "roomdetect", "params": {}},
+  {"cmd": "room", "params": {"points": [[0.1, 0.1], [7.95, 0.1], [7.95, 3.95], [0.1, 3.95], [0.1, 0.1]], "name": "living", "type": "living", "flatCeiling": false}},
+  {"cmd": "room", "params": {"points": [[8.05, 0.1], [11.9, 0.1], [11.9, 3.95], [8.05, 3.95], [8.05, 0.1]], "name": "utility", "type": "utility", "ceilingStack": "suspended"}},
+  {"cmd": "tray", "params": {"polygon": [[0.1, 4.05], [5.95, 4.05], [5.95, 8.9], [0.1, 8.9], [0.1, 4.05]], "inset": 0.6, "depth": 0.3}},
+  {"cmd": "soffit", "params": {"over": ["cb0", "cb1", "cb2", "cb3"]}},
+  {"cmd": "foundation", "params": {"type": "stem"}},
+  {"cmd": "camera", "params": {"save": "SouthWest", "kind": "full", "eye": [-2, -2, 5], "target": [4, 2, 1.8], "fov": 60}} 
+]
+```
+
+When a room sits under a roof the `flatCeiling` guard can refuse an attempt that would rise the flat ceiling above
+its roof underside, while a vaulted room keeps the roof line as the ceiling. Trays and soffits both auto-seat
+ceiling-hung items, and their underside values are available in `arch.inspect` and in `build3d {"ceiling": ...}`.
+The basement level is still below the main floor, so its exterior walls convert to `Concrete 0.2` and keep their
+footings under the floor structure.
+
 ## Lighting and final renders
 
 The lighting model is built from the same room model as the 3D view: fixtures sit on the ceiling, wall or floor,
