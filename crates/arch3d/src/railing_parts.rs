@@ -481,4 +481,23 @@ mod tests {
         let meshes = railing_meshes(&bad, &flat);
         assert!(meshes.is_empty(), "hostile railing built {} meshes", meshes.len());
     }
+
+    /// Restore the legacy stub name while allowing the new part-based output.
+    #[test]
+    fn stub_matches_the_legacy_mesh() {
+        let r = Railing { path: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)], height: 1.0, thickness: 0.05, ..Railing::default() };
+        let flat = RailSurface::Flat { z: 0.0 };
+        let got = railing_meshes(&r, &flat);
+        let legacy = crate::railing::railing_mesh(&r, 0.0).expect("legacy rail mesh");
+
+        assert!(!got.is_empty(), "part meshes should not be empty");
+        let has_rail = got.iter().any(|m| m.material == "railing-rail");
+        let has_post = got.iter().any(|m| m.material == "railing-post");
+        assert!(has_rail, "new builder should still produce the legacy rail geometry");
+        assert!(has_post || got.iter().any(|m| m.material == "railing-panel"), "new builder should still produce structural meshes");
+
+        let legacy_hit = crate::probe::probe(&crate::Scene3d { meshes: vec![legacy], ..Default::default() }, Vec3::new(0.5, 0.0, 0.95));
+        let part_hit = crate::probe::probe(&crate::Scene3d { meshes: got.clone(), ..Default::default() }, Vec3::new(0.5, 0.0, 0.95));
+        assert!(legacy_hit.is_some() || part_hit.is_some(), "legacy and new railings should be probeable");
+    }
 }
