@@ -18,6 +18,7 @@ pub mod build3d;
 pub mod casework;
 pub mod connections;
 pub mod deck;
+mod deck_inspect;
 pub(crate) mod defaults;
 pub mod electrical;
 pub(crate) mod electrical_inspect;
@@ -26,6 +27,9 @@ pub mod foundation;
 pub mod furnish;
 pub mod illuminance;
 pub mod inspect;
+mod inspect_detail;
+#[cfg(test)]
+mod inspect_detail_tests;
 pub mod level;
 pub mod library;
 pub mod library_icon;
