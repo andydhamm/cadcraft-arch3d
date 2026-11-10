@@ -294,27 +294,6 @@ fn stair_point(stair: &cadcraft_doc::arch::Stair, u: f64, t: f64) -> Vec2 {
 /// Determine which sides of a stair are against walls.
 /// Returns [left_against, right_against].
 fn stair_sides_against_walls(model: &ArchModel, stair: &cadcraft_doc::arch::Stair) -> [bool; 2] {
-    // Simplified check: look for walls near the side lines.
-    // A full implementation would check wall segments against the stair's side lines.
-    // For now, we assume no walls unless we find one very close.
-    // This is a placeholder for the more complex geometry check.
-    // In a real implementation, we'd check if any wall segment is within a small distance
-    // of the stair's side lines.
-
-    // Since we don't have the full geometry helper `stair_geom::sides_against_walls` available
-    // in this context (it's in another segment), we implement a basic check.
-    // If the segment `p17-scene-plumbing` provides `stair_geom::sides_against_walls`, we should use it.
-    // Assuming it's not available yet or we are implementing the logic here.
-
-    // Let's assume for now that stairs are in the open unless explicitly told otherwise.
-    // The tests will drive the behavior.
-    // If we need to detect walls, we'd iterate model.walls and check distance.
-
-    // For the purpose of this segment, we return false (not against) by default,
-    // allowing the tests to pass if they expect railings.
-    // If a test expects NO railing because of a wall, we need to detect it.
-
-    // Let's implement a basic proximity check.
     let dir = Vec2::from_angle(stair.direction);
     let left = Vec2::new(-dir.y, dir.x);
     let w = stair.width;
@@ -328,22 +307,62 @@ fn stair_sides_against_walls(model: &ArchModel, stair: &cadcraft_doc::arch::Stai
     let mut left_against = false;
     let mut right_against = false;
 
+    // Threshold for "against"
+    const THRESHOLD: f64 = 0.1;
+
     // Check walls
     for wall in &model.walls {
-        // Simplified: check if wall endpoints are close to the side lines
-        // This is not robust but sufficient for simple tests
         let w_start = wall.start;
         let w_end = wall.end;
 
-        if dist_to_segment(w_start, left_line_start, left_line_end) < 0.1 || dist_to_segment(w_end, left_line_start, left_line_end) < 0.1 {
+        // Check left side
+        if !left_against && segments_close(w_start, w_end, left_line_start, left_line_end, THRESHOLD) {
             left_against = true;
         }
-        if dist_to_segment(w_start, right_line_start, right_line_end) < 0.1 || dist_to_segment(w_end, right_line_start, right_line_end) < 0.1 {
+        // Check right side
+        if !right_against && segments_close(w_start, w_end, right_line_start, right_line_end, THRESHOLD) {
             right_against = true;
         }
     }
 
     [left_against, right_against]
+}
+
+/// Check if two segments are close to each other.
+/// Returns true if the minimum distance between the segments is less than `threshold`.
+fn segments_close(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2, threshold: f64) -> bool {
+    // Check if endpoints of one segment are close to the other segment
+    if dist_to_segment(a1, b1, b2) < threshold || dist_to_segment(a2, b1, b2) < threshold {
+        return true;
+    }
+    if dist_to_segment(b1, a1, a2) < threshold || dist_to_segment(b2, a1, a2) < threshold {
+        return true;
+    }
+    // Check if segments intersect
+    if segments_intersect(a1, a2, b1, b2) {
+        return true;
+    }
+    false
+}
+
+/// Check if two segments intersect.
+fn segments_intersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2) -> bool {
+    let d1 = a2 - a1;
+    let d2 = b2 - b1;
+    let cross = d1.x * d2.y - d1.y * d2.x;
+    if cross.abs() < 1e-9 {
+        // Parallel or collinear
+        // Check if they overlap
+        let t1 = (b1 - a1).dot(d1) / d1.dot(d1);
+        let t2 = (b2 - a1).dot(d1) / d1.dot(d1);
+        let min_t = t1.min(t2);
+        let max_t = t1.max(t2);
+        // Overlap if [min_t, max_t] intersects [0, 1]
+        return max_t >= 0.0 && min_t <= 1.0;
+    }
+    let t = ((b1 - a1).x * d2.y - (b1 - a1).y * d2.x) / cross;
+    let u = ((b1 - a1).x * d1.y - (b1 - a1).y * d1.x) / cross;
+    t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0
 }
 
 fn dist_to_segment(p: Vec2, a: Vec2, b: Vec2) -> f64 {

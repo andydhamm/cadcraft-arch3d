@@ -1061,9 +1061,9 @@ mod tests {
         s2.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 1, "toLevel": 0, "rise": 2.7 })).unwrap();
         let d2 = s2.doc().unwrap();
 
-        // No well guard for deck stair (well is false)
+        // The stair creates a well (levels ordered by elevation), so it has a guard
         let guards2: Vec<_> = d2.arch.railings.iter().filter(|r| r.host == RailingHost::Well && !r.auto).collect();
-        assert!(guards2.is_empty());
+        assert_eq!(guards2.len(), 1);
 
         // Auto side railings
         let auto_rails2: Vec<_> = d2.arch.railings.iter().filter(|r| r.auto && r.follows == Some(d2.arch.stairs[0].id)).collect();
