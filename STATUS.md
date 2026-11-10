@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 03:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 21: Electrical, technical illustration and the showcase house — 69 of 70 segments merged · 14 of 14 acceptance checks**
+**Phase 15 of 21: Electrical, technical illustration and the showcase house — 70 of 70 segments merged · 14 of 14 acceptance checks**
 
-8,252 workspace tests passing at the last merge · 871 segments merged in all · 0 of 15 seats working
+8,256 workspace tests passing at the last merge · 872 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-10 03:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 14 / 14 | 114.8 h so far · expected done Nov 10 05:06–Nov 11 17:12 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 14 / 14 | 115.1 h so far · expected done Nov 10 03:30–Nov 11 07:25 UTC |
 | 16 | Ceilings and foundations | building | 9 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,16 +35,14 @@ Updated 2026-11-10 03:15 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-69 merged, 8 replaced, 3 abandoned, 1 merging
+70 merged, 8 replaced, 3 abandoned
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `upstream-sync-a3d9348f6` | merge upstream upstream/main up to a3d9348f6 (21 commits) | merging | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 03:29 | `upstream-sync-a3d9348f6` | merged | 8,256 pass | claude-sonnet-b |
 | Nov 10 03:09 | `p16-exports` | merged | 8,252 pass | claude-sonnet-a |
 | Nov 10 02:49 | `p16-demo` | merged | 8,243 pass | mai-flash |
 | Nov 10 02:32 | `p16-demo` | refused | 0 pass | darwin-ws3 |
@@ -56,7 +54,6 @@ Updated 2026-11-10 03:15 UTC. This page and the card in the README are regenerat
 | Nov 10 00:20 | `harden-p15-showcase-test` | merged | 8,197 pass | tturbo-mac |
 | Nov 09 23:14 | `p15-check10-surfaces` | refused | 0 pass | claude-sonnet-c |
 | Nov 09 23:14 | `p16-soffit-meshes` | merged | 8,194 pass | bonsai-b |
-| Nov 09 22:33 | `p16-tray-commands` | merged | 8,188 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
@@ -65,15 +62,15 @@ Updated 2026-11-10 03:15 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | merging | 1018 |
 | bonsai-b | bonsai2-27b | idle | 963 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1063 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1030 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1030 |
 | claude-sonnet-a | sonnet | idle | 94 |
-| claude-sonnet-b | sonnet | merging | 99 |
+| claude-sonnet-b | sonnet | idle | 99 |
 | claude-sonnet-c | sonnet | idle | 44 |
 | claude-sonnet-d | sonnet | idle | 45 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 922 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 922 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 70 |
 | mai-flash-b | mai-code-1.1-flash | merging | 10 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 65 |
-| tturbo-mac | tturbo-ultraheretic | gate | 707 |
+| tturbo-mac | tturbo-ultraheretic | agent | 708 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
