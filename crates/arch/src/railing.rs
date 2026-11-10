@@ -3,6 +3,11 @@
 //! `stair.rs` is built by a sibling segment, so the code-limit constants are mirrored here
 //! with identical values until it lands; swap to `crate::stair::*` then.
 
+use crate::deck::{DECK_BOARD, DECK_JOIST_DEPTH};
+use crate::stair_geom::FlightLine;
+use crate::{ArchId, ArchModel};
+use cadcraft_doc::Railing;
+use cadcraft_doc::arch::RailingHost;
 use cadcraft_geom::Vec2;
 
 /// Lowest stair handrail height (864 mm).
@@ -193,6 +198,162 @@ pub fn post_points(path: &[Vec2], spacing: f64) -> Vec<Vec2> {
         out.pop();
     }
     out
+}
+
+/// The surface a railing stands on.
+#[derive(Clone, Debug, PartialEq)]
+pub enum RailSurface {
+    /// A flat floor at absolute `z`.
+    Flat {
+        /// Absolute elevation.
+        z: f64,
+    },
+    /// A deck: boards at `top`, posts reaching down to `post_bottom`.
+    Deck {
+        /// Absolute top of the boards.
+        top: f64,
+        /// Absolute bottom of the posts (the joist underside).
+        post_bottom: f64,
+    },
+    /// The side of a stair flight.
+    Flight {
+        /// The flight the railing climbs.
+        line: FlightLine,
+    },
+}
+
+/// The surface `r` stands on, from its host: a deck room, a side of a stair's flight, else the floor
+/// of its level.
+pub fn rail_surface(model: &ArchModel, r: &Railing) -> RailSurface {
+    let flat = || RailSurface::Flat { z: model.level(r.level).map_or(0.0, |l| l.elevation) };
+    match r.host {
+        RailingHost::Deck => {
+            let room = r.follows.and_then(|id| model.room(id));
+            let Some(room) = room else { return flat() };
+            match room.deck_height {
+                Some(h) if h.is_finite() && h > 0.0 => {
+                    let top = model.level(room.level).map_or(0.0, |l| l.elevation) + h;
+                    RailSurface::Deck { top, post_bottom: top - DECK_BOARD - DECK_JOIST_DEPTH }
+                }
+                _ => flat(),
+            }
+        }
+        RailingHost::StairLeft | RailingHost::StairRight => {
+            let flight = r.follows.and_then(|id| model.stair(id)).and_then(|s| crate::stair_geom::flight(model, s));
+            match flight {
+                Some(f) => RailSurface::Flight { line: f.line },
+                None => flat(),
+            }
+        }
+        RailingHost::Well => flat(),
+    }
+}
+
+impl RailSurface {
+    /// The height a handrail or post top follows at plan point `p`.
+    pub fn walk_z(&self, p: Vec2) -> f64 {
+        match self {
+            RailSurface::Flat { z } => *z,
+            RailSurface::Deck { top, .. } => *top,
+            RailSurface::Flight { line } => {
+                let u = line.local(p).0.clamp(0.0, line.run.max(0.0));
+                line.base + line.nosing_v(u)
+            }
+        }
+    }
+
+    /// The height a post at `p` starts from.
+    pub fn post_bottom(&self, p: Vec2) -> f64 {
+        match self {
+            RailSurface::Flat { z } => *z,
+            RailSurface::Deck { post_bottom, .. } => *post_bottom,
+            RailSurface::Flight { line } => {
+                let u = line.local(p).0.clamp(0.0, line.run.max(0.0));
+                line.base + line.surface_v(u)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod surface_tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+    use cadcraft_doc::{Level, Room, Stair};
+
+    fn model() -> ArchModel {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, elevation: 0.0, ..Level::default() }, Level { index: 1, elevation: 2.7, ..Level::default() }];
+        let id = m.push_stair(Stair {
+            start: Vec2::new(2.0, 1.0),
+            width: 1.0,
+            from_level: 0,
+            to_level: 1,
+            rise: 2.7,
+            risers: 16,
+            riser_height: 0.16875,
+            tread_depth: 0.254,
+            treads: 15,
+            run: 3.81,
+            ..Stair::default()
+        });
+        assert_eq!(id, ArchId(0));
+        m.push_room(Room {
+            polygon: vec![Vec2::new(2.0, 8.1), Vec2::new(6.0, 8.1), Vec2::new(6.0, 11.1), Vec2::new(2.0, 11.1)],
+            deck_height: Some(0.9),
+            ..Room::default()
+        });
+        m
+    }
+
+    #[test]
+    fn rail_surface_flat_for_plain_and_well() {
+        let m = model();
+        let plain = Railing { level: 1, ..Railing::default() };
+        assert_eq!(rail_surface(&m, &plain), RailSurface::Flat { z: 2.7 });
+        let well = Railing { level: 1, follows: Some(ArchId(0)), host: RailingHost::Well, ..Railing::default() };
+        assert_eq!(rail_surface(&m, &well), RailSurface::Flat { z: 2.7 });
+        let off = Railing { level: 9, ..Railing::default() };
+        assert_eq!(rail_surface(&m, &off), RailSurface::Flat { z: 0.0 });
+    }
+
+    #[test]
+    fn rail_surface_deck() {
+        let m = model();
+        let r = Railing { follows: Some(ArchId(0)), host: RailingHost::Deck, ..Railing::default() };
+        let s = rail_surface(&m, &r);
+        let RailSurface::Deck { top, post_bottom } = s else { panic!("{s:?}") };
+        assert!((top - 0.9).abs() < 1e-12 && (post_bottom - 0.691).abs() < 1e-9);
+        assert_eq!(s.walk_z(Vec2::new(3.0, 9.0)), top);
+        assert_eq!(s.post_bottom(Vec2::new(3.0, 9.0)), post_bottom);
+    }
+
+    #[test]
+    fn rail_surface_flight_for_stair_sides() {
+        let m = model();
+        for host in [RailingHost::StairLeft, RailingHost::StairRight] {
+            let r = Railing { follows: Some(ArchId(0)), host, ..Railing::default() };
+            let s = rail_surface(&m, &r);
+            assert!(matches!(s, RailSurface::Flight { .. }), "{s:?}");
+            assert!((s.walk_z(Vec2::new(4.0, 1.455)) - 1.5141).abs() < 1e-4);
+            assert!((s.post_bottom(Vec2::new(3.27, 1.455)) - 1.0125).abs() < 1e-9);
+            // Clamped to the flight at both ends.
+            assert!((s.walk_z(Vec2::new(-50.0, 1.0)) - 0.16875 - 0.025 * 0.16875 / 0.254).abs() < 1e-9);
+            assert_eq!(s.post_bottom(Vec2::new(500.0, 1.0)), 2.7);
+        }
+    }
+
+    #[test]
+    fn a_missing_host_falls_back_to_flat() {
+        let m = model();
+        for host in [RailingHost::Deck, RailingHost::StairLeft, RailingHost::StairRight] {
+            let r = Railing { level: 1, follows: Some(ArchId(77)), host, ..Railing::default() };
+            assert_eq!(rail_surface(&m, &r), RailSurface::Flat { z: 2.7 });
+            let none = Railing { level: 1, follows: None, host, ..Railing::default() };
+            assert_eq!(rail_surface(&m, &none), RailSurface::Flat { z: 2.7 });
+        }
+    }
 }
 
 #[cfg(test)]
