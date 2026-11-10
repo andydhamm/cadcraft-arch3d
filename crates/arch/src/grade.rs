@@ -297,4 +297,27 @@ mod tests {
             assert!((above_grade_area(&m) - full).abs() < 1e-9, "room type {:?} should count", t);
         }
     }
+
+    #[test]
+    fn a_level_with_no_walls_and_no_rooms_is_above_grade_if_elevation_is_high_enough() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 1.0, kind: LevelKind::Floor, ..Default::default() });
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
+        assert_eq!(level_above_grade_area(&m, &m.levels[0]), 0.0);
+    }
+
+    #[test]
+    fn a_very_high_level_is_above_grade() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 1e10, kind: LevelKind::Floor, ..Default::default() });
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
+    }
+
+    #[test]
+    fn a_room_with_a_zero_area_polygon_does_not_crash() {
+        let mut m = house(0.0, LevelKind::Floor);
+        m.rooms[0].polygon = vec![v(0.0, 0.0), v(0.0, 0.0), v(0.0, 0.0)];
+        let result = grade_class(&m, &m.levels[0]);
+        assert!(matches!(result, GradeClass::AboveGrade | GradeClass::Basement));
+    }
 }
