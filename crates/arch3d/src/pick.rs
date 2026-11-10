@@ -10,7 +10,7 @@ use cadcraft_doc::ArchId;
 use cadcraft_geom::Vec3;
 
 use crate::Scene3d;
-use crate::probe::part_of;
+use crate::probe::pick_part;
 
 /// Hard cap on tree nodes.
 pub const MAX_NODES: usize = 4096;
@@ -24,7 +24,7 @@ const LEAF_SIZE: usize = 4;
 pub struct PickHit {
     /// The arch object owning the struck mesh.
     pub object: ArchId,
-    /// Part name from [`part_of`] (`"wall"`, `"leaf"`, `"floor"`, …).
+    /// Part name from [`pick_part`] (`"wall"`, `"leaf"`, `"floor"`, …).
     pub part: &'static str,
     /// Distance along the (normalised) ray.
     pub distance: f64,
@@ -89,7 +89,7 @@ impl Bvh {
     pub fn build(scene: &Scene3d) -> Bvh {
         let mut bvh = Bvh::default();
         for (mi, mesh) in scene.meshes.iter().enumerate() {
-            bvh.meshes.push((part_of(mesh), mesh.object));
+            bvh.meshes.push((pick_part(mesh), mesh.object));
             let Ok(mesh_id) = u32::try_from(mi) else { continue };
             for g in mesh.indices.chunks_exact(3) {
                 let at = |k: usize| g.get(k).and_then(|&i| corner(mesh.positions.get(i as usize)));
