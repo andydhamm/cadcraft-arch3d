@@ -7,7 +7,7 @@
 //! crate.
 
 use super::{ArchId, ArchModel, Wall};
-use cadcraft_doc::arch::{Opening, OpeningKind};
+use cadcraft_doc::arch::{Opening, OpeningKind, OpeningTop};
 use cadcraft_geom::Vec2;
 
 /// Minimum width of a hinged/pocket/sliding opening, in metres.
@@ -163,6 +163,22 @@ pub fn validate_placement(
     Ok(offset)
 }
 
+/// The height `validate_placement` checks against the wall height: for a `top: roof` window whose
+/// host wall is taller than its sill, `min(height, wall.height - sill)` (the head follows the rake
+/// above the wall's nominal height); otherwise `o.height`, so every other opening is checked as
+/// before and a roof window whose sill is above the wall height is still refused.
+pub fn check_height(model: &ArchModel, o: &Opening) -> f64 {
+    if o.top == OpeningTop::Roof {
+        if let Some(w) = model.wall(o.host) {
+            let room = w.height - o.sill;
+            if room.is_finite() && room > 0.0 {
+                return o.height.min(room);
+            }
+        }
+    }
+    o.height
+}
+
 /// Place an opening on its host wall. When `fit` is true and the opening does
 /// not fit, the width is shrunk (bisection) to the largest value that still
 /// fits and is at least `min_width`; if even `min_width` does not fit at the
@@ -170,8 +186,9 @@ pub fn validate_placement(
 /// kept clamped to the wall.
 pub fn place_opening(model: &ArchModel, mut o: Opening, fit: bool) -> Result<Opening, PlacementError> {
     let min_w = min_width(o.kind, &o.style);
+    let ch = check_height(model, &o);
 
-    match validate_placement(model, o.host, o.offset, o.width, o.sill, o.height, o.kind, &o.style, None) {
+    match validate_placement(model, o.host, o.offset, o.width, o.sill, ch, o.kind, &o.style, None) {
         Ok(offset) => {
             o.offset = offset;
             o.rough_width = o.width + ROUGH_ALLOWANCE;
@@ -196,7 +213,7 @@ pub fn place_opening(model: &ArchModel, mut o: Opening, fit: bool) -> Result<Ope
                 let max_off = len - min_seg - rough_w / 2.0;
                 if min_off <= max_off {
                     let clamped = o.offset.clamp(min_off, max_off);
-                    if let Ok(offset) = validate_placement(model, o.host, clamped, o.width, o.sill, o.height, o.kind, &o.style, None) {
+                    if let Ok(offset) = validate_placement(model, o.host, clamped, o.width, o.sill, ch, o.kind, &o.style, None) {
                         o.offset = offset;
                         o.rough_width = o.width + ROUGH_ALLOWANCE;
                         o.rough_height = o.height + ROUGH_ALLOWANCE;
@@ -220,7 +237,7 @@ pub fn place_opening(model: &ArchModel, mut o: Opening, fit: bool) -> Result<Ope
                 let mid_max_off = len - min_seg - mid_rough / 2.0;
                 if mid_min_off <= mid_max_off {
                     let clamped = o.offset.clamp(mid_min_off, mid_max_off);
-                    if validate_placement(model, o.host, clamped, mid, o.sill, o.height, o.kind, &o.style, None).is_ok() {
+                    if validate_placement(model, o.host, clamped, mid, o.sill, ch, o.kind, &o.style, None).is_ok() {
                         lo = mid;
                     } else {
                         hi = mid;
@@ -237,7 +254,7 @@ pub fn place_opening(model: &ArchModel, mut o: Opening, fit: bool) -> Result<Ope
                 let final_max_off = len - min_seg - final_rough / 2.0;
                 if final_min_off <= final_max_off {
                     let final_clamped = o.offset.clamp(final_min_off, final_max_off);
-                    if let Ok(offset) = validate_placement(model, o.host, final_clamped, lo, o.sill, o.height, o.kind, &o.style, None) {
+                    if let Ok(offset) = validate_placement(model, o.host, final_clamped, lo, o.sill, ch, o.kind, &o.style, None) {
                         o.offset = offset;
                         o.width = lo;
                         o.rough_width = lo + ROUGH_ALLOWANCE;
@@ -257,7 +274,7 @@ pub fn place_opening(model: &ArchModel, mut o: Opening, fit: bool) -> Result<Ope
                 let phys_max = len - rough_w / 2.0;
                 if phys_min <= phys_max {
                     let clamped = o.offset.clamp(phys_min, phys_max);
-                    let ok_height = wall.height.is_finite() && o.sill + o.height <= wall.height;
+                    let ok_height = wall.height.is_finite() && o.sill + ch <= wall.height;
                     let c0 = clamped - rough_w / 2.0;
                     let c1 = clamped + rough_w / 2.0;
                     // Check no overlap with existing openings on this wall.
@@ -333,6 +350,38 @@ mod tests {
     fn opening_on(model: &mut ArchModel, host: ArchId, offset: f64, width: f64) -> ArchId {
         let o = Opening::new(host, offset, width, 2.0, OpeningKind::Door);
         model.push_opening(o)
+    }
+
+    fn roof_window(host: ArchId, sill: f64, height: f64) -> Opening {
+        Opening { host, offset: 2.5, width: 1.0, sill, height, kind: OpeningKind::Window, top: OpeningTop::Roof, ..Opening::default() }
+    }
+
+    #[test]
+    fn check_height_clamps_only_roof_tops() {
+        let mut model = ArchModel::default();
+        let host = wall(&mut model, Vec2::ZERO, Vec2::new(5.0, 0.0), 0.2);
+        let h = model.wall(host).map_or(0.0, |w| w.height);
+        let roof = roof_window(host, 1.0, 5.0);
+        assert!((check_height(&model, &roof) - (h - 1.0)).abs() < 1e-12);
+        let low = roof_window(host, 1.0, 0.5);
+        assert_eq!(check_height(&model, &low), 0.5);
+        let above = roof_window(host, h + 0.5, 1.0);
+        assert_eq!(check_height(&model, &above), 1.0);
+        let square = Opening { top: OpeningTop::Square, ..roof_window(host, 1.0, 5.0) };
+        assert_eq!(check_height(&model, &square), 5.0);
+        let round = Opening { top: OpeningTop::Round, ..roof_window(host, 1.0, 5.0) };
+        assert_eq!(check_height(&model, &round), 5.0);
+    }
+
+    #[test]
+    fn place_opening_skips_the_wall_height_check_for_roof_tops() {
+        let mut model = ArchModel::default();
+        let host = wall(&mut model, Vec2::ZERO, Vec2::new(5.0, 0.0), 0.2);
+        let h = model.wall(host).map_or(0.0, |w| w.height);
+        assert!(place_opening(&model, roof_window(host, 1.0, h + 1.0), false).is_ok());
+        let square = Opening { top: OpeningTop::Square, ..roof_window(host, 1.0, h + 1.0) };
+        assert!(place_opening(&model, square, false).is_err());
+        assert!(place_opening(&model, roof_window(host, h + 0.5, 1.0), false).is_err());
     }
 
     #[test]

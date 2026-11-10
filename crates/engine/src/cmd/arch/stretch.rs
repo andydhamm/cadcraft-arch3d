@@ -109,7 +109,8 @@ pub(crate) fn run_stretch(s: &mut Session, p: &Value) -> Result<Value> {
         // stretch, so a partial state is never committed.
         for oi in &adjustments {
             let o = &arch.openings[*oi];
-            match validate_placement(&arch, o.host, o.offset, o.width, o.sill, o.height, o.kind, &o.style, Some(o.id)) {
+            let check_h = cadcraft_arch::opening::check_height(&arch, o);
+            match validate_placement(&arch, o.host, o.offset, o.width, o.sill, check_h, o.kind, &o.style, Some(o.id)) {
                 Ok(_) => (),
                 Err(e) => {
                     return Err(bad("arch.wall.stretch", format!("the stretch would push o{} off w{}", o.id.0, o.host.0)));

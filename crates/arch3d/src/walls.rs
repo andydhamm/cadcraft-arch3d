@@ -7,7 +7,7 @@ use cadcraft_arch::join::WallShape;
 use cadcraft_arch::opening::ROUGH_ALLOWANCE;
 use cadcraft_doc::ArchId;
 use cadcraft_doc::ArchModel;
-use cadcraft_doc::arch::{Opening, OpeningKind, Wall};
+use cadcraft_doc::arch::{Opening, OpeningKind, OpeningTop, Wall};
 use cadcraft_geom::{Vec2, point_in_polygon};
 
 const HOLE_INSET: f64 = 1e-3;
@@ -70,20 +70,27 @@ pub fn extrude_wall(shape: &WallShape, height: f64, level_elevation: f64, materi
 /// no allowance below the sill), clipped against `outer`, kept only when its area
 /// exceeds 1e-6 and every vertex lies at least `HOLE_INSET` inside `outer`.
 /// Returned clockwise, as `push_prism_with_holes` expects.
-pub(crate) fn opening_holes(openings: &[&Opening], base: f64, _len: f64, _max_v: f64, outer: &[Vec2]) -> Vec<Vec<Vec2>> {
+pub(crate) fn opening_holes(openings: &[&Opening], base: f64, _len: f64, _max_v: f64, outer: &[Vec2], roof_top: Option<&[Vec2]>) -> Vec<Vec<Vec2>> {
     let mut holes = Vec::new();
     for op in openings {
-        let half = (op.width + ROUGH_ALLOWANCE) / 2.0;
-        let u0 = op.offset - half;
-        let u1 = op.offset + half;
-        let v0 = op.sill - base;
-        let v1 = op.sill + op.height + ROUGH_ALLOWANCE - base;
+        let rect = if op.top == OpeningTop::Square {
+            let half = (op.width + ROUGH_ALLOWANCE) / 2.0;
+            let u0 = op.offset - half;
+            let u1 = op.offset + half;
+            let v0 = op.sill - base;
+            let v1 = op.sill + op.height + ROUGH_ALLOWANCE - base;
 
-        if !u0.is_finite() || !u1.is_finite() || !v0.is_finite() || !v1.is_finite() {
-            continue;
-        }
-
-        let rect = vec![Vec2::new(u0, v0), Vec2::new(u1, v0), Vec2::new(u1, v1), Vec2::new(u0, v1)];
+            if !u0.is_finite() || !u1.is_finite() || !v0.is_finite() || !v1.is_finite() {
+                continue;
+            }
+            vec![Vec2::new(u0, v0), Vec2::new(u1, v0), Vec2::new(u1, v1), Vec2::new(u0, v1)]
+        } else {
+            // The shaped outline from the legacy bottom `sill - base`; use that value only here.
+            match cadcraft_arch::opening_top::rough_outline(op, op.sill - base, roof_top) {
+                Some(r) => r,
+                None => continue,
+            }
+        };
 
         let clipped = clip_polygon(&rect, outer);
         if clipped.len() < 3 || polygon_area(&clipped) <= 1e-6 {
@@ -311,7 +318,7 @@ pub fn elevation_profile(
         .copied()
         .filter(|op| !matches!(op.kind, OpeningKind::Door | OpeningKind::GarageDoor | OpeningKind::CasedOpening) || op.sill.abs() > 1e-9)
         .collect();
-    let holes = opening_holes(&door_holes, base, len, max_v, &outer);
+    let holes = opening_holes(&door_holes, base, len, max_v, &outer, roof_top);
 
     Some(WallProfile { outer, holes })
 }
@@ -782,7 +789,7 @@ mod tests {
     fn rough_opening_hole_uses_the_allowance() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert_eq!(holes.len(), 1);
         let h = &holes[0];
         let u_min = h.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
@@ -798,7 +805,7 @@ mod tests {
     fn holes_are_clockwise() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert_eq!(holes.len(), 1);
         let h = &holes[0];
         let mut area = 0.0f64;
@@ -813,7 +820,7 @@ mod tests {
     fn hole_touching_the_profile_edge_is_dropped() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.5, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "rough head 2.52 > 2.4 should be dropped, got {} holes", holes.len());
     }
 
@@ -821,14 +828,14 @@ mod tests {
     fn hole_at_the_wall_end_is_dropped() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 0.05, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "rough rect crossing u=0 should be dropped, got {} holes", holes.len());
     }
 
     #[test]
     fn no_openings_no_holes() {
         let outer = rect_outer();
-        let holes = opening_holes(&[], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty());
     }
 
@@ -1288,7 +1295,7 @@ mod tests {
     fn opening_at_exact_wall_start_is_clipped_and_dropped() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 0.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "opening at exact wall start should be clipped and dropped");
     }
 
@@ -1297,7 +1304,7 @@ mod tests {
     fn opening_at_exact_wall_end_is_clipped_and_dropped() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 10.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "opening at exact wall end should be clipped and dropped");
     }
 
@@ -1483,19 +1490,19 @@ mod tests {
     fn opening_with_nan_dimensions_is_skipped() {
         let outer = rect_outer();
         let op = Opening { width: f64::NAN, height: 1.2, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "NaN width should skip the opening");
 
         let op2 = Opening { width: 0.9, height: f64::NAN, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes2 = opening_holes(&[&op2], 0.0, 10.0, 2.4, &outer);
+        let holes2 = opening_holes(&[&op2], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes2.is_empty(), "NaN height should skip the opening");
 
         let op3 = Opening { width: 0.9, height: 1.2, sill: f64::NAN, offset: 4.0, ..Default::default() };
-        let holes3 = opening_holes(&[&op3], 0.0, 10.0, 2.4, &outer);
+        let holes3 = opening_holes(&[&op3], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes3.is_empty(), "NaN sill should skip the opening");
 
         let op4 = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: f64::NAN, ..Default::default() };
-        let holes4 = opening_holes(&[&op4], 0.0, 10.0, 2.4, &outer);
+        let holes4 = opening_holes(&[&op4], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes4.is_empty(), "NaN offset should skip the opening");
     }
 
@@ -1504,11 +1511,11 @@ mod tests {
     fn opening_with_infinite_dimensions_is_skipped() {
         let outer = rect_outer();
         let op = Opening { width: f64::INFINITY, height: 1.2, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "infinite width should skip the opening");
 
         let op2 = Opening { width: 0.9, height: f64::INFINITY, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes2 = opening_holes(&[&op2], 0.0, 10.0, 2.4, &outer);
+        let holes2 = opening_holes(&[&op2], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes2.is_empty(), "infinite height should skip the opening");
     }
 
@@ -1517,7 +1524,7 @@ mod tests {
     fn zero_width_opening_still_produces_a_hole() {
         let outer = rect_outer();
         let op = Opening { width: 0.0, height: 1.2, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert_eq!(holes.len(), 1, "zero-width opening should still produce a hole (rough allowance)");
     }
 
@@ -1526,7 +1533,7 @@ mod tests {
     fn zero_height_opening_still_produces_a_hole() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 0.0, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert_eq!(holes.len(), 1, "zero-height opening should still produce a hole (rough allowance)");
     }
 
@@ -1536,7 +1543,7 @@ mod tests {
         let outer = rect_outer();
         let op1 = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 2.0, ..Default::default() };
         let op2 = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 8.0, ..Default::default() };
-        let holes = opening_holes(&[&op1, &op2], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op1, &op2], 0.0, 10.0, 2.4, &outer, None);
         assert_eq!(holes.len(), 2, "two openings should produce two holes");
         // Both holes should have the correct width
         for h in &holes {
@@ -1552,7 +1559,7 @@ mod tests {
         let outer = rect_outer();
         // Opening wider than the wall (width 15 on a 10m wall)
         let op = Opening { width: 15.0, height: 1.2, sill: 0.9, offset: 5.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "oversized opening clipped to all edges should be dropped");
     }
 
@@ -1562,7 +1569,7 @@ mod tests {
         let outer = rect_outer();
         // Sill at 3.0m, wall is only 2.4m tall
         let op = Opening { width: 0.9, height: 1.2, sill: 3.0, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "opening above wall top should produce no hole");
     }
 
@@ -1573,7 +1580,7 @@ mod tests {
         // Sill at -0.5m, wall base at 0; after clipping the bottom edge sits
         // on the boundary and the inset check drops it.
         let op = Opening { width: 0.9, height: 1.2, sill: -0.5, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "opening clipped to base should be dropped");
     }
 
@@ -1584,7 +1591,7 @@ mod tests {
         let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 2.4), Vec2::new(5.0, 4.45), Vec2::new(0.0, 2.4)];
         // Small opening near the peak, fully inside the pentagon with margin.
         let op = Opening { width: 0.5, height: 0.5, sill: 3.5, offset: 5.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 4.45, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 4.45, &outer, None);
         assert_eq!(holes.len(), 1, "small opening near peak should produce one hole");
         let h = &holes[0];
         // All vertices must be inside the pentagon (v <= roofline at that u)
@@ -1602,7 +1609,7 @@ mod tests {
         // Opening whose rough rect crosses u=0; after clipping the left edge
         // sits on the boundary and the inset check drops it.
         let op = Opening { width: 0.118, height: 1.2, sill: 0.9, offset: 0.001, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "hole clipped to boundary should be dropped");
     }
 
@@ -1614,7 +1621,7 @@ mod tests {
         // half = 0.0005 => width = 0.12 - 0.001 = 0.119
         // offset = 0.0005
         let op = Opening { width: 0.119, height: 1.2, sill: 0.9, offset: 0.0005, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "hole just outside inset boundary should be dropped");
     }
 
@@ -1624,7 +1631,7 @@ mod tests {
         let outer = rect_outer();
         // Width 0.0005, height 0.0005; rough opening is 0.1205 x 0.1205, area ~0.0145
         let op = Opening { width: 0.0005, height: 0.0005, sill: 0.9, offset: 4.0, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert_eq!(holes.len(), 1, "tiny opening should still produce a hole (rough allowance)");
     }
 
@@ -1633,7 +1640,7 @@ mod tests {
     fn opening_with_negative_offset_is_clipped_and_dropped() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: -0.5, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "opening clipped to wall start should be dropped");
     }
 
@@ -1642,7 +1649,7 @@ mod tests {
     fn opening_past_wall_end_is_clipped_and_dropped() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 10.5, ..Default::default() };
-        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
         assert!(holes.is_empty(), "opening clipped to wall end should be dropped");
     }
 
@@ -1811,7 +1818,7 @@ mod tests {
         // Two openings that overlap in u (offset 4.0 width 1.5 and offset 4.5 width 1.5)
         let op1 = Opening { width: 1.5, height: 1.2, sill: 0.9, offset: 4.0, ..Default::default() };
         let op2 = Opening { width: 1.5, height: 1.2, sill: 0.9, offset: 4.5, ..Default::default() };
-        let holes = opening_holes(&[&op1, &op2], 0.0, 10.0, 2.4, &outer);
+        let holes = opening_holes(&[&op1, &op2], 0.0, 10.0, 2.4, &outer, None);
         // Both openings are fully inside the wall, so both should produce holes
         assert_eq!(holes.len(), 2, "two overlapping openings should produce two holes");
     }
