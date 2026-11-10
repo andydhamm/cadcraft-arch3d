@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 16:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 30 of 34 segments merged · 15 of 20 acceptance checks**
 
-8,365 workspace tests passing at the last merge · 894 segments merged in all · 0 of 15 seats working
+8,371 workspace tests passing at the last merge · 895 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 16:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 15 / 20 | 36.8 h so far · expected done Nov 10 19:12–Nov 11 08:21 UTC |
+| 16 | Ceilings and foundations | building | 15 / 20 | 37.0 h so far · expected done Nov 10 19:27–Nov 11 08:36 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,16 +35,17 @@ Updated 2026-11-10 16:15 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-30 merged, 3 replaced, 3 queued, 2 abandoned, 1 escalate
+30 merged, 3 replaced, 3 queued, 2 abandoned, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | escalate |  |
+| `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | merging |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 16:16 | `harden-p16f-soffit-faces` | merged | 8,371 pass | tturbo-mac |
 | Nov 10 15:52 | `harden-p16-rw-open-below-rooms` | merged | 8,365 pass | tturbo-mac |
 | Nov 10 15:35 | `p17-scene-plumbing-export` | merged | 8,359 pass | claude-sonnet-a |
 | Nov 10 15:19 | `p17-scene-plumbing-pick` | merged | 8,355 pass | claude-sonnet-c |
@@ -56,13 +57,12 @@ Updated 2026-11-10 16:15 UTC. This page and the card in the README are regenerat
 | Nov 10 12:57 | `p17-scene-plumbing-arch` | merged | 8,333 pass | claude-sonnet-a |
 | Nov 10 12:37 | `p16-rw-stair-wells` | refused | 8,322 pass | mai-flash-esc |
 | Nov 10 12:14 | `harden-p16-rw-overhead-arch` | merged | 8,318 pass | tturbo-mac |
-| Nov 10 11:44 | `p17-observables-inspect` | merged | 8,312 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1045 |
+| bonsai-a | bonsai2-27b | idle | 1045 |
 | bonsai-b | bonsai2-27b | idle | 986 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1091 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1055 |
