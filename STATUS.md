@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 02:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 68 of 70 segments merged · 12 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-10 02:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 113.8 h so far · expected done Nov 10 06:37–Nov 12 08:33 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 114.1 h so far · expected done Nov 10 06:51–Nov 12 08:48 UTC |
 | 16 | Ceilings and foundations | building | 8 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-10 02:15 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-68 merged, 8 replaced, 3 abandoned, 1 merging, 1 working
+68 merged, 8 replaced, 3 abandoned, 1 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | merging |  |
-| `upstream-sync-a3d9348f6` | merge upstream upstream/main up to a3d9348f6 (21 commits) | working | claude-sonnet-b |
+| `upstream-sync-a3d9348f6` | merge upstream upstream/main up to a3d9348f6 (21 commits) | gate | claude-sonnet-b |
 
 ## Recent merges
 
@@ -63,18 +63,18 @@ Updated 2026-11-10 02:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1012 |
-| bonsai-b | bonsai2-27b | agent | 961 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1056 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1027 |
-| claude-sonnet-a | sonnet | agent | 93 |
-| claude-sonnet-b | sonnet | agent | 98 |
+| bonsai-a | bonsai2-27b | agent | 1014 |
+| bonsai-b | bonsai2-27b | agent | 962 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1057 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1029 |
+| claude-sonnet-a | sonnet | merging | 94 |
+| claude-sonnet-b | sonnet | gate | 98 |
 | claude-sonnet-c | sonnet | idle | 44 |
 | claude-sonnet-d | sonnet | idle | 45 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 920 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 921 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 69 |
+| mai-flash | mai-code-1.1-flash | merging | 70 |
 | mai-flash-b | mai-code-1.1-flash | agent | 9 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 65 |
-| tturbo-mac | tturbo-ultraheretic | agent | 705 |
+| tturbo-mac | tturbo-ultraheretic | gate | 705 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
