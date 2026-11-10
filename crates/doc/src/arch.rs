@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub mod backdrop;
 pub mod casework;
 pub mod ceiling;
+pub mod detail;
 pub mod electrical;
 pub mod finish;
 pub mod foundation;
@@ -21,6 +22,7 @@ pub mod site;
 pub use backdrop::*;
 pub use casework::*;
 pub use ceiling::*;
+pub use detail::*;
 pub use electrical::*;
 pub use finish::*;
 pub use foundation::*;
@@ -711,6 +713,24 @@ pub struct Opening {
     pub glass_mode: String,
     pub mull_group: Option<ArchId>,
     pub layer: String,
+    /// Window grille (lites across and down); `None` is plain glass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grille: Option<Grille>,
+    /// Shape of the opening's top.
+    #[serde(default, skip_serializing_if = "OpeningTop::is_square")]
+    pub top: OpeningTop,
+    /// Rise of a segment top (0 = unset).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub top_rise: f64,
+    /// How far a `top: roof` window's rough top stays under the roof underside.
+    #[serde(default = "default_roof_offset", skip_serializing_if = "is_default_roof_offset")]
+    pub roof_offset: f64,
+    /// Which sides of the host wall carry the sill.
+    #[serde(default, skip_serializing_if = "OpeningSides::is_right_only")]
+    pub sill_sides: OpeningSides,
+    /// Which sides of the host wall carry the casing.
+    #[serde(default, skip_serializing_if = "OpeningSides::is_right_only")]
+    pub casing_sides: OpeningSides,
 }
 
 impl Default for Opening {
@@ -739,6 +759,12 @@ impl Default for Opening {
             glass_mode: "automatic".into(),
             mull_group: None,
             layer: "A-DOOR".into(),
+            grille: None,
+            top: OpeningTop::Square,
+            top_rise: 0.0,
+            roof_offset: DEFAULT_ROOF_OFFSET,
+            sill_sides: OpeningSides::RIGHT,
+            casing_sides: OpeningSides::RIGHT,
         }
     }
 }
@@ -783,6 +809,12 @@ impl Opening {
             glass_mode: "automatic".into(),
             mull_group: None,
             layer: layer.to_string(),
+            grille: None,
+            top: OpeningTop::Square,
+            top_rise: 0.0,
+            roof_offset: DEFAULT_ROOF_OFFSET,
+            sill_sides: OpeningSides::RIGHT,
+            casing_sides: OpeningSides::RIGHT,
         }
     }
 }
@@ -879,6 +911,13 @@ pub struct Room {
     /// minus the stack's total thickness; empty (the default) means no finish layers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ceiling_stack: Vec<CeilingLayer>,
+    /// Deck board direction in degrees counter-clockwise from +x, in [0, 180); `None` is
+    /// automatic (parallel to the ledger).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deck_boards: Option<f64>,
+    /// Deck railing setting per polygon edge i (vertex i to i+1); a missing entry is Auto.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deck_rails: Vec<RailSetting>,
 }
 
 impl Default for Room {
@@ -898,6 +937,8 @@ impl Default for Room {
             floor_finish: None,
             flat_ceiling: true,
             ceiling_stack: Vec::new(),
+            deck_boards: None,
+            deck_rails: Vec::new(),
         }
     }
 }
@@ -1075,6 +1116,24 @@ pub struct Stair {
     pub well_room: Option<ArchId>,
     /// Layer name.
     pub layer: String,
+    /// Open risers (no riser boards).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub open_risers: bool,
+    /// Stringer layout under the treads.
+    #[serde(default, skip_serializing_if = "Stringers::is_two")]
+    pub stringers: Stringers,
+    /// Depth of the stair's underside below the treads (metres).
+    #[serde(default = "default_underside", skip_serializing_if = "is_default_underside")]
+    pub underside: f64,
+    /// Railing on the left side of the flight.
+    #[serde(default, skip_serializing_if = "RailSetting::is_auto")]
+    pub rail_left: RailSetting,
+    /// Railing on the right side of the flight.
+    #[serde(default, skip_serializing_if = "RailSetting::is_auto")]
+    pub rail_right: RailSetting,
+    /// Plan cut height above the stair's from-level floor (metres).
+    #[serde(default = "default_plan_cut", skip_serializing_if = "is_default_plan_cut")]
+    pub plan_cut: f64,
 }
 
 impl Default for Stair {
@@ -1097,6 +1156,12 @@ impl Default for Stair {
             well: Vec::new(),
             well_room: None,
             layer: "A-STAIR".into(),
+            open_risers: false,
+            stringers: Stringers::Two,
+            underside: DEFAULT_UNDERSIDE,
+            rail_left: RailSetting::Auto,
+            rail_right: RailSetting::Auto,
+            plan_cut: DEFAULT_PLAN_CUT,
         }
     }
 }
@@ -1123,6 +1188,15 @@ pub struct Railing {
     pub post_spacing: f64,
     /// ID of the stair this railing follows (if any).
     pub follows: Option<ArchId>,
+    /// Horizontal offset of the built railing from its path (positive = left of travel).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub inset: f64,
+    /// What `follows` names: a stair's well, a side of a stair's flight, or a deck room.
+    #[serde(default, skip_serializing_if = "RailingHost::is_well")]
+    pub host: RailingHost,
+    /// Made automatically for a stair or deck and remade with it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub auto: bool,
     /// Layer name.
     pub layer: String,
 }
@@ -1137,8 +1211,11 @@ impl Default for Railing {
             style: RailingStyle::Panel,
             thickness: 0.05,
             baluster_gap: 0.099,
-            post_spacing: 1.2,
+            post_spacing: DEFAULT_POST_SPACING,
             follows: None,
+            inset: 0.0,
+            host: RailingHost::Well,
+            auto: false,
             layer: "A-RAIL".into(),
         }
     }
@@ -2574,9 +2651,13 @@ impl ArchModel {
             if r.post_spacing <= 0.0 {
                 messages.push(format!("{}: post spacing {} must be positive", id, r.post_spacing));
             }
-            if let Some(stair_id) = r.follows {
-                if self.stair(stair_id).is_none() {
-                    messages.push(format!("{}: unknown follows stair {}", id, stair_id));
+            if let Some(host_id) = r.follows {
+                if r.host == RailingHost::Deck {
+                    if !self.room(host_id).is_some_and(|rm| rm.room_type == RoomType::Deck) {
+                        messages.push(format!("{}: unknown follows deck {}", id, host_id));
+                    }
+                } else if self.stair(host_id).is_none() {
+                    messages.push(format!("{}: unknown follows stair {}", id, host_id));
                 }
             }
         }

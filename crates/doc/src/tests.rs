@@ -1191,3 +1191,169 @@ fn validate_rejects_railing_with_non_positive_thickness_or_spacing() {
     let msgs = m.validate();
     assert!(msgs.iter().any(|m| m.contains("post spacing") && m.contains("positive")));
 }
+
+#[test]
+fn rail_setting_names_round_trip() {
+    for s in [RailSetting::Auto, RailSetting::On, RailSetting::Off] {
+        assert_eq!(RailSetting::parse(s.name()), Some(s));
+        assert_eq!(RailSetting::parse(&format!(" {} ", s.name().to_uppercase())), Some(s));
+    }
+    assert!(RailSetting::Auto.is_auto() && !RailSetting::On.is_auto());
+    assert_eq!(RailSetting::parse("maybe"), None);
+}
+
+#[test]
+fn stringers_parse_accepts_center_and_centre() {
+    assert_eq!(Stringers::parse("center"), Some(Stringers::Centre));
+    assert_eq!(Stringers::parse("Centre"), Some(Stringers::Centre));
+    assert_eq!(Stringers::parse("none"), Some(Stringers::None));
+    assert_eq!(Stringers::parse("two"), Some(Stringers::Two));
+    assert!(Stringers::Two.is_two() && !Stringers::None.is_two());
+    assert_eq!(Stringers::Centre.name(), "centre");
+}
+
+#[test]
+fn railing_host_names() {
+    assert_eq!(RailingHost::Well.name(), "well");
+    assert_eq!(RailingHost::StairLeft.name(), "stairLeft");
+    assert_eq!(RailingHost::StairRight.name(), "stairRight");
+    assert_eq!(RailingHost::Deck.name(), "deck");
+    assert!(RailingHost::default().is_well());
+    assert_eq!(serde_json::to_string(&RailingHost::StairLeft).unwrap(), "\"stairLeft\"");
+}
+
+#[test]
+fn opening_top_names() {
+    for t in [OpeningTop::Square, OpeningTop::Round, OpeningTop::Segment, OpeningTop::Roof] {
+        assert_eq!(OpeningTop::parse(t.name()), Some(t));
+    }
+    assert!(OpeningTop::Square.is_square() && !OpeningTop::Roof.is_square());
+    assert_eq!(OpeningTop::parse("gothic"), None);
+}
+
+#[test]
+fn opening_sides_names_both_left_right_none() {
+    assert_eq!(OpeningSides::BOTH.name(), "both");
+    assert_eq!(OpeningSides::RIGHT.name(), "right");
+    assert_eq!(OpeningSides::NONE.name(), "none");
+    assert_eq!(OpeningSides { left: true, right: false }.name(), "left");
+    for n in ["left", "right", "both", "none"] {
+        assert_eq!(OpeningSides::parse(n).map(|s| s.name()), Some(n));
+    }
+    assert_eq!(OpeningSides::default(), OpeningSides::RIGHT);
+    assert!(OpeningSides::RIGHT.is_right_only() && !OpeningSides::BOTH.is_right_only());
+    assert_eq!(OpeningSides::parse("up"), None);
+}
+
+#[test]
+fn grille_default_is_one_by_one() {
+    let g = Grille::default();
+    assert_eq!((g.across, g.down, g.top_only), (1, 1, false));
+    let back: Grille = serde_json::from_str(r#"{"across":3}"#).unwrap();
+    assert_eq!((back.across, back.down), (3, 1));
+    assert_eq!(MAX_GRILLE_LITES, 12);
+}
+
+#[test]
+fn stair_without_phase17_keys_loads_with_the_defaults() {
+    let s: Stair = serde_json::from_str(r#"{"width":1.2}"#).unwrap();
+    assert_eq!(s.width, 1.2);
+    assert!(!s.open_risers);
+    assert_eq!(s.stringers, Stringers::Two);
+    assert_eq!(s.underside, 0.3);
+    assert_eq!((s.rail_left, s.rail_right), (RailSetting::Auto, RailSetting::Auto));
+    assert_eq!(s.plan_cut, 1.2);
+    let v = serde_json::to_value(Stair::default()).unwrap();
+    for k in ["open_risers", "stringers", "underside", "rail_left", "rail_right", "plan_cut"] {
+        assert!(v.get(k).is_none(), "{k} written");
+    }
+    let t = Stair { stringers: Stringers::Centre, plan_cut: 1.5, ..Stair::default() };
+    let back: Stair = serde_json::from_str(&serde_json::to_string(&t).unwrap()).unwrap();
+    assert_eq!(back, t);
+}
+
+#[test]
+fn railing_saved_before_keeps_post_spacing_1_2() {
+    let r: Railing = serde_json::from_str(r#"{"post_spacing":1.2}"#).unwrap();
+    assert_eq!(r.post_spacing, 1.2);
+    assert_eq!(Railing::default().post_spacing, DEFAULT_POST_SPACING);
+    assert_eq!(DEFAULT_POST_SPACING, 1.8);
+}
+
+#[test]
+fn railing_host_defaults_to_well_and_auto_false() {
+    let r: Railing = serde_json::from_str(r#"{"follows":3}"#).unwrap();
+    assert_eq!(r.host, RailingHost::Well);
+    assert!(!r.auto);
+    assert_eq!(r.inset, 0.0);
+    let v = serde_json::to_value(&r).unwrap();
+    assert!(v.get("host").is_none() && v.get("auto").is_none() && v.get("inset").is_none());
+    let d = Railing { host: RailingHost::Deck, auto: true, inset: -0.1, ..Railing::default() };
+    let back: Railing = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+    assert_eq!(back, d);
+}
+
+#[test]
+fn room_deck_fields_default_and_skip() {
+    let r = Room::default();
+    assert_eq!(r.deck_boards, None);
+    assert!(r.deck_rails.is_empty());
+    let v = serde_json::to_value(&r).unwrap();
+    assert!(v.get("deck_boards").is_none() && v.get("deck_rails").is_none());
+    let d = Room {
+        deck_boards: Some(30.0),
+        deck_rails: vec![RailSetting::Off, RailSetting::On],
+        ..Room::default()
+    };
+    let back: Room = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+    assert_eq!(back, d);
+}
+
+#[test]
+fn opening_defaults_square_top_right_sides_no_grille_roof_offset_0_15() {
+    for o in [Opening::default(), Opening::new(ArchId(1), 1.0, 0.9, 1.2, OpeningKind::Window)] {
+        assert_eq!(o.grille, None);
+        assert_eq!(o.top, OpeningTop::Square);
+        assert_eq!(o.top_rise, 0.0);
+        assert_eq!(o.roof_offset, 0.15);
+        assert_eq!(o.sill_sides, OpeningSides::RIGHT);
+        assert_eq!(o.casing_sides, OpeningSides::RIGHT);
+    }
+    let o: Opening = serde_json::from_str(r#"{"width":2.0}"#).unwrap();
+    assert_eq!(o.sill_sides, OpeningSides::RIGHT);
+    assert_eq!(o.roof_offset, 0.15);
+}
+
+#[test]
+fn model_without_phase17_values_writes_the_same_json() {
+    let mut m = ArchModel::default();
+    let w = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(5.0, 0.0), 0.2));
+    m.push_opening(Opening::new(w, 1.0, 0.9, 2.1, OpeningKind::Door));
+    m.push_stair(Stair::default());
+    m.push_railing(Railing::default());
+    m.push_room(Room::default());
+    let text = serde_json::to_string(&m).unwrap();
+    for k in [
+        "grille",
+        "top",
+        "top_rise",
+        "roof_offset",
+        "sill_sides",
+        "casing_sides",
+        "open_risers",
+        "stringers",
+        "underside",
+        "rail_left",
+        "rail_right",
+        "plan_cut",
+        "inset",
+        "host_kind",
+        "auto",
+        "deck_boards",
+        "deck_rails",
+    ] {
+        assert!(!text.contains(&format!("\"{k}\":")), "{k} written");
+    }
+    let back: ArchModel = serde_json::from_str(&text).unwrap();
+    assert_eq!(serde_json::to_string(&back).unwrap(), text);
+}
