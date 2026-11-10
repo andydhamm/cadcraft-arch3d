@@ -11,7 +11,8 @@
 //!   null) means the first level / the last level; a present but unknown
 //!   level is refused. They name the two levels the stair joins, in either
 //!   order: the pair is ordered by elevation and the stored `from_level` is
-//!   the lower, `to_level` the upper. Equal elevations are refused. `start` is
+//!   the lower, `to_level` the upper. Equal elevations (one level: a deck stair
+//!   to grade) need an explicit `rise` and cut no well. `start` is
 //!   the centre of the bottom nosing line on the lower level.
 //! - `rise`: optional, metres; when present must be finite and positive and is
 //!   used as given. When absent it is derived as `upper.elevation -
@@ -145,13 +146,16 @@ fn run_stair(s: &mut Session, p: &Value) -> Result<Value> {
     let first = arch.levels.get(from_i).ok_or_else(|| bad("stair", "unknown fromLevel"))?;
     let second = arch.levels.get(to_i).ok_or_else(|| bad("stair", "unknown toLevel"))?;
     // The two levels are ordered by elevation, whichever way they were named:
-    // the lower is `from_level`, the upper `to_level`. Equal (or non-finite)
-    // elevations are refused: a stair joins two different heights.
-    if !(first.elevation.is_finite() && second.elevation.is_finite()) || first.elevation == second.elevation {
-        return Err(bad("stair", "the two levels must have different, finite elevations"));
+    // the lower is `from_level`, the upper `to_level`. Non-finite elevations are
+    // refused. Equal elevations (one level, e.g. a deck stair to grade) are a
+    // stair only with an explicit `rise` (a derived rise is then 0 and refused
+    // below), and it climbs to no upper floor, so it cuts no well.
+    if !(first.elevation.is_finite() && second.elevation.is_finite()) {
+        return Err(bad("stair", "the two levels must have finite elevations"));
     }
     let (from_i, to_i, from_level, to_level) =
-        if second.elevation > first.elevation { (from_i, to_i, first, second) } else { (to_i, from_i, second, first) };
+        if second.elevation >= first.elevation { (from_i, to_i, first, second) } else { (to_i, from_i, second, first) };
+    let climbs = to_level.elevation > from_level.elevation;
 
     // --- rise: param if finite & positive, else derived (finite & positive) ---
     let rise = match p.get("rise") {
@@ -206,7 +210,7 @@ fn run_stair(s: &mut Session, p: &Value) -> Result<Value> {
     // Levels are ordered by elevation above, so the upper level is always
     // higher; riser tops are counted from the lower level's elevation.
     let base_z = from_level.elevation;
-    let well_poly = well_polygon(&stair, &plan, base_z, slab_underside, MIN_HEADROOM);
+    let well_poly = if climbs { well_polygon(&stair, &plan, base_z, slab_underside, MIN_HEADROOM) } else { None };
     let has_well = well_poly.is_some();
     let guard = well_poly.as_ref().and_then(|_| well_guard_path(&stair, &plan, base_z, slab_underside, MIN_HEADROOM));
     let well = well_poly.unwrap_or_default();
@@ -482,6 +486,23 @@ mod tests {
         assert_eq!(one.doc().unwrap().arch.stairs.len(), 0);
         // A present unknown level is still refused.
         assert!(s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "toLevel": 99 })).is_err());
+    }
+
+    /// Phase-5 check 02: a one-level plan's deck stair to grade, given only its rise. Both levels default to the one level
+    /// (equal elevations), which is a stair, not an error, when the rise is given; it climbs to no upper floor, so no well.
+    #[test]
+    fn one_level_stair_with_a_rise_is_made_without_a_well() {
+        let mut s = new_session();
+        let r = s.execute("stair", &json!({ "start": [2.0, -0.5], "direction": 90.0, "width": 0.9, "rise": 0.9 })).unwrap();
+        assert_eq!(r["risers"].as_u64(), Some(5));
+        assert_eq!(r["well"].as_bool(), Some(false));
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.stairs.len(), 1);
+        assert!(d.arch.stairs[0].well.is_empty());
+        assert!(d.arch.railings.is_empty());
+        assert!(d.arch.rooms.iter().all(|r| r.room_type != RoomType::OpenBelow));
+        // Without a rise, equal elevations still have nothing to climb.
+        assert!(s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0 })).is_err());
     }
 
     #[test]
