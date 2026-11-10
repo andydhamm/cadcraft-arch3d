@@ -305,7 +305,7 @@ pub fn railing_meshes(r: &Railing, surface: &RailSurface) -> Vec<Mesh> {
             let seg = &segments[i];
             // Posts belonging to segment i: those with seg_i == i, plus the previous segment's
             // last post (the corner) and this segment's first post.
-            let posts_in_seg: Vec<&(Vec2, usize)> = posts.iter().enumerate().filter(|(_, &(p, si))| *si == i).collect();
+            let posts_in_seg: Vec<&(Vec2, usize)> = posts.iter().filter(|&(_, si)| *si == i).collect();
             if posts_in_seg.is_empty() {
                 continue;
             }
@@ -329,8 +329,8 @@ pub fn railing_meshes(r: &Railing, surface: &RailSurface) -> Vec<Mesh> {
             if *u1 - *u0 < 1e-6 {
                 continue;
             }
-            let s_a = walk_z(surface, seg.a);
-            let s_b = walk_z(surface, seg.b);
+            let s_a = walk_z(surface, &seg.a);
+            let s_b = walk_z(surface, &seg.b);
             let lo = s_a + BOTTOM_GAP + RAIL_DEPTH;
             let hi = s_b + h - RAIL_DEPTH;
             let mut m = Mesh::new("railing-panel", r.id);
