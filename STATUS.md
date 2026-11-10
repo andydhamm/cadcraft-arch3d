@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 30 of 34 segments merged · 15 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 16:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 15 / 20 | 37.0 h so far · expected done Nov 10 19:27–Nov 11 08:36 UTC |
+| 16 | Ceilings and foundations | building | 15 / 20 | 37.3 h so far · expected done Nov 10 19:42–Nov 11 08:51 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -45,6 +45,7 @@ Updated 2026-11-10 16:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 16:35 | `p16-rw-stair-wells` | refused | 8,375 pass |  |
 | Nov 10 16:16 | `harden-p16f-soffit-faces` | merged | 8,371 pass | tturbo-mac |
 | Nov 10 15:52 | `harden-p16-rw-open-below-rooms` | merged | 8,365 pass | tturbo-mac |
 | Nov 10 15:35 | `p17-scene-plumbing-export` | merged | 8,359 pass | claude-sonnet-a |
@@ -56,7 +57,6 @@ Updated 2026-11-10 16:30 UTC. This page and the card in the README are regenerat
 | Nov 10 13:22 | `p16-rw-stair-wells` | refused | 8,337 pass | mai-flash-esc |
 | Nov 10 12:57 | `p17-scene-plumbing-arch` | merged | 8,333 pass | claude-sonnet-a |
 | Nov 10 12:37 | `p16-rw-stair-wells` | refused | 8,322 pass | mai-flash-esc |
-| Nov 10 12:14 | `harden-p16-rw-overhead-arch` | merged | 8,318 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -75,5 +75,5 @@ Updated 2026-11-10 16:30 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 73 |
 | mai-flash-b | mai-code-1.1-flash | idle | 11 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 77 |
-| tturbo-mac | tturbo-ultraheretic | agent | 726 |
+| tturbo-mac | tturbo-ultraheretic | agent | 727 |
 | tturbo-mac2 | tturbo-ultraheretic | held | 348 |
