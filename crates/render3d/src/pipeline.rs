@@ -777,11 +777,18 @@ mod tests {
         assert_eq!(alpha, 0.35);
         assert_eq!(roughness, 0.05);
         assert_eq!(metallic, 0.0);
-        for name in ["wall", "floor", "ceiling", "roof", "frame", "casing", "leaf", "sill", "header", "stair", "railing", "deck", "ground"] {
+        for name in ["wall", "floor", "ceiling", "roof", "frame", "casing", "leaf", "sill", "header", "stair", "railing", "ground"] {
             let (_, m, r, a) = material_pbr(name);
             assert_eq!((m, a), (0.0, 1.0), "{name}");
             assert!((0.6..=0.95).contains(&r), "{name} roughness {r}");
         }
+    }
+
+    #[test]
+    fn material_pbr_of_deck_is_the_wood_look() {
+        assert_eq!(material_pbr("deck"), material_pbr("floor-wood"));
+        assert_eq!(material_pbr("deck"), ([1.0; 3], 0.0, 0.5, 1.0));
+        assert_ne!(material_pbr("deck-joist"), material_pbr("floor-wood"));
     }
 
     #[test]

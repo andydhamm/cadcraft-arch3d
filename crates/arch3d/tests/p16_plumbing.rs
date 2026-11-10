@@ -78,9 +78,9 @@ fn signature(s: &Scene3d) -> (String, Vec<(String, u32)>, [usize; 7]) {
 
 #[test]
 fn flat_house_digest_unchanged_by_the_pipeline() {
-    // Measured on op/next before phase 16: the same house, built by `floors::ceiling_surface`.
+    // Measured on op/next before phase 16, re-recorded when phase 17 framed the deck (the only change).
     let s = Scene3d::build(&house());
-    assert_eq!(s.digest(), "833027d24769ad40");
+    assert_eq!(s.digest(), "3ef0652c227f6d1a");
     let meshes: Vec<(&str, u32)> = s.meshes.iter().map(|m| (m.material.as_str(), m.object.0)).collect();
     let want = [
         ("wall", 0),
@@ -102,6 +102,28 @@ fn flat_house_digest_unchanged_by_the_pipeline() {
         ("fascia", 0),
         ("soffit", 0),
         ("deck", 3),
+        // Phase 17 frames the deck: its edge y = -0.1 lies on w0's outer face (the ledger), then 9
+        // joists, rims on the other 3 edges, one beam at y = -2.7 and 3 posts on 3 piers.
+        ("deck-ledger", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-joist", 3),
+        ("deck-rim", 3),
+        ("deck-rim", 3),
+        ("deck-rim", 3),
+        ("deck-beam", 3),
+        ("deck-post", 3),
+        ("deck-post", 3),
+        ("deck-post", 3),
+        ("deck-footing", 3),
+        ("deck-footing", 3),
+        ("deck-footing", 3),
         ("light-trim", 0),
         ("light-lens-lit", 0),
         ("light-trim", 1),

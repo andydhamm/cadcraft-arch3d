@@ -143,6 +143,16 @@ pub fn texture(finish: Finish) -> Texture {
     Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile }
 }
 
+/// The finish the boards of a deck show.
+pub const DECK_BOARD_FINISH: Finish = Finish::Wood;
+
+/// The finish a material shows without a `wall-` / `roof-` / `floor-` prefix: [`DECK_BOARD_FINISH`]
+/// for the deck boards' material `deck` (any case), none for anything else (the deck's structure
+/// stays untextured).
+pub fn board_finish(material: &str) -> Option<Finish> {
+    material.eq_ignore_ascii_case("deck").then_some(DECK_BOARD_FINISH)
+}
+
 /// Mean sRGB colour of the texture's pixels.
 pub fn mean_srgb(t: &Texture) -> [u8; 3] {
     let n = (t.rgba.len() / 4) as u64;
@@ -182,6 +192,15 @@ pub fn mean_linear(t: &Texture) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn board_finish_is_wood_for_deck_only() {
+        assert_eq!(board_finish("deck"), Some(Finish::Wood));
+        assert_eq!(board_finish("DECK"), Some(Finish::Wood));
+        for other in ["deck-joist", "deck-post", "deck-footing", "floor", "wall", "", "decking"] {
+            assert_eq!(board_finish(other), None, "{other}");
+        }
+    }
 
     fn lum(t: &Texture, x: usize, y: usize) -> i32 {
         let i = (y * N + x) * 4;
