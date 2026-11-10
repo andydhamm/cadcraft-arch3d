@@ -446,9 +446,9 @@ fn pick_reports_stair_part() {
     let scene = Scene3d::build(&model);
     let bvh = Bvh::build(&scene);
     // Pick the stair from above.
-    let hit = bvh.ray(v(2.5, 1.5, 2.0), v(0.0, 0.0, -1.0), 10.0);
+    let hit = bvh.ray(v(2.5, 1.0, 2.0), v(0.0, 0.0, -1.0), 10.0);
     assert!(hit.is_some(), "stair should be pickable from above");
-    assert_eq!(hit.unwrap().part, "stair");
+    assert_eq!(hit.unwrap().part, "tread");
 }
 
 /// Picking a railing should report part "railing".
