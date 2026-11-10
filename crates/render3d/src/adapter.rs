@@ -75,6 +75,12 @@ pub async fn request_device(instance: &wgpu::Instance, choice: AdapterChoice) ->
         AdapterChoice::Auto => wgpu::RequestAdapterOptions { power_preference: wgpu::PowerPreference::HighPerformance, ..Default::default() },
         AdapterChoice::Fallback => wgpu::RequestAdapterOptions { force_fallback_adapter: true, ..Default::default() },
     };
+    let turn = adapter_turn().await;
+    // Another thread may have made the device while this one waited for its turn.
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(hit) = shared_device(choice) {
+        return Ok(hit);
+    }
     let adapter = instance.request_adapter(&options).await.map_err(|_| Render3dError::NoAdapter)?;
     let wanted = wgpu::Limits::downlevel_webgl2_defaults();
     let required_limits = wanted.clone().or_worse_values_from(&adapter.limits());
@@ -83,12 +89,23 @@ pub async fn request_device(instance: &wgpu::Instance, choice: AdapterChoice) ->
         .request_device(&wgpu::DeviceDescriptor { label: Some("render3d"), required_limits, ..Default::default() })
         .await
         .map_err(|e| Render3dError::Wgpu(e.to_string()))?;
+    drop(turn);
     let info = adapter.get_info();
     let info = DeviceInfo { name: info.name, backend: format!("{:?}", info.backend), adapter_type: format!("{:?}", info.device_type), downlevel };
     #[cfg(not(target_arch = "wasm32"))]
     return Ok(share_device(choice, (device, queue, info)));
     #[cfg(target_arch = "wasm32")]
     Ok((device, queue, info))
+}
+
+/// Held by whoever is asking the driver for an adapter and device.
+static ADAPTER_TURN: futures::lock::Mutex<()> = futures::lock::Mutex::new(());
+
+/// Wait for this process's turn at the driver. Every adapter request holds a turn from just before
+/// `request_adapter` until its `request_device` has returned: on NVIDIA 620.70.06, threads asking for
+/// an adapter at the same moment crash inside `libnvidia-eglcore` (wgpu `expose_adapter`).
+pub(crate) async fn adapter_turn() -> futures::lock::MutexGuard<'static, ()> {
+    ADAPTER_TURN.lock().await
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -128,6 +145,30 @@ mod tests {
         for bad in ["", "gpu", "software", "auto fallback", "fallbac"] {
             assert_eq!(AdapterChoice::parse(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn adapter_turns_never_overlap() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static HOLDERS: AtomicUsize = AtomicUsize::new(0);
+        static HIGHEST: AtomicUsize = AtomicUsize::new(0);
+        let threads: Vec<_> = (0..16)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    for _ in 0..8 {
+                        let _turn = futures::executor::block_on(adapter_turn());
+                        let now = HOLDERS.fetch_add(1, Ordering::SeqCst) + 1;
+                        HIGHEST.fetch_max(now, Ordering::SeqCst);
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                        HOLDERS.fetch_sub(1, Ordering::SeqCst);
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            assert!(t.join().is_ok(), "a thread panicked");
+        }
+        assert_eq!(HIGHEST.load(Ordering::SeqCst), 1);
     }
 
     #[test]

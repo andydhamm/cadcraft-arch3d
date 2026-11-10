@@ -4,16 +4,19 @@ use std::future::Future;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use futures::FutureExt;
-
 /// Try to obtain a wgpu device and queue without blocking for longer than one poll.
 ///
 /// Returns `None` when no adapter is available or the adapter/device request future
 /// is not ready after a single poll.
 pub(crate) fn device_and_queue() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = crate::offscreen::headless_instance();
-    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions::default()).now_or_never()?.ok()?;
-    let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor::default()).now_or_never()?.ok()?;
+    // A held turn is Pending, so bound the wait instead of reading a busy turn as no adapter.
+    let request = async {
+        let _turn = crate::adapter::adapter_turn().await;
+        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions::default()).await.ok()?;
+        adapter.request_device(&wgpu::DeviceDescriptor::default()).await.ok()
+    };
+    let (device, queue) = poll_bounded(request, SHARED_DEVICE_BUDGET)??;
     Some((crate::offscreen::kept_for_the_process(device), queue))
 }
 

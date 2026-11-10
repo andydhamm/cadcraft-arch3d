@@ -71,13 +71,13 @@ pub fn request_compute(choice: AdapterChoice, ray_query: bool) -> Result<Option<
 /// the T1000 out of memory, 2026-11-04).
 pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoice, ray_query: bool) -> Result<Option<ComputeGpu>, Render3dError> {
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(hit) = SHARED_COMPUTE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .iter()
-        .find(|(k, _)| *k == (choice, ray_query))
-        .map(|(_, g)| g.clone())
-    {
+    if let Some(hit) = shared_compute(choice, ray_query) {
+        return Ok(Some(hit));
+    }
+    let turn = crate::adapter::adapter_turn().await;
+    // Another thread may have made the device while this one waited for its turn.
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(hit) = shared_compute(choice, ray_query) {
         return Ok(Some(hit));
     }
     let options = match choice {
@@ -117,6 +117,7 @@ pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoi
         ..Default::default()
     };
     let (device, queue) = adapter.request_device(&desc).await.map_err(|e| Render3dError::Wgpu(e.to_string()))?;
+    drop(turn);
     let a = adapter.get_info();
     let adapter_key =
         format!("{:04x}-{:04x}-{}-{}-app{}", a.vendor, a.device, key_part(&a.driver), key_part(&a.driver_info), key_part(env!("CARGO_PKG_VERSION")));
@@ -138,6 +139,11 @@ pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoi
 
 #[cfg(not(target_arch = "wasm32"))]
 static SHARED_COMPUTE: std::sync::Mutex<Vec<((AdapterChoice, bool), ComputeGpu)>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(not(target_arch = "wasm32"))]
+fn shared_compute(choice: AdapterChoice, ray_query: bool) -> Option<ComputeGpu> {
+    SHARED_COMPUTE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter().find(|(k, _)| *k == (choice, ray_query)).map(|(_, g)| g.clone())
+}
 
 #[cfg(test)]
 mod tests {

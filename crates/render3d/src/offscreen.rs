@@ -832,7 +832,10 @@ mod offscreen_behavior_tests {
                 std::thread::spawn(|| {
                     for _ in 0..12 {
                         let instance = headless_instance();
-                        let _ = futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()));
+                        let _ = futures::executor::block_on(async {
+                            let _turn = crate::adapter::adapter_turn().await;
+                            instance.request_adapter(&wgpu::RequestAdapterOptions::default()).await
+                        });
                     }
                 })
             })
