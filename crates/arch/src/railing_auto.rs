@@ -82,8 +82,7 @@ fn stair_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
 
     if want_left {
         let t = stair.width / 2.0;
-        let inset = -0.045;
-        let path = vec![stair_point(stair, 0.0, t + inset), stair_point(stair, plan.run, t + inset)];
+        let path = vec![stair_point(stair, 0.0, t), stair_point(stair, plan.run, t)];
         rails.push(Railing {
             path,
             level: stair.from_level,
@@ -92,7 +91,7 @@ fn stair_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
             follows: Some(stair.id),
             host: RailingHost::StairLeft,
             auto: true,
-            inset,
+            inset: -0.045,
             layer: "A-RAIL".into(),
             ..Railing::default()
         });
@@ -107,8 +106,7 @@ fn stair_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
 
     if want_right {
         let t = -stair.width / 2.0;
-        let inset = 0.045;
-        let path = vec![stair_point(stair, 0.0, t + inset), stair_point(stair, plan.run, t + inset)];
+        let path = vec![stair_point(stair, 0.0, t), stair_point(stair, plan.run, t)];
         rails.push(Railing {
             path,
             level: stair.from_level,
@@ -117,7 +115,7 @@ fn stair_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
             follows: Some(stair.id),
             host: RailingHost::StairRight,
             auto: true,
-            inset,
+            inset: 0.045,
             layer: "A-RAIL".into(),
             ..Railing::default()
         });
