@@ -221,6 +221,12 @@ pub fn validate(o: &mut Opening, roof_top: Option<&[Vec2]>) -> Result<(), String
 mod tests {
     use super::*;
 
+    #[test]
+    fn the_stub_accepts_a_square_opening() {
+        let mut o = Opening::default();
+        assert!(validate(&mut o, None).is_ok());
+    }
+
     fn win(top: OpeningTop, offset: f64, width: f64, height: f64, sill: f64) -> Opening {
         Opening { offset, width, height, sill, top, ..Opening::default() }
     }
