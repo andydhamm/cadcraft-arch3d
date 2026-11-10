@@ -1037,4 +1037,36 @@ mod tests {
         let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "width": 5.0, "fromLevel": 0, "toLevel": 1 })).unwrap();
         assert_eq!(s.doc().unwrap().arch.stairs[0].width, 5.0);
     }
+
+    #[test]
+    fn stair_command_brings_its_automatic_side_railings() {
+        let mut s = two_level_session();
+        // Stair with well
+        s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 0, "toLevel": 1 })).unwrap();
+        let d = s.doc().unwrap();
+
+        // Well guard
+        let guards: Vec<_> = d.arch.railings.iter().filter(|r| r.host == RailingHost::Well && !r.auto).collect();
+        assert_eq!(guards.len(), 1);
+
+        // Auto side railings
+        let auto_rails: Vec<_> = d.arch.railings.iter().filter(|r| r.auto && r.follows == Some(d.arch.stairs[0].id)).collect();
+        assert_eq!(auto_rails.len(), 2);
+        assert!(auto_rails.iter().any(|r| r.host == RailingHost::StairLeft));
+        assert!(auto_rails.iter().any(|r| r.host == RailingHost::StairRight));
+        assert!(auto_rails.iter().all(|r| r.level == 0));
+
+        // Deck stair to grade
+        let mut s2 = two_level_session();
+        s2.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 1, "toLevel": 0, "rise": 2.7 })).unwrap();
+        let d2 = s2.doc().unwrap();
+
+        // No well guard for deck stair (well is false)
+        let guards2: Vec<_> = d2.arch.railings.iter().filter(|r| r.host == RailingHost::Well && !r.auto).collect();
+        assert!(guards2.is_empty());
+
+        // Auto side railings
+        let auto_rails2: Vec<_> = d2.arch.railings.iter().filter(|r| r.auto && r.follows == Some(d2.arch.stairs[0].id)).collect();
+        assert_eq!(auto_rails2.len(), 2);
+    }
 }
