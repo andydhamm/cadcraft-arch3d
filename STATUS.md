@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 21 of 33 segments merged · 10 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 08:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 10 / 20 | 28.5 h so far · expected done Nov 10 16:51–Nov 11 09:20 UTC |
+| 16 | Ceilings and foundations | building | 10 / 20 | 28.8 h so far · expected done Nov 10 17:07–Nov 11 09:35 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -42,9 +42,9 @@ Updated 2026-11-10 08:00 UTC. This page and the card in the README are regenerat
 | `p16f-tray-outline-reply` | tray: the reply's outline is a ring of [x, y] points | merging | darwin-ws3 |
 | `p16f-soffit-faces` | soffit: rects snap to the room-side wall face; `over` starts at the cabinets' backs | merging | bonsai-b |
 | `p16f-slab-edge-mesh` | slab foundation: one footing mesh per founded wall | merging | bonsai-ws2-a |
-| `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | merging | claude-sonnet-b |
+| `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | working | mai-flash |
 | `p16-rw-open-below-rooms` | Open Below rooms: drawn ones cut holes, roomdetect keeps them | merging | mai-flash-esc |
-| `p16-rw-overhead-3d` | arch3d: ceilings and wall tops clipped at the level above, opened under Open Below | working | mai-flash-esc |
+| `p16-rw-overhead-3d` | arch3d: ceilings and wall tops clipped at the level above, opened under Open Below | merging | mai-flash-esc |
 | `p16-rw-above-grade-living` | above-grade area: Chief's living-area convention | merging | claude-sonnet-c |
 | `p16-rw-technical-silhouettes` | technical illustration: silhouettes for the camera's view direction | merging | claude-sonnet-a |
 | `p16-rw-pane-styles` | 3D pane: Clay and Technical in the style selector | merging | claude-sonnet-a |
@@ -53,6 +53,7 @@ Updated 2026-11-10 08:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 08:07 | `p16-rw-stair-wells` | refused | 8,270 pass | claude-sonnet-b |
 | Nov 10 07:38 | `p16-rw-overhead-arch` | merged | 8,266 pass | claude-sonnet-d |
 | Nov 10 07:18 | `p16f-tray-roof-guard` | merged | 8,261 pass | bonsai-ws2-b |
 | Nov 10 06:51 | `p16-rw-roof-top-level` | merged | 8,259 pass | mai-flash-b |
@@ -64,24 +65,23 @@ Updated 2026-11-10 08:00 UTC. This page and the card in the README are regenerat
 | Nov 10 02:32 | `p16-demo` | refused | 0 pass | darwin-ws3 |
 | Nov 10 02:32 | `p15-docs-user-guide` | merged | 8,243 pass |  |
 | Nov 10 02:10 | `p16-trays-check` | merged | 8,242 pass | bonsai-a |
-| Nov 10 01:37 | `p16-render3d-adapter-turns` | merged | 8,241 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1027 |
-| bonsai-b | bonsai2-27b | agent | 971 |
-| bonsai-ws2-a | bonsai2-27b | idle | 1076 |
+| bonsai-a | bonsai2-27b | agent | 1028 |
+| bonsai-b | bonsai2-27b | gate | 971 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1076 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1041 |
 | claude-sonnet-a | sonnet | idle | 98 |
 | claude-sonnet-b | sonnet | idle | 102 |
 | claude-sonnet-c | sonnet | merging | 48 |
 | claude-sonnet-d | sonnet | idle | 46 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 928 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 930 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 71 |
+| mai-flash | mai-code-1.1-flash | agent | 71 |
 | mai-flash-b | mai-code-1.1-flash | idle | 11 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 66 |
+| mai-flash-esc | mai-code-1.1-flash | merging | 67 |
 | tturbo-mac | tturbo-ultraheretic | agent | 717 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
