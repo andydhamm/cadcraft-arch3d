@@ -379,7 +379,7 @@ impl Trim {
                     },
                     Some(_) => return Err(bad(cmd, "`grille.part` must be \"whole\" or \"top\"")),
                 };
-                t.grille = Some(Grille { across: count("across")?, down: count("down")?, top_only });
+                t.grille = Some(Grille { across: count("across")?, down: count("down")?, top_only, ..Default::default() });
             }
             Some(_) => return Err(bad(cmd, "`grille` must be null or {across, down, part?}")),
         }
@@ -1297,7 +1297,7 @@ mod tests {
         assert_eq!(o["grille"], json!({"across": 2, "down": 3, "part": "top"}));
         assert_eq!((o["sillSides"].as_str(), o["casingSides"].as_str()), (Some("both"), Some("none")));
         let op = &s.doc().unwrap().arch.openings[0];
-        assert_eq!(op.grille, Some(Grille { across: 2, down: 3, top_only: true }));
+        assert_eq!(op.grille, Some(Grille { across: 2, down: 3, top_only: true, ..Default::default() }));
         assert_eq!((op.top, op.top_rise, op.roof_offset), (OpeningTop::Round, 0.2, 0.3));
         assert_eq!((op.sill_sides, op.casing_sides), (OpeningSides::BOTH, OpeningSides::NONE));
         // Defaults: plain glass, square top, right sides; "whole" is the default part.
