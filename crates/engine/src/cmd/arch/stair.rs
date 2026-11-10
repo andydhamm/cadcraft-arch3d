@@ -485,6 +485,19 @@ mod tests {
     }
 
     #[test]
+    fn deck_stair_to_grade_makes_no_well() {
+        let mut s = two_level_session();
+        add_big_room(&mut s, 0);
+        let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 1, "toLevel": 0, "rise": 2.7 })).unwrap();
+        // Behaviour changed: the pair is ordered by elevation (lower first), so the well is
+        // cut, and the stair keeps it.
+        assert_eq!(r["well"].as_bool(), Some(true));
+        let d = s.doc().unwrap();
+        assert_eq!((d.arch.stairs[0].from_level, d.arch.stairs[0].to_level), (0, 1));
+        assert!(!d.arch.stairs[0].well.is_empty());
+    }
+
+    #[test]
     fn top_down_pair_is_ordered_not_refused() {
         let mut s = two_level_session();
         let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 1, "toLevel": 0 })).unwrap();
