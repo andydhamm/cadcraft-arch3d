@@ -2685,4 +2685,57 @@ mod tests {
         assert_eq!(uv["min"], json!([-1.0, -4.0]));
         assert_eq!(uv["max"], json!([3.0, 2.0]));
     }
+
+    #[test]
+    fn glb_interleaved_stair_parts_from_two_stairs() {
+        let scene = p17_scene(&[("stair-tread", 0), ("stair-tread", 1), ("stair-riser", 0), ("stair-riser", 1)]);
+        let json = tests_json(&scene);
+        let nodes: Vec<&str> = json["nodes"].as_array().map(|a| a.iter().filter_map(|n| n["name"].as_str()).collect()).unwrap_or_default();
+        let s0 = nodes.iter().filter(|&&n| n == "stair-s0").count();
+        let s1 = nodes.iter().filter(|&&n| n == "stair-s1").count();
+        assert_eq!(s0, 1, "{nodes:?}");
+        assert_eq!(s1, 1, "{nodes:?}");
+        for name in ["stair-s0", "stair-s1"] {
+            let mesh = json["meshes"].as_array().unwrap().iter().find(|m| m["name"] == name).unwrap();
+            assert_eq!(mesh["primitives"].as_array().unwrap().len(), 2, "{name}");
+        }
+    }
+
+    #[test]
+    fn glb_stair_and_railing_same_object_id() {
+        let scene = p17_scene(&[("stair-tread", 5), ("railing-post", 5)]);
+        let names = node_names(&scene);
+        assert_eq!(names, ["stair-s5", "railing-ra5"]);
+        let json = tests_json(&scene);
+        let nodes: Vec<&str> = json["nodes"].as_array().map(|a| a.iter().filter_map(|n| n["name"].as_str()).collect()).unwrap_or_default();
+        assert_eq!(nodes.iter().filter(|&&n| n == "stair-s5").count(), 1, "{nodes:?}");
+        assert_eq!(nodes.iter().filter(|&&n| n == "railing-ra5").count(), 1, "{nodes:?}");
+    }
+
+    #[test]
+    fn shares_a_node_edge_cases() {
+        assert!(!shares_a_node("stair"));
+        assert!(!shares_a_node("railing"));
+        assert!(!shares_a_node("deck"));
+        assert!(shares_a_node("stair-tread"));
+        assert!(shares_a_node("stair-riser"));
+        assert!(shares_a_node("stair-stringer"));
+        assert!(shares_a_node("stair-skirt"));
+        assert!(shares_a_node("stair-landing"));
+        assert!(shares_a_node("railing-post"));
+        assert!(shares_a_node("railing-rail"));
+        assert!(shares_a_node("railing-panel"));
+        assert!(shares_a_node("railing-baluster"));
+        assert!(shares_a_node("deck-ledger"));
+        assert!(shares_a_node("deck-joist"));
+        assert!(shares_a_node("deck-rim"));
+        assert!(shares_a_node("deck-beam"));
+        assert!(shares_a_node("deck-post"));
+        assert!(shares_a_node("deck-footing"));
+        assert!(!shares_a_node("wall"));
+        assert!(!shares_a_node("roof"));
+        assert!(!shares_a_node("floor"));
+        assert!(!shares_a_node("window-grille"));
+        assert!(!shares_a_node("door-casing-left"));
+    }
 }
