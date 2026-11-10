@@ -165,6 +165,28 @@ fn room_type_name(t: RoomType) -> &'static str {
     room_type_key(t)
 }
 
+fn same_ring_vertices(a: &[cadcraft_geom::Vec2], b: &[cadcraft_geom::Vec2]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut used = vec![false; b.len()];
+    for p in a {
+        let mut match_idx = None;
+        for (i, q) in b.iter().enumerate() {
+            if used[i] || !p.near(*q, 1e-9) {
+                continue;
+            }
+            match_idx = Some(i);
+            break;
+        }
+        let Some(i) = match_idx else {
+            return false;
+        };
+        used[i] = true;
+    }
+    true
+}
+
 /// `flatCeiling`: absent is `None`; `true` / `false`; any other JSON value (null included) is refused.
 fn flat_ceiling_param(p: &Value) -> Result<Option<bool>> {
     match p.get("flatCeiling") {
@@ -430,8 +452,45 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
     guard_flat_ceiling(arch, &room)?;
     let stack_json = ceiling_stack_json(&room.ceiling_stack);
     let d = s.doc_mut()?;
+    let room_level = room.level;
+    let level_elev = d.arch.level(room_level).map(|l| l.elevation).unwrap_or(0.0);
+    let seated_before = if room.room_type == RoomType::OpenBelow {
+        d.arch.levels.iter().filter(|l| l.elevation < level_elev).flat_map(|l| seated_ceiling_items(&d.arch, l.index)).collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
     let id = d.arch.push_room(room);
+    if room_type == RoomType::OpenBelow {
+        let Some(ip) = cadcraft_geom::region::interior_point(&d.arch.rooms.last().unwrap().polygon) else {
+            cadcraft_arch::area::refresh_areas(&mut d.arch);
+            d.touch_arch();
+            return Ok(json!({
+                "id": format!("r{}", id.0),
+                "handle": cadcraft_doc::arch::handle_json(cadcraft_arch::room_handle(id)),
+                "type": room_type_key(room_type),
+                "interiorArea": interior_area,
+                "standardArea": standard_area,
+                "flatCeiling": flat_ceiling,
+                "ceilingStack": stack_json,
+            }));
+        };
+        if let Some(host_idx) = d.arch.rooms.iter().position(|r| {
+            r.id != id
+                && r.level == room_level
+                && r.room_type != RoomType::OpenBelow
+                && r.polygon.len() >= 3
+                && cadcraft_geom::point_in_polygon(&r.polygon, ip)
+                && !r.holes.iter().any(|h| h.len() >= 3 && cadcraft_geom::point_in_polygon(h, ip))
+        }) {
+            let new_poly = d.arch.rooms.last().unwrap().polygon.clone();
+            let host = &mut d.arch.rooms[host_idx];
+            if !host.holes.iter().any(|h| same_ring_vertices(h, &new_poly)) {
+                host.holes.push(new_poly);
+            }
+        }
+    }
     cadcraft_arch::area::refresh_areas(&mut d.arch);
+    reseat(&mut d.arch, &seated_before);
     d.touch_arch();
 
     Ok(json!({
@@ -556,6 +615,40 @@ mod tests {
         assert_eq!(d.arch.room(d.arch.rooms.last().unwrap().id).unwrap().polygon.len(), 4);
         assert_eq!(d.arch.room(d.arch.rooms.last().unwrap().id).unwrap().level, 0);
         assert_eq!(d.arch.room(d.arch.rooms.last().unwrap().id).unwrap().room_type, RoomType::Other);
+    }
+
+    #[test]
+    fn room_open_below_cuts_a_hole_in_its_level_room() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        s.execute(
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
+                "level": 1,
+                "thickness": 0.2,
+                "height": 2.4,
+                "exterior": true,
+            }),
+        )
+        .unwrap();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        let host_id = s.doc().unwrap().arch.rooms[0].id;
+        s.execute(
+            "room",
+            &json!({
+                "points": [[1.5, 1.5], [2.5, 1.5], [2.5, 4.8], [1.5, 4.8], [1.5, 1.5]],
+                "type": "openBelow",
+                "level": "Level 2",
+            }),
+        )
+        .unwrap();
+        let d = s.doc().unwrap();
+        let open_id = d.arch.rooms.iter().find(|r| r.room_type == RoomType::OpenBelow).unwrap().id;
+        let host = d.arch.rooms.iter().find(|r| r.id == host_id).unwrap();
+        assert_eq!(host.holes.len(), 1);
+        assert_eq!(host.holes[0].len(), 4);
+        assert!(host.holes.iter().any(|hole| same_ring_vertices(hole, &d.arch.room(open_id).unwrap().polygon)));
     }
 
     /// The new room types ("dining", "family", "entry", "laundry") parse and
