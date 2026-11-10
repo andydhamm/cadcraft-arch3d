@@ -596,13 +596,55 @@ pub fn wall_slopes(model: &ArchModel, level: u32, fp: &Footprint, roof: &Roof) -
         .collect()
 }
 
-/// Highest level index owning an exterior wall, else the last level's index.
+/// Highest-level index reached by an exterior, non-divider wall.
+///
+/// The wall's effective level is its `top_level` when set and known, otherwise its
+/// `base_level`; a wall naming a missing level counts its base level. The winner is the
+/// level with the highest elevation, then the higher index on a tie. When no exterior,
+/// non-divider wall exists, we fall back to the highest-elevation level in the model.
 pub fn top_level(model: &ArchModel) -> u32 {
-    let highest = model.walls.iter().filter(|w| w.exterior && !w.divider).map(|w| w.top_level.map_or(w.base_level, |t| t.max(w.base_level))).max();
-    match highest {
-        Some(h) => h,
-        None => model.levels.last().map(|l| l.index).unwrap_or(0),
+    let mut best_index = 0;
+    let mut best_elevation = f64::NEG_INFINITY;
+    let mut saw_wall = false;
+
+    for wall in &model.walls {
+        if !wall.exterior || wall.divider {
+            continue;
+        }
+        saw_wall = true;
+
+        let reached = match wall.top_level {
+            Some(top) if model.level(top).is_some() => top,
+            _ => wall.base_level,
+        };
+        let Some(level) = model.level(reached) else {
+            continue;
+        };
+        if !level.elevation.is_finite() {
+            continue;
+        }
+
+        if level.elevation > best_elevation || (level.elevation == best_elevation && reached > best_index) {
+            best_elevation = level.elevation;
+            best_index = reached;
+        }
     }
+
+    if saw_wall && best_elevation.is_finite() {
+        return best_index;
+    }
+
+    for level in &model.levels {
+        if !level.elevation.is_finite() {
+            continue;
+        }
+        if level.elevation > best_elevation || (level.elevation == best_elevation && level.index > best_index) {
+            best_elevation = level.elevation;
+            best_index = level.index;
+        }
+    }
+
+    if best_elevation.is_finite() { best_index } else { 0 }
 }
 
 /// Errors from building roof geometry.
@@ -1177,6 +1219,47 @@ mod tests {
         // No exterior walls → last level (0).
         let empty = ArchModel::default();
         assert_eq!(top_level(&empty), 0);
+    }
+
+    #[test]
+    fn top_level_picks_the_highest_level_by_elevation() {
+        let mut add_ring = |model: &mut ArchModel, level: u32| {
+            let pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)];
+            for i in 0..pts.len() {
+                let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+                let mut wall = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+                wall.exterior = true;
+                wall.base_level = level;
+                model.push_wall(wall);
+            }
+        };
+
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ..Level::default() });
+        model.levels.push(Level { index: 1, name: "Basement".into(), elevation: -2.7, ..Level::default() });
+        add_ring(&mut model, 0);
+        add_ring(&mut model, 1);
+        assert_eq!(top_level(&model), 0);
+
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ..Level::default() });
+        model.levels.push(Level { index: 1, name: "Main".into(), elevation: 2.7, ..Level::default() });
+        add_ring(&mut model, 0);
+        add_ring(&mut model, 1);
+        assert_eq!(top_level(&model), 1);
+
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ..Level::default() });
+        model.levels.push(Level { index: 1, name: "Main".into(), elevation: 2.7, ..Level::default() });
+        let mut wall = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        wall.exterior = true;
+        wall.base_level = 0;
+        wall.top_level = Some(1);
+        model.push_wall(wall);
+        assert_eq!(top_level(&model), 1);
     }
 
     /// A fixture roof: no overhang, no thickness, default 6/12 pitch.
