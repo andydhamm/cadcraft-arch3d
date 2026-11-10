@@ -203,6 +203,21 @@ mod tests {
     }
 
     #[test]
+    fn stub_matches_the_legacy_slab() {
+        // Without a frame the boards are today's slab: same vertex count, one "deck" mesh; a deck
+        // with no height is still a "floor".
+        let level = Level::default();
+        let deck = north_deck();
+        let got = deck_meshes(&deck, &level, None);
+        let want: Vec<Mesh> = floors::floor_slab(&deck, &level, "deck").into_iter().collect();
+        assert_eq!(got.len(), 1);
+        assert!(!got[0].positions.is_empty() && !want[0].positions.is_empty());
+        assert_eq!(got[0].material, "deck");
+        let flat = Room { deck_height: None, ..deck };
+        assert_eq!(deck_meshes(&flat, &level, None)[0].material, "floor");
+    }
+
+    #[test]
     fn deck_without_frame_keeps_the_legacy_slab() {
         let polygon = vec![Vec2::new(2.0, 8.1), Vec2::new(6.0, 8.1), Vec2::new(6.0, 11.1), Vec2::new(2.0, 11.1)];
         let level = Level::default();

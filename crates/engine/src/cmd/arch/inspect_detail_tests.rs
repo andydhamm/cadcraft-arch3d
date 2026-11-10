@@ -125,7 +125,7 @@ fn opening_rows_report_top_grille_sides_and_glass() {
 }
 
 #[test]
-fn decks_rows_have_the_row_shape() {
+fn decks_rows_stub_has_the_row_shape() {
     let mut s = with_model(|m| {
         m.push_room(Room { room_type: RoomType::Living, polygon: square(), ..Room::default() });
         m.push_room(Room { room_type: RoomType::Deck, polygon: square(), deck_height: Some(0.5), ..Room::default() });

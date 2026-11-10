@@ -564,4 +564,11 @@ mod tests {
         let not_deck = Room { polygon: sq(3.0), deck_height: Some(0.5), ..Room::default() };
         assert!(frame(&m, &not_deck, &|_| 0.0).is_none());
     }
+
+    #[test]
+    fn frame_stub_is_none() {
+        // A room that is not a deck (the old stub's answer for everything) has no frame.
+        let m = house();
+        assert!(frame(&m, &north_deck(), &|_| 0.0).is_none());
+    }
 }
