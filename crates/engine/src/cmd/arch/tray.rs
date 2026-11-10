@@ -196,22 +196,34 @@ fn parse_create_tray(cmd: &str, model: &ArchModel, p: &Value) -> Result<Tray> {
     t.inset = p.get("inset").filter(|v| !v.is_null()).map(|_| parse_f64(cmd, p, "inset")).transpose()?.unwrap_or(0.0);
     t.depth = parse_f64(cmd, p, "depth")?;
     t.sides = parse_sides(cmd, p)?;
+    t.polygon = polygon.clone();
 
-    let mut best: Option<(usize, ArchId)> = None;
-    for tray in model.trays.iter().filter(|t| t.room == room.id && t.level == room.level) {
-        let outline = match outline_in(&room, &model.trays, tray) {
-            Ok(outline) => outline,
-            Err(_) => continue,
-        };
-        if polygon.iter().all(|p| point_in_polygon(&outline, *p)) {
-            let depth = tray_depth(model, tray.id);
-            match best {
-                Some((best_depth, _)) if depth <= best_depth => {}
-                _ => best = Some((depth, tray.id)),
+    // The drawn polygon becomes the parent tray's outline only when it is fully inside that tray's outline and inside the room;
+    // otherwise there is no parent.
+    let mut best_parent: Option<ArchId> = None;
+    let mut best_area: f64 = f64::INFINITY;
+    for cand in model.trays.iter() {
+        if cand.room != room.id || cand.level != room.level || cand.id == t.id {
+            continue;
+        }
+        if let Ok(outline) = outline_in(&room, &model.trays, cand) {
+            if outline.iter().all(|p| p.is_finite()) && polygon.iter().all(|p| point_in_polygon(&outline, *p) && point_in_polygon(&room.polygon, *p))
+            {
+                let area = (0..outline.len())
+                    .fold(0.0, |acc, i| {
+                        let a = outline[i];
+                        let b = outline[(i + 1) % outline.len()];
+                        acc + 0.5 * (a.x * b.y - a.y * b.x)
+                    })
+                    .abs();
+                if area < best_area {
+                    best_area = area;
+                    best_parent = Some(cand.id);
+                }
             }
         }
     }
-    t.parent = best.map(|(_, id)| id);
+    t.parent = best_parent;
     Ok(t)
 }
 
@@ -551,5 +563,47 @@ mod tests {
             assert!(a[1].as_f64().unwrap() >= 3.65 && a[1].as_f64().unwrap() <= 7.3);
         }
         assert!((row["ceiling"].as_f64().unwrap() - 2.7).abs() < 1e-6);
+    }
+
+    /// A drawn polygon inside tr0's outline gets `room` = NW and `parent` = tr0; one outside
+    /// every tray gets `parent` null; a polygon straddling two rooms or partly outside its room
+    /// is refused.
+    #[test]
+    fn polygon_tray_finds_its_room_and_parent() {
+        let mut s = Session::new();
+        build_phase1_house(&mut s);
+        let room = nw_room_id(&mut s);
+        let rev = s.doc().unwrap().arch_revision;
+
+        // tr0 in the NW room: its outline is (0.7..5.35, 3.65..7.3).
+        s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": 0.3})).unwrap();
+        let parent_id =
+            s.execute("arch.inspect", &json!({"trays": true})).unwrap()["trays"].as_array().unwrap()[0]["id"].as_str().unwrap().to_string();
+
+        // A polygon fully inside tr0's outline, still inside the room.
+        let inside = vec![[2.0, 4.0], [4.0, 4.0], [4.0, 6.0], [2.0, 6.0], [2.0, 4.0]];
+        let res = s.execute("tray", &json!({"polygon": inside.clone(), "depth": 0.2})).unwrap();
+        assert_eq!(res["room"], room);
+        assert_eq!(res["parent"], parent_id);
+        let handle = res["tray"].as_str().unwrap().to_string();
+        s.execute("tray.delete", &json!({"id": handle})).unwrap();
+
+        // A polygon inside the room but outside tr0's outline: parent is null.
+        let outside = vec![[0.2, 3.2], [0.5, 3.2], [0.5, 3.5], [0.2, 3.5], [0.2, 3.2]];
+        let res_out = s.execute("tray", &json!({"polygon": outside.clone(), "depth": 0.2})).unwrap();
+        assert_eq!(res_out["room"], room);
+        assert_eq!(res_out["parent"], Value::Null);
+        let outside_handle = res_out["tray"].as_str().unwrap().to_string();
+
+        // A polygon straddling the NW / South boundary: refused, nothing written.
+        let straddle = vec![[2.0, 2.8], [4.0, 2.8], [4.0, 5.0], [2.0, 5.0], [2.0, 2.8]];
+        let before = s.doc().unwrap().arch_revision;
+        let err = s.execute("tray", &json!({"polygon": straddle.clone(), "depth": 0.2}));
+        assert!(err.is_err());
+        assert_eq!(s.doc().unwrap().arch_revision, before);
+        assert_eq!(s.doc().unwrap().arch_revision, rev + 4);
+
+        let gone = s.execute("tray.delete", &json!({"id": outside_handle})).unwrap();
+        assert_eq!(gone["deleted"].as_array().unwrap().len(), 1);
     }
 }
