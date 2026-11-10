@@ -256,7 +256,11 @@ impl SceneCache {
         fill_materials(model, &mut self.scene);
         self.model = model.clone();
         let present = object_keys(&self.scene.meshes);
-        let rebuilt = if changed.is_empty() { 0 } else { self.sections.fresh_keys().intersection(&present).count() };
+        let fresh = self.sections.fresh_keys();
+        let rebuilt = if changed.is_empty() { 0 } else { fresh.intersection(&present).count() };
+        if changed == BTreeSet::from([ObjectKey { kind: ObjectKind::Foundation, id: ArchId(0) }]) {
+            eprintln!("changed={changed:?} fresh={fresh:?} present={present:?} rebuilt={rebuilt}");
+        }
         RebuildStats { rebuilt, objects: present.len(), incremental: true }
     }
 
@@ -540,7 +544,7 @@ impl Sections {
             painted(model, openings::opening_meshes(&map, &i.opening, i.span).into_iter().filter(|m| !m.positions.is_empty()).collect())
         });
 
-        let room_items = model
+        let room_items: Vec<(ArchId, RoomIn)> = model
             .rooms
             .iter()
             .map(|room| {
@@ -553,6 +557,13 @@ impl Sections {
                 (room.id, RoomIn { room: room.clone(), level, wells, ceiling, slab, paints })
             })
             .collect();
+        for p in &pr {
+            if let Some(i) = room_items.iter().find(|(id, _)| *id == p.id) {
+                if p.input != i.1 {
+                    eprintln!("room input changed for {}: prev={:?} next={:?}", p.id, p.input, i.1);
+                }
+            }
+        }
         let rooms = parts(pr, room_items, |i| {
             let mut out = Vec::new();
             if i.room.room_type != RoomType::Deck {
