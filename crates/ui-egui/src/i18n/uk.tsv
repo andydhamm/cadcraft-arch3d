@@ -1415,7 +1415,9 @@
 	Room	Кімната
 	Room Detect	Виявити кімнати
 	Stair	Сходи
+	Edit Stair	Редагувати сходи
 	Deck	Тераса
+	Edit Deck	Редагувати терасу
 	Railing	Огорожа
 	Library	Бібліотека
 	Library Item	Елемент бібліотеки
@@ -1455,6 +1457,8 @@
 	Architecture>Room Detect	Архітектура>Виявити кімнати
 	Architecture>Level	Архітектура>Рівень
 	Architecture>Stair	Архітектура>Сходи
+	Architecture>Edit Stair	Архітектура>Редагувати сходи
+	Architecture>Edit Deck	Архітектура>Редагувати терасу
 	Architecture>Railing	Архітектура>Огорожа
 	Architecture>Deck	Архітектура>Тераса
 	Detect from Linework	Виявити з ліній

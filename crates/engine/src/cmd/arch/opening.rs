@@ -18,12 +18,15 @@ use crate::cmd::CommandSpec;
 use crate::prompt::{Accept, Input, Interactive, Prompt, Step};
 use cadcraft_arch::opening::{place_opening, project_to_wall, validate_placement};
 use cadcraft_doc::ArchId;
-use cadcraft_doc::arch::{Hinge, MAX_OPENINGS, Opening, OpeningKind, Swing, arch_handle, handle_json, opening_handle, opening_label, wall_label};
+use cadcraft_doc::arch::{
+    ArchModel, Grille, Hinge, MAX_GRILLE_LITES, MAX_OPENINGS, Opening, OpeningKind, OpeningSides, OpeningTop, Swing, arch_handle, handle_json,
+    opening_handle, opening_label, wall_label,
+};
 use cadcraft_doc::{ARCH_HANDLE_BASE, Handle, is_arch_handle};
 use cadcraft_geom::Vec2;
 
 /// Allowed door styles.
-const DOOR_STYLES: [&str; 4] = ["hinged", "sliding", "pocket", "bifold"];
+const DOOR_STYLES: [&str; 5] = ["hinged", "sliding", "pocket", "bifold", "fixed"];
 
 /// Allowed window styles.
 const WINDOW_STYLES: [&str; 10] = ["single-hung", "double-hung", "slider", "casement", "picture", "bay", "box", "bow", "awning", "fixed"];
@@ -337,8 +340,113 @@ fn parse_arch_id(s: &str, space: &str) -> Result<ArchId, String> {
     Ok(n)
 }
 
+/// The phase-17 shape and trim values of an opening call; `None` leaves the opening's default.
+#[derive(Default)]
+struct Trim {
+    grille: Option<Grille>,
+    top: Option<OpeningTop>,
+    top_rise: Option<f64>,
+    roof_offset: Option<f64>,
+    sill_sides: Option<OpeningSides>,
+    casing_sides: Option<OpeningSides>,
+}
+
+impl Trim {
+    /// Parse and validate `grille`, `top`, `topRise`, `roofOffset`, `sillSides` and `casingSides`;
+    /// wrong types and out-of-range values are refused, never clamped.
+    fn parse(cmd: &str, kind: OpeningKind, p: &Value) -> Result<Trim, EngineError> {
+        use crate::cmd::bad;
+        let mut t = Trim::default();
+        match p.get("grille") {
+            None | Some(Value::Null) => {}
+            Some(Value::Object(m)) => {
+                if let Some(k) = m.keys().find(|k| !matches!(k.as_str(), "across" | "down" | "part")) {
+                    return Err(bad(cmd, format!("`grille` has no member `{k}`; use across, down and part")));
+                }
+                let count = |k: &str| -> Result<u32, EngineError> {
+                    m.get(k)
+                        .and_then(Value::as_u64)
+                        .filter(|n| (1..=u64::from(MAX_GRILLE_LITES)).contains(n))
+                        .and_then(|n| u32::try_from(n).ok())
+                        .ok_or_else(|| bad(cmd, format!("`grille.{k}` must be an integer in 1..={MAX_GRILLE_LITES}")))
+                };
+                let top_only = match m.get("part") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::String(s)) => match s.trim().to_ascii_lowercase().as_str() {
+                        "whole" => false,
+                        "top" => true,
+                        _ => return Err(bad(cmd, "`grille.part` must be \"whole\" or \"top\"")),
+                    },
+                    Some(_) => return Err(bad(cmd, "`grille.part` must be \"whole\" or \"top\"")),
+                };
+                t.grille = Some(Grille { across: count("across")?, down: count("down")?, top_only, ..Default::default() });
+            }
+            Some(_) => return Err(bad(cmd, "`grille` must be null or {across, down, part?}")),
+        }
+        if let Some(v) = p.get("top").filter(|v| !v.is_null()) {
+            let top = v.as_str().and_then(OpeningTop::parse).ok_or_else(|| bad(cmd, "`top` must be square, round, segment or roof"))?;
+            if top != OpeningTop::Square && kind != OpeningKind::Window {
+                return Err(bad(cmd, format!("`top` {} is for windows only", top.name())));
+            }
+            t.top = Some(top);
+        }
+        if let Some(v) = p.get("topRise").filter(|v| !v.is_null()) {
+            t.top_rise = Some(v.as_f64().filter(|x| x.is_finite() && *x > 0.0).ok_or_else(|| bad(cmd, "`topRise` must be a number above 0"))?);
+        }
+        if let Some(v) = p.get("roofOffset").filter(|v| !v.is_null()) {
+            t.roof_offset = Some(v.as_f64().filter(|x| (0.0..=1.0).contains(x)).ok_or_else(|| bad(cmd, "`roofOffset` must be a number in [0, 1]"))?);
+        }
+        for (key, slot) in [("sillSides", &mut t.sill_sides), ("casingSides", &mut t.casing_sides)] {
+            if let Some(v) = p.get(key).filter(|v| !v.is_null()) {
+                *slot = Some(v.as_str().and_then(OpeningSides::parse).ok_or_else(|| bad(cmd, format!("`{key}` must be left, right, both or none")))?);
+            }
+        }
+        Ok(t)
+    }
+
+    fn apply(&self, o: &mut Opening) {
+        if let Some(g) = self.grille {
+            o.grille = Some(g);
+        }
+        if let Some(v) = self.top {
+            o.top = v;
+        }
+        if let Some(v) = self.top_rise {
+            o.top_rise = v;
+        }
+        if let Some(v) = self.roof_offset {
+            o.roof_offset = v;
+        }
+        if let Some(v) = self.sill_sides {
+            o.sill_sides = v;
+        }
+        if let Some(v) = self.casing_sides {
+            o.casing_sides = v;
+        }
+    }
+}
+
+/// Check an opening's shaped top against its host wall and the roof over it, setting a roof top's
+/// height. The outline starts at `o.sill` measured from the wall's bottom, so no base offset is
+/// passed. Also called by `arch.opening.move`.
+pub(crate) fn validate_top(arch: &ArchModel, o: &mut Opening) -> Result<(), String> {
+    let wall = arch.wall(o.host).ok_or_else(|| format!("no wall {}", o.host))?;
+    let (base, top) = cadcraft_arch3d::wall_span(arch, wall).unwrap_or((0.0, wall.height));
+    let roof_top = if o.top == OpeningTop::Roof { cadcraft_arch3d::walls::roof_top_polyline(arch, wall, base, top) } else { None };
+    cadcraft_arch::opening_top::validate(o, roof_top.as_deref())
+}
+
+/// The grille as reply JSON: `{across, down, part}` or null.
+fn grille_json(g: Option<Grille>) -> Value {
+    match g {
+        Some(g) => json!({"across": g.across, "down": g.down, "part": if g.top_only { "top" } else { "whole" }}),
+        None => Value::Null,
+    }
+}
+
 /// Place an opening on a wall from JSON parameters and return a summary.
 fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &Value) -> Result<Value, EngineError> {
+    let trim = Trim::parse(cmd, kind, p)?;
     let d = s.doc_mut()?;
 
     // 1. Host wall.
@@ -424,7 +532,8 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
         if !total.is_finite() || total < 0.0 {
             return Err(crate::cmd::bad(cmd, format!("sill on level `{lv}` would be below the wall bottom")));
         }
-        if bottom + total + height > top + 1e-9 {
+        // A roof top derives its own height, so the head check does not apply.
+        if trim.top != Some(OpeningTop::Roof) && bottom + total + height > top + 1e-9 {
             return Err(crate::cmd::bad(cmd, format!("opening on level `{lv}` would rise above the top of wall {host}")));
         }
         sill = total;
@@ -450,6 +559,8 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
     o.casing_width = casing;
     o.hinge = hinge;
     o.swing = swing;
+    trim.apply(&mut o);
+    validate_top(&d.arch, &mut o).map_err(|e| crate::cmd::bad(cmd, e))?;
 
     let placed = place_opening(&d.arch, o, fit).map_err(|e| crate::cmd::bad(cmd, e.to_string()))?;
 
@@ -464,6 +575,8 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
         _ => "A-GLAZ",
     });
 
+    let (top_name, grille, sill_sides, casing_sides) =
+        (placed.top.name(), grille_json(placed.grille), placed.sill_sides.name(), placed.casing_sides.name());
     let id = d.arch.push_opening(placed);
     d.touch_arch();
 
@@ -476,6 +589,10 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
                 "offset": offset,
                 "width": placed_width,
                 "resized": resized,
+                "top": top_name,
+                "grille": grille,
+                "sillSides": sill_sides,
+                "casingSides": casing_sides,
             }
         ],
         "revision": d.arch_revision,
@@ -557,17 +674,27 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("door", "Door", run_door)
             .menu(&["Architecture", "Door"])
             .alias(&["dr"])
-            .params("{wall:\"w0\", offset?|point?, width?, height?, style?, hinge?, swing?, recess?, casing?, fit?, level?}")
+            .params(
+                "{wall:\"w0\", offset?|point?, width?, height?, style? (hinged|sliding|pocket|bifold|fixed), hinge?, swing?, recess?, casing?, fit?, level?, \
+                 grille?: null|{across,down,part?: whole|top}, sillSides?|casingSides?: left|right|both|none}",
+            )
             .interactive(|_| Ok(Box::new(OpeningM::new(OpeningKind::Door)))),
         CommandSpec::new("window", "Window", run_window)
             .menu(&["Architecture", "Window"])
             .alias(&["wn"])
-            .params("{wall:\"w0\", offset?|point?, width?, height?, style?, recess?, casing?, fit?, level?}")
+            .params(
+                "{wall:\"w0\", offset?|point?, width?, height?, style?, recess?, casing?, fit?, level?, \
+                 grille?: null|{across,down,part?: whole|top}, top?: square|round|segment|roof, topRise?, roofOffset?, \
+                 sillSides?|casingSides?: left|right|both|none}",
+            )
             .interactive(|_| Ok(Box::new(OpeningM::new(OpeningKind::Window)))),
         CommandSpec::new("garagedoor", "Garage Door", run_garagedoor)
             .menu(&["Architecture", "Garage Door"])
             .alias(&["gd"])
-            .params("{wall:\"w0\", offset?|point?, width?, height?, style?, recess?, casing?, fit?, level?}")
+            .params(
+                "{wall:\"w0\", offset?|point?, width?, height?, style?, recess?, casing?, fit?, level?, \
+                 grille?: null|{across,down,part?: whole|top}, sillSides?|casingSides?: left|right|both|none}",
+            )
             .interactive(|_| Ok(Box::new(OpeningM::new(OpeningKind::GarageDoor)))),
         CommandSpec::new("arch.opening.move", "Move Opening", run_opening_move).params("{opening:\"w0\", offset?|point?}"),
     ]
@@ -1153,6 +1280,129 @@ mod tests {
         let err = r.expect_err("door with height 3.0 on Main level should exceed wall top");
         assert!(!err.to_string().is_empty(), "expected an error, got empty");
         assert!(s.doc().expect("doc").arch.openings.is_empty(), "no opening should be added");
+    }
+
+    #[test]
+    fn window_accepts_grille_top_sides() {
+        let mut s = session_with_wall();
+        let r = s
+            .execute(
+                "window",
+                &json!({"wall": "w0", "offset": 3.0, "width": 0.9, "height": 1.5, "sill": 0.6, "top": "round",
+                        "grille": {"across": 2, "down": 3, "part": "top"}, "sillSides": "both", "casingSides": "NONE", "topRise": 0.2, "roofOffset": 0.3}),
+            )
+            .unwrap();
+        let o = &r["openings"][0];
+        assert_eq!(o["top"], json!("round"));
+        assert_eq!(o["grille"], json!({"across": 2, "down": 3, "part": "top"}));
+        assert_eq!((o["sillSides"].as_str(), o["casingSides"].as_str()), (Some("both"), Some("none")));
+        let op = &s.doc().unwrap().arch.openings[0];
+        assert_eq!(op.grille, Some(Grille { across: 2, down: 3, top_only: true, ..Default::default() }));
+        assert_eq!((op.top, op.top_rise, op.roof_offset), (OpeningTop::Round, 0.2, 0.3));
+        assert_eq!((op.sill_sides, op.casing_sides), (OpeningSides::BOTH, OpeningSides::NONE));
+        // Defaults: plain glass, square top, right sides; "whole" is the default part.
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 6.0, "grille": {"across": 1, "down": 2}})).unwrap();
+        let o = &r["openings"][0];
+        assert_eq!((o["top"].as_str(), o["sillSides"].as_str()), (Some("square"), Some("right")));
+        assert_eq!(o["grille"]["part"], json!("whole"));
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 8.0, "grille": null})).unwrap();
+        assert!(r["openings"][0]["grille"].is_null());
+    }
+
+    #[test]
+    fn door_accepts_the_fixed_style() {
+        let mut s = session_with_wall();
+        s.execute("door", &json!({"wall": "w0", "offset": 3.0, "width": 0.6, "style": "fixed"})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.openings[0].style, "fixed");
+    }
+
+    #[test]
+    fn door_refuses_a_top() {
+        for (cmd, top) in [("door", "round"), ("door", "segment"), ("garagedoor", "roof"), ("door", "gothic")] {
+            let mut s = session_with_wall();
+            assert!(s.execute(cmd, &json!({"wall": "w0", "offset": 3.0, "top": top})).is_err(), "{cmd} {top}");
+            assert!(s.doc().unwrap().arch.openings.is_empty());
+        }
+        // A square top is no shape.
+        let mut s = session_with_wall();
+        s.execute("door", &json!({"wall": "w0", "offset": 3.0, "top": "square"})).unwrap();
+    }
+
+    #[test]
+    fn window_refuses_grille_counts_0_and_13_and_a_string() {
+        for g in [
+            json!({"across": 0, "down": 1}),
+            json!({"across": 13, "down": 1}),
+            json!({"across": 1, "down": 0}),
+            json!({"across": 1}),
+            json!({"across": 1.5, "down": 1}),
+            json!({"across": 2, "down": 2, "part": "bottom"}),
+            json!({"across": 2, "down": 2, "bars": 1}),
+            json!("2x2"),
+            json!(3),
+        ] {
+            let mut s = session_with_wall();
+            assert!(s.execute("window", &json!({"wall": "w0", "offset": 3.0, "grille": g})).is_err(), "{g}");
+            assert!(s.doc().unwrap().arch.openings.is_empty());
+        }
+    }
+
+    #[test]
+    fn window_refuses_unknown_top_and_sides() {
+        for extra in [
+            json!({"top": "gothic"}),
+            json!({"top": 1}),
+            json!({"sillSides": "up"}),
+            json!({"casingSides": true}),
+            json!({"topRise": 0}),
+            json!({"topRise": "1"}),
+            json!({"roofOffset": 1.5}),
+            json!({"roofOffset": -0.1}),
+        ] {
+            let mut s = session_with_wall();
+            let mut p = json!({"wall": "w0", "offset": 3.0});
+            if let (Some(a), Some(b)) = (p.as_object_mut(), extra.as_object()) {
+                for (k, v) in b {
+                    a.insert(k.clone(), v.clone());
+                }
+            }
+            assert!(s.execute("window", &p).is_err(), "{extra}");
+            assert!(s.doc().unwrap().arch.openings.is_empty());
+        }
+    }
+
+    #[test]
+    fn roof_top_without_a_roof_reaches_validate() {
+        // No roof: validate gets None and (as a stub) accepts; the opening keeps its roof top.
+        let mut s = session_with_wall();
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 3.0, "top": "roof"})).unwrap();
+        assert_eq!(r["openings"][0]["top"], json!("roof"));
+        assert_eq!(s.doc().unwrap().arch.openings[0].top, OpeningTop::Roof);
+    }
+
+    #[test]
+    fn top_roof_skips_the_level_head_check() {
+        let mut s = session_with_split_levels();
+        // A square-top window this tall is refused on Main by the level head check.
+        assert!(s.execute("window", &json!({"wall": "w0", "offset": 3.0, "level": "Main", "height": 3.0, "sill": 0.0})).is_err());
+        // A roof top on a level is placed: its height is derived, and the sill is still
+        // measured from the wall's bottom (level 2.7 above a bottom at -1.2).
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 3.0, "level": "Main", "height": 1.2, "sill": 0.9, "top": "roof"}));
+        assert!(r.is_ok(), "{r:?}");
+        let o = &s.doc().unwrap().arch.openings[0];
+        assert_eq!(o.top, OpeningTop::Roof);
+        assert!((o.sill - 4.8).abs() < 1e-9, "{}", o.sill);
+    }
+
+    #[test]
+    fn validate_top_reports_a_missing_host() {
+        let arch = ArchModel::default();
+        let mut o = Opening::new(ArchId(7), 1.0, 0.9, 1.2, OpeningKind::Window);
+        assert!(validate_top(&arch, &mut o).is_err());
+        let mut s = session_with_wall();
+        let d = s.doc_mut().unwrap();
+        let mut o = Opening::new(ArchId(0), 1.0, 0.9, 1.2, OpeningKind::Window);
+        assert!(validate_top(&d.arch, &mut o).is_ok());
     }
 
     #[test]
