@@ -22,7 +22,7 @@ pub fn stair_mesh(s: &Stair, base: f64) -> Option<crate::mesh::Mesh> {
     let perp = dir.perp();
     let mut mesh = crate::mesh::Mesh::new("stair", s.id);
     mesh.level_elevation = base;
-    mesh.push_prism(&ring, 0.0, s.width);
+    mesh.push_prism(&ring, -s.width / 2.0, s.width / 2.0);
     if mesh.indices.is_empty() {
         return None;
     }
@@ -57,11 +57,11 @@ pub fn landing_mesh(s: &Stair, base: f64) -> Option<crate::mesh::Mesh> {
     let top = base + s.rise;
     let bottom = top - 0.05;
     let start_u = s.run;
-    let mut ring = vec![
-        Vec2::new(start_u, 0.0),
-        Vec2::new(start_u + landing_depth, 0.0),
-        Vec2::new(start_u + landing_depth, s.width),
-        Vec2::new(start_u, s.width),
+    let ring = vec![
+        Vec2::new(start_u, -s.width / 2.0),
+        Vec2::new(start_u + landing_depth, -s.width / 2.0),
+        Vec2::new(start_u + landing_depth, s.width / 2.0),
+        Vec2::new(start_u, s.width / 2.0),
     ];
     if ring.iter().any(|p| !p.is_finite()) {
         return None;
@@ -205,6 +205,24 @@ mod tests {
     use super::*;
     use cadcraft_doc::arch::Stair;
     use cadcraft_geom::Vec2;
+
+    fn y_extent(m: &crate::mesh::Mesh) -> (f64, f64) {
+        m.positions.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p[1] as f64), a.1.max(p[1] as f64)))
+    }
+
+    #[test]
+    fn stair_mesh_and_landing_are_centred_on_start() {
+        let m = stair_mesh(&flight(), 0.0).expect("flight");
+        let (lo, hi) = y_extent(&m);
+        assert!((lo + 0.5).abs() < 1e-6 && (hi - 0.5).abs() < 1e-6, "{lo} {hi}");
+    }
+
+    #[test]
+    fn landing_mesh_centred() {
+        let m = landing_mesh(&flight(), 0.0).expect("landing");
+        let (lo, hi) = y_extent(&m);
+        assert!((lo + 0.5).abs() < 1e-6 && (hi - 0.5).abs() < 1e-6, "{lo} {hi}");
+    }
 
     #[test]
     fn stair_mesh_is_a_closed_solid() {
