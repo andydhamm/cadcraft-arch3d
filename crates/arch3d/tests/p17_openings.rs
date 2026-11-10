@@ -60,14 +60,14 @@ fn door_opening() -> Opening {
 
 fn helper_grille(across: u32, down: u32, top_only: bool) -> Opening {
     let mut o = window_opening();
-    o.grille = Some(Grille { across, down, top_only });
+    o.grille = Some(Grille { across, down, top_only, ..Default::default() });
     o
 }
 
 #[test]
 fn grille_2x2_probes() {
     let o = helper_grille(2, 2, false);
-    let rect = GlassRect { u0: -0.55, u1: 0.55, z0: 0.95, z1: 2.05 };
+    let rect = GlassRect { u0: -0.55, u1: 0.55, z0: 0.95, z1: 2.05, ..Default::default() };
     let bars = grille_bars(&o, &rect);
     assert!(!bars.is_empty());
     let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).count();
@@ -79,7 +79,7 @@ fn grille_2x2_probes() {
 #[test]
 fn grille_bars_evenly_divide_the_glass() {
     let o = helper_grille(3, 3, false);
-    let rect = GlassRect { u0: -0.6, u1: 0.6, z0: 0.8, z1: 2.2 };
+    let rect = GlassRect { u0: -0.6, u1: 0.6, z0: 0.8, z1: 2.2, ..Default::default() };
     let bars = grille_bars(&o, &rect);
     let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).collect::<Vec<_>>();
     let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).collect::<Vec<_>>();
@@ -106,7 +106,7 @@ fn grille_bars_evenly_divide_the_glass() {
 #[test]
 fn top_part_only() {
     let o = helper_grille(2, 2, true);
-    let rect = GlassRect { u0: -0.55, u1: 0.55, z0: 0.9, z1: 2.1 };
+    let rect = GlassRect { u0: -0.55, u1: 0.55, z0: 0.9, z1: 2.1, ..Default::default() };
     let bars = grille_bars(&o, &rect);
     assert!(!bars.is_empty(), "top-only grilles should still create bars");
     assert!(bars.iter().all(|b| b[2] >= 1.5 - 0.02), "top-only bars should stay in the upper half of the glass");
@@ -116,14 +116,14 @@ fn top_part_only() {
 #[test]
 fn one_by_one_has_no_bars() {
     let o = helper_grille(1, 1, false);
-    let rect = GlassRect { u0: -0.5, u1: 0.5, z0: 0.0, z1: 1.0 };
+    let rect = GlassRect { u0: -0.5, u1: 0.5, z0: 0.0, z1: 1.0, ..Default::default() };
     assert!(grille_bars(&o, &rect).is_empty());
 }
 
 #[test]
 fn bars_never_overlap_inside_their_mesh() {
     let o = helper_grille(4, 3, false);
-    let rect = GlassRect { u0: -0.8, u1: 0.8, z0: 0.7, z1: 2.3 };
+    let rect = GlassRect { u0: -0.8, u1: 0.8, z0: 0.7, z1: 2.3, ..Default::default() };
     let bars = grille_bars(&o, &rect);
     for i in 0..bars.len() {
         for j in (i + 1)..bars.len() {
@@ -140,7 +140,7 @@ fn bars_never_overlap_inside_their_mesh() {
 fn grille_precedes_glass_in_the_opening_meshes() {
     let model = wall_model();
     let mut o = window_opening();
-    o.grille = Some(Grille { across: 2, down: 2, top_only: false });
+    o.grille = Some(Grille { across: 2, down: 2, top_only: false, ..Default::default() });
     let walls = [(ArchId(1), &model.walls[0])].into_iter().collect();
     let meshes = opening_meshes(&walls, &o, None);
     let grille_idx = meshes.iter().position(|m| m.material.contains("grille")).unwrap();
@@ -152,7 +152,7 @@ fn grille_precedes_glass_in_the_opening_meshes() {
 fn glazed_doors_take_grilles_too() {
     let mut o = door_opening();
     o.style = "glass".to_string();
-    o.grille = Some(Grille { across: 2, down: 2, top_only: false });
+    o.grille = Some(Grille { across: 2, down: 2, top_only: false, ..Default::default() });
     assert!(has_glass(&o));
     let model = wall_model();
     let walls = [(ArchId(1), &model.walls[0])].into_iter().collect();

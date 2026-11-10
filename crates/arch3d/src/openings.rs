@@ -333,7 +333,7 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
         }
         if o.casing_sides.left {
             let mat = if o.casing_sides.right { format!("{}-casing-left", kind_prefix) } else { format!("{}-casing-left", kind_prefix) };
-            push_side_casing(OpeningSides { left: true, right: false }, &mat);
+            push_side_casing(OpeningSides { left: true, ..OpeningSides::NONE }, &mat);
         }
     }
 
@@ -341,7 +341,7 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
     // before the glass mesh so a probe on the glass centre reports the grille.
     if has_glass(o) {
         let glass_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, 0.006, wall_t);
-        let glass_rect = GlassRect { u0: -w / 2.0 + fw, u1: w / 2.0 - fw, z0: frame_z0 + fw, z1: frame_z1 - fw };
+        let glass_rect = GlassRect { u0: -w / 2.0 + fw, u1: w / 2.0 - fw, z0: frame_z0 + fw, z1: frame_z1 - fw, ..Default::default() };
         if let Some(g) = o.grille {
             let across = g.across.min(MAX_GRILLE_LITES);
             let down = g.down.min(MAX_GRILLE_LITES);
