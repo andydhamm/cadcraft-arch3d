@@ -247,7 +247,7 @@ pub fn snap_rect(model: &ArchModel, level: u32, mut r: [f64; 4]) -> [f64; 4] {
 
         let (span_lo, span_hi) = if axis == 0 { (r[0].min(r[2]), r[0].max(r[2])) } else { (r[1].min(r[3]), r[1].max(r[3])) };
 
-        let mut best: Option<(f64, u32, f64)> = None;
+        let mut best: Option<(f64, ArchId, f64)> = None;
 
         for w in &model.walls {
             if w.base_level != level || w.divider {
