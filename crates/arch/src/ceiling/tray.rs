@@ -451,9 +451,24 @@ pub fn validate(model: &ArchModel, t: &Tray) -> Result<(), String> {
 
     let outline = outline_in(room, &model.trays, t)?;
     let p = outline.iter().fold(Vec2::ZERO, |acc, &v| acc + v) / outline.len() as f64;
-    let this_rise = rise_for_tray(room, &model.trays, t, p);
-    let parent_lift = lift_in(room, &model.trays, p) - this_rise;
-    let top = flat_ceiling_z(model, room).unwrap() + parent_lift + t.depth;
+    let mut ancestors_lift = 0.0;
+    let mut current = t.parent;
+    let mut seen = HashSet::new();
+    while let Some(id) = current {
+        if !seen.insert(id) {
+            break;
+        }
+        let Some(ancestor) = model.trays.iter().find(|tray| tray.id == id) else {
+            break;
+        };
+        ancestors_lift += rise_for_tray(room, &model.trays, ancestor, p);
+        current = ancestor.parent;
+    }
+    let flat_z = match flat_ceiling_z(model, room) {
+        Some(z) => z,
+        None => return Err("a tray needs a flat ceiling".to_string()),
+    };
+    let top = flat_z + ancestors_lift + t.depth;
     let top_ring = top_ring_in(room, &model.trays, t)?;
     let (min, uncovered) = lowest_underside_over(model, t.level, &top_ring);
     if uncovered {
@@ -576,6 +591,29 @@ mod tests {
         let msg = validate(&above, above.tray(over_id).unwrap()).unwrap_err();
         assert!(msg.contains("level above"));
         assert!(msg.contains("Upper"));
+    }
+
+    #[test]
+    fn validate_refuses_a_new_tray_above_the_roof() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let above = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.5, ..Default::default() };
+        assert!(validate(&m, &above).is_err(), "a new tray above the roof underside should be refused");
+        let below = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() };
+        assert!(validate(&m, &below).is_ok(), "a new tray under the roof underside should be accepted");
+    }
+
+    #[test]
+    fn validate_counts_a_new_nested_trays_parent() {
+        let mut m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let parent_id = m.push_tray(Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() });
+        let ok = Tray { id: ArchId(1), room: room_id, level: room_level, parent: Some(parent_id), inset: 0.6, depth: 0.15, ..Default::default() };
+        assert!(validate(&m, &ok).is_ok(), "a new nested tray with parent lift under the roof should be accepted");
+        let over = Tray { id: ArchId(1), room: room_id, level: room_level, parent: Some(parent_id), inset: 0.6, depth: 0.75, ..Default::default() };
+        assert!(validate(&m, &over).is_err(), "a new nested tray with parent lift above the roof should be refused");
     }
 
     #[test]

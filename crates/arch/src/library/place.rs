@@ -364,7 +364,8 @@ mod tests {
         let (_, _, el, _) = placed(place(&m, &req(Placement::Ceiling, "light", [0.5, 0.5, 0.3], [2.0, 2.0])));
         assert!((el - 2.4).abs() < 1e-9, "{el}");
         // On a level at 2.7 the elevation is still measured from that level's floor.
-        m.levels.push(Level { index: 1, elevation: 2.7, ..Level::default() });
+        // No structure, so the floor above (underside 2.7) does not clip the 2.7 ceiling below.
+        m.levels.push(Level { index: 1, elevation: 2.7, structure: 0.0, ..Level::default() });
         let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
         m.rooms.push(Room { id: ArchId(1), level: 1, polygon: poly, ..Default::default() });
         let mut r = req(Placement::Ceiling, "light", [0.5, 0.5, 0.3], [2.0, 2.0]);
