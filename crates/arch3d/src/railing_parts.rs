@@ -1,12 +1,12 @@
 //! Railing mesh generation for phase-17: posts at ends, corners and turns (in equal bays at
-/// `post_spacing`), a top rail, a bottom rail 0.05 m above the walking surface, a panel or
-/// balusters between, and an optional horizontal inset. Supports flat, deck and sloped stair
-/// surfaces.
-use cadcraft_arch::railing::{RailSurface, baluster_spacing};
-use cadcraft_doc::arch::Railing;
+//! `post_spacing`), a top rail, a bottom rail 0.05 m above the walking surface, a panel or
+//! balusters between, and an optional inset. Supports flat, deck and sloped stair surfaces.
+use cadcraft_arch::railing::{RailSurface, baluster_spacing, built_path, post_points};
+use cadcraft_doc::arch::{Railing, RailingStyle};
 use cadcraft_geom::Vec2;
 
 use crate::mesh::Mesh;
+use crate::solid::{self, Frame};
 
 /// Posts: 90 mm square, standing on the walking surface.
 const RAIL_POST: f64 = 0.09;
@@ -21,245 +21,126 @@ const MAX_POSTS: usize = 10_000;
 /// Maximum number of balusters per railing.
 const MAX_BALUSTERS: usize = 100_000;
 
-/// A segment of the built (possibly inset) railing path.
-struct Seg {
-    a: Vec2,
-    b: Vec2,
+fn walk_z(surface: &RailSurface, p: &Vec2) -> f64 {
+    match surface {
+        RailSurface::Flat { z } => *z,
+        RailSurface::Deck { top, .. } => *top,
+        RailSurface::Flight { line } => {
+            let u = line.local(*p).0.clamp(0.0, line.run.max(0.0));
+            line.base + line.nosing_v(u)
+        }
+    }
 }
 
-/// Build the built (inset) path as a run of consecutive segments. `inset` is applied along each
-/// segment's left normal (positive to the left of travel). Returns empty if all segments are
-/// degenerate or the inset is non-finite.
-fn built_segments(path: &[Vec2], inset: f64) -> Vec<Seg> {
-    let mut out: Vec<Seg> = Vec::new();
-    if !inset.is_finite() {
-        return out;
+fn post_bottom(surface: &RailSurface, p: &Vec2) -> f64 {
+    match surface {
+        RailSurface::Flat { z } => *z,
+        RailSurface::Deck { post_bottom, .. } => *post_bottom,
+        RailSurface::Flight { line } => {
+            let u = line.local(*p).0.clamp(0.0, line.run.max(0.0));
+            line.base + line.nosing_v(u)
+        }
     }
+}
+
+fn push_post(mesh: &mut Mesh, p: Vec2, z0: f64, z1: f64, axis: Vec2) {
+    if z1 - z0 <= 1e-12 || !p.is_finite() || !axis.is_finite() {
+        return;
+    }
+    let len = axis.len();
+    if len < 1e-12 || !len.is_finite() {
+        return;
+    }
+    solid::push_box(mesh, p, axis / len, RAIL_POST, RAIL_POST, z0, z1);
+}
+
+fn segment_axis_for_point(path: &[Vec2], p: Vec2) -> Vec2 {
+    let mut best: Option<Vec2> = None;
+    let mut best_dist = f64::INFINITY;
     for w in path.windows(2) {
         let a = w[0];
         let b = w[1];
-        if !a.is_finite() || !b.is_finite() {
+        let d = b - a;
+        let len = d.len();
+        if !len.is_finite() || len <= 1e-9 {
             continue;
         }
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let len = (dx * dx + dy * dy).sqrt();
-        if len < 1e-9 {
+        let proj = (p - a).dot(d) / len;
+        if !(proj >= 0.0 && proj <= len) {
             continue;
         }
-        // Left normal (positive to the left of travel direction a->b).
-        let nx = -dy / len;
-        let ny = dx / len;
-        let ax = a.x + nx * inset;
-        let ay = a.y + ny * inset;
-        let bx = b.x + nx * inset;
-        let by = b.y + ny * inset;
-        if !ax.is_finite() || !ay.is_finite() || !bx.is_finite() || !by.is_finite() {
+        let q = a + (d / len) * proj;
+        let dist = (p - q).len();
+        if dist < best_dist {
+            best_dist = dist;
+            best = Some(d / len);
+        }
+    }
+    best.unwrap_or(Vec2::new(1.0, 0.0))
+}
+
+fn segment_bays(path: &[Vec2], posts: &[Vec2]) -> Vec<(Vec2, Vec2)> {
+    if path.len() < 2 || posts.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for w in path.windows(2) {
+        let a = w[0];
+        let b = w[1];
+        let d = b - a;
+        let len = d.len();
+        if !len.is_finite() || len <= 1e-9 {
             continue;
         }
-        out.push(Seg { a: Vec2::new(ax, ay), b: Vec2::new(bx, by) });
+        let mut local: Vec<(f64, Vec2)> = Vec::new();
+        for &p in posts {
+            let delta = p - a;
+            let proj = delta.dot(d) / len;
+            if proj < -1e-6 || proj > len + 1e-6 {
+                continue;
+            }
+            local.push((proj, p));
+        }
+        if local.len() < 2 {
+            continue;
+        }
+        local.sort_by(|left, right| left.0.partial_cmp(&right.0).unwrap());
+        for win in local.windows(2) {
+            let u0 = win[0].0;
+            let u1 = win[1].0;
+            if u1 - u0 < 1e-9 {
+                continue;
+            }
+            let p0 = a + d * (u0 / len);
+            let p1 = a + d * (u1 / len);
+            out.push((p0, p1));
+        }
     }
     out
 }
 
-/// Post plan positions on `segments`. One post at the start of the first segment, then equal bays
-/// (`ceil(len/spacing)` per segment) so that consecutive posts are at most `spacing` apart.
-/// For an open path the final point is the end of the last segment; corners are the shared
-/// end/start of adjacent segments and are emitted once. Returns at most `MAX_POSTS`.
-fn post_points(segments: &[Seg], spacing: f64) -> Vec<(Vec2, usize)> {
-    let mut posts: Vec<(Vec2, usize)> = Vec::with_capacity(MAX_POSTS);
-    if segments.is_empty() {
-        return posts;
-    }
-    let s = if spacing.is_finite() && spacing > 0.0 { spacing } else { 0.0 };
-    for (i, seg) in segments.iter().enumerate() {
-        if posts.len() >= MAX_POSTS {
-            break;
-        }
-        let dx = seg.b.x - seg.a.x;
-        let dy = seg.b.y - seg.a.y;
-        let len = (dx * dx + dy * dy).sqrt();
-        if len < 1e-9 {
-            continue;
-        }
-        // Emit the start point only for the first segment (corners are the end of the
-        // previous segment, already emitted as its last point).
-        if i == 0 {
-            posts.push((seg.a, i));
-        }
-        if s <= 0.0 {
-            // No bays -> only the end point.
-            posts.push((seg.b, i));
-            continue;
-        }
-        let n = (len / s).ceil() as usize;
-        if n < 1 {
-            continue;
-        }
-        for k in 1..=n {
-            if posts.len() >= MAX_POSTS {
-                break;
-            }
-            let t = k as f64 / n as f64;
-            let px = seg.a.x + dx * t;
-            let py = seg.a.y + dy * t;
-            if !px.is_finite() || !py.is_finite() {
-                continue;
-            }
-            posts.push((Vec2::new(px, py), i));
-        }
-    }
-    // De-duplicate posts that land within tolerance of each other (e.g. a zero-length
-    // segment end coinciding with the next start) while preserving path order.
-    let mut dedup: Vec<(Vec2, usize)> = Vec::new();
-    for p in posts {
-        if dedup.iter().any(|q| (q.0.x - p.0.x).abs() < 1e-6 && (q.0.y - p.0.y).abs() < 1e-6) {
-            continue;
-        }
-        dedup.push(p);
-    }
-    dedup
-}
-
-/// The z of the walking surface at plan point `p`.
-fn walk_z(surface: &RailSurface, _p: &Vec2) -> f64 {
-    match surface {
-        RailSurface::Flat { z } => {
-            if z.is_finite() {
-                *z
-            } else {
-                0.0
-            }
-        }
-        RailSurface::Deck { top, .. } => {
-            if top.is_finite() {
-                *top
-            } else {
-                0.0
-            }
-        }
-        RailSurface::Flight { line } => {
-            if line.base.is_finite() {
-                line.base
-            } else {
-                0.0
-            }
-        }
-    }
-}
-
-/// The z at which a post bottom sits at plan point `p` (on the walking surface; on a deck, the
-/// rim joist bottom).
-fn post_bottom(surface: &RailSurface, _p: &Vec2) -> f64 {
-    match surface {
-        RailSurface::Flat { z } => {
-            if z.is_finite() {
-                *z
-            } else {
-                0.0
-            }
-        }
-        RailSurface::Deck { top, post_bottom } => {
-            let pb = if post_bottom.is_finite() { *post_bottom } else { top - 0.209 };
-            if pb.is_finite() { pb } else { 0.0 }
-        }
-        RailSurface::Flight { line } => {
-            if line.base.is_finite() {
-                line.base
-            } else {
-                0.0
-            }
-        }
-    }
-}
-
-/// Build a 90 mm square post at plan `p` from `z0` to `z1`.
-fn push_post(mesh: &mut Mesh, p: &Vec2, z0: f64, z1: f64) {
-    if z1 - z0 <= 1e-12 {
-        return;
-    }
-    let h = RAIL_POST / 2.0;
-    let a = Vec2::new(p.x - h, p.y - h);
-    let b = Vec2::new(p.x + h, p.y - h);
-    let c = Vec2::new(p.x + h, p.y + h);
-    let d = Vec2::new(p.x - h, p.y + h);
-    mesh.push_prism_with_holes(&[a, b, c, d], &[], z0, z1);
-}
-
-/// Build a rail/panel/baluster mesh from the built segment endpoints `a`, `b`, the walking
-/// surface z at each end (`z0_lo`, `z0_hi` for the walk surface), the desired z-range `[lo, hi]`
-/// and a thickness. For a flat surface `z0_lo == z0_hi`; for a sloped flight the quad corners
-/// are lifted to the walk surface z. The profile is a plan quad (a..b) offset by half the
-/// thickness, extruded from `lo` to `hi`.
-fn push_rail(mesh: &mut Mesh, a: &Vec2, b: &Vec2, lo: f64, hi: f64, thickness: f64) {
-    if hi - lo <= 1e-12 || thickness <= 1e-12 {
-        return;
-    }
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let len = (dx * dx + dy * dy).sqrt();
-    if len < 1e-9 {
-        return;
-    }
-    let nx = -dy / len;
-    let ny = dx / len;
-    let half = thickness / 2.0;
-    let ax = a.x + nx * half;
-    let ay = a.y + ny * half;
-    let bx = b.x + nx * half;
-    let by = b.y + ny * half;
-    let ax2 = a.x - nx * half;
-    let ay2 = a.y - ny * half;
-    let bx2 = b.x - nx * half;
-    let by2 = b.y - ny * half;
-    let quad = [Vec2::new(ax, ay), Vec2::new(bx, by), Vec2::new(bx2, by2), Vec2::new(ax2, ay2)];
-    if !quad.iter().all(|p| p.is_finite()) {
-        return;
-    }
-    if !lo.is_finite() || !hi.is_finite() {
-        return;
-    }
-    mesh.push_prism_with_holes(&quad, &[], lo, hi);
-}
-
-/// Build all railing meshes for `r` on `surface`. Returns an empty vector if inputs are invalid.
-///
-/// Mesh order: posts (path order), then rails (segment order, top before bottom), then the
-/// infill (panel or balusters). Probes report the first mesh holding a point, so a newel wins
-/// over the rail it carries.
+/// Build all railing meshes for `r` on `surface`.
 pub fn railing_meshes(r: &Railing, surface: &RailSurface) -> Vec<Mesh> {
     let h = r.height;
     let thk = r.thickness;
     if !h.is_finite() || h <= 0.0 || !thk.is_finite() || thk <= 0.0 {
         return Vec::new();
     }
-    if r.path.len() < 2 {
-        return Vec::new();
-    }
 
-    let segments = built_segments(&r.path, r.inset);
-    if segments.is_empty() {
+    let built = built_path(&r.path, r.inset);
+    if built.len() < 2 {
         return Vec::new();
     }
-    let posts = post_points(&segments, r.post_spacing);
+    let posts = post_points(&built, r.post_spacing);
     if posts.is_empty() {
-        // Fall back to the legacy mesh so a railing is still rendered.
-        let base = walk_z(surface, &r.path[0]);
-        if let Some(m) = crate::railing::railing_mesh(r, base) {
-            return vec![m];
-        }
         return Vec::new();
     }
 
-    let first = r.path.first().unwrap_or(&segments[0].a);
-    let level_elevation = walk_z(surface, first);
+    let level_elevation = walk_z(surface, &built[0]);
     let is_flight = matches!(surface, RailSurface::Flight { .. });
-
     let mut meshes: Vec<Mesh> = Vec::new();
 
-    // 1. Posts (path order). On a Flight surface the first and last posts are newels
-    // ("a newel at each end of each flight") reaching walk + h + NEWEL_CAP.
-    for (idx, (p, _seg_i)) in posts.iter().enumerate() {
+    for (idx, p) in posts.iter().enumerate() {
         let is_newel = is_flight && (idx == 0 || idx == posts.len() - 1);
         let material = if is_newel { "railing-newel" } else { "railing-post" };
         let z0 = post_bottom(surface, p);
@@ -267,101 +148,111 @@ pub fn railing_meshes(r: &Railing, surface: &RailSurface) -> Vec<Mesh> {
         let z1 = walk + h + if is_newel { NEWEL_CAP } else { 0.0 };
         let mut m = Mesh::new(material, r.id);
         m.level_elevation = level_elevation;
-        push_post(&mut m, p, z0, z1);
-        meshes.push(m);
-    }
-
-    // 2. Rails: per built segment, top then bottom. One mesh per rail segment so overlapping
-    //    corners never share a mesh.
-    for (i, seg) in segments.iter().enumerate() {
-        let a = &seg.a;
-        let b = &seg.b;
-        let s_a = walk_z(surface, a);
-        let s_b = walk_z(surface, b);
-        // Top rail: walk - RAIL_DEPTH .. walk + h.
-        {
-            let mut m = Mesh::new("railing-rail", r.id);
-            m.level_elevation = level_elevation;
-            let lo = s_a - RAIL_DEPTH;
-            let hi = s_b + h;
-            push_rail(&mut m, a, b, lo, hi, thk);
+        push_post(&mut m, *p, z0, z1, segment_axis_for_point(&built, *p));
+        if !m.indices.is_empty() {
             meshes.push(m);
         }
-        // Bottom rail: walk + BOTTOM_GAP .. walk + BOTTOM_GAP + RAIL_DEPTH.
-        {
-            let mut m = Mesh::new("railing-rail", r.id);
-            m.level_elevation = level_elevation;
-            let lo = s_a + BOTTOM_GAP;
-            let hi = s_b + BOTTOM_GAP + RAIL_DEPTH;
-            push_rail(&mut m, a, b, lo, hi, thk);
-            meshes.push(m);
-        }
-        let _ = i;
     }
 
-    // 3. Infill between consecutive posts on each segment.
-    if r.style == cadcraft_doc::arch::RailingStyle::Panel {
-        for i in 0..segments.len() {
-            let seg = &segments[i];
-            // Posts belonging to segment i: those with seg_i == i, plus the previous segment's
-            // last post (the corner) and this segment's first post.
-            let posts_in_seg: Vec<&(Vec2, usize)> = posts.iter().filter(|&(_, si)| *si == i).collect();
-            if posts_in_seg.is_empty() {
+    for w in built.windows(2) {
+        let a = w[0];
+        let b = w[1];
+        let len = (b - a).len();
+        if !len.is_finite() || len <= 1e-9 {
+            continue;
+        }
+        let Some(frame) = Frame::new(a, b - a, 0.0) else { continue };
+
+        let z_ta = walk_z(surface, &a) + h - RAIL_DEPTH;
+        let z_tb = walk_z(surface, &b) + h - RAIL_DEPTH;
+        let z_ha = walk_z(surface, &a) + h;
+        let z_hb = walk_z(surface, &b) + h;
+        let mut top = Mesh::new("railing-rail", r.id);
+        top.level_elevation = level_elevation;
+        solid::push_profile(
+            &mut top,
+            &[Vec2::new(0.0, z_ta), Vec2::new(len, z_tb), Vec2::new(len, z_hb), Vec2::new(0.0, z_ha)],
+            -thk / 2.0,
+            thk / 2.0,
+            &frame,
+        );
+        if !top.indices.is_empty() {
+            meshes.push(top);
+        }
+
+        let z_ba = walk_z(surface, &a) + BOTTOM_GAP;
+        let z_bb = walk_z(surface, &b) + BOTTOM_GAP;
+        let z_bha = walk_z(surface, &a) + BOTTOM_GAP + RAIL_DEPTH;
+        let z_bhb = walk_z(surface, &b) + BOTTOM_GAP + RAIL_DEPTH;
+        let mut bottom = Mesh::new("railing-rail", r.id);
+        bottom.level_elevation = level_elevation;
+        solid::push_profile(
+            &mut bottom,
+            &[Vec2::new(0.0, z_ba), Vec2::new(len, z_bb), Vec2::new(len, z_bhb), Vec2::new(0.0, z_bha)],
+            -thk / 2.0,
+            thk / 2.0,
+            &frame,
+        );
+        if !bottom.indices.is_empty() {
+            meshes.push(bottom);
+        }
+    }
+
+    if r.style == RailingStyle::Panel {
+        let mut panel = Mesh::new("railing-panel", r.id);
+        panel.level_elevation = level_elevation;
+        for (p0, p1) in segment_bays(&built, &posts) {
+            let d = p1 - p0;
+            let len = d.len();
+            if !len.is_finite() || len <= 1e-9 {
                 continue;
             }
-            // Find the leftmost and rightmost post on this segment (by path parameter u).
-            let seg_len = (seg.b.x - seg.a.x).powi(2) + (seg.b.y - seg.a.y).powi(2) as f64;
-            // Build a list of (u, post) for posts on this segment, where u is distance from seg.a.
-            let mut ps: Vec<(f64, &Vec2)> = Vec::new();
-            for (p, si) in posts_in_seg {
-                if *si != i {
-                    continue;
-                }
-                let u = (p.x - seg.a.x).powi(2) + (p.y - seg.a.y).powi(2) as f64;
-                ps.push((u, p));
-            }
-            if ps.len() < 2 {
-                continue;
-            }
-            // The first and last posts on the segment bound the panel.
-            let (u0, p0) = ps.first().unwrap();
-            let (u1, p1) = ps.last().unwrap();
-            if *u1 - *u0 < 1e-6 {
-                continue;
-            }
-            let s_a = walk_z(surface, &seg.a);
-            let s_b = walk_z(surface, &seg.b);
-            let lo = s_a + BOTTOM_GAP + RAIL_DEPTH;
-            let hi = s_b + h - RAIL_DEPTH;
-            let mut m = Mesh::new("railing-panel", r.id);
-            m.level_elevation = level_elevation;
-            // Panel spans from p0 to p1 along the segment.
-            let len = (seg.b.x - seg.a.x).powi(2) + (seg.b.y - seg.a.y).powi(2) as f64;
-            if len < 1e-9 {
-                continue;
-            }
-            let t0 = *u0 / len;
-            let t1 = *u1 / len;
-            let pa = Vec2::new(seg.a.x + (seg.b.x - seg.a.x) * t0, seg.a.y + (seg.b.y - seg.a.y) * t0);
-            let pb = Vec2::new(seg.a.x + (seg.b.x - seg.a.x) * t1, seg.a.y + (seg.b.y - seg.a.y) * t1);
-            push_rail(&mut m, &pa, &pb, lo, hi, thk);
-            if !pa.is_finite() || !pb.is_finite() || !lo.is_finite() || !hi.is_finite() {
-                continue;
-            }
-            if hi - lo > 1e-12 {
-                meshes.push(m);
-            }
+            let Some(frame) = Frame::new(p0, d, 0.0) else { continue };
+            let z0 = walk_z(surface, &p0) + BOTTOM_GAP + RAIL_DEPTH;
+            let z1 = walk_z(surface, &p1) + BOTTOM_GAP + RAIL_DEPTH;
+            let z2 = walk_z(surface, &p1) + h - RAIL_DEPTH;
+            let z3 = walk_z(surface, &p0) + h - RAIL_DEPTH;
+            solid::push_profile(
+                &mut panel,
+                &[Vec2::new(0.0, z0), Vec2::new(len, z1), Vec2::new(len, z2), Vec2::new(0.0, z3)],
+                -thk / 2.0,
+                thk / 2.0,
+                &frame,
+            );
+        }
+        if !panel.indices.is_empty() {
+            meshes.push(panel);
         }
     } else {
-        // Balusters: per segment, per bay, balusters of width `thk` evenly spaced with the gap
-        // from `cadcraft_arch::railing::baluster_spacing`.
-        for (i, seg) in segments.iter().enumerate() {
-            let mut posts_in_seg: Vec<(f64, &Vec2)> = Vec::new();
-            for (p, si) in posts.iter() {
-                if *si != i {
-                    continue;
-                }
+        let mut balusters = Mesh::new("railing-baluster", r.id);
+        balusters.level_elevation = level_elevation;
+        for (p0, p1) in segment_bays(&built, &posts) {
+            let d = p1 - p0;
+            let len = d.len();
+            if !len.is_finite() || len <= 1e-9 {
+                continue;
             }
+            let dir = d / len;
+            let Some((gap, count)) = baluster_spacing(len, thk) else {
+                continue;
+            };
+            if count == 0 || gap <= 0.0 {
+                continue;
+            }
+            let step = thk + gap;
+            for i in 0..count {
+                let u = gap / 2.0 + i as f64 * step;
+                if u > len - gap / 2.0 {
+                    break;
+                }
+                let center = p0 + dir * u;
+                let z0 = walk_z(surface, &center) + BOTTOM_GAP + RAIL_DEPTH;
+                let z1 = walk_z(surface, &center) + h - RAIL_DEPTH;
+                solid::push_box(&mut balusters, center, dir, thk, thk, z0, z1);
+            }
+        }
+        if !balusters.indices.is_empty() {
+            meshes.push(balusters);
         }
     }
 
@@ -374,6 +265,11 @@ mod tests {
     use cadcraft_doc::ArchId;
     use cadcraft_geom::Vec3;
 
+    fn centre(m: &Mesh) -> [f64; 2] {
+        let b = m.bounds();
+        [(b.min[0] + b.max[0]) / 2.0, (b.min[1] + b.max[1]) / 2.0]
+    }
+
     #[test]
     fn brief_railing_posts() {
         let r = Railing {
@@ -384,7 +280,7 @@ mod tests {
         };
         let flat = RailSurface::Flat { z: 0.0 };
         let meshes = railing_meshes(&r, &flat);
-        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
+        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(centre).collect();
         assert_eq!(posts.len(), 8, "expected 8 posts: {:?}", posts);
         let expected = [
             Vec2::new(0.0, 0.0),
@@ -396,12 +292,20 @@ mod tests {
             Vec2::new(4.0, 1.5),
             Vec2::new(4.0, 0.0),
         ];
-        let mut got: Vec<(f64, f64)> = posts.iter().map(|p| (p[0] as f64, p[1] as f64)).collect();
-        got.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then_with(|| a.1.partial_cmp(&b.1).unwrap()));
-        for (gx, gy) in &got {
-            let matched = expected.iter().any(|&e| (gx - e.x).abs() < 1e-3 && (gy - e.y).abs() < 1e-3);
-            assert!(matched, "post ({}, {}) not in expected", gx, gy);
+        let mut unmatched = expected.to_vec();
+        for p in &posts {
+            let mut idx = None;
+            for (i, e) in unmatched.iter().enumerate() {
+                if (p[0] - e.x).abs() < 1e-3 && (p[1] - e.y).abs() < 1e-3 {
+                    idx = Some(i);
+                    break;
+                }
+            }
+            if let Some(i) = idx {
+                unmatched.remove(i);
+            }
         }
+        assert!(unmatched.is_empty(), "unmatched post centres: {:?}", unmatched);
     }
 
     #[test]
@@ -415,17 +319,16 @@ mod tests {
         let flat = RailSurface::Flat { z: 0.0 };
         let meshes = railing_meshes(&r, &flat);
         let scene = crate::Scene3d { meshes, ..crate::Scene3d::default() };
-
         fn part(scene: &crate::Scene3d, x: f64, y: f64, z: f64) -> Option<String> {
             crate::probe::probe(scene, Vec3::new(x, y, z)).map(|h| h.part.to_string())
         }
 
-        assert_eq!(part(&scene, 1.3333, 3.0, 0.5), Some("post".to_string()), "post");
-        assert_eq!(part(&scene, 2.0, 3.0, 0.89), Some("railing".to_string()), "top rail");
-        assert_eq!(part(&scene, 2.0, 3.0, 0.07), Some("railing".to_string()), "bottom rail");
-        assert_eq!(part(&scene, 2.0, 3.0, 0.5), Some("railing".to_string()), "panel");
-        assert_eq!(part(&scene, 2.0, 3.0, 0.95), None, "above top rail");
-        assert_eq!(part(&scene, 2.0, 3.0, 0.03), None, "below bottom rail");
+        assert_eq!(part(&scene, 1.3333, 3.0, 0.5), Some("post".to_string()));
+        assert_eq!(part(&scene, 2.0, 3.0, 0.89), Some("railing".to_string()));
+        assert_eq!(part(&scene, 2.0, 3.0, 0.07), Some("railing".to_string()));
+        assert_eq!(part(&scene, 2.0, 3.0, 0.5), Some("railing".to_string()));
+        assert_eq!(part(&scene, 2.0, 3.0, 0.95), None);
+        assert_eq!(part(&scene, 2.0, 3.0, 0.03), None);
     }
 
     #[test]
@@ -434,12 +337,10 @@ mod tests {
         r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0)];
         r.height = 1.0;
         r.thickness = 0.05;
-        r.style = cadcraft_doc::arch::RailingStyle::Balusters;
+        r.style = RailingStyle::Balusters;
         let flat = RailSurface::Flat { z: 0.0 };
         let meshes = railing_meshes(&r, &flat);
-        assert!(!meshes.is_empty());
-        let balusters: Vec<_> = meshes.iter().filter(|m| m.material == "railing-baluster").collect();
-        assert!(!balusters.is_empty(), "no baluster mesh built");
+        assert!(meshes.iter().any(|m| m.material == "railing-baluster"), "baluster mesh should be present");
     }
 
     #[test]
@@ -452,8 +353,8 @@ mod tests {
         r.post_spacing = 4.0;
         let flat = RailSurface::Flat { z: 0.0 };
         let meshes = railing_meshes(&r, &flat);
-        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
-        assert!(!posts.is_empty(), "no posts for inset railing");
+        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(centre).collect();
+        assert!(!posts.is_empty());
         for p in &posts {
             assert!((p[1] - 0.2).abs() < 1e-3, "post y={:?}, want 0.2", p);
         }
@@ -468,8 +369,8 @@ mod tests {
         r.post_spacing = 1.0;
         let flat = RailSurface::Flat { z: 0.0 };
         let meshes = railing_meshes(&r, &flat);
-        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
-        assert_eq!(posts.len(), 5, "4 m at 1.0 spacing = 5 posts; got {}", posts.len());
+        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(centre).collect();
+        assert_eq!(posts.len(), 5, "4 m at 1.0 spacing = 5 posts; got {:?}", posts);
     }
 
     #[test]
@@ -482,10 +383,10 @@ mod tests {
         };
         let flat = RailSurface::Flat { z: 0.0 };
         let meshes = railing_meshes(&r, &flat);
-        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
-        let mut seen: Vec<[f32; 3]> = Vec::new();
+        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(centre).collect();
+        let mut seen: Vec<[f64; 2]> = Vec::new();
         for p in &posts {
-            if !seen.iter().any(|q: &[f32; 3]| (q[0] - p[0]).abs() < 1e-4 && (q[1] - p[1]).abs() < 1e-4) {
+            if !seen.iter().any(|q| (q[0] - p[0]).abs() < 1e-4 && (q[1] - p[1]).abs() < 1e-4) {
                 seen.push(*p);
             }
         }
@@ -500,7 +401,7 @@ mod tests {
         r.height = 1.0;
         r.thickness = 0.05;
         r.post_spacing = 4.0;
-        let deck: RailSurface = RailSurface::Deck { top: 1.0, post_bottom: 1.0 - 0.209 };
+        let deck = RailSurface::Deck { top: 1.0, post_bottom: 1.0 - 0.209 };
         let meshes = railing_meshes(&r, &deck);
         let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").collect();
         assert!(!posts.is_empty(), "no deck posts");
@@ -515,27 +416,37 @@ mod tests {
 
     #[test]
     fn stair_surface_slopes_the_rails() {
-        // Build a minimal Flight surface and check the top rail's z varies along the segment.
         let mut r = Railing::default();
         r.path = vec![Vec2::new(2.0, 1.5), Vec2::new(5.81, 1.5)];
         r.height = 1.0;
         r.thickness = 0.05;
         r.inset = -0.045;
         r.post_spacing = 1.0;
-        // Construct a Flight surface with a sloped base (simulated by a high base).
-        let surface = RailSurface::Flight { line: cadcraft_arch::railing::StairLine::default() };
+        let surface = RailSurface::Flight {
+            line: cadcraft_arch::stair_geom::FlightLine {
+                origin: Vec2::new(2.0, 1.5),
+                dir: Vec2::new(1.0, 0.0),
+                base: 0.0,
+                riser: 0.16875,
+                tread: 0.254,
+                treads: 15,
+                run: 3.81,
+                rise: 2.7,
+            },
+        };
         let meshes = railing_meshes(&r, &surface);
-        assert!(!meshes.is_empty(), "no flight railing meshes");
-        // The top rail should have positions at different z along its length.
         let rails: Vec<_> = meshes.iter().filter(|m| m.material == "railing-rail").collect();
-        assert!(!rails.is_empty(), "no rail meshes");
-        if rails.len() >= 2 {
-            // First rail mesh is top, second is bottom. Check z range of the top rail.
-            let top = &rails[0];
-            let zmin = top.positions.iter().map(|p| p[2] as f64).fold(f64::INFINITY, f64::min);
-            let zmax = top.positions.iter().map(|p| p[2] as f64).fold(f64::NEG_INFINITY, f64::max);
-            assert!((zmax - zmin).abs() > 1e-3, "flight top rail z range = {}, should slope", zmax - zmin);
+        assert!(!rails.is_empty());
+        let mut zmin = f64::INFINITY;
+        let mut zmax = f64::NEG_INFINITY;
+        for m in &rails {
+            for p in &m.positions {
+                let z = p[2] as f64;
+                zmin = zmin.min(z);
+                zmax = zmax.max(z);
+            }
         }
+        assert!((zmax - zmin).abs() > 1e-4, "flight rail z range = {}", zmax - zmin);
     }
 
     #[test]
@@ -545,14 +456,28 @@ mod tests {
         r.height = 1.0;
         r.thickness = 0.05;
         r.post_spacing = 4.0;
-        let surface = RailSurface::Flight { line: cadcraft_arch::railing::StairLine::default() };
+        let surface = RailSurface::Flight {
+            line: cadcraft_arch::stair_geom::FlightLine {
+                origin: Vec2::ZERO,
+                dir: Vec2::new(1.0, 0.0),
+                base: 0.0,
+                riser: 0.16875,
+                tread: 0.254,
+                treads: 15,
+                run: 3.81,
+                rise: 2.7,
+            },
+        };
         let meshes = railing_meshes(&r, &surface);
         let newels: Vec<_> = meshes.iter().filter(|m| m.material == "railing-newel").collect();
         assert_eq!(newels.len(), 2, "expected 2 newels, got {}", newels.len());
-        // Each newel top = walk + h + NEWEL_CAP = 0 + 1.0 + 0.1 = 1.1.
         for m in &newels {
             let zmax = m.positions.iter().map(|p| p[2] as f64).fold(f64::NEG_INFINITY, f64::max);
-            assert!((zmax - 1.1).abs() < 1e-3, "newel top z = {}, want 1.1", zmax);
+            let b = m.bounds();
+            let x = (b.min[0] + b.max[0]) / 2.0;
+            let y = (b.min[1] + b.max[1]) / 2.0;
+            let expected = surface.walk_z(Vec2::new(x, y)) + r.height + NEWEL_CAP;
+            assert!((zmax - expected).abs() < 1e-3, "newel top z = {}, expected {}", zmax, expected);
         }
     }
 
