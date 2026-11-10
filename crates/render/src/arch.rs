@@ -1698,6 +1698,39 @@ mod tests {
         assert_eq!(nosings, 1);
     }
 
+    /// Old name kept: a large tread depth draws no riser lines, only one nosing line.
+    #[test]
+    fn stair_with_large_tread_depth_draws_no_riser_lines() {
+        use cadcraft_doc::arch::Stair;
+        let mut d = Drawing::new_metric();
+        let sid = d.arch.push_stair(Stair { run: 1.0, tread_depth: 2.0, width: 1.0, ..Stair::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let h = stair_handle(sid);
+        let across = list
+            .prims
+            .iter()
+            .filter(|p| p.handle == h && p.len == 2)
+            .filter_map(|p| list.verts.get(p.start as usize..p.start as usize + 2))
+            .filter(|v| (v[0].x - v[1].x).abs() < 1e-9 && (v[0].y - v[1].y).abs() > 0.99)
+            .count();
+        assert!(across <= 1, "at most one line across the flight, got {across}");
+    }
+
+    /// Old name kept: a tiny tread depth keeps the linework capped.
+    #[test]
+    fn stair_with_tiny_tread_depth_caps_riser_lines() {
+        use cadcraft_doc::arch::Stair;
+        let mut d = Drawing::new_metric();
+        let sid = d.arch.push_stair(Stair { run: 10.0, tread_depth: 0.001, treads: usize::MAX, width: 1.0, ..Stair::default() });
+        d.touch_arch();
+        d.arch.plan_level = Some(0);
+        let list = build_arch(&d, &Options::default(), false);
+        let h = stair_handle(sid);
+        let n = list.prims.iter().filter(|p| p.handle == h).count();
+        assert!(n < 100_000, "capped linework, got {n}");
+    }
+
     /// A stair with very small tread_depth is capped at MAX_FLIGHT_TREADS nosing lines.
     #[test]
     fn stair_with_tiny_tread_depth_is_capped() {
