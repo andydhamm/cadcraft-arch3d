@@ -170,8 +170,36 @@ pub fn post_points(path: &[Vec2], spacing: f64) -> Vec<Vec2> {
     let Some(first) = path.first().copied() else {
         return out;
     };
+    let closed = path.len() >= 4 && path.last().is_some_and(|l| (*l - first).len() <= 1e-9);
     out.push(first);
     let good = spacing.is_finite() && spacing > 0.0;
+    if closed {
+        for w in path.windows(2).take(path.len().saturating_sub(1)) {
+            let (Some(&a), Some(&b)) = (w.first(), w.get(1)) else {
+                continue;
+            };
+            let l = (b - a).len();
+            if good && l.is_finite() && l > 1e-12 {
+                let bays = (l / spacing - 1e-9).ceil();
+                let n = if bays >= 1.0 { bays.min(MAX_POSTS as f64) as usize } else { 1 };
+                for k in 1..n {
+                    if out.len() >= MAX_POSTS {
+                        return out;
+                    }
+                    let t = k as f64 / n as f64;
+                    out.push(Vec2::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+                }
+            }
+            if out.len() >= MAX_POSTS {
+                return out;
+            }
+            out.push(b);
+        }
+        while out.len() > 1 && out.last().is_some_and(|p| (*p - first).len() <= 1e-9) {
+            out.pop();
+        }
+        return out;
+    }
     for w in path.windows(2) {
         let (Some(&a), Some(&b)) = (w.first(), w.get(1)) else {
             continue;
@@ -192,10 +220,6 @@ pub fn post_points(path: &[Vec2], spacing: f64) -> Vec<Vec2> {
             return out;
         }
         out.push(b);
-    }
-    let closed = path.len() >= 4 && path.last().is_some_and(|l| (*l - first).len() <= 1e-9);
-    if closed {
-        out.pop();
     }
     out
 }

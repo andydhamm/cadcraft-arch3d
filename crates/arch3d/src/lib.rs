@@ -34,7 +34,7 @@ pub mod planar;
 pub mod plant;
 pub mod probe;
 pub mod railing;
-pub(crate) mod railing_parts;
+pub mod railing_parts;
 pub mod ray;
 pub mod roof;
 pub mod section;
@@ -3040,8 +3040,9 @@ mod tests {
         let scene = Scene3d::build(&model);
         assert!(scene.decks > 0, "deck should be built");
 
-        // Deck board top is at level.elevation + deck_height = 0.9, slab is 0.05 thick (0.85–0.9).
-        let hit = scene.probe(Vec3::new(2.0, 1.5, 0.875));
+        // Deck board top is at level.elevation + deck_height = 0.9. Phase 17 frames the deck: the 25 mm
+        // boards are 0.875..0.9 and (2.0, 1.5) is right above a joist, so probe inside the boards.
+        let hit = scene.probe(Vec3::new(2.0, 1.5, 0.89));
         assert!(hit.is_some(), "probe inside deck should hit");
         assert_eq!(hit.unwrap().part, "deck", "probe inside deck should hit deck part");
     }

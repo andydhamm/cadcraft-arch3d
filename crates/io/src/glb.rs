@@ -79,8 +79,12 @@ fn align4(buf: &mut Vec<u8>) {
     }
 }
 
-/// The finish of a finished-face material `wall-<f>`, `roof-<f>` or `floor-<f>`.
+/// The finish of a finished-face material `wall-<f>`, `roof-<f>` or `floor-<f>`, or of the deck
+/// boards' `deck` (Wood).
 pub(crate) fn finish_of(material: &str) -> Option<Finish> {
+    if let Some(f) = cadcraft_arch3d::texture::board_finish(material) {
+        return Some(f);
+    }
     let rest = material.strip_prefix("wall-").or_else(|| material.strip_prefix("roof-")).or_else(|| material.strip_prefix("floor-"))?;
     Finish::parse(rest)
 }
@@ -889,6 +893,22 @@ mod tests {
         assert_eq!(roof["pbrMetallicRoughness"]["roughnessFactor"].as_f64().unwrap(), 0.95);
         let uv = json["accessors"].as_array().unwrap().iter().find(|a| a["type"] == "VEC2").unwrap();
         assert_eq!(uv["max"], json!([0.5, 0.5]));
+    }
+
+    #[test]
+    fn deck_boards_carry_the_wood_texture() {
+        let mut scene = scene_with(0);
+        scene.meshes = vec![finished("deck", 4), finished("deck-joist", 4)];
+        let json = glb_json_chunk(&write(&scene));
+        let names: Vec<&str> = json["images"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["wood"]);
+        let mats = json["materials"].as_array().unwrap();
+        let deck = &mats.iter().find(|m| m["name"] == "deck").unwrap()["pbrMetallicRoughness"];
+        assert_eq!(deck["baseColorTexture"]["index"], 0);
+        assert_eq!(deck["roughnessFactor"].as_f64().unwrap(), 0.5);
+        let joist = &mats.iter().find(|m| m["name"] == "deck-joist").unwrap()["pbrMetallicRoughness"];
+        assert!(joist.get("baseColorTexture").is_none());
+        assert_eq!(node_names(&scene), ["deck-r4", "deck-r4-joists"]);
     }
 
     #[test]

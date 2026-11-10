@@ -226,9 +226,9 @@ impl Default for OpeningSides {
 
 impl OpeningSides {
     /// Right side only (today's sill and casing).
-    pub const RIGHT: OpeningSides = OpeningSides { left: false, right: true };
+    pub const RIGHT: OpeningSides = OpeningSides { right: true, ..OpeningSides::NONE };
     /// Both sides.
-    pub const BOTH: OpeningSides = OpeningSides { left: true, right: true };
+    pub const BOTH: OpeningSides = OpeningSides { left: true, ..OpeningSides::RIGHT };
     /// Neither side.
     pub const NONE: OpeningSides = OpeningSides { left: false, right: false };
     /// True for the default, right only.

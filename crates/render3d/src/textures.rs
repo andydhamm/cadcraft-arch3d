@@ -25,8 +25,12 @@ pub const MIP_LEVELS: u32 = TEXTURE_SIZE.ilog2() + 1;
 /// Texture format of the array.
 pub const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-/// The finish a material shows: `wall-<f>`, `roof-<f>` or `floor-<f>` (case-insensitive).
+/// The finish a material shows: the deck boards' `deck` (Wood), else `wall-<f>`, `roof-<f>` or
+/// `floor-<f>` (case-insensitive).
 pub fn finish_of(material: &str) -> Option<Finish> {
+    if let Some(f) = cadcraft_arch3d::texture::board_finish(material) {
+        return Some(f);
+    }
     let m = material.to_ascii_lowercase();
     let name = ["wall-", "roof-", "floor-"].iter().find_map(|p| m.strip_prefix(p))?;
     Finish::parse(name)
@@ -384,6 +388,17 @@ mod tests {
         }
         assert_eq!(layer_for("WALL-Brick"), 3);
         assert_eq!(layer_for("glass-brick"), 0);
+    }
+
+    #[test]
+    fn deck_draws_the_wood_layer() {
+        assert_eq!(layer_for("deck"), layer_for("floor-wood"));
+        assert_ne!(layer_for("deck"), 0);
+        assert_eq!(layer_for("Deck"), layer_for("floor-wood"));
+        assert_eq!(finish_of("deck"), Some(Finish::Wood));
+        for other in ["deck-joist", "deck-post", "deck-beam", "deck-rim", "deck-ledger", "deck-footing"] {
+            assert_eq!(layer_for(other), 0, "{other}");
+        }
     }
 
     // ---- Phase 14: the scene's textures (symbol parts, paints, library images). ----
