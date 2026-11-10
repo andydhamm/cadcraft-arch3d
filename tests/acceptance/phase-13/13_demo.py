@@ -53,8 +53,10 @@ g, i = os.path.join(tmp, 'demo.glb'), os.path.join(tmp, 'demo.ifc')
 export(DEMO, g)
 export(DEMO, i)
 j, binc = glb(g)
-if sorted(glb_images(j, binc)) != ['brick', 'shingles', 'siding', 'wood']:
-    fail(f"the GLB carries the four textures: {sorted(glb_images(j, binc))}")
+# Phase 19 adds normalTexture images named <base>-normal; the four base-colour textures are what this demo shows.
+base_imgs = sorted(k for k in glb_images(j, binc) if not k.endswith('-normal'))
+if base_imgs != ['brick', 'shingles', 'siding', 'wood']:
+    fail(f"the GLB carries the four textures: {base_imgs}")
 names = [n.get('name') for n in j.get('nodes', []) if 'mesh' in n]
 if sum(1 for n in names if re.fullmatch(r'cabinet-cb\d+', n)) != 6 or sum(1 for n in names if re.fullmatch(r'fixture-fx\d+', n)) != 7:
     fail(f"the GLB has six cabinet and seven fixture nodes: {sorted(n for n in names if n.startswith(('cabinet', 'fixture')))}")
