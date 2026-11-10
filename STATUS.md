@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 18 of 33 segments merged · 10 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 06:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 10 / 20 | 27.0 h so far · expected done Nov 10 20:54–Nov 11 19:56 UTC |
+| 16 | Ceilings and foundations | building | 10 / 20 | 27.3 h so far · expected done Nov 10 21:09–Nov 11 20:11 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,7 +35,7 @@ Updated 2026-11-10 06:30 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-18 merged, 8 merging, 4 queued, 3 replaced, 3 working, 2 abandoned
+18 merged, 10 merging, 4 queued, 3 replaced, 2 abandoned, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -43,13 +43,13 @@ Updated 2026-11-10 06:30 UTC. This page and the card in the README are regenerat
 | `p16f-tray-roof-guard` | tray validate: a new tray above the roof underside is refused | merging | bonsai-ws2-b |
 | `p16f-soffit-faces` | soffit: rects snap to the room-side wall face; `over` starts at the cabinets' backs | merging | bonsai-b |
 | `p16f-slab-edge-mesh` | slab foundation: one footing mesh per founded wall | merging | bonsai-ws2-a |
-| `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | working | claude-sonnet-b |
+| `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | merging | claude-sonnet-b |
 | `p16-rw-roof-top-level` | roof: the top level is the highest by elevation | merging | mai-flash-b |
-| `p16-rw-open-below-rooms` | Open Below rooms: drawn ones cut holes, roomdetect keeps them | working | bonsai-a |
+| `p16-rw-open-below-rooms` | Open Below rooms: drawn ones cut holes, roomdetect keeps them | working | mai-flash-esc |
 | `p16-rw-overhead-arch` | arch: what lies over a point (the level above's floor, or an Open Below) clips ceilings and walls | merging | claude-sonnet-d |
 | `p16-rw-above-grade-living` | above-grade area: Chief's living-area convention | merging | claude-sonnet-c |
 | `p16-rw-technical-silhouettes` | technical illustration: silhouettes for the camera's view direction | merging | claude-sonnet-a |
-| `p16-rw-pane-styles` | 3D pane: Clay and Technical in the style selector | working | claude-sonnet-a |
+| `p16-rw-pane-styles` | 3D pane: Clay and Technical in the style selector | merging | claude-sonnet-a |
 
 ## Recent merges
 
@@ -72,18 +72,18 @@ Updated 2026-11-10 06:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1020 |
+| bonsai-a | bonsai2-27b | agent | 1022 |
 | bonsai-b | bonsai2-27b | merging | 966 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1065 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1034 |
-| claude-sonnet-a | sonnet | agent | 96 |
-| claude-sonnet-b | sonnet | agent | 101 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1066 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1035 |
+| claude-sonnet-a | sonnet | merging | 98 |
+| claude-sonnet-b | sonnet | merging | 102 |
 | claude-sonnet-c | sonnet | idle | 45 |
 | claude-sonnet-d | sonnet | idle | 46 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 924 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 71 |
 | mai-flash-b | mai-code-1.1-flash | idle | 11 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 65 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 65 |
 | tturbo-mac | tturbo-ultraheretic | gate | 714 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
