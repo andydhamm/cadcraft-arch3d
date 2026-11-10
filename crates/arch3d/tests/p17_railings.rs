@@ -144,7 +144,7 @@ fn closed_path_has_no_double_post() {
     let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m.positions[0]).collect();
     let mut seen: Vec<[f32; 3]> = vec![];
     for p in &posts {
-        if !seen.iter().any(|q: &&[f32; 3]| (q[0] - p[0]).abs() < 1e-4 && (q[1] - p[1]).abs() < 1e-4) {
+        if !seen.iter().any(|q: &[f32; 3]| (q[0] - p[0]).abs() < 1e-4 && (q[1] - p[1]).abs() < 1e-4) {
             seen.push(*p);
         }
     }
@@ -159,7 +159,7 @@ fn deck_surface_posts_reach_the_rim_bottom() {
     r.height = 1.0;
     r.thickness = 0.05;
     r.post_spacing = 4.0;
-    let deck: RailSurface = RailSurface::Deck { top: 1.0, ..Default::default() };
+    let deck: RailSurface = RailSurface::Deck { top: 1.0 };
     let meshes = make(&r, &deck);
     let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m).collect();
     let mut min_z = f64::INFINITY;
