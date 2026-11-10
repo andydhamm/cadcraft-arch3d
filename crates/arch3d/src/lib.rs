@@ -34,7 +34,7 @@ pub mod planar;
 pub mod plant;
 pub mod probe;
 pub mod railing;
-pub(crate) mod railing_parts;
+pub mod railing_parts;
 pub mod ray;
 pub mod roof;
 pub mod section;

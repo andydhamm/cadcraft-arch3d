@@ -33,7 +33,7 @@ pub const AGAINST_TOL: f64 = 0.03;
 pub const MAX_FLIGHT_TREADS: usize = 1024;
 
 /// What a railing on a stair needs of the flight: no width, no underside.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlightLine {
     /// The centre of the bottom nosing line.
     pub origin: Vec2,
@@ -77,6 +77,9 @@ impl FlightLine {
 
     /// The height of the line through the tread nosings at `u`.
     pub fn nosing_v(&self, u: f64) -> f64 {
+        if !self.riser.is_finite() || !self.tread.is_finite() || self.tread <= 0.0 || self.riser < 0.0 {
+            return 0.0;
+        }
         self.riser + (u + NOSING) * self.riser / self.tread
     }
 
@@ -96,6 +99,12 @@ impl FlightLine {
             }
         }
         best
+    }
+}
+
+impl Default for FlightLine {
+    fn default() -> Self {
+        Self { origin: Vec2::ZERO, dir: Vec2::new(1.0, 0.0), base: 0.0, riser: 0.16875, tread: 0.254, treads: 15, run: 3.81, rise: 2.7 }
     }
 }
 
