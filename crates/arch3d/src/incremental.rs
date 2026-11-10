@@ -25,8 +25,8 @@ use cadcraft_arch::casework_layout::counter_runs;
 use cadcraft_arch::join::{WallShape, solve_joins};
 use cadcraft_arch::roof::{Footprint, outer_footprint};
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, CabinetPart, ElectricalDevice, Fixture, FoundationKind, Furnishing, FurnishingHost, Level, LightFixture, Opening, Paint,
-    Plant, PlantSpecies, Railing, Roof, Room, RoomType, SLAB_THICKNESS, Side, Stair, Surface, Terrain, WallType,
+    Cabinet, CabinetKind, CabinetPart, ElectricalDevice, Fixture, FoundationKind, Furnishing, FurnishingHost, Level, LightFixture, Opening,
+    OpeningTop, Paint, Plant, PlantSpecies, Railing, Roof, Room, RoomType, SLAB_THICKNESS, Side, Stair, Surface, Terrain, WallType,
 };
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
@@ -71,11 +71,11 @@ impl ObjectKind {
     /// The kind owning a mesh of the [`part_of`] class `part`.
     fn from_part(part: &str) -> ObjectKind {
         match part {
-            "floor" | "ceiling" | "deck" | "slab" => ObjectKind::Room,
-            "glass" | "frame" | "casing" | "leaf" | "sill" | "header" => ObjectKind::Opening,
+            "floor" | "ceiling" | "deck" | "slab" | "ledger" | "joist" | "rim" | "beam" => ObjectKind::Room,
+            "glass" | "frame" | "casing" | "leaf" | "sill" | "header" | "grille" => ObjectKind::Opening,
             "roof" => ObjectKind::Roof,
-            "stair" => ObjectKind::Stair,
-            "railing" => ObjectKind::Railing,
+            "stair" | "tread" | "riser" | "stringer" | "skirt" => ObjectKind::Stair,
+            "railing" | "post" => ObjectKind::Railing,
             "terrain" | "path" => ObjectKind::Terrain,
             "plant" => ObjectKind::Plant,
             "light" => ObjectKind::Light,
@@ -99,6 +99,11 @@ pub struct ObjectKey {
 
 /// The object `mesh` belongs to, from its [`part_of`] class and its `object` id.
 pub fn object_key(mesh: &Mesh) -> ObjectKey {
+    // Phase 17: deck structure (posts and piers too) belongs to its deck room, while phase 16's
+    // "footing" part stays a foundation's.
+    if mesh.material.starts_with("deck-") {
+        return ObjectKey { kind: ObjectKind::Room, id: mesh.object };
+    }
     ObjectKey { kind: ObjectKind::from_part(part_of(mesh)), id: mesh.object }
 }
 
@@ -324,6 +329,8 @@ struct WallIn {
     /// Phase 16: the part of the wall rising to a vaulted ceiling over its room, if any.
     rise: Option<crate::wall_rise::RiseIn>,
     paints: Vec<(String, Paint)>,
+    /// Phase 17: where a stair's flight cuts the wall's top (empty for most walls).
+    flight_cuts: Vec<cadcraft_arch::flight_cut::FlightCut>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -331,6 +338,8 @@ struct OpeningIn {
     opening: Opening,
     host: Option<Wall>,
     span: Option<(f64, f64)>,
+    /// Phase 17: the host wall's roof top polyline, for an opening whose top follows the roof.
+    roof_top: Option<Vec<Vec2>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -358,18 +367,23 @@ struct RoofIn {
 struct StairIn {
     stair: Stair,
     base: f64,
+    /// Phase 17: which sides ([left, right]) stand against a wall.
+    against: [bool; 2],
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct RailingIn {
     railing: Railing,
-    base: f64,
+    /// Phase 17: what the railing stands on (a floor, a deck, a stair flight).
+    surface: cadcraft_arch::railing::RailSurface,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct DeckIn {
     room: Room,
     level: Level,
+    /// Phase 17: the deck's substructure, if it has one.
+    frame: Option<cadcraft_arch::deck::DeckFrame>,
     /// A deck is a room: its floor takes the room's paints.
     paints: Vec<(String, Paint)>,
 }
@@ -494,15 +508,27 @@ impl Sections {
         }
         let mut footprints: BTreeMap<u32, (Vec<Wall>, Option<Footprint>)> = BTreeMap::new();
 
+        // Each wall's roof top, for the openings whose top follows the roof.
+        let mut roof_tops: BTreeMap<ArchId, Option<Vec<Vec2>>> = BTreeMap::new();
         let wall_items = model
             .walls
             .iter()
             .map(|wall| {
                 let span = wall_span(model, wall);
                 let paints = paints_under(model, &Surface::WallSide { wall: wall.id, side: Side::Left }.object_key());
-                let mut input =
-                    WallIn { wall: wall.clone(), span, shape: None, openings: Vec::new(), clip: None, roof_top: None, rise: None, paints };
+                let mut input = WallIn {
+                    wall: wall.clone(),
+                    span,
+                    shape: None,
+                    openings: Vec::new(),
+                    clip: None,
+                    roof_top: None,
+                    rise: None,
+                    paints,
+                    flight_cuts: Vec::new(),
+                };
                 if let Some((base, top)) = span {
+                    input.flight_cuts = cadcraft_arch::flight_cut::flight_cuts(model, wall);
                     input.shape = shape_by_id.get(&wall.id).and_then(|&i| shapes.get(i)).cloned();
                     input.openings = hosted.get(&wall.id).cloned().unwrap_or_default();
                     input.clip = find_roof_clip(model, wall);
@@ -519,6 +545,7 @@ impl Sections {
                     }
                 }
                 input.rise = crate::wall_rise::rise_input(model, wall, input.shape.as_ref(), span, input.roof_top.is_some());
+                roof_tops.insert(wall.id, input.roof_top.clone());
                 (wall.id, input)
             })
             .collect();
@@ -535,13 +562,15 @@ impl Sections {
             .iter()
             .map(|o| {
                 let host = wall_map.get(&o.host).copied();
-                let input = OpeningIn { opening: o.clone(), host: host.cloned(), span: host.and_then(|w| wall_span(model, w)) };
+                let roof_top = if o.top == OpeningTop::Roof { roof_tops.get(&o.host).cloned().flatten() } else { None };
+                let input = OpeningIn { opening: o.clone(), host: host.cloned(), span: host.and_then(|w| wall_span(model, w)), roof_top };
                 (o.id, input)
             })
             .collect();
         let openings = parts(po, opening_items, |i| {
             let map: BTreeMap<ArchId, &Wall> = i.host.iter().map(|w| (i.opening.host, w)).collect();
-            painted(model, openings::opening_meshes(&map, &i.opening, i.span).into_iter().filter(|m| !m.positions.is_empty()).collect())
+            let made = openings::opening_meshes_with(&map, &i.opening, i.span, i.roof_top.as_deref());
+            painted(model, made.into_iter().filter(|m| !m.positions.is_empty()).collect())
         });
 
         let room_items: Vec<(ArchId, RoomIn)> = model
@@ -593,28 +622,37 @@ impl Sections {
             painted(model, crate::roof::roof_meshes(&i.roof, i.eave_z).into_iter().filter(|m| !m.positions.is_empty()).collect())
         });
 
-        let stair_items = model.stairs.iter().map(|s| (s.id, StairIn { stair: s.clone(), base: level_for(model, s.from_level).elevation })).collect();
-        let stairs = parts(ps, stair_items, |i| {
-            painted(model, stairs::stair_mesh(&i.stair, i.base).into_iter().chain(stairs::landing_mesh(&i.stair, i.base)).collect())
-        });
+        let stair_items = model
+            .stairs
+            .iter()
+            .map(|s| {
+                let against = cadcraft_arch::stair_geom::sides_against_walls(model, s);
+                (s.id, StairIn { stair: s.clone(), base: level_for(model, s.from_level).elevation, against })
+            })
+            .collect();
+        let stairs = parts(ps, stair_items, |i| painted(model, crate::stair_parts::stair_meshes(&i.stair, i.base, i.against)));
 
-        let railing_items =
-            model.railings.iter().map(|r| (r.id, RailingIn { railing: r.clone(), base: level_for(model, r.level).elevation })).collect();
-        let railings = parts(pl, railing_items, |i| painted(model, railing::railing_mesh(&i.railing, i.base).into_iter().collect()));
+        let railing_items = model
+            .railings
+            .iter()
+            .map(|r| (r.id, RailingIn { railing: r.clone(), surface: cadcraft_arch::railing::rail_surface(model, r) }))
+            .collect();
+        let railings = parts(pl, railing_items, |i| painted(model, crate::railing_parts::railing_meshes(&i.railing, &i.surface)));
 
+        // The site grade under the decks, worked out once and only when a deck exists.
+        let grade = std::cell::OnceCell::new();
         let deck_items = model
             .rooms
             .iter()
             .filter(|r| r.room_type == RoomType::Deck)
             .map(|r| {
                 let paints = paints_under(model, &Surface::RoomFloor(r.id).object_key());
-                (r.id, DeckIn { room: r.clone(), level: level_for(model, r.level), paints })
+                let grade = grade.get_or_init(|| cadcraft_arch::deck::site_grade(model));
+                let frame = cadcraft_arch::deck::frame(model, r, grade);
+                (r.id, DeckIn { room: r.clone(), level: level_for(model, r.level), frame, paints })
             })
             .collect();
-        let decks = parts(pd, deck_items, |i| {
-            let material = if i.room.deck_height.is_some_and(|h| h > 0.0 && h.is_finite()) { "deck" } else { "floor" };
-            painted(model, floors::floor_slab(&i.room, &i.level, material).into_iter().collect())
-        });
+        let decks = parts(pd, deck_items, |i| painted(model, crate::deck_frame::deck_meshes(&i.room, &i.level, i.frame.as_ref())));
 
         let site_in = SiteIn {
             terrain: model.terrain.clone(),
@@ -921,9 +959,10 @@ fn wall_mesh(i: &WallIn) -> Vec<Mesh> {
 fn wall_base_mesh(i: &WallIn) -> Option<Mesh> {
     let (base, top) = i.span?;
     let openings: Vec<&Opening> = i.openings.iter().collect();
-    let mesh = if !openings.is_empty() || i.clip.is_some() || i.roof_top.is_some() {
+    let mesh = if !openings.is_empty() || i.clip.is_some() || i.roof_top.is_some() || !i.flight_cuts.is_empty() {
         let shape = i.shape.as_ref()?;
-        let profile = elevation_profile(shape, &i.wall, base, top, i.clip.as_ref(), i.roof_top.as_deref(), &openings)?;
+        let mut profile = elevation_profile(shape, &i.wall, base, top, i.clip.as_ref(), i.roof_top.as_deref(), &openings)?;
+        crate::flight_cut::apply(&mut profile, &i.flight_cuts, base);
         if i.roof_top.is_some() {
             extrude_profile_slab(shape, &profile, base, &i.wall, "wall")
         } else {
@@ -1017,6 +1056,232 @@ impl Scene3d {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The phase-1 house: four 0.2 m exterior walls on 10 x 8 m, 2.4 m high, and a gable roof with
+    /// gables on x = 0 and x = 10.
+    fn p17_house(roof: bool) -> ArchModel {
+        use cadcraft_doc::RoofDirective;
+        let mut m = ArchModel::default();
+        for (a, b) in [((0.0, 0.0), (10.0, 0.0)), ((10.0, 0.0), (10.0, 8.0)), ((10.0, 8.0), (0.0, 8.0)), ((0.0, 8.0), (0.0, 0.0))] {
+            m.push_wall(Wall {
+                start: Vec2::new(a.0, a.1),
+                end: Vec2::new(b.0, b.1),
+                thickness: 0.2,
+                height: 2.4,
+                exterior: true,
+                ..Default::default()
+            });
+        }
+        if roof {
+            m.walls[1].roof_directive = RoofDirective::Gable;
+            m.walls[3].roof_directive = RoofDirective::Gable;
+            let r = Roof { pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, ..Roof::default() };
+            if let Ok(built) = cadcraft_arch::roof::build_roof(&m, 0, &r) {
+                m.push_roof(built);
+            }
+        }
+        m
+    }
+
+    /// A stair on the phase-1 house: start (2, 0.6), +x, width 1.0, level 0 to 1 at 2.7.
+    fn p17_stair() -> Stair {
+        Stair {
+            start: Vec2::new(2.0, 0.6),
+            width: 1.0,
+            from_level: 0,
+            to_level: 1,
+            rise: 2.7,
+            risers: 16,
+            riser_height: 0.16875,
+            treads: 15,
+            tread_depth: 0.254,
+            run: 3.81,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn object_key_of_deck_structure_is_the_room() {
+        for material in ["deck", "deck-ledger", "deck-joist", "deck-rim", "deck-beam", "deck-post", "deck-footing"] {
+            let key = object_key(&Mesh::new(material, ArchId(6)));
+            assert_eq!(key, ObjectKey { kind: ObjectKind::Room, id: ArchId(6) }, "{material}");
+        }
+        // Phase 16's footing stays a foundation's, and the new parts find their owners.
+        let owner = |material: &str| object_key(&Mesh::new(material, ArchId(1))).kind;
+        assert_eq!(owner("footing"), ObjectKind::Foundation);
+        for (material, kind) in [
+            ("stair-tread", ObjectKind::Stair),
+            ("stair-riser", ObjectKind::Stair),
+            ("stair-stringer", ObjectKind::Stair),
+            ("stair-skirt", ObjectKind::Stair),
+            ("stair-landing", ObjectKind::Stair),
+            ("railing-rail", ObjectKind::Railing),
+            ("window-grille", ObjectKind::Opening),
+            ("door-grille", ObjectKind::Opening),
+        ] {
+            assert_eq!(owner(material), kind, "{material}");
+        }
+    }
+
+    #[test]
+    fn deck_post_and_railing_post_are_different_owners() {
+        let deck = object_key(&Mesh::new("deck-post", ArchId(2)));
+        let rail = object_key(&Mesh::new("railing-post", ArchId(2)));
+        assert_eq!(deck.kind, ObjectKind::Room);
+        assert_eq!(rail.kind, ObjectKind::Railing);
+        assert_ne!(deck, rail);
+        let newel = object_key(&Mesh::new("railing-newel", ArchId(2)));
+        assert_eq!(newel, rail);
+    }
+
+    fn p17_deck() -> Room {
+        let polygon = vec![Vec2::new(2.0, 8.1), Vec2::new(6.0, 8.1), Vec2::new(6.0, 11.1), Vec2::new(2.0, 11.1)];
+        Room { polygon, room_type: RoomType::Deck, deck_height: Some(0.9), ..Default::default() }
+    }
+
+    #[test]
+    fn stair_inputs_carry_against() {
+        let mut m = p17_house(false);
+        m.push_stair(p17_stair());
+        m.push_stair(Stair { start: Vec2::new(2.0, 1.0), ..p17_stair() });
+        let s = Sections::make(&m, None);
+        let got: Vec<[bool; 2]> = s.stairs.iter().map(|p| p.input.against).collect();
+        assert_eq!(got, vec![[false, true], [false, false]]);
+        for p in &s.stairs {
+            assert_eq!(p.input.against, cadcraft_arch::stair_geom::sides_against_walls(&m, &p.input.stair));
+        }
+    }
+
+    #[test]
+    fn railing_inputs_carry_the_surface() {
+        use cadcraft_arch::railing::RailSurface;
+        use cadcraft_doc::arch::RailingHost;
+        let mut m = p17_house(false);
+        m.levels.clear();
+        m.levels.push(Level { index: 0, elevation: 0.3, ceiling_height: 2.4, ..Default::default() });
+        let deck = m.push_room(p17_deck());
+        let flat = m.push_railing(Railing { path: vec![Vec2::new(0.0, 0.5), Vec2::new(4.0, 0.5)], ..Default::default() });
+        let on_deck = m.push_railing(Railing {
+            path: vec![Vec2::new(2.0, 11.1), Vec2::new(6.0, 11.1)],
+            follows: Some(deck),
+            host: RailingHost::Deck,
+            ..Default::default()
+        });
+        let s = Sections::make(&m, None);
+        let surface = |id: ArchId| s.railings.iter().find(|p| p.id == id).map(|p| p.input.surface.clone());
+        assert_eq!(surface(flat), Some(RailSurface::Flat { z: 0.3 }));
+        match surface(on_deck) {
+            Some(RailSurface::Deck { top, post_bottom }) => {
+                assert!((top - 1.2).abs() < 1e-9 && (post_bottom - (1.2 - 0.025 - 0.184)).abs() < 1e-9, "{top} {post_bottom}");
+            }
+            other => panic!("a deck surface, got {other:?}"),
+        }
+        // A deck height change moves the surface, so the railing is made again.
+        let mut next = m.clone();
+        if let Some(r) = next.rooms.iter_mut().find(|r| r.id == deck) {
+            r.deck_height = Some(0.5);
+        }
+        let again = Sections::make(&next, Some(s));
+        let moved = again.railings.iter().find(|p| p.id == on_deck);
+        assert!(moved.is_some_and(|p| p.fresh), "the deck railing is rebuilt");
+        assert!(again.railings.iter().find(|p| p.id == flat).is_some_and(|p| !p.fresh), "the flat one is kept");
+    }
+
+    #[test]
+    fn wall_inputs_carry_flight_cuts() {
+        let mut m = p17_house(false);
+        m.push_stair(p17_stair());
+        let s = Sections::make(&m, None);
+        assert_eq!(s.walls.len(), 4);
+        for p in &s.walls {
+            assert_eq!(p.input.flight_cuts, cadcraft_arch::flight_cut::flight_cuts(&m, &p.input.wall), "wall {}", p.id);
+        }
+        // A wall without a span (a missing level) carries none.
+        let mut skipped = p17_house(false);
+        skipped.walls[0].base_level = 7;
+        let s = Sections::make(&skipped, None);
+        assert!(s.walls.iter().all(|p| p.input.span.is_some() || p.input.flight_cuts.is_empty()));
+    }
+
+    #[test]
+    fn roof_window_openings_carry_the_host_roof_top() {
+        let mut m = p17_house(true);
+        assert!(!m.roofs.is_empty(), "the gable roof builds");
+        let gable = m.walls[1].id;
+        let south = m.walls[0].id;
+        let mut roof = Opening::new(gable, 4.0, 1.0, 1.0, cadcraft_doc::arch::OpeningKind::Window);
+        roof.top = OpeningTop::Roof;
+        let roof = m.push_opening(roof);
+        let square = m.push_opening(Opening::new(gable, 2.0, 0.6, 1.0, cadcraft_doc::arch::OpeningKind::Window));
+        let other = m.push_opening({
+            let mut o = Opening::new(south, 4.0, 1.0, 1.0, cadcraft_doc::arch::OpeningKind::Window);
+            o.top = OpeningTop::Roof;
+            o
+        });
+        let s = Sections::make(&m, None);
+        let host_top = s.walls.iter().find(|p| p.id == gable).and_then(|p| p.input.roof_top.clone());
+        assert!(host_top.is_some(), "the gable wall has a roof top");
+        let input = |id: ArchId| s.openings.iter().find(|p| p.id == id).map(|p| p.input.roof_top.clone());
+        assert_eq!(input(roof), Some(host_top), "a roof-topped opening carries its host's roof top");
+        assert_eq!(input(square), Some(None), "a square one carries none");
+        let south_top = s.walls.iter().find(|p| p.id == south).and_then(|p| p.input.roof_top.clone());
+        assert_eq!(input(other), Some(south_top), "whatever the host has, even nothing");
+    }
+
+    #[test]
+    fn cache_equals_full_with_stairs_decks_railings_and_cuts() {
+        use cadcraft_doc::arch::RailingHost;
+        let mut model = p17_house(false);
+        model.levels.clear();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        let stair = model.push_stair(p17_stair());
+        let deck = model.push_room(p17_deck());
+        let rail = model.push_railing(Railing { path: vec![Vec2::new(0.0, 0.5), Vec2::new(4.0, 0.5)], ..Default::default() });
+        model.push_railing(Railing {
+            path: vec![Vec2::new(2.0, 11.1), Vec2::new(6.0, 11.1)],
+            follows: Some(deck),
+            host: RailingHost::Deck,
+            ..Default::default()
+        });
+        let (mut cache, _) = SceneCache::new(&model);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&model).digest());
+        // Seeded edits: stair width, deck height, railing path, a wall end.
+        let mut state = 7u64;
+        for step in 0..24 {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let pick = (state >> 33) % 4;
+            let amount = 0.05 + ((state >> 20) % 10) as f64 * 0.02;
+            let mut next = model.clone();
+            match pick {
+                0 => {
+                    if let Some(s) = next.stairs.iter_mut().find(|s| s.id == stair) {
+                        s.width = 0.9 + amount;
+                    }
+                }
+                1 => {
+                    if let Some(r) = next.rooms.iter_mut().find(|r| r.id == deck) {
+                        r.deck_height = Some(0.3 + amount);
+                    }
+                }
+                2 => {
+                    if let Some(r) = next.railings.iter_mut().find(|r| r.id == rail) {
+                        if let Some(p) = r.path.get_mut(1) {
+                            p.x = 3.0 + amount * 10.0;
+                        }
+                    }
+                }
+                _ => {
+                    if let Some(w) = next.walls.get_mut(2) {
+                        w.end.x = 0.5 * amount;
+                    }
+                }
+            }
+            cache.update(&next);
+            assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest(), "step {step} (edit {pick})");
+            model = next;
+        }
+    }
 
     fn square_room() -> ArchModel {
         let mut m = ArchModel::default();
