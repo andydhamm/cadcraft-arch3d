@@ -68,8 +68,35 @@ pub fn opening_symbol(model: &ArchModel, o: &Opening) -> Option<Symbol> {
     match o.kind {
         OpeningKind::Door => {
             let style_lower = o.style.to_ascii_lowercase();
+            let is_fixed = style_lower.contains("fixed");
             let is_sliding = style_lower.contains("slid") || style_lower.contains("bifold") || style_lower.contains("pocket");
-            if is_sliding {
+            if is_fixed {
+                if let (Some(a), Some(b)) = (wp(rough_start, -half), wp(rough_start, half)) {
+                    polys.push(vec![a, b]);
+                } else {
+                    return None;
+                }
+                if let (Some(a), Some(b)) = (wp(rough_end, -half), wp(rough_end, half)) {
+                    polys.push(vec![a, b]);
+                } else {
+                    return None;
+                }
+                if let (Some(a), Some(b)) = (wp(rough_start, half), wp(rough_end, half)) {
+                    polys.push(vec![a, b]);
+                } else {
+                    return None;
+                }
+                if let (Some(a), Some(b)) = (wp(rough_start, -half), wp(rough_end, -half)) {
+                    polys.push(vec![a, b]);
+                } else {
+                    return None;
+                }
+                if let (Some(a), Some(b)) = (wp(finished_start, 0.0), wp(finished_end, 0.0)) {
+                    polys.push(vec![a, b]);
+                } else {
+                    return None;
+                }
+            } else if is_sliding {
                 if let (Some(a), Some(b)) = (wp(rough_start, -half), wp(rough_start, half)) {
                     polys.push(vec![a, b]);
                 } else {
@@ -308,6 +335,16 @@ mod tests {
             let d = hinge.dist(*pt);
             assert!((d - o.width).abs() < 0.02, "arc radius {} != expected ~{} (width)", d, o.width);
         }
+    }
+
+    #[test]
+    fn fixed_door_symbol_has_no_swing_arc() {
+        let mut m = ArchModel::default();
+        let h = test_wall(&mut m, Vec2::ZERO, Vec2::new(10.0, 0.0), 0.2);
+        let idx = opening_on(&mut m, h, 3.0, 0.9, OpeningKind::Door, "fixed");
+        let s = opening_symbol(&m, &m.openings[idx]).unwrap();
+        assert_finite(&s);
+        assert!(s.polylines.iter().all(|p| p.len() == 2), "fixed door should have only straight lines, no swing arc");
     }
 
     #[test]
