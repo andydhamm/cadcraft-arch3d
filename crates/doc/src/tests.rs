@@ -1236,7 +1236,8 @@ fn opening_sides_names_both_left_right_none() {
     assert_eq!(OpeningSides::BOTH.name(), "both");
     assert_eq!(OpeningSides::RIGHT.name(), "right");
     assert_eq!(OpeningSides::NONE.name(), "none");
-    assert_eq!(OpeningSides { left: true, right: false }.name(), "left");
+    let left = OpeningSides { left: true, ..OpeningSides::NONE };
+    assert_eq!(left.name(), "left");
     for n in ["left", "right", "both", "none"] {
         assert_eq!(OpeningSides::parse(n).map(|s| s.name()), Some(n));
     }
