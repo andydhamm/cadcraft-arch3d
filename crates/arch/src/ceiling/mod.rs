@@ -9,6 +9,7 @@
 //! else the finished ceiling. "A room under a roof" means, throughout phase 16, a point that
 //! [`roof_underside_at`] answers for: a plane of a roof whose `level` is the room's level holds it.
 
+pub mod overhead;
 pub mod soffit;
 pub mod stack;
 pub mod tray;
@@ -198,15 +199,42 @@ pub fn lowest_underside_over(model: &ArchModel, level: u32, polygon: &[Vec2]) ->
 
 /// The rough ceiling of `room` at plan point `p` (absolute z): its flat ceiling, adjusted where
 /// it follows the roof ([`vault::adjust`]) and lifted by its trays ([`tray::lift`]).
+///
+/// What lies over `p` ([`overhead::overhead_at`]) clips it: the floor above caps it at that
+/// floor's underside; an Open Below room above replaces it with the upper room's own rough ceiling.
 pub fn rough_ceiling_in(model: &ArchModel, room: &Room, p: Vec2) -> Option<f64> {
+    rough_ceiling_depth(model, room, p, model.levels.len())
+}
+
+fn rough_ceiling_depth(model: &ArchModel, room: &Room, p: Vec2, depth: usize) -> Option<f64> {
+    use overhead::Overhead;
+    let over = overhead::overhead_at(model, room.level, p);
+    if let Overhead::Open { room: up, .. } = over {
+        let upper = overhead::room_by_id(model, up)?;
+        return rough_ceiling_depth(model, upper, p, depth.checked_sub(1)?);
+    }
     let flat = flat_ceiling_z(model, room)?;
-    let z = vault::adjust(model, room, flat, p) + tray::lift(model, room, p);
+    let mut z = vault::adjust(model, room, flat, p) + tray::lift(model, room, p);
+    if let Overhead::Floor { underside, .. } = over
+        && underside.is_finite()
+    {
+        z = z.min(underside);
+    }
     z.is_finite().then_some(z)
 }
 
 /// The finished ceiling of `room` at `p` (absolute z): the rough ceiling minus the finish stack.
+/// Under an Open Below room it is the upper room's finished ceiling (its own stack).
 pub fn finished_ceiling_in(model: &ArchModel, room: &Room, p: Vec2) -> Option<f64> {
-    let z = rough_ceiling_in(model, room, p)? - stack::thickness(&room.ceiling_stack);
+    finished_ceiling_depth(model, room, p, model.levels.len())
+}
+
+fn finished_ceiling_depth(model: &ArchModel, room: &Room, p: Vec2, depth: usize) -> Option<f64> {
+    if let overhead::Overhead::Open { room: up, .. } = overhead::overhead_at(model, room.level, p) {
+        let upper = overhead::room_by_id(model, up)?;
+        return finished_ceiling_depth(model, upper, p, depth.checked_sub(1)?);
+    }
+    let z = rough_ceiling_depth(model, room, p, depth)? - stack::thickness(&room.ceiling_stack);
     z.is_finite().then_some(z)
 }
 
@@ -487,7 +515,8 @@ mod tests {
     #[test]
     fn reseat_moves_only_seated_items() {
         let mut m = house(false);
-        m.levels.push(Level { index: 1, name: "Level 2".into(), elevation: 2.7, ..Level::default() });
+        // No structure: the floor above (underside 2.7) does not clip NE's raised 2.7 ceiling.
+        m.levels.push(Level { index: 1, name: "Level 2".into(), elevation: 2.7, structure: 0.0, ..Level::default() });
         m.push_room(Room { polygon: rect(0.1, 0.1, 9.9, 7.9), level: 1, ..Room::default() });
         let seated = m.push_furnishing(pendant(0, [8.0, 5.0], 2.4 - 0.86));
         let offset = m.push_furnishing(pendant(0, [9.0, 6.0], 1.0));
