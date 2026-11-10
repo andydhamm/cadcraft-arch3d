@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 66 of 69 segments merged · 12 of 14 acceptance checks**
 
-8,194 workspace tests passing at the last merge · 863 segments merged in all · 0 of 15 seats working
+8,197 workspace tests passing at the last merge · 864 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -25,7 +25,7 @@ Updated 2026-11-10 00:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 111.8 h so far · expected done Nov 10 05:47–Nov 11 20:27 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 112.1 h so far · expected done Nov 10 06:02–Nov 11 20:42 UTC |
 | 16 | Ceilings and foundations | building | 7 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -35,11 +35,11 @@ Updated 2026-11-10 00:15 UTC. This page and the card in the README are regenerat
 
 ## Phase 15 segments
 
-66 merged, 8 replaced, 3 merging, 3 abandoned
+66 merged, 8 replaced, 3 abandoned, 2 merging, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | merging | mai-flash-esc |
+| `p15-docs-user-guide` | USER-GUIDE: electrical, split levels, the showcase house; an MCP example | escalate |  |
 | `p15-check10-surfaces` | phase-15 check 10 reads the surface rows (operator fix, already on your branch) | merging | mai-flash-esc |
 | `upstream-sync-d847eac13` | merge upstream upstream/main up to d847eac13 (38 commits) | merging | claude-sonnet-d |
 
@@ -47,6 +47,8 @@ Updated 2026-11-10 00:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 00:20 | `p15-docs-user-guide` | refused | 0 pass | mai-flash-esc |
+| Nov 10 00:20 | `harden-p15-showcase-test` | merged | 8,197 pass | tturbo-mac |
 | Nov 09 23:14 | `p15-check10-surfaces` | refused | 0 pass | claude-sonnet-c |
 | Nov 09 23:14 | `p16-soffit-meshes` | merged | 8,194 pass | bonsai-b |
 | Nov 09 22:33 | `p16-tray-commands` | merged | 8,188 pass | mai-flash-esc |
@@ -57,8 +59,6 @@ Updated 2026-11-10 00:15 UTC. This page and the card in the README are regenerat
 | Nov 09 19:56 | `harden-p16-soffit-arch` | merged | 8,175 pass | tturbo-mac |
 | Nov 09 19:11 | `upstream-sync-865fa9afb` | merged | 8,169 pass | claude-sonnet-c |
 | Nov 09 18:24 | `p16-soffit-commands` | merged | 8,114 pass | claude-sonnet-d |
-| Nov 09 17:48 | `p15-showcase-test` | merged | 8,108 pass | mai-flash-esc |
-| Nov 09 16:35 | `p16-soffit-commands` | refused | 0 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -77,5 +77,5 @@ Updated 2026-11-10 00:15 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 65 |
-| tturbo-mac | tturbo-ultraheretic | gate | 698 |
+| tturbo-mac | tturbo-ultraheretic | agent | 700 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
