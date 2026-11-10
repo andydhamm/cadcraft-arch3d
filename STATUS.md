@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-09 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 15 of 21: Electrical, technical illustration and the showcase house — 66 of 69 segments merged · 12 of 14 acceptance checks**
 
@@ -25,7 +25,7 @@ Updated 2026-11-09 23:45 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 111.3 h so far · expected done Nov 10 05:17–Nov 11 19:57 UTC |
+| 15 | Electrical, technical illustration and the showcase house | building | 12 / 14 | 111.6 h so far · expected done Nov 10 05:32–Nov 11 20:12 UTC |
 | 16 | Ceilings and foundations | building | 7 / 13 | — |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
@@ -77,5 +77,5 @@ Updated 2026-11-09 23:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 69 |
 | mai-flash-b | mai-code-1.1-flash | idle | 9 |
 | mai-flash-esc | mai-code-1.1-flash | merging | 65 |
-| tturbo-mac | tturbo-ultraheretic | gate | 697 |
+| tturbo-mac | tturbo-ultraheretic | agent | 698 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
