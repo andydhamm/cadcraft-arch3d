@@ -55,7 +55,10 @@ pub enum Overhead {
 }
 
 fn holds(polygon: &[Vec2], holes: &[Vec<Vec2>], p: Vec2) -> bool {
-    polygon.len() >= 3 && point_in_polygon(polygon, p) && !holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p))
+    polygon.len() >= 3
+        && polygon.iter().all(|v| v.is_finite())
+        && point_in_polygon(polygon, p)
+        && !holes.iter().any(|h| h.len() >= 3 && h.iter().all(|v| v.is_finite()) && point_in_polygon(h, p))
 }
 
 fn bbox_meets(polygon: &[Vec2], bbox: [f64; 4]) -> bool {
