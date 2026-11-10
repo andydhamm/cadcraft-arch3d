@@ -51,11 +51,16 @@ pub enum Style3d {
     HiddenLine,
     /// Translucent faces: the whole building shows through.
     GlassHouse,
+    /// Uniform matte clay with soft shading.
+    Clay,
+    /// Technical line-drawing look.
+    Technical,
 }
 
 impl Style3d {
     /// Every style, in selector order.
-    pub const ALL: [Style3d; 4] = [Style3d::Shaded, Style3d::ShadedEdges, Style3d::HiddenLine, Style3d::GlassHouse];
+    pub const ALL: [Style3d; 6] =
+        [Style3d::Shaded, Style3d::ShadedEdges, Style3d::HiddenLine, Style3d::GlassHouse, Style3d::Clay, Style3d::Technical];
 
     /// The next style in selector order, wrapping after the last.
     pub fn next(self) -> Self {
@@ -63,7 +68,9 @@ impl Style3d {
             Style3d::Shaded => Style3d::ShadedEdges,
             Style3d::ShadedEdges => Style3d::HiddenLine,
             Style3d::HiddenLine => Style3d::GlassHouse,
-            Style3d::GlassHouse => Style3d::Shaded,
+            Style3d::GlassHouse => Style3d::Clay,
+            Style3d::Clay => Style3d::Technical,
+            Style3d::Technical => Style3d::Shaded,
         }
     }
 
@@ -74,6 +81,8 @@ impl Style3d {
             Style3d::ShadedEdges => "Shaded Edges",
             Style3d::HiddenLine => "Hidden Line",
             Style3d::GlassHouse => "Glass House",
+            Style3d::Clay => "Clay",
+            Style3d::Technical => "Technical",
         }
     }
 
@@ -84,6 +93,8 @@ impl Style3d {
             Style3d::ShadedEdges => cadcraft_render3d::Style::ShadedEdges,
             Style3d::HiddenLine => cadcraft_render3d::Style::HiddenLine,
             Style3d::GlassHouse => cadcraft_render3d::Style::GlassHouse,
+            Style3d::Clay => cadcraft_render3d::Style::Clay,
+            Style3d::Technical => cadcraft_render3d::Style::Technical,
         }
     }
 }
@@ -2158,11 +2169,11 @@ mod tests {
     }
 
     #[test]
-    fn pane3d_style_selector_cycles_all_four() {
+    fn pane3d_style_selector_cycles_all_six() {
         let mut s = Style3d::default();
         assert_eq!(s, Style3d::Shaded);
         let mut seen = vec![s];
-        for _ in 0..3 {
+        for _ in 0..5 {
             s = s.next();
             assert!(!seen.contains(&s));
             seen.push(s);
@@ -2170,7 +2181,27 @@ mod tests {
         assert_eq!(seen, Style3d::ALL.to_vec());
         assert_eq!(s.next(), Style3d::Shaded);
         let styles: std::collections::HashSet<_> = Style3d::ALL.iter().map(|s| format!("{:?}", s.render_style())).collect();
-        assert_eq!(styles.len(), 4);
+        assert_eq!(styles.len(), 6);
+    }
+
+    #[test]
+    fn style_selector_offers_clay_and_technical() {
+        assert_eq!(
+            Style3d::ALL,
+            [Style3d::Shaded, Style3d::ShadedEdges, Style3d::HiddenLine, Style3d::GlassHouse, Style3d::Clay, Style3d::Technical]
+        );
+        let mut s = Style3d::Shaded;
+        let mut seen = vec![s];
+        for _ in 0..5 {
+            s = s.next();
+            seen.push(s);
+        }
+        assert_eq!(seen, Style3d::ALL.to_vec());
+        assert_eq!(s.next(), Style3d::Shaded);
+        assert_eq!(Style3d::Clay.label(), "Clay");
+        assert_eq!(Style3d::Technical.label(), "Technical");
+        assert!(matches!(Style3d::Clay.render_style(), cadcraft_render3d::Style::Clay));
+        assert!(matches!(Style3d::Technical.render_style(), cadcraft_render3d::Style::Technical));
     }
 
     fn full_of(pane: &Pane3d) -> cadcraft_render3d::camera::FullCamera {
