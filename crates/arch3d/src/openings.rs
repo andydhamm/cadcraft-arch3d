@@ -28,6 +28,66 @@ fn band_offset(off: f64, depth: f64, wall_t: f64) -> f64 {
     if min > max { 0.0 } else { off.clamp(min, max) }
 }
 
+/// Whether the opening has a glass pane: windows, and doors whose style contains
+/// sliding, bifold, french, pocket or glass.
+pub fn has_glass(o: &Opening) -> bool {
+    matches!(o.kind, OpeningKind::Window)
+        || o.style.contains("sliding")
+        || o.style.contains("bifold")
+        || o.style.contains("french")
+        || o.style.contains("pocket")
+        || o.style.contains("glass")
+}
+
+/// The plane of an opening's glass pane, in model coordinates.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GlassPlane {
+    /// Centre of the pane (x, y, z).
+    pub centre: Vec3,
+    /// Unit normal in plan (the host wall's left).
+    pub normal: Vec2,
+    /// Unit direction along the pane in plan (the host wall's direction).
+    pub along: Vec2,
+    /// Half the pane's width.
+    pub half_width: f64,
+    /// Bottom of the pane (z).
+    pub bottom: f64,
+    /// Top of the pane (z).
+    pub top: f64,
+}
+
+/// The glass pane of `o` exactly as [`opening_meshes`] builds it; `None` without glass or with a
+/// missing or degenerate host wall.
+pub fn glass_plane(model: &ArchModel, o: &Opening) -> Option<GlassPlane> {
+    if !has_glass(o) {
+        return None;
+    }
+    let wall = model.walls.iter().find(|w| w.id == o.host)?;
+    let d = wall.end - wall.start;
+    if d.len() < 1e-9 || !d.len().is_finite() {
+        return None;
+    }
+    let dir = d.normalized();
+    let normal = Vec2::new(-dir.y, dir.x);
+    let (base, top) = crate::wall_span(model, wall).unwrap_or((0.0, wall.height));
+    let frame_z0 = base + o.sill;
+    let frame_z1 = (base + o.sill + o.height).min(top);
+    let bottom = frame_z0 + o.frame_width;
+    let gtop = frame_z1 - o.frame_width;
+    let glass_off = band_offset(o.recess - wall.thickness / 2.0 + o.frame_depth / 2.0, 0.006, wall.thickness);
+    let c = wall.start + dir * o.offset + normal * glass_off;
+    let plane = GlassPlane {
+        centre: Vec3::new(c.x, c.y, (bottom + gtop) / 2.0),
+        normal,
+        along: dir,
+        half_width: o.width / 2.0 - o.frame_width,
+        bottom,
+        top: gtop,
+    };
+    let finite = plane.centre.x.is_finite() && plane.centre.y.is_finite() && plane.centre.z.is_finite();
+    finite.then_some(plane)
+}
+
 /// Build all component meshes for a single opening.
 ///
 /// Components that share a material (e.g. all frame prisms) are merged into
@@ -176,13 +236,7 @@ pub fn opening_meshes(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: Option
     }
 
     // Glass: every window gets it; doors get it when the style indicates glazing.
-    let is_glazed_door = !is_window
-        && (o.style.contains("sliding")
-            || o.style.contains("bifold")
-            || o.style.contains("french")
-            || o.style.contains("pocket")
-            || o.style.contains("glass"));
-    if is_window || is_glazed_door {
+    if has_glass(o) {
         let glass_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, 0.006, wall_t);
         push_box(
             &format!("{}-glass", kind_prefix),
@@ -859,6 +913,46 @@ mod tests {
                 assert!(z >= 0.5 - 1e-6, "vertex below span base: z={}", z);
                 assert!(z <= 1.5 + 1e-6, "vertex above span top: z={}", z);
             }
+        }
+    }
+
+    #[test]
+    fn glass_plane_matches_the_glass_mesh() {
+        let model = wall_model();
+        let o = window_opening();
+        let g = glass_plane(&model, &o).expect("window has glass");
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let glass = meshes.iter().find(|m| m.material == "window-glass").expect("glass mesh");
+        let b = glass.bounds();
+        assert!(((b.min[0] + b.max[0]) / 2.0 - g.centre.x).abs() < 1e-4);
+        assert!(((b.min[1] + b.max[1]) / 2.0 - g.centre.y).abs() < 1e-4);
+        assert!((b.min[2] - g.bottom).abs() < 1e-4 && (b.max[2] - g.top).abs() < 1e-4);
+        assert!((b.max[0] - b.min[0] - 2.0 * g.half_width).abs() < 1e-4);
+        assert_eq!(g.normal, Vec2::new(0.0, 1.0));
+        assert_eq!(g.along, Vec2::new(1.0, 0.0));
+    }
+
+    #[test]
+    fn glass_plane_is_none_for_a_hinged_door_and_a_cased_opening() {
+        let model = wall_model();
+        assert!(glass_plane(&model, &door_opening()).is_none());
+        let cased = Opening { kind: OpeningKind::CasedOpening, style: "cased".into(), ..window_opening() };
+        assert!(glass_plane(&model, &cased).is_none());
+        let orphan = Opening { host: ArchId(99), ..window_opening() };
+        assert!(glass_plane(&model, &orphan).is_none());
+    }
+
+    #[test]
+    fn has_glass_matches_opening_meshes() {
+        let model = wall_model();
+        let mut cases = vec![window_opening(), door_opening()];
+        for style in ["hinged", "sliding", "bifold", "french", "pocket", "glass-panel"] {
+            cases.push(Opening { style: style.into(), ..door_opening() });
+        }
+        for o in &cases {
+            let meshes = opening_meshes(&walls_map(&model), o, None);
+            let any = meshes.iter().any(|m| m.material.ends_with("-glass"));
+            assert_eq!(has_glass(o), any, "{:?} {}", o.kind, o.style);
         }
     }
 
