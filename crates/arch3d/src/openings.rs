@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use cadcraft_arch::opening::is_double;
-use cadcraft_doc::arch::{Opening, OpeningKind};
+use cadcraft_doc::arch::{Grille, MAX_GRILLE_LITES, Opening, OpeningKind, OpeningSides};
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
 
@@ -37,6 +37,7 @@ pub fn has_glass(o: &Opening) -> bool {
         || o.style.contains("french")
         || o.style.contains("pocket")
         || o.style.contains("glass")
+        || o.style.contains("fixed")
 }
 
 /// The plane of an opening's glass pane, in model coordinates.
@@ -54,6 +55,82 @@ pub struct GlassPlane {
     pub bottom: f64,
     /// Top of the pane (z).
     pub top: f64,
+}
+
+/// A glass rectangle in the opening's local `(u, z)` coordinates.
+///
+/// `u` runs along the wall, positive to the right when viewed from the wall's
+/// start to its end; `z` runs vertically from the opening sill.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GlassRect {
+    pub u0: f64,
+    pub u1: f64,
+    pub z0: f64,
+    pub z1: f64,
+}
+
+/// The grille bars for a glass rectangle as `(u0, u1, z0, z1)` boxes in the
+/// glass plane. Bars are split into independent rectangles so they never overlap.
+pub fn grille_bars(o: &Opening, glass: &GlassRect) -> Vec<[f64; 4]> {
+    let Some(g) = o.grille else { return Vec::new() };
+    let across = g.across.min(MAX_GRILLE_LITES);
+    let down = g.down.min(MAX_GRILLE_LITES);
+    if across <= 1 || down <= 1 || across * down <= 1 {
+        return Vec::new();
+    }
+
+    let bar = 0.02;
+    let half = bar / 2.0;
+    let top_start = (glass.z0 + glass.z1) / 2.0;
+    let z0 = if g.top_only { top_start } else { glass.z0 };
+    let z1 = glass.z1;
+
+    let mut bars: Vec<[f64; 4]> = Vec::new();
+
+    let mut verticals: Vec<f64> = Vec::new();
+    for k in 1..across {
+        let u = glass.u0 + (k as f64 / across as f64) * (glass.u1 - glass.u0);
+        verticals.push(u);
+        bars.push([u - half, u + half, z0, z1]);
+    }
+
+    let mut segments = vec![(glass.u0, glass.u1)];
+    for u in &verticals {
+        let lo = *u - half;
+        let hi = *u + half;
+        let mut next = Vec::new();
+        for (s, e) in segments {
+            if e <= lo || s >= hi {
+                next.push((s, e));
+            } else {
+                if s < lo {
+                    next.push((s, lo));
+                }
+                if e > hi {
+                    next.push((hi, e));
+                }
+            }
+        }
+        segments = next;
+    }
+
+    for k in 1..down {
+        let z = glass.z0 + (k as f64 / down as f64) * (glass.z1 - glass.z0);
+        if g.top_only && z < top_start {
+            continue;
+        }
+        let hz = bar / 2.0;
+        for (s, e) in &segments {
+            if *s >= *e {
+                continue;
+            }
+            bars.push([*s, *e, z - hz, z + hz]);
+        }
+    }
+
+    // The helper is deliberately segment-based: the horizontal bars are split by
+    // the vertical bars, so each box is independent and a probe counts parity.
+    bars
 }
 
 /// The glass pane of `o` exactly as [`opening_meshes`] builds it; `None` without glass or with a
@@ -210,41 +287,77 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
         fw,
     );
 
-    // Casing (both faces + head)
+    // Casing and sill can be switched off per side: right side is the default,
+    // mirror-left is the opposite side of the wall centre plane.
     if cw > 0.0 {
-        let casing_off = band_offset(o.recess - wall_t / 2.0 + cd / 2.0, cd, wall_t);
-        push_box(
-            &format!("{}-casing", kind_prefix),
-            center + dir * (-w / 2.0 - fw / 2.0 - cw) + normal * casing_off,
-            center + dir * (-w / 2.0 - fw / 2.0) + normal * casing_off,
-            frame_z0,
-            frame_z1,
-            cd,
-        );
+        let mut push_side_casing = |side: OpeningSides, mat: &str| {
+            let side_off = if side.left {
+                band_offset(o.recess + wall_t / 2.0 - cd / 2.0, cd, wall_t)
+            } else {
+                band_offset(o.recess - wall_t / 2.0 + cd / 2.0, cd, wall_t)
+            };
+            push_box(
+                mat,
+                center + dir * (-w / 2.0 - fw / 2.0 - cw) + normal * side_off,
+                center + dir * (-w / 2.0 - fw / 2.0) + normal * side_off,
+                frame_z0,
+                frame_z1,
+                cd,
+            );
+            push_box(
+                mat,
+                center + dir * (w / 2.0 + fw / 2.0) + normal * side_off,
+                center + dir * (w / 2.0 + fw / 2.0 + cw) + normal * side_off,
+                frame_z0,
+                frame_z1,
+                cd,
+            );
+            let casing_head_off = if side.left {
+                band_offset(o.recess + wall_t / 2.0 - cw / 2.0, cw, wall_t)
+            } else {
+                band_offset(o.recess - wall_t / 2.0 + cw / 2.0, cw, wall_t)
+            };
+            push_box(
+                mat,
+                center + dir * (-w / 2.0 - fw / 2.0) + normal * casing_head_off,
+                center + dir * (w / 2.0 + fw / 2.0) + normal * casing_head_off,
+                frame_z1 - cw,
+                frame_z1,
+                cw,
+            );
+        };
 
-        push_box(
-            &format!("{}-casing", kind_prefix),
-            center + dir * (w / 2.0 + fw / 2.0) + normal * casing_off,
-            center + dir * (w / 2.0 + fw / 2.0 + cw) + normal * casing_off,
-            frame_z0,
-            frame_z1,
-            cd,
-        );
-
-        let casing_head_off = band_offset(o.recess - wall_t / 2.0 + cd / 2.0, cw, wall_t);
-        push_box(
-            &format!("{}-casing", kind_prefix),
-            center + dir * (-w / 2.0 - fw / 2.0) + normal * casing_head_off,
-            center + dir * (w / 2.0 + fw / 2.0) + normal * casing_head_off,
-            frame_z1 - cw,
-            frame_z1,
-            cw,
-        );
+        if o.casing_sides.right {
+            let mat = if o.casing_sides.left { format!("{}-casing-right", kind_prefix) } else { format!("{}-casing", kind_prefix) };
+            push_side_casing(OpeningSides::RIGHT, &mat);
+        }
+        if o.casing_sides.left {
+            let mat = if o.casing_sides.right { format!("{}-casing-left", kind_prefix) } else { format!("{}-casing-left", kind_prefix) };
+            push_side_casing(OpeningSides { left: true, ..OpeningSides::NONE }, &mat);
+        }
     }
 
-    // Glass: every window gets it; doors get it when the style indicates glazing.
+    // Grilles and glass: the bars sit in the same glass plane and are inserted
+    // before the glass mesh so a probe on the glass centre reports the grille.
     if has_glass(o) {
         let glass_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, 0.006, wall_t);
+        let glass_rect = GlassRect { u0: -w / 2.0 + fw, u1: w / 2.0 - fw, z0: frame_z0 + fw, z1: frame_z1 - fw, ..Default::default() };
+        if let Some(g) = o.grille {
+            let across = g.across.min(MAX_GRILLE_LITES);
+            let down = g.down.min(MAX_GRILLE_LITES);
+            if across > 1 && down > 1 && across * down > 1 {
+                for [u0, u1, z0, z1] in grille_bars(o, &glass_rect) {
+                    push_box(
+                        &format!("{}-grille", kind_prefix),
+                        center + dir * u0 + normal * glass_off,
+                        center + dir * u1 + normal * glass_off,
+                        z0,
+                        z1,
+                        0.02,
+                    );
+                }
+            }
+        }
         push_box(
             &format!("{}-glass", kind_prefix),
             center + dir * (-w / 2.0 + fw) + normal * glass_off,
@@ -255,8 +368,10 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
         );
     }
 
-    // Leaf: doors (not windows, not cased openings) get a leaf.
-    if !is_window && !matches!(o.kind, OpeningKind::CasedOpening) {
+    // Fixed glazed doors: a standard glazed leaf frame with no swing and no leaf
+    // solid over the glass.
+    let is_fixed_door = !is_window && matches!(o.kind, OpeningKind::Door) && o.style.eq_ignore_ascii_case("fixed");
+    if !is_window && !matches!(o.kind, OpeningKind::CasedOpening) && !is_fixed_door {
         let leaf_t = 0.045;
         let leaf_off = band_offset(o.recess - wall_t / 2.0 + leaf_t / 2.0, leaf_t, wall_t);
         let leaf_z0 = frame_z0 + fw;
@@ -293,16 +408,68 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
             );
         }
     }
+    if is_fixed_door {
+        let leaf_t = 0.1;
+        let leaf_off = band_offset(o.recess - wall_t / 2.0 + leaf_t / 2.0, leaf_t, wall_t);
+        let inner_left = -w / 2.0 + fw;
+        let inner_right = w / 2.0 - fw;
+        let stile_w = 0.1;
+        let left = inner_left + stile_w;
+        let right = inner_right - stile_w;
+        push_box(
+            &format!("{}-leaf", kind_prefix),
+            center + dir * (inner_left) + normal * leaf_off,
+            center + dir * (inner_left + stile_w) + normal * leaf_off,
+            frame_z0,
+            frame_z1,
+            leaf_t,
+        );
+        push_box(
+            &format!("{}-leaf", kind_prefix),
+            center + dir * (inner_right - stile_w) + normal * leaf_off,
+            center + dir * (inner_right) + normal * leaf_off,
+            frame_z0,
+            frame_z1,
+            leaf_t,
+        );
+        push_box(
+            &format!("{}-leaf", kind_prefix),
+            center + dir * (left) + normal * leaf_off,
+            center + dir * (right) + normal * leaf_off,
+            frame_z1 - 0.1,
+            frame_z1,
+            leaf_t,
+        );
+        push_box(
+            &format!("{}-leaf", kind_prefix),
+            center + dir * (left) + normal * leaf_off,
+            center + dir * (right) + normal * leaf_off,
+            frame_z0,
+            frame_z0 + 0.2,
+            leaf_t,
+        );
+    }
 
-    // Exterior sill (for windows)
+    // Exterior sill (for windows) or sill on selected side(s).
     if is_window && sd > 0.0 {
-        let ext_sill_off = band_offset(o.recess - wall_t / 2.0, 0.04, wall_t);
-        let s_a = center + dir * (-w / 2.0 - fw / 2.0 - sd) + normal * ext_sill_off;
-        let s_b = center + dir * (w / 2.0 + fw / 2.0 + sd) + normal * ext_sill_off;
-        let sill_bottom = (frame_z0 - 0.02).max(base);
-        let sill_mat = format!("{}-sill", kind_prefix);
-        if let Some(mesh) = box_between(s_a, s_b, sill_bottom, frame_z0, 0.04, &sill_mat, o.id) {
-            meshes.insert(sill_mat, mesh);
+        let right_off = band_offset(o.recess - wall_t / 2.0, 0.04, wall_t);
+        let left_off = band_offset(o.recess + wall_t / 2.0, 0.04, wall_t);
+        let mut side_sill = |side: &str, off: f64, material: &str| {
+            let s_a = center + dir * (-w / 2.0 - fw / 2.0 - sd) + normal * off;
+            let s_b = center + dir * (w / 2.0 + fw / 2.0 + sd) + normal * off;
+            let sill_bottom = (frame_z0 - 0.02).max(base);
+            if let Some(mesh) = box_between(s_a, s_b, sill_bottom, frame_z0, 0.04, material, o.id) {
+                meshes.insert(material.to_string(), mesh);
+            }
+            let _ = side;
+        };
+        if o.sill_sides.right {
+            let mat = if o.sill_sides.left { format!("{}-sill-right", kind_prefix) } else { format!("{}-sill", kind_prefix) };
+            side_sill("right", right_off, &mat);
+        }
+        if o.sill_sides.left {
+            let mat = format!("{}-sill-left", kind_prefix);
+            side_sill("left", left_off, &mat);
         }
     }
 
@@ -322,7 +489,23 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
         }
     }
 
-    meshes.into_values().collect()
+    let mut ordered: Vec<Mesh> = meshes.into_values().collect();
+    ordered.sort_by(|a, b| {
+        let rank = |m: &str| match m {
+            m if m.ends_with("-frame") => 0,
+            m if m.contains("-casing") => 1,
+            m if m.contains("-sill") => 2,
+            m if m.contains("-grille") => 3,
+            m if m.contains("-glass") => 4,
+            m if m.contains("-leaf") => 5,
+            m if m.contains("-header") => 6,
+            _ => 7,
+        };
+        let ra = rank(&a.material);
+        let rb = rank(&b.material);
+        ra.cmp(&rb).then_with(|| a.material.cmp(&b.material))
+    });
+    ordered
 }
 
 /// Create a box mesh between two 2D points, from z0 to z1, with given depth.
