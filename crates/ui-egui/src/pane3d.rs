@@ -2169,7 +2169,7 @@ mod tests {
     }
 
     #[test]
-    fn pane3d_style_selector_cycles_all_six() {
+    fn pane3d_style_selector_cycles_all_four() {
         let mut s = Style3d::default();
         assert_eq!(s, Style3d::Shaded);
         let mut seen = vec![s];
