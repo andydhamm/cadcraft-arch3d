@@ -261,4 +261,30 @@ mod tests {
         assert_eq!(kind_of("roof-notafinish"), "other");
         assert_eq!(kind_of("floor-notafinish"), "other");
     }
+
+    #[test]
+    fn pieces_group_phase17_meshes_by_kind_and_object() {
+        let scene = Scene3d {
+            meshes: vec![
+                square("stair-tread", 1, 0.0),
+                square("stair-riser", 1, 0.0),
+                square("stair-tread", 2, 0.0),
+                square("railing-post", 1, 0.0),
+                square("deck-joist", 3, 0.0),
+                square("deck-joist", 3, 0.0),
+                square("deck-post", 3, 0.0),
+            ],
+            ..Scene3d::default()
+        };
+        let pieces = Pieces::new(&scene);
+        assert_eq!(pieces.ids("stair"), vec![ArchId(1), ArchId(2)]);
+        assert_eq!(pieces.get("stair", ArchId(1)).len(), 2);
+        assert_eq!(pieces.get("stair", ArchId(2)).len(), 1);
+        assert_eq!(pieces.ids("railing"), vec![ArchId(1)]);
+        assert_eq!(pieces.get("railing", ArchId(1)).len(), 1);
+        assert_eq!(pieces.ids("deck-member"), vec![ArchId(3)]);
+        assert_eq!(pieces.get("deck-member", ArchId(3)).len(), 2);
+        assert_eq!(pieces.ids("deck-post"), vec![ArchId(3)]);
+        assert_eq!(pieces.get("deck-post", ArchId(3)).len(), 1);
+    }
 }
