@@ -1,7 +1,7 @@
 # Materials in the GLB: each finish used is one embedded PNG texture (256 x 256, generated in Rust, the same bytes every
 # export), the finished faces are their own nodes with a textured material and TEXCOORD_0, unfinished faces stay
 # untextured, and the textures look like what they are (siding rows, brick courses). gltf-validator when installed.
-# needs: p13-doc-finish, p13-texture-gen, p13-arch3d-finish-meshes, p13-glb-textures
+# needs: p13-doc-finish, p13-texture-gen, p13-arch3d-finish-meshes, p13-glb-textures, p18-room-finishes
 import os, hashlib
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p13lib.inc')).read())
 
@@ -17,7 +17,9 @@ export(cmds, b)
 if open(a, 'rb').read() != open(b, 'rb').read():
     fail("two exports of one model are byte-identical (textures included)")
 j, binc = glb(a)
-imgs = glb_images(j, binc)
+# Phase 19 adds a normalTexture image per finish, named <base>-normal after the base-colour images; this check is about
+# the base-colour textures, so it leaves those out.
+imgs = {k: v for k, v in glb_images(j, binc).items() if not k.endswith('-normal')}
 if sorted(imgs) != ['brick', 'shingles', 'siding', 'wood']:
     fail(f"one PNG per finish used, named by finish: {sorted(imgs)}")
 if len({hashlib.sha256(v).hexdigest() for v in imgs.values()}) != 4:
@@ -69,12 +71,13 @@ if 'wall-w0' not in [n.get('name') for n in j['nodes']]:
     fail("wall w0 keeps an untextured node 'wall-w0' for its other faces")
 print("ok: exterior faces, roof planes and the wood floor are textured nodes; the rest is not")
 
-# Without finishes the GLB carries no images.
+# Without finishes or rooms the GLB carries no images (phase 18: a detected room's floor takes its type's finish, so
+# the walls alone, with no room, are the model that uses none).
 plain = os.path.join(tmp, 'plain.glb')
-export(ROOM, plain)
+export(ROOM[:1], plain)
 pj, _ = glb(plain)
 if pj.get('images') or pj.get('textures'):
-    fail("a model without finishes exports no images or textures")
+    fail("a model without finishes or rooms exports no images or textures")
 
 validate_glb(a)
 print("PASS 02")
