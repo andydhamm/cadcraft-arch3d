@@ -63,14 +63,11 @@ fn golden_stair_geometry() {
 
     // Check geometry via probes
     // Stair starts at x=2.0, y=1.0. Width 1.0 (y from 0.5 to 1.5).
-    // The stair mesh is generated as a solid ramp (profile connects riser tops diagonally).
-    // At u=0.1 (x=2.1), the top surface height is approx 0.066m.
-    // Probe (2.1, 1.0, 0.05) is inside the ramp volume.
-    assert_probe(&scene, 2.1, 1.0, 0.05, Some("stair"));
-
-    // At u=0.6 (x=2.6), the top surface height is approx 0.398m.
-    // Probe (2.6, 1.0, 0.3) is inside the ramp volume.
-    assert_probe(&scene, 2.6, 1.0, 0.3, Some("stair"));
+    // The flight is built from treads and risers: tread 1 spans z 0.14375..0.16875, riser 1 is at
+    // u 0..0.019, and under tread 3 at x=2.6 (centre line) is air.
+    assert_probe(&scene, 2.1, 1.0, 0.16, Some("tread"));
+    assert_probe(&scene, 2.01, 1.0, 0.07, Some("riser"));
+    assert_probe(&scene, 2.6, 1.0, 0.3, None);
 
     // (2.1, 1, 1.0) is None.
     // At x=2.1 (riser 1), top is 0.16875. z=1.0 is above. Empty.
@@ -288,8 +285,8 @@ fn multiple_stairs_same_levels() {
     assert_eq!(scene.stairs, 2, "scene should have two stairs");
 
     // Probe both stairs
-    assert_probe(&scene, 2.1, 1.0, 0.05, Some("stair"));
-    assert_probe(&scene, 8.1, 1.0, 0.05, Some("stair"));
+    assert_probe(&scene, 2.1, 1.0, 0.16, Some("tread"));
+    assert_probe(&scene, 8.1, 1.0, 0.16, Some("tread"));
     // Probe between them (stair 1 ends at 5.81, stair 2 starts at 8.0)
     assert_probe(&scene, 7.0, 1.0, 0.05, None);
 }
@@ -321,9 +318,9 @@ fn stair_with_large_rise() {
     assert!(scene.stairs > 0, "scene should have a stair");
 
     // Probe at the bottom of the stair
-    assert_probe(&scene, 2.1, 1.0, 0.05, Some("stair"));
-    // Probe at the top of the stair (near 4.0m)
-    assert_probe(&scene, 2.0 + 22.0 * 0.254, 1.0, 3.5, Some("stair"));
+    assert_probe(&scene, 2.1, 1.0, 0.16, Some("tread"));
+    // Probe in tread 23 near the top (spans u 5.563..5.842, z 3.80833..3.83333)
+    assert_probe(&scene, 7.7, 1.0, 3.82, Some("tread"));
     // Riser height should be within IRC max (0.196m)
     assert!(riser_height <= 0.196 + TOL, "riser height {} exceeds max", riser_height);
 }

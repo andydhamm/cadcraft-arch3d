@@ -3018,10 +3018,9 @@ mod tests {
         let scene = Scene3d::build(&model);
         assert!(scene.stairs > 0, "stair should be built");
 
-        let hit = scene.probe(Vec3::new(2.5, 1.5, 0.5));
-        if let Some(h) = hit {
-            assert_eq!(h.part, "stair", "probe inside stair should hit stair part, got {}", h.part);
-        }
+        let hit = scene.probe(Vec3::new(2.1, 1.0, 0.16));
+        let h = hit.expect("the probe inside tread 1 hits");
+        assert_eq!(h.part, "tread", "probe inside a tread should hit the tread part, got {}", h.part);
     }
 
     #[test]
