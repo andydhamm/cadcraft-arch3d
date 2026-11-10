@@ -65,7 +65,7 @@ if len(full) < 2:
 for r in types['bedroom']:
     if not has(r['id'], 'bed'):
         fail(f"bedroom {r['id']} has a bed")
-defaults = [s for s in surfaces_of(ins) if str(s.get('material', '')).startswith('default:')]
+defaults = [s for s in surfaces_of(ins).values() if str(s.get('material', '')).startswith('default:')]
 if defaults:
     fail(f"no surface keeps its default material: {len(defaults)} do, e.g. {defaults[:5]}")
 print(f"ok: {len(rooms)} rooms, every one furnished; the kitchen and {len(full)} full baths equipped; no default materials")
