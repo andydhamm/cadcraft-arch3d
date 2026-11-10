@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 17 of 17 segments merged · 9 of 13 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 04:45 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 9 / 13 | 25.3 h so far · expected done Nov 10 04:45–Nov 10 21:30 UTC |
+| 16 | Ceilings and foundations | building | 9 / 13 | 25.5 h so far · expected done Nov 10 05:00–Nov 10 21:45 UTC |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
