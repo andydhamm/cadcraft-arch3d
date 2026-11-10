@@ -211,4 +211,93 @@ mod tests {
         m.rooms[0].room_type = RoomType::Kitchen;
         assert!((level_above_grade_area(&m, &m.levels[0]) - full).abs() < 1e-9);
     }
+
+    #[test]
+    fn multiple_levels_sum_only_above_grade() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: -1.0, kind: LevelKind::Floor, ..Default::default() });
+        m.levels.push(Level { index: 1, elevation: 1.0, kind: LevelKind::Floor, ..Default::default() });
+
+        let mut t = cadcraft_doc::arch::Terrain::default();
+        t.boundary = vec![v(-50.0, -50.0), v(50.0, -50.0), v(50.0, 50.0), v(-50.0, 50.0)];
+        t.pad = false;
+        t.points = vec![Vec3::new(-50.0, -50.0, 0.5), Vec3::new(-50.0, 50.0, 0.5), Vec3::new(50.0, -50.0, 0.5), Vec3::new(50.0, 50.0, 0.5)];
+        m.terrain = Some(t);
+
+        let c = [v(0.0, 0.0), v(10.0, 0.0), v(10.0, 8.0), v(0.0, 8.0)];
+        for i in 0..4 {
+            let mut w = Wall::new(c[i], c[(i + 1) % 4], 0.2);
+            w.exterior = true;
+            m.push_wall(w);
+        }
+        m.push_room(Room { level: 0, polygon: c.to_vec(), ..Default::default() });
+        m.push_room(Room { level: 1, polygon: c.to_vec(), ..Default::default() });
+
+        let room_area = interior_area(&m.rooms[0]);
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::Basement);
+        assert_eq!(grade_class(&m, &m.levels[1]), GradeClass::AboveGrade);
+        assert_eq!(level_above_grade_area(&m, &m.levels[0]), 0.0);
+        assert!((level_above_grade_area(&m, &m.levels[1]) - room_area).abs() < 1e-9);
+        assert!((above_grade_area(&m) - room_area).abs() < 1e-9);
+    }
+
+    #[test]
+    fn nan_elevation_is_basement() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: f64::NAN, kind: LevelKind::Floor, ..Default::default() });
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::Basement);
+        assert_eq!(above_grade_area(&m), 0.0);
+    }
+
+    #[test]
+    fn empty_model_has_zero_above_grade_area() {
+        let m = ArchModel::default();
+        assert_eq!(above_grade_area(&m), 0.0);
+    }
+
+    #[test]
+    fn rooms_on_other_levels_are_not_counted() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, kind: LevelKind::Floor, ..Default::default() });
+        m.levels.push(Level { index: 1, elevation: 3.0, kind: LevelKind::Floor, ..Default::default() });
+
+        let c = [v(0.0, 0.0), v(10.0, 0.0), v(10.0, 8.0), v(0.0, 8.0)];
+        for i in 0..4 {
+            let mut w = Wall::new(c[i], c[(i + 1) % 4], 0.2);
+            w.exterior = true;
+            m.push_wall(w);
+        }
+        m.push_room(Room { level: 0, polygon: c.to_vec(), ..Default::default() });
+        let c2 = [v(0.0, 0.0), v(5.0, 0.0), v(5.0, 5.0), v(0.0, 5.0)];
+        m.push_room(Room { level: 1, polygon: c2.to_vec(), ..Default::default() });
+
+        let area0 = interior_area(&m.rooms[0]);
+        let area1 = interior_area(&m.rooms[1]);
+        assert!((level_above_grade_area(&m, &m.levels[0]) - area0).abs() < 1e-9);
+        assert!((level_above_grade_area(&m, &m.levels[1]) - area1).abs() < 1e-9);
+        assert!((above_grade_area(&m) - area0 - area1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn all_living_room_types_count() {
+        let types = [
+            RoomType::Living,
+            RoomType::Kitchen,
+            RoomType::Bedroom,
+            RoomType::Bathroom,
+            RoomType::Dining,
+            RoomType::Family,
+            RoomType::Entry,
+            RoomType::Laundry,
+            RoomType::Hall,
+            RoomType::Office,
+            RoomType::Other,
+        ];
+        for t in types {
+            let mut m = house(0.0, LevelKind::Floor);
+            m.rooms[0].room_type = t;
+            let full = interior_area(&m.rooms[0]);
+            assert!((above_grade_area(&m) - full).abs() < 1e-9, "room type {:?} should count", t);
+        }
+    }
 }
