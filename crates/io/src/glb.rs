@@ -99,6 +99,9 @@ fn finish_roughness(f: Finish) -> f64 {
 /// writer. Roof planes are numbered in scene order: `roof-r{n}p0`, `roof-r{n}p1`, ...
 pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
     let mut roof_planes: HashMap<u32, u32> = HashMap::new();
+    let mut foundation_stems: HashMap<u32, u32> = HashMap::new();
+    let mut foundation_footings: HashMap<u32, u32> = HashMap::new();
+    let mut wall_bodies: HashMap<u32, u32> = HashMap::new();
     let mut names = Vec::new();
     for m in scene.meshes.iter().filter(|m| !m.positions.is_empty()) {
         let name = match m.material.as_str() {
@@ -121,7 +124,16 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
             }
             "fascia" => format!("roof-r{}-fascia", m.object.0),
             "soffit" => format!("roof-r{}-soffit", m.object.0),
-            "wall" => format!("wall-{}", m.object),
+            "wall" => {
+                // A vault's rise is a second plain wall mesh of the same wall.
+                let i = next_index(&mut wall_bodies, m.object.0);
+                if i == 0 { format!("wall-{}", m.object) } else { format!("wall-{}-rise", m.object) }
+            }
+            mat if mat == "soffit-box" || mat.starts_with("soffit-box:") => format!("soffit-sf{}", m.object.0),
+            "foundation" => format!("foundation-fd{}-{}", m.object.0, next_index(&mut foundation_stems, m.object.0)),
+            "footing" => format!("footing-fd{}-{}", m.object.0, next_index(&mut foundation_footings, m.object.0)),
+            "slab" => format!("slab-r{}", m.object.0),
+            "ceiling-layer" => format!("ceiling-r{}-layer", m.object.0),
             mat if mat.starts_with("wall-") && finish_of(mat).is_some() => format!("wall-{}-exterior", m.object),
             mat if mat.starts_with("roof-") && finish_of(mat).is_some() => {
                 let plane = roof_planes.entry(m.object.0).or_insert(0);
@@ -155,6 +167,14 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
         names.push(name);
     }
     names
+}
+
+/// The running 0-based index of `key`'s next mesh in `counts`.
+fn next_index(counts: &mut HashMap<u32, u32>, key: u32) -> u32 {
+    let n = counts.entry(key).or_insert(0);
+    let i = *n;
+    *n = n.saturating_add(1);
+    i
 }
 
 /// Separates a node name from a mesh index in `build_bin`'s node keys; never part of a node name.
@@ -899,6 +919,50 @@ mod tests {
                 .any(|p| p["material"].as_u64().map(|i| i as usize) == want);
             assert!(referenced, "{node} does not reference {mat}");
         }
+    }
+
+    #[test]
+    fn node_names_for_soffits_foundations_footings_slabs_stack_layers_and_wall_rises() {
+        let mesh = |material: &str, object: u32| {
+            let mut m = wall_mesh();
+            m.material = material.to_string();
+            m.object = ArchId(object);
+            m
+        };
+        let scene = Scene3d {
+            meshes: vec![
+                mesh("wall", 4),
+                mesh("wall", 4),
+                mesh("wall", 0),
+                mesh("soffit-box", 0),
+                mesh("soffit-box:paint", 1),
+                mesh("foundation", 0),
+                mesh("foundation", 0),
+                mesh("footing", 0),
+                mesh("footing", 0),
+                mesh("foundation", 1),
+                mesh("slab", 3),
+                mesh("ceiling-layer", 2),
+            ],
+            ..Scene3d::default()
+        };
+        assert_eq!(
+            node_names(&scene),
+            [
+                "wall-w4",
+                "wall-w4-rise",
+                "wall-w0",
+                "soffit-sf0",
+                "soffit-sf1",
+                "foundation-fd0-0",
+                "foundation-fd0-1",
+                "footing-fd0-0",
+                "footing-fd0-1",
+                "foundation-fd1-0",
+                "slab-r3",
+                "ceiling-r2-layer"
+            ]
+        );
     }
 
     #[test]

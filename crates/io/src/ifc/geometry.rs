@@ -17,7 +17,11 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
     match material {
         "wall" => "wall",
         "floor" => "floor",
-        "ceiling" => "ceiling",
+        "ceiling" | "ceiling-layer" => "ceiling",
+        "slab" => "slab",
+        "foundation" => "foundation",
+        "footing" => "footing",
+        m if m == "soffit-box" || m.starts_with("soffit-box:") => "isoffit",
         "roof" => "roof",
         "fascia" => "fascia",
         "soffit" => "soffit",

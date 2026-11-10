@@ -77,6 +77,7 @@ pub(super) fn parse_entities(
                 || crate::dxf_casework::is_casework_proxy(tags)
                 || crate::dxf_furnishing::is_furnishing_proxy(tags)
                 || crate::dxf_electrical::is_electrical_proxy(tags)
+                || crate::dxf_ceiling::is_ceiling_proxy(tags)
             {
                 rx.arch_proxies.push(h);
             }

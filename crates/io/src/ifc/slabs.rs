@@ -37,6 +37,13 @@ pub(super) fn emit(ctx: &mut Ctx) {
         let r = ctx.w.add("IfcSlab", params);
         ctx.contain(slot, r);
     }
+    for id in ctx.pieces.ids("slab") {
+        let meshes = ctx.pieces.get("slab", id).to_vec();
+        let n = id.0;
+        let slot = room_slot(ctx, id);
+        ctx.element("IfcSlab", &format!("slab/{n}"), &format!("slab-r{n}"), slot, &meshes, vec![P::Null, P::Enum("BASESLAB")]);
+    }
+    // Stack layers (`ceiling-layer` meshes) are part of the room's `ceiling` kind, so they join its body.
     for id in ctx.pieces.ids("ceiling") {
         let meshes = ctx.pieces.get("ceiling", id).to_vec();
         let n = id.0;

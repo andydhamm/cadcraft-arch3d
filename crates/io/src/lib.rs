@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod dxf_casework;
+mod dxf_ceiling;
 mod dxf_electrical;
 mod dxf_furnishing;
 mod dxf_light;

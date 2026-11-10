@@ -10,6 +10,7 @@
 
 mod casework;
 mod electrical;
+mod foundations;
 mod furnishing;
 pub mod geometry;
 pub mod guid;
@@ -67,6 +68,7 @@ pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> Str
     walls::emit(&mut ctx);
     openings::emit(&mut ctx);
     slabs::emit(&mut ctx);
+    foundations::emit(&mut ctx);
     roofs::emit(&mut ctx);
     stairs::emit(&mut ctx);
     spaces::emit(&mut ctx);
