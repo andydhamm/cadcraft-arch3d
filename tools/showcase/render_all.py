@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Render the showcase house in every view style (see README.md). Python 3 standard library only."""
-import argparse, json, os, shlex, struct, subprocess, sys, zlib
+import argparse, hashlib, json, os, shlex, struct, subprocess, sys, zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCRIPT = os.path.join(ROOT, 'docs', 'arch3d', 'showcase', 'bilevel.json')
@@ -186,6 +186,7 @@ def main(argv):
     ap.add_argument('--size', default='960x720')
     ap.add_argument('--spp', type=int, default=64)
     ap.add_argument('--cli-json', default=None)
+    ap.add_argument('--no-exports', action='store_true', help='skip GLB/IFC/OBJ export steps and leave exports empty')
     a = ap.parse_args(argv)
     try:
         w, h = (int(v) for v in a.size.lower().split('x'))
@@ -196,6 +197,7 @@ def main(argv):
         return 2
     out = os.path.abspath(a.out)
     os.makedirs(out, exist_ok=True)
+    script_sha256 = hashlib.sha256(open(SCRIPT, 'rb').read()).hexdigest()
     size = [w, h]
     dxf = os.path.join(out, 'bilevel.dxf')
     r = Runner(cli_base(a.cli_json), dxf)
@@ -255,17 +257,19 @@ def main(argv):
             skipped = True
         else:
             add('technical.png', 'technical', 'default')
-        for k in ('glb', 'ifc', 'obj'):
-            f = f'showcase.{k}'
-            r.run(f'export {k}', [cmd('export', {"path": p(f)})])
-            if not os.path.exists(p(f)):
-                raise Step(f'export {k}', f'{f} was not written')
-            exports[k] = f
+        if not a.no_exports:
+            for k in ('glb', 'ifc', 'obj'):
+                f = f'showcase.{k}'
+                r.run(f'export {k}', [cmd('export', {"path": p(f)})])
+                if not os.path.exists(p(f)):
+                    raise Step(f'export {k}', f'{f} was not written')
+                exports[k] = f
         try:
             contact_sheet(out, [i['file'] for i in images])
         except (ValueError, OSError, zlib.error, struct.error) as e:
             raise Step('contact sheet', str(e))
-        manifest = {'images': images, 'exports': exports, 'contactSheet': 'contact-sheet.png', 'technicalSkipped': skipped}
+        manifest = {'images': images, 'exports': exports, 'contactSheet': 'contact-sheet.png', 'technicalSkipped': skipped,
+                    'scriptSha256': script_sha256}
         with open(p('manifest.json'), 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2)
             f.write('\n')
