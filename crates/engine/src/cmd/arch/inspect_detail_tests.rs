@@ -125,7 +125,7 @@ fn opening_rows_report_top_grille_sides_and_glass() {
 }
 
 #[test]
-fn decks_rows_stub_has_the_row_shape() {
+fn decks_rows_have_the_row_shape() {
     let mut s = with_model(|m| {
         m.push_room(Room { room_type: RoomType::Living, polygon: square(), ..Room::default() });
         m.push_room(Room { room_type: RoomType::Deck, polygon: square(), deck_height: Some(0.5), ..Room::default() });
@@ -139,7 +139,8 @@ fn decks_rows_stub_has_the_row_shape() {
     assert_eq!(d["top"], json!(0.5));
     assert_eq!(d["boardDirection"], json!(0.0));
     assert!(d["ledger"].is_null());
+    // Phase 17 fills the frame: a free-standing deck now reports its members.
     for k in ["joists", "rims", "beams", "posts", "postGrades"] {
-        assert_eq!(d[k], json!([]), "{k}");
+        assert!(d[k].as_array().is_some_and(|a| !a.is_empty()), "{k}");
     }
 }
