@@ -55,7 +55,7 @@ fn groups(written: Vec<(String, &Mesh)>) -> Vec<(String, Vec<&Mesh>)> {
     let mut out: Vec<(String, Vec<&Mesh>)> = Vec::new();
     let mut slot: BTreeMap<String, usize> = BTreeMap::new();
     for (name, m) in written {
-        if one_node(&name) {
+        if one_node(&name) || glb::shares_a_node(&m.material) {
             if let Some(group) = slot.get(&name).and_then(|&i| out.get_mut(i)) {
                 group.1.push(m);
                 continue;
@@ -292,6 +292,33 @@ mod tests {
             }
         }
         out
+    }
+
+    #[test]
+    fn obj_groups_follow_the_shared_nodes() {
+        let mesh = |material: &str, object: u32| Mesh {
+            positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            ..Mesh::new(material, ArchId(object))
+        };
+        let scene = Scene3d {
+            meshes: vec![
+                mesh("stair-tread", 0),
+                mesh("railing-post", 1),
+                mesh("stair-riser", 0),
+                mesh("stair", 2),
+                mesh("stair", 2),
+                mesh("deck-joist", 3),
+                mesh("deck-joist", 3),
+            ],
+            ..Scene3d::default()
+        };
+        let obj = write_obj(&scene, "m.mtl");
+        let groups: Vec<(String, usize)> = groups_of(&obj).into_iter().map(|(n, u)| (n, u.len())).collect();
+        let want = [("stair-s0", 2), ("railing-ra1", 1), ("stair-s2", 1), ("stair-s2", 1), ("deck-r3-joists", 2)];
+        assert_eq!(groups, want.iter().map(|&(n, c)| (n.to_string(), c)).collect::<Vec<_>>());
     }
 
     #[test]
