@@ -8,7 +8,10 @@
 use std::collections::BTreeMap;
 
 use cadcraft_arch3d::{Scene3d, SceneCache};
-use cadcraft_doc::{ArchId, ArchModel};
+use cadcraft_doc::{
+    ArchId, ArchModel,
+    arch::{CeilingLayer, FoundationKind},
+};
 use cadcraft_engine::Session;
 use serde_json::{Value, json};
 
@@ -594,4 +597,273 @@ fn deleting_all_furnishings_removes_their_meshes_from_the_scene() {
         assert!(!mesh.material.starts_with("sym:"), "furnishing mesh remains: {}", mesh.material);
     }
     assert!(stats.incremental, "deletion must be incremental");
+}
+
+#[test]
+fn the_scene_cache_follows_every_phase_16_edit() {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    for (cmd, params) in [
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("wall", json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("wall", json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("roomdetect", json!({})),
+        ("roofauto", json!({"pitchRise": 6, "pitchRun": 12, "walls": [{"wall": "w1", "directive": "gable"}, {"wall": "w3", "directive": "gable"}]})),
+    ] {
+        s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    let mut m = s.doc().expect("a drawing").arch.clone();
+    let room_by_point = |x: f64, y: f64| {
+        let mut best = None;
+        let mut best_dist = f64::INFINITY;
+        for room in &m.rooms {
+            let poly = &room.polygon;
+            if poly.is_empty() {
+                continue;
+            }
+            let area = poly.iter().enumerate().fold(0.0, |sum, (i, p)| {
+                let q = &poly[(i + 1) % poly.len()];
+                sum + (p.x * q.y - q.x * p.y)
+            });
+            let cx = poly.iter().map(|p| p.x).sum::<f64>() / poly.len() as f64;
+            let cy = poly.iter().map(|p| p.y).sum::<f64>() / poly.len() as f64;
+            let dist = (cx - x).hypot(cy - y);
+            if area != 0.0 && dist < best_dist {
+                best = Some(room.id);
+                best_dist = dist;
+            }
+        }
+        best.expect("three rooms under the gable")
+    };
+    let s_room = room_by_point(5.0, 1.5);
+    let nw_room = room_by_point(3.0, 5.5);
+    let ne_room = room_by_point(8.0, 5.5);
+    let tray_id = m.push_tray(cadcraft_doc::arch::Tray { room: nw_room, level: 0, inset: 0.6, depth: 0.3, ..Default::default() });
+    let _soffit_id = m.push_soffit(cadcraft_doc::arch::Soffit {
+        level: 0,
+        polygon: vec![
+            cadcraft_geom::Vec2::new(7.0, 7.3),
+            cadcraft_geom::Vec2::new(9.0, 7.3),
+            cadcraft_geom::Vec2::new(9.0, 7.9),
+            cadcraft_geom::Vec2::new(7.0, 7.9),
+        ],
+        bottom: Some(2.1),
+        ..Default::default()
+    });
+    let _foundation_id =
+        m.push_foundation(cadcraft_doc::arch::Foundation { level: 0, kind: FoundationKind::Stem, footing_depth: 1.2, ..Default::default() });
+    m.lights.push(cadcraft_doc::arch::LightFixture::new(ArchId(0), "Surface ceiling fixture", cadcraft_geom::Vec2::new(7.0, 4.0)));
+    fn room_index(model: &ArchModel, room: ArchId) -> usize {
+        model.rooms.iter().position(|r| r.id == room).unwrap_or_else(|| panic!("missing room {room:?}"))
+    }
+    let mut cache = SceneCache::new(&m).0;
+    let label_order = [
+        "flat toggle S",
+        "flat toggle NW",
+        "flat toggle NE",
+        "stack S",
+        "stack NW",
+        "stack NE",
+        "soffit shift",
+        "soffit bottom",
+        "tray depth",
+        "tray inset",
+        "tray add",
+        "tray delete",
+        "roof steepen",
+        "footing depth",
+        "kind flip",
+    ];
+    let mut state = 17u64;
+    let mut most: BTreeMap<&'static str, usize> = BTreeMap::new();
+    for k in 0..120 {
+        let label = label_order[k % label_order.len()];
+        let before = signature(cache.scene());
+        match label {
+            "flat toggle S" => {
+                let idx = room_index(&m, s_room);
+                m.rooms[idx].flat_ceiling = !m.rooms[idx].flat_ceiling;
+            }
+            "flat toggle NW" => {
+                let idx = room_index(&m, nw_room);
+                m.rooms[idx].flat_ceiling = !m.rooms[idx].flat_ceiling;
+            }
+            "flat toggle NE" => {
+                let idx = room_index(&m, ne_room);
+                m.rooms[idx].flat_ceiling = !m.rooms[idx].flat_ceiling;
+            }
+            "stack S" => {
+                let idx = room_index(&m, s_room);
+                let room = &mut m.rooms[idx];
+                room.ceiling_stack =
+                    if room.ceiling_stack.is_empty() { vec![CeilingLayer::new("drywall", Some("drywall"), 0.0127)] } else { Vec::new() };
+            }
+            "stack NW" => {
+                let idx = room_index(&m, nw_room);
+                let room = &mut m.rooms[idx];
+                room.ceiling_stack =
+                    if room.ceiling_stack.is_empty() { vec![CeilingLayer::new("drywall", Some("drywall"), 0.0127)] } else { Vec::new() };
+            }
+            "stack NE" => {
+                let idx = room_index(&m, ne_room);
+                let room = &mut m.rooms[idx];
+                room.ceiling_stack =
+                    if room.ceiling_stack.is_empty() { vec![CeilingLayer::new("drywall", Some("drywall"), 0.0127)] } else { Vec::new() };
+            }
+            "soffit shift" => {
+                let soffit = &mut m.soffits[0];
+                let delta = if soffit.polygon.iter().all(|p| p.y > 7.2) { -0.1 } else { 0.1 };
+                soffit.polygon = soffit.polygon.iter().map(|p| cadcraft_geom::Vec2::new(p.x, p.y + delta)).collect();
+            }
+            "soffit bottom" => {
+                let soffit = &mut m.soffits[0];
+                soffit.bottom = Some(if soffit.bottom == Some(2.1) { 2.05 } else { 2.1 });
+            }
+            "tray depth" => {
+                let tray = &mut m.trays[0];
+                tray.depth = if tray.depth < 0.35 { 0.4 } else { 0.2 };
+            }
+            "tray inset" => {
+                let tray = &mut m.trays[0];
+                tray.inset = if tray.inset < 0.6 { 0.7 } else { 0.5 };
+            }
+            "tray add" => {
+                let parent = m.trays[0].id;
+                m.push_tray(cadcraft_doc::arch::Tray { room: nw_room, level: 0, parent: Some(parent), inset: 0.6, depth: 0.1, ..Default::default() });
+            }
+            "tray delete" => {
+                if m.trays.len() > 1 {
+                    let last = m.trays.last().unwrap().id;
+                    m.trays.retain(|t| t.id != last);
+                }
+            }
+            "roof steepen" => {
+                for roof in &mut m.roofs {
+                    for plane in &mut roof.planes {
+                        plane.slope = if plane.slope > 1.0 { plane.slope / 1.05 } else { plane.slope * 1.05 };
+                    }
+                }
+            }
+            "footing depth" => {
+                let footing = &mut m.foundations[0];
+                // A footing-depth edit is only meaningful while the foundation is a stem foundation;
+                // when the kind is slab the edit is a no-op, and the separate kind-flip edit owns
+                // the kind change. Keeping the depth edit pure avoids falsely invalidating room slab
+                // floors when the foundation kind changes.
+                if footing.kind == FoundationKind::Slab {
+                    continue;
+                }
+                footing.footing_depth = if footing.footing_depth <= 1.1 {
+                    (footing.footing_depth + 0.1).clamp(0.8, 1.6)
+                } else {
+                    (footing.footing_depth - 0.1).clamp(0.8, 1.6)
+                };
+            }
+            "kind flip" => {
+                let foundation = &mut m.foundations[0];
+                foundation.kind = if foundation.kind == FoundationKind::Stem { FoundationKind::Slab } else { FoundationKind::Stem };
+            }
+            _ => unreachable!("unexpected phase-16 label: {label}"),
+        }
+        let stats = cache.update(&m);
+        let rebuilt = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&rebuilt), "phase-16 edit {k} ({label})");
+        assert!(stats.incremental && stats.rebuilt <= stats.objects, "phase-16 edit {k} ({label}): {stats:?}");
+        let seen = most.entry(label).or_default();
+        *seen = (*seen).max(stats.rebuilt);
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let before_digest = before.0;
+        let after_digest = rebuilt.digest();
+        assert_ne!(before_digest, after_digest, "phase-16 edit {k} ({label}) changed no geometry");
+    }
+    // Formula from the phase-16 dependency graph: each edit rebuilds only the room, the walls it rises to,
+    // the soffits overlapping it, and the ceiling lights in that room that are not under a soffit.
+    let bounds: BTreeMap<&str, usize> = BTreeMap::from([
+        ("flat toggle S", 3),
+        ("flat toggle NW", 4),
+        ("flat toggle NE", 6),
+        ("stack S", 1),
+        ("stack NW", 1),
+        ("stack NE", 3),
+        ("soffit shift", 1),
+        ("soffit bottom", 1),
+        ("tray depth", 1),
+        ("tray inset", 1),
+        ("tray add", 1),
+        ("tray delete", 1),
+        ("roof steepen", 12),
+        ("footing depth", 1),
+        ("kind flip", 4),
+    ]);
+    for (label, bound) in bounds {
+        let built = most.get(label).copied().unwrap_or(0);
+        assert!(built <= bound, "{label}: rebuilt {built} > {bound}; most: {most:?}");
+    }
+}
+
+#[test]
+fn phase_16_edits_through_commands_keep_the_cache_exact() {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let setup: Vec<(&str, Value)> = vec![
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("wall", json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("wall", json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("roomdetect", json!({})),
+        ("roofauto", json!({"pitchRise": 6, "pitchRun": 12, "walls": [{"wall": "w1", "directive": "gable"}, {"wall": "w3", "directive": "gable"}]})),
+        ("tray", json!({"room": "r1", "inset": 0.6, "depth": 0.3})),
+        ("soffit", json!({"rect": [[7.0, 7.3], [9.0, 7.9]], "bottom": 2.1})),
+        ("foundation", json!({"type": "stem"})),
+        ("build3d", json!({"incremental": true})),
+    ];
+    for (cmd, params) in &setup {
+        s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    let room_rows = s.execute("arch.inspect", &json!({"rooms": true})).unwrap()["rooms"].as_array().unwrap().clone();
+    let room_id = |x: f64, y: f64| -> String {
+        let empty_poly: Vec<Value> = Vec::new();
+        room_rows
+            .iter()
+            .filter_map(|row| row.as_object())
+            .find(|row| {
+                let poly = row.get("polygon").and_then(Value::as_array).unwrap_or(&empty_poly);
+                if poly.is_empty() {
+                    return false;
+                }
+                let pts: Vec<[f64; 2]> = poly.iter().filter_map(|p| p.as_array()).map(|p| [p[0].as_f64().unwrap(), p[1].as_f64().unwrap()]).collect();
+                if pts.is_empty() {
+                    return false;
+                }
+                let cx = pts.iter().map(|p| p[0]).sum::<f64>() / pts.len() as f64;
+                let cy = pts.iter().map(|p| p[1]).sum::<f64>() / pts.len() as f64;
+                (cx - x).hypot(cy - y) < 1.0
+            })
+            .and_then(|row| row.get("id"))
+            .and_then(Value::as_str)
+            .unwrap()
+            .to_string()
+    };
+    let s_id = room_id(5.0, 1.5);
+    let nw_id = room_id(3.0, 5.5);
+    let ne_id = room_id(8.0, 5.5);
+    let inspect = s.execute("arch.inspect", &json!({"rooms": true, "trays": true, "soffits": true, "foundations": true})).unwrap();
+    let tray_id = inspect["trays"].as_array().unwrap().last().unwrap()["id"].as_str().unwrap().to_string();
+    let soffit_id = inspect["soffits"].as_array().unwrap().last().unwrap()["id"].as_str().unwrap().to_string();
+    let foundation_id = inspect["foundations"].as_array().unwrap().last().unwrap()["id"].as_str().unwrap().to_string();
+    let edits = [
+        ("tray.edit", json!({"id": tray_id, "depth": 0.25}), 1),
+        ("soffit.edit", json!({"id": soffit_id, "bottom": 2.0}), 1),
+        ("room", json!({"id": ne_id, "ceilingStack": "drywall"}), 2),
+        ("room", json!({"id": s_id, "flatCeiling": false}), 3),
+        ("foundation.edit", json!({"id": foundation_id, "footingDepth": 1.5}), 1),
+        ("foundation.edit", json!({"id": foundation_id, "type": "slab"}), 4),
+    ];
+    for (edit_cmd, params, want) in &edits {
+        s.execute(edit_cmd, params).unwrap_or_else(|e| panic!("{edit_cmd} {params}: {e:?}"));
+        let inc = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
+        let full = s.execute("build3d", &json!({"digest": true})).unwrap();
+        assert_eq!(inc["incremental"], true, "edit {edit_cmd} should be incremental");
+        assert_eq!(inc["digest"], full["digest"], "edit {edit_cmd}: incremental digest differs from full digest");
+        assert_eq!(inc["rebuilt"], *want, "edit {edit_cmd}: rebuilt {} should be {want}", inc["rebuilt"]);
+    }
 }
