@@ -2,12 +2,14 @@
 //! grade (the slab itself is the room's floor).
 //!
 //! Per on-grade foundation wall the thickened edge is ONE closed "footing" mesh built from two
-//! adjacent, non-overlapping prisms that share a face: a 0.3 m strip (inward from the outer
-//! face) from `elevation - 0.3` to `elevation - 0.1`, and the strip under the wall (wall
-//! thickness) from `elevation - 0.1` to `elevation`. Because the union is closed, an upward-ray
-//! probe counts each prism's crossings and a point in either prism stays inside (odd); the shared
-//! face never opens a gap. Basement walls on a slab level get only a footing via
-//! [`stem::basement_footing`]. No stem walls are built.
+//! adjacent, non-overlapping prisms that share a face: the strip under the wall (its plan width
+//! equals the wall thickness) from `elevation - 0.3` to `elevation - 0.1` (the 0.3 m deep
+//! footing), and the same-width strip from `elevation - 0.1` to `elevation`. The two prisms share
+//! the face at `elevation - 0.1`, so the union is a single closed box under the wall with no
+//! overhanging lip. Because the union is closed, an upward-ray probe counts the prism's crossings
+//! and a point in either prism stays inside (odd); the shared face never opens a gap. Basement
+//! walls on a slab level get only a footing via [`stem::basement_footing`]. No stem walls are
+//! built.
 
 use super::FoundationIn;
 use crate::foundation::stem::basement_footing;
@@ -36,10 +38,15 @@ pub fn meshes(i: &FoundationIn) -> Vec<Mesh> {
             }
         } else {
             // On-grade walls: one closed footing mesh per wall, built from two adjacent prisms
-            // (edge strip and wall strip) that share a face.
+            // (edge strip and wall strip) that share a face. The edge strip is as wide as the
+            // wall (its width equals `w.thickness`) so the two prisms form a single closed box
+            // under the wall, with no overhanging lip. That keeps an upward-ray probe honest:
+            // the wall strip sits directly above the edge strip, so a point in the edge strip
+            // has an odd number of crossings above and reads as inside, while a point out past
+            // the wall reads as outside.
             let mut mesh = Mesh::new("footing", i.foundation.id);
             let e = i.level.elevation;
-            let edge_ring = [w.a, w.b, w.b + w.inward * 0.3, w.a + w.inward * 0.3];
+            let edge_ring = [w.a, w.b, w.b + w.inward * w.thickness, w.a + w.inward * w.thickness];
             prism_into(&mut mesh, i, &edge_ring, e - 0.3, e - 0.1);
             let wall_ring = [w.a, w.b, w.b + w.inward * w.thickness, w.a + w.inward * w.thickness];
             prism_into(&mut mesh, i, &wall_ring, e - 0.1, e);
