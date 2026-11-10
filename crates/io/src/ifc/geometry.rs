@@ -28,6 +28,11 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
         "stair" => "stair",
         "railing" => "railing",
         "deck" => "deck",
+        "deck-ledger" | "deck-joist" | "deck-rim" | "deck-beam" => "deck-member",
+        "deck-post" => "deck-post",
+        "deck-footing" => "deck-pier",
+        m if m.starts_with("stair-") => "stair",
+        m if m.starts_with("railing-") => "railing",
         "terrain" => "terrain",
         m if m.starts_with("wall-") && crate::glb::finish_of(m).is_some() => "wall",
         m if m.starts_with("roof-") && crate::glb::finish_of(m).is_some() => "roof",
@@ -231,6 +236,23 @@ mod tests {
         assert_eq!(pieces.ids("wall"), vec![ArchId(1)]);
         assert_eq!(pieces.ids("roof"), vec![ArchId(0)]);
         assert_eq!(pieces.ids("floor"), vec![ArchId(2)]);
+    }
+
+    #[test]
+    fn kind_of_maps_stair_railing_and_deck_parts() {
+        for m in ["stair-tread", "stair-riser", "stair-stringer", "stair-skirt", "stair-landing"] {
+            assert_eq!(kind_of(m), "stair", "{m}");
+        }
+        assert_eq!(kind_of("railing-post"), "railing");
+        assert_eq!(kind_of("railing-baluster"), "railing");
+        for m in ["deck-ledger", "deck-joist", "deck-rim", "deck-beam"] {
+            assert_eq!(kind_of(m), "deck-member", "{m}");
+        }
+        assert_eq!(kind_of("deck-post"), "deck-post");
+        assert_eq!(kind_of("deck-footing"), "deck-pier");
+        assert_eq!(kind_of("deck"), "deck");
+        assert_eq!(kind_of("window-grille"), "opening");
+        assert_eq!(kind_of("door-grille"), "opening");
     }
 
     #[test]

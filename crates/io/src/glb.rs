@@ -144,7 +144,15 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
             mat if mat.starts_with("floor-") && finish_of(mat).is_some() => format!("floor-r{}", m.object.0),
             "stair" => format!("stair-s{}", m.object.0),
             "railing" => format!("railing-ra{}", m.object.0),
+            mat if mat.starts_with("stair-") => format!("stair-s{}", m.object.0),
+            mat if mat.starts_with("railing-") => format!("railing-ra{}", m.object.0),
             "deck" => format!("deck-r{}", m.object.0),
+            "deck-ledger" => format!("deck-r{}-ledger", m.object.0),
+            "deck-joist" => format!("deck-r{}-joists", m.object.0),
+            "deck-rim" => format!("deck-r{}-rims", m.object.0),
+            "deck-beam" => format!("deck-r{}-beams", m.object.0),
+            "deck-post" => format!("deck-r{}-posts", m.object.0),
+            "deck-footing" => format!("deck-r{}-piers", m.object.0),
             "floor" => format!("floor-r{}", m.object.0),
             "ceiling" => format!("ceiling-r{}", m.object.0),
             "terrain" => "terrain".to_string(),
@@ -181,9 +189,14 @@ fn next_index(counts: &mut HashMap<u32, u32>, key: u32) -> u32 {
 const NODE_KEY_SEP: char = '\u{1}';
 
 /// Whether a mesh of `material` joins the other meshes of its node: a furnishing's parts (`sym:`, its paints) and a
-/// cabinet's pulls (`pull:`, `paint:cabinet/cb<n>/pull`).
-fn shares_a_node(material: &str) -> bool {
-    material.starts_with("sym:")
+/// cabinet's pulls (`pull:`, `paint:cabinet/cb<n>/pull`), and (phase 17) the parts of a stair (`stair-…`), of a railing
+/// (`railing-…`) and of one deck-structure kind (`deck-ledger`, `-joist`, `-rim`, `-beam`, `-post`, `-footing`). The
+/// bare legacy `stair` / `railing` and the boards `deck` keep a node per mesh.
+pub(crate) fn shares_a_node(material: &str) -> bool {
+    material.starts_with("stair-")
+        || material.starts_with("railing-")
+        || matches!(material, "deck-ledger" | "deck-joist" | "deck-rim" | "deck-beam" | "deck-post" | "deck-footing")
+        || material.starts_with("sym:")
         || material.starts_with("pull:")
         || material.starts_with("paint:furnishing/")
         || (material.starts_with("paint:cabinet/") && material.ends_with("/pull"))
@@ -963,6 +976,91 @@ mod tests {
                 "ceiling-r2-layer"
             ]
         );
+    }
+
+    fn p17_scene(materials: &[(&str, u32)]) -> Scene3d {
+        let meshes = materials
+            .iter()
+            .map(|&(material, object)| {
+                let mut m = wall_mesh();
+                m.material = material.to_string();
+                m.object = ArchId(object);
+                m
+            })
+            .collect();
+        Scene3d { meshes, ..Scene3d::default() }
+    }
+
+    #[test]
+    fn node_names_for_phase17_materials() {
+        let scene = p17_scene(&[
+            ("stair-tread", 2),
+            ("stair-riser", 2),
+            ("stair-landing", 2),
+            ("stair", 2),
+            ("railing-post", 3),
+            ("railing-rail", 3),
+            ("railing", 3),
+            ("deck", 4),
+            ("deck-ledger", 4),
+            ("deck-joist", 4),
+            ("deck-rim", 4),
+            ("deck-beam", 4),
+            ("deck-post", 4),
+            ("deck-footing", 4),
+            ("window-grille", 5),
+            ("window-sill-left", 5),
+            ("door-casing-left", 6),
+        ]);
+        assert_eq!(
+            node_names(&scene),
+            [
+                "stair-s2",
+                "stair-s2",
+                "stair-s2",
+                "stair-s2",
+                "railing-ra3",
+                "railing-ra3",
+                "railing-ra3",
+                "deck-r4",
+                "deck-r4-ledger",
+                "deck-r4-joists",
+                "deck-r4-rims",
+                "deck-r4-beams",
+                "deck-r4-posts",
+                "deck-r4-piers",
+                "window-grille-o5",
+                "window-sill-left-o5",
+                "door-casing-left-o6"
+            ]
+        );
+    }
+
+    #[test]
+    fn phase17_parts_share_one_node() {
+        let scene = p17_scene(&[
+            ("stair-tread", 0),
+            ("stair-riser", 0),
+            ("railing-post", 1),
+            ("deck-joist", 2),
+            ("deck-joist", 2),
+            ("stair", 0),
+            ("stair", 0),
+            ("deck", 2),
+        ]);
+        let json = tests_json(&scene);
+        let nodes: Vec<&str> = json["nodes"].as_array().map(|a| a.iter().filter_map(|n| n["name"].as_str()).collect()).unwrap_or_default();
+        let count = |n: &str| nodes.iter().filter(|&&x| x == n).count();
+        assert_eq!(count("stair-s0"), 3, "{nodes:?}"); // one shared node + two legacy nodes
+        assert_eq!(count("railing-ra1"), 1);
+        assert_eq!(count("deck-r2-joists"), 1);
+        assert_eq!(count("deck-r2"), 1);
+        for m in ["stair-tread", "railing-rail", "deck-footing", "deck-post"] {
+            assert!(shares_a_node(m), "{m}");
+        }
+        for m in ["stair", "railing", "deck", "wall", "window-grille"] {
+            assert!(!shares_a_node(m), "{m}");
+        }
     }
 
     #[test]
