@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Stairs, railings and decks round-trip through DXF (CADCRAFT_ARCH v5) and reach the GLB as named nodes.
+# Updated in phase 17: a new stair brings its two automatic side railings and a new deck its railing, all with
+# `follows` and a `host`; the well guard is the railing with host "well", the drawn railing the one without `follows`.
 set -uo pipefail
 tmp=$(mktemp -d)
 cargo run -q -p cadcraft-cli -- run --metric \
@@ -21,12 +23,13 @@ assert S[0]["risers"]==16 and abs(S[0]["riserHeight"]-0.16875)<1e-9, S[0]
 assert abs(S[0]["start"][0]-2.0)<1e-9 and abs(S[0]["width"]-1.0)<1e-9, S[0]
 assert S[0]["wellRoom"], f"the stair lost its well room: {S[0]}"
 R=d.get("railings",[])
-# the drawn railing plus the guard the stair put round its well
-guard=[x for x in R if x.get("follows")]
+# the drawn railing, the guard the stair put round its well, and the automatic railings of the stair and the deck
+guard=[x for x in R if x.get("host")=="well"]
 drawn=[x for x in R if not x.get("follows")]
 assert len(drawn)==1 and abs(drawn[0]["height"]-0.914)<1e-9, f"drawn railing lost: {R}"
 assert [p[0][0] for p in [drawn[0]["path"]]] and abs(drawn[0]["path"][0][0]-0.0)<1e-9, f"railing path lost: {drawn[0]}"
 assert len(guard)==1 and abs(guard[0]["height"]-0.914)<1e-9, f"well guard railing lost: {R}"
+assert guard[0]["follows"]==S[0]["id"], f"the well guard follows the stair: {guard[0]}"
 DK=[x for x in d.get("rooms",[]) if x["type"]=="deck"]
 assert len(DK)==1 and abs(DK[0]["deckHeight"]-0.9)<1e-9, f"the deck room was lost: {d.get('rooms')}"
 raw=open(sys.argv[3],"rb").read()
