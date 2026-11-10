@@ -352,7 +352,17 @@ fn segments_intersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2) -> bool {
     let cross = d1.x * d2.y - d1.y * d2.x;
     if cross.abs() < 1e-9 {
         // Parallel or collinear
-        // Check if they overlap
+        // Check perpendicular distance to ensure they are collinear
+        let n = Vec2::new(-d1.y, d1.x).normalized();
+        if n.is_finite() {
+            let dist = (b1 - a1).dot(n).abs();
+            if dist > 1e-6 {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        // Collinear: check overlap
         let t1 = (b1 - a1).dot(d1) / d1.dot(d1);
         let t2 = (b2 - a1).dot(d1) / d1.dot(d1);
         let min_t = t1.min(t2);
