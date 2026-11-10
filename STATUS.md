@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 19:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 19:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 33 of 34 segments merged · 16 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 19:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 40.0 h so far · expected done Nov 10 20:14–Nov 11 08:09 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 40.3 h so far · expected done Nov 10 20:33–Nov 11 09:27 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 3 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -62,9 +62,9 @@ Updated 2026-11-10 19:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1055 |
-| bonsai-b | bonsai2-27b | agent | 1003 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1113 |
+| bonsai-a | bonsai2-27b | agent | 1056 |
+| bonsai-b | bonsai2-27b | agent | 1004 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1116 |
 | bonsai-ws2-b | bonsai2-27b | merging | 1056 |
 | claude-sonnet-a | sonnet | merging | 104 |
 | claude-sonnet-b | sonnet | merging | 107 |
@@ -74,6 +74,6 @@ Updated 2026-11-10 19:30 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | merging | 75 |
 | mai-flash-b | mai-code-1.1-flash | idle | 12 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 79 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 81 |
 | tturbo-mac | tturbo-ultraheretic | merging | 730 |
 | tturbo-mac2 | tturbo-ultraheretic | held | 348 |
