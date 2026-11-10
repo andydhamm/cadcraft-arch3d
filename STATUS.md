@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-10 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 34 of 35 segments merged · 16 of 20 acceptance checks**
 
-8,504 workspace tests passing at the last merge · 906 segments merged in all · 0 of 15 seats working
+8,527 workspace tests passing at the last merge · 907 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,8 +26,8 @@ Updated 2026-11-10 22:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 43.0 h so far · expected done Nov 10 23:52–Nov 11 21:59 UTC |
-| 17 | Stairs, decks, railings and openings in detail | building | 6 / 14 | — |
+| 16 | Ceilings and foundations | building | 16 / 20 | 43.3 h so far · expected done Nov 11 00:21–Nov 12 02:09 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
 | 20 | Plan views and dimensions | planned | — | — |
@@ -45,6 +45,7 @@ Updated 2026-11-10 22:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 10 22:31 | `p17-window-tops` | merged | 8,527 pass | claude-sonnet-c |
 | Nov 10 22:11 | `p16-rw-showcase-test` | merged | 8,504 pass | mai-flash |
 | Nov 10 21:57 | `p17-stair-plan` | merged | 8,499 pass | claude-sonnet-d |
 | Nov 10 21:30 | `p17-wall-under-flight` | refused | 8,493 pass | claude-sonnet-b |
@@ -56,7 +57,6 @@ Updated 2026-11-10 22:30 UTC. This page and the card in the README are regenerat
 | Nov 10 18:30 | `p16-rw-showcase-renders` | merged | 8,402 pass | mai-flash-b |
 | Nov 10 18:00 | `p17-commands` | merged | 8,402 pass | claude-sonnet-b |
 | Nov 10 17:32 | `p16-rw-showcase-script` | merged | 8,376 pass | darwin-ws3 |
-| Nov 10 16:59 | `p16-rw-stair-wells` | merged | 8,376 pass |  |
 
 ## Seats active in the last hour
 
@@ -68,7 +68,7 @@ Updated 2026-11-10 22:30 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-b | bonsai2-27b | idle | 1062 |
 | claude-sonnet-a | sonnet | idle | 104 |
 | claude-sonnet-b | sonnet | merging | 108 |
-| claude-sonnet-c | sonnet | merging | 54 |
+| claude-sonnet-c | sonnet | idle | 54 |
 | claude-sonnet-d | sonnet | idle | 49 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 947 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
