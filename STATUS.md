@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 32 of 34 segments merged · 16 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 17:45 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 38.3 h so far · expected done Nov 10 19:02–Nov 11 05:42 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 38.5 h so far · expected done Nov 10 19:17–Nov 11 05:57 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -63,8 +63,8 @@ Updated 2026-11-10 17:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1046 |
-| bonsai-b | bonsai2-27b | agent | 988 |
+| bonsai-a | bonsai2-27b | idle | 1047 |
+| bonsai-b | bonsai2-27b | agent | 991 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1096 |
 | bonsai-ws2-b | bonsai2-27b | merging | 1056 |
 | claude-sonnet-a | sonnet | idle | 101 |
@@ -73,7 +73,7 @@ Updated 2026-11-10 17:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-d | sonnet | merging | 47 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 941 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 73 |
+| mai-flash | mai-code-1.1-flash | agent | 74 |
 | mai-flash-b | mai-code-1.1-flash | merging | 12 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 77 |
 | tturbo-mac | tturbo-ultraheretic | merging | 730 |
