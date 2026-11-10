@@ -377,6 +377,70 @@ mod tests {
         );
     }
 
+    /// Multiple Open Below rooms on the same level are all kept after re-detection.
+    #[test]
+    fn roomdetect_keeps_multiple_open_below_rooms() {
+        let mut s = Session::new();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let ring = [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]];
+        s.execute("wall", &json!({ "points": ring, "level": 0, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("wall", &json!({ "points": ring, "level": 1, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        s.execute(
+            "room",
+            &json!({ "points": [[1.5, 1.5], [2.5, 1.5], [2.5, 2.5], [1.5, 2.5], [1.5, 1.5]], "type": "openBelow", "level": "Level 2" }),
+        )
+        .unwrap();
+        s.execute(
+            "room",
+            &json!({ "points": [[6.0, 5.0], [7.0, 5.0], [7.0, 6.0], [6.0, 6.0], [6.0, 5.0]], "type": "openBelow", "level": "Level 2" }),
+        )
+        .unwrap();
+        let ids: Vec<_> = s.doc().unwrap().arch.rooms.iter().filter(|r| r.level == 1 && r.room_type == RoomType::OpenBelow).map(|r| r.id).collect();
+        assert_eq!(ids.len(), 2);
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        let d = s.doc().unwrap();
+        let open_below: Vec<_> = d.arch.rooms.iter().filter(|r| r.level == 1 && r.room_type == RoomType::OpenBelow).collect();
+        assert_eq!(open_below.len(), 2);
+        for id in &ids {
+            assert!(open_below.iter().any(|r| r.id == *id));
+        }
+    }
+
+    /// Re-detecting all levels keeps Open Below rooms on every level.
+    #[test]
+    fn roomdetect_open_below_all_levels() {
+        let mut s = Session::new();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        s.execute("level", &json!({ "above": 1 })).unwrap();
+        let ring = [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]];
+        for lvl in 0..3 {
+            s.execute("wall", &json!({ "points": ring, "level": lvl, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        }
+        s.execute("roomdetect", &json!({})).unwrap();
+        s.execute("room", &json!({ "points": [[1.5, 1.5], [2.5, 1.5], [2.5, 2.5], [1.5, 2.5], [1.5, 1.5]], "type": "openBelow", "level": "1" }))
+            .unwrap();
+        s.execute("room", &json!({ "points": [[6.0, 5.0], [7.0, 5.0], [7.0, 6.0], [6.0, 6.0], [6.0, 5.0]], "type": "openBelow", "level": "2" }))
+            .unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        let d = s.doc().unwrap();
+        let lvl1_open: Vec<_> = d.arch.rooms.iter().filter(|r| r.level == 1 && r.room_type == RoomType::OpenBelow).collect();
+        let lvl2_open: Vec<_> = d.arch.rooms.iter().filter(|r| r.level == 2 && r.room_type == RoomType::OpenBelow).collect();
+        assert_eq!(lvl1_open.len(), 1);
+        assert_eq!(lvl2_open.len(), 1);
+    }
+
+    /// An Open Below room with no host room survives re-detection without crashing.
+    #[test]
+    fn roomdetect_open_below_no_host_room() {
+        let mut s = Session::new();
+        s.execute("room", &json!({ "points": [[1.5, 1.5], [2.5, 1.5], [2.5, 2.5], [1.5, 2.5], [1.5, 1.5]], "type": "openBelow" })).unwrap();
+        let id = s.doc().unwrap().arch.rooms[0].id;
+        s.execute("roomdetect", &json!({ "level": 0 })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.rooms.iter().any(|r| r.id == id && r.room_type == RoomType::OpenBelow));
+    }
+
     /// Re-detecting rooms keeps each room's floor finish; fresh rooms have none.
     #[test]
     fn roomdetect_keeps_a_rooms_floor_finish() {
