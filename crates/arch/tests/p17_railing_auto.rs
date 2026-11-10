@@ -34,8 +34,8 @@ fn make_deck_room(id: u32, level: u32, polygon: Vec<Vec2>, height: f64) -> Room 
         level,
         polygon,
         holes: Vec::new(),
-        ceiling_height: 2.4,
-        floor_height: 0.0,
+        ceiling_height: Some(2.4),
+        floor_height: Some(0.0),
         interior_area: 0.0,
         standard_area: 0.0,
         deck_height: Some(height),
@@ -72,7 +72,7 @@ fn stair_against_a_wall_gets_one() {
         end: Vec2::new(5.0, -0.5),
         thickness: 0.2,
         height: 2.4,
-        level: 0,
+        base_level: 0,
         top_level: None,
         ..cadcraft_doc::arch::Wall::default()
     };
@@ -98,7 +98,7 @@ fn rail_on_forces_a_wall_side() {
         end: Vec2::new(5.0, -0.5),
         thickness: 0.2,
         height: 2.4,
-        level: 0,
+        base_level: 0,
         top_level: None,
         ..cadcraft_doc::arch::Wall::default()
     };
