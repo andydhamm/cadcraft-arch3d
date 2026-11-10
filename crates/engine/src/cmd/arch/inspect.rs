@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.push(
         CommandSpec::new("arch.inspect", "Arch Inspect", run_inspect)
             .noundo()
-            .params("{poché?: bool, views?: bool, furnishings?: bool, surfaces?: bool, cabinets?: bool}"),
+            .params("{poché?: bool, views?: bool, furnishings?: bool, surfaces?: bool, cabinets?: bool, decks?: bool}"),
     );
     v
 }
@@ -438,6 +438,8 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::foundation::inspect_foundations(&d.arch, p, &mut out);
     super::tray::inspect_trays(&d.arch, p, &mut out);
     super::soffit::inspect_soffits(&d.arch, p, &mut out);
+    super::deck_inspect::inspect_decks(&d.arch, p, &mut out);
+    super::inspect_detail::inspect_details(&d.arch, &mut out);
 
     Ok(Value::Object(out))
 }
