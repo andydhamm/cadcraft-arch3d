@@ -308,33 +308,34 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
         }
     }
 
-    // Stair plan linework: the flight outline, one line per riser across the width, and the
-    // well polygon when present, all tagged with the stair's proxy handle.
-    if !arch_layer_skipped(d, "A-STAIR", plotting) {
-        let layer_color = d.layer("A-STAIR").map(|l| l.color).unwrap_or(Color::Index(7));
+    // Stair plan symbol (see cadcraft_arch::stair_symbol): nosing lines, break, arrow, label and
+    // the well, all tagged with the stair's proxy handle. Lines above the plan cut are dashed.
+    for s in &d.arch.stairs {
+        let layer = if s.layer.is_empty() { "A-STAIR" } else { s.layer.as_str() };
+        if arch_layer_skipped(d, layer, plotting) {
+            continue;
+        }
+        let Some(sym) = cadcraft_arch::stair_symbol::stair_symbol(&d.arch, s, d.arch.plan_level) else { continue };
+        let layer_color = d.layer(layer).map(|l| l.color).unwrap_or(Color::Index(7));
         let stair_ink = crate::ink(Color::ByLayer, layer_color, Color::Index(7));
-        let transparency = layer_transparency(d, "A-STAIR");
-        for s in &d.arch.stairs {
-            if !on_shown_level(d, s.from_level) && !on_shown_level(d, s.to_level) {
-                continue;
-            }
-            let handle = stair_handle(s.id);
-            let Some(outline) = flight_outline(s) else { continue };
-            push_polyline_with_transparency(&mut list, handle, &stair_ink, &outline, transparency);
-            let (dir, side) = (Vec2::new(s.direction.cos(), s.direction.sin()), Vec2::new(-s.direction.sin(), s.direction.cos()));
-            if s.tread_depth.is_finite() && s.tread_depth > 1e-6 {
-                let mut n = 1usize;
-                while n <= MAX_RISER_LINES && (n as f64) * s.tread_depth < s.run - 1e-9 {
-                    let a = s.start + dir * (n as f64 * s.tread_depth);
-                    let b = a + side * s.width;
-                    push_polyline_with_transparency(&mut list, handle, &stair_ink, &[a, b], transparency);
-                    n += 1;
+        let transparency = layer_transparency(d, layer);
+        let handle = stair_handle(s.id);
+        for line in &sym.lines {
+            if line.dashed {
+                for seg in crate::arch_electrical::dashed_segments(d, layer, &line.points) {
+                    push_polyline_with_transparency(&mut list, handle, &stair_ink, &seg, transparency);
                 }
+            } else {
+                push_polyline_with_transparency(&mut list, handle, &stair_ink, &line.points, transparency);
             }
-            if s.well.len() >= 3 && s.well.iter().all(|p| p.is_finite()) {
-                let mut ring = s.well.clone();
-                ring.push(s.well[0]);
-                push_polyline_with_transparency(&mut list, handle, &stair_ink, &ring, transparency);
+        }
+        if let Some(label) = &sym.label {
+            let params = TextParams::centered(label.at, label.height, label.angle);
+            let (sh, _) = place(&TextFont::Stroke, &label.text, &params);
+            for stroke in &sh.strokes {
+                if stroke.len() >= 2 && stroke.iter().all(|p| p.is_finite()) {
+                    push_polyline_with_transparency(&mut list, handle, &stair_ink, stroke, transparency);
+                }
             }
         }
     }
@@ -475,25 +476,6 @@ fn push_dim(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, transparen
             push_polyline_with_transparency(list, handle, ink, stroke, transparency);
         }
     }
-}
-
-/// Upper bound on riser lines drawn for one stair (hostile tread depths).
-const MAX_RISER_LINES: usize = 512;
-
-/// The plan rectangle of a stair's flight (start, direction, width, run), or `None` when any
-/// dimension is non-finite or non-positive.
-fn flight_outline(s: &cadcraft_doc::arch::Stair) -> Option<[Vec2; 5]> {
-    let ok = s.start.is_finite() && s.direction.is_finite() && s.width.is_finite() && s.run.is_finite();
-    if !ok || s.width <= 0.0 || s.run <= 0.0 {
-        return None;
-    }
-    let dir = Vec2::new(s.direction.cos(), s.direction.sin());
-    let side = Vec2::new(-s.direction.sin(), s.direction.cos());
-    let p0 = s.start;
-    let p1 = p0 + dir * s.run;
-    let p2 = p1 + side * s.width;
-    let p3 = p0 + side * s.width;
-    Some([p0, p1, p2, p3, p0])
 }
 
 /// Append one polyline prim of `pts` tagged `handle`, carrying `transparency` (percent).
@@ -1145,7 +1127,8 @@ mod tests {
         assert!((pts[1].y - 2e12).abs() < 1.0, "y1 precision: {}", pts[1].y);
     }
 
-    /// Stair plan linework carries the stair handle: outline, risers and the well.
+    /// Stair plan linework carries the stair handle: nosing lines, side lines, arrow, label
+    /// strokes and the well.
     #[test]
     fn stair_plan_linework_is_tagged() {
         use cadcraft_doc::arch::Stair;
@@ -1161,11 +1144,69 @@ mod tests {
         let list = build_arch(&d, &Options::default(), false);
         let h = stair_handle(sid);
         let prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h).collect();
-        // outline + 3 interior risers (0.25, 0.5, 0.75) + well
-        assert_eq!(prims.len(), 5);
         assert!(prims.iter().all(|p| p.kind == Kind::Polyline));
-        assert_eq!(prims[0].len, 5);
-        assert_eq!(prims[4].len, 4);
+        // 4 nosing lines + 2 side lines + 3 arrow strokes + the closed well + the UP strokes.
+        assert!(prims.len() >= 4 + 2 + 3 + 1 + 2, "got {}", prims.len());
+        assert_eq!(prims.iter().filter(|p| p.len == 4).count(), 1, "the well ring");
+        assert_eq!(list.prims.iter().filter(|p| p.handle != h).count(), 0, "everything carries the stair handle");
+    }
+
+    /// The phase-5 stair (start (2,1), +x, 0 -> 1) with its well, in a drawing.
+    fn phase5_drawing(plan_cut: f64) -> (Drawing, Handle) {
+        use cadcraft_doc::arch::Stair;
+        let mut d = Drawing::new_metric();
+        let sid = d.arch.push_stair(Stair {
+            start: Vec2::new(2.0, 1.0),
+            plan_cut,
+            well: vec![Vec2::new(2.508, 0.5), Vec2::new(5.81, 0.5), Vec2::new(5.81, 1.5), Vec2::new(2.508, 1.5)],
+            ..Stair::default()
+        });
+        d.touch_arch();
+        (d, stair_handle(sid))
+    }
+
+    /// Above the plan cut the nosing lines are dashed (cut into many strokes), below it solid.
+    #[test]
+    fn lower_plan_dashes_the_lines_above_the_cut() {
+        let (mut d, h) = phase5_drawing(1.2);
+        d.arch.plan_level = Some(0);
+        let count = |d: &Drawing| build_arch(d, &Options::default(), false).prims.iter().filter(|p| p.handle == h).count();
+        let dashed = count(&d);
+        let (mut d2, h2) = phase5_drawing(10.0);
+        d2.arch.plan_level = Some(0);
+        let solid = build_arch(&d2, &Options::default(), false).prims.iter().filter(|p| p.handle == h2).count();
+        assert!(dashed > solid + 8, "dashed {dashed} vs all solid {solid}");
+        // Every full-width solid nosing line is a 2-point polyline from y 0.5 to y 1.5.
+        let list = build_arch(&d, &Options::default(), false);
+        let xs: Vec<f64> = list
+            .prims
+            .iter()
+            .filter(|p| p.handle == h && p.len == 2)
+            .filter_map(|p| list.verts.get(p.start as usize..p.start as usize + 2))
+            .filter(|v| (v[0].x - v[1].x).abs() < 1e-9 && (v[0].y - 0.5).abs() < 1e-9 && (v[1].y - 1.5).abs() < 1e-9)
+            .map(|v| v[0].x)
+            .collect();
+        assert!(xs.iter().any(|x| (x - 1.975).abs() < 1e-9) && xs.iter().any(|x| (x - 3.499).abs() < 1e-9), "{xs:?}");
+        // The plan cut moves the line count: 1.5 keeps one more solid nosing line.
+        let (mut d3, h3) = phase5_drawing(1.5);
+        d3.arch.plan_level = Some(0);
+        let n3 = build_arch(&d3, &Options::default(), false).prims.iter().filter(|p| p.handle == h3).count();
+        assert_ne!(n3, dashed);
+    }
+
+    /// The upper level shows the part through the well and the well, and differs from the lower.
+    #[test]
+    fn level_2_plan_shows_dn_and_the_well() {
+        let (mut d, h) = phase5_drawing(1.2);
+        d.arch.plan_level = Some(1);
+        let list = build_arch(&d, &Options::default(), false);
+        let prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h).collect();
+        assert!(prims.iter().any(|p| p.len == 5), "the closed well ring");
+        // 12 nosing + 2 sides + 3 arrow + well + DN strokes, all solid (no dash splitting).
+        assert!(prims.len() >= 12 + 2 + 3 + 1 + 2, "got {}", prims.len());
+        assert!(prims.len() < 40, "no dashed strokes: {}", prims.len());
+        d.arch.plan_level = Some(2);
+        assert!(build_arch(&d, &Options::default(), false).prims.iter().all(|p| p.handle != h), "a third level shows nothing");
     }
 
     /// Railing linework is one polyline and obeys the A-RAIL layer state.
@@ -1638,36 +1679,40 @@ mod tests {
         assert!(list.prims.iter().all(|p| p.handle != h), "stair should be skipped in plot build when A-STAIR is no-plot");
     }
 
-    /// A stair with tread_depth larger than run draws only the outline, no riser lines.
+    /// A stair with tread_depth larger than run draws one nosing line (plus sides, arrow, label).
     #[test]
-    fn stair_with_large_tread_depth_draws_no_riser_lines() {
+    fn stair_with_large_tread_depth_draws_one_nosing_line() {
         use cadcraft_doc::arch::Stair;
         let mut d = Drawing::new_metric();
         let sid = d.arch.push_stair(Stair { run: 1.0, tread_depth: 2.0, width: 1.0, ..Stair::default() });
         d.touch_arch();
         let list = build_arch(&d, &Options::default(), false);
         let h = stair_handle(sid);
-        let prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h).collect();
-        // Only the outline (5-point polyline), no riser lines.
-        assert_eq!(prims.len(), 1, "expected 1 prim (outline only), got {}", prims.len());
-        assert_eq!(prims[0].len, 5, "outline should have 5 vertices");
+        let nosings = list
+            .prims
+            .iter()
+            .filter(|p| p.handle == h && p.len == 2)
+            .filter_map(|p| list.verts.get(p.start as usize..p.start as usize + 2))
+            .filter(|v| (v[0].x - v[1].x).abs() < 1e-9 && (v[0].y - v[1].y).abs() > 0.99)
+            .count();
+        assert_eq!(nosings, 1);
     }
 
-    /// A stair with very small tread_depth caps riser lines at MAX_RISER_LINES (512).
+    /// A stair with very small tread_depth is capped at MAX_FLIGHT_TREADS nosing lines.
     #[test]
-    fn stair_with_tiny_tread_depth_caps_riser_lines() {
+    fn stair_with_tiny_tread_depth_is_capped() {
         use cadcraft_doc::arch::Stair;
         let mut d = Drawing::new_metric();
-        let sid = d.arch.push_stair(Stair { run: 10.0, tread_depth: 0.001, width: 1.0, ..Stair::default() });
+        let sid = d.arch.push_stair(Stair { run: 10.0, tread_depth: 0.001, treads: usize::MAX, width: 1.0, ..Stair::default() });
         d.touch_arch();
+        d.arch.plan_level = Some(0);
         let list = build_arch(&d, &Options::default(), false);
         let h = stair_handle(sid);
-        let prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h).collect();
-        // 1 outline + 512 riser lines = 513 prims
-        assert_eq!(prims.len(), 513, "expected 513 prims (1 outline + 512 risers), got {}", prims.len());
+        let n = list.prims.iter().filter(|p| p.handle == h).count();
+        assert!(n > 1000 && n < 100_000, "capped linework, got {n}");
     }
 
-    /// A stair with NaN in its well polygon draws the outline but not the well.
+    /// A stair with NaN in its well polygon draws the symbol but not the well.
     #[test]
     fn stair_with_nan_in_well_draws_no_well() {
         use cadcraft_doc::arch::Stair;
@@ -1683,8 +1728,9 @@ mod tests {
         let list = build_arch(&d, &Options::default(), false);
         let h = stair_handle(sid);
         let prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h).collect();
-        // outline + 3 riser lines, no well
-        assert_eq!(prims.len(), 4, "expected 4 prims (outline + 3 risers, no well), got {}", prims.len());
+        // The symbol is drawn, the well (a closed 4-point ring here) is not.
+        assert!(prims.len() >= 9, "got {}", prims.len());
+        assert!(prims.iter().all(|p| p.len != 4), "no well ring");
     }
 
     /// Multiple stairs each produce prims tagged with their own distinct proxy handle.
