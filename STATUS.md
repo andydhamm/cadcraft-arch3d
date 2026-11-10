@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-10 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 15 of 21: Electrical, technical illustration and the showcase house — 70 of 70 segments merged · 14 of 14 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 17 of 17 segments merged · 9 of 13 acceptance checks**
 
 8,258 workspace tests passing at the last merge · 873 segments merged in all · 0 of 15 seats working
 
@@ -25,17 +25,17 @@ Updated 2026-11-10 04:15 UTC. This page and the card in the README are regenerat
 | 12 | Exports and interoperability | done | 15 / 15 | 15.2 h |
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
-| 15 | Electrical, technical illustration and the showcase house | building | 14 / 14 | 115.8 h so far · expected done Nov 10 04:15–Nov 11 08:10 UTC |
-| 16 | Ceilings and foundations | building | 9 / 13 | — |
+| 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
+| 16 | Ceilings and foundations | building | 9 / 13 | 25.0 h so far · expected done Nov 10 04:30–Nov 10 19:43 UTC |
 | 17 | Stairs, decks, railings and openings in detail | planned | — | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
 | 20 | Plan views and dimensions | planned | — | — |
 | 21 | Schedules, elevations and sheets | planned | — | — |
 
-## Phase 15 segments
+## Phase 16 segments
 
-70 merged, 8 replaced, 3 abandoned
+17 merged, 3 replaced, 2 abandoned
 
 
 ## Recent merges
@@ -72,5 +72,5 @@ Updated 2026-11-10 04:15 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 70 |
 | mai-flash-b | mai-code-1.1-flash | idle | 10 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 65 |
-| tturbo-mac | tturbo-ultraheretic | gate | 710 |
+| tturbo-mac | tturbo-ultraheretic | agent | 711 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
