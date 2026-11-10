@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-10 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-10 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 21 of 33 segments merged · 10 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-10 07:45 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 10 / 20 | 28.3 h so far · expected done Nov 10 16:36–Nov 11 09:05 UTC |
+| 16 | Ceilings and foundations | building | 10 / 20 | 28.5 h so far · expected done Nov 10 16:51–Nov 11 09:20 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 0 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -44,7 +44,7 @@ Updated 2026-11-10 07:45 UTC. This page and the card in the README are regenerat
 | `p16f-slab-edge-mesh` | slab foundation: one footing mesh per founded wall | merging | bonsai-ws2-a |
 | `p16-rw-stair-wells` | stairs: levels ordered by elevation, wells measured from the stair's base | merging | claude-sonnet-b |
 | `p16-rw-open-below-rooms` | Open Below rooms: drawn ones cut holes, roomdetect keeps them | merging | mai-flash-esc |
-| `p16-rw-overhead-3d` | arch3d: ceilings and wall tops clipped at the level above, opened under Open Below | working | bonsai-ws2-a |
+| `p16-rw-overhead-3d` | arch3d: ceilings and wall tops clipped at the level above, opened under Open Below | working | mai-flash-esc |
 | `p16-rw-above-grade-living` | above-grade area: Chief's living-area convention | merging | claude-sonnet-c |
 | `p16-rw-technical-silhouettes` | technical illustration: silhouettes for the camera's view direction | merging | claude-sonnet-a |
 | `p16-rw-pane-styles` | 3D pane: Clay and Technical in the style selector | merging | claude-sonnet-a |
@@ -70,18 +70,18 @@ Updated 2026-11-10 07:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1026 |
-| bonsai-b | bonsai2-27b | agent | 970 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1074 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1040 |
+| bonsai-a | bonsai2-27b | agent | 1027 |
+| bonsai-b | bonsai2-27b | agent | 971 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1076 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1041 |
 | claude-sonnet-a | sonnet | idle | 98 |
 | claude-sonnet-b | sonnet | idle | 102 |
 | claude-sonnet-c | sonnet | merging | 48 |
 | claude-sonnet-d | sonnet | idle | 46 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 924 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 928 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 71 |
 | mai-flash-b | mai-code-1.1-flash | idle | 11 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 66 |
-| tturbo-mac | tturbo-ultraheretic | gate | 716 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 66 |
+| tturbo-mac | tturbo-ultraheretic | agent | 717 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
