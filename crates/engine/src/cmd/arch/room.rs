@@ -651,6 +651,102 @@ mod tests {
         assert!(host.holes.iter().any(|hole| same_ring_vertices(hole, &d.arch.room(open_id).unwrap().polygon)));
     }
 
+    /// An Open Below room with no host room on its level is created but cuts no hole.
+    #[test]
+    fn room_open_below_with_no_host_room() {
+        let mut s = new_session();
+        // No walls at all — no host room can exist.
+        s.execute(
+            "room",
+            &json!({
+                "points": [[1.5, 1.5], [2.5, 1.5], [2.5, 2.5], [1.5, 2.5], [1.5, 1.5]],
+                "type": "openBelow",
+            }),
+        )
+        .unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.rooms.len(), 1);
+        assert_eq!(d.arch.rooms[0].room_type, RoomType::OpenBelow);
+        assert!(d.arch.rooms.iter().all(|r| r.holes.is_empty()));
+    }
+
+    /// Two Open Below rooms on the same level each cut a hole in the host room.
+    #[test]
+    fn room_open_below_multiple_cut_holes() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        s.execute(
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
+                "level": 1,
+                "thickness": 0.2,
+                "height": 2.4,
+                "exterior": true,
+            }),
+        )
+        .unwrap();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        s.execute(
+            "room",
+            &json!({
+                "points": [[1.5, 1.5], [2.5, 1.5], [2.5, 2.5], [1.5, 2.5], [1.5, 1.5]],
+                "type": "openBelow",
+                "level": "Level 2",
+            }),
+        )
+        .unwrap();
+        s.execute(
+            "room",
+            &json!({
+                "points": [[6.0, 5.0], [7.0, 5.0], [7.0, 6.0], [6.0, 6.0], [6.0, 5.0]],
+                "type": "openBelow",
+                "level": "Level 2",
+            }),
+        )
+        .unwrap();
+        let d = s.doc().unwrap();
+        let host = d.arch.rooms.iter().find(|r| r.level == 1 && r.room_type != RoomType::OpenBelow).unwrap();
+        assert_eq!(host.holes.len(), 2);
+    }
+
+    /// Undoing an Open Below room creation removes the hole it cut.
+    #[test]
+    fn room_open_below_undo_removes_hole() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        s.execute(
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
+                "level": 1,
+                "thickness": 0.2,
+                "height": 2.4,
+                "exterior": true,
+            }),
+        )
+        .unwrap();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        s.execute(
+            "room",
+            &json!({
+                "points": [[1.5, 1.5], [2.5, 1.5], [2.5, 2.5], [1.5, 2.5], [1.5, 1.5]],
+                "type": "openBelow",
+                "level": "Level 2",
+            }),
+        )
+        .unwrap();
+        {
+            let d = s.doc().unwrap();
+            let host = d.arch.rooms.iter().find(|r| r.level == 1 && r.room_type != RoomType::OpenBelow).unwrap();
+            assert_eq!(host.holes.len(), 1);
+        }
+        s.undo().unwrap();
+        let d = s.doc().unwrap();
+        let host = d.arch.rooms.iter().find(|r| r.level == 1 && r.room_type != RoomType::OpenBelow).unwrap();
+        assert_eq!(host.holes.len(), 0);
+    }
+
     /// The new room types ("dining", "family", "entry", "laundry") parse and
     /// report by key; parsing is trim- and case-insensitive; "attic" is
     /// refused.
