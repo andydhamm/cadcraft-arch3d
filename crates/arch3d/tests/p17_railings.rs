@@ -159,7 +159,7 @@ fn deck_surface_posts_reach_the_rim_bottom() {
     r.height = 1.0;
     r.thickness = 0.05;
     r.post_spacing = 4.0;
-    let deck: RailSurface = RailSurface::Deck { top: 1.0 };
+    let deck: RailSurface = RailSurface::Deck { top: 1.0, post_bottom: 1.0 - 0.209 };
     let meshes = make(&r, &deck);
     let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").map(|m| m).collect();
     let mut min_z = f64::INFINITY;
