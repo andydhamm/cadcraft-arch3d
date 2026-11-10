@@ -87,6 +87,24 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("fixture-") {
         return "fixture";
     }
+    // Phase 17: stair parts, railing posts and newels, deck structure and grilles.
+    for (prefix, part) in [("stair-tread", "tread"), ("stair-riser", "riser"), ("stair-stringer", "stringer"), ("stair-skirt", "skirt")] {
+        if m.starts_with(prefix) {
+            return part;
+        }
+    }
+    if m.starts_with("railing-post") || m.starts_with("railing-newel") || m == "deck-post" {
+        return "post";
+    }
+    for (name, part) in [("deck-ledger", "ledger"), ("deck-joist", "joist"), ("deck-rim", "rim"), ("deck-beam", "beam"), ("deck-footing", "footing")]
+    {
+        if m == name {
+            return part;
+        }
+    }
+    if m.contains("grille") {
+        return "grille";
+    }
     if m.contains("glass") {
         return "glass";
     }
@@ -234,22 +252,19 @@ pub fn probe_mesh(mesh: &Mesh, p: Vec3) -> bool {
 /// empty string.
 pub fn mesh_label(mesh: &Mesh) -> String {
     let m = mesh.material.to_lowercase();
-    // Phase 14: furnishing parts, pulls and painted surfaces are named by their object's kind.
-    let label = match part_of(mesh) {
-        "furnishing" => Some(cadcraft_doc::arch::furnishing_label(mesh.object)),
-        "pull" => Some(cadcraft_doc::arch::cabinet_label(mesh.object)),
-        "soffit" => Some(cadcraft_doc::arch::soffit_label(mesh.object)),
-        "foundation" | "footing" => Some(cadcraft_doc::arch::foundation_label(mesh.object)),
-        "slab" => Some(cadcraft_doc::arch::room_label(mesh.object)),
-        _ => m.strip_prefix("paint:").and_then(Surface::parse).map(|s| match s {
-            Surface::WallSide { .. } => cadcraft_doc::arch::wall_label(mesh.object),
-            Surface::RoomFloor(_) | Surface::RoomCeiling(_) => cadcraft_doc::arch::room_label(mesh.object),
-            Surface::Roof(_) => cadcraft_doc::arch::roof_label(mesh.object),
-            Surface::Cabinet { .. } => cadcraft_doc::arch::cabinet_label(mesh.object),
-            Surface::Fixture(_) => cadcraft_doc::arch::fixture_label(mesh.object),
-            Surface::Furnishing { .. } => cadcraft_doc::arch::furnishing_label(mesh.object),
-        }),
+    // Phase 17: deck structure belongs to its deck room (before any part rule: part "footing" is a
+    // foundation's), railing parts to the railing and stair parts to the stair.
+    let phase17 = if m == "deck" || m.starts_with("deck-") {
+        Some(cadcraft_doc::arch::room_label(mesh.object))
+    } else if m == "railing" || m.starts_with("railing-") {
+        Some(cadcraft_doc::arch::railing_label(mesh.object))
+    } else if m == "stair" || m.starts_with("stair-") {
+        Some(cadcraft_doc::arch::stair_label(mesh.object))
+    } else {
+        None
     };
+    // Phase 14: furnishing parts, pulls and painted surfaces are named by their object's kind.
+    let label = if phase17.is_some() { phase17 } else { phase14_label(mesh, &m) };
     // Site meshes first: a plant, the terrain solid, a path (its modifier) are named as the commands name them.
     let label = if let Some(label) = label {
         label
@@ -283,6 +298,40 @@ pub fn mesh_label(mesh: &Mesh) -> String {
         cadcraft_doc::arch::wall_label(mesh.object)
     };
     if label.is_empty() { format!("object-{}", mesh.object.0) } else { label }
+}
+
+/// The part a click on this mesh picks: `"deck"` for every deck material (boards and structure
+/// alike, so they all go to the deck room), else [`part_of`].
+pub fn pick_part(mesh: &Mesh) -> &'static str {
+    let m = mesh.material.to_lowercase();
+    if m == "deck" || m.starts_with("deck-") { "deck" } else { part_of(mesh) }
+}
+
+/// The kind of arch object a mesh belongs to: a room for every deck material, else the kind of its
+/// [`part_of`].
+pub fn arch_kind(mesh: &Mesh) -> cadcraft_doc::arch::ArchKind {
+    use cadcraft_doc::arch::ArchKind;
+    let m = mesh.material.to_lowercase();
+    if m == "deck" || m.starts_with("deck-") { ArchKind::Room } else { ArchKind::from_part(part_of(mesh)) }
+}
+
+/// The label of a phase-14/16 part, when its part names one.
+fn phase14_label(mesh: &Mesh, m: &str) -> Option<String> {
+    match part_of(mesh) {
+        "furnishing" => Some(cadcraft_doc::arch::furnishing_label(mesh.object)),
+        "pull" => Some(cadcraft_doc::arch::cabinet_label(mesh.object)),
+        "soffit" => Some(cadcraft_doc::arch::soffit_label(mesh.object)),
+        "foundation" | "footing" => Some(cadcraft_doc::arch::foundation_label(mesh.object)),
+        "slab" => Some(cadcraft_doc::arch::room_label(mesh.object)),
+        _ => m.strip_prefix("paint:").and_then(Surface::parse).map(|s| match s {
+            Surface::WallSide { .. } => cadcraft_doc::arch::wall_label(mesh.object),
+            Surface::RoomFloor(_) | Surface::RoomCeiling(_) => cadcraft_doc::arch::room_label(mesh.object),
+            Surface::Roof(_) => cadcraft_doc::arch::roof_label(mesh.object),
+            Surface::Cabinet { .. } => cadcraft_doc::arch::cabinet_label(mesh.object),
+            Surface::Fixture(_) => cadcraft_doc::arch::fixture_label(mesh.object),
+            Surface::Furnishing { .. } => cadcraft_doc::arch::furnishing_label(mesh.object),
+        }),
+    }
 }
 
 /// The level elevation for a mesh.
@@ -327,6 +376,87 @@ pub fn probe(scene: &Scene3d, p: Vec3) -> Option<Hit> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn named(material: &str, id: u32) -> Mesh {
+        Mesh::new(material, ArchId(id))
+    }
+
+    #[test]
+    fn part_of_maps_every_phase17_material() {
+        let want = [
+            ("stair-tread", "tread"),
+            ("stair-riser", "riser"),
+            ("stair-stringer", "stringer"),
+            ("stair-skirt", "skirt"),
+            ("stair-landing", "stair"),
+            ("stair", "stair"),
+            ("railing-post", "post"),
+            ("railing-newel", "post"),
+            ("railing-rail", "railing"),
+            ("railing-panel", "railing"),
+            ("railing-baluster", "railing"),
+            ("railing", "railing"),
+            ("deck", "deck"),
+            ("deck-ledger", "ledger"),
+            ("deck-joist", "joist"),
+            ("deck-rim", "rim"),
+            ("deck-beam", "beam"),
+            ("deck-post", "post"),
+            ("deck-footing", "footing"),
+            ("window-grille", "grille"),
+            ("door-grille", "grille"),
+            ("window-sill-left", "sill"),
+            ("window-casing-left", "casing"),
+            ("door-casing-left", "casing"),
+        ];
+        for (material, part) in want {
+            assert_eq!(part_of(&named(material, 0)), part, "{material}");
+        }
+        // Phase 16's footing and the roof's soffit keep their parts.
+        assert_eq!(part_of(&named("footing", 0)), "footing");
+        assert_eq!(part_of(&named("soffit", 0)), "roof");
+    }
+
+    #[test]
+    fn mesh_label_names_the_owner() {
+        use cadcraft_doc::arch::{railing_label, room_label, stair_label, wall_label};
+        for material in ["deck", "deck-ledger", "deck-joist", "deck-rim", "deck-beam", "deck-post", "deck-footing"] {
+            assert_eq!(mesh_label(&named(material, 3)), room_label(ArchId(3)), "{material}");
+        }
+        for material in ["railing", "railing-post", "railing-newel", "railing-rail", "railing-panel", "railing-baluster"] {
+            assert_eq!(mesh_label(&named(material, 2)), railing_label(ArchId(2)), "{material}");
+        }
+        for material in ["stair", "stair-tread", "stair-riser", "stair-stringer", "stair-skirt", "stair-landing"] {
+            assert_eq!(mesh_label(&named(material, 1)), stair_label(ArchId(1)), "{material}");
+        }
+        assert_eq!(mesh_label(&named("window-grille", 4)), cadcraft_doc::arch::opening_label(ArchId(4)));
+        assert_eq!(mesh_label(&named("wall", 0)), wall_label(ArchId(0)));
+        // Phase 16's footing stays a foundation's.
+        assert_eq!(mesh_label(&named("footing", 5)), cadcraft_doc::arch::foundation_label(ArchId(5)));
+    }
+
+    #[test]
+    fn pick_part_and_arch_kind_send_deck_structure_to_the_room() {
+        use cadcraft_doc::arch::ArchKind;
+        for material in ["deck", "deck-ledger", "deck-joist", "deck-rim", "deck-beam", "deck-post", "deck-footing"] {
+            let m = named(material, 0);
+            assert_eq!(pick_part(&m), "deck", "{material}");
+            assert_eq!(arch_kind(&m), ArchKind::Room, "{material}");
+        }
+        let checks = [
+            ("stair-tread", "tread", ArchKind::Stair),
+            ("stair-landing", "stair", ArchKind::Stair),
+            ("railing-post", "post", ArchKind::Railing),
+            ("railing-rail", "railing", ArchKind::Railing),
+            ("window-grille", "grille", ArchKind::Opening),
+            ("footing", "footing", ArchKind::Foundation),
+            ("wall", "wall", ArchKind::Wall),
+        ];
+        for (material, part, kind) in checks {
+            let m = named(material, 0);
+            assert_eq!((pick_part(&m), arch_kind(&m)), (part, kind), "{material}");
+        }
+    }
 
     /// Build a closed box (cube) mesh from `(x0, y0, z0)` with side `size`.
     fn box_mesh(x0: f64, y0: f64, z0: f64, size: f64, material: &str, object: ArchId) -> Mesh {

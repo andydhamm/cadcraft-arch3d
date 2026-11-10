@@ -11,10 +11,12 @@
 pub mod camera;
 pub mod casework;
 pub(crate) mod ceiling;
+pub(crate) mod deck_frame;
 pub mod edges;
 pub mod electrical;
 pub mod finish;
 pub mod fixture;
+pub(crate) mod flight_cut;
 pub mod foundation;
 
 pub mod furnishing;
@@ -32,11 +34,14 @@ pub mod planar;
 pub mod plant;
 pub mod probe;
 pub mod railing;
+pub(crate) mod railing_parts;
 pub mod ray;
 pub mod roof;
 pub mod section;
 pub mod site;
 pub(crate) mod soffit;
+pub mod solid;
+pub(crate) mod stair_parts;
 pub mod stairs;
 pub mod texture;
 pub mod uv;
@@ -2827,10 +2832,10 @@ mod tests {
     #[test]
     fn part_of_maps_stair_railing_deck() {
         let base = box_mesh(0.0, 0.0, 0.0, 1.0, "stair-stringer", ArchId(1));
-        assert_eq!(part_of(&base), "stair");
+        assert_eq!(part_of(&base), "stringer");
 
         let railing = box_mesh(0.0, 0.0, 0.0, 1.0, "railing-post", ArchId(2));
-        assert_eq!(part_of(&railing), "railing");
+        assert_eq!(part_of(&railing), "post");
 
         let deck = box_mesh(0.0, 0.0, 0.0, 1.0, "deck-board", ArchId(3));
         assert_eq!(part_of(&deck), "deck");
