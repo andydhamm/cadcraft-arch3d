@@ -55,7 +55,10 @@ pub enum Overhead {
 }
 
 fn holds(polygon: &[Vec2], holes: &[Vec<Vec2>], p: Vec2) -> bool {
-    polygon.len() >= 3 && point_in_polygon(polygon, p) && !holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p))
+    polygon.len() >= 3
+        && polygon.iter().all(|v| v.is_finite())
+        && point_in_polygon(polygon, p)
+        && !holes.iter().any(|h| h.len() >= 3 && h.iter().all(|v| v.is_finite()) && point_in_polygon(h, p))
 }
 
 fn bbox_meets(polygon: &[Vec2], bbox: [f64; 4]) -> bool {
@@ -284,5 +287,111 @@ mod tests {
         w.height = 2.4;
         assert!(near(wall_top_clip(&m, &w).unwrap(), 2.7));
         assert!(wall_top_clip(&m, &w).unwrap() >= w.top_z(&m.levels));
+    }
+
+    #[test]
+    fn overhead_in_empty_list_returns_clear() {
+        assert_eq!(overhead_in(&[], Vec2::new(1.0, 1.0)), Overhead::Clear);
+        assert_eq!(overhead_in(&[], Vec2::new(f64::NAN, 1.0)), Overhead::Clear);
+        assert_eq!(overhead_in(&[], Vec2::new(f64::INFINITY, 0.0)), Overhead::Clear);
+    }
+
+    #[test]
+    fn holds_rejects_degenerate_polygons() {
+        let p = Vec2::new(1.0, 1.0);
+        assert!(!holds(&[], &[], p), "empty polygon");
+        assert!(!holds(&[Vec2::new(0.0, 0.0)], &[], p), "one vertex");
+        assert!(!holds(&[Vec2::new(0.0, 0.0), Vec2::new(2.0, 2.0)], &[], p), "two vertices");
+        // A valid triangle holds its interior
+        let tri = vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(1.0, 2.0)];
+        assert!(holds(&tri, &[], Vec2::new(1.0, 0.5)), "interior of triangle");
+        assert!(!holds(&tri, &[], Vec2::new(10.0, 10.0)), "outside triangle");
+        // A hole excludes the point
+        let hole = vec![Vec2::new(0.5, 0.5), Vec2::new(1.5, 0.5), Vec2::new(1.0, 1.5)];
+        assert!(!holds(&tri, &[hole], Vec2::new(1.0, 0.8)), "inside hole");
+        // A degenerate hole (fewer than 3 points) is ignored
+        assert!(holds(&tri, &[vec![Vec2::new(0.5, 0.5), Vec2::new(1.0, 0.5)]], Vec2::new(1.0, 0.5)));
+        // Non-finite polygon vertex
+        assert!(!holds(&[Vec2::new(f64::NAN, 0.0), Vec2::new(2.0, 0.0), Vec2::new(1.0, 2.0)], &[], p));
+    }
+
+    #[test]
+    fn overhead_at_unknown_level_returns_clear() {
+        let m = split(false);
+        assert_eq!(overhead_at(&m, 99, Vec2::new(4.5, 1.5)), Overhead::Clear);
+        assert!(rooms_above(&m, 99, [0.0, 0.0, 10.0, 10.0]).is_empty());
+        // Level with NaN elevation
+        let mut m2 = split(false);
+        m2.levels.push(Level { index: 3, elevation: f64::NAN, ..Level::default() });
+        assert!(rooms_above(&m2, 3, [0.0, 0.0, 10.0, 10.0]).is_empty());
+    }
+
+    #[test]
+    fn rooms_above_same_elevation_sorts_by_index() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, ..Level::default() });
+        m.levels.push(Level { index: 1, elevation: 3.0, ..Level::default() });
+        // Two rooms at level 1, added in model order
+        let r0 = m.push_room(Room { polygon: rect(0.0, 0.0, 5.0, 5.0), level: 1, ..Room::default() });
+        let r1 = m.push_room(Room { polygon: rect(5.0, 0.0, 10.0, 5.0), level: 1, ..Room::default() });
+        let above = rooms_above(&m, 0, [0.0, 0.0, 10.0, 5.0]);
+        assert_eq!(above.len(), 2);
+        assert_eq!(above[0].room, r0, "model order preserved at same elevation");
+        assert_eq!(above[1].room, r1);
+    }
+
+    #[test]
+    fn wall_top_clip_no_level_above_returns_none() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, ..Level::default() });
+        m.push_room(Room { polygon: rect(0.1, 0.1, 9.9, 7.9), level: 0, ..Room::default() });
+        // No level above: no clip
+        let w = Wall::new(Vec2::new(0.0, 4.0), Vec2::new(10.0, 4.0), 0.2);
+        assert_eq!(wall_top_clip(&m, &w), None);
+        // Wall on a level with no rooms above it
+        let mut m2 = ArchModel::default();
+        m2.levels.push(Level { index: 0, ..Level::default() });
+        m2.levels.push(Level { index: 1, elevation: 2.7, ..Level::default() });
+        m2.push_room(Room { polygon: rect(0.1, 0.1, 9.9, 7.9), level: 0, ..Room::default() });
+        // Room on level 1 but far away, not over the wall
+        m2.push_room(Room { polygon: rect(100.0, 100.0, 110.0, 110.0), level: 1, ..Room::default() });
+        let w2 = Wall::new(Vec2::new(0.0, 4.0), Vec2::new(10.0, 4.0), 0.2);
+        assert_eq!(wall_top_clip(&m2, &w2), None);
+    }
+
+    #[test]
+    fn overhead_survives_hostile_input() {
+        let mut m = split(false);
+        // NaN level elevation
+        m.levels.push(Level { index: 3, elevation: f64::NAN, ..Level::default() });
+        let _ = rooms_above(&m, 0, [0.0, 0.0, 10.0, 10.0]);
+        // NaN room polygon vertex
+        m.push_room(Room { polygon: vec![Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)], level: 1, ..Room::default() });
+        let _ = rooms_above(&m, 0, [0.0, 0.0, 10.0, 10.0]);
+        // Huge polygon
+        m.push_room(Room {
+            polygon: vec![Vec2::new(-1e300, -1e300), Vec2::new(1e300, -1e300), Vec2::new(1e300, 1e300)],
+            level: 1,
+            ..Room::default()
+        });
+        let _ = rooms_above(&m, 0, [0.0, 0.0, 10.0, 10.0]);
+        // Non-finite bbox
+        assert!(rooms_above(&m, 0, [f64::NAN, 0.0, 1.0, 1.0]).is_empty());
+        assert!(rooms_above(&m, 0, [0.0, 0.0, f64::INFINITY, 1.0]).is_empty());
+        // Wall with NaN thickness
+        let mut w = landing_wall();
+        w.thickness = f64::NAN;
+        assert_eq!(wall_top_clip(&m, &w), None);
+        // Wall with huge coordinates
+        let w2 = Wall::new(Vec2::new(-1e300, 0.0), Vec2::new(1e300, 0.0), 0.2);
+        let _ = wall_top_clip(&m, &w2);
+        // Wall with NaN start
+        let mut w3 = landing_wall();
+        w3.start = Vec2::new(f64::NAN, 0.0);
+        assert_eq!(wall_top_clip(&m, &w3), None);
+        // Empty model
+        let empty = ArchModel::default();
+        assert_eq!(overhead_at(&empty, 0, Vec2::new(1.0, 1.0)), Overhead::Clear);
+        assert!(rooms_above(&empty, 0, [0.0, 0.0, 1.0, 1.0]).is_empty());
     }
 }
