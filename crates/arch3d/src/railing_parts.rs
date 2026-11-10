@@ -523,7 +523,7 @@ mod tests {
         r.inset = -0.045;
         r.post_spacing = 1.0;
         // Construct a Flight surface with a sloped base (simulated by a high base).
-        let surface = RailSurface::Flight { line: crate::geom::StairLine::default() };
+        let surface = RailSurface::Flight { line: cadcraft_arch::railing::StairLine::default() };
         let meshes = railing_meshes(&r, &surface);
         assert!(!meshes.is_empty(), "no flight railing meshes");
         // The top rail should have positions at different z along its length.
@@ -545,7 +545,7 @@ mod tests {
         r.height = 1.0;
         r.thickness = 0.05;
         r.post_spacing = 4.0;
-        let surface = RailSurface::Flight { line: crate::geom::StairLine::default() };
+        let surface = RailSurface::Flight { line: cadcraft_arch::railing::StairLine::default() };
         let meshes = railing_meshes(&r, &surface);
         let newels: Vec<_> = meshes.iter().filter(|m| m.material == "railing-newel").collect();
         assert_eq!(newels.len(), 2, "expected 2 newels, got {}", newels.len());
