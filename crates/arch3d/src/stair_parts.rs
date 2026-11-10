@@ -159,6 +159,19 @@ mod tests {
         })
     }
 
+    /// The stub once equalled the legacy solid; now only the landing still does.
+    #[test]
+    fn stub_matches_the_legacy_solid() {
+        let s = phase5_stair();
+        let got = stair_meshes(&s, 0.0, [false, false]);
+        assert!(!got.is_empty());
+        let want = stairs::landing_mesh(&s, 0.0).expect("landing");
+        let last = got.last().expect("last");
+        assert_eq!(last.positions, want.positions);
+        assert_eq!(last.indices, want.indices);
+        assert_eq!(last.material, "stair-landing");
+    }
+
     #[test]
     fn phase5_stair_parts() {
         let ms = stair_meshes(&phase5_stair(), 0.0, [false, false]);
