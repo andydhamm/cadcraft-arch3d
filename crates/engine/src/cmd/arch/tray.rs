@@ -300,7 +300,7 @@ fn run_tray(s: &mut Session, p: &Value) -> Result<Value> {
         "handle": handle_json(tray_handle(id)),
         "room": room_label(tray.room),
         "parent": tray.parent.map(tray_label),
-        "outline": outline,
+        "outline": points_json(&outline),
         "ceiling": ceiling,
     }))
 }
@@ -605,5 +605,39 @@ mod tests {
 
         let gone = s.execute("tray.delete", &json!({"id": outside_handle})).unwrap();
         assert_eq!(gone["deleted"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn tray_reply_outline_is_a_ring_of_points() {
+        let mut s = Session::new();
+        build_phase1_house(&mut s);
+        let room = nw_room_id(&mut s);
+
+        let res = s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": 0.3})).unwrap();
+        let outline = res["outline"].as_array().unwrap();
+
+        assert_eq!(outline.len(), 4);
+
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+
+        for point in outline {
+            let pair = point.as_array().unwrap();
+            assert_eq!(pair.len(), 2);
+            let x = pair[0].as_f64().unwrap();
+            let y = pair[1].as_f64().unwrap();
+
+            min_x = min_x.min(x);
+            max_x = max_x.max(x);
+            min_y = min_y.min(y);
+            max_y = max_y.max(y);
+        }
+
+        assert!((min_x - 0.7).abs() < 1e-9);
+        assert!((max_x - 5.35).abs() < 1e-9);
+        assert!((min_y - 3.65).abs() < 1e-9);
+        assert!((max_y - 7.3).abs() < 1e-9);
     }
 }
