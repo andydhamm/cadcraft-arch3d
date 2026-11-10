@@ -9,18 +9,23 @@
 //! - `fromLevel` / `toLevel`: optional, a level name or its numeric index
 //!   (index tried first, then name, like the `level` command). Absent (or
 //!   null) means the first level / the last level; a present but unknown
-//!   level is refused.
-//! - `rise`: optional, metres; when present must be finite and positive. When
-//!   absent it is derived as `to.elevation - from.elevation`, which must be
-//!   finite and positive.
+//!   level is refused. They name the two levels the stair joins, in either
+//!   order: the pair is ordered by elevation and the stored `from_level` is
+//!   the lower, `to_level` the upper. Equal elevations (one level: a deck stair
+//!   to grade) need an explicit `rise` and cut no well. `start` is
+//!   the centre of the bottom nosing line on the lower level.
+//! - `rise`: optional, metres; when present must be finite and positive and is
+//!   used as given. When absent it is derived as `upper.elevation -
+//!   lower.elevation`.
 //! - `shape`: optional, `straight|l|u` (case-insensitive, default
 //!   `straight`); only straight flights are meshed (phase-5 gap note).
 //! - `tread` / `maxRiser` / `minTread`: optional positive metres; default to
 //!   `MIN_TREAD` / `MAX_RISER` / `MIN_TREAD`.
 //!
-//! A well only exists when the flight climbs (`toLevel` above `fromLevel`); a
-//! deck stair to grade makes none. Headroom is measured against the upper
-//! level's slab underside (`to.elevation - to.structure`). When the upper
+//! A well is considered whenever the upper level is above the lower (never by
+//! list index). Headroom is measured against the upper level's slab underside
+//! (`upper.elevation - upper.structure`), with riser tops counted from the
+//! lower level's elevation (the stair's base). When the upper
 //! floor lacks `MIN_HEADROOM` clear of the flight, the stair's well becomes an
 //! `Open Below` room on the upper level ringed by a guard railing that follows
 //! the stair, and is cut as a hole into the upper room that contains it.
@@ -138,8 +143,19 @@ fn run_stair(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => find_level(arch, v)?,
         None => arch.levels.len().saturating_sub(1),
     };
-    let from_level = arch.levels.get(from_i).ok_or_else(|| bad("stair", "unknown fromLevel"))?;
-    let to_level = arch.levels.get(to_i).ok_or_else(|| bad("stair", "unknown toLevel"))?;
+    let first = arch.levels.get(from_i).ok_or_else(|| bad("stair", "unknown fromLevel"))?;
+    let second = arch.levels.get(to_i).ok_or_else(|| bad("stair", "unknown toLevel"))?;
+    // The two levels are ordered by elevation, whichever way they were named:
+    // the lower is `from_level`, the upper `to_level`. Non-finite elevations are
+    // refused. Equal elevations (one level, e.g. a deck stair to grade) are a
+    // stair only with an explicit `rise` (a derived rise is then 0 and refused
+    // below), and it climbs to no upper floor, so it cuts no well.
+    if !(first.elevation.is_finite() && second.elevation.is_finite()) {
+        return Err(bad("stair", "the two levels must have finite elevations"));
+    }
+    let (from_i, to_i, from_level, to_level) =
+        if second.elevation >= first.elevation { (from_i, to_i, first, second) } else { (to_i, from_i, second, first) };
+    let climbs = to_level.elevation > from_level.elevation;
 
     // --- rise: param if finite & positive, else derived (finite & positive) ---
     let rise = match p.get("rise") {
@@ -191,9 +207,12 @@ fn run_stair(s: &mut Session, p: &Value) -> Result<Value> {
         ..Stair::default()
     };
     let slab_underside = to_level.elevation - to_level.structure;
-    let well_poly = if to_i > from_i { well_polygon(&stair, &plan, slab_underside, MIN_HEADROOM) } else { None };
+    // Levels are ordered by elevation above, so the upper level is always
+    // higher; riser tops are counted from the lower level's elevation.
+    let base_z = from_level.elevation;
+    let well_poly = if climbs { well_polygon(&stair, &plan, base_z, slab_underside, MIN_HEADROOM) } else { None };
     let has_well = well_poly.is_some();
-    let guard = well_poly.as_ref().and_then(|_| well_guard_path(&stair, &plan, slab_underside, MIN_HEADROOM));
+    let guard = well_poly.as_ref().and_then(|_| well_guard_path(&stair, &plan, base_z, slab_underside, MIN_HEADROOM));
     let well = well_poly.unwrap_or_default();
 
     // --- one mutation + one revision bump; never a partial write ---
@@ -469,16 +488,89 @@ mod tests {
         assert!(s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "toLevel": 99 })).is_err());
     }
 
+    /// Phase-5 check 02: a one-level plan's deck stair to grade, given only its rise. Both levels default to the one level
+    /// (equal elevations), which is a stair, not an error, when the rise is given; it climbs to no upper floor, so no well.
+    #[test]
+    fn one_level_stair_with_a_rise_is_made_without_a_well() {
+        let mut s = new_session();
+        let r = s.execute("stair", &json!({ "start": [2.0, -0.5], "direction": 90.0, "width": 0.9, "rise": 0.9 })).unwrap();
+        assert_eq!(r["risers"].as_u64(), Some(5));
+        assert_eq!(r["well"].as_bool(), Some(false));
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.stairs.len(), 1);
+        assert!(d.arch.stairs[0].well.is_empty());
+        assert!(d.arch.railings.is_empty());
+        assert!(d.arch.rooms.iter().all(|r| r.room_type != RoomType::OpenBelow));
+        // Without a rise, equal elevations still have nothing to climb.
+        assert!(s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0 })).is_err());
+    }
+
     #[test]
     fn deck_stair_to_grade_makes_no_well() {
         let mut s = two_level_session();
         add_big_room(&mut s, 0);
         let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 1, "toLevel": 0, "rise": 2.7 })).unwrap();
-        assert_eq!(r["well"].as_bool(), Some(false));
+        // Behaviour changed: the pair is ordered by elevation (lower first), so the well is
+        // cut, and the stair keeps it.
+        assert_eq!(r["well"].as_bool(), Some(true));
         let d = s.doc().unwrap();
-        assert!(d.arch.stairs[0].well.is_empty());
-        assert!(d.arch.railings.is_empty());
-        assert!(d.arch.rooms.iter().all(|r| r.room_type != RoomType::OpenBelow && r.holes.is_empty()));
+        assert_eq!((d.arch.stairs[0].from_level, d.arch.stairs[0].to_level), (0, 1));
+        assert!(!d.arch.stairs[0].well.is_empty());
+    }
+
+    #[test]
+    fn top_down_pair_is_ordered_not_refused() {
+        let mut s = two_level_session();
+        let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 1, "toLevel": 0 })).unwrap();
+        assert_eq!(r["risers"].as_u64(), Some(16));
+        let st = &s.doc().unwrap().arch.stairs[0];
+        assert_eq!((st.from_level, st.to_level), (0, 1));
+    }
+
+    /// Level 0 renamed Main at 2.7 m and a lower level made after it at 0.
+    fn main_above_lower_session() -> Session {
+        let mut s = two_level_session();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels[0].name = "Main".into();
+        d.arch.levels[0].elevation = 2.7;
+        d.arch.levels[1].name = "Lower".into();
+        d.arch.levels[1].elevation = 0.0;
+        s
+    }
+
+    #[test]
+    fn stair_orders_its_levels_by_elevation() {
+        for (from, to) in [("Lower", "Main"), ("Main", "Lower")] {
+            let mut s = main_above_lower_session();
+            add_big_room(&mut s, 0);
+            add_big_room(&mut s, 1);
+            let r = s.execute("stair", &json!({ "start": [2.0, 1.0], "direction": 90.0, "fromLevel": from, "toLevel": to })).unwrap();
+            assert_eq!(r["well"].as_bool(), Some(true), "{from} -> {to}");
+            let d = s.doc().unwrap();
+            let st = &d.arch.stairs[0];
+            assert_eq!((st.from_level, st.to_level), (1, 0), "{from} -> {to}");
+            let open = d.arch.rooms.iter().find(|r| r.room_type == RoomType::OpenBelow).unwrap();
+            assert_eq!(open.level, 0);
+            let main_hall = d.arch.rooms.iter().find(|r| r.level == 0 && r.name == "Hall").unwrap();
+            assert_eq!(main_hall.holes.len(), 1);
+        }
+        // Equal elevations are still refused.
+        let mut s = main_above_lower_session();
+        s.doc_mut().unwrap().arch.levels[1].elevation = 2.7;
+        assert!(s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 0, "toLevel": 1 })).is_err());
+    }
+
+    #[test]
+    fn stair_from_an_upper_level_measures_headroom_from_its_base() {
+        let mut s = two_level_session();
+        let _ = s.execute("level", &json!({"above": 1}));
+        s.execute("stair", &json!({ "start": [2.0, 1.0], "direction": 90.0, "fromLevel": 1, "toLevel": 2 })).unwrap();
+        let st = &s.doc().unwrap().arch.stairs[0];
+        let ys: Vec<f64> = st.well.iter().map(|v| v.y).collect();
+        let (lo, hi) = (ys.iter().cloned().fold(f64::MAX, f64::min), ys.iter().cloned().fold(f64::MIN, f64::max));
+        assert!((lo - 1.508).abs() < 1e-9 && (hi - 4.81).abs() < 1e-9, "{ys:?}");
+        let xs: Vec<f64> = st.well.iter().map(|v| v.x).collect();
+        assert!(xs.iter().all(|x| (x - 1.5).abs() < 1e-9 || (x - 2.5).abs() < 1e-9));
     }
 
     #[test]

@@ -153,13 +153,20 @@ pub fn flight_polygon(s: &cadcraft_doc::arch::Stair, p: &StairPlan) -> Vec<Vec2>
     crate::poly::ensure_ccw(&[near_lo, near_hi, far_hi, far_lo])
 }
 
-/// Smallest riser index `i` with `i * riser_height > slab_underside -
-/// min_headroom` (strict), returned as the tread distance `(i - 1) *
-/// tread_depth` measured from the bottom nosing line. Returns `None` when
-/// no such riser exists within the flight or the distance would exceed
-/// `p.run`.
-pub fn well_start(_s: &cadcraft_doc::arch::Stair, p: &StairPlan, slab_underside: f64, min_headroom: f64) -> Option<f64> {
-    if !p.riser_height.is_finite() || !p.tread_depth.is_finite() || !p.run.is_finite() || !slab_underside.is_finite() || !min_headroom.is_finite() {
+/// Smallest riser index `i` with `base_z + i * riser_height > slab_underside -
+/// min_headroom` (strict; `base_z` is the elevation of the stair's lower
+/// level, so riser `i`'s top is `base_z + i * riser_height`), returned as the
+/// tread distance `(i - 1) * tread_depth` measured from the bottom nosing
+/// line. Returns `None` when no such riser exists within the flight, the
+/// distance would exceed `p.run`, or `base_z` is not finite.
+pub fn well_start(_s: &cadcraft_doc::arch::Stair, p: &StairPlan, base_z: f64, slab_underside: f64, min_headroom: f64) -> Option<f64> {
+    if !p.riser_height.is_finite()
+        || !p.tread_depth.is_finite()
+        || !p.run.is_finite()
+        || !base_z.is_finite()
+        || !slab_underside.is_finite()
+        || !min_headroom.is_finite()
+    {
         return None;
     }
     if p.riser_height <= 0.0 || p.tread_depth <= 0.0 || p.treads < 1 {
@@ -175,7 +182,7 @@ pub fn well_start(_s: &cadcraft_doc::arch::Stair, p: &StairPlan, slab_underside:
         upper = 1_000_000;
     }
     for i in 1..=upper {
-        if (i as f64) * p.riser_height > threshold {
+        if base_z + (i as f64) * p.riser_height > threshold {
             let dist = (i - 1) as f64 * p.tread_depth;
             if dist > p.run {
                 return None;
@@ -189,8 +196,8 @@ pub fn well_start(_s: &cadcraft_doc::arch::Stair, p: &StairPlan, slab_underside:
 /// Rectangle ringed by the stair's width, from `well_start` to the flight end
 /// (`p.run`). Returns `None` when `well_start` is `None` or when the
 /// remaining flight length is smaller than `1e-9` m.
-pub fn well_polygon(s: &cadcraft_doc::arch::Stair, p: &StairPlan, slab_underside: f64, min_headroom: f64) -> Option<Vec<Vec2>> {
-    let start = well_start(s, p, slab_underside, min_headroom)?;
+pub fn well_polygon(s: &cadcraft_doc::arch::Stair, p: &StairPlan, base_z: f64, slab_underside: f64, min_headroom: f64) -> Option<Vec<Vec2>> {
+    let start = well_start(s, p, base_z, slab_underside, min_headroom)?;
     if !s.start.is_finite() || !s.direction.is_finite() || !s.width.is_finite() || !p.run.is_finite() {
         return None;
     }
@@ -212,8 +219,8 @@ pub fn well_polygon(s: &cadcraft_doc::arch::Stair, p: &StairPlan, slab_underside
 
 /// Guard path ringing the well: an open polyline of three sides (the two long
 /// sides and the near end) with the arrival (top) end left open.
-pub fn well_guard_path(s: &cadcraft_doc::arch::Stair, p: &StairPlan, slab_underside: f64, min_headroom: f64) -> Option<Vec<Vec2>> {
-    let start = well_start(s, p, slab_underside, min_headroom)?;
+pub fn well_guard_path(s: &cadcraft_doc::arch::Stair, p: &StairPlan, base_z: f64, slab_underside: f64, min_headroom: f64) -> Option<Vec<Vec2>> {
+    let start = well_start(s, p, base_z, slab_underside, min_headroom)?;
     if !s.start.is_finite() || !s.direction.is_finite() || !s.width.is_finite() || !p.run.is_finite() {
         return None;
     }
@@ -362,7 +369,7 @@ mod tests {
         let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
         // i = 3 (top z = 3 * 0.16875 = 0.50625) is the first riser above
         // slab_underside - min_headroom = 2.4 - 2.032 = 0.368.
-        let w = well_start(&s, &p, 2.4, MIN_HEADROOM);
+        let w = well_start(&s, &p, 0.0, 2.4, MIN_HEADROOM);
         assert_eq!(w, Some((3 - 1) as f64 * p.tread_depth));
     }
 
@@ -370,7 +377,7 @@ mod tests {
     fn well_polygon_area_is_3_302() {
         let s = sample_stair();
         let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
-        let poly = well_polygon(&s, &p, 2.4, MIN_HEADROOM).expect("well present");
+        let poly = well_polygon(&s, &p, 0.0, 2.4, MIN_HEADROOM).expect("well present");
         assert_eq!(poly.len(), 4);
         // Well x 2.508..5.81 (length 3.302) at width 1.0 -> area 3.302.
         assert!((poly_area(&poly) - 3.302).abs() < 1e-9);
@@ -384,7 +391,7 @@ mod tests {
     fn well_guard_leaves_the_arrival_end_open() {
         let s = sample_stair();
         let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
-        let path = well_guard_path(&s, &p, 2.4, MIN_HEADROOM).expect("well present");
+        let path = well_guard_path(&s, &p, 0.0, 2.4, MIN_HEADROOM).expect("well present");
         // An open polyline of three sides: four points, each consecutive pair
         // joined along a rectangle side (same x or same y); the side that
         // would close the arrival end is absent.
@@ -404,9 +411,9 @@ mod tests {
         let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
         // Slab underside well above the top of the flight: no riser top is
         // within min_headroom of the underside, so there is no well.
-        assert_eq!(well_start(&s, &p, 5.0, MIN_HEADROOM), None);
-        assert_eq!(well_polygon(&s, &p, 5.0, MIN_HEADROOM), None);
-        assert_eq!(well_guard_path(&s, &p, 5.0, MIN_HEADROOM), None);
+        assert_eq!(well_start(&s, &p, 0.0, 5.0, MIN_HEADROOM), None);
+        assert_eq!(well_polygon(&s, &p, 0.0, 5.0, MIN_HEADROOM), None);
+        assert_eq!(well_guard_path(&s, &p, 0.0, 5.0, MIN_HEADROOM), None);
     }
 
     #[test]
@@ -429,7 +436,7 @@ mod tests {
         let mut s = sample_stair();
         s.direction = std::f64::consts::PI;
         let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
-        let poly = well_polygon(&s, &p, 2.4, MIN_HEADROOM).expect("well present");
+        let poly = well_polygon(&s, &p, 0.0, 2.4, MIN_HEADROOM).expect("well present");
         assert_eq!(poly.len(), 4);
         // Direction left (-1, 0): well runs from x=2-0.508=1.492 to x=2-3.81=-1.81
         // Width 1 centred: y in [0.5, 1.5]
@@ -445,7 +452,18 @@ mod tests {
         let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
         // Slab underside at 0.0: threshold = 0.0 - 2.032 = -2.032
         // First riser top 0.16875 > -2.032, so well starts at (1-1)*tread = 0
-        assert_eq!(well_start(&s, &p, 0.0, MIN_HEADROOM), Some(0.0));
+        assert_eq!(well_start(&s, &p, 0.0, 0.0, MIN_HEADROOM), Some(0.0));
+    }
+
+    #[test]
+    fn well_start_counts_from_the_stair_base() {
+        let s = sample_stair();
+        let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
+        let at = |base: f64, under: f64| well_start(&s, &p, base, under, MIN_HEADROOM);
+        let near = |a: Option<f64>| a.is_some_and(|v| (v - 0.508).abs() < 1e-9);
+        assert!(near(at(2.7, 5.1)));
+        assert!(near(at(0.0, 2.4)));
+        assert_eq!(at(f64::NAN, 2.4), None);
     }
 
     #[test]
@@ -457,7 +475,7 @@ mod tests {
         // i=3: 0.50625 > 0.50625? No (strict). i=4: 0.675 > 0.50625? Yes.
         // So well starts at (4-1)*tread = 3*0.254 = 0.762
         let slab = 3.0 * p.riser_height + MIN_HEADROOM;
-        assert_eq!(well_start(&s, &p, slab, MIN_HEADROOM), Some(3.0 * p.tread_depth));
+        assert_eq!(well_start(&s, &p, 0.0, slab, MIN_HEADROOM), Some(3.0 * p.tread_depth));
     }
 
     #[test]
