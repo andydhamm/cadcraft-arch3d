@@ -460,4 +460,16 @@ mod tests {
         assert!(mtl.contains(&textured), "{mtl}");
         assert!(!mtl.contains("map_Kd"), "no texture maps, as in phase 13");
     }
+
+    #[test]
+    fn obj_groups_interleaved_stair_parts() {
+        let scene = Scene3d {
+            meshes: vec![mesh("stair-tread", 0, true), mesh("stair-tread", 1, true), mesh("stair-riser", 0, true), mesh("stair-riser", 1, true)],
+            ..Scene3d::default()
+        };
+        let obj = write_obj(&scene, "m.mtl");
+        let groups: Vec<(String, usize)> = groups_of(&obj).into_iter().map(|(n, u)| (n, u.len())).collect();
+        let want = [("stair-s0", 2), ("stair-s1", 2)];
+        assert_eq!(groups, want.iter().map(|&(n, c)| (n.to_string(), c)).collect::<Vec<_>>());
+    }
 }

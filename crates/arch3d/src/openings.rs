@@ -6,11 +6,12 @@
 use std::collections::BTreeMap;
 
 use cadcraft_arch::opening::is_double;
-use cadcraft_doc::arch::{Grille, MAX_GRILLE_LITES, Opening, OpeningKind, OpeningSides};
+use cadcraft_doc::arch::{Grille, MAX_GRILLE_LITES, Opening, OpeningKind, OpeningSides, OpeningTop};
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
 
 use crate::mesh::Mesh;
+use crate::solid::{Frame, clip_convex, clip_left, push_profile};
 
 /// How far (metres) the opening header sits inside each wall face, so that
 /// hidden-line elevations hide it behind the wall above the rough opening.
@@ -133,6 +134,138 @@ pub fn grille_bars(o: &Opening, glass: &GlassRect) -> Vec<[f64; 4]> {
     bars
 }
 
+/// Shrink the convex counter-clockwise polygon `poly` inwards by `d` (the intersection of every
+/// edge's half-plane moved `d` inwards). Empty when nothing is left.
+fn shrink_convex(poly: &[Vec2], d: f64) -> Vec<Vec2> {
+    let mut out = poly.to_vec();
+    for (i, &a) in poly.iter().enumerate() {
+        let b = poly.get((i + 1) % poly.len()).copied().unwrap_or(a);
+        let e = b - a;
+        let len = e.len();
+        if !(len > 1e-12) {
+            continue;
+        }
+        let n = e.perp() / len;
+        out = clip_left(&out, a + n * d, b + n * d);
+        if out.is_empty() {
+            break;
+        }
+    }
+    out
+}
+
+/// The highest point of the polygon `poly` on the vertical line `u`, if it crosses it.
+fn height_at(poly: &[Vec2], u: f64) -> Option<f64> {
+    let mut best: Option<f64> = None;
+    for (i, &a) in poly.iter().enumerate() {
+        let b = poly.get((i + 1) % poly.len()).copied().unwrap_or(a);
+        let (lo, hi) = (a.x.min(b.x), a.x.max(b.x));
+        if u < lo - 1e-9 || u > hi + 1e-9 {
+            continue;
+        }
+        let y = if (b.x - a.x).abs() < 1e-12 { a.y.max(b.y) } else { a.y + (b.y - a.y) * ((u - a.x) / (b.x - a.x)).clamp(0.0, 1.0) };
+        best = Some(best.map_or(y, |m| m.max(y)));
+    }
+    best
+}
+
+/// The glass outline of a window with a shaped top (the finished outline shrunk by the frame
+/// width), in the host wall's profile coordinates (`v` from the wall bottom). `None` for a square
+/// top, a door, or when the shape cannot be made.
+fn shaped_glass(o: &Opening, roof_top: Option<&[Vec2]>) -> Option<Vec<Vec2>> {
+    if o.top == OpeningTop::Square || !matches!(o.kind, OpeningKind::Window) {
+        return None;
+    }
+    let fin = cadcraft_arch::opening_top::finished_outline(o, o.sill, roof_top)?;
+    let glass = shrink_convex(&fin, o.frame_width);
+    (glass.len() >= 3).then_some(glass)
+}
+
+/// The solids of a window with a shaped top, as `(meshes by material, header base z)`: the frame
+/// jambs and head, the casing, the glass and the grille bars, all as profiles in the wall plane.
+/// The header base is `None` for a roof top, which gets no header.
+fn shaped_parts(
+    o: &Opening,
+    wall: &Wall,
+    dir: Vec2,
+    base: f64,
+    roof_top: Option<&[Vec2]>,
+    kind_prefix: &str,
+) -> Option<(BTreeMap<String, Mesh>, Option<f64>)> {
+    let fin = cadcraft_arch::opening_top::finished_outline(o, o.sill, roof_top)?;
+    let glass = shaped_glass(o, roof_top)?;
+    let frame = Frame::new(wall.start, dir, base)?;
+    let (w, c, fw, fd, cw, cd, wall_t) = (o.width, o.offset, o.frame_width, o.frame_depth, o.casing_width, o.casing_depth, wall.thickness);
+    let chain = fin.get(2..)?;
+    let right_top = chain.first()?.y;
+    let left_top = chain.last()?.y;
+    let rect = |u0: f64, u1: f64, v0: f64, v1: f64| vec![Vec2::new(u0, v0), Vec2::new(u1, v0), Vec2::new(u1, v1), Vec2::new(u0, v1)];
+    // The band between the chain and the chain moved up by `d` (negative: down).
+    let band = |d: f64| -> Vec<Vec2> {
+        let (lo, hi) = if d < 0.0 { (d, 0.0) } else { (0.0, d) };
+        let mut ring: Vec<Vec2> = chain.iter().map(|p| Vec2::new(p.x, p.y + lo)).collect();
+        ring.extend(chain.iter().rev().map(|p| Vec2::new(p.x, p.y + hi)));
+        ring
+    };
+    let mut meshes: BTreeMap<String, Mesh> = BTreeMap::new();
+    let mut put = |material: String, ring: &[Vec2], off: f64, depth: f64| {
+        let mesh = meshes.entry(material.clone()).or_insert_with(|| Mesh::new(&material, o.id));
+        push_profile(mesh, ring, off - depth / 2.0, off + depth / 2.0, &frame);
+    };
+
+    let frame_mat = format!("{}-frame", kind_prefix);
+    let jamb_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, fd, wall_t);
+    put(frame_mat.clone(), &rect(c - w / 2.0 - fw / 2.0, c - w / 2.0 + fw / 2.0, o.sill, left_top), jamb_off, fd);
+    put(frame_mat.clone(), &rect(c + w / 2.0 - fw / 2.0, c + w / 2.0 + fw / 2.0, o.sill, right_top), jamb_off, fd);
+    let head_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, fw, wall_t);
+    put(frame_mat, &band(-fw), head_off, fw);
+
+    if cw > 0.0 {
+        let mut casing = |side: OpeningSides, mat: String| {
+            let side_off = if side.left {
+                band_offset(o.recess + wall_t / 2.0 - cd / 2.0, cd, wall_t)
+            } else {
+                band_offset(o.recess - wall_t / 2.0 + cd / 2.0, cd, wall_t)
+            };
+            let (l0, l1) = (c - w / 2.0 - fw / 2.0 - cw, c - w / 2.0 - fw / 2.0);
+            let (r0, r1) = (c + w / 2.0 + fw / 2.0, c + w / 2.0 + fw / 2.0 + cw);
+            put(mat.clone(), &rect(l0, l1, o.sill, left_top), side_off, cd);
+            put(mat.clone(), &rect(r0, r1, o.sill, right_top), side_off, cd);
+            let head_off = if side.left {
+                band_offset(o.recess + wall_t / 2.0 - cw / 2.0, cw, wall_t)
+            } else {
+                band_offset(o.recess - wall_t / 2.0 + cw / 2.0, cw, wall_t)
+            };
+            put(mat, &band(cw), head_off, cw);
+        };
+        if o.casing_sides.right {
+            let mat = if o.casing_sides.left { format!("{}-casing-right", kind_prefix) } else { format!("{}-casing", kind_prefix) };
+            casing(OpeningSides::RIGHT, mat);
+        }
+        if o.casing_sides.left {
+            casing(OpeningSides { left: true, ..OpeningSides::NONE }, format!("{}-casing-left", kind_prefix));
+        }
+    }
+
+    let glass_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, 0.006, wall_t);
+    let (gu0, gu1) = glass.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| (a.min(p.x), b.max(p.x)));
+    let (gv0, gv1) = glass.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| (a.min(p.y), b.max(p.y)));
+    let bbox = GlassRect { u0: gu0 - c, u1: gu1 - c, z0: base + gv0, z1: base + gv1 };
+    for [u0, u1, z0, z1] in grille_bars(o, &bbox) {
+        let clipped = clip_convex(&rect(c + u0, c + u1, z0 - base, z1 - base), &glass);
+        if clipped.len() >= 3 {
+            put(format!("{}-grille", kind_prefix), &clipped, glass_off, 0.02);
+        }
+    }
+    put(format!("{}-glass", kind_prefix), &glass, glass_off, 0.006);
+
+    let header_z0 = match o.top {
+        OpeningTop::Roof => None,
+        _ => cadcraft_arch::opening_top::rough_outline(o, o.sill, roof_top).and_then(|r| height_at(&r, c)).map(|v| base + v),
+    };
+    Some((meshes, header_z0))
+}
+
 /// The glass pane of `o` exactly as [`opening_meshes`] builds it; `None` without glass or with a
 /// missing or degenerate host wall.
 pub fn glass_plane(model: &ArchModel, o: &Opening) -> Option<GlassPlane> {
@@ -149,8 +282,15 @@ pub fn glass_plane(model: &ArchModel, o: &Opening) -> Option<GlassPlane> {
     let (base, top) = crate::wall_span(model, wall).unwrap_or((0.0, wall.height));
     let frame_z0 = base + o.sill;
     let frame_z1 = (base + o.sill + o.height).min(top);
-    let bottom = frame_z0 + o.frame_width;
-    let gtop = frame_z1 - o.frame_width;
+    let mut bottom = frame_z0 + o.frame_width;
+    let mut gtop = frame_z1 - o.frame_width;
+    if o.top != OpeningTop::Square {
+        let roof_top = if o.top == OpeningTop::Roof { crate::walls::roof_top_polyline(model, wall, base, top) } else { None };
+        if let Some(glass) = shaped_glass(o, roof_top.as_deref()) {
+            bottom = base + glass.iter().fold(f64::INFINITY, |m, p| m.min(p.y));
+            gtop = base + height_at(&glass, o.offset).unwrap_or(gtop - base);
+        }
+    }
     let glass_off = band_offset(o.recess - wall.thickness / 2.0 + o.frame_depth / 2.0, 0.006, wall.thickness);
     let c = wall.start + dir * o.offset + normal * glass_off;
     let plane = GlassPlane {
@@ -183,7 +323,6 @@ pub fn opening_meshes(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: Option
 /// [`opening_meshes`] that also knows the host wall's roof top polyline (`(w, z)` points along the
 /// wall), for an opening whose top follows the roof. `roof_top` is not read yet.
 pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: Option<(f64, f64)>, roof_top: Option<&[Vec2]>) -> Vec<Mesh> {
-    let _ = roof_top;
     let wall = match walls.get(&o.host) {
         Some(w) => w,
         None => return Vec::new(),
@@ -198,7 +337,12 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
     let (base, top) = span.unwrap_or((0.0, wall.height));
     // Offsets measured from the wall centre plane (along `normal`), each
     // clamped so the component stays inside the wall's thickness band.
-    let mut meshes: BTreeMap<String, Mesh> = BTreeMap::new();
+    let kind_is_window = matches!(o.kind, OpeningKind::Window);
+    let shaped_init = if kind_is_window && o.top != OpeningTop::Square { shaped_parts(o, wall, dir, base, roof_top, "window") } else { None };
+    let shaped = shaped_init.is_some();
+    let (shaped_meshes, shaped_header) = shaped_init.unzip();
+    let shaped_header = shaped_header.flatten();
+    let mut meshes: BTreeMap<String, Mesh> = shaped_meshes.unwrap_or_default();
     let mut push_box = |material: &str, a: Vec2, b: Vec2, z0: f64, z1: f64, depth: f64| {
         if depth <= 0.0 {
             return;
@@ -244,37 +388,39 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
         "door"
     };
 
-    // Frame: left jamb
+    // Frame: left jamb (a shaped top builds jambs and head in `shaped_parts`)
     let jamb_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, fd, wall_t);
-    push_box(
-        &format!("{}-frame", kind_prefix),
-        center + dir * (-w / 2.0 - fw / 2.0) + normal * jamb_off,
-        center + dir * (-w / 2.0 + fw / 2.0) + normal * jamb_off,
-        frame_z0,
-        frame_z1,
-        fd,
-    );
+    if !shaped {
+        push_box(
+            &format!("{}-frame", kind_prefix),
+            center + dir * (-w / 2.0 - fw / 2.0) + normal * jamb_off,
+            center + dir * (-w / 2.0 + fw / 2.0) + normal * jamb_off,
+            frame_z0,
+            frame_z1,
+            fd,
+        );
 
-    // Frame: right jamb
-    push_box(
-        &format!("{}-frame", kind_prefix),
-        center + dir * (w / 2.0 - fw / 2.0) + normal * jamb_off,
-        center + dir * (w / 2.0 + fw / 2.0) + normal * jamb_off,
-        frame_z0,
-        frame_z1,
-        fd,
-    );
+        // Frame: right jamb
+        push_box(
+            &format!("{}-frame", kind_prefix),
+            center + dir * (w / 2.0 - fw / 2.0) + normal * jamb_off,
+            center + dir * (w / 2.0 + fw / 2.0) + normal * jamb_off,
+            frame_z0,
+            frame_z1,
+            fd,
+        );
 
-    // Frame: head
-    let head_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, fw, wall_t);
-    push_box(
-        &format!("{}-frame", kind_prefix),
-        center + dir * (-w / 2.0) + normal * head_off,
-        center + dir * (w / 2.0) + normal * head_off,
-        frame_z1 - fw,
-        frame_z1,
-        fw,
-    );
+        // Frame: head
+        let head_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, fw, wall_t);
+        push_box(
+            &format!("{}-frame", kind_prefix),
+            center + dir * (-w / 2.0) + normal * head_off,
+            center + dir * (w / 2.0) + normal * head_off,
+            frame_z1 - fw,
+            frame_z1,
+            fw,
+        );
+    }
 
     // Frame: sill
     let sill_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, fw, wall_t);
@@ -289,7 +435,7 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
 
     // Casing and sill can be switched off per side: right side is the default,
     // mirror-left is the opposite side of the wall centre plane.
-    if cw > 0.0 {
+    if cw > 0.0 && !shaped {
         let mut push_side_casing = |side: OpeningSides, mat: &str| {
             let side_off = if side.left {
                 band_offset(o.recess + wall_t / 2.0 - cd / 2.0, cd, wall_t)
@@ -339,7 +485,7 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
 
     // Grilles and glass: the bars sit in the same glass plane and are inserted
     // before the glass mesh so a probe on the glass centre reports the grille.
-    if has_glass(o) {
+    if has_glass(o) && !shaped {
         let glass_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, 0.006, wall_t);
         let glass_rect = GlassRect { u0: -w / 2.0 + fw, u1: w / 2.0 - fw, z0: frame_z0 + fw, z1: frame_z1 - fw, ..Default::default() };
         if let Some(g) = o.grille {
@@ -476,9 +622,12 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
     // Header: a lintel centred on the wall centre plane, `HEADER_INSET` inside
     // both wall faces so an elevation hides it behind the wall above the
     // opening; clipped to stay inside the host wall span.
+    // A shaped top puts the header on the rough top at the centre; a roof top gets none.
     let header_h = 0.2;
-    let header_top = (frame_z1 + header_h).min(top);
-    if header_top > frame_z1 + 1e-9 {
+    let header_z0 = if shaped { shaped_header } else { Some(frame_z1) };
+    let header_top = header_z0.map_or(f64::NEG_INFINITY, |z| (z + header_h).min(top));
+    let frame_z1 = header_z0.unwrap_or(frame_z1);
+    if header_z0.is_some() && header_top > frame_z1 + 1e-9 {
         let header_depth = if wall_t > 4.0 * HEADER_INSET { wall_t - 2.0 * HEADER_INSET } else { wall_t / 2.0 };
         let header_off = band_offset(0.0, header_depth, wall_t);
         let h_a = center + dir * (-w / 2.0 - fw) + normal * header_off;

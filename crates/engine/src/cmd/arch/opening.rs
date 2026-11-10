@@ -562,7 +562,12 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
     trim.apply(&mut o);
     validate_top(&d.arch, &mut o).map_err(|e| crate::cmd::bad(cmd, e))?;
 
-    let placed = place_opening(&d.arch, o, fit).map_err(|e| crate::cmd::bad(cmd, e.to_string()))?;
+    let mut placed = place_opening(&d.arch, o, fit).map_err(|e| crate::cmd::bad(cmd, e.to_string()))?;
+    // `fit` may have slid or narrowed a shaped window: a roof top's derived height belongs to its
+    // final centre, so derive it again there.
+    if placed.top != OpeningTop::Square && ((placed.offset - offset).abs() > 1e-9 || (placed.width - requested_width).abs() > 1e-9) {
+        validate_top(&d.arch, &mut placed).map_err(|e| crate::cmd::bad(cmd, e))?;
+    }
 
     let placed_width = placed.width;
     let resized = (placed_width - requested_width).abs() > 1e-9;
@@ -631,10 +636,11 @@ pub(crate) fn run_opening_move(s: &mut Session, p: &Value) -> Result<Value, Engi
     // `d.arch.opening(id)` is a borrow that would conflict with the later
     // `d.arch.openings[i].offset = ...` mutation, so nothing is kept alive.
     let d = s.doc_mut()?;
-    let (host, width, sill, height, kind, style) = match d.arch.opening(id) {
-        Some(o) => (o.host, o.width, o.sill, o.height, o.kind, o.style.clone()),
+    let mut clone = match d.arch.opening(id) {
+        Some(o) => o.clone(),
         None => return Err(crate::cmd::bad(cmd, format!("no opening {id}"))),
     };
+    let host = clone.host;
 
     // 3. New offset: explicit number, or a point projected onto the host wall.
     let new_offset = match crate::cmd::f64_req(cmd, p, "offset") {
@@ -651,12 +657,25 @@ pub(crate) fn run_opening_move(s: &mut Session, p: &Value) -> Result<Value, Engi
 
     // 4. Re-validate on the host wall. `ignore = Some(id)` so the opening is
     // not compared against itself.
-    cadcraft_arch::opening::validate_placement(&d.arch, host, new_offset, width, sill, height, kind, &style, Some(id))
+    let check_h = cadcraft_arch::opening::check_height(&d.arch, &clone);
+    cadcraft_arch::opening::validate_placement(&d.arch, host, new_offset, clone.width, clone.sill, check_h, clone.kind, &clone.style, Some(id))
         .map_err(|e| crate::cmd::bad(cmd, e.to_string()))?;
+    // A shaped top is checked, and a roof top's height derived, at the new centre.
+    let shaped = clone.top != OpeningTop::Square;
+    if shaped {
+        clone.offset = new_offset;
+        validate_top(&d.arch, &mut clone).map_err(|e| crate::cmd::bad(cmd, e))?;
+    }
 
     // 5. Write the new offset back through the index (there is no setter).
     if let Some(i) = d.arch.opening_index(id) {
-        d.arch.openings[i].offset = new_offset;
+        if let Some(o) = d.arch.openings.get_mut(i) {
+            o.offset = new_offset;
+            if shaped {
+                o.height = clone.height;
+                o.rough_height = clone.rough_height;
+            }
+        }
     }
     d.touch_arch();
 
@@ -1373,11 +1392,11 @@ mod tests {
 
     #[test]
     fn roof_top_without_a_roof_reaches_validate() {
-        // No roof: validate gets None and (as a stub) accepts; the opening keeps its roof top.
+        // No roof: validate gets None and refuses; nothing is placed.
         let mut s = session_with_wall();
-        let r = s.execute("window", &json!({"wall": "w0", "offset": 3.0, "top": "roof"})).unwrap();
-        assert_eq!(r["openings"][0]["top"], json!("roof"));
-        assert_eq!(s.doc().unwrap().arch.openings[0].top, OpeningTop::Roof);
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 3.0, "top": "roof"}));
+        assert!(r.is_err_and(|e| e.to_string().contains("needs a gable wall under a roof")));
+        assert!(s.doc().unwrap().arch.openings.is_empty());
     }
 
     #[test]
@@ -1385,13 +1404,10 @@ mod tests {
         let mut s = session_with_split_levels();
         // A square-top window this tall is refused on Main by the level head check.
         assert!(s.execute("window", &json!({"wall": "w0", "offset": 3.0, "level": "Main", "height": 3.0, "sill": 0.0})).is_err());
-        // A roof top on a level is placed: its height is derived, and the sill is still
-        // measured from the wall's bottom (level 2.7 above a bottom at -1.2).
+        // A roof top skips that check (its height is derived): without a roof it is refused by the
+        // roof rule instead.
         let r = s.execute("window", &json!({"wall": "w0", "offset": 3.0, "level": "Main", "height": 1.2, "sill": 0.9, "top": "roof"}));
-        assert!(r.is_ok(), "{r:?}");
-        let o = &s.doc().unwrap().arch.openings[0];
-        assert_eq!(o.top, OpeningTop::Roof);
-        assert!((o.sill - 4.8).abs() < 1e-9, "{}", o.sill);
+        assert!(r.is_err_and(|e| e.to_string().contains("needs a gable wall under a roof")));
     }
 
     #[test]
@@ -1440,5 +1456,100 @@ mod tests {
         let r = s.execute("door", &json!({"wall": "w0", "offset": 3.0, "width": 0.9, "height": 2.1, "level": "Level 99"}));
         let err = r.expect_err("unknown level should be rejected");
         assert!(err.to_string().contains("unknown level"), "expected unknown level error, got: {err}");
+    }
+
+    /// The phase-1 10 x 8 house (walls 2.4 m high) under a 6/12 gable roof with gables on w1 and w3.
+    /// `level` puts the walls on that level; the roof goes on the highest level.
+    fn gable_house(level: Option<&str>) -> Session {
+        let mut s = Session::new();
+        let mut p =
+            json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2, "height": 2.4, "exterior": true});
+        if let Some(l) = level {
+            s.execute("level", &json!({"above": "Level 1"})).expect("a second level");
+            p["level"] = json!(l);
+        }
+        s.execute("wall", &p).expect("the ring");
+        let id = |n: u32| format!("w{n}");
+        let gables = json!([{"wall": id(1), "directive": "gable"}, {"wall": id(3), "directive": "gable"}]);
+        s.execute("roofauto", &json!({"pitchRise": 6, "pitchRun": 12, "walls": gables})).expect("a gable roof");
+        s
+    }
+
+    fn roof_window(s: &mut Session, offset: f64, extra: Value) -> Result<Value, EngineError> {
+        let mut p = json!({"wall": "w3", "offset": offset, "width": 1.0, "sill": 1.2, "top": "roof"});
+        if let (Some(m), Some(e)) = (p.as_object_mut(), extra.as_object()) {
+            m.extend(e.clone());
+        }
+        s.execute("window", &p)
+    }
+
+    fn height_of(s: &Session, id: u32) -> f64 {
+        s.doc().expect("doc").arch.opening(ArchId(id)).map_or(f64::NAN, |o| o.height)
+    }
+
+    #[test]
+    fn roof_top_window_moves_and_rederives_its_height() {
+        let mut s = gable_house(None);
+        roof_window(&mut s, 6.5, json!({})).expect("a roof window");
+        assert!((height_of(&s, 0) - 1.73).abs() < 1e-6, "{}", height_of(&s, 0));
+        // y = 3: the underside is 2.4 + 0.5 * 3.1 = 3.95, the rough top 3.80, the height 3.80 - 0.12 - 1.2.
+        s.execute("arch.opening.move", &json!({"opening": "o0", "offset": 5.0})).expect("moved");
+        let d = s.doc().expect("doc");
+        let o = d.arch.opening(ArchId(0)).expect("o0");
+        assert!((o.offset - 5.0).abs() < 1e-9);
+        assert!((o.height - 2.48).abs() < 1e-6, "{}", o.height);
+        assert!((o.rough_height - 2.6).abs() < 1e-6);
+        // A move that would leave the roof's span is refused and changes nothing.
+        let r = s.execute("arch.opening.move", &json!({"opening": "o0", "offset": 7.95}));
+        assert!(r.is_err());
+        assert!((height_of(&s, 0) - 2.48).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_square_window_moves_as_before() {
+        let mut s = gable_house(None);
+        s.execute("window", &json!({"wall": "w0", "offset": 3.0, "width": 0.9, "height": 1.2, "sill": 0.9})).expect("window");
+        s.execute("arch.opening.move", &json!({"opening": "o0", "offset": 6.0})).expect("moved");
+        let d = s.doc().expect("doc");
+        let o = d.arch.opening(ArchId(0)).expect("o0");
+        assert!((o.offset - 6.0).abs() < 1e-9 && (o.height - 1.2).abs() < 1e-12);
+        // Too high for the wall: still refused, as before.
+        assert!(s.execute("window", &json!({"wall": "w0", "offset": 1.5, "width": 0.9, "height": 2.0, "sill": 0.9})).is_err());
+    }
+
+    #[test]
+    fn fit_slide_rederives_a_roof_top() {
+        let mut s = gable_house(None);
+        // At offset 7.4 the rough span ends past the wall's last 0.15 m: `fit` slides it to 7.29 (y 0.71).
+        let r = roof_window(&mut s, 7.4, json!({"fit": true})).expect("slid into place");
+        let _ = r;
+        let placed = s.doc().expect("doc").arch.opening(ArchId(0)).map_or(f64::NAN, |o| o.offset);
+        assert!((placed - 7.4).abs() > 1e-3, "slid: {placed}");
+        // Underside 2.4 + 0.5 * (0.71 + 0.1) = 2.805; the height is 2.805 - 0.15 - 0.12 - 1.2.
+        let want = 2.4 + 0.5 * (8.0 - placed + 0.1) - 0.15 - 0.12 - 1.2;
+        assert!((height_of(&s, 0) - want).abs() < 1e-6, "{} vs {}", height_of(&s, 0), want);
+    }
+
+    #[test]
+    fn roof_top_on_an_upper_level_gable_measures_from_the_wall_bottom() {
+        let mut s = gable_house(Some("Level 2"));
+        let r = roof_window(&mut s, 6.5, json!({"level": "Level 2"}));
+        let d = s.doc().expect("doc");
+        assert!(r.is_ok(), "{:?}", r.as_ref().err());
+        let o = d.arch.opening(ArchId(0)).expect("o0");
+        // The same numbers as the ground-floor gable, measured from the wall's bottom.
+        assert!((o.sill - 1.2).abs() < 1e-9, "sill {}", o.sill);
+        assert!((o.height - 1.73).abs() < 1e-6, "height {}", o.height);
+    }
+
+    #[test]
+    fn stretch_keeps_a_roof_top_window() {
+        let mut s = gable_house(None);
+        roof_window(&mut s, 6.5, json!({})).expect("a roof window");
+        // The window's head (sill + height = 2.93) is above the wall's nominal 2.4 m.
+        s.execute("arch.wall.stretch", &json!({"wall": "w3", "end": "start", "to": [0.0, 9.0]})).expect("stretch keeps the roof window");
+        let d = s.doc().expect("doc");
+        let o = d.arch.opening(ArchId(0)).expect("o0");
+        assert!((o.offset - 7.5).abs() < 1e-6, "world position kept: {}", o.offset);
     }
 }
