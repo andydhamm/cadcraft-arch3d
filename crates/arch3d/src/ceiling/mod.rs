@@ -7,6 +7,7 @@
 //! down by the stack. [`ceiling_meshes`] is what a room's part in the scene shows of it: the stack's
 //! slabs and the trays' sides.
 
+use cadcraft_arch::ceiling::overhead::AboveRoom;
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{Level, Roof, Room, Tray};
 use cadcraft_geom::Vec2;
@@ -15,6 +16,7 @@ use crate::floors;
 use crate::mesh::Mesh;
 use crate::planar::{Piece, PlaneZ};
 
+pub(crate) mod overhead;
 pub(crate) mod stack;
 pub(crate) mod tray;
 pub(crate) mod vault;
@@ -30,16 +32,28 @@ pub(crate) struct CeilingIn {
     pub roofs: Vec<Roof>,
     /// The room's trays, in model order.
     pub trays: Vec<Tray>,
+    /// The rooms above this one whose polygons overlap the room's footprint, sorted by elevation.
+    pub above: Vec<AboveRoom>,
 }
 
 /// The inputs of `room`'s ceiling on `level`, with the openings `cuts`.
 pub(crate) fn ceiling_input(model: &ArchModel, room: &Room, level: &Level, cuts: Vec<Vec<Vec2>>) -> CeilingIn {
+    let mut lo = [f64::INFINITY; 2];
+    let mut hi = [f64::NEG_INFINITY; 2];
+    for p in &room.polygon {
+        lo[0] = lo[0].min(p.x);
+        lo[1] = lo[1].min(p.y);
+        hi[0] = hi[0].max(p.x);
+        hi[1] = hi[1].max(p.y);
+    }
+    let bbox = [lo[0], lo[1], hi[0], hi[1]];
     CeilingIn {
         room: room.clone(),
         level: level.clone(),
         cuts,
         roofs: model.roofs.iter().filter(|r| r.level == room.level).cloned().collect(),
         trays: model.trays.iter().filter(|t| t.room == room.id && t.level == room.level).cloned().collect(),
+        above: cadcraft_arch::ceiling::overhead::rooms_above(model, room.level, bbox),
     }
 }
 
@@ -55,7 +69,7 @@ pub(crate) fn base_pieces(i: &CeilingIn) -> Vec<Piece> {
 
 /// The rough ceiling: the level ceiling, vaulted under the roof and raised into the trays.
 pub(crate) fn rough_pieces(i: &CeilingIn) -> Vec<Piece> {
-    tray::apply(i, vault::apply(i, base_pieces(i)))
+    overhead::apply(i, tray::apply(i, vault::apply(i, base_pieces(i))))
 }
 
 /// The finished ceiling: the rough ceiling moved down by the finish stack.

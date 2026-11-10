@@ -432,27 +432,15 @@ impl Offscreen {
         if with_edges {
             let edges = self.edges.get_or_insert_with(|| EdgePass::new(&self.device, 1));
             let edge_color = if matches!(opts.style, Style::Technical) { TECHNICAL_EDGE_COLOR } else { EDGE_COLOR };
-            // Extract view direction from view_proj matrix (column 3 is translation, but we need direction).
-            // Actually, we can pass the camera's forward vector.
-            // For now, we pass [0,0,-1] as a placeholder or derive it.
-            // The camera eye and target are known in the caller, but here we only have vp.
-            // We can derive view direction from the inverse of the rotation part of vp.
-            // Or simpler: pass the view direction from the caller if possible.
-            // Since we are inside encode_with, we have `camera`.
+            // Unit vector from the eye to the target; zero (no silhouettes) when the camera is degenerate.
             let view_dir = {
-                let eye = camera.eye();
-                // We need the target. Camera trait might not expose target directly.
-                // We can approximate from the view matrix.
-                // The view matrix rows are right, up, back. The back vector is the negative view direction.
-                // vp = proj * view. The rotation part is in view.
-                // Let's just use [0.0, 0.0, -1.0] for now as a fallback, or better, extract from vp.
-                // vp is [[r0, r1, r2, r3], ...]. The view matrix is embedded.
-                // This is complex. Let's assume scene_feature_edges handles silhouette with a default or we skip silhouette for now if hard.
-                // The prompt asks for silhouette.
-                // I will pass [0.0, 0.0, -1.0] as a placeholder view direction.
-                [0.0f32, 0.0, -1.0]
+                let (e, t) = (camera.eye(), camera.target());
+                let d = [t.x - e.x, t.y - e.y, t.z - e.z];
+                let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+                if l.is_finite() && l > 1e-12 { [(d[0] / l) as f32, (d[1] / l) as f32, (d[2] / l) as f32] } else { [0.0; 3] }
             };
-            edges.prepare(&self.device, &self.queue, scene, scene_key, vp, edge_color, view_dir);
+            let silhouettes = matches!(opts.style, Style::Technical);
+            edges.prepare(&self.device, &self.queue, scene, scene_key, vp, edge_color, view_dir, silhouettes);
         }
         // The backdrop (every style but hidden-line) is drawn first; a missing image leaves the clear colour.
         let with_backdrop = match (&scene.backdrop, opts.style) {

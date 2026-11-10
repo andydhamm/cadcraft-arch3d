@@ -36,6 +36,28 @@ fn room_type_name(t: RoomType) -> &'static str {
     }
 }
 
+fn same_ring_vertices(a: &[cadcraft_geom::Vec2], b: &[cadcraft_geom::Vec2]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut used = vec![false; b.len()];
+    for p in a {
+        let mut match_idx = None;
+        for (i, q) in b.iter().enumerate() {
+            if used[i] || !p.near(*q, 1e-9) {
+                continue;
+            }
+            match_idx = Some(i);
+            break;
+        }
+        let Some(i) = match_idx else {
+            return false;
+        };
+        used[i] = true;
+    }
+    true
+}
+
 /// Resolve the `level` JSON parameter to an optional level index.
 ///
 /// Returns `Ok(None)` when `v` is absent or `Value::Null` (detect all levels),
@@ -113,9 +135,30 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
             None => all,
         };
 
-        // Replace-per-level: remove rooms for the target level, then insert the
-        // detected ones. One `touch_arch()` → one undo step.
-        // Snapshot the rooms being replaced so a new room can inherit its floor finish.
+        let kept_open_below: Vec<cadcraft_doc::arch::Room> = d
+            .arch
+            .rooms
+            .iter()
+            .filter(|r| match level_filter {
+                Some(l) => r.level == l,
+                None => true,
+            })
+            .filter(|r| r.room_type == RoomType::OpenBelow)
+            .cloned()
+            .collect();
+        let kept_ids: std::collections::HashSet<_> = kept_open_below.iter().map(|r| r.id).collect();
+        detected.retain(|r| {
+            let Some(pt) = cadcraft_arch::label::label_point(&r.polygon, &r.holes) else {
+                return true;
+            };
+            !kept_open_below.iter().any(|o| {
+                o.level == r.level
+                    && o.room_type == RoomType::OpenBelow
+                    && cadcraft_geom::point_in_polygon(&o.polygon, pt)
+                    && (cadcraft_arch::poly::ring_area(&r.polygon) - cadcraft_arch::poly::ring_area(&o.polygon)).abs() <= 1e-6
+            })
+        });
+
         let old_rooms: Vec<cadcraft_arch::Room> = d
             .arch
             .rooms
@@ -124,6 +167,7 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(l) => r.level == l,
                 None => true,
             })
+            .filter(|r| !kept_ids.contains(&r.id))
             .cloned()
             .collect();
         let old_label_points: Vec<(cadcraft_doc::arch::ArchId, u32, cadcraft_geom::Vec2)> = old_rooms
@@ -134,9 +178,12 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect();
         let before = d.arch.rooms.len();
-        d.arch.rooms.retain(|r| match level_filter {
-            Some(l) => r.level != l,
-            None => false,
+        d.arch.rooms.retain(|r| {
+            let on_target = match level_filter {
+                Some(l) => r.level == l,
+                None => true,
+            };
+            !on_target || r.room_type == RoomType::OpenBelow
         });
         let replaced = before - d.arch.rooms.len();
 
@@ -155,7 +202,6 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
                         .and_then(|o| o.floor_finish);
                 }
             }
-            // Phase 16: it keeps the replaced room's flat/vaulted ceiling and finish stack too.
             if let Some(pt) = cadcraft_arch::label::label_point(&r.polygon, &r.holes)
                 && let Some(o) = old_rooms
                     .iter()
@@ -166,6 +212,24 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
                 r.ceiling_stack = o.ceiling_stack.clone();
             }
             d.arch.push_room(r);
+        }
+
+        for kept in &kept_open_below {
+            if let Some(ip) = cadcraft_geom::region::interior_point(&kept.polygon) {
+                let target = d.arch.rooms.iter().position(|r| {
+                    r.level == kept.level
+                        && r.room_type != RoomType::OpenBelow
+                        && r.polygon.len() >= 3
+                        && cadcraft_geom::point_in_polygon(&r.polygon, ip)
+                        && !r.holes.iter().any(|h| h.len() >= 3 && cadcraft_geom::point_in_polygon(h, ip))
+                });
+                if let Some(host_idx) = target {
+                    let host = &mut d.arch.rooms[host_idx];
+                    if !host.holes.iter().any(|hole| same_ring_vertices(hole, &kept.polygon)) {
+                        host.holes.push(kept.polygon.clone());
+                    }
+                }
+            }
         }
 
         for tray in d.arch.trays.iter_mut() {
@@ -223,6 +287,94 @@ mod tests {
             "exterior": true
         });
         s.execute("wall", &wall_params).expect("wall must succeed");
+    }
+
+    #[test]
+    fn roomdetect_keeps_a_stair_wells_room_and_hole() {
+        let mut s = Session::new();
+        s.execute(
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
+                "thickness": 0.2,
+                "height": 2.4,
+                "exterior": true,
+                "level": 0,
+            }),
+        )
+        .unwrap();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        s.execute(
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
+                "thickness": 0.2,
+                "height": 2.4,
+                "exterior": true,
+                "level": 1,
+            }),
+        )
+        .unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        s.execute("stair", &json!({"start": [2.0, 1.0], "direction": 90.0, "width": 1.0, "fromLevel": 0, "toLevel": 1})).unwrap();
+        let well_id = s.doc().unwrap().arch.stairs[0].well_room.unwrap();
+        let open_room = s.doc().unwrap().arch.rooms.iter().find(|r| r.id == well_id).unwrap();
+        assert_eq!(open_room.room_type, RoomType::OpenBelow);
+        let host = s.doc().unwrap().arch.rooms.iter().find(|r| r.level == 1 && r.room_type != RoomType::OpenBelow).unwrap();
+        assert_eq!(host.holes.len(), 1);
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.stairs[0].well_room, Some(well_id));
+        assert!(d.arch.rooms.iter().any(|r| r.id == well_id && r.room_type == RoomType::OpenBelow));
+        let host = d.arch.rooms.iter().find(|r| r.level == 1 && r.room_type != RoomType::OpenBelow).unwrap();
+        assert_eq!(host.holes.len(), 1);
+        s.execute("roomdetect", &json!({})).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.stairs[0].well_room, Some(well_id));
+        assert!(d.arch.rooms.iter().any(|r| r.id == well_id && r.room_type == RoomType::OpenBelow));
+    }
+
+    #[test]
+    fn roomdetect_keeps_a_drawn_open_below_room() {
+        let mut s = Session::new();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let ring = [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]];
+        s.execute("wall", &json!({ "points": ring, "level": 0, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("wall", &json!({ "points": ring, "level": 1, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        s.execute(
+            "room",
+            &json!({ "points": [[6.0, 5.0], [8.0, 5.0], [8.0, 7.0], [6.0, 7.0], [6.0, 5.0]], "type": "openBelow", "level": "Level 2" }),
+        )
+        .unwrap();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.rooms.iter().filter(|r| r.level == 1 && r.room_type == RoomType::OpenBelow).count() >= 1);
+        let host = d.arch.rooms.iter().find(|r| r.level == 1 && r.room_type != RoomType::OpenBelow).unwrap();
+        assert!(host.holes.len() >= 1);
+    }
+
+    #[test]
+    fn roomdetect_drops_a_face_that_is_a_kept_open_below_room() {
+        let mut s = Session::new();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        s.execute("wall", &json!({ "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "level": 1, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        let mut open = s.doc().unwrap().arch.rooms[0].clone();
+        open.room_type = RoomType::OpenBelow;
+        open.name = "well".into();
+        let id = s.doc_mut().unwrap().arch.push_room(open);
+        let kept = s.doc().unwrap().arch.rooms.iter().find(|r| r.id == id).unwrap().clone();
+        s.execute("roomdetect", &json!({ "level": 1 })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.rooms.iter().any(|r| r.id == kept.id && r.room_type == RoomType::OpenBelow));
+        assert!(
+            d.arch
+                .rooms
+                .iter()
+                .filter(|r| r.level == 1 && r.room_type != RoomType::OpenBelow)
+                .all(|r| !r.holes.iter().any(|h| same_ring_vertices(h, &kept.polygon)))
+        );
     }
 
     /// Re-detecting rooms keeps each room's floor finish; fresh rooms have none.

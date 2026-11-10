@@ -6,7 +6,7 @@ use cadcraft_geom::Vec2;
 
 use crate::area::interior_area;
 use crate::terrain::surface::SiteSurface;
-use crate::{ArchModel, Level};
+use crate::{ArchModel, Level, RoomType};
 
 /// Distance sampled outside the exterior face of a wall, in metres.
 const SAMPLE_OFFSET: f64 = 0.3;
@@ -111,16 +111,24 @@ fn level_area_with(model: &ArchModel, level: &Level, surface: Option<&SiteSurfac
     if level.kind != LevelKind::Floor || class_with(model, level, surface) != GradeClass::AboveGrade {
         return 0.0;
     }
-    model.rooms.iter().filter(|r| r.level == level.index).map(interior_area).sum()
+    model.rooms.iter().filter(|r| r.level == level.index && counts_as_living(r.room_type)).map(interior_area).sum()
 }
 
-/// Interior room area on one level when it is a floor classed above grade, else 0.
+/// Whether a room of this type counts toward above-grade living area: open-below
+/// voids, garages, porches and decks do not.
+fn counts_as_living(t: RoomType) -> bool {
+    !matches!(t, RoomType::OpenBelow | RoomType::Garage | RoomType::Porch | RoomType::Deck)
+}
+
+/// Living interior room area (leaving out open-below, garage, porch and deck rooms) on one
+/// level when it is a floor classed above grade, else 0.
 pub fn level_above_grade_area(model: &ArchModel, level: &Level) -> f64 {
     let surface = SiteSurface::new(model).ok();
     level_area_with(model, level, surface.as_ref())
 }
 
-/// The sum of the rooms' interior area on levels of kind floor classed above grade.
+/// The sum of the rooms' living interior area (leaving out open-below, garage, porch and
+/// deck rooms) on levels of kind floor classed above grade.
 pub fn above_grade_area(model: &ArchModel) -> f64 {
     let surface = SiteSurface::new(model).ok();
     model.levels.iter().map(|l| level_area_with(model, l, surface.as_ref())).sum()
@@ -188,5 +196,19 @@ mod tests {
         assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
         assert_eq!(above_grade_area(&m), 0.0);
         assert_eq!(level_above_grade_area(&m, &m.levels[0]), 0.0);
+    }
+
+    #[test]
+    fn above_grade_area_leaves_out_open_below_garage_porch_and_deck() {
+        let mut m = house(0.0, LevelKind::Floor);
+        let full = interior_area(&m.rooms[0]);
+        assert!((above_grade_area(&m) - full).abs() < 1e-9);
+        for t in [RoomType::OpenBelow, RoomType::Garage, RoomType::Porch, RoomType::Deck] {
+            m.rooms[0].room_type = t;
+            assert_eq!(above_grade_area(&m), 0.0);
+            assert_eq!(level_above_grade_area(&m, &m.levels[0]), 0.0);
+        }
+        m.rooms[0].room_type = RoomType::Kitchen;
+        assert!((level_above_grade_area(&m, &m.levels[0]) - full).abs() < 1e-9);
     }
 }

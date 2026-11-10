@@ -103,9 +103,158 @@ pub fn offset_path(path: &[Vec2], d: f64) -> Vec<Vec2> {
     if out.iter().all(|p| p.x.is_finite() && p.y.is_finite()) { out } else { Vec::new() }
 }
 
+/// Cap on posts per railing.
+pub const MAX_POSTS: usize = 10_000;
+
+/// The path a railing is built along: `path` moved `inset` metres to the left of travel. A closed
+/// path (first point equals the last, at least 4 points) is offset as a ring so the closing corner is
+/// mitred too and the first and last built points are equal. `inset` 0 returns the path; empty on
+/// hostile input.
+pub fn built_path(path: &[Vec2], inset: f64) -> Vec<Vec2> {
+    if !inset.is_finite() || !path_ok(path) {
+        return Vec::new();
+    }
+    if inset == 0.0 {
+        return path.to_vec();
+    }
+    let closed = path.len() >= 4 && path.first().zip(path.last()).is_some_and(|(a, b)| (*a - *b).len() <= 1e-9);
+    if !closed {
+        return offset_path(path, inset);
+    }
+    let mut ring: Vec<Vec2> = Vec::with_capacity(path.len());
+    for p in path.iter().take(path.len() - 1) {
+        if ring.last().is_none_or(|q| (*p - *q).len() > 1e-12) {
+            ring.push(*p);
+        }
+    }
+    let n = ring.len();
+    if n < 3 {
+        return offset_path(path, inset);
+    }
+    let normal = |a: Vec2, b: Vec2| {
+        let v = b - a;
+        let l = v.len();
+        if l > 1e-12 { Some(Vec2::new(-v.y / l, v.x / l)) } else { None }
+    };
+    let mut out = Vec::with_capacity(n + 1);
+    for i in 0..n {
+        let (Some(prev), Some(p), Some(next)) = (ring.get((i + n - 1) % n), ring.get(i), ring.get((i + 1) % n)) else {
+            return Vec::new();
+        };
+        let (Some(a), Some(b)) = (normal(*prev, *p), normal(*p, *next)) else {
+            return Vec::new();
+        };
+        let k = 1.0 + a.x * b.x + a.y * b.y;
+        let m = if k > 1e-6 { Vec2::new((a.x + b.x) / k, (a.y + b.y) / k) } else { a };
+        out.push(Vec2::new(p.x + m.x * inset, p.y + m.y * inset));
+    }
+    if let Some(first) = out.first().copied() {
+        out.push(first);
+    }
+    if out.iter().all(|p| p.x.is_finite() && p.y.is_finite()) { out } else { Vec::new() }
+}
+
+/// Post positions along `path`: at every vertex and in equal bays at most `spacing` apart on each
+/// segment. A closed path does not repeat its first point. A bad `spacing` gives the vertices only.
+/// Capped at [`MAX_POSTS`].
+pub fn post_points(path: &[Vec2], spacing: f64) -> Vec<Vec2> {
+    let mut out: Vec<Vec2> = Vec::new();
+    if !path_ok(path) {
+        return out;
+    }
+    let Some(first) = path.first().copied() else {
+        return out;
+    };
+    out.push(first);
+    let good = spacing.is_finite() && spacing > 0.0;
+    for w in path.windows(2) {
+        let (Some(&a), Some(&b)) = (w.first(), w.get(1)) else {
+            continue;
+        };
+        let l = (b - a).len();
+        if good && l.is_finite() && l > 1e-12 {
+            let bays = (l / spacing - 1e-9).ceil();
+            let n = if bays >= 1.0 { bays.min(MAX_POSTS as f64) as usize } else { 1 };
+            for k in 1..n {
+                if out.len() >= MAX_POSTS {
+                    return out;
+                }
+                let t = k as f64 / n as f64;
+                out.push(Vec2::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+            }
+        }
+        if out.len() >= MAX_POSTS {
+            return out;
+        }
+        out.push(b);
+    }
+    let closed = path.len() >= 4 && path.last().is_some_and(|l| (*l - first).len() <= 1e-9);
+    if closed {
+        out.pop();
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn v(x: f64, y: f64) -> Vec2 {
+        Vec2::new(x, y)
+    }
+
+    #[test]
+    fn built_path_offsets_left_and_mitres() {
+        assert_eq!(built_path(&[v(0.0, 0.0), v(4.0, 0.0)], 0.0), vec![v(0.0, 0.0), v(4.0, 0.0)]);
+        let b = built_path(&[v(0.0, 0.0), v(4.0, 0.0), v(4.0, 3.0)], 0.5);
+        assert_eq!(b.len(), 3);
+        assert!(b[0].x.abs() < 1e-9 && (b[0].y - 0.5).abs() < 1e-9);
+        assert!((b[1].x - 3.5).abs() < 1e-9 && (b[1].y - 0.5).abs() < 1e-9);
+        assert!((b[2].x - 3.5).abs() < 1e-9 && (b[2].y - 3.0).abs() < 1e-9);
+        assert!(built_path(&[v(0.0, 0.0), v(f64::NAN, 1.0)], 0.5).is_empty());
+    }
+
+    #[test]
+    fn built_path_of_a_closed_path_mitres_the_closing_corner() {
+        let sq = [v(0.0, 0.0), v(4.0, 0.0), v(4.0, 3.0), v(0.0, 3.0), v(0.0, 0.0)];
+        let b = built_path(&sq, 0.5);
+        assert_eq!(b.len(), 5);
+        assert!((b[0].x - 0.5).abs() < 1e-9 && (b[0].y - 0.5).abs() < 1e-9);
+        assert_eq!(b[0], b[4]);
+        assert!((b[2].x - 3.5).abs() < 1e-9 && (b[2].y - 2.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn post_points_brief_numbers() {
+        let p = post_points(&[v(0.0, 0.0), v(0.0, 3.0), v(4.0, 3.0), v(4.0, 0.0)], 1.8);
+        let want = [(0.0, 0.0), (0.0, 1.5), (0.0, 3.0), (1.3333, 3.0), (2.6667, 3.0), (4.0, 3.0), (4.0, 1.5), (4.0, 0.0)];
+        assert_eq!(p.len(), want.len());
+        for (a, b) in p.iter().zip(want) {
+            assert!((a.x - b.0).abs() < 1e-3 && (a.y - b.1).abs() < 1e-3, "{a:?} {b:?}");
+        }
+    }
+
+    #[test]
+    fn post_points_closed_path_has_no_duplicate() {
+        let sq = [v(0.0, 0.0), v(2.0, 0.0), v(2.0, 2.0), v(0.0, 2.0), v(0.0, 0.0)];
+        assert_eq!(post_points(&sq, 5.0).len(), 4);
+    }
+
+    #[test]
+    fn post_points_with_bad_spacing_gives_the_vertices() {
+        let path = [v(0.0, 0.0), v(10.0, 0.0), v(10.0, 5.0)];
+        for s in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(post_points(&path, s), path.to_vec());
+        }
+    }
+
+    #[test]
+    fn post_points_caps_at_10000_and_survives_nan() {
+        let p = post_points(&[v(0.0, 0.0), v(500.0, 0.0)], 1e-6);
+        assert!(p.len() <= MAX_POSTS && !p.is_empty());
+        assert!(post_points(&[v(f64::NAN, 0.0), v(1.0, 0.0)], 1.0).is_empty());
+        assert!(post_points(&[], 1.0).is_empty());
+    }
 
     #[test]
     fn stair_handrail_band_is_864_to_965() {
