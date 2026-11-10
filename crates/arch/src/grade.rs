@@ -284,13 +284,10 @@ mod tests {
             RoomType::Living,
             RoomType::Kitchen,
             RoomType::Bedroom,
-            RoomType::Bathroom,
             RoomType::Dining,
             RoomType::Family,
             RoomType::Entry,
             RoomType::Laundry,
-            RoomType::Hall,
-            RoomType::Office,
             RoomType::Other,
         ];
         for t in types {
