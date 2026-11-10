@@ -166,3 +166,103 @@ pub fn feature_edges(mesh: &Mesh, crease_deg: f64) -> Vec<FeatureEdge> {
 pub fn scene_feature_edges(scene: &Scene3d, crease_deg: f64) -> Vec<FeatureEdge> {
     scene.meshes.iter().flat_map(|m| feature_edges(m, crease_deg)).collect()
 }
+
+/// One smooth two-triangle edge (under the crease angle) with both face normals; it is a silhouette when the view
+/// direction separates the normals.
+#[derive(Clone, Debug)]
+struct SmoothEdge {
+    a: [f64; 3],
+    b: [f64; 3],
+    n0: [f64; 3],
+    n1: [f64; 3],
+    object: ArchId,
+}
+
+/// The view-independent part of a scene's edges, computed once; [`EdgeSet::silhouettes`] is the cheap per-view pass.
+#[derive(Clone, Debug, Default)]
+pub struct EdgeSet {
+    /// Boundary, crease and non-manifold edges (the same as [`scene_feature_edges`]).
+    pub fixed: Vec<FeatureEdge>,
+    smooth: Vec<SmoothEdge>,
+}
+
+/// Weld every mesh once and split its edges into the fixed feature edges and the smooth candidates for silhouettes.
+pub fn scene_edge_set(scene: &Scene3d, crease_deg: f64) -> EdgeSet {
+    let cos = crease_deg.to_radians().cos();
+    let mut set = EdgeSet::default();
+    for mesh in &scene.meshes {
+        let w = weld(mesh);
+        set.fixed.extend(welded_edges(&w, crease_deg, None, mesh.object));
+        for ((i, j), ts) in edge_triangles(&w) {
+            if let [s, t] = ts.as_slice() {
+                let (Some(&n0), Some(&n1)) = (w.normals.get(*s), w.normals.get(*t)) else { continue };
+                if dot(n0, n1) >= cos {
+                    set.smooth.push(SmoothEdge { a: w.point(i), b: w.point(j), n0, n1, object: mesh.object });
+                }
+            }
+        }
+    }
+    set
+}
+
+impl EdgeSet {
+    /// The smooth edges where one face looks along `view_dir` and the other looks against it. A zero or non-finite
+    /// direction gives none.
+    pub fn silhouettes(&self, view_dir: [f64; 3]) -> Vec<FeatureEdge> {
+        if !view_dir.iter().all(|v| v.is_finite()) || unit(view_dir).is_none() {
+            return Vec::new();
+        }
+        self.smooth
+            .iter()
+            .filter(|e| {
+                let (f0, f1) = (dot(e.n0, view_dir), dot(e.n1, view_dir));
+                (f0 > 1e-9 && f1 < -1e-9) || (f0 < -1e-9 && f1 > 1e-9)
+            })
+            .map(|e| FeatureEdge::new(e.a, e.b, EdgeKind::Silhouette, e.object))
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod silhouette_tests {
+    use super::*;
+
+    fn cylinder(sides: usize) -> Scene3d {
+        let mut m = Mesh::new("cyl", ArchId(1));
+        for k in 0..sides {
+            let a = std::f64::consts::TAU * k as f64 / sides as f64;
+            let (x, y) = (a.cos() as f32, a.sin() as f32);
+            m.positions.push([x, y, 0.0]);
+            m.positions.push([x, y, 1.0]);
+        }
+        for k in 0..sides {
+            let (b0, t0) = (2 * k as u32, 2 * k as u32 + 1);
+            let n = (k + 1) % sides;
+            let (b1, t1) = (2 * n as u32, 2 * n as u32 + 1);
+            m.indices.extend([b0, b1, t1, b0, t1, t0]);
+        }
+        m.normals = vec![[0.0, 0.0, 1.0]; m.positions.len()];
+        m.uvs = vec![[0.0, 0.0]; m.positions.len()];
+        Scene3d { meshes: vec![m], ..Default::default() }
+    }
+
+    #[test]
+    fn silhouettes_follow_the_view_direction() {
+        let set = scene_edge_set(&cylinder(32), CREASE_DEG);
+        let side = set.silhouettes([0.0, 1.0, 0.0]);
+        assert!(!side.is_empty());
+        for e in &side {
+            assert_eq!(e.kind, EdgeKind::Silhouette);
+            assert!((e.a[0].abs() - 1.0).abs() < 0.02, "x = {}", e.a[0]);
+        }
+        assert!(set.silhouettes([0.0, 0.0, -1.0]).is_empty());
+        assert!(set.silhouettes([0.0; 3]).is_empty());
+        assert!(set.silhouettes([f64::NAN, 0.0, 1.0]).is_empty());
+    }
+
+    #[test]
+    fn edge_set_fixed_equals_feature_edges() {
+        let scene = cylinder(32);
+        assert_eq!(scene_edge_set(&scene, CREASE_DEG).fixed, scene_feature_edges(&scene, CREASE_DEG));
+    }
+}
