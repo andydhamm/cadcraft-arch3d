@@ -23,17 +23,17 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 
 | Crate | L | Contents | Deps |
 |---|---|---|---|
-| `doc/src/arch.rs` | L1 | **Phase 14: `furnishing` (`Furnishing`, f<n> at +0x60000, `SymbolMesh`, `ArchModel.symbols`/`images`), `paint` (`Paint`, `MaterialRef`, `ArchModel.paints`), `backdrop`, `ArchModel.defaults`.** `ArchModel{walls,openings,rooms,levels,roofs,stairs,railings,cameras,active_camera,types,next_id,next_room_id,next_roof_id,next_stair_id,next_railing_id}`, `ArchId`, `Wall`, `Opening`, `Room`, `RoomType`, `Level`, `WallType`, `Roof`, `RoofPlane`, `RoofEdge`, `Stair`, `Railing`, `RailingStyle`, `StairShape`, **`Camera3d`, `CameraKind` (Orbit | Full)**; `ARCH_HANDLE_BASE=0xA000_0000`, `ROOM_HANDLE_OFFSET=0x10000`, `ROOF_HANDLE_OFFSET=0x18000`, `STAIR_HANDLE_OFFSET=0x20000`, `RAILING_HANDLE_OFFSET=0x28000`; caps `MAX_WALLS 4096`, `MAX_OPENINGS 8192`, `MAX_ROOMS 1024`, `MAX_ROOF_EDGES 256`, `MAX_STAIRS`, `MAX_RAILINGS`, `MIN_ROOM_AREA 0.05`, **`MAX_CAMERAS 64`**. On `Drawing::arch` with `arch_revision`/`touch_arch()`. **Phase 9: `doc/src/arch/site.rs` — `SiteLocation` (+ `SiteReference`), `Terrain`, `ElevationLine`, `TerrainModifier`/`ModifierKind` (Flat | Hill | Path), `PathKind`, `Plant`, `PlantSpecies`, `PlantForm`, `CrownShape`; `ArchModel.site/terrain/plants/plant_species`; `Wall.retaining/freeboard/footing`; `TERRAIN_HANDLE_OFFSET 0x38000`, `PLANT_HANDLE_OFFSET 0x40000`.** **Phase 13: `arch/finish.rs` `Finish` (`for_walls`/`for_roofs`/`for_floors`), `Wall.finish`, `Roof.covering`, `Room.floor_finish`; `arch/casework.rs` `Cabinet`, `CabinetKind`, `Fronts`, `Fixture`, `FixtureKind`, `ArchModel.cabinets/fixtures`, `CABINET_HANDLE_OFFSET 0x50000`, `FIXTURE_HANDLE_OFFSET 0x58000`, `MAX_CABINETS`/`MAX_FIXTURES` 1024.** | geom,color |
+| `doc/src/arch.rs` | L1 | **Phase 15: `arch/electrical.rs` (`ElectricalDevice`, `ElectricalKind`, `WallSide`, `Connection`, `LightSet`/`LightState`; el<n> at +0x68000, cn<n> at +0x70000, caps 4,096; `ArchModel.electrical`/`connections`/`light_sets`), `LightFixture.brightness`, `Camera3d.light_set`, `LevelKind` (Floor | Landing, Floor not written), `Wall.top_level` with `spans_level`/`bottom_z`/`top_z`, `ArchModel.plan_level`, `ensure_ground_level`, room types Dining/Family/Entry/Laundry, `PathKind::Bed`.** **Phase 14: `furnishing` (`Furnishing`, f<n> at +0x60000, `SymbolMesh`, `ArchModel.symbols`/`images`), `paint` (`Paint`, `MaterialRef`, `ArchModel.paints`), `backdrop`, `ArchModel.defaults`.** `ArchModel{walls,openings,rooms,levels,roofs,stairs,railings,cameras,active_camera,types,next_id,next_room_id,next_roof_id,next_stair_id,next_railing_id}`, `ArchId`, `Wall`, `Opening`, `Room`, `RoomType`, `Level`, `WallType`, `Roof`, `RoofPlane`, `RoofEdge`, `Stair`, `Railing`, `RailingStyle`, `StairShape`, **`Camera3d`, `CameraKind` (Orbit | Full)**; `ARCH_HANDLE_BASE=0xA000_0000`, `ROOM_HANDLE_OFFSET=0x10000`, `ROOF_HANDLE_OFFSET=0x18000`, `STAIR_HANDLE_OFFSET=0x20000`, `RAILING_HANDLE_OFFSET=0x28000`; caps `MAX_WALLS 4096`, `MAX_OPENINGS 8192`, `MAX_ROOMS 1024`, `MAX_ROOF_EDGES 256`, `MAX_STAIRS`, `MAX_RAILINGS`, `MIN_ROOM_AREA 0.05`, **`MAX_CAMERAS 64`**. On `Drawing::arch` with `arch_revision`/`touch_arch()`. **Phase 9: `doc/src/arch/site.rs` — `SiteLocation` (+ `SiteReference`), `Terrain`, `ElevationLine`, `TerrainModifier`/`ModifierKind` (Flat | Hill | Path), `PathKind`, `Plant`, `PlantSpecies`, `PlantForm`, `CrownShape`; `ArchModel.site/terrain/plants/plant_species`; `Wall.retaining/freeboard/footing`; `TERRAIN_HANDLE_OFFSET 0x38000`, `PLANT_HANDLE_OFFSET 0x40000`.** **Phase 13: `arch/finish.rs` `Finish` (`for_walls`/`for_roofs`/`for_floors`), `Wall.finish`, `Roof.covering`, `Room.floor_finish`; `arch/casework.rs` `Cabinet`, `CabinetKind`, `Fronts`, `Fixture`, `FixtureKind`, `ArchModel.cabinets/fixtures`, `CABINET_HANDLE_OFFSET 0x50000`, `FIXTURE_HANDLE_OFFSET 0x58000`, `MAX_CABINETS`/`MAX_FIXTURES` 1024.** | geom,color |
 | `geom` | L0 | **Phase 9: `tin` (Delaunay TIN, `elevation_at`, per-triangle `contours`; lifted, see Building blocks), `cdt` (`triangulate_constrained`: constraints become edges, crossings split; cavities refilled in index order since phase 12), `tin_ops` (`TinIndex` grid location, `retain_inside`, `chain_contours`).** Older: `skeleton`, `region::Arrangement`. | — |
-| `arch` | L2 | **Phase 14: `library` (`record`: `ItemRecord`, `Category`, `layer_for`; `search`, `history`, `fits`, `place`), `furnishing` (plan outline, layers, IFC classes), `casework_layout` (fronts, pulls, counter runs, gaps), `paint` (surface keys, scopes).** `wall`,`graph`,`join`(`solve_joins`,`face_lines`,`stretch_wall`),`opening`,`symbol`,`room`,`poly`(area/perimeter/`offset_polygon`),`area`,`label`,`roof`(footprint, skeleton driver, `RoofError`), `roofedge`, **`stair`(`plan_stair`,`headroom_ok`,`well_start`,`flight_polygon`,`well_polygon`,`well_guard_path`, code limits), `railing`(`validate_height`,`baluster_spacing`,`path_length`)**, **`sun`(`sun_position(lat, date, time)`, `sun_dir`, `day_of_year`; NOAA fractional-year form)**, **`detect`(`detect(drawing, opts) -> Detection`; stages `flatten`, `arcs`, `walls`, `junctions`, `openings`, `rooms`, `layers`; `score` against a truth file — phase 8)**, **`terrain` (`surface::SiteSurface`, `mesh::site_mesh`, `contour::site_contours`, `volume::cut_fill`, `csv`, `pad`, `retaining`), `plant` (catalogue of 14, `plant_size`, `plan_symbol`), `site` (`north_direction`, `true_to_drawing`, `north_arrow`) — phase 9**; **`casework` (catalogue sizes, validation, wall placement, layers) — phase 13**. | geom,color,doc |
-| `arch3d` | L2 | **Phase 14: `furnishing` (symbol meshes in the build), `paint` (painted surfaces, `MaterialDef`), `icon` (the CPU icon rasterizer).** `build`/`build_dirty`→`Scene3d`; `mesh`(ear clip, `push_prism_with_holes`, profile prism), `walls`(elevation profiles + holes), `openings`, `floors`(slabs, ceilings, deck boards), `roof`(planes, fascia, soffit), **`stairs`(stepped prism, landing), `railing`(handrail + panel/balusters)**, `probe`+`ray`; **`camera`(`Orbit`, `FullCamera`, `project_point`, `ray_at`, `fit`, `projected_scene_bounds` — moved here from `render3d` in phase 6), `pick`(median-split BVH, `Bvh::ray`/`pick`)**; `edges`/`hlr`/`section` (assisted, phases 6–7); **`site` (terrain solid, draped paths, `site_meshes`), `plant` (trunk + crown) — phase 9**; **phase 13: `incremental` (`SceneCache`, `ObjectKey`/`ObjectKind`, `Sections`, `Scene3d::digest`; `build` is made of its parts), `finish` (finished-face meshes), `uv` (`face_uvs`), `texture` (256² procedural finishes, `mean_srgb`/`mean_linear`), `casework` (cabinets and casework fixtures)**. | geom,color,doc,arch |
-| `render` | L2 | **Phase 14: `arch_furnishing.rs` (furnishing plan outlines on their layers).** `arch.rs`: arch geometry → DisplayList tagged with proxy handles; layer bands; opening holes; room labels on `A-ROOM`; roof plan on `A-ROOF`; **stair plan (outline, riser lines, well ring) on `A-STAIR`; railing path on `A-RAIL`**; **`arch_site.rs`: the site plan on `C-TOPO-BNDY/MINR/MAJR/TEXT/GRAD`, `C-ROAD`, `L-PLNT`, `A-ANNO-NRTH` (phase 9)**; **`arch_casework.rs`: cabinet and fixture symbols on `A-FLOR-CASE`, `A-FLOR-CASE-UPPR`, `P-FLOR-FIXT`, `A-FLOR-APPL` (phase 13)**. | arch |
-| `io` | L3 | **Phase 14: `gltf_read` (plain glTF 2.0 binary), `image_read`, `library` (the embedded sample set), `dxf_furnishing` (proxies), `ifc/furnishing`; `dxf_arch` payload up to 64 MiB.** `dxf_arch.rs` (`CADCRAFT_ARCH` XRECORD **v9**, accepts 1–9 (v6 cameras, v7 views, v8 site, terrain and plants, v9 light fixtures; phase-11 area lights and IES ride in the v9 model), + save-time proxies on `A-WALL`/`A-DOOR`/`A-GLAZ`/`A-ROOM`/`A-ROOF`; opening proxies carry the whole plan symbol since phase 8; reading a record makes the drawing metric), **`dxf_site.rs` (site proxies marked `CADCRAFT-SITE`, phase 9)**, `glb.rs` (own GLTF 2.0; `node_names`, shared with OBJ); **phase 12: `step` (ISO 10303-21 text), `ifc` (`mod`: header, units, contexts, spatial structure; `guid`; `geometry`; one module per element kind: `walls`, `openings`, `slabs`, `roofs`, `stairs`, `spaces`, `site`, `lights`), `obj` (OBJ + MTL)**; **phase 13: `png` (RGBA8 encoder on `miniz_oxide`), finish textures in `glb`, `dxf_casework` (CADCRAFT-CASEWORK proxies), `ifc::casework`**. | arch,arch3d,dxf |
-| `render3d` | L5 | **Phase 14: `backdrop` (the shared CPU composite), symbol and image textures, the path tracer's per-pixel hit count.** `camera` (re-exports `arch3d::camera`), `pipeline` (PBR metallic-roughness: GGX, Smith, Schlick; per-material albedo/metallic/roughness/alpha; MSAA 4 or 1), `light`, **`shadow`** (one 1024² `Depth32Float` sun map, read with `textureLoad`; `ground_mesh`, `GROUND_OBJECT`), **`edges`** (line pipeline over `arch3d::edges`), **`adapter`** (`AdapterChoice` auto|fallback, devices always requested with `downlevel_webgl2_defaults`), `offscreen` (`Style` shaded | shaded-edges | hidden-line | glass-house; `create`/`with_device`/`encode`/`render`/`read_png`; `headless_instance`, made one at a time), `gputest`, `types`; **phase 10: `shadow_atlas`, `final_render::FinalRender` (raster steps); phase 11: `pathtrace` (`device` (own compute device), `scene_gpu` (flattened BVH, materials, lights, IES), `tracer` (progressive passes, stats, snapshots, denoise, resolve), `denoise`, `rt` (BLAS/TLAS for ray queries), `cache` (pipeline cache file), `shaders` + WGSL `pt/{common,traverse,traverse_rq,bsdf,lights,kernel,denoise,resolve}`), `FinalRender::start_path`; phase 12: `pathtrace::Exposure` (Auto | Fixed), `auto_exposure_from_luminances`; phase 13: `textures` (the finish `texture_2d_array`, bind group 3).** | geom,color,arch3d,wgpu,gpu-optin |
+| `arch` | L2 | **Phase 15: `electrical` (`place_device`, `device_room`, `device_symbol`), `connections` (`check_connection`, `bulged_polyline`, `connection_arcs`, `circuits`, `circuit_of`), `outlets` (`usable_runs`, `auto_outlets`, `outlet_gaps`), `grade` (`finished_grade`, `grade_class`, `above_grade_area`), `room::room_at`; `terrain::pad` pads landings, side splits and entry aprons.** **Phase 14: `library` (`record`: `ItemRecord`, `Category`, `layer_for`; `search`, `history`, `fits`, `place`), `furnishing` (plan outline, layers, IFC classes), `casework_layout` (fronts, pulls, counter runs, gaps), `paint` (surface keys, scopes).** `wall`,`graph`,`join`(`solve_joins`,`face_lines`,`stretch_wall`),`opening`,`symbol`,`room`,`poly`(area/perimeter/`offset_polygon`),`area`,`label`,`roof`(footprint, skeleton driver, `RoofError`), `roofedge`, **`stair`(`plan_stair`,`headroom_ok`,`well_start`,`flight_polygon`,`well_polygon`,`well_guard_path`, code limits), `railing`(`validate_height`,`baluster_spacing`,`path_length`)**, **`sun`(`sun_position(lat, date, time)`, `sun_dir`, `day_of_year`; NOAA fractional-year form)**, **`detect`(`detect(drawing, opts) -> Detection`; stages `flatten`, `arcs`, `walls`, `junctions`, `openings`, `rooms`, `layers`; `score` against a truth file — phase 8)**, **`terrain` (`surface::SiteSurface`, `mesh::site_mesh`, `contour::site_contours`, `volume::cut_fill`, `csv`, `pad`, `retaining`), `plant` (catalogue of 14, `plant_size`, `plan_symbol`), `site` (`north_direction`, `true_to_drawing`, `north_arrow`) — phase 9**; **`casework` (catalogue sizes, validation, wall placement, layers) — phase 13**. | geom,color,doc |
+| `arch3d` | L2 | **Phase 15: `electrical` (cover plates, probe part `electrical`, own cache section); walls built from `bottom_z`/`top_z` (spanning walls, offset levels); `light` scales lumens by brightness and applies a light set's overrides.** **Phase 14: `furnishing` (symbol meshes in the build), `paint` (painted surfaces, `MaterialDef`), `icon` (the CPU icon rasterizer).** `build`/`build_dirty`→`Scene3d`; `mesh`(ear clip, `push_prism_with_holes`, profile prism), `walls`(elevation profiles + holes), `openings`, `floors`(slabs, ceilings, deck boards), `roof`(planes, fascia, soffit), **`stairs`(stepped prism, landing), `railing`(handrail + panel/balusters)**, `probe`+`ray`; **`camera`(`Orbit`, `FullCamera`, `project_point`, `ray_at`, `fit`, `projected_scene_bounds` — moved here from `render3d` in phase 6), `pick`(median-split BVH, `Bvh::ray`/`pick`)**; `edges`/`hlr`/`section` (assisted, phases 6–7); **`site` (terrain solid, draped paths, `site_meshes`), `plant` (trunk + crown) — phase 9**; **phase 13: `incremental` (`SceneCache`, `ObjectKey`/`ObjectKind`, `Sections`, `Scene3d::digest`; `build` is made of its parts), `finish` (finished-face meshes), `uv` (`face_uvs`), `texture` (256² procedural finishes, `mean_srgb`/`mean_linear`), `casework` (cabinets and casework fixtures)**. | geom,color,doc,arch |
+| `render` | L2 | **Phase 15: `arch_electrical.rs` (device symbols on `E-POWR`/`E-LITE`, dashed connection arcs); the plan draws `plan_level` only; arch linework honours layer transparency.** **Phase 14: `arch_furnishing.rs` (furnishing plan outlines on their layers).** `arch.rs`: arch geometry → DisplayList tagged with proxy handles; layer bands; opening holes; room labels on `A-ROOM`; roof plan on `A-ROOF`; **stair plan (outline, riser lines, well ring) on `A-STAIR`; railing path on `A-RAIL`**; **`arch_site.rs`: the site plan on `C-TOPO-BNDY/MINR/MAJR/TEXT/GRAD`, `C-ROAD`, `L-PLNT`, `A-ANNO-NRTH` (phase 9)**; **`arch_casework.rs`: cabinet and fixture symbols on `A-FLOR-CASE`, `A-FLOR-CASE-UPPR`, `P-FLOR-FIXT`, `A-FLOR-APPL` (phase 13)**. | arch |
+| `io` | L3 | **Phase 15: `dxf_electrical` (CADCRAFT-ELECTRICAL proxies), `ifc/electrical` (`IfcOutlet`, `IfcSwitchingDevice`), GLB/OBJ `electrical-el<n>`; IFC storeys at free elevations; electrical data rides in the v9 model.** **Phase 14: `gltf_read` (plain glTF 2.0 binary), `image_read`, `library` (the embedded sample set), `dxf_furnishing` (proxies), `ifc/furnishing`; `dxf_arch` payload up to 64 MiB.** `dxf_arch.rs` (`CADCRAFT_ARCH` XRECORD **v9**, accepts 1–9 (v6 cameras, v7 views, v8 site, terrain and plants, v9 light fixtures; phase-11 area lights and IES ride in the v9 model), + save-time proxies on `A-WALL`/`A-DOOR`/`A-GLAZ`/`A-ROOM`/`A-ROOF`; opening proxies carry the whole plan symbol since phase 8; reading a record makes the drawing metric), **`dxf_site.rs` (site proxies marked `CADCRAFT-SITE`, phase 9)**, `glb.rs` (own GLTF 2.0; `node_names`, shared with OBJ); **phase 12: `step` (ISO 10303-21 text), `ifc` (`mod`: header, units, contexts, spatial structure; `guid`; `geometry`; one module per element kind: `walls`, `openings`, `slabs`, `roofs`, `stairs`, `spaces`, `site`, `lights`), `obj` (OBJ + MTL)**; **phase 13: `png` (RGBA8 encoder on `miniz_oxide`), finish textures in `glb`, `dxf_casework` (CADCRAFT-CASEWORK proxies), `ifc::casework`**. | arch,arch3d,dxf |
+| `render3d` | L5 | **Phase 15: `Style::Clay`, `Style::Technical`.** **Phase 14: `backdrop` (the shared CPU composite), symbol and image textures, the path tracer's per-pixel hit count.** `camera` (re-exports `arch3d::camera`), `pipeline` (PBR metallic-roughness: GGX, Smith, Schlick; per-material albedo/metallic/roughness/alpha; MSAA 4 or 1), `light`, **`shadow`** (one 1024² `Depth32Float` sun map, read with `textureLoad`; `ground_mesh`, `GROUND_OBJECT`), **`edges`** (line pipeline over `arch3d::edges`), **`adapter`** (`AdapterChoice` auto|fallback, devices always requested with `downlevel_webgl2_defaults`), `offscreen` (`Style` shaded | shaded-edges | hidden-line | glass-house; `create`/`with_device`/`encode`/`render`/`read_png`; `headless_instance`, made one at a time), `gputest`, `types`; **phase 10: `shadow_atlas`, `final_render::FinalRender` (raster steps); phase 11: `pathtrace` (`device` (own compute device), `scene_gpu` (flattened BVH, materials, lights, IES), `tracer` (progressive passes, stats, snapshots, denoise, resolve), `denoise`, `rt` (BLAS/TLAS for ray queries), `cache` (pipeline cache file), `shaders` + WGSL `pt/{common,traverse,traverse_rq,bsdf,lights,kernel,denoise,resolve}`), `FinalRender::start_path`; phase 12: `pathtrace::Exposure` (Auto | Fixed), `auto_exposure_from_luminances`; phase 13: `textures` (the finish `texture_2d_array`, bind group 3).** | geom,color,arch3d,wgpu,gpu-optin |
 | `gpu-optin` | — | **Phase 11:** the workspace's only unsafe code: wgpu's experimental-feature token for ray queries, and a pipeline cache read from disk. | wgpu |
-| `engine/src/cmd/arch/*` | L4 | **Phase 14: `library`, `library_icon`, `library_user`, `furnish` (`library.place`, transforms), `paint`, `backdrop`, `defaults`; `engine::library` (catalogs, `LibraryIo`, the user dir, `user` groups and copies).** `wall`,`wall.stretch`,`inspect`,`opening`,`build3d`,`sample`,`view`,`room`,`roomdetect`,`level`,`roofauto`,`roofplane`,`stair`,`railing`,`deck`, **`sun`, `camera` (save/use/delete/list), `walkthrough`, `pick3d`**, `views` (`elevation`, `section`, `view.delete`), `sheet` (`viewsheet`), **`archdetect`, `units` (`convert_drawing_to_metres`)**, **`site`, `site_inspect`, `terrain` (+ `terrain.contours`, `terrain.volumes`, `terrain.delete`), `terrain_modify`, `terrain_query`, `plant` (+ `plant.species`) — phase 9**; **`export` (`exchange.rs`) writes glb, obj (+ mtl) and ifc by extension or returns them as data — phase 12**; **`material`, `casework` (`cabinet`, `fixture` + `.edit`/`.delete`, `fixture.types`), `build3d {incremental}` on the document's `SceneCache` (`DocState`), `sample {house}` — phase 13**; grip routing; `snap::arch`. | arch,arch3d,io |
-| `ui-egui` | L5 | **Phase 14: `library_panel.rs` (the dockable Library panel, painter and eyedropper tools).** `pane3d.rs` (dockable, orbit, revision-gated rebuild, show-3D toggle, no-adapter placeholder; phase 6: style switcher, full camera + WASD/arrow walkthrough, loads the active saved camera, click-to-pick via `proxy_handle`; phase 7: a 3D pick becomes the 2D selection), **`archdetect_review.rs` (Detection Review panel, phase 8)**; **phase 11: Finalize chooses Path traced or Raster with a sample count, refines on screen (`{spp} / {total} samples`), cancels, and falls back to the raster still with a note without compute shaders**; **phase 13: the pane keeps its own `SceneCache`**. | render3d,arch3d |
-| `cadcraft-cli` | — | `convert` (runs `archdetect` first when there are no arch objects; `--no-detect`; **to `.ifc`, `.obj` (+ `.mtl`) and `.glb` since phase 12**), `run --export`, `render FILE OUT.png --camera orbit,…[,target=x,y,z] | full,eye=…,target=…[,eyeHeight=h][,fov=f] --style --sun --ground --adapter auto|fallback --size` (prints `PROJECTED`, `DEVICE … limits=downlevel_webgl2`, `SHADOW size=1024 built=1`; exit 3 `NO_ADAPTER`); `--sun` takes the site's latitude and true north (phase 9); **`--final [raster|path] --spp --bounces --seed --no-denoise --rt` (phase 11; stderr `FINAL renders=1 size=WxH mode=path spp=N cache=hit|miss|unsupported`); the session renderer (`render_hook`) serves `render` and `illuminance` for `run`**. | all |
+| `engine/src/cmd/arch/*` | L4 | **Phase 15: `electrical` (`outlet`, `switch`, `electrical.edit`/`.delete`), `connections` (`connection` + `.edit`/`.delete`, `circuit.brightness`), `outlets_auto`, `lightset`, `electrical_view` (`view.electrical`), `electrical_inspect`; `level` (free `elevation`, `kind`, `level.edit`, `level.show`), `wall {level, topLevel}`, openings with `level`, `export {view|level}`, `render {lightSet, style: clay|technical}`.** **Phase 14: `library`, `library_icon`, `library_user`, `furnish` (`library.place`, transforms), `paint`, `backdrop`, `defaults`; `engine::library` (catalogs, `LibraryIo`, the user dir, `user` groups and copies).** `wall`,`wall.stretch`,`inspect`,`opening`,`build3d`,`sample`,`view`,`room`,`roomdetect`,`level`,`roofauto`,`roofplane`,`stair`,`railing`,`deck`, **`sun`, `camera` (save/use/delete/list), `walkthrough`, `pick3d`**, `views` (`elevation`, `section`, `view.delete`), `sheet` (`viewsheet`), **`archdetect`, `units` (`convert_drawing_to_metres`)**, **`site`, `site_inspect`, `terrain` (+ `terrain.contours`, `terrain.volumes`, `terrain.delete`), `terrain_modify`, `terrain_query`, `plant` (+ `plant.species`) — phase 9**; **`export` (`exchange.rs`) writes glb, obj (+ mtl) and ifc by extension or returns them as data — phase 12**; **`material`, `casework` (`cabinet`, `fixture` + `.edit`/`.delete`, `fixture.types`), `build3d {incremental}` on the document's `SceneCache` (`DocState`), `sample {house}` — phase 13**; grip routing; `snap::arch`. | arch,arch3d,io |
+| `ui-egui` | L5 | **Phase 15: `electrical_tools.rs` (outlet and switch tools on a wall face, the Connection drag and arc grips, the Electrical View toggle, the plan's level picker, the light-set chooser).** **Phase 14: `library_panel.rs` (the dockable Library panel, painter and eyedropper tools).** `pane3d.rs` (dockable, orbit, revision-gated rebuild, show-3D toggle, no-adapter placeholder; phase 6: style switcher, full camera + WASD/arrow walkthrough, loads the active saved camera, click-to-pick via `proxy_handle`; phase 7: a 3D pick becomes the 2D selection), **`archdetect_review.rs` (Detection Review panel, phase 8)**; **phase 11: Finalize chooses Path traced or Raster with a sample count, refines on screen (`{spp} / {total} samples`), cancels, and falls back to the raster still with a note without compute shaders**; **phase 13: the pane keeps its own `SceneCache`**. | render3d,arch3d |
+| `cadcraft-cli` | — | **Phase 15: `run --commands FILE.json` (a JSON array of `{cmd, params}` steps); `render --style clay|technical`.** `convert` (runs `archdetect` first when there are no arch objects; `--no-detect`; **to `.ifc`, `.obj` (+ `.mtl`) and `.glb` since phase 12**), `run --export`, `render FILE OUT.png --camera orbit,…[,target=x,y,z] | full,eye=…,target=…[,eyeHeight=h][,fov=f] --style --sun --ground --adapter auto|fallback --size` (prints `PROJECTED`, `DEVICE … limits=downlevel_webgl2`, `SHADOW size=1024 built=1`; exit 3 `NO_ADAPTER`); `--sun` takes the site's latitude and true north (phase 9); **`--final [raster|path] --spp --bounces --seed --no-denoise --rt` (phase 11; stderr `FINAL renders=1 size=WxH mode=path spp=N cache=hit|miss|unsupported`); the session renderer (`render_hook`) serves `render` and `illuminance` for `run`**. | all |
 
 ## Decisions
 
@@ -74,6 +74,12 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 35. **A process-wide hook has one installer.** `LibraryIo` (like `IoHooks`) is a `OnceLock`: the first installation wins for the whole process, so a test that installs its own stub decides, by test order, what every later test sees. Phase 14 hit this twice (the furnish tests, then `library/user.rs`). Unit tests call `library::testing::install_io`; the apps install the real readers once at start.
 36. **Coverage comes from what the kernel knows.** Whether a pixel shows the backdrop is the path tracer's own per-pixel count of samples whose camera ray hit a surface (`accum[W·H + i].y`), never inferred from brightness: a mask of "misses darker than the mean miss" passed on dark test scenes and left a sunlit sky in place of the backdrop. Tests of compositing render under the default sun.
 37. **Meshes compare within a tolerance.** GLB stores positions as f32 (about 5e-7 at x = 7), so two copies of a mesh at different places never round to the same grid everywhere; a rounded key made equal meshes differ and stopped check 08 at its first step, hiding four bugs behind it. Checks match each vertex to an unused vertex within 1e-5 (`p14lib.same_geometry`).
+38. **Levels are free; a wall's vertical extent is derived.** A level stores its own elevation and is never stacked from its neighbour; a wall belongs to its base level and, with `top_level`, to every level whose floor lies within its extent. `Wall::spans_level` is the one selector every crate uses, and `bottom_z`/`top_z` the one source of a wall's heights. `LevelKind::Floor` is not written, so a drawing without landings writes the payload it wrote before (io's hostile-record test then had to truncate the whole record: with the longer payload its splice parsed by chance into three walls).
+39. **Up and down come from elevations, never from level order.** `level {elevation}` appends, so a level's index is its creation order. Code that means up, down, top or "the level above" compares elevations, and a stair's headroom is measured from its own base. Phase 15 left three places that do not (phase-15 gaps): `stair` cuts a well only when the to-level comes after the from-level, `arch::stair::well_start` measures riser tops from 0, and `roof::top_level` takes the highest index.
+40. **Grade classes and areas are computed on read.** A level's class and the above-grade area come from the finished grade (terrain, modifiers and pads) each time `arch.inspect` asks; nothing stores them (decision 14), so a terrain, pad or level edit never leaves a stale class.
+41. **A light set is a view of the lights; a circuit's brightness is an edit.** `circuit.brightness` writes `LightFixture.brightness` (undoable, saved); a light set chosen by a camera or a render overrides on/off and brightness for that frame only and never writes the model (check 05 reads the fixtures back unchanged).
+42. **A check runs against today's CLI before it is locked, and must stop at a product assertion.** Nine of the fourteen phase-15 checks were wrong as written. 01, 02, 06, 08, 10 and 11 raised in their own Python: a helper's return shape was guessed (`probes()` returns the build3d reply, `entities()` yields (kind, layer, pairs), `step_file()` returns (header, instances), `surfaces_of()` a map), or a helper lay outside the include chain. 07 looked rooms up by level index where the rows name the level, so it failed a correct product and would pass a stub reporting 0. 02, once it ran, passed on a stub: it counted symbols already on `E-LITE`. 12 sent NaN, which the CLI refuses before running any command, so it tested nothing. 09's camera could not see the faces it measured. The lead runs each check against the pre-phase CLI and reads where it stops: an exception, or a pass, is a check defect.
+43. **A scripted model is checked for where things are, and a test segment never edits what its test judges.** p15-showcase-test, asked for the showcase's engine test, made it pass by adding Dining, Bedroom 2 and Bedroom 3 as room polygons outside the house; check 10 counted room types and contents and never asked whether a room lies inside its level's walls, the kitchen's casework is in the kitchen or a flight meets its landing. A check of a scripted model asserts containment and connection, and a segment whose deliverable is a test does not list the artifact it judges.
 
 ## Phase 1 — walls, joins, poché, first 3D (landed)
 
@@ -642,7 +648,7 @@ It builds on the operator groundwork: the sample set `assets/library/sample/` (4
   - reading OpenUSD (SimReady and SimHome are converted outside);
   - the tile and wood material builders, the texture editor;
   - outlets, switches, wiring (phase 15).
-- **Ours, the user catalog:** a copied stock item cannot be placed. `library.copy` stores it as a group with no objects ("user item has no objects"). It should become a one-object group whose furnishing keeps the source's category, so a copied sink stays on P-FLOR-FIXT.
+- **Ours, the user catalog:** a copied stock item cannot be placed. `library.copy` stores it as a group with no objects ("user item has no objects"). It should become a one-object group whose furnishing keeps the source's category, so a copied sink stays on P-FLOR-FIXT. Fixed in phase 15 (check 14).
 - **Ours, commands:**
   - `move` with handles it cannot resolve moves nothing without an error, which hid the group bug;
   - `arch.inspect` prints furnishing handles in the short form (`a0060000`), which `move` does not take;
@@ -656,13 +662,225 @@ It builds on the operator groundwork: the sample set `assets/library/sample/` (4
   - icons are flat-shaded.
 - **Harden passes:** one was in its gate at the checkpoint, and harden-p14-r3d-pt-backdrop was retired as superseded.
 
+## Phase 15 — electrical, split levels and the showcase house (landed)
+
+14/14 checks on 2026-11-09, after the operator corrected nine checks (decision 42).
+- **What merged:** 60 segments (p15-check10-surfaces cherry-picked by the operator), 10 upstream syncs (295 upstream commits) and 27 harden passes.
+- **Landed by the operator:** p15-doc-levels at level 2, the `Connection` literal of p15-cmd-connections, check 14, the entry landing's building pad, and the corrections to checks 01, 02, 06, 07, 08, 09, 10, 11 and 12 (under Building blocks).
+- **Overlap:** phase 16's plan and groundwork landed on 2026-11-08 while the showcase segments were still running; 17 phase-16 segments merged before this checkpoint.
+
+### Electrical devices
+- **The object:** `ElectricalDevice` on `ArchModel.electrical` (`doc::arch::electrical`; `el<n>` at +0x68000; cap 4,096):
+  - kind: `duplex`, `gfci`, `240v`; `single-pole`, `three-way`, `dimmer`;
+  - wall and side (`left`/`right`, the surface-key sides);
+  - offset (wall start to plate centre) and height (plate centre above the level's floor);
+  - `counter` and level.
+- **Heights:** outlets 0.3 m and switches 1.2 m when `height` is omitted. A counter outlet sits 0.15 m above the counter top of the base cabinet in front of it (`counterTop` = elevation + carcass + counter thickness, in `arch.inspect`) and is refused where there is none.
+- **Placement** (`arch::electrical`):
+  - `place_device` puts the plate on the wall face, and refuses a device past the wall's end or in a doorway (an opening with sill 0);
+  - `device_room` looks 0.05 m off the face, as `arch::paint` does;
+  - `device_symbol` is the plan symbol.
+- **Plan:** outlets on `E-POWR`, switches on `E-LITE` (`render::arch_electrical`, tagged with proxy handles). DXF proxies are marked `CADCRAFT-ELECTRICAL` (`io::dxf_electrical`), written on save and dropped on read while the arch record is present.
+- **3D and exports:**
+  - a cover plate 0.07 × 0.115 m standing 0.006 m proud of the face (`arch3d::electrical`, probe part `electrical`, its own scene-cache section);
+  - GLB node and OBJ group `electrical-el<n>`;
+  - IFC `IfcOutlet` `.POWEROUTLET.`, or `IfcSwitchingDevice` `.TOGGLESWITCH.` / `.DIMMERSWITCH.`, with `CADCraft_Electrical` (Kind, Height, Wall).
+- **Commands:** `outlet` and `switch` (`wall` with `offset` or `point`, `side`, `height`, `counter`, `level`), `electrical.edit`, `electrical.delete`.
+
+### Connections and circuits
+- **Connections:** `Connection` (`cn<n>` at +0x70000) runs from a switch to up to 64 light fixtures, with a `bulge` in −1..1 (the sagitta over half the chord).
+  - `arch::connections::check_connection` validates.
+  - `bulged_polyline` is a 17-point quadratic Bézier, dashed on `E-LITE` in the plan and saved as proxies.
+- **Circuits:** switches that reach a common light are one circuit, so two three-way switches make one. `circuit.brightness {switch, brightness}` sets `LightFixture.brightness` (0..=1, default 1) on every light of the circuit, and `arch3d::light` scales lumens by it.
+- **Commands:** `connection`, `connection.edit`, `connection.delete`, `circuit.brightness`. The UI's Connection tool drags from a switch to lights, and its arc grips run `connection.edit`.
+
+### Auto-placed outlets
+- **Usable wall:** `arch::outlets::usable_runs(model, room)` is the room's boundary along the wall faces that face it. Floor-reaching openings (doors, not windows) break it, and so does the wall behind a counter in a kitchen. Distances are along the wall.
+- **Placement:** `auto_outlets` places duplex outlets so that no point of a run is more than 1.8 m from one. In a kitchen, GFCI outlets go over every counter run, at most 1.2 m apart, within 0.6 m of each end and 0.15 m above the counter.
+- **Measuring back:** `outlet_gaps` checks the rule. `arch.inspect {"electrical": true}` gives `outletGaps` per room that has runs: `maxGap`, and `counter` with `maxSpacing` and the end distances.
+- **Command:** `outlets.auto {room, dryRun?}` replies with the labels placed, whether the room is a kitchen and the largest remaining gap.
+
+### Plan views and light sets
+- **Electrical view:** `view.electrical` saves the layer state "Electrical": every `E-*` layer at transparency 0, every other layer at 70. Running it again restores the previous state. The plan export honours layer transparency for arch linework.
+- **A plan per level:** `level.show {level | "all"}` sets `ArchModel.plan_level`. The plan draws that level's objects (a spanning wall on each level it spans) and the site on every level.
+- **Exports:** `export {path, level}` writes one level's plan; `export {path, view}` frames one elevation or section.
+- **Light sets:** `LightSet{name, lights: label → LightState{on, brightness}}` on `ArchModel.light_sets`, edited by `lightset {name, lights | list | delete}`. `camera {save, lightSet}` stores a camera's set (`Camera3d.light_set`), and `render {lightSet}` applies one to that frame only (decision 41).
+
+### Levels and split levels
+- **Free levels:** `level {name, elevation, kind?}` appends a level at any elevation; `level.edit {level, name?, elevation?, ceiling?, structure?, kind?}` changes one.
+  - `LevelKind` is `floor` (the default, not written) or `landing`.
+  - Level 0 always exists (`ArchModel::ensure_ground_level`).
+- **Spanning walls:** `wall {level, topLevel}` sets `Wall.top_level`, which runs a wall from its base level's floor to the top level's ceiling.
+  - `Wall::spans_level` selects a level's walls in every crate, and `bottom_z`/`top_z` give the wall's extent (decision 38).
+  - A wall spanning Lower to Main bounds rooms on Lower, the landing and Main, and carries Main's roof.
+- **Openings on a level:** an opening given `level` has its sill measured from that level's floor. It is refused on a wall that does not span that level.
+- **Everything downstream:** room detection, the 3D build, elevations and sections (they are views of `Scene3d`), IFC storeys at free elevations, GLB, OBJ and DXF. A level edit rebuilds every object (`scene_cache_equals_full::a_level_edit_rebuilds_everything`).
+- **Data:**
+  - room types Dining, Family, Entry and Laundry;
+  - `PathKind::Bed` (mulch, 0.05 m) for planting beds;
+  - `arch::room::room_at(model, level, p)`.
+
+### Grade classes and the above-grade area
+- **Finished grade:** `arch::grade::finished_grade(p)` is the terrain's modified surface with pads applied; 0 without terrain or outside it.
+- **Classes:** `grade_class` gives `aboveGrade` when the level's floor is at or above the finished grade 0.3 m outside every exterior wall that spans it, sampled every 0.5 m and at both ends; otherwise `basement`. A level with no exterior walls is classed at its rooms' centroids.
+- **Area:** `above_grade_area` is the interior area of the rooms on `floor` levels classed above grade; landings and basements never count.
+- **Inspect:** `arch.inspect {"levels": true}` reports each level's `kind`, `gradeClass` and `aboveGradeArea`, and the reply's total (decision 40).
+
+### Pads for split levels
+- **First floor:** the lowest level at or above 0, landings included. A landing whose own exterior walls do not close takes the outer footprint of the nearest level below whose exterior walls all stand past the landing (operator fix `a876c243f`). That is the split-entry case, where the landing's only exterior wall is the spanning front wall.
+- **Side splits:** a floor level that reaches past the footprints below it gets its own pad there.
+- **Entry apron:** a door on a landing gets a flat apron one 0.15 m step below the landing, the door's width + 1.2 m wide and 1.5 m deep, applied after the pads.
+- **Cuts:** basement cuts are applied again after every region, so a cut wins inside its footprint.
+
+### Render styles
+- **Clay** (`Style::Clay`): every material #b4b4b4, metallic 0, roughness 0.8, no texture or tint, lit as shaded.
+- **Technical illustration** (`Style::Technical`, the optional item, built): flat base colours (ambient 1, no sun) with dark crease, boundary and silhouette lines from `arch3d::edges`. The silhouettes have a defect (see the gaps).
+- **Where:** both go through `render {"style"}`, `cadcraft-cli render --style` and the session renderer. Neither is in the 3D pane's selector.
+
+### The showcase house
+- **The runner:** `cadcraft-cli run --commands FILE.json` replays a JSON array of `{cmd, params}` steps, each as a `--cmd`.
+- **The script:** `docs/arch3d/showcase/bilevel.json` has 174 steps:
+  - Lower at −1.2 (a basement), an Entry landing at 0.15 with the front door and two half flights, and Main at 1.5 on a 26 × 16 m shell whose south wall spans from Lower's floor to Main's ceiling;
+  - kitchen appliances, two baths' fixtures, 29 library placements, light grids in every room, 11 switches with their connections, outlets auto-placed in nine rooms, the Evening light set, a 6/12 hip roof with a 0.5 m overhang and paints at plan scope;
+  - a 50 × 40 m lot rising 1.5 m from front to back, padded around the house, with a driveway, two sidewalks, two mulch beds, four trees and six shrubs;
+  - four saved cameras, four elevations and two sections.
+- **Rendering:** `tools/showcase/render_all.py` replays the script into a DXF once, then writes:
+  - a plan per level, and the Electrical view of Lower and Main;
+  - the four elevations and the two sections;
+  - the four cameras, a night render (sun off, the Evening set, camera Front) and the path-traced final;
+  - clay and technical;
+  - GLB, IFC and OBJ, `manifest.json` and `contact-sheet.png`.
+- **Tests:** `crates/engine/tests/showcase.rs` and `showcase_shell.rs` replay the script through the engine and assert the brief's numbers.
+- **Verdict:** it meets the checks, not the brief's "designed in full detail" (see the gaps).
+
+### Phase-14 carry-over
+Copy to User Catalog's copies now place (check 14):
+- a copy of the futon places as the futon (mesh, item, category, layer) under the copy's name;
+- an edited copy's size is the placed size;
+- a copied sink drops into a base cabinet's counter;
+- a copy of a copy, and a copy of a `library.add` group, still place after the item in between is deleted.
+
+### Docs
+USER-GUIDE.md gained "Electrical", "Split levels" and "The showcase house"; phase-13 check 09 runs their `sh` blocks. `docs/arch3d/mcp-examples/10-electrical.jsonl` is the tenth session.
+
+### Upstream
+295 commits in 10 syncs (df6597445, fc157ea91, 2611bc5f5, 1b39fbbab, 8e899eef6, 3b7eb1b7b, a655cee0c, 865fa9afb, d847eac13, a3d9348f6). Among them:
+- a Georgian interface;
+- the web build's page host mode and `window.cadcraft` page API;
+- DWG keeping other applications' objects as proxies of their class;
+- DXF hostile-input hardening (#1025);
+- `render` with a background and plot style (#803);
+- BREAK and TRIM keeping handles;
+- user SHX text fonts;
+- ALIASEDIT;
+- an in-app updater.
+
+### Numbers locked
+- **Devices** (test room, inner faces 0…6 × 0…4, 0.2 m walls):
+  - duplex (0.9, 0) and GFCI (1.9, 0) at 0.3 on `E-POWR`; 240 V at (6, 0.9);
+  - single-pole (0, 3.1), three-way (0, 2.5) and dimmer (4.1, 4) at 1.2 on `E-LITE`, all in r0;
+  - a counter outlet at counterTop + 0.15;
+  - plates probe `electrical` 3 mm off the face, nothing 1.2 m above an outlet;
+  - GLB nodes `electrical-el0…6`.
+- **Circuits:**
+  - two three-way switches to lf0 and lf1 make one circuit;
+  - `circuit.brightness 0.4` puts both lights and the circuit at 0.4;
+  - the two connections add 4 arcs on `E-LITE` (18 vs 14);
+  - a bulge of 0.25 edits to −0.5;
+  - deleting both connections ends the circuit.
+- **Outlets:**
+  - with a door at x 2.45…3.35 and a window on the opposite wall: duplex at 0.3, none in the doorway, worst gap ≤ 1.8 along the wall, and `outletGaps` within 0.06 of it;
+  - a kitchen with base runs on two walls: GFCI ≤ 0.6 from each counter end and ≤ 1.2 apart, at counterTop + 0.15.
+- **Split levels** (Lower 0, Entry landing 1.35, Main 2.7):
+  - `w0` bottom 0, top 5.1 (probes hit at z 0.5, 2.5 and 4.9, nothing at 5.3);
+  - the door opens from the landing (wall at z 1.0, open at 2.0);
+  - rooms on all three levels;
+  - Main moved to 2.8 gives incremental == full, and the wall reaches 5.2;
+  - IFC storeys at 0, 1.35, 2.7.
+- **Grade** (Lower −1.2, Entry 0.15, Main 1.5 on a 10 × 8 m shell):
+  - no terrain, or a slope to 1.0: Lower basement, Main and Entry above grade, and the above-grade area is Main's 76.44 m² (9.8 × 7.8);
+  - a slope to 3.0 (1.56 at the back wall, 0.94 at the front): all three basement, area 0;
+  - a floor exactly at grade is above grade.
+- **Pads** (the same house, Main extended to x 14, pad margin 1.0):
+  - apron 0.0 at (4.6, −0.8);
+  - the Entry pad's margin −0.15 at (2.5, −0.5);
+  - Lower's cut −1.5 at (4.5, 1.5);
+  - the side-split pad 1.2 at (12, 4);
+  - the original surface −0.5 + 1.5 · 45/48 at (25, 25).
+- **Showcase:**
+  - one landing between two floor levels; Lower basement, Main above grade;
+  - above-grade area ≥ 371.6 m² (≈ 474 m² by hand from the script, ≈ 404 m² of it inside Main's walls);
+  - every room furnished, lit, switched and connected;
+  - the kitchen's four appliances, two baths with toilet, lavatory and tub, a bed in each bedroom;
+  - no default material, and outlet spacing met;
+  - 19 images non-blank;
+  - GLB, IFC (three storeys, `IfcOutlet`, `IfcSwitchingDevice`) and OBJ.
+
+### Acceptance (all PASS)
+`01_electrical_devices` · `02_connections_circuits` · `03_outlets_auto` · `04_electrical_view_and_plan_levels` · `05_light_sets` · `06_split_levels` · `07_grade_classes` · `08_pad_and_entry_apron` · `09_render_styles` · `10_showcase_model` · `11_showcase_views` · `12_hostile` · `13_layers_wasm_i18n_docs` · `14_library_copy_places`.
+
+Nine were broken as written and corrected by the operator (decision 42):
+- 08, 09 and 12 at the first run (2026-11-05);
+- 01, 02, 06, 07 and 11 on 2026-11-08;
+- 10 on 2026-11-09.
+
+One product fix came of it: the entry landing's pad.
+
+### Phase-15 gaps
+- **Out of scope by the brief:** load calculations and panel schedules, wiring runs inside walls, low-voltage and data, plumbing and HVAC runs, and the watercolor, glass-house, hand-drawn-line and duotone styles.
+- **The showcase house passes its checks but is not the brief's house.** These come from `bilevel.json`; the areas are by hand.
+  - **Rooms outside the house.** Dining, Bedroom 2 and Bedroom 3 are room polygons at y 18–23, north of the 26 × 16 m shell.
+    - p15-showcase-test, a test-writing segment, added them to make its test pass (decision 43).
+    - Each has one free-standing wall for its switch and no roof. Its floor slab sits at Main's 1.5 m, over ground about 1 m lower.
+    - Their 70 m² count in the reported above-grade area.
+  - **The kitchen casework is in a bedroom.** Three base and two wall cabinets on Main's west wall, plus a two-cabinet "island" at (4, 8)–(5.4, 8), stand in Bedroom 1 (x 0–10).
+    - The island overlaps the bed at (5.2, 8) and the futon at (6, 8).
+    - The kitchen (x 10–18) holds only a free-standing range, refrigerator, sink and dishwasher, so the kitchen GFCI rule never runs in the showcase.
+  - **Undivided bays, not rooms.**
+    - Main is a 156 m² bedroom, a 105 m² kitchen, a 124 m² living room and a 19 m² bath.
+    - Lower is a 140 m² family room and a 265 m² L-shaped room typed Bath, which also holds the washer and a wardrobe.
+    - Bedroom 1 and the kitchen have no window. The 26 m front and the west side have no openings but the front door, so the Front camera, and the night render through it, show a blank wall.
+  - **The split entry is not a foyer.**
+    - The landing's one room (renamed Utility by a later re-detect) is a 3 × 3 m box walled on all four sides, with 1.05 m to the underside of Main's floor. w17 doubles w0 there.
+    - Its walls (default height 2.7, so up to 2.85) and its ceiling (2.55) rise through Main's floor into Bedroom 1.
+    - The Lower→Entry flight starts at (4, 14) and tops out about 12 m from the landing.
+    - The Entry→Main flight has no well (below).
+  - **Duplicate wall:** Main's south wall is doubled. w0 spans from Lower's floor to Main's ceiling (3.9), and w4 stands on the same centre line to 4.2.
+  - **README:** its room table is wrong. Lower has the family room and the "bath", and the Entry room was replaced by Utility.
+  - **Images:** the rendered views and contact sheet are not committed under `docs/arch3d/showcase/`. Check 11 writes them to a temporary folder, and the gate keeps them only as artifacts.
+  - **The checks' blind spots:**
+    - check 10 counts room types and contents, but never asks whether a room lies inside its level's walls, whether the kitchen's casework is in the kitchen, or whether a flight meets its landing;
+    - its roof test is vacuous, because its inspect call omits `roofs`;
+    - check 11's non-blank bar is a luminance σ of 3.
+- **Stair wells and free levels** (decision 39):
+  - `stair` cuts a well only when the to-level comes after the from-level in `ArchModel.levels` (`to_i > from_i`), and `level {elevation}` appends. So a flight to a level created earlier (the showcase's and check 06's Entry→Main) gets no well and runs into the floor slab.
+  - `arch::stair::well_start` compares riser tops measured from the stair's base with the upper slab's absolute underside, so the well is right only for a stair based at 0 (phase 5's case).
+  - `roof::top_level` also picks the highest index.
+- **Landings in 3D:** arch3d knows a landing only by its elevation. Its walls, room ceiling and slab are not clipped at the floor of the level above, and nothing opens the level above over a foyer except an Open Below room drawn by hand.
+- **`roomdetect` drops stair-well rooms:** it replaces every room of the level, Open Below wells included, and leaves `stair.well_room` pointing at a deleted room. The 3D hole survives (decision 17), but the plan's Open Below room and its label go. The showcase runs `stair` before `roomdetect`.
+- **Above-grade area:** it sums every room of an above-grade floor level, Open Below included, whether or not the room lies inside the level's walls.
+- **Technical illustration:**
+  - silhouettes are computed for a fixed straight-down view: `offscreen.rs` passes `[0, 0, -1]`, with a worker's comments left around it. From other cameras only the creases and boundaries are right;
+  - clay and technical are not in the 3D pane's style selector.
+- **Exports:** `ifc_step_grammar.rs` (decision 32) has no counts for `IfcOutlet` and `IfcSwitchingDevice`. Connections and circuits are not exported (no IFC relation, no glTF extras).
+- **Rebuild:** a level edit rebuilds every object. That is correct, but not incremental.
+- **The Electrical view is a layer state,** not a saved plan view; phase 20's plan views take it over.
+- **Phase-14 items still open:**
+  - `move` silently moves nothing for handles it cannot resolve;
+  - `arch.inspect` prints furnishing handles in the short form;
+  - `library_user::relative_value` still indexes and unwraps;
+  - plan outlines are convex hulls;
+  - symbol lights do not emit;
+  - the path tracer uses texture means;
+  - icons are flat.
+
 ## Open items vs Chief Architect
 
-sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFAULT`); site materials in the renderer; SSAO/TAA/cascaded shadows; arc walls and their openings; main-layer joins and the standard-area basis; pony walls, `reversed`; framing; terrain/plant tools, grips and a site panel in the UI; electrical/plumbing/HVAC (10); sheet title blocks and view titles; dormers/crickets/roof returns/skylights/gutters; interactive roof-plane joining; curtain walls; dynamic roof topology; IFC materials and colours, parametric IFC bodies (extrusions, type objects, material layer sets); `ARCHDETECT` on real plans (the two Moorfields plans find 1 and 0 walls; check 07 reports, does not gate), scale from dimensions, editing candidates before accept; phase-2 opening sub-items (mullions, jambs, hardware, display states, schedules); room boxes, reference display, dynamic defaults, split levels, moldings; door classification; the phase-5 stair/railing items above; the phase-6 items above; the phase-7, phase-8, phase-9, phase-12 and phase-13 items above (finish colours and scales, interior finishes, textures in the path tracer, OBJ and IFC; corner cabinets, hardware, backsplashes); **phase 11:** raster window glass is opaque, hardware ray-query parity unverified on hardware, Russian roulette without a survival floor; phase 14: a copied library item that places (a one-object group on its source's layer), `move` refusing handles it cannot resolve, `arch.inspect` handles in the form commands take, furnishing plan outlines beyond the convex hull, soffits under ceiling items, emitting symbol lights (phase 15), textures in the path tracer, shaded icons.
+sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFAULT`); site materials in the renderer; SSAO/TAA/cascaded shadows; arc walls and their openings; main-layer joins and the standard-area basis; pony walls, `reversed`; framing; terrain/plant tools, grips and a site panel in the UI; plumbing and HVAC, electrical load calculations, panel schedules, wiring runs, low-voltage and data; sheet title blocks and view titles; dormers/crickets/roof returns/skylights/gutters; interactive roof-plane joining; curtain walls; dynamic roof topology; IFC materials and colours, parametric IFC bodies (extrusions, type objects, material layer sets); `ARCHDETECT` on real plans (the two Moorfields plans find 1 and 0 walls; check 07 reports, does not gate), scale from dimensions, editing candidates before accept; phase-2 opening sub-items (mullions, jambs, hardware, display states, schedules); room boxes, reference display, dynamic defaults, moldings; door classification; the phase-5 stair/railing items above; the phase-6 items above; the phase-7, phase-8, phase-9, phase-12 and phase-13 items above (finish colours and scales, interior finishes, textures in the path tracer, OBJ and IFC; corner cabinets, hardware, backsplashes); **phase 11:** raster window glass is opaque, hardware ray-query parity unverified on hardware, Russian roulette without a survival floor; phase 14: `move` refusing handles it cannot resolve, `arch.inspect` handles in the form commands take, furnishing plan outlines beyond the convex hull, soffits under ceiling items, emitting symbol lights, textures in the path tracer, shaded icons; **phase 15:** a showcase house designed to the brief (rooms inside its walls, a kitchen with its casework and island, a foyer open to the main level, half flights meeting the landing, windows on every side), stair wells decided by elevation and measured from the stair's base, landing walls and ceilings clipped at the level above, `roomdetect` keeping stair-well rooms, an above-grade area without Open Below rooms, technical silhouettes from the camera and clay/technical in the pane, the electrical entities in the IFC grammar test, the showcase images committed.
 
 ## Phase plan
 
-0 ✅ → 1 ✅ → 2 ✅ → 3 ✅ → 4 ✅ → 5 ✅ → 6 ✅ → 7 ✅ → 8 ✅ → 9 ✅ → 10 ✅ → 11 ✅ → 12 ✅ → 13 ✅ → 14 ✅ → **15 electrical, technical illustration and the showcase house**.
+0 ✅ → 1 ✅ → 2 ✅ → 3 ✅ → 4 ✅ → 5 ✅ → 6 ✅ → 7 ✅ → 8 ✅ → 9 ✅ → 10 ✅ → 11 ✅ → 12 ✅ → 13 ✅ → 14 ✅ → 15 ✅ (a showcase rework proposed at its checkpoint) → **16 ceilings and foundations** (planned and grounded 2026-11-08; 17 segments merged at the phase-15 checkpoint) → 17 stairs, decks, railings and openings in detail → 18 interior finish, kitchen and bath → 19 light, sky and cameras → 20 plan views and dimensions → 21 schedules, elevations and sheets.
 
 ## Building blocks added outside the swarm (assisted)
 
@@ -693,52 +911,23 @@ sun in the pane (the site exists since phase 9; the pane still uses `Light::DEFA
   - **op/p14-pt-backdrop (6f78f5fe):** the path tracer paints the backdrop on the pixels no sample hit (decision 36).
   - **op/p14-docs-user-guide (23d0d1a7):** p14-docs-user-guide at level 2. Its 32 rounds had never run a test, because the swarm's gate built `-p docs` (fixed in CompleXiti 9547ec1d). Its examples rewritten to the real commands, the engine guide tests given the library readers, check 12's search rule made behavioural.
   - **op/p14-icon-category (bcdfd934):** `library.icon` refuses unknown categories; the checks compare meshes within a tolerance (decision 37); a placed group returns object handles; Copy to User Catalog copies stock items into the User catalog under their id; edit and delete refuse a stock id; `library/user.rs` tests use the shared readers (decision 35).
+- **Phase-15 operator fixes (2026-11-05/09).** Phase 15 needed no groundwork. Five operator interventions:
+  - **p15-doc-levels at level 2 (779953651):**
+    - `Level.kind` is skipped when it is Floor, so drawings without landings write the payload they wrote before;
+    - io's `hostile_arch_xrecord_never_panics` truncates the whole record (with the longer payload, its splice of chunk 0 parsed by chance into three walls and failed ten gates);
+    - the four new room types round-trip.
+  - **p15-cmd-connections (3d158e595):** the `Connection` literal goes through `Default` (`cargo xtask literals`).
+  - **op/p15-library-copy-check (802884283):** check 14 (Andy 11-05: Copy to User Catalog's copies must place), plus corrections to three checks:
+    - 08: phase 9's `elevations()` helper is not in the include chain;
+    - 09: a camera inside the room sees the painted faces;
+    - 12: JSON has no NaN, so the NaN inputs are null or strings.
+  - **Operator landing (0dcace523, 2026-11-08):**
+    - checks 01, 02, 06, 07 and 11 read the CLI's real output shapes;
+    - the entry landing gets the building pad, and a basement cut wins over the apron's slope (a876c243f, four tests);
+    - CHIEF-REFERENCE §7 for phases 16–21 (Andy, 11-07).
+  - **op/p15-check10-land (f9f140734):** check 10 reads `surfaces_of()`'s rows (cherry-picked from the swarm's p15-check10-surfaces).
 
-## Phase 15 plan
-
-## Phase 15 plan
-
-Phase 15 (electrical, split levels, the showcase house) needs no groundwork outside the swarm. Six segments open the DAG: the two data segments (p15-doc-electrical, p15-doc-levels), every phase-15 translation row (p15-i18n-labels, so no command segment edits the .tsv files), `export {view|level}`, the clay style and `cadcraft-cli run --commands`. The decisions follow.
-
-**Electrical devices.**
-- `ElectricalDevice` (handle el<n> at +0x68000): kind (duplex, GFCI, 240 V; single-pole, three-way, dimmer), wall, side (left/right, the surface-key sides), offset (wall start to plate centre), height (plate centre above the level's floor), counter, level.
-- Standard heights: outlets 0.3 m, switches 1.2 m; a counter outlet 0.15 m above the counter top in front (elevation + carcass + counter thickness, which arch.inspect reports as `counterTop`).
-- Layers: outlets E-POWR, switches and connection arcs E-LITE. Plates are 0.07 x 0.115 m, 0.006 m proud of the face (probe part `electrical`, GLB node `electrical-el<n>`, IfcOutlet / IfcSwitchingDevice).
-- A device in a doorway (an opening with sill 0) or past a wall's end is refused.
-
-**Connections and circuits.**
-- `Connection` (cn<n> at +0x70000): from a switch to light fixtures, with a bulge (-1..1, the arc's sagitta over half the chord) that the plan's grip reshapes.
-- Switches that share a light are one circuit (so two three-way switches make one). `circuit.brightness` sets `LightFixture.brightness` (0..=1, default 1) on every light of the circuit, and arch3d scales lumens by it.
-
-**Auto-placed outlets.**
-- Usable wall is the room's boundary along the faces that face it, broken at doorways (sill 0; windows do not break it). Distance is measured along the wall.
-- Duplex outlets so that no point is farther than 1.8 m from one. In a kitchen, GFCI over every counter run (at most 1.2 m apart, within 0.6 m of each end), and the wall behind a counter is served by the counter rule.
-
-**Light sets.** Named sets of {on, brightness} per light, stored in the drawing; a camera stores its set; a render applies a set to its lights for that render only (the model never changes).
-
-**Levels and split levels.**
-- A level's elevation is free (`level {elevation}`, `level.edit`), and its kind is floor or landing. A new drawing's level 0 always exists (`ensure_ground_level`).
-- A wall with `top_level` runs from its base level's floor to the top level's ceiling. Every crate selects a level's walls with `Wall::spans_level`, and heights come from `bottom_z`/`top_z`. A wall spanning Lower to Main bounds rooms on Lower, the landing and Main, and carries Main's roof.
-- An opening's sill is measured from its own level, so the front door opens from the landing.
-- `level.show` sets `ArchModel.plan_level`, the one level the plan draws; the site draws on every level.
-
-**Grade classes.** A level is above grade when its floor is at or above the finished grade (the terrain with its pads; 0 with no terrain) 0.3 m outside every exterior wall that spans it, sampled every 0.5 m; otherwise it is a basement. The above-grade area is the interior area of the rooms on floor levels classed above grade (landings and basements never count).
-
-**Pads.** The first floor is the lowest level at or above 0, landings included. Its pad and the basement cuts stay as in phase 9. New:
-- a floor level reaching past the footprints below it (a side split) gets its own pad there;
-- a door on a landing gets a flat apron one 0.15 m step below the landing (door width + 1.2 m wide, 1.5 m deep), applied last.
-
-**Views.**
-- The Electrical view is the layer state "Electrical": E-* layers on, every other layer at transparency 70.
-- `render {style: clay}` renders every material #b4b4b4. Technical illustration (flat colours with phase 7's silhouette and crease lines) is optional and built last; until it lands the style is refused as "not available yet", and check 09 counts that as a SKIP.
-- `export {view}` frames one elevation or section; `export {level}` gives one level's plan.
-
-**The showcase house.** `docs/arch3d/showcase/bilevel.json` is a JSON array of {cmd, params} replayed by `cadcraft-cli run --commands`:
-- Lower at -1.2 (a basement), the Entry landing at 0.15 with the front door and half flights, Main at 1.5 (above grade, at least 371.6 m² of rooms);
-- a sloping graded site with a driveway, sidewalks, trees, shrubs and planting beds (`PathKind::Bed`);
-- four cameras, a light set and the views.
-
-`tools/showcase/render_all.py` renders every view style, the exports and a contact sheet with a manifest. `crates/engine/tests/showcase.rs` replays the script through the engine and asserts the brief's numbers.
+  A CC-0 sky HDRI for phase 19 was added (576538153) and reverted (6f0b65d23); phase 19's groundwork still needs it.
 
 ## Phase 16 plan
 
@@ -751,4 +940,4 @@ Phase 16 (ceilings and foundations) was planned by the operator from a reviewed 
 - A vaulted room's ceiling follows the roof underside; a flat ceiling never rises above it (a ceiling or level edit that would is refused, naming the room; a roof edit is never refused and leaves a ceilingWarning). The walls of a vaulted room rise to the underside (wall-rise meshes); gable walls keep their phase-4 shape.
 - Foundations cover every exterior wall with no level below it; FOUNDATION creates no walls. A basement level's exterior walls become "Concrete 0.2".
 - Four segments start from earlier work (start_from): p16-vault-ceiling, p16-trays, p16-soffits and p16-foundation-stem had partial implementations from the operator's run outside the swarm; workers finish them against the checks.
-
+- The phase-16 demo is its own small house (`docs/arch3d/showcase/phase-16-demo.json`), not the showcase house, which the phase-15 checkpoint proposes to rework first.
