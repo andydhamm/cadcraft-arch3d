@@ -180,6 +180,70 @@ fn the_shell_has_two_bath_rooms() {
 }
 
 #[test]
+fn the_shell_library_returns_none_for_unknown_items() {
+    let s = showcase_session();
+
+    // Non-existent item ids must return None, not panic or return a default.
+    let unknown = ["does-not-exist-12345", "own:pull-bar-999", "furniture-xyz", "", "own:pull-bar-128-extra"];
+    for id in unknown {
+        assert!(s.library.item(id).is_none(), "library.item(\"{id}\") should be None");
+    }
+}
+
+#[test]
+fn the_shell_session_replays_independently() {
+    // Two separate sessions must both be able to replay the showcase script.
+    let mut s1 = showcase_session();
+    replay(&mut s1);
+
+    let mut s2 = showcase_session();
+    replay(&mut s2);
+
+    // Both sessions should have the same number of rooms after replay.
+    let r1: Value = s1.execute("arch.inspect", &json!({"rooms": true})).expect("inspect s1");
+    let r2: Value = s2.execute("arch.inspect", &json!({"rooms": true})).expect("inspect s2");
+    let rooms1 = r1["rooms"].as_array().expect("rooms s1").len();
+    let rooms2 = r2["rooms"].as_array().expect("rooms s2").len();
+    assert_eq!(rooms1, rooms2, "sessions should have the same room count after replay");
+    assert!(rooms1 > 0, "replay should produce rooms");
+}
+
+#[test]
+fn the_shell_session_survives_hostile_commands() {
+    let mut s = showcase_session();
+    replay(&mut s);
+
+    // Hostile or malformed commands should return errors, not crash the session.
+    let hostile = [
+        ("wall", json!({})),
+        ("wall", json!({"points": []})),
+        ("wall", json!({"points": [[0.0, 0.0]]})),
+        ("wall", json!({"points": [[0.0, 0.0], [1.0, 1.0]], "thickness": -1.0})),
+        ("wall", json!({"points": [[0.0, 0.0], [1.0, 1.0]], "thickness": 1e12})),
+        ("room", json!({})),
+        ("room", json!({"type": "nonexistent-type"})),
+        ("library.place", json!({})),
+        ("library.place", json!({"item": "does-not-exist"})),
+        ("cabinet", json!({})),
+        ("cabinet", json!({"kind": "base", "wall": "w999", "offset": 0.0})),
+        ("arch.inspect", json!({"bogusKey": true})),
+    ];
+
+    for (cmd, params) in hostile {
+        let result = s.execute(cmd, &params);
+        // Either succeeds or returns a clean error — never panics.
+        match result {
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+
+    // The session should still be usable after all the hostile commands.
+    let r: Value = s.execute("arch.inspect", &json!({"rooms": true})).expect("session still works");
+    assert!(r["rooms"].as_array().is_some(), "rooms array should still be present");
+}
+
+#[test]
 fn the_shell_library_lists_sample_items() {
     let mut s = showcase_session();
 
