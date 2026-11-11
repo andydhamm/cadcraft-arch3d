@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-11 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 17 of 21: Stairs, decks, railings and openings in detail — 19 of 21 segments merged · 13 of 14 acceptance checks**
 
-8,733 workspace tests passing at the last merge · 943 segments merged in all · 0 of 15 seats working
+8,737 workspace tests passing at the last merge · 945 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -27,7 +27,7 @@ Updated 2026-11-11 19:00 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 37.3 h so far · expected done Nov 11 22:41–Nov 13 08:26 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 37.5 h so far · expected done Nov 11 22:56–Nov 13 08:41 UTC |
 | 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
 | 19 | Light, sky and cameras | building | 1 / 17 | — |
 | 20 | Plan views and dimensions | building | 0 / 13 | — |
@@ -35,16 +35,21 @@ Updated 2026-11-11 19:00 UTC. This page and the card in the README are regenerat
 
 ## Phase 17 segments
 
-19 merged, 2 replaced, 1 merging, 1 queued
+19 merged, 2 replaced, 1 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p17f-showcase-phase17` | The showcase house gets its phase-17 details: railed stairs, a framed and railed rear deck, gridded windows and a round top; renders refreshed | merging | mai-flash |
+| `upstream-sync-e5021f017` | merge upstream upstream/main up to e5021f017 (19 commits) | gate | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 11 19:12 | `p19-foundation-5` | merged | 8,737 pass | claude-sonnet-b |
+| Nov 11 19:12 | `p19-foundation-5` | merged | 8,737 pass | darwin-ws3 |
+| Nov 11 19:12 | `p19-foundation-5` | merged | 8,737 pass | bonsai-ws2-b |
+| Nov 11 19:02 | `p18-scene-plumbing-4` | merged | 8,737 pass | claude-sonnet-d |
 | Nov 11 18:42 | `p19-foundation-3` | merged | 8,733 pass | claude-sonnet-b |
 | Nov 11 17:45 | `p19-strip-model-1` | merged | 8,731 pass | claude-sonnet-c |
 | Nov 11 17:45 | `p16f2-showcase-entry` | merged | 8,731 pass | claude-sonnet-d |
@@ -53,27 +58,23 @@ Updated 2026-11-11 19:00 UTC. This page and the card in the README are regenerat
 | Nov 11 17:15 | `p19-ptg-frame-lighting` | merged | 8,720 pass | claude-sonnet-a |
 | Nov 11 17:15 | `p19-foundation-4` | merged | 8,720 pass | claude-sonnet-a |
 | Nov 11 17:15 | `p18-molding-kit-2` | merged | 8,720 pass | claude-sonnet-c |
-| Nov 11 16:29 | `p18-scene-plumbing-3` | merged | 8,709 pass | claude-sonnet-b |
-| Nov 11 16:29 | `p19-foundation-2` | merged | 8,709 pass | claude-sonnet-b |
-| Nov 11 16:29 | `p19-normal-maps-1` | merged | 8,709 pass | bonsai-b |
-| Nov 11 16:07 | `p19-foundation-4` | refused | 8,698 pass | mai-flash-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 1119 |
-| bonsai-b | bonsai2-27b | agent | 1080 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1173 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1115 |
-| claude-sonnet-a | sonnet | merging | 122 |
-| claude-sonnet-b | sonnet | merging | 125 |
-| claude-sonnet-c | sonnet | merging | 64 |
-| claude-sonnet-d | sonnet | merging | 53 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 984 |
+| bonsai-a | bonsai2-27b | agent | 1119 |
+| bonsai-b | bonsai2-27b | agent | 1081 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1173 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1115 |
+| claude-sonnet-a | sonnet | down | 122 |
+| claude-sonnet-b | sonnet | agent | 125 |
+| claude-sonnet-c | sonnet | down | 64 |
+| claude-sonnet-d | sonnet | gate | 53 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 984 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | merging | 80 |
-| mai-flash-b | mai-code-1.1-flash | merging | 23 |
+| mai-flash | mai-code-1.1-flash | agent | 80 |
+| mai-flash-b | mai-code-1.1-flash | agent | 23 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | merging | 760 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 377 |
+| tturbo-mac | tturbo-ultraheretic | agent | 760 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 377 |
