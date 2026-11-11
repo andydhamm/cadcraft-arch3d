@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-11 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 35 of 35 segments merged · 16 of 20 acceptance checks**
 
-8,552 workspace tests passing at the last merge · 910 segments merged in all · 0 of 15 seats working
+8,559 workspace tests passing at the last merge · 911 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 00:45 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 45.3 h so far · expected done Nov 11 00:45–Nov 12 01:39 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 45.5 h so far · expected done Nov 11 01:00–Nov 12 01:54 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -42,6 +42,7 @@ Updated 2026-11-11 00:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 11 00:46 | `harden-p17-railing-auto` | merged | 8,559 pass | tturbo-mac |
 | Nov 11 00:22 | `p17-wall-under-flight` | refused | 8,564 pass | claude-sonnet-b |
 | Nov 10 23:57 | `upstream-sync-2f8f18618` | merged | 8,552 pass | mai-flash-b |
 | Nov 10 23:33 | `p17-wall-under-flight` | refused | 8,556 pass | claude-sonnet-b |
@@ -53,7 +54,6 @@ Updated 2026-11-11 00:45 UTC. This page and the card in the README are regenerat
 | Nov 10 21:30 | `p17-wall-under-flight` | refused | 8,493 pass | claude-sonnet-b |
 | Nov 10 20:34 | `p17-railing-parts` | merged | 8,481 pass | mai-flash-esc |
 | Nov 10 20:14 | `harden-p16-rw-above-grade-living` | merged | 8,459 pass | tturbo-mac |
-| Nov 10 19:53 | `p17-deck-frame` | merged | 8,451 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
@@ -67,7 +67,7 @@ Updated 2026-11-11 00:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | merging | 110 |
 | claude-sonnet-c | sonnet | idle | 54 |
 | claude-sonnet-d | sonnet | idle | 49 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 947 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 947 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | idle | 13 |
