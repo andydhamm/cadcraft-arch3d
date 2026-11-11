@@ -319,6 +319,9 @@ pub fn opening_meshes(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: Option
 /// [`opening_meshes`] that also knows the host wall's roof top polyline (`(w, z)` points along the
 /// wall), for an opening whose top follows the roof. `roof_top` is not read yet.
 pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: Option<(f64, f64)>, roof_top: Option<&[Vec2]>) -> Vec<Mesh> {
+    if let Some(m) = crate::niche::special_opening_meshes(walls, o, span) {
+        return m;
+    }
     let wall = match walls.get(&o.host) {
         Some(w) => w,
         None => return Vec::new(),

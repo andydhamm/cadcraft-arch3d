@@ -461,7 +461,7 @@ fn symbol_materials_carry_base_colour_and_textures() {
 fn backdrop_and_its_image_reach_the_scene() {
     let mut model = base_model();
     model.images.insert("sky".into(), image(4, 2, 5));
-    model.backdrop = Some(Backdrop::Image { item: "sky".into(), projection: Projection::Equirect });
+    model.backdrop = Some(Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: 0.0 });
     let (mut cache, _) = SceneCache::new(&model);
     let scene = Scene3d::build(&model);
     assert_eq!(scene.backdrop, model.backdrop);
@@ -476,7 +476,7 @@ fn backdrop_and_its_image_reach_the_scene() {
     assert_same(cache.scene(), &Scene3d::build(&next), "gradient");
     assert!(cache.scene().textures.is_empty());
     // An image backdrop whose image is missing has no texture.
-    next.backdrop = Some(Backdrop::Image { item: "night".into(), projection: Projection::Flat });
+    next.backdrop = Some(Backdrop::Image { item: "night".into(), projection: Projection::Flat, horizon: 0.0 });
     cache.update(&next);
     assert_same(cache.scene(), &Scene3d::build(&next), "missing image");
     assert!(cache.scene().textures.is_empty());
@@ -584,10 +584,12 @@ fn a_cabinet_edit_rebuilds_the_cabinets_of_its_level() {
     model.push_cabinet(base_cabinet(0, 1.0, 0.6, 1));
     let (mut cache, _) = SceneCache::new(&model);
     let level0 = model.cabinets.iter().filter(|c| c.level == 0).count();
-    // A base cabinet's edit reaches every cabinet on its level (counter runs, gaps), not level 1's.
+    // A base cabinet's size reaches the base cabinets of its level (counter runs, gaps), not the wall
+    // cabinets (they read no base cabinet) and not level 1's.
+    let base0 = model.cabinets.iter().filter(|c| c.level == 0 && c.kind == CabinetKind::Base).count();
     model.cabinets[0].width = 0.7;
     let stats = cache.update(&model);
-    assert_eq!(stats.rebuilt, level0, "{stats:?}");
+    assert_eq!(stats.rebuilt, base0, "{stats:?}");
     assert_same(cache.scene(), &Scene3d::build(&model), "cabinet width");
     // So does the sink it hosts: the sink plus the level's cabinets.
     model.furnishings[0].at[0] += 0.05;
@@ -786,7 +788,7 @@ fn edit(m: &mut ArchModel, state: &mut u64) -> (&'static str, usize) {
                 m.images.insert("sky".into(), image(2, 2, (r % 200) as u8));
             }
             m.backdrop = match (r / 7) % 3 {
-                0 => Some(Backdrop::Image { item: "sky".into(), projection: Projection::Equirect }),
+                0 => Some(Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: 0.0 }),
                 1 => Some(Backdrop::Colour { colour: [(r % 256) as u8, 30, 60] }),
                 _ => None,
             };
