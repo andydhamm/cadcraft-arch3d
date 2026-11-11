@@ -61,8 +61,11 @@ fn strip_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
     if f.facing == StripFacing::Out {
         const TICK_LEN: f64 = 0.02;
         const TICK_SPACING: f64 = 0.3;
-        for segment in f.path.windows(2) {
-            let (a, b) = (segment[0], segment[1]);
+        let mut segments: Vec<(Vec2, Vec2)> = f.path.windows(2).map(|w| (w[0], w[1])).collect();
+        if f.closed && f.path.len() > 2 {
+            segments.push((f.path[f.path.len() - 1], f.path[0]));
+        }
+        for (a, b) in segments {
             let dx = b.x - a.x;
             let dy = b.y - a.y;
             let seg_len = (dx * dx + dy * dy).sqrt();
@@ -131,6 +134,25 @@ fn line(c: Vec2, u: Vec2, r: f64) -> Vec<Vec2> {
 mod tests {
     use super::*;
     use cadcraft_doc::arch::FixtureShape;
+
+    #[test]
+    fn strip_symbol_is_the_path() {
+        let mut f = make(0, FixtureShape::Strip);
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        let down = plan_symbol(&f);
+        assert_eq!(down, vec![f.path.clone()]);
+        // Out adds ticks every 0.3 m on the right (-y when heading +x).
+        f.facing = StripFacing::Out;
+        let out = plan_symbol(&f);
+        assert_eq!(out[0], f.path);
+        assert_eq!(out.len(), 1 + 6);
+        assert!(out[1..].iter().all(|t| t.len() == 2 && t[1].y < t[0].y && (t[1].x - t[0].x).abs() < 1e-9));
+        // A closed path repeats its first point.
+        f.closed = true;
+        f.path = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0)];
+        assert_eq!(plan_symbol(&f)[0].len(), 4);
+        assert!(plan_symbol(&LightFixture { path: vec![Vec2::new(0.0, 0.0)], ..f }).is_empty());
+    }
 
     fn make(id: u32, shape: FixtureShape) -> LightFixture {
         let mut f = LightFixture::new(cadcraft_doc::ArchId(id), "pot-light", Vec2::new(5.0, 3.0));

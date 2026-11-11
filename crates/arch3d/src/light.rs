@@ -41,6 +41,35 @@ pub struct SceneLight {
     /// The fixture's IES distribution, scaled to the fixture's lumens; it replaces the cone (and
     /// an area light's cosine law) in [`SceneLight::intensity_toward`].
     pub ies: Option<std::sync::Arc<cadcraft_doc::arch::IesProfile>>,
+    /// A strip light's emitters (phase 19), brightness applied; `None` for every other kind.
+    pub strip: Option<std::sync::Arc<Vec<StripSample>>>,
+}
+
+/// One Lambertian emitter of a strip light: a short piece of the strip at `position` emitting
+/// `intensity` cd along its unit `normal` (cos law off it, nothing behind).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StripSample {
+    pub position: Vec3,
+    pub normal: Vec3,
+    /// Peak candela along `normal`: the piece's lumens / π.
+    pub intensity: f64,
+}
+
+/// Illuminance (lux) one strip sample gives a surface at `point` with unit normal `n`, and the
+/// unit vector from the point to the sample with its distance (for a shadow ray); `None` when it
+/// gives nothing.
+fn strip_sample_term(s: &StripSample, point: Vec3, n: Vec3) -> Option<(f64, Vec3, f64)> {
+    let w = s.position - point;
+    let d2 = w.dot(w);
+    if !d2.is_finite() || d2 < 1e-18 {
+        return None;
+    }
+    let d = d2.sqrt();
+    let l = w * (1.0 / d);
+    let cos_r = n.dot(l).max(0.0);
+    let cos_e = (-s.normal.dot(l)).max(0.0);
+    let e = s.intensity * cos_e * cos_r / d2;
+    (e.is_finite() && e > 0.0).then_some((e, l, d))
 }
 
 impl SceneLight {
@@ -158,7 +187,21 @@ pub fn scene_lights_with(model: &ArchModel, overrides: &BTreeMap<String, LightSt
         } else {
             (intensity, None)
         };
+        let strip = if f.kind == LightKind::Strip {
+            let samples: Vec<StripSample> = cadcraft_arch::light::strip_samples(model, f)
+                .into_iter()
+                .map(|(position, normal, lumens)| StripSample { position, normal, intensity: lumens * b / std::f64::consts::PI })
+                .filter(|s| s.position.is_finite() && s.normal.is_finite() && s.intensity.is_finite())
+                .collect();
+            if samples.is_empty() {
+                continue;
+            }
+            Some(std::sync::Arc::new(samples))
+        } else {
+            None
+        };
         out.push(SceneLight {
+            strip,
             id: f.id,
             kind: f.kind,
             position,
@@ -203,6 +246,10 @@ pub fn direct_illuminance(light: &SceneLight, point: Vec3, normal: Vec3) -> f64 
         return 0.0;
     }
     let n = normal * (1.0 / nl);
+    if light.kind == LightKind::Strip {
+        let e: f64 = light.strip.iter().flat_map(|v| v.iter()).filter_map(|s| strip_sample_term(s, point, n)).map(|t| t.0).sum();
+        return if e.is_finite() { e } else { 0.0 };
+    }
     if light.kind == LightKind::Area && light.ies.is_none() {
         let (w, l) = (light.size[0], light.size[1]);
         if !w.is_finite() || !l.is_finite() || w <= 0.0 || !l.is_finite() || l <= 0.0 {
@@ -279,7 +326,29 @@ pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
     });
     let mut out = Illuminance::default();
     for light in &scene.lights {
-        let e = if light.kind == LightKind::Area && light.ies.is_none() {
+        let e = if light.kind == LightKind::Strip {
+            let nl = normal.len();
+            if !nl.is_finite() || nl <= 0.0 {
+                0.0
+            } else {
+                let n = normal * (1.0 / nl);
+                let mut sum = 0.0;
+                for s in light.strip.iter().flat_map(|v| v.iter()) {
+                    let Some((e, l, d)) = strip_sample_term(s, point, n) else { continue };
+                    let start_margin = (d * 1e-4).clamp(1e-4, 0.01);
+                    let end_margin = (d * 1e-3).clamp(1e-4, 0.05);
+                    let max_t = (d - start_margin).max(start_margin);
+                    let blocked = max_t > start_margin + end_margin
+                        && occluders
+                            .ray(point + l * start_margin, l, max_t)
+                            .is_some_and(|hit| hit.distance > start_margin && hit.distance < max_t - end_margin);
+                    if !blocked {
+                        sum += e;
+                    }
+                }
+                if sum.is_finite() { sum } else { 0.0 }
+            }
+        } else if light.kind == LightKind::Area && light.ies.is_none() {
             let (w, l) = (light.size[0], light.size[1]);
             if !w.is_finite() || !l.is_finite() || w <= 0.0 || l <= 0.0 {
                 0.0
@@ -393,6 +462,51 @@ mod tests {
         }
         m.next_light_id = 4;
         m
+    }
+
+    fn strip_room(lm: f64, facing: cadcraft_doc::arch::StripFacing) -> ArchModel {
+        let mut m = room();
+        m.lights.clear();
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(0), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        f.lumens_per_metre = lm;
+        f.facing = facing;
+        m.lights.push(f);
+        m.next_light_id = 1;
+        m
+    }
+
+    #[test]
+    fn strip_direct_illuminance_matches_line_integral() {
+        use cadcraft_doc::arch::StripFacing;
+        let m = strip_room(500.0, StripFacing::Down);
+        let lights = scene_lights(&m);
+        assert_eq!(lights.len(), 1);
+        assert_eq!(lights[0].kind, LightKind::Strip);
+        let direct = direct_illuminance(&lights[0], Vec3::new(2.0, 2.0, 0.0), up());
+        let (h, a) = (2.4f64, 1.0f64);
+        let exact = 500.0 / std::f64::consts::PI * (a / (h * h + a * a) + (a / h).atan() / h);
+        assert!((exact - 49.72).abs() < 0.01, "{exact}");
+        assert!((direct - exact).abs() / exact < 0.001, "{direct} vs {exact}");
+        // With shadow rays in the built scene.
+        let scene = crate::build(&m);
+        let r = illuminance(&scene, Vec3::new(2.0, 2.0, 0.0), up());
+        assert!((r.lux - 49.72).abs() < 49.72 * 0.02, "{}", r.lux);
+        // Half the lumens per metre gives half; brightness scales it; facing out gives ~nothing.
+        let half = illuminance(&crate::build(&strip_room(250.0, StripFacing::Down)), Vec3::new(2.0, 2.0, 0.0), up());
+        assert!((half.lux - r.lux / 2.0).abs() < 0.1, "{}", half.lux);
+        let out = illuminance(&crate::build(&strip_room(500.0, StripFacing::Out)), Vec3::new(2.0, 2.0, 0.0), up());
+        assert!(out.lux < 1.0, "{}", out.lux);
+        let mut dim = BTreeMap::new();
+        dim.insert("lf0".to_string(), LightState { on: true, brightness: 0.5 });
+        let dimmed = scene_lights_with(&m, &dim);
+        let e = direct_illuminance(&dimmed[0], Vec3::new(2.0, 2.0, 0.0), up());
+        assert!((e - direct / 2.0).abs() < 1e-9);
+        let mut off = m.clone();
+        off.lights[0].on = false;
+        assert!(scene_lights(&off).is_empty());
     }
 
     #[test]

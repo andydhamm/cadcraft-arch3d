@@ -286,6 +286,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn strip_serde_defaults_and_old_files_load() {
+        // An old fixture (no strip keys) loads with the strip defaults.
+        let json = r#"{"id":0,"fixture":"Pendant","shape":"pendant","kind":"point","mount":"ceiling","position":{"x":1.0,"y":2.0},"lumens":1100.0,"kelvin":2700.0}"#;
+        let f: LightFixture = serde_json::from_str(json).unwrap_or_else(|_| LightFixture::new(ArchId(9), "x", Vec2::new(0.0, 0.0)));
+        assert_eq!(f.id, ArchId(0));
+        assert!(f.path.is_empty() && !f.closed && f.lumens_per_metre == 0.0 && f.tray.is_none());
+        assert_eq!(f.facing, StripFacing::Down);
+        // A strip round-trips; its kind and shape are lower case / kebab names.
+        let strip = LightFixture {
+            kind: LightKind::Strip,
+            shape: FixtureShape::Strip,
+            path: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0)],
+            lumens_per_metre: 500.0,
+            facing: StripFacing::Out,
+            tray: Some(ArchId(3)),
+            ..LightFixture::new(ArchId(1), "LED strip", Vec2::new(1.0, 0.0))
+        };
+        let text = serde_json::to_string(&strip).unwrap_or_default();
+        assert!(text.contains("\"strip\"") && text.contains("\"out\""), "{text}");
+        let back: Result<LightFixture, _> = serde_json::from_str(&text);
+        assert_eq!(back.ok(), Some(strip));
+        assert_eq!(FixtureShape::Strip.name(), "strip");
+        assert_eq!((MAX_STRIP_POINTS, MAX_STRIP_LENGTH, MAX_LUMENS_PER_METRE, STRIP_SAMPLE_SPACING), (256, 100.0, 10_000.0, 0.15));
+        // A default fixture writes no tray.
+        let plain = serde_json::to_string(&LightFixture::new(ArchId(2), "x", Vec2::new(0.0, 0.0))).unwrap_or_default();
+        assert!(!plain.contains("tray"), "{plain}");
+    }
+
+    #[test]
     fn light_handles_follow_the_plant_range() {
         let plants_end = super::super::ARCH_HANDLE_BASE + super::super::PLANT_HANDLE_OFFSET + (1u64 << 15);
         assert!(light_handle(ArchId(0)).0 >= plants_end);

@@ -78,8 +78,13 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
     let lens = if f.on { "light-lens-lit" } else { "light-lens" };
     let hw = 0.012 / 2.0;
     let mut parts: Vec<Option<Mesh>> = Vec::new();
-    for segment in f.path.windows(2) {
-        let (a, b) = (segment[0], segment[1]);
+    let mut segments: Vec<(Vec2, Vec2)> = f.path.windows(2).map(|w| (w[0], w[1])).collect();
+    if f.closed && f.path.len() > 2 {
+        if let (Some(last), Some(first)) = (f.path.last(), f.path.first()) {
+            segments.push((*last, *first));
+        }
+    }
+    for (a, b) in segments {
         if !a.is_finite() || !b.is_finite() {
             continue;
         }
@@ -253,6 +258,34 @@ pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec
 mod tests {
     use super::*;
     use cadcraft_doc::ArchId;
+
+    #[test]
+    fn strip_housing_follows_path() {
+        let mut m = ArchModel::default();
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0), Vec2::new(3.0, 3.0)];
+        f.height = Some(2.4);
+        m.lights.push(f.clone());
+        let meshes = fixture_meshes(&m);
+        let housing: Vec<_> = meshes.iter().filter(|x| x.material == "light-strip").collect();
+        assert_eq!(housing.len(), 2);
+        assert_eq!(meshes.iter().filter(|x| x.material == "light-lens-lit").count(), 2);
+        for h in &housing {
+            assert!(h.is_manifold());
+            let b = h.bounds();
+            assert!((b.max[2] - 2.4).abs() < 1e-5 && (b.min[2] - 2.394).abs() < 1e-5, "{b:?}");
+        }
+        let b = housing[0].bounds();
+        assert!((b.min[0] - 1.0).abs() < 1e-5 && (b.max[0] - 3.0).abs() < 1e-5);
+        assert!((b.max[1] - b.min[1] - 0.012).abs() < 1e-5);
+        // A closed path adds the closing segment; an off strip gets the unlit lens.
+        m.lights[0].closed = true;
+        m.lights[0].on = false;
+        let meshes = fixture_meshes(&m);
+        assert_eq!(meshes.iter().filter(|x| x.material == "light-strip").count(), 3);
+        assert_eq!(meshes.iter().filter(|x| x.material == "light-lens").count(), 3);
+    }
 
     fn model_with(names: &[&str]) -> ArchModel {
         let mut m = ArchModel::default();

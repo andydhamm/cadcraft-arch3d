@@ -10,7 +10,8 @@
 use cadcraft_doc::arch::{ArchModel, FixtureShape, IesProfile, Level, LightFixture, LightKind, LightMount, Room};
 use cadcraft_doc::arch::{
     DEFAULT_FLOOR_LAMP_HEIGHT, DEFAULT_PENDANT_DROP, DEFAULT_WALL_HEIGHT, MAX_AREA_SIDE, MAX_FIXTURE_GRID, MAX_IES_ANGLES, MAX_IES_VALUES,
-    MAX_KELVIN, MAX_LUMENS, MAX_SPOT_ANGLE, MIN_AREA_SIDE, MIN_KELVIN,
+    MAX_KELVIN, MAX_LUMENS, MAX_LUMENS_PER_METRE, MAX_SPOT_ANGLE, MAX_STRIP_LENGTH, MAX_STRIP_POINTS, MIN_AREA_SIDE, MIN_KELVIN,
+    STRIP_SAMPLE_SPACING, StripFacing,
 };
 use cadcraft_geom::{Vec2, Vec3, point_in_polygon};
 
@@ -33,6 +34,9 @@ pub struct FixtureType {
     pub width: f64,
     pub length: f64,
 }
+
+/// Lumens per metre of the catalogue's LED strip.
+pub const LED_STRIP_LUMENS_PER_METRE: f64 = 500.0;
 
 /// The built-in catalogue, in this order: the recessed pot light (the default), the pendant, the
 /// wall sconce, the surface ceiling fixture and the floor lamp.
@@ -116,6 +120,19 @@ pub fn catalogue() -> Vec<FixtureType> {
             width: 0.6,
             length: 0.6,
         },
+        FixtureType {
+            name: "LED strip",
+            shape: FixtureShape::Strip,
+            kind: LightKind::Strip,
+            mount: LightMount::Ceiling,
+            lumens: 0.0,
+            kelvin: 3000.0,
+            cone: 60.0,
+            falloff: 60.0,
+            diameter: 0.012,
+            width: 0.0,
+            length: 0.0,
+        },
     ]
 }
 
@@ -137,6 +154,7 @@ pub fn fixture_from_type(id: cadcraft_doc::arch::ArchId, t: &FixtureType, positi
         falloff: t.falloff,
         width: t.width,
         length: t.length,
+        lumens_per_metre: if t.kind == LightKind::Strip { LED_STRIP_LUMENS_PER_METRE } else { 0.0 },
         ..LightFixture::new(id, t.name, position)
     }
 }
@@ -193,6 +211,9 @@ pub fn validate_fixture(f: &LightFixture) -> Result<(), String> {
     if !f.position.is_finite() {
         return Err(format!("position must be finite, got {:?}", f.position));
     }
+    if f.kind == LightKind::Strip {
+        validate_strip(f)?;
+    }
     if !f.lumens.is_finite() || f.lumens < 0.0 || f.lumens > MAX_LUMENS {
         return Err(format!("lumens must be 0..={MAX_LUMENS}, got {}", f.lumens));
     }
@@ -237,6 +258,109 @@ pub fn validate_fixture(f: &LightFixture) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// A strip's path and output: at least two finite points (at most `MAX_STRIP_POINTS`, consecutive
+/// ones at least 0.01 m apart), length `0.05..=MAX_STRIP_LENGTH`, lumens per metre
+/// `0..=MAX_LUMENS_PER_METRE`.
+fn validate_strip(f: &LightFixture) -> Result<(), String> {
+    if f.path.len() < 2 || f.path.len() > MAX_STRIP_POINTS {
+        return Err(format!("path must hold 2..={MAX_STRIP_POINTS} points, got {}", f.path.len()));
+    }
+    if let Some(bad) = f.path.iter().find(|p| !p.is_finite()) {
+        return Err(format!("path points must be finite, got {bad:?}"));
+    }
+    for (a, b) in strip_segments(f) {
+        if (b - a).len() < 0.01 {
+            return Err(format!("path points must be at least 0.01 m apart, got {a:?} and {b:?}"));
+        }
+    }
+    let len = strip_length(f);
+    if !len.is_finite() || !(0.05..=MAX_STRIP_LENGTH).contains(&len) {
+        return Err(format!("path length must be 0.05..={MAX_STRIP_LENGTH} m, got {len}"));
+    }
+    if !f.lumens_per_metre.is_finite() || f.lumens_per_metre < 0.0 || f.lumens_per_metre > MAX_LUMENS_PER_METRE {
+        return Err(format!("lumensPerMetre must be 0..={MAX_LUMENS_PER_METRE}, got {}", f.lumens_per_metre));
+    }
+    Ok(())
+}
+
+/// The path's segments in order (a closed path adds the one back to the first point).
+fn strip_segments(f: &LightFixture) -> Vec<(Vec2, Vec2)> {
+    let mut v: Vec<(Vec2, Vec2)> = f.path.windows(2).map(|w| (w[0], w[1])).collect();
+    if f.closed && f.path.len() > 2 {
+        if let (Some(last), Some(first)) = (f.path.last(), f.path.first()) {
+            v.push((*last, *first));
+        }
+    }
+    v
+}
+
+/// Total length of a strip's path (m), counting the closing segment of a closed path; 0 when
+/// there are fewer than two points or a coordinate is not finite.
+pub fn strip_length(f: &LightFixture) -> f64 {
+    if f.path.len() < 2 || f.path.iter().any(|p| !p.is_finite()) {
+        return 0.0;
+    }
+    let l: f64 = strip_segments(f).iter().map(|(a, b)| (*b - *a).len()).sum();
+    if l.is_finite() { l } else { 0.0 }
+}
+
+/// The emitters of a strip as `(point, emitting normal, lumens)`: every segment is cut into
+/// `ceil(length / STRIP_SAMPLE_SPACING)` equal pieces, each a sample at its midpoint at z = level
+/// elevation + height, carrying `lumens_per_metre x piece length`. The normal is `(0,0,-1)` for
+/// [`StripFacing::Down`], or the horizontal unit vector to the right of the segment for `Out`
+/// (outward on a counter-clockwise ring). Empty for a path that is too long or too big, or an
+/// unknown height.
+pub fn strip_samples(model: &ArchModel, f: &LightFixture) -> Vec<(Vec3, Vec3, f64)> {
+    let total = strip_length(f);
+    if f.path.len() > MAX_STRIP_POINTS || total <= 0.0 || total > MAX_STRIP_LENGTH {
+        return Vec::new();
+    }
+    let Some(base) = strip_height(model, f) else { return Vec::new() };
+    let mut out = Vec::new();
+    for (a, b) in strip_segments(f) {
+        let d = b - a;
+        let len = d.len();
+        if !len.is_finite() || len < 1e-9 {
+            continue;
+        }
+        let pieces = ((len / STRIP_SAMPLE_SPACING).ceil() as usize).max(1);
+        let normal = match f.facing {
+            StripFacing::Down => Vec3::new(0.0, 0.0, -1.0),
+            StripFacing::Out => Vec3::new(d.y / len, -d.x / len, 0.0),
+        };
+        let lumens = f.lumens_per_metre * len / pieces as f64;
+        for k in 0..pieces {
+            let t = (k as f64 + 0.5) / pieces as f64;
+            let p = a + d * t;
+            out.push((Vec3::new(p.x, p.y, base), normal, lumens));
+        }
+    }
+    out
+}
+
+/// A strip's z: level elevation + height (the room ceiling under the midpoint when no height).
+fn strip_height(model: &ArchModel, f: &LightFixture) -> Option<f64> {
+    let level = model.levels.iter().rev().find(|l| l.index == f.level).or_else(|| model.levels.last());
+    let elevation = level.map(|l| l.elevation).unwrap_or(0.0);
+    let ceiling = level.map(|l| l.ceiling_height).unwrap_or(2.4);
+    let z = match f.height {
+        Some(h) => elevation + h,
+        None => {
+            let mut c = ceiling;
+            for room in &model.rooms {
+                if room.level == f.level && room.polygon.len() >= 3 && point_in_polygon(&room.polygon, f.position) {
+                    if let Some(ch) = room.ceiling_height.filter(|v| v.is_finite()) {
+                        c = ch;
+                    }
+                    break;
+                }
+            }
+            elevation + c
+        }
+    };
+    z.is_finite().then_some(z)
 }
 
 /// The IES table's shape and values (`ies: ...` messages): both angle lists non-empty, finite and
@@ -446,11 +570,69 @@ mod tests {
     use super::*;
     use cadcraft_doc::arch::ArchId;
 
+    fn strip(path: &[(f64, f64)], facing: StripFacing) -> LightFixture {
+        let t = find_type("LED strip").unwrap_or_else(|| catalogue().remove(0));
+        LightFixture {
+            path: path.iter().map(|p| Vec2::new(p.0, p.1)).collect(),
+            height: Some(2.4),
+            facing,
+            ..fixture_from_type(ArchId(0), &t, Vec2::new(0.0, 0.0))
+        }
+    }
+
+    #[test]
+    fn strip_samples_spacing_validate_and_catalogue() {
+        let t = find_type("led STRIP").unwrap_or_else(|| catalogue().remove(0));
+        assert_eq!((t.shape, t.kind, t.mount, t.kelvin, t.diameter), (FixtureShape::Strip, LightKind::Strip, LightMount::Ceiling, 3000.0, 0.012));
+        let f = strip(&[(1.0, 2.0), (3.0, 2.0)], StripFacing::Down);
+        assert_eq!(f.lumens_per_metre, 500.0);
+        assert!((strip_length(&f) - 2.0).abs() < 1e-12);
+        assert!((intensity_cd(&f) - 500.0 / std::f64::consts::PI).abs() < 1e-9);
+        assert_eq!(validate_fixture(&f), Ok(()));
+        let model = ArchModel::default();
+        let samples = strip_samples(&model, &f);
+        // 2 m at 0.15 m spacing = ceil(13.33) = 14 pieces at their midpoints.
+        assert_eq!(samples.len(), 14);
+        assert!((samples[0].0.x - (1.0 + 1.0 / 14.0)).abs() < 1e-9 && (samples[0].0.z - 2.4).abs() < 1e-9);
+        assert_eq!(samples[0].1, Vec3::new(0.0, 0.0, -1.0));
+        let total: f64 = samples.iter().map(|s| s.2).sum();
+        assert!((total - 1000.0).abs() < 1e-6, "{total}");
+        // Refusals name the field.
+        let bad = |g: LightFixture| validate_fixture(&g).err().unwrap_or_default();
+        assert!(bad(LightFixture { path: vec![Vec2::new(0.0, 0.0)], ..f.clone() }).contains("path"));
+        assert!(bad(LightFixture { lumens_per_metre: -5.0, ..f.clone() }).contains("lumensPerMetre"));
+        assert!(bad(LightFixture { lumens_per_metre: 10_001.0, ..f.clone() }).contains("lumensPerMetre"));
+        assert!(bad(LightFixture { path: vec![Vec2::new(0.0, 0.0), Vec2::new(0.005, 0.0)], ..f.clone() }).contains("0.01"));
+        assert!(bad(LightFixture { path: vec![Vec2::new(0.0, 0.0), Vec2::new(f64::NAN, 0.0)], ..f.clone() }).contains("finite"));
+        assert!(bad(LightFixture { path: vec![Vec2::new(0.0, 0.0), Vec2::new(101.0, 0.0)], ..f.clone() }).contains("length"));
+        assert!(bad(LightFixture { height: Some(101.0), ..f.clone() }).contains("height"));
+        assert!(bad(LightFixture { path: vec![Vec2::new(0.0, 0.0); 257], ..f.clone() }).contains("path"));
+    }
+
+    #[test]
+    fn out_facing_normal_right_of_path() {
+        let model = ArchModel::default();
+        // A counter-clockwise 2 x 2 ring: every normal points away from the centre.
+        let mut f = strip(&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)], StripFacing::Out);
+        f.closed = true;
+        assert!((strip_length(&f) - 8.0).abs() < 1e-12);
+        let samples = strip_samples(&model, &f);
+        assert!(!samples.is_empty());
+        for (p, n, _) in &samples {
+            assert!(n.z == 0.0 && (n.len() - 1.0).abs() < 1e-9);
+            let outward = Vec2::new(p.x - 1.0, p.y - 1.0);
+            assert!(outward.x * n.x + outward.y * n.y > 0.0, "{p:?} {n:?}");
+        }
+        // Heading +x, right is -y.
+        let line = strip(&[(0.0, 0.0), (1.0, 0.0)], StripFacing::Out);
+        assert_eq!(strip_samples(&model, &line)[0].1, Vec3::new(0.0, -1.0, 0.0));
+    }
+
     #[test]
     fn the_pot_light_is_800_lumens_in_a_60_degree_cone() {
         let t = find_type(" recessed POT light ").unwrap_or_else(|| catalogue().remove(1));
         assert_eq!((t.kind, t.lumens, t.kelvin, t.cone, t.falloff), (LightKind::Spot, 800.0, 3000.0, 60.0, 60.0));
-        assert_eq!(catalogue().len(), 6);
+        assert_eq!(catalogue().len(), 7);
         assert!(find_type("Pendant").is_some() && find_type("Wall sconce").is_some() && find_type("Surface ceiling fixture").is_some());
     }
 
