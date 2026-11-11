@@ -60,7 +60,7 @@ mod tests {
             kind: OpeningKind::Door,
             frame_width: 0.06,
             casing_width: 0.05,
-            casing_sides: OpeningSides { left: false, right: true },
+            casing_sides: OpeningSides { left: false, right: true, ..Default::default() },
             ..Opening::default()
         };
         model.push_opening(o.clone());
