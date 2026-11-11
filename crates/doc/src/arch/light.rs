@@ -36,6 +36,15 @@ pub const MAX_IES_VALUES: usize = 65_536;
 /// Largest IES file read (bytes).
 pub const MAX_IES_BYTES: usize = 1_000_000;
 
+/// Most points in a strip path.
+pub const MAX_STRIP_POINTS: usize = 256;
+/// Most total length of a strip path (m).
+pub const MAX_STRIP_LENGTH: f64 = 100.0;
+/// Most lumens per metre a strip can emit.
+pub const MAX_LUMENS_PER_METRE: f64 = 10_000.0;
+/// Spacing of sample points along a strip for illuminance (m).
+pub const STRIP_SAMPLE_SPACING: f64 = 0.15;
+
 /// How the fixture emits.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -50,6 +59,9 @@ pub enum LightKind {
     /// behind. The raster view draws it as a spot over the hemisphere; the path tracer samples
     /// the rectangle.
     Area,
+    /// A line of emitters along a 2D path (phase 19), emitting `lumensPerMetre / π` cd per metre
+    /// at each sample; the path tracer skips it until p19-strip-render.
+    Strip,
 }
 
 /// What the fixture is fixed to.
@@ -81,6 +93,8 @@ pub enum FixtureShape {
     /// A rectangular recessed panel (troffer) in the ceiling: a frame and a diffuser, the area
     /// light's face flush with the ceiling (phase 11).
     Panel,
+    /// A line of LED emitters along a 2D path (phase 19).
+    Strip,
 }
 
 impl FixtureShape {
@@ -93,6 +107,7 @@ impl FixtureShape {
             FixtureShape::SurfaceDome => "surface-dome",
             FixtureShape::FloorLamp => "floor-lamp",
             FixtureShape::Panel => "panel",
+            FixtureShape::Strip => "strip",
         }
     }
 }
@@ -149,6 +164,32 @@ pub struct LightFixture {
     /// replaces the cone; `None` = the cone or the area's cosine law.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ies: Option<IesProfile>,
+    /// The 2D path a strip light follows (metres, plan space; closed ring for tray rings).
+    #[serde(default)]
+    pub path: Vec<Vec2>,
+    /// Whether the strip path is a closed ring (tray rings, phase 19).
+    #[serde(default)]
+    pub closed: bool,
+    /// Lumens per metre of strip (phase 19).
+    #[serde(default)]
+    pub lumens_per_metre: f64,
+    /// How the strip emits (down or out, phase 19).
+    #[serde(default)]
+    pub facing: StripFacing,
+    /// The tray `ArchId` this strip runs along (set by p19-strip-tray).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tray: Option<ArchId>,
+}
+
+/// How a strip light emits.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StripFacing {
+    /// Emits downward (Lambertian, toward -Z).
+    #[default]
+    Down,
+    /// Emits outward, horizontal, to the right of each segment (outward on a counter-clockwise ring).
+    Out,
 }
 
 /// A photometric distribution read from an IES LM-63 file (type C photometry): candela by
@@ -215,6 +256,11 @@ impl LightFixture {
             width: 0.0,
             length: 0.0,
             ies: None,
+            path: Vec::new(),
+            closed: false,
+            lumens_per_metre: 0.0,
+            facing: StripFacing::default(),
+            tray: None,
         }
     }
 }
