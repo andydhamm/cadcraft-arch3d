@@ -64,12 +64,11 @@ fn stair_against_a_wall_gets_one() {
     let stair = make_stair(0, Vec2::new(0.0, 0.0), 0.0, 1.0, 0, 1, 2.7);
     m.push_stair(stair);
 
-    // Add a wall along the right side (y = -0.5)
-    // Stair right side is at y = -0.5
+    // A wall whose inner face lies on the right side (y = -0.5): centre y = -0.6, 0.2 thick.
     let wall = cadcraft_doc::arch::Wall {
         id: ArchId(0),
-        start: Vec2::new(-1.0, -0.5),
-        end: Vec2::new(5.0, -0.5),
+        start: Vec2::new(-1.0, -0.6),
+        end: Vec2::new(5.0, -0.6),
         thickness: 0.2,
         height: 2.4,
         base_level: 0,
@@ -257,22 +256,22 @@ fn stair_with_both_sides_against_walls_gets_none() {
     let stair = make_stair(0, Vec2::new(0.0, 0.0), 0.0, 1.0, 0, 1, 2.7);
     m.push_stair(stair);
 
-    // Wall along left side (y = +0.5)
+    // Wall whose face lies on the left side (y = +0.5)
     m.push_wall(cadcraft_doc::arch::Wall {
         id: ArchId(0),
-        start: Vec2::new(-1.0, 0.5),
-        end: Vec2::new(5.0, 0.5),
+        start: Vec2::new(-1.0, 0.6),
+        end: Vec2::new(5.0, 0.6),
         thickness: 0.2,
         height: 2.4,
         base_level: 0,
         top_level: None,
         ..cadcraft_doc::arch::Wall::default()
     });
-    // Wall along right side (y = -0.5)
+    // Wall whose face lies on the right side (y = -0.5)
     m.push_wall(cadcraft_doc::arch::Wall {
         id: ArchId(1),
-        start: Vec2::new(-1.0, -0.5),
-        end: Vec2::new(5.0, -0.5),
+        start: Vec2::new(-1.0, -0.6),
+        end: Vec2::new(5.0, -0.6),
         thickness: 0.2,
         height: 2.4,
         base_level: 0,
@@ -343,12 +342,114 @@ fn deck_with_single_edge_on_gets_one_open_path() {
 
     let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
     assert_eq!(rails.len(), 1);
-    // Path should be the bottom edge, pulled back at both ends (0.045 inset)
+    // Path is the bottom edge; ends next to free (switched-off) edges stay at the corners.
     assert_eq!(rails[0].path.len(), 2);
-    assert!((rails[0].path[0].x - 0.045).abs() < 1e-9);
+    assert!((rails[0].path[0].x - 0.0).abs() < 1e-9);
     assert!((rails[0].path[0].y - 0.0).abs() < 1e-9);
-    assert!((rails[0].path[1].x - 3.955).abs() < 1e-9);
+    assert!((rails[0].path[1].x - 4.0).abs() < 1e-9);
     assert!((rails[0].path[1].y - 0.0).abs() < 1e-9);
+}
+
+fn wall(a: (f64, f64), b: (f64, f64)) -> cadcraft_doc::arch::Wall {
+    cadcraft_doc::arch::Wall {
+        start: Vec2::new(a.0, a.1),
+        end: Vec2::new(b.0, b.1),
+        thickness: 0.2,
+        height: 2.4,
+        base_level: 0,
+        top_level: None,
+        ..cadcraft_doc::arch::Wall::default()
+    }
+}
+
+fn near(p: Vec2, x: f64, y: f64) -> bool {
+    (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9
+}
+
+fn house_with_deck(rails: Vec<RailSetting>) -> ArchModel {
+    let mut m = ArchModel::default();
+    m.push_wall(wall((0.0, 8.0), (8.0, 8.0)));
+    let poly = vec![Vec2::new(2.0, 8.1), Vec2::new(6.0, 8.1), Vec2::new(6.0, 11.1), Vec2::new(2.0, 11.1)];
+    let mut room = make_deck_room(0, 0, poly, 0.5);
+    room.deck_rails = rails;
+    m.push_room(room);
+    m
+}
+
+#[test]
+fn deck_against_a_wall_is_railed_on_its_three_free_edges() {
+    let m = house_with_deck(Vec::new());
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    let p = &rails[0].path;
+    assert_eq!(p.len(), 4);
+    assert!(near(p[0], 6.0, 8.145) && near(p[1], 6.0, 11.1) && near(p[2], 2.0, 11.1) && near(p[3], 2.0, 8.145));
+    assert_eq!(rails[0].inset, 0.045);
+}
+
+#[test]
+fn deck_edge_switched_off_splits_the_railing_and_keeps_the_corner_ends() {
+    let m = house_with_deck(vec![RailSetting::Auto, RailSetting::Auto, RailSetting::Off, RailSetting::Auto]);
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 2);
+    assert_eq!(rails[0].path.len(), 2);
+    assert!(near(rails[0].path[0], 6.0, 8.145) && near(rails[0].path[1], 6.0, 11.1));
+    assert!(near(rails[1].path[0], 2.0, 11.1) && near(rails[1].path[1], 2.0, 8.145));
+}
+
+#[test]
+fn deck_run_that_wraps_the_closing_edge_is_one_railing() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+    let mut room = make_deck_room(0, 0, poly, 0.5);
+    room.deck_rails = vec![RailSetting::On, RailSetting::Off, RailSetting::On, RailSetting::On];
+    m.push_room(room);
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    let p = &rails[0].path;
+    assert_eq!(p.len(), 4);
+    assert!(near(p[0], 4.0, 4.0) && near(p[1], 0.0, 4.0) && near(p[2], 0.0, 0.0) && near(p[3], 4.0, 0.0));
+}
+
+#[test]
+fn free_standing_deck_gets_one_closed_railing() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+    m.push_room(make_deck_room(0, 0, poly, 0.5));
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    assert_eq!(rails[0].path.len(), 5);
+    assert_eq!(rails[0].inset, 0.045);
+}
+
+#[test]
+fn clockwise_deck_insets_to_the_inside() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(0.0, 4.0), Vec2::new(4.0, 4.0), Vec2::new(4.0, 0.0)];
+    m.push_room(make_deck_room(0, 0, poly, 0.5));
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    assert_eq!(rails[0].inset, -0.045);
+}
+
+#[test]
+fn wall_crossing_under_a_flight_is_not_against_it() {
+    let mut m = ArchModel::default();
+    m.push_stair(make_stair(0, Vec2::new(1.0, 1.0), 0.0, 1.0, 0, 1, 2.7));
+    m.push_wall(wall((3.0, 0.0), (3.0, 3.0)));
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert_eq!(rails.len(), 2);
+}
+
+#[test]
+fn stair_beside_a_parallel_wall_face_has_no_railing_on_that_side() {
+    let mut m = ArchModel::default();
+    m.push_stair(make_stair(0, Vec2::new(1.0, 1.0), 0.0, 1.0, 0, 1, 2.7));
+    // Wall 0.2 thick centred at y = 0.4: its upper face is y = 0.5, the right side of the flight.
+    m.push_wall(wall((0.0, 0.4), (8.0, 0.4)));
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    assert_eq!(rails[0].host, RailingHost::StairLeft);
 }
 
 #[test]
