@@ -2,7 +2,7 @@
 # The library opens on nine categories, each with an icon; every sample item is listed with its licence and source and
 # loads (each 3D symbol places and builds); the existing catalogues are items (doors and windows, plants, light fixtures,
 # finishes, cabinet and fixture kinds, front styles); two icon renders of one item are byte-identical PNGs, 128 x 128.
-# needs: p14-doc-furnishing, p14-arch-library, p14-io-gltf-read, p14-io-library-files, p14-cmd-library, p14-apps-library-hooks, p14-arch3d-icon, p14-cmd-icons, p14-arch-place, p14-cmd-place, p14-arch3d-furnishing, p14-cmd-user-catalog
+# needs: p14-doc-furnishing, p14-arch-library, p14-io-gltf-read, p14-io-library-files, p14-cmd-library, p14-apps-library-hooks, p14-arch3d-icon, p14-cmd-icons, p14-arch-place, p14-cmd-place, p14-arch3d-furnishing, p14-cmd-user-catalog, p18-room-finishes
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p14lib.inc')).read())
 
@@ -48,8 +48,9 @@ for k, cat in (('door', 'Doors and windows'), ('window', 'Doors and windows'), (
     if not ks or any(i.get('category') != cat for i in ks):
         fail(f"existing catalogue items of kind {k} missing or outside {cat}: {[(i.get('id'), i.get('category')) for i in ks][:6]}")
 finishes = sorted(i['name'].lower() for i in kinds['finish'])
-if finishes != ['brick', 'shingles', 'siding', 'wood']:
-    fail(f"the finishes as library items: {finishes}")
+# Phase 18 adds concrete, tile, carpet, drywall and plaster (room-type finishes): one item per finish, exactly these.
+if finishes != ['brick', 'carpet', 'concrete', 'drywall', 'plaster', 'shingles', 'siding', 'tile', 'wood']:
+    fail(f"the nine finishes as library items: {finishes}")
 styles = sorted(i['id'] for i in kinds['frontStyle'])
 for want in ('frontstyle:door-slab', 'frontstyle:door-shaker', 'frontstyle:door-raised-panel',
              'frontstyle:drawer-slab', 'frontstyle:drawer-shaker', 'frontstyle:drawer-raised-panel'):
