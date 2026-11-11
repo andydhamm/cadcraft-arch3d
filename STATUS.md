@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 18:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 17 of 21: Stairs, decks, railings and openings in detail — 19 of 21 segments merged · 13 of 14 acceptance checks**
 
@@ -27,7 +27,7 @@ Updated 2026-11-11 18:45 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 37.0 h so far · expected done Nov 11 22:26–Nov 13 08:11 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 37.3 h so far · expected done Nov 11 22:41–Nov 13 08:26 UTC |
 | 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
 | 19 | Light, sky and cameras | building | 1 / 17 | — |
 | 20 | Plan views and dimensions | building | 0 / 13 | — |
@@ -35,11 +35,11 @@ Updated 2026-11-11 18:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 17 segments
 
-19 merged, 2 replaced, 1 gate, 1 queued
+19 merged, 2 replaced, 1 merging, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p17f-showcase-phase17` | The showcase house gets its phase-17 details: railed stairs, a framed and railed rear deck, gridded windows and a round top; renders refreshed | gate | mai-flash |
+| `p17f-showcase-phase17` | The showcase house gets its phase-17 details: railed stairs, a framed and railed rear deck, gridded windows and a round top; renders refreshed | merging | mai-flash |
 
 ## Recent merges
 
@@ -65,15 +65,15 @@ Updated 2026-11-11 18:45 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | merging | 1119 |
 | bonsai-b | bonsai2-27b | agent | 1080 |
 | bonsai-ws2-a | bonsai2-27b | merging | 1173 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1114 |
+| bonsai-ws2-b | bonsai2-27b | merging | 1115 |
 | claude-sonnet-a | sonnet | merging | 122 |
-| claude-sonnet-b | sonnet | agent | 124 |
+| claude-sonnet-b | sonnet | merging | 125 |
 | claude-sonnet-c | sonnet | merging | 64 |
 | claude-sonnet-d | sonnet | merging | 53 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 983 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 984 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 79 |
+| mai-flash | mai-code-1.1-flash | merging | 80 |
 | mai-flash-b | mai-code-1.1-flash | merging | 23 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
 | tturbo-mac | tturbo-ultraheretic | merging | 760 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 376 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 377 |
