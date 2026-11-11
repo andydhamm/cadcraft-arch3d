@@ -106,7 +106,7 @@ impl PathTracer {
             }
         }
 
-        let gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+        let mut gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
         if gpu_scene.tris.len() > MAX_GPU_TRIANGLES {
             return Err(format!("scene has {} triangles, more than MAX_GPU_TRIANGLES {MAX_GPU_TRIANGLES}", gpu_scene.tris.len()));
         }
@@ -120,7 +120,6 @@ impl PathTracer {
             Some(Err(e)) => (None, Some(e)),
             None => (None, None),
         };
-        let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
         let d = &gpu.device;
 
         let accum = d.create_buffer(&wgpu::BufferDescriptor {
@@ -145,12 +144,6 @@ impl PathTracer {
         let vp = crate::camera::view_proj(camera, f64::from(w) / f64::from(h));
         let inv_vp = invert_mat4(&vp);
 
-        let mut flags = 0u32;
-        let mut sun_dir = [0.0f32; 4];
-        let mut sun_rgb = [0.0f32; 4];
-        let mut sky_zenith = [0.0f32; 4];
-        let mut sky_horizon = [0.0f32; 4];
-        let mut furnace = [0.0f32; 4];
         let exposure = match opts.exposure {
             Exposure::Fixed(x) => x,
             Exposure::Auto if opts.furnace.is_some() => 1.0,
@@ -158,25 +151,8 @@ impl PathTracer {
             Exposure::Auto => lighting.exposure,
         };
 
-        if let Some(f) = opts.furnace {
-            flags |= FRAME_FURNACE;
-            let env = f.emission / (1.0 - f.albedo);
-            furnace = [f.albedo, f.emission, env, 0.0];
-        } else if lighting.sun.is_some() {
-            flags |= FRAME_SUN | FRAME_SKY;
-            let sun = lighting.sun.unwrap();
-            let d3 = sun.normalized().dir;
-            sun_dir = [d3[0] as f32, d3[1] as f32, d3[2] as f32, 0.0];
-            sun_rgb = [SUN_LUX, SUN_LUX, SUN_LUX, 0.0];
-            sky_zenith = [SKY_ZENITH_NITS; 4];
-            sky_horizon = [SKY_HORIZON_NITS; 4];
-        }
-        if ground {
-            flags |= FRAME_GROUND;
-        }
-
         let eye = camera.eye();
-        let frame = GpuFrame {
+        let mut frame = GpuFrame {
             inv_view_proj: inv_vp,
             eye: [eye.x as f32, eye.y as f32, eye.z as f32, 0.0],
             size: [w, h],
@@ -184,16 +160,18 @@ impl PathTracer {
             seed: opts.seed,
             bounces: opts.bounces,
             light_count: gpu_scene.lights.len() as u32,
-            flags,
-            spp_this_pass: 0,
-            sun_dir,
-            sun_rgb,
-            sky_zenith,
-            sky_horizon,
-            furnace,
+            flags: if ground { FRAME_GROUND } else { 0 },
             probe_count: 0,
+            look: [1, 0, 0, 0],
             ..Default::default()
         };
+        if let Some(f) = opts.furnace {
+            frame.flags |= FRAME_FURNACE;
+            frame.furnace = [f.albedo, f.emission, f.emission / (1.0 - f.albedo), 0.0];
+        } else {
+            frame_lighting(&mut frame, &mut gpu_scene.ies, lighting, Some(camera), opts);
+        }
+        let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
 
         Ok(PathTracer {
             size,
@@ -523,7 +501,7 @@ impl PathTracer {
         struct ResolveParams {
             size: [u32; 2],
             exposure: f32,
-            spp: u32,
+            tonemap: u32,
         }
         let exposure = match self.opts.exposure {
             Exposure::Fixed(x) => x,
@@ -531,7 +509,7 @@ impl PathTracer {
             Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_SUN != 0 => self.compute_auto_exposure(gpu),
             Exposure::Auto => self.exposure,
         };
-        let params = ResolveParams { size: [w, h], exposure, spp: self.spp_done };
+        let params = ResolveParams { size: [w, h], exposure, tonemap: self.frame.look[0] };
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
         let uniform = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -639,6 +617,53 @@ impl PathTracer {
 
 /// Invert a 4x4 column-major matrix (the view-projection). Returns the inverse or an identity if
 /// singular.
+/// Fills the lighting fields of `frame` (and appends to `aux`, the f32 buffer at binding 5, whose IES
+/// tables stay first) from `lighting`, the optional `camera` and `opts`. The one place the sun, sky,
+/// environment, moon, view clip and look are set; `new` and `irradiance` both call it.
+fn frame_lighting(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting, camera: Option<&Camera>, opts: &PathOptions) {
+    frame_sun(frame, lighting);
+    frame_environment(frame, aux, lighting);
+    frame_moon(frame, lighting);
+    frame_view(frame, lighting, camera);
+    frame_look(frame, lighting, opts);
+}
+
+/// Sun and sky: sets `FRAME_SUN | FRAME_SKY`, `sun_dir`, `sun_rgb`, `sky_zenith`, `sky_horizon` on `frame`
+/// when `lighting` has a sun. (`lighting` is the scene's light setup.)
+fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
+    if let Some(sun) = lighting.sun {
+        frame.flags |= FRAME_SUN | FRAME_SKY;
+        let d = sun.normalized().dir;
+        frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
+        frame.sun_rgb = [SUN_LUX, SUN_LUX, SUN_LUX, 0.0];
+        frame.sky_zenith = [SKY_ZENITH_NITS; 4];
+        frame.sky_horizon = [SKY_HORIZON_NITS; 4];
+    }
+}
+
+/// Environment map (stub): will append the map and its CDFs to `aux` and record the offsets in
+/// `frame.env` / `env_aux` / `env_params`, from `lighting`. Does nothing yet.
+fn frame_environment(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting) {
+    let _ = (frame, aux, lighting);
+}
+
+/// Moon (stub): will set `frame.moon_dir` / `moon_rgb` from `lighting`. Does nothing yet.
+fn frame_moon(frame: &mut GpuFrame, lighting: &Lighting) {
+    let _ = (frame, lighting);
+}
+
+/// View (stub): will set the clip box, near clip and forward from `lighting` and `camera`. Does
+/// nothing yet.
+fn frame_view(frame: &mut GpuFrame, lighting: &Lighting, camera: Option<&Camera>) {
+    let _ = (frame, lighting, camera);
+}
+
+/// Look (stub): will set the tone code and the Lambert flag in `frame.look` from `lighting` and `opts`.
+/// Does nothing yet (`look[0]` stays 1, ACES).
+fn frame_look(frame: &mut GpuFrame, lighting: &Lighting, opts: &PathOptions) {
+    let _ = (frame, lighting, opts);
+}
+
 fn invert_mat4(m: &[[f32; 4]; 4]) -> [[f32; 4]; 4] {
     // Standard 4x4 matrix inversion via cofactors.
     let a = m;
@@ -699,7 +724,10 @@ pub fn irradiance(
         return Err("spp must be at least 1".into());
     }
 
-    let gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+    let mut gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+    // As before, irradiance applies the sun whenever `lighting` has one, furnace or not.
+    let mut lit = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
+    frame_lighting(&mut lit, &mut gpu_scene.ies, lighting, None, opts);
     let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
     let pipelines = PtPipelines::new(gpu, None)?;
 
@@ -741,32 +769,17 @@ pub fn irradiance(
     let mut remaining = opts.spp;
     while remaining > 0 {
         let this_pass = remaining.min(64);
-        let mut frame = GpuFrame {
+        let frame = GpuFrame {
             inv_view_proj: [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
-            eye: [0.0; 4],
             size: [1, 1],
             sample_base,
             seed: opts.seed,
             bounces: opts.bounces,
             light_count: gpu_scene.lights.len() as u32,
-            flags: 0,
             spp_this_pass: this_pass,
-            sun_dir: [0.0; 4],
-            sun_rgb: [0.0; 4],
-            sky_zenith: [0.0; 4],
-            sky_horizon: [0.0; 4],
-            furnace: [0.0; 4],
             probe_count: gpu_probes.len() as u32,
-            ..Default::default()
+            ..lit
         };
-        if let Some(sun) = lighting.sun {
-            frame.flags |= FRAME_SUN | FRAME_SKY;
-            let d3 = sun.normalized().dir;
-            frame.sun_dir = [d3[0] as f32, d3[1] as f32, d3[2] as f32, 0.0];
-            frame.sun_rgb = [SUN_LUX, SUN_LUX, SUN_LUX, 0.0];
-            frame.sky_zenith = [SKY_ZENITH_NITS; 4];
-            frame.sky_horizon = [SKY_HORIZON_NITS; 4];
-        }
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
         let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -1490,6 +1503,46 @@ mod tests {
         }
         assert!(compared > 0, "no hit pixels to compare");
         assert!(mismatch == 0, "hit pixels changed: {mismatch} of {compared} differ");
+    }
+
+    #[test]
+    fn frame_lighting_matches_old_setup() {
+        let opts = PathOptions::default();
+        let base = GpuFrame { flags: FRAME_GROUND, look: [1, 0, 0, 0], ..Default::default() };
+
+        // (a) a sun sets exactly the old fields; every reserved field stays zero; aux is untouched.
+        let lighting = Lighting::default();
+        let Some(sun) = lighting.sun else { panic!("default lighting has a sun") };
+        let d = sun.normalized().dir;
+        let want = GpuFrame {
+            flags: FRAME_GROUND | FRAME_SUN | FRAME_SKY,
+            sun_dir: [d[0] as f32, d[1] as f32, d[2] as f32, 0.0],
+            sun_rgb: [SUN_LUX, SUN_LUX, SUN_LUX, 0.0],
+            sky_zenith: [SKY_ZENITH_NITS; 4],
+            sky_horizon: [SKY_HORIZON_NITS; 4],
+            look: [1, 0, 0, 0],
+            ..Default::default()
+        };
+        let mut f = base;
+        let mut aux = vec![1.0f32, 2.0, 3.0];
+        frame_lighting(&mut f, &mut aux, &lighting, None, &opts);
+        assert_eq!(f, want);
+        assert_eq!(aux, [1.0, 2.0, 3.0]);
+
+        // (b) no sun: nothing changes.
+        let dark = Lighting { sun: None, ..Lighting::default() };
+        let mut f = base;
+        let mut aux = vec![1.0f32, 2.0, 3.0];
+        frame_lighting(&mut f, &mut aux, &dark, None, &opts);
+        assert_eq!(f, base);
+        assert_eq!(aux, [1.0, 2.0, 3.0]);
+
+        // (c) a camera makes no difference yet.
+        let mut g = base;
+        let mut aux = vec![1.0f32, 2.0, 3.0];
+        frame_lighting(&mut g, &mut aux, &lighting, Some(&camera()), &opts);
+        assert_eq!(g, want);
+        assert_eq!(aux, [1.0, 2.0, 3.0]);
     }
 
     /// A path-traced 4-spp still of `scene` from `camera` at `size`, under the default (sunlit) lighting: camera
