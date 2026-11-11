@@ -442,3 +442,92 @@ fn technical_outlines_a_smooth_cylinder() {
     assert!(lined * 10 >= rows * 8, "both sides of the outline carry the line colour on most rows: {lined} of {rows}");
     assert!(inside * 10 <= rows * 2, "the smooth middle draws no lines: {inside} of {rows} rows have a dark pixel there");
 }
+
+// ---- phase 19: exposure -------------------------------------------------------------------------
+
+use crate::exposure::tone_map;
+use crate::lit_frame::Lighting;
+use cadcraft_doc::arch::{ExposureSetting, Look, ToneMap};
+use cadcraft_geom::Vec3;
+
+fn srgb_to_linear(c: u8) -> f32 {
+    let v = f32::from(c) / 255.0;
+    if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+}
+
+/// A sun straight overhead of 100 000 lx, no sky, the calibration albedo 0.5 (L = 15 915.5 nits),
+/// a manual exposure and a tone curve.
+pub(crate) fn plane_lighting(ev100: f64, tone: ToneMap) -> Lighting {
+    let mut look = Look::default();
+    look.exposure = ExposureSetting::Manual { ev100 };
+    look.tone_map = tone;
+    look.sky.on = false;
+    Lighting { sun: Some(Light { dir: [0.0, 0.0, 1.0], ..Light::DEFAULT }), look, lambert: Some(0.5), meter_night: true, ..Lighting::default() }
+}
+
+/// Looking straight down at `target`, a metre away.
+fn down_at(target: [f64; 3]) -> Camera {
+    let mut o = Orbit::at_origin(0.0, 89.0, 1.0, 45.0);
+    o.target = Vec3::new(target[0], target[1], target[2]);
+    Camera::Orbit(o)
+}
+
+/// The centre pixel of an interactive lit frame, as linear.
+fn lit_centre(r: &mut Offscreen, s: &Scene3d, camera: &Camera, lighting: &Lighting, ground: bool) -> Option<[f32; 3]> {
+    let eye = camera.eye();
+    let frame = r.lit_frame(s, 1, [eye.x, eye.y, eye.z], lighting, ground)?;
+    let light = lighting.sun.unwrap_or(Light::DEFAULT);
+    r.render_with(s, 1, camera, &light, &RenderOptions { lit: Some(&frame), ground, ..Default::default() });
+    let (w, h) = r.size();
+    let img = r.read_rgba().ok()?;
+    let p = px(&img, w, w / 2, h / 2);
+    Some([srgb_to_linear(p[0]), srgb_to_linear(p[1]), srgb_to_linear(p[2])])
+}
+
+fn near(got: f32, want: f32, rel: f32) -> bool {
+    (got - want).abs() <= want.abs() * rel + 0.004
+}
+
+#[test]
+fn lambert_albedo_overrides_ground_quad_and_texture() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    // The ground quad (albedo 0.75 and a GGX lobe) only: the cube is far from where the camera looks.
+    let far = scene(vec![cuboid("wall", [10.0, 10.0, 0.0], [11.0, 11.0, 1.0])]);
+    let want = tone_map(15_915.5 * crate::exposure::ev100_scale(14.0), crate::exposure::TONE_NONE);
+    let lighting = plane_lighting(14.0, ToneMap::None);
+    let Some(g) = lit_centre(&mut r, &far, &down_at([12.0, 12.0, 0.0]), &lighting, true) else { return };
+    for c in g {
+        assert!(near(c, want, 0.02), "ground quad: {g:?} want {want}");
+    }
+    // A floor mesh, whose material albedo is brown and which takes a finish texture.
+    let floor = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [5.0, 5.0, 0.0])]);
+    let Some(f) = lit_centre(&mut r, &floor, &down_at([0.0, 0.0, 0.0]), &lighting, false) else { return };
+    for c in f {
+        assert!(near(c, want, 0.02), "floor: {f:?} want {want}");
+    }
+    // Without the override the same floor is not grey 0.5.
+    let plain = Lighting { lambert: None, ..lighting };
+    let Some(p) = lit_centre(&mut r, &floor, &down_at([0.0, 0.0, 0.0]), &plain, false) else { return };
+    assert!((p[0] - p[2]).abs() > 0.02, "the floor material is not neutral: {p:?}");
+}
+
+#[test]
+fn raster_lambert_plane_reads_ev_scaled_luminance() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let floor = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [5.0, 5.0, 0.0])]);
+    let camera = down_at([0.0, 0.0, 0.0]);
+    for (ev, tone) in [(14.0, ToneMap::None), (15.0, ToneMap::None), (14.0, ToneMap::Aces), (14.0, ToneMap::Hable)] {
+        let code = crate::exposure::tone_code(tone);
+        let want = tone_map(15_915.5 * crate::exposure::ev100_scale(ev), code);
+        let Some(got) = lit_centre(&mut r, &floor, &camera, &plane_lighting(ev, tone), false) else { return };
+        for c in got {
+            assert!(near(c, want, 0.02), "EV100 {ev} {tone:?}: {got:?} want {want}");
+        }
+    }
+    // An automatic exposure with the albedo of the check (c) reads middle grey.
+    let mut auto = plane_lighting(14.0, ToneMap::None);
+    auto.look.exposure = ExposureSetting::Auto;
+    auto.lambert = Some(0.05);
+    let Some(got) = lit_centre(&mut r, &floor, &camera, &auto, false) else { return };
+    assert!(near(got[0], 0.18, 0.03), "auto: {got:?}");
+}

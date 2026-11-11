@@ -995,7 +995,9 @@ impl Sections {
     /// The scene these parts make (a copy; the cache keeps its parts).
     pub(crate) fn scene(&self, model: &ArchModel) -> Scene3d {
         let meshes = self.all_parts().flatten().filter(|m| keep(m)).cloned().collect();
-        with_meshes(self.counts(model), meshes)
+        let mut scene = with_meshes(self.counts(model), meshes);
+        scene.horizon = crate::site::horizon_mesh(model);
+        scene
     }
 
     /// The scene these parts make, moving their meshes into it.
@@ -1045,7 +1047,9 @@ impl Sections {
             .chain(meshes(molding_lines))
             .chain(meshes(countertops))
             .chain(meshes(backsplashes));
-        with_meshes(counts, all.filter(keep).collect())
+        let mut scene = with_meshes(counts, all.filter(keep).collect());
+        scene.horizon = crate::site::horizon_mesh(model);
+        scene
     }
 
     /// A scene without meshes, counted the way [`Scene3d::build`] counts: an object counts when its
@@ -1310,6 +1314,9 @@ impl Scene3d {
     /// equal digests; a scene without materials digests as it did before phase 14.
     pub fn digest(&self) -> String {
         let mut digests: Vec<u64> = self.meshes.iter().map(mesh_digest).collect();
+        if let Some(h) = &self.horizon {
+            digests.push(mesh_digest(h));
+        }
         digests.sort_unstable();
         let mut hash = digests.iter().fold(FNV_OFFSET_BASIS, |h, d| fnv1a(&d.to_le_bytes(), h));
         // `materials` is a BTreeMap: its iteration is sorted by name.
