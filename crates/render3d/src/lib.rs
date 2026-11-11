@@ -19,6 +19,7 @@ pub mod light;
 pub mod lights;
 pub mod lit;
 pub mod lit_frame;
+pub mod look;
 pub mod offscreen;
 pub mod pathtrace;
 pub mod pipeline;

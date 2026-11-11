@@ -13,6 +13,8 @@ use cadcraft_geom::{Mat4, Vec3};
 pub const MAX_DISTANCE: f64 = 1_000_000.0;
 /// Lower bound for the orbit distance (prevents the eye collapsing onto the target).
 pub const MIN_DISTANCE: f64 = 0.01;
+/// Far plane of the perspective cameras. The horizon slab is sized from this value.
+pub const FAR_PLANE: f64 = 10_000.0;
 /// Maximum |elevation| in degrees. ±90° degenerates the view basis.
 const MAX_ELEV: f64 = 89.0;
 
@@ -91,7 +93,7 @@ impl FullCamera {
         let tan_half = half.tan();
         let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
         let z_near = 0.1;
-        let z_far = 10_000.0;
+        let z_far = FAR_PLANE;
         let m = [
             [1.0 / (aspect * tan_half), 0.0, 0.0, 0.0],
             [0.0, 1.0 / tan_half, 0.0, 0.0],
@@ -183,7 +185,7 @@ impl Orbit {
         let tan_half = half.tan();
         let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
         let z_near = 0.1;
-        let z_far = 10_000.0;
+        let z_far = FAR_PLANE;
         let m = [
             [1.0 / (aspect * tan_half), 0.0, 0.0, 0.0],
             [0.0, 1.0 / tan_half, 0.0, 0.0],
