@@ -48,7 +48,7 @@ fn compass_dir(model: &ArchModel, azimuth: f64, elevation: f64) -> Option<[f64; 
     if !azimuth.is_finite() || !elevation.is_finite() || !(-90.0..=90.0).contains(&elevation) {
         return None;
     }
-    let d = sun_dir(&Sun { elevation_deg: elevation, azimuth_deg: azimuth, ..Default::default() });
+    let d = sun_dir(&Sun { elevation_deg: elevation, azimuth_deg: azimuth });
     Some(true_to_drawing(model.site.as_ref(), d))
 }
 
