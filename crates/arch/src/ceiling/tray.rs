@@ -629,4 +629,67 @@ mod tests {
         assert!(outline_in(&m.rooms[0], &m.trays, &m.trays[0]).is_err());
         assert_eq!(lift_in(&m.rooms[0], &m.trays, Vec2::new(0.5, 0.5)), 0.0);
     }
+
+    #[test]
+    fn validate_refuses_nan_depth() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: f64::NAN, ..Default::default() };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("depth or inset"), "NaN depth should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_zero_depth() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.0, ..Default::default() };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("depth or inset"), "zero depth should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_pitch_out_of_range() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let low =
+            Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.3, sides: TraySides::Pitched(4.0), ..Default::default() };
+        let err = validate(&m, &low).unwrap_err();
+        assert!(err.contains("degrees"), "pitch 4 should be refused: {err}");
+        let high =
+            Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.3, sides: TraySides::Pitched(86.0), ..Default::default() };
+        let err = validate(&m, &high).unwrap_err();
+        assert!(err.contains("degrees"), "pitch 86 should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_nan_pitch() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = Tray {
+            id: ArchId(1),
+            room: room_id,
+            level: room_level,
+            inset: 0.6,
+            depth: 0.3,
+            sides: TraySides::Pitched(f64::NAN),
+            ..Default::default()
+        };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("degrees"), "NaN pitch should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_new_tray_no_roof() {
+        let m = house(None);
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("roof"), "no roof should be refused: {err}");
+    }
 }
