@@ -500,7 +500,7 @@ mod tests {
         let out = illuminance(&crate::build(&strip_room(500.0, StripFacing::Out)), Vec3::new(2.0, 2.0, 0.0), up());
         assert!(out.lux < 1.0, "{}", out.lux);
         let mut dim = BTreeMap::new();
-        dim.insert("lf0".to_string(), LightState { on: true, brightness: 0.5 });
+        dim.insert("lf0".to_string(), LightState { brightness: 0.5, ..Default::default() });
         let dimmed = scene_lights_with(&m, &dim);
         let e = direct_illuminance(&dimmed[0], Vec3::new(2.0, 2.0, 0.0), up());
         assert!((e - direct / 2.0).abs() < 1e-9);
