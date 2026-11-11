@@ -869,6 +869,32 @@ mod tests {
     }
 
     #[test]
+    fn inspect_filler_and_shelves_rows() {
+        let mut s = Session::new();
+        let mut c = cadcraft_doc::arch::Cabinet::default();
+        c.id = cadcraft_doc::ArchId(0);
+        c.kind = cadcraft_doc::arch::CabinetKind::Wall;
+        c.level = 0;
+        c.position = Vec2::new(1.0, 0.5);
+        c.width = 0.762;
+        c.depth = 0.305;
+        c.height = 0.762;
+        c.elevation = 1.372;
+        c.fronts = cadcraft_doc::arch::Fronts::Open;
+        c.shelves = Some(2);
+        s.doc_mut().unwrap().arch.push_cabinet(c);
+
+        let v = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        let rows = v["cabinets"].as_array().expect("cabinets array missing");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0]["filler"].is_boolean());
+        assert!(rows[0]["shelves"].is_array(), "shelves should be reported for open cabinets");
+        assert_eq!(rows[0]["shelves"].as_array().unwrap().len(), 2);
+        assert!(rows[0]["shelves"][0]["bottom"].is_number());
+        assert!(rows[0]["shelves"][0]["top"].is_number());
+    }
+
+    #[test]
     fn inspect_and_command_replies_spell_handles_the_same_way() {
         let mut s = Session::new();
         let w = s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall");
