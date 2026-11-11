@@ -28,7 +28,21 @@ pub fn room_molding_meshes(room: ArchId, level: f64, runs: &[MoldingRun]) -> Vec
                 continue;
             }
             if let Some(swept) = crate::sweep::sweep(&run.profile.points, &run.path, &run.z, run.closed, run.side, &material, room) {
-                mesh.append(&swept);
+                let offset = mesh.positions.len() as u32;
+                mesh.positions.extend(swept.positions);
+                if !swept.normals.is_empty() {
+                    if mesh.normals.is_empty() {
+                        mesh.normals = vec![[0.0, 0.0, 0.0]; offset as usize];
+                    }
+                    mesh.normals.extend(swept.normals);
+                }
+                if !swept.uvs.is_empty() {
+                    if mesh.uvs.is_empty() {
+                        mesh.uvs = vec![[0.0, 0.0]; offset as usize];
+                    }
+                    mesh.uvs.extend(swept.uvs);
+                }
+                mesh.indices.extend(swept.indices.iter().map(|&i| i + offset));
             }
         }
         if !mesh.positions.is_empty() {
