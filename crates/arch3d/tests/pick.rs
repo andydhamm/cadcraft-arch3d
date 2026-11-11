@@ -28,6 +28,29 @@ fn house() -> (Scene3d, ArchId, ArchId) {
     (Scene3d::build(&m), w0, door)
 }
 
+#[test]
+fn pick_hit_owner_is_material_aware() {
+    use cadcraft_arch3d::Mesh;
+    use cadcraft_arch3d::incremental::ObjectKind;
+    let tri = |material: &str, object: u32, y: f32| {
+        let mut m = Mesh::new(material, ArchId(object));
+        m.positions = vec![[-1.0, y, -1.0], [1.0, y, -1.0], [0.0, y, 1.0]];
+        m.normals = vec![[0.0, -1.0, 0.0]; 3];
+        m.uvs = vec![[0.0, 0.0]; 3];
+        m.indices = vec![0, 1, 2];
+        m
+    };
+    let owner = |material: &str, y: f32| {
+        let scene = Scene3d { meshes: vec![tri(material, 4, y)], ..Default::default() };
+        scene.pick(v(0.0, -5.0, 0.0), v(0.0, 1.0, 0.0)).map(|h| h.owner)
+    };
+    assert_eq!(owner("countertop", 0.0), Some(ObjectKind::Countertop));
+    assert_eq!(owner("backsplash", 0.0), Some(ObjectKind::Backsplash));
+    assert_eq!(owner("glass-wall", 0.0), Some(ObjectKind::Wall));
+    assert_eq!(owner("paint:countertop/ct4", 0.0), Some(ObjectKind::Countertop));
+    assert_eq!(owner("paint:cabinet/cb4/counter", 0.0), Some(ObjectKind::Cabinet));
+}
+
 fn v(x: f64, y: f64, z: f64) -> Vec3 {
     Vec3::new(x, y, z)
 }
