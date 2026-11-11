@@ -147,7 +147,7 @@ mod tests {
     fn soffit_input_multiple_rooms_different_ceiling_heights() {
         let mut m = model();
         let mut room2 = Room { polygon: rect(4.0, 0.0, 8.0, 3.0), ..Default::default() };
-        room2.ceiling_height = 3.0;
+        room2.ceiling_height = Some(3.0);
         m.push_room(room2);
 
         let s = Soffit { level: 0, polygon: rect(2.0, 1.0, 6.0, 2.0), bottom: Some(2.0), ..Default::default() };
