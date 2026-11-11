@@ -56,6 +56,23 @@ fn render_item_icon(lib: &mut Library, item: &ItemRecord, view: &IconView) -> Re
             let img = ImageRgba { width: texture.width, height: texture.height, rgba: texture.rgba, ..Default::default() };
             Ok(render_sphere(Some(&img), [1.0, 1.0, 1.0], view))
         }
+        ItemKind::Molding => {
+            let profile = item.profile.as_deref().ok_or_else(|| EngineError::Other(format!("`{}` has no profile", item.id)))?;
+            let path = [cadcraft_geom::Vec2::new(0.0, 0.0), cadcraft_geom::Vec2::new(0.3, 0.0)];
+            let mesh = cadcraft_arch3d::sweep::sweep(profile, &path, &[0.0, 0.0], false, 1.0, "molding", cadcraft_doc::arch::ArchId(0))
+                .ok_or_else(|| EngineError::Other(format!("`{}` has an unusable profile", item.id)))?;
+            let part = cadcraft_doc::arch::SymbolPart {
+                name: "molding".to_string(),
+                positions: mesh.positions,
+                normals: mesh.normals,
+                indices: mesh.indices,
+                base_color: [0.8, 0.78, 0.72, 1.0],
+                metallic: 0.0,
+                roughness: 0.6,
+                ..Default::default()
+            };
+            Ok(render_symbol(&cadcraft_doc::arch::SymbolMesh { parts: vec![part], ..Default::default() }, view))
+        }
         _ => {
             let rgb = colour_for(item);
             Ok(render_sphere(None, [f32::from(rgb[0]) / 255.0, f32::from(rgb[1]) / 255.0, f32::from(rgb[2]) / 255.0], view))
@@ -321,5 +338,20 @@ mod tests {
         let mut s = crate::Session::new();
         let err = run_library_icon(&mut s, &json!({"item": "no-such-item", "cache": false})).unwrap_err();
         assert!(err.to_string().contains("no library item") || err.to_string().contains("no such"));
+    }
+
+    #[test]
+    fn molding_icon_is_deterministic_and_not_blank() {
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        let a = run_library_icon(&mut s, &json!({"item": "molding:crown", "cache": false})).unwrap();
+        let b = run_library_icon(&mut s, &json!({"item": "molding:crown", "cache": false})).unwrap();
+        assert_eq!(a["png"], b["png"]);
+        assert!(a["png"].as_str().is_some_and(|p| !p.is_empty()));
+        let casing = run_library_icon(&mut s, &json!({"item": "molding:casing", "cache": false})).unwrap();
+        assert_ne!(a["png"], casing["png"]);
+        // Not blank: a profile sweep is drawn, so it differs from the flat grey of an empty category.
+        let flat = run_library_icon(&mut s, &json!({"category": "User catalog", "cache": false})).unwrap();
+        assert_ne!(a["png"], flat["png"]);
     }
 }

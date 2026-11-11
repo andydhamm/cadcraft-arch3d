@@ -275,7 +275,37 @@ pub fn builtin_items() -> Vec<ItemRecord> {
             &["backdrop", "background", id],
         ));
     }
+    for (id, name) in cadcraft_arch::molding_profile::BUILTIN {
+        let Some(profile) = cadcraft_arch::molding_profile::builtin_profile(id) else { continue };
+        let (w, h) = profile_extent(&profile.points);
+        let word = match id {
+            "molding:base" => "base",
+            "molding:shoe" => "shoe",
+            "molding:crown" => "crown",
+            "molding:chair-rail" => "chair rail",
+            _ => "casing",
+        };
+        let mut r =
+            builtin(id.to_string(), name.to_string(), Category::CabinetParts, "Moldings", ItemKind::Molding, "molding", &["molding", "trim", word]);
+        r.size = Some([w, 1.0, h]);
+        r.profile = Some(profile.points);
+        v.push(r);
+    }
     v
+}
+
+/// Width and height of a profile's bounding box.
+fn profile_extent(points: &[[f64; 2]]) -> (f64, f64) {
+    let max = |i: usize| points.iter().map(|p| p[i]).fold(0.0_f64, f64::max);
+    (max(0), max(1))
+}
+
+/// A record with a `profile` must carry a valid one (never repaired).
+fn check_profile(r: &ItemRecord) -> Result<(), String> {
+    match &r.profile {
+        Some(p) => cadcraft_arch::molding_profile::validate_profile(p).map_err(|e| format!("the profile is invalid: {e}")),
+        None => Ok(()),
+    }
 }
 
 /// The entries of a catalog.json: `{"version": 1, "items": [...]}` with at most
@@ -403,6 +433,7 @@ pub fn entry_record(v: &Value, catalog: &str) -> Result<ItemRecord, String> {
             metres("cut-out", v, false)?;
         }
     }
+    check_profile(&r)?;
     let file = r.file.clone().unwrap_or_default();
     if file.is_empty() {
         return Err("no file".into());
@@ -458,6 +489,7 @@ pub fn user_record(v: &Value) -> Result<ItemRecord, String> {
     let mut r: ItemRecord = serde_json::from_value(rec.clone()).map_err(|e| format!("the record is unreadable: {e}"))?;
     short("id", &r.id, true)?;
     short("name", &r.name, true)?;
+    check_profile(&r)?;
     r.tags.clear();
     r.catalog = "user".to_string();
     r.read_only = false;
@@ -945,6 +977,50 @@ mod tests {
         assert!(lib.image("armchair").is_err());
         assert!(lib.file_bytes("door:hinged").is_err(), "a built-in item has no file");
         assert!(lib.file_bytes("nothing").is_err());
+    }
+
+    #[test]
+    fn five_builtin_moldings_in_the_moldings_folder() {
+        let items = builtin_items();
+        let moldings: Vec<&ItemRecord> = items.iter().filter(|r| r.kind == ItemKind::Molding).collect();
+        let ids: Vec<&str> = moldings.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["molding:base", "molding:shoe", "molding:crown", "molding:chair-rail", "molding:casing"]);
+        for r in &moldings {
+            assert_eq!((r.category.as_str(), r.folder.as_str(), r.symbol_type.as_str()), ("Cabinet parts", "Moldings", "molding"));
+            assert!(r.keywords.contains(&"molding".to_string()) && r.read_only);
+            let profile = r.profile.as_ref().expect("profile");
+            assert!(cadcraft_arch::molding_profile::validate_profile(profile).is_ok(), "{}", r.id);
+            let size = r.size.expect("size");
+            assert!((size[1] - 1.0).abs() < 1e-12);
+        }
+        let size = |id: &str| moldings.iter().find(|r| r.id == id).and_then(|r| r.size).expect("size");
+        assert!((size("molding:base")[0] - 0.015).abs() < 1e-9 && (size("molding:base")[2] - 0.09).abs() < 1e-9);
+        assert!((size("molding:crown")[0] - 0.1).abs() < 1e-9 && (size("molding:crown")[2] - 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn user_record_profile_is_validated_on_load() {
+        let good =
+            json!({"record": {"id": "user:cap", "name": "Cap", "kind": "molding", "profile": [[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.07]]}});
+        let r = user_record(&good).expect("valid profile");
+        assert_eq!(r.profile.as_ref().map(Vec::len), Some(4));
+        // Clockwise, a bow-tie, too few points, non-finite and too small: refused, never repaired.
+        let bad = [
+            json!([[0.0, 0.0], [0.0, 0.07], [0.02, 0.05], [0.02, 0.0]]),
+            json!([[0.0, 0.0], [0.02, 0.05], [0.02, 0.0], [0.0, 0.05]]),
+            json!([[0.0, 0.0], [0.02, 0.0]]),
+            json!([[0.0, 0.0], [0.02, 0.0], [0.02, 9.0], [0.0, 0.07]]),
+            json!([[0.0, 0.0], [0.0001, 0.0], [0.0001, 0.0001]]),
+        ];
+        for profile in bad {
+            let v = json!({"record": {"id": "user:cap", "name": "Cap", "kind": "molding", "profile": profile}});
+            assert!(user_record(&v).is_err(), "{profile}");
+        }
+        let mut entry = json!({"id": "x:y", "name": "Y", "category": "Cabinet parts", "licence": "CC0-1.0", "source": "s", "file": "y.glb",
+            "profile": [[0.0, 0.0], [0.0, 0.07], [0.02, 0.05], [0.02, 0.0]]});
+        assert!(entry_record(&entry, "c").is_err());
+        entry["profile"] = json!([[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.07]]);
+        assert!(entry_record(&entry, "c").is_ok());
     }
 
     #[test]
