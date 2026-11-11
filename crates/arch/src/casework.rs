@@ -292,7 +292,9 @@ mod tests {
         assert!(validate_cabinet(&c).is_err());
         c.shelves = None;
         let row = |across: u32, height: Option<f64>| FaceRow { across, height, ..Default::default() };
-        c.face = Some(FaceLayout { rows: vec![row(MAX_ACROSS, Some(0.3)), row(0, None)] });
+        let mut layout = FaceLayout::default();
+        layout.rows = vec![row(MAX_ACROSS, Some(0.3)), row(0, None)];
+        c.face = Some(layout);
         assert!(validate_cabinet(&c).is_ok());
         for bad_rows in [
             vec![row(MAX_ACROSS + 1, None)],
@@ -301,7 +303,9 @@ mod tests {
             vec![row(1, Some(3.1))],
             vec![row(1, None); MAX_FACE_ROWS + 1],
         ] {
-            c.face = Some(FaceLayout { rows: bad_rows });
+            let mut layout = FaceLayout::default();
+            layout.rows = bad_rows;
+            c.face = Some(layout);
             assert!(validate_cabinet(&c).is_err());
         }
     }
