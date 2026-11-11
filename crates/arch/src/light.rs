@@ -155,10 +155,19 @@ pub fn cone_solid_angle(apex_deg: f64) -> f64 {
 
 /// Luminous intensity (candela) of a fixture: a point light spreads its lumens over 4π sr, a spot
 /// over its `cone`'s solid angle (the falloff band adds light outside it and is not counted), an
-/// area light's peak along its aim is lumens / π (it falls off as cos θ).
-/// 800 lm in a 60° cone is 950.36 cd. Zero for an off fixture or a non-finite input.
+/// area light's peak along its aim is lumens / π (it falls off as cos θ), a strip's per-metre
+/// intensity is lumens-per-metre / π. Zero for an off fixture or a non-finite input.
 pub fn intensity_cd(f: &LightFixture) -> f64 {
-    if !f.on || !f.lumens.is_finite() || f.lumens <= 0.0 {
+    if !f.on {
+        return 0.0;
+    }
+    if f.kind == LightKind::Strip {
+        if !f.lumens_per_metre.is_finite() || f.lumens_per_metre <= 0.0 {
+            return 0.0;
+        }
+        return f.lumens_per_metre / std::f64::consts::PI;
+    }
+    if !f.lumens.is_finite() || f.lumens <= 0.0 {
         return 0.0;
     }
     let omega = match f.kind {

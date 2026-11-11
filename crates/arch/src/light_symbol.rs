@@ -1,11 +1,14 @@
 //! Plan symbols of light fixtures (phase 10), drawn on `E-LITE`. Filled by `p10-arch-light-symbol`.
 
-use cadcraft_doc::arch::{FixtureShape, LightFixture};
+use cadcraft_doc::arch::{FixtureShape, LightFixture, StripFacing};
 use cadcraft_geom::Vec2;
 
 /// Plan symbol polylines (metres; a closed ring repeats its first point) of the fixture's shape at
 /// its position, sized by `crate::light::housing_diameter`.
 pub fn plan_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
+    if f.shape == FixtureShape::Strip {
+        return strip_symbol(f);
+    }
     let c = f.position;
     let d = crate::light::housing_diameter(f);
     let r = d / 2.0;
@@ -38,7 +41,49 @@ pub fn plan_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
         }
         FixtureShape::FloorLamp => vec![circle(c, r), circle(c, 0.075)],
         FixtureShape::Panel => panel_symbol(f),
+        FixtureShape::Strip => strip_symbol(f),
     }
+}
+
+/// The strip's plan symbol: its path as a polyline, with tick marks every 0.3 m on the emitting
+/// side (the right of each segment) when facing out.
+fn strip_symbol(f: &LightFixture) -> Vec<Vec<Vec2>> {
+    if f.path.len() < 2 || f.path.iter().any(|p| !p.is_finite()) {
+        return Vec::new();
+    }
+    let mut polys: Vec<Vec<Vec2>> = Vec::new();
+    let mut path_poly = f.path.clone();
+    if f.closed {
+        path_poly.push(f.path[0].clone());
+    }
+    polys.push(path_poly);
+
+    if f.facing == StripFacing::Out {
+        const TICK_LEN: f64 = 0.02;
+        const TICK_SPACING: f64 = 0.3;
+        for segment in f.path.windows(2) {
+            let (a, b) = (segment[0], segment[1]);
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let seg_len = (dx * dx + dy * dy).sqrt();
+            if !seg_len.is_finite() || seg_len < 0.01 {
+                continue;
+            }
+            let count = (seg_len / TICK_SPACING).ceil() as usize;
+            for k in 1..=count {
+                let t = (k as f64) * TICK_SPACING / seg_len;
+                if t >= 1.0 {
+                    break;
+                }
+                let px = a.x + t * dx;
+                let py = a.y + t * dy;
+                let rx = dy / seg_len;
+                let ry = -dx / seg_len;
+                polys.push(vec![Vec2::new(px, py), Vec2::new(px + rx * TICK_LEN, py + ry * TICK_LEN)]);
+            }
+        }
+    }
+    polys
 }
 
 /// The catalogue panel's side (m), used for a side the fixture stores as 0 (or not finite).
