@@ -6,9 +6,11 @@
 
 use super::device::ComputeGpu;
 use super::rt::RqBuild;
-use super::scene_gpu::{FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene};
+use super::scene_gpu::{
+    FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene,
+};
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
-use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX};
+use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
 use super::{PathOptions, PathStats, PathStatus};
 use crate::camera::Camera;
 use crate::lit_frame::Lighting;
@@ -628,16 +630,26 @@ fn frame_lighting(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting,
     frame_look(frame, lighting, opts);
 }
 
-/// Sun and sky: sets `FRAME_SUN | FRAME_SKY`, `sun_dir`, `sun_rgb`, `sky_zenith`, `sky_horizon` on `frame`
-/// when `lighting` has a sun. (`lighting` is the scene's light setup.)
+/// Sun and sky. The sun (`FRAME_SUN`, `sun_dir`, `sun_rgb` = the look's lux) only when it is on and
+/// above the horizon, `FRAME_SUN_NO_SHADOW` when the look has cast shadows off; the gradient sky
+/// (`FRAME_SKY`, `sky_zenith`, `sky_horizon`) only when the look's sky is on as well.
 fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
     if let Some(sun) = lighting.sun {
-        frame.flags |= FRAME_SUN | FRAME_SKY;
         let d = sun.normalized().dir;
-        frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
-        frame.sun_rgb = [SUN_LUX, SUN_LUX, SUN_LUX, 0.0];
-        frame.sky_zenith = [SKY_ZENITH_NITS; 4];
-        frame.sky_horizon = [SKY_HORIZON_NITS; 4];
+        if lighting.look.sun.on && d[2] > 0.0 {
+            frame.flags |= FRAME_SUN;
+            if !lighting.look.sun.shadows {
+                frame.flags |= FRAME_SUN_NO_SHADOW;
+            }
+            let lux = lighting.look.sun.intensity as f32;
+            frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
+            frame.sun_rgb = [lux, lux, lux, 0.0];
+        }
+        if lighting.look.sky.on {
+            frame.flags |= FRAME_SKY;
+            frame.sky_zenith = [SKY_ZENITH_NITS; 4];
+            frame.sky_horizon = [SKY_HORIZON_NITS; 4];
+        }
     }
 }
 
@@ -1535,6 +1547,50 @@ mod tests {
         frame_lighting(&mut g, &mut aux, &lighting, Some(&camera()), &opts);
         assert_eq!(g, want);
         assert_eq!(aux, [1.0, 2.0, 3.0]);
+    }
+
+    fn frame_for(look: cadcraft_doc::arch::Look) -> GpuFrame {
+        let lighting = Lighting { look, ..Lighting::default() };
+        let mut f = GpuFrame::default();
+        frame_sun(&mut f, &lighting);
+        f
+    }
+
+    #[test]
+    fn frame_sun_follows_intensity_and_no_shadow_flag() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        let f = frame_for(look.clone());
+        assert_eq!(f.flags, FRAME_SUN | FRAME_SKY);
+        assert_eq!(f.sun_rgb, [100_000.0, 100_000.0, 100_000.0, 0.0]);
+        look.sun.intensity = 50_000.0;
+        look.sun.shadows = false;
+        let f = frame_for(look.clone());
+        assert_eq!(f.flags, FRAME_SUN | FRAME_SKY | FRAME_SUN_NO_SHADOW);
+        assert_eq!(f.sun_rgb, [50_000.0, 50_000.0, 50_000.0, 0.0]);
+        look.sun.on = false;
+        let f = frame_for(look);
+        assert_eq!(f.flags & (FRAME_SUN | FRAME_SUN_NO_SHADOW), 0, "sun off: no sun flags");
+        assert_eq!(f.sun_rgb, [0.0; 4]);
+    }
+
+    #[test]
+    fn sky_off_leaves_only_the_sun() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = false;
+        let f = frame_for(look);
+        assert_eq!(f.flags, FRAME_SUN, "no sky flag, the sun stays");
+        assert_eq!(f.sky_zenith, [0.0; 4]);
+        assert_eq!(f.sky_horizon, [0.0; 4]);
+    }
+
+    #[test]
+    fn sun_without_shadows_passes_occluders() {
+        // The sun's visibility returns 1 without tracing when FRAME_SUN_NO_SHADOW is set.
+        let src = super::super::shaders::kernel_source();
+        assert!(src.contains("if ((frame.flags & FRAME_SUN_NO_SHADOW) != 0u) { return vec3<f32>(1.0); }"));
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.shadows = false;
+        assert_ne!(frame_for(look).flags & FRAME_SUN_NO_SHADOW, 0);
     }
 
     /// A path-traced 4-spp still of `scene` from `camera` at `size`, under the default (sunlit) lighting: camera

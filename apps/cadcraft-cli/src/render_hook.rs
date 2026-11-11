@@ -325,13 +325,7 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
         return Err("path-traced illuminance needs compute shaders on this GPU".into());
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
-    let mut look = cadcraft_engine::doc::arch::Look::default();
-    let mut sun_dir = None;
-    match req.sun {
-        SunChoice::Off => look.sun.on = false,
-        SunChoice::Dir(d) => sun_dir = Some(d),
-        SunChoice::Default => {}
-    }
+    let (look, sun_dir) = req.resolved_sun();
     let lighting = lighting_for(&look, sun_dir, 8);
     let opts = path_options(&req.path);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
