@@ -433,6 +433,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::light_inspect::inspect_lights(&d.arch, p, &mut out);
     super::casework::inspect_casework(&d.arch, p, &mut out);
     inspect_cabinet_parts(&d.arch, &mut out);
+    super::cabinet_corner_inspect::inspect_cabinet_corners(&d.arch, p, &mut out);
     inspect_furnishings(&d.arch, p, &mut out);
     super::electrical_inspect::inspect_electrical(&d.arch, p, &mut out);
     super::foundation::inspect_foundations(&d.arch, p, &mut out);
