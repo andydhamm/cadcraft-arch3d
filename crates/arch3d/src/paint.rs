@@ -35,6 +35,7 @@ pub fn default_colour(part: &str) -> [f32; 4] {
         "cabinet" => [222.0 / 255.0, 184.0 / 255.0, 135.0 / 255.0],
         "counter" => [160.0 / 255.0, 160.0 / 255.0, 160.0 / 255.0],
         "pull" => [192.0 / 255.0, 192.0 / 255.0, 192.0 / 255.0],
+        "backsplash" => [0.9, 0.9, 0.88],
         "fixture" => [240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0],
         _ => [0.7, 0.7, 0.7],
     };
@@ -53,17 +54,21 @@ fn part_name(surface: &Surface) -> &'static str {
         Surface::Cabinet { .. } => "cabinet",
         Surface::Fixture(_) => "fixture",
         Surface::Furnishing { .. } => "furnishing",
+        Surface::Countertop(_) => "counter",
+        Surface::Backsplash(_) => "backsplash",
     }
 }
 
 /// The definition of built-in finish `f`.
-fn finish_def(f: Finish) -> MaterialDef {
+pub(crate) fn finish_def(f: Finish) -> MaterialDef {
     let t = texture(f);
     let m = mean_linear(&t);
     MaterialDef {
         base_color: [m[0], m[1], m[2], 1.0],
         texture: Some(format!("finish:{}", f.name())),
         tile: [t.tile[0] as f32, t.tile[1] as f32],
+        normal_texture: Some(format!("finish:{}:normal", f.name())),
+        normal_scale: 1.0,
         ..Default::default()
     }
 }
@@ -72,13 +77,22 @@ fn finish_def(f: Finish) -> MaterialDef {
 pub(crate) fn ref_def(model: &ArchModel, m: &MaterialRef) -> MaterialDef {
     match m {
         MaterialRef::Finish(f) => finish_def(*f),
-        MaterialRef::Item(id) => match model.images.get(id).filter(|i| i.is_valid()) {
-            Some(img) => {
-                let c = srgb_to_linear(img.mean_srgb());
-                MaterialDef { base_color: [c[0], c[1], c[2], 1.0], texture: Some(format!("item:{id}")), tile: TILE_DEFAULT, ..Default::default() }
+        MaterialRef::Item(id) => {
+            let normal_key = format!("{id}:normal");
+            match model.images.get(id).filter(|i| i.is_valid()) {
+                Some(img) => {
+                    let c = srgb_to_linear(img.mean_srgb());
+                    MaterialDef {
+                        base_color: [c[0], c[1], c[2], 1.0],
+                        texture: Some(format!("item:{id}")),
+                        normal_texture: model.images.get(&normal_key).filter(|i| i.is_valid()).map(|_| normal_key.clone()),
+                        tile: TILE_DEFAULT,
+                        ..Default::default()
+                    }
+                }
+                None => MaterialDef { base_color: [0.5, 0.5, 0.5, 1.0], ..Default::default() },
             }
-            None => MaterialDef { base_color: [0.5, 0.5, 0.5, 1.0], ..Default::default() },
-        },
+        }
         MaterialRef::Colour(c) => {
             let l = srgb_to_linear(*c);
             MaterialDef { base_color: [l[0], l[1], l[2], 1.0], ..Default::default() }

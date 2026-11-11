@@ -234,6 +234,8 @@ fn paint_node_name(material: &str, object: cadcraft_doc::ArchId) -> String {
         }
         cadcraft_doc::arch::Surface::Fixture(fx) => format!("fixture-fx{}", fx.0),
         cadcraft_doc::arch::Surface::Furnishing { furnishing, .. } => format!("furnishing-f{}", furnishing.0),
+        cadcraft_doc::arch::Surface::Countertop(c) => format!("countertop-ct{}", c.0),
+        cadcraft_doc::arch::Surface::Backsplash(b) => format!("backsplash-bs{}", b.0),
     }
 }
 
@@ -720,6 +722,12 @@ mod tests {
             indices: vec![0, 1, 2],
             ..Mesh::new("wall", ArchId(1))
         }
+    }
+
+    #[test]
+    fn paint_node_names_for_countertop_and_backsplash() {
+        assert_eq!(paint_node_name("paint:countertop/ct3", ArchId(3)), "countertop-ct3");
+        assert_eq!(paint_node_name("paint:backsplash/bs2", ArchId(2)), "backsplash-bs2");
     }
 
     fn scene_with(walls: usize) -> Scene3d {

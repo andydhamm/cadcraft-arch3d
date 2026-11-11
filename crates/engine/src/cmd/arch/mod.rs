@@ -39,6 +39,7 @@ pub mod library_user;
 pub(crate) mod light_inspect;
 pub mod lightfixture;
 pub mod lightset;
+pub mod look;
 pub mod material;
 pub mod opening;
 pub mod outlets_auto;
@@ -118,6 +119,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(site::specs());
     v.extend(terrain::specs());
     v.extend(backdrop::specs());
+    v.extend(look::specs());
     v.extend(terrain_modify::specs());
     v.extend(terrain_query::specs());
     v.extend(plant::specs());

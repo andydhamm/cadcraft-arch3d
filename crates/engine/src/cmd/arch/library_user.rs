@@ -130,7 +130,9 @@ fn save_user_item_file(s: &mut Session, rec: ItemRecord, objects: StoredObjects,
     record.id = id.clone();
     record.catalog = "user".to_string();
     record.read_only = false;
-    record.kind = ItemKind::Group;
+    if record.kind != ItemKind::Molding {
+        record.kind = ItemKind::Group;
+    }
     let item = UserItemFile { record, objects, symbols: Default::default(), source_item };
     write_user_file(&dir, &item).map_err(|e| bad(ADD, e))?;
     s.library.reload();
@@ -197,8 +199,84 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// The outline of closed LWPOLYLINE `label` with arcs sampled every <= 5 degrees, as a molding profile.
+fn molding_outline(s: &Session, label: &str) -> Result<Vec<[f64; 2]>> {
+    use cadcraft_doc::EntityKind;
+    use cadcraft_geom::Vec2;
+    if parse_id(label).is_some() {
+        return Err(bad(ADD, "an architecture object is not a molding profile: give a closed polyline"));
+    }
+    let h = cadcraft_doc::Handle::parse_hex(label).ok_or_else(|| bad(ADD, "`objects` must hold the handle of a closed polyline"))?;
+    let doc = s.doc()?;
+    let e = doc.entity(h).ok_or_else(|| bad(ADD, "no object with that handle"))?;
+    let EntityKind::LwPolyline(pl) = &e.kind else {
+        return Err(bad(ADD, "a molding profile must be a closed polyline"));
+    };
+    if !pl.closed {
+        return Err(bad(ADD, "the polyline is open: a molding profile is closed"));
+    }
+    let cap = cadcraft_doc::arch::MAX_PROFILE_POINTS;
+    if pl.vertices.len() > cap {
+        return Err(bad(ADD, format!("the polyline has more than {cap} points")));
+    }
+    let mut pts: Vec<Vec2> = Vec::new();
+    for (i, v) in pl.vertices.iter().enumerate() {
+        let next = pl.vertices.get((i + 1) % pl.vertices.len()).map_or(v.p, |n| n.p);
+        pts.push(v.p);
+        if let Some((arc, _)) = cadcraft_geom::bulge_to_arc(v.p, next, v.bulge) {
+            let theta = 4.0 * v.bulge.atan();
+            let steps = (theta.abs().to_degrees() / 5.0).ceil().max(1.0) as usize;
+            for k in 1..steps {
+                let a = theta * k as f64 / steps as f64;
+                let r = v.p - arc.center;
+                let (sn, cs) = a.sin_cos();
+                pts.push(arc.center + Vec2::new(r.x * cs - r.y * sn, r.x * sn + r.y * cs));
+            }
+        }
+        if pts.len() > cap {
+            return Err(bad(ADD, format!("the polyline has more than {cap} points")));
+        }
+    }
+    cadcraft_arch::molding_profile::profile_from_polyline(&pts).map_err(|e| bad(ADD, format!("not a usable molding profile: {e}")))
+}
+
+/// `library.add {kind: "molding", objects: [handle], name}`: a closed polyline becomes a profile item.
+fn add_molding(s: &mut Session, m: &serde_json::Map<String, Value>) -> Result<Value> {
+    let label = match field(Some(m), "objects") {
+        Some(Value::Array(a)) if a.len() == 1 => a[0].as_str().ok_or_else(|| bad(ADD, "`objects` must hold a polyline handle"))?.to_string(),
+        _ => return Err(bad(ADD, "a molding profile is exactly one closed polyline: `objects` is [handle]")),
+    };
+    let name = text(ADD, Some(m), "name")?;
+    let points = molding_outline(s, &label)?;
+    let max = |i: usize| points.iter().map(|p| p[i]).fold(0.0_f64, f64::max);
+    let record = ItemRecord {
+        id: "user:temp".to_string(),
+        name: name.to_string(),
+        category: "User catalog".to_string(),
+        folder: "Moldings".to_string(),
+        kind: ItemKind::Molding,
+        symbol_type: "molding".to_string(),
+        size: Some([max(0), 1.0, max(1)]),
+        profile: Some(points),
+        catalog: "user".to_string(),
+        source: "built in".to_string(),
+        licence: "CC0-1.0".to_string(),
+        author: "CADCraft".to_string(),
+        keywords: vec!["molding".to_string(), "trim".to_string()],
+        ..Default::default()
+    };
+    let mut reply = save_user_item_file(s, record, StoredObjects::default(), None)?;
+    reply["objects"] = json!(1);
+    Ok(reply)
+}
+
 fn run_add(s: &mut Session, p: &Value) -> Result<Value> {
     let m = object(p)?;
+    match field(Some(m), "kind") {
+        None => {}
+        Some(Value::String(k)) if k == "molding" => return add_molding(s, m),
+        Some(_) => return Err(bad(ADD, "`kind` must be \"molding\" (or omitted for a group)")),
+    }
     let names: Vec<String> = match field(Some(m), "objects") {
         Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         _ => return Err(bad(ADD, "`objects` must be a non-empty array of object labels")),
@@ -360,5 +438,70 @@ fn run_trash(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(json!({ "emptied": n }))
         }
         _ => Err(bad(TRASH, "`action` must be \"list\", \"restore\" or \"empty\"")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::library::testing::session;
+    use crate::temp_dir::TempDir;
+    use serde_json::{Value, json};
+
+    fn handle(s: &mut crate::Session, cmd: &str, p: Value) -> String {
+        let r = s.execute(cmd, &p).unwrap();
+        r["handle"].as_str().unwrap_or_default().to_string()
+    }
+
+    fn pline(s: &mut crate::Session, vertices: Value, closed: bool) -> String {
+        handle(s, "pline", json!({"vertices": vertices, "closed": closed}))
+    }
+
+    #[test]
+    fn library_add_a_closed_polyline_makes_a_molding_item() {
+        let dir = TempDir::new("library-add-molding");
+        let mut s = session(&dir);
+        let h = pline(&mut s, json!([[0, 0], [0.02, 0], [0.02, 0.05], [0, 0.07]]), true);
+        let r = s.execute("library.add", &json!({"objects": [h], "name": "Wainscot cap", "kind": "molding"})).unwrap();
+        assert_eq!(r, json!({"item": "user:wainscot-cap", "objects": 1}));
+        let it = s.execute("library.item", &json!({"id": "user:wainscot-cap"})).unwrap();
+        let it = &it["item"];
+        assert_eq!((it["kind"].as_str(), it["folder"].as_str()), (Some("molding"), Some("Moldings")));
+        assert!((it["size"][0].as_f64().unwrap() - 0.02).abs() < 1e-9 && (it["size"][2].as_f64().unwrap() - 0.07).abs() < 1e-9);
+        let p = crate::library::molding::profile_of(&s.library, "user:wainscot-cap").unwrap();
+        assert_eq!(p.points.len(), 4);
+        // A clockwise polyline away from the origin is reversed and moved to it.
+        let h = pline(&mut s, json!([[5, 5], [5, 5.07], [5.02, 5.05], [5.02, 5]]), true);
+        let r = s.execute("library.add", &json!({"objects": [h], "name": "Flipped", "kind": "molding"})).unwrap();
+        assert_eq!(r["item"], json!("user:flipped"));
+        let p = crate::library::molding::profile_of(&s.library, "user:flipped").unwrap();
+        assert!(cadcraft_arch::molding_profile::validate_profile(&p.points).is_ok());
+        // Without `kind` library.add still makes a group (here refused: no such object).
+        assert!(s.execute("library.add", &json!({"objects": ["f9"], "name": "G"})).is_err());
+    }
+
+    #[test]
+    fn library_add_molding_refusals() {
+        let dir = TempDir::new("library-add-molding-refusals");
+        let mut s = session(&dir);
+        let open = pline(&mut s, json!([[0, 0], [0.02, 0], [0.02, 0.05]]), false);
+        let bow = pline(&mut s, json!([[0, 0], [0.02, 0.05], [0.02, 0], [0, 0.05]]), true);
+        let ok = pline(&mut s, json!([[0, 0], [0.02, 0], [0.02, 0.05], [0, 0.07]]), true);
+        let line = handle(&mut s, "line", json!({"points": [[0, 0], [1, 1]]}));
+        let cases = [
+            json!({"objects": [open], "name": "A", "kind": "molding"}),
+            json!({"objects": [bow], "name": "B", "kind": "molding"}),
+            json!({"objects": [line], "name": "C", "kind": "molding"}),
+            json!({"objects": [ok.clone(), ok.clone()], "name": "D", "kind": "molding"}),
+            json!({"objects": ["FFFFFF"], "name": "E", "kind": "molding"}),
+            json!({"objects": ["cb0"], "name": "F", "kind": "molding"}),
+            json!({"objects": [], "name": "G", "kind": "molding"}),
+            json!({"objects": [ok.clone()], "name": "H", "kind": "bogus"}),
+            json!({"objects": [ok], "kind": "molding"}),
+        ];
+        for c in cases {
+            assert!(s.execute("library.add", &c).is_err(), "{c}");
+        }
+        let found = s.execute("library", &json!({"chips": [{"kind": "category", "value": "User catalog"}]})).unwrap();
+        assert_eq!(found["total"], json!(0));
     }
 }

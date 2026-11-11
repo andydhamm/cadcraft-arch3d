@@ -8,9 +8,12 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+pub mod backsplash;
+pub mod cabinet_parts;
 pub mod camera;
 pub mod casework;
 pub(crate) mod ceiling;
+pub mod countertop;
 pub(crate) mod deck_frame;
 pub mod edges;
 pub mod electrical;
@@ -18,6 +21,9 @@ pub mod finish;
 pub mod fixture;
 pub(crate) mod flight_cut;
 pub mod foundation;
+pub mod molding;
+pub mod niche;
+pub mod wall_glass;
 
 pub mod furnishing;
 pub mod paint;
@@ -270,6 +276,11 @@ pub struct MaterialDef {
     /// Metres per repeat for face-aligned UVs; `[1, 1]` means the mesh's UVs are texture
     /// coordinates.
     pub tile: [f32; 2],
+    /// Key into [`Scene3d::textures`] for a tangent-space normal map (`"finish:<name>:normal"`
+    /// for built-ins, otherwise a scene textures key).
+    pub normal_texture: Option<String>,
+    /// Strength of the normal map in tangent space; default 1.0.
+    pub normal_scale: f32,
     /// The sRGB tint a paint gave (already multiplied into `base_color`).
     pub tint: Option<[u8; 3]>,
 }
@@ -277,7 +288,34 @@ pub struct MaterialDef {
 impl Default for MaterialDef {
     /// White, not metallic, roughness 0.8, untextured, tile [1, 1], no tint.
     fn default() -> Self {
-        MaterialDef { base_color: [1.0; 4], metallic: 0.0, roughness: 0.8, texture: None, tile: [1.0, 1.0], tint: None }
+        MaterialDef {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 0.8,
+            texture: None,
+            tile: [1.0, 1.0],
+            normal_texture: None,
+            normal_scale: 1.0,
+            tint: None,
+        }
+    }
+}
+
+/// Copy a model backdrop into a scene and load any image backdrop pixels under `item:<id>`.
+pub fn set_backdrop(model: &ArchModel, scene: &mut Scene3d, backdrop: Option<&Backdrop>) {
+    // Drop the previous backdrop's picture unless a material (a paint or symbol) uses it.
+    if let Some(Backdrop::Image { item, .. }) = &scene.backdrop {
+        let key = format!("item:{item}");
+        if !scene.materials.values().any(|m| m.texture.as_deref() == Some(key.as_str())) {
+            scene.textures.remove(&key);
+        }
+    }
+    scene.backdrop = backdrop.cloned();
+    if let Some(Backdrop::Image { item, .. }) = backdrop
+        && let Some(image) = model.images.get(item)
+        && image.is_valid()
+    {
+        scene.textures.insert(format!("item:{item}"), image.clone());
     }
 }
 
@@ -292,13 +330,8 @@ pub(crate) fn fill_materials(model: &ArchModel, scene: &mut Scene3d) {
     electrical::plate_materials(model, scene);
     soffit::materials(model, scene);
     paint::materials(model, scene);
-    scene.backdrop = model.backdrop.clone();
-    if let Some(Backdrop::Image { item, .. }) = &model.backdrop
-        && let Some(image) = model.images.get(item)
-        && image.is_valid()
-    {
-        scene.textures.insert(format!("item:{item}"), image.clone());
-    }
+    niche::niche_materials(model, scene);
+    set_backdrop(model, scene, model.backdrop.as_ref());
 }
 
 impl Scene3d {
@@ -786,6 +819,27 @@ mod tests {
             ..Default::default()
         });
         model
+    }
+
+    #[test]
+    fn set_backdrop_loads_the_image_a_look_names() {
+        let mut model = ArchModel::default();
+        let image = cadcraft_doc::arch::ImageRgba {
+            width: 2,
+            height: 2,
+            rgba: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255],
+            ..Default::default()
+        };
+        model.images.insert("sky".into(), image.clone());
+        let backdrop = Backdrop::Image { item: "sky".into(), projection: cadcraft_doc::arch::Projection::Flat, horizon: 0.0 };
+        let mut scene = Scene3d::default();
+        set_backdrop(&model, &mut scene, Some(&backdrop));
+        assert_eq!(scene.backdrop, Some(backdrop));
+        assert_eq!(scene.textures.get("item:sky"), Some(&image));
+
+        set_backdrop(&model, &mut scene, None);
+        assert!(scene.backdrop.is_none());
+        assert!(scene.textures.get("item:sky").is_none());
     }
 
     #[test]

@@ -135,6 +135,10 @@ pub enum Surface {
         /// Part index.
         part: u32,
     },
+    /// A custom countertop.
+    Countertop(ArchId),
+    /// A backsplash.
+    Backsplash(ArchId),
 }
 
 /// Parse a canonical decimal id with the given prefix letters (`w3`, no sign, no leading zeros).
@@ -163,6 +167,8 @@ impl Surface {
             Surface::Cabinet { cabinet, part } => format!("cabinet/cb{}/{}", cabinet.0, part.name()),
             Surface::Fixture(f) => format!("fixture/fx{}", f.0),
             Surface::Furnishing { furnishing, part } => format!("furnishing/f{}/{}", furnishing.0, part),
+            Surface::Countertop(c) => format!("countertop/ct{}", c.0),
+            Surface::Backsplash(b) => format!("backsplash/bs{}", b.0),
         }
     }
 
@@ -175,6 +181,7 @@ impl Surface {
             Surface::Cabinet { cabinet, .. } => format!("cabinet/cb{}", cabinet.0),
             Surface::Fixture(f) => format!("fixture/fx{}", f.0),
             Surface::Furnishing { furnishing, .. } => format!("furnishing/f{}", furnishing.0),
+            Surface::Countertop(_) | Surface::Backsplash(_) => self.key(),
         }
     }
 
@@ -211,6 +218,8 @@ impl Surface {
             }
             ["fixture", f] => Some(Surface::Fixture(ArchId(labelled(f, "fx")?))),
             ["furnishing", f, part] => Some(Surface::Furnishing { furnishing: ArchId(labelled(f, "f")?), part: number(part)? }),
+            ["countertop", c] => Some(Surface::Countertop(ArchId(labelled(c, "ct")?))),
+            ["backsplash", b] => Some(Surface::Backsplash(ArchId(labelled(b, "bs")?))),
             _ => None,
         }
     }
@@ -234,6 +243,8 @@ mod tests {
             (Surface::Cabinet { cabinet: ArchId(1), part: CabinetPart::Pull }, "cabinet/cb1/pull", "cabinet/cb1"),
             (Surface::Fixture(ArchId(0)), "fixture/fx0", "fixture/fx0"),
             (Surface::Furnishing { furnishing: ArchId(2), part: 0 }, "furnishing/f2/0", "furnishing/f2"),
+            (Surface::Countertop(ArchId(0)), "countertop/ct0", "countertop/ct0"),
+            (Surface::Backsplash(ArchId(2)), "backsplash/bs2", "backsplash/bs2"),
         ];
         for (s, key, obj) in all {
             assert_eq!(s.key(), key);
@@ -269,6 +280,9 @@ mod tests {
             "furnishing/f2/-1",
             "furnishing/fx2/0",
             "furnishing/f99999999999/0",
+            "countertop/cb0",
+            "backsplash/bs",
+            "backsplash/bs0/x",
             "chair/c0",
         ] {
             assert_eq!(Surface::parse(bad), None, "{bad:?}");

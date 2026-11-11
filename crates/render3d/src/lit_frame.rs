@@ -138,7 +138,7 @@ impl Offscreen {
         };
         let layout = &self.lit_pipelines.as_ref()?.layout;
         let drawn = &self.lit_state.drawn;
-        Some(LitFrame::new(
+        let mut frame = LitFrame::new(
             &self.device,
             layout,
             &crate::lit::frame_uniform(sun_map, &params, atlas.size()),
@@ -147,7 +147,9 @@ impl Offscreen {
             atlas.view(),
             &params,
             (drawn.len(), slots.len()),
-        ))
+        );
+        frame.lighting = *lighting;
+        Some(frame)
     }
 }
 

@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("backdrop", "Backdrop", run_backdrop)
             .menu(&["Architecture", "Backdrop"])
-            .params("{kind?: colour|gradient|image|none, colour?, top?, bottom?, item?, projection?: flat|equirect}"),
+            .params("{kind?: colour|gradient|image|sky|none, colour?, top?, bottom?, item?, projection?: flat|equirect}"),
     ]
 }
 
@@ -49,12 +49,20 @@ fn colour_param(obj: &Map<String, Value>, key: &str) -> Result<[u8; 3], EngineEr
     v.as_str().and_then(parse_hex).ok_or_else(|| bad("backdrop", format!("`{key}` must be \"#rrggbb\"")))
 }
 
-fn describe(b: &Backdrop) -> Value {
+pub(crate) fn describe(b: &Backdrop) -> Value {
     match b {
         Backdrop::Colour { colour } => json!({"kind": "colour", "colour": hex(*colour)}),
         Backdrop::Gradient { top, bottom } => json!({"kind": "gradient", "top": hex(*top), "bottom": hex(*bottom)}),
-        Backdrop::Image { item, projection } => {
-            json!({"kind": "image", "item": item, "projection": serde_json::to_value(projection).unwrap_or(Value::Null)})
+        Backdrop::Image { item, projection, horizon } => {
+            let mut v = json!({"kind": "image", "item": item, "projection": serde_json::to_value(projection).unwrap_or(Value::Null)});
+            if *horizon != 0.0 {
+                v["horizon"] = json!(horizon);
+            }
+            v
+        }
+        Backdrop::Sky => json!({"kind": "sky"}),
+        Backdrop::Hdri { image, intensity, rotation, horizon } => {
+            json!({"kind": "hdri", "image": image, "intensity": intensity, "rotation": rotation, "horizon": horizon})
         }
     }
 }
@@ -82,8 +90,8 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         "colour" => &["kind", "colour"],
         "gradient" => &["kind", "top", "bottom"],
         "image" => &["kind", "item", "projection"],
-        "none" => &["kind"],
-        _ => return Err(bad("backdrop", "`kind` must be colour, gradient, image or none")),
+        "sky" | "none" => &["kind"],
+        _ => return Err(bad("backdrop", "`kind` must be colour, gradient, image, sky or none")),
     };
     if let Some(k) = obj.keys().find(|k| !allowed.contains(&k.as_str())) {
         return Err(bad("backdrop", format!("`{k}` does not apply to a {kind} backdrop")));
@@ -116,8 +124,9 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 None => return Err(bad("backdrop", format!("no library item `{item}`"))),
             }
             image = Some((item.to_string(), s.library.image(item).map_err(|e| bad("backdrop", e))?));
-            Some(Backdrop::Image { item: item.to_string(), projection })
+            Some(Backdrop::Image { item: item.to_string(), projection, horizon: 0.0 })
         }
+        "sky" => Some(Backdrop::Sky),
         _ => None,
     };
     s.doc()?;
@@ -131,7 +140,7 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         "gradient" => {
             json!({"kind": "gradient", "top": normalise_hex(top_str.unwrap_or("#000000")), "bottom": normalise_hex(bottom_str.unwrap_or("#000000"))})
         }
-        "image" => describe(d.arch.backdrop.as_ref().unwrap()),
+        "image" | "sky" => d.arch.backdrop.as_ref().map_or(Value::Null, describe),
         _ => json!({"kind": "none"}),
     };
     d.touch_arch();
@@ -188,7 +197,6 @@ mod tests {
             json!({"kind": "image", "item": "backdrop:gradient"}),
             json!({"kind": "image", "item": "finish:siding"}),
             json!({"kind": "image", "item": "own:backdrop-sky", "projection": "cube"}),
-            json!({"kind": "sky"}),
             json!({"kind": 5}),
             json!({"colour": "#000000", "kind": "none"}),
             json!({"bogus": 1}),
@@ -246,6 +254,20 @@ mod tests {
         for p in &bads {
             assert!(s.execute("backdrop", p).is_err(), "should refuse {p}");
         }
+    }
+
+    #[test]
+    fn backdrop_sky_sets_reports_and_refuses_extra_keys() {
+        let mut s = session();
+        let r = s.execute("backdrop", &json!({"kind": "sky"})).unwrap();
+        assert_eq!(r["backdrop"], json!({"kind": "sky"}));
+        assert_eq!(s.doc().unwrap().arch.backdrop, Some(Backdrop::Sky));
+        assert_eq!(s.execute("backdrop", &json!({})).unwrap()["backdrop"], json!({"kind": "sky"}));
+        let e = s.execute("backdrop", &json!({"kind": "sky", "colour": "#000000"})).unwrap_err().to_string();
+        assert!(e.contains("`colour` does not apply to a sky backdrop"), "{e}");
+        assert_eq!(s.doc().unwrap().arch.backdrop, Some(Backdrop::Sky));
+        let e = s.execute("backdrop", &json!({"kind": "nebula"})).unwrap_err().to_string();
+        assert!(e.contains("colour, gradient, image, sky or none"), "{e}");
     }
 
     #[test]

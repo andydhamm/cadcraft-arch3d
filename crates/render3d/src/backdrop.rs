@@ -51,7 +51,7 @@ pub fn image_textures(b: Option<&Backdrop>, textures: &BTreeMap<String, ImageRgb
 /// The usable image of `b` in `textures`, with its projection.
 fn image_of<'a>(b: &Backdrop, textures: &'a BTreeMap<String, ImageRgba>) -> Option<(&'a ImageRgba, Projection)> {
     match b {
-        Backdrop::Image { item, projection } => textures.get(&image_key(item)).filter(|i| i.is_valid()).map(|i| (i, *projection)),
+        Backdrop::Image { item, projection, .. } => textures.get(&image_key(item)).filter(|i| i.is_valid()).map(|i| (i, *projection)),
         _ => None,
     }
 }
@@ -110,6 +110,7 @@ pub fn backdrop_rgb(b: &Backdrop, textures: &BTreeMap<String, ImageRgba>, x: u32
             }
             out
         }
+        Backdrop::Sky | Backdrop::Hdri { .. } => CLEAR_RGB,
         Backdrop::Image { .. } => {
             let Some((img, projection)) = image_of(b, textures) else { return CLEAR_RGB };
             let rgb = match projection {
@@ -138,6 +139,11 @@ pub fn composite_misses(
     textures: &BTreeMap<String, ImageRgba>,
     ray_of: &dyn Fn(u32, u32) -> [f32; 3],
 ) {
+    // A sky or HDRI backdrop paints nothing: the path tracer's own miss radiance is the environment,
+    // and camera rays that read it still count as misses.
+    if matches!(b, Backdrop::Sky | Backdrop::Hdri { .. }) {
+        return;
+    }
     let n = (w as usize).saturating_mul(h as usize);
     if w == 0 || h == 0 || rgba.len() != n.saturating_mul(4) || missed.len() != n {
         return;
@@ -377,7 +383,9 @@ impl BackdropPass {
                 u.bottom = f(bottom);
                 u.kind[0] = 1;
             }
-            Backdrop::Image { item, projection } => {
+            // The sky and an HDRI are not pictures here: the clear colour (p19-env-raster draws them later).
+            Backdrop::Sky | Backdrop::Hdri { .. } => u.top = f(&CLEAR_RGB),
+            Backdrop::Image { item, projection, .. } => {
                 let Some((img, _)) = image_of(b, textures) else { return false };
                 let key = image_key(item);
                 let print = fingerprint(img);
@@ -441,7 +449,7 @@ mod tests {
         assert_eq!(backdrop_rgb(&g, &none(), 0, 1, 1, 2, up), [75, 100, 50]);
         // Flat: a 2x1 black/white image over 4 columns, bilinear and clamped.
         let img = ImageRgba { width: 2, height: 1, rgba: vec![0, 0, 0, 255, 255, 255, 255, 255], ..Default::default() };
-        let flat = Backdrop::Image { item: "pic".into(), projection: Projection::Flat };
+        let flat = Backdrop::Image { item: "pic".into(), projection: Projection::Flat, horizon: 0.0 };
         let t = with("pic", img);
         let row: Vec<u8> = (0..4).map(|x| backdrop_rgb(&flat, &t, x, 0, 4, 1, up)[0]).collect();
         assert_eq!(row, vec![0, 64, 191, 255]);
@@ -452,7 +460,7 @@ mod tests {
                 rgba.extend_from_slice(&[col * 50 + row * 10, 0, 0, 255]);
             }
         }
-        let eq = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect };
+        let eq = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: 0.0 };
         let t = with("sky", ImageRgba { width: 4, height: 2, rgba, ..Default::default() });
         let red = |d: [f32; 3]| backdrop_rgb(&eq, &t, 0, 0, 1, 1, d)[0];
         assert_eq!(red([1.0, 0.0, 0.0]), 80);
@@ -528,8 +536,8 @@ mod tests {
         let cases = [
             (Backdrop::Colour { colour: [32, 64, 96] }, none()),
             (Backdrop::Gradient { top: [250, 200, 20], bottom: [10, 20, 240] }, none()),
-            (Backdrop::Image { item: "pic".into(), projection: Projection::Flat }, with("pic", flat_img)),
-            (Backdrop::Image { item: "sky".into(), projection: Projection::Equirect }, with("sky", sky())),
+            (Backdrop::Image { item: "pic".into(), projection: Projection::Flat, horizon: 0.0 }, with("pic", flat_img)),
+            (Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: 0.0 }, with("sky", sky())),
         ];
         for (b, textures) in cases {
             let got = shot(&mut off, &scene(Some(b.clone()), textures.clone()), Style::Shaded);
@@ -582,11 +590,11 @@ mod tests {
         let Some(mut off) = offscreen() else { return };
         let plain = shot(&mut off, &scene(None, none()), Style::Shaded);
         for projection in [Projection::Flat, Projection::Equirect] {
-            let b = Backdrop::Image { item: "nowhere".into(), projection };
+            let b = Backdrop::Image { item: "nowhere".into(), projection, horizon: 0.0 };
             assert_eq!(shot(&mut off, &scene(Some(b), none()), Style::Shaded), plain);
         }
         let bad = ImageRgba { width: 4, height: 4, rgba: vec![1, 2, 3], ..Default::default() };
-        let b = Backdrop::Image { item: "bad".into(), projection: Projection::Flat };
+        let b = Backdrop::Image { item: "bad".into(), projection: Projection::Flat, horizon: 0.0 };
         assert_eq!(shot(&mut off, &scene(Some(b), with("bad", bad)), Style::Shaded), plain);
     }
 

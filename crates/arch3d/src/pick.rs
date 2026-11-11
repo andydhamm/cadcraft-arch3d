@@ -10,6 +10,7 @@ use cadcraft_doc::ArchId;
 use cadcraft_geom::Vec3;
 
 use crate::Scene3d;
+use crate::incremental::{ObjectKind, object_kind_of};
 use crate::probe::pick_part;
 
 /// Hard cap on tree nodes.
@@ -26,6 +27,8 @@ pub struct PickHit {
     pub object: ArchId,
     /// Part name from [`pick_part`] (`"wall"`, `"leaf"`, `"floor"`, …).
     pub part: &'static str,
+    /// The kind of object that owns the mesh (material-aware, unlike `part`).
+    pub owner: ObjectKind,
     /// Distance along the (normalised) ray.
     pub distance: f64,
     /// World-space hit point.
@@ -61,8 +64,8 @@ pub struct Bvh {
     /// Permutation of `tris` indices; leaves cover contiguous slices.
     order: Vec<u32>,
     nodes: Vec<Node>,
-    /// Part name and owning object per mesh index.
-    meshes: Vec<(&'static str, ArchId)>,
+    /// Part name, owning object and owner kind per mesh index.
+    meshes: Vec<(&'static str, ArchId, ObjectKind)>,
 }
 
 fn comp(v: Vec3, i: usize) -> f64 {
@@ -89,7 +92,7 @@ impl Bvh {
     pub fn build(scene: &Scene3d) -> Bvh {
         let mut bvh = Bvh::default();
         for (mi, mesh) in scene.meshes.iter().enumerate() {
-            bvh.meshes.push((pick_part(mesh), mesh.object));
+            bvh.meshes.push((pick_part(mesh), mesh.object, object_kind_of(mesh)));
             let Ok(mesh_id) = u32::try_from(mi) else { continue };
             for g in mesh.indices.chunks_exact(3) {
                 let at = |k: usize| g.get(k).and_then(|&i| corner(mesh.positions.get(i as usize)));
@@ -227,8 +230,8 @@ impl Bvh {
         }
         let (ti, t) = best?;
         let tri = self.tris.get(ti as usize)?;
-        let (part, object) = *self.meshes.get(tri.mesh as usize)?;
-        Some(PickHit { object, part, distance: t, point: origin + d * t })
+        let (part, object, owner) = *self.meshes.get(tri.mesh as usize)?;
+        Some(PickHit { object, part, owner, distance: t, point: origin + d * t })
     }
 }
 

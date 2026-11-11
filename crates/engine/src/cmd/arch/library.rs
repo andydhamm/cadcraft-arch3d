@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use cadcraft_arch::library::{Category, ChipKind, ItemRecord, Query, folders, query_for, search};
-use cadcraft_doc::arch::{ArchModel, Surface};
+use cadcraft_doc::arch::{ArchId, ArchModel, Surface};
 use serde_json::{Map, Value, json};
 
 use crate::cmd::{CommandSpec, always, bad};
@@ -123,6 +123,27 @@ fn surface_exists(m: &ArchModel, s: &Surface) -> bool {
         Surface::Cabinet { cabinet, .. } => m.cabinets.iter().any(|c| c.id == *cabinet),
         Surface::Fixture(f) => m.fixtures.iter().any(|x| x.id == *f),
         Surface::Furnishing { furnishing, .. } => m.furnishing(*furnishing).is_some(),
+        Surface::Countertop(c) => m.countertop(*c).is_some(),
+        Surface::Backsplash(b) => m.backsplash(*b).is_some(),
+    }
+}
+
+/// For the molding targets (`room/r<n>/molding`, `cabinet/cb<n>/crown`, `cabinet/cb<n>/lightRail`,
+/// `moldingLine/ml<n>`, which are not surfaces): whether the object exists; `None` for any other key.
+fn molding_target_exists(m: &ArchModel, key: &str) -> Option<bool> {
+    let parts: Vec<&str> = key.split('/').collect();
+    let id = |p: &str, prefix: &str| -> Option<ArchId> {
+        let digits = p.strip_prefix(prefix)?;
+        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        digits.parse::<u32>().ok().map(ArchId)
+    };
+    match parts.as_slice() {
+        ["room", r, "molding"] => Some(id(r, "r").is_some_and(|i| m.room(i).is_some())),
+        ["cabinet", c, "crown" | "lightRail"] => Some(id(c, "cb").is_some_and(|i| m.cabinets.iter().any(|x| x.id == i))),
+        ["moldingLine", l] => Some(id(l, "ml").is_some_and(|i| m.molding_line(i).is_some())),
+        _ => None,
     }
 }
 
@@ -132,8 +153,16 @@ fn for_query(s: &Session, v: &Value) -> Result<Query> {
     const CMD: &str = "library";
     let key = v.as_str().ok_or_else(|| bad(CMD, "`for` must be a surface key such as \"cabinet/cb0/pull\""))?;
     let shown: String = key.chars().take(64).collect();
-    let surface = Surface::parse(key).ok_or_else(|| bad(CMD, format!("`{shown}` is not a surface key")))?;
     let d = s.doc().map_err(|_| bad(CMD, "`for` needs an open drawing"))?;
+    if let Some(exists) = molding_target_exists(&d.arch, key) {
+        if !exists {
+            let object = key.split('/').next().unwrap_or("object");
+            let object = if object == "moldingLine" { "molding line" } else { object };
+            return Err(bad(CMD, format!("the drawing has no {object} `{shown}`")));
+        }
+        return query_for(key).ok_or_else(|| bad(CMD, format!("no library items fit {shown}")));
+    }
+    let surface = Surface::parse(key).ok_or_else(|| bad(CMD, format!("`{shown}` is not a surface key")))?;
     if !surface_exists(&d.arch, &surface) {
         return Err(bad(CMD, format!("the drawing has no {}", surface.object_key())));
     }
@@ -447,6 +476,53 @@ mod tests {
         }
         run(&mut s, "fixture", json!({"kind": "sink", "at": [3.0, 1.0]}));
         assert!(s.execute("library", &json!({"for": "fixture/fx0"})).is_err(), "nothing in the library fits a fixture");
+    }
+
+    fn square_room(s: &mut Session) {
+        run(s, "wall", json!({"points": [[0, 0], [4.1, 0], [4.1, 3.1], [0, 3.1], [0, 0]], "thickness": 0.1, "height": 2.4, "exterior": true}));
+        run(s, "roomdetect", json!({}));
+    }
+
+    #[test]
+    fn for_room_molding_is_the_moldings_folder() {
+        let dir = TempDir::new("library-for-room-molding");
+        let mut s = session(&dir);
+        square_room(&mut s);
+        let r = run(&mut s, "library", json!({"for": "room/r0/molding"}));
+        assert_eq!(r["query"], json!({"text": "", "chips": [{"kind": "folder", "value": "Moldings"}]}));
+        let found = ids(&r);
+        assert!(found.contains(&"molding:crown".to_string()) && found.len() >= 5, "{found:?}");
+        assert!(found.iter().all(|id| id.starts_with("molding:")), "{found:?}");
+    }
+
+    #[test]
+    fn for_cabinet_crown_light_rail_and_molding_line_targets() {
+        let dir = TempDir::new("library-for-molding-targets");
+        let mut s = session(&dir);
+        run(&mut s, "wall", json!({"points": [[0.0, 0.0], [5.0, 0.0]]}));
+        run(&mut s, "cabinet", json!({"kind": "base", "at": [1.0, 1.0]}));
+        let line = cadcraft_doc::arch::MoldingLine {
+            points: vec![cadcraft_geom::Vec2::new(0.0, 0.0), cadcraft_geom::Vec2::new(2.0, 0.0)],
+            ..Default::default()
+        };
+        let id = s.doc_mut().unwrap().arch.push_molding_line(line);
+        let line_key = format!("moldingLine/ml{}", id.0);
+        for key in ["cabinet/cb0/crown", "cabinet/cb0/lightRail", line_key.as_str()] {
+            let r = run(&mut s, "library", json!({"for": key}));
+            assert_eq!(r["query"]["chips"], json!([{"kind": "folder", "value": "Moldings"}]), "{key}");
+            assert!(ids(&r).contains(&"molding:base".to_string()), "{key}");
+        }
+    }
+
+    #[test]
+    fn for_a_missing_room_cabinet_or_molding_line_is_refused() {
+        let dir = TempDir::new("library-for-molding-missing");
+        let mut s = session(&dir);
+        square_room(&mut s);
+        for key in ["room/r9/molding", "cabinet/cb0/crown", "cabinet/cb0/lightRail", "moldingLine/ml0", "room/rx/molding", "room//molding"] {
+            let e = s.execute("library", &json!({"for": key})).unwrap_err().to_string();
+            assert!(e.contains("the drawing has no"), "{key}: {e}");
+        }
     }
 
     #[test]

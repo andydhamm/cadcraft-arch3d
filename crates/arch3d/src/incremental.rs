@@ -25,8 +25,9 @@ use cadcraft_arch::casework_layout::counter_runs;
 use cadcraft_arch::join::{WallShape, solve_joins};
 use cadcraft_arch::roof::{Footprint, outer_footprint};
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, CabinetPart, ElectricalDevice, Fixture, FoundationKind, Furnishing, FurnishingHost, Level, LightFixture, Opening,
-    OpeningTop, Paint, Plant, PlantSpecies, Railing, Roof, Room, RoomType, SLAB_THICKNESS, Side, Stair, Surface, Terrain, WallType,
+    Backsplash, Cabinet, CabinetKind, CabinetPart, Countertop, ElectricalDevice, Fixture, FoundationKind, Furnishing, FurnishingHost, Level,
+    LightFixture, MoldingLine, Opening, OpeningTop, Paint, Plant, PlantSpecies, Railing, Roof, Room, RoomType, SLAB_THICKNESS, Side, Stair, Surface,
+    Terrain, WallType,
 };
 use cadcraft_doc::{ArchId, ArchModel, Wall};
 use cadcraft_geom::{Vec2, Vec3};
@@ -65,9 +66,64 @@ pub enum ObjectKind {
     Soffit,
     /// Phase 16: a foundation's stem walls, footings and slab edges (`fd{n}`).
     Foundation,
+    /// Phase 18: a countertop (`ct{n}`).
+    Countertop,
+    /// Phase 18: a backsplash (`bs{n}`).
+    Backsplash,
+    /// Phase 18: a molding line (`ml{n}`).
+    MoldingLine,
 }
 
 impl ObjectKind {
+    /// The label of the object of this kind with id `id`.
+    pub fn label(self, id: ArchId) -> String {
+        use cadcraft_doc::arch as a;
+        match self {
+            ObjectKind::Wall => a::wall_label(id),
+            ObjectKind::Opening => a::opening_label(id),
+            ObjectKind::Room => a::room_label(id),
+            ObjectKind::Roof => a::roof_label(id),
+            ObjectKind::Stair => a::stair_label(id),
+            ObjectKind::Railing => a::railing_label(id),
+            ObjectKind::Terrain => a::terrain_label(Some(id.0)),
+            ObjectKind::Plant => a::plant_label(id),
+            ObjectKind::Light => a::light_label(id),
+            ObjectKind::Cabinet => a::cabinet_label(id),
+            ObjectKind::Fixture => a::fixture_label(id),
+            ObjectKind::Furnishing => a::furnishing_label(id),
+            ObjectKind::Electrical => a::electrical_label(id),
+            ObjectKind::Soffit => a::soffit_label(id),
+            ObjectKind::Foundation => a::foundation_label(id),
+            ObjectKind::Countertop => a::countertop_label(id),
+            ObjectKind::Backsplash => a::backsplash_label(id),
+            ObjectKind::MoldingLine => a::molding_line_label(id),
+        }
+    }
+
+    /// The proxy handle of the object of this kind with id `id`.
+    pub fn handle(self, id: ArchId) -> cadcraft_doc::Handle {
+        use cadcraft_doc::arch as a;
+        match self {
+            ObjectKind::Wall | ObjectKind::Terrain => a::arch_handle(id),
+            ObjectKind::Opening => a::opening_handle(id),
+            ObjectKind::Room => a::room_handle(id),
+            ObjectKind::Roof => a::roof_handle(id),
+            ObjectKind::Stair => a::stair_handle(id),
+            ObjectKind::Railing => a::railing_handle(id),
+            ObjectKind::Plant => a::plant_handle(id),
+            ObjectKind::Light => a::light_handle(id),
+            ObjectKind::Cabinet => a::cabinet_handle(id),
+            ObjectKind::Fixture => a::fixture_handle(id),
+            ObjectKind::Furnishing => a::furnishing_handle(id),
+            ObjectKind::Electrical => a::electrical_handle(id),
+            ObjectKind::Soffit => a::soffit_handle(id),
+            ObjectKind::Foundation => a::foundation_handle(id),
+            ObjectKind::Countertop => a::countertop_handle(id),
+            ObjectKind::Backsplash => a::backsplash_handle(id),
+            ObjectKind::MoldingLine => a::molding_line_handle(id),
+        }
+    }
+
     /// The kind owning a mesh of the [`part_of`] class `part`.
     fn from_part(part: &str) -> ObjectKind {
         match part {
@@ -85,6 +141,7 @@ impl ObjectKind {
             "electrical" => ObjectKind::Electrical,
             "soffit" => ObjectKind::Soffit,
             "foundation" | "footing" => ObjectKind::Foundation,
+            "backsplash" => ObjectKind::Backsplash,
             _ => ObjectKind::Wall,
         }
     }
@@ -97,14 +154,39 @@ pub struct ObjectKey {
     pub id: ArchId,
 }
 
-/// The object `mesh` belongs to, from its [`part_of`] class and its `object` id.
-pub fn object_key(mesh: &Mesh) -> ObjectKey {
+/// The kind of object `mesh` belongs to: material-aware, so a painted countertop or backsplash is
+/// its own object's, deck structure and room moldings belong to their room, and a molding line to
+/// its line; else the kind of its [`part_of`] class.
+pub fn object_kind_of(mesh: &Mesh) -> ObjectKind {
+    let m = mesh.material.to_lowercase();
+    // A painted surface is named by its key first (the part `counter` would read as a cabinet's).
+    if let Some(s) = m.strip_prefix("paint:").and_then(Surface::parse) {
+        match s {
+            Surface::Countertop(_) => return ObjectKind::Countertop,
+            Surface::Backsplash(_) => return ObjectKind::Backsplash,
+            _ => {}
+        }
+    }
     // Phase 17: deck structure (posts and piers too) belongs to its deck room, while phase 16's
     // "footing" part stays a foundation's.
-    if mesh.material.starts_with("deck-") {
-        return ObjectKey { kind: ObjectKind::Room, id: mesh.object };
+    if m.starts_with("deck-") || m.starts_with("molding-room-") {
+        ObjectKind::Room
+    } else if m.starts_with("glass-wall") || m.starts_with("niche-back") {
+        ObjectKind::Wall
+    } else if m.starts_with("molding-line") {
+        ObjectKind::MoldingLine
+    } else if m == "countertop" || m.starts_with("countertop-") {
+        ObjectKind::Countertop
+    } else if m == "backsplash" {
+        ObjectKind::Backsplash
+    } else {
+        ObjectKind::from_part(part_of(mesh))
     }
-    ObjectKey { kind: ObjectKind::from_part(part_of(mesh)), id: mesh.object }
+}
+
+/// The object `mesh` belongs to, from its [`object_kind_of`] class and its `object` id.
+pub fn object_key(mesh: &Mesh) -> ObjectKey {
+    ObjectKey { kind: object_kind_of(mesh), id: mesh.object }
 }
 
 /// The objects whose data differ between `prev` and `next` (added, removed or changed, compared by
@@ -139,6 +221,9 @@ pub fn changed_objects(prev: &ArchModel, next: &ArchModel) -> Option<BTreeSet<Ob
     diff(&prev.electrical, &next.electrical, |d| d.id, ObjectKind::Electrical, &mut changes);
     diff(&prev.soffits, &next.soffits, |s| s.id, ObjectKind::Soffit, &mut changes);
     diff(&prev.foundations, &next.foundations, |f| f.id, ObjectKind::Foundation, &mut changes);
+    diff(&prev.countertops, &next.countertops, |c| c.id, ObjectKind::Countertop, &mut changes);
+    diff(&prev.backsplashes, &next.backsplashes, |b| b.id, ObjectKind::Backsplash, &mut changes);
+    diff(&prev.molding_lines, &next.molding_lines, |l| l.id, ObjectKind::MoldingLine, &mut changes);
     // A tray is part of its room's ceiling.
     for id in changed_ids(&prev.trays, &next.trays, |t| t.id) {
         for t in prev.trays.iter().chain(&next.trays).filter(|t| t.id == id) {
@@ -175,6 +260,8 @@ fn surface_owner(surface: &Surface) -> ObjectKey {
         Surface::Cabinet { cabinet, .. } => (ObjectKind::Cabinet, *cabinet),
         Surface::Fixture(f) => (ObjectKind::Fixture, *f),
         Surface::Furnishing { furnishing, .. } => (ObjectKind::Furnishing, *furnishing),
+        Surface::Countertop(c) => (ObjectKind::Countertop, *c),
+        Surface::Backsplash(b) => (ObjectKind::Backsplash, *b),
     };
     ObjectKey { kind, id }
 }
@@ -317,20 +404,21 @@ fn parts<I: PartialEq>(prev: Vec<Part<I>>, items: Vec<(ArchId, I)>, make: impl F
         .collect()
 }
 
+/// Everything one wall's meshes are made from.
 #[derive(Clone, Debug, PartialEq)]
-struct WallIn {
-    wall: Wall,
+pub(crate) struct WallIn {
+    pub(crate) wall: Wall,
     /// `None` skips the wall (and leaves the rest empty).
-    span: Option<(f64, f64)>,
-    shape: Option<WallShape>,
-    openings: Vec<Opening>,
-    clip: Option<RoofClip>,
-    roof_top: Option<Vec<Vec2>>,
+    pub(crate) span: Option<(f64, f64)>,
+    pub(crate) shape: Option<WallShape>,
+    pub(crate) openings: Vec<Opening>,
+    pub(crate) clip: Option<RoofClip>,
+    pub(crate) roof_top: Option<Vec<Vec2>>,
     /// Phase 16: the part of the wall rising to a vaulted ceiling over its room, if any.
-    rise: Option<crate::wall_rise::RiseIn>,
-    paints: Vec<(String, Paint)>,
+    pub(crate) rise: Option<crate::wall_rise::RiseIn>,
+    pub(crate) paints: Vec<(String, Paint)>,
     /// Phase 17: where a stair's flight cuts the wall's top (empty for most walls).
-    flight_cuts: Vec<cadcraft_arch::flight_cut::FlightCut>,
+    pub(crate) flight_cuts: Vec<cadcraft_arch::flight_cut::FlightCut>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -404,16 +492,68 @@ struct FixtureIn {
     point: Option<Vec3>,
 }
 
+/// The fields of a cabinet that another cabinet's meshes read: counter runs and their corner
+/// merges, corner partners, fillers joining runs, a crown's exposed ends. A projection, not a
+/// clone, so an edit of any other field (face, style, shelves, ...) rebuilds that cabinet alone.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CabinetNeighbour {
+    pub(crate) id: ArchId,
+    pub(crate) kind: CabinetKind,
+    pub(crate) level: u32,
+    pub(crate) position: Vec2,
+    pub(crate) rotation: f64,
+    pub(crate) width: f64,
+    pub(crate) depth: f64,
+    pub(crate) height: f64,
+    pub(crate) elevation: f64,
+    pub(crate) counter: bool,
+    pub(crate) counter_thickness: f64,
+    pub(crate) counter_overhang: f64,
+    pub(crate) filler: bool,
+    pub(crate) corner: cadcraft_doc::arch::CornerPref,
+    /// Whether it has a crown molding.
+    pub(crate) crown: bool,
+    /// Whether it has a light rail.
+    pub(crate) light_rail: bool,
+}
+
+impl CabinetNeighbour {
+    fn of(c: &Cabinet) -> CabinetNeighbour {
+        CabinetNeighbour {
+            id: c.id,
+            kind: c.kind,
+            level: c.level,
+            position: c.position,
+            rotation: c.rotation,
+            width: c.width,
+            depth: c.depth,
+            height: c.height,
+            elevation: c.elevation,
+            counter: c.counter,
+            counter_thickness: c.counter_thickness,
+            counter_overhang: c.counter_overhang,
+            filler: c.filler,
+            corner: c.corner,
+            crown: c.crown.is_some(),
+            light_rail: c.light_rail.is_some(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct CabinetIn {
     cabinet: Cabinet,
     level: Level,
     paints: Vec<(String, Paint)>,
-    /// Every base cabinet on the cabinet's level: counter runs and gaps reach across them.
-    neighbours: Vec<Cabinet>,
+    /// Projections of the other cabinets of its kind group on its level (base cabinets for a base
+    /// cabinet, wall and tall cabinets for a wall or tall one): counter runs, corners, fillers and
+    /// crown ends reach across them.
+    neighbours: Vec<CabinetNeighbour>,
     /// The furnishings hosted by a cabinet on that level or by a gap beside one (cut-outs, bridged
     /// gaps).
     hosted: Vec<Furnishing>,
+    /// The cabinets on its level that custom countertops claim (sorted).
+    claimed: Vec<ArchId>,
     /// The pull symbol's key, when the model has that symbol.
     pull_symbol: Option<String>,
 }
@@ -444,6 +584,40 @@ struct ElectricalIn {
     level: f64,
 }
 
+/// Phase 18: one room's resolved molding runs.
+#[derive(Clone, Debug, PartialEq)]
+struct RoomMoldingIn {
+    room: ArchId,
+    /// The elevation of the room's level.
+    level: f64,
+    runs: Vec<cadcraft_arch::molding_runs::MoldingRun>,
+}
+
+/// Phase 18: one molding line.
+#[derive(Clone, Debug, PartialEq)]
+struct MoldingLineIn {
+    line: MoldingLine,
+    level: f64,
+}
+
+/// Phase 18: one countertop with its custom outline.
+#[derive(Clone, Debug, PartialEq)]
+struct CountertopIn {
+    outline: Option<cadcraft_arch::countertop::CounterOutline>,
+    countertop: Countertop,
+    level: f64,
+    paints: Vec<(String, Paint)>,
+}
+
+/// Phase 18: one backsplash with its resolved segments.
+#[derive(Clone, Debug, PartialEq)]
+struct BacksplashIn {
+    backsplash: Backsplash,
+    segments: Vec<cadcraft_arch::backsplash::BacksplashSegment>,
+    level: f64,
+    paints: Vec<(String, Paint)>,
+}
+
 /// The parts of a scene, section by section in the order [`Scene3d::build`] emits them.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Sections {
@@ -462,6 +636,10 @@ pub(crate) struct Sections {
     electrical: Vec<Part<ElectricalIn>>,
     soffits: Vec<Part<crate::soffit::SoffitIn>>,
     foundations: Vec<Part<crate::foundation::FoundationIn>>,
+    room_moldings: Vec<Part<RoomMoldingIn>>,
+    molding_lines: Vec<Part<MoldingLineIn>>,
+    countertops: Vec<Part<CountertopIn>>,
+    backsplashes: Vec<Part<BacksplashIn>>,
     /// The join shapes, for the walls and wall types they were solved for.
     joins: Option<(Vec<Wall>, Vec<WallType>, Vec<WallShape>)>,
     /// Per level: its walls, and the outer footprint they make (it joins every wall on the level).
@@ -487,6 +665,10 @@ impl Sections {
             electrical: pel,
             soffits: psf,
             foundations: pfd,
+            room_moldings: prm,
+            molding_lines: pml,
+            countertops: pct,
+            backsplashes: pbs,
             joins,
             footprints: mut old_footprints,
         } = prev.unwrap_or_default();
@@ -583,7 +765,7 @@ impl Sections {
                 let ceiling = crate::ceiling::ceiling_input(model, room, &level, cuts);
                 let slab = model.foundations.iter().any(|f| f.kind == FoundationKind::Slab && f.level == room.level);
                 let paints = paints_under(model, &Surface::RoomFloor(room.id).object_key());
-                (room.id, RoomIn { room: room.clone(), level, wells, ceiling, slab, paints })
+                (room.id, RoomIn { room: Room { moldings: Vec::new(), ..room.clone() }, level, wells, ceiling, slab, paints })
             })
             .collect();
         for p in &pr {
@@ -672,8 +854,10 @@ impl Sections {
             .cabinets
             .iter()
             .map(|c| {
-                let (neighbours, hosted) = casework.get(&c.level).cloned().unwrap_or_default();
+                let (base, upper, hosted, claimed) = casework.get(&c.level).cloned().unwrap_or_default();
+                let neighbours = if c.kind == CabinetKind::Base { base } else { upper };
                 let input = CabinetIn {
+                    claimed,
                     cabinet: c.clone(),
                     level: level_for(model, c.level),
                     paints: paints_under(model, &Surface::Cabinet { cabinet: c.id, part: CabinetPart::Carcass }.object_key()),
@@ -734,6 +918,54 @@ impl Sections {
         let foundation_items = model.foundations.iter().map(|f| (f.id, crate::foundation::foundation_input(model, f))).collect();
         let foundations = parts(pfd, foundation_items, |i| painted(model, crate::foundation::foundation_meshes(i)));
 
+        let room_molding_items = model
+            .rooms
+            .iter()
+            .filter(|r| !r.moldings.is_empty())
+            .map(|r| {
+                let input =
+                    RoomMoldingIn { room: r.id, level: level_for(model, r.level).elevation, runs: cadcraft_arch::molding_runs::room_runs(model, r) };
+                (r.id, input)
+            })
+            .collect();
+        let room_moldings = parts(prm, room_molding_items, |i| crate::molding::room::room_molding_meshes(i.room, i.level, &i.runs));
+
+        let molding_line_items =
+            model.molding_lines.iter().map(|l| (l.id, MoldingLineIn { line: l.clone(), level: level_for(model, l.level).elevation })).collect();
+        let molding_lines = parts(pml, molding_line_items, |i| crate::molding::line::line_meshes(&i.line, i.level));
+
+        let countertop_items = model
+            .countertops
+            .iter()
+            .map(|ct| {
+                let input = CountertopIn {
+                    outline: cadcraft_arch::countertop::custom_outline(model, ct),
+                    countertop: ct.clone(),
+                    level: level_for(model, ct.level).elevation,
+                    paints: paint_of(model, &Surface::Countertop(ct.id).object_key()),
+                };
+                (ct.id, input)
+            })
+            .collect();
+        let countertops =
+            parts(pct, countertop_items, |i| painted(model, crate::countertop::countertop_meshes(&i.countertop, i.outline.as_ref(), i.level)));
+
+        let backsplash_items = model
+            .backsplashes
+            .iter()
+            .map(|b| {
+                let input = BacksplashIn {
+                    backsplash: b.clone(),
+                    segments: cadcraft_arch::backsplash::segments(model, b),
+                    level: level_for(model, b.level).elevation,
+                    paints: paint_of(model, &Surface::Backsplash(b.id).object_key()),
+                };
+                (b.id, input)
+            })
+            .collect();
+        let backsplashes =
+            parts(pbs, backsplash_items, |i| painted(model, crate::backsplash::backsplash_meshes(&i.backsplash, &i.segments, i.level)));
+
         let joins = Some((model.walls.clone(), model.types.clone(), shapes));
         Sections {
             walls,
@@ -751,6 +983,10 @@ impl Sections {
             electrical,
             soffits,
             foundations,
+            room_moldings,
+            molding_lines,
+            countertops,
+            backsplashes,
             joins,
             footprints,
         }
@@ -781,6 +1017,10 @@ impl Sections {
             electrical,
             soffits,
             foundations,
+            room_moldings,
+            molding_lines,
+            countertops,
+            backsplashes,
             ..
         } = self;
         fn meshes<I>(list: Vec<Part<I>>) -> impl Iterator<Item = Mesh> {
@@ -800,7 +1040,11 @@ impl Sections {
             .chain(meshes(furnishings))
             .chain(meshes(electrical))
             .chain(meshes(soffits))
-            .chain(meshes(foundations));
+            .chain(meshes(foundations))
+            .chain(meshes(room_moldings))
+            .chain(meshes(molding_lines))
+            .chain(meshes(countertops))
+            .chain(meshes(backsplashes));
         with_meshes(counts, all.filter(keep).collect())
     }
 
@@ -863,6 +1107,10 @@ impl Sections {
             .chain(self.electrical.iter().map(|p| &p.meshes))
             .chain(self.soffits.iter().map(|p| &p.meshes))
             .chain(self.foundations.iter().map(|p| &p.meshes))
+            .chain(self.room_moldings.iter().map(|p| &p.meshes))
+            .chain(self.molding_lines.iter().map(|p| &p.meshes))
+            .chain(self.countertops.iter().map(|p| &p.meshes))
+            .chain(self.backsplashes.iter().map(|p| &p.meshes))
     }
 
     /// The objects of the parts made in the last build.
@@ -888,21 +1136,35 @@ impl Sections {
         self.electrical.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.soffits.iter().for_each(|p| add(p.fresh, &p.meshes));
         self.foundations.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.room_moldings.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.molding_lines.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.countertops.iter().for_each(|p| add(p.fresh, &p.meshes));
+        self.backsplashes.iter().for_each(|p| add(p.fresh, &p.meshes));
         out
     }
 }
 
-/// Per level index: its base cabinets, and the furnishings hosted by any cabinet on it or by a gap
-/// beside one, both in model order. The casework inputs every cabinet on that level shares.
-fn casework_levels(model: &ArchModel) -> BTreeMap<u32, (Vec<Cabinet>, Vec<Furnishing>)> {
+/// The casework inputs of one level: the projections of its base cabinets, those of its wall and
+/// tall cabinets, the furnishings hosted by any cabinet on it, and the cabinet ids its custom
+/// countertops claim (sorted).
+type LevelCasework = (Vec<CabinetNeighbour>, Vec<CabinetNeighbour>, Vec<Furnishing>, Vec<ArchId>);
+
+/// Per level index: the projections of its base cabinets, those of its wall and tall cabinets (all
+/// in model order), the furnishings hosted by any cabinet on it or by a gap beside one, and the
+/// cabinet ids on it that custom countertops claim. The casework inputs every cabinet on that level
+/// shares; projections, not clones, so an edit of a field no other cabinet reads rebuilds one cabinet.
+fn casework_levels(model: &ArchModel) -> BTreeMap<u32, LevelCasework> {
     let mut on_level: BTreeMap<u32, BTreeSet<ArchId>> = BTreeMap::new();
     for c in &model.cabinets {
         on_level.entry(c.level).or_default().insert(c.id);
     }
+    let claimed_all = cadcraft_arch::countertop::claimed_cabinets(model);
     on_level
         .into_iter()
         .map(|(level, ids)| {
-            let base = model.cabinets.iter().filter(|c| c.level == level && c.kind == CabinetKind::Base).cloned().collect();
+            let project = |base: bool| -> Vec<CabinetNeighbour> {
+                model.cabinets.iter().filter(|c| c.level == level && (c.kind == CabinetKind::Base) == base).map(CabinetNeighbour::of).collect()
+            };
             let hosted = model
                 .furnishings
                 .iter()
@@ -913,7 +1175,8 @@ fn casework_levels(model: &ArchModel) -> BTreeMap<u32, (Vec<Cabinet>, Vec<Furnis
                 })
                 .cloned()
                 .collect();
-            (level, (base, hosted))
+            let claimed = ids.iter().copied().filter(|id| claimed_all.contains(id)).collect();
+            (level, (project(true), project(false), hosted, claimed))
         })
         .collect()
 }
@@ -943,21 +1206,36 @@ fn made<I>(list: &[Part<I>]) -> usize {
 
 /// One wall's mesh: its join shape extruded, cut by its openings and clipped by the roof over it.
 fn wall_mesh(i: &WallIn) -> Vec<Mesh> {
-    let Some(mesh) = wall_base_mesh(i) else {
+    if let Some(m) = crate::wall_glass::wall_meshes(i) {
+        return m;
+    }
+    let Some(mut mesh) = wall_base_mesh(i) else {
         return Vec::new();
     };
+    // The niche's back block becomes part of the wall mesh, so finishes and paints split it too.
+    if let Some(span) = i.span {
+        crate::niche::add_back_blocks(&mut mesh, &i.wall, &i.openings, span);
+    }
     let (rest, outer) = crate::finish::split_exterior_face(&i.wall, mesh);
     let mut out = Vec::new();
     if !rest.indices.is_empty() {
         out.push(rest);
     }
     out.extend(outer);
+    if let Some(span) = i.span {
+        out.extend(crate::niche::back_skins(&i.wall, &i.openings, span));
+    }
     out
 }
 
 /// The wall's whole mesh, before any finish splits its exterior face off.
 fn wall_base_mesh(i: &WallIn) -> Option<Mesh> {
-    let (base, top) = i.span?;
+    wall_base_mesh_span(i, i.span?)
+}
+
+/// The wall's whole mesh between `span` = (base, top), flight cuts included.
+pub(crate) fn wall_base_mesh_span(i: &WallIn, span: (f64, f64)) -> Option<Mesh> {
+    let (base, top) = span;
     let openings: Vec<&Opening> = i.openings.iter().collect();
     let mesh = if !openings.is_empty() || i.clip.is_some() || i.roof_top.is_some() || !i.flight_cuts.is_empty() {
         let shape = i.shape.as_ref()?;
@@ -1121,6 +1399,95 @@ mod tests {
         ] {
             assert_eq!(owner(material), kind, "{material}");
         }
+    }
+
+    #[test]
+    fn object_kind_of_phase18_meshes() {
+        let kind = |material: &str| object_kind_of(&Mesh::new(material, ArchId(1)));
+        for (material, want) in [
+            ("countertop", ObjectKind::Countertop),
+            ("countertop-waterfall", ObjectKind::Countertop),
+            ("backsplash", ObjectKind::Backsplash),
+            ("molding-line", ObjectKind::MoldingLine),
+            ("molding-room-base-0", ObjectKind::Room),
+            ("glass-wall", ObjectKind::Wall),
+            ("niche-back:o3", ObjectKind::Wall),
+            ("deck-joist", ObjectKind::Room),
+            ("counter", ObjectKind::Cabinet),
+            ("paint:countertop/ct0", ObjectKind::Countertop),
+            ("paint:backsplash/bs1", ObjectKind::Backsplash),
+            ("paint:cabinet/cb0/counter", ObjectKind::Cabinet),
+        ] {
+            assert_eq!(kind(material), want, "{material}");
+        }
+        assert_eq!(object_key(&Mesh::new("backsplash", ArchId(2))), ObjectKey { kind: ObjectKind::Backsplash, id: ArchId(2) });
+        assert_eq!(ObjectKind::from_part("backsplash"), ObjectKind::Backsplash);
+    }
+
+    #[test]
+    fn changed_objects_reports_countertops_backsplashes_molding_lines_and_room_moldings() {
+        use cadcraft_doc::arch::{Backsplash as Bs, Countertop as Ct, RoomMolding};
+        let mut prev = ArchModel::default();
+        prev.rooms.push(Room { id: ArchId(0), ..Default::default() });
+        let mut next = prev.clone();
+        assert_eq!(changed_objects(&prev, &next), Some(BTreeSet::new()));
+        next.push_countertop(Ct::default());
+        next.push_backsplash(Bs::default());
+        next.push_molding_line(MoldingLine::default());
+        next.rooms[0].moldings.push(RoomMolding::default());
+        let got = changed_objects(&prev, &next).unwrap_or_default();
+        let key = |kind| ObjectKey { kind, id: ArchId(0) };
+        assert_eq!(
+            got,
+            BTreeSet::from([key(ObjectKind::Countertop), key(ObjectKind::Backsplash), key(ObjectKind::MoldingLine), key(ObjectKind::Room)])
+        );
+        // A paint on a countertop counts for the countertop.
+        let mut painted = next.clone();
+        painted.paints.insert("countertop/ct0".into(), Paint::default());
+        let got = changed_objects(&next, &painted).unwrap_or_default();
+        assert!(got.contains(&key(ObjectKind::Countertop)), "{got:?}");
+    }
+
+    #[test]
+    fn object_kind_label_and_handle() {
+        use cadcraft_doc::arch as a;
+        let id = ArchId(4);
+        assert_eq!(ObjectKind::Wall.label(id), a::wall_label(id));
+        assert_eq!(ObjectKind::Wall.handle(id), a::arch_handle(id));
+        assert_eq!(ObjectKind::Terrain.label(id), a::terrain_label(Some(4)));
+        assert_eq!(ObjectKind::Terrain.handle(id), a::arch_handle(id));
+        assert_eq!(ObjectKind::Opening.handle(id), a::opening_handle(id));
+        assert_eq!(ObjectKind::Cabinet.label(id), a::cabinet_label(id));
+        assert_eq!(ObjectKind::Cabinet.handle(id), a::cabinet_handle(id));
+        assert_eq!(ObjectKind::Countertop.label(id), "ct4");
+        assert_eq!(ObjectKind::Countertop.handle(id), a::countertop_handle(id));
+        assert_eq!(ObjectKind::Backsplash.label(id), "bs4");
+        assert_eq!(ObjectKind::Backsplash.handle(id), a::backsplash_handle(id));
+        assert_eq!(ObjectKind::MoldingLine.label(id), "ml4");
+        assert_eq!(ObjectKind::MoldingLine.handle(id), a::molding_line_handle(id));
+        assert_eq!(ObjectKind::Room.handle(id), a::room_handle(id));
+        // Every kind's handle is distinct for one id.
+        let kinds = [
+            ObjectKind::Wall,
+            ObjectKind::Opening,
+            ObjectKind::Room,
+            ObjectKind::Roof,
+            ObjectKind::Stair,
+            ObjectKind::Railing,
+            ObjectKind::Plant,
+            ObjectKind::Light,
+            ObjectKind::Cabinet,
+            ObjectKind::Fixture,
+            ObjectKind::Furnishing,
+            ObjectKind::Electrical,
+            ObjectKind::Soffit,
+            ObjectKind::Foundation,
+            ObjectKind::Countertop,
+            ObjectKind::Backsplash,
+            ObjectKind::MoldingLine,
+        ];
+        let handles: BTreeSet<_> = kinds.iter().map(|k| k.handle(id).0).collect();
+        assert_eq!(handles.len(), kinds.len());
     }
 
     #[test]
