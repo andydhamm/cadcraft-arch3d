@@ -43,6 +43,7 @@ pub mod railing;
 pub mod railing_parts;
 pub mod ray;
 pub mod roof;
+pub mod view_filter;
 pub mod section;
 pub mod site;
 pub(crate) mod soffit;
