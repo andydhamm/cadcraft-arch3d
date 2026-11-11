@@ -46,7 +46,6 @@ pub mod molding_runs;
 pub mod opening;
 pub mod opening_top;
 pub mod opening_trim;
-pub mod opening_trim;
 pub mod outlets;
 pub mod paint;
 pub mod plant;
