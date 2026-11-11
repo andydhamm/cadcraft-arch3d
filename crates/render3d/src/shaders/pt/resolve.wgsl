@@ -21,7 +21,8 @@ fn resolve_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let a = radiance[i];
     var rgb = a.rgb / max(a.w, 1.0) * rp.exposure;
     rgb = select(vec3<f32>(0.0), rgb, rgb == rgb);
-    if (rp.tonemap != 0u) {
+    // `tonemap` is the frame's tone code: 1 = ACES, anything else no curve (p19-exposure adds 2 Hable, 3 none).
+    if (rp.tonemap == 1u) {
         rgb = clamp(rgb * (2.51 * rgb + vec3<f32>(0.03)) / (rgb * (2.43 * rgb + vec3<f32>(0.59)) + vec3<f32>(0.14)), vec3<f32>(0.0), vec3<f32>(1.0));
     }
     let r = u32(srgb(rgb.x) * 255.0 + 0.5);
