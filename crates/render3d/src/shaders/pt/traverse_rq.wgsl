@@ -48,18 +48,24 @@ fn trace(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
     if (scene_is_empty() || all(d == vec3<f32>(0.0)) || !(t_max > PT_EPS)) {
         return h;
     }
-    var rq: ray_query;
-    rayQueryInitialize(&rq, acc, RayDesc(RAY_FLAG_NONE, 0xFFu, PT_EPS, t_max, o, d));
-    while (rayQueryProceed(&rq)) {
+    var t_min = PT_EPS;
+    for (var k = 0u; k < 32u; k = k + 1u) {
+        var rq: ray_query;
+        rayQueryInitialize(&rq, acc, RayDesc(RAY_FLAG_NONE, 0xFFu, t_min, t_max, o, d));
+        while (rayQueryProceed(&rq)) {}
+        let hit = rayQueryGetCommittedIntersection(&rq);
+        if (hit.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
+            return h;
+        }
+        if (!hit_clipped(o + d * hit.t)) {
+            h.t = hit.t;
+            h.tri = hit.primitive_index;
+            h.u = hit.barycentrics.x;
+            h.v = hit.barycentrics.y;
+            return h;
+        }
+        t_min = hit.t + PT_EPS;
     }
-    let hit = rayQueryGetCommittedIntersection(&rq);
-    if (hit.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
-        return h;
-    }
-    h.t = hit.t;
-    h.tri = hit.primitive_index;
-    h.u = hit.barycentrics.x;
-    h.v = hit.barycentrics.y;
     return h;
 }
 
