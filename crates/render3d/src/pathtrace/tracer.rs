@@ -653,9 +653,32 @@ fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
     }
 }
 
-/// Environment map (stub): will append the map and its CDFs to `aux` and record the offsets in
-/// `frame.env` / `env_aux` / `env_params`, from `lighting`. Does nothing yet.
-fn frame_environment(_frame: &mut GpuFrame, _aux: &mut Vec<f32>, _lighting: &Lighting) {}
+/// Environment map: appends the baked radiance and CDFs to `aux` and records `env` (the radiance
+/// offset, width, height, then flags 1 plus 2 when visible),`env_aux` (marginal and conditional offsets),
+/// `env_params.x` (total weight) and `FRAME_ENV`, clearing `FRAME_SKY` (the map replaces the
+/// gradient). Does nothing without a usable environment or in the furnace.
+pub(super) fn frame_environment(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting) {
+    if frame.flags & FRAME_FURNACE != 0 {
+        return;
+    }
+    let Some(e) = &lighting.environment else { return };
+    let table = super::env::env_table(e);
+    if !table.is_usable() {
+        return;
+    }
+    let (Ok(base), Ok(rad_len), Ok(cdf_len)) =
+        (u32::try_from(aux.len()), u32::try_from(table.radiance.len()), u32::try_from(table.radiance.len() + table.marginal.len()))
+    else {
+        return;
+    };
+    let (Some(marginal), Some(conditional)) = (base.checked_add(rad_len), base.checked_add(cdf_len)) else { return };
+    aux.extend(table.packed());
+    frame.flags |= super::scene_gpu::FRAME_ENV;
+    frame.flags &= !FRAME_SKY;
+    frame.env = [base, table.width, table.height, 1 | if e.visible { 2 } else { 0 }];
+    frame.env_aux = [marginal, conditional, 0, 0];
+    frame.env_params[0] = table.total;
+}
 
 /// Moon (stub): will set `frame.moon_dir` / `moon_rgb` from `lighting`. Does nothing yet.
 fn frame_moon(_frame: &mut GpuFrame, _lighting: &Lighting) {}

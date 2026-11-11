@@ -61,6 +61,9 @@ pub struct Lighting {
     /// Meter an automatic exposure on a frame without daylight (false keeps the legacy 0.01 scale,
     /// as `render {sun: false}` and hand-built night lightings always had).
     pub meter_night: bool,
+    /// The environment (light and/or background) the frame lights with; `None` when there is
+    /// none (p19-env-path).
+    pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
 }
 
 impl Default for Lighting {
@@ -74,6 +77,7 @@ impl Default for Lighting {
             sun_dir: None,
             lambert: None,
             meter_night: false,
+            environment: None,
         }
     }
 }

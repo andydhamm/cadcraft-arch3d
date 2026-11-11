@@ -429,7 +429,7 @@ fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f3
 /// A 100 m x 100 m slab under z = 0 (diffuse albedo 0.5 through the furnace materials, no lights).
 fn lambert_plane() -> GpuScene {
     let scene = Scene3d { meshes: vec![prism("wall", 1, [-50.0, -50.0, -1.0], [50.0, 50.0, 0.0])], ..Default::default() };
-    build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, emission: 0.0 }))
+    build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, ..Default::default() }))
 }
 
 /// `base` with `e` baked into `scene`'s aux buffer (no sun).
