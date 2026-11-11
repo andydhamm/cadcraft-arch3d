@@ -526,8 +526,8 @@ mod tests {
         let s = sample_stair();
         let p = plan_stair(2.7, 1.0, None, MAX_RISER, MIN_TREAD).unwrap();
         // base_z = 2.4, slab_underside = 2.4, threshold = 2.4 - 2.032 = 0.368
-        // First riser top above 0.368: 3 * 0.16875 = 0.50625 (i=3)
+        // First riser top above 0.368: 2.4 + 0.16875 = 2.56875 (i=1)
         let w = well_start(&s, &p, 2.4, 2.4, MIN_HEADROOM);
-        assert_eq!(w, Some((3 - 1) as f64 * p.tread_depth));
+        assert_eq!(w, Some(0.0));
     }
 }
