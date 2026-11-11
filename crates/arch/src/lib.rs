@@ -35,6 +35,7 @@ pub mod foundation;
 pub mod furnishing;
 pub mod grade;
 pub mod graph;
+pub mod hdr;
 pub mod ies;
 pub mod join;
 pub mod label;

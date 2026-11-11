@@ -255,6 +255,10 @@ pub const MAX_VIEWS: usize = 64;
 
 /// Maximum number of lines + ring points per view geometry.
 pub const MAX_VIEW_LINES: usize = 200_000;
+/// Maximum HDR backdrop images a drawing keeps.
+pub const MAX_HDR_IMAGES: usize = 4;
+/// Maximum size of the raw RGBE payload a drawing keeps, in bytes.
+pub const MAX_HDR_BYTES: usize = 8 * 1024 * 1024;
 
 /// The synthetic proxy handle for an architectural view.
 pub fn view_handle(id: ArchId) -> Handle {
@@ -1789,6 +1793,9 @@ pub struct ArchModel {
     /// Library material and backdrop images by item id.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub images: std::collections::BTreeMap<String, ImageRgba>,
+    /// HDR environment images keyed by library item id.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub hdr_images: std::collections::BTreeMap<String, ImageRgbe>,
     /// Paint by surface key.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub paints: std::collections::BTreeMap<String, Paint>,
@@ -1871,6 +1878,7 @@ impl Default for ArchModel {
             next_furnishing_id: 0,
             symbols: Default::default(),
             images: Default::default(),
+            hdr_images: Default::default(),
             paints: Default::default(),
             backdrop: None,
             look: Look::default(),
@@ -1978,6 +1986,7 @@ impl ArchModel {
             && self.furnishings.is_empty()
             && self.symbols.is_empty()
             && self.images.is_empty()
+            && self.hdr_images.is_empty()
             && self.paints.is_empty()
             && self.backdrop.is_none()
             && self.look.is_default()
@@ -2431,6 +2440,51 @@ impl ArchModel {
         } else {
             false
         }
+    }
+
+    /// Keep only the HDR backdrop images still referenced by the current scene while enforcing
+    /// the per-drawing caps. Invalid or stale entries are dropped before the count and byte
+    /// budget are applied.
+    pub fn prune_hdr_images(&mut self) {
+        let mut keep = std::collections::BTreeSet::new();
+        if let Some(b) = &self.backdrop {
+            if let Backdrop::Hdri { image, .. } = b {
+                keep.insert(image.clone());
+            }
+        }
+        if let Some(b) = &self.look.backdrop {
+            if let Backdrop::Hdri { image, .. } = b {
+                keep.insert(image.clone());
+            }
+        }
+        for camera in &self.cameras {
+            if let Some(Look { backdrop: Some(Backdrop::Hdri { image, .. }), .. }) = &camera.look {
+                keep.insert(image.clone());
+            }
+        }
+
+        self.hdr_images.retain(|key, img| keep.contains(key) && img.is_valid());
+
+        let mut ordered: Vec<_> = self.hdr_images.iter().map(|(k, v)| (k.clone(), v.rgbe.len())).collect();
+        ordered.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut total = 0usize;
+        let mut keep_order = std::collections::BTreeSet::new();
+        for (key, len) in ordered {
+            if keep_order.len() >= MAX_HDR_IMAGES {
+                break;
+            }
+            if total.checked_add(len).is_some() && total + len <= MAX_HDR_BYTES {
+                total += len;
+                keep_order.insert(key);
+            }
+        }
+        let mut filtered = std::collections::BTreeMap::new();
+        for (key, img) in self.hdr_images.iter() {
+            if keep_order.contains(key) {
+                filtered.insert(key.clone(), img.clone());
+            }
+        }
+        self.hdr_images = filtered;
     }
 
     /// A message when `counter` is at or below the largest id already in use, or
