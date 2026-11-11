@@ -48,7 +48,7 @@ impl Environment {
         if !(valid_w && valid_h && len_ok) {
             return false;
         }
-        let ok = |v: f32| v.is_finite() && v >= 0.0;
+        let ok = |v: &f32| v.is_finite() && *v >= 0.0;
         self.intensity.is_finite() && self.rotation_deg.is_finite() && self.horizon_deg.is_finite() && self.rgb.iter().all(|c| c.iter().all(ok))
     }
 
@@ -73,7 +73,7 @@ impl Environment {
         let dz = (d[2] - (self.horizon_deg * rad).sin()).clamp(-1.0, 1.0);
 
         // u wraps, v clamps.
-        let u_full = (0.5 + std::f32::atan2(y, x) / (2.0 * std::f32::consts::PI)) * self.width as f32;
+        let u_full = (0.5 + y.atan2(x) / (2.0 * std::f32::consts::PI)) * self.width as f32;
         let u0 = u_full.floor() as i32;
         let fu = u_full.fract();
         let u0 = u0.rem_euclid(self.width as i32);
@@ -84,7 +84,7 @@ impl Environment {
         let fv = v_full.fract().clamp(0.0, 1.0);
         let v0 = v0.clamp(0.0, self.height as f32 - 1.0);
         let v0i = v0 as i32;
-        let v1i = (v0 + 1) as i32;
+        let v1i = (v0 + 1.0) as i32;
         let v0i = v0i.clamp(0, self.height as i32 - 1) as usize;
         let v1i = v1i.clamp(0, self.height as i32 - 1) as usize;
 
@@ -111,23 +111,12 @@ impl Environment {
         let mut push = |x: u64| h = (h ^ x).wrapping_mul(0x01000193);
         push(self.width as u64);
         push(self.height as u64);
-        push(self.intensity.to_bits());
-        push(self.rotation_deg.to_bits());
-        push(self.horizon_deg.to_bits());
+        push(self.intensity.to_bits() as u64);
+        push(self.rotation_deg.to_bits() as u64);
+        push(self.horizon_deg.to_bits() as u64);
         push(if self.visible { 1u64 } else { 0u64 });
         push(if self.daylight { 1u64 } else { 0u64 });
         h
-    }
-
-    /// The one environment for the drawing and look: an HDRI (if the look names one),
-    /// else the Preetham sky (if the look asks for it), else nothing.
-    pub fn environment_for(
-        model: &cadcraft_doc::arch::ArchModel,
-        look: &cadcraft_doc::arch::Look,
-        sun_dir: Option<[f64; 3]>,
-    ) -> Option<std::sync::Arc<Self>> {
-        let env = Self::hdri_environment(model, look).or_else(|| Self::sky_environment(model, look, sun_dir));
-        env.filter(|e| e.is_valid()).map(std::sync::Arc::new)
     }
 
     /// [p19-hdri] An environment built from the look's HDRI backdrop. Stub: not available yet.
@@ -143,6 +132,17 @@ impl Environment {
     ) -> Option<Environment> {
         None
     }
+}
+
+/// The one environment for the drawing and look: an HDRI (if the look names one),
+/// else the Preetham sky (if the look asks for it), else nothing.
+pub fn environment_for(
+    model: &cadcraft_doc::arch::ArchModel,
+    look: &cadcraft_doc::arch::Look,
+    sun_dir: Option<[f64; 3]>,
+) -> Option<std::sync::Arc<Environment>> {
+    let env = Environment::hdri_environment(model, look).or_else(|| Environment::sky_environment(model, look, sun_dir));
+    env.filter(|e| e.is_valid()).map(std::sync::Arc::new)
 }
 
 // Compare the map's parameters and fingerprint, never its pixels.
