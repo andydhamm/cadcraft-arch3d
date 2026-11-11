@@ -122,6 +122,7 @@ pub fn validate_cabinet(c: &Cabinet) -> Result<(), ArchError> {
         Fronts::Doors => c.doors >= 1,
         Fronts::Drawers => c.drawers >= 1,
         Fronts::DrawerOverDoor => c.doors >= 1 && c.drawers >= 1,
+        Fronts::Open => true,
     };
     if !ok {
         return bad("fronts do not match the door and drawer counts");

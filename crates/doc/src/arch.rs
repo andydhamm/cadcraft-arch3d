@@ -11,23 +11,27 @@ use serde::{Deserialize, Serialize};
 pub mod backdrop;
 pub mod casework;
 pub mod ceiling;
+pub mod countertop;
 pub mod detail;
 pub mod electrical;
 pub mod finish;
 pub mod foundation;
 pub mod furnishing;
 pub mod light;
+pub mod molding;
 pub mod paint;
 pub mod site;
 pub use backdrop::*;
 pub use casework::*;
 pub use ceiling::*;
+pub use countertop::*;
 pub use detail::*;
 pub use electrical::*;
 pub use finish::*;
 pub use foundation::*;
 pub use furnishing::*;
 pub use light::*;
+pub use molding::*;
 pub use paint::*;
 pub use site::*;
 
@@ -289,6 +293,12 @@ pub enum ArchKind {
     Soffit,
     /// Phase 16: a foundation (`fd{n}`).
     Foundation,
+    /// Phase 18: a countertop (`ct{n}`).
+    Countertop,
+    /// Phase 18: a backsplash (`bs{n}`).
+    Backsplash,
+    /// Phase 18: a molding line (`ml{n}`).
+    MoldingLine,
 }
 
 impl ArchKind {
@@ -302,6 +312,7 @@ impl ArchKind {
             "railing" | "post" => ArchKind::Railing,
             "soffit" => ArchKind::Soffit,
             "foundation" | "footing" => ArchKind::Foundation,
+            "backsplash" => ArchKind::Backsplash,
             _ => ArchKind::Wall,
         }
     }
@@ -319,6 +330,9 @@ impl ArchKind {
             ArchKind::Tray => "tray",
             ArchKind::Soffit => "soffit",
             ArchKind::Foundation => "foundation",
+            ArchKind::Countertop => "countertop",
+            ArchKind::Backsplash => "backsplash",
+            ArchKind::MoldingLine => "moldingLine",
         }
     }
 
@@ -335,6 +349,9 @@ impl ArchKind {
             ArchKind::Tray => tray_handle(id),
             ArchKind::Soffit => soffit_handle(id),
             ArchKind::Foundation => foundation_handle(id),
+            ArchKind::Countertop => countertop_handle(id),
+            ArchKind::Backsplash => backsplash_handle(id),
+            ArchKind::MoldingLine => molding_line_handle(id),
         }
     }
 
@@ -351,6 +368,9 @@ impl ArchKind {
             ArchKind::Tray => tray_label(id),
             ArchKind::Soffit => soffit_label(id),
             ArchKind::Foundation => foundation_label(id),
+            ArchKind::Countertop => countertop_label(id),
+            ArchKind::Backsplash => backsplash_label(id),
+            ArchKind::MoldingLine => molding_line_label(id),
         }
     }
 }
@@ -918,6 +938,9 @@ pub struct Room {
     /// Deck railing setting per polygon edge i (vertex i to i+1); a missing entry is Auto.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deck_rails: Vec<RailSetting>,
+    /// Moldings on the room's walls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub moldings: Vec<RoomMolding>,
 }
 
 impl Default for Room {
@@ -939,6 +962,7 @@ impl Default for Room {
             ceiling_stack: Vec::new(),
             deck_boards: None,
             deck_rails: Vec::new(),
+            moldings: Vec::new(),
         }
     }
 }
@@ -1781,6 +1805,19 @@ pub struct ArchModel {
     pub foundations: Vec<Foundation>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub next_foundation_id: u32,
+    // Phase 18: countertops, backsplashes and molding lines, skipped when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub countertops: Vec<Countertop>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_countertop_id: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub backsplashes: Vec<Backsplash>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_backsplash_id: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub molding_lines: Vec<MoldingLine>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_molding_line_id: u32,
 }
 
 impl Default for ArchModel {
@@ -1831,6 +1868,12 @@ impl Default for ArchModel {
             next_soffit_id: 0,
             foundations: Vec::new(),
             next_foundation_id: 0,
+            countertops: Vec::new(),
+            next_countertop_id: 0,
+            backsplashes: Vec::new(),
+            next_backsplash_id: 0,
+            molding_lines: Vec::new(),
+            next_molding_line_id: 0,
             plant_species: Vec::new(),
             levels: vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::Floor }],
             types: vec![
@@ -1927,6 +1970,9 @@ impl ArchModel {
             && self.trays.is_empty()
             && self.soffits.is_empty()
             && self.foundations.is_empty()
+            && self.countertops.is_empty()
+            && self.backsplashes.is_empty()
+            && self.molding_lines.is_empty()
     }
 
     /// Ensure there is always a ground level at index 0 for plan operations.
@@ -2031,6 +2077,63 @@ impl ArchModel {
     /// The foundation with id `id`.
     pub fn foundation(&self, id: ArchId) -> Option<&Foundation> {
         self.foundations.iter().find(|f| f.id == id)
+    }
+
+    /// Add a countertop and return its new id.
+    pub fn push_countertop(&mut self, mut c: Countertop) -> ArchId {
+        let id = ArchId(self.next_countertop_id);
+        self.next_countertop_id = self.next_countertop_id.saturating_add(1);
+        c.id = id;
+        self.countertops.push(c);
+        id
+    }
+
+    /// The countertop with id `id`.
+    pub fn countertop(&self, id: ArchId) -> Option<&Countertop> {
+        self.countertops.iter().find(|c| c.id == id)
+    }
+
+    /// The index of a countertop by id, or `None` if not found.
+    pub fn countertop_index(&self, id: ArchId) -> Option<usize> {
+        self.countertops.iter().position(|c| c.id == id)
+    }
+
+    /// Add a backsplash and return its new id.
+    pub fn push_backsplash(&mut self, mut b: Backsplash) -> ArchId {
+        let id = ArchId(self.next_backsplash_id);
+        self.next_backsplash_id = self.next_backsplash_id.saturating_add(1);
+        b.id = id;
+        self.backsplashes.push(b);
+        id
+    }
+
+    /// The backsplash with id `id`.
+    pub fn backsplash(&self, id: ArchId) -> Option<&Backsplash> {
+        self.backsplashes.iter().find(|b| b.id == id)
+    }
+
+    /// The index of a backsplash by id, or `None` if not found.
+    pub fn backsplash_index(&self, id: ArchId) -> Option<usize> {
+        self.backsplashes.iter().position(|b| b.id == id)
+    }
+
+    /// Add a molding line and return its new id.
+    pub fn push_molding_line(&mut self, mut m: MoldingLine) -> ArchId {
+        let id = ArchId(self.next_molding_line_id);
+        self.next_molding_line_id = self.next_molding_line_id.saturating_add(1);
+        m.id = id;
+        self.molding_lines.push(m);
+        id
+    }
+
+    /// The molding line with id `id`.
+    pub fn molding_line(&self, id: ArchId) -> Option<&MoldingLine> {
+        self.molding_lines.iter().find(|m| m.id == id)
+    }
+
+    /// The index of a molding line by id, or `None` if not found.
+    pub fn molding_line_index(&self, id: ArchId) -> Option<usize> {
+        self.molding_lines.iter().position(|m| m.id == id)
     }
 
     /// Look up a wall type by name (case-insensitive).
@@ -4510,5 +4613,84 @@ mod tests {
         }
         let back: ArchModel = serde_json::from_str(&text).unwrap();
         assert_eq!(serde_json::to_string(&back).unwrap(), text);
+    }
+
+    #[test]
+    fn room_without_moldings_writes_no_key() {
+        let r = Room::default();
+        assert!(r.moldings.is_empty());
+        let v = serde_json::to_value(&r).unwrap();
+        assert!(v.get("moldings").is_none(), "moldings written for a default room");
+    }
+
+    #[test]
+    fn model_without_phase18_objects_writes_no_new_keys() {
+        let json = serde_json::to_value(ArchModel::default()).unwrap();
+        for key in ["countertops", "next_countertop_id", "backsplashes", "next_backsplash_id", "molding_lines", "next_molding_line_id"] {
+            assert!(json.get(key).is_none(), "{key} written for a model without it");
+        }
+    }
+
+    #[test]
+    fn push_countertop_backsplash_molding_line_assign_ids() {
+        let mut m = ArchModel::default();
+        assert_eq!(m.push_countertop(Countertop::default()), ArchId(0));
+        assert_eq!(m.push_countertop(Countertop::default()), ArchId(1));
+        assert_eq!(m.next_countertop_id, 2);
+        assert!(m.countertop(ArchId(0)).is_some());
+        assert_eq!(m.countertop_index(ArchId(1)), Some(1));
+        assert_eq!(m.push_backsplash(Backsplash::default()), ArchId(0));
+        assert_eq!(m.push_backsplash(Backsplash::default()), ArchId(1));
+        assert_eq!(m.next_backsplash_id, 2);
+        assert!(m.backsplash(ArchId(0)).is_some());
+        assert_eq!(m.backsplash_index(ArchId(1)), Some(1));
+        assert_eq!(m.push_molding_line(MoldingLine::default()), ArchId(0));
+        assert_eq!(m.push_molding_line(MoldingLine::default()), ArchId(1));
+        assert_eq!(m.next_molding_line_id, 2);
+        assert!(m.molding_line(ArchId(0)).is_some());
+        assert_eq!(m.molding_line_index(ArchId(1)), Some(1));
+    }
+
+    #[test]
+    fn arch_kind_countertop_backsplash_molding_line_keys_labels_handles() {
+        let id = ArchId(3);
+        assert_eq!(
+            (ArchKind::Countertop.key(), ArchKind::Backsplash.key(), ArchKind::MoldingLine.key()),
+            ("countertop", "backsplash", "moldingLine")
+        );
+        assert_eq!(
+            (ArchKind::Countertop.label(id), ArchKind::Backsplash.label(id), ArchKind::MoldingLine.label(id)),
+            ("ct3".into(), "bs3".into(), "ml3".into())
+        );
+        assert_eq!(ArchKind::Countertop.handle(id), countertop_handle(id));
+        assert_eq!(ArchKind::Backsplash.handle(id), backsplash_handle(id));
+        assert_eq!(ArchKind::MoldingLine.handle(id), molding_line_handle(id));
+        assert!(ArchKind::Foundation < ArchKind::Countertop);
+        assert!(ArchKind::Countertop < ArchKind::Backsplash);
+        assert!(ArchKind::Backsplash < ArchKind::MoldingLine);
+    }
+
+    #[test]
+    fn a_model_holding_only_a_molding_line_or_a_countertop_or_a_backsplash_is_not_empty() {
+        let mut m = ArchModel::default();
+        m.walls.clear();
+        m.levels.clear();
+        m.types.clear();
+        m.push_molding_line(MoldingLine::default());
+        assert!(!m.is_empty());
+
+        let mut m = ArchModel::default();
+        m.walls.clear();
+        m.levels.clear();
+        m.types.clear();
+        m.push_countertop(Countertop::default());
+        assert!(!m.is_empty());
+
+        let mut m = ArchModel::default();
+        m.walls.clear();
+        m.levels.clear();
+        m.types.clear();
+        m.push_backsplash(Backsplash::default());
+        assert!(!m.is_empty());
     }
 }

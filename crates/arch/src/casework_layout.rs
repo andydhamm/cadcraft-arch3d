@@ -90,6 +90,7 @@ pub fn fronts(model: &ArchModel, c: &Cabinet) -> Vec<FrontInfo> {
     let door_w = (c.width - GAP * (n_doors as f64 + 1.0)) / n_doors as f64;
 
     match c.fronts {
+        Fronts::Open => {}
         Fronts::Doors => {
             let door_top = if cutout { usable - 0.15 - GAP } else { usable };
             for i in 0..n_doors {
