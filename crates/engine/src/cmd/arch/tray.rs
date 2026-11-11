@@ -640,4 +640,82 @@ mod tests {
         assert!((min_y - 3.65).abs() < 1e-9);
         assert!((max_y - 7.3).abs() < 1e-9);
     }
+
+    #[test]
+    fn tray_edit_reply_outline_is_a_ring_of_points() {
+        let mut s = Session::new();
+        build_phase1_house(&mut s);
+        let room = nw_room_id(&mut s);
+        let created = s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": 0.3})).unwrap();
+        let tray_id = created["tray"].as_str().unwrap().to_string();
+
+        let edited = s.execute("tray.edit", &json!({"id": tray_id, "depth": 0.4})).unwrap();
+        let outline = edited["outline"].as_array().unwrap();
+        assert_eq!(outline.len(), 4);
+        for point in outline {
+            let pair = point.as_array().unwrap();
+            assert_eq!(pair.len(), 2);
+            assert!(pair[0].is_number());
+            assert!(pair[1].is_number());
+        }
+    }
+
+    #[test]
+    fn tray_polygon_create_outline_is_a_ring_of_points() {
+        let mut s = Session::new();
+        build_phase1_house(&mut s);
+        let room = nw_room_id(&mut s);
+        s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": 0.3})).unwrap();
+
+        let polygon = vec![[2.0, 4.0], [4.0, 4.0], [4.0, 6.0], [2.0, 6.0], [2.0, 4.0]];
+        let created = s.execute("tray", &json!({"polygon": polygon, "depth": 0.2})).unwrap();
+        let outline = created["outline"].as_array().unwrap();
+        assert_eq!(outline.len(), 4);
+        for point in outline {
+            let pair = point.as_array().unwrap();
+            assert_eq!(pair.len(), 2);
+            assert!(pair[0].is_number());
+            assert!(pair[1].is_number());
+        }
+    }
+
+    #[test]
+    fn inspect_tray_outline_is_a_ring_of_points() {
+        let mut s = Session::new();
+        build_phase1_house(&mut s);
+        let room = nw_room_id(&mut s);
+        s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": 0.3})).unwrap();
+
+        let inspect = s.execute("arch.inspect", &json!({"trays": true})).unwrap();
+        let trays = inspect["trays"].as_array().unwrap();
+        assert!(!trays.is_empty());
+        let tray = &trays[0];
+        let outline = tray["outline"].as_array().unwrap();
+        assert_eq!(outline.len(), 4);
+        for point in outline {
+            let pair = point.as_array().unwrap();
+            assert_eq!(pair.len(), 2);
+            assert!(pair[0].is_number());
+            assert!(pair[1].is_number());
+        }
+    }
+
+    #[test]
+    fn nested_tray_outline_is_a_ring_of_points() {
+        let mut s = Session::new();
+        build_phase1_house(&mut s);
+        let room = nw_room_id(&mut s);
+        let parent = s.execute("tray", &json!({"room": room, "inset": 0.6, "depth": 0.3})).unwrap();
+        let parent_id = parent["tray"].as_str().unwrap().to_string();
+
+        let child = s.execute("tray", &json!({"tray": parent_id, "inset": 0.6, "depth": 0.1})).unwrap();
+        let outline = child["outline"].as_array().unwrap();
+        assert_eq!(outline.len(), 4);
+        for point in outline {
+            let pair = point.as_array().unwrap();
+            assert_eq!(pair.len(), 2);
+            assert!(pair[0].is_number());
+            assert!(pair[1].is_number());
+        }
+    }
 }
