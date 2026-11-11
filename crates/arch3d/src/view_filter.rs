@@ -12,7 +12,6 @@ use crate::Scene3d;
 use crate::camera::Camera;
 use crate::incremental::ObjectKind;
 use crate::mesh::Mesh;
-use cadcraft_arch::furnishing::FurnishingHost;
 use cadcraft_doc::arch::Look;
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::{Vec2, Vec3};
@@ -71,7 +70,7 @@ pub fn from_look(look: &Look, model: &ArchModel, camera: &Camera) -> ViewFilter 
     let eye = camera.eye();
     let forward = crate::camera::forward(camera);
     let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
-    ViewFilter { hidden, clip: look.clip, near: look.near_clip, eye, forward }
+    ViewFilter { hidden, clip: look.clip.map(|c| ClipBox { min: c.min, max: c.max }), near: look.near_clip, eye, forward }
 }
 
 /// The viewed level: the model's `plan_level` (the level walls are drawn at) or 0.
@@ -93,10 +92,11 @@ impl ViewFilter {
         let mut h: u64 = 0;
         for (kind, id) in &self.hidden {
             h = combine(h, kind.len() as u64);
-            h = combine(h, id.0);
+            h = combine(h, id.0 as u64);
         }
-        if let Some(c) = self.clip {
-            for &v in [c.min.x as i64, c.min.y as i64, c.min.z as i64, c.max.x as i64, c.max.y as i64, c.max.z as i64] {
+        if let Some(c) = &self.clip {
+            let vals = [c.min.x as i64, c.min.y as i64, c.min.z as i64, c.max.x as i64, c.max.y as i64, c.max.z as i64];
+            for &v in &vals {
                 h = combine(h, (v.wrapping_mul(-1)) as u64);
             }
         }
@@ -150,39 +150,33 @@ pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
     }
 
     for o in model.openings.iter() {
-        if let Some(h) = o.host {
-            if hidden.iter().any(|(_, id)| *id == h) {
-                push_hidden(&mut hidden, "opening", o.id);
-            }
+        if hidden.iter().any(|(_, id)| *id == o.host) {
+            push_hidden(&mut hidden, "opening", o.id);
         }
     }
 
     for d in model.electrical.iter() {
-        if let Some(w) = d.wall {
-            if hidden.iter().any(|(_, id)| *id == w) {
-                push_hidden(&mut hidden, "electrical", d.id);
-            }
+        if hidden.iter().any(|(_, id)| *id == d.wall) {
+            push_hidden(&mut hidden, "electrical", d.id);
         }
     }
 
-    for f in model.furnishing.iter() {
-        if let Some(FurnishingHost::Wall(w)) = f.host {
-            if hidden.iter().any(|(_, id)| *id == w) {
+    for f in model.furnishing().iter() {
+        if let Some(host_id) = f.host {
+            if hidden.iter().any(|(_, id)| *id == host_id) {
                 push_hidden(&mut hidden, "furnishing", f.id);
             }
         }
     }
 
-    for lf in model.light.iter() {
-        if let Some(w) = lf.wall {
-            if hidden.iter().any(|(_, id)| *id == w) {
-                push_hidden(&mut hidden, "light", lf.id);
-            }
+    for lf in model.lights.iter() {
+        if hidden.iter().any(|(_, id)| *id == lf.wall) {
+            push_hidden(&mut hidden, "light", lf.id);
         }
     }
 
-    for cb in model.casework.iter() {
-        if on_wall(cb, &hidden) {
+    for cb in model.cabinets.iter() {
+        if on_wall(&cb, model, &hidden) {
             push_hidden(&mut hidden, "cabinet", cb.id);
         }
     }
@@ -224,9 +218,39 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
     outer_normal.dot(to_eye) > 0.0
 }
 
-/// A cabinet is "on" a hidden wall if its host wall is in the hidden set.
-fn on_wall(cb: &cadcraft_doc::arch::Cabinet, hidden: &Hidden) -> bool {
-    if let Some(w) = cb.wall { hidden.iter().any(|(_, id)| *id == w) } else { false }
+/// A cabinet is "on" a hidden wall if its position is within 0.05 m of the
+/// wall's centre line (back edge within 0.05 m of the inner face).
+fn on_wall(cb: &cadcraft_doc::arch::Cabinet, model: &ArchModel, hidden: &Hidden) -> bool {
+    let pos = Vec2::new(cb.position.x, cb.position.y);
+    let mut near_any: bool = false;
+    for (_, w_id) in hidden.iter() {
+        if let Some(w) = model.walls.iter().find(|w| w.id == *w_id) {
+            if point_to_segment_dist(pos, w.start, w.end) < w.thickness / 2.0 + 0.05 {
+                near_any = true;
+                break;
+            }
+        }
+    }
+    near_any
+}
+
+/// Distance from point `p` to line segment `a-b`.
+fn point_to_segment_dist(p: Vec2, a: Vec2, b: Vec2) -> f64 {
+    let ab = b - a;
+    let ab_len_sq = ab.x * ab.x + ab.y * ab.y;
+    if ab_len_sq < 1e-12 {
+        (p - a).len()
+    } else {
+        let t = ((p - a).x * ab.x + (p - a).y * ab.y) / ab_len_sq;
+        let t = if t < 0.0 {
+            0.0
+        } else if t > 1.0 {
+            1.0
+        } else {
+            t
+        };
+        ((p - (a + ab * t)).len())
+    }
 }
 
 /// Raycasting point-in-polygon test.

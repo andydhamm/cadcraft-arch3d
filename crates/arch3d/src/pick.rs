@@ -268,7 +268,7 @@ impl Bvh {
                 let Some(tri) = self.tris.get(ti as usize) else { continue };
                 if let Some(t) = tri_hit(tri, origin, d) {
                     let Some((part, object, owner)) = self.meshes.get(tri.mesh as usize) else { continue };
-                    hits.push((t, tri.mesh, PickHit { object, part, owner, distance: t, point: origin + d * t }));
+                    hits.push((t, tri.mesh, PickHit { object: *object, part, owner: *owner, distance: t, point: origin + d * t }));
                 }
             }
         }
