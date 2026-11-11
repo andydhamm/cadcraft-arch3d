@@ -17,7 +17,7 @@ pub fn profile_of(lib: &Library, item: &str) -> Result<MoldingProfile, String> {
         && let Some(points) = &r.profile
         && validate_profile(points).is_ok()
     {
-        return Ok(MoldingProfile { item: item.to_string(), points: points.clone() });
+        return Ok(MoldingProfile { item: item.to_string(), points: points.clone(), ..Default::default() });
     }
     let shown: String = item.chars().take(64).collect();
     Err(format!("`{shown}` is not a molding profile"))
