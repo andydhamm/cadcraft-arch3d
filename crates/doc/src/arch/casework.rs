@@ -550,6 +550,7 @@ mod tests {
             counter_thickness: 0.04,
             counter_overhang: 0.03,
             toe_kick: true,
+            ..Default::default()
         };
         let json = serde_json::to_value(&original).unwrap();
         assert_eq!(json.get("door_style"), Some(&serde_json::Value::String("raised-panel".into())));
