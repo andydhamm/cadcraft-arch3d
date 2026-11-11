@@ -2126,4 +2126,91 @@ mod tests {
         assert_eq!(crate::room::detect_rooms_at_level(&m, 0).len(), 1);
         assert!(crate::room::detect_rooms_at_level(&m, 1).is_empty());
     }
+
+    #[test]
+    fn top_level_empty_model_returns_zero() {
+        let m = ArchModel::default();
+        assert_eq!(top_level(&m), 0);
+    }
+
+    #[test]
+    fn top_level_only_interior_walls_uses_levels() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ..Level::default() });
+        m.levels.push(Level { index: 1, name: "Upper".into(), elevation: 2.7, ..Level::default() });
+        // Only an interior divider wall.
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.exterior = false;
+        w.divider = true;
+        m.push_wall(w);
+        // No exterior walls → falls through to the highest level.
+        assert_eq!(top_level(&m), 1);
+    }
+
+    #[test]
+    fn top_level_wall_with_missing_top_level_uses_base() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ..Level::default() });
+        // Wall on level 0, top_level set to a level that does not exist.
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.exterior = true;
+        w.base_level = 0;
+        w.top_level = Some(99);
+        m.push_wall(w);
+        assert_eq!(top_level(&m), 0);
+    }
+
+    #[test]
+    fn top_level_wall_with_missing_base_level_is_skipped() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ..Level::default() });
+        // Wall on a level that does not exist.
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.exterior = true;
+        w.base_level = 5;
+        m.push_wall(w);
+        // Wall is skipped; falls through to the highest level.
+        assert_eq!(top_level(&m), 0);
+    }
+
+    #[test]
+    fn top_level_nan_elevation_is_skipped() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ..Level::default() });
+        m.levels.push(Level { index: 1, name: "NaN".into(), elevation: f64::NAN, ..Level::default() });
+        // Wall on level 0.
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.exterior = true;
+        w.base_level = 0;
+        m.push_wall(w);
+        // Level 1 has NaN elevation → skipped; level 0 wins.
+        assert_eq!(top_level(&m), 0);
+    }
+
+    #[test]
+    fn top_level_tie_in_elevation_picks_higher_index() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, name: "A".into(), elevation: 0.0, ..Level::default() });
+        m.levels.push(Level { index: 1, name: "B".into(), elevation: 0.0, ..Level::default() });
+        m.levels.push(Level { index: 2, name: "C".into(), elevation: 0.0, ..Level::default() });
+        // Walls on all three levels, same elevation.
+        for level in 0..3u32 {
+            let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+            w.exterior = true;
+            w.base_level = level;
+            m.push_wall(w);
+        }
+        assert_eq!(top_level(&m), 2);
+    }
+
+    #[test]
+    fn top_level_single_wall_returns_its_level() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ..Level::default() });
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.exterior = true;
+        w.base_level = 0;
+        m.push_wall(w);
+        assert_eq!(top_level(&m), 0);
+    }
 }
