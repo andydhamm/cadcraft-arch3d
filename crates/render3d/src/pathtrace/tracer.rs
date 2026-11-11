@@ -643,26 +643,18 @@ fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
 
 /// Environment map (stub): will append the map and its CDFs to `aux` and record the offsets in
 /// `frame.env` / `env_aux` / `env_params`, from `lighting`. Does nothing yet.
-fn frame_environment(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting) {
-    let _ = (frame, aux, lighting);
-}
+fn frame_environment(_frame: &mut GpuFrame, _aux: &mut Vec<f32>, _lighting: &Lighting) {}
 
 /// Moon (stub): will set `frame.moon_dir` / `moon_rgb` from `lighting`. Does nothing yet.
-fn frame_moon(frame: &mut GpuFrame, lighting: &Lighting) {
-    let _ = (frame, lighting);
-}
+fn frame_moon(_frame: &mut GpuFrame, _lighting: &Lighting) {}
 
 /// View (stub): will set the clip box, near clip and forward from `lighting` and `camera`. Does
 /// nothing yet.
-fn frame_view(frame: &mut GpuFrame, lighting: &Lighting, camera: Option<&Camera>) {
-    let _ = (frame, lighting, camera);
-}
+fn frame_view(_frame: &mut GpuFrame, _lighting: &Lighting, _camera: Option<&Camera>) {}
 
 /// Look (stub): will set the tone code and the Lambert flag in `frame.look` from `lighting` and `opts`.
 /// Does nothing yet (`look[0]` stays 1, ACES).
-fn frame_look(frame: &mut GpuFrame, lighting: &Lighting, opts: &PathOptions) {
-    let _ = (frame, lighting, opts);
-}
+fn frame_look(_frame: &mut GpuFrame, _lighting: &Lighting, _opts: &PathOptions) {}
 
 fn invert_mat4(m: &[[f32; 4]; 4]) -> [[f32; 4]; 4] {
     // Standard 4x4 matrix inversion via cofactors.
