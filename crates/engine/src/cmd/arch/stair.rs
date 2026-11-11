@@ -1069,4 +1069,44 @@ mod tests {
         let auto_rails2: Vec<_> = d2.arch.railings.iter().filter(|r| r.auto && r.follows == Some(d2.arch.stairs[0].id)).collect();
         assert_eq!(auto_rails2.len(), 2);
     }
+
+    #[test]
+    fn stair_orders_levels_given_by_name_top_down() {
+        let mut s = two_level_session();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels[0].name = "Upper".into();
+        d.arch.levels[1].name = "Lower".into();
+        // Upper is at 0, Lower is at 2.7 (inverted elevations)
+        d.arch.levels[0].elevation = 0.0;
+        d.arch.levels[1].elevation = 2.7;
+        add_big_room(&mut s, 0);
+        add_big_room(&mut s, 1);
+        let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": "Upper", "toLevel": "Lower" })).unwrap();
+        assert_eq!(r["risers"].as_u64(), Some(16));
+        let st = &s.doc().unwrap().arch.stairs[0];
+        // from_level should be 0 (Upper, elevation 0), to_level should be 1 (Lower, elevation 2.7)
+        assert_eq!((st.from_level, st.to_level), (0, 1));
+    }
+
+    #[test]
+    fn stair_refuses_equal_elevations_different_indices() {
+        let mut s = two_level_session();
+        // Make both levels have the same elevation but different indices
+        s.doc_mut().unwrap().arch.levels[1].elevation = 0.0;
+        let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": 0, "toLevel": 1 }));
+        assert!(r.is_err());
+        assert_eq!(s.doc().unwrap().arch.stairs.len(), 0);
+    }
+
+    #[test]
+    fn stair_with_level_name_that_is_a_number_beyond_index() {
+        let mut s = two_level_session();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels[0].name = "Level 1".into();
+        d.arch.levels[1].name = "2".into(); // Name is "2", but index 2 doesn't exist
+        let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": 90.0, "fromLevel": "Level 1", "toLevel": "2" })).unwrap();
+        assert_eq!(r["risers"].as_u64(), Some(16));
+        let st = &s.doc().unwrap().arch.stairs[0];
+        assert_eq!((st.from_level, st.to_level), (0, 1));
+    }
 }
