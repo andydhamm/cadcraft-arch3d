@@ -1629,7 +1629,7 @@ mod tests {
         let img =
             ImageRgba { width: 2, height: 2, rgba: vec![255, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 255, 255, 255, 255, 255], ..Default::default() };
         let textures = BTreeMap::from([("item:pic".to_string(), img)]);
-        let b = Backdrop::Image { item: "pic".into(), projection: Projection::Flat };
+        let b = Backdrop::Image { item: "pic".into(), projection: Projection::Flat, horizon: 0.0 };
         let (w, h) = (16u32, 12u32);
         let rgba = sunlit_still(&gpu, &with_backdrop(b.clone(), textures.clone()), &looking_up(), (w, h));
         for y in 0..h {
@@ -1650,7 +1650,7 @@ mod tests {
         // 4 x 4, every row one red level: 240, 160, 80, 0 from the top.
         let rgba: Vec<u8> = [240u8, 160, 80, 0].iter().flat_map(|&r| [r, 0, 0, 255].repeat(4)).collect();
         let textures = BTreeMap::from([("item:sky".to_string(), ImageRgba { width: 4, height: 4, rgba, ..Default::default() })]);
-        let b = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect };
+        let b = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: 0.0 };
         let (w, h) = (32u32, 24u32);
         let up = sunlit_still(&gpu, &with_backdrop(b.clone(), textures.clone()), &looking_up(), (w, h));
         let c = ((h / 2) * w + w / 2) as usize * 4;
