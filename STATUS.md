@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-11 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 21: Ceilings and foundations — 37 of 40 segments merged · 18 of 20 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 38 of 40 segments merged · 19 of 20 acceptance checks**
 
-8,560 workspace tests passing at the last merge · 913 segments merged in all · 0 of 15 seats working
+8,561 workspace tests passing at the last merge · 914 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 06:45 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 18 / 20 | 51.3 h so far · expected done Nov 11 13:18–Nov 12 22:44 UTC |
+| 16 | Ceilings and foundations | building | 19 / 20 | 51.5 h so far · expected done Nov 11 10:41–Nov 12 10:07 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,17 +35,18 @@ Updated 2026-11-11 06:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-37 merged, 3 replaced, 2 abandoned, 2 merging, 1 queued
+38 merged, 3 replaced, 2 abandoned, 1 working, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p16f2-silhouette-depth` | technical illustration: fills get a slope-scaled depth bias so silhouettes show | merging | mai-flash-b |
+| `p16f2-showcase-entry` | showcase: the down flight ends on the landing, a foyer opens Main over it, renders committed | working | claude-sonnet-b |
 | `upstream-sync-6d744887f` | merge upstream upstream/main up to 6d744887f (7 commits) | merging | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 11 06:54 | `p16f2-silhouette-depth` | merged | 8,561 pass | mai-flash-b |
 | Nov 11 04:44 | `p16f2-room-level-index` | merged | 8,560 pass | darwin-ws3 |
 | Nov 11 03:54 | `p16f2-slab-edge-width` | merged | 8,559 pass | bonsai-b |
 | Nov 11 01:18 | `p17-wall-under-flight` | refused | 8,571 pass | claude-sonnet-b |
@@ -57,7 +58,6 @@ Updated 2026-11-11 06:45 UTC. This page and the card in the README are regenerat
 | Nov 10 22:52 | `p17-railing-auto` | merged | 8,539 pass | darwin-ws3 |
 | Nov 10 22:31 | `p17-window-tops` | merged | 8,527 pass | claude-sonnet-c |
 | Nov 10 22:11 | `p16-rw-showcase-test` | merged | 8,504 pass | mai-flash |
-| Nov 10 21:57 | `p17-stair-plan` | merged | 8,499 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -66,9 +66,9 @@ Updated 2026-11-11 06:45 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | idle | 1072 |
 | bonsai-b | bonsai2-27b | idle | 1034 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1132 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1072 |
-| claude-sonnet-a | sonnet | merging | 107 |
-| claude-sonnet-b | sonnet | merging | 111 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1072 |
+| claude-sonnet-a | sonnet | idle | 107 |
+| claude-sonnet-b | sonnet | agent | 111 |
 | claude-sonnet-c | sonnet | idle | 54 |
 | claude-sonnet-d | sonnet | idle | 49 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 951 |
@@ -76,5 +76,5 @@ Updated 2026-11-11 06:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | idle | 14 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | merging | 743 |
-| tturbo-mac2 | tturbo-ultraheretic | merging | 350 |
+| tturbo-mac | tturbo-ultraheretic | agent | 743 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 350 |
