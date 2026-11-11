@@ -400,7 +400,7 @@ fn run_state_save(s: &mut Session, p: &Value) -> Result<Value> {
     let d = s.doc_mut()?;
     let layers = d.layers.clone();
     d.layer_states.retain(|st| st.name != name);
-    d.layer_states.push(cadcraft_doc::LayerState { name, layers });
+    d.layer_states.push(cadcraft_doc::LayerState { name, layers, rules: Default::default() });
     ok()
 }
 
