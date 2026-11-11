@@ -19,10 +19,13 @@ pub use cadcraft_doc::{
 
 pub mod area;
 pub mod casework;
+pub mod casework_corner;
+pub mod casework_face;
 pub mod casework_layout;
 pub mod casework_symbol;
 pub mod ceiling;
 pub mod connections;
+pub mod countertop;
 pub mod deck;
 pub mod detect;
 pub mod electrical;
