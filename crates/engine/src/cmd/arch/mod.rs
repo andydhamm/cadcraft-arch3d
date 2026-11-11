@@ -18,6 +18,7 @@ pub mod build3d;
 pub(crate) mod cabinet_opts;
 pub mod casework;
 pub mod connections;
+pub mod countertop;
 mod countertop_inspect;
 pub mod deck;
 mod deck_inspect;
@@ -135,5 +136,6 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(tray::specs());
     v.extend(foundation::specs());
     v.extend(soffit::specs());
+    v.extend(countertop::specs());
     v
 }

@@ -23,7 +23,14 @@ pub(crate) fn proxy_casework_entities(m: &ArchModel) -> Vec<(String, String, Vec
     let mut out: Vec<(String, String, Vec<Tag>)> = Vec::new();
     let cabinets = m.cabinets.iter().map(|c| (cabinet_layer(c.kind), cabinet_symbol_in(m, c)));
     let fixtures = m.fixtures.iter().map(|f| (fixture_layer(f.kind), fixture_symbol(f)));
-    for (layer, symbol) in cabinets.chain(fixtures) {
+    // Custom countertops: the sampled ring, closed, on the countertop's layer.
+    let counters = m.countertops.iter().filter_map(|ct| {
+        let o = cadcraft_arch::countertop::custom_outline(m, ct)?;
+        let mut ring = cadcraft_arch::countertop_edit::sampled_ring(&o.ring, &o.sagittas);
+        ring.push(*ring.first()?);
+        Some((ct.layer.as_str(), vec![ring]))
+    });
+    for (layer, symbol) in cabinets.chain(fixtures).chain(counters) {
         for poly in symbol {
             if out.len() >= MAX_CASEWORK_PROXIES {
                 return out;
@@ -126,6 +133,24 @@ mod tests {
         let back = crate::read_dxf(text.as_bytes()).unwrap();
         assert!(back.arch.is_empty());
         assert_eq!(back.model.len(), d.model.len() + n, "every proxy survives as plain linework");
+    }
+
+    #[test]
+    fn a_custom_countertop_is_written_as_a_closed_proxy_and_dropped_on_read() {
+        use cadcraft_doc::arch::Countertop;
+        let mut d = Drawing::default();
+        d.arch.push_countertop(Countertop {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
+            ..Default::default()
+        });
+        let p = proxy_casework_entities(&d.arch);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].1, "A-FLOR-CASE");
+        assert!(is_casework_proxy(&p[0].2));
+        assert_eq!((p[0].2[0].i64(), p[0].2[1].i64()), (4, 1), "four vertices, closed");
+        let back = crate::read_dxf(crate::write_dxf(&d).as_bytes()).unwrap();
+        assert_eq!(back.arch.countertops, d.arch.countertops);
+        assert_eq!(back.model.len(), d.model.len(), "the proxy is not kept as linework");
     }
 
     #[test]
