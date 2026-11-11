@@ -238,7 +238,7 @@ pub fn merge_corners(model: &ArchModel, mut outlines: Vec<CounterOutline>) -> Ve
         let mut bridged: Vec<ArchId> = oi.bridged.iter().chain(&oj.bridged).copied().collect();
         bridged.sort();
         bridged.dedup();
-        let merged = CounterOutline {
+        let mut merged = CounterOutline {
             key,
             level: oi.level,
             cabinets,
@@ -247,8 +247,9 @@ pub fn merge_corners(model: &ArchModel, mut outlines: Vec<CounterOutline>) -> Ve
             top: oi.top,
             thickness: oi.thickness,
             holes: oi.holes.iter().chain(&oj.holes).cloned().collect(),
-            bridged,
+            ..Default::default()
         };
+        merged.bridged = bridged;
         let (lo, hi) = (i.min(j), i.max(j));
         outlines.remove(hi);
         if let Some(slot) = outlines.get_mut(lo) {
