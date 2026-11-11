@@ -12,7 +12,7 @@ use crate::Scene3d;
 use crate::camera::Camera;
 use crate::incremental::ObjectKind;
 use crate::mesh::Mesh;
-use cadcraft_doc::arch::Look;
+use cadcraft_doc::arch::{FurnishingHost, Look};
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::{Vec2, Vec3};
 
@@ -70,7 +70,8 @@ pub fn from_look(look: &Look, model: &ArchModel, camera: &Camera) -> ViewFilter 
     let eye = camera.eye();
     let forward = crate::camera::forward(camera);
     let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
-    ViewFilter { hidden, clip: look.clip.map(|c| ClipBox { min: c.min, max: c.max }), near: look.near_clip, eye, forward }
+    let clip = look.clip.map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
+    ViewFilter { hidden, clip, near: look.near_clip, eye, forward }
 }
 
 /// The viewed level: the model's `plan_level` (the level walls are drawn at) or 0.
@@ -123,7 +124,7 @@ impl ViewFilter {
     /// Whether a world point is accepted: inside the clip box (inclusive, when set)
     /// and at least `near` along the camera forward from the eye.
     pub fn accepts(&self, p: Vec3) -> bool {
-        if let Some(c) = self.clip {
+        if let Some(ref c) = self.clip {
             if !c.contains(p) {
                 return false;
             }
@@ -161,17 +162,23 @@ pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
         }
     }
 
-    for f in model.furnishing().iter() {
-        if let Some(host_id) = f.host {
-            if hidden.iter().any(|(_, id)| *id == host_id) {
+    for f in model.furnishings.iter() {
+        if let FurnishingHost::Wall { wall } = f.host {
+            if hidden.iter().any(|(_, id)| *id == wall) {
                 push_hidden(&mut hidden, "furnishing", f.id);
             }
         }
     }
 
     for lf in model.lights.iter() {
-        if hidden.iter().any(|(_, id)| *id == lf.wall) {
-            push_hidden(&mut hidden, "light", lf.id);
+        let pos = Vec2::new(lf.position.x, lf.position.y);
+        for (_, w_id) in hidden.iter() {
+            if let Some(w) = model.walls.iter().find(|w| w.id == *w_id) {
+                if point_to_segment_dist(pos, w.start, w.end) < w.thickness / 2.0 + 0.05 {
+                    push_hidden(&mut hidden, "light", lf.id);
+                    break;
+                }
+            }
         }
     }
 
