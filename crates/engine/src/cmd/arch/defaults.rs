@@ -43,6 +43,7 @@ fn fronts_name(f: Fronts) -> &'static str {
         Fronts::Doors => "doors",
         Fronts::Drawers => "drawers",
         Fronts::DrawerOverDoor => "drawerOverDoor",
+        Fronts::Open => "open",
     }
 }
 
