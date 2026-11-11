@@ -7,7 +7,8 @@ struct Uniforms {
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 
-// Per-draw material and per-frame sun (group 1, dynamic offset), 96 bytes.
+// Per-draw material and per-frame sun (group 1, dynamic offset), 128 bytes. All zero in the
+// reserved fields (tone_map .. normal_strength, clip_min .. _p7) is the pre-phase-19 look.
 struct PbrUniforms {
     light_dir:     vec3<f32>,   // offset 0, toward the sun
     sun_intensity: f32,         // offset 12
@@ -16,16 +17,20 @@ struct PbrUniforms {
     roughness:     f32,         // offset 24
     alpha:         f32,         // offset 28
     style:         u32,         // offset 32: 0 shaded, 1 shaded-edges, 2 hidden-line, 3 glass-house
-    _p0:           f32,         // offset 36
-    _p1:           f32,         // offset 40
-    _p2:           f32,         // offset 44
+    tone_map:      u32,         // offset 36
+    normal_layer:  u32,         // offset 40
+    flags:         u32,         // offset 44: 1 lambert, 2 clip
     camera_pos:    vec3<f32>,   // offset 48
     shadow_min:    f32,         // offset 60
     shadow_max:    f32,         // offset 64
-    _p3:           f32,         // offset 68
-    _p4:           f32,         // offset 72
-    _p5:           f32,         // offset 76
-    _p6:           vec4<f32>,   // offset 80 -> total 96 bytes
+    exposure:      f32,         // offset 68
+    ambient_lux:   f32,         // offset 72
+    normal_strength: f32,       // offset 76
+    _p6:           vec4<f32>,   // offset 80
+    clip_min:      vec3<f32>,   // offset 96
+    lambert_albedo: f32,        // offset 108
+    clip_max:      vec3<f32>,   // offset 112
+    _p7:           f32,         // offset 124 -> total 128 bytes
 };
 @group(1) @binding(1) var<uniform> p: PbrUniforms;
 
@@ -79,16 +84,64 @@ fn fresnel_schlick(vdh: f32, f0: vec3<f32>) -> vec3<f32> {
     return f0 + (vec3<f32>(1.0) - f0) * pow(clamp(1.0 - vdh, 0.0, 1.0), 5.0);
 }
 
-@fragment fn fs(v: VOut) -> @location(0) vec4<f32> {
+// What the fragment stage computed before ambient and the final colour step: the sun's share
+// (`direct`), the material at the fragment and the shading normal. `keep` = 1 when `direct` is a
+// display colour that no lighting changes (hidden-line).
+struct Shade {
+    direct: vec3<f32>,
+    albedo: vec3<f32>,
+    metallic: f32,
+    n: vec3<f32>,
+    alpha: f32,
+    keep: u32,
+};
+
+// Hook [p19-seeing-in-render]: true when the fragment lies outside the clip box.
+fn clip_discard(wpos: vec3<f32>) -> bool {
+    return false;
+}
+
+// Hook [p19-normal-maps-render]: the normal after the draw's normal map.
+fn shading_normal(n: vec3<f32>, uv: vec2<f32>, wpos: vec3<f32>) -> vec3<f32> {
+    return n;
+}
+
+// Irradiance the sun adds on a face square to it; it carries (1 - ambient) of the light so a white
+// diffuse face at ndl = 1 is fully lit.
+fn sun_irradiance() -> f32 {
+    return p.sun_intensity * (1.0 - p.ambient) * PI;
+}
+
+// The ambient term of the phase-6 look.
+fn base_ambient(albedo: vec3<f32>, metallic: f32, n: vec3<f32>) -> vec3<f32> {
+    return albedo * p.ambient * (1.0 - metallic * 0.5);
+}
+
+// Hook [p19-exposure]: the last step on a lit colour.
+fn finish_color(rgb: vec3<f32>) -> vec3<f32> {
+    return rgb;
+}
+
+fn shade_parts(v: VOut) -> Shade {
+    var s: Shade;
+    if (clip_discard(v.wpos)) {
+        discard;
+    }
     // Flat shading from the triangle's own plane: cross(dpdy, dpdx) of the world position is the
     // face normal turned toward the camera. arch3d's boxes share 8 corners with averaged normals,
     // which interpolate to anything across a face (speckled walls, 2026-10-25), and its winding is
     // not consistent, so neither the vertex normal nor front_facing can be trusted here.
-    let n = normalize(cross(dpdy(v.wpos), dpdx(v.wpos)));
+    let n = shading_normal(normalize(cross(dpdy(v.wpos), dpdx(v.wpos))), v.uv, v.wpos);
 
     // Hidden-line: faces in the clear colour, depth written; the edges come from arch3d::edges.
     if (p.style == 2u) {
-        return vec4<f32>(CLEAR_COLOR, 1.0);
+        s.direct = CLEAR_COLOR;
+        s.albedo = vec3<f32>(0.0);
+        s.metallic = 0.0;
+        s.n = n;
+        s.alpha = 1.0;
+        s.keep = 1u;
+        return s;
     }
 
     let albedo = base_albedo(v.uv);
@@ -117,12 +170,19 @@ fn fresnel_schlick(vdh: f32, f0: vec3<f32>) -> vec3<f32> {
     let kd = (vec3<f32>(1.0) - f) * (1.0 - metallic);
     let diffuse = kd * albedo / PI;
 
-    // The sun carries (1 - ambient) of the light so a white diffuse face at ndl = 1 is fully lit.
-    let radiance = p.sun_intensity * (1.0 - p.ambient) * PI;
-    let lit = (diffuse + spec) * radiance * ndl;
-    let amb = albedo * p.ambient * (1.0 - metallic * 0.5);
-    let c = amb + lit;
+    s.direct = (diffuse + spec) * sun_irradiance() * ndl;
+    s.albedo = albedo;
+    s.metallic = metallic;
+    s.n = n;
+    s.alpha = clamp(p.alpha, 0.0, 1.0);
+    s.keep = 0u;
+    return s;
+}
 
-    let alpha = clamp(p.alpha, 0.0, 1.0);
-    return vec4<f32>(c, alpha);
+@fragment fn fs(v: VOut) -> @location(0) vec4<f32> {
+    let s = shade_parts(v);
+    if (s.keep != 0u) {
+        return vec4<f32>(s.direct, s.alpha);
+    }
+    return vec4<f32>(finish_color(s.direct + base_ambient(s.albedo, s.metallic, s.n)), s.alpha);
 }
