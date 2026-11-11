@@ -69,6 +69,7 @@ impl Default for Lighting {
             exposure: crate::lights::DEFAULT_EXPOSURE,
             look: cadcraft_doc::arch::Look::default(),
             sun_dir: None,
+            environment: None,
         }
     }
 }
