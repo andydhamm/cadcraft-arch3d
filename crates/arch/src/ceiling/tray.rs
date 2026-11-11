@@ -370,6 +370,34 @@ pub fn validate(model: &ArchModel, t: &Tray) -> Result<(), String> {
         _ => {}
     }
 
+    if let Some(parent_id) = t.parent {
+        let parent = model.trays.iter().find(|p| p.id == parent_id).ok_or_else(|| "the tray is nested too deep".to_string())?;
+        if parent.room != t.room || parent.level != t.level {
+            return Err("the tray is nested too deep".to_string());
+        }
+        let mut current = Some(parent_id);
+        let mut seen = HashSet::new();
+        let mut depth = 0usize;
+        while let Some(id) = current {
+            if depth >= MAX_TRAY_NESTING || !seen.insert(id) {
+                return Err("the tray is nested too deep".to_string());
+            }
+            let tray = model.trays.iter().find(|p| p.id == id).ok_or_else(|| "the tray is nested too deep".to_string())?;
+            if tray.room != t.room || tray.level != t.level {
+                return Err("the tray is nested too deep".to_string());
+            }
+            current = tray.parent;
+            depth += 1;
+        }
+        let parent_outline = outline_in(room, &model.trays, parent)?;
+        let outline = outline_in(room, &model.trays, t)?;
+        for &v in &outline {
+            if !ring_holds(&parent_outline, v) {
+                return Err("the tray is not inside its parent tray".to_string());
+            }
+        }
+    }
+
     outline_in(room, &model.trays, t)?;
     top_ring_in(room, &model.trays, t)?;
 
@@ -390,34 +418,6 @@ pub fn validate(model: &ArchModel, t: &Tray) -> Result<(), String> {
         for &v in ring {
             if !ring_holds(&room.polygon, v) || room.holes.iter().any(|h| ring_holds(h, v)) {
                 return Err("the drawn tray outline is not inside the room".to_string());
-            }
-        }
-    }
-
-    if let Some(parent_id) = t.parent {
-        let parent = model.trays.iter().find(|p| p.id == parent_id).ok_or_else(|| "the tray is nested too deep".to_string())?;
-        if parent.room != t.room || parent.level != t.level {
-            return Err("the tray is nested too deep".to_string());
-        }
-        let mut current = Some(parent_id);
-        let mut seen = HashSet::new();
-        let mut depth = 0usize;
-        while let Some(id) = current {
-            if depth > MAX_TRAY_NESTING || !seen.insert(id) {
-                return Err("the tray is nested too deep".to_string());
-            }
-            let tray = model.trays.iter().find(|p| p.id == id).ok_or_else(|| "the tray is nested too deep".to_string())?;
-            if tray.room != t.room || tray.level != t.level {
-                return Err("the tray is nested too deep".to_string());
-            }
-            current = tray.parent;
-            depth += 1;
-        }
-        let parent_outline = outline_in(room, &model.trays, parent)?;
-        let outline = outline_in(room, &model.trays, t)?;
-        for &v in &outline {
-            if !ring_holds(&parent_outline, v) {
-                return Err("the tray is not inside its parent tray".to_string());
             }
         }
     }
