@@ -48,7 +48,7 @@ fn compass_dir(model: &ArchModel, azimuth: f64, elevation: f64) -> Option<[f64; 
     if !azimuth.is_finite() || !elevation.is_finite() || !(-90.0..=90.0).contains(&elevation) {
         return None;
     }
-    let d = sun_dir(&Sun { elevation_deg: elevation, azimuth_deg: azimuth });
+    let d = sun_dir(&Sun { elevation_deg: elevation, azimuth_deg: azimuth, ..Default::default() });
     Some(true_to_drawing(model.site.as_ref(), d))
 }
 
@@ -281,7 +281,11 @@ fn parse_clip(cmd: &str, v: &Value, look: &mut Look) -> Result<(), EngineError> 
         Value::Null => look.clip = None,
         Value::Object(o) => {
             check_keys(cmd, "`clip`", o, &["min", "max"])?;
-            look.clip = Some(ClipBox { min: parse_vec3(cmd, "clip.min", o.get("min"))?, max: parse_vec3(cmd, "clip.max", o.get("max"))? });
+            look.clip = Some(ClipBox {
+                min: parse_vec3(cmd, "clip.min", o.get("min"))?,
+                max: parse_vec3(cmd, "clip.max", o.get("max"))?,
+                ..Default::default()
+            });
         }
         _ => return Err(parse_err(cmd, "clip", v, "null or {min, max}")),
     }
