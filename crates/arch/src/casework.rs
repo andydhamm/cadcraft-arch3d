@@ -3,7 +3,8 @@
 
 use crate::join::ArchError;
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, DOOR_PAIR_WIDTH, FaceLayout, FaceRow, Fixture, FixtureKind, Fronts, MAX_ACROSS, MAX_FACE_ROWS, MAX_FILLER_WIDTH, MAX_SHELVES,
+    Cabinet, CabinetKind, DOOR_PAIR_WIDTH, FaceLayout, FaceRow, Fixture, FixtureKind, Fronts, MAX_ACROSS, MAX_FACE_ROWS, MAX_FILLER_WIDTH,
+    MAX_SHELVES,
 };
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::Vec2;

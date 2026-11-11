@@ -4,8 +4,7 @@
 use crate::casework_layout::{FrontInfo, FrontKind, Hinge, hosted_cutout};
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, Construction, DOOR_PAIR_WIDTH, FACE_REVEAL, FaceKind, FaceLayout, FaceRow, FrontMount, Fronts, MAX_ACROSS,
-    MAX_FACE_ROWS,
+    Cabinet, CabinetKind, Construction, DOOR_PAIR_WIDTH, FACE_REVEAL, FaceKind, FaceLayout, FaceRow, FrontMount, Fronts, MAX_ACROSS, MAX_FACE_ROWS,
 };
 
 const GAP: f64 = 0.003;

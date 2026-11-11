@@ -2,7 +2,7 @@
 
 use cadcraft_arch::casework_face::{default_face, face_box, row_heights};
 use cadcraft_doc::ArchModel;
-use cadcraft_doc::arch::{Cabinet, Construction, Fronts, FrontMount};
+use cadcraft_doc::arch::{Cabinet, Construction, FrontMount, Fronts};
 
 use crate::Mesh;
 use crate::casework::{Frame, level_elevation};
