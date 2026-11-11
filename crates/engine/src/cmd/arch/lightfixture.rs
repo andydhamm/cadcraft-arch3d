@@ -72,6 +72,7 @@ fn kind_name(kind: LightKind) -> &'static str {
         LightKind::Point => "point",
         LightKind::Spot => "spot",
         LightKind::Area => "area",
+        LightKind::Strip => "strip",
     }
 }
 
