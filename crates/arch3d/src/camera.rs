@@ -278,6 +278,47 @@ fn clamp_pos(x: f64, lo: f64, hi: f64) -> f64 {
     }
 }
 
+/// Unit forward (camera gaze) direction in world space.
+pub fn forward(camera: &Camera) -> Vec3 {
+    let eye = camera.eye();
+    let target = camera.target();
+    (target - eye).normalized()
+}
+
+/// Combined view·projection matrix with a custom near plane (in world units),
+/// returned in WGSL `mat4x4<f32>` column-major layout.
+pub fn view_proj_with_near(camera: &Camera, aspect: f64, near: f64) -> [[f32; 4]; 4] {
+    let view = camera.view();
+    let half = (camera.fov_deg() * std::f64::consts::PI / 360.0);
+    let tan_half = half.tan();
+    let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
+    let z_far = FAR_PLANE;
+    let proj = [
+        [1.0 / (aspect * tan_half), 0.0, 0.0, 0.0],
+        [0.0, 1.0 / tan_half, 0.0, 0.0],
+        [0.0, 0.0, -z_far / (z_far - near), -near * z_far / (z_far - near)],
+        [0.0, 0.0, -1.0, 0.0],
+    ];
+    let m = [[f64; 4]; 4];
+    for c in 0..4 {
+        for r in 0..4 {
+            m[r][c] = view.m[r][c] as f64;
+        }
+    }
+    // Multiply proj * view (row-major math: clip = proj * (view * p))
+    let mut out = [[0.0f32; 4]; 4];
+    for c in 0..4 {
+        for r in 0..4 {
+            let mut sum = 0.0f64;
+            for i in 0..4 {
+                sum += proj[r][i] * (m[i as usize][c] as f64);
+            }
+            out[c][r] = (sum as f32);
+        }
+    }
+    out
+}
+
 /// Project scene bounds into viewport pixel coordinates.
 ///
 /// Returns `[min_x, min_y, max_x, max_y]` in pixel coordinates with y-down,

@@ -8,11 +8,11 @@
 
 use std::collections::BTreeSet;
 
-use crate::{Camera, Scene3d};
 use crate::mesh::Mesh;
+use crate::{Camera, Scene3d};
 use cadcraft_arch::{FurnishingHost, ObjectKind};
-use cadraft_doc::arch::Look;
 use cadcraft_doc::{ArchId, ArchModel, Vec3};
+use cadraft_doc::arch::Look;
 
 /// A set of hidden objects, keyed by a part-class string and the object id, so
 /// `hidden` is a total order even when the id set is empty.
@@ -38,12 +38,7 @@ pub struct ClipBox {
 impl ClipBox {
     /// Whether `p` lies inside the box, boundaries included.
     pub fn contains(&self, p: Vec3) -> bool {
-        p.x >= self.min.x
-            && p.x <= self.max.x
-            && p.y >= self.min.y
-            && p.y <= self.max.y
-            && p.z >= self.min.z
-            && p.z <= self.max.z
+        p.x >= self.min.x && p.x <= self.max.x && p.y >= self.min.y && p.y <= self.max.y && p.z >= self.min.z && p.z <= self.max.z
     }
 }
 
@@ -66,23 +61,13 @@ pub struct ViewFilter {
 pub fn from_look(look: &Look, model: &ArchModel, camera: &Camera) -> ViewFilter {
     let eye = camera.eye();
     let forward = crate::camera::forward(camera);
-    let hidden = if look.cutaway {
-        cutaway_hidden(model, eye, level(model))
-    } else {
-        Hidden::default()
-    };
-    ViewFilter {
-        hidden,
-        clip: look.clip,
-        near: look.near_clip,
-        eye,
-        forward,
-    }
+    let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
+    ViewFilter { hidden, clip: look.clip, near: look.near_clip, eye, forward }
 }
 
 /// The viewed level: the model's `plan_level` (the level walls are drawn at) or 0.
 fn level(model: &ArchModel) -> u32 {
-    model.plan_level
+    model.plan_level.unwrap_or(0)
 }
 
 impl ViewFilter {
@@ -96,9 +81,14 @@ impl ViewFilter {
         if self.is_empty() {
             return 0;
         }
-        let mut h = self.clip.map_or(0, |c| h64((c.min.x as i64, c.min.y as i64, c.min.z as i64, c.max.x as i64, c.max.y as i64, c.max.z as i64)));
+        let mut h: u64 = 0;
+        if let Some(c) = self.clip {
+            for &v in [c.min.x as i64, c.min.y as i64, c.min.z as i64, c.max.x as i64, c.max.y as i64, c.max.z as i64] {
+                h = combine(h, (v.wrapping_mul(-1)) as u64);
+            }
+        }
         if let Some(n) = self.near {
-            h = h64((h, n as i64));
+            h = combine(h, (n as i64) as u64);
         }
         h
     }
@@ -110,10 +100,7 @@ impl ViewFilter {
         if self.hidden.is_empty() {
             return s;
         }
-        let mut hidden: BTreeSet<ArchId> = BTreeSet::new();
-        for (_, id) in &self.hidden {
-            hidden.insert(id);
-        }
+        let hidden: BTreeSet<ArchId> = self.hidden.iter().map(|(_, id)| *id).collect();
         s.meshes.retain(|m| !hidden.contains(&m.object));
         s.furnishing_boxes.retain(|b| !hidden.contains(&b.object));
         s.electrical_boxes.retain(|b| !hidden.contains(&b.object));
@@ -142,20 +129,16 @@ impl ViewFilter {
 /// points at `eye`, plus everything hosted in or on them.
 pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
     let mut hidden: Hidden = Hidden::default();
-    let rooms: Vec<&cadraft_doc::arch::Room> = model.rooms.iter().filter(|r| r.level == level).collect();
+    let rooms: Vec<&cadcraft_doc::arch::Room> = model.rooms.iter().filter(|r| r.level == level).collect();
+    let eye_p = Vec2::new(eye.x, eye.y);
 
-    for w in model.walls.iter().filter(|w| {
-        // Only exterior walls on the level.
-        (w.base_level == level || w.top_level == Some(level))
-            && w.level_elevation.is_some()
-            && is_exterior(&w, model, rooms, level)
-    }) {
+    for w in model.walls.iter().filter(|w| (w.base_level == level || w.top_level == Some(level)) && facing_exterior(w, &rooms, &eye_p)) {
         push_hidden(&mut hidden, "wall", w.id);
     }
 
     for o in model.openings.iter() {
         if let Some(h) = o.host {
-            if hidden.iter().any(|(_, id)| id == h && id.0 == h.0) {
+            if hidden.iter().any(|(_, id)| *id == h) {
                 push_hidden(&mut hidden, "opening", o.id);
             }
         }
@@ -163,7 +146,7 @@ pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
 
     for d in model.electrical.iter() {
         if let Some(w) = d.wall {
-            if hidden.iter().any(|(_, id)| id == w) {
+            if hidden.iter().any(|(_, id)| *id == w) {
                 push_hidden(&mut hidden, "electrical", d.id);
             }
         }
@@ -171,20 +154,22 @@ pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
 
     for f in model.furnishing.iter() {
         if let Some(FurnishingHost::Wall(w)) = f.host {
-            if hidden.iter().any(|(_, id)| id == w) {
+            if hidden.iter().any(|(_, id)| *id == w) {
                 push_hidden(&mut hidden, "furnishing", f.id);
             }
         }
     }
 
     for lf in model.light.iter() {
-        if is_wall_mounted(lf, model, level) && hidden.iter().any(|(_, id)| id == lf.wall) {
-            push_hidden(&mut hidden, "light", lf.id);
+        if let Some(w) = lf.wall {
+            if hidden.iter().any(|(_, id)| *id == w) {
+                push_hidden(&mut hidden, "light", lf.id);
+            }
         }
     }
 
     for cb in model.casework.iter() {
-        if on_wall(&cb, model, level, &hidden) {
+        if on_wall(cb, &hidden) {
             push_hidden(&mut hidden, "cabinet", cb.id);
         }
     }
@@ -192,11 +177,67 @@ pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
     hidden
 }
 
-impl ViewFilter {
-    fn push_hidden(&mut hidden, ...)
+/// Whether `w`'s outer face points toward `eye` (in plan).
+fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::Room], eye: &Vec2) -> bool {
+    let dx = w.end.x - w.start.x;
+    let dy = w.end.y - w.start.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-9 {
+        return false;
+    }
+    let mid = Vec2::new((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0);
+    let dir = Vec2::new(dx / len, dy / len);
+    let normal = Vec2::new(-dir.y, dir.x);
+    let half = w.thickness / 2.0;
+    let side_a = Vec2::new(mid.x + normal.x * (half + 0.05), mid.y + normal.y * (half + 0.05));
+    let side_b = Vec2::new(mid.x - normal.x * (half + 0.05), mid.y - normal.y * (half + 0.05));
+
+    let in_a = rooms.iter().any(|r| point_in_ring(side_a, &r.polygon));
+    let in_b = rooms.iter().any(|r| point_in_ring(side_b, &r.polygon));
+
+    let outer_is_a;
+    match (in_a, in_b) {
+        (true, true) => return false,
+        (true, false) => outer_is_a = false,
+        (false, true) => outer_is_a = true,
+        (false, false) => {
+            let centroid = Vec2::new(mid.x, mid.y);
+            outer_is_a = side_a.dist(centroid) >= side_b.dist(centroid);
+        }
+    }
+
+    let outer_normal = if outer_is_a { normal } else { -normal };
+    let to_eye = Vec2::new(eye.x - mid.x, eye.y - mid.y);
+    outer_normal.dot(to_eye) > 0.0
 }
 
-#[inline]
-fn h64(v: (u64, i64)) -> u64 {
-    (v.0.wrapping_mul(0x9e3779b97f4a7c15)) ^ (v.1 as u64)
+/// A cabinet is "on" a hidden wall if its host wall is in the hidden set.
+fn on_wall(cb: &cadcraft_doc::arch::Cabinet, hidden: &Hidden) -> bool {
+    if let Some(w) = cb.wall { hidden.iter().any(|(_, id)| *id == w) } else { false }
+}
+
+/// Raycasting point-in-polygon test.
+fn point_in_ring(p: Vec2, ring: &[Vec2]) -> bool {
+    if ring.len() < 3 {
+        return false;
+    }
+    let mut inside = false;
+    let n = ring.len();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let a = ring[i];
+        let b = ring[j];
+        if (a.y > p.y) != (b.y > p.y) {
+            let x_intersect = (a.x - b.x) * (p.y - a.y) / (a.y - b.y) + a.x;
+            if p.x < x_intersect {
+                inside = !inside;
+            }
+        }
+    }
+    inside
+}
+
+/// Insert a hidden entry.
+fn push_hidden(hidden: &mut Hidden, kind: &'static str, id: ArchId) {
+    hidden.insert((kind, id));
 }

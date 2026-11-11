@@ -295,4 +295,41 @@ impl Scene3d {
     pub fn pick_with(&self, bvh: &Bvh, origin: Vec3, dir: Vec3) -> Option<PickHit> {
         bvh.ray(origin, dir, f64::MAX)
     }
+
+    /// Nearest hit of an infinite ray against a prebuilt tree, skipping hits
+    /// rejected by `accept`. Re-casts the ray up to 64 times, each time
+    /// advancing past the most recent rejected hit. Returns `None` when no
+    /// accepted hit exists.
+    pub fn pick_filtered(&self, bvh: &Bvh, origin: Vec3, dir: Vec3, accept: &dyn Fn(&PickHit) -> bool) -> Option<PickHit> {
+        let mut t_min = 0.0f64;
+        for _ in 0..64 {
+            let (origin, dir) = (origin, dir);
+            let hits = bvh.rays_all(origin, dir);
+            let accepted = hits
+                .into_iter()
+                .filter(|h| h.distance >= t_min)
+                .filter(|h| accept(h))
+                .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|h| {
+                    let d = h.distance;
+                    h
+                })
+                .map_or(None, |h| Some((h.distance, h)));
+            match accepted {
+                Some((t, h)) => return Some(h),
+                None => {
+                    // Advance past the nearest rejected hit to re-cast.
+                    if let Some(nearest) = bvh.nearest_rejected(origin, dir, t_min) {
+                        t_min = nearest + 1e-6;
+                        if t_min >= f64::MAX {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+        None
+    }
 }
