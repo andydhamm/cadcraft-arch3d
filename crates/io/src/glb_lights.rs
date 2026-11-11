@@ -19,7 +19,8 @@ pub(crate) fn punctual_lights(scene: &Scene3d) -> (Vec<Value>, Vec<Value>) {
     let mut nodes = Vec::new();
 
     for light in &scene.lights {
-        if !light_valid(light) {
+        // A strip has no KHR light; only its housing node is exported.
+        if light.kind == LightKind::Strip || !light_valid(light) {
             continue;
         }
 
@@ -66,7 +67,8 @@ pub(crate) fn punctual_lights(scene: &Scene3d) -> (Vec<Value>, Vec<Value>) {
                     "outerConeAngle": std::f64::consts::PI / 2.0,
                 });
             }
-            LightKind::Point => {}
+            // A strip is skipped above; this arm only completes the match.
+            LightKind::Point | LightKind::Strip => {}
         }
 
         let light_index = lights.len();
@@ -114,7 +116,7 @@ fn light_valid(light: &cadcraft_arch3d::light::SceneLight) -> bool {
     }
     match light.kind {
         // An area light's cone is fixed (the whole hemisphere), whatever its cosines say.
-        LightKind::Point | LightKind::Area => true,
+        LightKind::Point | LightKind::Area | LightKind::Strip => true,
         LightKind::Spot => {
             light.cos_inner.is_finite()
                 && light.cos_outer.is_finite()

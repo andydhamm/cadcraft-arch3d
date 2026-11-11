@@ -122,6 +122,10 @@ impl ShadowAtlas {
         let mut total = 0u32;
         for &i in shadowed {
             let Some(light) = lights.get(i) else { continue };
+            // Strips never get a shadow map (until p19-strip-render).
+            if light.kind == LightKind::Strip {
+                continue;
+            }
             let spot = match light.kind {
                 LightKind::Spot => spot_view_proj(light, SHADOW_NEAR, far),
                 _ => None,
