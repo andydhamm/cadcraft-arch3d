@@ -609,6 +609,21 @@ mod tests {
     }
 
     #[test]
+    fn sky_and_hdri_are_not_pictures() {
+        let hdri = Backdrop::Hdri { image: "pic".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 };
+        let img = ImageRgba { width: 1, height: 1, rgba: vec![1, 2, 3, 255], ..Default::default() };
+        let textures = with("pic", img);
+        for b in [Backdrop::Sky, hdri] {
+            assert!(image_of(&b, &textures).is_none());
+            assert!(image_textures(Some(&b), &textures).is_empty());
+            // The path tracer's own miss radiance stays: nothing is painted over a miss.
+            let mut px = vec![9u8; 2 * 4];
+            composite_misses(&mut px, 2, 1, &[true, true], &b, &textures, &|_, _| [0.0, 0.0, 1.0]);
+            assert_eq!(px, vec![9u8; 8]);
+        }
+    }
+
+    #[test]
     fn invert_roundtrips() {
         let m = [[2.0, 0.0, 0.0, 0.0], [0.0, 4.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [1.0, 2.0, 3.0, 1.0]];
         let inv = invert(&m);

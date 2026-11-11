@@ -41,7 +41,7 @@ fn lights_hash(scene: &Scene3d) -> u64 {
 }
 
 /// What a lit frame lights with.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Lighting {
     /// The sun (`None` = night: the sun is off).
     pub sun: Option<Light>,
@@ -51,6 +51,10 @@ pub struct Lighting {
     pub budget: usize,
     /// Display units per lux (`lights::DEFAULT_EXPOSURE`).
     pub exposure: f32,
+    /// The render look the frame is lit for (phase 19; read by later packages).
+    pub look: cadcraft_doc::arch::Look,
+    /// The explicit toward-sun direction in drawing space, when one was given.
+    pub sun_dir: Option<[f64; 3]>,
 }
 
 impl Default for Lighting {
@@ -60,6 +64,8 @@ impl Default for Lighting {
             sun_shadow: false,
             budget: crate::lights::DEFAULT_SHADOW_BUDGET,
             exposure: crate::lights::DEFAULT_EXPOSURE,
+            look: cadcraft_doc::arch::Look::default(),
+            sun_dir: None,
         }
     }
 }
@@ -148,7 +154,7 @@ impl Offscreen {
             &params,
             (drawn.len(), slots.len()),
         );
-        frame.lighting = *lighting;
+        frame.lighting = lighting.clone();
         Some(frame)
     }
 }

@@ -429,7 +429,7 @@ impl Pane3d {
             }
             self.lighting_inputs = Some(inputs);
         }
-        self.lighting
+        self.lighting.clone()
     }
 
     /// The rectangle the pane last drew into, in points (`None` before the first draw).
@@ -1032,12 +1032,12 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
         let eye = self.camera.eye();
         let frame = off.lit_frame(&self.scene, self.key, [eye.x, eye.y, eye.z], &self.lighting, false);
         // Redraw only when something visible changed; an idle pane costs one textured triangle.
-        let state: ViewState = (self.key, (w, h), vp, self.style, self.lighting, frame.as_ref().map_or(0, |f| f.lights));
-        if res.drawn != Some(state) {
+        let state: ViewState = (self.key, (w, h), vp, self.style, self.lighting.clone(), frame.as_ref().map_or(0, |f| f.lights));
+        if res.drawn != Some(state.clone()) {
             let opts = cadcraft_render3d::RenderOptions { lit: frame.as_ref(), style: self.style.render_style(), ..Default::default() };
             let sun = self.lighting.sun.unwrap_or(cadcraft_render3d::Light::DEFAULT);
             off.encode_with(encoder, &self.scene, self.key, &self.camera, &sun, &opts);
-            res.drawn = Some(state);
+            res.drawn = Some(state.clone());
             res.draws += 1;
         }
         drop(frame);
@@ -1082,7 +1082,7 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
                 }
             };
             res.final_render = Some(render);
-            ui_state.started = Some(state);
+            ui_state.started = Some(state.clone());
             ui_state.progress = Some(0.0);
         }
         if std::mem::take(&mut ui_state.cancel)
@@ -1101,13 +1101,13 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
                     let wanted = ui_state.path_progress.map_or(stats.spp_done, |(_, wanted)| wanted);
                     ui_state.path_progress = Some((stats.spp_done, wanted));
                     if let Some((pw, ph, rgba)) = r.preview() {
-                        res.final_image = Some((state, upload_still(device, queue, &res.layout, &res.sampler, pw, ph, &rgba)));
+                        res.final_image = Some((state.clone(), upload_still(device, queue, &res.layout, &res.sampler, pw, ph, &rgba)));
                     }
                 }
             }
             Some(cadcraft_render3d::FinalStatus::Done { width, height, rgba }) => {
                 let group = upload_still(device, queue, &res.layout, &res.sampler, width, height, &rgba);
-                res.final_image = Some((state, group));
+                res.final_image = Some((state.clone(), group));
                 ui_state.done = Some(FinalDone { state, width, height, rgba });
                 ui_state.progress = None;
                 ui_state.path_progress = None;
@@ -2555,11 +2555,11 @@ mod tests {
         let mut pane = site_pane();
         let vp = |c: f32| [[c; 4]; 4];
         let state: ViewState = (pane.scene_key(), (320, 200), vp(1.0), pane.style, pane.lighting(), 2);
-        let still = || FinalDone { state, width: 1, height: 1, rgba: vec![0; 4] };
-        let mut f = FinalUi { done: Some(still()), progress: Some(0.5), started: Some(state), ..Default::default() };
+        let still = || FinalDone { state: state.clone(), width: 1, height: 1, rgba: vec![0; 4] };
+        let mut f = FinalUi { done: Some(still()), progress: Some(0.5), started: Some(state.clone()), ..Default::default() };
         f.observe(&state);
         assert!(f.done.is_some() && !f.cancel, "the same view keeps the still and the render");
-        let moved: ViewState = (state.0, state.1, vp(2.0), state.3, state.4, state.5);
+        let moved: ViewState = (state.0, state.1, vp(2.0), state.3, state.4.clone(), state.5);
         f.observe(&moved);
         assert!(f.done.is_none(), "a camera move drops the still");
         assert!(f.cancel, "and cancels a running render");
