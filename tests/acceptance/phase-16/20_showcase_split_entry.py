@@ -149,8 +149,11 @@ for im in man.get('images', []):
     if rel not in tracked or not os.path.exists(f):
         fail(f"{rel} ({im.get('kind')}) is committed")
     frac, sd = foreground(f)
-    if not (0.05 <= frac <= 0.99) or sd <= 2:
-        fail(f"{rel} renders non-blank: {frac * 100:.1f} % foreground (5..99 %), luma sd {sd:.2f} (> 2)")
+    # Line drawings (plans, electrical plans, elevations, sections: thin lines on white) as phase-15 check 11 takes them
+    # (0.5 % at least); shaded and rendered views 5 %. A plan of the showcase covers ~3 % of its frame.
+    lo = 0.005 if im.get('kind') in ('plan', 'electrical', 'elevation', 'section') else 0.05
+    if not (lo <= frac <= 0.99) or sd <= 2:
+        fail(f"{rel} renders non-blank: {frac * 100:.1f} % foreground ({lo * 100:g}..99 %), luma sd {sd:.2f} (> 2)")
     kinds.setdefault(im.get('kind'), []).append(im)
     total += os.path.getsize(f)
 for k, n in NEED.items():
