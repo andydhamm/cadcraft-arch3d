@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 19:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 17 of 21: Stairs, decks, railings and openings in detail — 19 of 21 segments merged · 13 of 14 acceptance checks**
 
@@ -27,7 +27,7 @@ Updated 2026-11-11 19:15 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 37.5 h so far · expected done Nov 11 22:56–Nov 13 08:41 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 37.8 h so far · expected done Nov 11 23:11–Nov 13 08:56 UTC |
 | 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
 | 19 | Light, sky and cameras | building | 1 / 17 | — |
 | 20 | Plan views and dimensions | building | 0 / 13 | — |
@@ -63,18 +63,18 @@ Updated 2026-11-11 19:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1119 |
-| bonsai-b | bonsai2-27b | agent | 1081 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1173 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1115 |
-| claude-sonnet-a | sonnet | down | 122 |
-| claude-sonnet-b | sonnet | agent | 125 |
+| bonsai-a | bonsai2-27b | agent | 1120 |
+| bonsai-b | bonsai2-27b | agent | 1082 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1173 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1117 |
+| claude-sonnet-a | sonnet | agent | 122 |
+| claude-sonnet-b | sonnet | down | 125 |
 | claude-sonnet-c | sonnet | down | 64 |
 | claude-sonnet-d | sonnet | gate | 53 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 984 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 985 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 80 |
 | mai-flash-b | mai-code-1.1-flash | agent | 23 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | agent | 760 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 377 |
+| tturbo-mac | tturbo-ultraheretic | agent | 761 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 378 |
