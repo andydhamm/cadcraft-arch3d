@@ -199,9 +199,9 @@ fn multiple_vaulted_rooms_one_rise() {
 #[test]
 fn very_large_wall_coordinates() {
     let mut m = ArchModel::default();
-    m.push_wall(wall((1000.0, 1000.0), (1010.0, 1000.0), 0.2, false));
+    m.push_wall(wall((1000.0, 1000.0), (1010.0, 1000.0), 0.2, true));
     m.push_wall(wall((1010.0, 1000.0), (1010.0, 1008.0), 0.2, true));
-    m.push_wall(wall((1010.0, 1008.0), (1000.0, 1008.0), 0.2, false));
+    m.push_wall(wall((1010.0, 1008.0), (1000.0, 1008.0), 0.2, true));
     m.push_wall(wall((1000.0, 1008.0), (1000.0, 1000.0), 0.2, true));
     m.push_wall(wall((1000.0, 1003.0), (1010.0, 1003.0), 0.1, false));
     m.push_room(Room { name: "South".into(), polygon: rect(1000.1, 1000.1, 1009.9, 1002.95), flat_ceiling: false, ..Default::default() });
