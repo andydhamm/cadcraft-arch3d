@@ -159,6 +159,8 @@ fn unpainted_part(surface: &Surface) -> &'static str {
         Surface::Cabinet { part: CabinetPart::Pull, .. } => "pull",
         Surface::Fixture(_) => "fixture",
         Surface::Furnishing { .. } => "furnishing",
+        Surface::Countertop(_) => "counter",
+        Surface::Backsplash(_) => "backsplash",
     }
 }
 
@@ -330,6 +332,8 @@ fn phase14_label(mesh: &Mesh, m: &str) -> Option<String> {
             Surface::Cabinet { .. } => cadcraft_doc::arch::cabinet_label(mesh.object),
             Surface::Fixture(_) => cadcraft_doc::arch::fixture_label(mesh.object),
             Surface::Furnishing { .. } => cadcraft_doc::arch::furnishing_label(mesh.object),
+            Surface::Countertop(_) => cadcraft_doc::arch::countertop_label(mesh.object),
+            Surface::Backsplash(_) => cadcraft_doc::arch::backsplash_label(mesh.object),
         }),
     }
 }

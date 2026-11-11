@@ -229,6 +229,8 @@ fn paint_node_name(material: &str, object: cadcraft_doc::ArchId) -> String {
         }
         cadcraft_doc::arch::Surface::Fixture(fx) => format!("fixture-fx{}", fx.0),
         cadcraft_doc::arch::Surface::Furnishing { furnishing, .. } => format!("furnishing-f{}", furnishing.0),
+        cadcraft_doc::arch::Surface::Countertop(c) => format!("countertop-ct{}", c.0),
+        cadcraft_doc::arch::Surface::Backsplash(b) => format!("backsplash-bs{}", b.0),
     }
 }
 
