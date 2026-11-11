@@ -145,8 +145,19 @@ pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
     let mut hidden: Hidden = Hidden::default();
     let rooms: Vec<&cadcraft_doc::arch::Room> = model.rooms.iter().filter(|r| r.level == level).collect();
     let eye_p = Vec2::new(eye.x, eye.y);
+    let walls_on_level: Vec<&cadcraft_doc::arch::Wall> = model.walls.iter().filter(|w| w.base_level == level || w.top_level == Some(level)).collect();
+    let outer_centroid: Vec2 = if walls_on_level.is_empty() {
+        Vec2::new(eye_p.x, eye_p.y)
+    } else {
+        let n = walls_on_level.len() as f64;
+        let cx: f64 = walls_on_level.iter().map(|w| (w.start.x + w.end.x) / 2.0).sum();
+        let cy: f64 = walls_on_level.iter().map(|w| (w.start.y + w.end.y) / 2.0).sum();
+        Vec2::new(cx / n, cy / n)
+    };
 
-    for w in model.walls.iter().filter(|w| (w.base_level == level || w.top_level == Some(level)) && facing_exterior(w, &rooms, &eye_p)) {
+    for w in
+        model.walls.iter().filter(|w| (w.base_level == level || w.top_level == Some(level)) && facing_exterior(w, &rooms, &outer_centroid, &eye_p))
+    {
         push_hidden(&mut hidden, "wall", w.id);
     }
 
@@ -218,7 +229,7 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
         (true, false) => outer_is_a = false,
         (false, true) => outer_is_a = true,
         (false, false) => {
-            outer_is_a = side_a.dist(outer_centroid) >= side_b.dist(outer_centroid);
+            outer_is_a = side_a.dist(*outer_centroid) >= side_b.dist(*outer_centroid);
         }
     }
 
