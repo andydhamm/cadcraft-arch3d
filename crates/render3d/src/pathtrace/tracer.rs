@@ -1713,6 +1713,57 @@ mod tests {
         assert_eq!(&rgba[0..3], &[255, 0, 0], "top-left is the image's top-left");
     }
 
+    /// A uniform environment of radiance 1 under a manual EV100 0 and no tone curve, visible or light-only.
+    fn env_lighting(visible: bool) -> Lighting {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.exposure = cadcraft_doc::arch::ExposureSetting::Manual { ev100: 0.0 };
+        look.tone_map = cadcraft_doc::arch::ToneMap::None;
+        look.sky.on = false;
+        let mut e = crate::environment::Environment::uniform([1.0; 3], 16, 8);
+        e.visible = visible;
+        e.intensity = 1.0;
+        Lighting { sun: None, look, environment: Some(std::sync::Arc::new(e)), ..Lighting::default() }
+    }
+
+    fn env_still(gpu: &ComputeGpu, scene: &Scene3d, lighting: &Lighting) -> Vec<u8> {
+        // EV100 0 is a scale of 1/1.2; the tone code 3 is no curve (frame_look is p19-exposure's).
+        let opts = PathOptions { spp: 4, seed: 7, denoise: false, exposure: Exposure::Fixed(1.0 / 1.2), ..Default::default() };
+        let mut t = PathTracer::new(gpu, scene, &looking_up(), lighting, false, (16, 12), &opts, None).unwrap();
+        t.frame.look[0] = 3;
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => return rgba,
+                s => panic!("{s:?}"),
+            }
+        }
+    }
+
+    /// A light-only environment lights the scene but camera rays that miss still show the picture backdrop.
+    #[test]
+    fn invisible_environment_keeps_camera_misses() {
+        let Some(gpu) = compute() else { return };
+        let scene = with_backdrop(Backdrop::Colour { colour: [32, 64, 96] }, BTreeMap::new());
+        let rgba = env_still(&gpu, &scene, &env_lighting(false));
+        let wrong = (0..16 * 12).filter(|i| rgba[i * 4..i * 4 + 4] != [32, 64, 96, 255]).count();
+        assert_eq!(wrong, 0, "misses that are not the backdrop, e.g. {:?}", &rgba[0..4]);
+    }
+
+    /// A visible environment under a Sky backdrop stays in the image: radiance 1 x 1/1.2 = 0.8333, sRGB 235.
+    #[test]
+    fn visible_environment_shows_through_a_sky_backdrop() {
+        let Some(gpu) = compute() else { return };
+        let scene = with_backdrop(Backdrop::Sky, BTreeMap::new());
+        let rgba = env_still(&gpu, &scene, &env_lighting(true));
+        for i in 0..16 * 12 {
+            let p = &rgba[i * 4..i * 4 + 4];
+            assert_ne!(&p[..3], &crate::backdrop::CLEAR_RGB, "pixel {i} is the clear colour");
+            for c in &p[..3] {
+                assert!((i32::from(*c) - 235).abs() <= 4, "pixel {i}: {p:?}");
+            }
+        }
+    }
+
     /// An equirect image is looked up by view direction: looking up, the centre is the zenith (the image's top row);
     /// looking level, the top-centre pixel is 20° above the horizon (v = 0.5 - 20/180).
     #[test]
