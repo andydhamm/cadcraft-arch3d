@@ -275,7 +275,37 @@ pub fn builtin_items() -> Vec<ItemRecord> {
             &["backdrop", "background", id],
         ));
     }
+    for (id, name) in cadcraft_arch::molding_profile::BUILTIN {
+        let Some(profile) = cadcraft_arch::molding_profile::builtin_profile(id) else { continue };
+        let (w, h) = profile_extent(&profile.points);
+        let word = match id {
+            "molding:base" => "base",
+            "molding:shoe" => "shoe",
+            "molding:crown" => "crown",
+            "molding:chair-rail" => "chair rail",
+            _ => "casing",
+        };
+        let mut r =
+            builtin(id.to_string(), name.to_string(), Category::CabinetParts, "Moldings", ItemKind::Molding, "molding", &["molding", "trim", word]);
+        r.size = Some([w, 1.0, h]);
+        r.profile = Some(profile.points);
+        v.push(r);
+    }
     v
+}
+
+/// Width and height of a profile's bounding box.
+fn profile_extent(points: &[[f64; 2]]) -> (f64, f64) {
+    let max = |i: usize| points.iter().map(|p| p[i]).fold(0.0_f64, f64::max);
+    (max(0), max(1))
+}
+
+/// A record with a `profile` must carry a valid one (never repaired).
+fn check_profile(r: &ItemRecord) -> Result<(), String> {
+    match &r.profile {
+        Some(p) => cadcraft_arch::molding_profile::validate_profile(p).map_err(|e| format!("the profile is invalid: {e}")),
+        None => Ok(()),
+    }
 }
 
 /// The entries of a catalog.json: `{"version": 1, "items": [...]}` with at most
@@ -403,21 +433,13 @@ pub fn entry_record(v: &Value, catalog: &str) -> Result<ItemRecord, String> {
             metres("cut-out", v, false)?;
         }
     }
+    check_profile(&r)?;
     let file = r.file.clone().unwrap_or_default();
     if file.is_empty() {
         return Err("no file".into());
     }
     if !safe_relative(&file) {
         return Err("the file must be a plain relative path inside the catalog's folder".into());
-    }
-    if let Some(normal_map) = &r.normal_map {
-        if !safe_relative(normal_map) {
-            return Err("the normalMap must be a plain relative path inside the catalog's folder".into());
-        }
-        match extension(normal_map).as_str() {
-            "png" | "jpg" | "jpeg" => {}
-            ext => return Err(format!("unsupported normalMap type `.{}`", ext.chars().take(16).collect::<String>())),
-        }
     }
     r.kind = match (extension(&file).as_str(), Category::parse(&r.category)) {
         ("glb", _) => ItemKind::Symbol,
@@ -467,6 +489,7 @@ pub fn user_record(v: &Value) -> Result<ItemRecord, String> {
     let mut r: ItemRecord = serde_json::from_value(rec.clone()).map_err(|e| format!("the record is unreadable: {e}"))?;
     short("id", &r.id, true)?;
     short("name", &r.name, true)?;
+    check_profile(&r)?;
     r.tags.clear();
     r.catalog = "user".to_string();
     r.read_only = false;
@@ -606,7 +629,7 @@ mod native {
         let entries = catalog_entries(&bytes)?;
 
         let mut skipped = Vec::new();
-        let mut accepted: Vec<(Value, String, Vec<u8>, Option<(String, Vec<u8>)>)> = Vec::new();
+        let mut accepted: Vec<(Value, String, Vec<u8>)> = Vec::new();
         let mut ids = BTreeSet::new();
         for (i, v) in entries.iter().enumerate() {
             let label = entry_label(v, i);
@@ -620,16 +643,6 @@ mod native {
                     return Err("the file is not in the folder".into());
                 }
                 let data = read_item_file(&path)?;
-                let mut normal = None;
-                if let Some(map) = &r.normal_map {
-                    let normal_path = join_relative(&from, map);
-                    if !regular_file(&normal_path) {
-                        return Err("the normalMap is not in the folder".into());
-                    }
-                    let bytes = read_item_file(&normal_path)?;
-                    (io.read_image)(&bytes, 1024)?;
-                    normal = Some((map.clone(), bytes));
-                }
                 match r.kind {
                     ItemKind::Symbol => {
                         let mesh = (io.read_glb)(&data)?;
@@ -641,10 +654,10 @@ mod native {
                         (io.read_image)(&data, 1024)?;
                     }
                 }
-                Ok((file, data, normal))
+                Ok((file, data))
             });
             match checked {
-                Ok((file, data, normal)) => accepted.push((v.clone(), file, data, normal)),
+                Ok((file, data)) => accepted.push((v.clone(), file, data)),
                 Err(reason) => skipped.push(Skipped::new(label, reason)),
             }
         }
@@ -680,23 +693,16 @@ mod native {
     }
 
     /// The accepted entries' files and a catalog.json listing just them, in a fresh folder.
-    fn write_catalog(dir: &Path, accepted: &[(Value, String, Vec<u8>, Option<(String, Vec<u8>)>)]) -> Result<(), String> {
+    fn write_catalog(dir: &Path, accepted: &[(Value, String, Vec<u8>)]) -> Result<(), String> {
         std::fs::create_dir(dir).map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
-        for (_, file, data, normal) in accepted {
+        for (_, file, data) in accepted {
             let path = join_relative(dir, file);
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| format!("cannot make {}: {e}", parent.display()))?;
             }
             std::fs::write(&path, data).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-            if let Some((normal_path, normal_data)) = normal {
-                let path = join_relative(dir, normal_path);
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent).map_err(|e| format!("cannot make {}: {e}", parent.display()))?;
-                }
-                std::fs::write(&path, normal_data).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-            }
         }
-        let items: Vec<Value> = accepted.iter().map(|(v, _, _, _)| v.clone()).collect();
+        let items: Vec<Value> = accepted.iter().map(|(v, _, _)| v.clone()).collect();
         let catalog = serde_json::json!({ "version": 1, "items": items });
         let text = serde_json::to_vec_pretty(&catalog).map_err(|e| e.to_string())?;
         std::fs::write(dir.join("catalog.json"), text).map_err(|e| format!("cannot write catalog.json: {e}"))
@@ -974,52 +980,47 @@ mod tests {
     }
 
     #[test]
-    fn install_copies_and_validates_the_normal_map() {
-        let dir = crate::temp_dir::TempDir::new("install-normal-map");
-        let src = dir.join("source");
-        let user_dir = dir.join("user");
-        std::fs::create_dir_all(&src).unwrap();
-        std::fs::create_dir_all(&user_dir).unwrap();
-        let rgba = vec![255u8, 128, 64, 255];
-        let normal = vec![0u8, 128, 255, 255];
-        let catalog = serde_json::to_vec(&json!({
-            "version": 1,
-            "items": [{
-                "id": "test-mat",
-                "name": "Test Mat",
-                "category": "Materials",
-                "licence": "CC0-1.0",
-                "source": "me",
-                "folder": "Images",
-                "file": "test-mat.png",
-                "normalMap": "test-mat-normal.png"
-            }]
-        }))
-        .unwrap();
-        std::fs::write(src.join("catalog.json"), catalog).unwrap();
-        std::fs::write(src.join("test-mat.png"), cadcraft_io::png::encode_rgba8(1, 1, &rgba).unwrap()).unwrap();
-        std::fs::write(src.join("test-mat-normal.png"), cadcraft_io::png::encode_rgba8(1, 1, &normal).unwrap()).unwrap();
+    fn five_builtin_moldings_in_the_moldings_folder() {
+        let items = builtin_items();
+        let moldings: Vec<&ItemRecord> = items.iter().filter(|r| r.kind == ItemKind::Molding).collect();
+        let ids: Vec<&str> = moldings.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["molding:base", "molding:shoe", "molding:crown", "molding:chair-rail", "molding:casing"]);
+        for r in &moldings {
+            assert_eq!((r.category.as_str(), r.folder.as_str(), r.symbol_type.as_str()), ("Cabinet parts", "Moldings", "molding"));
+            assert!(r.keywords.contains(&"molding".to_string()) && r.read_only);
+            let profile = r.profile.as_ref().expect("profile");
+            assert!(cadcraft_arch::molding_profile::validate_profile(profile).is_ok(), "{}", r.id);
+            let size = r.size.expect("size");
+            assert!((size[1] - 1.0).abs() < 1e-12);
+        }
+        let size = |id: &str| moldings.iter().find(|r| r.id == id).and_then(|r| r.size).expect("size");
+        assert!((size("molding:base")[0] - 0.015).abs() < 1e-9 && (size("molding:base")[2] - 0.09).abs() < 1e-9);
+        assert!((size("molding:crown")[0] - 0.1).abs() < 1e-9 && (size("molding:crown")[2] - 0.1).abs() < 1e-9);
+    }
 
-        let io = crate::library::LibraryIo {
-            read_glb: crate::library::testing::fake_glb,
-            read_image: cadcraft_io::image_read::read_image,
-            encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
-            sample: cadcraft_io::library::sample_files,
-        };
-        let installed = install(&io, &user_dir, &src, &|_, _| false).unwrap();
-        assert_eq!(installed.items, 1);
-        let copy = user_dir.join("installed").join("source").join("test-mat-normal.png");
-        assert!(copy.exists());
-        assert!(!std::fs::read(copy).unwrap().is_empty());
-
-        let bad = dir.join("bad");
-        std::fs::create_dir_all(&bad).unwrap();
-        let bad_catalog = serde_json::to_vec(&json!({"version":1,"items":[{"id":"bad","name":"Bad","category":"Materials","licence":"CC0-1.0","source":"me","file":"bad.png","normalMap":"nope.png"}]})).unwrap();
-        std::fs::write(bad.join("catalog.json"), bad_catalog).unwrap();
-        std::fs::write(bad.join("bad.png"), cadcraft_io::png::encode_rgba8(1, 1, &rgba).unwrap()).unwrap();
-        let bad_installed = install(&io, &user_dir, &bad, &|_, _| false).unwrap();
-        assert_eq!(bad_installed.items, 0);
-        assert!(!bad_installed.skipped.is_empty());
+    #[test]
+    fn user_record_profile_is_validated_on_load() {
+        let good =
+            json!({"record": {"id": "user:cap", "name": "Cap", "kind": "molding", "profile": [[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.07]]}});
+        let r = user_record(&good).expect("valid profile");
+        assert_eq!(r.profile.as_ref().map(Vec::len), Some(4));
+        // Clockwise, a bow-tie, too few points, non-finite and too small: refused, never repaired.
+        let bad = [
+            json!([[0.0, 0.0], [0.0, 0.07], [0.02, 0.05], [0.02, 0.0]]),
+            json!([[0.0, 0.0], [0.02, 0.05], [0.02, 0.0], [0.0, 0.05]]),
+            json!([[0.0, 0.0], [0.02, 0.0]]),
+            json!([[0.0, 0.0], [0.02, 0.0], [0.02, 9.0], [0.0, 0.07]]),
+            json!([[0.0, 0.0], [0.0001, 0.0], [0.0001, 0.0001]]),
+        ];
+        for profile in bad {
+            let v = json!({"record": {"id": "user:cap", "name": "Cap", "kind": "molding", "profile": profile}});
+            assert!(user_record(&v).is_err(), "{profile}");
+        }
+        let mut entry = json!({"id": "x:y", "name": "Y", "category": "Cabinet parts", "licence": "CC0-1.0", "source": "s", "file": "y.glb",
+            "profile": [[0.0, 0.0], [0.0, 0.07], [0.02, 0.05], [0.02, 0.0]]});
+        assert!(entry_record(&entry, "c").is_err());
+        entry["profile"] = json!([[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.07]]);
+        assert!(entry_record(&entry, "c").is_ok());
     }
 
     #[test]
