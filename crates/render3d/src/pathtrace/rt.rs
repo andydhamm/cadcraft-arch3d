@@ -43,22 +43,11 @@ impl RqBuild {
         }
         let vertex_count = u32::try_from(scene.tris.len().checked_mul(3)?).ok()?;
 
-        let vertex_bytes = bytemuck::cast_slice(&positions);
-        let vertex_size = ((vertex_bytes.len() + 255) / 256) * 256;
-        let padded = if vertex_bytes.len() % 256 == 0 {
-            vertex_bytes.to_vec()
-        } else {
-            let mut v = vec![0u8; vertex_size];
-            v[..vertex_bytes.len()].copy_from_slice(vertex_bytes);
-            v
-        };
-        let vertex_buffer = d.create_buffer(&wgpu::BufferDescriptor {
+        let vertex_buffer = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("pt rq verts"),
-            size: vertex_size.max(256) as u64,
-            usage: wgpu::BufferUsages::BLAS_INPUT | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
+            contents: bytemuck::cast_slice(&positions),
+            usage: wgpu::BufferUsages::BLAS_INPUT | wgpu::BufferUsages::STORAGE,
         });
-        gpu.queue.write_buffer(&vertex_buffer, 0, &padded);
 
         let size = wgpu::BlasTriangleGeometrySizeDescriptor {
             vertex_format: wgpu::VertexFormat::Float32x3,

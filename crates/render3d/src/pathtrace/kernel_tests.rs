@@ -199,24 +199,20 @@ fn trace_accumulates_luminance_squares_after_the_colours() {
         compilation_options: Default::default(),
         cache: None,
     });
-    let frame_bytes = bytemuck::bytes_of(&frame);
-    let frame_size = ((frame_bytes.len() + 255) / 256) * 256;
-    let frame_buf = d.create_buffer(&wgpu::BufferDescriptor {
+    let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("sq frame"),
-        size: frame_size as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
+        contents: bytemuck::bytes_of(&frame),
+        usage: wgpu::BufferUsages::UNIFORM,
     });
-    gpu.queue.write_buffer(&frame_buf, 0, frame_bytes);
     let accum = d.create_buffer(&wgpu::BufferDescriptor {
         label: Some("sq accum"),
-        size: ((64 * 2 * 16) as usize).div_ceil(256) as u64 * 256,
+        size: (64 * 2 * 16) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
     let aov = d.create_buffer(&wgpu::BufferDescriptor {
         label: Some("sq aov"),
-        size: ((64 * 2 * 16) as usize).div_ceil(256) as u64 * 256,
+        size: (64 * 2 * 16) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -355,15 +351,11 @@ fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f3
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
         })
     };
-    let frame_bytes = bytemuck::bytes_of(&frame);
-    let frame_size = ((frame_bytes.len() + 255) / 256) * 256;
-    let frame_buf = d.create_buffer(&wgpu::BufferDescriptor {
+    let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("aov frame"),
-        size: frame_size as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
+        contents: bytemuck::bytes_of(&frame),
+        usage: wgpu::BufferUsages::UNIFORM,
     });
-    gpu.queue.write_buffer(&frame_buf, 0, frame_bytes);
     let accum = storage("aov accum", bytemuck::cast_slice(&zero));
     let aov = storage("aov aov", bytemuck::cast_slice(&zero));
     let probes = storage("aov probes", bytemuck::bytes_of(&GpuProbe::default()));

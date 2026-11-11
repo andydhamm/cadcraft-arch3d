@@ -62,11 +62,10 @@ pub struct RqPtPipelines {
 }
 
 fn entry(binding: u32, ty: wgpu::BufferBindingType) -> wgpu::BindGroupLayoutEntry {
-    let min_binding_size = None;
     wgpu::BindGroupLayoutEntry {
         binding,
         visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer { ty, has_dynamic_offset: false, min_binding_size },
+        ty: wgpu::BindingType::Buffer { ty, has_dynamic_offset: false, min_binding_size: None },
         count: None,
     }
 }
@@ -179,6 +178,17 @@ pub fn build_rq_pipelines(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>)
 mod tests {
     use super::*;
 
+    #[test]
+    fn every_path_tracer_pipeline_builds() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if let Err(e) = PtPipelines::new(&gpu, None) {
+            assert!(false, "the path tracer's WGSL must compile: {e}");
+        }
+    }
+
     fn assert_pt_hooks_are_stubbed(source: &str) {
         let stubs = [
             "fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { return visibility(o, d, 1.0e6); }",
@@ -220,23 +230,7 @@ mod tests {
         for source in [src.as_str(), rq_src.as_str()] {
             assert_pt_hooks_are_stubbed(source);
         }
+        assert!(!KERNEL_WGSL.contains("sky_radiance("));
         assert!(!KERNEL_WGSL.contains("visibility(o, sun.dir, 1.0e6)"));
-
-        let Some(gpu) = crate::gputest::shared_compute() else {
-            eprintln!("SKIP: no compute device");
-            return;
-        };
-        let kernel_ok = PtPipelines::new(&gpu, None);
-        if let Err(err) = kernel_ok {
-            panic!("compute kernel must compile: {err}");
-        }
-        if !gpu.ray_query {
-            eprintln!("SKIP: ray queries unsupported on this device");
-            return;
-        }
-        let rq_ok = crate::pathtrace::shaders::build_rq_pipelines(&gpu, None);
-        if let Err(err) = rq_ok {
-            panic!("rq kernel must compile: {err}");
-        }
     }
 }

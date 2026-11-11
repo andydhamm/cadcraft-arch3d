@@ -43,14 +43,10 @@ struct AtrousPipeline {
 }
 
 fn layout_entry(binding: u32, ty: wgpu::BufferBindingType) -> wgpu::BindGroupLayoutEntry {
-    let min_binding_size = match ty {
-        wgpu::BufferBindingType::Uniform => std::num::NonZeroU64::new(32),
-        _ => None,
-    };
     wgpu::BindGroupLayoutEntry {
         binding,
         visibility: wgpu::ShaderStages::COMPUTE,
-        ty: wgpu::BindingType::Buffer { ty, has_dynamic_offset: false, min_binding_size },
+        ty: wgpu::BindingType::Buffer { ty, has_dynamic_offset: false, min_binding_size: None },
         count: None,
     }
 }
@@ -145,15 +141,11 @@ pub fn denoise(gpu: &ComputeGpu, color: &[[f32; 4]], aov: &[[f32; 4]], size: (u3
             sigma_a: SIGMA_ALBEDO,
             ..Default::default()
         };
-        let params_bytes = bytemuck::bytes_of(&params);
-        let params_size = ((params_bytes.len() + 255) / 256) * 256;
-        let uniform = d.create_buffer(&wgpu::BufferDescriptor {
+        let uniform = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("pt denoise params"),
-            size: params_size as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM,
         });
-        gpu.queue.write_buffer(&uniform, 0, params_bytes);
         let bind = d.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("pt denoise"),
             layout: &atrous.layout,

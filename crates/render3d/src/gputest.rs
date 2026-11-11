@@ -20,40 +20,27 @@ pub(crate) fn device_and_queue() -> Option<(wgpu::Device, wgpu::Queue)> {
     Some((crate::offscreen::kept_for_the_process(device), queue))
 }
 
-/// One device per test thread. Sharing one device across all tests was racing the same queue on the
-/// software adapter; each test thread now gets its own device, while still reusing a single device
-/// within that thread.
+/// One device for every GPU test in this binary, created once on a helper thread and given
+/// [`SHARED_DEVICE_BUDGET`] to appear. `None` (tests skip) without an adapter or when the driver
+/// does not answer in time. Sharing one device keeps parallel tests from each opening their own,
+/// which is what made test binaries hang on a busy GPU.
 pub(crate) fn shared_device() -> Option<(wgpu::Device, wgpu::Queue)> {
-    thread_local! {
-        static SHARED: std::cell::OnceCell<Option<(wgpu::Device, wgpu::Queue)>> = const { std::cell::OnceCell::new() };
-    }
-    SHARED.with(|cell| {
-        let init = || crate::offscreen::device_within(SHARED_DEVICE_BUDGET);
-        cell.get_or_init(init).clone()
-    })
+    static SHARED: std::sync::OnceLock<Option<(wgpu::Device, wgpu::Queue)>> = std::sync::OnceLock::new();
+    SHARED.get_or_init(|| crate::offscreen::device_within(SHARED_DEVICE_BUDGET)).clone()
 }
 
-/// One compute device (the software adapter) for each test thread; `None` (tests skip) without one.
+/// One compute device (the software adapter) for every path-tracer test in this binary; `None`
+/// (tests skip) without one.
 pub(crate) fn shared_compute() -> Option<crate::pathtrace::ComputeGpu> {
-    thread_local! {
-        static SHARED: std::cell::OnceCell<Option<crate::pathtrace::ComputeGpu>> = const { std::cell::OnceCell::new() };
-    }
-    SHARED.with(|cell| {
-        let init = || crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, false).ok().flatten();
-        cell.get_or_init(init).clone()
-    })
+    static SHARED: std::sync::OnceLock<Option<crate::pathtrace::ComputeGpu>> = std::sync::OnceLock::new();
+    SHARED.get_or_init(|| crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, false).ok().flatten()).clone()
 }
 
 /// One compute device on the software adapter with ray queries asked for (llvmpipe offers them), for the
 /// hardware-ray-query path's tests; `None` without one. Its `ray_query` is false where the adapter has none.
 pub(crate) fn shared_compute_rq() -> Option<crate::pathtrace::ComputeGpu> {
-    thread_local! {
-        static SHARED: std::cell::OnceCell<Option<crate::pathtrace::ComputeGpu>> = const { std::cell::OnceCell::new() };
-    }
-    SHARED.with(|cell| {
-        let init = || crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, true).ok().flatten();
-        cell.get_or_init(init).clone()
-    })
+    static SHARED: std::sync::OnceLock<Option<crate::pathtrace::ComputeGpu>> = std::sync::OnceLock::new();
+    SHARED.get_or_init(|| crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, true).ok().flatten()).clone()
 }
 
 /// How long [`shared_device`] waits for the adapter and device.
@@ -80,84 +67,6 @@ pub(crate) fn poll_bounded<F: Future>(fut: F, budget: Duration) -> Option<F::Out
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn probe_minimal_storage_write() {
-        let Some((device, queue)) = shared_device() else {
-            eprintln!("SKIP: no device");
-            return;
-        };
-        #[repr(C)]
-        #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
-        struct Node {
-            min: [f32; 3],
-            left_or_first: u32,
-            max: [f32; 3],
-            count: u32,
-        }
-        let node = Node::default();
-        let bytes = bytemuck::bytes_of(&node);
-        let buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("probe nodes"),
-            size: bytes.len() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        queue.write_buffer(&buf, 0, bytes);
-    }
-
-    #[test]
-    fn probe_compute_storage_write_on_rq_device() {
-        let Some(gpu) = crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, true).ok().flatten() else {
-            eprintln!("SKIP: no rq compute device");
-            return;
-        };
-        #[repr(C)]
-        #[derive(Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
-        struct Node {
-            min: [f32; 3],
-            left_or_first: u32,
-            max: [f32; 3],
-            count: u32,
-        }
-        let buf = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("probe rq nodes"),
-            size: std::mem::size_of::<Node>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        gpu.queue.write_buffer(&buf, 0, bytemuck::bytes_of(&Node::default()));
-    }
-
-    #[test]
-    fn probe_uniform_write_on_rq_device() {
-        let Some(gpu) = crate::pathtrace::request_compute(crate::adapter::AdapterChoice::Fallback, true).ok().flatten() else {
-            eprintln!("SKIP: no rq compute device");
-            return;
-        };
-        let frame = crate::pathtrace::scene_gpu::GpuFrame {
-            inv_view_proj: [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
-            eye: [0.0, 0.0, 1.0, 0.0],
-            size: [8, 8],
-            sample_base: 0,
-            seed: 1,
-            bounces: 1,
-            light_count: 0,
-            flags: 0,
-            spp_this_pass: 1,
-            probe_count: 0,
-            ..Default::default()
-        };
-        let bytes = bytemuck::bytes_of(&frame);
-        let size = ((bytes.len() + 255) / 256) * 256;
-        let buf = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("probe uniform"),
-            size: size as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        gpu.queue.write_buffer(&buf, 0, bytes);
-    }
 
     #[test]
     fn shared_device_is_created_once() {

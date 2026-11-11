@@ -73,7 +73,7 @@ impl PathTracer {
             return Err(format!("size {w}x{h} exceeds max_texture_dimension_2d {max_dim}"));
         }
         let pixels = u64::from(w) * u64::from(h);
-        let accum_bytes = align_up(pixels as usize * 32, 256).max(256) as u64;
+        let accum_bytes = pixels * 32;
         let max_binding = u64::from(gpu.device.limits().max_storage_buffer_binding_size);
         if accum_bytes > max_binding {
             return Err(format!("accum buffer {accum_bytes} bytes exceeds max_storage_buffer_binding_size {max_binding}"));
@@ -112,7 +112,6 @@ impl PathTracer {
         }
 
         let pipelines = PtPipelines::new(gpu, cache)?;
-        let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
         let rq_build = if opts.rt && gpu.ray_query { RqBuild::build(gpu, &gpu_scene) } else { None };
         // A ray-query kernel that does not build renders the compute path, and says why (rt_error): until
         // 2026-11-03 `.ok()` dropped the error and the kernel had never compiled on any adapter.
@@ -121,6 +120,7 @@ impl PathTracer {
             Some(Err(e)) => (None, Some(e)),
             None => (None, None),
         };
+        let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
         let d = &gpu.device;
 
         let accum = d.create_buffer(&wgpu::BufferDescriptor {
@@ -131,13 +131,13 @@ impl PathTracer {
         });
         let aov = d.create_buffer(&wgpu::BufferDescriptor {
             label: Some("pt aov"),
-            size: align_up((pixels * 32) as usize, 256).max(256) as u64,
+            size: pixels * 32,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let probes_buf = d.create_buffer(&wgpu::BufferDescriptor {
             label: Some("pt probes"),
-            size: 256,
+            size: 16,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -240,7 +240,11 @@ impl PathTracer {
 
         let d = &gpu.device;
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
-        let frame_buf = uniform(gpu, "pt frame", &frame);
+        let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("pt frame"),
+            contents: bytemuck::bytes_of(&frame),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
         let (w, h) = self.size;
         if let (Some(build), Some(rq)) = (self.rq_build.as_ref(), self.rq_pipelines.as_ref()) {
             let kernel_entries = &[
@@ -530,14 +534,11 @@ impl PathTracer {
         let params = ResolveParams { size: [w, h], exposure, spp: self.spp_done };
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
-        let params_bytes = bytemuck::bytes_of(&params).to_vec();
-        let uniform = d.create_buffer(&wgpu::BufferDescriptor {
+        let uniform = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("pt resolve params"),
-            size: align_up(params_bytes.len(), 256).max(256) as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM,
         });
-        gpu.queue.write_buffer(&uniform, 0, &params_bytes);
         let pixels_buf = d.create_buffer(&wgpu::BufferDescriptor {
             label: Some("pt resolve out"),
             size: rgba_bytes,
@@ -717,29 +718,24 @@ pub fn irradiance(
     let d = &gpu.device;
 
     // Accumulate over passes of 64 samples.
-    let accum_size = align_up((n * 16) as usize, 256).max(256) as u64;
+    let accum_size = (n * 16) as u64;
     let accum = d.create_buffer(&wgpu::BufferDescriptor {
         label: Some("pt irr accum"),
         size: accum_size,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let aov_size = align_up((n * 16) as usize, 256).max(256) as u64;
     let aov = d.create_buffer(&wgpu::BufferDescriptor {
         label: Some("pt irr aov"),
-        size: aov_size,
+        size: (n * 16) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let probe_bytes = bytemuck::cast_slice(&gpu_probes);
-    let probe_size = align_up(probe_bytes.len(), 256).max(256) as u64;
-    let probe_buf = d.create_buffer(&wgpu::BufferDescriptor {
+    let probe_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("pt irr probes"),
-        size: probe_size,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
+        contents: bytemuck::cast_slice(&gpu_probes),
+        usage: wgpu::BufferUsages::STORAGE,
     });
-    gpu.queue.write_buffer(&probe_buf, 0, probe_bytes);
 
     let mut sample_base = 0u32;
     let mut remaining = opts.spp;
@@ -773,7 +769,11 @@ pub fn irradiance(
         }
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
-        let frame_buf = uniform(gpu, "pt irr frame", &frame);
+        let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("pt irr frame"),
+            contents: bytemuck::bytes_of(&frame),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
         let bind = d.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("pt irradiance"),
             layout: &pipelines.kernel_layout,
@@ -866,59 +866,25 @@ fn pixel_ray(inv_vp: &[[f32; 4]; 4], x: u32, y: u32, w: u32, h: u32) -> [f32; 3]
     [(d[0] / len) as f32, (d[1] / len) as f32, (d[2] / len) as f32]
 }
 
-fn align_up(value: usize, align: usize) -> usize {
-    let rem = value % align;
-    if rem == 0 { value } else { value + align - rem }
-}
-
-fn storage<T: Copy + Pod + Default>(gpu: &ComputeGpu, label: &str, items: &[T]) -> wgpu::Buffer {
+fn storage<T: Copy + Pod + Default>(d: &wgpu::Device, label: &str, items: &[T]) -> wgpu::Buffer {
     let one = [T::default()];
     let data: &[T] = if items.is_empty() { &one } else { items };
-    let bytes = bytemuck::cast_slice(data).to_vec();
-    // Some adapters enforce a minimum binding size for storage buffers. Keep the host copy at least
-    // 256 bytes and aligned to 256 so the shader sees a valid buffer even when the Rust data is
-    // smaller than the WGSL binding would otherwise require. Write the full padded buffer to match
-    // that size on strict validation layers.
-    let size = align_up(bytes.len(), 256).max(256);
-    let mut padded = vec![0u8; size];
-    padded[..bytes.len()].copy_from_slice(&bytes);
-    let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+    d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(label),
-        size: size as u64,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-    gpu.queue.write_buffer(&buffer, 0, &padded);
-    buffer
-}
-
-fn uniform<T: Copy + Pod>(gpu: &ComputeGpu, label: &str, value: &T) -> wgpu::Buffer {
-    let bytes = bytemuck::bytes_of(value).to_vec();
-    // Uniform buffers can be rejected when their host-side size is smaller than the binding's
-    // minimum size. Pad to the WGSL uniform layout and to a 256-byte multiple so the validation
-    // happily accepts the write on strict adapters.
-    let size = align_up(bytes.len(), 256).max(512);
-    let mut padded = vec![0u8; size];
-    padded[..bytes.len()].copy_from_slice(&bytes);
-    let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some(label),
-        size: size as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-    gpu.queue.write_buffer(&buffer, 0, &padded);
-    buffer
+        contents: bytemuck::cast_slice(data),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    })
 }
 
 /// Upload `scene` to `gpu`.
 pub fn upload_scene(gpu: &ComputeGpu, scene: &GpuScene) -> SceneBuffers {
     let d = &gpu.device;
     SceneBuffers {
-        nodes: storage(gpu, "pt nodes", &scene.nodes),
-        tris: storage(gpu, "pt tris", &scene.tris),
-        materials: storage(gpu, "pt materials", &scene.materials),
-        lights: storage(gpu, "pt lights", &scene.lights),
-        ies: storage(gpu, "pt ies", &scene.ies),
+        nodes: storage(d, "pt nodes", &scene.nodes),
+        tris: storage(d, "pt tris", &scene.tris),
+        materials: storage(d, "pt materials", &scene.materials),
+        lights: storage(d, "pt lights", &scene.lights),
+        ies: storage(d, "pt ies", &scene.ies),
     }
 }
 
@@ -982,9 +948,13 @@ fn run_entry_on(
         compilation_options: Default::default(),
         cache: None,
     });
-    let frame_buf = uniform(gpu, "pt frame", frame);
-    let aov = storage(gpu, "pt aov", &[[0.0f32; 4]; 2]);
-    let probe_buf = storage(gpu, "pt probes", probes);
+    let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("pt frame"),
+        contents: bytemuck::bytes_of(frame),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    let aov = storage(d, "pt aov", &[[0.0f32; 4]; 2]);
+    let probe_buf = storage(d, "pt probes", probes);
     let read = d.create_buffer(&wgpu::BufferDescriptor {
         label: Some("pt read"),
         size: (n * 32) as u64,
@@ -1335,28 +1305,6 @@ mod tests {
             })
             .sum::<f32>()
             / n as f32
-    }
-
-    #[test]
-    fn probe_uniform_helper_succeeds_on_rq_device() {
-        let Some(gpu) = crate::gputest::shared_compute_rq() else {
-            eprintln!("SKIP: no compute device");
-            return;
-        };
-        let frame = GpuFrame {
-            inv_view_proj: [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
-            eye: [0.0, 0.0, 1.0, 0.0],
-            size: [8, 8],
-            sample_base: 0,
-            seed: 1,
-            bounces: 1,
-            light_count: 0,
-            flags: 0,
-            spp_this_pass: 1,
-            probe_count: 0,
-            ..Default::default()
-        };
-        let _ = uniform(&gpu, "pt frame", &frame);
     }
 
     #[test]
