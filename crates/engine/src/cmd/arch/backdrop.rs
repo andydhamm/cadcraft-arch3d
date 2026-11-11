@@ -53,8 +53,16 @@ fn describe(b: &Backdrop) -> Value {
     match b {
         Backdrop::Colour { colour } => json!({"kind": "colour", "colour": hex(*colour)}),
         Backdrop::Gradient { top, bottom } => json!({"kind": "gradient", "top": hex(*top), "bottom": hex(*bottom)}),
-        Backdrop::Image { item, projection } => {
-            json!({"kind": "image", "item": item, "projection": serde_json::to_value(projection).unwrap_or(Value::Null)})
+        Backdrop::Image { item, projection, horizon } => {
+            let mut v = json!({"kind": "image", "item": item, "projection": serde_json::to_value(projection).unwrap_or(Value::Null)});
+            if *horizon != 0.0 {
+                v["horizon"] = json!(horizon);
+            }
+            v
+        }
+        Backdrop::Sky => json!({"kind": "sky"}),
+        Backdrop::Hdri { image, intensity, rotation, horizon } => {
+            json!({"kind": "hdri", "image": image, "intensity": intensity, "rotation": rotation, "horizon": horizon})
         }
     }
 }
@@ -116,7 +124,7 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 None => return Err(bad("backdrop", format!("no library item `{item}`"))),
             }
             image = Some((item.to_string(), s.library.image(item).map_err(|e| bad("backdrop", e))?));
-            Some(Backdrop::Image { item: item.to_string(), projection })
+            Some(Backdrop::Image { item: item.to_string(), projection, horizon: 0.0 })
         }
         _ => None,
     };

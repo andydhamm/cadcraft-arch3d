@@ -18,6 +18,7 @@ pub mod finish;
 pub mod foundation;
 pub mod furnishing;
 pub mod light;
+pub mod look;
 pub mod molding;
 pub mod paint;
 pub mod site;
@@ -31,6 +32,7 @@ pub use finish::*;
 pub use foundation::*;
 pub use furnishing::*;
 pub use light::*;
+pub use look::*;
 pub use molding::*;
 pub use paint::*;
 pub use site::*;
@@ -1631,6 +1633,9 @@ pub struct Camera3d {
     /// [`ArchModel::light_sets`]); `None` = no set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub light_set: Option<String>,
+    /// This camera's render look; `None` = follow the global look.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look: Option<Look>,
 }
 
 impl Default for Camera3d {
@@ -1646,6 +1651,7 @@ impl Default for Camera3d {
             eye_height: Some(1.6),
             fov_deg: Some(45.0),
             light_set: None,
+            look: None,
         }
     }
 }
@@ -1789,6 +1795,12 @@ pub struct ArchModel {
     /// The 3D backdrop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backdrop: Option<Backdrop>,
+    /// The global render look (its `backdrop` stays `None`: see `ArchModel::backdrop`).
+    #[serde(default, skip_serializing_if = "Look::is_default")]
+    pub look: Look,
+    /// Named sun directions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sun_angles: Vec<SunAngle>,
     /// Set as Default: command parameters used when a command omits them.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub defaults: std::collections::BTreeMap<String, serde_json::Value>,
@@ -1861,6 +1873,8 @@ impl Default for ArchModel {
             images: Default::default(),
             paints: Default::default(),
             backdrop: None,
+            look: Look::default(),
+            sun_angles: Vec::new(),
             defaults: Default::default(),
             trays: Vec::new(),
             next_tray_id: 0,
@@ -1966,6 +1980,8 @@ impl ArchModel {
             && self.images.is_empty()
             && self.paints.is_empty()
             && self.backdrop.is_none()
+            && self.look.is_default()
+            && self.sun_angles.is_empty()
             && self.defaults.is_empty()
             && self.trays.is_empty()
             && self.soffits.is_empty()
@@ -2374,6 +2390,7 @@ impl ArchModel {
             && c.fov_deg.map_or(true, |v| v.is_finite())
             && c.target.map_or(true, |t| t.iter().all(|v| v.is_finite()))
             && c.eye.map_or(true, |e| e.iter().all(|v| v.is_finite()))
+            && c.look.as_ref().is_none_or(|l| l.validate().is_ok())
     }
 
     /// Add or update a saved camera, storing it on the model so that it
@@ -2437,6 +2454,19 @@ impl ArchModel {
     ///   its kind (skipped when the in-use ids reach [`u32::MAX`]).
     pub fn validate(&mut self) -> Vec<String> {
         let mut messages = Vec::new();
+
+        if let Err(e) = self.look.validate() {
+            messages.push(format!("render look reset: {e}"));
+            self.look = Look::default();
+        }
+        self.look.backdrop = None;
+        let before = self.sun_angles.len();
+        let mut seen_angles = std::collections::HashSet::new();
+        self.sun_angles.retain(|a| a.validate().is_ok() && seen_angles.insert(a.name.clone()));
+        self.sun_angles.truncate(MAX_SUN_ANGLES);
+        if self.sun_angles.len() != before {
+            messages.push(format!("{} invalid or extra sun angle(s) dropped", before - self.sun_angles.len()));
+        }
 
         if self.walls.len() > MAX_WALLS {
             messages.push(format!("model has {} walls, max {MAX_WALLS}", self.walls.len()));
@@ -4012,6 +4042,7 @@ mod tests {
             eye_height: Some(1.7),
             fov_deg: Some(50.0),
             light_set: None,
+            look: None,
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: Camera3d = serde_json::from_str(&json).unwrap();
