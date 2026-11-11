@@ -196,6 +196,33 @@ mod tests {
     }
 
     #[test]
+    fn label_and_handle_for_new_parts() {
+        use cadcraft_doc::arch::{handle_json, opening_handle, railing_handle, room_handle, stair_handle};
+        let id = ArchId(2);
+        for p in ["tread", "riser", "stringer", "skirt"] {
+            assert_eq!(label_and_handle(id, p, ObjectKind::Stair), ("s2".to_owned(), handle_json(stair_handle(id))), "{p}");
+        }
+        assert_eq!(label_and_handle(id, "post", ObjectKind::Railing), ("ra2".to_owned(), handle_json(railing_handle(id))));
+        assert_eq!(label_and_handle(id, "grille", ObjectKind::Opening), ("o2".to_owned(), handle_json(opening_handle(id))));
+        for p in ["ledger", "joist", "rim", "beam"] {
+            assert_eq!(label_and_handle(id, p, ObjectKind::Room), ("r2".to_owned(), handle_json(room_handle(id))), "{p}");
+        }
+    }
+
+    #[test]
+    fn pick3d_answers_a_cabinet_label() {
+        use cadcraft_doc::arch::{cabinet_handle, fixture_handle, handle_json};
+        for part in ["cabinet", "counter"] {
+            let (label, handle) = label_and_handle(ArchId(2), part, ObjectKind::Cabinet);
+            assert_eq!(label, "cb2");
+            assert_eq!(handle, handle_json(cabinet_handle(ArchId(2))));
+        }
+        let (label, handle) = label_and_handle(ArchId(1), "fixture", ObjectKind::Fixture);
+        assert_eq!(label, "fx1");
+        assert_eq!(handle, handle_json(fixture_handle(ArchId(1))));
+    }
+
+    #[test]
     fn label_and_handle_follows_the_owner() {
         use cadcraft_doc::arch::{
             backsplash_handle, cabinet_handle, countertop_handle, fixture_handle, handle_json, opening_handle, railing_handle, room_handle,

@@ -1402,6 +1402,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn proxy_handle_maps_the_phase17_parts() {
+        use cadcraft_arch3d::incremental::ObjectKind as K;
+        use cadcraft_doc::arch as a;
+        let id = cadcraft_doc::ArchId(3);
+        for p in ["tread", "riser", "stringer", "skirt"] {
+            assert_eq!(K::Stair.handle(id), a::stair_handle(id), "{p}");
+        }
+        assert_eq!(K::Railing.handle(id), a::railing_handle(id));
+        assert_eq!(K::Opening.handle(id), a::opening_handle(id));
+        for p in ["ledger", "joist", "rim", "beam"] {
+            assert_eq!(K::Room.handle(id), a::room_handle(id), "{p}");
+        }
+        assert_eq!(K::Wall.handle(id), a::arch_handle(id));
+    }
+
+    #[test]
     fn click_handle_follows_the_owner() {
         use cadcraft_arch3d::incremental::ObjectKind as K;
         use cadcraft_doc::arch as a;
@@ -2339,6 +2355,12 @@ mod tests {
         pane.pick(size, px);
         assert_eq!(pane.pick(size, [f32::NAN, 0.0]), None);
         assert_eq!(pane.take_picked(), Some(handle));
+        // Other object kinds route to their own handle ranges.
+        let id = cadcraft_doc::ArchId(3);
+        use cadcraft_arch3d::incremental::ObjectKind as K;
+        assert_eq!(K::Opening.handle(id), cadcraft_doc::arch::opening_handle(id));
+        assert_eq!(K::Room.handle(id), cadcraft_doc::arch::room_handle(id));
+        assert_eq!(K::Roof.handle(id), cadcraft_doc::arch::roof_handle(id));
     }
 
     #[test]
