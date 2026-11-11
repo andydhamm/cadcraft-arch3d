@@ -1410,7 +1410,7 @@ mod tests {
             ("backsplash", ObjectKind::Backsplash),
             ("molding-line", ObjectKind::MoldingLine),
             ("molding-room-base-0", ObjectKind::Room),
-            ("glass-wall", ObjectKind::Opening),
+            ("glass-wall", ObjectKind::Wall),
             ("niche-back:o3", ObjectKind::Wall),
             ("deck-joist", ObjectKind::Room),
             ("counter", ObjectKind::Cabinet),
