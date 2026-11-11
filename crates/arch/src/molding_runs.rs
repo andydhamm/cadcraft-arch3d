@@ -150,14 +150,21 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     if cross.abs() > 1e-6 {
                         continue;
                     }
+
                     // Check face line proximity
+                    // The room polygon edge lies on the wall face.
+                    // Wall face lines are offset from centerline by thickness/2.
+                    // We check if the edge midpoint is close to either face line.
                     let left_normal = Vec2::new(-wall_dir.y, wall_dir.x);
                     let t = w.thickness / 2.0;
-                    // Try right face (-t) and left face (+t)
-                    let right_face_pt = w.start + left_normal * (-t);
-                    let left_face_pt = w.start + left_normal * t;
-                    let dist_right = (mid - right_face_pt).dot(left_normal).abs();
-                    let dist_left = (mid - left_face_pt).dot(left_normal).abs();
+
+                    // Project midpoint onto wall normal to find distance from centerline
+                    let rel_mid = mid - w.start;
+                    let dist_from_center = rel_mid.dot(left_normal);
+
+                    // Determine which face is closer
+                    let dist_right = (dist_from_center + t).abs();
+                    let dist_left = (dist_from_center - t).abs();
 
                     let (side, dist) = if dist_right <= dist_left {
                         (cadcraft_doc::arch::Side::Right, dist_right)
@@ -175,7 +182,9 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     let edge_t1 = (b - w.start).dot(wall_dir);
                     let edge_min = edge_t0.min(edge_t1);
                     let edge_max = edge_t0.max(edge_t1);
-                    if edge_max < -t || edge_min > wall_len + t {
+
+                    // Allow slight tolerance for joins
+                    if edge_max < -1e-4 || edge_min > wall_len + 1e-4 {
                         continue;
                     }
 
@@ -274,6 +283,9 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 let b = ring[(ei + 1) % ring.len()];
                 let edge_vec = b - a;
                 let l = edge_vec.len();
+                if l <= 1e-9 {
+                    continue;
+                }
                 let unit = edge_vec / l;
 
                 let p0 = a + unit * t0;
@@ -283,9 +295,15 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     // Check if this piece continues the run
                     let prev_ei = run.2;
                     let prev_end = ring[(prev_ei + 1) % ring.len()];
-                    let is_cont = (ei == (prev_ei + 1) % ring.len()) && (t0.abs() < 1e-9 || (p0 - prev_end).len() < 1e-9);
+                    // Continuity: next edge index is prev + 1, and start is near prev end
+                    let is_cont = (ei == (prev_ei + 1) % ring.len()) && ((t0.abs() < 1e-9) || ((p0 - prev_end).len() < 1e-9));
 
                     if is_cont {
+                        // Append p1, but avoid duplicate vertex if p0 == prev_end
+                        if (p0 - prev_end).len() > 1e-9 {
+                            run.0.push(p0);
+                            run.1.push(z0);
+                        }
                         run.0.push(p1);
                         run.1.push(z0);
                         run.2 = ei;
@@ -315,7 +333,8 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             if let Some((path, z, _)) = current_run {
                 if path.len() >= 2 {
                     // Check if it's a closed ring
-                    let is_closed = is_outer && path.len() == ring.len() && (path[0] - path[path.len() - 1]).len() < 1e-6;
+                    // A closed ring run covers all edges without breaks
+                    let is_closed = is_outer && path.len() == ring.len() + 1 && (path[0] - path[path.len() - 1]).len() < 1e-6;
                     runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: is_closed, side: 1.0 });
                 }
             }
