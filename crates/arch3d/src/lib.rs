@@ -43,6 +43,7 @@ pub(crate) mod soffit;
 pub mod solid;
 pub(crate) mod stair_parts;
 pub mod stairs;
+pub mod sweep;
 pub mod texture;
 pub mod uv;
 pub mod views;

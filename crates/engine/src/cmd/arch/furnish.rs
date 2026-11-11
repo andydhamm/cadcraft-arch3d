@@ -246,6 +246,7 @@ fn place_record(s: &mut Session, item: &ItemRecord, req: &Request, m: Option<&Ma
         ItemKind::Fixture => via(s, "fixture", casework_params(built_in_name(item, "fixture:")?, req)),
         ItemKind::Backdrop => via(s, "backdrop", backdrop_params(item, m)),
         ItemKind::Finish | ItemKind::Material => Err(bad(PLACE, "a material is painted: use paint.material")),
+        ItemKind::Molding => Err(bad(PLACE, "a molding is applied with room.moldings, moldingline or a cabinet's crown")),
         ItemKind::Group => crate::library::user::place_group(s, item, Vec2::new(req.at[0], req.at[1]), req.rotation.unwrap_or(0.0)),
     }
 }
