@@ -238,7 +238,8 @@ fn cabinet_neighbours_are_projections() {
 
     // Claiming a cabinet changes the claimed ids of the level: every cabinet on it is rebuilt.
     m.countertops[0].cabinets.push(ArchId(0));
-    let level = m.cabinets.len();
+    // The countertop holding the claim is rebuilt too.
+    let level = m.cabinets.len() + 1;
     assert_eq!(cache.update(&m).rebuilt, level);
     check(&cache, &m, "claimed cabinet");
 }
