@@ -2,7 +2,7 @@
 
 use super::Ctx;
 use crate::step::P;
-use cadcraft_doc::arch::StairShape;
+use cadcraft_doc::arch::{Railing, RailingHost, StairShape};
 
 /// One `IfcStair` (key `stair/<n>`, `PredefinedType` from the stair's shape) per stair in its
 /// `from_level` storey, and one `IfcRailing` (`.HANDRAIL.` for a stair's own rail, else
@@ -44,8 +44,17 @@ pub(super) fn emit(ctx: &mut Ctx) {
             &format!("railing-ra{n}"),
             slot,
             &meshes,
-            vec![P::Null, P::Enum(if railing.follows.is_some() { "HANDRAIL" } else { "GUARDRAIL" })],
+            vec![P::Null, P::Enum(predefined_type(railing))],
         );
+    }
+}
+
+/// `HANDRAIL` for a railing on a stair (its sides and well guard), `GUARDRAIL` for a deck's
+/// railing and for one that follows nothing.
+fn predefined_type(railing: &Railing) -> &'static str {
+    match (railing.follows, railing.host) {
+        (Some(_), RailingHost::Well | RailingHost::StairLeft | RailingHost::StairRight) => "HANDRAIL",
+        _ => "GUARDRAIL",
     }
 }
 
@@ -53,7 +62,7 @@ pub(super) fn emit(ctx: &mut Ctx) {
 mod tests {
     use super::super::{IfcOptions, write_model};
     use cadcraft_arch3d::Scene3d;
-    use cadcraft_doc::arch::{ArchModel, Railing, Stair, StairShape};
+    use cadcraft_doc::arch::{ArchModel, Railing, RailingHost, Stair, StairShape};
     use cadcraft_geom::Vec2;
 
     /// A model with one stair of each `StairShape` (straight, L, U).
@@ -86,5 +95,36 @@ mod tests {
         assert_eq!(text.matches("=IFCRAILING(").count(), 2, "{text}");
         assert!(text.contains(".HANDRAIL."), "stair rail is a handrail");
         assert!(text.contains(".GUARDRAIL."), "free-standing rail is a guardrail");
+    }
+
+    #[test]
+    fn railing_types_follow_the_host() {
+        let mut m = stairs_model();
+        let stair = m.stairs[0].id;
+        let path = || vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0)];
+        for host in [RailingHost::StairLeft, RailingHost::StairRight, RailingHost::Well] {
+            m.push_railing(Railing { path: path(), follows: Some(stair), host, ..Railing::default() });
+        }
+        m.push_railing(Railing { path: path(), follows: Some(stair), host: RailingHost::Deck, ..Railing::default() });
+        m.push_railing(Railing { path: path(), follows: None, ..Railing::default() });
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCRAILING(").count(), 5, "{text}");
+        assert_eq!(text.matches(",$,.HANDRAIL.);").count(), 3, "{text}");
+        assert_eq!(text.matches(",$,.GUARDRAIL.);").count(), 2, "{text}");
+    }
+
+    #[test]
+    fn stair_body_holds_every_stair_part() {
+        let mut m = ArchModel::default();
+        m.push_stair(Stair { shape: StairShape::Straight, open_risers: true, ..Stair::default() });
+        let scene = Scene3d::build(&m);
+        let parts: Vec<_> = scene.meshes.iter().filter(|x| x.material == "stair" || x.material.starts_with("stair-")).collect();
+        assert!(parts.len() > 1, "the stair builds several parts: {}", parts.len());
+        let triangles: usize = parts.iter().map(|x| x.indices.len() / 3).sum();
+        let text = write_model(&m, &scene, &IfcOptions::default());
+        assert_eq!(text.matches("=IFCSTAIR(").count(), 1, "{text}");
+        let sets: Vec<&str> = text.lines().filter(|l| l.contains("=IFCTRIANGULATEDFACESET(")).collect();
+        assert_eq!(sets.len(), 1, "one body");
+        assert_eq!(sets[0].matches("),(").count() + 1, triangles, "every part's triangles are in the body");
     }
 }
