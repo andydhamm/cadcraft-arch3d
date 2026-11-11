@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 03:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 35 of 39 segments merged · 16 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 03:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 47.8 h so far · expected done Nov 11 10:38–Nov 12 12:36 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 48.0 h so far · expected done Nov 11 10:53–Nov 12 12:51 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -77,5 +77,5 @@ Updated 2026-11-11 03:15 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | gate | 13 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | gate | 737 |
+| tturbo-mac | tturbo-ultraheretic | gate | 738 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 348 |
