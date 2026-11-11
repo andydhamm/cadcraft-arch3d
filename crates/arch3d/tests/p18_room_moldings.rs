@@ -13,15 +13,15 @@ fn test_model() -> ArchModel {
         room_type: RoomType::Living,
         level: 0,
         ceiling_height: Some(2.4),
-        moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: Default::default(), offset: 0.0 }],
+        moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: Default::default(), offset: 0.0, ..Default::default() }],
         ..Room::default()
     };
     model.push_room(room.clone());
 
-    let w0 = model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.2, 0.0), thickness: 0.2, ..Wall::default() });
-    let w1 = model.push_wall(Wall { start: Vec2::new(4.2, 0.0), end: Vec2::new(4.2, 3.2), thickness: 0.2, ..Wall::default() });
-    let w2 = model.push_wall(Wall { start: Vec2::new(4.2, 3.2), end: Vec2::new(0.0, 3.2), thickness: 0.2, ..Wall::default() });
-    let w3 = model.push_wall(Wall { start: Vec2::new(0.0, 3.2), end: Vec2::new(0.0, 0.0), thickness: 0.2, ..Wall::default() });
+    let w0 = model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.2, 0.0), thickness: 0.2, height: 2.4, ..Wall::default() });
+    let w1 = model.push_wall(Wall { start: Vec2::new(4.2, 0.0), end: Vec2::new(4.2, 3.2), thickness: 0.2, height: 2.4, ..Wall::default() });
+    let w2 = model.push_wall(Wall { start: Vec2::new(4.2, 3.2), end: Vec2::new(0.0, 3.2), thickness: 0.2, height: 2.4, ..Wall::default() });
+    let w3 = model.push_wall(Wall { start: Vec2::new(0.0, 3.2), end: Vec2::new(0.0, 0.0), thickness: 0.2, height: 2.4, ..Wall::default() });
 
     model
 }
@@ -62,7 +62,7 @@ fn base_mesh_probes() {
 #[test]
 fn crown_is_a_closed_ring_mesh() {
     let mut model = test_model();
-    model.rooms[0].moldings = vec![RoomMolding { kind: MoldingKind::Crown, profile: Default::default(), offset: 0.0 }];
+    model.rooms[0].moldings = vec![RoomMolding { kind: MoldingKind::Crown, profile: Default::default(), offset: 0.0, ..Default::default() }];
 
     let scene = build(&model);
     let molding_mesh = scene.meshes.iter().find(|m| m.material.starts_with("molding-room-crown")).expect("crown mesh");

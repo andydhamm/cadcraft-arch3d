@@ -92,7 +92,7 @@ mod tests {
         assert!(trim_interval(&model, &o, Side::Right).is_none());
 
         // Negative frame width treated as 0
-        let o = Opening { host: w, offset: 5.0, width: 0.9, height: 2.1, frame_width: -0.1, ..Opening::default() };
+        let o = Opening { host: w, offset: 5.0, width: 0.9, height: 2.1, frame_width: -0.1, casing_width: 0.0, ..Opening::default() };
         let (s0, s1) = trim_interval(&model, &o, Side::Right).unwrap();
         assert!((s1 - s0 - 0.9).abs() < 1e-9);
     }
