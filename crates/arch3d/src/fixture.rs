@@ -78,7 +78,8 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
     let lens = if f.on { "light-lens-lit" } else { "light-lens" };
     let hw = 0.012 / 2.0;
     let mut parts: Vec<Option<Mesh>> = Vec::new();
-    for (a, b) in f.path.windows(2) {
+    for segment in f.path.windows(2) {
+        let (a, b) = (segment[0], segment[1]);
         if !a.is_finite() || !b.is_finite() {
             continue;
         }
