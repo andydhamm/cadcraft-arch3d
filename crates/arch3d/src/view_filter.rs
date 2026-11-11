@@ -192,7 +192,10 @@ pub fn cutaway_hidden(model: &ArchModel, eye: Vec3, level: u32) -> Hidden {
 }
 
 /// Whether `w`'s outer face points toward `eye` (in plan).
-fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::Room], eye: &Vec2) -> bool {
+///
+/// `outer_centroid` is the average centre-line midpoint of the level's exterior walls; it
+/// decides which side of a wall is "outer" when no room is on either side.
+fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::Room], outer_centroid: &Vec2, eye: &Vec2) -> bool {
     let dx = w.end.x - w.start.x;
     let dy = w.end.y - w.start.y;
     let len = (dx * dx + dy * dy).sqrt();
@@ -215,8 +218,7 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
         (true, false) => outer_is_a = false,
         (false, true) => outer_is_a = true,
         (false, false) => {
-            let centroid = Vec2::new(mid.x, mid.y);
-            outer_is_a = side_a.dist(centroid) >= side_b.dist(centroid);
+            outer_is_a = side_a.dist(outer_centroid) >= side_b.dist(outer_centroid);
         }
     }
 
