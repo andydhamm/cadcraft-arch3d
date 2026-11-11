@@ -119,6 +119,7 @@ fn molding_run(model: &ArchModel, c: &Cabinet, crown: bool) -> Option<MoldingRun
         profile,
         closed: false,
         side: 1.0,
+        ..Default::default()
     })
 }
 
@@ -131,11 +132,11 @@ mod tests {
     use cadcraft_doc::arch::{FaceLayout, FaceRow};
 
     fn crown() -> Option<CabinetMolding> {
-        Some(CabinetMolding { profile: builtin_profile("molding:crown").unwrap_or_default(), size: None })
+        Some(CabinetMolding { profile: builtin_profile("molding:crown").unwrap_or_default(), size: None, ..Default::default() })
     }
 
     fn rail() -> Option<CabinetMolding> {
-        Some(CabinetMolding { profile: builtin_profile("molding:casing").unwrap_or_default(), size: None })
+        Some(CabinetMolding { profile: builtin_profile("molding:casing").unwrap_or_default(), size: None, ..Default::default() })
     }
 
     fn wall_cab(id: u32, x: f64) -> Cabinet {
@@ -196,9 +197,9 @@ mod tests {
         assert!((r.path[1].y - 0.286).abs() < 1e-9);
         // A face layout of only openings is a box front too; a door row is the face.
         c.fronts = Fronts::Doors;
-        c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Opening, ..Default::default() }] });
+        c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Opening, ..Default::default() }], ..Default::default() });
         assert!((crown_run(&m, &c).unwrap().path[1].y - 0.286).abs() < 1e-9);
-        c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Door, ..Default::default() }] });
+        c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Door, ..Default::default() }], ..Default::default() });
         assert!((crown_run(&m, &c).unwrap().path[1].y - 0.305).abs() < 1e-9);
         // A filler counts as fronted.
         c.face = None;
