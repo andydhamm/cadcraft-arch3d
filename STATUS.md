@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 13:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 38 of 39 segments merged · 19 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 13:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 19 / 20 | 57.8 h so far · expected done Nov 11 15:55–Nov 13 11:15 UTC |
+| 16 | Ceilings and foundations | building | 19 / 20 | 58.0 h so far · expected done Nov 11 16:10–Nov 13 11:30 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | — |
 | 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | building | 0 / 17 | — |
@@ -62,15 +62,15 @@ Updated 2026-11-11 13:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1099 |
-| bonsai-b | bonsai2-27b | agent | 1059 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1156 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1096 |
+| bonsai-a | bonsai2-27b | gate | 1100 |
+| bonsai-b | bonsai2-27b | agent | 1060 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1158 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1098 |
 | claude-sonnet-a | sonnet | merging | 117 |
-| claude-sonnet-b | sonnet | agent | 116 |
-| claude-sonnet-c | sonnet | idle | 59 |
+| claude-sonnet-b | sonnet | merging | 117 |
+| claude-sonnet-c | sonnet | gate | 59 |
 | claude-sonnet-d | sonnet | idle | 50 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 966 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 967 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 77 |
 | mai-flash-b | mai-code-1.1-flash | idle | 19 |
