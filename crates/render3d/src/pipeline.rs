@@ -505,6 +505,14 @@ struct Built {
     tex_bgl: wgpu::BindGroupLayout,
 }
 
+/// The depth bias of every main-pass mesh pipeline (plain, shadowed, lit): fills are pushed back a little, most where
+/// they face the camera at a grazing angle (slope-scaled), so the edge lines drawn after them win the depth test.
+/// A silhouette edge lies exactly on a smooth surface's outline, where the front face next to it is nearer the camera
+/// than the edge (2026-11-10: on the sample desk lamp's stem that face was ~5e-4 nearer in depth a pixel inside the
+/// outline); without the bias every silhouette lost the test and technical illustration drew no outline at all. Lines
+/// on the face itself (creases) stop z-fighting with it too. The shadow-map pass keeps its own bias.
+pub(crate) const FILL_DEPTH_BIAS: wgpu::DepthBiasState = wgpu::DepthBiasState { constant: 2, slope_scale: 2.0, clamp: 0.0 };
+
 /// Build the render pipelines and related resources.
 fn create_all(device: &wgpu::Device, sample_count: u32) -> Built {
     let sample_count = valid_sample_count(sample_count);
@@ -556,7 +564,7 @@ fn create_all(device: &wgpu::Device, sample_count: u32) -> Built {
                 depth_write_enabled: Some(depth_write),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
+                bias: FILL_DEPTH_BIAS,
             }),
             multisample: wgpu::MultisampleState { count: sample_count, mask: !0, alpha_to_coverage_enabled: false },
             fragment: Some(wgpu::FragmentState {

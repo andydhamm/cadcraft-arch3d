@@ -391,3 +391,54 @@ fn projected_scene_bounds_match_the_rendered_silhouette_where_the_bounding_box_d
     let gap = (0..4).map(|k| (tight[k] - boxed[k]).abs()).fold(0.0f32, f32::max);
     assert!(gap > 3.0, "the scene fills its bounding box; this test needs one that does not ({tight:?} vs {boxed:?})");
 }
+
+/// A smooth vertical cylinder (radius 1, z -2..2, `sides` faces, one shared vertex per corner with a radial normal).
+fn smooth_cylinder(sides: u32) -> Mesh {
+    let mut m = Mesh::new("wall", ArchId(1));
+    for k in 0..sides {
+        let a = std::f32::consts::TAU * k as f32 / sides as f32;
+        let (x, y) = (a.cos(), a.sin());
+        for z in [-2.0_f32, 2.0] {
+            m.positions.push([x, y, z]);
+            m.normals.push([x, y, 0.0]);
+            m.uvs.push([x, z]);
+        }
+    }
+    for k in 0..sides {
+        let n = (k + 1) % sides;
+        let (b0, t0, b1, t1) = (2 * k, 2 * k + 1, 2 * n, 2 * n + 1);
+        m.indices.extend_from_slice(&[b0, b1, t1, b0, t1, t0]);
+    }
+    m
+}
+
+/// Phase-16 check 18 (technical silhouettes): a smooth surface's outline is drawn in the technical line colour on both
+/// sides, its middle stays the flat fill. The silhouette edges lie exactly on the outline, where the adjacent front face
+/// is nearer the camera than the edge; without a slope-scaled depth bias on the fill they lose the depth test and no
+/// line shows (2026-11-10: 0 of 120 rows of the sample desk lamp's stem were outlined).
+#[test]
+fn technical_outlines_a_smooth_cylinder() {
+    let Some(mut r) = renderer((96, 96)) else { return };
+    let s = scene(vec![smooth_cylinder(32)]);
+    let cam = Camera::Orbit(Orbit::at_origin(-90.0, 0.0, 12.0, 45.0));
+    r.render_with(&s, 1, &cam, &Light::DEFAULT, &RenderOptions { style: Style::Technical, ..Default::default() });
+    let img = r.read_rgba().expect("readback");
+    let lum = |p: [u8; 4]| 0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2]);
+    let bg = clear_srgb();
+    let (mut rows, mut lined, mut inside) = (0, 0, 0);
+    for y in 30..66 {
+        let xs: Vec<u32> = (0..96).filter(|&x| !close(px(&img, 96, x, y), bg, 12)).collect();
+        let (Some(&xl), Some(&xr)) = (xs.first(), xs.last()) else { continue };
+        if xr - xl < 8 {
+            continue;
+        }
+        rows += 1;
+        let dark = |x: u32| lum(px(&img, 96, x, y)) < 60.0;
+        lined += usize::from((xl..xl + 2).any(dark) && (xr - 1..=xr).any(dark));
+        let third = (xr - xl) / 3;
+        inside += usize::from((xl + third..=xr - third).any(dark));
+    }
+    assert!(rows >= 20, "the cylinder is drawn across the middle rows: {rows}");
+    assert!(lined * 10 >= rows * 8, "both sides of the outline carry the line colour on most rows: {lined} of {rows}");
+    assert!(inside * 10 <= rows * 2, "the smooth middle draws no lines: {inside} of {rows} rows have a dark pixel there");
+}
