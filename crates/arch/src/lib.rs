@@ -18,11 +18,15 @@ pub use cadcraft_doc::{
 };
 
 pub mod area;
+pub mod backsplash;
 pub mod casework;
+pub mod casework_corner;
+pub mod casework_face;
 pub mod casework_layout;
 pub mod casework_symbol;
 pub mod ceiling;
 pub mod connections;
+pub mod countertop;
 pub mod deck;
 pub mod detect;
 pub mod electrical;
@@ -37,6 +41,8 @@ pub mod label;
 pub mod library;
 pub mod light;
 pub mod light_symbol;
+pub mod molding_profile;
+pub mod molding_runs;
 pub mod opening;
 pub mod opening_top;
 pub mod outlets;

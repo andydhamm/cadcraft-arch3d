@@ -124,6 +124,8 @@ fn unpainted(model: &ArchModel, s: &Surface) -> String {
             let key = model.furnishing(*furnishing).map(|f| f.symbol.as_str()).unwrap_or("");
             format!("sym:{key}:{part}")
         }
+        Surface::Countertop(_) => default("counter"),
+        Surface::Backsplash(_) => default("backsplash"),
     }
 }
 
@@ -183,7 +185,34 @@ pub fn surfaces(model: &ArchModel) -> Vec<SurfaceInfo> {
             out.push(info(model, Surface::Furnishing { furnishing: f.id, part }, room, f.level));
         }
     }
+    for ct in &model.countertops {
+        let room = cadcraft_geom::region::interior_point(&ct.polygon).and_then(|p| room_at(model, ct.level, p));
+        out.push(info(model, Surface::Countertop(ct.id), room, ct.level));
+    }
+    if !model.backsplashes.is_empty() {
+        let outlines = crate::countertop::outlines(model);
+        for b in &model.backsplashes {
+            let room = backsplash_outline(&outlines, b).and_then(|o| {
+                let (p, q) = (o.ring.first()?, o.ring.get(1)?);
+                room_at(model, b.level, p.mid(*q))
+            });
+            out.push(info(model, Surface::Backsplash(b.id), room, b.level));
+        }
+    }
     out
+}
+
+/// The counter outline a backsplash follows.
+fn backsplash_outline<'a>(
+    outlines: &'a [crate::countertop::CounterOutline],
+    b: &cadcraft_doc::arch::Backsplash,
+) -> Option<&'a crate::countertop::CounterOutline> {
+    use crate::countertop::CounterKey;
+    use cadcraft_doc::arch::CounterRef;
+    match b.counter? {
+        CounterRef::Countertop(id) => outlines.iter().find(|o| o.key == Some(CounterKey::Custom(id))),
+        CounterRef::Cabinet(id) => outlines.iter().find(|o| o.cabinets.contains(&id)),
+    }
 }
 
 fn find<'a>(all: &'a [SurfaceInfo], target: &Surface) -> Result<&'a SurfaceInfo, String> {
@@ -681,5 +710,41 @@ mod tests {
         assert!(got.contains(&Surface::Furnishing { furnishing: f1, part: 0 }));
         assert!(got.contains(&part1_f0));
         assert_eq!(got.len(), 3);
+    }
+
+    fn square_ct(m: &mut ArchModel, x0: f64, y0: f64, x1: f64, y1: f64) -> ArchId {
+        m.push_countertop(cadcraft_doc::arch::Countertop { polygon: rect(x0, y0, x1, y1), ..Default::default() })
+    }
+
+    #[test]
+    fn countertop_and_backsplash_surfaces_are_listed_with_their_room() {
+        let (mut m, _, r) = boxed();
+        let ct = square_ct(&mut m, 1.5, 1.5, 2.5, 2.5);
+        let bs =
+            m.push_backsplash(cadcraft_doc::arch::Backsplash { counter: Some(cadcraft_doc::arch::CounterRef::Countertop(ct)), ..Default::default() });
+        let loose = m.push_backsplash(cadcraft_doc::arch::Backsplash::default());
+        let all = surfaces(&m);
+        let n = all.len();
+        assert_eq!(all[n - 3].surface, Surface::Countertop(ct));
+        assert_eq!(all[n - 3].room, Some(r));
+        assert_eq!(all[n - 2].surface, Surface::Backsplash(bs));
+        assert_eq!(all[n - 2].room, Some(r));
+        assert_eq!(all[n - 1].surface, Surface::Backsplash(loose));
+        assert_eq!(all[n - 1].room, None);
+    }
+
+    #[test]
+    fn unpainted_countertop_is_default_counter() {
+        let (mut m, _, _) = boxed();
+        let ct = square_ct(&mut m, 1.5, 1.5, 2.5, 2.5);
+        assert_eq!(info_of(&m, &Surface::Countertop(ct)).material, "default:counter");
+    }
+
+    #[test]
+    fn unpainted_backsplash_is_default_backsplash() {
+        let (mut m, _, _) = boxed();
+        let bs = m.push_backsplash(cadcraft_doc::arch::Backsplash::default());
+        assert_eq!(info_of(&m, &Surface::Backsplash(bs)).material, "default:backsplash");
+        assert!(finish_fits(&Surface::Backsplash(bs), Finish::Siding));
     }
 }

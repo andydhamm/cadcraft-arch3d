@@ -6,8 +6,10 @@
 # saved cameras and both level plans render non-blank. (2) The showcase house (docs/arch3d/showcase/bilevel.json):
 # its two stairs get their automatic side railings, a rear deck with its railing, grilles on its windows and one
 # round top; the Entry plan carries UP and DN stair symbols.
+# Non-blank: a camera render has 5..99 % of its pixels off the clear colour; a plan is a line drawing (thin lines on
+# the clear colour), taken as phase-15 check 11 and phase-16 check 20 take plans: 0.5..99 %. Both need luma sd > 2.
 # A stub fails: a missing or partly refused commands file, no railings, no frame, no grille, old stair linework.
-# needs: p17-stair-flight, p17-wall-under-flight, p17-stair-plan, p17-railing-auto, p17-deck-frame, p17-grilles-doors, p17-window-tops, p17-demo
+# needs: p17-stair-flight, p17-wall-under-flight, p17-stair-plan, p17-railing-auto, p17-deck-frame, p17-grilles-doors, p17-window-tops, p17-demo, p17f-railing-auto-contact, p17f-showcase-phase17
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p17lib.inc')).read())
 
@@ -49,8 +51,13 @@ def check_house(insp, what, want_dashed):
         fail(f"{what}: a deck against the house with a ledger, at least 9 joists and posts: "
              f"{[(d.get('id'), d.get('ledger'), len(d.get('joists') or []), len(d.get('posts') or [])) for d in decks]}")
     D = framed[0]['id']
-    if not [r for r in railings_by_host(insp, 'deck') if r.get('follows') == D]:
+    rails = [r for r in railings_by_host(insp, 'deck') if r.get('follows') == D]
+    if not rails:
         fail(f"{what}: deck {D} has its railing: {[(r.get('id'), r.get('host'), r.get('follows')) for r in railings_of(insp)]}")
+    for r in rails:
+        p = r.get('path') or []
+        if len(p) >= 2 and abs(p[0][0] - p[-1][0]) < 1e-9 and abs(p[0][1] - p[-1][1]) < 1e-9:
+            fail(f"{what}: deck {D} is against the house, so its railing {r.get('id')} leaves the ledger edge open (not a closed ring): {p}")
     ops = openings_of(insp)
     gridded = [o for o in ops if isinstance(o.get('grille'), dict) and o['grille'].get('across', 1) * o['grille'].get('down', 1) > 1]
     if len(gridded) < 3:
@@ -93,12 +100,13 @@ replay_file(DEMO, [cmd('export', {"path": l1, "level": lo}), cmd('export', {"pat
             [cmd('render', {"out": sh, "size": [800, 600], "camera": c}) for sh, c in zip(shots, CAMS[:2])], "plans and renders")
 check_plan(l1, "the demo's lower plan", True, {'UP'})
 check_plan(l2, "the demo's upper plan", False, {'DN'})
-for path, name in list(zip(shots, CAMS)) + [(p1, 'the lower plan'), (p2, 'the upper plan')]:
+IMAGES = [(sh, f"camera {c}", 0.05) for sh, c in zip(shots, CAMS)] + [(p1, 'the lower plan', 0.005), (p2, 'the upper plan', 0.005)]
+for path, name, low in IMAGES:
     if not os.path.exists(path):
         fail(f"{name}: no image written")
     frac, sd = foreground(path)
-    if not (0.05 <= frac <= 0.99) or sd <= 2:
-        fail(f"{name} renders non-blank: {frac * 100:.1f} % of the pixels differ from the clear colour (5..99 %), luma sd {sd:.2f} (> 2)")
+    if not (low <= frac <= 0.99) or sd <= 2:
+        fail(f"{name} renders non-blank: {frac * 100:.1f} % of the pixels differ from the clear colour ({low * 100:g}..99 %), luma sd {sd:.2f} (> 2)")
     artifact(path, os.path.basename(path))
 print(f"ok: the demo house: stair {s['id']} railed on both sides, deck {D} framed and railed, gridded windows and a round top, a fixed "
       f"sidelight; full stair symbols on both plans; cameras {CAMS[:2]} and both plans render non-blank")

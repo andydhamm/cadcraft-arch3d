@@ -1,7 +1,7 @@
 //! Plan symbols of cabinets and fixtures (phase 13). Local frame: x along the width, centred on
 //! the back edge; y out of the front. Every point is returned in world coordinates.
 
-use cadcraft_doc::arch::{Cabinet, CabinetKind, Fixture, FixtureKind};
+use cadcraft_doc::arch::{ArchModel, Cabinet, CabinetKind, Fixture, FixtureKind};
 use cadcraft_geom::Vec2;
 
 /// How far behind the front edge the fronts line sits (m).
@@ -81,6 +81,20 @@ pub fn cabinet_symbol(c: &Cabinet) -> Vec<Vec<Vec2>> {
         _ => {}
     }
     finite(out)
+}
+
+/// The plan symbol of a cabinet in its model: the corner symbol when it has one, else the plain
+/// symbol without its counter ring when a custom countertop claims the cabinet (that countertop
+/// draws the counter).
+pub fn cabinet_symbol_in(model: &ArchModel, c: &Cabinet) -> Vec<Vec<Vec2>> {
+    if let Some(s) = crate::casework_corner::corner_symbol(model, c) {
+        return s;
+    }
+    let mut sym = cabinet_symbol(c);
+    if c.kind == CabinetKind::Base && c.counter && crate::countertop::claimed_cabinets(model).contains(&c.id) {
+        sym.pop();
+    }
+    sym
 }
 
 /// The plan symbol of a fixture: footprint plus the detail of its kind.

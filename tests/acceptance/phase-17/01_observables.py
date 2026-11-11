@@ -42,7 +42,8 @@ if len(drawn) != 1 or drawn[0].get('follows') is not None or drawn[0].get('auto'
 d = drawn[0]
 near(d['postSpacing'], 1.8, 1e-9, "the drawn railing's postSpacing (default 1.8)")
 near(d['inset'], 0.0, 1e-9, "the drawn railing's inset (default 0)")
-same_points(d['posts'], [[12, 0], [13 + 2 / 3, 0], [14 + 2 / 3, 0], [17, 0]], 1e-3, "the drawn railing's posts (5 m at 1.8: 3 bays)")
+# 5 m at 1.8 at most: 3 equal bays of 5/3, so posts at 12, 13.6667, 15.3333 and 17.
+same_points(d['posts'], [[12, 0], [12 + 5 / 3, 0], [12 + 10 / 3, 0], [17, 0]], 1e-3, "the drawn railing's posts (5 m at 1.8: 3 bays)")
 guard = one_railing(insp, 'well', s['id'], "the well guard")
 if guard.get('auto') is not False or guard.get('level') != 1:
     fail(f"the well guard is a phase-5 railing on Level 2 (auto false, level 1): {json.dumps(guard)[:300]}")

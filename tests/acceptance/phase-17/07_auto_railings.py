@@ -11,7 +11,7 @@
 # 1.1994. The north deck's railing: path (6,8.145) (6,11.1) (2,11.1) (2,8.145) inset 0.045 inside, posts at the
 # corners, (5.955,9.6), (4.6517,11.055), (3.3483,11.055), (2.045,9.6); its posts reach down to the rim bottom 0.691.
 # A stub (no automatic railings) fails (a).
-# needs: p17-observables, p17-commands, p17-scene-plumbing, p17-railing-parts, p17-railing-auto
+# needs: p17-observables, p17-commands, p17-scene-plumbing, p17-railing-parts, p17-railing-auto, p17f-railing-auto-contact
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p17lib.inc')).read())
 
@@ -67,9 +67,13 @@ expect_hits(rr, [([5.955, 11.055, 0.75], 'post'), ([5.955, 11.055, 1.70], 'post'
 rr = run_ok(HOUSE + [NORTH_DECK, cmd('deck.edit', {"id": D, "rails": ["auto", "auto", "off", "auto"]}), INSPECT17,
                      cmd('deck.edit', {"id": D, "rails": "off"}), INSPECT17], "deck.edit rails")
 two = railings_by_host(inspected(rr, 0), 'deck')
-paths = sorted(json.dumps(r.get('path')) for r in two)
-if len(two) != 2 or paths != sorted([json.dumps([[6, 8.145], [6, 11.1]]), json.dumps([[2, 11.1], [2, 8.145]])]):
-    fail(f"edge 2 off splits the deck railing in two: {[r.get('path') for r in two]}")
+if len(two) != 2 or not all(isinstance(r.get('path'), list) and len(r['path']) == 2 and isinstance(r['path'][0], list)
+                            and len(r['path'][0]) >= 2 for r in two):
+    fail(f"edge 2 off splits the deck railing in two (two 2-point paths): {[r.get('path') for r in two]}")
+two.sort(key=lambda r: -num(r['path'][0][0], 'path x'))
+# The end at the house wall is pulled 0.045 back; the end at the switched-off free edge stays on the corner.
+same_points(two[0]['path'], [[6, 8.145], [6, 11.1]], 1e-6, "edge 2 off: the east railing (edge 1)")
+same_points(two[1]['path'], [[2, 11.1], [2, 8.145]], 1e-6, "edge 2 off: the west railing (edge 3)")
 if railings_by_host(inspected(rr, 1), 'deck'):
     fail(f"rails off removes every deck railing: {[(r.get('id'), r.get('host')) for r in railings_of(inspected(rr, 1))]}")
 print(f"ok: deck {D}: one railing on the three free edges with 8 posts reaching the rims; edge 2 off splits it; rails off removes it")
@@ -77,8 +81,9 @@ print(f"ok: deck {D}: one railing on the three free edges with 8 posts reaching 
 # (d) A free-standing deck: one closed railing.
 rr = run_ok([free_deck(12), INSPECT17], "a free-standing deck")
 fd = railings_by_host(inspected(rr), 'deck')
-if len(fd) != 1 or len(fd[0].get('path') or []) != 5 or json.dumps(fd[0]['path'][0]) != json.dumps(fd[0]['path'][-1]):
+if len(fd) != 1 or len(fd[0].get('path') or []) != 5:
     fail(f"a deck touching no wall gets one closed railing (5 path points, first = last): {[r.get('path') for r in fd]}")
+same_points([fd[0]['path'][-1]], [fd[0]['path'][0][:2]], 1e-9, "the closed railing's last point equals its first")
 if len(fd[0].get('posts') or []) != 10:
     fail(f"the closed railing has 10 posts (4 corners + 2 + 1 + 2 + 1): {len(fd[0].get('posts') or [])}")
 print("ok: a free-standing deck: one closed railing, 10 posts")

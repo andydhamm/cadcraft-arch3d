@@ -55,12 +55,12 @@ fn mesh_shader_lighting_formula() {
     let src = shader_source();
     // Metallic-roughness PBR: ambient + (Lambert diffuse + GGX specular) * radiance * N·L
     assert!(src.contains("max(dot(n, l), 0.0)"), "shader must clamp N·L at 0");
-    assert!(src.contains("let c = amb + lit;"), "shader must add ambient and direct lighting");
+    assert!(src.contains("s.direct + base_ambient("), "shader must add ambient and direct lighting");
 }
 
 #[test]
 fn mesh_shader_returns_opaque_color() {
     let src = shader_source();
     // Opaque by default (alpha 1.0); only glass (alpha < 1) blends.
-    assert!(src.contains("return vec4<f32>(c, alpha);"), "fragment shader must return the material alpha");
+    assert!(src.contains("s.alpha = clamp(p.alpha, 0.0, 1.0);"), "fragment shader must return the material alpha");
 }

@@ -74,28 +74,28 @@ pub struct GlassRect {
 /// glass plane. Bars are split into independent rectangles so they never overlap.
 pub fn grille_bars(o: &Opening, glass: &GlassRect) -> Vec<[f64; 4]> {
     let Some(g) = o.grille else { return Vec::new() };
-    let across = g.across.min(MAX_GRILLE_LITES);
-    let down = g.down.min(MAX_GRILLE_LITES);
-    if across <= 1 || down <= 1 || across * down <= 1 {
+    let across = g.across.max(1).min(MAX_GRILLE_LITES);
+    let down = g.down.max(1).min(MAX_GRILLE_LITES);
+    if across * down <= 1 {
         return Vec::new();
     }
 
     let bar = 0.02;
     let half = bar / 2.0;
-    let top_start = (glass.z0 + glass.z1) / 2.0;
-    let z0 = if g.top_only { top_start } else { glass.z0 };
+    let pz0 = if g.top_only { (glass.z0 + glass.z1) / 2.0 } else { glass.z0 };
     let z1 = glass.z1;
+    let u0 = glass.u0;
+    let u1 = glass.u1;
 
     let mut bars: Vec<[f64; 4]> = Vec::new();
-
     let mut verticals: Vec<f64> = Vec::new();
     for k in 1..across {
-        let u = glass.u0 + (k as f64 / across as f64) * (glass.u1 - glass.u0);
+        let u = u0 + (k as f64 / across as f64) * (u1 - u0);
         verticals.push(u);
-        bars.push([u - half, u + half, z0, z1]);
+        bars.push([u - half, u + half, pz0, z1]);
     }
 
-    let mut segments = vec![(glass.u0, glass.u1)];
+    let mut segments = vec![(u0, u1)];
     for u in &verticals {
         let lo = *u - half;
         let hi = *u + half;
@@ -116,16 +116,12 @@ pub fn grille_bars(o: &Opening, glass: &GlassRect) -> Vec<[f64; 4]> {
     }
 
     for k in 1..down {
-        let z = glass.z0 + (k as f64 / down as f64) * (glass.z1 - glass.z0);
-        if g.top_only && z < top_start {
-            continue;
-        }
-        let hz = bar / 2.0;
+        let z = pz0 + (k as f64 / down as f64) * (z1 - pz0);
         for (s, e) in &segments {
             if *s >= *e {
                 continue;
             }
-            bars.push([*s, *e, z - hz, z + hz]);
+            bars.push([*s, *e, z - half, z + half]);
         }
     }
 
@@ -488,20 +484,16 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
     if has_glass(o) && !shaped {
         let glass_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, 0.006, wall_t);
         let glass_rect = GlassRect { u0: -w / 2.0 + fw, u1: w / 2.0 - fw, z0: frame_z0 + fw, z1: frame_z1 - fw, ..Default::default() };
-        if let Some(g) = o.grille {
-            let across = g.across.min(MAX_GRILLE_LITES);
-            let down = g.down.min(MAX_GRILLE_LITES);
-            if across > 1 && down > 1 && across * down > 1 {
-                for [u0, u1, z0, z1] in grille_bars(o, &glass_rect) {
-                    push_box(
-                        &format!("{}-grille", kind_prefix),
-                        center + dir * u0 + normal * glass_off,
-                        center + dir * u1 + normal * glass_off,
-                        z0,
-                        z1,
-                        0.02,
-                    );
-                }
+        if o.grille.is_some() {
+            for [u0, u1, z0, z1] in grille_bars(o, &glass_rect) {
+                push_box(
+                    &format!("{}-grille", kind_prefix),
+                    center + dir * u0 + normal * glass_off,
+                    center + dir * u1 + normal * glass_off,
+                    z0,
+                    z1,
+                    0.02,
+                );
             }
         }
         push_box(

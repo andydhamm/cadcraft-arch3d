@@ -19,6 +19,10 @@ pub enum FrontKind {
     Drawer,
     /// Fixed panel (no pull) in place of a drawer or door strip.
     False,
+    /// An open face: no front is drawn.
+    Opening,
+    /// A face appliance, drawn by the face-appliance builder rather than the front loop.
+    Appliance,
 }
 
 /// Which side a door is hinged on.
@@ -58,6 +62,9 @@ fn hinge_of(i: usize, n: usize) -> Hinge {
 
 /// The fronts of a cabinet, in the order arch3d builds them.
 pub fn fronts(model: &ArchModel, c: &Cabinet) -> Vec<FrontInfo> {
+    if let Some(face) = &c.face {
+        return crate::casework_face::face_fronts(model, c, face);
+    }
     let toe = if c.toe_kick { 0.1 } else { 0.0 };
     let usable = c.height - toe;
     let e = c.elevation;
@@ -75,7 +82,7 @@ pub fn fronts(model: &ArchModel, c: &Cabinet) -> Vec<FrontInfo> {
             None
         } else {
             match kind {
-                FrontKind::False => None,
+                FrontKind::False | FrontKind::Opening | FrontKind::Appliance => None,
                 FrontKind::Drawer => Some([(x0 + x1) / 2.0, (v0 + v1) / 2.0]),
                 FrontKind::Door => {
                     let u = if hinge == Some(Hinge::Right) { x0 + 0.05 } else { x1 - 0.05 };
@@ -90,6 +97,7 @@ pub fn fronts(model: &ArchModel, c: &Cabinet) -> Vec<FrontInfo> {
     let door_w = (c.width - GAP * (n_doors as f64 + 1.0)) / n_doors as f64;
 
     match c.fronts {
+        Fronts::Open => {}
         Fronts::Doors => {
             let door_top = if cutout { usable - 0.15 - GAP } else { usable };
             for i in 0..n_doors {
@@ -246,7 +254,8 @@ pub fn counter_runs(model: &ArchModel) -> Vec<CounterRun> {
     let top = |c: &Cabinet| c.elevation + c.height;
     let ok = |a: &Cabinet, b: &Cabinet| (top(a) - top(b)).abs() <= EPS && (a.counter_thickness - b.counter_thickness).abs() <= EPS;
     let mut runs = Vec::new();
-    for line in lines(model, ok, |c| c.counter) {
+    let claimed = crate::countertop::claimed_cabinets(model);
+    for line in lines(model, ok, |c| c.counter && !claimed.contains(&c.id)) {
         let mut cur: Vec<(usize, f64)> = Vec::new();
         let mut bridged: Vec<ArchId> = Vec::new();
         let flush = |cur: &mut Vec<(usize, f64)>, bridged: &mut Vec<ArchId>, runs: &mut Vec<CounterRun>| {
@@ -343,6 +352,23 @@ mod tests {
             toe_kick: true,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn fronts_of_an_open_cabinet_are_empty() {
+        let c = cab(0, 0.0, Fronts::Open);
+        assert!(fronts(&model(vec![c.clone()]), &c).is_empty());
+    }
+
+    #[test]
+    fn a_face_layout_dispatches_to_face_fronts() {
+        // The stub returns no fronts whatever the plain fields say; a cabinet without a layout keeps them.
+        let mut c = cab(0, 0.0, Fronts::Doors);
+        let m = model(vec![c.clone()]);
+        assert_eq!(fronts(&m, &c).len(), 1);
+        let face = cadcraft_doc::arch::FaceLayout::default();
+        c.face = Some(face.clone());
+        assert_eq!(fronts(&m, &c), crate::casework_face::face_fronts(&m, &c, &face));
     }
 
     fn model(cabs: Vec<Cabinet>) -> ArchModel {

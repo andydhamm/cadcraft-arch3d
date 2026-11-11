@@ -76,6 +76,8 @@ pub(crate) fn cabinet_meshes_in(model: &ArchModel, c: &Cabinet, runs: &[CounterR
             FrontKind::Door => c.door_style,
             FrontKind::Drawer => c.drawer_style,
             FrontKind::False => FrontStyle::Slab,
+            // Not drawn by the front loop: an opening has no front, an appliance is built elsewhere.
+            FrontKind::Opening | FrontKind::Appliance => continue,
         };
         push_front(&mut front, &frame, style, c.depth, [u0, floor + v0, u1, floor + v1]);
     }

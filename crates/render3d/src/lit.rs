@@ -25,11 +25,24 @@ pub struct LitParams {
     pub tonemap: bool,
     /// PCF radius in texels for fixture and sun shadows (0 = one tap; Finalize uses 2).
     pub pcf_radius: u32,
+    /// Ambient illuminance in lux (0 = unset); written to `FrameU.ext.x`.
+    pub ambient_lux: f32,
+    /// Second-order spherical-harmonic ambient (nine rgb coefficients), when there is one.
+    pub sh: Option<[[f32; 3]; 9]>,
 }
 
 impl Default for LitParams {
     fn default() -> Self {
-        LitParams { sun_on: true, sun_intensity: 1.0, ambient: 0.25, exposure: crate::lights::DEFAULT_EXPOSURE, tonemap: false, pcf_radius: 0 }
+        LitParams {
+            sun_on: true,
+            sun_intensity: 1.0,
+            ambient: 0.25,
+            exposure: crate::lights::DEFAULT_EXPOSURE,
+            tonemap: false,
+            pcf_radius: 0,
+            ambient_lux: 0.0,
+            sh: None,
+        }
     }
 }
 
@@ -79,6 +92,13 @@ pub fn frame_uniform(sun: Option<&ShadowMap>, params: &LitParams, atlas_size: u3
         params.pcf_radius.min(8) as f32,
         atlas_size as f32,
     ]);
+    // ext: x ambient lux, y = 1 when the SH is valid; then nine SH vec4s (rgb, w unused).
+    let sh_valid = params.sh.is_some_and(|sh| sh.iter().flatten().all(|c| c.is_finite()));
+    words.extend_from_slice(&[finite(params.ambient_lux, 0.0).max(0.0), if sh_valid { 1.0 } else { 0.0 }, 0.0, 0.0]);
+    let sh = if sh_valid { params.sh.unwrap_or([[0.0; 3]; 9]) } else { [[0.0; 3]; 9] };
+    for c in sh {
+        words.extend_from_slice(&[c[0], c[1], c[2], 0.0]);
+    }
     let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
     debug_assert_eq!(bytes.len() as u64, FRAME_UNIFORM_SIZE);
     bytes
@@ -94,6 +114,9 @@ pub struct LitFrame {
     /// Lights drawn and lights shadowed in this frame.
     pub lights: usize,
     pub shadowed: usize,
+    /// What the frame was lit with (set by `Offscreen::lit_frame`; the default from
+    /// [`LitFrame::new`]); the per-frame `frame_look` reads it.
+    pub lighting: crate::lit_frame::Lighting,
 }
 
 impl LitFrame {
@@ -131,7 +154,7 @@ impl LitFrame {
         });
         let (sun_intensity, ambient) =
             if params.sun_on { (params.sun_intensity, params.ambient) } else { (0.0, crate::lights::NIGHT_AMBIENT.min(params.ambient)) };
-        LitFrame { bind_group, sun_intensity, ambient, lights: counts.0, shadowed: counts.1 }
+        LitFrame { bind_group, sun_intensity, ambient, lights: counts.0, shadowed: counts.1, lighting: Default::default() }
     }
 }
 
@@ -179,13 +202,15 @@ impl LitPipelines {
     }
 }
 
-const MESH_FRAGMENT: &str = "@fragment fn fs(v: VOut) -> @location(0) vec4<f32> {";
+pub(crate) const MESH_FRAGMENT: &str = "@fragment fn fs(v: VOut) -> @location(0) vec4<f32> {";
 
-/// Compose the lit shader without changing the phase-6 mesh shader used by the unlit pipelines.
+/// Compose the lit shader without changing the phase-6 mesh shader used by the unlit pipelines:
+/// everything in `mesh.wgsl` before its fragment function (so `shade_parts` and the hook functions
+/// are in scope), then the light maths and `lit.wgsl`, whose `fs` replaces the mesh one.
 fn lit_shader_source() -> Option<String> {
     let mesh = include_str!("shaders/mesh.wgsl");
-    let (before, after) = mesh.split_once(MESH_FRAGMENT)?;
-    Some(format!("{before}fn fs_base(v: VOut) -> vec4<f32> {{{after}\n{}\n{}", crate::lights::LIGHT_MATH_WGSL, include_str!("shaders/lit.wgsl")))
+    let (before, _) = mesh.split_once(MESH_FRAGMENT)?;
+    Some(format!("{before}\n{}\n{}", crate::lights::LIGHT_MATH_WGSL, include_str!("shaders/lit.wgsl")))
 }
 
 /// Build one main-pass variant over the shared mesh vertex and bind-group layouts.
@@ -330,6 +355,22 @@ mod tests {
     }
 
     #[test]
+    fn frame_uniform_256_and_zero_by_default() {
+        assert_eq!(FRAME_UNIFORM_SIZE, 256);
+        let bytes = frame_uniform(None, &LitParams::default(), 512);
+        assert_eq!(bytes.len(), 256);
+        assert!(bytes[96..].iter().all(|&b| b == 0), "ext and sh are zero by default");
+        let sh = [[1.0, 2.0, 3.0]; 9];
+        let on = frame_uniform(None, &LitParams { ambient_lux: 40.0, sh: Some(sh), ..Default::default() }, 512);
+        let word = |at: usize| f32::from_le_bytes([on[at], on[at + 1], on[at + 2], on[at + 3]]);
+        assert_eq!((word(96), word(100)), (40.0, 1.0));
+        assert_eq!((word(112), word(116), word(120), word(124)), (1.0, 2.0, 3.0, 0.0));
+        assert_eq!(word(240), 1.0, "the ninth coefficient ends the block");
+        let bad = frame_uniform(None, &LitParams { sh: Some([[f32::NAN; 3]; 9]), ..Default::default() }, 512);
+        assert!(bad[96..].iter().all(|&b| b == 0), "a non-finite SH is not sent");
+    }
+
+    #[test]
     fn lit_pipelines_build_on_the_test_device() {
         let Some((device, queue)) = skip_without_device() else { return };
         let gpu = GpuPipeline::new(&device, &queue, 1);
@@ -380,7 +421,8 @@ mod tests {
         let prefix = mesh.split_once(MESH_FRAGMENT).map(|(before, _)| before);
         if let (Some(prefix), Some(source)) = (prefix, lit_shader_source()) {
             assert!(source.starts_with(prefix));
-            assert!(source.contains("fn fs_base(v: VOut) -> vec4<f32> {"));
+            assert!(source.contains("fn shade_parts(v: VOut) -> Shade {"));
+            assert!(!source.contains(MESH_FRAGMENT), "the mesh fragment is replaced by the lit one");
             assert!(source.ends_with(include_str!("shaders/lit.wgsl")));
         } else {
             assert!(false, "the lit shader must preserve the original mesh shader");

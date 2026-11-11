@@ -35,6 +35,7 @@ pub fn default_colour(part: &str) -> [f32; 4] {
         "cabinet" => [222.0 / 255.0, 184.0 / 255.0, 135.0 / 255.0],
         "counter" => [160.0 / 255.0, 160.0 / 255.0, 160.0 / 255.0],
         "pull" => [192.0 / 255.0, 192.0 / 255.0, 192.0 / 255.0],
+        "backsplash" => [0.9, 0.9, 0.88],
         "fixture" => [240.0 / 255.0, 240.0 / 255.0, 240.0 / 255.0],
         _ => [0.7, 0.7, 0.7],
     };
@@ -53,6 +54,8 @@ fn part_name(surface: &Surface) -> &'static str {
         Surface::Cabinet { .. } => "cabinet",
         Surface::Fixture(_) => "fixture",
         Surface::Furnishing { .. } => "furnishing",
+        Surface::Countertop(_) => "counter",
+        Surface::Backsplash(_) => "backsplash",
     }
 }
 

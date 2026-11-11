@@ -99,15 +99,24 @@ fn parse_room_type(s: &str) -> Option<RoomType> {
 /// arch model's levels. Mirrors `cmd/arch/level.rs`'s `find_level` but reads a plain `&str`.
 /// An unknown name/index is an error, never a silent fallback to level 0.
 fn find_room_level(arch: &cadcraft_doc::arch::ArchModel, ref_val: &str) -> Result<usize> {
-    if let Some(i) = ref_val.trim().parse::<u64>().ok() {
+    let s = ref_val.trim();
+    // Try integer parse first, then float (accepting only integer-valued floats like 1.0 or 1e0).
+    if let Ok(i) = s.parse::<u64>() {
         if i < arch.levels.len() as u64 {
             return Ok(i as usize);
         }
+    } else if let Ok(f) = s.parse::<f64>() {
+        if f.is_finite() && f >= 0.0 && (f % 1.0) == 0.0 && f <= u64::MAX as f64 {
+            let i = f as u64;
+            if i < arch.levels.len() as u64 {
+                return Ok(i as usize);
+            }
+        }
     }
-    if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == ref_val.trim()) {
+    if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == s) {
         return Ok(i);
     }
-    Err(EngineError::Other(format!("room: unknown level `{ref_val}`")))
+    Err(bad("room", format!("unknown level `{ref_val}`")))
 }
 
 /// Parse an id for the edit path: a string like `"r12"` (case-insensitive, the
@@ -1216,6 +1225,56 @@ mod tests {
         assert_eq!(r["id"].as_str().unwrap(), "r0");
         assert_eq!(s.doc().unwrap().arch.rooms.len(), 1);
         assert_eq!(s.doc().unwrap().arch.rooms[0].level, 1);
+    }
+
+    /// `level: 0` on a one-level drawing is index 0 and creates the room there.
+    #[test]
+    fn room_level_zero_is_index_zero() {
+        let mut s = new_session();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 0 })).unwrap();
+        assert_eq!(r["id"].as_str().unwrap(), "r0");
+        assert_eq!(s.doc().unwrap().arch.rooms[0].level, 0);
+    }
+
+    /// A float with an integer value (`level: 1.0`) resolves to that index, as `1` does.
+    #[test]
+    fn room_level_float_with_integer_value() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 1.0 })).unwrap();
+        assert_eq!(r["id"].as_str().unwrap(), "r0");
+        assert_eq!(s.doc().unwrap().arch.rooms[0].level, 1);
+    }
+
+    /// Scientific notation (`level: 1e0`) is an integer value and resolves to that index.
+    #[test]
+    fn room_level_scientific_notation() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 1e0 })).unwrap();
+        assert_eq!(r["id"].as_str().unwrap(), "r0");
+        assert_eq!(s.doc().unwrap().arch.rooms[0].level, 1);
+    }
+
+    /// An integer past the last level (`level: 99`) is refused, nothing is drawn.
+    #[test]
+    fn room_level_out_of_range_integer() {
+        let mut s = new_session();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 99 }));
+        assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })));
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
+    }
+
+    /// Non-number, non-string `level` values (`true`, `[]`, `{}`) are refused.
+    #[test]
+    fn room_level_non_number_non_string() {
+        let mut s = new_session();
+        for bad in [json!(true), json!([0]), json!({ "index": 0 })] {
+            let p = json!({ "points": square_points(), "level": bad });
+            let r = s.execute("room", &p);
+            assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })), "{bad}: {r:?}");
+        }
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
     }
 
     /// `level: null` is treated as absent and defaults to level 0.

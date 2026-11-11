@@ -867,3 +867,159 @@ fn phase_16_edits_through_commands_keep_the_cache_exact() {
         assert_eq!(inc["rebuilt"], *want, "edit {edit_cmd}: rebuilt {} should be {want}", inc["rebuilt"]);
     }
 }
+
+/// The phase-17 scene: the phase-1 house with Level 2, a 0.1 m wall under a 0.9 m stair, the north
+/// deck with its railing, a drawn railing and a window with a 2 x 2 grille, all through a Session.
+fn phase_17_session() -> Session {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let setup: Vec<(&str, Value)> = vec![
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("wall", json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("wall", json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("roomdetect", json!({})),
+        ("level", json!({"above": 0})),
+        ("wall", json!({"points": [[3, 0], [3, 3]], "thickness": 0.1})),
+        ("stair", json!({"start": [1, 1], "direction": 0, "width": 0.9, "fromLevel": 0, "toLevel": 1})),
+        ("deck", json!({"points": [[2, 8.1], [6, 8.1], [6, 11.1], [2, 11.1], [2, 8.1]], "height": 0.9})),
+        ("railing", json!({"path": [[12, 0], [12, 3], [16, 3]]})),
+        ("window", json!({"wall": "w2", "offset": 6.0, "width": 0.9, "height": 1.2, "sill": 0.9, "grille": {"across": 2, "down": 2}})),
+    ];
+    for (cmd, params) in &setup {
+        s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    s
+}
+
+/// One seeded phase-17 edit of the model of [`phase_17_session`]; returns its label.
+fn phase_17_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
+    *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    let r = (*state >> 33) as usize;
+    match r % 10 {
+        0 => {
+            m.stairs[0].open_risers = !m.stairs[0].open_risers;
+            "stair risers"
+        }
+        1 => {
+            use cadcraft_doc::arch::Stringers;
+            m.stairs[0].stringers = match m.stairs[0].stringers {
+                Stringers::Two => Stringers::Centre,
+                Stringers::Centre => Stringers::None,
+                Stringers::None => Stringers::Two,
+            };
+            "stair stringers"
+        }
+        2 => {
+            m.stairs[0].underside = if m.stairs[0].underside < 0.35 { 0.4 } else { 0.3 };
+            "stair underside"
+        }
+        3 => {
+            m.stairs[0].width = if m.stairs[0].width < 0.95 { 1.0 } else { 0.9 };
+            "stair width"
+        }
+        4 => {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.deck_height.is_some()) {
+                room.deck_height = Some(if room.deck_height == Some(0.9) { 1.0 } else { 0.9 });
+            }
+            "deck height"
+        }
+        5 => {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.deck_height.is_some()) {
+                room.deck_boards = if room.deck_boards.is_some() { None } else { Some(90.0) };
+            }
+            "deck boards"
+        }
+        6 => {
+            if let Some(rail) = m.railings.iter_mut().find(|r| r.follows.is_none()) {
+                rail.post_spacing = if rail.post_spacing > 1.5 { 1.2 } else { 1.8 };
+            }
+            "railing spacing"
+        }
+        7 => {
+            if let Some(rail) = m.railings.iter_mut().find(|r| r.follows.is_none()) {
+                rail.inset = if rail.inset > 0.05 { 0.0 } else { 0.1 };
+            }
+            "railing inset"
+        }
+        8 => {
+            if let Some(o) = m.openings.first_mut() {
+                o.grille = if o.grille.is_some() { None } else { Some(cadcraft_doc::arch::Grille { across: 2, down: 2, ..Default::default() }) };
+            }
+            "grille"
+        }
+        _ => {
+            // The (3,0)-(3,3) wall: its x is 3 or one nudge away.
+            if let Some(w) =
+                m.walls.iter_mut().find(|w| (w.start.y - 0.0).abs() < 1e-9 && (w.end.y - 3.0).abs() < 1e-9 && (w.start.x - 3.0).abs() < 0.06)
+            {
+                let dx = if w.start.x > 3.0 { -0.05 } else { 0.05 };
+                w.start.x += dx;
+                w.end.x += dx;
+            }
+            "wall nudge"
+        }
+    }
+}
+
+#[test]
+fn the_scene_cache_follows_every_phase_17_edit() {
+    let s = phase_17_session();
+    let m = s.doc().expect("a drawing").arch.clone();
+    assert!(
+        m.rooms.iter().any(|r| r.deck_height.is_some()) && m.railings.iter().any(|r| r.follows.is_none()),
+        "the scene has its deck and drawn railing"
+    );
+    assert!(m.openings.first().is_some_and(|o| o.grille.is_some()), "the window has its grille");
+    let most = cache_follows("phase 17", m, 120, 17, phase_17_edit);
+    // Bounds = 1 + the objects whose inputs (incremental.rs) contain the edited data, for this scene:
+    //   stair risers, stair stringers: StairIn only                           -> 1
+    //   stair underside: the stair + the wall under it (WallIn.flight_cuts)    -> 2
+    //   stair width: the stair + the wall under it (its cut follows the width;
+    //     the well is stored, RailSurface's FlightLine has no width)           -> 2
+    //   deck height: DeckIn + its railing's RailSurface::Deck                  -> 2
+    //   deck boards, railing spacing, railing inset: the one object            -> 1
+    //   grille: the opening + its host wall (WallIn.openings holds Openings)   -> 2
+    //   wall nudge: the wall + the walls joined to it + their openings (none
+    //     on w2's neighbours here) + the stair if `against` changes (it does not) -> 3
+    let bounds: BTreeMap<&str, usize> = BTreeMap::from([
+        ("stair risers", 1),
+        ("stair stringers", 1),
+        ("stair underside", 2),
+        ("stair width", 2),
+        ("deck height", 2),
+        ("deck boards", 1),
+        ("railing spacing", 1),
+        ("railing inset", 1),
+        ("grille", 2),
+        ("wall nudge", 3),
+    ]);
+    for (label, bound) in bounds {
+        let built = most.get(label).copied();
+        assert!(built.is_some(), "{label} never ran: {most:?}");
+        assert!(built.unwrap_or(0) <= bound, "{label}: rebuilt {built:?} > {bound}; most: {most:?}");
+    }
+}
+
+#[test]
+fn phase_17_edits_through_commands_keep_the_cache_exact() {
+    let mut s = phase_17_session();
+    let deck = s.doc().expect("a drawing").arch.rooms.iter().find(|r| r.deck_height.is_some()).map(|r| format!("r{}", r.id.0)).expect("a deck room");
+    s.execute("build3d", &json!({"incremental": true})).unwrap();
+    let edits = [
+        ("stair.edit", json!({"id": "s0", "openRisers": true})),
+        ("stair.edit", json!({"id": "s0", "stringers": "centre"})),
+        ("stair.edit", json!({"id": "s0", "underside": 0.4})),
+        ("stair.edit", json!({"id": "s0", "railLeft": "off"})),
+        ("deck.edit", json!({"id": deck, "boards": 45})),
+        ("deck.edit", json!({"id": deck, "height": 1.1})),
+        ("deck.edit", json!({"id": deck, "rails": "off"})),
+        ("arch.opening.move", json!({"opening": "o0", "offset": 5.0})),
+    ];
+    for (cmd, params) in &edits {
+        s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+        let inc = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
+        let full = s.execute("build3d", &json!({"digest": true})).unwrap();
+        assert_eq!(inc["incremental"], true, "{cmd} {params}");
+        assert_eq!(inc["digest"], full["digest"], "{cmd} {params}: the cache differs from the full build");
+    }
+}

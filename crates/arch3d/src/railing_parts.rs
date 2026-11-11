@@ -500,4 +500,122 @@ mod tests {
         let part_hit = crate::probe::probe(&crate::Scene3d { meshes: got.clone(), ..Default::default() }, Vec3::new(0.5, 0.0, 0.95));
         assert!(legacy_hit.is_some() || part_hit.is_some(), "legacy and new railings should be probeable");
     }
+
+    #[test]
+    fn short_path_large_spacing_gives_two_posts() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        r.height = 1.0;
+        r.thickness = 0.05;
+        r.post_spacing = 2.0;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").collect();
+        assert_eq!(posts.len(), 2, "1m path at 2m spacing = 2 posts; got {}", posts.len());
+    }
+
+    #[test]
+    fn coincident_points_in_path_work() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        r.height = 1.0;
+        r.thickness = 0.05;
+        r.post_spacing = 1.0;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        assert!(!meshes.is_empty(), "coincident points should not break railing");
+    }
+
+    #[test]
+    fn collinear_points_treated_as_one_segment() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(2.0, 0.0)];
+        r.height = 1.0;
+        r.thickness = 0.05;
+        r.post_spacing = 1.0;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").collect();
+        assert_eq!(posts.len(), 3, "2m collinear path at 1m spacing = 3 posts; got {}", posts.len());
+    }
+
+    #[test]
+    fn large_path_caps_posts() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(100.0, 0.0)];
+        r.height = 1.0;
+        r.thickness = 0.05;
+        r.post_spacing = 1.8;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        let posts: Vec<_> = meshes.iter().filter(|m| m.material == "railing-post").collect();
+        assert!(posts.len() <= MAX_POSTS, "posts {} exceed cap {}", posts.len(), MAX_POSTS);
+        assert!(posts.len() > 50, "expected ~57 posts for 100m at 1.8m spacing, got {}", posts.len());
+    }
+
+    #[test]
+    fn nan_in_path_builds_nothing() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 0.0)];
+        r.height = 1.0;
+        r.thickness = 0.05;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        assert!(meshes.is_empty(), "NaN in path should build nothing");
+    }
+
+    #[test]
+    fn zero_height_builds_nothing() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        r.height = 0.0;
+        r.thickness = 0.05;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        assert!(meshes.is_empty(), "zero height should build nothing");
+    }
+
+    #[test]
+    fn zero_thickness_builds_nothing() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        r.height = 1.0;
+        r.thickness = 0.0;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        assert!(meshes.is_empty(), "zero thickness should build nothing");
+    }
+
+    #[test]
+    fn panel_style_with_single_bay() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        r.height = 1.0;
+        r.thickness = 0.05;
+        r.style = RailingStyle::Panel;
+        r.post_spacing = 1.0;
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes = railing_meshes(&r, &flat);
+        let panels: Vec<_> = meshes.iter().filter(|m| m.material == "railing-panel").collect();
+        assert_eq!(panels.len(), 1, "single bay should have one panel mesh");
+    }
+
+    #[test]
+    fn clone_produces_same_meshes() {
+        let mut r = Railing::default();
+        r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(0.0, 3.0), Vec2::new(4.0, 3.0)];
+        r.height = 0.914;
+        r.thickness = 0.05;
+        r.post_spacing = 1.8;
+        r.style = RailingStyle::Panel;
+        r.inset = 0.1;
+
+        let r2 = r.clone();
+
+        let flat = RailSurface::Flat { z: 0.0 };
+        let meshes1 = railing_meshes(&r, &flat);
+        let meshes2 = railing_meshes(&r2, &flat);
+
+        assert_eq!(meshes1.len(), meshes2.len(), "clone should produce same mesh count");
+    }
 }

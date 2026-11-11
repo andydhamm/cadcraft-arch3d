@@ -88,7 +88,188 @@ pub enum Fronts {
     Drawers,
     /// A drawer above doors.
     DrawerOverDoor,
+    /// No fronts: open shelves.
+    Open,
 }
+
+/// How a cabinet is built.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Construction {
+    /// A frameless (European-style) box.
+    #[default]
+    Frameless,
+    /// A framed (face-frame) box.
+    Framed,
+}
+
+impl Construction {
+    /// The JSON spelling of this construction.
+    pub fn key(self) -> &'static str {
+        match self {
+            Construction::Frameless => "frameless",
+            Construction::Framed => "framed",
+        }
+    }
+
+    /// Parses a construction name (exact lower case).
+    pub fn parse(s: &str) -> Option<Construction> {
+        match s {
+            "frameless" => Some(Construction::Frameless),
+            "framed" => Some(Construction::Framed),
+            _ => None,
+        }
+    }
+}
+
+/// How the fronts sit on the cabinet.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FrontMount {
+    /// Fronts overlay the carcass.
+    #[default]
+    Overlay,
+    /// Fronts sit inset in the carcass.
+    Inset,
+}
+
+impl FrontMount {
+    /// The JSON spelling of this mount.
+    pub fn key(self) -> &'static str {
+        match self {
+            FrontMount::Overlay => "overlay",
+            FrontMount::Inset => "inset",
+        }
+    }
+
+    /// Parses a mount name (exact lower case).
+    pub fn parse(s: &str) -> Option<FrontMount> {
+        match s {
+            "overlay" => Some(FrontMount::Overlay),
+            "inset" => Some(FrontMount::Inset),
+            _ => None,
+        }
+    }
+}
+
+/// The corner treatment a cabinet wants.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CornerPref {
+    /// Decide from the geometry.
+    #[default]
+    Auto,
+    /// No corner treatment.
+    None,
+    /// A blind corner.
+    Blind,
+    /// A diagonal corner.
+    Diagonal,
+    /// A lazy-Susan corner.
+    LazySusan,
+}
+
+impl CornerPref {
+    /// The JSON spelling of this preference.
+    pub fn key(self) -> &'static str {
+        match self {
+            CornerPref::Auto => "auto",
+            CornerPref::None => "none",
+            CornerPref::Blind => "blind",
+            CornerPref::Diagonal => "diagonal",
+            CornerPref::LazySusan => "lazySusan",
+        }
+    }
+
+    /// Parses a corner-pref name (exact case as in JSON).
+    pub fn parse(s: &str) -> Option<CornerPref> {
+        match s {
+            "auto" => Some(CornerPref::Auto),
+            "none" => Some(CornerPref::None),
+            "blind" => Some(CornerPref::Blind),
+            "diagonal" => Some(CornerPref::Diagonal),
+            "lazySusan" => Some(CornerPref::LazySusan),
+            _ => None,
+        }
+    }
+}
+
+/// The kind of a cabinet face row.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FaceKind {
+    /// A hinged door row.
+    #[default]
+    Door,
+    /// A drawer row.
+    Drawer,
+    /// A false-front row (no opening).
+    False,
+    /// An open (no-front) row.
+    Opening,
+    /// An appliance row.
+    Appliance,
+}
+
+impl FaceKind {
+    /// The JSON spelling of this kind.
+    pub fn key(self) -> &'static str {
+        match self {
+            FaceKind::Door => "door",
+            FaceKind::Drawer => "drawer",
+            FaceKind::False => "false",
+            FaceKind::Opening => "opening",
+            FaceKind::Appliance => "appliance",
+        }
+    }
+
+    /// Parses a face-kind name (exact case as in JSON).
+    pub fn parse(s: &str) -> Option<FaceKind> {
+        match s {
+            "door" => Some(FaceKind::Door),
+            "drawer" => Some(FaceKind::Drawer),
+            "false" => Some(FaceKind::False),
+            "opening" => Some(FaceKind::Opening),
+            "appliance" => Some(FaceKind::Appliance),
+            _ => None,
+        }
+    }
+}
+
+/// One row of a cabinet's face layout.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FaceRow {
+    pub kind: FaceKind,
+    /// `None` = shares the rest equally.
+    pub height: Option<f64>,
+    /// 0 = automatic: a door row pairs above DOOR_PAIR_WIDTH, any other row 1.
+    pub across: u32,
+    /// The appliance item id for an appliance row.
+    pub appliance: Option<String>,
+}
+
+/// A cabinet's face layout, top to bottom.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FaceLayout {
+    pub rows: Vec<FaceRow>,
+}
+
+/// Most face rows on a cabinet.
+pub const MAX_FACE_ROWS: usize = 8;
+/// Most faces across a row.
+pub const MAX_ACROSS: u32 = 4;
+/// Most shelves in a cabinet.
+pub const MAX_SHELVES: u32 = 12;
+/// Widest filler cabinet.
+pub const MAX_FILLER_WIDTH: f64 = 0.15;
+/// Width above which a door row pairs.
+pub const DOOR_PAIR_WIDTH: f64 = 0.686;
+/// Reveal between fronts.
+pub const FACE_REVEAL: f64 = 0.003;
+/// Most appliance rows on a tall cabinet.
+pub const MAX_FACE_APPLIANCES_TALL: usize = 2;
 
 /// A cabinet.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -137,6 +318,45 @@ pub struct Cabinet {
     /// Whether the base is recessed for a toe kick.
     #[serde(default)]
     pub toe_kick: bool,
+    /// How the cabinet is built.
+    #[serde(default, skip_serializing_if = "is_default_construction")]
+    pub construction: Construction,
+    /// How the fronts sit on the carcass.
+    #[serde(default, skip_serializing_if = "is_default_front_mount")]
+    pub mount: FrontMount,
+    /// An explicit face layout; `None` = derived from `fronts`/`doors`/`drawers`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<FaceLayout>,
+    /// The corner treatment this cabinet wants.
+    #[serde(default, skip_serializing_if = "is_default_corner_pref")]
+    pub corner: CornerPref,
+    /// Shelf count; `None` = automatic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shelves: Option<u32>,
+    /// Whether this is a filler.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub filler: bool,
+    /// Whether a backsplash is suppressed over this cabinet.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub backsplash_off: bool,
+    /// Crown molding on top.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crown: Option<super::molding::CabinetMolding>,
+    /// A light rail under the cabinet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub light_rail: Option<super::molding::CabinetMolding>,
+}
+
+fn is_default_construction(c: &Construction) -> bool {
+    *c == Construction::Frameless
+}
+
+fn is_default_front_mount(m: &FrontMount) -> bool {
+    *m == FrontMount::Overlay
+}
+
+fn is_default_corner_pref(c: &CornerPref) -> bool {
+    *c == CornerPref::Auto
 }
 
 /// The kind of plumbing or appliance fixture.
@@ -234,6 +454,15 @@ mod tests {
             counter_thickness: 0.038,
             counter_overhang: 0.025,
             toe_kick: true,
+            construction: Construction::Frameless,
+            mount: FrontMount::Overlay,
+            face: None,
+            corner: CornerPref::Auto,
+            shelves: None,
+            filler: false,
+            backsplash_off: false,
+            crown: None,
+            light_rail: None,
         }
     }
 
@@ -321,6 +550,7 @@ mod tests {
             counter_thickness: 0.04,
             counter_overhang: 0.03,
             toe_kick: true,
+            ..Default::default()
         };
         let json = serde_json::to_value(&original).unwrap();
         assert_eq!(json.get("door_style"), Some(&serde_json::Value::String("raised-panel".into())));
@@ -377,5 +607,46 @@ mod tests {
         m.push_cabinet(cab());
         m.next_cabinet_id = 0;
         assert!(m.validate().iter().any(|s| s.contains("next_cabinet_id")));
+    }
+
+    #[test]
+    fn cabinet_without_phase18_fields_loads_and_writes_the_same_json() {
+        let old = r#"{"id":0,"kind":"base","level":0,"position":[0.0,0.0],"rotation":0.0,"width":0.6,"depth":0.6,"height":0.876,"elevation":0.0,"fronts":"doors","doors":1,"drawers":0,"counter":false,"counter_thickness":0.038,"counter_overhang":0.025,"toe_kick":true}"#;
+        let c: Cabinet = serde_json::from_str(old).unwrap();
+        assert_eq!(c.construction, Construction::Frameless);
+        assert_eq!(c.mount, FrontMount::Overlay);
+        assert!(c.face.is_none());
+        assert_eq!(c.corner, CornerPref::Auto);
+        assert!(c.shelves.is_none());
+        assert!(!c.filler);
+        assert!(!c.backsplash_off);
+        assert!(c.crown.is_none());
+        assert!(c.light_rail.is_none());
+        let text = serde_json::to_string(&c).unwrap();
+        for k in ["construction", "mount", "face", "corner", "shelves", "filler", "backsplash_off", "crown", "lightRail"] {
+            assert!(!text.contains(&format!("\"{k}\"")), "{k} written");
+        }
+    }
+
+    #[test]
+    fn fronts_open_round_trips() {
+        let f = Fronts::Open;
+        let v = serde_json::to_value(&f).unwrap();
+        assert_eq!(v, serde_json::Value::String("open".into()));
+        let back: Fronts = serde_json::from_value(v).unwrap();
+        assert_eq!(back, f);
+    }
+
+    #[test]
+    fn face_layout_round_trips() {
+        let fl = FaceLayout {
+            rows: vec![
+                FaceRow { kind: FaceKind::Drawer, height: Some(0.15), across: 2, appliance: None },
+                FaceRow { kind: FaceKind::Door, height: None, across: 0, appliance: None },
+            ],
+        };
+        let v = serde_json::to_value(&fl).unwrap();
+        let back: FaceLayout = serde_json::from_value(v).unwrap();
+        assert_eq!(back, fl);
     }
 }
