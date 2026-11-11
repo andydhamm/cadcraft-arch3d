@@ -39,12 +39,12 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("cabinet", "Cabinet", run_cabinet)
             .menu(&["Architecture", "Cabinet"])
             .params(
-                "{kind: \"base\"|\"wall\"|\"tall\", wall?: \"w0\", offset?, at?: [x,y], rotation?, level?, width?, depth?, height?, elevation?, fronts?: \"doors\"|\"drawers\"|\"drawerOverDoor\", doors?, drawers?, counter?, widths?: [m, ...], doorStyle?: \"slab\"|\"shaker\"|\"raised-panel\", drawerStyle?: \"slab\"|\"shaker\"|\"raised-panel\", pull?: \"<item-id>\"}",
+                "{kind: \"base\"|\"wall\"|\"tall\", wall?: \"w0\", offset?, at?: [x,y], rotation?, level?, width?, depth?, height?, elevation?, fronts?: \"doors\"|\"drawers\"|\"drawerOverDoor\"|\"open\", doors?, drawers?, counter?, widths?: [m, ...], doorStyle?: \"slab\"|\"shaker\"|\"raised-panel\", drawerStyle?: \"slab\"|\"shaker\"|\"raised-panel\", pull?: \"<item-id>\", construction?: \"frameless\"|\"framed\", mount?: \"overlay\"|\"inset\", corner?: \"auto\"|\"none\"|\"blind\"|\"diagonal\"|\"lazySusan\", shelves?: n|\"auto\", crown?: item|null, crownSize?: [w,h]|null, lightRail?: item|null, lightRailSize?: [w,h]|null, backsplash?: bool}",
             )
             .interactive(|_| Ok(Box::new(CaseworkM::new(false)))),
         CommandSpec::new("cabinet.edit", "Edit Cabinet", run_cabinet_edit)
             .menu(&["Architecture", "Edit Cabinet"])
-            .params("{id: \"cb0\", kind?, wall?, offset?, at?, rotation?, level?, width?, depth?, height?, elevation?, fronts?, doors?, drawers?, counter?, doorStyle?, drawerStyle?, pull?}"),
+            .params("{id: \"cb0\", kind?, wall?, offset?, at?, rotation?, level?, width?, depth?, height?, elevation?, fronts?: \"doors\"|\"drawers\"|\"drawerOverDoor\"|\"open\", doors?, drawers?, counter?, doorStyle?, drawerStyle?, pull?, construction?: \"frameless\"|\"framed\", mount?: \"overlay\"|\"inset\", corner?: \"auto\"|\"none\"|\"blind\"|\"diagonal\"|\"lazySusan\", shelves?: n|\"auto\", crown?: item|null, crownSize?: [w,h]|null, lightRail?: item|null, lightRailSize?: [w,h]|null, backsplash?: bool}"),
         CommandSpec::new("cabinet.delete", "Delete Cabinet", run_cabinet_delete).menu(&["Architecture", "Delete Cabinet"]).params("{id}"),
         CommandSpec::new("fixture", "Fixture", run_fixture)
             .menu(&["Architecture", "Fixture"])
@@ -239,7 +239,8 @@ fn parse_fronts(cmd: &str, p: &Value) -> Result<Option<Fronts>> {
         Some("doors") => Ok(Some(Fronts::Doors)),
         Some("drawers") => Ok(Some(Fronts::Drawers)),
         Some("drawerOverDoor") => Ok(Some(Fronts::DrawerOverDoor)),
-        Some(o) => Err(bad(cmd, format!("`fronts` must be \"doors\", \"drawers\" or \"drawerOverDoor\"; got `{o}`"))),
+        Some("open") => Ok(Some(Fronts::Open)),
+        Some(o) => Err(bad(cmd, format!("`fronts` must be \"doors\", \"drawers\", \"drawerOverDoor\" or \"open\"; got `{o}`"))),
     }
 }
 
@@ -279,6 +280,7 @@ fn run_cabinet(session: &mut Session, params: &Value) -> Result<Value> {
     let params = &merged_params;
     let kind = parse_cabinet_kind(CMD, params)?.ok_or_else(|| bad(CMD, "`kind` is required"))?;
 
+    let opts = super::cabinet_opts::parse(CMD, session, params)?;
     let pull_raw = text(CMD, params, "pull")?;
     let pull_mesh: Option<SymbolMesh> = match pull_raw {
         Some(raw) => Some(resolve_pull(CMD, session, raw)?),
@@ -334,6 +336,7 @@ fn run_cabinet(session: &mut Session, params: &Value) -> Result<Value> {
         cab.position = pos;
         cab.rotation = rot;
         cab.level = level;
+        opts.apply(CMD, &mut cab)?;
         validate_cabinet(&cab).map_err(|e| bad(CMD, e.to_string()))?;
         cabinets.push(cab);
     }
@@ -358,6 +361,7 @@ fn run_cabinet_edit(session: &mut Session, params: &Value) -> Result<Value> {
     const CMD: &str = "cabinet.edit";
     let raw = text(CMD, params, "id")?.ok_or_else(|| bad(CMD, "`id` is required"))?;
     let id = parse_id(raw, "cb").ok_or_else(|| bad(CMD, format!("unknown cabinet `{raw}`")))?;
+    let opts = super::cabinet_opts::parse(CMD, session, params)?;
 
     let pull_mesh: Option<SymbolMesh>;
     let clear_pull: bool;
@@ -420,6 +424,7 @@ fn run_cabinet_edit(session: &mut Session, params: &Value) -> Result<Value> {
         set(&mut cab.rotation, c.rotation);
         set(&mut cab.level, c.level);
     }
+    opts.apply(CMD, &mut cab)?;
     validate_cabinet(&cab).map_err(|e| bad(CMD, e.to_string()))?;
 
     let mut d = session.doc_mut()?;
@@ -650,6 +655,36 @@ mod tests {
 
     fn cabinets(s: &Session) -> Vec<Cabinet> {
         s.doc().map(|d| d.arch.cabinets.clone()).unwrap_or_default()
+    }
+
+    #[test]
+    fn cabinet_accepts_fronts_open() {
+        let mut s = session();
+        let r = run(&mut s, "cabinet", json!({ "kind": "wall", "at": [1.0, 1.0], "fronts": "open" }));
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(cabinets(&s).first().map(|c| c.fronts), Some(Fronts::Open));
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "at": [2.0, 1.0], "fronts": "sideways" }));
+        assert!(r.is_err());
+        let r = run(&mut s, "cabinet.edit", json!({ "id": "cb0", "fronts": "doors" }));
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(cabinets(&s).first().map(|c| c.fronts), Some(Fronts::Doors));
+        let r = run(&mut s, "cabinet.edit", json!({ "id": "cb0", "fronts": "open" }));
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(cabinets(&s).first().map(|c| c.fronts), Some(Fronts::Open));
+    }
+
+    #[test]
+    fn cabinet_opts_hook_is_called_on_create_and_edit() {
+        use super::super::cabinet_opts::CALLS;
+        let mut s = session();
+        CALLS.with(|c| c.set((0, 0)));
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "at": [1.0, 1.0], "widths": [0.6, 0.6] }));
+        assert!(r.is_ok(), "{r:?}");
+        // Parsed once per call, applied to every cabinet of the run.
+        assert_eq!(CALLS.with(|c| c.get()), (1, 2));
+        let r = run(&mut s, "cabinet.edit", json!({ "id": "cb0", "height": 0.9 }));
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(CALLS.with(|c| c.get()), (2, 3));
     }
 
     /// A session on a 4 m wall whose library holds a "pull" item `own:bar` and a non-pull `own:chair`.
