@@ -23,7 +23,7 @@ pub(super) fn emit(ctx: &mut Ctx) {
                 P::Null,
                 match fixture.kind {
                     LightKind::Point | LightKind::Spot => P::Enum("POINTSOURCE"),
-                    LightKind::Area => P::Enum("DIRECTIONSOURCE"),
+                    LightKind::Area | LightKind::Strip => P::Enum("DIRECTIONSOURCE"),
                 },
             ],
         );
