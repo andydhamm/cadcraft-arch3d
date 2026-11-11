@@ -33,17 +33,17 @@ pub struct FaceBox {
 
 /// The face layout a cabinet without an explicit one has, as a layout.
 pub fn default_face(c: &Cabinet) -> FaceLayout {
-    let across = if (1..=MAX_ACROSS).contains(&c.doors) { c.doors } else { 0 };
-    let door = FaceRow { kind: FaceKind::Door, across, ..Default::default() };
+    let across = if c.width.is_finite() && c.width > DOOR_PAIR_WIDTH { c.doors.max(2) } else { c.doors };
+    let door = FaceRow { kind: FaceKind::Door, across, ..FaceRow::default() };
     let drawers = c.drawers.max(1) as usize;
-    let drawer = |height: Option<f64>| FaceRow { kind: FaceKind::Drawer, height, ..Default::default() };
+    let drawer = |height: Option<f64>| FaceRow { kind: FaceKind::Drawer, height, ..FaceRow::default() };
     let rows = match c.fronts {
         Fronts::Doors => vec![door],
         Fronts::Drawers => (0..drawers).map(|_| drawer(None)).collect(),
         Fronts::DrawerOverDoor => (0..drawers).map(|_| drawer(Some(0.15))).chain(std::iter::once(door)).collect(),
-        Fronts::Open => vec![FaceRow { kind: FaceKind::Opening, ..Default::default() }],
+        Fronts::Open => vec![FaceRow { kind: FaceKind::Opening, ..FaceRow::default() }],
     };
-    FaceLayout { rows }
+    FaceLayout { rows, ..FaceLayout::default() }
 }
 
 /// The face box of `c`: what its face layout divides into rows and items.
@@ -162,7 +162,7 @@ pub fn face_fronts(model: &ArchModel, c: &Cabinet, face: &FaceLayout) -> Vec<Fro
                     }
                 }
             };
-            out.push(FrontInfo { kind, rect: [x0, v0, x1, v1], hinge, pull });
+            out.push(FrontInfo { kind, rect: [x0, v0, x1, v1], hinge, pull, ..FrontInfo::default() });
         }
     }
     out
@@ -190,13 +190,13 @@ mod tests {
     }
 
     fn row(kind: FaceKind, height: Option<f64>, across: u32) -> FaceRow {
-        FaceRow { kind, height, across, appliance: None }
+        FaceRow { kind, height, across, ..FaceRow::default() }
     }
 
     #[test]
     fn three_equal_drawers_sum_with_reveals() {
         let c = base();
-        let face = FaceLayout { rows: vec![row(FaceKind::Drawer, None, 0); 3] };
+        let face = FaceLayout { rows: vec![row(FaceKind::Drawer, None, 0); 3], ..FaceLayout::default() };
         let h = row_heights(&c, &face).unwrap();
         assert!((h[0] - h[1]).abs() < 1e-9 && (h[1] - h[2]).abs() < 1e-9);
         assert!((h.iter().sum::<f64>() + 2.0 * FACE_REVEAL - 0.776).abs() < 1e-9);
@@ -207,15 +207,18 @@ mod tests {
     #[test]
     fn fixed_rows_then_shared() {
         let c = base();
-        let face = FaceLayout { rows: vec![row(FaceKind::Drawer, Some(0.15), 0), row(FaceKind::Door, None, 0), row(FaceKind::Drawer, None, 0)] };
+        let face = FaceLayout {
+            rows: vec![row(FaceKind::Drawer, Some(0.15), 0), row(FaceKind::Door, None, 0), row(FaceKind::Drawer, None, 0)],
+            ..FaceLayout::default()
+        };
         let h = row_heights(&c, &face).unwrap();
         assert_eq!(h[0], 0.15);
         assert!((h[1] - h[2]).abs() < 1e-12);
         assert!((h.iter().sum::<f64>() + 2.0 * FACE_REVEAL - 0.776).abs() < 1e-9);
         // Only fixed rows must fill the face exactly.
-        let short = FaceLayout { rows: vec![row(FaceKind::Door, Some(0.5), 0)] };
+        let short = FaceLayout { rows: vec![row(FaceKind::Door, Some(0.5), 0)], ..FaceLayout::default() };
         assert!(row_heights(&c, &short).is_none());
-        let exact = FaceLayout { rows: vec![row(FaceKind::Door, Some(0.776), 0)] };
+        let exact = FaceLayout { rows: vec![row(FaceKind::Door, Some(0.776), 0)], ..FaceLayout::default() };
         assert!(row_heights(&c, &exact).is_some());
     }
 
@@ -237,10 +240,10 @@ mod tests {
         let mut c = base();
         c.width = 0.762;
         let m = ArchModel::default();
-        let one = FaceLayout { rows: vec![row(FaceKind::Door, None, 1)] };
+        let one = FaceLayout { rows: vec![row(FaceKind::Door, None, 1)], ..FaceLayout::default() };
         assert_eq!(face_fronts(&m, &c, &one).len(), 1);
         c.width = 0.6;
-        let two = FaceLayout { rows: vec![row(FaceKind::Door, None, 2)] };
+        let two = FaceLayout { rows: vec![row(FaceKind::Door, None, 2)], ..FaceLayout::default() };
         let f = face_fronts(&m, &c, &two);
         assert_eq!(f.len(), 2);
         assert_eq!((f[0].hinge, f[1].hinge), (Some(Hinge::Left), Some(Hinge::Right)));
@@ -327,12 +330,12 @@ mod tests {
         let m = ArchModel::default();
         let bad = [
             FaceLayout::default(),
-            FaceLayout { rows: vec![row(FaceKind::Door, None, 0); 9] },
-            FaceLayout { rows: vec![row(FaceKind::Door, Some(f64::NAN), 0)] },
-            FaceLayout { rows: vec![row(FaceKind::Door, Some(0.01), 0)] },
-            FaceLayout { rows: vec![row(FaceKind::Door, Some(2.0), 0), row(FaceKind::Drawer, None, 0)] },
-            FaceLayout { rows: vec![row(FaceKind::Door, None, 7)] },
-            FaceLayout { rows: vec![row(FaceKind::Door, Some(f64::INFINITY), 0)] },
+            FaceLayout { rows: vec![row(FaceKind::Door, None, 0); 9], ..FaceLayout::default() },
+            FaceLayout { rows: vec![row(FaceKind::Door, Some(f64::NAN), 0)], ..FaceLayout::default() },
+            FaceLayout { rows: vec![row(FaceKind::Door, Some(0.01), 0)], ..FaceLayout::default() },
+            FaceLayout { rows: vec![row(FaceKind::Door, Some(2.0), 0), row(FaceKind::Drawer, None, 0)], ..FaceLayout::default() },
+            FaceLayout { rows: vec![row(FaceKind::Door, None, 7)], ..FaceLayout::default() },
+            FaceLayout { rows: vec![row(FaceKind::Door, Some(f64::INFINITY), 0)], ..FaceLayout::default() },
         ];
         for f in &bad {
             assert!(face_fronts(&m, &c, f).is_empty());

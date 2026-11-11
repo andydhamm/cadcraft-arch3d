@@ -36,7 +36,7 @@ fn mesh_named<'a>(s: &'a Scene3d, name: &str) -> Option<&'a Mesh> {
 }
 
 fn drawers(n: usize) -> FaceLayout {
-    FaceLayout { rows: vec![FaceRow { kind: FaceKind::Drawer, ..Default::default() }; n] }
+    FaceLayout { rows: vec![FaceRow { kind: FaceKind::Drawer, ..FaceRow::default() }; n], ..FaceLayout::default() }
 }
 
 #[test]
