@@ -174,7 +174,7 @@ fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
 
 /// Siding height field: linear rise down each board, step at the bottom edge (rows only).
 fn siding_height(_salt: u64, _x: usize, y: usize) -> f32 {
-    let row = y % 32 as f32;
+    let row = y as f32 % 32.0;
     let mut h = row * 0.03;
     // Step at the bottom edge: full recess rows 30..31, bevel row 29.
     if row >= 30.0 {
@@ -254,10 +254,9 @@ pub fn normal_map(finish: Finish) -> Texture {
     let mut rgba: Vec<u8> = Vec::with_capacity(N * N * 4);
     for y in 0..N {
         for x in 0..N {
-            let i = y * N + x;
-            let xm = ((x as u32) + N as u32 - 1) % N as usize;
+            let xm = (x + N - 1) % N;
             let xp = (x + 1) % N;
-            let ym = ((y as u32) + N as u32 - 1) % N as usize;
+            let ym = (y + N - 1) % N;
             let yp = (y + 1) % N;
             let dx = (h[xp * N] - h[xm * N]) * 2.0;
             let dy = (h[yp * N] - h[ym * N]) * 2.0;
@@ -473,7 +472,7 @@ mod tests {
                 let g = (p[1] as f32 / 255.0 - 0.5) * 2.0;
                 let b = p[2] as f32 / 255.0;
                 assert!((b - 0.5).abs() > 0.0, "normal z should be > 0.5 after offset");
-                sum_xy += (r.abs() + g.abs()) / 2.0;
+                sum_xy += ((r.abs() + g.abs()) / 2.0) as f64;
                 n_xy += 1.0;
             }
             let mean_xy = sum_xy / n_xy;
