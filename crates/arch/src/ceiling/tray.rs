@@ -486,7 +486,7 @@ pub fn validate(model: &ArchModel, t: &Tray) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::arch::{ArchModel, Roof, RoofDirective, Room, Tray, TraySides, Wall};
+    use cadcraft_doc::arch::{ArchModel, MAX_TRAY_NESTING, Roof, RoofDirective, Room, Tray, TraySides, Wall};
     use cadcraft_geom::Vec2;
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
@@ -691,5 +691,152 @@ mod tests {
         let tray = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() };
         let err = validate(&m, &tray).unwrap_err();
         assert!(err.contains("roof"), "no roof should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_nan_inset() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = Tray { id: ArchId(1), room: room_id, level: room_level, inset: f64::NAN, depth: 0.3, ..Default::default() };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("depth or inset"), "NaN inset should be refused: {err}");
+    }
+
+    #[test]
+    fn outline_errs_when_room_missing() {
+        let m = house(Some(6.0));
+        let tray = Tray { id: ArchId(1), room: ArchId(999), level: 0, inset: 0.6, depth: 0.3, ..Default::default() };
+        let err = outline(&m, &tray).unwrap_err();
+        assert!(err.contains("no room"), "missing room should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_overlapping_siblings() {
+        let mut m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let t1 = m.push_tray(Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() });
+        let t2 = m.push_tray(Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() });
+        let err = validate(&m, m.tray(t2).unwrap()).unwrap_err();
+        assert!(err.contains("overlaps"), "overlapping siblings should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_pitched_non_convex() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let poly = vec![Vec2::new(0.5, 3.5), Vec2::new(5.5, 3.5), Vec2::new(5.5, 5.5), Vec2::new(3.5, 5.5), Vec2::new(3.5, 7.5), Vec2::new(0.5, 7.5)];
+        let tray = Tray {
+            id: ArchId(1),
+            room: room_id,
+            level: room_level,
+            polygon: poly,
+            depth: 0.3,
+            sides: TraySides::Pitched(45.0),
+            ..Default::default()
+        };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("convex"), "non-convex pitched tray should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_polygon_outside_room() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let poly = vec![Vec2::new(0.5, 3.5), Vec2::new(5.5, 3.5), Vec2::new(5.5, 8.5), Vec2::new(0.5, 8.5), Vec2::new(0.5, 3.5)];
+        let tray = Tray { id: ArchId(1), room: room_id, level: room_level, polygon: poly, depth: 0.3, ..Default::default() };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("inside the room"), "polygon outside room should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_parent_in_different_room() {
+        let mut m = house(Some(6.0));
+        let room1_id = m.rooms[1].id;
+        let room1_level = m.rooms[1].level;
+        let room2_id = m.rooms[2].id;
+        let room2_level = m.rooms[2].level;
+        let parent = m.push_tray(Tray { room: room1_id, level: room1_level, inset: 0.6, depth: 0.3, ..Default::default() });
+        let child = Tray { id: ArchId(1), room: room2_id, level: room2_level, parent: Some(parent), inset: 0.6, depth: 0.15, ..Default::default() };
+        let err = validate(&m, &child).unwrap_err();
+        assert!(err.contains("nested too deep"), "parent in different room should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_missing_parent() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let child =
+            Tray { id: ArchId(1), room: room_id, level: room_level, parent: Some(ArchId(999)), inset: 0.6, depth: 0.15, ..Default::default() };
+        let err = validate(&m, &child).unwrap_err();
+        assert!(err.contains("nested too deep"), "missing parent should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_deep_nesting() {
+        let mut m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let mut prev = None;
+        for i in 0..(MAX_TRAY_NESTING + 2) {
+            let t = m.push_tray(Tray {
+                room: room_id,
+                level: room_level,
+                parent: prev,
+                inset: 0.1 * (i as f64 + 1.0),
+                depth: 0.05,
+                ..Default::default()
+            });
+            prev = Some(t);
+        }
+        let last = m.trays.last().unwrap();
+        let err = validate(&m, last).unwrap_err();
+        assert!(err.contains("nested too deep"), "deep nesting should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_refuses_large_inset() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 3.0, depth: 0.3, ..Default::default() };
+        let err = validate(&m, &tray).unwrap_err();
+        assert!(err.contains("inset leaves no tray outline"), "large inset should be refused: {err}");
+    }
+
+    #[test]
+    fn validate_accepts_boundary_values() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray =
+            Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.0, depth: 0.01, sides: TraySides::Pitched(5.0), ..Default::default() };
+        assert!(validate(&m, &tray).is_ok(), "boundary values should be accepted");
+    }
+
+    #[test]
+    fn lift_in_ignores_non_finite_depth() {
+        let mut m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = m.push_tray(Tray { room: room_id, level: room_level, inset: 0.6, depth: f64::NAN, ..Default::default() });
+        let room = &m.rooms[1];
+        let lift = lift_in(room, &m.trays, Vec2::new(3.025, 5.475));
+        assert_eq!(lift, 0.0, "non-finite depth should add 0 to lift");
+    }
+
+    #[test]
+    fn lift_in_is_zero_outside_all_trays() {
+        let mut m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        let tray = m.push_tray(Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.3, ..Default::default() });
+        let room = &m.rooms[1];
+        let lift = lift_in(room, &m.trays, Vec2::new(0.0, 0.0));
+        assert_eq!(lift, 0.0, "point outside all trays should have 0 lift");
     }
 }
