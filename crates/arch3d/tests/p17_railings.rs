@@ -168,28 +168,43 @@ fn deck_surface_posts_reach_the_rim_bottom() {
 
 #[test]
 fn stair_surface_slopes_the_rails() {
-    // Flight surface: the rails slope with the stair nosing line.
-    // We only assert that the top rail at two different x positions is at
-    // different heights (a flat surface would give identical heights).
     let mut r = Railing::default();
     r.path = vec![Vec2::new(2.0, 1.5), Vec2::new(5.81, 1.5)];
     r.height = 1.0;
     r.thickness = 0.05;
     r.inset = -0.045;
     r.post_spacing = 1.0;
-    // Use the Flight surface with a base matching the phase-5 stair.
-    // We rely on the Flight walk_z to give base + nosing_v(u), which slopes.
-    let scene = cadcraft_arch3d::Scene3d::default();
-    // We cannot easily build the full Flight surface without the stair; instead
-    // we just assert that rails exist and their z varies with position.
-    let _ = scene;
+    let surface = RailSurface::Flight {
+        line: cadcraft_arch::stair_geom::FlightLine { origin: Vec2::new(2.0, 1.5), dir: Vec2::new(1.0, 0.0), base: 0.0, ..Default::default() },
+    };
+    let meshes = make(&r, &surface);
+    let rails: Vec<_> = meshes.iter().filter(|m| m.material == "railing-rail").collect();
+    assert!(!rails.is_empty(), "flight railing should have rails");
+    let mut zmin = f64::INFINITY;
+    let mut zmax = f64::NEG_INFINITY;
+    for m in &rails {
+        for p in &m.positions {
+            let z = p[2] as f64;
+            zmin = zmin.min(z);
+            zmax = zmax.max(z);
+        }
+    }
+    assert!((zmax - zmin).abs() > 1e-4, "flight rail z range = {}", zmax - zmin);
 }
 
 #[test]
 fn newels_cap_the_flight_ends() {
-    // On a Flight surface the first and last posts are newels capped by NEWEL_CAP.
-    // This test is a placeholder; it will be completed when the Flight surface
-    // can be constructed with the stair geometry.
+    let mut r = Railing::default();
+    r.path = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0)];
+    r.height = 1.0;
+    r.thickness = 0.05;
+    r.post_spacing = 4.0;
+    let surface = RailSurface::Flight {
+        line: cadcraft_arch::stair_geom::FlightLine { origin: Vec2::ZERO, dir: Vec2::new(1.0, 0.0), base: 0.0, ..Default::default() },
+    };
+    let meshes = make(&r, &surface);
+    let newels: Vec<_> = meshes.iter().filter(|m| m.material == "railing-newel").collect();
+    assert_eq!(newels.len(), 2, "expected 2 newels, got {}", newels.len());
 }
 
 #[test]
