@@ -1,78 +1,92 @@
 //! The named sun angles command: store sun directions on the drawing, resolve them to
 //! compass azimuth/elevation and a drawing-space direction vector, and refuse deletes that
-//! would orphan a look (global or per-camera) that still names an angle.
+//! would orphan a look (global or per-camera) still naming an angle.
 use crate::cmd::CommandSpec;
 use crate::{EngineError, Session};
-use cadcraft_arch::site::SiteLocation;
-use cadcraft_doc::Handle;
-use cadcraft_doc::arch::Site;
-use cadcraft_geom::Vec2;
+use cadcraft_arch::site::true_to_drawing;
+use cadcraft_arch::sun::{Sun, sun_dir, sun_position};
+use cadcraft_doc::arch::site::SiteLocation;
+use cadcraft_doc::arch::{ArchModel, Camera3d, Look, SunAngle, SunLook};
 use serde_json::{Value, json};
-use std::f64::consts::PI;
 
 /// The upper bound on named sun angles kept on one drawing.
 const MAX_SUN_ANGLES: usize = 16;
 
-/// Sun angle direction: compass azimuth/elevation turned into drawing space.
-fn compass_dir(azimuth: f64, elevation: f64) -> Vec2 {
-    let a = azimuth * PI / 360.0;
-    let e = elevation * PI / 360.0;
-    let x = a.sin();
-    let y = a.cos();
-    let z = e.sin();
-    Vec2::new(x, y) // y carries z; the resolver maps y -> z in the 3D frame
+/// Resolve a stored sun angle to its resolved compass azimuth/elevation and drawing-space direction.
+fn resolved_sun(angle: &SunAngle, site: Option<&SiteLocation>) -> Option<(f64, f64, [f64; 3])> {
+    match (&angle.date, &angle.time, angle.azimuth, angle.elevation) {
+        (Some(date), Some(time), None, None) => {
+            let site = site?;
+            let sun = sun_position(site.latitude, date, time)?;
+            let dir = true_to_drawing(Some(site), sun_dir(&sun));
+            Some((sun.azimuth_deg, sun.elevation_deg, dir))
+        }
+        (None, None, Some(azimuth), Some(elevation)) => {
+            if !azimuth.is_finite() || !elevation.is_finite() || !(-90.0..=90.0).contains(&elevation) {
+                return None;
+            }
+            let dir = true_to_drawing(site, sun_dir(&Sun { azimuth_deg: azimuth, elevation_deg: elevation, ..Sun::default() }));
+            Some((azimuth, elevation, dir))
+        }
+        _ => None,
+    }
 }
 
-/// Resolve a stored sun angle to a resolved direction and compass values, using the site.
-fn resolve(angle: &cadcraft_doc::arch::SunAngle, site: Option<&SiteLocation>) -> Value {
-    // compass azimuth/elevation: stored directly, or derived from date/time via the sun module.
-    let (az, el): (f64, f64) = if !angle.date.is_empty() && !angle.time.is_empty() {
-        if let Some(s) = site {
-            match cadcraft_arch::sun::solar_position(s.lat, s.lon, &angle.date, &angle.time) {
-                Ok((az, el)) => (az, el),
-                Err(_) => (azimuth_default(), elevation_default()),
-            }
-        } else {
-            (f64::NAN, f64::NAN)
-        }
-    } else {
-        (angle.azimuth, angle.elevation)
-    };
-    let finite = az.is_finite() && el.is_finite();
-    let dir = if finite { Some(compass_dir(az, el).into_array()) } else { None };
+/// Resolve a stored sun angle to a JSON row using the site's orientation when needed.
+fn resolve(angle: &SunAngle, site: Option<&SiteLocation>) -> Value {
+    let (az, el, dir) = resolved_sun(angle, site).unwrap_or((f64::NAN, f64::NAN, [0.0; 3]));
+    let ok = az.is_finite() && el.is_finite();
     json!({
         "name": angle.name,
         "date": angle.date,
         "time": angle.time,
-        "azimuth": if finite { json!(az) } else { json!(null) },
-        "elevation": if finite { json!(el) } else { json!(null) },
-        "dir": dir,
-        "sunElevation": if finite { json!(el) } else { json!(null) },
-        "sunAzimuth": if finite { json!(az) } else { json!(null) },
+        "azimuth": angle.azimuth,
+        "elevation": angle.elevation,
+        "dir": ok.then_some(dir),
+        "sunElevation": ok.then_some(el),
+        "sunAzimuth": ok.then_some(az),
     })
 }
 
-fn azimuth_default() -> f64 {
-    f64::NAN
-}
-fn elevation_default() -> f64 {
-    f64::NAN
-}
-
-fn angle_by_name(model: &cadcraft_doc::arch::ArchModel, name: &str) -> usize {
+fn angle_by_name(model: &ArchModel, name: &str) -> Option<usize> {
     model.sun_angles.iter().position(|a| a.name == name)
 }
 
-fn is_used(name: &str, model: &cadcraft_doc::arch::ArchModel) -> Option<&String> {
+fn is_used<'a>(name: &str, model: &'a ArchModel) -> Option<&'a str> {
     if model.look.sun.angle.as_deref() == Some(name) {
-        return Some(&String::from("the drawing's look"));
+        return Some("the drawing's look");
     }
     for cam in &model.cameras {
-        if cam.saved && cam.look.sun.angle.as_deref() == Some(name) {
-            return Some(&String::from(&cam.name));
+        if cam.look.as_ref().and_then(|look| look.sun.angle.as_deref()) == Some(name) {
+            return Some(cam.name.as_str());
         }
     }
     None
+}
+
+fn add_or_replace(s: &mut Session, angle: SunAngle, replace: bool) -> Result<(), EngineError> {
+    let mut d = s.doc_mut()?;
+    let model = &mut d.arch;
+    if let Some(i) = angle_by_name(model, &angle.name) {
+        if replace {
+            model.sun_angles[i] = angle;
+            d.touch_arch();
+            return Ok(());
+        }
+        return Err(EngineError::Other(format!("sun angle `{}` already exists", angle.name)));
+    }
+    if model.sun_angles.len() >= MAX_SUN_ANGLES {
+        return Err(EngineError::Other(format!("sun angle limit reached: at most {MAX_SUN_ANGLES}")));
+    }
+    model.sun_angles.push(angle);
+    d.touch_arch();
+    Ok(())
+}
+
+fn list_json(s: &Session) -> Result<Value, EngineError> {
+    let model = &s.doc()?.arch;
+    let site = model.site.as_ref();
+    Ok(json!({ "sunAngles": model.sun_angles.iter().map(|a| resolve(a, site)).collect::<Vec<_>>() }))
 }
 
 /// Command specs for the sun angle module.
@@ -92,96 +106,63 @@ fn run_sunangle(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     let elevation = p.get("elevation").and_then(Value::as_f64);
     let replace = p.get("replace").and_then(Value::as_bool).unwrap_or(false);
     let list = p.get("list").and_then(Value::as_bool).unwrap_or(false);
-    let delete = p.get("delete").and_then(Value::as_str).map(str::trim);
-    let site = s.doc()?.arch.site.as_ref();
+    let delete_name = p.get("delete").and_then(Value::as_str).map(str::trim);
 
     if list {
-        let model = &s.doc()?.arch;
-        let site = s.doc()?.arch.site.as_ref();
-        let angles: Vec<Value> = model.sun_angles.iter().map(|a| resolve(a, site)).collect();
-        return Ok(json!({"sunAngles": angles}));
+        return list_json(s);
     }
 
-    if let Some(d) = delete {
-        let mut model = s.doc_mut()?.arch;
-        let idx = match angle_by_name(&model, d) {
+    if let Some(delete_name) = delete_name {
+        let mut d = s.doc_mut()?;
+        let idx = match d.arch.sun_angles.iter().position(|a| a.name == delete_name) {
             Some(i) => i,
-            None => {
-                return Err(EngineError::Other(format!("sun angle `{d}` not found")));
-            }
+            None => return Err(EngineError::Other(format!("sun angle `{delete_name}` not found"))),
         };
-        if let Some(owner) = is_used(d, &model) {
-            return Err(EngineError::Other(format!("sun angle `{d}` is used by {owner}")));
+        if let Some(owner) = is_used(delete_name, &d.arch) {
+            return Err(EngineError::Other(format!("sun angle `{delete_name}` is used by {owner}")));
         }
-        let _ = model.sun_angles.remove(idx);
-        s.doc_mut()?.touch_arch();
-        return Ok(list_json(s));
+        d.arch.sun_angles.remove(idx);
+        d.touch_arch();
+        return list_json(s);
     }
 
     let name = match name {
         Some(n) if !n.is_empty() => n.to_string(),
-        _ => {
-            return Err(EngineError::Other("sunangle: `name` is required for add/replace/delete".into()));
-        }
+        _ => return Err(EngineError::Other("sunangle: `name` is required for add/replace/delete".into())),
     };
 
-    let direct = azimuth.is_some() && elevation.is_some();
-    if direct {
-        let az = azimuth.unwrap();
-        let el = elevation.unwrap();
-        if !az.is_finite() || !el.is_finite() {
-            return Err(EngineError::Other(format!("sunangle `sunangle {name}`: azimuth/elevation must be finite, got {az} / {el}")));
-        }
-        if !(el >= -90.0 && el <= 90.0) {
-            return Err(EngineError::Other(format!("sunangle `sunangle {name}`: elevation {el} out of range -90..=90")));
-        }
-        let angle = cadraft_doc_angle(name, date, time, az, el);
-        add_or_replace(s, angle, replace);
-    } else if !date.is_empty() && !time.is_empty() {
-        let site = site.ok_or_else(|| EngineError::Other("sunangle: date/time form needs a site location".into()))?;
-        let (az, el) = cadcraft_arch::sun::solar_position(site.lat, site.lon, &date, &time)
-            .map_err(|_| EngineError::Other("sunangle: could not resolve sun from date/time".into()))?;
-        let angle = cadraft_doc_angle(name, date, time, az, el);
-        add_or_replace(s, angle, replace);
-    } else {
+    let has_date_time = date.is_some() || time.is_some();
+    let has_compass = azimuth.is_some() || elevation.is_some();
+    if has_date_time && has_compass {
+        return Err(EngineError::Other(format!("sunangle: `name` may use date/time or azimuth/elevation, not both for `{name}`")));
+    }
+    if !has_date_time && !has_compass {
         return Err(EngineError::Other("sunangle: provide either (date, time) or (azimuth, elevation) with `name`".into()));
     }
-    Ok(list_json(s))
-}
-
-fn cadraft_doc_angle(name: String, date: String, time: String, azimuth: f64, elevation: f64) -> cadraft_doc::arch::SunAngle {
-    cadcraft_doc::arch::SunAngle { name, date, time, azimuth, elevation, ..cadraft_doc::arch::SunAngle::default() }
-}
-
-fn add_or_replace(s: &mut Session, angle: cadraft_doc::arch::SunAngle, replace: bool) -> Result<(), EngineError> {
-    let mut model = s.doc_mut()?.arch;
-    if replace {
-        let idx = match angle_by_name(&model, &angle.name) {
-            Some(i) => i,
-            None => return Err(EngineError::Other(format!("sunangle: `sunangle {}` not found", angle.name))),
-        };
-        if model.sun_angles.len() >= MAX_SUN_ANGLES {
-            return Err(EngineError::Other("sunangle: too many sun angles".into()));
-        }
-        model.sun_angles[idx] = angle;
-    } else {
-        if model.sun_angles.iter().any(|a| a.name == angle.name) {
-            return Err(EngineError::Other(format!("sunangle: duplicate name `{}`", angle.name)));
-        }
-        if model.sun_angles.len() >= MAX_SUN_ANGLES {
-            return Err(EngineError::Other("sunangle: too many sun angles".into()));
-        }
-        model.sun_angles.push(angle);
+    if has_date_time {
+        let date = date.ok_or_else(|| EngineError::Other("sunangle: `date` is required with `time`".into()))?;
+        let time = time.ok_or_else(|| EngineError::Other("sunangle: `time` is required with `date`".into()))?;
+        let site = s.doc()?.arch.site.as_ref().ok_or_else(|| EngineError::Other("sunangle: date/time form needs a site location".into()))?;
+        let sun = sun_position(site.latitude, &date, &time)
+            .ok_or_else(|| EngineError::Other(format!("sunangle `{name}`: could not resolve sun for {date} {time}")))?;
+        let angle = SunAngle { name, date: Some(date), time: Some(time), azimuth: Some(sun.azimuth_deg), elevation: Some(sun.elevation_deg) };
+        angle.validate().map_err(EngineError::Other)?;
+        add_or_replace(s, angle, replace)?;
+        return list_json(s);
     }
-    s.doc_mut()?.touch_arch();
-    Ok(())
-}
 
-fn list_json(s: &Session) -> Value {
-    let model = &s.doc()?.arch;
-    let site = s.doc()?.arch.site.as_ref();
-    let angles: Vec<Value> = model.sun_angles.iter().map(|a| resolve(a, site)).collect();
-    json!({"sunAngles": angles})
+    let az = azimuth.ok_or_else(|| EngineError::Other(format!("sunangle `{name}`: `azimuth` is required")))?;
+    let el = elevation.ok_or_else(|| EngineError::Other(format!("sunangle `{name}`: `elevation` is required")))?;
+    if !az.is_finite() || !el.is_finite() {
+        return Err(EngineError::Other(format!("sunangle `{name}`: azimuth/elevation must be finite, got {az} / {el}")));
+    }
+    if !(-90.0..=90.0).contains(&el) {
+        return Err(EngineError::Other(format!("sunangle `{name}`: elevation {el} out of range -90..=90")));
+    }
+    let angle = SunAngle { name, date: None, time: None, azimuth: Some(az), elevation: Some(el) };
+    angle.validate().map_err(EngineError::Other)?;
+    add_or_replace(s, angle, replace)?;
+    list_json(s)
 }
 
 #[cfg(test)]
@@ -192,12 +173,12 @@ mod tests {
         s.execute("sunangle", &json!({"name": name, "azimuth": azimuth, "elevation": elevation})).expect("sunangle add failed")
     }
 
-    fn list(s: &Session) -> Vec<String> {
+    fn list(s: &mut Session) -> Vec<String> {
         s.execute("sunangle", &json!({"list": true}))
             .map(|v| {
                 v["sunAngles"]
                     .as_array()
-                    .map(|a| a.iter().map(|x| x["name"].as_str().map(|s| s.to_string()).unwrap_or_default()).collect::<Vec<_>>())
+                    .map(|a| a.iter().map(|x| x["name"].as_str().map(str::to_owned).unwrap_or_default()).collect())
                     .unwrap_or_default()
             })
             .unwrap_or_default()
@@ -207,74 +188,73 @@ mod tests {
     fn add_list_replace_delete() {
         let mut s = Session::new();
         add_angle(&mut s, "NOON", 180.0, 62.39);
-        assert!(list(&s).contains(&"NOON".into()), "NOON not in list");
-        let before = list(&s).clone();
-        assert_eq!(before, vec!["NOON"]);
+        assert!(list(&mut s).contains(&"NOON".to_string()), "NOON not in list");
+        assert_eq!(list(&mut s), vec!["NOON"]);
+
         add_angle(&mut s, "LOW", 180.0, 30.0);
         let mid = list(&mut s);
-        assert!(mid.contains(&"NOON".into()));
-        assert!(mid.contains(&"LOW".into()));
+        assert!(mid.contains(&"NOON".to_string()));
+        assert!(mid.contains(&"LOW".to_string()));
         assert_eq!(mid.len(), 2);
+
         s.execute("sunangle", &json!({"name": "NOON", "azimuth": 90.0, "elevation": 10.0, "replace": true})).expect("sunangle replace failed");
-        assert!(list(&s).contains(&"NOON".into()));
-        assert_eq!(list(&s).len(), 2);
+        assert_eq!(list(&mut s).len(), 2);
+
         s.execute("sunangle", &json!({"delete": "LOW"})).expect("sunangle delete failed");
-        assert!(!list(&s).contains(&"LOW".into()));
-        assert_eq!(list(&s), vec!["NOON"]);
+        assert!(!list(&mut s).contains(&"LOW".to_string()));
+        assert_eq!(list(&mut s), vec!["NOON"]);
+
         s.execute("sunangle", &json!({"delete": "NOON"})).expect("sunangle delete NOON");
-        assert_eq!(list(&s), vec![]);
+        assert!(list(&mut s).is_empty());
     }
 
     #[test]
     fn refuses_bad_forms_duplicates_and_used_deletes() {
         let mut s = Session::new();
-        // Bad form: name with neither (date,time) nor (azimuth,elevation).
+
         let bad = s.execute("sunangle", &json!({"name": "BAD"}));
         assert!(bad.is_err(), "sunangle bad form should be refused");
-        // Duplicate name.
+
         add_angle(&mut s, "A", 180.0, 62.39);
         let dup = s.execute("sunangle", &json!({"name": "A", "azimuth": 180.0, "elevation": 30.0}));
         assert!(dup.is_err(), "sunangle duplicate should be refused");
-        // Out-of-range elevation (refused, never clamped).
+
         let range = s.execute("sunangle", &json!({"name": "RANGE", "azimuth": 180.0, "elevation": 120.0}));
         assert!(range.is_err(), "sunangle out-of-range elevation should be refused");
-        // Delete: name that doesn't exist.
+
         let del_missing = s.execute("sunangle", &json!({"delete": "NOPE"}));
         assert!(del_missing.is_err(), "sunangle delete missing should be refused");
-        // Delete: refuse when the drawing's look uses it.
+
         {
-            if let Ok(d) = s.doc_mut() {
-                d.arch.look.sun.angle = Some("A".to_string());
-                d.touch_arch();
-            }
+            let mut d = s.doc_mut().unwrap();
+            d.arch.look.sun.angle = Some("A".to_string());
+            d.touch_arch();
         }
         let del_used = s.execute("sunangle", &json!({"delete": "A"}));
         assert!(del_used.is_err(), "sunangle delete used-by-look should be refused");
-        // Refusing delete also refuses when a saved camera look uses it.
-        if let Ok(d) = s.doc_mut() {
-            d.arch.cameras.push(cadcraft_doc::arch::Camera3d {
+
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.cameras.push(Camera3d {
                 name: "Cam".into(),
-                look: cadcraft_doc::arch::Look {
-                    sun: cadcraft_doc::arch::Sun { angle: Some("A".to_string()), ..cadcraft_doc::arch::Sun::default() },
-                    ..cadcraft_doc::arch::Look::default()
-                },
-                saved: true,
-                ..cadcraft_doc::arch::Camera3d::default()
+                look: Some(Look { sun: SunLook { angle: Some("A".to_string()), ..SunLook::default() }, ..Look::default() }),
+                ..Camera3d::default()
             });
             d.touch_arch();
         }
         let del_used_cam = s.execute("sunangle", &json!({"delete": "A"}));
         assert!(del_used_cam.is_err(), "sunangle delete used-by-camera should be refused");
-        // After clearing the look usage, delete is allowed.
-        if let Ok(d) = s.doc_mut() {
+
+        {
+            let mut d = s.doc_mut().unwrap();
             d.arch.look.sun.angle = None;
             if let Some(c) = d.arch.cameras.first_mut() {
-                c.look.sun.angle = None;
+                c.look = None;
             }
             d.touch_arch();
         }
         let ok = s.execute("sunangle", &json!({"delete": "A"}));
         assert!(ok.is_ok(), "sunangle delete after clearing usage should succeed");
-        assert_eq!(list(&s), vec![]);
+        assert!(list(&mut s).is_empty());
     }
 }
