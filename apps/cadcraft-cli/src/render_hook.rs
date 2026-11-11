@@ -12,8 +12,9 @@ use cadcraft_geom::Vec3;
 use cadcraft_render3d::adapter::AdapterChoice;
 use cadcraft_render3d::camera::{Camera, Orbit};
 use cadcraft_render3d::final_render::render_final_with;
-use cadcraft_render3d::light::{Light, Sun};
+use cadcraft_render3d::light::Light;
 use cadcraft_render3d::lights::DEFAULT_EXPOSURE;
+use cadcraft_render3d::look::lighting_for;
 use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, png_rgba};
 use cadcraft_render3d::pathtrace::cache;
 use cadcraft_render3d::pathtrace::{CacheOutcome, ComputeGpu, Exposure, Furnace, PathOptions, irradiance, luminance, request_compute};
@@ -130,15 +131,6 @@ fn ready<'a>(
     Ok(state)
 }
 
-fn lighting_for(sun: SunChoice, budget: usize) -> Lighting {
-    let light = match sun {
-        SunChoice::Default => Some(Light::DEFAULT),
-        SunChoice::Off => None,
-        SunChoice::Dir(d) => Some(Light::from_sun(&Sun { dir: [d[0] as f32, d[1] as f32, d[2] as f32], ..Sun::default() }, Light::DEFAULT.ambient)),
-    };
-    Lighting { sun: light, sun_shadow: matches!(sun, SunChoice::Dir(_)), budget, exposure: DEFAULT_EXPOSURE, ..Lighting::default() }
-}
-
 /// The path-tracer options a request asks for.
 fn path_options(p: &PathParams) -> PathOptions {
     PathOptions {
@@ -209,12 +201,16 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         state.cache = Some(cache::open(c, cache::cache_dir().as_deref()));
     }
     let State { off, scene, cache: pcache, cache_saved, path_traces, .. } = state;
-    let scene = &scene.as_ref().ok_or("renderer unavailable")?.2;
+    let (look, sun_dir) = req.resolved_sun();
+    let scene = &mut scene.as_mut().ok_or("renderer unavailable")?.2;
+    // The effective look's backdrop replaces the cached scene's (no rebuild).
+    cadcraft_arch3d::set_backdrop(&req.drawing.arch, scene, look.backdrop.as_ref());
+    let scene = &*scene;
     off.resize(req.size);
 
     let camera = req.camera.clone().unwrap_or_else(|| Camera::Orbit(Orbit::fit(&scene.bounds)));
     let eye = camera.eye();
-    let lighting = lighting_for(req.sun, req.budget);
+    let lighting = lighting_for(&look, sun_dir, req.budget);
     let maps_before = off.shadow_maps_built();
 
     let mut final_mode: Option<&str> = None;
@@ -329,7 +325,14 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
         return Err("path-traced illuminance needs compute shaders on this GPU".into());
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
-    let lighting = lighting_for(req.sun, 8);
+    let mut look = cadcraft_engine::doc::arch::Look::default();
+    let mut sun_dir = None;
+    match req.sun {
+        SunChoice::Off => look.sun.on = false,
+        SunChoice::Dir(d) => sun_dir = Some(d),
+        SunChoice::Default => {}
+    }
+    let lighting = lighting_for(&look, sun_dir, 8);
     let opts = path_options(&req.path);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
     let results: Vec<Value> = req

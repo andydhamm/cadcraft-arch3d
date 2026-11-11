@@ -144,7 +144,7 @@ impl FinalRender {
             scene: scene.clone(),
             key: scene_key,
             camera: *camera,
-            lighting: *lighting,
+            lighting: lighting.clone(),
             ground,
             target,
             atlas: crate::shadow_atlas::ShadowAtlas::new(&off.device, side),
