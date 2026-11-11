@@ -99,15 +99,24 @@ fn parse_room_type(s: &str) -> Option<RoomType> {
 /// arch model's levels. Mirrors `cmd/arch/level.rs`'s `find_level` but reads a plain `&str`.
 /// An unknown name/index is an error, never a silent fallback to level 0.
 fn find_room_level(arch: &cadcraft_doc::arch::ArchModel, ref_val: &str) -> Result<usize> {
-    if let Some(i) = ref_val.trim().parse::<u64>().ok() {
+    let s = ref_val.trim();
+    // Try integer parse first, then float (accepting only integer-valued floats like 1.0 or 1e0).
+    if let Ok(i) = s.parse::<u64>() {
         if i < arch.levels.len() as u64 {
             return Ok(i as usize);
         }
+    } else if let Ok(f) = s.parse::<f64>() {
+        if f.is_finite() && f >= 0.0 && (f % 1.0) == 0.0 && f <= u64::MAX as f64 {
+            let i = f as u64;
+            if i < arch.levels.len() as u64 {
+                return Ok(i as usize);
+            }
+        }
     }
-    if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == ref_val.trim()) {
+    if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == s) {
         return Ok(i);
     }
-    Err(EngineError::Other(format!("room: unknown level `{ref_val}`")))
+    Err(bad("room", format!("unknown level `{ref_val}`")))
 }
 
 /// Parse an id for the edit path: a string like `"r12"` (case-insensitive, the
