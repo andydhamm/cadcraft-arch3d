@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 38 of 40 segments merged · 19 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 08:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 19 / 20 | 52.8 h so far · expected done Nov 11 11:57–Nov 12 11:22 UTC |
+| 16 | Ceilings and foundations | building | 19 / 20 | 53.0 h so far · expected done Nov 11 12:11–Nov 12 11:37 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 9 / 14 | — |
 | 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -46,6 +46,7 @@ Updated 2026-11-11 08:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 11 08:19 | `p17-demo` | refused | 8,591 pass, 3 fail | mai-flash-b |
 | Nov 11 08:05 | `p17-exports-rebuild` | merged | 8,594 pass | claude-sonnet-c |
 | Nov 11 07:49 | `p18-observables-1` | merged | 8,588 pass | claude-sonnet-a |
 | Nov 11 07:32 | `p17-wall-under-flight` | merged | 8,572 pass |  |
@@ -57,7 +58,6 @@ Updated 2026-11-11 08:15 UTC. This page and the card in the README are regenerat
 | Nov 11 00:22 | `p17-wall-under-flight` | refused | 8,564 pass | claude-sonnet-b |
 | Nov 10 23:57 | `upstream-sync-2f8f18618` | merged | 8,552 pass | mai-flash-b |
 | Nov 10 23:33 | `p17-wall-under-flight` | refused | 8,556 pass | claude-sonnet-b |
-| Nov 10 23:08 | `harden-p17-scene-plumbing-export` | merged | 8,544 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -74,7 +74,7 @@ Updated 2026-11-11 08:15 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 952 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 75 |
-| mai-flash-b | mai-code-1.1-flash | merging | 15 |
+| mai-flash-b | mai-code-1.1-flash | gate | 15 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
 | tturbo-mac | tturbo-ultraheretic | merging | 745 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 355 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 356 |
