@@ -175,6 +175,8 @@ fn surface_owner(surface: &Surface) -> ObjectKey {
         Surface::Cabinet { cabinet, .. } => (ObjectKind::Cabinet, *cabinet),
         Surface::Fixture(f) => (ObjectKind::Fixture, *f),
         Surface::Furnishing { furnishing, .. } => (ObjectKind::Furnishing, *furnishing),
+        // Placeholder until the scene-plumbing segment adds dedicated kinds.
+        Surface::Countertop(c) | Surface::Backsplash(c) => (ObjectKind::Cabinet, *c),
     };
     ObjectKey { kind, id }
 }
