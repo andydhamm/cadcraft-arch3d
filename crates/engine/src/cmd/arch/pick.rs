@@ -6,7 +6,8 @@ use serde_json::{Value, json};
 
 use cadcraft_arch3d::Scene3d;
 use cadcraft_arch3d::camera::{Camera, FullCamera, MAX_DISTANCE, Orbit, ray_at};
-use cadcraft_doc::arch::{handle_json, part_handle};
+use cadcraft_arch3d::incremental::ObjectKind;
+use cadcraft_doc::arch::handle_json;
 use cadcraft_doc::{ArchId, opening_label, railing_label, roof_label, room_label, stair_label, wall_label};
 use cadcraft_geom::Vec3;
 
@@ -125,21 +126,25 @@ fn parse_pixel(v: Option<&Value>, size: (u32, u32)) -> Result<[f32; 2], EngineEr
     Ok([x as f32, y as f32])
 }
 
-/// Label and proxy handle (lower-case hex, as `arch.inspect` reports) of a hit object.
-fn label_and_handle(id: ArchId, part: &str) -> (String, String) {
-    let label = match part {
-        "floor" | "ceiling" | "deck" | "ledger" | "joist" | "rim" | "beam" => room_label(id),
-        "leaf" | "frame" | "glass" | "casing" | "sill" | "header" | "grille" => opening_label(id),
-        "roof" => roof_label(id),
-        "stair" | "tread" | "riser" | "stringer" | "skirt" => stair_label(id),
-        "railing" | "post" => railing_label(id),
-        "plant" => cadcraft_doc::arch::plant_label(id),
-        "light" => cadcraft_doc::arch::light_label(id),
-        "cabinet" | "counter" => cadcraft_doc::arch::cabinet_label(id),
-        "fixture" => cadcraft_doc::arch::fixture_label(id),
-        _ => wall_label(id),
+/// Label and proxy handle (lower-case hex, as `arch.inspect` reports) of a hit object: the
+/// material-aware owner decides both; a terrain keeps the part-based label.
+fn label_and_handle(id: ArchId, part: &str, owner: ObjectKind) -> (String, String) {
+    let label = match owner {
+        ObjectKind::Terrain => match part {
+            "floor" | "ceiling" | "deck" | "ledger" | "joist" | "rim" | "beam" => room_label(id),
+            "leaf" | "frame" | "glass" | "casing" | "sill" | "header" | "grille" => opening_label(id),
+            "roof" => roof_label(id),
+            "stair" | "tread" | "riser" | "stringer" | "skirt" => stair_label(id),
+            "railing" | "post" => railing_label(id),
+            "plant" => cadcraft_doc::arch::plant_label(id),
+            "light" => cadcraft_doc::arch::light_label(id),
+            "cabinet" | "counter" => cadcraft_doc::arch::cabinet_label(id),
+            "fixture" => cadcraft_doc::arch::fixture_label(id),
+            _ => wall_label(id),
+        },
+        _ => owner.label(id),
     };
-    (label, handle_json(part_handle(id, part)))
+    (label, handle_json(owner.handle(id)))
 }
 
 /// Cast the ray through `pixel` of a `size` viewport and report the nearest object hit.
@@ -156,7 +161,7 @@ fn run_pick3d(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     Ok(match scene.pick(origin, dir) {
         None => json!({ "ok": true, "hit": null }),
         Some(h) => {
-            let (id, handle) = label_and_handle(h.object, h.part);
+            let (id, handle) = label_and_handle(h.object, h.part, h.owner);
             json!({ "ok": true, "hit": {
                 "id": id, "handle": handle, "part": h.part, "distance": h.distance,
                 "point": [h.point.x, h.point.y, h.point.z],
@@ -195,12 +200,12 @@ mod tests {
         use cadcraft_doc::arch::{handle_json, opening_handle, railing_handle, room_handle, stair_handle};
         let id = ArchId(2);
         for p in ["tread", "riser", "stringer", "skirt"] {
-            assert_eq!(label_and_handle(id, p), ("s2".to_owned(), handle_json(stair_handle(id))), "{p}");
+            assert_eq!(label_and_handle(id, p, ObjectKind::Stair), ("s2".to_owned(), handle_json(stair_handle(id))), "{p}");
         }
-        assert_eq!(label_and_handle(id, "post"), ("ra2".to_owned(), handle_json(railing_handle(id))));
-        assert_eq!(label_and_handle(id, "grille"), ("o2".to_owned(), handle_json(opening_handle(id))));
+        assert_eq!(label_and_handle(id, "post", ObjectKind::Railing), ("ra2".to_owned(), handle_json(railing_handle(id))));
+        assert_eq!(label_and_handle(id, "grille", ObjectKind::Opening), ("o2".to_owned(), handle_json(opening_handle(id))));
         for p in ["ledger", "joist", "rim", "beam"] {
-            assert_eq!(label_and_handle(id, p), ("r2".to_owned(), handle_json(room_handle(id))), "{p}");
+            assert_eq!(label_and_handle(id, p, ObjectKind::Room), ("r2".to_owned(), handle_json(room_handle(id))), "{p}");
         }
     }
 
@@ -208,13 +213,41 @@ mod tests {
     fn pick3d_answers_a_cabinet_label() {
         use cadcraft_doc::arch::{cabinet_handle, fixture_handle, handle_json};
         for part in ["cabinet", "counter"] {
-            let (label, handle) = label_and_handle(ArchId(2), part);
+            let (label, handle) = label_and_handle(ArchId(2), part, ObjectKind::Cabinet);
             assert_eq!(label, "cb2");
             assert_eq!(handle, handle_json(cabinet_handle(ArchId(2))));
         }
-        let (label, handle) = label_and_handle(ArchId(1), "fixture");
+        let (label, handle) = label_and_handle(ArchId(1), "fixture", ObjectKind::Fixture);
         assert_eq!(label, "fx1");
         assert_eq!(handle, handle_json(fixture_handle(ArchId(1))));
+    }
+
+    #[test]
+    fn label_and_handle_follows_the_owner() {
+        use cadcraft_doc::arch::{
+            backsplash_handle, cabinet_handle, countertop_handle, fixture_handle, handle_json, opening_handle, railing_handle, room_handle,
+            stair_handle,
+        };
+        let id = ArchId(2);
+        for p in ["tread", "riser", "stringer", "skirt"] {
+            assert_eq!(label_and_handle(id, p, ObjectKind::Stair), ("s2".to_owned(), handle_json(stair_handle(id))), "{p}");
+        }
+        assert_eq!(label_and_handle(id, "post", ObjectKind::Railing), ("ra2".to_owned(), handle_json(railing_handle(id))));
+        assert_eq!(label_and_handle(id, "grille", ObjectKind::Opening), ("o2".to_owned(), handle_json(opening_handle(id))));
+        for p in ["ledger", "joist", "rim", "beam"] {
+            assert_eq!(label_and_handle(id, p, ObjectKind::Room), ("r2".to_owned(), handle_json(room_handle(id))), "{p}");
+        }
+        // The same part `counter`, three owners.
+        assert_eq!(label_and_handle(id, "counter", ObjectKind::Cabinet), ("cb2".to_owned(), handle_json(cabinet_handle(id))));
+        assert_eq!(label_and_handle(id, "counter", ObjectKind::Countertop), ("ct2".to_owned(), handle_json(countertop_handle(id))));
+        assert_eq!(label_and_handle(id, "backsplash", ObjectKind::Backsplash), ("bs2".to_owned(), handle_json(backsplash_handle(id))));
+        // A glass wall is a wall, not the opening its part name suggests.
+        assert_eq!(label_and_handle(id, "glass", ObjectKind::Wall).0, "w2");
+        let (label, handle) = label_and_handle(ArchId(1), "fixture", ObjectKind::Fixture);
+        assert_eq!(label, "fx1");
+        assert_eq!(handle, handle_json(fixture_handle(ArchId(1))));
+        // A terrain keeps the part-based label.
+        assert_eq!(label_and_handle(id, "wall", ObjectKind::Terrain).0, "w2");
     }
 
     #[test]

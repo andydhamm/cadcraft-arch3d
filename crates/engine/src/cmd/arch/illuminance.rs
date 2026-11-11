@@ -4,7 +4,8 @@ use cadcraft_doc::arch::{ArchId, light_label};
 use cadcraft_geom::Vec3;
 use serde_json::{Value, json};
 
-use crate::cmd::arch::render::{IlluminanceRequest, PathParams, SunChoice, parse_sun, render_hooks};
+use crate::cmd::arch::look::{apply_look_params, effective_look, effective_sun_dir};
+use crate::cmd::arch::render::{IlluminanceRequest, PathParams, SunChoice, render_hooks};
 use crate::cmd::{CommandSpec, bad};
 use crate::{Result, Session};
 
@@ -57,6 +58,13 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
         }
     };
 
+    // The look the light is measured under (sun intensity, cast shadows, sky) and the sun it asks
+    // for. An absent `sun` stays night, as phases 10 and 11 measured it.
+    let mut look = effective_look(&doc.arch, None);
+    let explicit = apply_look_params("illuminance", params, &doc.arch, &mut look, true)?;
+    let sun_dir = effective_sun_dir(&doc.arch, &look, explicit);
+    let sun = if params.get("sun").is_none() || !look.sun.on { SunChoice::Off } else { sun_dir.map_or(SunChoice::Default, SunChoice::Dir) };
+
     if method == "path" {
         let whole = |key: &str, lo: u64, hi: u64, def: u64| -> Result<u64> {
             match params.get(key) {
@@ -71,11 +79,6 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
         let spp = whole("spp", 1, 65536, 1024)?;
         let bounces = whole("bounces", 0, 32, 4)?;
         let seed = whole("seed", 0, 4294967295, 0)?;
-
-        let sun = match params.get("sun") {
-            None => SunChoice::Off,
-            Some(val) => parse_sun(Some(val), &doc)?,
-        };
 
         let path = PathParams {
             spp: spp as u32,
@@ -94,7 +97,8 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
             .as_ref()
             .ok_or_else(|| bad("illuminance", "path-traced illuminance needs the 3D renderer: run it from cadcraft-cli run or the app"))?;
 
-        let request = IlluminanceRequest::new(&doc, vec![[[point.x, point.y, point.z], [normal.x, normal.y, normal.z]]], sun, path);
+        let request =
+            IlluminanceRequest::new(&doc, vec![[[point.x, point.y, point.z], [normal.x, normal.y, normal.z]]], sun, path).with_look(look, sun_dir);
 
         (illuminance_fn)(&request).map_err(|e| bad("illuminance", e))
     } else {
@@ -113,8 +117,18 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
             })
             .collect::<Vec<_>>();
 
+        // The sun's direct light: 0 when it is off or `sun` is absent; a shadow ray when cast shadows are on.
+        let toward_sun = match sun {
+            SunChoice::Off => None,
+            SunChoice::Dir(d) => Some(Vec3::new(d[0], d[1], d[2])),
+            SunChoice::Default => Some(Vec3::new(-0.5, -0.5, std::f64::consts::FRAC_1_SQRT_2)),
+        };
+        let sun_lux =
+            toward_sun.map_or(0.0, |s| cadcraft_arch3d::light::sun_illuminance(&scene, point, normal, s, look.sun.intensity, look.sun.shadows));
+
         Ok(json!({
-            "lux": illumination.lux,
+            "lux": illumination.lux + sun_lux,
+            "sun": sun_lux,
             "lights": scene.lights.len(),
             "direct": true,
             "contributions": contributions,
@@ -127,7 +141,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("illuminance", "Illuminance", run)
             .menu(&["Architecture", "Illuminance"])
-            .params("{point: [x,y,z], normal?: [x,y,z], method?: \"direct\" | \"path\", path: spp? 1..=65536, bounces? 0..=32, seed? 0..=4294967295, sun?: false | {date, time}}")
+            .params("{point: [x,y,z], normal?: [x,y,z], method?: \"direct\" | \"path\", path: spp? 1..=65536, bounces? 0..=32, seed? 0..=4294967295, sun?: false | \"default\" | {on?, intensity?, shadows?, angle? | date, time | azimuth, elevation}, sky?}")
             .noundo(),
     ]
 }
@@ -179,6 +193,54 @@ mod tests {
         let ids: Vec<_> = contribs.iter().filter_map(|v| v.get("id").and_then(Value::as_str)).collect();
         assert_eq!(ids, vec!["lf0", "lf1", "lf2", "lf3"]);
         assert!(contribs.iter().all(|v| v.get("lux").and_then(Value::as_f64).is_some()));
+    }
+
+    fn column_session() -> Session {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        let mut model = ArchModel::default();
+        let mut w = cadcraft_doc::Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.2, 0.0), 0.2);
+        w.height = 3.0;
+        model.push_wall(w);
+        let d = s.doc_mut().unwrap();
+        d.arch = model;
+        d.touch_arch();
+        s
+    }
+
+    #[test]
+    fn direct_includes_the_sun_with_shadow_ray() {
+        let mut s = column_session();
+        let overhead = json!({"azimuth": 0, "elevation": 90});
+        let open = s.execute("illuminance", &json!({"point": [5.0, 5.0, 0.0], "sun": overhead, "sky": false})).unwrap();
+        assert!((open["sun"].as_f64().unwrap() - 100_000.0).abs() < 1.0, "{open}");
+        assert!((open["lux"].as_f64().unwrap() - 100_000.0).abs() < 1.0);
+        // Under the column the sun is blocked, unless cast shadows are off.
+        let under = json!({"point": [0.1, 0.0, 0.0], "sun": overhead});
+        assert_eq!(s.execute("illuminance", &under).unwrap()["sun"].as_f64(), Some(0.0));
+        let lit = s.execute("illuminance", &json!({"point": [0.1, 0.0, 0.0], "sun": {"azimuth": 0, "elevation": 90, "shadows": false}})).unwrap();
+        assert!((lit["sun"].as_f64().unwrap() - 100_000.0).abs() < 1.0, "{lit}");
+    }
+
+    #[test]
+    fn intensity_scales_absent_sun_is_night() {
+        let mut s = column_session();
+        let at = |s: &mut Session, sun: Option<Value>| {
+            let mut p = json!({"point": [5.0, 5.0, 0.0]});
+            if let Some(v) = sun {
+                p["sun"] = v;
+            }
+            s.execute("illuminance", &p).unwrap()
+        };
+        let half = at(&mut s, Some(json!({"azimuth": 0, "elevation": 90, "intensity": 50000})));
+        assert!((half["sun"].as_f64().unwrap() - 50_000.0).abs() < 1.0, "{half}");
+        let low = at(&mut s, Some(json!({"azimuth": 180, "elevation": 30})));
+        assert!((low["sun"].as_f64().unwrap() - 50_000.0).abs() < 1.0, "{low}");
+        let off = at(&mut s, Some(json!({"azimuth": 0, "elevation": 90, "on": false})));
+        assert_eq!((off["sun"].as_f64(), off["lux"].as_f64()), (Some(0.0), Some(0.0)));
+        let night = at(&mut s, None);
+        assert_eq!((night["sun"].as_f64(), night["lux"].as_f64()), (Some(0.0), Some(0.0)));
+        assert!(s.execute("illuminance", &json!({"point": [5.0, 5.0, 0.0], "sun": {"azimuth": 0, "elevation": 91}})).is_err());
     }
 
     #[test]
