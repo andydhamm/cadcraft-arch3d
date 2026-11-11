@@ -366,6 +366,7 @@ impl Offscreen {
         self.last_look = match opts.lit {
             Some(frame) => {
                 let size = (self.targets.width, self.targets.height);
+                self.meter.scene_key = scene_key;
                 crate::frame_look::frame_look(scene, camera, size, &frame.lighting, opts.ground, &mut self.meter)
             }
             None => crate::frame_look::FrameLook::default(),
