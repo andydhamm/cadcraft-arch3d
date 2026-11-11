@@ -126,23 +126,29 @@ pub async fn request_compute_with(instance: &wgpu::Instance, choice: AdapterChoi
     let gpu = ComputeGpu::new(device, queue, info, rq, features.contains(wgpu::Features::PIPELINE_CACHE), adapter_key);
     #[cfg(not(target_arch = "wasm32"))]
     {
+        let tid = std::thread::current().id();
         let mut shared = SHARED_COMPUTE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some((_, first)) = shared.iter().find(|(k, _)| *k == (choice, ray_query)) {
-            // Another thread made one first: keep ours open (never dropped) and share theirs.
+        if let Some((_, first)) = shared.iter().find(|(k, _)| *k == (tid, choice, ray_query)) {
             let _ = crate::offscreen::kept_for_the_process(gpu.device.clone());
             return Ok(Some(first.clone()));
         }
-        shared.push(((choice, ray_query), gpu.clone()));
+        shared.push(((tid, choice, ray_query), gpu.clone()));
     }
     Ok(Some(gpu))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-static SHARED_COMPUTE: std::sync::Mutex<Vec<((AdapterChoice, bool), ComputeGpu)>> = std::sync::Mutex::new(Vec::new());
+static SHARED_COMPUTE: std::sync::Mutex<Vec<((std::thread::ThreadId, AdapterChoice, bool), ComputeGpu)>> = std::sync::Mutex::new(Vec::new());
 
 #[cfg(not(target_arch = "wasm32"))]
 fn shared_compute(choice: AdapterChoice, ray_query: bool) -> Option<ComputeGpu> {
-    SHARED_COMPUTE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter().find(|(k, _)| *k == (choice, ray_query)).map(|(_, g)| g.clone())
+    let tid = std::thread::current().id();
+    SHARED_COMPUTE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .find(|(k, _)| *k == (tid, choice, ray_query))
+        .map(|(_, g)| g.clone())
 }
 
 #[cfg(test)]
