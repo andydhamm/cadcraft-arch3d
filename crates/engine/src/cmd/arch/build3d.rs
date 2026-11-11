@@ -110,6 +110,8 @@ fn run_build3d(s: &mut Session, params: &Value) -> crate::Result<Value> {
         "revision": arch_revision,
         "probe": probe_results,
         "parts": parts_json(&scene),
+        // The ground plane out to the far plane is not a mesh: `meshes` and `parts` never count it.
+        "horizon": u8::from(scene.horizon.is_some()),
     });
     if let (Some(points), Value::Object(obj)) = (ceiling_points, &mut reply) {
         let zs: Vec<Value> = points
@@ -1604,6 +1606,26 @@ mod tests {
         let r = s.execute("build3d", &json!({"ceiling": at_cap})).unwrap();
         assert_eq!(r["ceiling"].as_array().map(Vec::len), Some(1024));
         assert_eq!(s.doc().unwrap().arch_revision, rev);
+    }
+
+    #[test]
+    fn build3d_reports_horizon() {
+        let mut s = fresh_session();
+        let r = s.execute("build3d", &json!({})).unwrap();
+        assert_eq!(r["horizon"], 0, "no terrain, no horizon");
+        let boundary = json!([[0, 0], [40, 0], [40, 30], [0, 30]]);
+        s.execute("terrain", &json!({"boundary": boundary, "elevation": 0})).unwrap();
+        let r = s.execute("build3d", &json!({"probe": [[500, 500, -0.5], [500, 500, 0.5]]})).unwrap();
+        assert_eq!(r["horizon"], 1);
+        assert_eq!(r["meshes"], 1, "the horizon is not a mesh");
+        assert!(r["parts"].get("horizon").is_none(), "{}", r["parts"]);
+        assert_eq!(r["probe"][0]["part"], "horizon");
+        assert!(r["probe"][1].is_null());
+        let min_x = r["bounds"]["min"][0].as_f64().unwrap_or(f64::NAN);
+        assert!(min_x > -1.5 && min_x < 1.0, "the horizon must not widen the bounds: {}", r["bounds"]);
+        s.execute("terrain.delete", &json!({})).unwrap();
+        let r = s.execute("build3d", &json!({})).unwrap();
+        assert_eq!(r["horizon"], 0);
     }
 
     #[test]
