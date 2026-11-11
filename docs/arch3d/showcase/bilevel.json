@@ -173,5 +173,7 @@
 {"cmd":"elevation","params":{"side":"west","name":"West","insert":[50,75],"scale":50,"dimensions":true}},
 {"cmd":"section","params":{"from":[0,8],"to":[26,8],"look":[0,1],"name":"Section A","insert":[50,25],"scale":50}},
 {"cmd":"section","params":{"from":[13,-5],"to":[13,35],"look":[1,0],"name":"Section B","insert":[50,75],"scale":50}},
-{"cmd":"room","params":{"points":[[3.05,0.1],[5.95,0.1],[5.95,2.95],[3.05,2.95],[3.05,0.1]],"name":"Foyer","type":"openBelow","level":"Main"}}
+{"cmd":"room","params":{"points":[[3.05,0.1],[5.95,0.1],[5.95,2.95],[3.05,2.95],[3.05,0.1]],"name":"Foyer","type":"openBelow","level":"Main"}},
+{"cmd":"paint.material","params":{"material":"#b08050","target":"room/r16/floor","scope":"plan"}},
+{"cmd":"paint.material","params":{"material":"#f4f4f0","target":"room/r16/ceiling","scope":"plan"}}
 ]
