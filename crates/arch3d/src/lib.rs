@@ -289,7 +289,13 @@ impl Default for MaterialDef {
 
 /// Copy a model backdrop into a scene and load any image backdrop pixels under `item:<id>`.
 pub fn set_backdrop(model: &ArchModel, scene: &mut Scene3d, backdrop: Option<&Backdrop>) {
-    scene.textures.retain(|key, _| !key.starts_with("item:"));
+    // Drop the previous backdrop's picture unless a material (a paint or symbol) uses it.
+    if let Some(Backdrop::Image { item, .. }) = &scene.backdrop {
+        let key = format!("item:{item}");
+        if !scene.materials.values().any(|m| m.texture.as_deref() == Some(key.as_str())) {
+            scene.textures.remove(&key);
+        }
+    }
     scene.backdrop = backdrop.cloned();
     if let Some(Backdrop::Image { item, .. }) = backdrop
         && let Some(image) = model.images.get(item)
