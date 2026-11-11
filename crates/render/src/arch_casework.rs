@@ -1,7 +1,7 @@
 //! Cabinets and fixtures in the plan (phase 13): each symbol on its layer, tagged with the item's
 //! handle so the plan picks and selects it.
 
-use cadcraft_arch::casework::{cabinet_layer, cabinet_symbol, fixture_layer, fixture_symbol};
+use cadcraft_arch::casework::{cabinet_layer, fixture_layer, fixture_symbol};
 use cadcraft_color::Color;
 use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::{cabinet_handle, fixture_handle};
@@ -25,7 +25,7 @@ pub(crate) fn push_casework(d: &Drawing, list: &mut DisplayList, plotting: bool)
         }
         let ink = ink_for(d, layer);
         let transparency = layer_transparency(d, layer);
-        for sym in cabinet_symbol(c) {
+        for sym in cadcraft_arch::casework_symbol::cabinet_symbol_in(&d.arch, c) {
             if sym.len() >= 2 {
                 push_polyline_with_transparency(list, cabinet_handle(c.id), &ink, &sym, transparency);
             }

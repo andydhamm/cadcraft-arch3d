@@ -43,6 +43,18 @@ pub const FRAME_SUN: u32 = 1;
 pub const FRAME_SKY: u32 = 2;
 pub const FRAME_FURNACE: u32 = 4;
 pub const FRAME_GROUND: u32 = 8;
+/// The environment map light is present [p19-env-path].
+pub const FRAME_ENV: u32 = 16;
+/// The moon is a directional light [p19-sky].
+pub const FRAME_MOON: u32 = 32;
+/// The seeing-in clip box is active [p19-seeing-in-render].
+pub const FRAME_CLIP: u32 = 64;
+/// The sun casts no shadows [p19-sun].
+pub const FRAME_SUN_NO_SHADOW: u32 = 128;
+/// Normal maps are sampled [p19-normal-maps-render].
+pub const FRAME_NORMAL_MAPS: u32 = 256;
+/// Surfaces are treated as Lambertian [p19-exposure].
+pub const FRAME_LAMBERT: u32 = 512;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
@@ -119,7 +131,9 @@ pub struct GpuFrame {
     pub seed: u32,
     pub bounces: u32,
     pub light_count: u32,
-    /// [`FRAME_SUN`] | [`FRAME_SKY`] | [`FRAME_FURNACE`] | [`FRAME_GROUND`].
+    /// Any combination of [`FRAME_SUN`], [`FRAME_SKY`], [`FRAME_FURNACE`],
+    /// [`FRAME_GROUND`], [`FRAME_ENV`], [`FRAME_MOON`], [`FRAME_CLIP`],
+    /// [`FRAME_SUN_NO_SHADOW`], [`FRAME_NORMAL_MAPS`] and [`FRAME_LAMBERT`].
     pub flags: u32,
     /// Samples per pixel this pass adds.
     pub spp_this_pass: u32,
@@ -133,6 +147,28 @@ pub struct GpuFrame {
     pub furnace: [f32; 4],
     pub probe_count: u32,
     pub _pad: [u32; 3],
+    /// Environment map in the aux (`ies`) buffer: texel offset, width, height and flags
+    /// (1 present, 2 visible) [p19-env-path].
+    pub env: [u32; 4],
+    /// Marginal CDF offset and conditional CDF offset, two unused [p19-env-path].
+    pub env_aux: [u32; 4],
+    /// Environment parameters: x is the total weight [p19-env-path].
+    pub env_params: [f32; 4],
+    /// Toward the moon (unit, w unused) [p19-sky].
+    pub moon_dir: [f32; 4],
+    /// Moon illuminance in lux (RGB, w unused) [p19-sky].
+    pub moon_rgb: [f32; 4],
+    /// Seeing-in clip box, min corner [p19-seeing-in-render].
+    pub clip_min: [f32; 4],
+    /// Seeing-in clip box, max corner [p19-seeing-in-render].
+    pub clip_max: [f32; 4],
+    /// Camera forward (xyz, unit) and near-clip distance in metres (w) [p19-seeing-in-render].
+    pub view: [f32; 4],
+    /// Normal maps in the aux buffer: texel offset, map edge, map count and one unused
+    /// [p19-normal-maps-render].
+    pub tex: [u32; 4],
+    /// Tone-curve code: x is 1 ACES (p19-exposure adds 2 Hable, 3 none).
+    pub look: [u32; 4],
 }
 
 /// One irradiance probe: a point and the unit normal of the surface it lies on.
@@ -683,8 +719,93 @@ mod tests {
         assert_eq!(std::mem::size_of::<GpuTri>(), 64);
         assert_eq!(std::mem::size_of::<GpuMaterial>(), 48);
         assert_eq!(std::mem::size_of::<GpuLight>(), 80);
-        assert_eq!(std::mem::size_of::<GpuFrame>(), 208);
+        assert_eq!(std::mem::size_of::<GpuFrame>(), 368);
         assert_eq!(std::mem::size_of::<GpuProbe>(), 32);
+    }
+
+    #[test]
+    fn gpu_frame_layout_matches_wgsl() {
+        // Field offsets, in the order the WGSL `Frame` declares them.
+        assert_eq!(std::mem::offset_of!(GpuFrame, inv_view_proj), 0);
+        assert_eq!(std::mem::offset_of!(GpuFrame, eye), 64);
+        assert_eq!(std::mem::offset_of!(GpuFrame, size), 80);
+        assert_eq!(std::mem::offset_of!(GpuFrame, sample_base), 88);
+        assert_eq!(std::mem::offset_of!(GpuFrame, seed), 92);
+        assert_eq!(std::mem::offset_of!(GpuFrame, bounces), 96);
+        assert_eq!(std::mem::offset_of!(GpuFrame, light_count), 100);
+        assert_eq!(std::mem::offset_of!(GpuFrame, flags), 104);
+        assert_eq!(std::mem::offset_of!(GpuFrame, spp_this_pass), 108);
+        assert_eq!(std::mem::offset_of!(GpuFrame, sun_dir), 112);
+        assert_eq!(std::mem::offset_of!(GpuFrame, sun_rgb), 128);
+        assert_eq!(std::mem::offset_of!(GpuFrame, sky_zenith), 144);
+        assert_eq!(std::mem::offset_of!(GpuFrame, sky_horizon), 160);
+        assert_eq!(std::mem::offset_of!(GpuFrame, furnace), 176);
+        assert_eq!(std::mem::offset_of!(GpuFrame, probe_count), 192);
+        assert_eq!(std::mem::offset_of!(GpuFrame, env), 208);
+        assert_eq!(std::mem::offset_of!(GpuFrame, env_aux), 224);
+        assert_eq!(std::mem::offset_of!(GpuFrame, env_params), 240);
+        assert_eq!(std::mem::offset_of!(GpuFrame, moon_dir), 256);
+        assert_eq!(std::mem::offset_of!(GpuFrame, moon_rgb), 272);
+        assert_eq!(std::mem::offset_of!(GpuFrame, clip_min), 288);
+        assert_eq!(std::mem::offset_of!(GpuFrame, clip_max), 304);
+        assert_eq!(std::mem::offset_of!(GpuFrame, view), 320);
+        assert_eq!(std::mem::offset_of!(GpuFrame, tex), 336);
+        assert_eq!(std::mem::offset_of!(GpuFrame, look), 352);
+        assert_eq!(std::mem::size_of::<GpuFrame>(), 368);
+
+        // The six new flag bits have their reserved values and all ten bits are distinct.
+        assert_eq!((FRAME_ENV, FRAME_MOON, FRAME_CLIP, FRAME_SUN_NO_SHADOW, FRAME_NORMAL_MAPS, FRAME_LAMBERT), (16, 32, 64, 128, 256, 512));
+        let bits = [
+            FRAME_SUN,
+            FRAME_SKY,
+            FRAME_FURNACE,
+            FRAME_GROUND,
+            FRAME_ENV,
+            FRAME_MOON,
+            FRAME_CLIP,
+            FRAME_SUN_NO_SHADOW,
+            FRAME_NORMAL_MAPS,
+            FRAME_LAMBERT,
+        ];
+        for a in 0..bits.len() {
+            for b in a + 1..bits.len() {
+                assert_eq!(bits[a] & bits[b], 0, "frame flags overlap");
+                assert_ne!(bits[a], bits[b], "frame flags equal");
+            }
+        }
+
+        let wgsl = include_str!("../shaders/pt/common.wgsl");
+        // The ten new fields, in the same order as the WGSL `Frame`.
+        let fields = [
+            "env: vec4<u32>",
+            "env_aux: vec4<u32>",
+            "env_params: vec4<f32>",
+            "moon_dir: vec4<f32>",
+            "moon_rgb: vec4<f32>",
+            "clip_min: vec4<f32>",
+            "clip_max: vec4<f32>",
+            "view: vec4<f32>",
+            "tex: vec4<u32>",
+            "look: vec4<u32>",
+        ];
+        let mut at = 0usize;
+        for f in fields {
+            let i = wgsl.find(f).unwrap_or_else(|| panic!("wgsl missing field {f}"));
+            assert!(i > at, "wgsl field {f} out of order");
+            at = i + f.len();
+        }
+        for (name, value) in [
+            ("FRAME_ENV", 16u32),
+            ("FRAME_MOON", 32u32),
+            ("FRAME_CLIP", 64u32),
+            ("FRAME_SUN_NO_SHADOW", 128u32),
+            ("FRAME_NORMAL_MAPS", 256u32),
+            ("FRAME_LAMBERT", 512u32),
+        ] {
+            assert!(wgsl.contains(&format!("const {name}: u32 = {value}u;")), "wgsl missing `const {name}: u32 = {value}u;`",);
+        }
+        assert!(wgsl.contains("fn hit_clipped(p: vec3<f32>) -> bool"));
+        assert!(wgsl.contains("fn camera_t_min(d: vec3<f32>) -> f32"));
     }
 
     #[test]

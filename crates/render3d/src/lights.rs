@@ -5,7 +5,9 @@
 //! - binding 0: `FrameU` ([`FRAME_UNIFORM_SIZE`] bytes): `sun_vp: mat4x4<f32>` (the sun map's
 //!   light matrix), `sun: vec4<f32>` (x = depth bias, y = 1 when a sun map is bound, z = 1 when
 //!   the sun is on, w = 0), `params: vec4<f32>` (x = exposure in display units per lux, y = 1 to
-//!   tone-map (Finalize), z = PCF radius in texels (0 = one tap), w = shadow-atlas layer size).
+//!   tone-map (Finalize), z = PCF radius in texels (0 = one tap), w = shadow-atlas layer size),
+//!   `ext: vec4<f32>` (x = ambient illuminance in lux, y = 1 when `sh` is valid),
+//!   `sh: array<vec4<f32>, 9>` (spherical-harmonic ambient, rgb in xyz); 256 bytes in all.
 //! - binding 1: the sun map, `texture_depth_2d` (a 1×1 map when there is none).
 //! - binding 2: `LightsU` ([`LIGHTS_UNIFORM_SIZE`] bytes): `count: vec4<u32>` (x = lights
 //!   drawn), `lights: array<GpuLight, 64>`, `spot_vp: array<mat4x4<f32>, 64>` (light i's spot
@@ -47,7 +49,7 @@ pub const DEFAULT_EXPOSURE: f32 = 0.01;
 /// Ambient level with the sun off (night).
 pub const NIGHT_AMBIENT: f32 = 0.02;
 /// Bytes of `FrameU` (binding 0) and `LightsU` (binding 2).
-pub const FRAME_UNIFORM_SIZE: u64 = 96;
+pub const FRAME_UNIFORM_SIZE: u64 = 256;
 pub const LIGHTS_UNIFORM_SIZE: u64 = 16 + 64 * MAX_GPU_LIGHTS as u64 + 64 * MAX_GPU_LIGHTS as u64;
 
 /// A light's shadow-map slot in the atlas.

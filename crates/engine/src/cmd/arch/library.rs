@@ -123,6 +123,8 @@ fn surface_exists(m: &ArchModel, s: &Surface) -> bool {
         Surface::Cabinet { cabinet, .. } => m.cabinets.iter().any(|c| c.id == *cabinet),
         Surface::Fixture(f) => m.fixtures.iter().any(|x| x.id == *f),
         Surface::Furnishing { furnishing, .. } => m.furnishing(*furnishing).is_some(),
+        Surface::Countertop(c) => m.countertop(*c).is_some(),
+        Surface::Backsplash(b) => m.backsplash(*b).is_some(),
     }
 }
 
