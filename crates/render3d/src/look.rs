@@ -21,7 +21,15 @@ pub fn lighting_for(look: &Look, sun_dir: Option<[f64; 3]>, budget: usize) -> Li
             Some(_) => None,
         }
     };
-    Lighting { sun, sun_shadow: sun.is_some() && sun_dir.is_some(), budget, exposure: DEFAULT_EXPOSURE, look: look.clone(), sun_dir }
+    Lighting {
+        sun_shadow: sun.is_some() && sun_dir.is_some(),
+        sun,
+        budget,
+        exposure: DEFAULT_EXPOSURE,
+        look: look.clone(),
+        sun_dir,
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
