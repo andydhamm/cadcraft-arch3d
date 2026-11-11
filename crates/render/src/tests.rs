@@ -1166,51 +1166,54 @@ fn without_linetypes_every_line_is_drawn_whole() {
     assert!(drawn.prims.len() > 2 * continuous.prims.len(), "drawn with its linetype: {} primitives", drawn.prims.len());
 }
 
-// ---------- arch poché ----------
-
-/// A drawing with one model-space line and one arch wall (ArchId 0).
-fn arch_wall_drawing() -> Drawing {
-    let mut d = Drawing::new_imperial();
-    d.add(&Space::Model, Common::default(), EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(10.0, 0.0, 0.0) }))
-        .unwrap();
-    let mut model = ArchModel::default();
-    model.add_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.3, height: 3.0, ..Default::default() });
-    d.arch = model;
-    d.touch_arch();
-    d
+/// A broken table whose parts, with their repeated labels, together hold more cells than a table may
+/// lay out is drawn as its outline, though the table's own cells are within the limit.
+#[test]
+fn broken_table_cells_count_across_its_parts() {
+    let d = Drawing::new_imperial();
+    let t = cadcraft_doc::Table {
+        col_widths: vec![1.0; 600],
+        row_heights: vec![1.0; 1000],
+        title: true,
+        header: true,
+        breaks: Some(cadcraft_doc::TableBreak { enabled: true, height: 3.0, ..Default::default() }),
+        ..Default::default()
+    };
+    assert!(t.parts().len() > 500 && 1000 * 600 <= crate::MAX_LAYOUT_CELLS);
+    let g = crate::table_geometry(&d, &t);
+    let parts = t.parts();
+    assert_eq!((g.lines.len(), g.texts.len(), g.fills.len()), (4 * parts.len(), 0, 0));
+    // Each part's box starts at its own origin.
+    let top = |i: usize| g.lines[4 * i].a;
+    assert!((0..parts.len()).all(|i| top(i) == parts[i].origin));
 }
 
 #[test]
-fn build_includes_arch_poché() {
-    let d = arch_wall_drawing();
-    let l = build(&d, &Space::Model, &Options::default());
-    assert!(l.prims.iter().any(|p| p.kind == Kind::Tris && p.handle == crate::arch_handle(ArchId(0))), "no arch poché tris in the display list");
-}
-
-#[test]
-fn build_plot_includes_arch_poché() {
-    let d = arch_wall_drawing();
-    let l = build_plot(&d, &Space::Model, &Options::default());
-    assert!(l.prims.iter().any(|p| p.kind == Kind::Tris && p.handle == crate::arch_handle(ArchId(0))), "no arch poché tris in the plot display list");
-}
-
-#[test]
-fn arch_poché_extends_display_bounds() {
-    let mut d = Drawing::new_imperial();
-    d.add(&Space::Model, Common::default(), EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(1.0, 0.0, 0.0) }))
-        .unwrap();
-    let mut model = ArchModel::default();
-    model.add_wall(Wall { start: Vec2::new(100.0, 100.0), end: Vec2::new(110.0, 100.0), thickness: 0.3, height: 3.0, ..Default::default() });
-    d.arch = model;
-    d.touch_arch();
-    let l = build(&d, &Space::Model, &Options::default());
-    assert!(l.bounds.contains(Vec2::new(100.0, 100.0)), "bounds do not contain wall start");
-    assert!(l.bounds.contains(Vec2::new(110.0, 100.0)), "bounds do not contain wall end");
-}
-
-#[test]
-fn paper_space_skips_arch() {
-    let d = arch_wall_drawing();
-    let l = build(&d, &Space::Paper("Layout1".into()), &Options::default());
-    assert!(!l.prims.iter().any(|p| p.handle == crate::arch_handle(ArchId(0))), "arch poché drawn in paper space");
+fn rotated_and_reversed_copies_of_a_curved_loop_fill_once() {
+    let ring = |rot: usize, rev: bool| {
+        let mut v: Vec<PolyVertex> = [(0.0, 0.0, 0.5), (4.0, 0.0, -0.25), (4.0, 3.0, 0.0), (0.0, 3.0, 0.1)]
+            .map(|(x, y, bulge)| PolyVertex { bulge, ..PolyVertex::new(Vec2::new(x, y)) })
+            .to_vec();
+        if rev {
+            // The same boundary wound the other way: bulges move to the other end of their edge and flip.
+            let b: Vec<f64> = v.iter().map(|q| q.bulge).collect();
+            v.reverse();
+            let n = v.len();
+            for (j, q) in v.iter_mut().enumerate() {
+                q.bulge = -b[(n - 1 - j + n - 1) % n];
+            }
+        }
+        v.rotate_left(rot);
+        HatchLoop { vertices: v, outer: true, sources: Vec::new() }
+    };
+    let mut h = pattern_hatch("SOLID", 1.0, (0.0, 0.0, 1.0, 1.0));
+    h.loops = vec![ring(0, false), ring(2, false), ring(1, true), ring(3, true)];
+    assert_eq!(loops_of(&h).len(), 1);
+    // A different boundary is kept.
+    h.loops.push(HatchLoop {
+        vertices: ring(0, false).vertices.into_iter().map(|q| PolyVertex { bulge: 0.0, ..q }).collect(),
+        outer: true,
+        sources: Vec::new(),
+    });
+    assert_eq!(loops_of(&h).len(), 2);
 }

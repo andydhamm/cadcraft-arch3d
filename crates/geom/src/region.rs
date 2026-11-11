@@ -461,9 +461,10 @@ fn outside(core: &Graph, u: usize, steps: usize) -> Option<Vec<Vec2>> {
 }
 
 /// Outlines of the groups of curves inside the face `outer` (vertex indices into `g`).
-fn islands_in(g: &Graph, comp: &[usize], core: &Graph, outer: &[usize], p: Vec2) -> Vec<Island> {
+fn islands(g: &Graph, outer: &[usize], p: Vec2) -> Option<Vec<Island>> {
+    let comp = components(g);
     let outer_comp: std::collections::HashSet<usize> = outer.iter().filter_map(|&i| comp.get(i).copied()).collect();
-    let Some(outer_pts) = points(g, outer) else { return Vec::new() };
+    let outer_pts = points(g, outer)?;
     let ob = Bounds2::from_points(outer_pts.iter().copied());
     // Leftmost (then lowest) vertex still on a cycle, per component.
     let mut start: HashMap<usize, usize> = HashMap::new();
@@ -492,19 +493,32 @@ fn islands_in(g: &Graph, comp: &[usize], core: &Graph, outer: &[usize], p: Vec2)
     let mut starts: Vec<(usize, usize)> = start.into_iter().collect();
     starts.sort_unstable();
     let mut out = Vec::new();
+    // Each containment test scans a whole polygon, accepted or not: they share one allowance of
+    // polygon edges, and the search ends when it is spent.
+    let mut edges_left: usize = 100_000_000;
     for (c, u) in starts {
         if out.len() >= MAX_ISLANDS {
             break;
         }
         let Some(&pu) = core.pts.get(u) else { continue };
-        if !ob.contains(pu) || !point_in_polygon(&outer_pts, pu) {
+        if !ob.contains(pu) {
+            continue;
+        }
+        let left = edges_left.checked_sub(outer_pts.len())?;
+        edges_left = left;
+        if !point_in_polygon(&outer_pts, pu) {
             continue;
         }
         let steps = edges.get(&c).copied().unwrap_or(0).saturating_add(4);
         let Some(lp) = outside(core, u, steps) else { continue };
         let area = shoelace(&lp);
         let ib = Bounds2::from_points(lp.iter().copied());
-        if lp.len() < 3 || !area.is_finite() || area <= 0.0 || !ob.contains_box(&ib) || point_in_polygon(&lp, p) {
+        if lp.len() < 3 || !area.is_finite() || area <= 0.0 || !ob.contains_box(&ib) {
+            continue;
+        }
+        let left = edges_left.checked_sub(lp.len())?;
+        edges_left = left;
+        if point_in_polygon(&lp, p) {
             continue;
         }
         let mut src = sources.remove(&c).unwrap_or_default();
@@ -512,7 +526,7 @@ fn islands_in(g: &Graph, comp: &[usize], core: &Graph, outer: &[usize], p: Vec2)
         src.dedup();
         out.push(Island { outline: lp, sources: src });
     }
-    out
+    Some(out)
 }
 
 /// The point of the nearest other curve within `snap` of the end `e` of curve `i`, as (curve,
@@ -524,6 +538,10 @@ fn nearest_curve(polys: &[Vec<Vec2>], i: usize, e: Vec2, snap: f64, tol: f64, bu
     for (j, other) in polys.iter().enumerate() {
         if j == i {
             continue;
+        }
+        // A curve with no segment costs a visit too, so many of them can't multiply the searches.
+        if other.len() < 2 {
+            *budget = budget.checked_sub(1).ok_or(())?;
         }
         for (k, w) in other.windows(2).enumerate() {
             if *budget == 0 {
@@ -623,7 +641,15 @@ pub fn boundary_at(polys: &[Vec<Vec2>], p: Vec2, tol: f64) -> Option<Boundary> {
 
 /// [`boundary_at`], with gaps of up to `gap` between curve ends closed (HPGAPTOL).
 pub fn boundary_at_gap(polys: &[Vec<Vec2>], p: Vec2, tol: f64, gap: f64) -> Option<Boundary> {
-    Arrangement::new(polys, tol, gap)?.boundary_at(p)
+    let g = build_gap(polys, tol, gap)?;
+    let ids = outer_face(&g, p)?;
+    let outer = points(&g, &ids)?;
+    let islands = islands(&g, &ids, p)?;
+    let mut outer_sources: Vec<usize> =
+        ids.iter().zip(ids.iter().cycle().skip(1)).filter_map(|(&u, &v)| g.edge_src.get(&(u.min(v), u.max(v))).copied()).collect();
+    outer_sources.sort_unstable();
+    outer_sources.dedup();
+    Some(Boundary { outer, islands, outer_sources })
 }
 
 /// The outside outline of curves that together enclose an area (counter-clockwise, dangling
