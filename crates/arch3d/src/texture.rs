@@ -427,8 +427,8 @@ mod tests {
         // Drywall and plaster are flat (single colour, no noise).
         for f in [Finish::Drywall, Finish::Plaster] {
             let t = texture(f);
-            let first = t.rgba[0];
-            assert!(t.rgba.iter().all(|&v| v == first), "{f:?} is not flat");
+            let first = [t.rgba[0], t.rgba[1], t.rgba[2], t.rgba[3]];
+            assert!(t.rgba.chunks_exact(4).all(|p| p == first), "{f:?} is not flat");
         }
     }
 

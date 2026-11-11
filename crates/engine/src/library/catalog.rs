@@ -837,13 +837,23 @@ mod tests {
         }
     }
 
-    /// The four finishes, with their names.
+    /// The nine finishes, with their names.
     fn finishes(items: &[ItemRecord]) {
         let finishes: Vec<(String, String)> = items.iter().filter(|r| r.id.starts_with("finish:")).map(|r| (r.id.clone(), r.name.clone())).collect();
         assert_eq!(
             finishes,
-            [("finish:siding", "Siding"), ("finish:shingles", "Shingles"), ("finish:brick", "Brick"), ("finish:wood", "Wood")]
-                .map(|(a, b)| (a.to_string(), b.to_string()))
+            [
+                ("finish:siding", "Siding"),
+                ("finish:shingles", "Shingles"),
+                ("finish:brick", "Brick"),
+                ("finish:wood", "Wood"),
+                ("finish:concrete", "Concrete"),
+                ("finish:tile", "Tile"),
+                ("finish:carpet", "Carpet"),
+                ("finish:drywall", "Drywall"),
+                ("finish:plaster", "Plaster"),
+            ]
+            .map(|(a, b)| (a.to_string(), b.to_string()))
         );
         assert!(items.iter().filter(|r| r.id.starts_with("finish:")).all(|r| r.category == "Materials" && r.kind == ItemKind::Finish));
         for f in Finish::ALL {

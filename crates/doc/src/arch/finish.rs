@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn finish_names_round_trip() {
         let names: Vec<&str> = Finish::ALL.iter().map(|f| f.name()).collect();
-        assert_eq!(names, ["siding", "shingles", "brick", "wood"]);
+        assert_eq!(names, ["siding", "shingles", "brick", "wood", "concrete", "tile", "carpet", "drywall", "plaster"]);
         for f in Finish::ALL {
             assert_eq!(Finish::parse(f.name()), Some(f));
             let json = serde_json::to_string(&f).unwrap();
@@ -124,12 +124,23 @@ mod tests {
             (Finish::Shingles, false, true, false),
             (Finish::Brick, true, false, false),
             (Finish::Wood, true, true, true),
+            (Finish::Concrete, true, false, true),
+            (Finish::Tile, true, false, true),
+            (Finish::Carpet, false, false, true),
+            (Finish::Drywall, true, false, false),
+            (Finish::Plaster, false, false, false),
         ];
         for (f, w, r, fl) in rows {
             assert_eq!(f.for_walls(), w, "{f:?} walls");
             assert_eq!(f.for_roofs(), r, "{f:?} roofs");
             assert_eq!(f.for_floors(), fl, "{f:?} floors");
         }
+    }
+
+    #[test]
+    fn for_ceilings() {
+        let ceilings: Vec<Finish> = Finish::ALL.into_iter().filter(|f| f.for_ceilings()).collect();
+        assert_eq!(ceilings, [Finish::Wood, Finish::Drywall, Finish::Plaster]);
     }
 
     #[test]
