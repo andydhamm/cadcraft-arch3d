@@ -29,6 +29,7 @@ pub mod connections;
 pub mod countertop;
 pub mod deck;
 pub mod detect;
+pub mod dimension;
 pub mod electrical;
 pub mod flight_cut;
 pub mod foundation;
