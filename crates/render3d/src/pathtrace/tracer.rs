@@ -1353,23 +1353,8 @@ mod tests {
             light_count: 0,
             flags: 0,
             spp_this_pass: 1,
-            sun_dir: [0.0, 0.0, 1.0, 0.0],
-            sun_rgb: [1.0, 1.0, 1.0, 0.0],
-            sky_zenith: [1.0, 1.0, 1.0, 0.0],
-            sky_horizon: [1.0, 1.0, 1.0, 0.0],
-            furnace: [0.0, 0.0, 0.0, 0.0],
             probe_count: 0,
-            _pad: [0, 0, 0],
-            env: [0, 0, 0, 0],
-            env_aux: [0, 0, 0, 0],
-            env_params: [0.0, 0.0, 0.0, 0.0],
-            moon_dir: [0.0, 0.0, 1.0, 0.0],
-            moon_rgb: [0.0, 0.0, 0.0, 0.0],
-            clip_min: [0.0, 0.0, 0.0, 0.0],
-            clip_max: [1.0, 1.0, 1.0, 0.0],
-            view: [0.0, 0.0, 1.0, 0.0],
-            tex: [0, 0, 0, 0],
-            look: [0, 0, 0, 0],
+            ..Default::default()
         };
         let _ = uniform(&gpu, "pt frame", &frame);
     }
