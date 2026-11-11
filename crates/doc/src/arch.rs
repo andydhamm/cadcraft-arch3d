@@ -4654,7 +4654,10 @@ mod tests {
     #[test]
     fn arch_kind_countertop_backsplash_molding_line_keys_labels_handles() {
         let id = ArchId(3);
-        assert_eq!((ArchKind::Countertop.key(), ArchKind::Backsplash.key(), ArchKind::MoldingLine.key()), ("countertop", "backsplash", "moldingLine"));
+        assert_eq!(
+            (ArchKind::Countertop.key(), ArchKind::Backsplash.key(), ArchKind::MoldingLine.key()),
+            ("countertop", "backsplash", "moldingLine")
+        );
         assert_eq!(
             (ArchKind::Countertop.label(id), ArchKind::Backsplash.label(id), ArchKind::MoldingLine.label(id)),
             ("ct3".into(), "bs3".into(), "ml3".into())
