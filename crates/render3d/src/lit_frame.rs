@@ -55,6 +55,9 @@ pub struct Lighting {
     pub look: cadcraft_doc::arch::Look,
     /// The explicit toward-sun direction in drawing space, when one was given.
     pub sun_dir: Option<[f64; 3]>,
+    /// The environment (light and/or background) the frame lights with; `None` when there is
+    /// no environment (p19-env-path).
+    pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
 }
 
 impl Default for Lighting {
