@@ -13,10 +13,11 @@ use cadcraft_arch::site::true_to_drawing;
 use cadcraft_arch::sun::{sun_dir, sun_position};
 use cadcraft_arch3d::camera::{Camera, FullCamera, Orbit};
 use cadcraft_doc::Drawing;
-use cadcraft_doc::arch::{Camera3d, CameraKind};
+use cadcraft_doc::arch::{Camera3d, CameraKind, Look};
 use cadcraft_geom::Vec3;
 use serde_json::{Value, json};
 
+use crate::cmd::arch::look::{apply_look_params, describe_look, effective_look, effective_sun_dir};
 use crate::cmd::arch::pick::parse_camera;
 use crate::cmd::{CommandSpec, bad};
 use crate::{EngineError, Session};
@@ -59,6 +60,12 @@ pub struct RenderRequest<'a> {
     pub final_mode: FinalMode,
     /// The path tracer's settings (phase 11; used when `final_mode` is `Path`).
     pub path: PathParams,
+    /// The effective render look (phase 19); the default look for callers that do not set one.
+    pub look: Look,
+    /// An explicit toward-sun direction (drawing space) from the look; `None` = see `sun`.
+    pub sun_dir: Option<[f64; 3]>,
+    /// The render's own `sun: false`: sun and sky both off, whatever the look says.
+    pub legacy_night: bool,
 }
 
 /// Which Finalize Render a request runs (phase 11): the phase-10 shadow-mapped still, or the path
@@ -144,7 +151,36 @@ impl<'a> RenderRequest<'a> {
             samples,
             final_mode: FinalMode::default(),
             path: PathParams::default(),
+            look: Look::default(),
+            sun_dir: None,
+            legacy_night: matches!(sun, SunChoice::Off),
         }
+    }
+
+    /// The same request with a render look and its explicit sun direction (phase 19).
+    pub fn with_look(mut self, look: Look, sun_dir: Option<[f64; 3]>) -> Self {
+        self.look = look;
+        self.sun_dir = sun_dir;
+        self
+    }
+
+    /// The look and sun direction the renderer lights with: `sun` and `sun_dir` keep their older
+    /// meaning (`Dir(d)` is the direction, `Off` is night: sun off, and the sky too when
+    /// `legacy_night`), so `sunstudy` and other older callers behave as before.
+    pub fn resolved_sun(&self) -> (Look, Option<[f64; 3]>) {
+        let mut look = self.look.clone();
+        let mut dir = self.sun_dir;
+        match self.sun {
+            SunChoice::Dir(d) if dir.is_none() => dir = Some(d),
+            SunChoice::Off => {
+                look.sun.on = false;
+                if self.legacy_night {
+                    look.sky.on = false;
+                }
+            }
+            _ => {}
+        }
+        (look, dir)
     }
 
     /// The same request with an override light set for this render only.
@@ -344,7 +380,9 @@ fn parse_path_params(v: &Value) -> Result<PathParams, EngineError> {
     let exposure = match v.get("exposure") {
         None => None,
         Some(val) => match val {
+            // "auto" and {ev100} belong to the look (apply_look_params checks them).
             Value::String(s) if s == "auto" => None,
+            Value::Object(_) => None,
             Value::Number(n) if n.is_f64() => {
                 let x = n
                     .as_f64()
@@ -437,11 +475,13 @@ fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
     }
 }
 
-fn camera_from_params(v: Option<&Value>, doc: &Drawing) -> Result<(Option<Camera>, Option<String>), EngineError> {
+/// The camera to render from and the saved camera whose look applies (the named or active one;
+/// an inline camera object follows the global look).
+fn camera_from_params<'a>(v: Option<&Value>, doc: &'a Drawing) -> Result<(Option<Camera>, Option<&'a Camera3d>), EngineError> {
     match v {
         None | Some(Value::Null) => match &doc.arch.active_camera {
             Some(name) => match doc.arch.camera_by_name(name) {
-                Some(c) => Ok((Some(camera_from_saved(c)?), c.light_set.clone())),
+                Some(c) => Ok((Some(camera_from_saved(c)?), Some(c))),
                 None => Ok((None, None)),
             },
             None => Ok((None, None)),
@@ -449,7 +489,7 @@ fn camera_from_params(v: Option<&Value>, doc: &Drawing) -> Result<(Option<Camera
         Some(Value::String(name)) => {
             let name = name.trim();
             match doc.arch.camera_by_name(name) {
-                Some(c) => Ok((Some(camera_from_saved(c)?), c.light_set.clone())),
+                Some(c) => Ok((Some(camera_from_saved(c)?), Some(c))),
                 None => Err(bad("render", format!("no camera named `{name}`"))),
             }
         }
@@ -457,21 +497,38 @@ fn camera_from_params(v: Option<&Value>, doc: &Drawing) -> Result<(Option<Camera
     }
 }
 
-fn parse_light_set(v: Option<&Value>, doc: &Drawing, cmd: &str) -> Result<Option<String>, EngineError> {
-    match v {
-        None | Some(Value::Null) => Ok(None),
-        Some(Value::String(name)) => {
-            let name = name.trim();
-            if name.is_empty() {
-                return Err(bad(cmd, "`lightSet` must be a non-empty string or null"));
-            }
-            if !doc.arch.light_sets.iter().any(|set| set.name == name) {
-                return Err(bad(cmd, format!("unknown light set `{name}`")));
-            }
-            Ok(Some(name.to_string()))
+/// Read a `render`'s params into a request: the camera, the effective look (the saved camera's or
+/// the drawing's, then this render's own look keys), its sun direction and the legacy sun choice.
+fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'a>, EngineError> {
+    let size = parse_size(params.get("size"))?;
+    let (camera, saved) = camera_from_params(params.get("camera"), doc)?;
+    let (final_render, final_mode) = parse_final(params.get("final"))?;
+    let style = parse_style(params.get("style"))?;
+    let ground = params.get("ground").and_then(Value::as_bool).unwrap_or(false);
+    let budget = parse_budget(params.get("budget"))?;
+    let samples = parse_samples(params.get("samples"))?;
+    let out = params.get("out").and_then(Value::as_str).map(PathBuf::from);
+    let path = parse_path_params(params)?;
+
+    let mut look = effective_look(&doc.arch, saved);
+    let explicit = apply_look_params("render", params, &doc.arch, &mut look, true)?;
+    let sun_dir = effective_sun_dir(&doc.arch, &look, explicit);
+    let sun = if !look.sun.on {
+        SunChoice::Off
+    } else {
+        match sun_dir {
+            Some(d) if d[2] > 0.0 => SunChoice::Dir(d),
+            _ => SunChoice::Default,
         }
-        Some(_) => Err(bad(cmd, "`lightSet` must be a string name or null")),
-    }
+    };
+    let legacy_night = matches!(params.get("sun"), Some(Value::Bool(false)));
+    let light_set = look.light_set.clone();
+    let mut request = RenderRequest::new(doc, camera, size, out, final_render, sun, style, ground, budget, samples)
+        .with_light_set(light_set)
+        .with_final(final_mode, path)
+        .with_look(look, sun_dir);
+    request.legacy_night = legacy_night;
+    Ok(request)
 }
 
 /// `render`: render a 3D still through the installed render hook.
@@ -479,27 +536,13 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let hooks = render_hooks().ok_or_else(|| bad("render", "render needs the 3D renderer: run it from cadcraft-cli run or the app"))?;
 
     let doc = s.doc()?;
-
-    let size = parse_size(params.get("size"))?;
-    let (camera, camera_light_set) = camera_from_params(params.get("camera"), doc)?;
-    let light_set = match params.get("lightSet") {
-        Some(_) => parse_light_set(params.get("lightSet"), doc, "render")?,
-        None => camera_light_set,
-    };
-    let (final_render, final_mode) = parse_final(params.get("final"))?;
-    let sun = parse_sun(params.get("sun"), doc)?;
-    let style = parse_style(params.get("style"))?;
-    let ground = params.get("ground").and_then(Value::as_bool).unwrap_or(false);
-    let budget = parse_budget(params.get("budget"))?;
-    let samples = parse_samples(params.get("samples"))?;
-    let out = params.get("out").and_then(Value::as_str).map(PathBuf::from);
-
-    let path = parse_path_params(params)?;
-    let request = RenderRequest::new(&doc, camera, size, out, final_render, sun, style, ground, budget, samples)
-        .with_light_set(light_set)
-        .with_final(final_mode, path);
-
-    (hooks.render)(&request).map_err(|e| bad("render", e))
+    let request = build_request(doc, params)?;
+    let mut reply = (hooks.render)(&request).map_err(|e| bad("render", e))?;
+    if let Value::Object(m) = &mut reply {
+        m.insert("look".to_string(), describe_look(&request.look));
+        m.insert("sunDir".to_string(), request.sun_dir.map_or(Value::Null, |d| json!(d)));
+    }
+    Ok(reply)
 }
 
 /// Command specs.
@@ -507,7 +550,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("render", "Render 3D", run_render)
             .menu(&["Architecture", "Render 3D"])
-            .params("{out?: path, size?: [w,h], camera?: name|{…}, lightSet?: name, final?: bool | \"raster\" | \"path\", sun?: false | {date, time} | \"default\", style?: shaded | shaded-edges | hidden-line | glass-house | clay | technical, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
+            .params("{out?: path, size?: [w,h], camera?: name|{…}, lightSet?: name|null, final?: bool | \"raster\" | \"path\", sun?: false | \"default\" | {on?, intensity?, shadows?, angle?: name} + one of {date, time} | {azimuth, elevation (compass)}, technique?, exposure?: \"auto\" | {ev100} | number (path tracer), toneMap?, sky?: bool | {on?, turbidity?, stars?, moon?}, cutaway?, clip?, nearClip? (look keys, for this render only; reply gains look and sunDir), style?: shaded | shaded-edges | hidden-line | glass-house | clay | technical, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
             .noundo(),
     ]
 }
@@ -722,5 +765,82 @@ mod tests {
         // The actual rendering logic is tested in render3d.
         let style = parse_style(Some(&json!("technical"))).unwrap();
         assert_eq!(style, "technical");
+    }
+
+    fn sited() -> Drawing {
+        let mut d = Drawing::new_metric();
+        d.arch.site = Some(cadcraft_doc::arch::site::SiteLocation { latitude: 51.05, ..Default::default() });
+        d
+    }
+
+    #[test]
+    fn legacy_sun_false_is_night_and_below_horizon_is_accepted() {
+        let d = sited();
+        let r = build_request(&d, &json!({"sun": false})).unwrap();
+        assert!(!r.look.sun.on && !r.look.sky.on && r.legacy_night);
+        assert_eq!(r.sun, SunChoice::Off);
+        assert_eq!(r.sun_dir, None);
+        // The look's own sun off is not the legacy night: the sky stays.
+        let r = build_request(&d, &json!({"sun": {"on": false}})).unwrap();
+        assert!(!r.look.sun.on && r.look.sky.on && !r.legacy_night);
+        let (l, _) = r.resolved_sun();
+        assert!(l.sky.on);
+        // A sun below the horizon is accepted and reported.
+        let r = build_request(&d, &json!({"sun": {"date": "2026-06-21", "time": "02:00"}})).unwrap();
+        assert!(r.sun_dir.is_some_and(|v| v[2] < 0.0));
+        assert_eq!(r.sun, SunChoice::Default);
+        let r = build_request(&d, &json!({"sun": {"date": "2026-06-21", "time": "12:00"}})).unwrap();
+        assert!(matches!(r.sun, SunChoice::Dir(v) if v[2] > 0.0));
+        assert!(build_request(&d, &json!({"sun": "off"})).is_err());
+    }
+
+    #[test]
+    fn look_overrides_one_render_only() {
+        let mut d = sited();
+        d.arch.look.tone_map = cadcraft_doc::arch::ToneMap::Hable;
+        let r = build_request(&d, &json!({"toneMap": "none", "cutaway": true})).unwrap();
+        assert_eq!(r.look.tone_map, cadcraft_doc::arch::ToneMap::None);
+        assert!(r.look.cutaway);
+        assert_eq!(d.arch.look.tone_map, cadcraft_doc::arch::ToneMap::Hable);
+        let r = build_request(&d, &json!({})).unwrap();
+        assert_eq!(r.look.tone_map, cadcraft_doc::arch::ToneMap::Hable);
+        assert!(!r.look.cutaway);
+        // A saved camera's own look wins over the global one.
+        let own = Look { tone_map: cadcraft_doc::arch::ToneMap::Aces, ..Look::default() };
+        d.arch.cameras.push(Camera3d { name: "own".into(), look: Some(own), ..Default::default() });
+        let r = build_request(&d, &json!({"camera": "own"})).unwrap();
+        assert_eq!(r.look.tone_map, cadcraft_doc::arch::ToneMap::Aces);
+        // The echo carries the effective look.
+        assert_eq!(describe_look(&r.look)["toneMap"], "aces");
+        assert!(build_request(&d, &json!({"toneMap": "filmic"})).is_err());
+    }
+
+    #[test]
+    fn resolved_sun_keeps_legacy_choices() {
+        let d = Drawing::new_metric();
+        let mk = |sun| RenderRequest::new(&d, None, (8, 8), None, false, sun, "shaded".into(), false, 8, Vec::new());
+        let (l, dir) = mk(SunChoice::Default).resolved_sun();
+        assert!(l == Look::default() && dir.is_none());
+        let (l, dir) = mk(SunChoice::Off).resolved_sun();
+        assert!(!l.sun.on && !l.sky.on && dir.is_none());
+        let (l, dir) = mk(SunChoice::Dir([0.0, 0.0, 1.0])).resolved_sun();
+        assert!(l.sun.on && dir == Some([0.0, 0.0, 1.0]));
+        let explicit = mk(SunChoice::Dir([0.0, 0.0, 1.0])).with_look(Look::default(), Some([1.0, 0.0, 0.0]));
+        assert_eq!(explicit.resolved_sun().1, Some([1.0, 0.0, 0.0]));
+    }
+
+    #[test]
+    fn exposure_object_passes_path_params_and_echoes_manual() {
+        assert_eq!(parse_path_params(&json!({"exposure": {"ev100": 3}})).unwrap().exposure, None);
+        let d = Drawing::new_metric();
+        let r = build_request(&d, &json!({"exposure": {"ev100": 3}})).unwrap();
+        assert_eq!(describe_look(&r.look)["exposure"], json!({"ev100": 3.0}));
+        assert!(build_request(&d, &json!({"exposure": {"ev100": 99}})).is_err());
+        // A bare number keeps its phase-12 meaning: the look stays automatic.
+        let r = build_request(&d, &json!({"exposure": 0.5})).unwrap();
+        assert_eq!(r.path.exposure, Some(0.5));
+        assert_eq!(describe_look(&r.look)["exposure"], "auto");
+        let err = build_request(&d, &json!({"exposure": 0.0})).unwrap_err().to_string();
+        assert!(err.contains("`exposure` must be \"auto\" or a positive number"), "{err}");
     }
 }
