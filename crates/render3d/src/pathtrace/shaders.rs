@@ -189,6 +189,31 @@ mod tests {
         }
     }
 
+    fn assert_pt_hooks_are_stubbed(source: &str) {
+        let stubs = [
+            "fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { return visibility(o, d, 1.0e6); }",
+            "fn env_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }",
+            "fn env_escape(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32> { return sky_radiance(d); }",
+            "fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }",
+            "fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }",
+            "fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }",
+            "fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }",
+        ];
+        for stub in stubs {
+            assert_eq!(source.matches(stub).count(), 1, "missing stub: {stub}");
+        }
+        assert_eq!(source.matches("sun_visibility(o, sun.dir)").count(), 2, "sun visibility uses");
+        assert!(source.contains("env_escape(d, depth, mode, prev_pdf)"));
+        assert!(source.contains("pt_shading_normal(h.tri, n, h.u, h.v)"));
+        assert!(source.contains("camera_t_min(dir)"));
+        assert!(source.contains("env_irradiance(o, n, &r)"));
+        assert!(source.contains("moon_irradiance(o, n)"));
+        assert!(source.contains("env_direct(m, p, n, wo, r)"));
+        assert!(source.contains("moon_direct(m, p, n, wo)"));
+        assert!(source.contains("!hit_clipped("));
+        assert!(!source.contains("visibility(o, sun.dir, 1.0e6)"));
+    }
+
     #[test]
     fn the_kernel_source_holds_every_entry_point() {
         let src = kernel_source();
@@ -196,5 +221,16 @@ mod tests {
         {
             assert!(src.contains(f), "{f}");
         }
+    }
+
+    #[test]
+    fn pt_hooks_are_stubs_with_todays_behaviour() {
+        let src = kernel_source();
+        let rq_src = rq_kernel_source();
+        for source in [src.as_str(), rq_src.as_str()] {
+            assert_pt_hooks_are_stubbed(source);
+        }
+        assert!(!KERNEL_WGSL.contains("sky_radiance("));
+        assert!(!KERNEL_WGSL.contains("visibility(o, sun.dir, 1.0e6)"));
     }
 }
