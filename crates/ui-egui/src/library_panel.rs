@@ -780,6 +780,7 @@ mod tests {
         app.pane3d.click = Some(crate::pane3d::Click {
             object: cadcraft_doc::ArchId(0),
             part: "floor".into(),
+            owner: cadcraft_arch3d::incremental::ObjectKind::Room,
             material: "floor".into(),
             normal: [0.0, 0.0, 1.0],
             point: cadcraft_geom::Vec3::new(4.0, 5.0, 0.0),

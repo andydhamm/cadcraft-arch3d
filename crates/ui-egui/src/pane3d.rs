@@ -106,25 +106,6 @@ pub const RUN_FACTOR: f64 = 4.0;
 /// Degrees turned per arrow-key press in the full camera.
 pub const TURN_STEP_DEG: f64 = 5.0;
 
-/// The proxy handle (as the 2D pane uses) of the arch object a 3D hit struck.
-///
-/// Walls and openings number separately, so the mesh's part decides which handle range the id
-/// belongs to; `grips::arch_id_from_handle` reads it back.
-pub fn proxy_handle(id: cadcraft_doc::ArchId, part: &str) -> cadcraft_doc::Handle {
-    use cadcraft_doc::arch as a;
-    match part {
-        "leaf" | "frame" | "casing" | "glass" | "sill" | "header" | "grille" => a::opening_handle(id),
-        "floor" | "ceiling" | "deck" | "ledger" | "joist" | "rim" | "beam" => a::room_handle(id),
-        "roof" => a::roof_handle(id),
-        "cabinet" | "counter" | "pull" => a::cabinet_handle(id),
-        "fixture" => a::fixture_handle(id),
-        "furnishing" => a::furnishing_handle(id),
-        "stair" | "tread" | "riser" | "stringer" | "skirt" => a::stair_handle(id),
-        "railing" | "post" => a::railing_handle(id),
-        _ => a::arch_handle(id),
-    }
-}
-
 /// What the offscreen target (or a finished still) shows: scene key, size, view-projection,
 /// style, lighting and the number of fixture lights drawn.
 type ViewState = (u64, (u32, u32), [[f32; 4]; 4], Style3d, cadcraft_render3d::Lighting, usize);
@@ -365,6 +346,8 @@ pub struct Click {
     pub object: cadcraft_doc::ArchId,
     /// Part name (`"wall"`, `"floor"`, `"cabinet"`, `"furnishing"`, ...).
     pub part: String,
+    /// The kind of object owning the struck mesh (material-aware, unlike `part`).
+    pub owner: cadcraft_arch3d::incremental::ObjectKind,
     /// The struck mesh's material name (`sym:<key>:<i>` for a furnishing).
     pub material: String,
     /// Unit normal of the struck face.
@@ -540,7 +523,7 @@ impl Pane3d {
         let scene = self.scene.as_ref()?;
         let (origin, dir) = cadcraft_render3d::camera::ray_at(&self.camera(), size, pixel)?;
         let hit = scene.pick(origin, dir)?;
-        Some(proxy_handle(hit.object, hit.part))
+        Some(hit.owner.handle(hit.object))
     }
 
     /// Click at `pixel`: remember the struck object's handle for the app to select. A miss
@@ -558,7 +541,7 @@ impl Pane3d {
         let (origin, dir) = cadcraft_render3d::camera::ray_at(&self.camera(), size, pixel)?;
         let hit = scene.pick(origin, dir)?;
         let (material, normal, level) = locate(scene, &hit, dir);
-        Some(Click { object: hit.object, part: hit.part.to_owned(), material, normal, point: hit.point, level })
+        Some(Click { object: hit.object, part: hit.part.to_owned(), owner: hit.owner, material, normal, point: hit.point, level })
     }
 
     /// Take the handle of the last 3D pick, for the app to add to the selection the 2D pane uses.
@@ -1195,7 +1178,7 @@ pub fn apply_pick(pane: &mut Pane3d, session: &mut cadcraft_engine::Session) -> 
         pane.armed = None;
     }
     if let Some(click) = pane.click.take() {
-        let handle = proxy_handle(click.object, &click.part);
+        let handle = click.owner.handle(click.object);
         if pane.tool != PaintTool::Off {
             pane.picked = None;
             paint_click(pane, session, &click);
@@ -1314,6 +1297,24 @@ pub fn surface_of(
     normal: [f64; 3],
 ) -> Option<cadcraft_doc::arch::Surface> {
     use cadcraft_doc::arch::{CabinetPart, Side, Surface};
+    // A painted countertop or backsplash has part `counter` / `backsplash`: resolve its own key
+    // first, or the cabinet arm below would hand back another object's surface.
+    if let Some(s) = material.strip_prefix("paint:").and_then(Surface::parse) {
+        match s {
+            Surface::Countertop(c) if model.countertop(c).is_some() => return Some(s),
+            Surface::Backsplash(b) if model.backsplash(b).is_some() => return Some(s),
+            _ => {}
+        }
+    }
+    if material == "countertop" || material.starts_with("countertop-") {
+        return model.countertop(object).map(|_| Surface::Countertop(object));
+    }
+    if material == "backsplash" {
+        return model.backsplash(object).map(|_| Surface::Backsplash(object));
+    }
+    if material == "glass-wall" || material.starts_with("molding-") {
+        return None;
+    }
     match part {
         "wall" => {
             let w = model.wall(object)?;
@@ -1356,7 +1357,9 @@ pub fn surface_of(
 fn locate(scene: &cadcraft_render3d::Scene3d, hit: &cadcraft_arch3d::pick::PickHit, dir: cadcraft_geom::Vec3) -> (String, [f64; 3], f64) {
     let p = [hit.point.x, hit.point.y, hit.point.z];
     let mut best: Option<(f64, &cadcraft_arch3d::mesh::Mesh, [f64; 3])> = None;
-    for mesh in scene.meshes.iter().filter(|m| m.object == hit.object && cadcraft_arch3d::probe::pick_part(m) == hit.part) {
+    for mesh in scene.meshes.iter().filter(|m| {
+        m.object == hit.object && cadcraft_arch3d::probe::pick_part(m) == hit.part && cadcraft_arch3d::incremental::object_kind_of(m) == hit.owner
+    }) {
         for t in mesh.indices.chunks_exact(3) {
             let v = |i: u32| mesh.positions.get(i as usize).map(|v| [f64::from(v[0]), f64::from(v[1]), f64::from(v[2])]);
             let (Some(a), Some(b), Some(c)) = (v(t[0]), v(t[1]), v(t[2])) else { continue };
@@ -1400,17 +1403,77 @@ mod tests {
 
     #[test]
     fn proxy_handle_maps_the_phase17_parts() {
+        use cadcraft_arch3d::incremental::ObjectKind as K;
         use cadcraft_doc::arch as a;
         let id = cadcraft_doc::ArchId(3);
         for p in ["tread", "riser", "stringer", "skirt"] {
-            assert_eq!(proxy_handle(id, p), a::stair_handle(id), "{p}");
+            assert_eq!(K::Stair.handle(id), a::stair_handle(id), "{p}");
         }
-        assert_eq!(proxy_handle(id, "post"), a::railing_handle(id));
-        assert_eq!(proxy_handle(id, "grille"), a::opening_handle(id));
+        assert_eq!(K::Railing.handle(id), a::railing_handle(id));
+        assert_eq!(K::Opening.handle(id), a::opening_handle(id));
         for p in ["ledger", "joist", "rim", "beam"] {
-            assert_eq!(proxy_handle(id, p), a::room_handle(id), "{p}");
+            assert_eq!(K::Room.handle(id), a::room_handle(id), "{p}");
         }
-        assert_eq!(proxy_handle(id, "wall"), a::arch_handle(id));
+        assert_eq!(K::Wall.handle(id), a::arch_handle(id));
+    }
+
+    #[test]
+    fn click_handle_follows_the_owner() {
+        use cadcraft_arch3d::incremental::ObjectKind as K;
+        use cadcraft_doc::arch as a;
+        let id = cadcraft_doc::ArchId(3);
+        assert_eq!(K::Stair.handle(id), a::stair_handle(id));
+        assert_eq!(K::Railing.handle(id), a::railing_handle(id));
+        assert_eq!(K::Opening.handle(id), a::opening_handle(id));
+        assert_eq!(K::Room.handle(id), a::room_handle(id));
+        assert_eq!(K::Wall.handle(id), a::arch_handle(id));
+        assert_eq!(K::Countertop.handle(id), a::countertop_handle(id));
+        assert_eq!(K::Backsplash.handle(id), a::backsplash_handle(id));
+        assert_ne!(K::Countertop.handle(id), K::Cabinet.handle(id));
+    }
+
+    #[test]
+    fn surface_of_countertop_and_backsplash() {
+        use cadcraft_doc::arch::Surface;
+        let mut m = cadcraft_doc::ArchModel::default();
+        let ct = m.push_countertop(Default::default());
+        let bs = m.push_backsplash(Default::default());
+        let n = [0.0, 0.0, 1.0];
+        assert_eq!(surface_of(&m, ct, "counter", "countertop", n), Some(Surface::Countertop(ct)));
+        assert_eq!(surface_of(&m, ct, "counter", "countertop-waterfall", n), Some(Surface::Countertop(ct)));
+        assert_eq!(surface_of(&m, bs, "backsplash", "backsplash", n), Some(Surface::Backsplash(bs)));
+        let key = Surface::Countertop(ct).object_key();
+        assert_eq!(surface_of(&m, ct, "counter", &format!("paint:{key}"), n), Some(Surface::Countertop(ct)));
+        let key = Surface::Backsplash(bs).object_key();
+        assert_eq!(surface_of(&m, bs, "backsplash", &format!("paint:{key}"), n), Some(Surface::Backsplash(bs)));
+        // No such object: no surface, and never a cabinet's.
+        assert_eq!(surface_of(&m, cadcraft_doc::ArchId(9), "counter", "countertop", n), None);
+        assert_eq!(surface_of(&m, cadcraft_doc::ArchId(9), "backsplash", "backsplash", n), None);
+        assert_eq!(surface_of(&m, ct, "glass", "glass-wall", n), None);
+        assert_eq!(surface_of(&m, ct, "molding", "molding-room-base-0", n), None);
+    }
+
+    #[test]
+    fn locate_filters_by_owner() {
+        use cadcraft_arch3d::incremental::ObjectKind;
+        use cadcraft_arch3d::mesh::Mesh;
+        use cadcraft_geom::{Vec2, Vec3};
+        let ring = [Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        // Same object number and pick part (`counter`), different owners; the cabinet's is lower.
+        let mut cabinet = Mesh::new("counter", cadcraft_doc::ArchId(1));
+        cabinet.push_prism(&ring, 0.0, 0.2);
+        let mut top = Mesh::new("countertop", cadcraft_doc::ArchId(1));
+        top.push_prism(&ring, 0.5, 0.7);
+        let scene = cadcraft_render3d::Scene3d { meshes: vec![cabinet, top], ..Default::default() };
+        let dir = Vec3::new(0.0, 0.0, -1.0);
+        let hit = scene.pick(Vec3::new(0.5, 0.5, 2.0), dir).expect("hit");
+        assert_eq!(hit.owner, ObjectKind::Countertop);
+        let (material, _, _) = locate(&scene, &hit, dir);
+        assert_eq!(material, "countertop");
+        let mut other = hit;
+        other.owner = ObjectKind::Cabinet;
+        let (material, _, _) = locate(&scene, &other, dir);
+        assert_ne!(material, "countertop");
     }
 
     #[test]
@@ -1491,6 +1554,7 @@ mod tests {
         Click {
             object: cadcraft_doc::ArchId(0),
             part: "wall".into(),
+            owner: cadcraft_arch3d::incremental::ObjectKind::Wall,
             material: "wall".into(),
             normal,
             point: cadcraft_geom::Vec3::new(5.0, 0.0, 1.0),
@@ -2283,7 +2347,7 @@ mod tests {
             })
             .expect("some pixel of the view hits the house");
         let handle = pane.pick(size, px).expect("pick");
-        assert_eq!(handle, proxy_handle(hit.object, hit.part));
+        assert_eq!(handle, hit.owner.handle(hit.object));
         assert_eq!(handle, cadcraft_doc::arch::arch_handle(hit.object), "a wall hit is the wall's proxy handle");
         assert_eq!(cadcraft_engine::grips::arch_id_from_handle(handle), Some(cadcraft_engine::grips::ArchTarget::Wall(hit.object)));
         assert_eq!(pane.take_picked(), Some(handle));
@@ -2293,9 +2357,10 @@ mod tests {
         assert_eq!(pane.take_picked(), Some(handle));
         // Other object kinds route to their own handle ranges.
         let id = cadcraft_doc::ArchId(3);
-        assert_eq!(proxy_handle(id, "leaf"), cadcraft_doc::arch::opening_handle(id));
-        assert_eq!(proxy_handle(id, "floor"), cadcraft_doc::arch::room_handle(id));
-        assert_eq!(proxy_handle(id, "roof"), cadcraft_doc::arch::roof_handle(id));
+        use cadcraft_arch3d::incremental::ObjectKind as K;
+        assert_eq!(K::Opening.handle(id), cadcraft_doc::arch::opening_handle(id));
+        assert_eq!(K::Room.handle(id), cadcraft_doc::arch::room_handle(id));
+        assert_eq!(K::Roof.handle(id), cadcraft_doc::arch::roof_handle(id));
     }
 
     #[test]
