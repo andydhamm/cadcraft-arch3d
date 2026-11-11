@@ -2,7 +2,7 @@ use cadcraft_arch::molding_runs::room_runs;
 use cadcraft_arch3d::build;
 use cadcraft_arch3d::probe::probe_mesh;
 use cadcraft_doc::arch::{ArchModel, Level, MoldingKind, Room, RoomMolding, RoomType, Wall};
-use cadcraft_geom::Vec2;
+use cadcraft_geom::{Vec2, Vec3};
 
 fn test_model() -> ArchModel {
     let mut model = ArchModel::default();

@@ -2,7 +2,7 @@
 
 use crate::cmd::{CommandSpec, Session, bad, f64_req, str_param};
 use crate::{EngineError, Result};
-use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding};
+use cadcraft_doc::arch::{ArchId, ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding};
 use serde_json::{Map as JsonMap, Value, json};
 
 /// Maximum moldings per room.
@@ -34,6 +34,11 @@ fn default_offset(kind: MoldingKind) -> f64 {
         MoldingKind::Chair => 0.9,
         MoldingKind::Crown => 0.0,
     }
+}
+
+/// Resolve a room label to an ArchId.
+fn room_id_from_label(model: &ArchModel, label: &str) -> Option<ArchId> {
+    model.rooms.iter().find(|r| cadcraft_doc::arch::room_label(r.id) == label).map(|r| r.id)
 }
 
 /// Run the room.moldings command.
@@ -70,11 +75,9 @@ fn run_room_moldings(s: &mut Session, p: &Value) -> Result<Value> {
             let mut prof = MoldingProfile::default();
             prof.points = vec![[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]];
             prof
-        } else if let Some(item) = m.get("profile").and_then(Value::as_str) {
-            // Resolve profile from library
-            crate::library::molding::profile_of(item).ok_or_else(|| bad("room.moldings", format!("unknown profile `{item}`")))?
         } else {
-            crate::library::molding::default_profile(kind)
+            // Default profile
+            cadcraft_arch::molding_profile::default_profile(kind)
         };
 
         new_moldings.push(RoomMolding { kind, profile, offset });
@@ -83,12 +86,12 @@ fn run_room_moldings(s: &mut Session, p: &Value) -> Result<Value> {
     let d = s.doc_mut()?;
 
     // Resolve target rooms
-    let targets: Vec<cadcraft_doc::ArchId> = match room_param {
+    let targets: Vec<ArchId> = match room_param {
         Value::String(s) => {
             if s == "all" {
                 d.arch.rooms.iter().map(|r| r.id).collect()
             } else {
-                let id = cadcraft_doc::arch::room_id_from_label(s).ok_or_else(|| bad("room.moldings", format!("unknown room `{s}`")))?;
+                let id = room_id_from_label(&d.arch, s).ok_or_else(|| bad("room.moldings", format!("unknown room `{s}`")))?;
                 vec![id]
             }
         }
@@ -96,7 +99,7 @@ fn run_room_moldings(s: &mut Session, p: &Value) -> Result<Value> {
             let mut ids = Vec::new();
             for v in arr {
                 if let Some(s) = v.as_str() {
-                    let id = cadcraft_doc::arch::room_id_from_label(s).ok_or_else(|| bad("room.moldings", format!("unknown room `{s}`")))?;
+                    let id = room_id_from_label(&d.arch, s).ok_or_else(|| bad("room.moldings", format!("unknown room `{s}`")))?;
                     ids.push(id);
                 } else {
                     return Err(bad("room.moldings", "`room` array items must be strings"));
@@ -119,7 +122,7 @@ fn run_room_moldings(s: &mut Session, p: &Value) -> Result<Value> {
     }
 
     // Ensure layer exists
-    d.arch.ensure_layer("A-FLOR-TRIM");
+    d.ensure_layer("A-FLOR-TRIM");
 
     d.touch_arch();
 
