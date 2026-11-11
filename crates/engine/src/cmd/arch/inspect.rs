@@ -652,7 +652,11 @@ mod tests {
             height: 0.762,
             elevation: 1.372,
             crown: Some(CabinetMolding {
-                profile: MoldingProfile { item: "molding:crown".into(), points: vec![[0.0, 0.0], [0.1, 0.0], [0.1, 0.06], [0.0, 0.06]] },
+                profile: MoldingProfile {
+                    item: "molding:crown".into(),
+                    points: vec![[0.0, 0.0], [0.1, 0.0], [0.1, 0.06], [0.0, 0.06]],
+                    ..Default::default()
+                },
                 size: Some([0.1, 0.06]),
                 ..Default::default()
             }),

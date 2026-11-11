@@ -22,7 +22,7 @@ fn item(cmd: &str, s: &Session, p: &Value, key: &str) -> Result<Option<CabinetMo
             let raw = v.as_str().ok_or_else(|| bad(cmd, format!("`{key}` must be a molding item id or null")))?;
             let profile =
                 crate::library::molding::profile_of(&s.library, raw).map_err(|e| bad(cmd, format!("`{key}` is not a valid molding profile: {e}")))?;
-            Ok(Some(CabinetMolding { profile, size: None }))
+            Ok(Some(CabinetMolding { profile, size: None, ..Default::default() }))
         }
     }
 }
@@ -159,10 +159,12 @@ mod tests {
             crown: Some(Some(CabinetMolding {
                 profile: crate::library::molding::profile_of(&s.library, "molding:crown").unwrap(),
                 size: Some([0.05, 0.05]),
+                ..Default::default()
             })),
             light_rail: Some(Some(CabinetMolding {
                 profile: crate::library::molding::profile_of(&s.library, "molding:casing").unwrap(),
                 size: Some([0.05, 0.064]),
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -185,14 +187,22 @@ mod tests {
             ..Default::default()
         };
         let bad_item = Opts {
-            crown: Some(Some(CabinetMolding { profile: crate::library::molding::profile_of(&s.library, "molding:crown").unwrap(), size: None })),
+            crown: Some(Some(CabinetMolding {
+                profile: crate::library::molding::profile_of(&s.library, "molding:crown").unwrap(),
+                size: None,
+                ..Default::default()
+            })),
             ..Default::default()
         };
         assert!(bad_item.apply("cabinet", &mut c).is_err());
         let bad_size = Opts { crown_size: Some(Some([0.05, 0.05])), ..Default::default() };
         assert!(bad_size.apply("cabinet", &mut c).is_err());
         c.kind = CabinetKind::Wall;
-        c.crown = Some(CabinetMolding { profile: crate::library::molding::profile_of(&s.library, "molding:crown").unwrap(), size: None });
+        c.crown = Some(CabinetMolding {
+            profile: crate::library::molding::profile_of(&s.library, "molding:crown").unwrap(),
+            size: None,
+            ..Default::default()
+        });
         let clear = Opts { crown: Some(None), ..Default::default() };
         assert!(clear.apply("cabinet", &mut c).is_ok());
     }
