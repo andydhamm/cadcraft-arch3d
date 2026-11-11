@@ -310,7 +310,7 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
             ..Default::default()
         };
         let layout = &job.target.lit_pipelines.as_ref().ok_or("the lit pipelines are not available")?.layout;
-        let frame = crate::lit::LitFrame::new(
+        let mut frame = crate::lit::LitFrame::new(
             &job.target.device,
             layout,
             &crate::lit::frame_uniform(sun_map.as_ref(), &params, job.atlas.size()),
@@ -320,6 +320,8 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
             &params,
             (job.drawn.len(), job.slots.len()),
         );
+        // The frame's look (exposure, tone map, ambient) comes from the lighting, as in the pane.
+        frame.lighting = job.lighting.clone();
         let opts =
             crate::offscreen::RenderOptions { lit: Some(&frame), ground: job.ground, style: crate::offscreen::Style::Shaded, ..Default::default() };
         let light = sun.unwrap_or(crate::light::Light::DEFAULT);
@@ -755,5 +757,55 @@ mod tests {
         assert_eq!(stats.as_ref().map(|s| s.spp_done), Some(4));
         assert_eq!(crate::offscreen::png_rgba(&png).map(|p| p.len()).ok(), Some((SIZE.0 * SIZE.1 * 4) as usize));
         assert_eq!(o.final_renders(), 1);
+    }
+
+    /// The pane's lit frame and the raster Finalize tone-map alike: the same plane under the same
+    /// sun, manual exposure and curve gives the same pixel in both (and the curve's value).
+    #[test]
+    fn finalize_matches_interactive_on_a_plane() {
+        use crate::exposure::{TONE_ACES, TONE_HABLE, ev100_scale, tone_code, tone_map};
+        use crate::light::Light;
+        use crate::offscreen::{RenderOptions, png_rgba};
+        use cadcraft_doc::arch::{ExposureSetting, Look, ToneMap};
+        let Some(mut o) = off() else { return };
+        let s = scene_no_lights();
+        let camera = Camera::Orbit(Orbit::at_origin(0.0, 89.0, 3.0, 45.0));
+        for tone in [ToneMap::Aces, ToneMap::Hable] {
+            let mut look = Look::default();
+            look.exposure = ExposureSetting::Manual { ev100: 14.0 };
+            look.tone_map = tone;
+            look.sky.on = false;
+            let lighting = Lighting {
+                sun: Some(Light { dir: [0.0, 0.0, 1.0], ..Light::DEFAULT }),
+                look,
+                lambert: Some(0.5),
+                meter_night: true,
+                ..Lighting::default()
+            };
+            let eye = camera.eye();
+            let Some(frame) = o.lit_frame(&s, 1, [eye.x, eye.y, eye.z], &lighting, false) else { return };
+            let sun = lighting.sun.unwrap_or(Light::DEFAULT);
+            o.render_with(&s, 1, &camera, &sun, &RenderOptions { lit: Some(&frame), ..Default::default() });
+            let (w, h) = o.size();
+            let Ok(img) = o.read_rgba() else { return };
+            let at = ((h / 2 * w + w / 2) * 4) as usize;
+            let interactive = img.get(at..at + 3).map(|p| [srgb_to_linear(p[0]), srgb_to_linear(p[1]), srgb_to_linear(p[2])]);
+            let png = render_final(&mut o, &s, 2, &camera, &lighting, false, SIZE);
+            let Ok(png) = png else { return };
+            let Ok(img) = png_rgba(&png) else { return };
+            let at = ((SIZE.1 / 2 * SIZE.0 + SIZE.0 / 2) * 4) as usize;
+            let finalize = img.get(at..at + 3).map(|p| [srgb_to_linear(p[0]), srgb_to_linear(p[1]), srgb_to_linear(p[2])]);
+            let want = tone_map(15_915.5 * ev100_scale(14.0), tone_code(tone));
+            assert!(matches!(tone_code(tone), TONE_ACES | TONE_HABLE));
+            for (name, got) in [("interactive", interactive), ("finalize", finalize)] {
+                let Some(got) = got else { return };
+                for c in got {
+                    assert!((c - want).abs() <= want * 0.02 + 0.004, "{name} {tone:?}: {got:?} want {want}");
+                }
+            }
+            if let (Some(a), Some(b)) = (interactive, finalize) {
+                assert!((a[0] - b[0]).abs() < 0.01, "{tone:?}: interactive {a:?} finalize {b:?}");
+            }
+        }
     }
 }

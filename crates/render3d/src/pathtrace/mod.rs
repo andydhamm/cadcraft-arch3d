@@ -102,6 +102,12 @@ pub struct PathOptions {
     pub furnace: Option<Furnace>,
     /// Sample counts at which [`PathTracer::step`] keeps an image (ascending, each <= `spp`).
     pub snapshots: Vec<u32>,
+    /// The tone curve of the resolve (`exposure::TONE_ACES`, `TONE_HABLE`, `TONE_NONE`); the
+    /// furnace test uses it too. Default ACES.
+    pub tone_map: u32,
+    /// The Lambert calibration albedo: every surface becomes pure Lambert with this albedo
+    /// (`scene_gpu::apply_lambert`, filled by p19-exposure-2).
+    pub lambert: Option<f32>,
 }
 
 impl Default for PathOptions {
@@ -116,6 +122,8 @@ impl Default for PathOptions {
             spp_per_step: DEFAULT_SPP_PER_STEP,
             furnace: None,
             snapshots: Vec::new(),
+            tone_map: crate::exposure::TONE_ACES,
+            lambert: None,
         }
     }
 }
@@ -194,27 +202,7 @@ pub fn luminance(rgb: [f32; 3]) -> f32 {
     0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
 }
 
-/// Auto exposure from a still's hit pixels: `clamp(0.18 / Lavg, DAY_EXPOSURE, NIGHT_EXPOSURE)`.
-pub fn auto_exposure_from_luminances(luminance: &[f32], hit: &[bool]) -> f32 {
-    if luminance.len() != hit.len() || luminance.is_empty() {
-        return DAY_EXPOSURE;
-    }
-    let mut log_sum = 0.0f64;
-    let mut count = 0usize;
-    for (&l, &is_hit) in luminance.iter().zip(hit.iter()) {
-        if !is_hit {
-            continue;
-        }
-        let lum = l.max(0.0);
-        log_sum += (1e-4 + lum as f64).ln();
-        count += 1;
-    }
-    if count == 0 {
-        return DAY_EXPOSURE;
-    }
-    let lavg = (log_sum / count as f64).exp() as f32;
-    (0.18 / lavg).clamp(DAY_EXPOSURE, NIGHT_EXPOSURE)
-}
+pub use crate::exposure::auto_exposure_from_luminances;
 
 #[cfg(test)]
 mod lights_tests;
