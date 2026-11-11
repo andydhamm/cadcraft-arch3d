@@ -1218,6 +1218,56 @@ mod tests {
         assert_eq!(s.doc().unwrap().arch.rooms[0].level, 1);
     }
 
+    /// `level: 0` on a one-level drawing is index 0 and creates the room there.
+    #[test]
+    fn room_level_zero_is_index_zero() {
+        let mut s = new_session();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 0 })).unwrap();
+        assert_eq!(r["id"].as_str().unwrap(), "r0");
+        assert_eq!(s.doc().unwrap().arch.rooms[0].level, 0);
+    }
+
+    /// A float with an integer value (`level: 1.0`) resolves to that index, as `1` does.
+    #[test]
+    fn room_level_float_with_integer_value() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 1.0 })).unwrap();
+        assert_eq!(r["id"].as_str().unwrap(), "r0");
+        assert_eq!(s.doc().unwrap().arch.rooms[0].level, 1);
+    }
+
+    /// Scientific notation (`level: 1e0`) is an integer value and resolves to that index.
+    #[test]
+    fn room_level_scientific_notation() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 1e0 })).unwrap();
+        assert_eq!(r["id"].as_str().unwrap(), "r0");
+        assert_eq!(s.doc().unwrap().arch.rooms[0].level, 1);
+    }
+
+    /// An integer past the last level (`level: 99`) is refused, nothing is drawn.
+    #[test]
+    fn room_level_out_of_range_integer() {
+        let mut s = new_session();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 99 }));
+        assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })));
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
+    }
+
+    /// Non-number, non-string `level` values (`true`, `[]`, `{}`) are refused.
+    #[test]
+    fn room_level_non_number_non_string() {
+        let mut s = new_session();
+        for bad in [json!(true), json!([0]), json!({ "index": 0 })] {
+            let p = json!({ "points": square_points(), "level": bad });
+            let r = s.execute("room", &p);
+            assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })), "{bad}: {r:?}");
+        }
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
+    }
+
     /// `level: null` is treated as absent and defaults to level 0.
     #[test]
     fn room_accepts_level_as_null() {
