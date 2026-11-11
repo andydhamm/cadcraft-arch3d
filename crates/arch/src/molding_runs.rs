@@ -397,8 +397,8 @@ mod tests {
             width: 0.9,
             height: 2.1,
             kind: cadcraft_doc::arch::OpeningKind::Door,
-            frame_width: Some(0.06),
-            casing_width: None,
+            frame_width: 0.06,
+            casing_width: 0.0,
             ..cadcraft_doc::arch::Opening::default()
         };
         model.push_opening(o);
@@ -468,7 +468,8 @@ mod tests {
             width: 0.9,
             height: 2.1,
             kind: cadcraft_doc::arch::OpeningKind::Door,
-            frame_width: Some(0.06),
+            frame_width: 0.06,
+            casing_width: 0.0,
             ..cadcraft_doc::arch::Opening::default()
         };
         model.push_opening(door);
@@ -481,7 +482,8 @@ mod tests {
             height: 1.2,
             sill: 0.9,
             kind: cadcraft_doc::arch::OpeningKind::Window,
-            frame_width: Some(0.06),
+            frame_width: 0.06,
+            casing_width: 0.0,
             ..cadcraft_doc::arch::Opening::default()
         };
         model.push_opening(window);
@@ -522,7 +524,8 @@ mod tests {
             width: 0.9,
             height: 2.1,
             kind: cadcraft_doc::arch::OpeningKind::Door,
-            frame_width: Some(0.06),
+            frame_width: 0.06,
+            casing_width: 0.0,
             ..cadcraft_doc::arch::Opening::default()
         };
         model.push_opening(door);

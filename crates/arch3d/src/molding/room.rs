@@ -21,18 +21,17 @@ pub fn room_molding_meshes(room: ArchId, level: f64, runs: &[MoldingRun]) -> Vec
             continue;
         }
         let kind = group[0].kind;
-        let mut mesh = Mesh::new();
+        let material = format!("molding-room-{}-{}", kind.key(), idx);
+        let mut mesh = Mesh::new(&material, room);
         for run in group {
             if run.path.len() < 2 || run.z.len() != run.path.len() {
                 continue;
             }
-            if let Some(swept) = crate::sweep::sweep(&run.profile.points, &run.path, &run.z, run.closed, run.side) {
-                mesh.append(&swept);
+            if let Some(swept) = crate::sweep::sweep(&run.profile.points, &run.path, &run.z, run.closed, run.side, &material, room) {
+                mesh.extend(&swept);
             }
         }
         if !mesh.positions.is_empty() {
-            mesh.material = format!("molding-room-{}-{}", kind.key(), idx);
-            mesh.object = room;
             mesh.level_elevation = level;
             meshes.push(mesh);
         }
