@@ -943,7 +943,7 @@ fn phase_17_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         8 => {
             if let Some(o) = m.openings.first_mut() {
-                o.grille = if o.grille.is_some() { None } else { Some(cadcraft_doc::arch::Grille { across: 2, down: 2, top_only: false }) };
+                o.grille = if o.grille.is_some() { None } else { Some(cadcraft_doc::arch::Grille { across: 2, down: 2, ..Default::default() }) };
             }
             "grille"
         }
