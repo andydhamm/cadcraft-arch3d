@@ -61,7 +61,8 @@ fn fronted(c: &Cabinet) -> bool {
 
 /// Whether `n` continues `c`'s row at the end `sign` (-1 left, +1 right) with the same molding.
 fn continues(c: &Cabinet, n: &Cabinet, sign: f64, crown: bool) -> bool {
-    if n.id == c.id || n.level != c.level || !matches!(n.kind, CabinetKind::Wall | CabinetKind::Tall) || molding_of(n, crown).is_none() || !finite(n) {
+    if n.id == c.id || n.level != c.level || !matches!(n.kind, CabinetKind::Wall | CabinetKind::Tall) || molding_of(n, crown).is_none() || !finite(n)
+    {
         return false;
     }
     let turn = (n.rotation - c.rotation).rem_euclid(360.0);
