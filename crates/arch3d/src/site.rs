@@ -30,6 +30,45 @@ pub fn is_site_material(material: &str) -> bool {
     material == "terrain" || material.starts_with("path-") || material.starts_with("plant-")
 }
 
+const HORIZON_RADIUS: f64 = 0.95 * crate::camera::FAR_PLANE;
+
+/// A flat slab outside the site's boundary at the mean edge elevation.
+///
+/// The slab is deliberately kept in [`Scene3d::horizon`] rather than in `meshes` so it does not
+/// distort the scene bounds, shadow receiver bounds, or camera framing.
+pub fn horizon_mesh(model: &ArchModel) -> Option<Mesh> {
+    let terrain = model.terrain.as_ref()?;
+    if terrain.boundary.len() < 3 {
+        return None;
+    }
+    let surf = SiteSurface::new(model).ok()?;
+    let mean = surf.mean_edge_elevation()?;
+    let mut centroid = Vec2::new(0.0, 0.0);
+    for &p in &terrain.boundary {
+        centroid += p;
+    }
+    let n = terrain.boundary.len() as f64;
+    if !n.is_finite() || n <= 0.0 {
+        return None;
+    }
+    centroid = centroid * (1.0 / n);
+    let ring = vec![
+        Vec2::new(centroid.x - HORIZON_RADIUS, centroid.y - HORIZON_RADIUS),
+        Vec2::new(centroid.x + HORIZON_RADIUS, centroid.y - HORIZON_RADIUS),
+        Vec2::new(centroid.x + HORIZON_RADIUS, centroid.y + HORIZON_RADIUS),
+        Vec2::new(centroid.x - HORIZON_RADIUS, centroid.y + HORIZON_RADIUS),
+    ];
+    let z0 = mean - TERRAIN_SKIRT;
+    let z1 = mean;
+    let mut mesh = Mesh::new("terrain", ArchId(0));
+    mesh.push_prism_with_holes(&ring, &[terrain.boundary.clone()], z0, z1);
+    if mesh.positions.is_empty() {
+        return None;
+    }
+    mesh.level_elevation = mean;
+    Some(mesh)
+}
+
 /// The site's meshes: the terrain solid and its paths (`p9-arch3d-terrain-solid`) plus the
 /// plants (`crate::plant::plant_meshes`).
 pub fn site_meshes(model: &ArchModel) -> SiteMeshes {
@@ -399,6 +438,32 @@ mod tests {
 
     fn part(s: &Scene3d, x: f64, y: f64, z: f64) -> Option<String> {
         s.probe(Vec3::new(x, y, z)).map(|h| h.part)
+    }
+
+    #[test]
+    fn horizon_slab_at_mean_edge_elevation_outside_boundary() {
+        let model = model_with(Vec::new());
+        let mesh = horizon_mesh(&model).unwrap();
+        let mean = SiteSurface::new(&model).unwrap().mean_edge_elevation().unwrap();
+        assert_eq!(mesh.material, "terrain");
+        assert_eq!(mesh.object, ArchId(0));
+        assert!((mesh.level_elevation - mean).abs() < 1e-6);
+        let z = mesh.bounds();
+        assert!((z.min[2] - (mean - TERRAIN_SKIRT)).abs() < 1e-6);
+        assert!((z.max[2] - mean).abs() < 1e-6);
+        assert!(z.min[0] < 0.0 && z.max[0] > 40.0);
+        assert!(z.min[1] < 0.0 && z.max[1] > 30.0);
+    }
+
+    #[test]
+    fn horizon_not_in_bounds_or_meshes_and_none_without_terrain() {
+        let model = model_with(Vec::new());
+        let scene = Scene3d::build(&model);
+        assert!(scene.horizon.is_some());
+        assert_eq!(scene.meshes.iter().filter(|m| m.material == "terrain").count(), 1);
+        assert!(scene.bounds.min[0] > -1.0 && scene.bounds.max[0] < 41.0);
+        assert!(scene.bounds.min[1] > -1.0 && scene.bounds.max[1] < 31.0);
+        assert!(Scene3d::build(&ArchModel::default()).horizon.is_none());
     }
 
     #[test]
