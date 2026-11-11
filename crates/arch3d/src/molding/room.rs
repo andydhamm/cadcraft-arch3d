@@ -72,6 +72,7 @@ mod tests {
             z: vec![0.0, 0.0],
             closed: false,
             side: 1.0,
+            ..Default::default()
         }];
         let meshes = room_molding_meshes(ArchId(0), 0.0, &runs);
         assert_eq!(meshes.len(), 1);
@@ -89,6 +90,7 @@ mod tests {
             z: vec![2.4, 2.4, 2.4, 2.4],
             closed: true,
             side: 1.0,
+            ..Default::default()
         }];
         let meshes = room_molding_meshes(ArchId(0), 0.0, &runs);
         assert_eq!(meshes.len(), 1);

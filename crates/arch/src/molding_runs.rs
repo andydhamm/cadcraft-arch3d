@@ -379,7 +379,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -420,7 +420,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -449,8 +449,8 @@ mod tests {
             level: 0,
             ceiling_height: Some(2.4),
             moldings: vec![
-                RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0 },
-                RoomMolding { kind: MoldingKind::Chair, profile: MoldingProfile::default(), offset: 0.9 },
+                RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() },
+                RoomMolding { kind: MoldingKind::Chair, profile: MoldingProfile::default(), offset: 0.9, ..Default::default() },
             ],
             ..Room::default()
         };
@@ -508,7 +508,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -547,7 +547,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -576,7 +576,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -609,9 +609,9 @@ mod tests {
             level: 0,
             ceiling_height: Some(2.4),
             moldings: vec![
-                RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0 },
-                RoomMolding { kind: MoldingKind::Chair, profile: MoldingProfile::default(), offset: 0.9 },
-                RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0 },
+                RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() },
+                RoomMolding { kind: MoldingKind::Chair, profile: MoldingProfile::default(), offset: 0.9, ..Default::default() },
+                RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() },
             ],
             ..Room::default()
         };
@@ -646,7 +646,7 @@ mod tests {
             room_type: RoomType::OpenBelow,
             level: 0,
             ceiling_height: None,
-            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -672,7 +672,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -692,7 +692,7 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0 }],
+            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
             ..Room::default()
         };
         model.push_room(room.clone());

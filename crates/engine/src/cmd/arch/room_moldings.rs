@@ -80,7 +80,7 @@ fn run_room_moldings(s: &mut Session, p: &Value) -> Result<Value> {
             cadcraft_arch::molding_profile::default_profile(kind)
         };
 
-        new_moldings.push(RoomMolding { kind, profile, offset });
+        new_moldings.push(RoomMolding { kind, profile, offset, ..Default::default() });
     }
 
     let d = s.doc_mut()?;
