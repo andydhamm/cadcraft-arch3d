@@ -3,15 +3,13 @@
 
 use crate::join::ArchError;
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, FaceLayout, FaceRow, Fixture, FixtureKind, Fronts, MAX_ACROSS, MAX_FACE_ROWS, MAX_FILLER_WIDTH, MAX_SHELVES,
+    Cabinet, CabinetKind, DOOR_PAIR_WIDTH, FaceLayout, FaceRow, Fixture, FixtureKind, Fronts, MAX_ACROSS, MAX_FACE_ROWS, MAX_FILLER_WIDTH, MAX_SHELVES,
 };
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::Vec2;
 
 pub use crate::casework_symbol::{cabinet_symbol, fixture_symbol};
 
-/// Widest cabinet that still gets a single door (m).
-const SINGLE_DOOR_MAX_WIDTH: f64 = 0.6;
 /// Highest a cabinet may reach above the floor (m).
 const MAX_TOP: f64 = 3.0;
 /// Position coordinate limit (m).
@@ -52,7 +50,7 @@ pub fn cabinet_defaults(kind: CabinetKind) -> Cabinet {
             c.toe_kick = true;
         }
     }
-    if c.width > SINGLE_DOOR_MAX_WIDTH {
+    if c.width > DOOR_PAIR_WIDTH {
         c.doors = 2;
     }
     c
@@ -254,6 +252,13 @@ mod tests {
 
     use super::*;
     use cadcraft_doc::Wall;
+
+    #[test]
+    fn cabinet_defaults_door_pairs_above_0_686() {
+        // The defaults are 0.6 wide: one door; a pair needs a width above 0.686.
+        assert_eq!(cabinet_defaults(CabinetKind::Wall).doors, 1);
+        assert!(DOOR_PAIR_WIDTH > 0.6 && (DOOR_PAIR_WIDTH - 0.686).abs() < 1e-12);
+    }
 
     #[test]
     fn base_cabinet_counter_top_is_0_914() {
