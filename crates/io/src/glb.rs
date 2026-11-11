@@ -719,6 +719,12 @@ mod tests {
         }
     }
 
+    #[test]
+    fn paint_node_names_for_countertop_and_backsplash() {
+        assert_eq!(paint_node_name("paint:countertop/ct3", ArchId(3)), "countertop-ct3");
+        assert_eq!(paint_node_name("paint:backsplash/bs2", ArchId(2)), "backsplash-bs2");
+    }
+
     fn scene_with(walls: usize) -> Scene3d {
         Scene3d {
             meshes: (0..walls)

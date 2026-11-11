@@ -3,7 +3,8 @@
 //! Written only on save, dropped on read while the arch record is present (the record is the
 //! truth) and kept as plain linework when it is not.
 
-use cadcraft_arch::casework::{cabinet_layer, cabinet_symbol, fixture_layer, fixture_symbol};
+use cadcraft_arch::casework::{cabinet_layer, fixture_layer, fixture_symbol};
+use cadcraft_arch::casework_symbol::cabinet_symbol_in;
 use cadcraft_doc::arch::ArchModel;
 use cadcraft_dxf::Tag;
 use cadcraft_geom::Vec2;
@@ -20,7 +21,7 @@ pub(crate) const MAX_CASEWORK_PROXIES: usize = 20_000;
 /// with the repeated vertex dropped. Output is capped at [`MAX_CASEWORK_PROXIES`].
 pub(crate) fn proxy_casework_entities(m: &ArchModel) -> Vec<(String, String, Vec<Tag>)> {
     let mut out: Vec<(String, String, Vec<Tag>)> = Vec::new();
-    let cabinets = m.cabinets.iter().map(|c| (cabinet_layer(c.kind), cabinet_symbol(c)));
+    let cabinets = m.cabinets.iter().map(|c| (cabinet_layer(c.kind), cabinet_symbol_in(m, c)));
     let fixtures = m.fixtures.iter().map(|f| (fixture_layer(f.kind), fixture_symbol(f)));
     for (layer, symbol) in cabinets.chain(fixtures) {
         for poly in symbol {
