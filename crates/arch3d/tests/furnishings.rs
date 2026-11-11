@@ -584,10 +584,12 @@ fn a_cabinet_edit_rebuilds_the_cabinets_of_its_level() {
     model.push_cabinet(base_cabinet(0, 1.0, 0.6, 1));
     let (mut cache, _) = SceneCache::new(&model);
     let level0 = model.cabinets.iter().filter(|c| c.level == 0).count();
-    // A base cabinet's edit reaches every cabinet on its level (counter runs, gaps), not level 1's.
+    // A base cabinet's size reaches the base cabinets of its level (counter runs, gaps), not the wall
+    // cabinets (they read no base cabinet) and not level 1's.
+    let base0 = model.cabinets.iter().filter(|c| c.level == 0 && c.kind == CabinetKind::Base).count();
     model.cabinets[0].width = 0.7;
     let stats = cache.update(&model);
-    assert_eq!(stats.rebuilt, level0, "{stats:?}");
+    assert_eq!(stats.rebuilt, base0, "{stats:?}");
     assert_same(cache.scene(), &Scene3d::build(&model), "cabinet width");
     // So does the sink it hosts: the sink plus the level's cabinets.
     model.furnishings[0].at[0] += 0.05;
