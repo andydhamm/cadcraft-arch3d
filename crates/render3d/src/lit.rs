@@ -215,7 +215,7 @@ fn lit_render_pipeline(
             depth_write_enabled: Some(depth_write),
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: Default::default(),
-            bias: Default::default(),
+            bias: crate::pipeline::FILL_DEPTH_BIAS,
         }),
         multisample: wgpu::MultisampleState { count: 1, mask: !0, alpha_to_coverage_enabled: false },
         multiview_mask: None,
