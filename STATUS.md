@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-11 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 21: Ceilings and foundations — 35 of 35 segments merged · 16 of 20 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 35 of 39 segments merged · 16 of 20 acceptance checks**
 
 8,559 workspace tests passing at the last merge · 911 segments merged in all · 0 of 15 seats working
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 02:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 47.0 h so far · expected done Nov 11 02:30–Nov 12 03:24 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 47.3 h so far · expected done Nov 11 10:08–Nov 12 12:07 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,8 +35,11 @@ Updated 2026-11-11 02:30 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-35 merged, 3 replaced, 2 abandoned
+35 merged, 3 replaced, 3 queued, 2 abandoned, 1 working
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `p16f2-slab-edge-width` | slab foundation: the thickened edge is 0.3 m in from the outer face | working | bonsai-a |
 
 ## Recent merges
 
@@ -59,7 +62,7 @@ Updated 2026-11-11 02:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1071 |
+| bonsai-a | bonsai2-27b | agent | 1071 |
 | bonsai-b | bonsai2-27b | idle | 1027 |
 | bonsai-ws2-a | bonsai2-27b | down | 1132 |
 | bonsai-ws2-b | bonsai2-27b | down | 1063 |
@@ -72,5 +75,5 @@ Updated 2026-11-11 02:30 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | idle | 13 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | agent | 736 |
+| tturbo-mac | tturbo-ultraheretic | gate | 736 |
 | tturbo-mac2 | tturbo-ultraheretic | held | 348 |
