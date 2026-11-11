@@ -410,6 +410,15 @@ pub fn entry_record(v: &Value, catalog: &str) -> Result<ItemRecord, String> {
     if !safe_relative(&file) {
         return Err("the file must be a plain relative path inside the catalog's folder".into());
     }
+    if let Some(normal_map) = &r.normal_map {
+        if !safe_relative(normal_map) {
+            return Err("the normalMap must be a plain relative path inside the catalog's folder".into());
+        }
+        match extension(normal_map).as_str() {
+            "png" | "jpg" | "jpeg" => {}
+            ext => return Err(format!("unsupported normalMap type `.{}`", ext.chars().take(16).collect::<String>())),
+        }
+    }
     r.kind = match (extension(&file).as_str(), Category::parse(&r.category)) {
         ("glb", _) => ItemKind::Symbol,
         ("png" | "jpg" | "jpeg", Some(Category::Materials)) => ItemKind::Material,
@@ -597,7 +606,7 @@ mod native {
         let entries = catalog_entries(&bytes)?;
 
         let mut skipped = Vec::new();
-        let mut accepted: Vec<(Value, String, Vec<u8>)> = Vec::new();
+        let mut accepted: Vec<(Value, String, Vec<u8>, Option<(String, Vec<u8>)>)> = Vec::new();
         let mut ids = BTreeSet::new();
         for (i, v) in entries.iter().enumerate() {
             let label = entry_label(v, i);
@@ -611,6 +620,16 @@ mod native {
                     return Err("the file is not in the folder".into());
                 }
                 let data = read_item_file(&path)?;
+                let mut normal = None;
+                if let Some(map) = &r.normal_map {
+                    let normal_path = join_relative(&from, map);
+                    if !regular_file(&normal_path) {
+                        return Err("the normalMap is not in the folder".into());
+                    }
+                    let bytes = read_item_file(&normal_path)?;
+                    (io.read_image)(&bytes, 1024)?;
+                    normal = Some((map.clone(), bytes));
+                }
                 match r.kind {
                     ItemKind::Symbol => {
                         let mesh = (io.read_glb)(&data)?;
@@ -622,10 +641,10 @@ mod native {
                         (io.read_image)(&data, 1024)?;
                     }
                 }
-                Ok((file, data))
+                Ok((file, data, normal))
             });
             match checked {
-                Ok((file, data)) => accepted.push((v.clone(), file, data)),
+                Ok((file, data, normal)) => accepted.push((v.clone(), file, data, normal)),
                 Err(reason) => skipped.push(Skipped::new(label, reason)),
             }
         }
@@ -661,16 +680,23 @@ mod native {
     }
 
     /// The accepted entries' files and a catalog.json listing just them, in a fresh folder.
-    fn write_catalog(dir: &Path, accepted: &[(Value, String, Vec<u8>)]) -> Result<(), String> {
+    fn write_catalog(dir: &Path, accepted: &[(Value, String, Vec<u8>, Option<(String, Vec<u8>)>)]) -> Result<(), String> {
         std::fs::create_dir(dir).map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
-        for (_, file, data) in accepted {
+        for (_, file, data, normal) in accepted {
             let path = join_relative(dir, file);
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| format!("cannot make {}: {e}", parent.display()))?;
             }
             std::fs::write(&path, data).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+            if let Some((normal_path, normal_data)) = normal {
+                let path = join_relative(dir, normal_path);
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| format!("cannot make {}: {e}", parent.display()))?;
+                }
+                std::fs::write(&path, normal_data).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+            }
         }
-        let items: Vec<Value> = accepted.iter().map(|(v, _, _)| v.clone()).collect();
+        let items: Vec<Value> = accepted.iter().map(|(v, _, _, _)| v.clone()).collect();
         let catalog = serde_json::json!({ "version": 1, "items": items });
         let text = serde_json::to_vec_pretty(&catalog).map_err(|e| e.to_string())?;
         std::fs::write(dir.join("catalog.json"), text).map_err(|e| format!("cannot write catalog.json: {e}"))
@@ -945,6 +971,55 @@ mod tests {
         assert!(lib.image("armchair").is_err());
         assert!(lib.file_bytes("door:hinged").is_err(), "a built-in item has no file");
         assert!(lib.file_bytes("nothing").is_err());
+    }
+
+    #[test]
+    fn install_copies_and_validates_the_normal_map() {
+        let dir = crate::temp_dir::TempDir::new("install-normal-map");
+        let src = dir.join("source");
+        let user_dir = dir.join("user");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&user_dir).unwrap();
+        let rgba = vec![255u8, 128, 64, 255];
+        let normal = vec![0u8, 128, 255, 255];
+        let catalog = serde_json::to_vec(&json!({
+            "version": 1,
+            "items": [{
+                "id": "test-mat",
+                "name": "Test Mat",
+                "category": "Materials",
+                "licence": "CC0-1.0",
+                "source": "me",
+                "folder": "Images",
+                "file": "test-mat.png",
+                "normalMap": "test-mat-normal.png"
+            }]
+        }))
+        .unwrap();
+        std::fs::write(src.join("catalog.json"), catalog).unwrap();
+        std::fs::write(src.join("test-mat.png"), cadcraft_io::png::encode_rgba8(1, 1, &rgba).unwrap()).unwrap();
+        std::fs::write(src.join("test-mat-normal.png"), cadcraft_io::png::encode_rgba8(1, 1, &normal).unwrap()).unwrap();
+
+        let io = crate::library::LibraryIo {
+            read_glb: crate::library::testing::fake_glb,
+            read_image: cadcraft_io::image_read::read_image,
+            encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+            sample: cadcraft_io::library::sample_files,
+        };
+        let installed = install(&io, &user_dir, &src, &|_, _| false).unwrap();
+        assert_eq!(installed.items, 1);
+        let copy = user_dir.join("installed").join("source").join("test-mat-normal.png");
+        assert!(copy.exists());
+        assert!(!std::fs::read(copy).unwrap().is_empty());
+
+        let bad = dir.join("bad");
+        std::fs::create_dir_all(&bad).unwrap();
+        let bad_catalog = serde_json::to_vec(&json!({"version":1,"items":[{"id":"bad","name":"Bad","category":"Materials","licence":"CC0-1.0","source":"me","file":"bad.png","normalMap":"nope.png"}]})).unwrap();
+        std::fs::write(bad.join("catalog.json"), bad_catalog).unwrap();
+        std::fs::write(bad.join("bad.png"), cadcraft_io::png::encode_rgba8(1, 1, &rgba).unwrap()).unwrap();
+        let bad_installed = install(&io, &user_dir, &bad, &|_, _| false).unwrap();
+        assert_eq!(bad_installed.items, 0);
+        assert!(!bad_installed.skipped.is_empty());
     }
 
     #[test]

@@ -435,6 +435,30 @@ impl Library {
         }
     }
 
+    /// The item `id`'s companion normal map, if it has one. Reads alongside the item's file and
+    /// respects the same catalogue and licence rules as [`Library::file_bytes`].
+    pub fn normal_map_bytes(&self, id: &str) -> Result<Option<Vec<u8>>, String> {
+        let r = self.item(id).ok_or_else(|| format!("no library item `{id}`"))?;
+        let Some(file) = r.normal_map.as_deref().filter(|f| !f.is_empty()) else {
+            return Ok(None);
+        };
+        if r.licence.trim().is_empty() {
+            return Err(format!("`{id}` has no licence, so it never loads"));
+        }
+        match r.catalog.as_str() {
+            "builtin" => Ok(None),
+            "sample" => {
+                let io = library_io().ok_or(NO_READERS)?;
+                (io.sample)()
+                    .iter()
+                    .find(|(name, _)| *name == file)
+                    .map(|(_, b)| Some(b.to_vec()))
+                    .ok_or_else(|| format!("the sample set has no {file}"))
+            }
+            other => self.dir_file(r, other, Some(file)).map(Some),
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn dir_file(&self, r: &ItemRecord, catalog_name: &str, file: Option<&str>) -> Result<Vec<u8>, String> {
         let id = &r.id;

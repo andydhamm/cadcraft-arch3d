@@ -105,6 +105,8 @@ pub struct ItemRecord {
     pub attribution: String,
     pub catalog: String,
     pub read_only: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "normalMap")]
+    pub normal_map: Option<String>,
     pub file: Option<String>,
     pub elevation: Option<f64>,
     pub cutout: Option<[f64; 2]>,
@@ -216,5 +218,22 @@ mod tests {
         assert_eq!(ifc_class_for("Appliances and plumbing fixtures", "sink"), "IfcSanitaryTerminal");
         assert_eq!(ifc_class_for("Appliances and plumbing fixtures", "range"), "IfcElectricAppliance");
         assert_eq!(ifc_class_for("Lighting and electrical", "light"), "IfcLightFixture");
+    }
+
+    #[test]
+    fn item_record_reads_normal_map() {
+        let json = serde_json::json!({
+            "id": "test-mat",
+            "name": "Test Mat",
+            "category": "Materials",
+            "licence": "CC0-1.0",
+            "source": "me",
+            "folder": "Images",
+            "file": "test-mat.png",
+            "normalMap": "test-mat-normal.png",
+            "catalog": "user"
+        });
+        let rec: ItemRecord = serde_json::from_value(json).unwrap();
+        assert_eq!(rec.normal_map.as_deref(), Some("test-mat-normal.png"));
     }
 }
