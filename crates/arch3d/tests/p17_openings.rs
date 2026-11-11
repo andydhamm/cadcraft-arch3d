@@ -104,6 +104,25 @@ fn grille_bars_evenly_divide_the_glass() {
 }
 
 #[test]
+fn top_part_only() {
+    let o = helper_grille(2, 2, true);
+    let rect = GlassRect { u0: -0.45, u1: 0.45, z0: 0.96, z1: 2.04, ..Default::default() };
+    let bars = grille_bars(&o, &rect);
+    assert!(!bars.is_empty(), "top-only grilles should still create bars");
+
+    let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).collect::<Vec<_>>();
+    let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).collect::<Vec<_>>();
+    assert_eq!(vertical.len(), 1, "2x2 top-only should have one central vertical bar");
+    assert_eq!(horizontal.len(), 2, "2x2 top-only should split the single horizontal bar into two pieces");
+    assert!(((vertical[0][0] + vertical[0][1]) / 2.0).abs() < 1e-9, "top-part vertical bar should be centered on the window centre");
+    assert!((vertical[0][2] - 1.5).abs() < 1e-9, "top-part vertical bar should start at the upper-half boundary");
+    let z_centres = horizontal.iter().map(|b| (b[2] + b[3]) / 2.0).collect::<Vec<_>>();
+    assert_eq!(z_centres.len(), 2);
+    assert!((z_centres[0] - 1.77).abs() < 1e-3, "horizontal top bars should be centred in the upper half");
+    assert!((z_centres[1] - 1.77).abs() < 1e-3);
+}
+
+#[test]
 fn top_part_grille_divides_the_upper_half_evenly() {
     let o = helper_grille(2, 2, true);
     let rect = GlassRect { u0: -0.45, u1: 0.45, z0: 0.96, z1: 2.04, ..Default::default() };
