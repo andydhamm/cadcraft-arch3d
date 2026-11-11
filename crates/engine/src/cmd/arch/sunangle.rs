@@ -4,11 +4,11 @@
 use crate::cmd::CommandSpec;
 use crate::{EngineError, Session};
 use cadcraft_arch::site::SiteLocation;
-use cadcraft_doc::arch::Site;
 use cadcraft_doc::Handle;
+use cadcraft_doc::arch::Site;
 use cadcraft_geom::Vec2;
+use serde_json::{Value, json};
 use std::f64::consts::PI;
-use serde_json::{json, Value};
 
 /// The upper bound on named sun angles kept on one drawing.
 const MAX_SUN_ANGLES: usize = 16;
@@ -39,11 +39,7 @@ fn resolve(angle: &cadcraft_doc::arch::SunAngle, site: Option<&SiteLocation>) ->
         (angle.azimuth, angle.elevation)
     };
     let finite = az.is_finite() && el.is_finite();
-    let dir = if finite {
-        Some(compass_dir(az, el).into_array())
-    } else {
-        None
-    };
+    let dir = if finite { Some(compass_dir(az, el).into_array()) } else { None };
     json!({
         "name": angle.name,
         "date": angle.date,
@@ -56,8 +52,12 @@ fn resolve(angle: &cadcraft_doc::arch::SunAngle, site: Option<&SiteLocation>) ->
     })
 }
 
-fn azimuth_default() -> f64 { f64::NAN }
-fn elevation_default() -> f64 { f64::NAN }
+fn azimuth_default() -> f64 {
+    f64::NAN
+}
+fn elevation_default() -> f64 {
+    f64::NAN
+}
 
 fn angle_by_name(model: &cadcraft_doc::arch::ArchModel, name: &str) -> usize {
     model.sun_angles.iter().position(|a| a.name == name)
@@ -98,11 +98,7 @@ fn run_sunangle(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     if list {
         let model = &s.doc()?.arch;
         let site = s.doc()?.arch.site.as_ref();
-        let angles: Vec<Value> = model
-            .sun_angles
-            .iter()
-            .map(|a| resolve(a, site))
-            .collect();
+        let angles: Vec<Value> = model.sun_angles.iter().map(|a| resolve(a, site)).collect();
         return Ok(json!({"sunAngles": angles}));
     }
 
@@ -134,46 +130,27 @@ fn run_sunangle(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         let az = azimuth.unwrap();
         let el = elevation.unwrap();
         if !az.is_finite() || !el.is_finite() {
-            return Err(EngineError::Other(format!(
-                "sunangle `sunangle {name}`: azimuth/elevation must be finite, got {az} / {el}"
-            )));
+            return Err(EngineError::Other(format!("sunangle `sunangle {name}`: azimuth/elevation must be finite, got {az} / {el}")));
         }
         if !(el >= -90.0 && el <= 90.0) {
-            return Err(EngineError::Other(format!(
-                "sunangle `sunangle {name}`: elevation {el} out of range -90..=90"
-            )));
+            return Err(EngineError::Other(format!("sunangle `sunangle {name}`: elevation {el} out of range -90..=90")));
         }
         let angle = cadraft_doc_angle(name, date, time, az, el);
         add_or_replace(s, angle, replace);
     } else if !date.is_empty() && !time.is_empty() {
         let site = site.ok_or_else(|| EngineError::Other("sunangle: date/time form needs a site location".into()))?;
-        let (az, el) = cadraft_arch::sun::solar_position(site.lat, site.lon, &date, &time)
+        let (az, el) = cadcraft_arch::sun::solar_position(site.lat, site.lon, &date, &time)
             .map_err(|_| EngineError::Other("sunangle: could not resolve sun from date/time".into()))?;
         let angle = cadraft_doc_angle(name, date, time, az, el);
         add_or_replace(s, angle, replace);
     } else {
-        return Err(EngineError::Other(
-            "sunangle: provide either (date, time) or (azimuth, elevation) with `name`".into(),
-        ));
+        return Err(EngineError::Other("sunangle: provide either (date, time) or (azimuth, elevation) with `name`".into()));
     }
     Ok(list_json(s))
 }
 
-fn cadraft_doc_angle(
-    name: String,
-    date: String,
-    time: String,
-    azimuth: f64,
-    elevation: f64,
-) -> cadraft_doc::arch::SunAngle {
-    cadcraft_doc::arch::SunAngle {
-        name,
-        date,
-        time,
-        azimuth,
-        elevation,
-        ..cadraft_doc::arch::SunAngle::default()
-    }
+fn cadraft_doc_angle(name: String, date: String, time: String, azimuth: f64, elevation: f64) -> cadraft_doc::arch::SunAngle {
+    cadcraft_doc::arch::SunAngle { name, date, time, azimuth, elevation, ..cadraft_doc::arch::SunAngle::default() }
 }
 
 fn add_or_replace(s: &mut Session, angle: cadraft_doc::arch::SunAngle, replace: bool) -> Result<(), EngineError> {
@@ -212,8 +189,7 @@ mod tests {
     use super::*;
 
     fn add_angle(s: &mut Session, name: &str, azimuth: f64, elevation: f64) -> Value {
-        s.execute("sunangle", &json!({"name": name, "azimuth": azimuth, "elevation": elevation}))
-            .expect("sunangle add failed")
+        s.execute("sunangle", &json!({"name": name, "azimuth": azimuth, "elevation": elevation})).expect("sunangle add failed")
     }
 
     fn list(s: &Session) -> Vec<String> {
@@ -239,8 +215,7 @@ mod tests {
         assert!(mid.contains(&"NOON".into()));
         assert!(mid.contains(&"LOW".into()));
         assert_eq!(mid.len(), 2);
-        s.execute("sunangle", &json!({"name": "NOON", "azimuth": 90.0, "elevation": 10.0, "replace": true}))
-            .expect("sunangle replace failed");
+        s.execute("sunangle", &json!({"name": "NOON", "azimuth": 90.0, "elevation": 10.0, "replace": true})).expect("sunangle replace failed");
         assert!(list(&s).contains(&"NOON".into()));
         assert_eq!(list(&s).len(), 2);
         s.execute("sunangle", &json!({"delete": "LOW"})).expect("sunangle delete failed");
@@ -280,10 +255,7 @@ mod tests {
             d.arch.cameras.push(cadcraft_doc::arch::Camera3d {
                 name: "Cam".into(),
                 look: cadcraft_doc::arch::Look {
-                    sun: cadcraft_doc::arch::Sun {
-                        angle: Some("A".to_string()),
-                        ..cadcraft_doc::arch::Sun::default()
-                    },
+                    sun: cadcraft_doc::arch::Sun { angle: Some("A".to_string()), ..cadcraft_doc::arch::Sun::default() },
                     ..cadcraft_doc::arch::Look::default()
                 },
                 saved: true,
