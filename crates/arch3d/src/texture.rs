@@ -172,8 +172,9 @@ fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
     h
 }
 
-/// Siding height field: linear rise down each board, step at the bottom edge (rows only).
-fn siding_height(_salt: u64, _x: usize, y: usize) -> f32 {
+/// Siding height field: linear rise down each board, step at the bottom edge,
+/// with a tiny per-column variation so boards are not perfectly flat.
+fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
     let row = y as f32 % 32.0;
     let mut h = row * 0.03;
     // Step at the bottom edge: full recess rows 30..31, bevel row 29.
@@ -182,6 +183,8 @@ fn siding_height(_salt: u64, _x: usize, y: usize) -> f32 {
     } else if row == 29.0 {
         h -= 0.5;
     }
+    // Small per-column variation: boards are not perfectly flat.
+    h += jitter(hash(salt, x as u64, y as u64, 7), 1) as f32 * 0.01;
     h
 }
 
@@ -258,8 +261,8 @@ pub fn normal_map(finish: Finish) -> Texture {
             let xp = (x + 1) % N;
             let ym = (y + N - 1) % N;
             let yp = (y + 1) % N;
-            let dx = (h[xp * N] - h[xm * N]) * 2.0;
-            let dy = (h[yp * N] - h[ym * N]) * 2.0;
+            let dx = (h[y * N + xp] - h[y * N + xm]) * 2.0;
+            let dy = (h[yp * N + x] - h[ym * N + x]) * 2.0;
             let z = 1.0;
             let len = (dx * dx + dy * dy + z * z).sqrt();
             let pack = |c: f32| ((c / len * 0.5 + 0.5) * 255.0).clamp(0.0, 255.0) as u8;
