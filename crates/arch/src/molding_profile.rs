@@ -51,7 +51,7 @@ pub fn builtin_profile(id: &str) -> Option<MoldingProfile> {
         "molding:casing" => vec![[0.0, 0.0], [0.012, 0.0], [0.016, 0.008], [0.016, 0.064], [0.0, 0.064]],
         _ => return None,
     };
-    Some(MoldingProfile { item: id.to_string(), points })
+    Some(MoldingProfile { item: id.to_string(), points, ..Default::default() })
 }
 
 /// The default profile of a molding kind (base, crown or chair rail).
@@ -119,7 +119,7 @@ pub fn scaled(p: &MoldingProfile, size: [f64; 2]) -> Result<MoldingProfile, Stri
         return Err("the molding profile has no size".to_string());
     }
     let points = p.points.iter().map(|q| [q[0] * size[0] / w, q[1] * size[1] / h]).collect();
-    Ok(MoldingProfile { item: p.item.clone(), points })
+    Ok(MoldingProfile { item: p.item.clone(), points, ..Default::default() })
 }
 
 /// A profile outline from a closed polyline's points: drop a closing point equal to the first,
