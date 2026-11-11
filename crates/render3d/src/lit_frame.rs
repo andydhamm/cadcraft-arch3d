@@ -74,6 +74,14 @@ impl Default for Lighting {
     }
 }
 
+impl Lighting {
+    /// Whether the frame is lit by daylight: a sun, or an environment marked `daylight`.
+    /// (p19-exposure's `exposure::daylight` should call this; it was not merged yet.)
+    pub fn has_daylight(&self) -> bool {
+        self.sun.is_some() || self.environment.as_ref().is_some_and(|e| e.daylight)
+    }
+}
+
 impl Offscreen {
     /// Lights shadowed in the last [`Offscreen::lit_frame`].
     pub fn shadowed_lights(&self) -> usize {

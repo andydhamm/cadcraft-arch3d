@@ -423,3 +423,80 @@ fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f3
     read.unmap();
     out
 }
+
+// ---- Environment map (p19-env-path) ------------------------------------------------------------
+
+/// A 100 m x 100 m slab under z = 0 (diffuse albedo 0.5 through the furnace materials, no lights).
+fn lambert_plane() -> GpuScene {
+    let scene = Scene3d { meshes: vec![prism("wall", 1, [-50.0, -50.0, -1.0], [50.0, 50.0, 0.0])], ..Default::default() };
+    build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, emission: 0.0 }))
+}
+
+/// `base` with `e` baked into `scene`'s aux buffer (no sun).
+fn with_environment(scene: &mut GpuScene, e: crate::environment::Environment, base: GpuFrame) -> GpuFrame {
+    let lighting = crate::lit_frame::Lighting { sun: None, environment: Some(std::sync::Arc::new(e)), ..Default::default() };
+    let mut frame = base;
+    super::tracer::frame_environment(&mut frame, &mut scene.ies, &lighting);
+    frame
+}
+
+/// Mean red radiance over the 8 x 8 pixels of a camera 5 m above the plane looking down.
+fn plane_mean(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame, spp: u32) -> f64 {
+    let out = trace(gpu, scene, frame);
+    assert_eq!(out.len(), 64);
+    out.iter().map(|a| f64::from(a[0]) / f64::from(spp)).sum::<f64>() / 64.0
+}
+
+fn down_frame(bounces: u32, spp: u32) -> GpuFrame {
+    GpuFrame { bounces, spp_this_pass: spp, seed: 11, ..camera_frame([0.0, 0.0, 5.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) }
+}
+
+#[test]
+fn uniform_environment_lights_a_lambert_plane() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = lambert_plane();
+    let frame = with_environment(&mut scene, crate::environment::Environment::uniform([1.0; 3], 16, 8), down_frame(2, 1024));
+    assert_eq!(frame.flags & super::scene_gpu::FRAME_ENV, super::scene_gpu::FRAME_ENV);
+    let mean = plane_mean(&gpu, &scene, &frame, 1024);
+    // L = albedo * E / pi = 0.5 * pi / pi.
+    assert!((mean - 0.5).abs() <= 0.005, "plane radiance {mean}");
+}
+
+#[test]
+fn env_irradiance_up_pi_down_zero() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = lambert_plane();
+    let spp = 16_384;
+    let frame = with_environment(
+        &mut scene,
+        crate::environment::Environment::uniform([1.0; 3], 16, 8),
+        GpuFrame { probe_count: 2, bounces: 0, spp_this_pass: spp, seed: 5, ..Default::default() },
+    );
+    let buffers = upload_scene(&gpu, &scene);
+    let probes = [up_probe(0.0, 0.0), GpuProbe { point: [0.0, 0.0, 0.0], normal: [0.0, 0.0, -1.0], ..Default::default() }];
+    let out = check(run_entry(&gpu, &buffers, "irradiance_main", &frame, &probes));
+    let lux = |a: &[f32; 4]| f64::from(luminance([a[0], a[1], a[2]])) / f64::from(spp);
+    let (up, down) = (lux(&out[0]), lux(&out[1]));
+    assert!((up - std::f64::consts::PI).abs() <= 0.03 * std::f64::consts::PI, "up {up}");
+    assert!(down.abs() < 1e-3, "down {down}");
+}
+
+/// A map with a bright patch 34 degrees above the horizon on a dim sky.
+fn patchy() -> crate::environment::Environment {
+    let mut e = crate::environment::Environment::uniform([1.0; 3], 16, 8);
+    e.rgb[2 * 16 + 3] = [20.0; 3];
+    e
+}
+
+#[test]
+fn env_mis_matches_bsdf_only() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = lambert_plane();
+    let frame = with_environment(&mut scene, patchy(), down_frame(2, 1024));
+    let mis = plane_mean(&gpu, &scene, &frame, 1024);
+    // No total importance: no light sample, and every escape is the whole BSDF-sampled share.
+    let bsdf_only = GpuFrame { env_params: [0.0; 4], ..frame };
+    let plain = plane_mean(&gpu, &scene, &bsdf_only, 1024);
+    assert!(mis > 0.5 && plain > 0.5, "mis {mis}, bsdf only {plain}");
+    assert!((mis - plain).abs() <= 0.02 * plain, "mis {mis}, bsdf only {plain}");
+}

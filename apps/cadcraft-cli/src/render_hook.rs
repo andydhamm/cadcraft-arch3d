@@ -190,6 +190,39 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
     crate::output::write_atomic(out, png).map_err(|e| e.to_string()).map(|_| ())
 }
 
+/// The last environment built and the key it was built for.
+type EnvCache = Option<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>)>;
+static ENV_CACHE: Mutex<EnvCache> = Mutex::new(None);
+
+/// The environment for the drawing and look, rebuilt only when the look's sky fields, its
+/// backdrop, the sun direction or the arch revision change (an HDRI decode is not cheap).
+fn environment_cached(
+    model: &cadcraft_engine::doc::arch::ArchModel,
+    revision: u64,
+    look: &cadcraft_engine::doc::arch::Look,
+    sun_dir: Option<[f64; 3]>,
+) -> Option<std::sync::Arc<cadcraft_render3d::Environment>> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{:?}", look.sky).hash(&mut h);
+    format!("{:?}", look.backdrop).hash(&mut h);
+    sun_dir.map(|d| d.map(f64::to_bits)).hash(&mut h);
+    revision.hash(&mut h);
+    let key = h.finish();
+    if let Ok(guard) = ENV_CACHE.lock() {
+        if let Some((k, env)) = guard.as_ref() {
+            if *k == key {
+                return env.clone();
+            }
+        }
+    }
+    let env = cadcraft_render3d::environment_for(model, look, sun_dir);
+    if let Ok(mut guard) = ENV_CACHE.lock() {
+        *guard = Some((key, env.clone()));
+    }
+    env
+}
+
 fn render_one(req: &RenderRequest) -> Result<Value, String> {
     let style = crate::render::parse_style(&req.style).ok_or_else(|| format!("`{}` is not one of {}", req.style, crate::render::STYLE_NAMES))?;
     let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
@@ -210,7 +243,8 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
 
     let camera = req.camera.clone().unwrap_or_else(|| Camera::Orbit(Orbit::fit(&scene.bounds)));
     let eye = camera.eye();
-    let lighting = lighting_for(&look, sun_dir, req.budget);
+    let mut lighting = lighting_for(&look, sun_dir, req.budget);
+    lighting.environment = environment_cached(&req.drawing.arch, key, &look, sun_dir);
     let maps_before = off.shadow_maps_built();
 
     let mut final_mode: Option<&str> = None;
@@ -229,6 +263,10 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                 *cache_saved = cache::save(c, handle, &dir).is_ok();
             }
         }
+        path_info.insert(
+            "environment".into(),
+            lighting.environment.as_ref().map_or(Value::Null, |e| json!({ "width": e.width, "height": e.height, "visible": e.visible })),
+        );
         match (stats, fallback) {
             (Some(st), None) => {
                 final_mode = Some("path");
@@ -332,7 +370,8 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
         SunChoice::Dir(d) => sun_dir = Some(d),
         SunChoice::Default => {}
     }
-    let lighting = lighting_for(&look, sun_dir, 8);
+    let mut lighting = lighting_for(&look, sun_dir, 8);
+    lighting.environment = environment_cached(&req.drawing.arch, req.drawing.arch_revision, &look, sun_dir);
     let opts = path_options(&req.path);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
     let results: Vec<Value> = req

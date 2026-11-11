@@ -134,12 +134,167 @@ fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
 
 // [p19-sun] what of the sun reaches o along d (cast shadows on/off).
 fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { return visibility(o, d, 1.0e6); }
-// [p19-env-path]
-fn env_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }
-// [p19-env-path] the radiance an escaping ray sees (sky or environment map); depth, mode and prev_pdf are for MIS.
-fn env_escape(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32> { return sky_radiance(d); }
-// [p19-env-path]
-fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }
+// ---- Environment map (p19-env-path) --------------------------------------------------------------
+// The baked table lives in the aux buffer (`ies`): frame.env.x is the radiance offset (rgb per
+// texel, row 0 the zenith), frame.env.y/.z the width and height, frame.env.w the flags (1 present,
+// 2 visible), frame.env_aux.x the marginal CDF (height + 1) and .y the conditional CDFs
+// (height rows of width + 1); frame.env_params.x is the total importance (0: nothing to sample).
+// u = 0.5 + atan2(y, x) / 2 pi, v = 0.5 - asin(z) / pi (backdrop.wgsl).
+
+fn env_active() -> bool {
+    return (frame.flags & FRAME_ENV) != 0u && frame.env.y > 0u && frame.env.z > 0u && (frame.env.w & 1u) != 0u;
+}
+
+// The index of the texel unit d falls in.
+fn env_texel(d: vec3<f32>) -> vec2<u32> {
+    let w = frame.env.y;
+    let h = frame.env.z;
+    let u = 0.5 + atan2(d.y, d.x) / (2.0 * PT_PI);
+    let v = 0.5 - asin(clamp(d.z, -1.0, 1.0)) / PT_PI;
+    return vec2<u32>(min(u32(max(u * f32(w), 0.0)), w - 1u), min(u32(max(v * f32(h), 0.0)), h - 1u));
+}
+
+// The environment's radiance (nits) along unit d.
+fn env_lookup(d: vec3<f32>) -> vec3<f32> {
+    if (!env_active()) {
+        return vec3<f32>(0.0);
+    }
+    let t = env_texel(d);
+    let i = frame.env.x + (t.y * frame.env.y + t.x) * 3u;
+    return vec3<f32>(ies[i], ies[i + 1u], ies[i + 2u]);
+}
+
+// The largest i in [0, n) with ies[base + i] <= x (a CDF of n + 1 entries).
+fn env_search(base: u32, n: u32, x: f32) -> u32 {
+    var lo = 0u;
+    var hi = n;
+    while (lo < hi) {
+        let mid = (lo + hi + 1u) >> 1u;
+        if (ies[base + mid] <= x) {
+            lo = mid;
+        } else {
+            hi = mid - 1u;
+        }
+    }
+    return min(lo, n - 1u);
+}
+
+// The density per steradian with which env_sample picks unit d (0: it cannot).
+fn env_pdf(d: vec3<f32>) -> f32 {
+    if (!env_active() || !(frame.env_params.x > 0.0)) {
+        return 0.0;
+    }
+    let w = frame.env.y;
+    let h = frame.env.z;
+    let t = env_texel(d);
+    let m = ies[frame.env_aux.x + t.y + 1u] - ies[frame.env_aux.x + t.y];
+    let cb = frame.env_aux.y + t.y * (w + 1u);
+    let c = ies[cb + t.x + 1u] - ies[cb + t.x];
+    let v = 0.5 - asin(clamp(d.z, -1.0, 1.0)) / PT_PI;
+    let sin_t = sin(v * PT_PI);
+    if (!(sin_t > 1.0e-6)) {
+        return 0.0;
+    }
+    return m * c * f32(w * h) / (2.0 * PT_PI * PT_PI * sin_t);
+}
+
+struct EnvSample { dir: vec3<f32>, li: vec3<f32>, pdf: f32 };
+
+// A direction drawn in proportion to luminance x sin(theta), its radiance and its pdf (0: none).
+fn env_sample(u: vec2<f32>) -> EnvSample {
+    var s: EnvSample;
+    s.dir = vec3<f32>(0.0, 0.0, 1.0);
+    s.li = vec3<f32>(0.0);
+    s.pdf = 0.0;
+    if (!env_active() || !(frame.env_params.x > 0.0)) {
+        return s;
+    }
+    let w = frame.env.y;
+    let h = frame.env.z;
+    let row = env_search(frame.env_aux.x, h, u.x);
+    let m0 = ies[frame.env_aux.x + row];
+    let m1 = ies[frame.env_aux.x + row + 1u];
+    var fv = 0.5;
+    if (m1 > m0) {
+        fv = clamp((u.x - m0) / (m1 - m0), 0.0, 1.0);
+    }
+    let cb = frame.env_aux.y + row * (w + 1u);
+    let col = env_search(cb, w, u.y);
+    let c0 = ies[cb + col];
+    let c1 = ies[cb + col + 1u];
+    var fu = 0.5;
+    if (c1 > c0) {
+        fu = clamp((u.y - c0) / (c1 - c0), 0.0, 1.0);
+    }
+    let uu = (f32(col) + fu) / f32(w);
+    let vv = (f32(row) + fv) / f32(h);
+    let az = (uu - 0.5) * 2.0 * PT_PI;
+    let el = (0.5 - vv) * PT_PI;
+    let d = vec3<f32>(cos(el) * cos(az), cos(el) * sin(az), sin(el));
+    // Re-derive the texel from the direction, so radiance and pdf agree with env_escape's.
+    s.dir = d;
+    s.pdf = env_pdf(d);
+    s.li = env_lookup(d);
+    return s;
+}
+
+// One environment sample's contribution at a non-glass vertex, MIS-weighted against the BSDF.
+fn env_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> {
+    if (!env_active()) {
+        return vec3<f32>(0.0);
+    }
+    let s = env_sample(vec2<f32>(rand(r), rand(r)));
+    if (!(s.pdf > 0.0) || !(light_luminance(s.li) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let f = bsdf_eval(m, n, wo, s.dir);
+    if (!(light_luminance(f) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let v = visibility(p + n * PT_EPS, s.dir, 1.0e6);
+    if (!(light_luminance(v) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let w = power_heuristic(s.pdf, bsdf_pdf(m, n, wo, s.dir));
+    return f * s.li * v * (w / s.pdf);
+}
+
+// The radiance an escaping ray sees. With an environment: a camera ray (depth 0) sees it only when
+// it is visible (else the pixel stays a miss for the backdrop or clear colour); after a specular
+// bounce all of it; after a diffuse or glossy one the MIS share env_direct did not count; and
+// nothing on the first segment of an irradiance path (env_irradiance counted it). Without one,
+// the constant sky.
+fn env_escape(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32> {
+    if (!env_active()) {
+        return sky_radiance(d);
+    }
+    if (depth == 0u && mode == AREA_SEEN) {
+        if ((frame.env.w & 2u) != 0u) {
+            return env_lookup(d);
+        }
+        return vec3<f32>(0.0);
+    }
+    if (mode == AREA_SKIP) {
+        return vec3<f32>(0.0);
+    }
+    if (mode == AREA_SEEN) {
+        return env_lookup(d);
+    }
+    return env_lookup(d) * power_heuristic(prev_pdf, env_pdf(d));
+}
+
+// The illuminance (rgb lux) the environment gives a point o with normal n: one sample, cos / pdf.
+fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> {
+    if (!env_active()) {
+        return vec3<f32>(0.0);
+    }
+    let s = env_sample(vec2<f32>(rand(r), rand(r)));
+    let c = dot(n, s.dir);
+    if (!(s.pdf > 0.0) || !(c > 0.0) || !(light_luminance(s.li) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    return s.li * visibility(o, s.dir, 1.0e6) * (c / s.pdf);
+}
 // [p19-sky]
 fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }
 // [p19-sky]
