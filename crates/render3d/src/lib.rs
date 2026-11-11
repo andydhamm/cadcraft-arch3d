@@ -13,6 +13,7 @@ pub mod adapter;
 pub mod backdrop;
 pub mod camera;
 pub mod edges;
+pub mod exposure;
 pub mod final_render;
 pub mod frame_look;
 pub mod light;
