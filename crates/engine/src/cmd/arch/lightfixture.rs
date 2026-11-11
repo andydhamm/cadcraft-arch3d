@@ -15,32 +15,33 @@ use serde_json::{Value, json};
 use crate::cmd::{CommandSpec, bad, point_req, str_param};
 use crate::{Result, Session};
 
-const STRIP_SAMPLE_SPACING: f64 = 0.15;
+/// How far behind a wall cabinet's front face an under-cabinet strip runs (m).
 const STRIP_UNDER_BEHIND_FACE: f64 = 0.05;
+/// How far under the carcass bottom an under-cabinet strip sits (m).
 const STRIP_UNDER_HEIGHT_MARGIN: f64 = 0.005;
-const STRIP_ROOM_INSET_DEFAULT: f64 = 0.05;
+/// How far below the ceiling a room ring sits by default (m).
+const STRIP_ROOM_DROP: f64 = 0.05;
+/// Two cabinets whose front edges are this close (m) are joined.
+const STRIP_JOIN_TOL: f64 = 0.01;
 
-/// A strip's resolved placement (its 2D path + orientation), independent of the fixture id.
-#[derive(Clone)]
-struct StripForm {
+/// A strip's resolved placement: its 2D path and how it is hung. The forms (`path`, `under`,
+/// `room`) all resolve to this; the fixture is built from it in one place.
+struct StripPlan {
     points: Vec<Vec2>,
     closed: bool,
     level: u32,
     height: f64,
-    lumens_per_metre: f64,
-    kelvin: f64,
     facing: StripFacing,
-    on: bool,
 }
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("lightfixture", "Light Fixture", run_lightfixture).menu(&["Architecture", "Light Fixture"]).params(
-            "{type?, at?: [x,y], room?: \"r0\", rows?, cols?, level?, height?, rotation?, tilt?, lumens?, kelvin?, cone?, falloff?, kind?: \"point\"|\"spot\"|\"area\", width?, length?, ies?: \"file.ies\"|null, on?}",
+            "{type?, at?: [x,y], room?: \"r0\", rows?, cols?, LED strip (exactly one form): path?: [[x,y],...] + closed? + facing?: \"down\"|\"out\", under?: [\"cb0\",...] (joined wall cabinets), room? + inset? (a closed ring facing out); lumensPerMetre?, level?, height?, rotation?, tilt?, lumens?, kelvin?, cone?, falloff?, kind?: \"point\"|\"spot\"|\"area\", width?, length?, ies?: \"file.ies\"|null, on?}",
         ),
         CommandSpec::new("lightfixture.edit", "Edit Light Fixture", run_lightfixture_edit)
             .menu(&["Architecture", "Edit Light Fixture"])
-            .params("{id: \"lf0\", at?, height?, rotation?, tilt?, lumens?, kelvin?, cone?, falloff?, kind?, width?, length?, ies?: \"file.ies\"|null, on?}"),
+            .params("{id: \"lf0\", at?, path?, closed?, lumensPerMetre?, facing?: \"down\"|\"out\", height?, rotation?, tilt?, lumens?, kelvin?, cone?, falloff?, kind?, width?, length?, ies?: \"file.ies\"|null, on?}"),
         CommandSpec::new("lightfixture.delete", "Delete Light Fixture", run_lightfixture_delete)
             .menu(&["Architecture", "Delete Light Fixture"])
             .params("{id}"),
@@ -308,6 +309,9 @@ fn grid_like(doc: &cadcraft_doc::Drawing, room_id: ArchId, rows: u32, cols: u32,
 }
 
 fn run_lightfixture(session: &mut Session, params: &Value) -> Result<Value> {
+    if is_strip_request(params) {
+        return run_strip(session, params);
+    }
     let doc = session.doc()?;
     let has_at = params.get("at").is_some_and(|v| !v.is_null());
     let has_room = params.get("room").is_some_and(|v| !v.is_null());
@@ -373,6 +377,338 @@ fn run_lightfixture(session: &mut Session, params: &Value) -> Result<Value> {
     Ok(json!({ "lights": labels, "handles": handles }))
 }
 
+/// Whether the call asks for a strip: the catalogue type is a strip, or it carries a strip form.
+fn is_strip_request(params: &Value) -> bool {
+    let typ = str_param(params, "type").unwrap_or("");
+    let strip_type = find_type(typ).is_some_and(|t| t.kind == LightKind::Strip);
+    strip_type || ["path", "under"].iter().any(|k| params.get(*k).is_some_and(|v| !v.is_null()))
+}
+
+fn parse_facing(cmd: &str, value: &Value) -> Result<StripFacing> {
+    match value.as_str().map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        Some("down") => Ok(StripFacing::Down),
+        Some("out") => Ok(StripFacing::Out),
+        _ => Err(bad(cmd, format!("`facing` must be \"down\" or \"out\"; got {value}"))),
+    }
+}
+
+fn finite_param(cmd: &str, params: &Value, key: &str) -> Result<Option<f64>> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_f64().filter(|n| n.is_finite()).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a finite number; got {v}"))),
+    }
+}
+
+/// `path`: `[x, y]` points (at most `MAX_STRIP_POINTS`), every coordinate finite.
+fn parse_path(cmd: &str, value: &Value) -> Result<Vec<Vec2>> {
+    let rows = value.as_array().ok_or_else(|| bad(cmd, format!("`path` must be an array of [x, y] points; got {value}")))?;
+    if rows.len() > MAX_STRIP_POINTS {
+        return Err(bad(cmd, format!("`path` holds at most {MAX_STRIP_POINTS} points; got {}", rows.len())));
+    }
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let xy = row.as_array().filter(|a| a.len() == 2).and_then(|a| Some((a.first()?.as_f64()?, a.get(1)?.as_f64()?)));
+        match xy {
+            Some((x, y)) if x.is_finite() && y.is_finite() => out.push(Vec2::new(x, y)),
+            _ => return Err(bad(cmd, format!("`path` points must be [x, y] with finite numbers; got {row}"))),
+        }
+    }
+    Ok(out)
+}
+
+/// The point half way along the path (by length), the strip's position.
+fn path_midpoint(points: &[Vec2], closed: bool) -> Vec2 {
+    let mut ring: Vec<Vec2> = points.to_vec();
+    if closed {
+        if let Some(first) = points.first() {
+            ring.push(*first);
+        }
+    }
+    let total: f64 = ring.windows(2).map(|w| (w[1] - w[0]).len()).sum();
+    let mut left = total / 2.0;
+    for w in ring.windows(2) {
+        let len = (w[1] - w[0]).len();
+        if len > 0.0 && left <= len {
+            return w[0] + (w[1] - w[0]) * (left / len);
+        }
+        left -= len;
+    }
+    ring.first().copied().unwrap_or(Vec2::new(0.0, 0.0))
+}
+
+/// Height (m above the level) of the ceiling over `at` on `level`, as a ceiling fixture would hang.
+fn ceiling_over(doc: &cadcraft_doc::Drawing, level: u32, at: Vec2) -> Option<f64> {
+    let probe = LightFixture { level, ..LightFixture::new(ArchId(0), "Recessed pot light", at) };
+    let z = cadcraft_arch::light::light_point(&doc.arch, &probe)?.z;
+    let model = &doc.arch;
+    let elevation = model.levels.iter().rev().find(|l| l.index == level).or_else(|| model.levels.last()).map_or(0.0, |l| l.elevation);
+    Some(z - elevation)
+}
+
+/// One wall cabinet's front edge and the strip's line 0.05 m behind it.
+struct CabinetRun {
+    front: (Vec2, Vec2),
+    path: (Vec2, Vec2),
+}
+
+/// Resolve `under`: wall cabinets on one level whose front edges join in a run. The path runs
+/// along their front-bottom edges, 0.05 m behind the front face.
+fn plan_under(doc: &cadcraft_doc::Drawing, value: &Value) -> Result<StripPlan> {
+    let cmd = "lightfixture";
+    let ids = value
+        .as_array()
+        .filter(|a| !a.is_empty() && a.len() <= MAX_STRIP_POINTS)
+        .ok_or_else(|| bad(cmd, format!("`under` must be a non-empty array of cabinet ids; got {value}")))?;
+    let mut level = None;
+    let mut elevation: Option<f64> = None;
+    let mut runs: Vec<CabinetRun> = Vec::new();
+    for raw in ids {
+        let label = raw.as_str().map(str::trim).unwrap_or("");
+        let number = label.strip_prefix("cb").or_else(|| label.strip_prefix("CB")).unwrap_or(label);
+        let cab = number.parse::<u32>().ok().and_then(|n| doc.arch.cabinets.iter().find(|c| c.id.0 == n));
+        let Some(cab) = cab else {
+            return Err(bad(cmd, format!("`under` names an unknown cabinet {raw}")));
+        };
+        if cab.kind != CabinetKind::Wall {
+            return Err(bad(cmd, format!("`under` takes wall cabinets only; {label} is not one")));
+        }
+        if level.is_some_and(|l| l != cab.level) || elevation.is_some_and(|e| (e - cab.elevation).abs() > 1e-6) {
+            return Err(bad(cmd, format!("`under`: {label} is on another level or hangs at another height than the first cabinet")));
+        }
+        let usable =
+            cab.position.is_finite() && cab.rotation.is_finite() && cab.width.is_finite() && cab.depth.is_finite() && cab.elevation.is_finite();
+        if !usable || cab.width <= 0.0 {
+            return Err(bad(cmd, format!("`under`: cabinet {label} has no usable size or position")));
+        }
+        level = Some(cab.level);
+        elevation = Some(cab.elevation);
+        let u = Vec2::from_angle(cab.rotation.to_radians());
+        let v = u.perp();
+        let hw = cab.width / 2.0;
+        let at = |x: f64, y: f64| cab.position + u * x + v * y;
+        runs.push(CabinetRun {
+            front: (at(-hw, cab.depth), at(hw, cab.depth)),
+            path: (at(-hw, cab.depth - STRIP_UNDER_BEHIND_FACE), at(hw, cab.depth - STRIP_UNDER_BEHIND_FACE)),
+        });
+    }
+    let near = |a: Vec2, b: Vec2| (a - b).len() <= STRIP_JOIN_TOL;
+    // Start from a cabinet with a free end (a ring of cabinets has none: take the first).
+    let free_end = |i: usize| {
+        let Some(me) = runs.get(i) else { return false };
+        let joined = |p: Vec2| runs.iter().enumerate().any(|(j, r)| j != i && (near(p, r.front.0) || near(p, r.front.1)));
+        !joined(me.front.0) || !joined(me.front.1)
+    };
+    let start = (0..runs.len()).find(|&i| free_end(i)).unwrap_or(0);
+    let Some(first) = runs.get(start) else {
+        return Err(bad(cmd, "`under` names no cabinets"));
+    };
+    let mut used = vec![false; runs.len()];
+    if let Some(u) = used.get_mut(start) {
+        *u = true;
+    }
+    // Orient the first cabinet so that its joined end is the tail.
+    let joined_at_b = runs.iter().enumerate().any(|(j, r)| j != start && (near(first.front.1, r.front.0) || near(first.front.1, r.front.1)));
+    let (mut tail_front, tail_path, head_path) =
+        if joined_at_b || runs.len() == 1 { (first.front.1, first.path.1, first.path.0) } else { (first.front.0, first.path.0, first.path.1) };
+    let mut points = vec![head_path, tail_path];
+    for _ in 1..runs.len() {
+        let next = runs.iter().enumerate().find_map(|(j, r)| {
+            if used.get(j).copied().unwrap_or(true) {
+                None
+            } else if near(tail_front, r.front.0) {
+                Some((j, r.front.1, r.path.1))
+            } else if near(tail_front, r.front.1) {
+                Some((j, r.front.0, r.path.0))
+            } else {
+                None
+            }
+        });
+        let Some((j, front, path)) = next else {
+            return Err(bad(cmd, "`under`: the cabinets' front edges do not join (a gap of more than 0.01 m)"));
+        };
+        if let Some(u) = used.get_mut(j) {
+            *u = true;
+        }
+        tail_front = front;
+        points.push(path);
+    }
+    Ok(StripPlan {
+        points,
+        closed: false,
+        level: level.unwrap_or(0),
+        height: elevation.unwrap_or(0.0) - STRIP_UNDER_HEIGHT_MARGIN,
+        facing: StripFacing::Down,
+    })
+}
+
+/// Resolve `room` + `inset`: a closed counter-clockwise ring inset from the room outline,
+/// facing out, hung `height` (default ceiling - 0.05).
+fn plan_room(doc: &cadcraft_doc::Drawing, params: &Value) -> Result<StripPlan> {
+    let cmd = "lightfixture";
+    let label = str_param(params, "room").ok_or_else(|| bad(cmd, "`room` must be a room id"))?;
+    let room =
+        parse_room_id(label).and_then(|id| doc.arch.rooms.iter().find(|r| r.id == id)).ok_or_else(|| bad(cmd, format!("unknown room `{label}`")))?;
+    let inset = finite_param(cmd, params, "inset")?.ok_or_else(|| bad(cmd, "`inset` is required with `room`"))?;
+    if inset <= 0.0 {
+        return Err(bad(cmd, format!("`inset` must be greater than 0 m; got {inset}")));
+    }
+    let mut outline = room.polygon.clone();
+    if outline.len() > 1 && outline.first() == outline.last() {
+        outline.pop();
+    }
+    let regions = cadcraft_geom::skeleton::inset(&outline, &[], inset)
+        .map_err(|e| bad(cmd, format!("`inset` {inset} cannot be taken from room `{label}`: {e:?}")))?;
+    let [region] = regions.as_slice() else {
+        return Err(bad(cmd, format!("`inset` {inset} leaves {} rings in room `{label}`; exactly one is needed", regions.len())));
+    };
+    let mut ring = region.outer.clone();
+    if ring.len() > 1 && ring.first() == ring.last() {
+        ring.pop();
+    }
+    let area: f64 = ring.iter().zip(ring.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum();
+    if area < 0.0 {
+        ring.reverse();
+    }
+    let height = match finite_param(cmd, params, "height")? {
+        Some(h) => h,
+        None => ceiling_over(doc, room.level, path_midpoint(&ring, true)).map_or(2.4 - STRIP_ROOM_DROP, |c| c - STRIP_ROOM_DROP),
+    };
+    Ok(StripPlan { points: ring, closed: true, level: room.level, height, facing: StripFacing::Out })
+}
+
+/// Resolve `path`: the points as given; the height defaults to the ceiling over the path's midpoint.
+fn plan_path(doc: &cadcraft_doc::Drawing, params: &Value, value: &Value) -> Result<StripPlan> {
+    let cmd = "lightfixture";
+    let points = parse_path(cmd, value)?;
+    let closed = match params.get("closed") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad(cmd, format!("`closed` must be a boolean; got {v}")))?,
+    };
+    let level = resolve_level(doc, params.get("level"))?;
+    let height = match finite_param(cmd, params, "height")? {
+        Some(h) => h,
+        None => ceiling_over(doc, level, path_midpoint(&points, closed)).unwrap_or(2.4),
+    };
+    let facing = match params.get("facing") {
+        None | Some(Value::Null) => StripFacing::Down,
+        Some(v) => parse_facing(cmd, v)?,
+    };
+    Ok(StripPlan { points, closed, level, height, facing })
+}
+
+/// `lightfixture` with `type: "LED strip"`: ONE match over the exclusive forms (`path`, `under`,
+/// `room`). Everything is validated on a new fixture before the drawing is touched.
+fn run_strip(session: &mut Session, params: &Value) -> Result<Value> {
+    let cmd = "lightfixture";
+    let doc = session.doc()?;
+    let doc = &*doc;
+    let given = |k: &str| params.get(k).is_some_and(|v| !v.is_null());
+    let forms: Vec<&str> = ["path", "under", "room"].into_iter().filter(|k| given(k)).collect();
+    if let Some(k) = ["at", "rows", "cols"].into_iter().find(|k| given(k)) {
+        return Err(bad(cmd, format!("an LED strip takes `path`, `under` or `room`, not `{k}`")));
+    }
+    if str_param(params, "type").is_some_and(|t| find_type(t).is_some_and(|t| t.kind != LightKind::Strip)) {
+        return Err(bad(cmd, "`path` and `under` belong to type \"LED strip\""));
+    }
+    let mut plan = match forms.as_slice() {
+        ["path"] => plan_path(doc, params, params.get("path").unwrap_or(&Value::Null))?,
+        ["under"] => plan_under(doc, params.get("under").unwrap_or(&Value::Null))?,
+        ["room"] => plan_room(doc, params)?,
+        [] => return Err(bad(cmd, "an LED strip needs exactly one of `path`, `under` or `room`")),
+        many => return Err(bad(cmd, format!("an LED strip takes exactly one of `path`, `under` or `room`; got {}", many.join(" and ")))),
+    };
+    if forms != ["room"] && given("inset") {
+        return Err(bad(cmd, "`inset` belongs to the `room` form"));
+    }
+    if forms == ["under"] {
+        // Under cabinets the height, level and facing are fixed by the run.
+        if let Some(k) = ["height", "facing", "level"].into_iter().find(|k| given(k)) {
+            return Err(bad(cmd, format!("`{k}` is not taken with `under`: the cabinets set it")));
+        }
+    }
+    if forms == ["room"] {
+        if let Some(v) = params.get("facing").filter(|v| !v.is_null()) {
+            plan.facing = parse_facing(cmd, v)?;
+        }
+    }
+
+    let typ = str_param(params, "type").unwrap_or("LED strip");
+    let t = find_type(typ).ok_or_else(|| bad(cmd, format!("unknown fixture type `{typ}`; lightfixture.types lists them")))?;
+    let id = ArchId(doc.arch.next_light_id);
+    let mut fixture = fixture_from_type(id, &t, path_midpoint(&plan.points, plan.closed));
+    fixture.level = plan.level;
+    fixture.path = plan.points;
+    fixture.closed = plan.closed;
+    fixture.height = Some(plan.height);
+    fixture.facing = plan.facing;
+    if let Some(v) = finite_param(cmd, params, "lumensPerMetre")? {
+        fixture.lumens_per_metre = v;
+    }
+    if let Some(v) = finite_param(cmd, params, "kelvin")? {
+        fixture.kelvin = v;
+    }
+    if let Some(v) = params.get("on") {
+        fixture.on = v.as_bool().ok_or_else(|| bad(cmd, format!("`on` must be a boolean; got {v}")))?;
+    }
+    settle_strip(&mut fixture);
+    check_fixture(cmd, &fixture)?;
+
+    if doc.arch.lights.len() + 1 > MAX_LIGHT_FIXTURES {
+        return Err(bad(cmd, format!("at most {MAX_LIGHT_FIXTURES} light fixtures are allowed")));
+    }
+    let mut doc_mut = session.doc_mut()?;
+    doc_mut.ensure_layer("E-LITE");
+    doc_mut.arch.lights.push(fixture);
+    doc_mut.arch.next_light_id = doc_mut.arch.next_light_id.saturating_add(1);
+    doc_mut.touch_arch();
+    Ok(json!({ "lights": [light_label(id)], "handles": [handle_json(light_handle(id))] }))
+}
+
+/// Keep a strip's derived values true: its position is the path's midpoint and its lumens are
+/// lumens per metre x length.
+fn settle_strip(fixture: &mut LightFixture) {
+    if fixture.kind != LightKind::Strip {
+        return;
+    }
+    if fixture.path.len() >= 2 && fixture.path.iter().all(|p| p.is_finite()) {
+        fixture.position = path_midpoint(&fixture.path, fixture.closed);
+    }
+    let lumens = fixture.lumens_per_metre * strip_length(fixture);
+    if lumens.is_finite() {
+        fixture.lumens = lumens;
+    }
+}
+
+/// The strip keys of `lightfixture.edit`, applied to `fixture`. Returns whether any was given (so
+/// that `settle_strip` runs). Strip keys on another kind are refused.
+fn edit_strip(fixture: &mut LightFixture, params: &Value) -> Result<bool> {
+    let cmd = "lightfixture.edit";
+    let present: Vec<&str> = ["path", "closed", "lumensPerMetre", "facing"].into_iter().filter(|k| params.get(*k).is_some()).collect();
+    if fixture.kind != LightKind::Strip {
+        return match present.first() {
+            Some(k) => Err(bad(cmd, format!("`{k}` applies to strips only; this light is a {}", kind_name(fixture.kind)))),
+            None => Ok(false),
+        };
+    }
+    if params.get("kind").is_some() {
+        return Err(bad(cmd, "a strip's `kind` cannot change"));
+    }
+    if let Some(v) = params.get("path") {
+        fixture.path = parse_path(cmd, v)?;
+    }
+    if let Some(v) = params.get("closed") {
+        fixture.closed = v.as_bool().ok_or_else(|| bad(cmd, format!("`closed` must be a boolean; got {v}")))?;
+    }
+    if let Some(v) = params.get("lumensPerMetre") {
+        fixture.lumens_per_metre =
+            v.as_f64().filter(|n| n.is_finite()).ok_or_else(|| bad(cmd, format!("`lumensPerMetre` must be a finite number; got {v}")))?;
+    }
+    if let Some(v) = params.get("facing") {
+        fixture.facing = parse_facing(cmd, v)?;
+    }
+    Ok(!present.is_empty())
+}
+
 fn run_lightfixture_edit(session: &mut Session, params: &Value) -> Result<Value> {
     let raw = str_param(params, "id").ok_or_else(|| bad("lightfixture.edit", "`id` is required"))?;
     let id = parse_light_id(raw).ok_or_else(|| bad("lightfixture.edit", format!("unknown light `{raw}`")))?;
@@ -380,13 +716,20 @@ fn run_lightfixture_edit(session: &mut Session, params: &Value) -> Result<Value>
     let mut doc = session.doc_mut()?;
     let idx = doc.arch.lights.iter().position(|f| f.id == id).ok_or_else(|| bad("lightfixture.edit", format!("unknown light `{raw}`")))?;
     let mut fixture = doc.arch.lights[idx].clone();
+    let strip_edit = edit_strip(&mut fixture, params)?;
     if let Some(at) = params.get("at") {
         if !at.is_null() {
+            if fixture.kind == LightKind::Strip {
+                return Err(bad("lightfixture.edit", "a strip's position follows its `path`; give `path` instead of `at`"));
+            }
             fixture.position = point_req("lightfixture.edit", params, "at")?;
         }
     }
     apply_overrides("lightfixture.edit", &mut fixture, params)?;
     apply_ies(&mut fixture, &ies, params);
+    if strip_edit {
+        settle_strip(&mut fixture);
+    }
     check_fixture("lightfixture.edit", &fixture)?;
     doc.arch.lights[idx] = fixture;
     doc.touch_arch();
@@ -716,6 +1059,115 @@ mod tests {
 
     fn error_text(session: &mut Session, cmd: &str, params: &Value) -> String {
         session.execute(cmd, params).expect_err("must be refused").to_string()
+    }
+
+    fn wall_cabinet(position: Vec2, width: f64, kind: CabinetKind) -> cadcraft_doc::arch::Cabinet {
+        cadcraft_doc::arch::Cabinet { kind, position, rotation: 0.0, width, depth: 0.35, height: 0.7, elevation: 1.372, ..Default::default() }
+    }
+
+    #[test]
+    fn strip_path_under_cabinets_room_inset_and_refusals() {
+        let mut session = Session::new();
+        session.doc_mut().unwrap().arch.push_room(square_room());
+        let lights = |s: &Session| s.doc().unwrap().arch.lights.clone();
+
+        // A path strip: position is the midpoint, lumens = lm/m x length, height as given.
+        let out =
+            session.execute("lightfixture", &json!({"type": "LED strip", "path": [[1, 2], [3, 2]], "height": 2.4, "lumensPerMetre": 500})).unwrap();
+        assert_eq!(out["lights"][0], "lf0");
+        let f = lights(&session)[0].clone();
+        assert_eq!((f.kind, f.path.len(), f.closed, f.facing), (LightKind::Strip, 2, false, StripFacing::Down));
+        assert_eq!((f.position, f.lumens, f.height), (Vec2::new(2.0, 2.0), 1000.0, Some(2.4)));
+
+        // Height defaults to the room's ceiling (2.4 here); `out` and `closed` are taken.
+        session.execute("lightfixture", &json!({"type": "LED strip", "path": [[1, 1], [2, 1], [2, 2]], "closed": true, "facing": "out"})).unwrap();
+        let f = lights(&session)[1].clone();
+        assert_eq!((f.closed, f.facing, f.height), (true, StripFacing::Out, Some(2.4)));
+
+        // A room ring: one closed path inset 0.5 m from the 4 x 4 outline, 12 m, facing out, ceiling - 0.05.
+        session.execute("lightfixture", &json!({"type": "LED strip", "room": "r0", "inset": 0.5})).unwrap();
+        let ring = lights(&session)[2].clone();
+        assert_eq!((ring.closed, ring.facing), (true, StripFacing::Out));
+        assert!((strip_length(&ring) - 12.0).abs() < 1e-6, "{}", strip_length(&ring));
+        assert!((ring.height.unwrap_or(0.0) - 2.35).abs() < 1e-9, "{:?}", ring.height);
+        assert!(ring.path.iter().all(|p| p.x >= 0.5 - 1e-9 && p.x <= 3.5 + 1e-9 && p.y >= 0.5 - 1e-9 && p.y <= 3.5 + 1e-9));
+
+        // Under a run of two joined wall cabinets: their widths, 5 mm under the carcass, down.
+        let (a, b, gap, base) = {
+            let doc = session.doc_mut().unwrap();
+            let a = doc.arch.push_cabinet(wall_cabinet(Vec2::new(1.3, 0.0), 0.6, CabinetKind::Wall));
+            let b = doc.arch.push_cabinet(wall_cabinet(Vec2::new(2.05, 0.0), 0.9, CabinetKind::Wall));
+            let gap = doc.arch.push_cabinet(wall_cabinet(Vec2::new(3.5, 0.0), 0.6, CabinetKind::Wall));
+            let base = doc.arch.push_cabinet(wall_cabinet(Vec2::new(2.05, 1.0), 0.9, CabinetKind::Base));
+            (a, b, gap, base)
+        };
+        let ids = |v: &[ArchId]| json!(v.iter().map(|i| format!("cb{}", i.0)).collect::<Vec<_>>());
+        // Either order of the ids finds the same run.
+        session.execute("lightfixture", &json!({"type": "LED strip", "under": ids(&[b, a])})).unwrap();
+        let under = lights(&session)[3].clone();
+        assert!((strip_length(&under) - 1.5).abs() < 1e-9, "{}", strip_length(&under));
+        assert!((under.height.unwrap_or(0.0) - (1.372 - 0.005)).abs() < 1e-9);
+        assert_eq!((under.closed, under.facing), (false, StripFacing::Down));
+        // The path runs 0.05 m behind the front face (depth 0.35 -> y 0.30), x 1.0..2.5.
+        assert!(under.path.iter().all(|p| (p.y - 0.30).abs() < 1e-9), "{:?}", under.path);
+        let xs: Vec<f64> = under.path.iter().map(|p| p.x).collect();
+        assert!(
+            xs.iter().cloned().fold(f64::MAX, f64::min) - 1.0 < 1e-9 && (xs.iter().cloned().fold(f64::MIN, f64::max) - 2.5).abs() < 1e-9,
+            "{xs:?}"
+        );
+
+        // Refusals change nothing: the light list and the next id stay as they were.
+        let before = (lights(&session), session.doc().unwrap().arch.next_light_id);
+        let strip = |extra: Value| {
+            let mut p = json!({"type": "LED strip"});
+            if let (Some(o), Some(e)) = (p.as_object_mut(), extra.as_object()) {
+                o.extend(e.clone());
+            }
+            p
+        };
+        let refused = [
+            (strip(json!({"path": [[0, 0]]})), "path"),
+            (strip(json!({"path": [[0, 0], [1, 0]], "lumensPerMetre": -5})), "lumensPerMetre"),
+            (strip(json!({"path": [[0, 0], [1, 0]], "facing": "up"})), "facing"),
+            (strip(json!({"path": [[0, 0], [1, 0]], "height": "high"})), "height"),
+            (strip(json!({"path": [[0, 0], [0.001, 0]]})), "0.01"),
+            (strip(json!({"path": [[0, 0], [1, 0]], "under": ids(&[a])})), "exactly one"),
+            (strip(json!({"path": [[0, 0], [1, 0]], "at": [1, 1]})), "`at`"),
+            (strip(json!({"path": [[0, 0], [1, 0]], "rows": 2})), "`rows`"),
+            (strip(json!({"under": ["cb99"]})), "cb99"),
+            (strip(json!({"under": ids(&[a, gap])})), "join"),
+            (strip(json!({"under": ids(&[base])})), "wall cabinets"),
+            (strip(json!({"room": "r0", "inset": -1})), "inset"),
+            (strip(json!({"room": "r0", "inset": 2.5})), "inset"),
+            (strip(json!({"room": "r9", "inset": 0.5})), "r9"),
+            (strip(json!({"room": "r0", "path": [[0, 0], [1, 0]], "inset": 0.5})), "exactly one"),
+            (strip(json!({})), "exactly one"),
+        ];
+        for (params, word) in refused {
+            let msg = error_text(&mut session, "lightfixture", &params);
+            assert!(msg.contains(word), "{params}: {msg}");
+        }
+        assert_eq!((lights(&session), session.doc().unwrap().arch.next_light_id), before, "a refused strip places nothing");
+
+        // Edit: the path, lm/m and facing change the derived lumens and position; refusals change nothing.
+        session.execute("lightfixture.edit", &json!({"id": "lf0", "path": [[0, 2], [4, 2]], "lumensPerMetre": 250, "facing": "out"})).unwrap();
+        let f = lights(&session)[0].clone();
+        assert_eq!((f.position, f.lumens, f.facing), (Vec2::new(2.0, 2.0), 1000.0, StripFacing::Out));
+        let kept = lights(&session);
+        for params in [
+            json!({"id": "lf0", "facing": "sideways"}),
+            json!({"id": "lf0", "lumensPerMetre": 10001}),
+            json!({"id": "lf0", "path": [[0, 0]]}),
+            json!({"id": "lf0", "at": [1, 1]}),
+            json!({"id": "lf0", "kind": "point"}),
+        ] {
+            error_text(&mut session, "lightfixture.edit", &params);
+        }
+        assert_eq!(lights(&session), kept);
+        // Strip keys on a pot light are refused too.
+        session.execute("lightfixture", &json!({"at": [1.0, 1.0]})).unwrap();
+        let msg = error_text(&mut session, "lightfixture.edit", &json!({"id": "lf4", "facing": "out"}));
+        assert!(msg.contains("facing"), "{msg}");
     }
 
     #[test]
