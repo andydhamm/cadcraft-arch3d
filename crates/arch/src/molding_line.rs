@@ -79,6 +79,7 @@ pub fn line_run_at(l: &MoldingLine, level_elevation: f64) -> Option<MoldingRun> 
         z,
         closed: l.closed,
         side: if l.flip { -1.0 } else { 1.0 },
+        ..Default::default()
     })
 }
 
