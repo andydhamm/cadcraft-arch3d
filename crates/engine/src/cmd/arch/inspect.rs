@@ -477,6 +477,12 @@ fn inspect_cabinet_parts(model: &ArchModel, out: &mut JsonMap<String, Value>) {
         obj.insert("doorStyle".to_string(), json!(c.door_style.name()));
         obj.insert("drawerStyle".to_string(), json!(c.drawer_style.name()));
         obj.insert("pull".to_string(), json!(c.pull));
+        obj.insert("filler".to_string(), json!(c.filler));
+        let shelves = cadcraft_arch::casework_shelves::shelf_levels(c)
+            .iter()
+            .map(|(bottom, top)| json!({ "bottom": *bottom, "top": *top }))
+            .collect::<Vec<_>>();
+        obj.insert("shelves".to_string(), if shelves.is_empty() { Value::Null } else { Value::Array(shelves) });
         obj.insert("falseFront".to_string(), json!(false_front));
         obj.insert("cutout".to_string(), json!(casework_layout::hosted_cutout(model, c).map(|(_, _, size)| size)));
         // `fronts` stays the phase-13 mode name (the cabinet command's own parameter, which phase-13 check 04 and
