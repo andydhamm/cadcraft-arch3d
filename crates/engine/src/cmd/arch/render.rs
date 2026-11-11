@@ -112,12 +112,39 @@ pub struct IlluminanceRequest<'a> {
     /// Night (`SunChoice::Off`), the default light, or a sun direction.
     pub sun: SunChoice,
     pub path: PathParams,
+    /// The look the light is measured under (phase 19): sun intensity and cast shadows, sky on or off.
+    pub look: Look,
+    /// An explicit toward-sun direction (drawing space) from the look; `None` = see `sun`.
+    pub sun_dir: Option<[f64; 3]>,
 }
 
 impl<'a> IlluminanceRequest<'a> {
     /// Build a request. Each probe is a `(point, normal)` pair.
     pub fn new(drawing: &'a Drawing, probes: Vec<[[f64; 3]; 2]>, sun: SunChoice, path: PathParams) -> Self {
-        Self { drawing, probes, sun, path }
+        Self { drawing, probes, sun, path, look: Look::default(), sun_dir: None }
+    }
+
+    /// The same request with a look and its explicit sun direction (phase 19).
+    pub fn with_look(mut self, look: Look, sun_dir: Option<[f64; 3]>) -> Self {
+        self.look = look;
+        self.sun_dir = sun_dir;
+        self
+    }
+
+    /// The look and sun direction the renderer lights with: `Dir(d)` is the direction when none is
+    /// explicit, `Off` is night (sun and sky off), `Default` leaves the look as it is.
+    pub fn resolved_sun(&self) -> (Look, Option<[f64; 3]>) {
+        let mut look = self.look.clone();
+        let mut dir = self.sun_dir;
+        match self.sun {
+            SunChoice::Dir(d) if dir.is_none() => dir = Some(d),
+            SunChoice::Off => {
+                look.sun.on = false;
+                look.sky.on = false;
+            }
+            _ => {}
+        }
+        (look, dir)
     }
 }
 
