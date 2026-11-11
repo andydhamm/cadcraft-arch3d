@@ -49,8 +49,8 @@ fn trace(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
         return h;
     }
     var t_min = PT_EPS;
+    var rq: ray_query;
     for (var k = 0u; k < 32u; k = k + 1u) {
-        var rq: ray_query;
         rayQueryInitialize(&rq, acc, RayDesc(RAY_FLAG_NONE, 0xFFu, t_min, t_max, o, d));
         while (rayQueryProceed(&rq)) {}
         let hit = rayQueryGetCommittedIntersection(&rq);
