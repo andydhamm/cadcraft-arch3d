@@ -113,6 +113,45 @@ impl SiteSurface {
         let z = super::pad::apply_pads(&self.pads, p, toward, z);
         z.is_finite().then_some(z)
     }
+
+    /// The boundary's length-weighted mean elevation, sampled in short segments along the ring.
+    ///
+    /// Each edge is sampled every 0.5 m or less, so a terrain with a level pad or a steep falloff
+    /// still returns the mean elevation of the surrounding grade, not just the corners.
+    pub fn mean_edge_elevation(&self) -> Option<f64> {
+        if self.boundary.len() < 3 {
+            return None;
+        }
+        let mut total = 0.0;
+        let mut length = 0.0;
+        let mut prev = *self.boundary.last()?;
+        for &curr in &self.boundary {
+            let seg = curr - prev;
+            let len = seg.len();
+            if !len.is_finite() || len <= 0.0 {
+                prev = curr;
+                continue;
+            }
+            let mut seg_total = 0.0;
+            let n = (len / 0.5).ceil().max(1.0) as usize;
+            for i in 0..n {
+                let t = (i as f64 + 0.5) / n as f64;
+                let p = prev + seg * t;
+                let z = self.modified_toward(p, curr)?;
+                if !z.is_finite() {
+                    return None;
+                }
+                seg_total += z * (len / n as f64);
+            }
+            total += seg_total;
+            length += len;
+            prev = curr;
+        }
+        if !length.is_finite() || length <= 0.0 {
+            return None;
+        }
+        Some(total / length)
+    }
 }
 
 fn segment_distance(p: Vec2, a: Vec2, b: Vec2) -> f64 {
@@ -169,6 +208,21 @@ mod tests {
 
     fn near(a: Option<f64>, b: f64) -> bool {
         a.is_some_and(|a| (a - b).abs() < 1e-6)
+    }
+
+    #[test]
+    fn mean_edge_elevation_length_weighted() {
+        let mut m = model(Vec::new());
+        m.terrain.as_mut().unwrap().modifiers.push(TerrainModifier {
+            id: 1,
+            kind: ModifierKind::Flat {
+                polygon: vec![Vec2::new(35.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(35.0, 30.0)],
+                elevation: 5.0,
+                margin: 0.0,
+            },
+        });
+        let mean = SiteSurface::new(&m).unwrap().mean_edge_elevation().unwrap();
+        assert!((mean - 261.25 / 140.0).abs() < 1e-6, "mean={mean}");
     }
 
     #[test]

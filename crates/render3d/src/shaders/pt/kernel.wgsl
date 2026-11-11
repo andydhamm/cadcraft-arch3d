@@ -1,4 +1,7 @@
-// Path tracer: the entry points.
+// Path tracer: the entry points and hook stubs.
+//
+// The hooks below are part of the shared WGSL kernel; later packages fill the stubs, while the
+// traversal, BSDF, lights and kernel code here stays byte-identical across both kernels.
 //
 // trace_main: one invocation per pixel adds frame.spp_this_pass samples to accum (rgb sum, w
 // count): a camera ray through a jittered point of the pixel (frame.inv_view_proj), then a path:
@@ -142,9 +145,10 @@ fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<f
     if (light_luminance(sun.li) > 0.0) {
         let f = bsdf_eval(m, n, wo, sun.dir);
         if (light_luminance(f) > 0.0) {
-            sum = sum + f * sun.li * visibility(o, sun.dir, 1.0e6);
+            sum = sum + f * sun.li * sun_visibility(o, sun.dir);
         }
     }
+    sum = sum + env_direct(m, p, n, wo, r) + moon_direct(m, p, n, wo);
     return sum;
 }
 
@@ -172,7 +176,7 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
         res.radiance = res.radiance + throughput * area_lights_seen(o, d, h.t, mode, prev_pdf, sel);
         if (h.t < 0.0) {
             // The sky has no light sample, so every ray that escapes counts it.
-            res.radiance = res.radiance + throughput * sky_radiance(d);
+            res.radiance = res.radiance + throughput * env_escape(d, depth, mode, prev_pdf);
             break;
         }
         let tri = tris[h.tri];
@@ -180,6 +184,7 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
         if (dot(n, d) > 0.0) {
             n = -n;
         }
+        n = pt_shading_normal(h.tri, n, h.u, h.v);
         let p = o + d * h.t;
         let m = materials[tri.material];
         if (depth == 0u) {
@@ -243,7 +248,8 @@ fn trace_main(@builtin(global_invocation_id) id: vec3<u32>) {
         let far4 = frame.inv_view_proj * vec4<f32>(ndc, 1.0, 1.0);
         let near4 = frame.inv_view_proj * vec4<f32>(ndc, 0.0, 1.0);
         let dir = normalize(far4.xyz / far4.w - near4.xyz / near4.w);
-        let res = path_radiance(frame.eye.xyz, dir, 0u, AREA_SEEN, 0.0, &r);
+        let t0 = camera_t_min(dir);
+        let res = path_radiance(frame.eye.xyz + dir * t0, dir, 0u, AREA_SEEN, 0.0, &r);
         hits = hits + res.hit;
         if (finite_rgb(res.radiance)) {
             let l = dot(res.radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
@@ -287,8 +293,9 @@ fn irradiance_main(@builtin(global_invocation_id) id: vec3<u32>) {
         let sun = sun_sample();
         let cos_sun = max(dot(n, sun.dir), 0.0);
         if (light_luminance(sun.li) > 0.0 && cos_sun > 0.0) {
-            e = e + sun.li * visibility(o, sun.dir, 1.0e6) * cos_sun;
+            e = e + sun.li * sun_visibility(o, sun.dir) * cos_sun;
         }
+        e = e + env_irradiance(o, n, &r) + moon_irradiance(o, n);
         if (frame.bounces > 0u) {
             let u1 = rand(&r);
             let phi = 2.0 * PT_PI * rand(&r);
