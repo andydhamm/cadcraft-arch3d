@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-11 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 21: Ceilings and foundations — 36 of 39 segments merged · 17 of 20 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 37 of 39 segments merged · 18 of 20 acceptance checks**
 
-8,559 workspace tests passing at the last merge · 912 segments merged in all · 0 of 15 seats working
+8,560 workspace tests passing at the last merge · 913 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 04:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 17 / 20 | 49.0 h so far · expected done Nov 11 09:18–Nov 12 04:44 UTC |
+| 16 | Ceilings and foundations | building | 18 / 20 | 49.3 h so far · expected done Nov 11 07:29–Nov 11 23:22 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,17 +35,17 @@ Updated 2026-11-11 04:30 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-36 merged, 3 replaced, 2 abandoned, 2 merging, 1 queued
+37 merged, 3 replaced, 2 abandoned, 1 merging, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p16f2-room-level-index` | room: an integer `level` is the level's index | merging | darwin-ws3 |
 | `p16f2-silhouette-depth` | technical illustration: fills get a slope-scaled depth bias so silhouettes show | merging | mai-flash-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 11 04:44 | `p16f2-room-level-index` | merged | 8,560 pass | darwin-ws3 |
 | Nov 11 03:54 | `p16f2-slab-edge-width` | merged | 8,559 pass | bonsai-b |
 | Nov 11 01:18 | `p17-wall-under-flight` | refused | 8,571 pass | claude-sonnet-b |
 | Nov 11 00:46 | `harden-p17-railing-auto` | merged | 8,559 pass | tturbo-mac |
@@ -57,7 +57,6 @@ Updated 2026-11-11 04:30 UTC. This page and the card in the README are regenerat
 | Nov 10 22:31 | `p17-window-tops` | merged | 8,527 pass | claude-sonnet-c |
 | Nov 10 22:11 | `p16-rw-showcase-test` | merged | 8,504 pass | mai-flash |
 | Nov 10 21:57 | `p17-stair-plan` | merged | 8,499 pass | claude-sonnet-d |
-| Nov 10 21:30 | `p17-wall-under-flight` | refused | 8,493 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
@@ -76,5 +75,5 @@ Updated 2026-11-11 04:30 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | idle | 14 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | gate | 739 |
+| tturbo-mac | tturbo-ultraheretic | agent | 740 |
 | tturbo-mac2 | tturbo-ultraheretic | merging | 349 |
