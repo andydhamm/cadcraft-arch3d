@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use cadcraft_arch3d::Scene3d;
 use cadcraft_arch3d::camera::{Camera, FullCamera, MAX_DISTANCE, Orbit, ray_at};
 use cadcraft_arch3d::incremental::ObjectKind;
+use cadcraft_arch3d::view_filter::ViewFilter;
 use cadcraft_doc::arch::handle_json;
 use cadcraft_doc::{ArchId, opening_label, railing_label, roof_label, room_label, stair_label, wall_label};
 use cadcraft_geom::Vec3;
