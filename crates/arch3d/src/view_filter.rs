@@ -70,7 +70,7 @@ pub fn from_look(look: &Look, model: &ArchModel, camera: &Camera) -> ViewFilter 
     let eye = camera.eye();
     let forward = crate::camera::forward(camera);
     let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
-    let clip = look.clip.map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
+    let clip = look.clip.as_ref().map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
     ViewFilter { hidden, clip, near: look.near_clip, eye, forward }
 }
 
