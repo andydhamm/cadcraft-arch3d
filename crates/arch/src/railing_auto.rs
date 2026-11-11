@@ -68,6 +68,11 @@ fn stair_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
         return Vec::new();
     };
 
+    // Skip if the stair's position or orientation is not finite.
+    if !(stair.start.is_finite() && stair.direction.is_finite()) {
+        return Vec::new();
+    }
+
     // Determine which sides are against walls
     let against = stair_sides_against_walls(model, stair);
 

@@ -110,7 +110,7 @@ mod tests {
         paint.material = MaterialRef::parse("#c04020");
         paint.tint = Some([1, 2, 3]);
         d.arch.paints.insert(Surface::Furnishing { furnishing: d.arch.furnishings[0].id, part: 0 }.key(), paint);
-        d.arch.backdrop = Some(Backdrop::Image { item: "material-oak".into(), projection: Projection::Equirect });
+        d.arch.backdrop = Some(Backdrop::Image { item: "material-oak".into(), projection: Projection::Equirect, horizon: 0.0 });
         d.arch.defaults.insert("door".into(), serde_json::json!({"width": 0.9}));
         d
     }

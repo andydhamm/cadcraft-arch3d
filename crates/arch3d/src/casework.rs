@@ -25,14 +25,14 @@ fn rect_ring(position: Vec2, rotation_deg: f64, x0: f64, x1: f64, y0: f64, y1: f
     ]
 }
 
-fn push_box(mesh: &mut Mesh, position: Vec2, rotation_deg: f64, x0: f64, x1: f64, y0: f64, y1: f64, z0: f64, z1: f64) {
+pub(crate) fn push_box(mesh: &mut Mesh, position: Vec2, rotation_deg: f64, x0: f64, x1: f64, y0: f64, y1: f64, z0: f64, z1: f64) {
     if !(x0.is_finite() && x1.is_finite() && y0.is_finite() && y1.is_finite() && z0.is_finite() && z1.is_finite()) {
         return;
     }
     mesh.push_prism(&rect_ring(position, rotation_deg, x0, x1, y0, y1), z0, z1);
 }
 
-fn level_elevation(model: &ArchModel, level: u32) -> f64 {
+pub(crate) fn level_elevation(model: &ArchModel, level: u32) -> f64 {
     model
         .levels
         .iter()
@@ -50,101 +50,100 @@ pub fn cabinet_meshes(model: &ArchModel, c: &Cabinet) -> Vec<Mesh> {
 /// [`cabinet_meshes`] with the model's counter runs already worked out (`runs` is
 /// `counter_runs(model)`): a scene build works them out once, not once per cabinet.
 pub(crate) fn cabinet_meshes_in(model: &ArchModel, c: &Cabinet, runs: &[CounterRun]) -> Vec<Mesh> {
+    // A filler: its panel, its crown and its run's counter. `cabinet.fill` copies the end cabinet's
+    // counter fields and crown, so a filler joins its counter run like any base cabinet, and the
+    // cabinet with the lowest u along a run owns (builds) the run's counter: a filler at a run's
+    // start would otherwise leave the whole counter without a mesh.
+    if c.filler {
+        let mut out = crate::cabinet_parts::filler::filler_meshes(model, c);
+        out.extend(crate::cabinet_parts::molding::molding_meshes(model, c));
+        out.extend(crate::cabinet_parts::counter::counter_meshes(model, c, runs));
+        return out;
+    }
     let level_z = level_elevation(model, c.level) + c.elevation;
     let toe = if c.toe_kick { 0.1 } else { 0.0 };
     let mut meshes = Vec::new();
+    let corner = cadcraft_arch::casework_corner::corner_info(model, c);
 
     // The recessed plinth is part of the carcass mesh: exports name one node per mesh, so a second "cabinet-box"
     // mesh would be a second `cabinet-cb<n>` node (phase-13 check 13 counts one per cabinet).
-    let mut carcass = Mesh::new("cabinet-box", c.id);
-    push_box(&mut carcass, c.position, c.rotation, -c.width / 2.0, c.width / 2.0, 0.0, c.depth - 0.019, level_z + toe, level_z + c.height);
-    if c.toe_kick {
-        push_box(&mut carcass, c.position, c.rotation, -c.width / 2.0, c.width / 2.0, 0.0, c.depth - 0.075, level_z, level_z + 0.1);
-    }
-    if !carcass.indices.is_empty() {
-        meshes.push(carcass);
+    match crate::cabinet_parts::corner::carcass(model, c, corner.as_ref()).or_else(|| crate::cabinet_parts::shelves::open_carcass(model, c)) {
+        Some(m) => meshes.push(m),
+        None => {
+            let mut carcass = Mesh::new("cabinet-box", c.id);
+            push_box(&mut carcass, c.position, c.rotation, -c.width / 2.0, c.width / 2.0, 0.0, c.depth - 0.019, level_z + toe, level_z + c.height);
+            if c.toe_kick {
+                push_box(&mut carcass, c.position, c.rotation, -c.width / 2.0, c.width / 2.0, 0.0, c.depth - 0.075, level_z, level_z + 0.1);
+            }
+            if !carcass.indices.is_empty() {
+                meshes.push(carcass);
+            }
+        }
     }
 
-    let mut front = Mesh::new("cabinet-front", c.id);
+    meshes.extend(crate::cabinet_parts::frame::frame_meshes(model, c));
+
     let layout = fronts(model, c);
-    let frame = Frame { position: c.position, rotation: c.rotation };
-    // The layout's v is above the level's floor (the cabinet's elevation included).
-    let floor = level_elevation(model, c.level);
-    for f in &layout {
-        let [u0, v0, u1, v1] = f.rect;
-        let style = match f.kind {
-            FrontKind::Door => c.door_style,
-            FrontKind::Drawer => c.drawer_style,
-            FrontKind::False => FrontStyle::Slab,
-            // Not drawn by the front loop: an opening has no front, an appliance is built elsewhere.
-            FrontKind::Opening | FrontKind::Appliance => continue,
-        };
-        push_front(&mut front, &frame, style, c.depth, [u0, floor + v0, u1, floor + v1]);
-    }
-    if !front.indices.is_empty() {
-        meshes.push(front);
+    match crate::cabinet_parts::corner::fronts(model, c, corner.as_ref()) {
+        Some(m) => meshes.push(m),
+        None => {
+            let mut front = Mesh::new("cabinet-front", c.id);
+            let frame = Frame { position: c.position, rotation: c.rotation };
+            // The layout's v is above the level's floor (the cabinet's elevation included).
+            let floor = level_elevation(model, c.level);
+            let plane = crate::cabinet_parts::frame::front_plane(c);
+            for f in &layout {
+                let [u0, v0, u1, v1] = f.rect;
+                let style = match f.kind {
+                    FrontKind::Door => c.door_style,
+                    FrontKind::Drawer => c.drawer_style,
+                    FrontKind::False => FrontStyle::Slab,
+                    // Not drawn by the front loop: an opening has no front, an appliance is built elsewhere.
+                    FrontKind::Opening | FrontKind::Appliance => continue,
+                };
+                push_front(&mut front, &frame, style, c.depth, plane, [u0, floor + v0, u1, floor + v1]);
+            }
+            if !front.indices.is_empty() {
+                meshes.push(front);
+            }
+        }
     }
 
     meshes.extend(pull_meshes(model, c, &layout));
-
-    let run = runs.iter().find(|r| r.cabinets.contains(&c.id));
-    match run {
-        Some(run) => {
-            if run.owner == c.id
-                && let Some(counter) = run_counter(model, run)
-            {
-                meshes.push(counter);
-            }
-        }
-        None if c.counter => {
-            let mut counter = Mesh::new("counter", c.id);
-            push_box(
-                &mut counter,
-                c.position,
-                c.rotation,
-                -c.width / 2.0,
-                c.width / 2.0,
-                0.0,
-                c.depth + c.counter_overhang,
-                level_z + c.height,
-                level_z + c.height + c.counter_thickness,
-            );
-            if !counter.indices.is_empty() {
-                meshes.push(counter);
-            }
-        }
-        None => {}
-    }
+    meshes.extend(crate::cabinet_parts::appliance::appliance_meshes(model, c, &layout));
+    meshes.extend(crate::cabinet_parts::shelves::shelf_meshes(model, c));
+    meshes.extend(crate::cabinet_parts::molding::molding_meshes(model, c));
+    meshes.extend(crate::cabinet_parts::counter::counter_meshes(model, c, runs));
 
     meshes
 }
 
 /// A cabinet's frame in plan: origin at the back edge's centre, rotated.
-struct Frame {
-    position: Vec2,
-    rotation: f64,
+pub(crate) struct Frame {
+    pub(crate) position: Vec2,
+    pub(crate) rotation: f64,
 }
 
 impl Frame {
     /// A point `(u, y, z)` of the cabinet frame in the world.
-    fn point(&self, u: f64, y: f64, z: f64) -> [f32; 3] {
+    pub(crate) fn point(&self, u: f64, y: f64, z: f64) -> [f32; 3] {
         let p = world_point(self.position, self.rotation, Vec2::new(u, y));
         [p.x as f32, p.y as f32, z as f32]
     }
 
     /// A direction `(du, dy, dz)` of the cabinet frame in the world.
-    fn dir(&self, d: [f64; 3]) -> [f32; 3] {
+    pub(crate) fn dir(&self, d: [f64; 3]) -> [f32; 3] {
         let r = rotate_local(Vec2::new(d[0], d[1]), self.rotation);
         [r.x as f32, r.y as f32, d[2] as f32]
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn box_(&self, mesh: &mut Mesh, u0: f64, u1: f64, y0: f64, y1: f64, z0: f64, z1: f64) {
+    pub(crate) fn box_(&self, mesh: &mut Mesh, u0: f64, u1: f64, y0: f64, y1: f64, z0: f64, z1: f64) {
         push_box(mesh, self.position, self.rotation, u0, u1, y0, y1, z0, z1);
     }
 
     /// One flat quad of frame points (in order around it), wound so that its normal faces `outward`.
-    fn quad(&self, mesh: &mut Mesh, pts: [[f64; 3]; 4], outward: [f64; 3]) {
+    pub(crate) fn quad(&self, mesh: &mut Mesh, pts: [[f64; 3]; 4], outward: [f64; 3]) {
         let sub = |a: [f64; 3], b: [f64; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
         let (e1, e2) = (sub(pts[1], pts[0]), sub(pts[2], pts[0]));
         let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
@@ -179,13 +178,14 @@ const FIELD_INSET: f64 = 0.05;
 /// How far a raised field stands back from the frame's face.
 const FIELD_BACK: f64 = 0.002;
 
-/// One front of `style`: the same outer box (y depth-0.019..depth) whatever the style.
-fn push_front(mesh: &mut Mesh, fr: &Frame, style: FrontStyle, depth: f64, rect: [f64; 4]) {
+/// One front of `style`: the same outer box (y `plane` = (y0, y1), by default depth-0.019..depth)
+/// whatever the style.
+fn push_front(mesh: &mut Mesh, fr: &Frame, style: FrontStyle, depth: f64, plane: (f64, f64), rect: [f64; 4]) {
     let [u0, z0, u1, z1] = rect;
     if !(u0.is_finite() && u1.is_finite() && z0.is_finite() && z1.is_finite()) || u1 <= u0 || z1 <= z0 {
         return;
     }
-    let (y0, y1) = (depth - 0.019, depth);
+    let (y0, y1) = plane;
     let framed = u1 - u0 > 2.0 * FRAME_W + 0.02 && z1 - z0 > 2.0 * FRAME_W + 0.02;
     if style == FrontStyle::Slab || !framed {
         fr.box_(mesh, u0, u1, y0, y1, z0, z1);
@@ -212,7 +212,7 @@ fn push_front(mesh: &mut Mesh, fr: &Frame, style: FrontStyle, depth: f64, rect: 
 
 /// The pulls of `c`: one mesh `pull:<key>:<i>` per symbol part, a copy of the symbol on every front
 /// with a pull.
-fn pull_meshes(model: &ArchModel, c: &Cabinet, layout: &[FrontInfo]) -> Vec<Mesh> {
+pub(crate) fn pull_meshes(model: &ArchModel, c: &Cabinet, layout: &[FrontInfo]) -> Vec<Mesh> {
     let Some(key) = c.pull_symbol.as_deref() else { return Vec::new() };
     let Some(symbol) = symbol_for(model, key) else { return Vec::new() };
     let ext = symbol.extents();
@@ -272,7 +272,7 @@ const MAX_COUNTER_HOLES: usize = 64;
 
 /// The counter of a run, in the owner's frame, with a hole for every cut-out furnishing hosted on
 /// a cabinet of the run or in one of its bridged gaps (the first [`MAX_COUNTER_HOLES`] of them).
-fn run_counter(model: &ArchModel, run: &CounterRun) -> Option<Mesh> {
+pub(crate) fn run_counter(model: &ArchModel, run: &CounterRun) -> Option<Mesh> {
     let floor = level_elevation(model, run.level);
     // `run.top` is the cabinets' top (elevation + height): the counter sits on it, as a lone one always did.
     let (z0, z1) = (floor + run.top, floor + run.top + run.thickness);

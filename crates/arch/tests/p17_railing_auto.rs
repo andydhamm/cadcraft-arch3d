@@ -474,3 +474,85 @@ fn deck_with_nan_height_gets_none() {
     let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
     assert!(rails.is_empty());
 }
+
+#[test]
+fn stair_at_angle_gets_railings() {
+    let mut m = ArchModel::default();
+    let stair = make_stair(0, Vec2::new(0.0, 0.0), std::f64::consts::FRAC_PI_4, 1.0, 0, 1, 2.7);
+    m.push_stair(stair);
+
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert_eq!(rails.len(), 2);
+    assert!(rails.iter().any(|r| r.host == RailingHost::StairLeft));
+    assert!(rails.iter().any(|r| r.host == RailingHost::StairRight));
+    // Both path points must be finite.
+    for r in &rails {
+        for p in &r.path {
+            assert!(p.is_finite());
+        }
+    }
+}
+
+#[test]
+fn stair_with_nan_direction_gets_none() {
+    let mut m = ArchModel::default();
+    let stair = make_stair(0, Vec2::new(0.0, 0.0), f64::NAN, 1.0, 0, 1, 2.7);
+    m.push_stair(stair);
+
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert!(rails.is_empty());
+}
+
+#[test]
+fn deck_with_collinear_vertices() {
+    let mut m = ArchModel::default();
+    // Rectangle with an extra collinear point on the top edge.
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(2.0, 4.0), Vec2::new(0.0, 4.0)];
+    let room = make_deck_room(0, 0, poly, 0.5);
+    m.push_room(room);
+
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    // Closed ring: 6 vertices (5 original + first repeated).
+    assert_eq!(rails[0].path.len(), 6);
+}
+
+#[test]
+fn deck_with_all_edges_against_walls_gets_none() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(2.0, 2.0), Vec2::new(6.0, 2.0), Vec2::new(6.0, 6.0), Vec2::new(2.0, 6.0)];
+    let room = make_deck_room(0, 0, poly, 0.5);
+    m.push_room(room);
+
+    // Four walls, one on each side, with faces touching the deck edges.
+    m.push_wall(wall((1.0, 1.9), (7.0, 1.9))); // bottom
+    m.push_wall(wall((1.0, 6.1), (7.0, 6.1))); // top
+    m.push_wall(wall((1.9, 1.0), (1.9, 7.0))); // left
+    m.push_wall(wall((6.1, 1.0), (6.1, 7.0))); // right
+
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert!(rails.is_empty());
+}
+
+#[test]
+fn deck_run_touching_walls_at_both_ends_pulls_back_both() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+    let mut room = make_deck_room(0, 0, poly, 0.5);
+    // Only the top edge (edge 2) is railed; left and right edges have walls.
+    room.deck_rails = vec![RailSetting::Off, RailSetting::Off, RailSetting::On, RailSetting::Off];
+    m.push_room(room);
+
+    m.push_wall(wall((-0.1, -1.0), (-0.1, 5.0))); // left wall
+    m.push_wall(wall((4.1, -1.0), (4.1, 5.0))); // right wall
+
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    let p = &rails[0].path;
+    assert_eq!(p.len(), 2);
+    // Start pulled back from (4,4) toward (0,4); end pulled back from (0,4) toward (4,4).
+    assert!((p[0].x - 3.955).abs() < 1e-9);
+    assert!((p[0].y - 4.0).abs() < 1e-9);
+    assert!((p[1].x - 0.045).abs() < 1e-9);
+    assert!((p[1].y - 4.0).abs() < 1e-9);
+}
