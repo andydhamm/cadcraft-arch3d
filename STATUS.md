@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 38 of 40 segments merged · 19 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 07:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 19 / 20 | 51.5 h so far · expected done Nov 11 10:41–Nov 12 10:07 UTC |
+| 16 | Ceilings and foundations | building | 19 / 20 | 51.8 h so far · expected done Nov 11 10:56–Nov 12 10:22 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,11 +35,11 @@ Updated 2026-11-11 07:00 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-38 merged, 3 replaced, 2 abandoned, 1 working, 1 merging
+38 merged, 3 replaced, 2 abandoned, 2 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p16f2-showcase-entry` | showcase: the down flight ends on the landing, a foyer opens Main over it, renders committed | working | claude-sonnet-b |
+| `p16f2-showcase-entry` | showcase: the down flight ends on the landing, a foyer opens Main over it, renders committed | merging | claude-sonnet-b |
 | `upstream-sync-6d744887f` | merge upstream upstream/main up to 6d744887f (7 commits) | merging | claude-sonnet-b |
 
 ## Recent merges
@@ -68,7 +68,7 @@ Updated 2026-11-11 07:00 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-a | bonsai2-27b | idle | 1132 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1072 |
 | claude-sonnet-a | sonnet | idle | 107 |
-| claude-sonnet-b | sonnet | agent | 111 |
+| claude-sonnet-b | sonnet | merging | 112 |
 | claude-sonnet-c | sonnet | idle | 54 |
 | claude-sonnet-d | sonnet | idle | 49 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 951 |
@@ -76,5 +76,5 @@ Updated 2026-11-11 07:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | idle | 14 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | agent | 743 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 350 |
+| tturbo-mac | tturbo-ultraheretic | gate | 743 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 351 |
