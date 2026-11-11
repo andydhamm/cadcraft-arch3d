@@ -134,7 +134,7 @@ fn run_backsplash(s: &mut Session, p: &Value) -> Result<Value> {
     let layer = b.layer.clone();
     let id = doc.arch.push_backsplash(b);
     if let Some(m) = material {
-        doc.arch.paints.insert(Surface::Backsplash(id).key(), Paint { material: Some(m), tint: None });
+        doc.arch.paints.insert(Surface::Backsplash(id).key(), Paint { material: Some(m), ..Default::default() });
     }
     doc.ensure_layer(&layer);
     doc.touch_arch();
@@ -173,7 +173,7 @@ fn run_edit(s: &mut Session, p: &Value) -> Result<Value> {
     }
     match material {
         Some(Some(m)) => {
-            doc.arch.paints.insert(Surface::Backsplash(id).key(), Paint { material: Some(m), tint: None });
+            doc.arch.paints.insert(Surface::Backsplash(id).key(), Paint { material: Some(m), ..Default::default() });
         }
         Some(None) => {
             doc.arch.paints.remove(&Surface::Backsplash(id).key());

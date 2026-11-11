@@ -97,7 +97,7 @@ fn painted_backsplash_takes_its_material() {
     let mut model = kitchen();
     let plain = Scene3d::build(&model);
     assert!(plain.meshes.iter().any(|m| m.material == "backsplash" && m.object == ArchId(0)));
-    model.paints.insert("backsplash/bs0".to_string(), Paint { material: Some(MaterialRef::Colour([0xc0, 0x40, 0x20])), tint: None });
+    model.paints.insert("backsplash/bs0".to_string(), Paint { material: Some(MaterialRef::Colour([0xc0, 0x40, 0x20])), ..Default::default() });
     let scene = Scene3d::build(&model);
     assert!(scene.meshes.iter().all(|m| m.material != "backsplash"));
     let painted: Vec<_> = scene.meshes.iter().filter(|m| m.material == "paint:backsplash/bs0").collect();

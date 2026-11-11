@@ -37,7 +37,7 @@ mod tests {
     use cadcraft_geom::Vec2;
 
     fn seg(x0: f64, x1: f64, top: f64) -> BacksplashSegment {
-        BacksplashSegment { a: Vec2::new(x0, 0.0), b: Vec2::new(x1, 0.0), wall: ArchId(0), bottom: 0.9, top }
+        BacksplashSegment { a: Vec2::new(x0, 0.0), b: Vec2::new(x1, 0.0), bottom: 0.9, top, ..Default::default() }
     }
 
     #[test]
