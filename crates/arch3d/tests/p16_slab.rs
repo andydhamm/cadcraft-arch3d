@@ -277,10 +277,17 @@ fn slab_edge_is_one_footing_mesh_per_wall() {
 
     let held = |p: Vec3| meshes.iter().filter(|m| cadcraft_arch3d::probe::probe_mesh(m, p)).count();
 
-    // (5, 0.15, -0.2) lies in the south wall's edge strip (x 0..10, y 0..0.3, z -0.3..-0.1).
+    // This fixture's south wall has its outer face at y = 0 and its inner face at y = 0.2 (thickness 0.2, inward +y).
+    // The edge strip is 0.3 m wide from the OUTER face (y 0..0.3, z -0.3..-0.1), so it reaches 0.1 m past the wall's
+    // inner face; the wall strip is the wall's own width (y 0..0.2, z -0.1..0).
+    // (5, 0.15, -0.2) lies in the edge strip under the wall.
     assert_eq!(held(Vec3::new(5.0, 0.15, -0.2)), 1, "edge strip point held by exactly one mesh");
+    // (5, 0.25, -0.2) lies in the edge strip past the wall's inner face: the edge is 0.3 m wide, not the wall's 0.2 m.
+    assert_eq!(held(Vec3::new(5.0, 0.25, -0.2)), 1, "the edge strip reaches 0.3 m in from the outer face");
     // (5, 0.0, -0.05) lies at the south wall's outer face, inside the wall strip (z -0.1..0).
     assert_eq!(held(Vec3::new(5.0, 0.0, -0.05)), 1, "wall strip point held by exactly one mesh");
-    // (5, 0.25, -0.2) is outside every footing prism.
-    assert_eq!(held(Vec3::new(5.0, 0.25, -0.2)), 0, "no footing holds this point");
+    // (5, 0.35, -0.2) is past the 0.3 m edge, and (5, 0.25, -0.05) is above the edge but beside the wall strip (the
+    // slab floor's place): no footing holds either.
+    assert_eq!(held(Vec3::new(5.0, 0.35, -0.2)), 0, "nothing past the 0.3 m edge");
+    assert_eq!(held(Vec3::new(5.0, 0.25, -0.05)), 0, "the strip above the edge is only as wide as the wall");
 }
