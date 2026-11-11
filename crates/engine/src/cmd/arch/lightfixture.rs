@@ -4,16 +4,34 @@
 //! file (`ies: "path.ies"`, `ies: null` clears it).
 
 use cadcraft_arch::ies;
-use cadcraft_arch::light::{catalogue, find_type, fixture_from_type, grid_positions, validate_fixture};
+use cadcraft_arch::light::{catalogue, find_type, fixture_from_type, grid_positions, strip_length, validate_fixture};
 use cadcraft_doc::arch::{
-    ArchId, IesProfile, LightFixture, LightKind, LightMount, MAX_AREA_SIDE, MAX_FIXTURE_GRID, MAX_IES_BYTES, MAX_LIGHT_FIXTURES, MIN_AREA_SIDE,
-    handle_json, light_handle, light_label,
+    ArchId, CabinetKind, FixtureShape, IesProfile, LightFixture, LightKind, LightMount, MAX_AREA_SIDE, MAX_FIXTURE_GRID, MAX_IES_BYTES,
+    MAX_LIGHT_FIXTURES, MAX_LUMENS_PER_METRE, MAX_STRIP_LENGTH, MAX_STRIP_POINTS, MIN_AREA_SIDE, StripFacing, handle_json, light_handle, light_label,
 };
 use cadcraft_geom::Vec2;
 use serde_json::{Value, json};
 
 use crate::cmd::{CommandSpec, bad, point_req, str_param};
 use crate::{Result, Session};
+
+const STRIP_SAMPLE_SPACING: f64 = 0.15;
+const STRIP_UNDER_BEHIND_FACE: f64 = 0.05;
+const STRIP_UNDER_HEIGHT_MARGIN: f64 = 0.005;
+const STRIP_ROOM_INSET_DEFAULT: f64 = 0.05;
+
+/// A strip's resolved placement (its 2D path + orientation), independent of the fixture id.
+#[derive(Clone)]
+struct StripForm {
+    points: Vec<Vec2>,
+    closed: bool,
+    level: u32,
+    height: f64,
+    lumens_per_metre: f64,
+    kelvin: f64,
+    facing: StripFacing,
+    on: bool,
+}
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
