@@ -1,0 +1,103 @@
+{
+  "images": [
+    {
+      "file": "plan-lower.png",
+      "kind": "plan",
+      "view": "Lower"
+    },
+    {
+      "file": "plan-main.png",
+      "kind": "plan",
+      "view": "Main"
+    },
+    {
+      "file": "plan-entry.png",
+      "kind": "plan",
+      "view": "Entry"
+    },
+    {
+      "file": "electrical-lower.png",
+      "kind": "electrical",
+      "view": "Lower"
+    },
+    {
+      "file": "electrical-main.png",
+      "kind": "electrical",
+      "view": "Main"
+    },
+    {
+      "file": "elevation-south.png",
+      "kind": "elevation",
+      "view": "South"
+    },
+    {
+      "file": "elevation-north.png",
+      "kind": "elevation",
+      "view": "North"
+    },
+    {
+      "file": "elevation-east.png",
+      "kind": "elevation",
+      "view": "East"
+    },
+    {
+      "file": "elevation-west.png",
+      "kind": "elevation",
+      "view": "West"
+    },
+    {
+      "file": "section-a.png",
+      "kind": "section",
+      "view": "Section A"
+    },
+    {
+      "file": "section-b.png",
+      "kind": "section",
+      "view": "Section B"
+    },
+    {
+      "file": "camera-front.png",
+      "kind": "camera",
+      "view": "Front"
+    },
+    {
+      "file": "camera-back.png",
+      "kind": "camera",
+      "view": "Back"
+    },
+    {
+      "file": "camera-kitchen.png",
+      "kind": "camera",
+      "view": "Kitchen"
+    },
+    {
+      "file": "camera-living.png",
+      "kind": "camera",
+      "view": "Living"
+    },
+    {
+      "file": "night.png",
+      "kind": "night",
+      "view": "Front"
+    },
+    {
+      "file": "path.png",
+      "kind": "path",
+      "view": "default"
+    },
+    {
+      "file": "clay.png",
+      "kind": "clay",
+      "view": "default"
+    },
+    {
+      "file": "technical.png",
+      "kind": "technical",
+      "view": "default"
+    }
+  ],
+  "exports": {},
+  "contactSheet": "contact-sheet.png",
+  "technicalSkipped": false,
+  "scriptSha256": "5b646241f2dd646beb49abe38942947d3395dfc6916e3cb0a2eaba69211adc3c"
+}
