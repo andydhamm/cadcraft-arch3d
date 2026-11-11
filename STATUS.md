@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-11 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 38 of 40 segments merged · 19 of 20 acceptance checks**
 
-8,588 workspace tests passing at the last merge · 916 segments merged in all · 0 of 15 seats working
+8,594 workspace tests passing at the last merge · 917 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 08:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 19 / 20 | 52.5 h so far · expected done Nov 11 11:41–Nov 12 11:07 UTC |
+| 16 | Ceilings and foundations | building | 19 / 20 | 52.8 h so far · expected done Nov 11 11:57–Nov 12 11:22 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 9 / 14 | — |
 | 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -46,6 +46,7 @@ Updated 2026-11-11 08:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 11 08:05 | `p17-exports-rebuild` | merged | 8,594 pass | claude-sonnet-c |
 | Nov 11 07:49 | `p18-observables-1` | merged | 8,588 pass | claude-sonnet-a |
 | Nov 11 07:32 | `p17-wall-under-flight` | merged | 8,572 pass |  |
 | Nov 11 06:54 | `p16f2-silhouette-depth` | merged | 8,561 pass | mai-flash-b |
@@ -57,24 +58,23 @@ Updated 2026-11-11 08:00 UTC. This page and the card in the README are regenerat
 | Nov 10 23:57 | `upstream-sync-2f8f18618` | merged | 8,552 pass | mai-flash-b |
 | Nov 10 23:33 | `p17-wall-under-flight` | refused | 8,556 pass | claude-sonnet-b |
 | Nov 10 23:08 | `harden-p17-scene-plumbing-export` | merged | 8,544 pass | tturbo-mac |
-| Nov 10 22:52 | `p17-railing-auto` | merged | 8,539 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1073 |
-| bonsai-b | bonsai2-27b | agent | 1036 |
+| bonsai-a | bonsai2-27b | idle | 1075 |
+| bonsai-b | bonsai2-27b | idle | 1039 |
 | bonsai-ws2-a | bonsai2-27b | merging | 1133 |
 | bonsai-ws2-b | bonsai2-27b | merging | 1073 |
-| claude-sonnet-a | sonnet | gate | 107 |
+| claude-sonnet-a | sonnet | merging | 109 |
 | claude-sonnet-b | sonnet | merging | 112 |
-| claude-sonnet-c | sonnet | merging | 56 |
+| claude-sonnet-c | sonnet | idle | 56 |
 | claude-sonnet-d | sonnet | idle | 49 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 951 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 952 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | merging | 15 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
 | tturbo-mac | tturbo-ultraheretic | merging | 745 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 354 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 355 |
