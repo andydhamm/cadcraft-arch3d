@@ -33,7 +33,7 @@ fn pony_probes() {
         thickness: 0.1,
         height: 2.0,
         wall_type: "Interior".to_string(),
-        split: Some(WallSplit { height: 1.07, upper: "Glass".to_string(), upper_thickness: 0.01 }),
+        split: Some(WallSplit { height: 1.07, upper: "Glass".to_string(), ..Default::default() }),
         ..Wall::default()
     });
     let scene = Scene3d::build(&model);
@@ -71,7 +71,7 @@ fn openings_cut_both_parts() {
         thickness: 0.1,
         height: 2.0,
         wall_type: "Interior".to_string(),
-        split: Some(WallSplit { height: 1.0, upper: "Glass".to_string(), upper_thickness: 0.01 }),
+        split: Some(WallSplit { height: 1.0, upper: "Glass".to_string(), ..Default::default() }),
         ..Wall::default()
     });
     let mut opening = Opening::new(wall_id, 0.5, 0.8, 1.6, OpeningKind::Window);
@@ -91,7 +91,7 @@ fn split_edit_rebuilds_only_the_wall_and_its_openings_and_equals_full() {
         thickness: 0.1,
         height: 2.0,
         wall_type: "Interior".to_string(),
-        split: Some(WallSplit { height: 1.0, upper: "Glass".to_string(), upper_thickness: 0.01 }),
+        split: Some(WallSplit { height: 1.0, upper: "Glass".to_string(), ..Default::default() }),
         ..Wall::default()
     });
     let mut opening = Opening::new(wall_id, 0.5, 0.8, 1.2, OpeningKind::Window);
