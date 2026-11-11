@@ -2603,7 +2603,10 @@ mod tests {
         let mut s = session_with(|m| {
             m.push_countertop(Countertop {
                 polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
-                edges: vec![CounterEdge { sagitta: 0.5, profile: EdgeProfile::Bullnose, waterfall: true }, CounterEdge::default()],
+                edges: vec![
+                    CounterEdge { sagitta: 0.5, profile: EdgeProfile::Bullnose, waterfall: true, ..CounterEdge::default() },
+                    CounterEdge::default(),
+                ],
                 ..Countertop::default()
             });
         });
