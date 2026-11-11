@@ -223,3 +223,153 @@ fn an_old_drawing_keeps_its_railings() {
     assert_eq!(m.railings.len(), 3); // Old + 2 new
     assert!(m.railings.iter().any(|r| r.follows.is_none()));
 }
+
+#[test]
+fn stair_path_is_at_flight_edge_not_inset() {
+    let mut m = ArchModel::default();
+    // Phase-5 stair: start (2,1), +x direction, width 1.0
+    let stair = make_stair(0, Vec2::new(2.0, 1.0), 0.0, 1.0, 0, 1, 2.7);
+    m.push_stair(stair);
+
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert_eq!(rails.len(), 2);
+
+    // Left path at t = +0.5: (2, 1.5) to (5.81, 1.5)
+    let left = rails.iter().find(|r| r.host == RailingHost::StairLeft).unwrap();
+    assert!((left.path[0].x - 2.0).abs() < 1e-9);
+    assert!((left.path[0].y - 1.5).abs() < 1e-9);
+    assert!((left.path[1].x - 5.81).abs() < 1e-9);
+    assert!((left.path[1].y - 1.5).abs() < 1e-9);
+    assert_eq!(left.inset, -0.045);
+
+    // Right path at t = -0.5: (2, 0.5) to (5.81, 0.5)
+    let right = rails.iter().find(|r| r.host == RailingHost::StairRight).unwrap();
+    assert!((right.path[0].x - 2.0).abs() < 1e-9);
+    assert!((right.path[0].y - 0.5).abs() < 1e-9);
+    assert!((right.path[1].x - 5.81).abs() < 1e-9);
+    assert!((right.path[1].y - 0.5).abs() < 1e-9);
+    assert_eq!(right.inset, 0.045);
+}
+
+#[test]
+fn stair_with_both_sides_against_walls_gets_none() {
+    let mut m = ArchModel::default();
+    let stair = make_stair(0, Vec2::new(0.0, 0.0), 0.0, 1.0, 0, 1, 2.7);
+    m.push_stair(stair);
+
+    // Wall along left side (y = +0.5)
+    m.push_wall(cadcraft_doc::arch::Wall {
+        id: ArchId(0),
+        start: Vec2::new(-1.0, 0.5),
+        end: Vec2::new(5.0, 0.5),
+        thickness: 0.2,
+        height: 2.4,
+        base_level: 0,
+        top_level: None,
+        ..cadcraft_doc::arch::Wall::default()
+    });
+    // Wall along right side (y = -0.5)
+    m.push_wall(cadcraft_doc::arch::Wall {
+        id: ArchId(1),
+        start: Vec2::new(-1.0, -0.5),
+        end: Vec2::new(5.0, -0.5),
+        thickness: 0.2,
+        height: 2.4,
+        base_level: 0,
+        top_level: None,
+        ..cadcraft_doc::arch::Wall::default()
+    });
+
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert!(rails.is_empty());
+}
+
+#[test]
+fn stair_with_both_rail_on_forces_both_sides() {
+    let mut m = ArchModel::default();
+    let mut stair = make_stair(0, Vec2::new(0.0, 0.0), 0.0, 1.0, 0, 1, 2.7);
+    stair.rail_left = RailSetting::On;
+    stair.rail_right = RailSetting::On;
+    m.push_stair(stair);
+
+    // Walls on both sides
+    m.push_wall(cadcraft_doc::arch::Wall {
+        id: ArchId(0),
+        start: Vec2::new(-1.0, 0.5),
+        end: Vec2::new(5.0, 0.5),
+        thickness: 0.2,
+        height: 2.4,
+        base_level: 0,
+        top_level: None,
+        ..cadcraft_doc::arch::Wall::default()
+    });
+    m.push_wall(cadcraft_doc::arch::Wall {
+        id: ArchId(1),
+        start: Vec2::new(-1.0, -0.5),
+        end: Vec2::new(5.0, -0.5),
+        thickness: 0.2,
+        height: 2.4,
+        base_level: 0,
+        top_level: None,
+        ..cadcraft_doc::arch::Wall::default()
+    });
+
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert_eq!(rails.len(), 2);
+    assert!(rails.iter().any(|r| r.host == RailingHost::StairLeft));
+    assert!(rails.iter().any(|r| r.host == RailingHost::StairRight));
+}
+
+#[test]
+fn deck_with_all_edges_off_gets_none() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+    let mut room = make_deck_room(0, 0, poly, 0.5);
+    room.deck_rails = vec![RailSetting::Off; 4];
+    m.push_room(room);
+
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert!(rails.is_empty());
+}
+
+#[test]
+fn deck_with_single_edge_on_gets_one_open_path() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+    let mut room = make_deck_room(0, 0, poly, 0.5);
+    // Only edge 0 (bottom, from (0,0) to (4,0)) on
+    room.deck_rails = vec![RailSetting::On, RailSetting::Off, RailSetting::Off, RailSetting::Off];
+    m.push_room(room);
+
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert_eq!(rails.len(), 1);
+    // Path should be the bottom edge, pulled back at both ends (0.045 inset)
+    assert_eq!(rails[0].path.len(), 2);
+    assert!((rails[0].path[0].x - 0.045).abs() < 1e-9);
+    assert!((rails[0].path[0].y - 0.0).abs() < 1e-9);
+    assert!((rails[0].path[1].x - 3.955).abs() < 1e-9);
+    assert!((rails[0].path[1].y - 0.0).abs() < 1e-9);
+}
+
+#[test]
+fn stair_with_nan_width_gets_none() {
+    let mut m = ArchModel::default();
+    let mut stair = make_stair(0, Vec2::new(0.0, 0.0), 0.0, f64::NAN, 0, 1, 2.7);
+    stair.width = f64::NAN;
+    m.push_stair(stair);
+
+    let rails = auto_railings(&m, RailHostRef::Stair(ArchId(0)));
+    assert!(rails.is_empty());
+}
+
+#[test]
+fn deck_with_nan_height_gets_none() {
+    let mut m = ArchModel::default();
+    let poly = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+    let mut room = make_deck_room(0, 0, poly, 0.5);
+    room.deck_height = Some(f64::NAN);
+    m.push_room(room);
+
+    let rails = auto_railings(&m, RailHostRef::Deck(ArchId(0)));
+    assert!(rails.is_empty());
+}
