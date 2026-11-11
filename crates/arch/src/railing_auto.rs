@@ -3,7 +3,7 @@
 //! touched.
 
 use crate::stair::{GUARD_HEIGHT, MAX_RISER, MIN_TREAD, plan_stair};
-use cadcraft_doc::arch::{MAX_RAILINGS, RailSetting, Railing, RailingHost, RailingStyle, Room};
+use cadcraft_doc::arch::{MAX_RAILINGS, RailSetting, Railing, RailingHost, RailingStyle};
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::Vec2;
 
@@ -126,154 +126,119 @@ fn stair_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
 
 /// Calculate automatic railings for a deck.
 fn deck_railings(model: &ArchModel, id: ArchId) -> Vec<Railing> {
+    const INSET: f64 = 0.045;
     let Some(room) = model.rooms.iter().find(|r| r.id == id) else {
         return Vec::new();
     };
-
-    // Deck must have a valid height and polygon
     let Some(height) = room.deck_height else {
         return Vec::new();
     };
-    if height <= 0.0 || !height.is_finite() {
+    if height <= 0.0 || !height.is_finite() || room.polygon.len() < 3 {
         return Vec::new();
     }
-    if room.polygon.len() < 3 {
-        return Vec::new();
-    }
-
-    let edges = deck_edges(model, room);
-    if edges.is_empty() {
-        return Vec::new();
-    }
-
+    let edges = crate::deck::deck_edges(model, room);
     let n = edges.len();
-    let mut railed = vec![false; n];
-    for i in 0..n {
-        let setting = room.deck_rails.get(i).copied().unwrap_or(RailSetting::Auto);
-        railed[i] = match setting {
+    if n == 0 || room.polygon.iter().any(|p| !p.is_finite()) {
+        return Vec::new();
+    }
+
+    let railed: Vec<bool> = edges
+        .iter()
+        .enumerate()
+        .map(|(i, e)| match room.deck_rails.get(i).copied().unwrap_or(RailSetting::Auto) {
             RailSetting::On => true,
             RailSetting::Off => false,
-            RailSetting::Auto => edges[i].wall.is_none(),
-        };
-    }
+            RailSetting::Auto => e.wall.is_none(),
+        })
+        .collect();
+    let at = |i: usize| railed.get(i).copied().unwrap_or(false);
+    let touches_wall = |i: usize| edges.get(i).is_some_and(|e| e.wall.is_some());
 
-    let mut paths = Vec::new();
-    let all_railed = railed.iter().all(|&r| r);
-
-    if all_railed {
-        // One closed path
-        let mut path: Vec<Vec2> = room.polygon.clone();
+    let mut paths: Vec<Vec<Vec2>> = Vec::new();
+    if railed.iter().all(|&r| r) {
+        let mut path = room.polygon.clone();
         if let Some(first) = room.polygon.first() {
             path.push(*first);
         }
         paths.push(path);
     } else {
-        // Find runs of consecutive railed edges
-        let mut runs = Vec::new();
-        let mut current_run = Vec::new();
-        let mut in_run = false;
-
-        // We iterate twice to handle cyclic nature if needed, but simpler to just find start points
-        // A run starts at an edge i where railed[i] is true and railed[i-1] is false.
-        for i in 0..n {
-            let prev = (i + n - 1) % n;
-            if railed[i] && !railed[prev] {
-                // Start of a new run
-                if !current_run.is_empty() {
-                    runs.push(current_run.clone());
-                }
-                current_run.clear();
-                current_run.push(i);
-                in_run = true;
-            } else if railed[i] && in_run {
-                current_run.push(i);
-            } else if !railed[i] && in_run {
-                runs.push(current_run.clone());
-                current_run.clear();
-                in_run = false;
-            }
-        }
-        if !current_run.is_empty() {
-            runs.push(current_run);
-        }
-
-        for run in runs {
-            if run.is_empty() {
+        for start in 0..n {
+            if !(at(start) && !at((start + n - 1) % n)) {
                 continue;
             }
-            let start_idx = run[0];
-            let end_idx = *run.last().unwrap();
-
-            // Build path from start_idx to end_idx
-            // Path vertices are polygon vertices.
-            // Edge i connects polygon[i] to polygon[(i+1)%n]
-            // Run covers edges start_idx .. end_idx
-            // Path vertices: polygon[start_idx], polygon[start_idx+1], ..., polygon[end_idx+1]
-
-            let mut path = Vec::new();
-            let mut curr = start_idx;
-            loop {
-                path.push(room.polygon[curr]);
-                if curr == end_idx {
-                    path.push(room.polygon[(curr + 1) % n]);
+            // Walk the run cyclically.
+            let mut last = start;
+            for k in 1..n {
+                if at((start + k) % n) {
+                    last = (start + k) % n;
+                } else {
                     break;
                 }
-                curr = (curr + 1) % n;
             }
-
-            // Pull back the start end by the inset so the end post stands inside the deck.
+            let count = (last + n - start) % n + 1;
+            let mut path: Vec<Vec2> = Vec::with_capacity(count + 1);
+            for k in 0..=count {
+                if let Some(p) = room.polygon.get((start + k) % n) {
+                    path.push(*p);
+                }
+            }
+            if path.len() < 2 {
+                continue;
+            }
+            // Pull an end back from a corner where the neighbouring edge is a wall.
+            if touches_wall((start + n - 1) % n)
+                && let (Some(&p0), Some(&p1)) = (path.first(), path.get(1))
             {
-                let p0 = path[0];
-                let p1 = path[1];
                 let dir = (p1 - p0).normalized();
-                if dir.is_finite() {
-                    path[0] = p0 + dir * 0.045;
+                if dir.is_finite()
+                    && let Some(f) = path.first_mut()
+                {
+                    *f = p0 + dir * INSET;
                 }
             }
-
-            // Pull back the end end by the inset.
-            {
-                let p_last = *path.last().unwrap();
-                let p_prev = path[path.len() - 2];
-                let dir = (p_prev - p_last).normalized();
-                if dir.is_finite() {
-                    let new_last = p_last + dir * 0.045;
-                    path.pop();
-                    path.push(new_last);
-                }
-            }
-
-            // Filter short paths
-            if path.len() >= 2 {
-                let mut valid = true;
-                for i in 0..path.len() - 1 {
-                    if (path[i + 1] - path[i]).len() < 0.05 {
-                        valid = false;
-                        break;
+            if touches_wall((last + 1) % n) {
+                let prev = path.len().checked_sub(2).and_then(|i| path.get(i)).copied();
+                if let (Some(&pl), Some(pp)) = (path.last(), prev) {
+                    let dir = (pp - pl).normalized();
+                    if dir.is_finite()
+                        && let Some(l) = path.last_mut()
+                    {
+                        *l = pl + dir * INSET;
                     }
                 }
-                if valid {
-                    paths.push(path);
-                }
+            }
+            if path.windows(2).all(|w| match w {
+                [a, b] => (*b - *a).len() >= 0.05,
+                _ => true,
+            }) {
+                paths.push(path);
             }
         }
     }
 
-    let mut rails = Vec::new();
-    for path in paths {
-        rails.push(Railing {
+    // Signed area: counter-clockwise means the left of travel is inside.
+    let mut area2 = 0.0;
+    for (i, a) in room.polygon.iter().enumerate() {
+        if let Some(b) = room.polygon.get((i + 1) % room.polygon.len()) {
+            area2 += a.cross(*b);
+        }
+    }
+    let inset = if area2 >= 0.0 { INSET } else { -INSET };
+
+    paths
+        .into_iter()
+        .map(|path| Railing {
             path,
             level: room.level,
             height: GUARD_HEIGHT,
             follows: Some(room.id),
             host: RailingHost::Deck,
             auto: true,
-            inset: 0.045,
+            inset,
             layer: "A-RAIL".into(),
             ..Railing::default()
-        });
-    }
-    rails
+        })
+        .collect()
 }
 
 /// Helper to get a point on the stair flight.
@@ -284,141 +249,57 @@ fn stair_point(stair: &cadcraft_doc::arch::Stair, u: f64, t: f64) -> Vec2 {
     stair.start + dir * u + left * t
 }
 
-/// Determine which sides of a stair are against walls.
+/// Determine which sides of a stair are against walls: a wall face parallel to the side line,
+/// within 0.05 m of it, and overlapping at least half of its length.
 /// Returns [left_against, right_against].
 fn stair_sides_against_walls(model: &ArchModel, stair: &cadcraft_doc::arch::Stair) -> [bool; 2] {
-    let dir = Vec2::from_angle(stair.direction);
-    let left = Vec2::new(-dir.y, dir.x);
-    let w = stair.width;
-    let run = stair.run;
-
-    let left_line_start = stair_point(stair, 0.0, w / 2.0);
-    let left_line_end = stair_point(stair, run, w / 2.0);
-    let right_line_start = stair_point(stair, 0.0, -w / 2.0);
-    let right_line_end = stair_point(stair, run, -w / 2.0);
-
-    let mut left_against = false;
-    let mut right_against = false;
-
-    // Threshold for "against"
-    const THRESHOLD: f64 = 0.1;
-
-    // Check walls
-    for wall in &model.walls {
-        let w_start = wall.start;
-        let w_end = wall.end;
-
-        // Check left side
-        if !left_against && segments_close(w_start, w_end, left_line_start, left_line_end, THRESHOLD) {
-            left_against = true;
-        }
-        // Check right side
-        if !right_against && segments_close(w_start, w_end, right_line_start, right_line_end, THRESHOLD) {
-            right_against = true;
-        }
-    }
-
-    [left_against, right_against]
+    let half = stair.width / 2.0;
+    [side_against(model, stair, half), side_against(model, stair, -half)]
 }
 
-/// Check if two segments are close to each other.
-/// Returns true if the minimum distance between the segments is less than `threshold`.
-fn segments_close(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2, threshold: f64) -> bool {
-    // Check if endpoints of one segment are close to the other segment
-    if dist_to_segment(a1, b1, b2) < threshold || dist_to_segment(a2, b1, b2) < threshold {
-        return true;
+/// Whether the side line of the flight at offset `t` lies against a wall face.
+fn side_against(model: &ArchModel, stair: &cadcraft_doc::arch::Stair, t: f64) -> bool {
+    let s0 = stair_point(stair, 0.0, t);
+    let s1 = stair_point(stair, stair.run, t);
+    let d = s1 - s0;
+    let len = d.len();
+    if !(s0.is_finite() && s1.is_finite() && len.is_finite() && len > 1e-9) {
+        return false;
     }
-    if dist_to_segment(b1, a1, a2) < threshold || dist_to_segment(b2, a1, a2) < threshold {
-        return true;
-    }
-    // Check if segments intersect
-    if segments_intersect(a1, a2, b1, b2) {
-        return true;
+    let dir = d / len;
+    let normal = dir.perp();
+    let level = model.level(stair.from_level);
+    for w in &model.walls {
+        if w.divider {
+            continue;
+        }
+        if !(w.base_level == stair.from_level || level.is_some_and(|l| w.spans_level(l, &model.levels))) {
+            continue;
+        }
+        let Some(faces) = crate::join::face_lines(w) else { continue };
+        for (fa, fb) in faces {
+            let fd = fb - fa;
+            let fl = fd.len();
+            if !(fl.is_finite() && fl > 1e-9) || d.cross(fd).abs() / (len * fl) > 1e-3 {
+                continue;
+            }
+            if (fa - s0).dot(normal).abs() > 0.05 || (fb - s0).dot(normal).abs() > 0.05 {
+                continue;
+            }
+            let (pa, pb) = ((fa - s0).dot(dir), (fb - s0).dot(dir));
+            let overlap = pa.max(pb).min(len) - pa.min(pb).max(0.0);
+            if overlap >= len / 2.0 {
+                return true;
+            }
+        }
     }
     false
-}
-
-/// Check if two segments intersect.
-fn segments_intersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2) -> bool {
-    let d1 = a2 - a1;
-    let d2 = b2 - b1;
-    let cross = d1.x * d2.y - d1.y * d2.x;
-    if cross.abs() < 1e-9 {
-        // Parallel or collinear
-        // Check perpendicular distance to ensure they are collinear
-        let n = Vec2::new(-d1.y, d1.x).normalized();
-        if n.is_finite() {
-            let dist = (b1 - a1).dot(n).abs();
-            if dist > 1e-6 {
-                return false;
-            }
-        } else {
-            return false;
-        }
-        // Collinear: check overlap
-        let t1 = (b1 - a1).dot(d1) / d1.dot(d1);
-        let t2 = (b2 - a1).dot(d1) / d1.dot(d1);
-        let min_t = t1.min(t2);
-        let max_t = t1.max(t2);
-        // Overlap if [min_t, max_t] intersects [0, 1]
-        return max_t >= 0.0 && min_t <= 1.0;
-    }
-    let t = ((b1 - a1).x * d2.y - (b1 - a1).y * d2.x) / cross;
-    let u = ((b1 - a1).x * d1.y - (b1 - a1).y * d1.x) / cross;
-    t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0
-}
-
-fn dist_to_segment(p: Vec2, a: Vec2, b: Vec2) -> f64 {
-    let ab = b - a;
-    let ap = p - a;
-    let len_sq = ab.dot(ab);
-    if len_sq == 0.0 {
-        return ap.len();
-    }
-    let mut t = ap.dot(ab) / len_sq;
-    t = t.clamp(0.0, 1.0);
-    let proj = a + ab * t;
-    (p - proj).len()
-}
-
-/// Deck edge info.
-struct DeckEdge {
-    wall: Option<ArchId>,
-}
-
-/// Calculate deck edges and their wall associations.
-fn deck_edges(model: &ArchModel, room: &Room) -> Vec<DeckEdge> {
-    let n = room.polygon.len();
-    if n < 3 {
-        return Vec::new();
-    }
-    let mut edges = Vec::with_capacity(n);
-    for i in 0..n {
-        let p1 = room.polygon[i];
-        let p2 = room.polygon[(i + 1) % n];
-
-        // Check if any wall is close to this edge
-        let mut wall_id = None;
-        for wall in &model.walls {
-            // Check if wall segment overlaps or is close to deck edge
-            // Simplified check: midpoint distance
-            let mid = (p1 + p2) * 0.5;
-            let w_mid = (wall.start + wall.end) * 0.5;
-            if (mid - w_mid).len() < 0.1 {
-                wall_id = Some(wall.id);
-                break;
-            }
-        }
-        edges.push(DeckEdge { wall: wall_id });
-    }
-    edges
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use cadcraft_doc::ArchId;
-    use cadcraft_doc::arch::{Room, RoomType, Stair, StairShape};
 
     fn rail(host: RailingHost, follows: u32, auto: bool) -> Railing {
         Railing { host, follows: Some(ArchId(follows)), auto, ..Railing::default() }
