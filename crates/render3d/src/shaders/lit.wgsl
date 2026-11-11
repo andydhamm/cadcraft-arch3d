@@ -114,6 +114,10 @@ fn lit_ambient(albedo: vec3<f32>, metallic: f32, n: vec3<f32>) -> vec3<f32> {
 
 // Hook [p19-exposure]: display units per lux of fixture light.
 fn fixture_scale() -> f32 {
+    if (physical()) {
+        // Radiance in nits; the frame's exposure scales it in finish_color.
+        return 1.0;
+    }
     return fr.params.x;
 }
 
@@ -164,14 +168,16 @@ fn fs(v: VOut) -> @location(0) vec4<f32> {
 
     let n = s.n;
     let n_l = select(n, -n, dot(n, p.camera_pos - v.wpos) < 0.0);
-    let diffuse_albedo = albedo * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
+    let diffuse_albedo = albedo * (1.0 - s.metallic * 0.5);
     let light_count = min(lu.count.x, 64u);
     for (var i = 0u; i < light_count; i = i + 1u) {
         rgb = rgb + (diffuse_albedo / LIT_PI) * fixture_light(i, v.wpos, n_l) * fixture_scale();
     }
 
-    rgb = rgb + albedo * p._p6.x;
-    if (fr.params.y > 0.5) {
+    // Emissive is a display value; in a physically scaled frame it is 100 nits per unit (what the
+    // legacy exposure of 0.01 turns back into the same display value).
+    rgb = rgb + albedo * p._p6.x * select(1.0, 100.0, physical());
+    if (fr.params.y > 0.5 && !physical()) {
         let x = rgb;
         let numerator = x * (2.51 * x + vec3<f32>(0.03));
         let denominator = x * (2.43 * x + vec3<f32>(0.59)) + vec3<f32>(0.14);
