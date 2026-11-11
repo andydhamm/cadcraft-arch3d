@@ -216,6 +216,11 @@ pub fn builtin_items() -> Vec<ItemRecord> {
             Finish::Siding | Finish::Brick => &["finish", "wall"],
             Finish::Shingles => &["finish", "roof"],
             Finish::Wood => &["finish", "wall", "roof", "floor"],
+            Finish::Concrete => &["finish", "wall", "floor"],
+            Finish::Tile => &["finish", "wall", "floor"],
+            Finish::Carpet => &["finish", "floor"],
+            Finish::Drywall => &["finish", "wall", "ceiling"],
+            Finish::Plaster => &["finish", "ceiling"],
         };
         v.push(builtin(format!("finish:{}", f.name()), capitalised(f.name()), Category::Materials, "Finishes", ItemKind::Finish, "finish", uses));
     }

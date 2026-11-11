@@ -153,6 +153,11 @@ pub fn material_pbr(material: &str) -> ([f32; 3], f32, f32, f32) {
             cadcraft_doc::arch::Finish::Shingles => 0.95,
             cadcraft_doc::arch::Finish::Brick => 0.9,
             cadcraft_doc::arch::Finish::Wood => 0.5,
+            cadcraft_doc::arch::Finish::Concrete => 0.9,
+            cadcraft_doc::arch::Finish::Tile => 0.3,
+            cadcraft_doc::arch::Finish::Carpet => 1.0,
+            cadcraft_doc::arch::Finish::Drywall => 0.9,
+            cadcraft_doc::arch::Finish::Plaster => 0.9,
         };
         return ([1.0; 3], 0.0, rough, 1.0);
     }
