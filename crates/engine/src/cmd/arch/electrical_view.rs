@@ -22,7 +22,7 @@ fn run_view_electrical(s: &mut Session, params: &Value) -> Result<Value, EngineE
     let name = "Electrical";
     let saved = d.layers.clone();
     d.layer_states.retain(|st| st.name != name);
-    d.layer_states.push(LayerState { name: name.to_string(), layers: saved });
+    d.layer_states.push(LayerState { name: name.to_string(), layers: saved, rules: Default::default() });
 
     let mut shown = Vec::new();
     let mut dimmed = Vec::new();

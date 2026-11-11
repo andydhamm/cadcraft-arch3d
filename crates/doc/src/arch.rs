@@ -21,6 +21,7 @@ pub mod light;
 pub mod look;
 pub mod molding;
 pub mod paint;
+pub mod planview;
 pub mod site;
 pub use backdrop::*;
 pub use casework::*;
@@ -35,6 +36,7 @@ pub use light::*;
 pub use look::*;
 pub use molding::*;
 pub use paint::*;
+pub use planview::*;
 pub use site::*;
 
 /// A stable identifier for an architectural object.
@@ -904,6 +906,35 @@ impl RoomType {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LabelArea {
+    #[default]
+    Interior,
+    Standard,
+}
+
+impl LabelArea {
+    pub fn key(self) -> &'static str {
+        match self {
+            LabelArea::Interior => "interior",
+            LabelArea::Standard => "standard",
+        }
+    }
+
+    pub fn from_key(s: &str) -> Option<Self> {
+        match s {
+            "interior" => Some(LabelArea::Interior),
+            "standard" => Some(LabelArea::Standard),
+            _ => None,
+        }
+    }
+
+    pub fn is_interior(&self) -> bool {
+        matches!(self, LabelArea::Interior)
+    }
+}
+
 /// An architectural room: enclosed area defined by wall faces.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -918,6 +949,8 @@ pub struct Room {
     pub floor_height: Option<f64>,
     pub interior_area: f64,
     pub standard_area: f64,
+    #[serde(default, skip_serializing_if = "LabelArea::is_interior")]
+    pub label_area: LabelArea,
     /// Height of the deck surface above the level elevation, if this is a deck room.
     pub deck_height: Option<f64>,
     /// The room's floor finish.
@@ -958,6 +991,7 @@ impl Default for Room {
             floor_height: None,
             interior_area: 0.0,
             standard_area: 0.0,
+            label_area: LabelArea::Interior,
             deck_height: None,
             floor_finish: None,
             flat_ceiling: true,
@@ -1735,6 +1769,12 @@ pub struct ArchModel {
     /// The one level the plan draws; `None` = all levels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_level: Option<u32>,
+    #[serde(default = "template_plan_views", skip_serializing_if = "is_template_plan_views")]
+    pub plan_views: Vec<PlanView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open_plan_views: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_plan_view: Option<String>,
     // Skipped when empty, so a model without views writes the same payload it did before views existed.
     #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "deserialize_views")]
     pub views: Vec<ArchView>,
@@ -1850,6 +1890,9 @@ impl Default for ArchModel {
             cameras: Vec::new(),
             active_camera: None,
             plan_level: None,
+            plan_views: template_plan_views(),
+            open_plan_views: Vec::new(),
+            active_plan_view: None,
             views: Vec::new(),
             next_view_id: 0,
             site: None,
@@ -1916,6 +1959,24 @@ impl Default for ArchModel {
 }
 
 impl ArchModel {
+    /// Look up a plan view by trimmed, case-insensitive name.
+    pub fn plan_view(&self, name: &str) -> Option<&PlanView> {
+        let key = name.trim();
+        if key.is_empty() {
+            return None;
+        }
+        self.plan_views.iter().find(|v| v.name.trim().eq_ignore_ascii_case(key))
+    }
+
+    /// Look up a mutable plan view by trimmed, case-insensitive name.
+    pub fn plan_view_mut(&mut self, name: &str) -> Option<&mut PlanView> {
+        let key = name.trim();
+        if key.is_empty() {
+            return None;
+        }
+        self.plan_views.iter_mut().find(|v| v.name.trim().eq_ignore_ascii_case(key))
+    }
+
     /// Add a wall and return its new id.
     pub fn push_wall(&mut self, mut w: Wall) -> ArchId {
         let id = ArchId(self.next_id);
@@ -2886,6 +2947,7 @@ impl ArchModel {
         }
         self.views = valid_views;
 
+        messages.extend(repair_plan_views(self));
         messages
     }
 }
