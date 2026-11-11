@@ -441,6 +441,13 @@ mod tests {
     }
 
     #[test]
+    fn mean_of_empty_texture_returns_zero() {
+        let t = Texture { finish: Finish::Siding, width: 0, height: 0, rgba: Vec::new(), tile: [1.0, 1.0] };
+        assert_eq!(mean_srgb(&t), [0; 3]);
+        assert_eq!(mean_linear(&t), [0.0; 3]);
+    }
+
+    #[test]
     fn all_four_finishes_are_pairwise_distinct() {
         let textures: Vec<Texture> = Finish::ALL.iter().copied().map(texture).collect();
         for i in 0..textures.len() {
