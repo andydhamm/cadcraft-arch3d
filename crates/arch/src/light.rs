@@ -175,6 +175,8 @@ pub fn intensity_cd(f: &LightFixture) -> f64 {
         LightKind::Spot => cone_solid_angle(f.cone),
         // A Lambertian face: Φ = π·I₀, so I₀ = Φ/π along the aim (I₀·cos θ off it).
         LightKind::Area => std::f64::consts::PI,
+        // Handled above; unreachable.
+        LightKind::Strip => 0.0,
     };
     if omega.is_finite() && omega > 0.0 { f.lumens / omega } else { 0.0 }
 }

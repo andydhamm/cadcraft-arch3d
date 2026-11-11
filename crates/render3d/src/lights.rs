@@ -135,7 +135,7 @@ pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, Shad
         // cosine law); the path tracer samples its rectangle.
         let cos_outer = match l.kind {
             LightKind::Spot | LightKind::Area => l.cos_outer,
-            LightKind::Point => -2.0,
+            LightKind::Point | LightKind::Strip => -2.0,
         };
         write_f32(&mut buf, base + 16, l.direction.x as f32);
         write_f32(&mut buf, base + 20, l.direction.y as f32);

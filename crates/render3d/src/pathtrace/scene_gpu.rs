@@ -366,6 +366,8 @@ fn gpu_light(l: &SceneLight) -> GpuLight {
         LightKind::Point => LIGHT_POINT,
         LightKind::Spot => LIGHT_SPOT,
         LightKind::Area => LIGHT_AREA,
+        // Skipped until p19-strip-render: treated as a point light here.
+        LightKind::Strip => LIGHT_POINT,
     };
     let scale = if kind == LIGHT_AREA {
         let area = l.size[0] * l.size[1];
