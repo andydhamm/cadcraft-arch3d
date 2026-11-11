@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 03:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 35 of 39 segments merged · 16 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 03:00 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 16 / 20 | 47.5 h so far · expected done Nov 11 10:23–Nov 12 12:21 UTC |
+| 16 | Ceilings and foundations | building | 16 / 20 | 47.8 h so far · expected done Nov 11 10:38–Nov 12 12:36 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | planned | — | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -35,12 +35,12 @@ Updated 2026-11-11 03:00 UTC. This page and the card in the README are regenerat
 
 ## Phase 16 segments
 
-35 merged, 3 replaced, 3 gate, 2 abandoned, 1 queued
+35 merged, 3 replaced, 2 abandoned, 2 gate, 1 merging, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p16f2-slab-edge-width` | slab foundation: the thickened edge is 0.3 m in from the outer face | gate | bonsai-a |
-| `p16f2-room-level-index` | room: an integer `level` is the level's index | gate | darwin-ws3 |
+| `p16f2-room-level-index` | room: an integer `level` is the level's index | merging | darwin-ws3 |
 | `p16f2-silhouette-depth` | technical illustration: fills get a slope-scaled depth bias so silhouettes show | gate | mai-flash-b |
 
 ## Recent merges
@@ -65,14 +65,14 @@ Updated 2026-11-11 03:00 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1071 |
-| bonsai-b | bonsai2-27b | gate | 1027 |
+| bonsai-b | bonsai2-27b | merging | 1028 |
 | bonsai-ws2-a | bonsai2-27b | down | 1132 |
 | bonsai-ws2-b | bonsai2-27b | down | 1063 |
 | claude-sonnet-a | sonnet | idle | 104 |
 | claude-sonnet-b | sonnet | idle | 110 |
 | claude-sonnet-c | sonnet | idle | 54 |
 | claude-sonnet-d | sonnet | idle | 49 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 948 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 949 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | gate | 13 |
