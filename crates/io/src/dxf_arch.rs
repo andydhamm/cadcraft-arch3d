@@ -1303,6 +1303,35 @@ mod tests {
     }
 
     #[test]
+    fn a_drawing_holding_only_a_molding_line_and_a_countertop_round_trips() {
+        use cadcraft_doc::arch::{CounterEdge, Countertop, EdgeProfile, MoldingLine, MoldingProfile};
+        let mut d = Drawing::new_metric();
+        let mut profile = MoldingProfile::default();
+        profile.item = "ogee".into();
+        profile.points = vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.05]];
+        let mut edge = CounterEdge::default();
+        edge.sagitta = 0.2;
+        edge.profile = EdgeProfile::Bullnose;
+        edge.waterfall = true;
+        d.arch.push_molding_line(MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(3.0, 0.0)],
+            elevation: 0.1,
+            profile,
+            ..Default::default()
+        });
+        d.arch.push_countertop(Countertop {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0)],
+            edges: vec![edge],
+            ..Default::default()
+        });
+        assert!(arch_chunks(&d.arch).is_some());
+        let back = read_dxf(write_dxf(&d).as_bytes()).expect("reopen");
+        assert_eq!(back.arch.molding_lines, d.arch.molding_lines);
+        assert_eq!(back.arch.countertops, d.arch.countertops);
+        assert_eq!((back.arch.next_molding_line_id, back.arch.next_countertop_id), (1, 1));
+    }
+
+    #[test]
     fn cameras_round_trip_through_dxf() {
         use cadcraft_doc::arch::Camera3d;
         let mut d = Drawing::new_metric();

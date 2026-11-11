@@ -2,7 +2,9 @@
 //! layers. The data lives in `cadcraft_doc::arch::casework`.
 
 use crate::join::ArchError;
-use cadcraft_doc::arch::{Cabinet, CabinetKind, Fixture, FixtureKind, Fronts};
+use cadcraft_doc::arch::{
+    Cabinet, CabinetKind, FaceLayout, FaceRow, Fixture, FixtureKind, Fronts, MAX_ACROSS, MAX_FACE_ROWS, MAX_FILLER_WIDTH, MAX_SHELVES,
+};
 use cadcraft_doc::{ArchId, ArchModel};
 use cadcraft_geom::Vec2;
 
@@ -88,7 +90,11 @@ pub fn validate_cabinet(c: &Cabinet) -> Result<(), ArchError> {
     if !c.rotation.is_finite() {
         return bad("rotation must be finite");
     }
-    if !in_range(c.width, 0.2, 1.5) {
+    if c.filler {
+        if !(c.width.is_finite() && c.width > 0.0 && c.width <= MAX_FILLER_WIDTH) {
+            return bad(format!("a filler's width must be above 0 and at most {MAX_FILLER_WIDTH} m"));
+        }
+    } else if !in_range(c.width, 0.2, 1.5) {
         return bad("cabinet width must be 0.2..=1.5 m");
     }
     if !in_range(c.depth, 0.2, 0.9) {
@@ -124,8 +130,25 @@ pub fn validate_cabinet(c: &Cabinet) -> Result<(), ArchError> {
         Fronts::DrawerOverDoor => c.doors >= 1 && c.drawers >= 1,
         Fronts::Open => true,
     };
-    if !ok {
+    // A filler's front is one panel whatever its fronts say.
+    if !ok && !c.filler {
         return bad("fronts do not match the door and drawer counts");
+    }
+    if c.shelves.is_some_and(|n| n > MAX_SHELVES) {
+        return bad(format!("a cabinet has at most {MAX_SHELVES} shelves"));
+    }
+    if let Some(face) = &c.face {
+        if face.rows.len() > MAX_FACE_ROWS {
+            return bad(format!("a face layout has at most {MAX_FACE_ROWS} rows"));
+        }
+        for row in &face.rows {
+            if row.across > MAX_ACROSS {
+                return bad(format!("a face row has at most {MAX_ACROSS} fronts across"));
+            }
+            if row.height.is_some_and(|h| !in_range(h, f64::MIN_POSITIVE, 3.0)) {
+                return bad("a face row height must be above 0 and at most 3 m");
+            }
+        }
     }
     Ok(())
 }
@@ -254,6 +277,65 @@ mod tests {
         }
         assert_eq!(cabinet_layer(CabinetKind::Wall), "A-FLOR-CASE-UPPR");
         assert_eq!(fixture_layer(FixtureKind::Range), "A-FLOR-APPL");
+    }
+
+    #[test]
+    fn validate_open_cabinet() {
+        let mut c = cabinet_defaults(CabinetKind::Wall);
+        c.fronts = Fronts::Open;
+        c.doors = 0;
+        c.drawers = 0;
+        assert!(validate_cabinet(&c).is_ok());
+        c.shelves = Some(MAX_SHELVES);
+        assert!(validate_cabinet(&c).is_ok());
+        c.shelves = Some(MAX_SHELVES + 1);
+        assert!(validate_cabinet(&c).is_err());
+        c.shelves = None;
+        let row = |across: u32, height: Option<f64>| FaceRow { across, height, ..Default::default() };
+        let mut layout = FaceLayout::default();
+        layout.rows = vec![row(MAX_ACROSS, Some(0.3)), row(0, None)];
+        c.face = Some(layout);
+        assert!(validate_cabinet(&c).is_ok());
+        for bad_rows in [
+            vec![row(MAX_ACROSS + 1, None)],
+            vec![row(1, Some(0.0))],
+            vec![row(1, Some(f64::NAN))],
+            vec![row(1, Some(3.1))],
+            vec![row(1, None); MAX_FACE_ROWS + 1],
+        ] {
+            let mut layout = FaceLayout::default();
+            layout.rows = bad_rows;
+            c.face = Some(layout);
+            assert!(validate_cabinet(&c).is_err());
+        }
+    }
+
+    #[test]
+    fn validate_filler_widths() {
+        for kind in [CabinetKind::Base, CabinetKind::Wall, CabinetKind::Tall] {
+            let mut c = cabinet_defaults(kind);
+            c.filler = true;
+            c.fronts = Fronts::Open;
+            for (w, ok) in [(0.05, true), (MAX_FILLER_WIDTH, true), (0.16, false), (0.0, false), (-0.05, false), (f64::NAN, false)] {
+                c.width = w;
+                assert_eq!(validate_cabinet(&c).is_ok(), ok, "{kind:?} {w}");
+            }
+            // A cabinet that is not a filler keeps 0.2..=1.5.
+            c.filler = false;
+            c.width = 0.05;
+            assert!(validate_cabinet(&c).is_err());
+        }
+    }
+
+    #[test]
+    fn a_filler_skips_the_fronts_count_rule() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.fronts = Fronts::Drawers;
+        c.drawers = 0;
+        assert!(validate_cabinet(&c).is_err());
+        c.filler = true;
+        c.width = 0.1;
+        assert!(validate_cabinet(&c).is_ok());
     }
 
     #[test]

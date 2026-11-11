@@ -460,6 +460,8 @@ fn inspect_cabinet_parts(model: &ArchModel, out: &mut JsonMap<String, Value>) {
                         FrontKind::Door => "door",
                         FrontKind::Drawer => "drawer",
                         FrontKind::False => "false",
+                        FrontKind::Opening => "opening",
+                        FrontKind::Appliance => "appliance",
                     },
                     "rect": f.rect,
                     "hinge": f.hinge.map(|h| match h {
