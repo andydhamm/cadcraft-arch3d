@@ -421,7 +421,8 @@ mod tests {
                 }
             }
             // The spread must be wider than a flat texture would produce.
-            assert!(max_lum - min_lum > 12, "{f:?} luminance spread {max_lum - min_lum}");
+            let spread = max_lum - min_lum;
+            assert!(spread > 12, "{f:?} luminance spread {spread}");
         }
         // Drywall and plaster are flat (single colour, no noise).
         for f in [Finish::Drywall, Finish::Plaster] {
@@ -436,13 +437,13 @@ mod tests {
         // Drywall: exactly (232, 231, 228, 255) every pixel.
         let d = texture(Finish::Drywall);
         for (y, x) in [(0u32, 0u32), (1, 1), (128, 128), (255, 255), (42, 200)] {
-            let i = (y * N + x as usize) * 4;
+            let i = (y as usize * N + x as usize) * 4;
             assert_eq!([d.rgba[i], d.rgba[i + 1], d.rgba[i + 2], d.rgba[i + 3]], [232, 231, 228, 255], "{y},{x}");
         }
         // Plaster: exactly (234, 234, 232, 255) every pixel.
         let p = texture(Finish::Plaster);
         for (y, x) in [(0u32, 0u32), (1, 1), (128, 128), (255, 255), (42, 200)] {
-            let i = (y * N + x as usize) * 4;
+            let i = (y as usize * N + x as usize) * 4;
             assert_eq!([p.rgba[i], p.rgba[i + 1], p.rgba[i + 2], p.rgba[i + 3]], [234, 234, 232, 255], "{y},{x}");
         }
     }
