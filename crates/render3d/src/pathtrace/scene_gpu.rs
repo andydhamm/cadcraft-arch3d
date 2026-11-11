@@ -788,17 +788,17 @@ mod tests {
         ];
         let mut at = 0usize;
         for f in fields {
-            let i = wgsl.find(f).unwrap_or_else(|_| panic!("wgsl missing field {f}"));
+            let i = wgsl.find(f).unwrap_or_else(|| panic!("wgsl missing field {f}"));
             assert!(i > at, "wgsl field {f} out of order");
             at = i + f.len();
         }
         for (name, value) in [
-            ("FRAME_ENV", 16u),
-            ("FRAME_MOON", 32u),
-            ("FRAME_CLIP", 64u),
-            ("FRAME_SUN_NO_SHADOW", 128u),
-            ("FRAME_NORMAL_MAPS", 256u),
-            ("FRAME_LAMBERT", 512u),
+            ("FRAME_ENV", 16u32),
+            ("FRAME_MOON", 32u32),
+            ("FRAME_CLIP", 64u32),
+            ("FRAME_SUN_NO_SHADOW", 128u32),
+            ("FRAME_NORMAL_MAPS", 256u32),
+            ("FRAME_LAMBERT", 512u32),
         ] {
             assert!(wgsl.contains(&format!("const {name}: u32 = {value}u;")), "wgsl missing `const {name}: u32 = {value}u;`",);
         }
