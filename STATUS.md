@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-11 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 16 of 21: Ceilings and foundations — 37 of 39 segments merged · 18 of 20 acceptance checks**
+**Phase 16 of 21: Ceilings and foundations — 37 of 40 segments merged · 18 of 20 acceptance checks**
 
 8,560 workspace tests passing at the last merge · 913 segments merged in all · 0 of 15 seats working
 
@@ -26,20 +26,21 @@ Updated 2026-11-11 05:15 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 18 / 20 | 49.8 h so far · expected done Nov 11 08:27–Nov 12 02:59 UTC |
+| 16 | Ceilings and foundations | building | 18 / 20 | 50.0 h so far · expected done Nov 11 10:18–Nov 12 05:44 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
-| 18 | Interior finish, kitchen and bath | planned | — | — |
+| 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | planned | — | — |
 | 20 | Plan views and dimensions | planned | — | — |
 | 21 | Schedules, elevations and sheets | planned | — | — |
 
 ## Phase 16 segments
 
-37 merged, 3 replaced, 2 abandoned, 1 merging, 1 queued
+37 merged, 3 replaced, 2 abandoned, 1 merging, 1 queued, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p16f2-silhouette-depth` | technical illustration: fills get a slope-scaled depth bias so silhouettes show | merging | mai-flash-b |
+| `upstream-sync-6d744887f` | merge upstream upstream/main up to 6d744887f (7 commits) | working | claude-sonnet-b |
 
 ## Recent merges
 
@@ -63,17 +64,17 @@ Updated 2026-11-11 05:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1072 |
-| bonsai-b | bonsai2-27b | idle | 1028 |
+| bonsai-b | bonsai2-27b | agent | 1028 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1132 |
-| bonsai-ws2-b | bonsai2-27b | idle | 1063 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1063 |
 | claude-sonnet-a | sonnet | idle | 104 |
-| claude-sonnet-b | sonnet | idle | 110 |
+| claude-sonnet-b | sonnet | agent | 110 |
 | claude-sonnet-c | sonnet | idle | 54 |
 | claude-sonnet-d | sonnet | idle | 49 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 949 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 949 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 75 |
 | mai-flash-b | mai-code-1.1-flash | idle | 14 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
-| tturbo-mac | tturbo-ultraheretic | gate | 740 |
-| tturbo-mac2 | tturbo-ultraheretic | merging | 349 |
+| tturbo-mac | tturbo-ultraheretic | gate | 741 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 349 |
