@@ -970,8 +970,8 @@ mod tests {
                 ..Default::default()
             },
         );
-        scene.textures.insert("finish:brick".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![255; 8 * 8 * 4] });
-        scene.textures.insert("finish:brick:normal".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![128; 8 * 8 * 4] });
+        scene.textures.insert("finish:brick".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![255; 8 * 8 * 4], ..Default::default() });
+        scene.textures.insert("finish:brick:normal".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![128; 8 * 8 * 4], ..Default::default() });
 
         let mut item = wall_mesh();
         item.material = "paint:room/r0/floor".to_string();
@@ -986,8 +986,8 @@ mod tests {
                 ..Default::default()
             },
         );
-        scene.textures.insert("item:test-mat".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![200; 8 * 8 * 4] });
-        scene.textures.insert("test-mat:normal".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![64; 8 * 8 * 4] });
+        scene.textures.insert("item:test-mat".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![200; 8 * 8 * 4], ..Default::default() });
+        scene.textures.insert("test-mat:normal".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![64; 8 * 8 * 4], ..Default::default() });
         scene.meshes = vec![brick, item];
 
         let json = glb_json_chunk(&write(&scene));

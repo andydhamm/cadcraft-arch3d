@@ -686,8 +686,8 @@ mod tests {
         let dir = TempDir::new("paint-normal-item");
         let mut s = setup(&dir);
         std::fs::create_dir_all(dir.join("user")).unwrap();
-        let image = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![255; 64 * 64 * 4] };
-        let mut normal = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![0; 64 * 64 * 4] };
+        let image = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![255; 64 * 64 * 4], ..Default::default() };
+        let mut normal = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![0; 64 * 64 * 4], ..Default::default() };
         for (i, px) in normal.rgba.iter_mut().enumerate() {
             if i % 4 == 0 {
                 *px = 255;
