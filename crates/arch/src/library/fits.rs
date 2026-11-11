@@ -9,6 +9,12 @@ pub fn query_for(target: &str) -> Option<Query> {
     let _id = parts.next()?;
     let sub = parts.next();
 
+    let molding = matches!((kind, sub), ("room", Some("molding")) | ("cabinet", Some("crown" | "lightRail")) | ("moldingLine", None));
+    if molding {
+        let chip = Chip { kind: ChipKind::Folder, value: "Moldings".into(), ..Default::default() };
+        return Some(Query { text: String::new(), chips: vec![chip], ..Default::default() });
+    }
+
     match kind {
         "cabinet" => {
             let chip = match sub {
@@ -35,6 +41,17 @@ pub fn query_for(target: &str) -> Option<Query> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn query_for_room_molding_and_cabinet_crown_is_the_moldings_folder() {
+        for key in ["room/r1/molding", "cabinet/cb1/crown", "cabinet/cb1/lightRail", "moldingLine/ml1"] {
+            let q = query_for(key).unwrap();
+            assert_eq!(q.chips.len(), 1, "{key}");
+            assert_eq!(q.chips[0].kind, ChipKind::Folder);
+            assert_eq!(q.chips[0].value, "Moldings");
+        }
+        assert_eq!(query_for("room/r1/floor").unwrap().chips[0].value, "Materials");
+    }
 
     #[test]
     fn query_for_targets() {

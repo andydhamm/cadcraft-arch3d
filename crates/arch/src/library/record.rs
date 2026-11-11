@@ -80,6 +80,8 @@ pub enum ItemKind {
     Fixture,
     FrontStyle,
     Group,
+    /// A molding profile (`profile` holds the closed outline).
+    Molding,
 }
 
 /// A single item in the library.
@@ -107,6 +109,9 @@ pub struct ItemRecord {
     pub elevation: Option<f64>,
     pub cutout: Option<[f64; 2]>,
     pub notes: String,
+    /// The closed 2D outline of a molding item (metres, x out, y up).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<Vec<[f64; 2]>>,
 }
 
 /// Determine the folder for a given category and symbol type.

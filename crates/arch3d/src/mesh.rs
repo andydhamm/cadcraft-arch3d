@@ -618,7 +618,7 @@ fn point_in_ring_even_odd(p: Vec2, ring: &[Vec2]) -> bool {
 /// Returns a list of triangle index triples referencing vertices of `ring`.
 /// Returns an empty vector if the polygon cannot be triangulated (degenerate,
 /// self-intersecting, or non-finite inputs).
-fn triangulate(ring: &[Vec2]) -> Vec<[u32; 3]> {
+pub(crate) fn triangulate(ring: &[Vec2]) -> Vec<[u32; 3]> {
     let n = ring.len();
     if n < 3 {
         return Vec::new();
