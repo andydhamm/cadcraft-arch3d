@@ -270,6 +270,11 @@ pub struct MaterialDef {
     /// Metres per repeat for face-aligned UVs; `[1, 1]` means the mesh's UVs are texture
     /// coordinates.
     pub tile: [f32; 2],
+    /// Key into [`Scene3d::textures`] for a tangent-space normal map (`"finish:<name>:normal"`
+    /// for built-ins, otherwise a scene textures key).
+    pub normal_texture: Option<String>,
+    /// Strength of the normal map in tangent space; default 1.0.
+    pub normal_scale: f32,
     /// The sRGB tint a paint gave (already multiplied into `base_color`).
     pub tint: Option<[u8; 3]>,
 }
@@ -277,7 +282,16 @@ pub struct MaterialDef {
 impl Default for MaterialDef {
     /// White, not metallic, roughness 0.8, untextured, tile [1, 1], no tint.
     fn default() -> Self {
-        MaterialDef { base_color: [1.0; 4], metallic: 0.0, roughness: 0.8, texture: None, tile: [1.0, 1.0], tint: None }
+        MaterialDef {
+            base_color: [1.0; 4],
+            metallic: 0.0,
+            roughness: 0.8,
+            texture: None,
+            tile: [1.0, 1.0],
+            normal_texture: None,
+            normal_scale: 1.0,
+            tint: None,
+        }
     }
 }
 
