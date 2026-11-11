@@ -5,7 +5,7 @@
 //! Azimuth is measured clockwise from North (0° = North, 90° = East).
 
 /// The position of the sun.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Sun {
     /// Elevation angle in degrees above the horizon.
     pub elevation_deg: f64,
