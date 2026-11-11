@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 12:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 38 of 39 segments merged · 19 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 12:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 19 / 20 | 57.0 h so far · expected done Nov 11 15:10–Nov 13 10:30 UTC |
+| 16 | Ceilings and foundations | building | 19 / 20 | 57.3 h so far · expected done Nov 11 15:25–Nov 13 10:45 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | — |
 | 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | building | 0 / 17 | — |
@@ -62,18 +62,18 @@ Updated 2026-11-11 12:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1093 |
-| bonsai-b | bonsai2-27b | gate | 1054 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1150 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1091 |
-| claude-sonnet-a | sonnet | agent | 116 |
+| bonsai-a | bonsai2-27b | agent | 1095 |
+| bonsai-b | bonsai2-27b | agent | 1055 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1151 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1093 |
+| claude-sonnet-a | sonnet | merging | 117 |
 | claude-sonnet-b | sonnet | idle | 116 |
 | claude-sonnet-c | sonnet | idle | 59 |
 | claude-sonnet-d | sonnet | idle | 50 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 962 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 964 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 77 |
 | mai-flash-b | mai-code-1.1-flash | idle | 19 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 84 |
 | tturbo-mac | tturbo-ultraheretic | agent | 750 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 366 |
+| tturbo-mac2 | tturbo-ultraheretic | merging | 367 |
