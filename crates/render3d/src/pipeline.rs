@@ -27,11 +27,17 @@ pub struct GpuUniform {
 /// Byte size of [`GpuUniform`].
 pub const UNIFORM_SIZE: u64 = 96;
 
-/// Distance between per-draw uniform slots in one buffer: [`UNIFORM_SIZE`] rounded up to the
-/// device's `min_uniform_buffer_offset_alignment` (256 on every backend we target).
+/// Distance between per-draw uniform slots in one buffer: the larger of [`UNIFORM_SIZE`] and
+/// [`PBR_SIZE`] rounded up to the device's `min_uniform_buffer_offset_alignment` (256 on every
+/// backend we target).
 pub fn uniform_stride(device: &wgpu::Device) -> u64 {
-    let align = u64::from(device.limits().min_uniform_buffer_offset_alignment).max(1);
-    UNIFORM_SIZE.div_ceil(align) * align
+    stride_for(u64::from(device.limits().min_uniform_buffer_offset_alignment))
+}
+
+/// [`uniform_stride`] for a given offset alignment.
+pub fn stride_for(align: u64) -> u64 {
+    let align = align.max(1);
+    UNIFORM_SIZE.max(PBR_SIZE).div_ceil(align) * align
 }
 
 /// Shading style: faces shaded with PBR.
@@ -59,7 +65,7 @@ pub fn style_is_clay(style: u32) -> bool {
 
 /// Material and sun uniforms uploaded to the GPU (WGSL `PbrUniforms`, group 1 binding 1).
 ///
-/// 96 bytes, 16-byte align; the `_p*` fields are layout padding.
+/// 128 bytes, 16-byte align; all-zero new fields mean the pre-phase-19 look.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct PbrUniform {
@@ -77,20 +83,42 @@ pub struct PbrUniform {
     pub alpha: f32,
     /// One of the `STYLE_*` constants.
     pub style: u32,
-    pub _p0: [u32; 3],
+    /// Tone-map code (0 = the pipeline's own; see `frame_look`).
+    pub tone_map: u32,
+    /// Normal-map layer (0 = none).
+    pub normal_layer: u32,
+    /// `PBR_FLAG_*` bits.
+    pub flags: u32,
     /// Eye position in world space.
     pub camera_pos: [f32; 3],
     /// Shadow-map depth range start (unused until shadows land).
     pub shadow_min: f32,
     /// Shadow-map depth range end.
     pub shadow_max: f32,
-    pub _p1: [f32; 3],
+    /// Exposure scale (0 = unset).
+    pub exposure: f32,
+    /// Ambient illuminance in lux (0 = unset).
+    pub ambient_lux: f32,
+    /// Normal-map strength.
+    pub normal_strength: f32,
     /// `[emissive, texture layer, 1 / tile u, 1 / tile v]` (WGSL `_p6`; emissive is read by the lit
     /// pipelines only; the UVs are multiplied by the last two before sampling).
     pub _p2: [f32; 4],
+    /// Clip box minimum (read when `PBR_FLAG_CLIP` is set).
+    pub clip_min: [f32; 3],
+    /// Lambert albedo (read when `PBR_FLAG_LAMBERT` is set).
+    pub lambert_albedo: f32,
+    /// Clip box maximum.
+    pub clip_max: [f32; 3],
+    /// Layout padding.
+    pub _p7: f32,
 }
 /// Byte size of [`PbrUniform`].
-pub const PBR_SIZE: u64 = 96;
+pub const PBR_SIZE: u64 = 128;
+/// [`PbrUniform::flags`] bit: draw with a plain Lambert look of `lambert_albedo`.
+pub const PBR_FLAG_LAMBERT: u32 = 1;
+/// [`PbrUniform::flags`] bit: discard fragments outside `clip_min..clip_max`.
+pub const PBR_FLAG_CLIP: u32 = 2;
 
 impl PbrUniform {
     /// Build the block from a light, a draw and a style, replacing every non-finite value and
@@ -117,11 +145,15 @@ impl PbrUniform {
             roughness: if clay { CLAY_ROUGHNESS } else { fin(draw.roughness, 0.5).clamp(0.0, 1.0) },
             alpha: fin(draw.alpha, 1.0).clamp(0.0, 1.0),
             style: style.min(STYLE_TECHNICAL),
-            _p0: [0; 3],
+            tone_map: 0,
+            normal_layer: 0,
+            flags: 0,
             camera_pos: cam,
             shadow_min: 0.0,
             shadow_max: 0.0,
-            _p1: [0.0; 3],
+            exposure: 0.0,
+            ambient_lux: 0.0,
+            normal_strength: 0.0,
             _p2: if clay || technical {
                 // Clay and Technical: no emissive, no texture (layer 0 is white).
                 [0.0, 0.0, 1.0, 1.0]
@@ -133,6 +165,10 @@ impl PbrUniform {
                     per_repeat(draw.tile[1]),
                 ]
             },
+            clip_min: [0.0; 3],
+            lambert_albedo: 0.0,
+            clip_max: [0.0; 3],
+            _p7: 0.0,
         }
     }
 }
@@ -717,6 +753,42 @@ pub fn pbr_bind_group(device: &wgpu::Device, pbr_bgl: &wgpu::BindGroupLayout, bu
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pbr_uniform_layout_128_named_fields() {
+        use std::mem::{offset_of, size_of};
+        assert_eq!(size_of::<PbrUniform>() as u64, PBR_SIZE);
+        assert_eq!(PBR_SIZE, 128);
+        assert_eq!(offset_of!(PbrUniform, style), 32);
+        assert_eq!(offset_of!(PbrUniform, tone_map), 36);
+        assert_eq!(offset_of!(PbrUniform, normal_layer), 40);
+        assert_eq!(offset_of!(PbrUniform, flags), 44);
+        assert_eq!(offset_of!(PbrUniform, camera_pos), 48);
+        assert_eq!(offset_of!(PbrUniform, shadow_max), 64);
+        assert_eq!(offset_of!(PbrUniform, exposure), 68);
+        assert_eq!(offset_of!(PbrUniform, ambient_lux), 72);
+        assert_eq!(offset_of!(PbrUniform, normal_strength), 76);
+        assert_eq!(offset_of!(PbrUniform, _p2), 80);
+        assert_eq!(offset_of!(PbrUniform, clip_min), 96);
+        assert_eq!(offset_of!(PbrUniform, lambert_albedo), 108);
+        assert_eq!(offset_of!(PbrUniform, clip_max), 112);
+        assert_eq!(offset_of!(PbrUniform, _p7), 124);
+        assert_eq!((PBR_FLAG_LAMBERT, PBR_FLAG_CLIP), (1, 2));
+        let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, &Draw::default(), STYLE_SHADED, [0.0; 3]);
+        assert_eq!((p.tone_map, p.normal_layer, p.flags), (0, 0, 0));
+        assert_eq!((p.exposure, p.ambient_lux, p.normal_strength, p.lambert_albedo), (0.0, 0.0, 0.0, 0.0));
+        assert_eq!((p.clip_min, p.clip_max), ([0.0; 3], [0.0; 3]));
+    }
+
+    #[test]
+    fn stride_covers_the_pbr_block() {
+        for align in [1u64, 16, 64, 256] {
+            let stride = stride_for(align);
+            assert!(stride >= PBR_SIZE && stride >= UNIFORM_SIZE, "align {align}: {stride}");
+            assert_eq!(stride % align, 0);
+        }
+        assert_eq!(stride_for(64), 128);
+        assert_eq!(stride_for(256), 256);
+    }
 
     #[test]
     fn site_and_fixture_materials_have_their_own_colours() {
@@ -847,8 +919,8 @@ mod tests {
     }
 
     #[test]
-    fn pbr_uniform_block_is_96_bytes() {
-        assert_eq!(std::mem::size_of::<PbrUniform>(), 96);
+    fn pbr_uniform_block_matches_the_shader() {
+        assert_eq!(std::mem::size_of::<PbrUniform>(), 128);
         assert_eq!(std::mem::offset_of!(PbrUniform, sun_intensity), 12);
         assert_eq!(std::mem::offset_of!(PbrUniform, style), 32);
         assert_eq!(std::mem::offset_of!(PbrUniform, camera_pos), 48);
@@ -887,7 +959,8 @@ mod tests {
     #[test]
     fn flat_normal_still_drives_shading() {
         // The face normal comes from the screen-space derivatives, never the vertex normal.
-        let fs = SHADER.split("@fragment").nth(1).unwrap_or("");
+        // The fragment's shading now lives in `shade_parts`, which `fs` calls.
+        let fs = SHADER.split("fn shade_parts").nth(1).unwrap_or("");
         assert!(fs.contains("cross(dpdy(v.wpos), dpdx(v.wpos))"));
         assert!(!fs.contains("v.nrm"));
         assert!(SHADER.contains("arch3d's boxes share 8 corners with averaged normals"));

@@ -30,32 +30,31 @@ struct Light { vp: mat4x4<f32> };
 }
 ";
 
-/// Shadow lookup appended to the mesh shader. The mesh `fs` is renamed `fs_base`; the new `fs`
-/// returns its colour, or ambient only when the fragment is behind the stored depth.
+/// Shadow lookup appended to the mesh shader, cut before the mesh `fs` (so `shade_parts` and the
+/// hook functions are in scope). The new `fs` returns the lit colour, or ambient only when the
+/// fragment is behind the stored depth.
 const LOOKUP_WGSL: &str = "
 struct ShadowU { vp: mat4x4<f32>, params: vec4<f32> };
 @group(2) @binding(0) var<uniform> sh: ShadowU;
 @group(2) @binding(1) var shadow_tex: texture_depth_2d;
 
 @fragment fn fs(v: VOut) -> @location(0) vec4<f32> {
-    let c = fs_base(v);
-    if (p.style == 2u) {
-        return c;
+    let s = shade_parts(v);
+    if (s.keep != 0u) {
+        return vec4<f32>(s.direct, s.alpha);
     }
-    let albedo = base_albedo(v.uv);
+    var direct = s.direct;
     let lc = sh.vp * vec4<f32>(v.wpos, 1.0);
     let ndc = lc.xyz / lc.w;
     let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    if (uv.x < 0.0 || uv.x >= 1.0 || uv.y < 0.0 || uv.y >= 1.0 || ndc.z < 0.0 || ndc.z > 1.0) {
-        return c;
+    if (uv.x >= 0.0 && uv.x < 1.0 && uv.y >= 0.0 && uv.y < 1.0 && ndc.z >= 0.0 && ndc.z <= 1.0) {
+        let dims = vec2<f32>(textureDimensions(shadow_tex));
+        let stored = textureLoad(shadow_tex, vec2<i32>(uv * dims), 0);
+        if (ndc.z > stored + sh.params.x) {
+            direct = vec3<f32>(0.0);
+        }
     }
-    let dims = vec2<f32>(textureDimensions(shadow_tex));
-    let stored = textureLoad(shadow_tex, vec2<i32>(uv * dims), 0);
-    if (ndc.z > stored + sh.params.x) {
-        let amb = albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
-        return vec4<f32>(amb, c.a);
-    }
-    return c;
+    return vec4<f32>(finish_color(direct + base_ambient(s.albedo, s.metallic, s.n)), s.alpha);
 }
 ";
 
@@ -126,7 +125,8 @@ impl ShadowPipelines {
         if !SRC.contains(FS) {
             return None;
         }
-        let source = format!("{}\n{}", SRC.replacen(FS, "fn fs_base(v: VOut) -> vec4<f32> {", 1), LOOKUP_WGSL);
+        let (before, _) = SRC.split_once(FS)?;
+        let source = format!("{before}\n{LOOKUP_WGSL}");
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("render3d mesh+shadow"),
             source: wgpu::ShaderSource::Wgsl(source.into()),

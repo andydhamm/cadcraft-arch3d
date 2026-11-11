@@ -14,6 +14,7 @@ pub mod backdrop;
 pub mod camera;
 pub mod edges;
 pub mod final_render;
+pub mod frame_look;
 pub mod light;
 pub mod lights;
 pub mod lit;
