@@ -35,6 +35,10 @@ fn probe(scene: &Scene3d, x: f64, y: f64, z: f64) -> Option<(String, String)> {
     scene.probe(Vec3::new(x, y, z)).map(|h| (h.id, h.part))
 }
 
+fn count_rise_meshes(scene: &Scene3d, wall_id: cadcraft_doc::ArchId) -> usize {
+    scene.meshes.iter().filter(|m| m.object == wall_id && m.material == "wall").count()
+}
+
 #[test]
 fn interior_wall_rises_to_3_925_3_975() {
     let mut m = house_with_roof(Some(6.0));
@@ -119,6 +123,96 @@ fn rise_keeps_the_exterior_finish_split() {
     let scene = Scene3d::build(&m);
     assert!(scene.meshes.iter().any(|mesh| mesh.object == m.walls[0].id && mesh.material == "wall-brick"));
     assert!(scene.meshes.iter().any(|mesh| mesh.object == m.walls[0].id && mesh.material == "wall"));
+}
+
+#[test]
+fn wall_with_zero_thickness_gets_no_rise() {
+    let mut m = ArchModel::default();
+    m.push_wall(wall((0.0, 0.0), (10.0, 0.0), 0.0, false));
+    m.push_room(Room { name: "Single".into(), polygon: rect(0.1, 0.1, 9.9, 2.0), flat_ceiling: false, ..Default::default() });
+    let scene = Scene3d::build(&m);
+    assert!(
+        scene
+            .meshes
+            .iter()
+            .all(|mesh| mesh.bounds().max[2] <= 2.4 + 1e-6 || mesh.material.starts_with("ceiling") || mesh.material.starts_with("roof"))
+    );
+}
+
+#[test]
+fn wall_with_negative_thickness_gets_no_rise() {
+    let mut m = ArchModel::default();
+    m.push_wall(wall((0.0, 0.0), (10.0, 0.0), -0.1, false));
+    m.push_room(Room { name: "Single".into(), polygon: rect(0.1, 0.1, 9.9, 2.0), flat_ceiling: false, ..Default::default() });
+    let scene = Scene3d::build(&m);
+    assert!(
+        scene
+            .meshes
+            .iter()
+            .all(|mesh| mesh.bounds().max[2] <= 2.4 + 1e-6 || mesh.material.starts_with("ceiling") || mesh.material.starts_with("roof"))
+    );
+}
+
+#[test]
+fn wall_with_nan_start_gets_no_rise() {
+    let mut m = ArchModel::default();
+    m.push_wall(Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() });
+    m.push_room(Room { name: "Single".into(), polygon: rect(0.1, 0.1, 9.9, 2.0), flat_ceiling: false, ..Default::default() });
+    let scene = Scene3d::build(&m);
+    assert!(
+        scene
+            .meshes
+            .iter()
+            .all(|mesh| mesh.bounds().max[2] <= 2.4 + 1e-6 || mesh.material.starts_with("ceiling") || mesh.material.starts_with("roof"))
+    );
+}
+
+#[test]
+fn room_not_touching_wall_does_not_cause_rise() {
+    let mut m = house_with_roof(Some(6.0));
+    m.rooms.clear();
+    m.push_room(Room { name: "Detached".into(), polygon: rect(0.1, 0.1, 4.9, 2.0), flat_ceiling: false, ..Default::default() });
+    let scene = Scene3d::build(&m);
+    assert!(probe(&scene, 5.0, 3.0, 3.9).is_none());
+}
+
+#[test]
+fn wall_at_different_level_than_roof_gets_no_rise() {
+    let mut m = house_with_roof(Some(6.0));
+    m.rooms[0].flat_ceiling = false;
+    m.walls[4].base_level = 1;
+    let scene = Scene3d::build(&m);
+    assert!(probe(&scene, 5.0, 3.0, 3.9).is_none());
+}
+
+#[test]
+fn multiple_vaulted_rooms_one_rise() {
+    let mut m = house_with_roof(Some(6.0));
+    m.rooms[0].flat_ceiling = false;
+    m.rooms[1].flat_ceiling = false;
+    let scene = Scene3d::build(&m);
+    assert!(probe(&scene, 5.0, 3.0, 3.9).is_some());
+    let rise_count = scene.meshes.iter().filter(|mesh| mesh.object == m.walls[4].id && mesh.material == "wall").count();
+    assert!(rise_count <= 2, "too many rise meshes: {}", rise_count);
+}
+
+#[test]
+fn very_large_wall_coordinates() {
+    let mut m = ArchModel::default();
+    m.push_wall(wall((1000.0, 1000.0), (1010.0, 1000.0), 0.2, false));
+    m.push_wall(wall((1010.0, 1000.0), (1010.0, 1008.0), 0.2, true));
+    m.push_wall(wall((1010.0, 1008.0), (1000.0, 1008.0), 0.2, false));
+    m.push_wall(wall((1000.0, 1008.0), (1000.0, 1000.0), 0.2, true));
+    m.push_wall(wall((1000.0, 1003.0), (1010.0, 1003.0), 0.1, false));
+    m.push_room(Room { name: "South".into(), polygon: rect(1000.1, 1000.1, 1009.9, 1002.95), flat_ceiling: false, ..Default::default() });
+    m.push_room(Room { name: "North".into(), polygon: rect(1000.1, 1003.05, 1009.9, 1007.9), ..Default::default() });
+    m.walls[1].roof_directive = RoofDirective::Gable;
+    m.walls[3].roof_directive = RoofDirective::Gable;
+    let seed = Roof { pitch_rise: 6.0, pitch_run: 12.0, overhang: 0.5, thickness: 0.2, ..Roof::default() };
+    let built = cadcraft_arch::roof::build_roof(&m, 0, &seed).expect("the gable roof builds");
+    m.push_roof(built);
+    let scene = Scene3d::build(&m);
+    assert!(probe(&scene, 1005.0, 1003.0, 3.9).is_some());
 }
 
 #[test]
