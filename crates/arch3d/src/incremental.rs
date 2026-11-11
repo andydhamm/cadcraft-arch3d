@@ -171,6 +171,8 @@ pub fn object_kind_of(mesh: &Mesh) -> ObjectKind {
     // "footing" part stays a foundation's.
     if m.starts_with("deck-") || m.starts_with("molding-room-") {
         ObjectKind::Room
+    } else if m.starts_with("glass-wall") || m.starts_with("niche-back") {
+        ObjectKind::Wall
     } else if m.starts_with("molding-line") {
         ObjectKind::MoldingLine
     } else if m == "countertop" || m.starts_with("countertop-") {
