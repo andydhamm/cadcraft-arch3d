@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-11 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 16 of 21: Ceilings and foundations — 37 of 40 segments merged · 18 of 20 acceptance checks**
 
@@ -26,7 +26,7 @@ Updated 2026-11-11 06:30 UTC. This page and the card in the README are regenerat
 | 13 | Polish | done | 13 / 13 | 29.0 h |
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
-| 16 | Ceilings and foundations | building | 18 / 20 | 51.0 h so far · expected done Nov 11 13:03–Nov 12 22:29 UTC |
+| 16 | Ceilings and foundations | building | 18 / 20 | 51.3 h so far · expected done Nov 11 13:18–Nov 12 22:44 UTC |
 | 17 | Stairs, decks, railings and openings in detail | building | 8 / 14 | — |
 | 18 | Interior finish, kitchen and bath | building | 0 / 20 | — |
 | 19 | Light, sky and cameras | planned | — | — |
@@ -64,9 +64,9 @@ Updated 2026-11-11 06:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1072 |
-| bonsai-b | bonsai2-27b | agent | 1032 |
+| bonsai-b | bonsai2-27b | idle | 1034 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1132 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1069 |
+| bonsai-ws2-b | bonsai2-27b | merging | 1072 |
 | claude-sonnet-a | sonnet | merging | 107 |
 | claude-sonnet-b | sonnet | merging | 111 |
 | claude-sonnet-c | sonnet | idle | 54 |
