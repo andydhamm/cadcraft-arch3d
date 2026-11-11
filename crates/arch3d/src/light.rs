@@ -144,6 +144,7 @@ pub fn scene_lights_with(model: &ArchModel, overrides: &BTreeMap<String, LightSt
             LightKind::Point => (-1.0, -1.0),
             LightKind::Spot => ((f.cone.to_radians() * 0.5).cos(), (f.falloff.to_radians() * 0.5).cos()),
             LightKind::Area => (1.0, 0.0),
+            LightKind::Strip => (-1.0, -1.0),
         };
         if !cos_inner.is_finite() || !cos_outer.is_finite() {
             continue;

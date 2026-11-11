@@ -68,6 +68,37 @@ pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
     model.lights.iter().flat_map(|f| fixture_housing(f, light_point(model, f))).collect()
 }
 
+/// One strip light's housing: a 12 mm wide by 6 mm high box (`light-strip`) along each segment of
+/// the path at the light height, plus a 1 mm lens (`light-lens-lit` when on, `light-lens` when
+/// off) on the bottom face. Empty when the path has fewer than two points.
+fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
+    if f.path.len() < 2 {
+        return Vec::new();
+    }
+    let lens = if f.on { "light-lens-lit" } else { "light-lens" };
+    let hw = 0.012 / 2.0;
+    let mut parts: Vec<Option<Mesh>> = Vec::new();
+    for (a, b) in f.path.windows(2) {
+        if !a.is_finite() || !b.is_finite() {
+            continue;
+        }
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 1e-6 || !len.is_finite() {
+            continue;
+        }
+        let ux = dx / len;
+        let uy = dy / len;
+        let px = -uy * hw;
+        let py = ux * hw;
+        let ring = vec![Vec2::new(a.x + px, a.y + py), Vec2::new(b.x + px, b.y + py), Vec2::new(b.x - px, b.y - py), Vec2::new(a.x - px, a.y - py)];
+        parts.push(prism("light-strip", f, &ring, zp - 0.006, zp));
+        parts.push(prism(lens, f, &ring, zp - 0.006, zp - 0.005));
+    }
+    parts
+}
+
 /// One fixture's housing with its light at `point` ([`light_point`]); none without a point. The
 /// incremental rebuild reuses it while the fixture and its point are unchanged.
 pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> Vec<Mesh> {
@@ -118,6 +149,7 @@ pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> 
             let diffuser = prism(lens, f, &inner, zp - 0.004, zp - 0.002);
             vec![finish(frame_m), diffuser]
         }
+        FixtureShape::Strip => strip_housing(f, zp),
     };
     parts.into_iter().flatten().collect()
 }
