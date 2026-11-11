@@ -40,6 +40,11 @@ fn finish_salt(f: Finish) -> u64 {
         Finish::Shingles => 2,
         Finish::Brick => 3,
         Finish::Wood => 4,
+        Finish::Concrete => 5,
+        Finish::Tile => 6,
+        Finish::Carpet => 7,
+        Finish::Drywall => 8,
+        Finish::Plaster => 9,
     }
 }
 
@@ -122,6 +127,21 @@ fn pixel(finish: Finish, x: usize, y: usize) -> [i32; 3] {
             let grain = if g == 0 { -14 } else { 0 };
             shade([168, 122, 78], tone + grain + noise(2))
         }
+        Finish::Concrete => {
+            let noise = |amp: i32| jitter(hash(salt, x as u64, y as u64, 0), amp);
+            let fleck = (hash(salt, (x * 7 + y * 13) as u64, 11, 11) % 16) == 0;
+            let base = if fleck { [132, 132, 126] } else { [150, 150, 146] };
+            shade(base, noise(10))
+        }
+        Finish::Tile => {
+            if x % 128 < 4 || y % 128 < 4 {
+                return shade([160, 158, 152], jitter(hash(salt, 0, 0, 11), 2));
+            }
+            shade([226, 223, 216], jitter(hash(salt, x as u64, y as u64, 0), 3))
+        }
+        Finish::Carpet => shade([176, 160, 138], jitter(hash(salt, x as u64, y as u64, 0), 8)),
+        Finish::Drywall => [232, 231, 228],
+        Finish::Plaster => [234, 234, 232],
     }
 }
 
@@ -139,6 +159,11 @@ pub fn texture(finish: Finish) -> Texture {
         Finish::Shingles => [1.0, 1.0],
         Finish::Brick => [0.84, 0.6],
         Finish::Wood => [1.2, 0.84],
+        Finish::Concrete => [2.0, 2.0],
+        Finish::Tile => [0.6, 0.6],
+        Finish::Carpet => [1.0, 1.0],
+        Finish::Drywall => [1.0, 1.0],
+        Finish::Plaster => [1.0, 1.0],
     };
     Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile }
 }
@@ -312,6 +337,11 @@ mod tests {
         assert_eq!(texture(Finish::Shingles).tile, [1.0, 1.0]);
         assert_eq!(texture(Finish::Brick).tile, [0.84, 0.6]);
         assert_eq!(texture(Finish::Wood).tile, [1.2, 0.84]);
+        assert_eq!(texture(Finish::Concrete).tile, [2.0, 2.0]);
+        assert_eq!(texture(Finish::Tile).tile, [0.6, 0.6]);
+        assert_eq!(texture(Finish::Carpet).tile, [1.0, 1.0]);
+        assert_eq!(texture(Finish::Drywall).tile, [1.0, 1.0]);
+        assert_eq!(texture(Finish::Plaster).tile, [1.0, 1.0]);
     }
 
     #[test]
@@ -349,6 +379,71 @@ mod tests {
                 r + g + b < 200
             });
             assert!(has_joint, "plank {} should have a dark end joint", plank);
+        }
+    }
+
+    #[test]
+    fn tile_has_grout_lines_every_128_px() {
+        let t = texture(Finish::Tile);
+        // Grout runs at the first 4 pixels of every 128 px tile: x = 0..=3 and x = 128..=131,
+        // and likewise for y. Grout is the dark grey (160, 158, 152); glaze is off-white
+        // (226, 223, 216).
+        for x in [0u32, 1, 2, 3, 128, 129, 130, 131] {
+            let i = (128 * N + x as usize) * 4;
+            let (r, g, b) = (t.rgba[i] as i32, t.rgba[i + 1] as i32, t.rgba[i + 2] as i32);
+            assert!((r - 160).abs() < 20, "grout row x={} r={}", x, r);
+            assert!((g - 158).abs() < 20, "grout row x={} g={}", x, g);
+            assert!((b - 152).abs() < 20, "grout row x={} b={}", x, b);
+        }
+        // Non-grout pixels are off-white.
+        for (x, y) in [(64, 64), (192, 64), (64, 192), (192, 192)] {
+            let i = (y * N + x) * 4;
+            let (r, g, b) = (t.rgba[i] as i32, t.rgba[i + 1] as i32, t.rgba[i + 2] as i32);
+            assert!((r - 226).abs() < 8, "glaze x={}y={} r={}", x, y, r);
+            assert!((g - 223).abs() < 8, "glaze x={}y={} g={}", x, y, g);
+            assert!((b - 216).abs() < 8, "glaze x={}y={} b={}", x, y, b);
+        }
+    }
+
+    #[test]
+    fn carpet_and_concrete_are_noisy() {
+        // Carpet and concrete have per-pixel noise (±8 and ±10).
+        for f in [Finish::Carpet, Finish::Concrete] {
+            let t = texture(f);
+            let mut min_lum = i32::MAX;
+            let mut max_lum = i32::MIN;
+            for y in 0..N {
+                for x in 0..N {
+                    let i = (y * N + x) * 4;
+                    let l = t.rgba[i] as i32 + t.rgba[i + 1] as i32 + t.rgba[i + 2] as i32;
+                    min_lum = min_lum.min(l);
+                    max_lum = max_lum.max(l);
+                }
+            }
+            // The spread must be wider than a flat texture would produce.
+            assert!(max_lum - min_lum > 12, "{f:?} luminance spread {max_lum - min_lum}");
+        }
+        // Drywall and plaster are flat (single colour, no noise).
+        for f in [Finish::Drywall, Finish::Plaster] {
+            let t = texture(f);
+            let first = t.rgba[0];
+            assert!(t.rgba.iter().all(|&v| v == first), "{f:?} is not flat");
+        }
+    }
+
+    #[test]
+    fn drywall_and_plaster_are_flat() {
+        // Drywall: exactly (232, 231, 228, 255) every pixel.
+        let d = texture(Finish::Drywall);
+        for (y, x) in [(0u32, 0u32), (1, 1), (128, 128), (255, 255), (42, 200)] {
+            let i = (y * N + x as usize) * 4;
+            assert_eq!([d.rgba[i], d.rgba[i + 1], d.rgba[i + 2], d.rgba[i + 3]], [232, 231, 228, 255], "{y},{x}");
+        }
+        // Plaster: exactly (234, 234, 232, 255) every pixel.
+        let p = texture(Finish::Plaster);
+        for (y, x) in [(0u32, 0u32), (1, 1), (128, 128), (255, 255), (42, 200)] {
+            let i = (y * N + x as usize) * 4;
+            assert_eq!([p.rgba[i], p.rgba[i + 1], p.rgba[i + 2], p.rgba[i + 3]], [234, 234, 232, 255], "{y},{x}");
         }
     }
 }
