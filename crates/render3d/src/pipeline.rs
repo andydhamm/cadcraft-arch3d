@@ -754,6 +754,12 @@ pub fn pbr_bind_group(device: &wgpu::Device, pbr_bgl: &wgpu::BindGroupLayout, bu
 #[cfg(test)]
 mod tests {
     #[test]
+    fn pbr_uniform_block_is_96_bytes() {
+        // The block grew to 128 B (reserved fields); the test keeps its old name.
+        assert_eq!(std::mem::size_of::<PbrUniform>(), 128);
+    }
+
+    #[test]
     fn pbr_uniform_layout_128_named_fields() {
         use std::mem::{offset_of, size_of};
         assert_eq!(size_of::<PbrUniform>() as u64, PBR_SIZE);
