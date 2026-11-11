@@ -8,9 +8,7 @@ use cadcraft_doc::arch::{ArchModel, Opening, OpeningSides, Side};
 /// matching `side` in `casing_sides` (default RIGHT: the wall's right face, the
 /// exterior of a counter-clockwise ring).
 pub fn casing_on_face(o: &Opening, side: Side) -> bool {
-    let Some(c) = o.casing_width else {
-        return false;
-    };
+    let c = o.casing_width;
     if !c.is_finite() || c <= 0.0 {
         return false;
     }
@@ -27,8 +25,8 @@ pub fn casing_on_face(o: &Opening, side: Side) -> bool {
 pub fn trim_interval(model: &ArchModel, o: &Opening, side: Side) -> Option<(f64, f64)> {
     let wall = model.wall(o.host)?;
     let w = o.width;
-    let fw = o.frame_width.unwrap_or(0.0).max(0.0);
-    let c = if casing_on_face(o, side) { o.casing_width.unwrap_or(0.0) } else { 0.0 };
+    let fw = if o.frame_width.is_finite() { o.frame_width.max(0.0) } else { 0.0 };
+    let c = if casing_on_face(o, side) { o.casing_width } else { 0.0 };
     let half = w / 2.0 + fw / 2.0 + c;
     let s0 = o.offset - half;
     let s1 = o.offset + half;
@@ -40,7 +38,7 @@ pub fn trim_interval(model: &ArchModel, o: &Opening, side: Side) -> Option<(f64,
 
 /// The top of the trim above the sill: height + casing width when built on that face.
 pub fn trim_height(o: &Opening, side: Side) -> f64 {
-    let c = if casing_on_face(o, side) { o.casing_width.unwrap_or(0.0) } else { 0.0 };
+    let c = if casing_on_face(o, side) { o.casing_width } else { 0.0 };
     o.height + c
 }
 
@@ -60,8 +58,8 @@ mod tests {
             width: 0.9,
             height: 2.1,
             kind: OpeningKind::Door,
-            frame_width: Some(0.06),
-            casing_width: Some(0.05),
+            frame_width: 0.06,
+            casing_width: 0.05,
             casing_sides: OpeningSides { left: false, right: true },
             ..Opening::default()
         };
@@ -94,7 +92,7 @@ mod tests {
         assert!(trim_interval(&model, &o, Side::Right).is_none());
 
         // Negative frame width treated as 0
-        let o = Opening { host: w, offset: 5.0, width: 0.9, height: 2.1, frame_width: Some(-0.1), ..Opening::default() };
+        let o = Opening { host: w, offset: 5.0, width: 0.9, height: 2.1, frame_width: -0.1, ..Opening::default() };
         let (s0, s1) = trim_interval(&model, &o, Side::Right).unwrap();
         assert!((s1 - s0 - 0.9).abs() < 1e-9);
     }

@@ -1,5 +1,6 @@
 //! Room molding runs (phase 18): the resolved paths a room's moldings follow.
 
+use crate::poly::ring_area;
 use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding, Wall};
 use cadcraft_geom::Vec2;
 
@@ -26,12 +27,15 @@ pub struct MoldingRun {
 ///
 /// Returns None when either end is not finite or top <= bottom.
 pub fn wall_z_span(model: &ArchModel, w: &Wall) -> Option<(f64, f64)> {
-    let bottom = w.bottom_z(&model.levels)?;
+    let bottom = w.bottom_z(&model.levels);
     let top = if w.top_level.is_none() && w.to_ceiling {
-        let level = model.level(w.base_level)?;
-        level.elevation + level.ceiling_height
+        if let Some(level) = model.level(w.base_level) {
+            level.elevation + level.ceiling_height
+        } else {
+            return None;
+        }
     } else {
-        w.top_z(&model.levels)?
+        w.top_z(&model.levels)
     };
     if !bottom.is_finite() || !top.is_finite() || top <= bottom {
         return None;
@@ -84,7 +88,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
         let mut room_poly = room.polygon.clone();
         if !room_poly.is_empty() {
             // Ensure CCW
-            if cadcraft_geom::ring_area(&room_poly) < 0.0 {
+            if ring_area(&room_poly) < 0.0 {
                 room_poly.reverse();
             }
             rings.push((room_poly, true));
@@ -93,7 +97,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             let mut h = hole.clone();
             if h.len() >= 3 {
                 // Ensure CW
-                if cadcraft_geom::ring_area(&h) > 0.0 {
+                if ring_area(&h) > 0.0 {
                     h.reverse();
                 }
                 rings.push((h, false));
@@ -127,7 +131,13 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                         continue;
                     }
                     // Check level
-                    let on_level = w.base_level == room.level || (w.top_level.is_some() && w.spans_level(room.level, &model.levels));
+                    let on_level = if w.base_level == room.level {
+                        true
+                    } else if let Some(top_level_idx) = w.top_level {
+                        if let Some(level) = model.level(room.level) { w.spans_level(level, &model.levels) } else { false }
+                    } else {
+                        false
+                    };
                     if !on_level {
                         continue;
                     }
@@ -395,7 +405,7 @@ mod tests {
 
         let runs = room_runs(&model, &room);
         let base_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Base).collect();
-        let total_len: f64 = base_runs.iter().map(run_length).sum();
+        let total_len: f64 = base_runs.iter().map(|r| run_length(r)).sum();
         // Perimeter 14.0, trim 0.96
         assert!((total_len - (14.0 - 0.96)).abs() < 0.01);
     }
@@ -424,7 +434,7 @@ mod tests {
         let crown_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Crown).collect();
         assert_eq!(crown_runs.len(), 1);
         assert!(crown_runs[0].closed);
-        assert!((run_length(&crown_runs[0]) - 14.0).abs() < 0.01);
+        assert!((run_length(crown_runs[0]) - 14.0).abs() < 0.01);
     }
 
     #[test]
@@ -477,8 +487,8 @@ mod tests {
         model.push_opening(window);
 
         let runs = room_runs(&model, &room);
-        let base_len: f64 = runs.iter().filter(|r| r.kind == MoldingKind::Base).map(run_length).sum();
-        let chair_len: f64 = runs.iter().filter(|r| r.kind == MoldingKind::Chair).map(run_length).sum();
+        let base_len: f64 = runs.iter().filter(|r| r.kind == MoldingKind::Base).map(|r| run_length(r)).sum();
+        let chair_len: f64 = runs.iter().filter(|r| r.kind == MoldingKind::Chair).map(|r| run_length(r)).sum();
         // Base: 14.0 - 0.96 (door trim)
         // Chair: 14.0 - 0.96 (door) - 1.26 (window trim)
         assert!((base_len - (14.0 - 0.96)).abs() < 0.01);
