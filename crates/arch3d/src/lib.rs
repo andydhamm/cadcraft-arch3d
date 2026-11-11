@@ -216,6 +216,10 @@ fn level_for(model: &ArchModel, index: u32) -> cadcraft_doc::arch::Level {
 #[derive(Debug, Clone, Default)]
 pub struct Scene3d {
     pub meshes: Vec<Mesh>,
+    /// A flat slab outside the site boundary at the mean edge elevation.
+    /// It is intentionally kept out of [`Scene3d::meshes`] and [`Scene3d::bounds`] so camera fits,
+    /// shadow receiver bounds and HLR see only the terrain and model geometry.
+    pub horizon: Option<Mesh>,
     pub bounds: Bounds3,
     pub revision: u64,
     pub openings_built: usize,
@@ -335,6 +339,7 @@ impl Scene3d {
     /// exactly. It ends by filling the materials, textures and backdrop from the model.
     pub fn build(model: &ArchModel) -> Scene3d {
         let mut scene = incremental::Sections::make(model, None).into_scene(model);
+        scene.horizon = site::horizon_mesh(model);
         fill_materials(model, &mut scene);
         scene
     }
@@ -642,6 +647,7 @@ impl Scene3d {
 
         Scene3d {
             meshes,
+            horizon: site::horizon_mesh(model),
             bounds,
             revision: 0,
             openings_built,
@@ -816,6 +822,23 @@ mod tests {
             assert_eq!(a.indices, b.indices);
             assert_eq!(a.material, b.material);
         }
+    }
+
+    #[test]
+    fn scene_cache_equals_full_with_horizon() {
+        let mut model = two_wall_model();
+        model.terrain = Some(cadcraft_doc::arch::Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(20.0, 0.0), Vec2::new(20.0, 20.0), Vec2::new(0.0, 20.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(20.0, 0.0, 0.0), Vec3::new(20.0, 20.0, 0.0), Vec3::new(0.0, 20.0, 0.0)],
+            ..Default::default()
+        });
+        let full = Scene3d::build(&model);
+        assert!(full.horizon.is_some());
+        let mut cache = SceneCache::new(&model).0;
+        assert_eq!(cache.scene().digest(), full.digest());
+        cache.update(&model);
+        assert_eq!(cache.scene().digest(), full.digest());
+        assert!(cache.scene().horizon.is_some());
     }
 
     #[test]
