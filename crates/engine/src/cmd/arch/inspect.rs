@@ -439,6 +439,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::tray::inspect_trays(&d.arch, p, &mut out);
     super::soffit::inspect_soffits(&d.arch, p, &mut out);
     super::countertop_inspect::inspect_countertops(&d.arch, p, &mut out);
+    super::backsplash::inspect_backsplashes(&d.arch, p, &mut out);
     super::deck_inspect::inspect_decks(&d.arch, p, &mut out);
     super::inspect_detail::inspect_details(&d.arch, &mut out);
     super::look::inspect_look(&d.arch, p, &mut out);
