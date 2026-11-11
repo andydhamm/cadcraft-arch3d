@@ -301,6 +301,24 @@ impl Default for MaterialDef {
     }
 }
 
+/// Copy a model backdrop into a scene and load any image backdrop pixels under `item:<id>`.
+pub fn set_backdrop(model: &ArchModel, scene: &mut Scene3d, backdrop: Option<&Backdrop>) {
+    // Drop the previous backdrop's picture unless a material (a paint or symbol) uses it.
+    if let Some(Backdrop::Image { item, .. }) = &scene.backdrop {
+        let key = format!("item:{item}");
+        if !scene.materials.values().any(|m| m.texture.as_deref() == Some(key.as_str())) {
+            scene.textures.remove(&key);
+        }
+    }
+    scene.backdrop = backdrop.cloned();
+    if let Some(Backdrop::Image { item, .. }) = backdrop
+        && let Some(image) = model.images.get(item)
+        && image.is_valid()
+    {
+        scene.textures.insert(format!("item:{item}"), image.clone());
+    }
+}
+
 /// Clear and refill `scene`'s materials and textures from `model` (the symbols' parts, then the
 /// paints), and copy its backdrop, with an image backdrop's pixels under `item:<id>` so the
 /// renderers find them. The last step of [`Scene3d::build`] and of [`SceneCache`]'s builds and
@@ -313,13 +331,7 @@ pub(crate) fn fill_materials(model: &ArchModel, scene: &mut Scene3d) {
     soffit::materials(model, scene);
     paint::materials(model, scene);
     niche::niche_materials(model, scene);
-    scene.backdrop = model.backdrop.clone();
-    if let Some(Backdrop::Image { item, .. }) = &model.backdrop
-        && let Some(image) = model.images.get(item)
-        && image.is_valid()
-    {
-        scene.textures.insert(format!("item:{item}"), image.clone());
-    }
+    set_backdrop(model, scene, model.backdrop.as_ref());
 }
 
 impl Scene3d {
@@ -807,6 +819,27 @@ mod tests {
             ..Default::default()
         });
         model
+    }
+
+    #[test]
+    fn set_backdrop_loads_the_image_a_look_names() {
+        let mut model = ArchModel::default();
+        let image = cadcraft_doc::arch::ImageRgba {
+            width: 2,
+            height: 2,
+            rgba: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255],
+            ..Default::default()
+        };
+        model.images.insert("sky".into(), image.clone());
+        let backdrop = Backdrop::Image { item: "sky".into(), projection: cadcraft_doc::arch::Projection::Flat, horizon: 0.0 };
+        let mut scene = Scene3d::default();
+        set_backdrop(&model, &mut scene, Some(&backdrop));
+        assert_eq!(scene.backdrop, Some(backdrop));
+        assert_eq!(scene.textures.get("item:sky"), Some(&image));
+
+        set_backdrop(&model, &mut scene, None);
+        assert!(scene.backdrop.is_none());
+        assert!(scene.textures.get("item:sky").is_none());
     }
 
     #[test]
