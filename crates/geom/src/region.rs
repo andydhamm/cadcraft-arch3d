@@ -45,7 +45,7 @@ impl Arrangement {
     pub fn boundary_at(&self, p: Vec2) -> Option<Boundary> {
         let ids = outer_face(&self.g, p)?;
         let outer = points(&self.g, &ids)?;
-        let islands = islands_in(&self.g, &self.comp, &self.core, &ids, p);
+        let islands = islands_in(&self.g, &self.comp, &self.core, &ids, p)?;
         let mut outer_sources: Vec<usize> =
             ids.iter().zip(ids.iter().cycle().skip(1)).filter_map(|(&u, &v)| self.g.edge_src.get(&(u.min(v), u.max(v))).copied()).collect();
         outer_sources.sort_unstable();
@@ -461,8 +461,7 @@ fn outside(core: &Graph, u: usize, steps: usize) -> Option<Vec<Vec2>> {
 }
 
 /// Outlines of the groups of curves inside the face `outer` (vertex indices into `g`).
-fn islands(g: &Graph, outer: &[usize], p: Vec2) -> Option<Vec<Island>> {
-    let comp = components(g);
+fn islands_in(g: &Graph, comp: &[usize], core: &Graph, outer: &[usize], p: Vec2) -> Option<Vec<Island>> {
     let outer_comp: std::collections::HashSet<usize> = outer.iter().filter_map(|&i| comp.get(i).copied()).collect();
     let outer_pts = points(g, outer)?;
     let ob = Bounds2::from_points(outer_pts.iter().copied());
@@ -641,15 +640,7 @@ pub fn boundary_at(polys: &[Vec<Vec2>], p: Vec2, tol: f64) -> Option<Boundary> {
 
 /// [`boundary_at`], with gaps of up to `gap` between curve ends closed (HPGAPTOL).
 pub fn boundary_at_gap(polys: &[Vec<Vec2>], p: Vec2, tol: f64, gap: f64) -> Option<Boundary> {
-    let g = build_gap(polys, tol, gap)?;
-    let ids = outer_face(&g, p)?;
-    let outer = points(&g, &ids)?;
-    let islands = islands(&g, &ids, p)?;
-    let mut outer_sources: Vec<usize> =
-        ids.iter().zip(ids.iter().cycle().skip(1)).filter_map(|(&u, &v)| g.edge_src.get(&(u.min(v), u.max(v))).copied()).collect();
-    outer_sources.sort_unstable();
-    outer_sources.dedup();
-    Some(Boundary { outer, islands, outer_sources })
+    Arrangement::new(polys, tol, gap)?.boundary_at(p)
 }
 
 /// The outside outline of curves that together enclose an area (counter-clockwise, dangling

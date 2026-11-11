@@ -725,3 +725,647 @@ fn dim_style_spellings_of_one_field_apply_once() {
     assert!(st.apply_fields(m).is_empty());
     assert_eq!(st.text_height, want);
 }
+
+/// A new drawing carries the two standard layers (`0` and `Defpoints`) plus the five
+/// arch proxy layers (`A-WALL`, `A-DOOR`, `A-GLAZ`, `A-ROOF`, `A-STAIR`), so arch
+/// commands have a layer to sit on from the start.
+#[test]
+fn a_new_drawing_has_no_arch_layers() {
+    // Historical name: after p1-arch-layers, a new drawing includes the five
+    // architectural layers. The assertion reflects the current behaviour.
+    let d = Drawing::new_imperial();
+    assert_eq!(d.layers.len(), 12, "a new drawing must have exactly 12 layers");
+}
+
+#[test]
+fn a_new_drawing_has_arch_layers() {
+    let arch_names = ["A-WALL", "A-DOOR", "A-GLAZ", "A-ROOF", "A-STAIR"];
+    for d in [Drawing::new_imperial(), Drawing::new_metric()] {
+        assert_eq!(d.layers.len(), 12, "a new drawing should carry 0, Defpoints, and 10 arch layers");
+        assert!(d.layers.iter().any(|l| l.name == "Defpoints"), "Defpoints missing from a new drawing");
+        for name in arch_names {
+            assert!(d.layer(name).is_some(), "{name} must be present in a new drawing");
+        }
+    }
+}
+
+/// `A-WALL` sits in every new drawing, so arch commands have a layer to sit on.
+/// `ensure_layer` is idempotent: calling it again is a no-op that returns false.
+#[test]
+fn a_wall_layer_exists_in_a_new_drawing() {
+    for d in [Drawing::new_imperial(), Drawing::new_metric()] {
+        assert!(d.layer("A-WALL").is_some(), "A-WALL must be present in a new drawing");
+    }
+    // ensure_layer is a no-op when the layer already exists.
+    let mut d = Drawing::new_imperial();
+    assert!(d.layer("A-WALL").is_some(), "A-WALL should start present");
+    assert!(!d.ensure_layer("A-WALL"), "`ensure_layer` on an existing layer must be a no-op");
+    assert!(d.layer("A-WALL").is_some(), "A-WALL must still be present");
+    assert_eq!(d.layers.iter().filter(|l| l.name == "A-WALL").count(), 1, "A-WALL must not be duplicated");
+}
+
+/// The layer table in a new drawing is exactly `0`, `Defpoints`, `A-WALL`, `A-DOOR`,
+/// `A-GLAZ`, `A-ROOF`, `A-STAIR` — in that order — for both constructors.
+#[test]
+fn arch_layers_are_in_a_new_drawing_in_order() {
+    let expected = vec![
+        "0".to_string(),
+        "Defpoints".to_string(),
+        "A-WALL".to_string(),
+        "A-DOOR".to_string(),
+        "A-GLAZ".to_string(),
+        "A-ROOF".to_string(),
+        "A-STAIR".to_string(),
+        "A-RAIL".to_string(),
+        "A-ELEV".to_string(),
+        "A-SECT".to_string(),
+        "A-SECT-MCUT".to_string(),
+        "A-ANNO-DIMS".to_string(),
+    ];
+    for d in [Drawing::new_imperial(), Drawing::new_metric()] {
+        let names: Vec<_> = d.layers.iter().map(|l| l.name.clone()).collect();
+        assert_eq!(names, expected, "a new drawing's layer table must be the template layers, in order");
+    }
+}
+
+/// `ensure_layer` adds a missing layer exactly once; a second call is a no-op that
+/// reports `false` without duplicating the layer.
+#[test]
+fn ensure_layer_adds_a_missing_layer_once() {
+    let mut d = Drawing::new_imperial();
+    assert!(d.layer("CustomLayer").is_none(), "CustomLayer should start absent");
+    let first = d.ensure_layer("CustomLayer");
+    let second = d.ensure_layer("CustomLayer");
+    assert!(first, "the first `ensure_layer` call must report that it added the layer");
+    assert!(!second, "the second `ensure_layer` call must report false (no-op)");
+    assert_eq!(d.layers.iter().filter(|l| l.name == "CustomLayer").count(), 1, "CustomLayer must not be duplicated by `ensure_layer`");
+}
+
+/// `ensure_layer` matches layer names case-insensitively, the same way
+/// `Drawing::layer` does, so `ensure_layer("MyLayer")` followed by
+/// `ensure_layer("mylayer")` is a no-op that returns false.
+#[test]
+fn ensure_layer_is_case_insensitive() {
+    let mut d = Drawing::new_imperial();
+    assert!(d.ensure_layer("MyLayer"), "first call must add the layer");
+    assert!(!d.ensure_layer("mylayer"), "lowercase must be a no-op");
+    assert!(!d.ensure_layer("MYLAYER"), "uppercase must be a no-op");
+    assert!(!d.ensure_layer("MyLayer"), "exact repeat must be a no-op");
+    assert_eq!(d.layers.iter().filter(|l| l.name.eq_ignore_ascii_case("MyLayer")).count(), 1, "MyLayer must exist exactly once");
+    // The stored name is the first one passed.
+    assert_eq!(d.layer("MyLayer").unwrap().name, "MyLayer");
+}
+
+/// `RoofEdge` and `RoofEdgeKind` are re-exported at the crate root so downstream
+/// callers can `use cadcraft_doc::RoofEdge` (phase-4 roof-edge export).
+#[test]
+fn roof_edge_types_are_reexported() {
+    let e = crate::RoofEdge {
+        kind: crate::RoofEdgeKind::Ridge,
+        a: cadcraft_geom::Vec2::ZERO,
+        b: cadcraft_geom::Vec2::new(1.0, 0.0),
+        za: 4.45,
+        zb: 4.45,
+        ..Default::default()
+    };
+    assert_eq!(e.kind, crate::RoofEdgeKind::Ridge);
+
+    // Serde round-trip: the re-exported type must serialize/deserialize through `serde_json`.
+    let s = serde_json::to_string(&e).unwrap();
+    let back: crate::RoofEdge = serde_json::from_str(&s).unwrap();
+    assert_eq!(back.kind, crate::RoofEdgeKind::Ridge);
+    assert_eq!(back.a, cadcraft_geom::Vec2::ZERO);
+    assert_eq!(back.b, cadcraft_geom::Vec2::new(1.0, 0.0));
+    assert_eq!(back.za, 4.45);
+    assert_eq!(back.zb, 4.45);
+}
+
+/// All five RoofEdgeKind variants survive a serde round-trip through the re-exported type.
+#[test]
+fn roof_edge_all_kinds_roundtrip() {
+    let kinds =
+        [crate::RoofEdgeKind::Eave, crate::RoofEdgeKind::Ridge, crate::RoofEdgeKind::Hip, crate::RoofEdgeKind::Valley, crate::RoofEdgeKind::GableEnd];
+    for kind in kinds {
+        let e = crate::RoofEdge {
+            kind,
+            a: cadcraft_geom::Vec2::new(0.0, 0.0),
+            b: cadcraft_geom::Vec2::new(2.0, 3.0),
+            za: 1.5,
+            zb: 2.5,
+            ..Default::default()
+        };
+        let s = serde_json::to_string(&e).unwrap();
+        let back: crate::RoofEdge = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.kind, kind, "kind round-trip failed");
+        assert_eq!(back.a, e.a);
+        assert_eq!(back.b, e.b);
+        assert_eq!(back.za, e.za);
+        assert_eq!(back.zb, e.zb);
+    }
+}
+
+/// A degenerate zero-length roof edge (a == b) serializes and round-trips correctly.
+#[test]
+fn roof_edge_zero_length_roundtrips() {
+    let pt = cadcraft_geom::Vec2::new(5.0, 5.0);
+    let e = crate::RoofEdge { kind: crate::RoofEdgeKind::Ridge, a: pt, b: pt, za: 3.0, zb: 3.0, ..Default::default() };
+    let s = serde_json::to_string(&e).unwrap();
+    let back: crate::RoofEdge = serde_json::from_str(&s).unwrap();
+    assert_eq!(back.a, pt);
+    assert_eq!(back.b, pt);
+    assert_eq!(back.za, 3.0);
+    assert_eq!(back.zb, 3.0);
+}
+
+/// Roof edges with huge coordinate values and NaN heights survive a round-trip.
+#[test]
+fn roof_edge_huge_and_nan_values_roundtrip() {
+    let huge = crate::RoofEdge {
+        kind: crate::RoofEdgeKind::Eave,
+        a: cadcraft_geom::Vec2::new(1e15, -1e15),
+        b: cadcraft_geom::Vec2::new(-1e15, 1e15),
+        za: 1e12,
+        zb: -1e12,
+        ..Default::default()
+    };
+    let s = serde_json::to_string(&huge).unwrap();
+    let back: crate::RoofEdge = serde_json::from_str(&s).unwrap();
+    assert_eq!(back.a, huge.a);
+    assert_eq!(back.b, huge.b);
+    assert_eq!(back.za, huge.za);
+    assert_eq!(back.zb, huge.zb);
+
+    let nan = crate::RoofEdge {
+        kind: crate::RoofEdgeKind::Hip,
+        a: cadcraft_geom::Vec2::new(f64::NAN, 1.0),
+        b: cadcraft_geom::Vec2::new(2.0, f64::NAN),
+        za: f64::NAN,
+        zb: f64::NAN,
+        ..Default::default()
+    };
+    // serde_json serializes f64::NAN as null; verify the JSON contains nulls for the NaN fields
+    // and finite values for the others. A full round-trip is not possible without NaN-aware
+    // deserialization, so we check the serialized form directly.
+    let s = serde_json::to_string(&nan).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+    assert!(v["a"]["x"].is_null(), "a.x should be null (NaN)");
+    assert_eq!(v["a"]["y"].as_f64(), Some(1.0));
+    assert_eq!(v["b"]["x"].as_f64(), Some(2.0));
+    assert!(v["b"]["y"].is_null(), "b.y should be null (NaN)");
+    assert!(v["za"].is_null(), "za should be null (NaN)");
+    assert!(v["zb"].is_null(), "zb should be null (NaN)");
+}
+
+/// A sloped roof edge (za != zb) preserves its height difference through a round-trip.
+#[test]
+fn roof_edge_sloped_heights_roundtrip() {
+    let e = crate::RoofEdge {
+        kind: crate::RoofEdgeKind::Valley,
+        a: cadcraft_geom::Vec2::new(0.0, 0.0),
+        b: cadcraft_geom::Vec2::new(10.0, 0.0),
+        za: 2.4,
+        zb: 4.45,
+        ..Default::default()
+    };
+    let s = serde_json::to_string(&e).unwrap();
+    let back: crate::RoofEdge = serde_json::from_str(&s).unwrap();
+    assert_eq!(back.za, 2.4);
+    assert_eq!(back.zb, 4.45);
+    // The height difference is preserved exactly.
+    assert_eq!(back.zb - back.za, e.zb - e.za);
+}
+
+#[test]
+fn stair_defaults_are_usable() {
+    let s = crate::Stair::default();
+    assert_eq!(s.width, 1.0);
+    assert_eq!(s.tread_depth, 0.254);
+    assert_eq!(s.layer, "A-STAIR");
+    assert_eq!(s.shape, crate::StairShape::Straight);
+}
+
+#[test]
+fn stair_and_railing_handles_do_not_collide() {
+    let id = crate::ArchId(100);
+    let sh = crate::stair_handle(id);
+    let rh = crate::railing_handle(id);
+    let wh = crate::arch_handle(id);
+    let rhm = crate::room_handle(id);
+    let rooh = crate::roof_handle(id);
+    let oh = crate::opening_handle(id);
+
+    assert_ne!(sh, rh);
+    assert_ne!(sh, wh);
+    assert_ne!(sh, rhm);
+    assert_ne!(sh, rooh);
+    assert_ne!(sh, oh);
+
+    assert_ne!(rh, wh);
+    assert_ne!(rh, rhm);
+    assert_ne!(rh, rooh);
+    assert_ne!(rh, oh);
+
+    assert!(crate::is_stair_handle(sh));
+    assert!(crate::is_railing_handle(rh));
+    assert!(!crate::is_stair_handle(rh));
+    assert!(!crate::is_railing_handle(sh));
+}
+
+#[test]
+fn stair_label_is_s_n() {
+    assert_eq!(crate::stair_label(crate::ArchId(0)), "s0");
+    assert_eq!(crate::stair_label(crate::ArchId(12)), "s12");
+    assert_eq!(crate::railing_label(crate::ArchId(0)), "ra0");
+    assert_eq!(crate::railing_label(crate::ArchId(12)), "ra12");
+}
+
+#[test]
+fn room_deck_height_defaults_to_none() {
+    let r = crate::Room::default();
+    assert_eq!(r.deck_height, None);
+}
+
+#[test]
+fn arch_model_round_trips_stairs_and_railings() {
+    let mut m = crate::ArchModel::default();
+    let sid = m.push_stair(crate::Stair::default());
+    let rid = m.push_railing(crate::Railing::default());
+
+    let json = serde_json::to_string(&m).unwrap();
+    let back: crate::ArchModel = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(back.stairs.len(), 1);
+    assert_eq!(back.railings.len(), 1);
+    assert_eq!(back.stairs[0].id, sid);
+    assert_eq!(back.railings[0].id, rid);
+    assert_eq!(back.next_stair_id, 1);
+    assert_eq!(back.next_railing_id, 1);
+}
+
+#[test]
+fn stair_and_railing_index_and_ids() {
+    let mut m = crate::ArchModel::default();
+    let s0 = m.push_stair(crate::Stair::default());
+    let s1 = m.push_stair(crate::Stair::default());
+    let s2 = m.push_stair(crate::Stair::default());
+    assert_eq!(m.stair_index(s0), Some(0));
+    assert_eq!(m.stair_index(s1), Some(1));
+    assert_eq!(m.stair_index(s2), Some(2));
+    assert_eq!(m.stair_index(crate::ArchId(99)), None);
+    let ids: Vec<_> = m.stair_ids().collect();
+    assert_eq!(ids, vec![s0, s1, s2]);
+
+    let r0 = m.push_railing(crate::Railing::default());
+    let r1 = m.push_railing(crate::Railing::default());
+    assert_eq!(m.railing_index(r0), Some(0));
+    assert_eq!(m.railing_index(r1), Some(1));
+    assert_eq!(m.railing_index(crate::ArchId(99)), None);
+    let rids: Vec<_> = m.railing_ids().collect();
+    assert_eq!(rids, vec![r0, r1]);
+}
+
+#[test]
+fn stair_railing_handle_range_boundaries() {
+    let stair_base = crate::ARCH_HANDLE_BASE + crate::STAIR_HANDLE_OFFSET;
+    assert!(crate::is_stair_handle(crate::Handle(stair_base)));
+    assert!(crate::is_stair_handle(crate::Handle(stair_base + 32767)));
+    assert!(!crate::is_stair_handle(crate::Handle(stair_base + 32768)));
+    assert!(!crate::is_stair_handle(crate::Handle(stair_base - 1)));
+
+    let rail_base = crate::ARCH_HANDLE_BASE + crate::RAILING_HANDLE_OFFSET;
+    assert!(crate::is_railing_handle(crate::Handle(rail_base)));
+    assert!(crate::is_railing_handle(crate::Handle(rail_base + 32767)));
+    assert!(!crate::is_railing_handle(crate::Handle(rail_base + 32768)));
+    assert!(!crate::is_railing_handle(crate::Handle(rail_base - 1)));
+}
+
+#[test]
+fn stair_railing_json_roundtrip_with_data() {
+    let mut s = crate::Stair::default();
+    s.id = crate::ArchId(7);
+    s.start = cadcraft_geom::Vec2::new(1.5, 2.5);
+    s.direction = 0.785;
+    s.width = 1.2;
+    s.from_level = 0;
+    s.to_level = 1;
+    s.rise = 2.7;
+    s.shape = crate::StairShape::L;
+    s.risers = 16;
+    s.riser_height = 0.16875;
+    s.tread_depth = 0.254;
+    s.treads = 15;
+    s.run = 3.81;
+    s.landing_depth = 1.2;
+    s.well = vec![
+        cadcraft_geom::Vec2::new(0.0, 0.0),
+        cadcraft_geom::Vec2::new(4.0, 0.0),
+        cadcraft_geom::Vec2::new(4.0, 1.5),
+        cadcraft_geom::Vec2::new(0.0, 1.5),
+    ];
+    s.well_room = Some(crate::ArchId(3));
+    s.layer = "A-STAIR".to_string();
+
+    let json = serde_json::to_string(&s).unwrap();
+    let back: crate::Stair = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.id, crate::ArchId(7));
+    assert_eq!(back.start, cadcraft_geom::Vec2::new(1.5, 2.5));
+    assert!((back.direction - 0.785).abs() < 1e-12);
+    assert_eq!(back.shape, crate::StairShape::L);
+    assert_eq!(back.risers, 16);
+    assert_eq!(back.well.len(), 4);
+    assert_eq!(back.well_room, Some(crate::ArchId(3)));
+
+    let mut r = crate::Railing::default();
+    r.id = crate::ArchId(5);
+    r.path = vec![cadcraft_geom::Vec2::new(0.0, 0.0), cadcraft_geom::Vec2::new(10.0, 0.0), cadcraft_geom::Vec2::new(10.0, 8.0)];
+    r.level = 1;
+    r.height = 0.914;
+    r.style = crate::RailingStyle::Balusters;
+    r.thickness = 0.05;
+    r.baluster_gap = 0.099;
+    r.post_spacing = 1.2;
+    r.follows = Some(crate::ArchId(7));
+    r.layer = "A-RAIL".to_string();
+
+    let json = serde_json::to_string(&r).unwrap();
+    let back: crate::Railing = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.id, crate::ArchId(5));
+    assert_eq!(back.path.len(), 3);
+    assert_eq!(back.style, crate::RailingStyle::Balusters);
+    assert_eq!(back.follows, Some(crate::ArchId(7)));
+}
+
+#[test]
+fn validate_rejects_too_many_stairs_and_railings() {
+    let mut m = crate::ArchModel::default();
+    for _ in 0..crate::MAX_STAIRS + 1 {
+        m.push_stair(crate::Stair::default());
+    }
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("max") && m.contains("stairs")));
+
+    let mut m = crate::ArchModel::default();
+    for _ in 0..crate::MAX_RAILINGS + 1 {
+        m.push_railing(crate::Railing::default());
+    }
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("max") && m.contains("railings")));
+}
+
+#[test]
+fn validate_flags_duplicate_stair_and_railing_ids() {
+    let mut m = crate::ArchModel::default();
+    m.push_stair(crate::Stair::default());
+    m.push_stair(crate::Stair::default());
+    m.stairs[1].id = m.stairs[0].id;
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("duplicate stair id")));
+
+    let mut m = crate::ArchModel::default();
+    m.push_railing(crate::Railing::default());
+    m.push_railing(crate::Railing::default());
+    m.railings[1].id = m.railings[0].id;
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("duplicate railing id")));
+}
+
+#[test]
+fn validate_reports_stale_next_stair_and_railing_id() {
+    let mut m = crate::ArchModel::default();
+    m.push_stair(crate::Stair::default());
+    m.push_stair(crate::Stair::default());
+    m.next_stair_id = 1;
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("next id") && m.contains("next_stair_id")));
+
+    let mut m = crate::ArchModel::default();
+    m.push_railing(crate::Railing::default());
+    m.push_railing(crate::Railing::default());
+    m.next_railing_id = 1;
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("next id") && m.contains("next_railing_id")));
+}
+
+#[test]
+fn validate_rejects_stair_with_degenerate_well() {
+    let mut m = crate::ArchModel::default();
+    let mut s = crate::Stair::default();
+    s.well = vec![cadcraft_geom::Vec2::new(0.0, 0.0), cadcraft_geom::Vec2::new(1.0, 0.0)];
+    m.push_stair(s);
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("well has") && m.contains("<3")));
+}
+
+#[test]
+fn validate_rejects_stair_with_invalid_well_room() {
+    let mut m = crate::ArchModel::default();
+    let mut s = crate::Stair::default();
+    s.well_room = Some(crate::ArchId(999));
+    m.push_stair(s);
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("unknown well_room")));
+}
+
+#[test]
+fn validate_rejects_railing_with_degenerate_path() {
+    let mut m = crate::ArchModel::default();
+    let mut r = crate::Railing::default();
+    r.path = vec![cadcraft_geom::Vec2::new(0.0, 0.0)];
+    m.push_railing(r);
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("path has") && m.contains("<2")));
+}
+
+#[test]
+fn validate_rejects_railing_with_invalid_follows() {
+    let mut m = crate::ArchModel::default();
+    let mut r = crate::Railing::default();
+    r.follows = Some(crate::ArchId(999));
+    m.push_railing(r);
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("unknown follows stair")));
+}
+
+#[test]
+fn validate_rejects_railing_with_non_positive_thickness_or_spacing() {
+    let mut m = crate::ArchModel::default();
+    let mut r = crate::Railing::default();
+    r.thickness = 0.0;
+    m.push_railing(r);
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("thickness") && m.contains("positive")));
+
+    let mut m = crate::ArchModel::default();
+    let mut r = crate::Railing::default();
+    r.post_spacing = 0.0;
+    m.push_railing(r);
+    let msgs = m.validate();
+    assert!(msgs.iter().any(|m| m.contains("post spacing") && m.contains("positive")));
+}
+
+#[test]
+fn rail_setting_names_round_trip() {
+    for s in [RailSetting::Auto, RailSetting::On, RailSetting::Off] {
+        assert_eq!(RailSetting::parse(s.name()), Some(s));
+        assert_eq!(RailSetting::parse(&format!(" {} ", s.name().to_uppercase())), Some(s));
+    }
+    assert!(RailSetting::Auto.is_auto() && !RailSetting::On.is_auto());
+    assert_eq!(RailSetting::parse("maybe"), None);
+}
+
+#[test]
+fn stringers_parse_accepts_center_and_centre() {
+    assert_eq!(Stringers::parse("center"), Some(Stringers::Centre));
+    assert_eq!(Stringers::parse("Centre"), Some(Stringers::Centre));
+    assert_eq!(Stringers::parse("none"), Some(Stringers::None));
+    assert_eq!(Stringers::parse("two"), Some(Stringers::Two));
+    assert!(Stringers::Two.is_two() && !Stringers::None.is_two());
+    assert_eq!(Stringers::Centre.name(), "centre");
+}
+
+#[test]
+fn railing_host_names() {
+    assert_eq!(RailingHost::Well.name(), "well");
+    assert_eq!(RailingHost::StairLeft.name(), "stairLeft");
+    assert_eq!(RailingHost::StairRight.name(), "stairRight");
+    assert_eq!(RailingHost::Deck.name(), "deck");
+    assert!(RailingHost::default().is_well());
+    assert_eq!(serde_json::to_string(&RailingHost::StairLeft).unwrap(), "\"stairLeft\"");
+}
+
+#[test]
+fn opening_top_names() {
+    for t in [OpeningTop::Square, OpeningTop::Round, OpeningTop::Segment, OpeningTop::Roof] {
+        assert_eq!(OpeningTop::parse(t.name()), Some(t));
+    }
+    assert!(OpeningTop::Square.is_square() && !OpeningTop::Roof.is_square());
+    assert_eq!(OpeningTop::parse("gothic"), None);
+}
+
+#[test]
+fn opening_sides_names_both_left_right_none() {
+    assert_eq!(OpeningSides::BOTH.name(), "both");
+    assert_eq!(OpeningSides::RIGHT.name(), "right");
+    assert_eq!(OpeningSides::NONE.name(), "none");
+    let left = OpeningSides { left: true, ..OpeningSides::NONE };
+    assert_eq!(left.name(), "left");
+    for n in ["left", "right", "both", "none"] {
+        assert_eq!(OpeningSides::parse(n).map(|s| s.name()), Some(n));
+    }
+    assert_eq!(OpeningSides::default(), OpeningSides::RIGHT);
+    assert!(OpeningSides::RIGHT.is_right_only() && !OpeningSides::BOTH.is_right_only());
+    assert_eq!(OpeningSides::parse("up"), None);
+}
+
+#[test]
+fn grille_default_is_one_by_one() {
+    let g = Grille::default();
+    assert_eq!((g.across, g.down, g.top_only), (1, 1, false));
+    let back: Grille = serde_json::from_str(r#"{"across":3}"#).unwrap();
+    assert_eq!((back.across, back.down), (3, 1));
+    assert_eq!(MAX_GRILLE_LITES, 12);
+}
+
+#[test]
+fn stair_without_phase17_keys_loads_with_the_defaults() {
+    let s: Stair = serde_json::from_str(r#"{"width":1.2}"#).unwrap();
+    assert_eq!(s.width, 1.2);
+    assert!(!s.open_risers);
+    assert_eq!(s.stringers, Stringers::Two);
+    assert_eq!(s.underside, 0.3);
+    assert_eq!((s.rail_left, s.rail_right), (RailSetting::Auto, RailSetting::Auto));
+    assert_eq!(s.plan_cut, 1.2);
+    let v = serde_json::to_value(Stair::default()).unwrap();
+    for k in ["open_risers", "stringers", "underside", "rail_left", "rail_right", "plan_cut"] {
+        assert!(v.get(k).is_none(), "{k} written");
+    }
+    let t = Stair { stringers: Stringers::Centre, plan_cut: 1.5, ..Stair::default() };
+    let back: Stair = serde_json::from_str(&serde_json::to_string(&t).unwrap()).unwrap();
+    assert_eq!(back, t);
+}
+
+#[test]
+fn railing_saved_before_keeps_post_spacing_1_2() {
+    let r: Railing = serde_json::from_str(r#"{"post_spacing":1.2}"#).unwrap();
+    assert_eq!(r.post_spacing, 1.2);
+    assert_eq!(Railing::default().post_spacing, DEFAULT_POST_SPACING);
+    assert_eq!(DEFAULT_POST_SPACING, 1.8);
+}
+
+#[test]
+fn railing_host_defaults_to_well_and_auto_false() {
+    let r: Railing = serde_json::from_str(r#"{"follows":3}"#).unwrap();
+    assert_eq!(r.host, RailingHost::Well);
+    assert!(!r.auto);
+    assert_eq!(r.inset, 0.0);
+    let v = serde_json::to_value(&r).unwrap();
+    assert!(v.get("host").is_none() && v.get("auto").is_none() && v.get("inset").is_none());
+    let d = Railing { host: RailingHost::Deck, auto: true, inset: -0.1, ..Railing::default() };
+    let back: Railing = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+    assert_eq!(back, d);
+}
+
+#[test]
+fn room_deck_fields_default_and_skip() {
+    let r = Room::default();
+    assert_eq!(r.deck_boards, None);
+    assert!(r.deck_rails.is_empty());
+    let v = serde_json::to_value(&r).unwrap();
+    assert!(v.get("deck_boards").is_none() && v.get("deck_rails").is_none());
+    let d = Room {
+        deck_boards: Some(30.0),
+        deck_rails: vec![RailSetting::Off, RailSetting::On],
+        ..Room::default()
+    };
+    let back: Room = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+    assert_eq!(back, d);
+}
+
+#[test]
+fn opening_defaults_square_top_right_sides_no_grille_roof_offset_0_15() {
+    for o in [Opening::default(), Opening::new(ArchId(1), 1.0, 0.9, 1.2, OpeningKind::Window)] {
+        assert_eq!(o.grille, None);
+        assert_eq!(o.top, OpeningTop::Square);
+        assert_eq!(o.top_rise, 0.0);
+        assert_eq!(o.roof_offset, 0.15);
+        assert_eq!(o.sill_sides, OpeningSides::RIGHT);
+        assert_eq!(o.casing_sides, OpeningSides::RIGHT);
+    }
+    let o: Opening = serde_json::from_str(r#"{"width":2.0}"#).unwrap();
+    assert_eq!(o.sill_sides, OpeningSides::RIGHT);
+    assert_eq!(o.roof_offset, 0.15);
+}
+
+#[test]
+fn model_without_phase17_values_writes_the_same_json() {
+    let mut m = ArchModel::default();
+    let w = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(5.0, 0.0), 0.2));
+    m.push_opening(Opening::new(w, 1.0, 0.9, 2.1, OpeningKind::Door));
+    m.push_stair(Stair::default());
+    m.push_railing(Railing::default());
+    m.push_room(Room::default());
+    let text = serde_json::to_string(&m).unwrap();
+    for k in [
+        "grille",
+        "top",
+        "top_rise",
+        "roof_offset",
+        "sill_sides",
+        "casing_sides",
+        "open_risers",
+        "stringers",
+        "underside",
+        "rail_left",
+        "rail_right",
+        "plan_cut",
+        "inset",
+        "host_kind",
+        "auto",
+        "deck_boards",
+        "deck_rails",
+    ] {
+        assert!(!text.contains(&format!("\"{k}\":")), "{k} written");
+    }
+    let back: ArchModel = serde_json::from_str(&text).unwrap();
+    assert_eq!(serde_json::to_string(&back).unwrap(), text);
+}
