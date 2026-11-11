@@ -28,7 +28,7 @@ pub fn room_molding_meshes(room: ArchId, level: f64, runs: &[MoldingRun]) -> Vec
                 continue;
             }
             if let Some(swept) = crate::sweep::sweep(&run.profile.points, &run.path, &run.z, run.closed, run.side, &material, room) {
-                mesh.extend(&swept);
+                mesh.append(&swept);
             }
         }
         if !mesh.positions.is_empty() {
