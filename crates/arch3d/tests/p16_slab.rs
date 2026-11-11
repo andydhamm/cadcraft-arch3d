@@ -291,3 +291,105 @@ fn slab_edge_is_one_footing_mesh_per_wall() {
     assert_eq!(held(Vec3::new(5.0, 0.35, -0.2)), 0, "nothing past the 0.3 m edge");
     assert_eq!(held(Vec3::new(5.0, 0.25, -0.05)), 0, "the strip above the edge is only as wide as the wall");
 }
+
+#[test]
+fn edge_width_is_independent_of_wall_thickness() {
+    // A 0.1 m wall: the edge strip is still 0.3 m wide, extending 0.2 m past the wall's inner face.
+    let walls = vec![FoundationWall {
+        a: Vec2::new(0.0, 0.0),
+        b: Vec2::new(10.0, 0.0),
+        inward: Vec2::new(0.0, 1.0),
+        thickness: 0.1,
+        basement: false,
+        ..Default::default()
+    }];
+    let i = FoundationIn { walls, level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    assert_eq!(meshes.len(), 1);
+
+    let held = |p: Vec3| meshes.iter().filter(|m| cadcraft_arch3d::probe::probe_mesh(m, p)).count();
+
+    // Edge strip: y 0..0.3, z -0.3..-0.1
+    // Wall strip: y 0..0.1, z -0.1..0
+    assert_eq!(held(Vec3::new(5.0, 0.05, -0.2)), 1, "edge strip under thin wall");
+    assert_eq!(held(Vec3::new(5.0, 0.2, -0.2)), 1, "edge strip past thin wall's inner face");
+    assert_eq!(held(Vec3::new(5.0, 0.35, -0.2)), 0, "past the 0.3 m edge");
+    assert_eq!(held(Vec3::new(5.0, 0.05, -0.05)), 1, "wall strip of thin wall");
+    assert_eq!(held(Vec3::new(5.0, 0.2, -0.05)), 0, "above edge, beside thin wall strip");
+}
+
+#[test]
+fn slab_on_upper_level_has_correct_z_range() {
+    let mut level = main_level();
+    level.elevation = 3.0;
+    let walls = vec![FoundationWall {
+        a: Vec2::new(0.0, 0.0),
+        b: Vec2::new(10.0, 0.0),
+        inward: Vec2::new(0.0, 1.0),
+        thickness: 0.2,
+        basement: false,
+        ..Default::default()
+    }];
+    let i = FoundationIn { walls, level, foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    assert_eq!(meshes.len(), 1);
+
+    // Edge strip: z 2.7..2.9, wall strip: z 2.9..3.0
+    let (lo, hi) = z_range(&meshes[0]);
+    assert!((lo - 2.7).abs() < 1e-6, "edge strip bottom: {lo}");
+    assert!((hi - 3.0).abs() < 1e-6, "wall strip top: {hi}");
+
+    let held = |p: Vec3| meshes.iter().filter(|m| cadcraft_arch3d::probe::probe_mesh(m, p)).count();
+    assert_eq!(held(Vec3::new(5.0, 0.15, 2.8)), 1, "edge strip at elevation 3.0");
+    assert_eq!(held(Vec3::new(5.0, 0.05, 2.95)), 1, "wall strip at elevation 3.0");
+    assert_eq!(held(Vec3::new(5.0, 0.05, 3.05)), 0, "above the slab");
+}
+
+#[test]
+fn nan_wall_coordinates_skip_mesh() {
+    let walls = vec![
+        FoundationWall {
+            a: Vec2::new(f64::NAN, 0.0),
+            b: Vec2::new(10.0, 0.0),
+            inward: Vec2::new(0.0, 1.0),
+            thickness: 0.2,
+            basement: false,
+            ..Default::default()
+        },
+        FoundationWall {
+            a: Vec2::new(0.0, 0.0),
+            b: Vec2::new(10.0, 0.0),
+            inward: Vec2::new(0.0, 1.0),
+            thickness: 0.2,
+            basement: false,
+            ..Default::default()
+        },
+    ];
+    let i = FoundationIn { walls, level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    // Only the second wall (with finite coords) produces a mesh.
+    assert_eq!(meshes.len(), 1, "NaN wall coords skip the mesh");
+}
+
+#[test]
+fn edge_strip_z_range_is_exact() {
+    let walls = vec![FoundationWall {
+        a: Vec2::new(0.0, 0.0),
+        b: Vec2::new(10.0, 0.0),
+        inward: Vec2::new(0.0, 1.0),
+        thickness: 0.2,
+        basement: false,
+        ..Default::default()
+    }];
+    let i = FoundationIn { walls, level: main_level(), foundation: main_foundation(), ..Default::default() };
+    let meshes = slab::meshes(&i);
+    assert_eq!(meshes.len(), 1);
+
+    let held = |p: Vec3| meshes.iter().filter(|m| cadcraft_arch3d::probe::probe_mesh(m, p)).count();
+
+    // Edge strip spans z -0.3..-0.1; wall strip spans z -0.1..0.
+    assert_eq!(held(Vec3::new(5.0, 0.25, -0.15)), 1, "in edge strip");
+    assert_eq!(held(Vec3::new(5.0, 0.25, -0.05)), 0, "above edge strip, past wall");
+    assert_eq!(held(Vec3::new(5.0, 0.05, -0.25)), 1, "in edge strip under wall");
+    assert_eq!(held(Vec3::new(5.0, 0.05, -0.05)), 1, "in wall strip under wall");
+}
