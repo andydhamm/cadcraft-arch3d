@@ -111,7 +111,7 @@ fn trace(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> Hit {
                 let hit = tri_hit(tris[i], o, d);
                 let t = hit.x;
                 // best_t starts at t_max, so a hit at or past t_max is never taken (as trace_cpu).
-                if (t > PT_EPS && (t < best_t || (have_best && abs(t - best_t) <= 1.0e-5 && i < best_tri))) {
+                if (t > PT_EPS && (t < best_t || (have_best && abs(t - best_t) <= 1.0e-5 && i < best_tri)) && !hit_clipped(o + d * t)) {
                     best_t = t;
                     best_tri = i;
                     best_u = hit.y;
