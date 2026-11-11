@@ -153,7 +153,7 @@ impl ShadowPipelines {
                     depth_write_enabled: Some(depth_write),
                     depth_compare: Some(wgpu::CompareFunction::Less),
                     stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
+                    bias: crate::pipeline::FILL_DEPTH_BIAS,
                 }),
                 multisample: wgpu::MultisampleState { count: 1, mask: !0, alpha_to_coverage_enabled: false },
                 fragment: Some(wgpu::FragmentState {
