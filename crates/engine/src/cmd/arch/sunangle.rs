@@ -145,7 +145,14 @@ fn run_sunangle(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         let site = s.doc()?.arch.site.as_ref().ok_or_else(|| EngineError::Other("sunangle: date/time form needs a site location".into()))?;
         let sun = sun_position(site.latitude, &date, &time)
             .ok_or_else(|| EngineError::Other(format!("sunangle `{name}`: could not resolve sun for {date} {time}")))?;
-        let angle = SunAngle { name, date: Some(date), time: Some(time), azimuth: Some(sun.azimuth_deg), elevation: Some(sun.elevation_deg) };
+        let angle = SunAngle {
+            name,
+            date: Some(date),
+            time: Some(time),
+            azimuth: Some(sun.azimuth_deg),
+            elevation: Some(sun.elevation_deg),
+            ..Default::default()
+        };
         angle.validate().map_err(EngineError::Other)?;
         add_or_replace(s, angle, replace)?;
         return list_json(s);
@@ -159,7 +166,7 @@ fn run_sunangle(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     if !(-90.0..=90.0).contains(&el) {
         return Err(EngineError::Other(format!("sunangle `{name}`: elevation {el} out of range -90..=90")));
     }
-    let angle = SunAngle { name, date: None, time: None, azimuth: Some(az), elevation: Some(el) };
+    let angle = SunAngle { name, date: None, time: None, azimuth: Some(az), elevation: Some(el), ..Default::default() };
     angle.validate().map_err(EngineError::Other)?;
     add_or_replace(s, angle, replace)?;
     list_json(s)
