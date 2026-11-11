@@ -49,15 +49,18 @@ pub struct Lighting {
     pub sun_shadow: bool,
     /// Lights shadowed at most (`lights::DEFAULT_SHADOW_BUDGET`); the rest light unshadowed.
     pub budget: usize,
-    /// Display units per lux (`lights::DEFAULT_EXPOSURE`).
+    /// Display units per lux (`lights::DEFAULT_EXPOSURE`). A value other than the default is a
+    /// bare-number exposure of the request: the frame uses it as its fixed exposure scale.
     pub exposure: f32,
     /// The render look the frame is lit for (phase 19; read by later packages).
     pub look: cadcraft_doc::arch::Look,
     /// The explicit toward-sun direction in drawing space, when one was given.
     pub sun_dir: Option<[f64; 3]>,
-    /// The environment (light and/or background) the frame lights with; `None` when there is
-    /// no environment (p19-env-path).
-    pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
+    /// The calibration albedo: every surface reads as plain Lambert with it (`render {albedo}`).
+    pub lambert: Option<f32>,
+    /// Meter an automatic exposure on a frame without daylight (false keeps the legacy 0.01 scale,
+    /// as `render {sun: false}` and hand-built night lightings always had).
+    pub meter_night: bool,
 }
 
 impl Default for Lighting {
@@ -69,16 +72,9 @@ impl Default for Lighting {
             exposure: crate::lights::DEFAULT_EXPOSURE,
             look: cadcraft_doc::arch::Look::default(),
             sun_dir: None,
-            environment: None,
+            lambert: None,
+            meter_night: false,
         }
-    }
-}
-
-impl Lighting {
-    /// Whether the frame is lit by daylight: a sun, or an environment marked `daylight`.
-    /// (p19-exposure's `exposure::daylight` should call this; it was not merged yet.)
-    pub fn has_daylight(&self) -> bool {
-        self.sun.is_some() || self.environment.as_ref().is_some_and(|e| e.daylight)
     }
 }
 

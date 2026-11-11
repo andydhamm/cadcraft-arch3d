@@ -442,11 +442,67 @@ pub fn illuminance(scene: &Scene3d, point: Vec3, normal: Vec3) -> Illuminance {
     out
 }
 
+/// Direct sunlight (lux) at `point` on a surface with `normal`: `lux × max(0, n·s) × vis`, with
+/// `toward_sun` the direction to the sun. `vis` is 0 when a ray from `point + n × 1e-4` to 1e6 m
+/// meets any mesh but a fixture housing, 1 otherwise (no ray when `shadows` is false). 0 for a
+/// sun at or below the horizon, a zero normal or non-finite input.
+pub fn sun_illuminance(scene: &Scene3d, point: Vec3, normal: Vec3, toward_sun: Vec3, lux: f64, shadows: bool) -> f64 {
+    let (nl, sl) = (normal.len(), toward_sun.len());
+    if !point.is_finite() || !lux.is_finite() || !nl.is_finite() || nl <= 0.0 || !sl.is_finite() || sl <= 0.0 {
+        return 0.0;
+    }
+    let n = normal * (1.0 / nl);
+    let s = toward_sun * (1.0 / sl);
+    if s.z <= 0.0 {
+        return 0.0;
+    }
+    let cos = n.dot(s).max(0.0);
+    let e = lux * cos;
+    if !e.is_finite() || e <= 0.0 {
+        return 0.0;
+    }
+    if shadows {
+        let occluders = crate::pick::Bvh::build(&Scene3d {
+            meshes: scene.meshes.iter().filter(|m| !is_light_material(&m.material)).cloned().collect(),
+            ..Default::default()
+        });
+        if occluders.ray(point + n * 1e-4, s, 1e6).is_some() {
+            return 0.0;
+        }
+    }
+    e
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use cadcraft_doc::arch::{LightFixture, Wall};
     use cadcraft_geom::Vec2;
+
+    #[test]
+    fn sun_illuminance_open_ground_and_behind_column() {
+        let mut m = ArchModel::default();
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.2, 0.0), 0.2);
+        w.height = 3.0;
+        m.push_wall(w);
+        let scene = crate::build(&m);
+        let up = Vec3::new(0.0, 0.0, 1.0);
+        let s = Vec3::new(0.0, 0.0, 1.0);
+        let open = Vec3::new(5.0, 5.0, 0.0);
+        assert!((sun_illuminance(&scene, open, up, s, 100_000.0, true) - 100_000.0).abs() < 1.0);
+        let low = Vec3::new(0.0, 1.0, 1.0);
+        let e = sun_illuminance(&scene, open, up, low, 100_000.0, true);
+        assert!((e - 100_000.0 * 0.5f64.sqrt()).abs() < 1.0, "{e}");
+        // Right under the column with the sun overhead: shadowed, unless shadows are off.
+        let under = Vec3::new(0.1, 0.0, 0.0);
+        assert_eq!(sun_illuminance(&scene, under, up, s, 100_000.0, true), 0.0);
+        assert!((sun_illuminance(&scene, under, up, s, 100_000.0, false) - 100_000.0).abs() < 1.0);
+        // Below the horizon, facing away or non-finite input: nothing.
+        assert_eq!(sun_illuminance(&scene, open, up, Vec3::new(0.0, 0.0, -1.0), 1e5, true), 0.0);
+        assert_eq!(sun_illuminance(&scene, open, -up, s, 1e5, false), 0.0);
+        assert_eq!(sun_illuminance(&scene, open, up, s, f64::NAN, false), 0.0);
+        assert_eq!(sun_illuminance(&scene, Vec3::new(f64::NAN, 0.0, 0.0), up, s, 1e5, false), 0.0);
+    }
 
     fn room() -> ArchModel {
         let mut m = ArchModel::default();

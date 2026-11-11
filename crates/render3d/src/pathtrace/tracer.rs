@@ -7,10 +7,10 @@
 use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
-    FRAME_ENV, FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene,
+    FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
-use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX};
+use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
 use super::{PathOptions, PathStats, PathStatus};
 use crate::camera::Camera;
 use crate::lit_frame::Lighting;
@@ -624,52 +624,38 @@ impl PathTracer {
 /// environment, moon, view clip and look are set; `new` and `irradiance` both call it.
 fn frame_lighting(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting, camera: Option<&Camera>, opts: &PathOptions) {
     frame_sun(frame, lighting);
-    // The furnace path is untouched: no environment map there.
-    if opts.furnace.is_none() {
-        frame_environment(frame, aux, lighting);
-    }
+    frame_environment(frame, aux, lighting);
     frame_moon(frame, lighting);
     frame_view(frame, lighting, camera);
     frame_look(frame, lighting, opts);
 }
 
-/// Sun and sky: sets `FRAME_SUN | FRAME_SKY`, `sun_dir`, `sun_rgb`, `sky_zenith`, `sky_horizon` on `frame`
-/// when `lighting` has a sun. (`lighting` is the scene's light setup.)
+/// Sun and sky. The sun (`FRAME_SUN`, `sun_dir`, `sun_rgb` = the look's lux) only when it is on and
+/// above the horizon, `FRAME_SUN_NO_SHADOW` when the look has cast shadows off; the gradient sky
+/// (`FRAME_SKY`, `sky_zenith`, `sky_horizon`) only when the look's sky is on as well.
 fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
     if let Some(sun) = lighting.sun {
-        frame.flags |= FRAME_SUN | FRAME_SKY;
         let d = sun.normalized().dir;
-        frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
-        frame.sun_rgb = [SUN_LUX, SUN_LUX, SUN_LUX, 0.0];
-        frame.sky_zenith = [SKY_ZENITH_NITS; 4];
-        frame.sky_horizon = [SKY_HORIZON_NITS; 4];
+        if lighting.look.sun.on && d[2] > 0.0 {
+            frame.flags |= FRAME_SUN;
+            if !lighting.look.sun.shadows {
+                frame.flags |= FRAME_SUN_NO_SHADOW;
+            }
+            let lux = lighting.look.sun.intensity as f32;
+            frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
+            frame.sun_rgb = [lux, lux, lux, 0.0];
+        }
+        if lighting.look.sky.on {
+            frame.flags |= FRAME_SKY;
+            frame.sky_zenith = [SKY_ZENITH_NITS; 4];
+            frame.sky_horizon = [SKY_HORIZON_NITS; 4];
+        }
     }
 }
 
-/// Environment map: appends the baked table (radiance, marginal and conditional CDFs, see
-/// [`super::env`]) to `aux` and records the offsets in `frame.env` (texel offset, width, height,
-/// flags: 1 present, 2 visible), `env_aux` (marginal and conditional offsets) and `env_params.x`
-/// (the total importance); sets `FRAME_ENV` and clears `FRAME_SKY` (the environment replaces the
-/// constant sky). Does nothing without a usable environment.
-pub(super) fn frame_environment(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting) {
-    let Some(e) = &lighting.environment else { return };
-    let table = super::env::env_table(e);
-    if !table.is_usable() {
-        return;
-    }
-    let base = aux.len();
-    let (Ok(rad), Ok(marg), Ok(cond)) =
-        (u32::try_from(base), u32::try_from(base + table.radiance.len()), u32::try_from(base + table.radiance.len() + table.marginal.len()))
-    else {
-        return;
-    };
-    aux.extend(table.packed());
-    frame.env = [rad, table.width, table.height, 1 | if e.visible { 2 } else { 0 }];
-    frame.env_aux = [marg, cond, 0, 0];
-    frame.env_params[0] = table.total;
-    frame.flags |= FRAME_ENV;
-    frame.flags &= !FRAME_SKY;
-}
+/// Environment map (stub): will append the map and its CDFs to `aux` and record the offsets in
+/// `frame.env` / `env_aux` / `env_params`, from `lighting`. Does nothing yet.
+fn frame_environment(_frame: &mut GpuFrame, _aux: &mut Vec<f32>, _lighting: &Lighting) {}
 
 /// Moon (stub): will set `frame.moon_dir` / `moon_rgb` from `lighting`. Does nothing yet.
 fn frame_moon(_frame: &mut GpuFrame, _lighting: &Lighting) {}
@@ -1563,6 +1549,50 @@ mod tests {
         assert_eq!(aux, [1.0, 2.0, 3.0]);
     }
 
+    fn frame_for(look: cadcraft_doc::arch::Look) -> GpuFrame {
+        let lighting = Lighting { look, ..Lighting::default() };
+        let mut f = GpuFrame::default();
+        frame_sun(&mut f, &lighting);
+        f
+    }
+
+    #[test]
+    fn frame_sun_follows_intensity_and_no_shadow_flag() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        let f = frame_for(look.clone());
+        assert_eq!(f.flags, FRAME_SUN | FRAME_SKY);
+        assert_eq!(f.sun_rgb, [100_000.0, 100_000.0, 100_000.0, 0.0]);
+        look.sun.intensity = 50_000.0;
+        look.sun.shadows = false;
+        let f = frame_for(look.clone());
+        assert_eq!(f.flags, FRAME_SUN | FRAME_SKY | FRAME_SUN_NO_SHADOW);
+        assert_eq!(f.sun_rgb, [50_000.0, 50_000.0, 50_000.0, 0.0]);
+        look.sun.on = false;
+        let f = frame_for(look);
+        assert_eq!(f.flags & (FRAME_SUN | FRAME_SUN_NO_SHADOW), 0, "sun off: no sun flags");
+        assert_eq!(f.sun_rgb, [0.0; 4]);
+    }
+
+    #[test]
+    fn sky_off_leaves_only_the_sun() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = false;
+        let f = frame_for(look);
+        assert_eq!(f.flags, FRAME_SUN, "no sky flag, the sun stays");
+        assert_eq!(f.sky_zenith, [0.0; 4]);
+        assert_eq!(f.sky_horizon, [0.0; 4]);
+    }
+
+    #[test]
+    fn sun_without_shadows_passes_occluders() {
+        // The sun's visibility returns 1 without tracing when FRAME_SUN_NO_SHADOW is set.
+        let src = super::super::shaders::kernel_source();
+        assert!(src.contains("if ((frame.flags & FRAME_SUN_NO_SHADOW) != 0u) { return vec3<f32>(1.0); }"));
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.shadows = false;
+        assert_ne!(frame_for(look).flags & FRAME_SUN_NO_SHADOW, 0);
+    }
+
     /// A path-traced 4-spp still of `scene` from `camera` at `size`, under the default (sunlit) lighting: camera
     /// rays that miss see the sky, so a miss is as bright as the sky there, not black.
     fn sunlit_still(gpu: &ComputeGpu, scene: &Scene3d, camera: &Camera, size: (u32, u32)) -> Vec<u8> {
@@ -1586,50 +1616,6 @@ mod tests {
     /// above it.
     fn looking_level() -> Camera {
         Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, -6.0, 1.2), Vec3::new(0.0, 6.0, 1.2), 40.0))
-    }
-
-    /// A 4-spp, undenoised still looking up (every camera ray misses) under `env` alone (no sun), with the display
-    /// exposure at EV100 0 (1 / 1.2) and no tone curve.
-    fn environment_still(gpu: &ComputeGpu, scene: &Scene3d, env: crate::environment::Environment) -> Vec<u8> {
-        let lighting = Lighting { sun: None, environment: Some(std::sync::Arc::new(env)), ..Default::default() };
-        let opts = PathOptions { spp: 4, seed: 7, denoise: false, exposure: Exposure::Fixed(1.0 / 1.2), ..Default::default() };
-        let mut t = PathTracer::new(gpu, scene, &looking_up(), &lighting, false, (16, 12), &opts, None).unwrap();
-        t.frame.look[0] = 0;
-        loop {
-            match t.step(gpu) {
-                PathStatus::Running { .. } => {}
-                PathStatus::Done { rgba, .. } => return rgba,
-                s => panic!("{s:?}"),
-            }
-        }
-    }
-
-    /// A light-only environment adds no picture: a missed pixel stays a miss, so the backdrop shows (or, with none,
-    /// the pixel is black).
-    #[test]
-    fn invisible_environment_keeps_camera_misses() {
-        let Some(gpu) = compute() else { return };
-        let mut env = crate::environment::Environment::uniform([1.0; 3], 8, 4);
-        env.visible = false;
-        let rgba = environment_still(&gpu, &with_backdrop(Backdrop::Colour { colour: [32, 64, 96] }, BTreeMap::new()), env.clone());
-        let wrong = (0..16 * 12).filter(|i| rgba[i * 4..i * 4 + 4] != [32, 64, 96, 255]).count();
-        assert_eq!(wrong, 0, "{wrong} of 192 misses are not the backdrop");
-        let bare = Scene3d { backdrop: None, ..with_backdrop(Backdrop::Sky, BTreeMap::new()) };
-        let rgba = environment_still(&gpu, &bare, env);
-        assert!((0..16 * 12).all(|i| rgba[i * 4..i * 4 + 3] == [0, 0, 0]), "an invisible environment is not the picture: {:?}", &rgba[0..4]);
-    }
-
-    /// A visible environment under a Sky backdrop is the picture: radiance 1 at exposure 1 / 1.2 reads 0.8333, sRGB 235.
-    #[test]
-    fn visible_environment_shows_through_a_sky_backdrop() {
-        let Some(gpu) = compute() else { return };
-        let env = crate::environment::Environment::uniform([1.0; 3], 8, 4);
-        let rgba = environment_still(&gpu, &with_backdrop(Backdrop::Sky, BTreeMap::new()), env);
-        for i in 0..16 * 12 {
-            let px = &rgba[i * 4..i * 4 + 4];
-            assert!(px[..3].iter().all(|c| (i32::from(*c) - 235).abs() <= 5), "pixel {i} reads {px:?}, want 235");
-            assert_ne!(px[..3], crate::backdrop::CLEAR_RGB, "pixel {i} is the clear colour");
-        }
     }
 
     fn with_backdrop(backdrop: Backdrop, textures: BTreeMap<String, ImageRgba>) -> Scene3d {
