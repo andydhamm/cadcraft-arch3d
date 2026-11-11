@@ -17,6 +17,18 @@ const FRAME_SUN: u32 = 1u;
 const FRAME_SKY: u32 = 2u;
 const FRAME_FURNACE: u32 = 4u;
 const FRAME_GROUND: u32 = 8u;
+// [p19-env-path] the environment-map light is present.
+const FRAME_ENV: u32 = 16u;
+// [p19-sky] the moon is a light source.
+const FRAME_MOON: u32 = 32u;
+// [p19-seeing-in-render] the seeing-in clip box is active.
+const FRAME_CLIP: u32 = 64u;
+// [p19-sun] the sun casts no shadows.
+const FRAME_SUN_NO_SHADOW: u32 = 128u;
+// [p19-normal-maps-render] normal maps are sampled.
+const FRAME_NORMAL_MAPS: u32 = 256u;
+// [p19-exposure] surfaces are Lambertian.
+const FRAME_LAMBERT: u32 = 512u;
 
 const MAX_PATH_DEPTH: u32 = 64u;
 const STACK_SIZE: u32 = 64u;
@@ -40,6 +52,16 @@ struct Frame {
     _p0: u32,
     _p1: u32,
     _p2: u32,
+    env: vec4<u32>,
+    env_aux: vec4<u32>,
+    env_params: vec4<f32>,
+    moon_dir: vec4<f32>,
+    moon_rgb: vec4<f32>,
+    clip_min: vec4<f32>,
+    clip_max: vec4<f32>,
+    view: vec4<f32>,
+    tex: vec4<u32>,
+    look: vec4<u32>,
 };
 
 struct Node { min: vec3<f32>, left_or_first: u32, max: vec3<f32>, count: u32 };
@@ -75,6 +97,7 @@ struct Probe { point: vec3<f32>, _a: f32, normal: vec3<f32>, _b: f32 };
 @group(0) @binding(2) var<storage, read> tris: array<Tri>;
 @group(0) @binding(3) var<storage, read> materials: array<Material>;
 @group(0) @binding(4) var<storage, read> lights: array<Light>;
+// The per-still aux buffer: IES tables first, then data at the offsets the frame records.
 @group(0) @binding(5) var<storage, read> ies: array<f32>;
 // Per pixel (or per probe): the radiance sum in rgb, the sample count in w.
 @group(0) @binding(6) var<storage, read_write> accum: array<vec4<f32>>;
@@ -114,3 +137,8 @@ fn onb(n: vec3<f32>) -> mat3x3<f32> {
     let bt = vec3<f32>(b, s + n.y * n.y * a, -n.y);
     return mat3x3<f32>(t, bt, n);
 }
+
+// [p19-seeing-in-render] true when a hit at world point p is cut away by the clip box.
+fn hit_clipped(p: vec3<f32>) -> bool { return false; }
+// [p19-seeing-in-render] the distance along a camera ray of direction d at which it starts (near clip).
+fn camera_t_min(d: vec3<f32>) -> f32 { return 0.0; }

@@ -8,9 +8,12 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+pub mod backsplash;
+pub mod cabinet_parts;
 pub mod camera;
 pub mod casework;
 pub(crate) mod ceiling;
+pub mod countertop;
 pub(crate) mod deck_frame;
 pub mod edges;
 pub mod electrical;
@@ -18,6 +21,9 @@ pub mod finish;
 pub mod fixture;
 pub(crate) mod flight_cut;
 pub mod foundation;
+pub mod molding;
+pub mod niche;
+pub mod wall_glass;
 
 pub mod furnishing;
 pub mod paint;
@@ -296,6 +302,7 @@ pub(crate) fn fill_materials(model: &ArchModel, scene: &mut Scene3d) {
     electrical::plate_materials(model, scene);
     soffit::materials(model, scene);
     paint::materials(model, scene);
+    niche::niche_materials(model, scene);
     scene.backdrop = model.backdrop.clone();
     if let Some(Backdrop::Image { item, .. }) = &model.backdrop
         && let Some(image) = model.images.get(item)

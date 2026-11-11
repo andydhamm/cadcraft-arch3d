@@ -183,9 +183,18 @@ pub struct Offscreen {
     pub(crate) lit_pipelines: Option<crate::lit::LitPipelines>,
     pub(crate) lit_state: crate::lit_frame::LitState,
     pub(crate) final_renders: u64,
+    /// Phase 19: exposure metering state and the look of the last encoded frame.
+    meter: crate::frame_look::Meter,
+    last_look: crate::frame_look::FrameLook,
 }
 
 impl Offscreen {
+    /// The [`FrameLook`](crate::frame_look::FrameLook) of the last frame encoded (the default
+    /// when it was unlit).
+    pub fn last_frame_look(&self) -> &crate::frame_look::FrameLook {
+        &self.last_look
+    }
+
     /// A renderer with its own device on the best available adapter.
     /// [`Render3dError::NoAdapter`] when there is none (headless, no GPU).
     pub async fn new(instance: &wgpu::Instance, size: (u32, u32)) -> Result<Self, Render3dError> {
@@ -245,6 +254,8 @@ impl Offscreen {
             lit_pipelines: None,
             lit_state: Default::default(),
             final_renders: 0,
+            meter: Default::default(),
+            last_look: Default::default(),
         }
     }
 
@@ -351,6 +362,14 @@ impl Offscreen {
         if lit.is_none() && opts.shadow.is_some() && self.shadowed.is_none() {
             self.shadowed = ShadowPipelines::new(&self.device, &self.gpu);
         }
+        // The frame's look, decided once from the lit frame (the default when unlit).
+        self.last_look = match opts.lit {
+            Some(frame) => {
+                let size = (self.targets.width, self.targets.height);
+                crate::frame_look::frame_look(scene, camera, size, &frame.lighting, opts.ground, &mut self.meter)
+            }
+            None => crate::frame_look::FrameLook::default(),
+        };
         let Some((_, meshes)) = self.meshes.as_ref() else { return };
         let draws = meshes.draws.len() as u64;
         let filtered_meshes: Vec<&crate::types::Mesh> =
@@ -408,7 +427,7 @@ impl Offscreen {
                         draw.alpha = 0.35;
                     }
                 }
-                let p = if matches!(opts.style, Style::Technical) {
+                let mut p = if matches!(opts.style, Style::Technical) {
                     // Flat shading: ambient 1.0, sun 0.0
                     let light = Light { ambient: 1.0, dir: [0.0, 0.0, 1.0], ..Default::default() };
                     PbrUniform::new(&light, 0.0, &draw, opts.style.code(), eye)
@@ -420,6 +439,9 @@ impl Offscreen {
                         None => PbrUniform::new(&l, 1.0, &draw, opts.style.code(), eye),
                     }
                 };
+                // Draws past the scene's meshes are the ground quad.
+                let material = filtered_meshes.get(i).map_or("ground", |mesh| mesh.material.as_str());
+                crate::frame_look::fill_draw(&mut p, &self.last_look, scene, material);
                 let at = i * self.stride as usize;
                 pbr_bytes[at..at + PBR_SIZE as usize].copy_from_slice(bytemuck::bytes_of(&p));
             }

@@ -67,6 +67,22 @@ pub fn part_of(mesh: &Mesh) -> &'static str {
     if m.starts_with("soffit-box") {
         return "soffit";
     }
+    // Phase 18: glass walls, niche back blocks, moldings, countertops and backsplashes.
+    if m.starts_with("glass-wall") {
+        return "glass";
+    }
+    if m.starts_with("molding-") {
+        return "molding";
+    }
+    if m == "countertop" || m.starts_with("countertop-") {
+        return "counter";
+    }
+    if m == "backsplash" {
+        return "backsplash";
+    }
+    if m.starts_with("niche-back") {
+        return "wall";
+    }
     // Phase 13: finished faces belong to their wall, roof or room.
     if m.starts_with("wall-") {
         return "wall";
@@ -159,6 +175,8 @@ fn unpainted_part(surface: &Surface) -> &'static str {
         Surface::Cabinet { part: CabinetPart::Pull, .. } => "pull",
         Surface::Fixture(_) => "fixture",
         Surface::Furnishing { .. } => "furnishing",
+        Surface::Countertop(_) => "counter",
+        Surface::Backsplash(_) => "backsplash",
     }
 }
 
@@ -254,7 +272,17 @@ pub fn mesh_label(mesh: &Mesh) -> String {
     let m = mesh.material.to_lowercase();
     // Phase 17: deck structure belongs to its deck room (before any part rule: part "footing" is a
     // foundation's), railing parts to the railing and stair parts to the stair.
-    let phase17 = if m == "deck" || m.starts_with("deck-") {
+    let phase17 = if m.starts_with("glass-wall") || m.starts_with("niche-back") {
+        Some(cadcraft_doc::arch::wall_label(mesh.object))
+    } else if m.starts_with("molding-room-") {
+        Some(cadcraft_doc::arch::room_label(mesh.object))
+    } else if m.starts_with("molding-line") {
+        Some(cadcraft_doc::arch::molding_line_label(mesh.object))
+    } else if m == "countertop" || m.starts_with("countertop-") {
+        Some(cadcraft_doc::arch::countertop_label(mesh.object))
+    } else if m == "backsplash" {
+        Some(cadcraft_doc::arch::backsplash_label(mesh.object))
+    } else if m == "deck" || m.starts_with("deck-") {
         Some(cadcraft_doc::arch::room_label(mesh.object))
     } else if m == "railing" || m.starts_with("railing-") {
         Some(cadcraft_doc::arch::railing_label(mesh.object))
@@ -312,7 +340,28 @@ pub fn pick_part(mesh: &Mesh) -> &'static str {
 pub fn arch_kind(mesh: &Mesh) -> cadcraft_doc::arch::ArchKind {
     use cadcraft_doc::arch::ArchKind;
     let m = mesh.material.to_lowercase();
-    if m == "deck" || m.starts_with("deck-") { ArchKind::Room } else { ArchKind::from_part(part_of(mesh)) }
+    if let Some(s) = m.strip_prefix("paint:").and_then(Surface::parse) {
+        match s {
+            Surface::Countertop(_) => return ArchKind::Countertop,
+            Surface::Backsplash(_) => return ArchKind::Backsplash,
+            _ => {}
+        }
+    }
+    if m.starts_with("glass-wall") || m.starts_with("niche-back") {
+        ArchKind::Wall
+    } else if m.starts_with("molding-room-") {
+        ArchKind::Room
+    } else if m.starts_with("molding-line") {
+        ArchKind::MoldingLine
+    } else if m == "countertop" || m.starts_with("countertop-") {
+        ArchKind::Countertop
+    } else if m == "backsplash" {
+        ArchKind::Backsplash
+    } else if m == "deck" || m.starts_with("deck-") {
+        ArchKind::Room
+    } else {
+        ArchKind::from_part(part_of(mesh))
+    }
 }
 
 /// The label of a phase-14/16 part, when its part names one.
@@ -330,6 +379,8 @@ fn phase14_label(mesh: &Mesh, m: &str) -> Option<String> {
             Surface::Cabinet { .. } => cadcraft_doc::arch::cabinet_label(mesh.object),
             Surface::Fixture(_) => cadcraft_doc::arch::fixture_label(mesh.object),
             Surface::Furnishing { .. } => cadcraft_doc::arch::furnishing_label(mesh.object),
+            Surface::Countertop(_) => cadcraft_doc::arch::countertop_label(mesh.object),
+            Surface::Backsplash(_) => cadcraft_doc::arch::backsplash_label(mesh.object),
         }),
     }
 }
@@ -415,6 +466,57 @@ mod tests {
         // Phase 16's footing and the roof's soffit keep their parts.
         assert_eq!(part_of(&named("footing", 0)), "footing");
         assert_eq!(part_of(&named("soffit", 0)), "roof");
+    }
+
+    #[test]
+    fn part_of_maps_phase18_materials() {
+        let want = [
+            ("glass-wall", "glass"),
+            ("molding-room-base-0", "molding"),
+            ("molding-line", "molding"),
+            ("countertop", "counter"),
+            ("countertop-waterfall", "counter"),
+            ("backsplash", "backsplash"),
+            ("niche-back:o3", "wall"),
+            ("cabinet-crown", "cabinet"),
+        ];
+        for (material, part) in want {
+            assert_eq!(part_of(&named(material, 0)), part, "{material}");
+        }
+    }
+
+    #[test]
+    fn mesh_label_of_phase18_meshes() {
+        use cadcraft_doc::arch::{backsplash_label, countertop_label, molding_line_label, room_label, wall_label};
+        assert_eq!(mesh_label(&named("glass-wall", 2)), wall_label(ArchId(2)));
+        assert_eq!(mesh_label(&named("molding-room-base-0", 3)), room_label(ArchId(3)));
+        assert_eq!(mesh_label(&named("molding-line", 4)), molding_line_label(ArchId(4)));
+        assert_eq!(mesh_label(&named("countertop", 5)), countertop_label(ArchId(5)));
+        assert_eq!(mesh_label(&named("countertop-waterfall", 5)), countertop_label(ArchId(5)));
+        assert_eq!(mesh_label(&named("backsplash", 6)), backsplash_label(ArchId(6)));
+        assert_eq!(mesh_label(&named("niche-back:o3", 7)), wall_label(ArchId(7)));
+        assert_eq!(mesh_label(&named("paint:countertop/ct0", 0)), "ct0");
+        assert_eq!(mesh_label(&named("paint:backsplash/bs1", 1)), "bs1");
+    }
+
+    #[test]
+    fn arch_kind_of_phase18_meshes() {
+        use cadcraft_doc::arch::ArchKind;
+        let want = [
+            ("glass-wall", ArchKind::Wall),
+            ("niche-back:o3", ArchKind::Wall),
+            ("molding-room-base-0", ArchKind::Room),
+            ("molding-line", ArchKind::MoldingLine),
+            ("countertop", ArchKind::Countertop),
+            ("countertop-waterfall", ArchKind::Countertop),
+            ("backsplash", ArchKind::Backsplash),
+            ("paint:countertop/ct0", ArchKind::Countertop),
+            ("paint:backsplash/bs1", ArchKind::Backsplash),
+            ("deck-joist", ArchKind::Room),
+        ];
+        for (material, kind) in want {
+            assert_eq!(arch_kind(&named(material, 0)), kind, "{material}");
+        }
     }
 
     #[test]

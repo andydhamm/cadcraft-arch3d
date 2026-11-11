@@ -1,10 +1,12 @@
-// Phase-10 fixture lighting. Appended after mesh.wgsl (with its fragment renamed
-// to fs_base) and lights::LIGHT_MATH_WGSL.
+// Phase-10 fixture lighting. Appended after mesh.wgsl (cut before its fragment function, so
+// shade_parts and the hook functions are in scope) and lights::LIGHT_MATH_WGSL.
 
 struct FrameU {
     sun_vp: mat4x4<f32>,
     sun: vec4<f32>,
     params: vec4<f32>,
+    ext: vec4<f32>,             // x ambient lux, y = 1 when `sh` is valid
+    sh: array<vec4<f32>, 9>,    // second-order spherical harmonics, rgb in xyz
 };
 @group(2) @binding(0) var<uniform> fr: FrameU;
 @group(2) @binding(1) var sun_map: texture_depth_2d;
@@ -105,50 +107,67 @@ fn lit_cube_shadow(i: u32, delta: vec3<f32>) -> f32 {
     return visibility / max(samples, 1.0);
 }
 
+// Hook [p19-env-raster]: the ambient term of the lit pipelines.
+fn lit_ambient(albedo: vec3<f32>, metallic: f32, n: vec3<f32>) -> vec3<f32> {
+    return base_ambient(albedo, metallic, n);
+}
+
+// Hook [p19-exposure]: display units per lux of fixture light.
+fn fixture_scale() -> f32 {
+    return fr.params.x;
+}
+
+// Hook [p19-strip-render]: the illuminance (lux) fixture `i` casts on a face with normal `n` at
+// `wpos`: its cone, the cosine, the inverse square and its shadow.
+fn fixture_light(i: u32, wpos: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    let light = lu.lights[i];
+    let to_l = light.pos_range.xyz - wpos;
+    let d2 = max(dot(to_l, to_l), 1e-8);
+    let l = to_l / sqrt(d2);
+    let ndl = max(dot(n, l), 0.0);
+
+    var cone = 1.0;
+    if (light.dir_cos_outer.w >= -1.5) {
+        let toward = dot(-l, light.dir_cos_outer.xyz);
+        if (light.color_cos_inner.w <= light.dir_cos_outer.w + 1e-7) {
+            cone = step(light.dir_cos_outer.w, toward);
+        } else {
+            cone = smoothstep(light.dir_cos_outer.w, light.color_cos_inner.w, toward);
+        }
+    }
+    let illuminance = light.color_cos_inner.xyz * cone * ndl / d2;
+
+    var shadow = 1.0;
+    if (light.shadow.x >= 0.0) {
+        if (light.shadow.y < 0.5) {
+            shadow = lit_spot_shadow(i, wpos);
+        } else {
+            shadow = lit_cube_shadow(i, wpos - light.pos_range.xyz);
+        }
+    }
+    return illuminance * shadow;
+}
+
 @fragment
 fn fs(v: VOut) -> @location(0) vec4<f32> {
-    var c = fs_base(v);
-    if (p.style == 2u) {
-        return c;
+    let s = shade_parts(v);
+    if (s.keep != 0u) {
+        return vec4<f32>(s.direct, s.alpha);
     }
-    let albedo = base_albedo(v.uv);
-    var rgb = c.rgb;
+    let albedo = s.albedo;
+    var direct = s.direct;
 
     if (fr.sun.y > 0.5 && fr.sun.z > 0.5 && lit_sun_visibility(v.wpos) < 0.5) {
-        rgb = albedo * p.ambient * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
+        direct = vec3<f32>(0.0);
     }
+    var rgb = direct + lit_ambient(albedo, s.metallic, s.n);
 
-    let n = normalize(cross(dpdy(v.wpos), dpdx(v.wpos)));
+    let n = s.n;
     let n_l = select(n, -n, dot(n, p.camera_pos - v.wpos) < 0.0);
     let diffuse_albedo = albedo * (1.0 - clamp(p.metallic, 0.0, 1.0) * 0.5);
     let light_count = min(lu.count.x, 64u);
     for (var i = 0u; i < light_count; i = i + 1u) {
-        let light = lu.lights[i];
-        let to_l = light.pos_range.xyz - v.wpos;
-        let d2 = max(dot(to_l, to_l), 1e-8);
-        let l = to_l / sqrt(d2);
-        let ndl = max(dot(n_l, l), 0.0);
-
-        var cone = 1.0;
-        if (light.dir_cos_outer.w >= -1.5) {
-            let toward = dot(-l, light.dir_cos_outer.xyz);
-            if (light.color_cos_inner.w <= light.dir_cos_outer.w + 1e-7) {
-                cone = step(light.dir_cos_outer.w, toward);
-            } else {
-                cone = smoothstep(light.dir_cos_outer.w, light.color_cos_inner.w, toward);
-            }
-        }
-        let illuminance = light.color_cos_inner.xyz * cone * ndl / d2;
-
-        var shadow = 1.0;
-        if (light.shadow.x >= 0.0) {
-            if (light.shadow.y < 0.5) {
-                shadow = lit_spot_shadow(i, v.wpos);
-            } else {
-                shadow = lit_cube_shadow(i, v.wpos - light.pos_range.xyz);
-            }
-        }
-        rgb = rgb + (diffuse_albedo / LIT_PI) * illuminance * shadow * fr.params.x;
+        rgb = rgb + (diffuse_albedo / LIT_PI) * fixture_light(i, v.wpos, n_l) * fixture_scale();
     }
 
     rgb = rgb + albedo * p._p6.x;
@@ -158,5 +177,5 @@ fn fs(v: VOut) -> @location(0) vec4<f32> {
         let denominator = x * (2.43 * x + vec3<f32>(0.59)) + vec3<f32>(0.14);
         rgb = clamp(numerator / denominator, vec3<f32>(0.0), vec3<f32>(1.0));
     }
-    return vec4<f32>(rgb, c.a);
+    return vec4<f32>(finish_color(rgb), s.alpha);
 }
