@@ -299,7 +299,7 @@ pub fn view_proj_with_near(camera: &Camera, aspect: f64, near: f64) -> [[f32; 4]
         [0.0, 0.0, -z_far / (z_far - near), -near * z_far / (z_far - near)],
         [0.0, 0.0, -1.0, 0.0],
     ];
-    let m = [[f64; 4]; 4];
+    let mut m = [[0.0f64; 4]; 4];
     for c in 0..4 {
         for r in 0..4 {
             m[r][c] = view.m[r][c] as f64;

@@ -8,11 +8,14 @@
 
 use std::collections::BTreeSet;
 
+use crate::Scene3d;
+use crate::camera::Camera;
+use crate::incremental::ObjectKind;
 use crate::mesh::Mesh;
-use crate::{Camera, Scene3d};
-use cadcraft_arch::{FurnishingHost, ObjectKind};
-use cadcraft_doc::{ArchId, ArchModel, Vec3};
-use cadraft_doc::arch::Look;
+use cadcraft_arch::furnishing::FurnishingHost;
+use cadcraft_doc::arch::Look;
+use cadcraft_doc::{ArchId, ArchModel};
+use cadcraft_geom::{Vec2, Vec3};
 
 /// A set of hidden objects, keyed by a part-class string and the object id, so
 /// `hidden` is a total order even when the id set is empty.
@@ -27,6 +30,12 @@ const PART_OF: &[(&'static str, ObjectKind)] = &[
     ("furnishing", ObjectKind::Furnishing),
     ("light", ObjectKind::Light),
 ];
+
+/// Mixes a 64-bit value into a running hash (FNV-1a style); deterministic and
+/// independent of insertion order.
+fn combine(h: u64, x: u64) -> u64 {
+    (h ^ x).wrapping_mul(0x5BC96907F1C0439Cu64)
+}
 
 /// A six-plane clip box: three min and three max planes, inclusive of both.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -82,6 +91,10 @@ impl ViewFilter {
             return 0;
         }
         let mut h: u64 = 0;
+        for (kind, id) in &self.hidden {
+            h = combine(h, kind.len() as u64);
+            h = combine(h, id.0);
+        }
         if let Some(c) = self.clip {
             for &v in [c.min.x as i64, c.min.y as i64, c.min.z as i64, c.max.x as i64, c.max.y as i64, c.max.z as i64] {
                 h = combine(h, (v.wrapping_mul(-1)) as u64);
@@ -102,8 +115,8 @@ impl ViewFilter {
         }
         let hidden: BTreeSet<ArchId> = self.hidden.iter().map(|(_, id)| *id).collect();
         s.meshes.retain(|m| !hidden.contains(&m.object));
-        s.furnishing_boxes.retain(|b| !hidden.contains(&b.object));
-        s.electrical_boxes.retain(|b| !hidden.contains(&b.object));
+        s.furnishing_boxes.retain(|b| !hidden.contains(&b.id));
+        s.electrical_boxes.retain(|b| !hidden.contains(&b.id));
         s
     }
 

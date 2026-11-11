@@ -233,6 +233,58 @@ impl Bvh {
         let (part, object, owner) = *self.meshes.get(tri.mesh as usize)?;
         Some(PickHit { object, part, owner, distance: t, point: origin + d * t })
     }
+
+    /// Every strike the ray makes, in increasing distance (then mesh) order. The far end is
+    /// `f64::MAX`, which is what [`Scene3d::pick_filtered`] needs to walk through all hits.
+    /// An empty scene or a zero / non-finite direction yields an empty list.
+    pub fn rays_all(&self, origin: Vec3, dir: Vec3) -> Vec<PickHit> {
+        if self.nodes.is_empty() || !origin.is_finite() || !dir.is_finite() {
+            return Vec::new();
+        }
+        let len = dir.len();
+        if !(len > 0.0) || !len.is_finite() {
+            return Vec::new();
+        }
+        let d = dir * (1.0 / len);
+        if !d.is_finite() {
+            return Vec::new();
+        }
+        let max_t = f64::MAX;
+        let mut hits: Vec<(f64, u32, PickHit)> = Vec::new();
+        let mut stack: Vec<u32> = vec![0];
+        while let Some(ni) = stack.pop() {
+            let Some(node) = self.nodes.get(ni as usize) else { continue };
+            if !box_hit(node, origin, d, max_t) {
+                continue;
+            }
+            if node.count == 0 {
+                // Push right first so the left child is visited first.
+                stack.push(node.right);
+                stack.push(node.left);
+                continue;
+            }
+            for slot in node.start..node.start.saturating_add(node.count) {
+                let Some(&ti) = self.order.get(slot as usize) else { continue };
+                let Some(tri) = self.tris.get(ti as usize) else { continue };
+                if let Some(t) = tri_hit(tri, origin, d) {
+                    let Some((part, object, owner)) = self.meshes.get(tri.mesh as usize) else { continue };
+                    hits.push((t, tri.mesh, PickHit { object, part, owner, distance: t, point: origin + d * t }));
+                }
+            }
+        }
+        hits.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.cmp(&b.1)));
+        hits.into_iter().map(|(_, _, h)| h).collect()
+    }
+
+    /// The distance of the nearest strike at least `t_min` out along the ray — the hit
+    /// [`Scene3d::pick_filtered`] advances past when no accepted hit exists.
+    pub fn nearest_rejected(&self, origin: Vec3, dir: Vec3, t_min: f64) -> Option<f64> {
+        self.rays_all(origin, dir)
+            .iter()
+            .filter(|h| h.distance >= t_min)
+            .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|h| h.distance)
+    }
 }
 
 /// Slab test of the ray against a node box, limited to `[0, t_max]`.
