@@ -397,13 +397,14 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
     }
 
     // --- Level: name or index, else 0; unknown is an error, never a silent default ---
-    // `level` must be a string (a level name or a numeric index string). A present
-    // non‑string (e.g. a bare JSON number) is malformed, not "absent".
+    // A string is a level name or an index string; a bare JSON number is an index, resolved the same way (a fraction,
+    // a negative number or an index past the last level is unknown). Anything else is malformed, not "absent".
     let level = match p.get("level") {
         None => 0,
         Some(Value::Null) => 0,
         Some(Value::String(n)) => find_room_level(arch, n)?,
-        Some(other) => return Err(bad("room", format!("`level` must be a string (a level name or index), got `{other}`"))),
+        Some(Value::Number(n)) => find_room_level(arch, &n.to_string())?,
+        Some(other) => return Err(bad("room", format!("`level` must be a level name or index, got `{other}`"))),
     };
 
     // --- Type: known names only; unknown is refused, absent is Other ---
@@ -1192,17 +1193,29 @@ mod tests {
         assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
     }
 
-    /// A bare JSON number for `level` is refused (must be a string).
+    /// A bare JSON number that is not a level index (a fraction, a negative number, one past the last level) is
+    /// refused, and nothing is drawn. (Until phase 16 every bare number was refused; an integer index is accepted now,
+    /// as `stair`, `tray`, `soffit` and `roomdetect` accept it: phase-16 check 16 draws `room {"level": 1}`.)
     #[test]
     fn room_rejects_level_as_bare_number() {
         let mut s = new_session();
-        let p = json!({
-            "points": square_points(),
-            "level": 1,
-        });
-        let r = s.execute("room", &p);
-        assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })));
+        for bad in [json!(1.5), json!(-1), json!(1)] {
+            let p = json!({ "points": square_points(), "level": bad });
+            let r = s.execute("room", &p);
+            assert!(r.is_err(), "level {bad} is refused on a one-level drawing: {r:?}");
+        }
         assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
+    }
+
+    /// An integer `level` is the level's index, as `level: "1"` is; the room is drawn on that level.
+    #[test]
+    fn room_accepts_level_as_integer_index() {
+        let mut s = new_session();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 1 })).unwrap();
+        assert_eq!(r["id"].as_str().unwrap(), "r0");
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 1);
+        assert_eq!(s.doc().unwrap().arch.rooms[0].level, 1);
     }
 
     /// `level: null` is treated as absent and defaults to level 0.
