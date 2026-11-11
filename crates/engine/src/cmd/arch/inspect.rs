@@ -438,6 +438,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::foundation::inspect_foundations(&d.arch, p, &mut out);
     super::tray::inspect_trays(&d.arch, p, &mut out);
     super::soffit::inspect_soffits(&d.arch, p, &mut out);
+    super::countertop_inspect::inspect_countertops(&d.arch, p, &mut out);
     super::deck_inspect::inspect_decks(&d.arch, p, &mut out);
     super::inspect_detail::inspect_details(&d.arch, &mut out);
 
@@ -2563,6 +2564,71 @@ mod tests {
             toe_kick: true,
             ..Cabinet::default()
         }
+    }
+
+    fn counter_cabinet(x: f64) -> cadcraft_doc::arch::Cabinet {
+        cadcraft_doc::arch::Cabinet { position: Vec2::new(x, 0.3), counter: true, counter_thickness: 0.04, ..kitchen_cabinet() }
+    }
+
+    #[test]
+    fn inspect_countertops_rows_for_automatic_counters() {
+        let mut s = session_with(|m| {
+            m.push_cabinet(counter_cabinet(0.3));
+            m.push_cabinet(counter_cabinet(0.9));
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "countertops": true }));
+        let rows = v["countertops"].as_array().expect("countertops array");
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        let r = &rows[0];
+        assert_eq!(r["id"], "cb0");
+        assert_eq!(r["auto"], true);
+        assert!(r["handle"].is_null());
+        assert_eq!(r["cabinets"], json!(["cb0", "cb1"]));
+        assert_eq!(r["polygon"].as_array().map(Vec::len), Some(4));
+        let edges = r["edges"].as_array().expect("edges");
+        assert_eq!(edges.len(), 4);
+        assert!(edges.iter().all(|e| e["radius"].is_null() && e["sagitta"] == 0.0 && e["profile"] == "square" && e["waterfall"] == false));
+        assert!(r["top"].as_f64().is_some_and(|t| t > 0.88), "{r:?}");
+        assert!(r["area"].as_f64().is_some_and(|a| a > 0.7), "{r:?}");
+        assert_eq!(r["holes"], json!([]));
+        assert!(r["layer"].is_string());
+        // Not asked for: no key.
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        assert!(v.get("countertops").is_none());
+    }
+
+    #[test]
+    fn inspect_countertops_rows_for_custom_ones() {
+        use cadcraft_doc::arch::{CounterEdge, Countertop, EdgeProfile};
+        let mut s = session_with(|m| {
+            m.push_countertop(Countertop {
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
+                edges: vec![
+                    CounterEdge { sagitta: 0.5, profile: EdgeProfile::Bullnose, waterfall: true, ..CounterEdge::default() },
+                    CounterEdge::default(),
+                ],
+                ..Countertop::default()
+            });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "countertops": true }));
+        let rows = v["countertops"].as_array().expect("countertops array");
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        let r = &rows[0];
+        assert_eq!(r["id"], "ct0");
+        assert_eq!(r["auto"], false);
+        assert!(r["handle"].is_number() || r["handle"].is_string(), "{r:?}");
+        let e0 = &r["edges"][0];
+        assert_eq!(e0["length"], 2.0);
+        assert_eq!(e0["sagitta"], 0.5);
+        assert_eq!(e0["radius"], 1.25); // (2²/4 + 0.5²) / (2 * 0.5)
+        assert_eq!(e0["profile"], "bullnose");
+        assert_eq!(e0["waterfall"], true);
+        assert!(r["edges"][1]["radius"].is_null());
+        assert_eq!(r["thickness"], 0.038);
+        assert_eq!(r["top"], 0.914);
+        // 2 x 1 rectangle plus the segment of a chord 2, sagitta 0.5 (> 0).
+        assert!(r["area"].as_f64().is_some_and(|a| a > 2.5), "{r:?}");
+        assert_eq!(r["layer"], "A-FLOR-CASE");
     }
 
     #[test]
