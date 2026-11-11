@@ -162,7 +162,7 @@ pub fn read_hdr(bytes: &[u8]) -> Result<ImageRgbe, String> {
     } else {
         return Err(format!("HDR payload length {} does not match {expected} bytes", payload.len()));
     };
-    Ok(ImageRgbe { width, height, rgbe })
+    Ok(ImageRgbe { width, height, rgbe, ..Default::default() })
 }
 
 /// Downsample an RGBE image while preserving aspect ratio and linear-light averaging.
@@ -207,7 +207,7 @@ pub fn fit(img: &ImageRgbe, max_w: u32, max_h: u32) -> ImageRgbe {
             out.extend_from_slice(&px);
         }
     }
-    ImageRgbe { width: target_w, height: target_h, rgbe: out }
+    ImageRgbe { width: target_w, height: target_h, rgbe: out, ..Default::default() }
 }
 
 /// Create a thumbnail from an HDR image, with a bounded, mostly non-uniform display mapping.
@@ -230,7 +230,7 @@ pub fn display_image(img: &ImageRgbe, max_side: u32) -> ImageRgba {
         let srgb = mapped.map(|v| (v.powf(1.0 / 2.2) * 255.0).round().clamp(0.0, 255.0) as u8);
         rgba.extend_from_slice(&[srgb[0], srgb[1], srgb[2], 255]);
     }
-    ImageRgba { width: scaled.width, height: scaled.height, rgba }
+    ImageRgba { width: scaled.width, height: scaled.height, rgba, ..Default::default() }
 }
 
 #[cfg(test)]
@@ -311,7 +311,7 @@ mod tests {
         for px in rgbe.chunks_exact_mut(4) {
             px[3] = 128;
         }
-        let img = ImageRgbe { width: 2048, height: 1024, rgbe };
+        let img = ImageRgbe { width: 2048, height: 1024, rgbe, ..Default::default() };
         let fit_img = fit(&img, 1024, 512);
         assert_eq!(fit_img.width, 1024);
         assert_eq!(fit_img.height, 512);
@@ -331,6 +331,7 @@ mod tests {
             width: 4,
             height: 2,
             rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128, 255, 0, 0, 128, 0, 255, 0, 128, 0, 0, 255, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128],
+            ..Default::default()
         };
         let thumb = display_image(&img, 16);
         assert!(thumb.width <= 16);
@@ -351,11 +352,11 @@ mod tests {
     #[test]
     fn hdr_images_pruned_and_capped() {
         let mut model = cadcraft_doc::ArchModel::default();
-        model.hdr_images.insert("b".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128] });
-        model.hdr_images.insert("a".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128] });
-        model.hdr_images.insert("c".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128] });
-        model.hdr_images.insert("d".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128] });
-        model.hdr_images.insert("e".into(), ImageRgbe { width: 1, height: 1, rgbe: vec![0, 0, 0, 0] });
+        model.hdr_images.insert("b".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() });
+        model.hdr_images.insert("a".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() });
+        model.hdr_images.insert("c".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() });
+        model.hdr_images.insert("d".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() });
+        model.hdr_images.insert("e".into(), ImageRgbe { width: 1, height: 1, rgbe: vec![0, 0, 0, 0], ..Default::default() });
         model.backdrop = Some(cadcraft_doc::arch::Backdrop::Hdri { image: "b".to_string(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
         model.prune_hdr_images();
         assert!(model.hdr_images.contains_key("b"));
