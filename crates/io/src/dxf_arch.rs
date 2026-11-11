@@ -525,6 +525,32 @@ mod tests {
     }
 
     #[test]
+    fn look_and_sun_angles_round_trip_and_bad_look_loads_default() {
+        let mut model = ArchModel::default();
+        model.look = cadcraft_doc::arch::Look {
+            technique: cadcraft_doc::arch::Technique::Path,
+            exposure: cadcraft_doc::arch::ExposureSetting::Manual { ev100: 4.0 },
+            tone_map: cadcraft_doc::arch::ToneMap::None,
+            ..Default::default()
+        };
+        model.sun_angles.push(cadcraft_doc::arch::SunAngle {
+            name: "Noon".into(),
+            date: Some("2026-06-21".into()),
+            time: Some("12:00".into()),
+            ..Default::default()
+        });
+
+        let text = arch_chunks(&model).expect("look and sun angles should serialize").join("");
+        let back = parse_arch(&text).expect("look and sun angles should parse back");
+        assert_eq!(back.look, model.look);
+        assert_eq!(back.sun_angles, model.sun_angles);
+
+        let bad = r#"{"version":9,"model":{"walls":[],"look":{"exposure":{"mode":"manual","ev100":99.0}}}}"#;
+        let loaded = parse_arch(bad).expect("bad look payload should still parse");
+        assert_eq!(loaded.look, cadcraft_doc::arch::Look::default());
+    }
+
+    #[test]
     fn arch_chunks_roundtrips_a_model() {
         let m = one_wall_model();
         let chunks = match arch_chunks(&m) {
