@@ -186,6 +186,7 @@ mod tests {
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
+            ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
         let image = place_camera_image(&mut s, "Cover", &view).unwrap().unwrap();
@@ -213,6 +214,7 @@ mod tests {
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
+            ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
         let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
@@ -237,6 +239,7 @@ mod tests {
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
+            ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
         let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
@@ -259,6 +262,7 @@ mod tests {
             scale: 0.0,
             at: [10.0, 20.0],
             size: [0.0, 0.0],
+            ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
         place_camera_image(&mut s, "Cover", &view).unwrap();
