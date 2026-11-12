@@ -1608,6 +1608,12 @@ menu	View	视图
 	Architecture>Edit Deck	建筑>编辑平台
 	Room Moldings	房间装饰线
 	Architecture>Room Moldings	建筑>房间装饰线
+	Molding Line	装饰线
+	Edit Molding Line	编辑装饰线
+	Delete Molding Line	删除装饰线
+	Architecture>Molding Line	建筑>装饰线
+	Architecture>Edit Molding Line	建筑>编辑装饰线
+	Architecture>Delete Molding Line	建筑>删除装饰线
 	Sheet	图纸
 	Edit Sheet	编辑图纸
 	Delete Sheet	删除图纸
