@@ -144,8 +144,7 @@ fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32
 fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }
 // [p19-sky]
 fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }
-// [p19-normal-maps-render] the shading normal at barycentrics (u, v) of triangle tri; n is the geometric normal facing the ray.
-fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }
+// pt_shading_normal (the normal map's shading normal) is in kernel.wgsl.
 
 // Two neighbouring entries of an angle list and how far between them (0 = lo, 1 = hi).
 struct IesBracket { lo: u32, hi: u32, t: f32 };

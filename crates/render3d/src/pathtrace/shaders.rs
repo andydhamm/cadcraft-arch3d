@@ -197,8 +197,9 @@ mod tests {
             "fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }",
             "fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }",
             "fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }",
-            "fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }",
         ];
+        // pt_shading_normal is filled in (p19-normal-maps-render): one definition, in the kernel.
+        assert_eq!(source.matches("fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> {").count(), 1);
         for stub in stubs {
             assert_eq!(source.matches(stub).count(), 1, "missing stub: {stub}");
         }

@@ -531,3 +531,79 @@ fn raster_lambert_plane_reads_ev_scaled_luminance() {
     let Some(got) = lit_centre(&mut r, &floor, &camera, &auto, false) else { return };
     assert!(near(got[0], 0.18, 0.03), "auto: {got:?}");
 }
+
+/// A physically scaled sun lighting from `dir` (toward the sun), no sky, no Lambert override, a
+/// manual exposure of 15 EV100.
+fn sun_from(dir: [f32; 3]) -> Lighting {
+    let mut look = Look::default();
+    look.exposure = ExposureSetting::Manual { ev100: 15.0 };
+    look.tone_map = ToneMap::None;
+    look.sky.on = false;
+    Lighting { sun: Some(Light::new(dir, 0.25)), look, meter_night: true, ..Lighting::default() }
+}
+
+/// The central 40 x 20 pixels (luminance as 0..255 levels) of `s` seen face-on from 6 m under
+/// `lighting`; `None` without a device.
+fn wall_patch(r: &mut Offscreen, key: u64, s: &Scene3d, lighting: &Lighting) -> Option<Vec<f32>> {
+    let camera = Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, -6.0, 1.5), Vec3::new(0.0, 0.0, 1.5), 40.0));
+    let eye = camera.eye();
+    let frame = r.lit_frame(s, key, [eye.x, eye.y, eye.z], lighting, false)?;
+    let light = lighting.sun.unwrap_or(Light::DEFAULT);
+    r.render_with(s, key, &camera, &light, &RenderOptions { lit: Some(&frame), ground: false, ..Default::default() });
+    let (w, h) = r.size();
+    let img = r.read_rgba().ok()?;
+    let mut out = Vec::new();
+    for y in (h / 2 - 10)..(h / 2 + 10) {
+        for x in (w / 2 - 20)..(w / 2 + 20) {
+            let p = px(&img, w, x, y);
+            out.push(0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2]));
+        }
+    }
+    Some(out)
+}
+
+/// Mean of `a` and mean |A - B| of two patches.
+fn patch_stats(a: &[f32], b: &[f32]) -> (f32, f32) {
+    let n = a.len().max(1) as f32;
+    (a.iter().sum::<f32>() / n, a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum::<f32>() / n)
+}
+
+#[test]
+fn brick_differs_under_mirrored_suns() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let (east, west) = (sun_from([0.6, -0.5, 0.4]), sun_from([-0.6, -0.5, 0.4]));
+    let brick = scene(vec![cuboid("wall-brick", [-4.0, -0.2, 0.0], [4.0, 0.0, 3.0])]);
+    let (Some(a), Some(b)) = (wall_patch(&mut r, 10, &brick, &east), wall_patch(&mut r, 10, &brick, &west)) else { return };
+    let (mean, diff) = patch_stats(&a, &b);
+    assert!(diff >= 1.5, "brick: mean |A - B| {diff} levels");
+    assert!((mean - b.iter().sum::<f32>() / b.len() as f32).abs() <= 0.03 * mean, "the means stay within 3 %");
+    // Flat shading reads the same under mirrored suns: a wall with no relief does not differ.
+    let plain = scene(vec![cuboid("wall", [-4.0, -0.2, 0.0], [4.0, 0.0, 3.0])]);
+    let (Some(a), Some(b)) = (wall_patch(&mut r, 11, &plain, &east), wall_patch(&mut r, 11, &plain, &west)) else { return };
+    let (_, flat) = patch_stats(&a, &b);
+    assert!(flat < 0.5, "plain wall: mean |A - B| {flat} levels");
+}
+
+#[test]
+fn flat_normal_layer_changes_nothing() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let lighting = sun_from([0.6, -0.5, 0.4]);
+    // The same wall twice: its material with no normal map, and with a map that is flat everywhere.
+    let mut with_flat = scene(vec![cuboid("flat-wall", [-4.0, -0.2, 0.0], [4.0, 0.0, 3.0])]);
+    let mut image = cadcraft_doc::arch::ImageRgba::default();
+    image.width = 4;
+    image.height = 4;
+    image.rgba = crate::textures::FLAT_NORMAL.repeat(16);
+    with_flat.textures.insert("test:flat:normal".to_string(), image);
+    let bare_def = crate::types::MaterialDef { base_color: [0.5, 0.4, 0.3, 1.0], ..Default::default() };
+    with_flat.materials.insert("flat-wall".to_string(), bare_def.clone());
+    let mut bare = with_flat.clone();
+    bare.textures.clear();
+    let Some(a) = wall_patch(&mut r, 12, &bare, &lighting) else { return };
+    let mapped_def = crate::types::MaterialDef { normal_texture: Some("test:flat:normal".to_string()), ..bare_def };
+    with_flat.materials.insert("flat-wall".to_string(), mapped_def);
+    let Some(b) = wall_patch(&mut r, 13, &with_flat, &lighting) else { return };
+    let (mean, diff) = patch_stats(&a, &b);
+    assert!(mean > 5.0, "the wall is lit: {mean}");
+    assert!(diff < 1.0, "a flat normal map changes the picture by {diff} levels");
+}

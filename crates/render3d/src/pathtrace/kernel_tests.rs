@@ -423,3 +423,61 @@ fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f3
     read.unmap();
     out
 }
+
+/// A 4 x 2 m wall on the plane y = 0 facing -y, UVs in metres (u along x, v up).
+fn uv_wall(material: &str) -> Mesh {
+    let mut m = Mesh::new(material, ArchId(1));
+    for (p, uv) in [([0.0, 0.0, 0.0], [0.0, 0.0]), ([4.0, 0.0, 0.0], [4.0, 0.0]), ([4.0, 0.0, 2.0], [4.0, 2.0]), ([0.0, 0.0, 2.0], [0.0, 2.0])] {
+        m.positions.push(p);
+        m.normals.push([0.0, -1.0, 0.0]);
+        m.uvs.push(uv);
+    }
+    m.indices.extend([0, 1, 2, 0, 2, 3]);
+    m
+}
+
+/// The wall's 8 x 8 image under a raking sun (azimuth mirrored by `side`), luminance per pixel;
+/// `maps` = false leaves the frame's `FRAME_NORMAL_MAPS` off.
+fn wall_under_sun(gpu: &ComputeGpu, material: &str, side: f32, maps: bool) -> Vec<f32> {
+    use super::scene_gpu::{FRAME_NORMAL_MAPS, FRAME_SUN};
+    let scene = build_gpu_scene(&Scene3d { meshes: vec![uv_wall(material)], ..Default::default() }, false, None);
+    let sun = [0.8 * side, -0.5, 0.3];
+    let len = (sun[0] * sun[0] + sun[1] * sun[1] + sun[2] * sun[2]).sqrt();
+    let mut flags = FRAME_SUN;
+    if maps && scene.tex[2] > 0 {
+        flags |= FRAME_NORMAL_MAPS;
+    }
+    let frame = GpuFrame {
+        flags,
+        tex: scene.tex,
+        sun_dir: [sun[0] / len, sun[1] / len, sun[2] / len, 0.0],
+        sun_rgb: [1.0e5; 4],
+        look: [1, 0, 0, 0],
+        spp_this_pass: 4,
+        ..camera_frame([2.0, -2.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0])
+    };
+    trace(gpu, &scene, &frame).iter().map(|a| luminance([a[0], a[1], a[2]]) / a[3].max(1.0)).collect()
+}
+
+#[test]
+fn pt_normal_map_differs_under_mirrored_suns() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    // Mean |A - B| over the image, relative to the mean luminance.
+    let relative_diff = |material: &str, maps: bool| {
+        let (a, b) = (wall_under_sun(&gpu, material, 1.0, maps), wall_under_sun(&gpu, material, -1.0, maps));
+        let mean = a.iter().sum::<f32>() / a.len() as f32;
+        let diff = a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f32>() / a.len() as f32;
+        assert!(mean > 100.0, "{material} is lit: {mean}");
+        diff / mean
+    };
+    // Flat shading reads (nearly) the same under mirrored suns: what is left is the specular lobe
+    // seen from a pixel on one side of the wall.
+    let flat = relative_diff("wall", true);
+    assert!(flat < 0.02, "flat wall: {flat}");
+    // The brick wall without its maps is as flat; with them the joints catch one sun and shade the
+    // other.
+    let bare = relative_diff("wall-brick", false);
+    let mapped = relative_diff("wall-brick", true);
+    assert!(bare < 0.02, "brick without maps: {bare}");
+    assert!(mapped > 0.04 && mapped > 3.0 * bare, "brick with maps: {mapped} (without {bare})");
+}

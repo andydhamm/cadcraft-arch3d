@@ -7,7 +7,7 @@
 use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
-    FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene,
+    FRAME_FURNACE, FRAME_GROUND, FRAME_NORMAL_MAPS, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
 use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
@@ -167,6 +167,7 @@ impl PathTracer {
             look: [1, 0, 0, 0],
             ..Default::default()
         };
+        frame_normal_maps(&mut frame, &gpu_scene);
         if let Some(f) = opts.furnace {
             frame.flags |= FRAME_FURNACE;
             frame.furnace = [f.albedo, f.emission, f.emission / (1.0 - f.albedo), 0.0];
@@ -667,6 +668,16 @@ fn frame_view(_frame: &mut GpuFrame, _lighting: &Lighting, _camera: Option<&Came
 /// Look (stub): will set the tone code and the Lambert flag in `frame.look` from `lighting` and `opts`.
 /// Does nothing yet (`look[0]` stays 1, ACES).
 fn frame_look(_frame: &mut GpuFrame, _lighting: &Lighting, _opts: &PathOptions) {}
+
+/// Where the scene's normal maps are in the aux buffer (`frame.tex`) and `FRAME_NORMAL_MAPS` when
+/// it has any. The maps are appended to the aux buffer by `build_gpu_scene`, ahead of anything
+/// the lighting adds after them.
+fn frame_normal_maps(frame: &mut GpuFrame, scene: &GpuScene) {
+    if scene.tex[2] > 0 {
+        frame.tex = scene.tex;
+        frame.flags |= FRAME_NORMAL_MAPS;
+    }
+}
 
 fn invert_mat4(m: &[[f32; 4]; 4]) -> [[f32; 4]; 4] {
     // Standard 4x4 matrix inversion via cofactors.
