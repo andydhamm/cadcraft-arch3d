@@ -33,13 +33,7 @@ fn run_room_label(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let digits = raw.get(..1).filter(|pre| pre.eq_ignore_ascii_case("r")).and_then(|_| raw.get(1..)).unwrap_or(&raw);
     let id = digits.parse::<u32>().map(ArchId).map_err(|_| bad(CMD, format!("unknown room `{raw}`")))?;
-    let index = s
-        .doc()?
-        .arch
-        .rooms
-        .iter()
-        .position(|r| r.id == id)
-        .ok_or_else(|| bad(CMD, format!("unknown room `{raw}`")))?;
+    let index = s.doc()?.arch.rooms.iter().position(|r| r.id == id).ok_or_else(|| bad(CMD, format!("unknown room `{raw}`")))?;
     let d = s.doc_mut()?;
     let room = d.arch.rooms.get_mut(index).ok_or_else(|| bad(CMD, format!("unknown room `{raw}`")))?;
     room.label_area = area;
@@ -57,10 +51,7 @@ mod tests {
     fn session() -> Session {
         let mut s = Session::new();
         let d = s.doc_mut().unwrap();
-        d.arch.push_room(Room {
-            polygon: vec![Vec2::ZERO, Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
-            ..Room::default()
-        });
+        d.arch.push_room(Room { polygon: vec![Vec2::ZERO, Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)], ..Room::default() });
         s
     }
 

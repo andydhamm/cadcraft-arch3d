@@ -181,13 +181,7 @@ mod tests {
     fn area_interior_or_standard_per_room() {
         let mut m = ArchModel::default();
         m.push_room(Room { polygon: quad(0.0, 0.0), interior_area: 12.0, standard_area: 15.5, ..Room::default() });
-        m.push_room(Room {
-            polygon: quad(10.0, 0.0),
-            interior_area: 12.0,
-            standard_area: 15.5,
-            label_area: LabelArea::Standard,
-            ..Room::default()
-        });
+        m.push_room(Room { polygon: quad(10.0, 0.0), interior_area: 12.0, standard_area: 15.5, label_area: LabelArea::Standard, ..Room::default() });
         m.push_room(Room { polygon: quad(20.0, 0.0), interior_area: f64::NAN, ..Room::default() });
         let l = run(&m, show(false, true, false, false));
         assert_eq!(l.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["12.00 m2", "15.50 m2"]);
