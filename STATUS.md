@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 17 of 21: Stairs, decks, railings and openings in detail — 20 of 21 segments merged · 14 of 14 acceptance checks**
 
@@ -27,7 +27,7 @@ Updated 2026-11-12 04:00 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 14 / 14 | 46.3 h so far · expected done Nov 12 08:48–Nov 25 22:00 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 14 / 14 | 46.5 h so far · expected done Nov 12 09:03–Nov 25 22:15 UTC |
 | 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 1 / 13 | — |
@@ -62,18 +62,18 @@ Updated 2026-11-12 04:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1148 |
-| bonsai-b | bonsai2-27b | agent | 1107 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1201 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1155 |
+| bonsai-a | bonsai2-27b | gate | 1148 |
+| bonsai-b | bonsai2-27b | agent | 1109 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1203 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1155 |
 | claude-sonnet-a | sonnet | idle | 127 |
 | claude-sonnet-b | sonnet | agent | 135 |
 | claude-sonnet-c | sonnet | idle | 70 |
-| claude-sonnet-d | sonnet | agent | 59 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1012 |
+| claude-sonnet-d | sonnet | gate | 59 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1012 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 88 |
+| mai-flash | mai-code-1.1-flash | idle | 89 |
 | mai-flash-b | mai-code-1.1-flash | idle | 29 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 92 |
-| tturbo-mac | tturbo-ultraheretic | agent | 788 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 393 |
+| tturbo-mac | tturbo-ultraheretic | agent | 789 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 394 |
