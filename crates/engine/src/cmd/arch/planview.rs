@@ -291,7 +291,12 @@ fn parse_fields(cmd: &str, p: &Map<String, Value>, view: &mut PlanView, d: &Draw
                 if !(0.0 < width && width <= 1e9) || !(0.0 < height && height <= 1e9) {
                     return Err(bad(cmd, "`zoom.width` and `zoom.height` must be in (0, 1e9]"));
                 }
-                Some(ViewZoom { center: [finite(cmd, "zoom.center", &c[0])?, finite(cmd, "zoom.center", &c[1])?], width, height })
+                Some(ViewZoom {
+                    center: [finite(cmd, "zoom.center", &c[0])?, finite(cmd, "zoom.center", &c[1])?],
+                    width,
+                    height,
+                    ..Default::default()
+                })
             }
             _ => return Err(bad(cmd, "`zoom` must be \"current\", {center, width, height} or null")),
         };
@@ -321,7 +326,7 @@ fn current_zoom(s: &Session) -> Option<ViewZoom> {
     let f = st.zoom_frame();
     let (w, h) = s.viewport_px;
     let aspect = st.zoom_aspect(w / h.max(1.0)).max(1e-9);
-    let z = ViewZoom { center: [f.center.x, f.center.y], width: f.height * aspect, height: f.height };
+    let z = ViewZoom { center: [f.center.x, f.center.y], width: f.height * aspect, height: f.height, ..Default::default() };
     (z.center.iter().all(|c| c.is_finite()) && z.width.is_finite() && z.height.is_finite() && z.width > 0.0 && z.height > 0.0).then_some(z)
 }
 

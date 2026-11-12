@@ -68,6 +68,7 @@ Plan views are saved named states in the drawing: a level or any level, wildcard
 ```sh
 cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'planview {"name":"Level 0 Floor","level":0,"kind":"floor"}' \
+  --cmd 'level {"name":"Level 2","elevation":3.0}' \
   --cmd 'planview {"name":"Level 1 Roof","kind":"roof","level":1}' \
   --cmd 'planview.list {}'
 ```
