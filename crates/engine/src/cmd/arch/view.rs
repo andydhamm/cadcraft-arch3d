@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 use cadcraft_doc::arch::{Camera3d, CameraKind};
 
+use super::look::{LOOK_KEYS, apply_look_params, effective_look};
 use crate::{
     EngineError, Session,
     cmd::{CommandSpec, bad},
@@ -22,8 +23,13 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("view3d", "3D View", run_view3d).menu(&["Architecture", "3D View"]).params("{}").noundo(),
         CommandSpec::new("camera", "Camera", run_camera).params(
-            "{save:name, kind?:orbit|full, target?, azimuth?, elevation?, distance?, eye?, eyeHeight?, fov?} | {list:true} | {use:name} | {delete:name} | {azimuth?, elevation?, distance?, target?}",
+            "{save:name, kind?:orbit|full|overview, target?, azimuth?, elevation?, distance?, eye?, eyeHeight?, fov?, level?: name|index, lowerLevels?: bool, technique?, exposure?, toneMap?, sun?: {angle?…}, sky?, lightSet?, cutaway?, clip?, nearClip?} | {list:true} | {use:name} | {delete:name} | {azimuth?, elevation?, distance?, target?}",
         ),
+        CommandSpec::new("camera.reset", "Reset Camera", run_camera_reset).params("{name?: camera (default: the active one)}"),
+        CommandSpec::new("camera.orbit", "Orbit Camera", run_camera_orbit)
+            .params("{name?, azimuth?: delta degrees, elevation?: delta degrees (result within ±89), distance?: factor > 0}"),
+        CommandSpec::new("camera.update", "Update Camera", run_camera_update)
+            .params("{name?, target?, azimuth?, elevation?, distance?, eye?, eyeHeight?, fov?, level?, lowerLevels?, + the look keys of camera save}"),
         CommandSpec::new("walkthrough", "Walkthrough", run_walkthrough)
             .menu(&["Architecture", "Walkthrough"])
             .params("{eye,yaw,forward?,strafe?,turn?,step?}")
@@ -175,7 +181,8 @@ fn camera_save(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         None | Some(Value::Null) => CameraKind::Orbit,
         Some(Value::String(k)) if k == "orbit" => CameraKind::Orbit,
         Some(Value::String(k)) if k == "full" => CameraKind::Full,
-        Some(_) => return Err(bad("camera", "`kind` must be \"orbit\" or \"full\"")),
+        Some(Value::String(k)) if k == "overview" => CameraKind::Overview,
+        Some(v) => return Err(bad("camera", format!("`kind` must be \"orbit\", \"full\" or \"overview\", not {v}"))),
     };
     let mut cam = Camera3d { name, kind, ..Default::default() };
     // Reset optional fields to None to avoid inheriting invalid defaults (e.g. NaN)
@@ -252,7 +259,7 @@ fn camera_save(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         }
     } else if let Some(h) = eye_height_param {
         cam.eye_height = Some(h);
-    } else if kind == CameraKind::Orbit {
+    } else if kind != CameraKind::Full {
         // Ensure orbit cameras without explicit eye have no eye stored,
         // overriding any default from Camera3d::default().
         cam.eye = None;
@@ -265,21 +272,22 @@ fn camera_save(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         }
         cam.fov_deg = Some(f);
     }
-    if let Some(raw) = params.get("lightSet") {
-        if raw.is_null() {
-            cam.light_set = None;
-        } else {
-            let name = raw
-                .as_str()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .ok_or_else(|| bad("camera", "`lightSet` must be a non-empty string or null"))?;
-            let doc = s.doc()?;
-            if !doc.arch.light_sets.iter().any(|set| set.name == name) {
-                return Err(bad("camera", format!("unknown light set `{name}`")));
-            }
-            cam.light_set = Some(name.to_string());
+    if let Some(v) = params.get("level").filter(|v| !v.is_null()) {
+        if kind != CameraKind::Overview {
+            return Err(bad("camera", format!("`level` needs `kind`: \"overview\" (got {v})")));
         }
+        cam.level = Some(level_param(&s.doc()?.arch, v)?);
+    }
+    if let Some(v) = params.get("lowerLevels").filter(|v| !v.is_null()) {
+        if kind != CameraKind::Overview {
+            return Err(bad("camera", format!("`lowerLevels` needs `kind`: \"overview\" (got {v})")));
+        }
+        cam.lower_levels = Some(v.as_bool().ok_or_else(|| bad("camera", format!("`lowerLevels` must be true or false, not {v}")))?);
+    }
+    if kind == CameraKind::Overview {
+        // The overview pose is an orbit; the target and distance are fitted at render time when absent.
+        cam.azimuth_deg.get_or_insert(30.0);
+        cam.elevation_deg.get_or_insert(50.0);
     }
     if kind == CameraKind::Orbit {
         if cam.azimuth_deg.is_none() {
@@ -302,12 +310,221 @@ fn camera_save(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
             return Err(bad("camera", "`eye` must differ from `target`"));
         }
     }
+    // The camera keeps its look: the effective global look (with the backdrop) under this call's
+    // own look keys, stored complete so later global changes never reach it.
+    let mut look = effective_look(&s.doc()?.arch, None);
+    apply_look_params("camera", params, &s.doc()?.arch, &mut look, false)?;
+    cam.light_set = look.light_set.clone();
+    cam.look = Some(look);
+    cam.saved = Some(Box::new(cam.clone()));
     let name = cam.name.clone();
     let doc = s.doc_mut()?;
     doc.arch.set_camera(cam).map_err(|e| bad("camera", format!("cannot save camera: {e}")))?;
     doc.arch.active_camera = Some(name);
     doc.touch_arch();
     cameras_json(s)
+}
+
+/// The pose keys `camera.update` reads.
+const POSE_KEYS: &[&str] = &["target", "azimuth", "elevation", "distance", "eye", "eyeHeight", "fov", "level", "lowerLevels"];
+
+/// A level named by name or index, as the `index` the levels carry.
+fn level_param(arch: &cadcraft_doc::ArchModel, v: &Value) -> Result<u32, EngineError> {
+    let by_pos = |i: u64| usize::try_from(i).ok().and_then(|i| arch.levels.get(i)).map(|l| l.index).or((i == 0 && arch.levels.is_empty()).then_some(0));
+    let found = match v {
+        Value::Number(n) => n.as_u64().and_then(by_pos),
+        Value::String(n) => match n.trim().parse::<u64>() {
+            Ok(i) => by_pos(i),
+            Err(_) => arch.levels.iter().find(|l| l.name.eq_ignore_ascii_case(n.trim())).map(|l| l.index),
+        },
+        _ => None,
+    };
+    found.ok_or_else(|| bad("camera", format!("`level` must name an existing level (a name or index), not {v}")))
+}
+
+/// The camera a `camera.*` command acts on: `name`, else the active camera.
+fn target_camera(cmd: &str, s: &Session, params: &Value) -> Result<String, EngineError> {
+    let arch = &s.doc()?.arch;
+    let name = match params.get("name") {
+        None | Some(Value::Null) => arch.active_camera.clone().ok_or_else(|| bad(cmd, "no `name` given and no active camera"))?,
+        Some(Value::String(n)) if !n.trim().is_empty() => n.trim().to_string(),
+        Some(v) => return Err(bad(cmd, format!("`name` must be a camera name, not {v}"))),
+    };
+    if arch.camera_by_name(&name).is_none() {
+        return Err(bad(cmd, format!("no camera named `{name}`")));
+    }
+    Ok(name)
+}
+
+/// A finite number the command was given, else a refusal naming the key and value.
+fn num_key(cmd: &str, params: &Value, key: &str) -> Result<Option<f64>, EngineError> {
+    match params.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_f64().filter(|n| n.is_finite()).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a finite number, not {v}"))),
+    }
+}
+
+/// Write `cam` back over the camera of the same name (undoable; the caller validated it).
+fn store_camera(s: &mut Session, cam: Camera3d) -> Result<Value, EngineError> {
+    let doc = s.doc_mut()?;
+    let Some(slot) = doc.arch.cameras.iter_mut().find(|c| c.name == cam.name) else {
+        return Err(bad("camera", format!("no camera named `{}`", cam.name)));
+    };
+    *slot = cam;
+    doc.touch_arch();
+    cameras_json(s)
+}
+
+/// `camera.reset`: the live camera returns to its saved pose and look.
+fn run_camera_reset(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
+    let name = target_camera("camera.reset", s, params)?;
+    let Some(cam) = s.doc()?.arch.camera_by_name(&name).cloned() else {
+        return Err(bad("camera.reset", format!("no camera named `{name}`")));
+    };
+    let Some(saved) = cam.saved.clone() else {
+        return Err(bad("camera.reset", format!("camera `{name}` has no saved state")));
+    };
+    let mut live = *saved;
+    live.name = cam.name.clone();
+    live.saved = cam.saved;
+    store_camera(s, live)
+}
+
+/// `camera.orbit`: change the live pose by deltas.
+fn run_camera_orbit(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
+    const CMD: &str = "camera.orbit";
+    let name = target_camera(CMD, s, params)?;
+    let (daz, del) = (num_key(CMD, params, "azimuth")?, num_key(CMD, params, "elevation")?);
+    let factor = match num_key(CMD, params, "distance")? {
+        Some(f) if f <= 0.0 => return Err(bad(CMD, format!("`distance` must be a factor greater than 0, not {f}"))),
+        f => f,
+    };
+    if daz.is_none() && del.is_none() && factor.is_none() {
+        return Err(bad(CMD, "nothing to change: give `azimuth`, `elevation` or `distance`"));
+    }
+    let Some(mut cam) = s.doc()?.arch.camera_by_name(&name).cloned() else {
+        return Err(bad(CMD, format!("no camera named `{name}`")));
+    };
+    let scaled = |d: f64, f: f64| -> Result<f64, EngineError> {
+        let n = d * f;
+        if n.is_finite() && n > 0.0 && n <= MAX_DISTANCE { Ok(n) } else { Err(bad(CMD, format!("`distance` factor {f} takes the distance outside (0, {MAX_DISTANCE}]"))) }
+    };
+    let (daz, del) = (daz.unwrap_or(0.0), del.unwrap_or(0.0));
+    if cam.kind == CameraKind::Full {
+        // Rotate the eye about the target around +Z and pitch it; scale its distance.
+        let t = cam.target.unwrap_or([0.0; 3]);
+        let e = cam.eye.unwrap_or([0.0, -10.0]);
+        let v = [e[0] - t[0], e[1] - t[1], cam.eye_height.unwrap_or(1.6) - t[2]];
+        let r = v[0].hypot(v[1]);
+        let dist = (r * r + v[2] * v[2]).sqrt();
+        if dist <= 0.0 {
+            return Err(bad(CMD, format!("camera `{name}` has its eye on its target")));
+        }
+        let yaw = v[1].atan2(v[0]) + daz.to_radians();
+        let pitch = (v[2].atan2(r).to_degrees() + del).clamp(-89.0, 89.0).to_radians();
+        let dist = match factor {
+            Some(f) => scaled(dist, f)?,
+            None => dist,
+        };
+        let (cp, sp) = (pitch.cos(), pitch.sin());
+        let eye = [t[0] + dist * cp * yaw.cos(), t[1] + dist * cp * yaw.sin(), t[2] + dist * sp];
+        if !eye.iter().all(|x| x.is_finite()) {
+            return Err(bad(CMD, "the new eye is not finite"));
+        }
+        cam.eye = Some([eye[0], eye[1]]);
+        cam.eye_height = Some(eye[2]);
+    } else {
+        let az = cam.azimuth_deg.unwrap_or(if cam.kind == CameraKind::Overview { 30.0 } else { 0.0 }) + daz;
+        let el = cam.elevation_deg.unwrap_or(if cam.kind == CameraKind::Overview { 50.0 } else { 30.0 }) + del;
+        if !az.is_finite() || !el.is_finite() {
+            return Err(bad(CMD, "the new angles are not finite"));
+        }
+        cam.azimuth_deg = Some(az);
+        cam.elevation_deg = Some(el.clamp(-89.0, 89.0));
+        if let Some(f) = factor {
+            let Some(d) = cam.distance else {
+                return Err(bad(CMD, format!("camera `{name}` has no distance yet (an overview fits it at render time): set one with camera.update")));
+            };
+            cam.distance = Some(scaled(d, f)?);
+        }
+    }
+    store_camera(s, cam)
+}
+
+/// `camera.update`: apply pose and look keys to the live camera, then save the live camera.
+fn run_camera_update(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
+    const CMD: &str = "camera.update";
+    let name = target_camera(CMD, s, params)?;
+    if !POSE_KEYS.iter().chain(LOOK_KEYS).any(|k| params.get(*k).is_some()) {
+        return Err(bad(CMD, "nothing to update: give pose keys (target, azimuth, elevation, distance, eye, eyeHeight, fov, level, lowerLevels) or look keys"));
+    }
+    let doc = s.doc()?;
+    let Some(mut cam) = doc.arch.camera_by_name(&name).cloned() else {
+        return Err(bad(CMD, format!("no camera named `{name}`")));
+    };
+    if let Some(t) = opt_vec::<3>(params, "target")? {
+        cam.target = Some(t);
+    }
+    if let Some(a) = num_key(CMD, params, "azimuth")? {
+        cam.azimuth_deg = Some(a);
+    }
+    if let Some(e) = num_key(CMD, params, "elevation")? {
+        if !(-89.0..=89.0).contains(&e) {
+            return Err(bad(CMD, format!("`elevation` must be within [-89, 89] degrees, not {e}")));
+        }
+        cam.elevation_deg = Some(e);
+    }
+    if let Some(d) = num_key(CMD, params, "distance")? {
+        if !(d > 0.0 && d <= MAX_DISTANCE) {
+            return Err(bad(CMD, format!("`distance` must be in (0, {MAX_DISTANCE}], not {d}")));
+        }
+        cam.distance = Some(d);
+    }
+    if let Some(v) = params.get("eye").filter(|v| !v.is_null()) {
+        let nums: Option<Vec<f64>> = v.as_array().and_then(|a| a.iter().map(|x| x.as_f64().filter(|n| n.is_finite())).collect());
+        match nums.as_deref() {
+            Some([x, y]) => cam.eye = Some([*x, *y]),
+            Some([x, y, z]) if cam.kind == CameraKind::Full => {
+                cam.eye = Some([*x, *y]);
+                cam.eye_height = Some(*z);
+            }
+            _ => return Err(bad(CMD, format!("`eye` must be [x, y] (or [x, y, z] on a full camera), not {v}"))),
+        }
+    }
+    if let Some(h) = num_key(CMD, params, "eyeHeight")? {
+        cam.eye_height = Some(h);
+    }
+    if let Some(f) = num_key(CMD, params, "fov")? {
+        if !(f > 0.0 && f < 180.0) {
+            return Err(bad(CMD, format!("`fov` must be within (0, 180) degrees, not {f}")));
+        }
+        cam.fov_deg = Some(f);
+    }
+    if let Some(v) = params.get("level").filter(|v| !v.is_null()) {
+        if cam.kind != CameraKind::Overview {
+            return Err(bad(CMD, format!("`level` needs an overview camera (got {v})")));
+        }
+        cam.level = Some(level_param(&doc.arch, v)?);
+    }
+    if let Some(v) = params.get("lowerLevels").filter(|v| !v.is_null()) {
+        if cam.kind != CameraKind::Overview {
+            return Err(bad(CMD, format!("`lowerLevels` needs an overview camera (got {v})")));
+        }
+        cam.lower_levels = Some(v.as_bool().ok_or_else(|| bad(CMD, format!("`lowerLevels` must be true or false, not {v}")))?);
+    }
+    if cam.kind == CameraKind::Full {
+        let (e, t) = (cam.eye.unwrap_or([0.0; 2]), cam.target.unwrap_or([0.0; 3]));
+        if e == [t[0], t[1]] {
+            return Err(bad(CMD, "`eye` must differ from `target`"));
+        }
+    }
+    let mut look = effective_look(&doc.arch, Some(&cam));
+    apply_look_params(CMD, params, &doc.arch, &mut look, false)?;
+    cam.light_set = look.light_set.clone();
+    cam.look = Some(look);
+    cam.saved = None;
+    cam.saved = Some(Box::new(cam.clone()));
+    store_camera(s, cam)
 }
 
 /// `{"ok":true,"cameras":[…],"active":name|null}` for the current drawing.
@@ -317,7 +534,11 @@ fn cameras_json(s: &Session) -> Result<Value, EngineError> {
         .cameras
         .iter()
         .map(|c| {
-            let kind = if c.kind == CameraKind::Full { "full" } else { "orbit" };
+            let kind = match c.kind {
+                CameraKind::Full => "full",
+                CameraKind::Overview => "overview",
+                _ => "orbit",
+            };
             let eye = if c.kind == CameraKind::Full {
                 match (c.eye, c.eye_height) {
                     (Some([x, y]), Some(z)) => json!([x, y, z]),
@@ -338,6 +559,8 @@ fn cameras_json(s: &Session) -> Result<Value, EngineError> {
                 "eyeHeight": c.eye_height,
                 "fov": c.fov_deg,
                 "lightSet": c.light_set,
+                "level": c.level,
+                "lowerLevels": c.lower_levels,
             })
         })
         .collect();
