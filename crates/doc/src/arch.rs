@@ -5197,7 +5197,8 @@ mod tests {
     #[test]
     fn prune_hdr_images_keeps_saved_camera_look_images() {
         let mut m = ArchModel::default();
-        let saved_look = Look { backdrop: Some(Backdrop::Hdri { image: "saved-hdr".into(), ..Default::default() }), ..Default::default() };
+        let saved_look =
+            Look { backdrop: Some(Backdrop::Hdri { image: "saved-hdr".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 }), ..Default::default() };
         let saved = Camera3d { name: "ov".into(), look: Some(saved_look), ..Default::default() };
         let cam = Camera3d { name: "test".into(), saved: Some(Box::new(saved)), ..Default::default() };
         m.set_camera(cam).unwrap();
@@ -5223,7 +5224,7 @@ mod tests {
 
     #[test]
     fn saved_camera_with_look_round_trips_and_validates() {
-        let saved_look = Look { backdrop: Some(Backdrop::Colour([1.0, 0.5, 0.2])), ..Default::default() };
+        let saved_look = Look { backdrop: Some(Backdrop::Colour { colour: [255, 127, 51] }), ..Default::default() };
         let saved = Camera3d { name: "ov".into(), look: Some(saved_look), ..Default::default() };
         let cam = Camera3d { name: "test".into(), saved: Some(Box::new(saved)), ..Default::default() };
 
