@@ -57,6 +57,7 @@ pub mod railing_auto;
 pub mod roof;
 pub mod roofedge;
 pub mod room;
+pub mod schedule;
 pub mod site;
 pub mod stair;
 pub mod stair_geom;
