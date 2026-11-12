@@ -124,7 +124,8 @@ pub(crate) fn inspect_sheets(d: &Drawing, p: &Value, out: &mut JsonMap<String, V
 mod tests {
     use super::*;
     use crate::Session;
-    use cadcraft_doc::arch::sheet::{Schedule, Sheet, SheetSet};
+    use cadraft_doc::arch::sheet::{Schedule, Sheet, SheetSet};
+    use cadraft_doc::arch::{ArchId, Opening, OpeningKind};
 
     fn inspect(s: &mut Session, p: Value) -> Value {
         s.execute("arch.inspect", &p).unwrap_or(Value::Null)
@@ -141,7 +142,7 @@ mod tests {
             if let Ok(d) = s.doc_mut() {
                 d.arch.schedules.push(Schedule { name: "Doors".into(), columns: vec!["number".into()], ..Schedule::default() });
                 d.arch.sheets.push(Sheet { name: "A101".into(), number: "A101".into(), ..Sheet::default() });
-                d.arch.sheet_set = SheetSet { project: "House".into(), date: "2026-11-12".into() };
+                d.arch.sheet_set = SheetSet { project: "House".into(), date: "2026-11-12".into(), ..SheetSet::default() };
             }
         }
         let v = inspect(&mut s, json!({"schedules": true, "sheets": true}));
@@ -157,10 +158,17 @@ mod tests {
     #[test]
     fn inspect_numbers_are_null_with_the_stub() {
         let mut s = Session::new();
-        let w = s.execute("wall", &json!({"points": [[0, 0], [5, 0]]}));
-        assert!(w.is_ok(), "{w:?}");
-        let o = s.execute("opening", &json!({"wall": "w0", "kind": "door", "offset": 1.0}));
-        assert!(o.is_ok(), "{o:?}");
+        if let Ok(d) = s.doc_mut() {
+            let wid = d.arch.push_wall(cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(0.0, 0.0),
+                end: cadcraft_geom::Vec2::new(5.0, 0.0),
+                thickness: 0.2,
+                height: 2.7,
+                ..cadcraft_doc::Wall::default()
+            });
+            d.arch.push_opening(Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door));
+            d.touch_arch();
+        }
         let v = inspect(&mut s, json!({"openings": true, "cabinets": true}));
         let rows = v["openings"].as_array().cloned().unwrap_or_default();
         assert!(!rows.is_empty(), "{v}");
