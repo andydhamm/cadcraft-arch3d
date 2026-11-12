@@ -61,6 +61,7 @@ fn kind_label(k: OpeningKind) -> &'static str {
         OpeningKind::Door | OpeningKind::GarageDoor => "door",
         OpeningKind::Window => "window",
         OpeningKind::CasedOpening => "cased",
+        OpeningKind::Niche => "niche",
     }
 }
 
