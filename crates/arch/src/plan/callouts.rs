@@ -8,7 +8,7 @@
 use cadcraft_doc::arch::{ArchId, ArchModel, ArchView, ViewKind};
 use cadcraft_geom::Vec2;
 
-use super::{PlanAnnotation, PlanLabelKind, PlanLineKind};
+use super::{PlanAnnotation, PlanLabel, PlanLabelKind, PlanLine, PlanLineKind};
 
 const LAYER_CALLOUT: &str = "A-ANNO-SYMB";
 const MARKER_RADIUS: f64 = 0.45;
@@ -42,30 +42,23 @@ pub fn callouts(model: &ArchModel, level: Option<u32>, out: &mut PlanAnnotation)
 
                     let text = format!("{}/{}", view_entry.number, sheet.number);
                     let handle = cadcraft_doc::arch::view_handle(id);
+                    let look = Vec2::new(view.look[0], view.look[1]);
 
                     match view.kind {
                         ViewKind::Elevation => {
                             if let Some(center) = elevation_marker_center(model, view, level) {
-                                push_marker(out, center, view.look, &text, handle);
+                                push_marker(out, center, look, &text, handle);
                             }
                         }
                         ViewKind::Section => {
                             if let Some((c1, c2)) = section_marker_centers(model, view) {
-                                // For sections, the "look" direction is along the cut line
-                                // We need to determine the direction to push the pointer.
-                                // The prompt says "two lines from the circle toward centre + look * 0.75".
-                                // For sections, look is usually perpendicular to the cut.
-                                // However, the marker is at the ends of the cut.
-                                // The pointer should point towards the "inside" of the section view?
-                                // The prompt says: "two lines from the circle toward centre + look * 0.75".
-                                // This implies the pointer direction is `look`.
-                                push_marker(out, c1, view.look, &text, handle);
-                                push_marker(out, c2, view.look, &text, handle);
+                                push_marker(out, c1, look, &text, handle);
+                                push_marker(out, c2, look, &text, handle);
                             }
                         }
                         ViewKind::Interior => {
                             if let Some(center) = interior_marker_center(model, view, level) {
-                                push_marker(out, center, view.look, &text, handle);
+                                push_marker(out, center, look, &text, handle);
                             }
                         }
                         _ => {}
@@ -101,7 +94,8 @@ pub fn callout_at(model: &ArchModel, level: Option<u32>, p: Vec2, tol: f64) -> O
 
                     let centers = marker_centers(model, view, level);
                     for center in centers {
-                        let dist_sq = center.dist_sq(p);
+                        let dist = center.dist(p);
+                        let dist_sq = dist * dist;
                         if dist_sq <= threshold_sq && dist_sq < best_dist_sq {
                             best_dist_sq = dist_sq;
                             best_id = Some(id);
@@ -143,14 +137,12 @@ fn marker_centers(model: &ArchModel, view: &ArchView, level: Option<u32>) -> Vec
 }
 
 fn elevation_marker_center(model: &ArchModel, view: &ArchView, level: Option<u32>) -> Option<Vec2> {
-    let bounds = model.wall_bounds(level)?;
+    let bounds = model.bounds();
     let center = bounds.center();
 
-    // Calculate the largest projection of the bounds' corners from center on look
-    let look = view.look;
+    let look = Vec2::new(view.look[0], view.look[1]);
     let mut max_proj = 0.0;
 
-    // Check corners of the bounding box
     let corners = [
         Vec2::new(bounds.min.x, bounds.min.y),
         Vec2::new(bounds.max.x, bounds.min.y),
@@ -165,33 +157,6 @@ fn elevation_marker_center(model: &ArchModel, view: &ArchView, level: Option<u32
         }
     }
 
-    // Marker is at center - look * (max_proj + 2.0)
-    // Wait, prompt says: "c - look * (e + 2.0) where ... e the largest projection ... outside the building on the viewer's side"
-    // If look points towards the viewer, then -look points away from the viewer (into the building).
-    // If look points away from the viewer (into the building), then -look points towards the viewer.
-    // Elevation views look *at* the wall. The "viewer" is outside.
-    // So `look` points from the viewer towards the wall.
-    // The marker should be outside the building, on the viewer's side.
-    // So we move from center in the direction OPPOSITE to look?
-    // "c - look * (e + 2.0)"
-    // If look is (0, -1) (looking north from south), -look is (0, 1).
-    // Center is (0,0). e is distance to north wall? No, e is largest projection ON look.
-    // If look is (0, -1), projection of north wall (y=5) is -5. South wall (y=-5) is 5.
-    // Max projection is 5 (south wall).
-    // Center - look * (5 + 2) = (0,0) - (0,-1)*7 = (0, 7).
-    // This puts the marker at y=7, which is north of the house.
-    // But the viewer is south. The marker should be south.
-    // Let's re-read carefully: "outside the building on the viewer's side".
-    // If viewer is south, marker should be south (y < -5).
-    // My calculation gave y=7.
-    // Maybe `look` points from the wall to the viewer?
-    // In ArchView, `look` is the direction the camera is looking.
-    // If camera is south looking north, look is (0, 1).
-    // Projection of south wall (y=-5) on (0,1) is -5. North wall (y=5) is 5.
-    // Max projection is 5.
-    // Center - look * (5 + 2) = (0,0) - (0,1)*7 = (0, -7).
-    // This is south. Correct.
-
     Some(center - look * (max_proj + 2.0))
 }
 
@@ -201,7 +166,7 @@ fn section_marker_centers(_model: &ArchModel, view: &ArchView) -> Option<(Vec2, 
     let p2 = Vec2::new(cut[1][0], cut[1][1]);
 
     let dir = p2 - p1;
-    if dir.len_sq() < 1e-9 {
+    if dir.len() < 1e-9 {
         return None;
     }
     let dir_norm = dir.normalize();
@@ -469,7 +434,7 @@ mod tests {
         model.sheets.push(sheet);
 
         // Calculate expected marker position
-        let bounds = model.wall_bounds(None).unwrap();
+        let bounds = model.bounds();
         let center = bounds.center();
         let look = Vec2::Y;
         let mut max_proj = 0.0;
