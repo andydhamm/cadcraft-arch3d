@@ -142,18 +142,18 @@ mod tests {
     use super::*;
 
     fn encode(img: &image::RgbaImage, f: image::ImageFormat) -> Vec<u8> {
-        let mut out = Vec::new();
+        let mut out = std::io::Cursor::new(Vec::new());
         match f {
             image::ImageFormat::Png => {
                 img.write_to(&mut out, f).expect("PNG encode");
             }
             image::ImageFormat::Jpeg => {
-                let rgb = img.to_rgb8();
+                let rgb = image::imageops::color_to_rgb(img);
                 rgb.write_to(&mut out, f).expect("JPEG encode");
             }
             _ => panic!("unsupported format in test"),
         }
-        out
+        out.into_inner()
     }
 
     fn png(w: u32, h: u32) -> Vec<u8> {
