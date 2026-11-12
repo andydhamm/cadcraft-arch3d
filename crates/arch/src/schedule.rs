@@ -624,7 +624,7 @@ mod tests {
             ..Wall::default()
         });
         let surface = Surface::WallSide { wall: wall_id, side: Side::Left };
-        model.paints.insert(surface.key(), Paint { material: Some(MaterialRef::Colour([0xc0, 0x40, 0x20])), tint: None });
+        model.paints.insert(surface.key(), Paint { material: Some(MaterialRef::Colour([0xc0, 0x40, 0x20])), ..Default::default() });
         let schedule =
             Schedule { kind: ScheduleKind::Room, columns: vec!["name".into(), "floor".into(), "walls".into(), "area".into()], ..Schedule::default() };
         let rows = rows(&model, &schedule);
