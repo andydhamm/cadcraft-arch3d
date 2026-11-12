@@ -247,7 +247,7 @@ mod tests {
     fn every_sheet_gets_one_linked_insert() {
         let mut s = Session::new();
         let mut d = s.doc_mut().unwrap();
-        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string() };
+        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
         d.arch.sheets.push(make_sheet("Plans", "A-101", "Floor Plan"));
         d.layouts.iter_mut().find(|l| l.name == "Layout1").unwrap().name = "Plans".to_string();
         drop(d);
@@ -262,7 +262,7 @@ mod tests {
     fn macros_expand_number_title_project_date_scale() {
         let mut s = Session::new();
         let mut d = s.doc_mut().unwrap();
-        d.arch.sheet_set = SheetSet { project: "Phase 21 House".to_string(), date: "2026-11-09".to_string() };
+        d.arch.sheet_set = SheetSet { project: "Phase 21 House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
         d.arch.sheets.push(make_sheet("Plans", "A-101", "Floor Plan"));
         d.layouts.iter_mut().find(|l| l.name == "Layout1").unwrap().name = "Plans".to_string();
         drop(d);
@@ -283,7 +283,7 @@ mod tests {
     fn mixed_scales_read_as_noted() {
         let mut s = Session::new();
         let mut d = s.doc_mut().unwrap();
-        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string() };
+        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
         d.arch.sheets.push(cadcraft_doc::arch::sheet::Sheet {
             name: "Plans".to_string(),
             number: "A-101".to_string(),
@@ -308,7 +308,7 @@ mod tests {
     fn unknown_macros_stay() {
         let mut s = Session::new();
         let mut d = s.doc_mut().unwrap();
-        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string() };
+        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
         d.arch.sheets.push(cadcraft_doc::arch::sheet::Sheet {
             name: "Plans".to_string(),
             number: "A-101".to_string(),
@@ -329,7 +329,7 @@ mod tests {
     fn sheetset_edit_updates_every_sheet() {
         let mut s = Session::new();
         let mut d = s.doc_mut().unwrap();
-        d.arch.sheet_set = SheetSet { project: "Old".to_string(), date: "Old date".to_string() };
+        d.arch.sheet_set = SheetSet { project: "Old".to_string(), date: "Old date".to_string(), ..SheetSet::default() };
         d.arch.sheets.push(make_sheet("Plans", "A-101", "Floor Plan"));
         d.arch.sheets.push(make_sheet("Ceiling", "A-102", "Ceiling"));
         d.layouts.iter_mut().find(|l| l.name == "Layout1").unwrap().name = "Plans".to_string();
@@ -337,7 +337,7 @@ mod tests {
         drop(d);
         refresh_title_blocks(&mut s).unwrap();
         let mut d = s.doc_mut().unwrap();
-        d.arch.sheet_set = SheetSet { project: "Renamed House".to_string(), date: "2026-11-09".to_string() };
+        d.arch.sheet_set = SheetSet { project: "Renamed House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
         drop(d);
         refresh_title_blocks(&mut s).unwrap();
         for sh in &s.doc().unwrap().arch.sheets {
@@ -400,7 +400,7 @@ mod tests {
     fn inserts_survive_a_dxf_round_trip() {
         let mut s = Session::new();
         let mut d = s.doc_mut().unwrap();
-        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string() };
+        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
         d.arch.sheets.push(make_sheet("Plans", "A-101", "Floor Plan"));
         d.layouts.iter_mut().find(|l| l.name == "Layout1").unwrap().name = "Plans".to_string();
         drop(d);
