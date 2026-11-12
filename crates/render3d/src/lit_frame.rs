@@ -47,6 +47,8 @@ fn lights_hash(scene: &Scene3d) -> u64 {
 pub struct Lighting {
     /// The sun (`None` = night: the sun is off).
     pub sun: Option<Light>,
+    /// The moon as a directional light (direction, lux) when the sun is down and the sky is on.
+    pub moon: Option<([f64; 3], f32)>,
     /// Build and use the sun's shadow map (`--sun` / a site sun; the default light casts none).
     pub sun_shadow: bool,
     /// Lights shadowed at most (`lights::DEFAULT_SHADOW_BUDGET`); the rest light unshadowed.
@@ -68,10 +70,49 @@ pub struct Lighting {
     pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
 }
 
+impl Lighting {
+    /// Moon as the directional light only when the sun is below the horizon and the sky is on.
+    pub fn with_moon(mut self, moon_dir: Option<[f64; 3]>) -> Self {
+        self.moon = None;
+        if !self.look.sky.on || self.sun.is_some() {
+            return self;
+        }
+        let Some(dir) = moon_dir else {
+            return self;
+        };
+        let length = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+        if !length.is_finite() || length <= 0.0 {
+            return self;
+        }
+        let d = [dir[0] / length, dir[1] / length, dir[2] / length];
+        let lux = self.look.sky.moon.lux.max(0.0) as f32;
+        if lux > 0.0 {
+            self.moon = Some((d, lux));
+        }
+        self
+    }
+
+    /// The current directional light's lux: the sun while it's up, else the moon while it lights.
+    pub fn directional_lux(&self) -> f32 {
+        if let Some(sun) = self.sun {
+            let lux = if self.look.sun.on { self.look.sun.intensity as f32 } else { 0.0 };
+            if lux > 0.0 {
+                return lux;
+            }
+            let dir = sun.normalized().dir;
+            if dir[2] > 0.0 {
+                return self.look.sun.intensity as f32;
+            }
+        }
+        self.moon.map_or(0.0, |(_, lux)| lux)
+    }
+}
+
 impl Default for Lighting {
     fn default() -> Self {
         Lighting {
             sun: Some(Light::DEFAULT),
+            moon: None,
             sun_shadow: false,
             budget: crate::lights::DEFAULT_SHADOW_BUDGET,
             exposure: crate::lights::DEFAULT_EXPOSURE,
@@ -360,5 +401,45 @@ mod tests {
         let l = Lighting::default();
         assert!(o.lit_frame(&s, 1, orbit(0.0), &l, false).is_some());
         assert!(o.lit_frame(&s, 1, orbit(0.0), &l, true).is_some());
+    }
+
+    #[test]
+    fn with_moon_only_when_sun_down_and_sky_on() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        let zero = Lighting { look: look.clone(), sun: Some(Light::DEFAULT), ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(zero.moon.is_none(), "sun in daylight overrides the moon");
+
+        let moon = Lighting { look: look.clone(), sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(moon.moon.is_some());
+
+        look.sky.on = false;
+        let sky_off = Lighting { look, sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(sky_off.moon.is_none());
+    }
+
+    #[test]
+    fn moon_direct_light() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        let light = Lighting { look, sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(light.moon.is_some());
+        assert!((light.directional_lux() - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn direct_moon_is_lux_times_sin_elevation() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        let el = 30.0_f64;
+        let dir = [0.0, el.to_radians().cos(), el.to_radians().sin()];
+        let light = Lighting { look, sun: None, ..Default::default() }.with_moon(Some(dir));
+        let Some((moon_dir, lux)) = light.moon else {
+            panic!("moon must be active");
+        };
+        assert!((lux - 0.25).abs() < 1e-6);
+        assert!((moon_dir[2] - el.to_radians().sin()).abs() < 1e-6);
     }
 }
