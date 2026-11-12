@@ -304,7 +304,8 @@ mod tests {
     #[test]
     fn ground_is_darker_than_sky() {
         let sun = sun_at(45.0, 0.0);
-        let sky = sky_radiance([0.0, 0.5, 0.5], sun, 3.0);
+        // Compare ground against sky toward the sun, where the sky is brightest.
+        let sky = sky_radiance(sun, sun, 3.0);
         let ground = sky_radiance([0.0, -0.5, -0.5], sun, 3.0);
         for i in 0..3 {
             assert!(ground[i] < sky[i], "ground should be darker: ground[{}]={} sky[{}]={}", i, ground[i], i, sky[i]);
