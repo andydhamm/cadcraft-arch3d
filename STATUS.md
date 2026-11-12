@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 20:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 20 of 35 segments merged · 5 of 20 acceptance checks**
 
@@ -28,20 +28,20 @@ Updated 2026-11-12 20:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 5 / 20 | 38.5 h so far · expected done Nov 13 09:05–Nov 14 10:38 UTC |
+| 18 | Interior finish, kitchen and bath | building | 5 / 20 | 38.8 h so far · expected done Nov 13 09:20–Nov 14 10:53 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 3 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-20 merged, 6 merging, 6 queued, 2 gate, 1 working
+20 merged, 7 merging, 6 queued, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-room-finishes-2` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | merging | mai-flash |
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
-| `p18-molding-lines-2` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | gate | claude-sonnet-c |
+| `p18-molding-lines-2` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | merging | claude-sonnet-c |
 | `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-d |
 | `p18-backsplash` | Backsplash: `backsplash {run | wall}` covers the wall face behind a counter from the counter top to the underside of the wall cabinets (else a set height, default 0.45), 10 mm thick, its own material, top to the ceiling on demand, per-cabinet on / off | merging | bonsai-ws2-a |
 | `p18-cabinet-fronts-2` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | bonsai-a |
@@ -70,18 +70,18 @@ Updated 2026-11-12 20:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1200 |
-| bonsai-b | bonsai2-27b | agent | 1160 |
+| bonsai-a | bonsai2-27b | gate | 1200 |
+| bonsai-b | bonsai2-27b | agent | 1161 |
 | bonsai-ws2-a | bonsai2-27b | gate | 1281 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1230 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1231 |
 | claude-sonnet-a | sonnet | gate | 141 |
-| claude-sonnet-b | sonnet | agent | 149 |
-| claude-sonnet-c | sonnet | gate | 85 |
+| claude-sonnet-b | sonnet | idle | 150 |
+| claude-sonnet-c | sonnet | idle | 86 |
 | claude-sonnet-d | sonnet | idle | 79 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1065 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 101 |
+| mai-flash | mai-code-1.1-flash | gate | 101 |
 | mai-flash-b | mai-code-1.1-flash | agent | 44 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 105 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 106 |
 | tturbo-mac | tturbo-ultraheretic | agent | 811 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 421 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 422 |
