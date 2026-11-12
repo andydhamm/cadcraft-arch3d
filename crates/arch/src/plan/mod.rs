@@ -13,8 +13,10 @@ pub mod ceiling;
 pub mod labels;
 pub mod layers;
 pub use layers::layers_in_use;
+pub mod callouts;
 pub mod reference;
 pub mod roof;
+pub mod tags;
 
 /// The kind of a [`PlanLine`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,6 +35,7 @@ pub enum PlanLineKind {
     CeilingItem,
     Soffit,
     Reference,
+    Callout,
 }
 
 impl PlanLineKind {
@@ -53,6 +56,7 @@ impl PlanLineKind {
             PlanLineKind::CeilingItem => "ceilingItem",
             PlanLineKind::Soffit => "soffit",
             PlanLineKind::Reference => "reference",
+            PlanLineKind::Callout => "callout",
         }
     }
 }
@@ -66,6 +70,8 @@ pub enum PlanLabelKind {
     RoomCeiling,
     Pitch,
     TrayHeight,
+    ScheduleNumber,
+    Callout,
 }
 
 impl PlanLabelKind {
@@ -78,6 +84,8 @@ impl PlanLabelKind {
             PlanLabelKind::RoomCeiling => "roomCeiling",
             PlanLabelKind::Pitch => "pitch",
             PlanLabelKind::TrayHeight => "trayHeight",
+            PlanLabelKind::ScheduleNumber => "scheduleNumber",
+            PlanLabelKind::Callout => "callout",
         }
     }
 }
@@ -202,6 +210,8 @@ pub fn annotate(model: &ArchModel, view: Option<&PlanView>, level: Option<u32>) 
         ceiling::ceiling_plan(model, level, &mut out);
     }
     labels::room_labels(model, level, view.map_or_else(RoomLabelShow::default, |v| v.labels), &mut out);
+    tags::schedule_labels(model, level, view.map_or_else(RoomLabelShow::default, |v| v.labels), &mut out);
+    callouts::callouts(model, level, &mut out);
     out
 }
 
