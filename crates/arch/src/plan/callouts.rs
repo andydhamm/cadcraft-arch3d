@@ -244,11 +244,11 @@ fn push_marker(out: &mut PlanAnnotation, center: Vec2, look: Vec2, text: &str, h
 mod tests {
     use super::*;
     use cadcraft_doc::Handle;
-    use cadcraft_doc::arch::{ArchModel, ArchView, Level, Sheet, SheetSource, SheetView, ViewKind, Wall};
+    use cadcraft_doc::arch::{ArchKind, ArchModel, ArchView, Level, Sheet, SheetSource, SheetView, ViewKind, Wall};
     use cadcraft_geom::Vec2;
 
     fn make_view(id: u32, kind: ViewKind, look: Vec2, level: Option<u32>, room_point: Option<Vec2>, cut: Option<[[f64; 2]; 2]>) -> ArchView {
-        ArchView { id: ArchId::view(id), kind, look: [look.x, look.y], cut, room_point: room_point.map(|p| [p.x, p.y]), level, ..Default::default() }
+        ArchView { id: ArchId(id), kind, look: [look.x, look.y], cut, room_point: room_point.map(|p| [p.x, p.y]), level, ..Default::default() }
     }
 
     fn make_sheet(name: &str, number: &str, views: Vec<SheetView>) -> Sheet {
@@ -256,7 +256,7 @@ mod tests {
     }
 
     fn make_sheet_view(number: &str, id: u32) -> SheetView {
-        SheetView { number: number.parse().unwrap_or(0), source: SheetSource::View { id: ArchId::view(id) }, ..Default::default() }
+        SheetView { number: number.parse().unwrap_or(0), source: SheetSource::View { id: ArchId(id) }, ..Default::default() }
     }
 
     fn setup_model() -> ArchModel {
@@ -415,7 +415,7 @@ mod tests {
         let mut out = PlanAnnotation::default();
         callouts(&model, None, &mut out);
 
-        let expected_handle = cadcraft_doc::arch::view_handle(ArchId::view(0));
+        let expected_handle = cadcraft_doc::arch::view_handle(ArchId(0));
 
         for line in &out.lines {
             assert_eq!(line.handle, expected_handle);
@@ -454,7 +454,7 @@ mod tests {
 
         // Find it
         let found = callout_at(&model, None, marker_pos, 0.1);
-        assert_eq!(found, Some(ArchId::view(0)));
+        assert_eq!(found, Some(ArchId(0)));
 
         // Too far
         let far = marker_pos + Vec2::X * 10.0;
