@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 10:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 10:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 11 of 35 segments merged · 1 of 20 acceptance checks**
 
@@ -28,14 +28,14 @@ Updated 2026-11-12 10:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 28.5 h so far · expected done Nov 15 20:17–Nov 28 18:00 UTC |
+| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 28.8 h so far · expected done Nov 15 20:32–Nov 28 18:15 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 2 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
 
 ## Phase 18 segments
 
-13 queued, 11 merged, 9 merging, 2 gate
+13 queued, 11 merged, 10 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -45,10 +45,10 @@ Updated 2026-11-12 10:00 UTC. This page and the card in the README are regenerat
 | `p18-cabinet-moldings` | Cabinet moldings: crown and light rail on wall (and tall) cabinets from a profile with a size override, following the door faces or the box front where there is no door, returning at exposed ends | merging | mai-flash-esc |
 | `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-d |
 | `p18-backsplash` | Backsplash: `backsplash {run | wall}` covers the wall face behind a counter from the counter top to the underside of the wall cabinets (else a set height, default 0.45), 10 mm thick, its own material, top to the ceiling on demand, per-cabinet on / off | merging | claude-sonnet-a |
-| `p18-cabinet-fronts-2` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | gate | claude-sonnet-d |
+| `p18-cabinet-fronts-2` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | claude-sonnet-d |
 | `p18-corners` | Corner cabinets: a base or wall cabinet in an inside corner where two runs meet becomes blind, diagonal-door or lazy-susan (a plan symbol with its cut-out), and the counter runs round the corner in one piece | merging | claude-sonnet-c |
 | `p18-fillers-shelves` | Fillers and open shelves: `cabinet.fill` closes a run's gap to a wall with a filler up to 0.15 m (larger gaps reported, never stretched); open wall cabinets with an automatic or given shelf count, evenly spaced | merging | mai-flash-b |
-| `p18-glass-walls-2` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | gate | mai-flash-b |
+| `p18-glass-walls-2` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | working | mai-flash-b |
 | `p18-glass-walls-3` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | merging | tturbo-mac |
 
 ## Recent merges
@@ -72,18 +72,18 @@ Updated 2026-11-12 10:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1162 |
+| bonsai-a | bonsai2-27b | gate | 1163 |
 | bonsai-b | bonsai2-27b | merging | 1135 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1234 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1177 |
-| claude-sonnet-a | sonnet | agent | 132 |
-| claude-sonnet-b | sonnet | agent | 142 |
-| claude-sonnet-c | sonnet | down | 73 |
-| claude-sonnet-d | sonnet | gate | 67 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1031 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1236 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1179 |
+| claude-sonnet-a | sonnet | down | 132 |
+| claude-sonnet-b | sonnet | down | 142 |
+| claude-sonnet-c | sonnet | idle | 73 |
+| claude-sonnet-d | sonnet | down | 68 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1033 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 92 |
-| mai-flash-b | mai-code-1.1-flash | gate | 32 |
+| mai-flash | mai-code-1.1-flash | idle | 94 |
+| mai-flash-b | mai-code-1.1-flash | agent | 33 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 95 |
 | tturbo-mac | tturbo-ultraheretic | agent | 797 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 401 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 402 |
