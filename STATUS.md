@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-12 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 17 of 21: Stairs, decks, railings and openings in detail — 22 of 22 segments merged · 14 of 14 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 9 of 35 segments merged · 1 of 20 acceptance checks**
 
 8,871 workspace tests passing at the last merge · 966 segments merged in all · 0 of 15 seats working
 
@@ -27,16 +27,28 @@ Updated 2026-11-12 07:15 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 14 / 14 | 49.5 h so far · expected done Nov 12 07:15–Nov 14 19:15 UTC |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
+| 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
+| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 26.0 h so far · expected done Nov 12 14:57–Nov 17 20:25 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 1 / 13 | — |
-| 21 | Schedules, elevations and sheets | planned | — | — |
+| 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
 
-## Phase 17 segments
+## Phase 18 segments
 
-22 merged, 2 replaced
+16 queued, 9 merged, 9 merging, 1 gate
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `p18-room-finishes-1` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | merging | claude-sonnet-b |
+| `p18-room-moldings` | Room moldings: each room's base, chair rail and crown along its wall faces, base and chair stopping at opening trim, crown round a flat ceiling; `room.moldings`, the trim widths in arch.inspect, the brief's molding numbers | merging | claude-sonnet-c |
+| `p18-molding-lines-1` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | merging | mai-flash-esc |
+| `p18-cabinet-moldings` | Cabinet moldings: crown and light rail on wall (and tall) cabinets from a profile with a size override, following the door faces or the box front where there is no door, returning at exposed ends | merging | mai-flash-esc |
+| `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-d |
+| `p18-backsplash` | Backsplash: `backsplash {run | wall}` covers the wall face behind a counter from the counter top to the underside of the wall cabinets (else a set height, default 0.45), 10 mm thick, its own material, top to the ceiling on demand, per-cabinet on / off | merging | claude-sonnet-a |
+| `p18-cabinet-fronts-1` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | bonsai-b |
+| `p18-corners` | Corner cabinets: a base or wall cabinet in an inside corner where two runs meet becomes blind, diagonal-door or lazy-susan (a plan symbol with its cut-out), and the counter runs round the corner in one piece | merging | claude-sonnet-c |
+| `p18-fillers-shelves` | Fillers and open shelves: `cabinet.fill` closes a run's gap to a wall with a filler up to 0.15 m (larger gaps reported, never stretched); open wall cabinets with an automatic or given shelf count, evenly spaced | merging | mai-flash-b |
+| `p18-glass-walls-1` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | gate | claude-sonnet-a |
 
 ## Recent merges
 
@@ -60,17 +72,17 @@ Updated 2026-11-12 07:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | agent | 1155 |
-| bonsai-b | bonsai2-27b | agent | 1126 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1220 |
-| bonsai-ws2-b | bonsai2-27b | idle | 1164 |
-| claude-sonnet-a | sonnet | agent | 130 |
-| claude-sonnet-b | sonnet | idle | 137 |
+| bonsai-b | bonsai2-27b | agent | 1127 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1222 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1165 |
+| claude-sonnet-a | sonnet | gate | 130 |
+| claude-sonnet-b | sonnet | agent | 137 |
 | claude-sonnet-c | sonnet | idle | 70 |
 | claude-sonnet-d | sonnet | idle | 63 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1024 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1026 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 90 |
-| mai-flash-b | mai-code-1.1-flash | idle | 29 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 93 |
+| mai-flash-b | mai-code-1.1-flash | agent | 29 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 94 |
 | tturbo-mac | tturbo-ultraheretic | idle | 795 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 399 |
