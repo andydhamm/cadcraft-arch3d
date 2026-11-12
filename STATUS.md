@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 19:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 19 of 35 segments merged · 4 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-12 19:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 37.8 h so far · expected done Nov 13 10:36–Nov 14 15:15 UTC |
+| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 38.0 h so far · expected done Nov 13 10:52–Nov 14 15:30 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 3 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
@@ -53,6 +53,7 @@ Updated 2026-11-12 19:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 19:25 | `p19-horizon-2` | refused | 9,215 pass | claude-sonnet-b |
 | Nov 12 18:49 | `p18-backsplash` | refused | 0 pass | claude-sonnet-a |
 | Nov 12 18:49 | `p18-countertops` | refused | 0 pass | claude-sonnet-d |
 | Nov 12 18:49 | `p18-cabinet-fronts-2` | refused | 0 pass | claude-sonnet-d |
@@ -64,18 +65,17 @@ Updated 2026-11-12 19:15 UTC. This page and the card in the README are regenerat
 | Nov 12 17:19 | `p19-env-path` | merged | 9,172 pass, 1 fail | claude-sonnet-b |
 | Nov 12 17:03 | `p21-schedule-model` | merged | 9,166 pass | mai-flash-esc |
 | Nov 12 17:03 | `p21-sheet-command` | merged | 9,166 pass | claude-sonnet-c |
-| Nov 12 17:03 | `p18-shower-niche-1` | merged | 9,166 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1199 |
-| bonsai-b | bonsai2-27b | gate | 1157 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1275 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1227 |
-| claude-sonnet-a | sonnet | idle | 141 |
-| claude-sonnet-b | sonnet | idle | 149 |
+| bonsai-b | bonsai2-27b | agent | 1158 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1278 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1228 |
+| claude-sonnet-a | sonnet | agent | 141 |
+| claude-sonnet-b | sonnet | agent | 149 |
 | claude-sonnet-c | sonnet | idle | 85 |
 | claude-sonnet-d | sonnet | idle | 78 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1064 |
@@ -83,5 +83,5 @@ Updated 2026-11-12 19:15 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | gate | 100 |
 | mai-flash-b | mai-code-1.1-flash | gate | 43 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 105 |
-| tturbo-mac | tturbo-ultraheretic | agent | 809 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 419 |
+| tturbo-mac | tturbo-ultraheretic | gate | 809 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 420 |
