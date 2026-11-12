@@ -62,6 +62,11 @@ mod tests {
     use cadcraft_geom::Vec2;
 
     #[test]
+    fn the_stub_builds_nothing() {
+        assert!(room_molding_meshes(ArchId(0), 0.0, &[]).is_empty());
+    }
+
+    #[test]
     fn base_mesh_probes() {
         // Test that base molding mesh is created and probeable
         let runs = vec![MoldingRun {
