@@ -329,6 +329,34 @@ fn aovs_hold_the_first_hit() {
     assert_eq!(aov[1], [0.0; 4]);
 }
 
+#[test]
+fn pt_clip_box_and_near_clip() {
+    use super::scene_gpu::FRAME_CLIP;
+    let Some(gpu) = gpu_or_skip() else { return };
+    // A floor at z = 0 under a slab at z 1.0..1.1, seen from (0, 0, 2) looking down.
+    let scene = build_gpu_scene(
+        &Scene3d {
+            meshes: vec![prism("floor", 1, [-1.0, -1.0, -0.1], [1.0, 1.0, 0.0]), prism("ceiling", 2, [-1.0, -1.0, 1.0], [1.0, 1.0, 1.1])],
+            ..Default::default()
+        },
+        false,
+        None,
+    );
+    let base = GpuFrame { spp_this_pass: 1, ..camera_frame([0.0, 0.0, 2.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) };
+    let t_at = |frame: &GpuFrame| run_with_aov(&gpu, &scene, frame)[2 * (3 * 8 + 3) + 1][3];
+    // Nothing set: the slab is the first hit (about 0.9 away).
+    let open = t_at(&base);
+    assert!(open > 0.8 && open < 1.2, "{open}");
+    // A clip box under the slab: the ray skips it and lands on the floor, about 2 away.
+    let clipped = GpuFrame { flags: FRAME_CLIP, clip_min: [-9.0, -9.0, -9.0, 0.0], clip_max: [9.0, 9.0, 0.5, 0.0], ..base };
+    let floor = t_at(&clipped);
+    assert!(floor > 1.9 && floor < 2.3, "{floor}");
+    // A near clip of 1.5 starts the ray below the slab: the floor is then about 0.5 away.
+    let near = GpuFrame { view: [0.0, 0.0, -1.0, 1.5], ..base };
+    let started = t_at(&near);
+    assert!(started > 0.4 && started < 0.8, "{started}");
+}
+
 /// Run `trace_main` once over `frame`'s 8 x 8 pixels and read back the AOV buffer.
 fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f32; 4]> {
     let d = &gpu.device;
