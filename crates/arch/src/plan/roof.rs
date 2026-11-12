@@ -62,6 +62,10 @@ pub fn roof_plan(model: &ArchModel, out: &mut PlanAnnotation) {
                 if !a.is_finite() || !b.is_finite() {
                     continue;
                 }
+                // The pairwise match below is quadratic: bound it for hostile drawings.
+                if ring_edges.len() >= 4096 {
+                    break;
+                }
                 max_coord = max_coord.max(a.x.abs().max(a.y.abs()).max(b.x.abs().max(b.y.abs())));
                 ring_edges.push((a, b, plane_index));
             }
@@ -191,6 +195,13 @@ mod tests {
             level: 0,
             pitch_rise: 6.0,
             pitch_run: 12.0,
+            edges: vec![
+                edge(RoofEdgeKind::Ridge, (6.0, 4.0), (4.0, 4.0)),
+                edge(RoofEdgeKind::Hip, (-0.1, -0.1), (4.0, 4.0)),
+                edge(RoofEdgeKind::Hip, (10.1, -0.1), (6.0, 4.0)),
+                edge(RoofEdgeKind::Hip, (10.1, 8.1), (6.0, 4.0)),
+                edge(RoofEdgeKind::Hip, (-0.1, 8.1), (4.0, 4.0)),
+            ],
             planes: vec![
                 roof_plane(&[(-0.1, -0.1), (10.1, -0.1), (6.0, 4.0), (4.0, 4.0)], 0.5, [-0.1, -0.1, 10.1, -0.1], 0.0),
                 roof_plane(&[(10.1, -0.1), (10.1, 8.1), (6.0, 4.0)], 0.5, [10.1, -0.1, 10.1, 8.1], 0.0),
@@ -241,9 +252,10 @@ mod tests {
             level: 0,
             pitch_rise: 6.0,
             pitch_run: 12.0,
+            edges: vec![edge(RoofEdgeKind::Ridge, (10.1, 4.0), (-0.1, 4.0))],
             planes: vec![
                 roof_plane(&[(-0.1, -0.1), (10.1, -0.1), (10.1, 4.0), (-0.1, 4.0)], 0.5, [-0.1, -0.1, 10.1, -0.1], 0.0),
-                roof_plane(&[(-0.1, 8.1), (10.1, 8.1), (10.1, 4.0), (-0.1, 4.0)], 0.5, [-0.1, 8.1, 10.1, 8.1], 0.0),
+                roof_plane(&[(10.1, 8.1), (-0.1, 8.1), (-0.1, 4.0), (10.1, 4.0)], 0.5, [10.1, 8.1, -0.1, 8.1], 0.0),
             ],
             ..Roof::default()
         };
@@ -298,10 +310,10 @@ mod tests {
             id: ArchId(3),
             overhang: 0.5,
             planes: vec![
-                roof_plane(&[(-0.1, -0.1), (10.1, -0.1), (6.0, 4.0), (4.0, 4.0)], 0.5, [-0.1, -0.1, 10.1, -0.1], 0.5),
-                roof_plane(&[(10.1, -0.1), (10.1, 8.1), (6.0, 4.0)], 0.5, [10.1, -0.1, 10.1, 8.1], 0.5),
-                roof_plane(&[(10.1, 8.1), (-0.1, 8.1), (4.0, 4.0), (6.0, 4.0)], 0.5, [10.1, 8.1, -0.1, 8.1], 0.5),
-                roof_plane(&[(-0.1, 8.1), (-0.1, -0.1), (4.0, 4.0)], 0.5, [-0.1, 8.1, -0.1, -0.1], 0.5),
+                roof_plane(&[(-0.6, -0.6), (10.6, -0.6), (6.0, 4.0), (4.0, 4.0)], 0.5, [-0.6, -0.6, 10.6, -0.6], 0.5),
+                roof_plane(&[(10.6, -0.6), (10.6, 8.6), (6.0, 4.0)], 0.5, [10.6, -0.6, 10.6, 8.6], 0.5),
+                roof_plane(&[(10.6, 8.6), (-0.6, 8.6), (4.0, 4.0), (6.0, 4.0)], 0.5, [10.6, 8.6, -0.6, 8.6], 0.5),
+                roof_plane(&[(-0.6, 8.6), (-0.6, -0.6), (4.0, 4.0)], 0.5, [-0.6, 8.6, -0.6, -0.6], 0.5),
             ],
             ..Roof::default()
         };
@@ -368,10 +380,22 @@ mod tests {
 
     #[test]
     fn down_slope_is_the_negative_left_normal_of_the_base_edge() {
-        let dir = Vec2::new(1.0, 0.0);
-        let left = Vec2::new(-dir.y, dir.x);
-        let computed = -left;
-        assert_eq!(computed, Vec2::new(0.0, -1.0));
+        let planes = [
+            (vec![(-0.1, -0.1), (10.1, -0.1), (6.0, 4.0), (4.0, 4.0)], [-0.1, -0.1, 10.1, -0.1]),
+            (vec![(10.1, -0.1), (10.1, 8.1), (6.0, 4.0)], [10.1, -0.1, 10.1, 8.1]),
+            (vec![(10.1, 8.1), (-0.1, 8.1), (4.0, 4.0), (6.0, 4.0)], [10.1, 8.1, -0.1, 8.1]),
+            (vec![(-0.1, 8.1), (-0.1, -0.1), (4.0, 4.0)], [-0.1, 8.1, -0.1, -0.1]),
+        ];
+        for (ring, base) in planes {
+            let dir = Vec2::new(base[2] - base[0], base[3] - base[1]);
+            let dir = dir / dir.len();
+            let down = Vec2::new(dir.y, -dir.x);
+            let left = Vec2::new(-dir.y, dir.x);
+            assert_eq!(down, -left);
+            let p = Vec2::new(base[0], base[1]);
+            let highest = ring.iter().map(|&(x, y)| Vec2::new(x, y)).fold(p, |h, q| if (q - p).dot(left) > (h - p).dot(left) { q } else { h });
+            assert!((highest - p).dot(down) < 0.0, "down points from the highest vertex toward the base");
+        }
     }
 
     #[test]
