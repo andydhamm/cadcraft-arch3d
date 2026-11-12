@@ -330,7 +330,12 @@ pub(crate) fn detect_edits(s: &mut Session, before: Option<&Arc<Drawing>>, uid: 
                 row.edited = true;
             }
         }
-        updates.push((idx, rows));
+        if rows != rec.generated {
+            updates.push((idx, rows));
+        }
+    }
+    if updates.is_empty() {
+        return;
     }
     if let Ok(mut doc) = s.doc_mut() {
         for (idx, rows) in updates {
@@ -351,12 +356,16 @@ pub(crate) fn regenerate(s: &mut Session, before: Option<&Arc<Drawing>>, uid: Op
     if uid.is_some_and(|u| u != st.uid) {
         return;
     }
-    let Ok(mut doc) = s.doc_mut() else {
+    let Ok(current) = s.doc() else {
         return;
     };
-    if before.arch_revision == doc.arch_revision {
+    if current.arch.auto_dims.is_empty() || before.arch_revision == current.arch_revision {
         return;
     }
+    // Work on a copy so an unchanged model keeps the same Arc and no undo step of its own.
+    let mut work: Drawing = current.clone();
+    let doc = &mut work;
+    let mut changed = false;
     let records = doc.arch.auto_dims.clone();
     let mut updates = Vec::new();
     for rec in &records {
@@ -375,6 +384,7 @@ pub(crate) fn regenerate(s: &mut Session, before: Option<&Arc<Drawing>>, uid: Op
                 }
             }
             if !kept {
+                changed = true;
                 let mut handles = Vec::new();
                 for pair in row.points.windows(2) {
                     let h = doc.new_handle();
@@ -393,10 +403,14 @@ pub(crate) fn regenerate(s: &mut Session, before: Option<&Arc<Drawing>>, uid: Op
                 continue;
             }
             if !has_same_kind {
+                changed = true;
                 for h in &old.handles {
                     doc.remove_entity(*h);
                 }
             }
+        }
+        if next != rec.generated {
+            changed = true;
         }
         updates.push((rec.level, next));
     }
@@ -404,6 +418,9 @@ pub(crate) fn regenerate(s: &mut Session, before: Option<&Arc<Drawing>>, uid: Op
         if let Some(rec) = doc.arch.auto_dims.iter_mut().find(|r| r.level == level) {
             rec.generated = next;
         }
+    }
+    if changed && let Ok(live) = s.doc_mut() {
+        *live = work;
     }
 }
 
