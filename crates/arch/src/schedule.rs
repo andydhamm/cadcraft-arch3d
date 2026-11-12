@@ -32,6 +32,7 @@ fn door_kind_name(kind: OpeningKind) -> &'static str {
         OpeningKind::GarageDoor => "garageDoor",
         OpeningKind::CasedOpening => "casedOpening",
         OpeningKind::Window => "window",
+        _ => "door",
     }
 }
 
@@ -40,6 +41,7 @@ fn cabinet_kind_name(kind: CabinetKind) -> &'static str {
         CabinetKind::Base => "base",
         CabinetKind::Wall => "wall",
         CabinetKind::Tall => "tall",
+        _ => "base",
     }
 }
 
@@ -49,6 +51,7 @@ fn fronts_name(fronts: Fronts) -> &'static str {
         Fronts::Drawers => "drawers",
         Fronts::DrawerOverDoor => "drawerOverDoor",
         Fronts::Open => "open",
+        _ => "doors",
     }
 }
 
@@ -56,6 +59,7 @@ fn swing_name(swing: Swing) -> &'static str {
     match swing {
         Swing::In => "in",
         Swing::Out => "out",
+        _ => "in",
     }
 }
 
@@ -67,6 +71,7 @@ fn opening_prefix(kind: OpeningKind) -> Option<char> {
     match kind {
         OpeningKind::Door | OpeningKind::GarageDoor | OpeningKind::CasedOpening => Some('D'),
         OpeningKind::Window => Some('W'),
+        _ => None,
     }
 }
 
@@ -83,6 +88,7 @@ fn opening_identity(item: &Opening) -> Option<String> {
             let s = mm(item.sill)?;
             Some(format!("{}|{}|{}|{}", item.style.trim().to_ascii_lowercase(), w, h, s))
         }
+        _ => None,
     }
 }
 

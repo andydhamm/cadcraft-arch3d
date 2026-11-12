@@ -156,6 +156,15 @@ mod tests {
     }
 
     #[test]
+    fn inspect_numbers_are_null_with_the_stub() {
+        let mut s = Session::new();
+        let v = inspect(&mut s, json!({"openings": true, "cabinets": true}));
+        let openings = v["openings"].as_array().cloned().unwrap_or_default();
+        assert!(openings.is_empty() || v["openings"].is_null(), "{v}");
+        assert!(v["cabinets"].is_null() || v["cabinets"] == json!([]), "{v}");
+    }
+
+    #[test]
     fn inspect_numbers_are_reported() {
         let mut s = Session::new();
         if let Ok(d) = s.doc_mut() {
