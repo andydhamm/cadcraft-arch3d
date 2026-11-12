@@ -45,6 +45,7 @@ pub mod label;
 pub mod library;
 pub mod light;
 pub mod light_symbol;
+pub mod molding_line;
 pub mod molding_profile;
 pub mod molding_runs;
 pub mod opening;
