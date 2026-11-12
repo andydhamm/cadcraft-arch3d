@@ -20,6 +20,7 @@ The replayed model's room set is the split-entry bi-level. The `arch.inspect {"r
 | Lower | Lower Bath | bath | 6.21 m² |
 | Lower | Kitchen | kitchen | 14.88 m² |
 | Lower | Living | living | 22.92 m² |
+| Lower | Rear deck | deck | 18.36 m² |
 | Lower | Bedroom 1 | bedroom | 13.70 m² |
 | Entry | Entry | entry | 7.33 m² |
 | Entry | Utility | utility | 4.15 m² |
@@ -31,7 +32,9 @@ The replayed model's room set is the split-entry bi-level. The `arch.inspect {"r
 | Main | Bedroom 2 | bedroom | 10.92 m² |
 | Main | Bedroom 3 | bedroom | 8.83 m² |
 
-The split entry is the front landing between the basement and main levels. The Lower→Entry stair ends at the landing and the Entry→Main stair starts from the landing's edge; the landing is a level of its own, so the front door sits on a small utility landing. The Open Below foyer is a room on the Main level cut out over the landing; its ceiling lifts the landing to full headroom instead of clamping the floor slab. The `renders` contact sheet and each image below show the plan, electrical views, elevations, sections and rendered views for the house.
+The split entry is the front landing between the basement and main levels. The Lower→Entry stair ends at the landing and the Entry→Main stair starts from the landing's edge; the landing is a level of its own, so the front door sits on a small utility landing. The Open Below foyer is a room on the Main level cut out over the landing; its ceiling lifts the landing to full headroom instead of clamping the floor slab. Phase 17 adds the showcase touches: both stairs carry auto side railings, the rear deck is framed and railed, several windows get grilles, and the round-topped window closes the north-facing façade with a softer head.
+
+The rear deck sits against the north exterior wall on the Lower level, with a closed perimeter ring, ledger and joists, a wood surface and a pair of outdoor dining pieces. The `renders` contact sheet and each image below show the plan, electrical views, elevations, sections and rendered views for the house.
 
 The Main level also carries the casework (base and wall cabinets with bar pulls), the kitchen appliances (range, refrigerator, sink, dishwasher), the baths (toilet, lavatory, bathtub) and the furnishing.
 
