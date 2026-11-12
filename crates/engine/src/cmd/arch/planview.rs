@@ -8,9 +8,7 @@
 //! changes nothing and pushes no undo step. Nothing here calls `touch_arch`: the 2D plan is
 //! rebuilt on every build, exactly as `level.show` leaves it.
 
-use cadcraft_doc::arch::{
-    AnnotationSet, MAX_PLAN_VIEWS, PlanKind, PlanView, ReferenceDisplay, RoomLabelShow, ViewZoom, validate_plan_view,
-};
+use cadcraft_doc::arch::{AnnotationSet, MAX_PLAN_VIEWS, PlanKind, PlanView, ReferenceDisplay, RoomLabelShow, ViewZoom, validate_plan_view};
 use cadcraft_doc::{Drawing, LayerRule, MAX_LAYER_PATTERN, MAX_LAYER_RULES, Space};
 use serde_json::{Map, Value, json};
 
@@ -28,23 +26,22 @@ macro_rules! view_fields {
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        CommandSpec::new("planview", "New Plan View", run_new)
-            .menu(&["Architecture", MENU, "New Plan View"])
-            .params(concat!("{name, from?: view name (default \"Working\"), ", view_fields!(), ", open?: bool (default true)}")),
-        CommandSpec::new("planview.edit", "Edit Plan View", run_edit)
-            .menu(&["Architecture", MENU, "Edit Plan View"])
-            .params(concat!("{name, rename?, ", view_fields!(), "}")),
-        CommandSpec::new("planview.delete", "Delete Plan View", run_delete)
-            .menu(&["Architecture", MENU, "Delete Plan View"])
-            .params("{name}"),
+        CommandSpec::new("planview", "New Plan View", run_new).menu(&["Architecture", MENU, "New Plan View"]).params(concat!(
+            "{name, from?: view name (default \"Working\"), ",
+            view_fields!(),
+            ", open?: bool (default true)}"
+        )),
+        CommandSpec::new("planview.edit", "Edit Plan View", run_edit).menu(&["Architecture", MENU, "Edit Plan View"]).params(concat!(
+            "{name, rename?, ",
+            view_fields!(),
+            "}"
+        )),
+        CommandSpec::new("planview.delete", "Delete Plan View", run_delete).menu(&["Architecture", MENU, "Delete Plan View"]).params("{name}"),
         CommandSpec::new("planview.open", "Open Plan View", run_open).menu(&["Architecture", MENU, "Open Plan View"]).params("{name}"),
         CommandSpec::new("planview.close", "Close Plan View", run_close)
             .menu(&["Architecture", MENU, "Close Plan View"])
             .params("{name?: default the active view}"),
-        CommandSpec::new("planview.list", "List Plan Views", run_list)
-            .menu(&["Architecture", MENU, "List Plan Views"])
-            .params("{}")
-            .noundo(),
+        CommandSpec::new("planview.list", "List Plan Views", run_list).menu(&["Architecture", MENU, "List Plan Views"]).params("{}").noundo(),
     ]
 }
 
@@ -127,12 +124,7 @@ fn apply_zoom(s: &mut Session, v: &PlanView) -> Result<()> {
 /// Open the plan view `name`: apply it (layers, level, annotation), make its tab active, and show
 /// its zoom. Used by `planview.open` and by exports.
 pub(crate) fn open_plan_view(s: &mut Session, name: &str) -> Result<Value> {
-    let v = s
-        .doc()?
-        .arch
-        .plan_view(name)
-        .cloned()
-        .ok_or_else(|| bad("planview.open", format!("`name`: no plan view `{}`", name.trim())))?;
+    let v = s.doc()?.arch.plan_view(name).cloned().ok_or_else(|| bad("planview.open", format!("`name`: no plan view `{}`", name.trim())))?;
     let report = apply_plan_view(s.doc_mut()?, &v);
     apply_zoom(s, &v)?;
     let d = s.doc()?;
@@ -219,7 +211,8 @@ fn parse_fields(cmd: &str, p: &Map<String, Value>, view: &mut PlanView, d: &Draw
             for (i, item) in list.iter().enumerate() {
                 let at = format!("layers.rules[{i}]");
                 let rm = object(cmd, &at, item, &["pattern", "on", "transparency"])?;
-                let pattern = string(cmd, &format!("{at}.pattern"), rm.get("pattern").ok_or_else(|| bad(cmd, format!("`{at}.pattern` is required")))?)?;
+                let pattern =
+                    string(cmd, &format!("{at}.pattern"), rm.get("pattern").ok_or_else(|| bad(cmd, format!("`{at}.pattern` is required")))?)?;
                 if pattern.trim().is_empty() || pattern.chars().count() > MAX_LAYER_PATTERN || pattern.chars().any(|c| c.is_control()) {
                     return Err(bad(cmd, format!("`{at}.pattern` must be 1..={MAX_LAYER_PATTERN} characters without control characters")));
                 }

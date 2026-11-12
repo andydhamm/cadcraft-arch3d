@@ -61,6 +61,21 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --save cameras.dxf
 ```
 
+## Plan views
+
+Plan views are saved named states in the drawing: a level or any level, wildcard layer rules over the current layer state, an annotation set (the default layer and text/dimension style for new annotations), and a saved zoom. Use `planview` to create and duplicate named views, `planview.open` to open a tab, `planview.close` to close it, `planview.edit` to rename or change rules, and `planview.delete` to remove one.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'planview {"name":"Floor Plan","level":0,"kind":"floor"}' \
+  --cmd 'planview {"name":"Roof","kind":"roof","level":1}' \
+  --cmd 'planview.list {}'
+```
+
+## Dimensions
+
+Dimensions and room labels are part of the plan view: room labels can show names, areas and dimensions, reference levels can be drawn, and dimension styles follow the view's annotation set. The plan can be reopened with the active view still applied, and the drawing keeps the tab state so a saved plan view is restored the same way every time.
+
 ## Walkthrough
 
 In the 3D pane, walkthrough mode moves the eye with W A S D and turns it with the mouse. The `walkthrough`
