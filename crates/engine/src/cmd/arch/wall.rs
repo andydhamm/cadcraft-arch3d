@@ -296,9 +296,9 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
                 true
             }
         }
-        Some(t) => match t.as_str() {
+        Some(t) => match t.to_ascii_lowercase().as_str() {
             "exterior" => true,
-            "interior" | "knee" | "railing" | "retaining" => false,
+            "interior" | "knee" | "railing" | "retaining" | "glass" => false,
             _ => return Err(bad("wall", format!("unknown wall type `{t}`"))),
         },
     };
@@ -328,7 +328,9 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None if has_thickness => return Err(bad("wall", "`thickness` must be a positive finite number")),
             None => {
-                if exterior {
+                if type_str.as_deref().map(str::to_ascii_lowercase).as_deref() == Some("glass") {
+                    cadcraft_doc::arch::GLASS_THICKNESS
+                } else if exterior {
                     super::DEFAULT_EXT_THICKNESS
                 } else {
                     super::DEFAULT_INT_THICKNESS
@@ -347,6 +349,7 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
     }
 
     let wall_type = type_str.clone().unwrap_or_else(|| if exterior { "exterior".to_string() } else { "interior".to_string() });
+    let wall_type_lower = wall_type.to_ascii_lowercase();
 
     // Level: from param, or the first level in the model when absent
     let level_idx = match &level_ref {
@@ -372,6 +375,8 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
         top.elevation + top.ceiling_height - base_elev
     } else if has_height {
         size_param("wall", p, "height", false)?.unwrap_or(f64::NAN)
+    } else if wall_type_lower == "glass" {
+        cadcraft_doc::arch::GLASS_WALL_HEIGHT
     } else {
         d_read.arch.levels.get(level_idx).map(|l| l.ceiling_height + l.structure).unwrap_or(super::DEFAULT_WALL_HEIGHT)
     };
@@ -418,6 +423,9 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
 
     // --- Now mutate ---
     let d = s.doc_mut()?;
+    if !d.arch.types.iter().any(|t| t.name.eq_ignore_ascii_case("Glass")) {
+        d.arch.types.push(cadcraft_doc::arch::glass_wall_type());
+    }
 
     // Ensure A-WALL layer exists
     if needs_layer {
@@ -426,7 +434,7 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
 
     // --- Build wall objects ---
     let base_level_idx = level_idx as u32;
-    let raw_layers = super::wall_layers(exterior);
+    let raw_layers = if wall_type.eq_ignore_ascii_case("Glass") { vec![("glass".to_string(), thickness)] } else { super::wall_layers(exterior) };
     let layers = if thickness == 0.0 {
         // Divider with zero thickness: no bands.
         Vec::new()
@@ -440,6 +448,12 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     let mut new_walls: Vec<Wall> = Vec::with_capacity(new_segment_count);
+    if wall_type.eq_ignore_ascii_case("Glass") && !height.is_finite() {
+        return Err(bad("wall", "glass walls must have a finite `height`"));
+    }
+    if wall_type.eq_ignore_ascii_case("Glass") && height <= 0.0 {
+        return Err(bad("wall", "glass walls must have a positive height"));
+    }
     for i in 0..new_segment_count {
         let id = d.arch.next_wall_id();
         d.arch.next_id = d.arch.next_id.saturating_add(1);

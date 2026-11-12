@@ -8,6 +8,7 @@ use crate::Handle;
 use cadcraft_geom::{Bounds2, Vec2};
 use serde::{Deserialize, Serialize};
 
+pub mod autodim;
 pub mod backdrop;
 pub mod casework;
 pub mod ceiling;
@@ -24,6 +25,7 @@ pub mod paint;
 pub mod planview;
 pub mod sheet;
 pub mod site;
+pub use autodim::*;
 pub use backdrop::*;
 pub use casework::*;
 pub use ceiling::*;
@@ -1922,6 +1924,8 @@ pub struct ArchModel {
     pub cameras: Vec<Camera3d>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_camera: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_dims: Vec<AutoDims>,
     /// The one level the plan draws; `None` = all levels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_level: Option<u32>,
@@ -2059,6 +2063,7 @@ impl Default for ArchModel {
             next_railing_id: 0,
             cameras: Vec::new(),
             active_camera: None,
+            auto_dims: Vec::new(),
             plan_level: None,
             plan_views: template_plan_views(),
             open_plan_views: Vec::new(),
@@ -2128,6 +2133,7 @@ impl Default for ArchModel {
                     ],
                     reference: RefSide::Centre,
                 },
+                glass_wall_type(),
             ],
         }
     }
@@ -3408,9 +3414,19 @@ mod tests {
     #[test]
     fn arch_model_defaults_have_two_wall_types() {
         let m = ArchModel::default();
-        assert_eq!(m.types.len(), 2);
+        assert_eq!(m.types.len(), 3);
         assert_eq!(m.types[0].name, "Exterior");
         assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
+    }
+
+    #[test]
+    fn arch_model_defaults_have_three_wall_types() {
+        let m = ArchModel::default();
+        assert_eq!(m.types.len(), 3);
+        assert_eq!(m.types[0].name, "Exterior");
+        assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
     }
 
     #[test]
