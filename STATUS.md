@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 9 of 35 segments merged · 1 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-12 08:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 27.0 h so far · expected done Nov 12 15:57–Nov 17 21:25 UTC |
+| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 27.3 h so far · expected done Nov 12 16:12–Nov 17 21:40 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 2 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
@@ -71,15 +71,15 @@ Updated 2026-11-12 08:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1160 |
-| bonsai-b | bonsai2-27b | gate | 1129 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1230 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1172 |
+| bonsai-a | bonsai2-27b | gate | 1160 |
+| bonsai-b | bonsai2-27b | agent | 1130 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1230 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1173 |
 | claude-sonnet-a | sonnet | gate | 131 |
-| claude-sonnet-b | sonnet | agent | 139 |
-| claude-sonnet-c | sonnet | agent | 72 |
-| claude-sonnet-d | sonnet | agent | 63 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1028 |
+| claude-sonnet-b | sonnet | idle | 140 |
+| claude-sonnet-c | sonnet | gate | 72 |
+| claude-sonnet-d | sonnet | gate | 64 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1029 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 90 |
 | mai-flash-b | mai-code-1.1-flash | idle | 31 |
