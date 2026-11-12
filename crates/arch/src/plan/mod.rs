@@ -331,6 +331,33 @@ mod tests {
     }
 
     #[test]
+    fn plan_label_kinds_have_keys() {
+        assert_eq!(PlanLabelKind::RoomName.key(), "roomName");
+        assert_eq!(PlanLabelKind::RoomArea.key(), "roomArea");
+        assert_eq!(PlanLabelKind::RoomDimensions.key(), "roomDimensions");
+        assert_eq!(PlanLabelKind::RoomCeiling.key(), "roomCeiling");
+        assert_eq!(PlanLabelKind::Pitch.key(), "pitch");
+        assert_eq!(PlanLabelKind::TrayHeight.key(), "trayHeight");
+        assert_eq!(PlanLabelKind::ScheduleNumber.key(), "scheduleNumber");
+        assert_eq!(PlanLabelKind::Callout.key(), "callout");
+        assert_eq!(PlanLineKind::Ridge.key(), "ridge");
+        assert_eq!(PlanLineKind::Hip.key(), "hip");
+        assert_eq!(PlanLineKind::Valley.key(), "valley");
+        assert_eq!(PlanLineKind::GableEnd.key(), "gableEnd");
+        assert_eq!(PlanLineKind::Eave.key(), "eave");
+        assert_eq!(PlanLineKind::Rake.key(), "rake");
+        assert_eq!(PlanLineKind::SlopeArrow.key(), "slopeArrow");
+        assert_eq!(PlanLineKind::SlopeArrowHead.key(), "slopeArrowHead");
+        assert_eq!(PlanLineKind::TrayOutline.key(), "trayOutline");
+        assert_eq!(PlanLineKind::TrayTop.key(), "trayTop");
+        assert_eq!(PlanLineKind::VaultLine.key(), "vaultLine");
+        assert_eq!(PlanLineKind::CeilingItem.key(), "ceilingItem");
+        assert_eq!(PlanLineKind::Soffit.key(), "soffit");
+        assert_eq!(PlanLineKind::Reference.key(), "reference");
+        assert_eq!(PlanLineKind::Callout.key(), "callout");
+    }
+
+    #[test]
     fn plan_line_and_label_constructors_default_the_optional_fields() {
         let l = PlanLine::new("A-ROOF", PlanLineKind::Ridge, Vec2::ZERO, Vec2::new(3.0, 4.0), Handle(7));
         assert!(!l.dashed && l.color.is_none() && l.transparency.is_none());
