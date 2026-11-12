@@ -210,6 +210,7 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
             {
                 r.flat_ceiling = o.flat_ceiling;
                 r.ceiling_stack = o.ceiling_stack.clone();
+                r.label_area = o.label_area;
             }
             d.arch.push_room(r);
         }
@@ -479,6 +480,21 @@ mod tests {
         let d = s.doc().unwrap();
         assert!(!d.arch.rooms.is_empty());
         assert!(d.arch.rooms.iter().all(|r| !r.flat_ceiling && r.ceiling_stack == stack));
+    }
+
+    #[test]
+    fn roomdetect_keeps_label_area() {
+        use cadcraft_doc::arch::LabelArea;
+        let mut s = Session::new();
+        build_test_wall(&mut s);
+        s.execute("roomdetect", &json!({})).unwrap();
+        for r in s.doc_mut().unwrap().arch.rooms.iter_mut() {
+            r.label_area = LabelArea::Standard;
+        }
+        s.execute("roomdetect", &json!({})).unwrap();
+        let d = s.doc().unwrap();
+        assert!(!d.arch.rooms.is_empty());
+        assert!(d.arch.rooms.iter().all(|r| r.label_area == LabelArea::Standard));
     }
 
     /// A tray created in the NW room stays bound to the room that still contains

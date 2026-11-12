@@ -53,6 +53,7 @@ pub mod roofauto;
 pub mod roofplane;
 pub mod room;
 pub mod roomdetect;
+pub mod roomlabel;
 pub mod sample;
 pub mod sheet;
 pub mod site;
@@ -95,6 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(room::specs());
     v.extend(library::specs());
     v.extend(roomdetect::specs());
+    v.extend(roomlabel::specs());
     v.extend(inspect::specs());
     v.extend(pick::specs());
     v.extend(level::specs());
