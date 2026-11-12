@@ -715,6 +715,17 @@ fn space_names_its_tab() {
     assert_eq!(p.tab_name(), "Sheet A");
 }
 
+/// Several spellings of one DIM field apply once, the last in the map's order, and none is rejected.
+#[test]
+fn dim_style_spellings_of_one_field_apply_once() {
+    let mut st = DimStyle::default();
+    let m = serde_json::json!({ "textHeight": 2.5, "TEXTHEIGHT": 3.5, "DIMTXT": 4.5 });
+    let m = m.as_object().unwrap();
+    let want = m.values().next_back().and_then(serde_json::Value::as_f64).unwrap();
+    assert!(st.apply_fields(m).is_empty());
+    assert_eq!(st.text_height, want);
+}
+
 /// A new drawing carries the two standard layers (`0` and `Defpoints`) plus the five
 /// arch proxy layers (`A-WALL`, `A-DOOR`, `A-GLAZ`, `A-ROOF`, `A-STAIR`), so arch
 /// commands have a layer to sit on from the start.

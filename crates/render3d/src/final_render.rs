@@ -290,6 +290,8 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
         let shadowed: Vec<usize> = job.drawn.iter().take(job.lights_done).copied().collect();
         off.uploaded(&job.scene, job.key, job.ground).ok_or("the scene could not be uploaded")?;
         let (_, meshes) = off.meshes.as_ref().ok_or("the scene could not be uploaded")?;
+        // Geometry outside the view's clip box casts no fixture shadow.
+        job.atlas.set_clip(crate::frame_look::look_clip(&job.lighting.look));
         let before = job.atlas.maps_built();
         job.slots = job.atlas.update(&off.device, &off.queue, meshes, job.occluders, &job.scene.lights, &shadowed, job.far);
         off.shadows_built += job.atlas.maps_built().saturating_sub(before);
@@ -297,6 +299,7 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
     }
     if !job.rendered {
         let sun = job.lighting.sun;
+        job.target.shadow_clip = crate::frame_look::look_clip(&job.lighting.look);
         let sun_map = match sun.filter(|_| job.lighting.sun_shadow) {
             Some(s) => job.target.build_shadow(&job.scene, job.key, &s, job.ground),
             None => None,

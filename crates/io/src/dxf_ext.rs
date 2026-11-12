@@ -13,8 +13,8 @@ use std::collections::HashMap;
 
 use cadcraft_color::Color;
 use cadcraft_doc::{ArrayParams, AssocSnap, Constraint, DimAssoc, DimStyle, Handle, LayerState, Parametric, PlotStyleTable};
-use cadcraft_dxf::{Tag, Version};
 use cadcraft_render::Arrowhead;
+use craft_dxf::{Tag, Version};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -443,6 +443,7 @@ fn snap_code(s: &AssocSnap) -> i64 {
         AssocSnap::OnCircle { .. } => 4,
         AssocSnap::Intersection { .. } => 5,
         AssocSnap::Vertex { .. } => 6,
+        AssocSnap::Arch { .. } => 7,
     }
 }
 
@@ -459,6 +460,13 @@ pub(crate) fn assoc_xdata(assoc: &[DimAssoc]) -> Vec<Tag> {
             AssocSnap::OnCircle { angle } => v.push(Tag::f(1040, *angle)),
             AssocSnap::Intersection { other } => v.push(Tag::s(1005, other.hex())),
             AssocSnap::Vertex { index } => v.push(Tag::i(1071, i64::try_from(*index).unwrap_or(i64::from(i32::MAX)).min(i64::from(i32::MAX)))),
+            AssocSnap::Arch { feature, along } => {
+                v.push(Tag::s(1000, feature.key()));
+                v.push(Tag::f(1040, *along));
+                if let AssocSnap::Arch { feature: cadcraft_doc::ArchFeature::Edge(index), .. } = &a.snap {
+                    v.push(Tag::i(1071, i64::try_from(*index).unwrap_or(i64::from(i32::MAX)).min(i64::from(i32::MAX))));
+                }
+            }
             _ => {}
         }
         v.push(Tag::s(1002, "}"));
@@ -626,6 +634,20 @@ pub(crate) fn read_assoc(tags: &[Tag]) -> Vec<DimAssoc> {
                 Some(index) => AssocSnap::Vertex { index },
                 None => continue,
             },
+            7 => {
+                let key = body.iter().filter(|x| x.code == 1000).nth(1).map(Tag::str).unwrap_or_default();
+                let along = body.iter().find(|x| x.code == 1040).map(Tag::f64).filter(|a| a.is_finite());
+                let edge = body.iter().find(|x| x.code == 1071).and_then(|x| u32::try_from(x.i64()).ok());
+                let feature = match (key.trim(), edge) {
+                    ("centre" | "center", _) => cadcraft_doc::ArchFeature::Centre,
+                    ("leftFace" | "leftface", _) => cadcraft_doc::ArchFeature::LeftFace,
+                    ("rightFace" | "rightface", _) => cadcraft_doc::ArchFeature::RightFace,
+                    ("edge", Some(index)) => cadcraft_doc::ArchFeature::Edge(index),
+                    _ => continue,
+                };
+                let Some(along) = along else { continue };
+                AssocSnap::Arch { feature, along }
+            }
             _ => continue,
         };
         out.push(DimAssoc { point: point.to_string(), handle, snap });
@@ -844,15 +866,33 @@ pub(crate) fn apply_anno(d: &mut cadcraft_doc::Drawing, p: AnnoPayload) {
             std::sync::Arc::make_mut(b).annotative = true;
         }
     }
+    // Which layout holds each paper space object, found once: `modify_entity` searches every
+    // layout for a handle model space lacks, which a long list of missing handles made quadratic.
+    let mut in_layout: std::collections::HashMap<Handle, usize> = Default::default();
+    if !p.objects.is_empty() {
+        // First layout wins, as `modify_entity` did.
+        for (i, l) in d.layouts.iter().enumerate() {
+            for h in l.entities.handles() {
+                in_layout.entry(h).or_insert(i);
+            }
+        }
+    }
     for o in p.objects {
         let Some(h) = Handle::parse_hex(&o.handle) else { continue };
+        let store = if d.model.contains(h) {
+            &mut d.model
+        } else if let Some(l) = in_layout.get(&h).and_then(|&i| d.layouts.get_mut(i)) {
+            &mut l.entities
+        } else {
+            continue;
+        };
         let mut scales: Vec<cadcraft_doc::AnnoScale> = Vec::new();
         for s in o.scales.into_iter().filter(|s| s.is_valid() && !s.name.trim().is_empty()) {
             if scales.len() < cadcraft_doc::MAX_SCALES && !scales.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) {
                 scales.push(s);
             }
         }
-        let _ = d.modify_entity(h, |e| {
+        store.modify(h, |e| {
             if cadcraft_doc::can_be_annotative(&e.kind) {
                 e.common.anno_scales = scales;
             }

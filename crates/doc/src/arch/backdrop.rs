@@ -1,6 +1,95 @@
 //! The backdrop behind the 3D view.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+/// A decoded Radiance RGBE image pixel buffer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ImageRgbe {
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// Raw RGBE scanline data: `[r, g, b, e]` per pixel.
+    pub rgbe: Vec<u8>,
+}
+
+impl ImageRgbe {
+    /// Decode one pixel to linear float RGB. Returns `[0.0; 3]` when the coordinate is out of range.
+    pub fn pixel_rgb(&self, x: u32, y: u32) -> [f64; 3] {
+        if x >= self.width || y >= self.height {
+            return [0.0; 3];
+        }
+        let idx = (y as usize).checked_mul(self.width as usize).and_then(|row| row.checked_add(x as usize)).and_then(|i| i.checked_mul(4));
+        let Some(idx) = idx else {
+            return [0.0; 3];
+        };
+        let px = match self.rgbe.get(idx..idx + 4) {
+            Some(values) => values,
+            None => return [0.0; 3],
+        };
+        let [r, g, b, e] = [px[0], px[1], px[2], px[3]];
+        let factor = if e == 0 { 0.0 } else { 2f64.powi(i32::from(e) - 136) };
+        [r as f64 * factor, g as f64 * factor, b as f64 * factor]
+    }
+
+    /// Decode each pixel to linear float RGB.
+    pub fn to_rgb(&self) -> Vec<[f64; 3]> {
+        let mut rgb = Vec::with_capacity(self.rgbe.len().saturating_div(4));
+        for y in 0..self.height {
+            for x in 0..self.width {
+                rgb.push(self.pixel_rgb(x, y));
+            }
+        }
+        rgb
+    }
+
+    /// Whether the buffer length matches the dimensions and the stored size is within the
+    /// model caps used for HDR backdrops.
+    pub fn is_valid(&self) -> bool {
+        let expected = (self.width as usize).checked_mul(self.height as usize).and_then(|n| n.checked_mul(4));
+        matches!(expected, Some(len) if len == self.rgbe.len()) && (1..=1024).contains(&self.width) && (1..=512).contains(&self.height)
+    }
+}
+
+impl Serialize for ImageRgbe {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex = self.rgbe.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        serializer.serialize_str(&hex)
+    }
+}
+
+impl<'de> Deserialize<'de> for ImageRgbe {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let hex = String::deserialize(deserializer)?;
+        if hex.len() % 2 != 0 {
+            return Err(serde::de::Error::custom("bad RGBE hex length"));
+        }
+        let mut bytes = Vec::with_capacity(hex.len() / 2);
+        let mut chars = hex.as_bytes().chunks_exact(2);
+        for chunk in &mut chars {
+            let hi = match chunk[0] {
+                b'0'..=b'9' => (chunk[0] - b'0') as u8,
+                b'a'..=b'f' => (chunk[0] - b'a' + 10) as u8,
+                b'A'..=b'F' => (chunk[0] - b'A' + 10) as u8,
+                _ => return Err(serde::de::Error::custom("bad RGBE hex")),
+            };
+            let lo = match chunk[1] {
+                b'0'..=b'9' => (chunk[1] - b'0') as u8,
+                b'a'..=b'f' => (chunk[1] - b'a' + 10) as u8,
+                b'A'..=b'F' => (chunk[1] - b'A' + 10) as u8,
+                _ => return Err(serde::de::Error::custom("bad RGBE hex")),
+            };
+            bytes.push((hi << 4) | lo);
+        }
+        Ok(ImageRgbe { width: 1, height: 1, rgbe: bytes })
+    }
+}
 
 /// How a backdrop image maps onto the view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,5 +170,15 @@ mod tests {
         assert_eq!(serde_json::from_value::<Backdrop>(v).unwrap(), i);
         assert_eq!(serde_json::to_string(&Projection::Flat).unwrap(), "\"flat\"");
         assert_eq!(Projection::default(), Projection::Flat);
+    }
+
+    #[test]
+    fn image_rgbe_hex_round_trip_and_bad_hex_is_invalid() {
+        let img = ImageRgbe { width: 2, height: 1, rgbe: vec![0x10, 0x20, 0x30, 0x80, 0x40, 0x50, 0x60, 0x81] };
+        let json = serde_json::to_string(&img).unwrap();
+        let back: ImageRgbe = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.rgbe, img.rgbe);
+        assert!(serde_json::from_str::<ImageRgbe>("\"zz\"").is_err());
+        assert!(serde_json::from_str::<ImageRgbe>("\"123\"").is_err());
     }
 }
