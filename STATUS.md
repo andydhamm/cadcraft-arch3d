@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-11 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 17 of 21: Stairs, decks, railings and openings in detail — 19 of 21 segments merged · 13 of 14 acceptance checks**
 
@@ -27,7 +27,7 @@ Updated 2026-11-11 23:45 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 42.0 h so far · expected done Nov 12 00:22–Nov 13 09:29 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 13 / 14 | 42.3 h so far · expected done Nov 12 00:37–Nov 13 09:44 UTC |
 | 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
 | 19 | Light, sky and cameras | building | 1 / 17 | — |
 | 20 | Plan views and dimensions | building | 0 / 13 | — |
@@ -35,17 +35,18 @@ Updated 2026-11-11 23:45 UTC. This page and the card in the README are regenerat
 
 ## Phase 17 segments
 
-19 merged, 2 replaced, 2 merging
+19 merged, 2 replaced, 1 working, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p17f-showcase-phase17` | The showcase house gets its phase-17 details: railed stairs, a framed and railed rear deck, gridded windows and a round top; renders refreshed | merging | mai-flash |
+| `p17f-showcase-phase17` | The showcase house gets its phase-17 details: railed stairs, a framed and railed rear deck, gridded windows and a round top; renders refreshed | working | claude-sonnet-a |
 | `upstream-sync-e5021f017` | merge upstream upstream/main up to e5021f017 (19 commits) | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 11 23:54 | `p17f-showcase-phase17` | refused | 8,783 pass | mai-flash |
 | Nov 11 23:42 | `harden-p16-soffit-input` | merged | 8,782 pass | tturbo-mac |
 | Nov 11 23:15 | `p18-glass-walls-1` | refused | 8,786 pass | mai-flash |
 | Nov 11 21:48 | `p19-sun-2` | merged | 8,778 pass | claude-sonnet-d |
@@ -57,24 +58,23 @@ Updated 2026-11-11 23:45 UTC. This page and the card in the README are regenerat
 | Nov 11 19:31 | `harden-p16f-tray-roof-guard` | merged | 8,747 pass | tturbo-mac2 |
 | Nov 11 19:12 | `p19-foundation-5` | merged | 8,737 pass | claude-sonnet-b |
 | Nov 11 19:12 | `p19-foundation-5` | merged | 8,737 pass | darwin-ws3 |
-| Nov 11 19:12 | `p19-foundation-5` | merged | 8,737 pass | bonsai-ws2-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1133 |
-| bonsai-b | bonsai2-27b | agent | 1097 |
+| bonsai-a | bonsai2-27b | agent | 1135 |
+| bonsai-b | bonsai2-27b | agent | 1098 |
 | bonsai-ws2-a | bonsai2-27b | merging | 1194 |
 | bonsai-ws2-b | bonsai2-27b | merging | 1145 |
-| claude-sonnet-a | sonnet | idle | 126 |
+| claude-sonnet-a | sonnet | agent | 126 |
 | claude-sonnet-b | sonnet | idle | 129 |
-| claude-sonnet-c | sonnet | idle | 67 |
+| claude-sonnet-c | sonnet | agent | 67 |
 | claude-sonnet-d | sonnet | idle | 58 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1001 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1002 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 86 |
 | mai-flash-b | mai-code-1.1-flash | idle | 29 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 89 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 89 |
 | tturbo-mac | tturbo-ultraheretic | agent | 772 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 384 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 385 |
