@@ -427,4 +427,150 @@ mod tests {
         assert!((cs[0].brightness - 0.3).abs() <= 1e-9);
         assert_eq!(circuit_of(&m, s0), Some(cs[0].clone()));
     }
+
+    #[test]
+    fn three_switches_in_a_chain_are_one_circuit() {
+        let (mut m, s0) = fixture();
+
+        let s1 = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::ThreeWay,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 1.2,
+            ..Default::default()
+        });
+        let s2 = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::ThreeWay,
+            side: WallSide::Left,
+            offset: 2.5,
+            height: 1.2,
+            ..Default::default()
+        });
+
+        // s0 -> l0, s1 -> l0 and l1, s2 -> l1: one transitive circuit.
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0)], ..Default::default() });
+        m.push_connection(Connection { from: s1, to: vec![ArchId(0), ArchId(1)], ..Default::default() });
+        m.push_connection(Connection { from: s2, to: vec![ArchId(1)], ..Default::default() });
+
+        let cs = circuits(&m);
+        assert_eq!(cs.len(), 1);
+        assert_eq!(cs[0].switches, vec![s0, s1, s2]);
+        assert_eq!(cs[0].lights, vec![ArchId(0), ArchId(1)]);
+    }
+
+    #[test]
+    fn two_disjoint_groups_are_two_circuits() {
+        let (mut m, s0) = fixture();
+
+        let s1 = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::ThreeWay,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 1.2,
+            ..Default::default()
+        });
+
+        // s0 -> l0, s1 -> l1: no shared lights, two circuits.
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0)], ..Default::default() });
+        m.push_connection(Connection { from: s1, to: vec![ArchId(1)], ..Default::default() });
+
+        let cs = circuits(&m);
+        assert_eq!(cs.len(), 2);
+        assert_eq!(cs[0].switches, vec![s0]);
+        assert_eq!(cs[0].lights, vec![ArchId(0)]);
+        assert_eq!(cs[1].switches, vec![s1]);
+        assert_eq!(cs[1].lights, vec![ArchId(1)]);
+    }
+
+    #[test]
+    fn a_switch_with_an_empty_connection_is_in_no_circuit() {
+        let (mut m, s0) = fixture();
+
+        // A connection with no lights: the switch drives nothing.
+        m.push_connection(Connection { from: s0, to: vec![], ..Default::default() });
+
+        let cs = circuits(&m);
+        assert!(cs.is_empty());
+        assert!(circuit_of(&m, s0).is_none());
+    }
+
+    #[test]
+    fn circuit_brightness_ignores_non_finite() {
+        let (mut m, s0) = fixture();
+
+        m.lights[0].brightness = f64::NAN;
+        m.lights[1].brightness = 0.5;
+
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0), ArchId(1)], ..Default::default() });
+
+        let cs = circuits(&m);
+        assert_eq!(cs.len(), 1);
+        // Only l1 has finite brightness, so the mean is 0.5.
+        assert!((cs[0].brightness - 0.5).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn a_light_not_in_the_model_still_appears_in_the_circuit() {
+        let (mut m, s0) = fixture();
+
+        // Connect to l0 (exists) and l99 (does not exist).
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0), ArchId(99)], ..Default::default() });
+
+        let cs = circuits(&m);
+        assert_eq!(cs.len(), 1);
+        assert_eq!(cs[0].lights, vec![ArchId(0), ArchId(99)]);
+        // Brightness is based only on l0 (brightness 1.0 by default).
+        assert!((cs[0].brightness - 1.0).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn circuit_of_finds_the_right_circuit() {
+        let (mut m, s0) = fixture();
+
+        let s1 = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::ThreeWay,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 1.2,
+            ..Default::default()
+        });
+
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0)], ..Default::default() });
+        m.push_connection(Connection { from: s1, to: vec![ArchId(1)], ..Default::default() });
+
+        let c0 = circuit_of(&m, s0).unwrap();
+        let c1 = circuit_of(&m, s1).unwrap();
+        assert_eq!(c0.switches, vec![s0]);
+        assert_eq!(c1.switches, vec![s1]);
+        assert_ne!(c0, c1);
+    }
+
+    #[test]
+    fn duplicate_connections_are_deduplicated() {
+        let (mut m, s0) = fixture();
+
+        // Push the same connection twice.
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0), ArchId(1)], ..Default::default() });
+        m.push_connection(Connection { from: s0, to: vec![ArchId(0), ArchId(1)], ..Default::default() });
+
+        let cs = circuits(&m);
+        assert_eq!(cs.len(), 1);
+        assert_eq!(cs[0].switches, vec![s0]);
+        assert_eq!(cs[0].lights, vec![ArchId(0), ArchId(1)]);
+    }
+
+    #[test]
+    fn a_connection_from_a_missing_switch_is_ignored() {
+        let (mut m, _s0) = fixture();
+
+        // A connection from a switch that doesn't exist.
+        m.push_connection(Connection { from: ArchId(999), to: vec![ArchId(0)], ..Default::default() });
+
+        let cs = circuits(&m);
+        assert!(cs.is_empty());
+    }
 }

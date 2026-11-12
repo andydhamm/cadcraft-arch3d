@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use cadcraft_color::{Color, Rgb};
-use cadcraft_doc::arch::RoofEdgeKind;
 use cadcraft_doc::{ArchId, Drawing, Handle, Wall};
 use cadcraft_fonts::{TextFont, TextParams, place};
 use cadcraft_geom::Vec2;
@@ -50,7 +49,14 @@ fn wall_on_shown_level(d: &Drawing, wall: &Wall) -> bool {
 /// (and no-plot while plotting); an opening's symbol is skipped by its own layer's state.
 /// A missing layer draws as before.
 pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
+    build_arch_with(d, plotting, &crate::arch_plan::plan_annotation(d))
+}
+
+/// [`build_arch`] with the plan annotation given (the active view's, made at `plan_level`).
+pub(crate) fn build_arch_with(d: &Drawing, plotting: bool, ann: &cadcraft_arch::plan::PlanAnnotation) -> DisplayList {
     let mut list = DisplayList::default();
+    // Reference lines sit beneath the wall poché.
+    crate::arch_plan::push_plan_lines(d, &mut list, plotting, ann, true);
     let layer = d.layer("A-WALL").map(|l| l.color).unwrap_or(Color::Index(7));
     let ink = crate::ink(Color::ByLayer, layer, Color::Index(7));
 
@@ -101,24 +107,26 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
                 }
             }
 
-            // Filled poché with holes
-            let tris = crate::triangulate_evenodd(&polys);
-            if tris.len() >= 3 {
-                let start = u32::try_from(list.tris.len()).unwrap_or(u32::MAX);
-                for q in &tris {
-                    list.bounds.add(*q);
-                    list.tris.push(*q);
+            // Filled poché with holes (glass walls draw outline only, no fill)
+            if !wall.is_glass() {
+                let tris = crate::triangulate_evenodd(&polys);
+                if tris.len() >= 3 {
+                    let start = u32::try_from(list.tris.len()).unwrap_or(u32::MAX);
+                    for q in &tris {
+                        list.bounds.add(*q);
+                        list.tris.push(*q);
+                    }
+                    list.prims.push(DPrim {
+                        handle: arch_handle(wall.id),
+                        color: ink.rgb,
+                        aci7: ink.aci7,
+                        lw: 0.0,
+                        transparency: wall_t,
+                        kind: Kind::Tris,
+                        start,
+                        len: u32::try_from(tris.len()).unwrap_or(u32::MAX),
+                    });
                 }
-                list.prims.push(DPrim {
-                    handle: arch_handle(wall.id),
-                    color: ink.rgb,
-                    aci7: ink.aci7,
-                    lw: 0.0,
-                    transparency: wall_t,
-                    kind: Kind::Tris,
-                    start,
-                    len: u32::try_from(tris.len()).unwrap_or(u32::MAX),
-                });
             }
 
             // Outline
@@ -228,85 +236,10 @@ pub fn build_arch(d: &Drawing, _opts: &Options, plotting: bool) -> DisplayList {
         }
     }
 
-    // Room labels: for each room, shape its name at the polygon centroid as 2D polyline
-    // primitives tagged with the room's proxy handle on layer A-ROOM.
-    if !arch_layer_skipped(d, "A-ROOM", plotting) {
-        for r in &d.arch.rooms {
-            if r.polygon.len() < 3 || !on_shown_level(d, r.level) {
-                continue;
-            }
-            if !r.polygon.iter().all(|p| p.is_finite()) {
-                continue;
-            }
-            let label_text = if r.name.is_empty() { format!("r{}", r.id.0) } else { r.name.clone() };
-            let n = r.polygon.len() as f64;
-            let cx = r.polygon.iter().map(|p| p.x).sum::<f64>() / n;
-            let cy = r.polygon.iter().map(|p| p.y).sum::<f64>() / n;
-            let label_pt = Vec2::new(cx, cy);
-            let params = TextParams::centered(label_pt, 0.24, 0.0);
-            let (sh, _) = place(&TextFont::Stroke, &label_text, &params);
-            let room_layer = d.layer("A-ROOM").map(|l| l.color).unwrap_or(Color::Index(7));
-            let room_ink = crate::ink(Color::ByLayer, room_layer, Color::Index(7));
-            let room_t = layer_transparency(d, "A-ROOM");
-            for stroke in &sh.strokes {
-                if stroke.len() < 2 || !stroke.iter().all(|p| p.is_finite()) {
-                    continue;
-                }
-                let start = u32::try_from(list.verts.len()).unwrap_or(u32::MAX);
-                for q in stroke {
-                    list.bounds.add(*q);
-                    list.verts.push(*q);
-                }
-                list.prims.push(DPrim {
-                    handle: room_handle(r.id),
-                    color: room_ink.rgb,
-                    aci7: room_ink.aci7,
-                    lw: 0.0,
-                    transparency: room_t,
-                    kind: Kind::Polyline,
-                    start,
-                    len: u32::try_from(stroke.len()).unwrap_or(u32::MAX),
-                });
-            }
-        }
-    }
-
-    // Roof plan linework: each roof's non-eave edges (ridges, hips, valleys and gable ends)
-    // as polylines on A-ROOF, tagged with the roof's proxy handle so picking resolves to the
-    // roof. Eave edges are skipped — the poché already shows them along the walls.
-    if !arch_layer_skipped(d, "A-ROOF", plotting) {
-        for roof in &d.arch.roofs {
-            if roof.edges.is_empty() {
-                continue;
-            }
-            let roof_layer = d.layer("A-ROOF").map(|l| l.color).unwrap_or(Color::Index(7));
-            let roof_ink = crate::ink(Color::ByLayer, roof_layer, Color::Index(7));
-            let roof_t = layer_transparency(d, "A-ROOF");
-            for edge in &roof.edges {
-                if matches!(edge.kind, RoofEdgeKind::Eave) {
-                    continue;
-                }
-                if !edge.a.is_finite() || !edge.b.is_finite() {
-                    continue;
-                }
-                let start = u32::try_from(list.verts.len()).unwrap_or(u32::MAX);
-                list.bounds.add(edge.a);
-                list.bounds.add(edge.b);
-                list.verts.push(edge.a);
-                list.verts.push(edge.b);
-                list.prims.push(DPrim {
-                    handle: roof_handle(roof.id),
-                    color: roof_ink.rgb,
-                    aci7: roof_ink.aci7,
-                    lw: 0.0,
-                    transparency: roof_t,
-                    kind: Kind::Polyline,
-                    start,
-                    len: 2,
-                });
-            }
-        }
-    }
+    // Plan annotation: labels (room names and the view's extras), then the lines (roof linework
+    // and the view's overlays), as `cadcraft_arch::plan::annotate` made them.
+    crate::arch_plan::push_plan_labels(d, &mut list, plotting, ann);
+    crate::arch_plan::push_plan_lines(d, &mut list, plotting, ann, false);
 
     // Stair plan symbol (see cadcraft_arch::stair_symbol): nosing lines, break, arrow, label and
     // the well, all tagged with the stair's proxy handle. Lines above the plan cut are dashed.
@@ -1063,7 +996,9 @@ mod tests {
         assert_ne!(h0, h1, "roof handles must be distinct");
     }
 
-    /// A zero-length roof edge (a == b) is drawn as a 2-point polyline at that location.
+    /// Kept under its old name; the behaviour changed. A zero-length roof edge (a == b) is
+    /// refused by the plan annotation (`push_line` drops segments shorter than 1e-12), so it
+    /// draws nothing.
     #[test]
     fn zero_length_roof_edge_is_drawn() {
         let mut d = Drawing::new_metric();
@@ -1076,14 +1011,7 @@ mod tests {
 
         let handle = roof_handle(rid);
         let roof_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
-        assert_eq!(roof_prims.len(), 1, "zero-length edge should still draw");
-        let prim = &roof_prims[0];
-        assert_eq!(prim.kind, Kind::Polyline);
-        assert_eq!(prim.len, 2);
-        let pts = list.points(prim);
-        assert_eq!(pts.len(), 2);
-        assert!((pts[0].x - 5.0).abs() < 1e-9 && (pts[0].y - 5.0).abs() < 1e-9);
-        assert!((pts[1].x - 5.0).abs() < 1e-9 && (pts[1].y - 5.0).abs() < 1e-9);
+        assert!(roof_prims.is_empty(), "zero-length edge is dropped by the annotation");
     }
 
     /// Multiple collinear roof edges each draw as separate prims (no automatic merging).
@@ -1941,6 +1869,56 @@ mod tests {
         let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(wid)).collect();
         assert!(!wall_prims.is_empty(), "wall should still draw with missing layer");
         assert!(wall_prims.iter().all(|p| p.transparency == 0), "missing layer should give zero transparency");
+    }
+
+    /// A glass wall draws its outline but no filled poché triangles.
+    #[test]
+    fn glass_wall_draws_an_outline_without_fill() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.01,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        // Glass wall: outline only (1 polyline), no filled poché (no tris).
+        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
+        assert!(tris.is_empty(), "glass wall should have no filled poché, got {} tris prims", tris.len());
+        let outlines: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len >= 4).collect();
+        assert_eq!(outlines.len(), 1, "glass wall should have exactly one outline polyline");
+    }
+
+    /// A split (pony) wall keeps its lower type's filled poché.
+    #[test]
+    fn pony_wall_keeps_the_lower_fill() {
+        use cadcraft_doc::arch::WallSplit;
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.1,
+            height: 2.0,
+            wall_type: "Interior".into(),
+            split: Some(WallSplit { height: 1.07, upper: "Glass".into(), upper_thickness: 0.01, ..Default::default() }),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        // Split wall: lower type is solid, so it keeps the filled poché.
+        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
+        assert!(!tris.is_empty(), "split wall should keep the lower filled poché");
+        let outlines: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len >= 4).collect();
+        assert_eq!(outlines.len(), 1, "split wall should have one outline polyline");
     }
 
     #[test]

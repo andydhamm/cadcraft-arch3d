@@ -7,7 +7,8 @@
 use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
-    FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene,
+    FRAME_CLIP, FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES,
+    build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
 use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
@@ -683,9 +684,25 @@ pub(super) fn frame_environment(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighti
 /// Moon (stub): will set `frame.moon_dir` / `moon_rgb` from `lighting`. Does nothing yet.
 fn frame_moon(_frame: &mut GpuFrame, _lighting: &Lighting) {}
 
-/// View (stub): will set the clip box, near clip and forward from `lighting` and `camera`. Does
-/// nothing yet.
-fn frame_view(_frame: &mut GpuFrame, _lighting: &Lighting, _camera: Option<&Camera>) {}
+/// View: the look's clip box (`FRAME_CLIP`, `clip_min`, `clip_max`) and, when a camera is given, its
+/// unit forward direction and the look's near clip in `view` (`xyz`, `w`). A near clip is camera-only
+/// and needs the camera; an irradiance pass has none and keeps `view` zero.
+fn frame_view(frame: &mut GpuFrame, lighting: &Lighting, camera: Option<&Camera>) {
+    if let Some(c) = &lighting.look.clip {
+        let ok = c.min.iter().chain(c.max.iter()).all(|v| v.is_finite());
+        if ok {
+            frame.flags |= FRAME_CLIP;
+            frame.clip_min = [c.min[0] as f32, c.min[1] as f32, c.min[2] as f32, 0.0];
+            frame.clip_max = [c.max[0] as f32, c.max[1] as f32, c.max[2] as f32, 0.0];
+        }
+    }
+    if let (Some(camera), Some(near)) = (camera, lighting.look.near_clip) {
+        let f = crate::camera::forward(camera);
+        if near.is_finite() && near > 0.0 && f.x.is_finite() && f.y.is_finite() && f.z.is_finite() {
+            frame.view = [f.x as f32, f.y as f32, f.z as f32, near as f32];
+        }
+    }
+}
 
 /// Look (stub): will set the tone code and the Lambert flag in `frame.look` from `lighting` and `opts`.
 /// Does nothing yet (`look[0]` stays 1, ACES).

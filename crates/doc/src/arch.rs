@@ -21,6 +21,8 @@ pub mod light;
 pub mod look;
 pub mod molding;
 pub mod paint;
+pub mod planview;
+pub mod sheet;
 pub mod site;
 pub use backdrop::*;
 pub use casework::*;
@@ -35,6 +37,8 @@ pub use light::*;
 pub use look::*;
 pub use molding::*;
 pub use paint::*;
+pub use planview::*;
+pub use sheet::*;
 pub use site::*;
 
 /// A stable identifier for an architectural object.
@@ -255,6 +259,10 @@ pub const MAX_VIEWS: usize = 64;
 
 /// Maximum number of lines + ring points per view geometry.
 pub const MAX_VIEW_LINES: usize = 200_000;
+/// Maximum HDR backdrop images a drawing keeps.
+pub const MAX_HDR_IMAGES: usize = 4;
+/// Maximum size of the raw RGBE payload a drawing keeps, in bytes.
+pub const MAX_HDR_BYTES: usize = 8 * 1024 * 1024;
 
 /// The synthetic proxy handle for an architectural view.
 pub fn view_handle(id: ArchId) -> Handle {
@@ -301,6 +309,10 @@ pub enum ArchKind {
     Backsplash,
     /// Phase 18: a molding line (`ml{n}`).
     MoldingLine,
+    /// Phase 21: a cabinet (`cb{n}`).
+    Cabinet,
+    /// Phase 21: a fixture (`fx{n}`).
+    Fixture,
 }
 
 impl ArchKind {
@@ -315,6 +327,8 @@ impl ArchKind {
             "soffit" => ArchKind::Soffit,
             "foundation" | "footing" => ArchKind::Foundation,
             "backsplash" => ArchKind::Backsplash,
+            "cabinet" | "counter" | "pull" => ArchKind::Cabinet,
+            "fixture" => ArchKind::Fixture,
             _ => ArchKind::Wall,
         }
     }
@@ -335,6 +349,8 @@ impl ArchKind {
             ArchKind::Countertop => "countertop",
             ArchKind::Backsplash => "backsplash",
             ArchKind::MoldingLine => "moldingLine",
+            ArchKind::Cabinet => "cabinet",
+            ArchKind::Fixture => "fixture",
         }
     }
 
@@ -354,6 +370,8 @@ impl ArchKind {
             ArchKind::Countertop => countertop_handle(id),
             ArchKind::Backsplash => backsplash_handle(id),
             ArchKind::MoldingLine => molding_line_handle(id),
+            ArchKind::Cabinet => cabinet_handle(id),
+            ArchKind::Fixture => fixture_handle(id),
         }
     }
 
@@ -373,6 +391,8 @@ impl ArchKind {
             ArchKind::Countertop => countertop_label(id),
             ArchKind::Backsplash => backsplash_label(id),
             ArchKind::MoldingLine => molding_line_label(id),
+            ArchKind::Cabinet => cabinet_label(id),
+            ArchKind::Fixture => fixture_label(id),
         }
     }
 }
@@ -385,6 +405,13 @@ pub const MIN_WALL_THICKNESS: f64 = 1e-4;
 
 /// Minimum wall length, in metres.
 pub const MIN_WALL_LENGTH: f64 = 1e-6;
+
+/// Builtin wall type for clear glass partitions.
+pub const GLASS_WALL_TYPE: &str = "Glass";
+/// Clear glass thickness, in metres.
+pub const GLASS_THICKNESS: f64 = 0.01;
+/// Default glass wall height, in metres.
+pub const GLASS_WALL_HEIGHT: f64 = 2.0;
 
 /// Maximum number of openings in a drawing.
 pub const MAX_OPENINGS: usize = 8192;
@@ -470,6 +497,30 @@ pub struct Wall {
     /// ring).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finish: Option<Finish>,
+    /// Optional split: a lower wall section with a distinct upper type (e.g. a pony wall).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split: Option<WallSplit>,
+}
+
+/// A split wall: a lower wall section with a glass or solid upper section.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WallSplit {
+    pub height: f64,
+    pub upper: String,
+    pub upper_thickness: f64,
+}
+
+pub fn is_glass_type(name: &str) -> bool {
+    name.trim().eq_ignore_ascii_case(GLASS_WALL_TYPE)
+}
+
+pub fn glass_wall_type() -> WallType {
+    WallType {
+        name: GLASS_WALL_TYPE.to_string(),
+        layers: vec![WallLayer { name: "glass".to_string(), thickness: GLASS_THICKNESS, material: "glass".to_string() }],
+        reference: RefSide::Centre,
+    }
 }
 
 fn default_wall_type() -> String {
@@ -479,7 +530,7 @@ fn default_wall_type() -> String {
 /// A builtin wall-type name always accepted even without a `WallType` entry in
 /// `ArchModel::types` (matches the names the `wall` command can store).
 fn is_builtin_wall_type(name: &str) -> bool {
-    matches!(name.to_lowercase().as_str(), "exterior" | "interior" | "knee" | "railing" | "retaining")
+    matches!(name.to_lowercase().as_str(), "exterior" | "interior" | "knee" | "railing" | "retaining" | "glass")
 }
 
 impl Wall {
@@ -508,7 +559,18 @@ impl Wall {
             freeboard: None,
             footing: None,
             finish: None,
+            split: None,
         }
+    }
+
+    /// Whether this wall is a glass wall with no split.
+    pub fn is_glass(&self) -> bool {
+        self.split.is_none() && is_glass_type(&self.wall_type)
+    }
+
+    /// Whether this wall's upper split is glass.
+    pub fn upper_is_glass(&self) -> bool {
+        self.split.as_ref().is_some_and(|s| is_glass_type(&s.upper))
     }
 
     /// Elevation of the floor at which this wall sits (its base level's elevation).
@@ -569,6 +631,7 @@ impl Default for Wall {
             freeboard: None,
             footing: None,
             finish: None,
+            split: None,
         }
     }
 }
@@ -904,6 +967,35 @@ impl RoomType {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LabelArea {
+    #[default]
+    Interior,
+    Standard,
+}
+
+impl LabelArea {
+    pub fn key(self) -> &'static str {
+        match self {
+            LabelArea::Interior => "interior",
+            LabelArea::Standard => "standard",
+        }
+    }
+
+    pub fn from_key(s: &str) -> Option<Self> {
+        match s {
+            "interior" => Some(LabelArea::Interior),
+            "standard" => Some(LabelArea::Standard),
+            _ => None,
+        }
+    }
+
+    pub fn is_interior(&self) -> bool {
+        matches!(self, LabelArea::Interior)
+    }
+}
+
 /// An architectural room: enclosed area defined by wall faces.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -918,6 +1010,8 @@ pub struct Room {
     pub floor_height: Option<f64>,
     pub interior_area: f64,
     pub standard_area: f64,
+    #[serde(default, skip_serializing_if = "LabelArea::is_interior")]
+    pub label_area: LabelArea,
     /// Height of the deck surface above the level elevation, if this is a deck room.
     pub deck_height: Option<f64>,
     /// The room's floor finish.
@@ -958,6 +1052,7 @@ impl Default for Room {
             floor_height: None,
             interior_area: 0.0,
             standard_area: 0.0,
+            label_area: LabelArea::Interior,
             deck_height: None,
             floor_finish: None,
             flat_ceiling: true,
@@ -1287,6 +1382,10 @@ pub enum CameraKind {
     Orbit,
     /// A full (framed) camera.
     Full,
+    /// A floor overview: the camera level and the ones below, no ceilings.
+    /// Posed like an orbit camera.
+    #[serde(alias = "overview")]
+    Overview,
 }
 
 /// The kind of an architectural view.
@@ -1297,6 +1396,19 @@ pub enum ViewKind {
     Elevation,
     /// A section view (cutting through a line).
     Section,
+    /// An interior elevation, looking from a room at one of its walls (phase 21).
+    Interior,
+}
+
+impl ViewKind {
+    /// The JSON spelling of this kind.
+    pub fn key(self) -> &'static str {
+        match self {
+            ViewKind::Elevation => "elevation",
+            ViewKind::Section => "section",
+            ViewKind::Interior => "interior",
+        }
+    }
 }
 
 /// A line segment in a generated view geometry.
@@ -1388,6 +1500,12 @@ pub struct ViewGeometry {
     pub rings: Vec<ViewRing>,
     /// Dimensions.
     pub dims: Vec<ViewDim>,
+    /// Material pattern lines (phase 21).
+    pub patterns: Vec<ViewPatternLine>,
+    /// Indicator lines such as door swings (phase 21).
+    pub indicators: Vec<ViewLine>,
+    /// Text labels (phase 21).
+    pub labels: Vec<ViewLabel>,
     /// Error message if generation failed.
     pub error: Option<String>,
 }
@@ -1418,6 +1536,24 @@ pub struct ArchView {
     pub dimensions: bool,
     /// Layer name ("A-ELEV" or "A-SECT").
     pub layer: String,
+    /// Interior view: the room looked from (phase 21).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room: Option<ArchId>,
+    /// A point inside the room when the view was made; finds the room after renumbering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room_point: Option<[f64; 2]>,
+    /// Interior view: the wall looked at.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wall: Option<ArchId>,
+    /// The level the view shows, when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+    /// Notes drawn on the view.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<ViewNote>,
+    /// The next note id.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_note_id: u32,
     /// Generated geometry, not serialized. Regenerated by engine.
     #[serde(skip)]
     pub generated: Option<ViewGeometry>,
@@ -1437,6 +1573,12 @@ impl Default for ArchView {
             insert: [0.0, 0.0],
             dimensions: false,
             layer: "A-ELEV".into(),
+            room: None,
+            room_point: None,
+            wall: None,
+            level: None,
+            notes: Vec::new(),
+            next_note_id: 0,
             generated: None,
         }
     }
@@ -1510,6 +1652,25 @@ impl ArchView {
             if self.cut.is_some() {
                 return Err(ViewError::UnexpectedCut);
             }
+            if self.kind == ViewKind::Interior {
+                if self.room.is_none() {
+                    return Err(ViewError::MissingRoom);
+                }
+                if self.wall.is_none() {
+                    return Err(ViewError::MissingWall);
+                }
+                match self.room_point {
+                    Some(p) if p[0].is_finite() && p[1].is_finite() => {}
+                    _ => return Err(ViewError::MissingRoom),
+                }
+            }
+        }
+
+        if self.notes.len() > MAX_VIEW_NOTES {
+            return Err(ViewError::BadNote(format!("at most {MAX_VIEW_NOTES} notes")));
+        }
+        for n in &self.notes {
+            validate_note(n).map_err(ViewError::BadNote)?;
         }
 
         if let Some(d) = self.depth {
@@ -1590,11 +1751,22 @@ pub enum ViewError {
     EmptyLayer,
     /// Adding the view would exceed [`MAX_VIEWS`].
     TooMany,
+    /// An interior view had no (usable) room.
+    MissingRoom,
+    /// An interior view had no wall.
+    MissingWall,
+    /// A view note was invalid; the text says why.
+    BadNote(String),
 }
 
 impl std::fmt::Display for ViewError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            ViewError::MissingRoom => write!(f, "an interior view needs a room and a finite room point"),
+            ViewError::MissingWall => write!(f, "an interior view needs a wall"),
+            ViewError::BadNote(s) => write!(f, "bad note: {s}"),
+            other => write!(f, "{:?}", other),
+        }
     }
 }
 
@@ -1636,6 +1808,17 @@ pub struct Camera3d {
     /// This camera's render look; `None` = follow the global look.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub look: Option<Look>,
+    /// The saved state `camera.reset` returns to (its own `saved` is always
+    /// `None`); `None` = never saved with a state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved: Option<Box<Camera3d>>,
+    /// Overview cameras: the level shown (index into the levels); `None` =
+    /// the plan level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+    /// Overview cameras: whether the levels below are shown; `None` = true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lower_levels: Option<bool>,
 }
 
 impl Default for Camera3d {
@@ -1652,6 +1835,9 @@ impl Default for Camera3d {
             fov_deg: Some(45.0),
             light_set: None,
             look: None,
+            saved: None,
+            level: None,
+            lower_levels: None,
         }
     }
 }
@@ -1689,6 +1875,10 @@ where
     D: serde::Deserializer<'de>,
 {
     let mut views = Vec::<ArchView>::deserialize(deserializer)?;
+    for view in &mut views {
+        view.notes.truncate(MAX_VIEW_NOTES);
+        view.notes.retain(|n| validate_note(n).is_ok());
+    }
     views.retain(|view| view.validate().is_ok());
     views.truncate(MAX_VIEWS);
     Ok(views)
@@ -1735,6 +1925,12 @@ pub struct ArchModel {
     /// The one level the plan draws; `None` = all levels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_level: Option<u32>,
+    #[serde(default = "template_plan_views", skip_serializing_if = "is_template_plan_views")]
+    pub plan_views: Vec<PlanView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open_plan_views: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_plan_view: Option<String>,
     // Skipped when empty, so a model without views writes the same payload it did before views existed.
     #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "deserialize_views")]
     pub views: Vec<ArchView>,
@@ -1789,6 +1985,9 @@ pub struct ArchModel {
     /// Library material and backdrop images by item id.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub images: std::collections::BTreeMap<String, ImageRgba>,
+    /// HDR environment images keyed by library item id.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub hdr_images: std::collections::BTreeMap<String, ImageRgbe>,
     /// Paint by surface key.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub paints: std::collections::BTreeMap<String, Paint>,
@@ -1830,6 +2029,17 @@ pub struct ArchModel {
     pub molding_lines: Vec<MoldingLine>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub next_molding_line_id: u32,
+    /// Schedules (phase 21).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub schedules: Vec<Schedule>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_schedule_id: u32,
+    /// Sheets (phase 21).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sheets: Vec<Sheet>,
+    /// Sheet-set project data.
+    #[serde(default, skip_serializing_if = "SheetSet::is_default")]
+    pub sheet_set: SheetSet,
 }
 
 impl Default for ArchModel {
@@ -1850,6 +2060,9 @@ impl Default for ArchModel {
             cameras: Vec::new(),
             active_camera: None,
             plan_level: None,
+            plan_views: template_plan_views(),
+            open_plan_views: Vec::new(),
+            active_plan_view: None,
             views: Vec::new(),
             next_view_id: 0,
             site: None,
@@ -1871,6 +2084,7 @@ impl Default for ArchModel {
             next_furnishing_id: 0,
             symbols: Default::default(),
             images: Default::default(),
+            hdr_images: Default::default(),
             paints: Default::default(),
             backdrop: None,
             look: Look::default(),
@@ -1888,6 +2102,10 @@ impl Default for ArchModel {
             next_backsplash_id: 0,
             molding_lines: Vec::new(),
             next_molding_line_id: 0,
+            schedules: Vec::new(),
+            next_schedule_id: 0,
+            sheets: Vec::new(),
+            sheet_set: SheetSet::default(),
             plant_species: Vec::new(),
             levels: vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::Floor }],
             types: vec![
@@ -1910,12 +2128,31 @@ impl Default for ArchModel {
                     ],
                     reference: RefSide::Centre,
                 },
+                glass_wall_type(),
             ],
         }
     }
 }
 
 impl ArchModel {
+    /// Look up a plan view by trimmed, case-insensitive name.
+    pub fn plan_view(&self, name: &str) -> Option<&PlanView> {
+        let key = name.trim();
+        if key.is_empty() {
+            return None;
+        }
+        self.plan_views.iter().find(|v| v.name.trim().eq_ignore_ascii_case(key))
+    }
+
+    /// Look up a mutable plan view by trimmed, case-insensitive name.
+    pub fn plan_view_mut(&mut self, name: &str) -> Option<&mut PlanView> {
+        let key = name.trim();
+        if key.is_empty() {
+            return None;
+        }
+        self.plan_views.iter_mut().find(|v| v.name.trim().eq_ignore_ascii_case(key))
+    }
+
     /// Add a wall and return its new id.
     pub fn push_wall(&mut self, mut w: Wall) -> ArchId {
         let id = ArchId(self.next_id);
@@ -1965,6 +2202,8 @@ impl ArchModel {
             && self.railings.is_empty()
             && self.cameras.is_empty()
             && self.views.is_empty()
+            && self.schedules.is_empty()
+            && self.sheets.is_empty()
             && self.site.is_none()
             && self.terrain.is_none()
             && self.plants.is_empty()
@@ -1978,6 +2217,7 @@ impl ArchModel {
             && self.furnishings.is_empty()
             && self.symbols.is_empty()
             && self.images.is_empty()
+            && self.hdr_images.is_empty()
             && self.paints.is_empty()
             && self.backdrop.is_none()
             && self.look.is_default()
@@ -2342,6 +2582,50 @@ impl ArchModel {
         self.views.iter().find(|v| view_label(v.id) == label)
     }
 
+    /// A view by "v<n>", else by a unique case-insensitive name match.
+    pub fn view_by_ref(&self, s: &str) -> Option<&ArchView> {
+        let s = s.trim();
+        if let Some(v) = self.view_by_label(s) {
+            return Some(v);
+        }
+        let mut found = self.views.iter().filter(|v| v.name.trim().eq_ignore_ascii_case(s));
+        let first = found.next()?;
+        if found.next().is_some() { None } else { Some(first) }
+    }
+
+    /// The schedule with this id.
+    pub fn schedule(&self, id: ArchId) -> Option<&Schedule> {
+        self.schedules.iter().find(|s| s.id == id)
+    }
+
+    /// The schedule with this id, mutable.
+    pub fn schedule_mut(&mut self, id: ArchId) -> Option<&mut Schedule> {
+        self.schedules.iter_mut().find(|s| s.id == id)
+    }
+
+    /// A schedule by "sc<n>" or by name (trimmed, case-insensitive).
+    pub fn schedule_by_ref(&self, s: &str) -> Option<&Schedule> {
+        let s = s.trim();
+        if let Some(id) = parse_schedule_label(s) {
+            if let Some(found) = self.schedule(id) {
+                return Some(found);
+            }
+        }
+        self.schedules.iter().find(|x| x.name.trim().eq_ignore_ascii_case(s))
+    }
+
+    /// A sheet by name (trimmed, case-insensitive).
+    pub fn sheet(&self, name: &str) -> Option<&Sheet> {
+        let name = name.trim();
+        self.sheets.iter().find(|s| s.name.trim().eq_ignore_ascii_case(name))
+    }
+
+    /// A sheet by name, mutable.
+    pub fn sheet_mut(&mut self, name: &str) -> Option<&mut Sheet> {
+        let name = name.trim();
+        self.sheets.iter_mut().find(|s| s.name.trim().eq_ignore_ascii_case(name))
+    }
+
     /// Union of every wall's poché ring bounds.
     ///
     /// Computed as `Bounds2::from_points` over each wall's four offset corners
@@ -2391,6 +2675,7 @@ impl ArchModel {
             && c.target.map_or(true, |t| t.iter().all(|v| v.is_finite()))
             && c.eye.map_or(true, |e| e.iter().all(|v| v.is_finite()))
             && c.look.as_ref().is_none_or(|l| l.validate().is_ok())
+            && c.saved.as_ref().is_none_or(|s| s.saved.is_none() && Self::camera_is_finite(s))
     }
 
     /// Add or update a saved camera, storing it on the model so that it
@@ -2431,6 +2716,51 @@ impl ArchModel {
         } else {
             false
         }
+    }
+
+    /// Keep only the HDR backdrop images still referenced by the current scene while enforcing
+    /// the per-drawing caps. Invalid or stale entries are dropped before the count and byte
+    /// budget are applied.
+    pub fn prune_hdr_images(&mut self) {
+        let mut keep = std::collections::BTreeSet::new();
+        if let Some(b) = &self.backdrop {
+            if let Backdrop::Hdri { image, .. } = b {
+                keep.insert(image.clone());
+            }
+        }
+        if let Some(b) = &self.look.backdrop {
+            if let Backdrop::Hdri { image, .. } = b {
+                keep.insert(image.clone());
+            }
+        }
+        for camera in &self.cameras {
+            if let Some(Look { backdrop: Some(Backdrop::Hdri { image, .. }), .. }) = &camera.look {
+                keep.insert(image.clone());
+            }
+        }
+
+        self.hdr_images.retain(|key, img| keep.contains(key) && img.is_valid());
+
+        let mut ordered: Vec<_> = self.hdr_images.iter().map(|(k, v)| (k.clone(), v.rgbe.len())).collect();
+        ordered.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut total = 0usize;
+        let mut keep_order = std::collections::BTreeSet::new();
+        for (key, len) in ordered {
+            if keep_order.len() >= MAX_HDR_IMAGES {
+                break;
+            }
+            if total.checked_add(len).is_some() && total + len <= MAX_HDR_BYTES {
+                total += len;
+                keep_order.insert(key);
+            }
+        }
+        let mut filtered = std::collections::BTreeMap::new();
+        for (key, img) in self.hdr_images.iter() {
+            if keep_order.contains(key) {
+                filtered.insert(key.clone(), img.clone());
+            }
+        }
+        self.hdr_images = filtered;
     }
 
     /// A message when `counter` is at or below the largest id already in use, or
@@ -2877,7 +3207,13 @@ impl ArchModel {
             self.views.truncate(MAX_VIEWS);
         }
         let mut valid_views = Vec::new();
-        for v in self.views.drain(..) {
+        for mut v in self.views.drain(..) {
+            let notes_before = v.notes.len();
+            v.notes.truncate(MAX_VIEW_NOTES);
+            v.notes.retain(|n| validate_note(n).is_ok());
+            if v.notes.len() != notes_before {
+                messages.push(format!("view `{}`: {} invalid or extra note(s) dropped", v.name, notes_before - v.notes.len()));
+            }
             if v.validate().is_ok() {
                 valid_views.push(v);
             } else {
@@ -2886,6 +3222,34 @@ impl ArchModel {
         }
         self.views = valid_views;
 
+        // Schedules and sheets: drop invalid, repeated and extra ones.
+        let level_count = self.levels.len();
+        let before = self.schedules.len();
+        let mut seen_ids = std::collections::BTreeSet::new();
+        let mut seen_names = std::collections::BTreeSet::new();
+        self.schedules
+            .retain(|s| validate_schedule(s, level_count).is_ok() && seen_ids.insert(s.id) && seen_names.insert(s.name.trim().to_lowercase()));
+        self.schedules.truncate(MAX_SCHEDULES);
+        if self.schedules.len() != before {
+            messages.push(format!("{} invalid or repeated schedule(s) dropped", before - self.schedules.len()));
+        }
+        if let Some(msg) = self.stale_next_id("next_schedule_id", self.next_schedule_id, self.schedules.iter().map(|s| s.id.0).max()) {
+            messages.push(msg);
+        }
+        let before = self.sheets.len();
+        let mut seen_names = std::collections::BTreeSet::new();
+        let mut seen_numbers = std::collections::BTreeSet::new();
+        self.sheets.retain(|s| {
+            validate_sheet(s, level_count).is_ok()
+                && seen_names.insert(s.name.trim().to_lowercase())
+                && seen_numbers.insert(s.number.trim().to_lowercase())
+        });
+        self.sheets.truncate(MAX_SHEETS);
+        if self.sheets.len() != before {
+            messages.push(format!("{} invalid or repeated sheet(s) dropped", before - self.sheets.len()));
+        }
+
+        messages.extend(repair_plan_views(self));
         messages
     }
 }
@@ -3045,9 +3409,19 @@ mod tests {
     #[test]
     fn arch_model_defaults_have_two_wall_types() {
         let m = ArchModel::default();
-        assert_eq!(m.types.len(), 2);
+        assert_eq!(m.types.len(), 3);
         assert_eq!(m.types[0].name, "Exterior");
         assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
+    }
+
+    #[test]
+    fn arch_model_defaults_have_three_wall_types() {
+        let m = ArchModel::default();
+        assert_eq!(m.types.len(), 3);
+        assert_eq!(m.types[0].name, "Exterior");
+        assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
     }
 
     #[test]
@@ -3140,6 +3514,32 @@ mod tests {
     fn wall_type_lookup_is_case_insensitive() {
         let m = ArchModel::default();
         assert!(m.wall_type("exterior").is_some());
+    }
+
+    #[test]
+    fn wall_without_split_writes_the_same_json() {
+        let wall = Wall { wall_type: GLASS_WALL_TYPE.to_string(), thickness: GLASS_THICKNESS, height: GLASS_WALL_HEIGHT, ..Wall::default() };
+        let json = serde_json::to_value(&wall).unwrap();
+        assert!(json.get("split").is_none(), "glass walls with no split omit the field: {json}");
+    }
+
+    #[test]
+    fn is_glass_type_any_case() {
+        assert!(is_glass_type("glass"));
+        assert!(is_glass_type("GLASS"));
+        assert!(is_glass_type("Glass"));
+        assert!(!is_glass_type("wood"));
+    }
+
+    #[test]
+    fn glass_wall_type_layers() {
+        let t = glass_wall_type();
+        assert_eq!(t.name, GLASS_WALL_TYPE);
+        assert_eq!(t.layers.len(), 1);
+        assert_eq!(t.layers[0].name, "glass");
+        assert_eq!(t.layers[0].thickness, GLASS_THICKNESS);
+        assert_eq!(t.layers[0].material, "glass");
+        assert_eq!(t.reference, RefSide::Centre);
     }
 
     #[test]
@@ -4041,8 +4441,7 @@ mod tests {
             eye: Some([5.0, -15.0]),
             eye_height: Some(1.7),
             fov_deg: Some(50.0),
-            light_set: None,
-            look: None,
+            ..Camera3d::default()
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: Camera3d = serde_json::from_str(&json).unwrap();
@@ -4068,6 +4467,39 @@ mod tests {
         let back_full: CameraKind = serde_json::from_str("\"Full\"").unwrap();
         assert_eq!(back_orbit, CameraKind::Orbit);
         assert_eq!(back_full, CameraKind::Full);
+    }
+
+    #[test]
+    fn overview_camera_and_saved_state_serde() {
+        let saved = Camera3d { name: "ov".into(), ..Camera3d::default() };
+        let cam = Camera3d {
+            name: "ov".into(),
+            kind: CameraKind::Overview,
+            level: Some(1),
+            lower_levels: Some(false),
+            saved: Some(Box::new(saved)),
+            ..Camera3d::default()
+        };
+        let json = serde_json::to_string(&cam).unwrap();
+        assert!(json.contains("\"Overview\""));
+        let back: Camera3d = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, cam);
+        let lower: CameraKind = serde_json::from_str("\"overview\"").unwrap();
+        assert_eq!(lower, CameraKind::Overview);
+        // Older drawings (no new keys) open unchanged and omit the keys again.
+        let plain = Camera3d { name: "p".into(), ..Camera3d::default() };
+        let pj = serde_json::to_string(&plain).unwrap();
+        assert!(!pj.contains("saved") && !pj.contains("level") && !pj.contains("lower_levels"));
+        let old: Camera3d = serde_json::from_str("{\"name\":\"o\"}").unwrap();
+        assert!(old.saved.is_none() && old.level.is_none() && old.lower_levels.is_none());
+        // A non-finite saved state is refused.
+        let mut m = ArchModel::default();
+        let mut bad = cam.clone();
+        if let Some(s) = bad.saved.as_mut() {
+            s.distance = Some(f64::NAN);
+        }
+        assert_eq!(m.set_camera(bad), Err(CameraError::NotFinite));
+        assert_eq!(m.set_camera(cam), Ok(()));
     }
 
     #[test]
