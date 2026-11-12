@@ -13,6 +13,7 @@ pub const DEFAULT_INT_THICKNESS: f64 = 0.1;
 pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 
 pub mod archdetect;
+pub mod autodim;
 pub mod backdrop;
 pub mod build3d;
 pub(crate) mod cabinet_fill;
@@ -43,6 +44,7 @@ pub mod lightfixture;
 pub mod lightset;
 pub mod look;
 pub mod material;
+pub mod moldingline;
 pub mod niche;
 pub mod opening;
 pub mod outlets_auto;
@@ -108,8 +110,10 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(niche::specs());
     v.extend(room::specs());
     v.extend(room_moldings::specs());
+    v.extend(moldingline::specs());
     v.extend(library::specs());
     v.extend(roomdetect::specs());
+    v.extend(autodim::specs());
     v.extend(inspect::specs());
     v.extend(pick::specs());
     v.extend(level::specs());
