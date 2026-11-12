@@ -118,7 +118,7 @@ mod tests {
         m.levels = vec![Level { index: 0, elevation: 0.0, ..Level::default() }, Level { index: 1, elevation: 3.0, ..Level::default() }];
         let wall_id = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
         let mut out = PlanAnnotation::default();
-        let r = ReferenceDisplay { level: 0, color: [255, 136, 0], transparency: 42 };
+        let r = ReferenceDisplay { level: 0, color: [255, 136, 0], transparency: 42, ..ReferenceDisplay::default() };
         reference_lines(&m, 1, &r, &mut out);
         assert_eq!(out.lines.len(), 4);
         for line in &out.lines {
