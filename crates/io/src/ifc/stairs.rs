@@ -127,4 +127,68 @@ mod tests {
         assert_eq!(sets.len(), 1, "one body");
         assert_eq!(sets[0].matches("),(").count() + 1, triangles, "every part's triangles are in the body");
     }
+
+    #[test]
+    fn empty_model_exports_no_stairs_or_railings() {
+        let m = ArchModel::default();
+        let scene = Scene3d::build(&m);
+        let text = write_model(&m, &scene, &IfcOptions::default());
+        assert_eq!(text.matches("=IFCSTAIR(").count(), 0, "no stairs in empty model: {text}");
+        assert_eq!(text.matches("=IFCRAILING(").count(), 0, "no railings in empty model: {text}");
+    }
+
+    #[test]
+    fn multiple_stairs_get_unique_keys() {
+        let mut m = ArchModel::default();
+        m.push_stair(Stair { shape: StairShape::Straight, ..Stair::default() });
+        m.push_stair(Stair { shape: StairShape::L, ..Stair::default() });
+        m.push_stair(Stair { shape: StairShape::U, ..Stair::default() });
+        let scene = Scene3d::build(&m);
+        let text = write_model(&m, &scene, &IfcOptions::default());
+        assert_eq!(text.matches("=IFCSTAIR(").count(), 3, "{text}");
+        assert!(text.contains("stair-s0"), "first stair key");
+        assert!(text.contains("stair-s1"), "second stair key");
+        assert!(text.contains("stair-s2"), "third stair key");
+    }
+
+    #[test]
+    fn multiple_railings_get_unique_keys() {
+        let mut m = ArchModel::default();
+        m.push_railing(Railing { path: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0)], follows: None, ..Railing::default() });
+        m.push_railing(Railing { path: vec![Vec2::new(0.0, 1.0), Vec2::new(2.0, 1.0)], follows: None, ..Railing::default() });
+        let scene = Scene3d::build(&m);
+        let text = write_model(&m, &scene, &IfcOptions::default());
+        assert_eq!(text.matches("=IFCRAILING(").count(), 2, "{text}");
+        assert!(text.contains("railing-ra0"), "first railing key");
+        assert!(text.contains("railing-ra1"), "second railing key");
+    }
+
+    #[test]
+    fn stairs_and_railings_coexist_in_one_model() {
+        let mut m = ArchModel::default();
+        m.push_stair(Stair { shape: StairShape::Straight, ..Stair::default() });
+        let stair_id = m.stairs[0].id;
+        m.push_railing(Railing { path: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0)], follows: Some(stair_id), ..Railing::default() });
+        m.push_railing(Railing { path: vec![Vec2::new(0.0, 1.0), Vec2::new(2.0, 1.0)], follows: None, ..Railing::default() });
+        let scene = Scene3d::build(&m);
+        let text = write_model(&m, &scene, &IfcOptions::default());
+        assert_eq!(text.matches("=IFCSTAIR(").count(), 1, "one stair: {text}");
+        assert_eq!(text.matches("=IFCRAILING(").count(), 2, "two railings: {text}");
+        assert!(text.contains(".HANDRAIL."), "stair rail is a handrail");
+        assert!(text.contains(".GUARDRAIL."), "free-standing rail is a guardrail");
+    }
+
+    #[test]
+    fn all_three_stair_shapes_in_one_model() {
+        let mut m = ArchModel::default();
+        m.push_stair(Stair { shape: StairShape::Straight, ..Stair::default() });
+        m.push_stair(Stair { shape: StairShape::L, ..Stair::default() });
+        m.push_stair(Stair { shape: StairShape::U, ..Stair::default() });
+        let scene = Scene3d::build(&m);
+        let text = write_model(&m, &scene, &IfcOptions::default());
+        assert_eq!(text.matches("=IFCSTAIR(").count(), 3, "{text}");
+        assert_eq!(text.matches(".STRAIGHT_RUN_STAIR.").count(), 1, "one straight stair");
+        assert_eq!(text.matches(".QUARTER_TURN_STAIR.").count(), 1, "one L stair");
+        assert_eq!(text.matches(".HALF_TURN_STAIR.").count(), 1, "one U stair");
+    }
 }
