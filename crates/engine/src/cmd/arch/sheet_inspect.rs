@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn inspect_numbers_are_null_with_the_stub() {
+    fn inspect_numbers_are_reported() {
         let mut s = Session::new();
         if let Ok(d) = s.doc_mut() {
             let wid = d.arch.push_wall(cadcraft_doc::Wall {
@@ -172,9 +172,7 @@ mod tests {
         let v = inspect(&mut s, json!({"openings": true, "cabinets": true}));
         let rows = v["openings"].as_array().cloned().unwrap_or_default();
         assert!(!rows.is_empty(), "{v}");
-        for r in &rows {
-            assert!(r.get("number").is_some_and(Value::is_null), "{r}");
-        }
+        assert_eq!(rows[0]["number"], json!("D01"), "{v}");
         assert_eq!(v["cabinets"], json!([]), "{v}");
     }
 }
