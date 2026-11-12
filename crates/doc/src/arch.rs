@@ -2760,6 +2760,11 @@ impl ArchModel {
             if let Some(Look { backdrop: Some(Backdrop::Hdri { image, .. }), .. }) = &camera.look {
                 keep.insert(image.clone());
             }
+            if let Some(saved) = &camera.saved {
+                if let Some(Look { backdrop: Some(Backdrop::Hdri { image, .. }), .. }) = &saved.look {
+                    keep.insert(image.clone());
+                }
+            }
         }
 
         self.hdr_images.retain(|key, img| keep.contains(key) && img.is_valid());
@@ -5187,6 +5192,49 @@ mod tests {
         assert!(!obj.contains_key("depth") && !obj.contains_key("face") && !obj.contains_key("material"));
         let back: Opening = serde_json::from_value(v).unwrap();
         assert_eq!(back, Opening::default());
+    }
+
+    #[test]
+    fn prune_hdr_images_keeps_saved_camera_look_images() {
+        let mut m = ArchModel::default();
+        let saved_look = Look { backdrop: Some(Backdrop::Hdri { image: "saved-hdr".into(), ..Default::default() }), ..Default::default() };
+        let saved = Camera3d { name: "ov".into(), look: Some(saved_look), ..Default::default() };
+        let cam = Camera3d { name: "test".into(), saved: Some(Box::new(saved)), ..Default::default() };
+        m.set_camera(cam).unwrap();
+
+        m.hdr_images.insert("saved-hdr".into(), ImageRgbe::default());
+
+        m.prune_hdr_images();
+
+        assert!(m.hdr_images.contains_key("saved-hdr"), "saved camera look image was pruned");
+    }
+
+    #[test]
+    fn camera_level_zero_and_lower_levels_true_round_trip() {
+        let cam = Camera3d { name: "ov".into(), kind: CameraKind::Overview, level: Some(0), lower_levels: Some(true), ..Camera3d::default() };
+        let json = serde_json::to_string(&cam).unwrap();
+        assert!(json.contains("\"level\":0"));
+        assert!(json.contains("\"lowerLevels\":true"));
+
+        let back: Camera3d = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.level, Some(0));
+        assert_eq!(back.lower_levels, Some(true));
+    }
+
+    #[test]
+    fn saved_camera_with_look_round_trips_and_validates() {
+        let saved_look = Look { backdrop: Some(Backdrop::Colour([1.0, 0.5, 0.2])), ..Default::default() };
+        let saved = Camera3d { name: "ov".into(), look: Some(saved_look), ..Default::default() };
+        let cam = Camera3d { name: "test".into(), saved: Some(Box::new(saved)), ..Default::default() };
+
+        // Round trip
+        let json = serde_json::to_string(&cam).unwrap();
+        let back: Camera3d = serde_json::from_str(&json).unwrap();
+        assert!(back.saved.as_ref().unwrap().look.is_some());
+
+        // Validates through set_camera
+        let mut m = ArchModel::default();
+        assert_eq!(m.set_camera(cam), Ok(()));
     }
 
     #[test]
