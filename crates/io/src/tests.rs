@@ -1993,12 +1993,12 @@ fn layer_states_roundtrip_next_to_constraints() {
         description: "walls \\ hidden".into(),
         ..Layer::default()
     });
-    d.layer_states.push(LayerState { name: "Plot".into(), layers: d.layers.clone() });
+    d.layer_states.push(LayerState { name: "Plot".into(), layers: d.layers.clone(), ..Default::default() });
     let mut off = d.layers.clone();
     for l in &mut off {
         (l.on, l.frozen, l.locked, l.plot) = (false, true, true, false);
     }
-    d.layer_states.push(LayerState { name: "All off".into(), layers: off });
+    d.layer_states.push(LayerState { name: "All off".into(), layers: off, ..Default::default() });
     let text = write_dxf(&d);
     assert!(text.contains("CADCRAFT_LAYERSTATES"));
     let back = read_dxf(text.as_bytes()).unwrap();
