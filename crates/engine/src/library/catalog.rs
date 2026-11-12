@@ -458,6 +458,8 @@ pub fn entry_record(v: &Value, catalog: &str) -> Result<ItemRecord, String> {
         ("png" | "jpg" | "jpeg", Some(Category::Materials)) => ItemKind::Material,
         ("png" | "jpg" | "jpeg", Some(Category::Backdrops)) => ItemKind::Backdrop,
         ("png" | "jpg" | "jpeg", _) => return Err("an image item belongs in Materials or Backdrops".into()),
+        ("hdr", Some(Category::Backdrops)) => ItemKind::Backdrop,
+        ("hdr", _) => return Err("an HDR item belongs in Backdrops".into()),
         (ext, _) => return Err(format!("unsupported file type `.{}`", ext.chars().take(16).collect::<String>())),
     };
     if r.folder.is_empty() {
