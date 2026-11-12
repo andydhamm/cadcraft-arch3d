@@ -433,20 +433,21 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             let mut obj = JsonMap::new();
             obj.insert("name".to_string(), json!(c.name));
             obj.insert("kind".to_string(), json!(describe_camera_kind(c.kind)));
-            obj.insert("target".to_string(), json!([c.target.x, c.target.y, c.target.z]));
+            obj.insert("target".to_string(), json!(c.target));
             obj.insert("azimuth".to_string(), json!(c.azimuth_deg));
             obj.insert("elevation".to_string(), json!(c.elevation_deg));
             obj.insert("distance".to_string(), json!(c.distance));
-            obj.insert("eye".to_string(), json!([c.eye[0], c.eye[1]]));
+            obj.insert("eye".to_string(), json!(c.eye));
             obj.insert("eyeHeight".to_string(), json!(c.eye_height));
             obj.insert("fov".to_string(), json!(c.fov_deg));
             obj.insert("level".to_string(), json!(c.level));
             obj.insert("lowerLevels".to_string(), json!(c.lower_levels));
             obj.insert("look".to_string(), json!(c.look));
-            obj.insert("saved".to_string(), json!(c.saved.as_ref().and_then(describe_camera)));
+            obj.insert("saved".to_string(), json!(c.saved.as_ref().and_then(|s| describe_camera(s))));
+            // A camera with no saved copy has nothing to match its live pose against.
             let modified = match &c.saved {
                 Some(s) => !cameras_equal(s, c),
-                None => false,
+                None => true,
             };
             obj.insert("modified".to_string(), json!(modified));
             camera_objects.push(Value::Object(obj));
@@ -651,14 +652,14 @@ fn describe_camera_kind(kind: cadcraft_doc::arch::CameraKind) -> &'static str {
 fn cameras_equal(a: &cadcraft_doc::arch::Camera3d, b: &cadcraft_doc::arch::Camera3d) -> bool {
     a.name == b.name
         && a.kind == b.kind
-        && (a.azimuth_deg - b.azimuth_deg).abs() < 1e-9
-        && (a.elevation_deg - b.elevation_deg).abs() < 1e-9
-        && (a.distance - b.distance).abs() < 1e-9
+        && a.azimuth_deg == b.azimuth_deg
+        && a.elevation_deg == b.elevation_deg
+        && a.distance == b.distance
         && a.eye == b.eye
-        && (a.eye_height - b.eye_height).abs() < 1e-9
-        && (a.fov_deg - b.fov_deg).abs() < 1e-9
+        && a.eye_height == b.eye_height
+        && a.fov_deg == b.fov_deg
         && a.light_set == b.light_set
-        && a.look.as_deref() == b.look.as_deref()
+        && a.look == b.look
 }
 
 /// JSON description of a saved camera (without its own saved field, to avoid recursion).
@@ -666,11 +667,11 @@ fn describe_camera(c: &cadcraft_doc::arch::Camera3d) -> Value {
     let mut obj = JsonMap::new();
     obj.insert("name".to_string(), json!(c.name));
     obj.insert("kind".to_string(), json!(describe_camera_kind(c.kind)));
-    obj.insert("target".to_string(), json!([c.target.x, c.target.y, c.target.z]));
+    obj.insert("target".to_string(), json!(c.target));
     obj.insert("azimuth".to_string(), json!(c.azimuth_deg));
     obj.insert("elevation".to_string(), json!(c.elevation_deg));
     obj.insert("distance".to_string(), json!(c.distance));
-    obj.insert("eye".to_string(), json!([c.eye[0], c.eye[1]]));
+    obj.insert("eye".to_string(), json!(c.eye));
     obj.insert("eyeHeight".to_string(), json!(c.eye_height));
     obj.insert("fov".to_string(), json!(c.fov_deg));
     obj.insert("level".to_string(), json!(c.level));
@@ -3233,13 +3234,13 @@ mod tests {
             d.arch.cameras.push(cadcraft_doc::arch::Camera3d {
                 name: "dusk".into(),
                 kind: cadcraft_doc::arch::CameraKind::Full,
-                target: cadraft_geom::Vec3::new(4.0, 2.5, 1.2),
-                azimuth_deg: 300.0,
-                elevation_deg: 8.0,
-                distance: 10.0,
-                eye: [-6.0, -6.0],
-                eye_height: 1.6,
-                fov_deg: 50.0,
+                target: Some([4.0, 2.5, 1.2]),
+                azimuth_deg: Some(300.0),
+                elevation_deg: Some(8.0),
+                distance: Some(10.0),
+                eye: Some([-6.0, -6.0]),
+                eye_height: Some(1.6),
+                fov_deg: Some(50.0),
                 light_set: "Evening".into(),
                 look: None,
                 saved: None,
