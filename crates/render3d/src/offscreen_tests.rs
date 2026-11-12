@@ -580,3 +580,60 @@ fn raster_lambert_plane_reads_ev_scaled_luminance() {
     let Some(got) = lit_centre(&mut r, &floor, &camera, &auto, false) else { return };
     assert!(near(got[0], 0.18, 0.03), "auto: {got:?}");
 }
+
+// ---- phase 19: environment light in the raster views ---------------------------------------------
+
+/// A night frame lit only by a uniform environment of radiance 1 (so E = pi), Lambert albedo 0.5.
+fn env_lighting(ev100: f64, tone: ToneMap, visible: bool) -> Lighting {
+    let mut look = Look::default();
+    look.exposure = ExposureSetting::Manual { ev100 };
+    look.tone_map = tone;
+    let mut env = crate::environment::Environment::uniform([1.0; 3], 32, 16);
+    env.visible = visible;
+    env.key = env.compute_key();
+    Lighting { sun: None, look, lambert: Some(0.5), meter_night: true, environment: Some(std::sync::Arc::new(env)), ..Lighting::default() }
+}
+
+#[test]
+fn raster_lambert_plane_under_uniform_environment() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let floor = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [5.0, 5.0, 0.0])]);
+    // L = albedo / pi * E = 0.5; EV100 -1 scales by 2 / 1.2.
+    let Some(got) = lit_centre(&mut r, &floor, &down_at([0.0, 0.0, 0.0]), &env_lighting(-1.0, ToneMap::None, false), false) else { return };
+    for c in got {
+        assert!((c - 0.8333).abs() <= 0.8333 * 0.03, "plane under the environment: {got:?}");
+    }
+}
+
+#[test]
+fn environment_background_exposed_and_tone_mapped() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let empty = scene(Vec::new());
+    let camera = down_at([0.0, 0.0, 0.0]);
+    let Some(got) = lit_centre(&mut r, &empty, &camera, &env_lighting(0.0, ToneMap::None, true), false) else { return };
+    for c in got {
+        assert!((c - 0.8333).abs() <= 0.8333 * 0.02, "background: {got:?}");
+    }
+    let want = tone_map(1.0 / 1.2, crate::exposure::TONE_ACES);
+    let Some(aces) = lit_centre(&mut r, &empty, &camera, &env_lighting(0.0, ToneMap::Aces, true), false) else { return };
+    for c in aces {
+        assert!((c - want).abs() <= want * 0.02, "ACES background: {aces:?} want {want}");
+    }
+    // A visible environment wins over a picture backdrop.
+    let mut pic = scene(Vec::new());
+    pic.backdrop = Some(cadcraft_doc::arch::Backdrop::Colour { colour: [32, 64, 96] });
+    let Some(over) = lit_centre(&mut r, &pic, &camera, &env_lighting(0.0, ToneMap::None, true), false) else { return };
+    assert!((over[0] - 0.8333).abs() <= 0.8333 * 0.02, "environment over picture: {over:?}");
+}
+
+#[test]
+fn picture_backdrop_unchanged_with_light_only_env() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let mut pic = scene(Vec::new());
+    pic.backdrop = Some(cadcraft_doc::arch::Backdrop::Colour { colour: [32, 64, 96] });
+    let Some(got) = lit_centre(&mut r, &pic, &down_at([0.0, 0.0, 0.0]), &env_lighting(0.0, ToneMap::Aces, false), false) else { return };
+    for (c, byte) in got.iter().zip([32u8, 64, 96]) {
+        let want = srgb_to_linear(byte);
+        assert!((c - want).abs() <= want * 0.03 + 0.002, "picture colour kept: {got:?}");
+    }
+}

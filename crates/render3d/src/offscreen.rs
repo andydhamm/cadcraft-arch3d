@@ -475,7 +475,31 @@ impl Offscreen {
             edges.prepare(&self.device, &self.queue, scene, scene_key, vp, edge_color, view_dir, silhouettes);
         }
         // The backdrop (every style but hidden-line) is drawn first; a missing image leaves the clear colour.
+        // A visible environment of a lit frame wins over a picture: it is drawn exposed and tone
+        // mapped like the surfaces. A light-only environment leaves the backdrop alone.
+        let visible_env = opts
+            .lit
+            .and_then(|frame| frame.lighting.environment.clone())
+            .filter(|e| e.visible && e.is_valid() && self.last_look.tone_map != 0 && opts.style != Style::HiddenLine);
         let with_backdrop = match (&scene.backdrop, opts.style) {
+            _ if visible_env.is_some() => {
+                let pass = match &mut self.backdrop {
+                    Some(p) => p,
+                    slot => slot.insert(BackdropPass::new(&self.device, &self.queue)),
+                };
+                match &visible_env {
+                    Some(env) => pass.prepare_environment(
+                        &self.device,
+                        &self.queue,
+                        env,
+                        self.last_look.exposure,
+                        self.last_look.tone_map,
+                        (self.targets.width, self.targets.height),
+                        &vp,
+                    ),
+                    None => false,
+                }
+            }
             (Some(b), style) if style != Style::HiddenLine => {
                 let pass = match &mut self.backdrop {
                     Some(p) => p,
