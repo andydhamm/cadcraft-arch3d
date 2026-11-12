@@ -93,6 +93,7 @@ pub(super) fn std_assoc_refs(d: &Drawing, dm: &Dimension) -> (i64, Vec<OsnapRef>
                 }
                 (6, 0.0, Some(*other))
             }
+            AssocSnap::Arch { .. } => continue,
         };
         flags |= 1 << slot;
         refs.push(OsnapRef { osnap, main: a.handle, segment: 0, param, point, other });
