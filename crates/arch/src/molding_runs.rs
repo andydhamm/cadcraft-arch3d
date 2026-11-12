@@ -50,7 +50,28 @@ pub(crate) fn face_carries(model: &ArchModel, w: &Wall, band: (f64, f64)) -> boo
     if !band.0.is_finite() || !band.1.is_finite() {
         return false;
     }
-    wall_z_span(model, w).is_some_and(|(_, top)| top >= band.1 - 1e-6)
+    wall_z_span(model, w).is_some_and(|(_, top)| top >= band.1 - 1e-6) && band_on_solid(model, w, band)
+}
+
+/// Whether `band` lies on a solid (non-glass) part of the wall: glass faces carry no molding.
+/// A split wall is solid below its split height only when its lower type is, above only when its
+/// upper type is; a band across the split needs both parts solid.
+fn band_on_solid(model: &ArchModel, w: &Wall, band: (f64, f64)) -> bool {
+    use cadcraft_doc::arch::is_glass_type;
+    let Some(split) = w.split.as_ref() else {
+        return !is_glass_type(&w.wall_type);
+    };
+    let Some((bottom, _)) = wall_z_span(model, w) else {
+        return false;
+    };
+    let s = bottom + split.height;
+    if band.1 <= s + 1e-9 {
+        !is_glass_type(&w.wall_type)
+    } else if band.0 >= s - 1e-9 {
+        !is_glass_type(&split.upper)
+    } else {
+        !is_glass_type(&w.wall_type) && !is_glass_type(&split.upper)
+    }
 }
 
 /// The molding runs of `room`.
@@ -821,5 +842,32 @@ mod tests {
         let (b, t) = span.unwrap();
         assert!((b - 0.0).abs() < 1e-9);
         assert!((t - 5.1).abs() < 1e-9); // 2.7 + 2.4
+    }
+
+    #[test]
+    fn glass_faces_carry_no_molding() {
+        use cadcraft_doc::arch::WallSplit;
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "L1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        let mk = |wall_type: &str, split: Option<WallSplit>| Wall {
+            start: Vec2::ZERO,
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.1,
+            height: 2.4,
+            wall_type: wall_type.into(),
+            split,
+            ..Wall::default()
+        };
+        let base = (0.0, 0.1);
+        let chair = (0.9, 1.0);
+        assert!(face_carries(&model, &mk("Interior", None), base));
+        let glass = mk("Glass", None);
+        assert!(!face_carries(&model, &glass, base) && !face_carries(&model, &glass, chair));
+        let pony = mk("Interior", Some(WallSplit { height: 1.1, upper: "Glass".into(), upper_thickness: 0.01, ..Default::default() }));
+        assert!(face_carries(&model, &pony, base) && face_carries(&model, &pony, chair));
+        assert!(!face_carries(&model, &pony, (1.0, 1.2)));
+        assert!(!face_carries(&model, &pony, (2.3, 2.4)));
+        let inv = mk("Glass", Some(WallSplit { height: 1.1, upper: "Interior".into(), upper_thickness: 0.1, ..Default::default() }));
+        assert!(!face_carries(&model, &inv, base) && face_carries(&model, &inv, (1.2, 1.3)));
     }
 }

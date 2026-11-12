@@ -694,6 +694,8 @@ pub enum OpeningKind {
     GarageDoor,
     /// A cased opening (no swing).
     CasedOpening,
+    /// A recess in one face of a wall that does not go through.
+    Niche,
 }
 
 /// Which side the hinge is on.
@@ -818,6 +820,15 @@ pub struct Opening {
     /// Which sides of the host wall carry the casing.
     #[serde(default, skip_serializing_if = "OpeningSides::is_right_only")]
     pub casing_sides: OpeningSides,
+    /// Niche recess depth in metres (0 for every other opening).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub depth: f64,
+    /// The face a niche is recessed from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<paint::Side>,
+    /// Material key of a niche's back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<String>,
 }
 
 impl Default for Opening {
@@ -852,6 +863,9 @@ impl Default for Opening {
             roof_offset: DEFAULT_ROOF_OFFSET,
             sill_sides: OpeningSides::RIGHT,
             casing_sides: OpeningSides::RIGHT,
+            depth: 0.0,
+            face: None,
+            material: None,
         }
     }
 }
@@ -869,6 +883,7 @@ impl Opening {
             OpeningKind::Window => "slider".to_string(),
             OpeningKind::GarageDoor => "garage".to_string(),
             OpeningKind::CasedOpening => "cased".to_string(),
+            OpeningKind::Niche => "niche".to_string(),
             OpeningKind::Door => "hinged".to_string(),
         };
         let layer = if kind == OpeningKind::Window { "A-GLAZ" } else { "A-DOOR" };
@@ -902,6 +917,9 @@ impl Opening {
             roof_offset: DEFAULT_ROOF_OFFSET,
             sill_sides: OpeningSides::RIGHT,
             casing_sides: OpeningSides::RIGHT,
+            depth: 0.0,
+            face: None,
+            material: None,
         }
     }
 }
@@ -5160,5 +5178,27 @@ mod tests {
         m.types.clear();
         m.push_backsplash(Backsplash::default());
         assert!(!m.is_empty());
+    }
+
+    #[test]
+    fn opening_without_niche_fields_writes_the_same_json() {
+        let v = serde_json::to_value(Opening::default()).unwrap();
+        let obj = v.as_object().unwrap();
+        assert!(!obj.contains_key("depth") && !obj.contains_key("face") && !obj.contains_key("material"));
+        let back: Opening = serde_json::from_value(v).unwrap();
+        assert_eq!(back, Opening::default());
+    }
+
+    #[test]
+    fn niche_kind_round_trips() {
+        let o = Opening { kind: OpeningKind::Niche, depth: 0.1, face: Some(paint::Side::Right), material: Some("tile".into()), ..Opening::default() };
+        let v = serde_json::to_value(&o).unwrap();
+        assert_eq!(v["kind"], "niche");
+        assert_eq!(v["face"], "right");
+        assert_eq!(v["depth"], 0.1);
+        assert_eq!(v["material"], "tile");
+        let back: Opening = serde_json::from_value(v).unwrap();
+        assert_eq!(back, o);
+        assert_eq!(Opening::new(ArchId(0), 1.0, 0.6, 0.9, OpeningKind::Niche).style, "niche");
     }
 }
