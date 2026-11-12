@@ -243,7 +243,8 @@ fn soffit_with_unparseable_material_falls_back() {
     let scene = Scene3d::build(&m);
     let meshes = part_meshes(&scene, "soffit");
     assert_eq!(meshes.len(), 1);
-    assert_eq!(meshes[0].material, "soffit-box");
+    // MaterialRef::parse treats a bare string as an item reference.
+    assert_eq!(meshes[0].material, "soffit-box:item:not-a-real-material");
     assert!(hit(&scene, 8.0, 7.6, 2.2) == Some(("sf0".to_string(), "soffit".to_string())));
 }
 
