@@ -211,6 +211,7 @@ fn run_roomdetect(s: &mut Session, p: &Value) -> Result<Value> {
                 r.flat_ceiling = o.flat_ceiling;
                 r.ceiling_stack = o.ceiling_stack.clone();
             }
+            super::room_moldings::inherit(&mut r, &old_rooms);
             d.arch.push_room(r);
         }
 
