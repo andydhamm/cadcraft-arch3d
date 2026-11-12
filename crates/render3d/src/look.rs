@@ -22,7 +22,7 @@ pub fn lighting_for(look: &Look, sun_dir: Option<[f64; 3]>, budget: usize) -> Li
         }
     };
     Lighting {
-        sun_shadow: sun.is_some() && sun_dir.is_some(),
+        sun_shadow: sun.is_some() && sun_dir.is_some() && look.sun.shadows,
         sun,
         budget,
         exposure: DEFAULT_EXPOSURE,
@@ -54,5 +54,19 @@ mod tests {
         off.sun.on = false;
         assert_eq!(lighting_for(&off, Some(d), 8).sun, None);
         assert_eq!(lighting_for(&Look::default(), Some([0.0, 0.0, -1.0]), 8).sun, None);
+    }
+
+    #[test]
+    fn lighting_for_honours_shadows_and_on() {
+        let d = [0.0, 0.0, 1.0];
+        let mut look = Look::default();
+        look.sun.shadows = false;
+        let l = lighting_for(&look, Some(d), 8);
+        assert!(l.sun.is_some() && !l.sun_shadow, "sun on, shadows off");
+        look.sun.shadows = true;
+        assert!(lighting_for(&look, Some(d), 8).sun_shadow);
+        look.sun.on = false;
+        let l = lighting_for(&look, Some(d), 8);
+        assert!(l.sun.is_none() && !l.sun_shadow, "sun off");
     }
 }

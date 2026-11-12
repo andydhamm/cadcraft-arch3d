@@ -67,7 +67,7 @@ fn helper_grille(across: u32, down: u32, top_only: bool) -> Opening {
 #[test]
 fn grille_2x2_probes() {
     let o = helper_grille(2, 2, false);
-    let rect = GlassRect { u0: -0.55, u1: 0.55, z0: 0.95, z1: 2.05, ..Default::default() };
+    let rect = GlassRect::new(-0.55, 0.55, 0.95, 2.05);
     let bars = grille_bars(&o, &rect);
     assert!(!bars.is_empty());
     let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).count();
@@ -79,7 +79,7 @@ fn grille_2x2_probes() {
 #[test]
 fn grille_bars_evenly_divide_the_glass() {
     let o = helper_grille(3, 3, false);
-    let rect = GlassRect { u0: -0.6, u1: 0.6, z0: 0.8, z1: 2.2, ..Default::default() };
+    let rect = GlassRect::new(-0.6, 0.6, 0.8, 2.2);
     let bars = grille_bars(&o, &rect);
     let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).collect::<Vec<_>>();
     let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).collect::<Vec<_>>();
@@ -106,7 +106,7 @@ fn grille_bars_evenly_divide_the_glass() {
 #[test]
 fn top_part_only() {
     let o = helper_grille(2, 2, true);
-    let rect = GlassRect { u0: -0.45, u1: 0.45, z0: 0.96, z1: 2.04, ..Default::default() };
+    let rect = GlassRect::new(-0.45, 0.45, 0.96, 2.04);
     let bars = grille_bars(&o, &rect);
     assert!(!bars.is_empty(), "top-only grilles should still create bars");
 
@@ -125,7 +125,7 @@ fn top_part_only() {
 #[test]
 fn top_part_grille_divides_the_upper_half_evenly() {
     let o = helper_grille(2, 2, true);
-    let rect = GlassRect { u0: -0.45, u1: 0.45, z0: 0.96, z1: 2.04, ..Default::default() };
+    let rect = GlassRect::new(-0.45, 0.45, 0.96, 2.04);
     let bars = grille_bars(&o, &rect);
     assert!(!bars.is_empty(), "top-only grilles should still create bars");
 
@@ -144,7 +144,7 @@ fn top_part_grille_divides_the_upper_half_evenly() {
 #[test]
 fn top_part_grille_leaves_the_lower_half_clear() {
     let o = helper_grille(2, 2, true);
-    let rect = GlassRect { u0: -0.55, u1: 0.55, z0: 0.9, z1: 2.1, ..Default::default() };
+    let rect = GlassRect::new(-0.55, 0.55, 0.9, 2.1);
     let bars = grille_bars(&o, &rect);
     assert!(bars.iter().all(|b| b[2] >= 1.5 - 1e-9), "top-only bars must stay in the upper half");
     assert!(bars.iter().all(|b| b[3] <= 2.1 + 1e-9), "top-only bars must stay inside the glass");
@@ -153,7 +153,7 @@ fn top_part_grille_leaves_the_lower_half_clear() {
 #[test]
 fn one_by_three_grille_has_two_horizontal_bars() {
     let o = helper_grille(1, 3, false);
-    let rect = GlassRect { u0: -0.5, u1: 0.5, z0: 0.0, z1: 1.0, ..Default::default() };
+    let rect = GlassRect::new(-0.5, 0.5, 0.0, 1.0);
     let bars = grille_bars(&o, &rect);
     let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).count();
     let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).count();
@@ -164,7 +164,7 @@ fn one_by_three_grille_has_two_horizontal_bars() {
 #[test]
 fn three_by_one_grille_has_two_vertical_bars() {
     let o = helper_grille(3, 1, false);
-    let rect = GlassRect { u0: -0.5, u1: 0.5, z0: 0.0, z1: 1.0, ..Default::default() };
+    let rect = GlassRect::new(-0.5, 0.5, 0.0, 1.0);
     let bars = grille_bars(&o, &rect);
     let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).count();
     let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).count();
@@ -175,14 +175,14 @@ fn three_by_one_grille_has_two_vertical_bars() {
 #[test]
 fn one_by_one_has_no_bars() {
     let o = helper_grille(1, 1, false);
-    let rect = GlassRect { u0: -0.5, u1: 0.5, z0: 0.0, z1: 1.0, ..Default::default() };
+    let rect = GlassRect::new(-0.5, 0.5, 0.0, 1.0);
     assert!(grille_bars(&o, &rect).is_empty());
 }
 
 #[test]
 fn bars_never_overlap_inside_their_mesh() {
     let o = helper_grille(4, 3, false);
-    let rect = GlassRect { u0: -0.8, u1: 0.8, z0: 0.7, z1: 2.3, ..Default::default() };
+    let rect = GlassRect::new(-0.8, 0.8, 0.7, 2.3);
     let bars = grille_bars(&o, &rect);
     for i in 0..bars.len() {
         for j in (i + 1)..bars.len() {
@@ -264,4 +264,79 @@ fn default_window_meshes_unchanged() {
         !meshes.iter().any(|m| m.material.contains("sill-left") || m.material.contains("sill-right")),
         "default should not add mirrored side materials"
     );
+}
+
+#[test]
+fn grille_bars_handle_zero_sized_glass() {
+    let o = helper_grille(2, 2, false);
+    let rect = GlassRect::new(0.0, 0.0, 0.0, 0.0);
+    let bars = grille_bars(&o, &rect);
+    for b in &bars {
+        assert!(b[0].is_finite() && b[1].is_finite() && b[2].is_finite() && b[3].is_finite());
+    }
+}
+
+#[test]
+fn grille_bars_handle_nan_in_glass() {
+    let o = helper_grille(2, 2, false);
+    let rect = GlassRect::new(f64::NAN, 1.0, 0.0, 1.0);
+    let bars = grille_bars(&o, &rect);
+    for b in &bars {
+        let _ = b[0];
+    }
+}
+
+#[test]
+fn grille_bars_handle_huge_glass() {
+    let o = helper_grille(2, 2, false);
+    let rect = GlassRect::new(0.0, 1e10, 0.0, 1e10);
+    let bars = grille_bars(&o, &rect);
+    assert!(!bars.is_empty());
+    for b in &bars {
+        assert!(b[0].is_finite() && b[1].is_finite() && b[2].is_finite() && b[3].is_finite());
+    }
+}
+
+#[test]
+fn grille_bars_zero_across_or_down() {
+    let o = helper_grille(0, 0, false);
+    let rect = GlassRect::new(0.0, 1.0, 0.0, 1.0);
+    let bars = grille_bars(&o, &rect);
+    assert!(bars.is_empty(), "0x0 grille should produce no bars");
+}
+
+#[test]
+fn grille_bars_clamp_to_max_lites() {
+    let o = helper_grille(1000, 1000, false);
+    let rect = GlassRect::new(0.0, 1.0, 0.0, 1.0);
+    let bars = grille_bars(&o, &rect);
+    for b in &bars {
+        assert!(b[0].is_finite() && b[1].is_finite() && b[2].is_finite() && b[3].is_finite());
+    }
+}
+
+#[test]
+fn top_only_one_by_two_has_one_horizontal_bar() {
+    let o = helper_grille(1, 2, true);
+    let rect = GlassRect::new(-0.5, 0.5, 0.0, 1.0);
+    let bars = grille_bars(&o, &rect);
+    let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).count();
+    let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).count();
+    assert_eq!(vertical, 0, "1x2 top-only should have no vertical bars");
+    assert_eq!(horizontal, 1, "1x2 top-only should have one horizontal bar");
+    let z_centre = bars[0][2] + (bars[0][3] - bars[0][2]) / 2.0;
+    assert!((z_centre - 0.75).abs() < 1e-9, "bar should be at z=0.75, got {}", z_centre);
+}
+
+#[test]
+fn top_only_two_by_one_has_one_vertical_bar_in_upper_half() {
+    let o = helper_grille(2, 1, true);
+    let rect = GlassRect::new(-0.5, 0.5, 0.0, 1.0);
+    let bars = grille_bars(&o, &rect);
+    let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).count();
+    let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).count();
+    assert_eq!(horizontal, 0, "2x1 top-only should have no horizontal bars");
+    assert_eq!(vertical, 1, "2x1 top-only should have one vertical bar");
+    assert!((bars[0][2] - 0.5).abs() < 1e-9, "bar should start at z=0.5, got {}", bars[0][2]);
+    assert!((bars[0][3] - 1.0).abs() < 1e-9, "bar should end at z=1.0, got {}", bars[0][3]);
 }

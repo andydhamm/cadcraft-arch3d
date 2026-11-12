@@ -445,7 +445,8 @@ impl Pane3d {
                 }
                 self.full = Some(FullCamera::new(eye, target, fov.unwrap_or(45.0)));
             }
-            CameraKind::Orbit => {
+            // Overview loads like Orbit; the level filter comes with the pane package.
+            CameraKind::Orbit | CameraKind::Overview => {
                 self.full = None;
                 self.orbit_target = target;
                 self.orbit_fov = fov;

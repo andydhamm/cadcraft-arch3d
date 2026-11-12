@@ -14,7 +14,7 @@ use crate::backdrop::BackdropPass;
 
 /// Alias of [`DeviceInfo`] for the accessor signature.
 type Info = DeviceInfo;
-use crate::camera::{Camera, view_proj};
+use crate::camera::{Camera, view_proj, view_proj_with_near};
 use crate::edges::{EDGE_COLOR, EdgePass};
 use crate::light::Light;
 use crate::pipeline::{
@@ -186,6 +186,9 @@ pub struct Offscreen {
     /// Phase 19: exposure metering state and the look of the last encoded frame.
     meter: crate::frame_look::Meter,
     last_look: crate::frame_look::FrameLook,
+    /// The clip box the next sun shadow map is built with (set by the lit frame before it builds one;
+    /// `None` = no box, the fragment-free depth pipeline).
+    pub(crate) shadow_clip: Option<[[f32; 3]; 2]>,
 }
 
 impl Offscreen {
@@ -256,6 +259,7 @@ impl Offscreen {
             final_renders: 0,
             meter: Default::default(),
             last_look: Default::default(),
+            shadow_clip: None,
         }
     }
 
@@ -331,8 +335,9 @@ impl Offscreen {
     pub fn build_shadow(&mut self, scene: &Scene3d, scene_key: u64, light: &Light, ground: bool) -> Option<ShadowMap> {
         self.ensure_meshes(scene, scene_key, ground);
         let (_, meshes) = self.meshes.as_ref()?;
-        let map =
-            crate::shadow::build(&self.device, &self.queue, meshes, light.normalized().dir, &crate::shadow::receiver_bounds(&scene.bounds, ground))?;
+        let bounds = crate::shadow::receiver_bounds(&scene.bounds, ground);
+        // Geometry outside the view's clip box casts nothing (`shadow_clip` is set by the lit frame).
+        let map = crate::shadow::build_clipped(&self.device, &self.queue, meshes, light.normalized().dir, &bounds, self.shadow_clip)?;
         self.shadows_built += 1;
         Some(map)
     }
@@ -366,6 +371,7 @@ impl Offscreen {
         self.last_look = match opts.lit {
             Some(frame) => {
                 let size = (self.targets.width, self.targets.height);
+                self.meter.scene_key = scene_key;
                 crate::frame_look::frame_look(scene, camera, size, &frame.lighting, opts.ground, &mut self.meter)
             }
             None => crate::frame_look::FrameLook::default(),
@@ -405,7 +411,11 @@ impl Offscreen {
             self.slots = Some(Slots { capacity, buffer, bind_group, pbr_buffer, pbr_bind_group });
         }
         let aspect = f64::from(self.targets.width) / f64::from(self.targets.height);
-        let vp = view_proj(camera, aspect);
+        // A view's near clip moves the camera's near plane (camera only: shadows are unaffected).
+        let vp = match self.last_look.near {
+            Some(near) => view_proj_with_near(camera, aspect, f64::from(near)),
+            None => view_proj(camera, aspect),
+        };
         let l = light.normalized();
         let eye = camera.eye();
         let eye = [eye.x as f32, eye.y as f32, eye.z as f32];

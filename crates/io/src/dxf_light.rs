@@ -3,8 +3,8 @@
 //! the arch record is present (like site proxies).
 
 use cadcraft_doc::arch::ArchModel;
-use cadcraft_dxf::Tag;
 use cadcraft_geom::Vec2;
+use craft_dxf::Tag;
 
 use cadcraft_arch::light;
 

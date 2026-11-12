@@ -102,6 +102,12 @@ pub struct PathOptions {
     pub furnace: Option<Furnace>,
     /// Sample counts at which [`PathTracer::step`] keeps an image (ascending, each <= `spp`).
     pub snapshots: Vec<u32>,
+    /// The tone curve of the resolve (`exposure::TONE_ACES`, `TONE_HABLE`, `TONE_NONE`); the
+    /// furnace test uses it too. Default ACES.
+    pub tone_map: u32,
+    /// The Lambert calibration albedo: every surface becomes pure Lambert with this albedo
+    /// (`scene_gpu::apply_lambert`, filled by p19-exposure-2).
+    pub lambert: Option<f32>,
 }
 
 impl Default for PathOptions {
@@ -116,6 +122,8 @@ impl Default for PathOptions {
             spp_per_step: DEFAULT_SPP_PER_STEP,
             furnace: None,
             snapshots: Vec::new(),
+            tone_map: crate::exposure::TONE_ACES,
+            lambert: None,
         }
     }
 }
@@ -194,27 +202,7 @@ pub fn luminance(rgb: [f32; 3]) -> f32 {
     0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
 }
 
-/// Auto exposure from a still's hit pixels: `clamp(0.18 / Lavg, DAY_EXPOSURE, NIGHT_EXPOSURE)`.
-pub fn auto_exposure_from_luminances(luminance: &[f32], hit: &[bool]) -> f32 {
-    if luminance.len() != hit.len() || luminance.is_empty() {
-        return DAY_EXPOSURE;
-    }
-    let mut log_sum = 0.0f64;
-    let mut count = 0usize;
-    for (&l, &is_hit) in luminance.iter().zip(hit.iter()) {
-        if !is_hit {
-            continue;
-        }
-        let lum = l.max(0.0);
-        log_sum += (1e-4 + lum as f64).ln();
-        count += 1;
-    }
-    if count == 0 {
-        return DAY_EXPOSURE;
-    }
-    let lavg = (log_sum / count as f64).exp() as f32;
-    (0.18 / lavg).clamp(DAY_EXPOSURE, NIGHT_EXPOSURE)
-}
+pub use crate::exposure::auto_exposure_from_luminances;
 
 #[cfg(test)]
 mod lights_tests;
@@ -266,5 +254,48 @@ mod tests {
         let lum = [1.0, 2.0, 5.0];
         let e = auto_exposure_from_luminances(&lum, &[true, true, true]);
         assert_eq!(e, NIGHT_EXPOSURE, "bright hits should clamp to the night exposure: {e}");
+    }
+
+    #[test]
+    fn apply_lambert_makes_every_material_diffuse() {
+        use super::scene_gpu::{GpuMaterial, GpuScene, LENS_NITS, MAT_EMIT_CAMERA_ONLY, apply_lambert};
+
+        let mut scene = GpuScene::default();
+        scene.materials.push(GpuMaterial {
+            albedo: [0.1, 0.2, 0.3],
+            metallic: 0.5,
+            roughness: 0.2,
+            ior: 1.5,
+            transmission: 0.5,
+            emission: [0.1, 0.2, 0.3],
+            flags: 0,
+            ..Default::default()
+        });
+        scene.materials.push(GpuMaterial {
+            albedo: [0.5, 0.5, 0.5],
+            metallic: 1.0,
+            roughness: 0.0,
+            ior: 1.0,
+            transmission: 1.0,
+            emission: [LENS_NITS, LENS_NITS, LENS_NITS],
+            flags: MAT_EMIT_CAMERA_ONLY,
+            ..Default::default()
+        });
+
+        apply_lambert(&mut scene, 0.5);
+
+        // Every material is now a pure Lambert.
+        for m in &scene.materials {
+            assert_eq!(m.albedo, [0.5, 0.5, 0.5]);
+            assert_eq!(m.metallic, 0.0);
+            assert_eq!(m.roughness, 1.0);
+            assert_eq!(m.ior, 1.0);
+            assert_eq!(m.transmission, 0.0);
+        }
+
+        // Emission is kept only on light lenses (MAT_EMIT_CAMERA_ONLY).
+        assert_eq!(scene.materials[0].emission, [0.0, 0.0, 0.0], "non-lens emission cleared");
+        assert_eq!(scene.materials[1].emission, [LENS_NITS, LENS_NITS, LENS_NITS], "lens emission kept");
+        assert_eq!(scene.materials[1].flags, MAT_EMIT_CAMERA_ONLY, "lens flag kept");
     }
 }

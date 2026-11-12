@@ -329,7 +329,7 @@ fn run_cabinet(session: &mut Session, params: &Value) -> Result<Value> {
     for w in &widths {
         let mut cab = base.clone();
         cab.width = *w;
-        cab.doors = doors.unwrap_or(if *w > 0.6 { 2 } else { 1 });
+        cab.doors = doors.unwrap_or(if *w > cadcraft_doc::arch::DOOR_PAIR_WIDTH { 2 } else { 1 });
         let shift = edge + w / 2.0 - first / 2.0;
         edge += w;
         let (pos, rot, level) = place(CMD, &doc, &c, *w, cab.depth, shift)?;
@@ -831,6 +831,19 @@ mod tests {
         assert_eq!(cabinets(&s).get(1).map(|c| c.doors), Some(2));
         let layers = s.doc().map(|d| d.layer("A-FLOR-CASE-UPPR").is_some()).unwrap_or(false);
         assert!(layers);
+    }
+
+    #[test]
+    fn cabinet_command_door_pairs() {
+        let mut s = session();
+        for (w, offset) in [(0.610, 0.5), (0.686, 1.5), (0.762, 2.5)] {
+            let r = run(&mut s, "cabinet", json!({ "kind": "wall", "wall": "w0", "offset": offset, "width": w }));
+            assert!(r.is_ok(), "{r:?}");
+        }
+        assert_eq!(cabinets(&s).iter().map(|c| c.doors).collect::<Vec<_>>(), vec![1, 1, 2]);
+        let r = run(&mut s, "cabinet", json!({ "kind": "wall", "wall": "w0", "offset": 3.3, "width": 0.762, "doors": 1 }));
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(cabinets(&s).get(3).map(|c| c.doors), Some(1));
     }
 
     #[test]
