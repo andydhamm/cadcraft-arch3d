@@ -165,7 +165,7 @@ fn add_pattern_segments(mesh: &Mesh, model: &ArchModel, dir: [f64; 3], out: &mut
                 let a = add(a, scale([-dir[0], -dir[1], -dir[2]], 1e-4));
                 let b = add(b, scale([-dir[0], -dir[1], -dir[2]], 1e-4));
                 if (sub(a, b).iter().map(|x| x * x).sum::<f64>()).sqrt() > 1e-6 {
-                    out.push(Seg3 { a, b, kind, object: mesh.object });
+                    out.push(Seg3 { a, b, kind, object: mesh.object, ..Default::default() });
                     count += 1;
                 }
             }
@@ -190,7 +190,7 @@ fn add_pattern_segments(mesh: &Mesh, model: &ArchModel, dir: [f64; 3], out: &mut
                         let a = add(a, scale([-dir[0], -dir[1], -dir[2]], 1e-4));
                         let b = add(b, scale([-dir[0], -dir[1], -dir[2]], 1e-4));
                         if (sub(a, b).iter().map(|x| x * x).sum::<f64>()).sqrt() > 1e-6 {
-                            out.push(Seg3 { a, b, kind, object: mesh.object });
+                            out.push(Seg3 { a, b, kind, object: mesh.object, ..Default::default() });
                             last += 1;
                         }
                     }
@@ -222,6 +222,7 @@ pub(crate) fn pattern_lines(model: &ArchModel, sc: &Scene3d, ov: &OrthoView) -> 
                 Some((_, material)) => material,
                 None => "finish:default".to_string(),
             },
+            ..Default::default()
         });
     }
     if out.len() > MAX_VIEW_LINES {
