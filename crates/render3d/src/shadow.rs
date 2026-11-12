@@ -30,6 +30,111 @@ struct Light { vp: mat4x4<f32> };
 }
 ";
 
+/// WGSL of the clipped depth-only pass: the vertex stage passes the world position and the
+/// fragment stage discards outside the view's clip box, so clipped geometry casts nothing.
+pub(crate) const DEPTH_CLIP_SHADER: &str = "
+struct Light { vp: mat4x4<f32>, clip_min: vec4<f32>, clip_max: vec4<f32> };
+@group(0) @binding(0) var<uniform> light: Light;
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) wpos: vec3<f32> };
+@vertex fn vs(@location(0) pos: vec3<f32>) -> VOut {
+    var o: VOut;
+    o.pos = light.vp * vec4<f32>(pos, 1.0);
+    o.wpos = pos;
+    return o;
+}
+@fragment fn fs(v: VOut) {
+    if (any(v.wpos < light.clip_min.xyz) || any(v.wpos > light.clip_max.xyz)) {
+        discard;
+    }
+}
+";
+
+/// The uniform of a clipped depth pass: the light matrix, then the clip box (96 bytes).
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct ClipPassUniform {
+    light_view_proj: [[f32; 4]; 4],
+    clip_min: [f32; 4],
+    clip_max: [f32; 4],
+}
+
+/// Bytes of a depth pass's uniform: the 64-byte light matrix, or with a clip box the 96-byte
+/// matrix plus box (the clipped pipeline's layout).
+pub(crate) fn pass_bytes(matrix: &[[f32; 4]; 4], clip: Option<[[f32; 3]; 2]>) -> Vec<u8> {
+    match clip {
+        None => bytemuck::bytes_of(matrix).to_vec(),
+        Some([lo, hi]) => bytemuck::bytes_of(&ClipPassUniform {
+            light_view_proj: *matrix,
+            clip_min: [lo[0], lo[1], lo[2], 0.0],
+            clip_max: [hi[0], hi[1], hi[2], 0.0],
+        })
+        .to_vec(),
+    }
+}
+
+/// A depth-only pass: its uniform layout (group 0) and pipeline. The default is fragment-free with a
+/// 64-byte light-matrix uniform; `clipped` is the second pipeline with a fragment stage that
+/// discards outside the clip box and a 96-byte uniform ([`pass_bytes`]).
+pub(crate) struct DepthPass {
+    pub bgl: wgpu::BindGroupLayout,
+    pub pipeline: wgpu::RenderPipeline,
+    /// Size in bytes of the uniform the pass reads.
+    pub uniform_size: u64,
+}
+
+/// Build the depth pass `label` (clipped or not).
+pub(crate) fn depth_pass(device: &wgpu::Device, label: &str, clipped: bool) -> DepthPass {
+    let uniform_size: u64 = if clipped { 96 } else { 64 };
+    let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some(label),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: if clipped { wgpu::ShaderStages::VERTEX_FRAGMENT } else { wgpu::ShaderStages::VERTEX },
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: std::num::NonZero::new(uniform_size),
+            },
+            count: None,
+        }],
+    });
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some(label),
+        source: wgpu::ShaderSource::Wgsl(if clipped { DEPTH_CLIP_SHADER } else { DEPTH_SHADER }.into()),
+    });
+    let layout =
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some(label), bind_group_layouts: &[Some(&bgl)], immediate_size: 0 });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(label),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &module,
+            entry_point: Some("vs"),
+            buffers: &[Some(vertex_layout())],
+            compilation_options: Default::default(),
+        },
+        // No culling: arch3d's winding is not consistent, and front faces must cast too.
+        primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleList, cull_mode: None, ..Default::default() },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState { count: 1, mask: !0, alpha_to_coverage_enabled: false },
+        fragment: clipped.then(|| wgpu::FragmentState {
+            module: &module,
+            entry_point: Some("fs"),
+            targets: &[],
+            compilation_options: Default::default(),
+        }),
+        multiview_mask: None,
+        cache: None,
+    });
+    DepthPass { bgl, pipeline, uniform_size }
+}
+
 /// Shadow lookup appended to the mesh shader, cut before the mesh `fs` (so `shade_parts` and the
 /// hook functions are in scope). The new `fs` returns the lit colour, or ambient only when the
 /// fragment is behind the stored depth.
@@ -252,6 +357,19 @@ fn fit(light_dir: [f32; 3], bounds: &Bounds3) -> Option<([[f32; 4]; 4], f64)> {
 /// surface toward the sun. `None` when it is non-finite, at or below the horizon (`z <= 0.01`
 /// after normalising) or `bounds` is empty or non-finite. Blended (glass) draws cast nothing.
 pub fn build(device: &wgpu::Device, queue: &wgpu::Queue, meshes: &GpuMeshes, light_dir: [f32; 3], bounds: &Bounds3) -> Option<ShadowMap> {
+    build_clipped(device, queue, meshes, light_dir, bounds, None)
+}
+
+/// [`build`] for a view with a clip box `[min, max]`: geometry outside the box casts nothing (the
+/// second, fragment-discarding depth pipeline). `None` is [`build`] exactly.
+pub fn build_clipped(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    meshes: &GpuMeshes,
+    light_dir: [f32; 3],
+    bounds: &Bounds3,
+    clip: Option<[[f32; 3]; 2]>,
+) -> Option<ShadowMap> {
     let (light_view_proj, range) = fit(light_dir, bounds)?;
 
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -287,59 +405,20 @@ pub fn build(device: &wgpu::Device, queue: &wgpu::Queue, meshes: &GpuMeshes, lig
     });
 
     // The depth pass has its own group so the map is never bound while it is the attachment.
-    let pass_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("render3d shadow pass layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: std::num::NonZero::new(64),
-            },
-            count: None,
-        }],
+    let depth = depth_pass(device, "render3d shadow depth", clip.is_some());
+    let pass_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("render3d shadow pass uniform"),
+        size: depth.uniform_size,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
+    queue.write_buffer(&pass_buffer, 0, &pass_bytes(&light_view_proj, clip));
     let pass_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("render3d shadow pass bind group"),
-        layout: &pass_bgl,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer: &buffer, offset: 0, size: std::num::NonZero::new(64) }),
-        }],
+        layout: &depth.bgl,
+        entries: &[wgpu::BindGroupEntry { binding: 0, resource: pass_buffer.as_entire_binding() }],
     });
-    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("render3d shadow depth"),
-        source: wgpu::ShaderSource::Wgsl(DEPTH_SHADER.into()),
-    });
-    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("render3d shadow pass pipeline layout"),
-        bind_group_layouts: &[Some(&pass_bgl)],
-        immediate_size: 0,
-    });
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("render3d shadow depth pipeline"),
-        layout: Some(&layout),
-        vertex: wgpu::VertexState {
-            module: &module,
-            entry_point: Some("vs"),
-            buffers: &[Some(vertex_layout())],
-            compilation_options: Default::default(),
-        },
-        // No culling: arch3d's winding is not consistent, and front faces must cast too.
-        primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleList, cull_mode: None, ..Default::default() },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(true),
-            depth_compare: Some(wgpu::CompareFunction::Less),
-            stencil: wgpu::StencilState::default(),
-            bias: wgpu::DepthBiasState::default(),
-        }),
-        multisample: wgpu::MultisampleState { count: 1, mask: !0, alpha_to_coverage_enabled: false },
-        fragment: None,
-        multiview_mask: None,
-        cache: None,
-    });
+    let pipeline = depth.pipeline;
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render3d shadow") });
     {
@@ -526,6 +605,59 @@ mod tests {
         assert!(build(&device, &queue, &meshes, [1.0, 0.0, 0.0], &scene.bounds).is_none());
         assert!(build(&device, &queue, &meshes, [0.3, 0.3, -0.5], &scene.bounds).is_none());
         assert!(build(&device, &queue, &meshes, sun_from_south(), &Bounds3::empty()).is_none());
+    }
+
+    #[test]
+    fn clipped_geometry_casts_no_raster_shadow() {
+        let Some((device, queue)) = crate::gputest::shared_device() else { return };
+        // A floor with a roof slab 2 m above it; the sun is nearly overhead.
+        let mut scene = Scene3d::default();
+        scene.meshes.push(cuboid("floor", [-6.0, -6.0, -0.1], [6.0, 6.0, 0.0]));
+        scene.meshes.push(cuboid("ceiling", [-3.0, -3.0, 2.0], [3.0, 3.0, 2.1]));
+        scene.bounds = Bounds3::new([-6.0, -6.0, -0.1], [6.0, 6.0, 2.1]);
+        let meshes = crate::pipeline::upload(&device, &scene);
+        let sun = [0.0, -0.1, 1.0];
+        let probe = [0.0, 0.0, 0.0];
+        let depth = |clip: Option<[[f32; 3]; 2]>| {
+            let sm = build_clipped(&device, &queue, &meshes, sun, &scene.bounds, clip).expect("shadow map");
+            depth_at(&sm, &read_depth(&device, &queue, &sm), probe)
+        };
+        let open = depth(None);
+        // Above z = 1 is clipped: the roof casts nothing, the floor point sees the floor's own depth.
+        let clipped = depth(Some([[-10.0, -10.0, -10.0], [10.0, 10.0, 1.0]]));
+        assert!(open < clipped - 0.01, "the roof shadows the floor without a clip: {open} vs {clipped}");
+        // A box that holds everything changes nothing (the fragment pipeline keeps what is inside).
+        let all = depth(Some([[-10.0, -10.0, -10.0], [10.0, 10.0, 10.0]]));
+        assert!((all - open).abs() < 1e-4, "{all} vs {open}");
+        // The default map is the fragment-free 64-byte pass; the clipped one is 96 bytes.
+        let m = [[0.0f32; 4]; 4];
+        assert_eq!((pass_bytes(&m, None).len(), pass_bytes(&m, Some([[0.0; 3], [1.0; 3]])).len()), (64, 96));
+
+        // The fixture atlas keys on the clip box too: a new box renders the maps again.
+        let lights = [cadcraft_arch3d::light::SceneLight {
+            id: ArchId(1),
+            kind: cadcraft_arch3d::light::LightKind::Spot,
+            position: cadcraft_geom::Vec3::new(0.0, 0.0, 1.5),
+            direction: cadcraft_geom::Vec3::new(0.0, 0.0, -1.0),
+            intensity: 900.0,
+            color: [1.0; 3],
+            cos_inner: 30f64.to_radians().cos(),
+            cos_outer: 35f64.to_radians().cos(),
+            ..Default::default()
+        }];
+        let key = crate::shadow_atlas::occluder_key(&scene);
+        let mut atlas = crate::shadow_atlas::ShadowAtlas::new(&device, 64);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 20.0);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 20.0);
+        assert_eq!(atlas.maps_built(), 1, "an unchanged clip reuses the map");
+        atlas.set_clip(Some([[-10.0, -10.0, -10.0], [10.0, 10.0, 1.0]]));
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 20.0);
+        assert_eq!(atlas.maps_built(), 2, "a new clip box renders it again");
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 20.0);
+        assert_eq!(atlas.maps_built(), 2);
+        atlas.set_clip(None);
+        atlas.update(&device, &queue, &meshes, key, &lights, &[0], 20.0);
+        assert_eq!(atlas.maps_built(), 3);
     }
 
     #[test]
