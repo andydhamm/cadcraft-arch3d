@@ -324,6 +324,9 @@ fn run_room(s: &mut Session, p: &Value) -> Result<Value> {
                 edited.name = n;
             }
             if let Some(rt) = room_type {
+                if rt != edited.room_type {
+                    edited.floor_finish = None;
+                }
                 edited.room_type = rt;
             }
             if let Some(c) = ceiling {
@@ -858,6 +861,24 @@ mod tests {
         assert_eq!(r["type"].as_str().unwrap(), "kitchen");
         assert_eq!(r["name"].as_str().unwrap(), "Old");
         assert_eq!(r["interiorArea"].as_f64().unwrap(), 9.0);
+    }
+
+    #[test]
+    fn type_change_clears_the_floor_finish() {
+        let mut s = new_session();
+        let _ = s.execute("room", &json!({ "points": square_points() })).unwrap();
+        s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(cadcraft_doc::arch::Finish::Wood);
+        s.execute("room", &json!({ "id": "r0", "type": "bath" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, None);
+    }
+
+    #[test]
+    fn same_type_keeps_it() {
+        let mut s = new_session();
+        let _ = s.execute("room", &json!({ "points": square_points() })).unwrap();
+        s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(cadcraft_doc::arch::Finish::Tile);
+        s.execute("room", &json!({ "id": "r0", "type": "other" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, Some(cadcraft_doc::arch::Finish::Tile));
     }
 
     /// An unknown or malformed id is refused and the model is untouched.
