@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("export", "Export...", run_export)
             .menu(&["File", "Export..."])
             .alias(&["exp"])
-            .params("{path? (else returns base64 `data`), format?: dxf|dwg|svg|png|pdf (default: the path's extension), view?: \"v<n>\" (png/svg/pdf of that elevation or section only, framed with a 5 % margin), level?: name|index (the plan of that level; the shown level is restored)} → {format, bytes, path? | data}")
+            .params("{path? (else returns base64 `data`), format?: dxf|dwg|svg|png|pdf (default: the path's extension), view?: \"v<n>\" (png/svg/pdf of that elevation or section only, framed with a 5 % margin), level?: name|index (the plan of that level; the shown level is restored), planView?: name (the plan as that saved plan view shows it; the session keeps its tabs and layers)} → {format, bytes, path? | data}")
             .noundo(),
         CommandSpec::new("preview", "Plot Preview", run_preview)
             .menu(&["File", "Plot Preview"])
@@ -125,11 +125,27 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(v) => Some(v),
     };
+    let plan_view = match p.get("planView") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_str().ok_or_else(|| bad("export", "`planView` must be a plan view name"))?),
+    };
+    if [view.is_some(), level.is_some(), plan_view.is_some()].iter().filter(|b| **b).count() > 1 {
+        return Err(bad("export", "give only one of `view`, `level` and `planView`"));
+    }
+    if let Some(name) = plan_view {
+        let mut copy = s.doc()?.clone();
+        let v = copy.arch.plan_view(name).cloned().ok_or_else(|| bad("export", format!("`planView`: no plan view `{}`", name.trim())))?;
+        super::arch::planview::apply_plan_view(&mut copy, &v);
+        let saved = s.state()?.doc.clone();
+        s.state_mut()?.doc = Arc::new(copy);
+        let r = export_inner(s, p);
+        if let Ok(st) = s.state_mut() {
+            st.doc = saved;
+        }
+        return r;
+    }
     if view.is_none() && level.is_none() {
         return export_inner(s, p);
-    }
-    if view.is_some() && level.is_some() {
-        return Err(bad("export", "give `view` or `level`, not both"));
     }
     // The scoped drawing replaces the session's for the export only; the original is put back
     // whatever the outcome, so the shown level and the entities are untouched.
@@ -759,6 +775,51 @@ mod tests {
             plot: Some(fake_plot),
         });
         io().is_some_and(|h| (h.write)(&Drawing::new_imperial(), "probe.test").is_ok_and(|b| b == b"exchange"))
+    }
+
+    fn plan_view_session() -> Session {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [6.0, 0.0]], "thickness": 0.2})).unwrap();
+        s
+    }
+
+    #[test]
+    fn export_plan_view_draws_that_view_and_leaves_the_session_alone() {
+        let ours = our_hooks();
+        let mut s = plan_view_session();
+        if !ours {
+            return;
+        }
+        let layers = s.doc().unwrap().layers.clone();
+        let depth = s.state().unwrap().undo.len();
+        let open = s.doc().unwrap().arch.open_plan_views.clone();
+        let clayer = s.doc().unwrap().header.str("CLAYER", "0");
+        let level = s.doc().unwrap().arch.plan_level;
+        let r = s.execute("export", &json!({"format": "svg", "planView": "Electrical"})).unwrap();
+        assert!(r["data"].is_string());
+        let d = s.doc().unwrap();
+        assert_eq!(d.layers.len(), layers.len());
+        assert!(d.layers.iter().zip(&layers).all(|(a, b)| a.name == b.name && a.transparency == b.transparency && a.on == b.on));
+        assert_eq!(d.arch.open_plan_views, open);
+        assert!(d.arch.active_plan_view.is_none());
+        assert_eq!(d.header.str("CLAYER", "0"), clayer);
+        assert_eq!(d.arch.plan_level, level);
+        assert_eq!(s.state().unwrap().undo.len(), depth);
+    }
+
+    #[test]
+    fn export_plan_view_with_level_or_view_is_refused() {
+        let mut s = plan_view_session();
+        assert!(s.execute("export", &json!({"format": "svg", "planView": "Electrical", "level": 0})).is_err());
+        assert!(s.execute("export", &json!({"format": "svg", "planView": "Electrical", "view": "v0"})).is_err());
+        assert!(s.doc().unwrap().arch.active_plan_view.is_none());
+    }
+
+    #[test]
+    fn export_unknown_plan_view_is_refused() {
+        let mut s = plan_view_session();
+        let e = s.execute("export", &json!({"format": "svg", "planView": "Nope"})).unwrap_err().to_string();
+        assert!(e.contains("Nope"), "{e}");
     }
 
     fn view_session() -> Session {
