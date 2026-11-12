@@ -14,7 +14,7 @@ use crate::camera::{Camera, ray_at};
 use crate::exposure::{daylight, exposure_scale, tone_code};
 use crate::lit_frame::Lighting;
 use crate::pathtrace::luminance;
-use crate::pipeline::{PBR_FLAG_LAMBERT, PbrUniform, STYLE_HIDDEN_LINE, STYLE_TECHNICAL};
+use crate::pipeline::{PBR_FLAG_CLIP, PBR_FLAG_LAMBERT, PbrUniform, STYLE_HIDDEN_LINE, STYLE_TECHNICAL};
 use crate::types::{ArchId, Mesh, Scene3d};
 
 /// What one frame looks like, decided once and written into every draw.
@@ -232,8 +232,23 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     f.exposure_mode = mode;
 }
 
-/// Clip box, near plane and Lambert override of the view [p19-seeing-in-render]. A stub.
-pub fn view_look(_f: &mut FrameLook, _lighting: &Lighting) {}
+/// The clip box of a look as `[min, max]` in drawing space; `None` without one or when a corner is
+/// not finite (a hostile box clips nothing rather than everything).
+pub fn look_clip(look: &cadcraft_doc::arch::Look) -> Option<[[f32; 3]; 2]> {
+    let c = look.clip.as_ref()?;
+    if !c.min.iter().chain(c.max.iter()).all(|v| v.is_finite()) {
+        return None;
+    }
+    let f = |v: [f64; 3]| [v[0] as f32, v[1] as f32, v[2] as f32];
+    Some([f(c.min), f(c.max)])
+}
+
+/// Clip box and near plane of the view: copied from the look (`Look::clip`, `Look::near_clip`). A
+/// near clip outside (0, 1000] m is ignored. The Lambert override is `exposure_look`'s.
+pub fn view_look(f: &mut FrameLook, lighting: &Lighting) {
+    f.clip = look_clip(&lighting.look);
+    f.near = lighting.look.near_clip.filter(|n| n.is_finite() && *n > 0.0 && *n <= 1000.0).map(|n| n as f32);
+}
 
 /// Copy the frame's look into one draw's block; `material` is the draw's mesh material name (the
 /// ground quad's is `"ground"`).
@@ -264,8 +279,14 @@ pub fn fill_exposure(p: &mut PbrUniform, f: &FrameLook) {
 /// The draw's normal map layer and strength [p19-normal-maps-render]. A stub.
 pub fn fill_normal_map(_p: &mut PbrUniform, _f: &FrameLook, _scene: &Scene3d, _material: &str) {}
 
-/// Clip box and Lambert override into the draw [p19-seeing-in-render]. A stub.
-pub fn fill_clip(_p: &mut PbrUniform, _f: &FrameLook) {}
+/// The clip box and `PBR_FLAG_CLIP` into the draw; a frame without a clip leaves the block as it is.
+pub fn fill_clip(p: &mut PbrUniform, f: &FrameLook) {
+    if let Some([min, max]) = f.clip {
+        p.flags |= PBR_FLAG_CLIP;
+        p.clip_min = min;
+        p.clip_max = max;
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -358,6 +379,46 @@ mod tests {
         // With nothing hit the daylight scale is the day exposure.
         let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
         assert_eq!(f.exposure, crate::pathtrace::DAY_EXPOSURE);
+    }
+
+    #[test]
+    fn fill_clip_box_and_flag() {
+        use cadcraft_doc::arch::ClipBox;
+        let scene = Scene3d::default();
+        // The look's box and near reach the frame look.
+        let mut lighting = Lighting::default();
+        lighting.look.clip = Some(ClipBox { min: [-1.0, -2.0, -3.0], max: [4.0, 5.0, 2.0], ..Default::default() });
+        lighting.look.near_clip = Some(0.75);
+        let mut f = FrameLook::default();
+        view_look(&mut f, &lighting);
+        assert_eq!((f.clip, f.near), (Some([[-1.0, -2.0, -3.0], [4.0, 5.0, 2.0]]), Some(0.75)));
+        let before = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_SHADED, [0.0; 3]);
+        let mut p = before;
+        fill_draw(&mut p, &f, &scene, "wall");
+        assert_eq!(p.flags & PBR_FLAG_CLIP, PBR_FLAG_CLIP);
+        assert_eq!((p.clip_min, p.clip_max), ([-1.0, -2.0, -3.0], [4.0, 5.0, 2.0]));
+        // Hidden-line and technical draws are clipped too, and the Lambert bit is untouched.
+        let mut h = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_HIDDEN_LINE, [0.0; 3]);
+        fill_draw(&mut h, &f, &scene, "wall");
+        assert_eq!(h.flags & PBR_FLAG_CLIP, PBR_FLAG_CLIP);
+        assert_eq!(p.flags & PBR_FLAG_LAMBERT, 0);
+        // No box: the draw is exactly as it was made.
+        let mut none = FrameLook::default();
+        lighting.look.clip = None;
+        lighting.look.near_clip = None;
+        view_look(&mut none, &lighting);
+        assert_eq!((none.clip, none.near), (None, None));
+        let mut q = before;
+        fill_draw(&mut q, &none, &scene, "wall");
+        assert_eq!(bytemuck::bytes_of(&before), bytemuck::bytes_of(&q));
+        // Hostile values are ignored, never clamped.
+        lighting.look.clip = Some(ClipBox { min: [f64::NAN, 0.0, 0.0], max: [1.0; 3], ..Default::default() });
+        for near in [0.0, -1.0, f64::NAN, 1.0e6] {
+            lighting.look.near_clip = Some(near);
+            let mut g = FrameLook::default();
+            view_look(&mut g, &lighting);
+            assert_eq!((g.clip, g.near), (None, None), "near {near}");
+        }
     }
 
     #[test]
