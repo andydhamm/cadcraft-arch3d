@@ -89,6 +89,20 @@ pub(crate) fn parse_adapter(s: &str) -> Option<AdapterChoice> {
     AdapterChoice::parse(s)
 }
 
+/// Whether `t` is a valid time: `solar-noon` or `HH:MM` with 0 ≤ HH ≤ 23 and 0 ≤ MM ≤ 59.
+fn valid_time(t: &str) -> bool {
+    if t == "solar-noon" {
+        return true;
+    }
+    let parts: Vec<&str> = t.split(':').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    let h: u32 = parts[0].parse().ok()?;
+    let m: u32 = parts[1].parse().ok()?;
+    h < 24 && m < 60
+}
+
 /// Parse `date=YYYY-MM-DD,time=solar-noon|HH:MM[,lat=DEG]` into `(lat, date, time)`. `date`
 /// and `time` are always required; `lat` is optional (render falls back to the site latitude
 /// when it is missing). When `lat` is given the sun must be computable for the triple; unknown
@@ -105,6 +119,9 @@ pub(crate) fn parse_sun(s: &str) -> Option<(Option<f64>, String, String)> {
         }
     }
     let (date, time) = (date?, time?);
+    if !valid_time(&time) {
+        return None;
+    }
     if let Some(lat) = lat {
         cadcraft_arch::sun::sun_position(lat, &date, &time)?;
     }
