@@ -312,6 +312,87 @@ fn mspace_edits_model_through_viewport() {
     assert!(s.state().unwrap().mspace.is_none());
 }
 
+/// A drawing with layouts `A101`..`A103` and arch sheets of the same names, in that order.
+fn session_with_sheets() -> Option<Session> {
+    super::super::file::set_io(super::super::file::IoHooks {
+        read: |_, _| Err("no reader in tests".into()),
+        write: |_, _| Err("no writer in tests".into()),
+        plot: Some(fake_plot),
+    });
+    io().and_then(|h| h.plot)?;
+    let mut s = session_with_model();
+    for n in ["A101", "A102", "A103"] {
+        s.execute("layout.new", &json!({"name": n})).ok()?;
+        s.doc_mut().ok()?.arch.sheets.push(cadcraft_doc::arch::Sheet { name: n.into(), number: n.into(), ..Default::default() });
+    }
+    Some(s)
+}
+
+/// The `layouts` list the fake plotter received.
+fn plotted_layouts(r: &Value) -> Vec<String> {
+    let bytes = super::super::file::base64_decode(r["data"].as_str().unwrap_or("")).unwrap_or_default();
+    let text = String::from_utf8_lossy(&bytes).to_string();
+    let at = text.find("\"layouts\":[").map(|i| i + 11).unwrap_or(0);
+    let rest = text.get(at..).unwrap_or("");
+    let end = rest.find(']').unwrap_or(0);
+    rest.get(..end).unwrap_or("").split(',').map(|n| n.trim_matches('"').to_string()).collect()
+}
+
+#[test]
+fn plot_sheets_all_is_one_pdf_in_sheet_order() {
+    let Some(mut s) = session_with_sheets() else { return };
+    let r = s.execute("plot", &json!({"sheets": "all"})).unwrap();
+    assert_eq!(r["pages"], 3);
+    assert_eq!(r["layout"], "A101");
+    assert_eq!(plotted_layouts(&r), ["A101", "A102", "A103"]);
+    let r = s.execute("exportpdf", &json!({"sheets": "ALL"})).unwrap();
+    assert_eq!(r["pages"], 3);
+}
+
+#[test]
+fn plot_sheets_list_keeps_its_order() {
+    let Some(mut s) = session_with_sheets() else { return };
+    let r = s.execute("plot", &json!({"sheets": ["a103", "A101"]})).unwrap();
+    assert_eq!(r["pages"], 2);
+    assert_eq!(plotted_layouts(&r), ["A103", "A101"]);
+}
+
+#[test]
+fn plot_sheets_refusals() {
+    let Some(mut s) = session_with_sheets() else { return };
+    let bad_params = [
+        json!({"sheets": "some"}),
+        json!({"sheets": 3}),
+        json!({"sheets": []}),
+        json!({"sheets": [1]}),
+        json!({"sheets": ["Nope"]}),
+        json!({"sheets": ["A101", "a101"]}),
+        json!({"sheets": "all", "layout": "A101"}),
+        json!({"sheets": "all", "layouts": "all"}),
+        json!({"sheets": "all", "output": "png"}),
+    ];
+    for p in bad_params {
+        assert!(s.execute("plot", &p).is_err(), "{p}");
+    }
+    // A sheet whose layout is gone is refused naming it.
+    s.execute("layout.delete", &json!({"name": "A102"})).unwrap();
+    let e = s.execute("plot", &json!({"sheets": "all"})).unwrap_err().to_string();
+    assert!(e.contains("A102"), "{e}");
+    // No sheets at all.
+    s.doc_mut().unwrap().arch.sheets.clear();
+    let e = s.execute("plot", &json!({"sheets": "all"})).unwrap_err().to_string();
+    assert!(e.contains("no sheets"), "{e}");
+}
+
+#[test]
+fn sheet_order_follows_the_model() {
+    let Some(mut s) = session_with_sheets() else { return };
+    s.doc_mut().unwrap().arch.sheets.reverse();
+    let r = s.execute("plot", &json!({"sheets": "all"})).unwrap();
+    assert_eq!(plotted_layouts(&r), ["A103", "A102", "A101"]);
+    assert_eq!(r["layout"], "A103");
+}
+
 /// PLOT and EXPORTPDF help name the `device` parameter, and PLOT's help every built-in device (#2557).
 #[test]
 fn plot_help_names_the_device_and_the_built_in_devices() {
