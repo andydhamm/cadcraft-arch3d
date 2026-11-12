@@ -68,7 +68,7 @@ mod tests {
     }
 
     fn attach(corner: Corner) -> Option<NoteAttach> {
-        Some(NoteAttach { kind: ArchKind::Cabinet, object: ArchId(0), corner })
+        Some(NoteAttach { kind: ArchKind::Cabinet, object: ArchId(0), corner, ..Default::default() })
     }
 
     #[test]

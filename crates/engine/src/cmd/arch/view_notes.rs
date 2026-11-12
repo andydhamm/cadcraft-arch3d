@@ -92,7 +92,7 @@ fn attach_of(cmd: &str, key: &str, v: &Value) -> Result<NoteAttach> {
     let (kind, object) =
         parse_object(label).ok_or_else(|| bad(cmd, format!("`{key}.object` `{label}` is not a wall, opening, room, cabinet or fixture label")))?;
     let corner = o.get("corner").and_then(Value::as_str).and_then(Corner::from_key).ok_or_else(err)?;
-    Ok(NoteAttach { kind, object, corner })
+    Ok(NoteAttach { kind, object, corner, ..Default::default() })
 }
 
 /// A point given as view coordinates or as an attachment.
