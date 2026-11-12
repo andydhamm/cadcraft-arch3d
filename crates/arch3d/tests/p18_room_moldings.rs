@@ -13,7 +13,12 @@ fn test_model() -> ArchModel {
         room_type: RoomType::Living,
         level: 0,
         ceiling_height: Some(2.4),
-        moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: Default::default(), offset: 0.0, ..Default::default() }],
+        moldings: vec![RoomMolding {
+            kind: MoldingKind::Base,
+            profile: cadcraft_arch::molding_profile::default_profile(MoldingKind::Base),
+            offset: 0.0,
+            ..Default::default()
+        }],
         ..Room::default()
     };
     model.push_room(room.clone());
@@ -62,7 +67,12 @@ fn base_mesh_probes() {
 #[test]
 fn crown_is_a_closed_ring_mesh() {
     let mut model = test_model();
-    model.rooms[0].moldings = vec![RoomMolding { kind: MoldingKind::Crown, profile: Default::default(), offset: 0.0, ..Default::default() }];
+    model.rooms[0].moldings = vec![RoomMolding {
+        kind: MoldingKind::Crown,
+        profile: cadcraft_arch::molding_profile::default_profile(MoldingKind::Crown),
+        offset: 0.0,
+        ..Default::default()
+    }];
 
     let scene = build(&model);
     let molding_mesh = scene.meshes.iter().find(|m| m.material.starts_with("molding-room-crown")).expect("crown mesh");

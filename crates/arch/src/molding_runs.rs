@@ -1,6 +1,6 @@
 //! Room molding runs (phase 18): the resolved paths a room's moldings follow.
 
-use crate::poly::ring_area;
+use crate::join::polygon_area;
 use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding, Wall};
 use cadcraft_geom::Vec2;
 
@@ -88,7 +88,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
         let mut room_poly = room.polygon.clone();
         if !room_poly.is_empty() {
             // Ensure CCW
-            if ring_area(&room_poly) < 0.0 {
+            if polygon_area(&room_poly) < 0.0 {
                 room_poly.reverse();
             }
             rings.push((room_poly, true));
@@ -97,7 +97,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             let mut h = hole.clone();
             if h.len() >= 3 {
                 // Ensure CW
-                if ring_area(&h) > 0.0 {
+                if polygon_area(&h) > 0.0 {
                     h.reverse();
                 }
                 rings.push((h, false));
@@ -111,9 +111,10 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             }
             let mut pieces: Vec<(f64, f64, usize)> = Vec::new(); // (t_start, t_end, edge_idx)
 
-            for (ei, edge) in ring.windows(2).enumerate() {
-                let a = edge[0];
-                let b = edge[1];
+            let n = ring.len();
+            for ei in 0..n {
+                let a = ring[ei];
+                let b = ring[(ei + 1) % n];
                 let edge_vec = b - a;
                 let l = edge_vec.len();
                 if l <= 1e-9 {
@@ -133,7 +134,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     // Check level
                     let on_level = if w.base_level == room.level {
                         true
-                    } else if let Some(top_level_idx) = w.top_level {
+                    } else if w.top_level.is_some() {
                         if let Some(level) = model.level(room.level) { w.spans_level(level, &model.levels) } else { false }
                     } else {
                         false
@@ -275,67 +276,67 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             // Sort pieces by edge index and start
             pieces.sort_by(|a, b| a.2.cmp(&b.2).then(a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)));
 
-            // Group consecutive pieces into runs
-            let mut current_run: Option<(Vec<Vec2>, Vec<f64>, usize)> = None; // path, z, start_edge
-
-            for (t0, t1, ei) in pieces {
+            let is_end = |t: f64, ei: usize| -> bool {
                 let a = ring[ei];
-                let b = ring[(ei + 1) % ring.len()];
-                let edge_vec = b - a;
-                let l = edge_vec.len();
-                if l <= 1e-9 {
-                    continue;
-                }
-                let unit = edge_vec / l;
-
-                let p0 = a + unit * t0;
-                let p1 = a + unit * t1;
-
-                if let Some(ref mut run) = current_run {
-                    // Check if this piece continues the run
-                    let prev_ei = run.2;
-                    let prev_end = ring[(prev_ei + 1) % ring.len()];
-                    // Continuity: next edge index is prev + 1, and start is near prev end
-                    let is_cont = (ei == (prev_ei + 1) % ring.len()) && ((t0.abs() < 1e-9) || ((p0 - prev_end).len() < 1e-9));
-
-                    if is_cont {
-                        // Append p1, but avoid duplicate vertex if p0 == prev_end
-                        if (p0 - prev_end).len() > 1e-9 {
-                            run.0.push(p0);
-                            run.1.push(z0);
-                        }
-                        run.0.push(p1);
-                        run.1.push(z0);
-                        run.2 = ei;
-                    } else {
-                        // Finalize current run
-                        let (path, z, _) = current_run.take().unwrap();
-                        if path.len() >= 2 {
-                            runs.push(MoldingRun {
-                                kind: molding.kind,
-                                index: idx,
-                                profile: molding.profile.clone(),
-                                path,
-                                z,
-                                closed: false,
-                                side: 1.0,
-                            });
-                        }
-                        // Start new run
-                        current_run = Some((vec![p0, p1], vec![z0, z0], ei));
-                    }
-                } else {
-                    current_run = Some((vec![p0, p1], vec![z0, z0], ei));
+                let b = ring[(ei + 1) % n];
+                (t - (b - a).len()).abs() <= 1e-9
+            };
+            // One full piece per edge: one closed run starting at ring vertex 0.
+            let full = pieces.len() == n && pieces.iter().enumerate().all(|(k, (t0, t1, ei))| *ei == k && t0.abs() <= 1e-9 && is_end(*t1, *ei));
+            if full {
+                runs.push(MoldingRun {
+                    kind: molding.kind,
+                    index: idx,
+                    profile: molding.profile.clone(),
+                    path: ring.clone(),
+                    z: vec![z0; n],
+                    closed: true,
+                    side: 1.0,
+                });
+                continue;
+            }
+            let mut groups: Vec<Vec<usize>> = Vec::new();
+            for k in 0..pieces.len() {
+                let joins = k > 0 && {
+                    let (_, pt1, pei) = pieces[k - 1];
+                    let (qt0, _, qei) = pieces[k];
+                    is_end(pt1, pei) && qt0.abs() <= 1e-9 && qei == (pei + 1) % n
+                };
+                match groups.last_mut() {
+                    Some(g) if joins => g.push(k),
+                    _ => groups.push(vec![k]),
                 }
             }
-
-            // Finalize last run
-            if let Some((path, z, _)) = current_run {
+            // Wrap-around: the last group continues into the first.
+            if groups.len() > 1 {
+                let (lt1, lei) = pieces.last().map(|p| (p.1, p.2)).unwrap_or((0.0, 0));
+                let (ft0, fei) = pieces.first().map(|p| (p.0, p.2)).unwrap_or((1.0, 0));
+                if is_end(lt1, lei) && ft0.abs() <= 1e-9 && fei == (lei + 1) % n {
+                    let first = groups.remove(0);
+                    if let Some(last) = groups.last_mut() {
+                        last.extend(first);
+                    }
+                }
+            }
+            for g in groups {
+                let mut path: Vec<Vec2> = Vec::new();
+                for (gi, k) in g.iter().enumerate() {
+                    let (t0, t1, ei) = pieces[*k];
+                    let a = ring[ei];
+                    let b = ring[(ei + 1) % n];
+                    let l = (b - a).len();
+                    if l <= 1e-9 {
+                        continue;
+                    }
+                    let unit = (b - a) / l;
+                    if gi == 0 {
+                        path.push(a + unit * t0);
+                    }
+                    path.push(if is_end(t1, ei) { b } else { a + unit * t1 });
+                }
                 if path.len() >= 2 {
-                    // Check if it's a closed ring
-                    // A closed ring run covers all edges without breaks
-                    let is_closed = is_outer && path.len() == ring.len() + 1 && (path[0] - path[path.len() - 1]).len() < 1e-6;
-                    runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: is_closed, side: 1.0 });
+                    let z = vec![z0; path.len()];
+                    runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: false, side: 1.0 });
                 }
             }
         }
@@ -398,7 +399,12 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Base,
+                profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -439,7 +445,12 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -468,8 +479,18 @@ mod tests {
             level: 0,
             ceiling_height: Some(2.4),
             moldings: vec![
-                RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() },
-                RoomMolding { kind: MoldingKind::Chair, profile: MoldingProfile::default(), offset: 0.9, ..Default::default() },
+                RoomMolding {
+                    kind: MoldingKind::Base,
+                    profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                    offset: 0.0,
+                    ..Default::default()
+                },
+                RoomMolding {
+                    kind: MoldingKind::Chair,
+                    profile: crate::molding_profile::default_profile(MoldingKind::Chair),
+                    offset: 0.9,
+                    ..Default::default()
+                },
             ],
             ..Room::default()
         };
@@ -527,7 +548,12 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Base,
+                profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -551,8 +577,12 @@ mod tests {
 
         let runs = room_runs(&model, &room);
         let base_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Base).collect();
-        // Should have 2 runs on the south wall (before and after door)
-        assert!(base_runs.len() >= 2);
+        // The pieces before and after the door join round the ring into one open run.
+        assert_eq!(base_runs.len(), 1);
+        assert!(!base_runs[0].closed);
+        let (first, last) = (base_runs[0].path[0], base_runs[0].path[base_runs[0].path.len() - 1]);
+        assert!((first.x - 2.48).abs() < 1e-9 && (first.y - 0.1).abs() < 1e-9);
+        assert!((last.x - 1.52).abs() < 1e-9 && (last.y - 0.1).abs() < 1e-9);
     }
 
     #[test]
@@ -566,7 +596,12 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Base,
+                profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -595,7 +630,12 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Base,
+                profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -628,9 +668,24 @@ mod tests {
             level: 0,
             ceiling_height: Some(2.4),
             moldings: vec![
-                RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() },
-                RoomMolding { kind: MoldingKind::Chair, profile: MoldingProfile::default(), offset: 0.9, ..Default::default() },
-                RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() },
+                RoomMolding {
+                    kind: MoldingKind::Base,
+                    profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                    offset: 0.0,
+                    ..Default::default()
+                },
+                RoomMolding {
+                    kind: MoldingKind::Chair,
+                    profile: crate::molding_profile::default_profile(MoldingKind::Chair),
+                    offset: 0.9,
+                    ..Default::default()
+                },
+                RoomMolding {
+                    kind: MoldingKind::Crown,
+                    profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                    offset: 0.0,
+                    ..Default::default()
+                },
             ],
             ..Room::default()
         };
@@ -662,10 +717,15 @@ mod tests {
         let room_poly = vec![Vec2::new(0.1, 0.1), Vec2::new(4.1, 0.1), Vec2::new(4.1, 3.1), Vec2::new(0.1, 3.1)];
         let room = Room {
             polygon: room_poly,
-            room_type: RoomType::OpenBelow,
+            room_type: RoomType::Deck,
             level: 0,
             ceiling_height: None,
-            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -691,7 +751,12 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Base, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Base,
+                profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -711,7 +776,12 @@ mod tests {
             room_type: RoomType::Living,
             level: 0,
             ceiling_height: Some(2.4),
-            moldings: vec![RoomMolding { kind: MoldingKind::Crown, profile: MoldingProfile::default(), offset: 0.0, ..Default::default() }],
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.0,
+                ..Default::default()
+            }],
             ..Room::default()
         };
         model.push_room(room.clone());
@@ -725,7 +795,9 @@ mod tests {
         let runs = room_runs(&model, &room);
         let crown_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Crown).collect();
         // The low wall should not carry crown molding
-        assert!(crown_runs.is_empty() || crown_runs.iter().all(|r| !r.path.iter().any(|p| p.y < 0.15)));
+        // No segment runs along the low south wall (y = 0.1).
+        assert!(!crown_runs.is_empty());
+        assert!(crown_runs.iter().all(|r| r.path.windows(2).all(|s| !(s[0].y < 0.15 && s[1].y < 0.15))));
     }
 
     #[test]

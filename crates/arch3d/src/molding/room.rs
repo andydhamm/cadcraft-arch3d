@@ -67,7 +67,7 @@ mod tests {
         let runs = vec![MoldingRun {
             kind: MoldingKind::Base,
             index: 0,
-            profile: Default::default(),
+            profile: cadcraft_arch::molding_profile::default_profile(MoldingKind::Base),
             path: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)],
             z: vec![0.0, 0.0],
             closed: false,
@@ -85,7 +85,7 @@ mod tests {
         let runs = vec![MoldingRun {
             kind: MoldingKind::Crown,
             index: 0,
-            profile: Default::default(),
+            profile: cadcraft_arch::molding_profile::default_profile(MoldingKind::Crown),
             path: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)],
             z: vec![2.4, 2.4, 2.4, 2.4],
             closed: true,
