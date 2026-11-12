@@ -58,6 +58,7 @@ pub mod room_moldings;
 pub mod roomdetect;
 pub mod sample;
 pub mod sheet;
+pub(crate) mod sheet_inspect;
 pub mod site;
 pub(crate) mod site_inspect;
 pub mod soffit;
