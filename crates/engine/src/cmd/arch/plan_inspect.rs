@@ -94,7 +94,14 @@ pub(crate) fn inspect_plan(m: &ArchModel, p: &Value, out: &mut JsonMap<String, V
         }
         Some(_) => return Err(bad("arch.inspect", "`plan` must be true or the name of a plan view")),
     };
-    let a = annotate(m, view, level);
+    let a = if view.is_none() {
+        let mut a = annotate(m, None, level);
+        a.labels.clear();
+        cadcraft_arch::plan::labels::room_labels(m, level, cadcraft_doc::arch::RoomLabelShow::default(), &mut a);
+        a
+    } else {
+        annotate(m, view, level)
+    };
     out.insert("plan".to_string(), plan_json(view, level, &a));
     Ok(())
 }
