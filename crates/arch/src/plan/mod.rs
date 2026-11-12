@@ -364,7 +364,7 @@ mod tests {
             edges: vec![RoofEdge { kind: RoofEdgeKind::Ridge, a: Vec2::ZERO, b: Vec2::new(4.0, 0.0), ..RoofEdge::default() }],
             ..Roof::default()
         });
-        m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 3.0), name: "A".into(), ..Room::default() });
+        m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 3.0), name: "A".into(), interior_area: 12.0, ..Room::default() });
         let none = annotate(&m, None, None);
         assert_eq!(none.lines.len(), 1);
         assert_eq!(none.lines[0].handle, roof_handle(rid));
@@ -380,7 +380,7 @@ mod tests {
         // A level other than the room's drops its label.
         assert!(annotate(&m, None, Some(1)).labels.is_empty());
         let mut v = PlanView::default();
-        v.labels = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false };
+        v.labels = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, ..Default::default() };
         assert!(annotate(&m, Some(&v), None).labels.is_empty());
         // active_view / opened_level.
         assert!(active_view(&m).is_none());

@@ -208,7 +208,8 @@ mod tests {
         let r = s.execute("arch.inspect", &json!({"plan": "floor plan"})).unwrap();
         assert_eq!(r["plan"]["view"], "Floor Plan");
         assert_eq!(r["plan"]["level"], 1);
-        assert_eq!(texts(&r["plan"]), vec!["Up"]);
+        // Floor Plan shows name, area, dimensions.
+        assert_eq!(texts(&r["plan"]), vec!["Up", "0.00 m2", "4.00 x 3.00"]);
         let r = s.execute("arch.inspect", &json!({"plan": "Roof Plan"})).unwrap();
         assert_eq!(r["plan"]["kind"], "roof");
         assert_eq!(r["plan"]["lines"].as_array().map(Vec::len), Some(1));
@@ -257,9 +258,10 @@ mod tests {
         }
         let r = s.execute("arch.inspect", &json!({"plan": true})).unwrap();
         assert_eq!(r["plan"]["level"], 0);
-        assert_eq!(texts(&r["plan"]), vec!["Down"]);
+        // Floor Plan shows name, area, dimensions.
+        assert_eq!(texts(&r["plan"]), vec!["Down", "0.00 m2", "4.00 x 3.00"]);
         let r = s.execute("arch.inspect", &json!({"plan": "Floor Plan"})).unwrap();
         assert_eq!(r["plan"]["level"], 1);
-        assert_eq!(texts(&r["plan"]), vec!["Up"]);
+        assert_eq!(texts(&r["plan"]), vec!["Up", "0.00 m2", "4.00 x 3.00"]);
     }
 }
