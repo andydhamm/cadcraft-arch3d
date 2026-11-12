@@ -22,6 +22,10 @@ pub fn sample_files() -> &'static [(&'static str, &'static [u8])] {
         ("dresser-6-drawers.glb", include_bytes!("../../../assets/library/sample/dresser-6-drawers.glb")),
         ("faucet-bathroom-chrome.glb", include_bytes!("../../../assets/library/sample/faucet-bathroom-chrome.glb")),
         ("faucet-kitchen-chrome.glb", include_bytes!("../../../assets/library/sample/faucet-kitchen-chrome.glb")),
+        (
+            "hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+            include_bytes!("../../../assets/library/sample/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr"),
+        ),
         ("lamp-desk.glb", include_bytes!("../../../assets/library/sample/lamp-desk.glb")),
         ("lamp-floor.glb", include_bytes!("../../../assets/library/sample/lamp-floor.glb")),
         ("lavatory-small.glb", include_bytes!("../../../assets/library/sample/lavatory-small.glb")),
