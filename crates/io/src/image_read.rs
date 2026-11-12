@@ -143,8 +143,16 @@ mod tests {
 
     fn encode(img: &image::RgbaImage, f: image::ImageFormat) -> Vec<u8> {
         let mut out = Vec::new();
-        let mut cursor = std::io::Cursor::new(&mut out);
-        assert!(img.write_to(&mut cursor, f).is_ok());
+        match f {
+            image::ImageFormat::Png => {
+                img.write_to(&mut out, f).expect("PNG encode");
+            }
+            image::ImageFormat::Jpeg => {
+                let rgb = img.to_rgb8();
+                rgb.write_to(&mut out, f).expect("JPEG encode");
+            }
+            _ => panic!("unsupported format in test"),
+        }
         out
     }
 
