@@ -404,6 +404,13 @@ pub const MIN_WALL_THICKNESS: f64 = 1e-4;
 /// Minimum wall length, in metres.
 pub const MIN_WALL_LENGTH: f64 = 1e-6;
 
+/// Builtin wall type for clear glass partitions.
+pub const GLASS_WALL_TYPE: &str = "Glass";
+/// Clear glass thickness, in metres.
+pub const GLASS_THICKNESS: f64 = 0.01;
+/// Default glass wall height, in metres.
+pub const GLASS_WALL_HEIGHT: f64 = 2.0;
+
 /// Maximum number of openings in a drawing.
 pub const MAX_OPENINGS: usize = 8192;
 
@@ -488,6 +495,30 @@ pub struct Wall {
     /// ring).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finish: Option<Finish>,
+    /// Optional split: a lower wall section with a distinct upper type (e.g. a pony wall).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split: Option<WallSplit>,
+}
+
+/// A split wall: a lower wall section with a glass or solid upper section.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WallSplit {
+    pub height: f64,
+    pub upper: String,
+    pub upper_thickness: f64,
+}
+
+pub fn is_glass_type(name: &str) -> bool {
+    name.trim().eq_ignore_ascii_case(GLASS_WALL_TYPE)
+}
+
+pub fn glass_wall_type() -> WallType {
+    WallType {
+        name: GLASS_WALL_TYPE.to_string(),
+        layers: vec![WallLayer { name: "glass".to_string(), thickness: GLASS_THICKNESS, material: "glass".to_string() }],
+        reference: RefSide::Centre,
+    }
 }
 
 fn default_wall_type() -> String {
@@ -497,7 +528,7 @@ fn default_wall_type() -> String {
 /// A builtin wall-type name always accepted even without a `WallType` entry in
 /// `ArchModel::types` (matches the names the `wall` command can store).
 fn is_builtin_wall_type(name: &str) -> bool {
-    matches!(name.to_lowercase().as_str(), "exterior" | "interior" | "knee" | "railing" | "retaining")
+    matches!(name.to_lowercase().as_str(), "exterior" | "interior" | "knee" | "railing" | "retaining" | "glass")
 }
 
 impl Wall {
@@ -526,7 +557,18 @@ impl Wall {
             freeboard: None,
             footing: None,
             finish: None,
+            split: None,
         }
+    }
+
+    /// Whether this wall is a glass wall with no split.
+    pub fn is_glass(&self) -> bool {
+        self.split.is_none() && is_glass_type(&self.wall_type)
+    }
+
+    /// Whether this wall's upper split is glass.
+    pub fn upper_is_glass(&self) -> bool {
+        self.split.as_ref().is_some_and(|s| is_glass_type(&s.upper))
     }
 
     /// Elevation of the floor at which this wall sits (its base level's elevation).
@@ -587,6 +629,7 @@ impl Default for Wall {
             freeboard: None,
             footing: None,
             finish: None,
+            split: None,
         }
     }
 }
@@ -3392,6 +3435,32 @@ mod tests {
     fn wall_type_lookup_is_case_insensitive() {
         let m = ArchModel::default();
         assert!(m.wall_type("exterior").is_some());
+    }
+
+    #[test]
+    fn wall_without_split_writes_the_same_json() {
+        let wall = Wall { wall_type: GLASS_WALL_TYPE.to_string(), thickness: GLASS_THICKNESS, height: GLASS_WALL_HEIGHT, ..Wall::default() };
+        let json = serde_json::to_value(&wall).unwrap();
+        assert!(json.get("split").is_none(), "glass walls with no split omit the field: {json}");
+    }
+
+    #[test]
+    fn is_glass_type_any_case() {
+        assert!(is_glass_type("glass"));
+        assert!(is_glass_type("GLASS"));
+        assert!(is_glass_type("Glass"));
+        assert!(!is_glass_type("wood"));
+    }
+
+    #[test]
+    fn glass_wall_type_layers() {
+        let t = glass_wall_type();
+        assert_eq!(t.name, GLASS_WALL_TYPE);
+        assert_eq!(t.layers.len(), 1);
+        assert_eq!(t.layers[0].name, "glass");
+        assert_eq!(t.layers[0].thickness, GLASS_THICKNESS);
+        assert_eq!(t.layers[0].material, "glass");
+        assert_eq!(t.reference, RefSide::Centre);
     }
 
     #[test]
