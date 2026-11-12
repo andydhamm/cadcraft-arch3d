@@ -486,16 +486,24 @@ impl DimStyle {
 
     /// Set fields from a JSON object of field or DIM* variable names (numbers, booleans as
     /// 0/1, colours as ACI numbers or names). Returns the names that were not recognised or
-    /// had unusable values.
+    /// had unusable values. When several spellings name one field, the last one wins and the
+    /// superseded ones are not validated.
     pub fn apply_fields(&mut self, src: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
         use serde_json::Value;
         let mut rejected = Vec::new();
         let Ok(mut cur) = serde_json::to_value(&*self) else { return src.keys().cloned().collect() };
+        // Spellings of one field (`DIMPOST`, `dimpost`, `textPrefix`…): only the last is applied, so
+        // the style is checked once per field, not once per spelling (each check copies its strings).
+        let last_spelling: std::collections::HashMap<&str, &String> =
+            src.keys().filter_map(|k| DimStyle::field_name(k).filter(|f| *f != "name").map(|f| (f, k))).collect();
         for (k, v) in src {
             let Some(field) = DimStyle::field_name(k).filter(|f| *f != "name") else {
                 rejected.push(k.clone());
                 continue;
             };
+            if last_spelling.get(field) != Some(&k) {
+                continue;
+            }
             let Some(obj) = cur.as_object_mut() else { break };
             let Some(old) = obj.get(field).cloned() else {
                 rejected.push(k.clone());
@@ -946,6 +954,100 @@ pub struct LayerState {
 pub const MAX_LAYER_RULES: usize = 256;
 pub const MAX_LAYER_PATTERN: usize = 255;
 
+/// Longest layer name a rule is matched against.
+const MAX_MATCH_NAME: usize = 255;
+
+/// Whether `name` matches `pattern`, ignoring case: `*` stands for any run of characters (also
+/// none) and `?` for exactly one. Iterative with backtracking to the last star, so it takes
+/// O(pattern x name) time and no stack; a pattern over [`MAX_LAYER_PATTERN`] characters or a
+/// name over 255 never matches.
+pub fn wildcard_match(pattern: &str, name: &str) -> bool {
+    if pattern.chars().count() > MAX_LAYER_PATTERN || name.chars().count() > MAX_MATCH_NAME {
+        return false;
+    }
+    let fold = |s: &str| -> Vec<char> { s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect() };
+    let (p, n) = (fold(pattern), fold(name));
+    let (mut pi, mut ni) = (0usize, 0usize);
+    let mut star: Option<(usize, usize)> = None;
+    while ni < n.len() {
+        match p.get(pi) {
+            Some('*') => {
+                star = Some((pi, ni));
+                pi += 1;
+            }
+            Some(&c) if c == '?' || Some(&c) == n.get(ni) => {
+                pi += 1;
+                ni += 1;
+            }
+            _ => match star {
+                Some((sp, sn)) => {
+                    pi = sp + 1;
+                    ni = sn + 1;
+                    star = Some((sp, sn + 1));
+                }
+                None => return false,
+            },
+        }
+    }
+    while p.get(pi) == Some(&'*') {
+        pi += 1;
+    }
+    pi == p.len()
+}
+
+impl LayerState {
+    /// Apply this state to `layers`: each saved layer replaces the first layer of the same name
+    /// (case-insensitive) whole; every layer the snapshot does not name takes the last matching
+    /// rule (of the first [`MAX_LAYER_RULES`]): `on: true` turns it on and thaws it, `on: false`
+    /// turns it off (frozen is left), a transparency is capped at 90. Returns how many layers
+    /// changed.
+    pub fn apply(&self, layers: &mut [Layer]) -> usize {
+        let mut index: std::collections::HashMap<String, usize> = std::collections::HashMap::with_capacity(layers.len());
+        for (i, l) in layers.iter().enumerate() {
+            index.entry(l.name.to_ascii_lowercase()).or_insert(i);
+        }
+        let mut named = std::collections::HashSet::new();
+        let mut changed = 0;
+        for saved in &self.layers {
+            if let Some(i) = index.get(&saved.name.to_ascii_lowercase()).copied()
+                && let Some(l) = layers.get_mut(i)
+            {
+                named.insert(i);
+                if *l != *saved {
+                    *l = saved.clone();
+                    changed += 1;
+                }
+            }
+        }
+        let rules = self.rules.get(..MAX_LAYER_RULES).unwrap_or(&self.rules);
+        if rules.is_empty() {
+            return changed;
+        }
+        for (i, l) in layers.iter_mut().enumerate() {
+            if named.contains(&i) {
+                continue;
+            }
+            let Some(rule) = rules.iter().rev().find(|r| wildcard_match(&r.pattern, &l.name)) else { continue };
+            let before = (l.on, l.frozen, l.transparency);
+            match rule.on {
+                Some(true) => {
+                    l.on = true;
+                    l.frozen = false;
+                }
+                Some(false) => l.on = false,
+                None => {}
+            }
+            if let Some(t) = rule.transparency {
+                l.transparency = t.min(90);
+            }
+            if before != (l.on, l.frozen, l.transparency) {
+                changed += 1;
+            }
+        }
+        changed
+    }
+}
+
 /// A named group of entities (GROUP).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Group {
@@ -957,3 +1059,87 @@ pub struct Group {
 
 /// Shared ownership helper: blocks are cloned on write.
 pub type BlockRef = Arc<Block>;
+
+#[cfg(test)]
+mod rule_tests {
+    use super::*;
+
+    fn rule(pattern: &str, on: Option<bool>, transparency: Option<u8>) -> LayerRule {
+        LayerRule { pattern: pattern.into(), on, transparency }
+    }
+
+    fn layer(name: &str, on: bool, frozen: bool, transparency: u8) -> Layer {
+        Layer { on, frozen, transparency, ..Layer::new(name) }
+    }
+
+    #[test]
+    fn wildcard_match_cases() {
+        assert!(wildcard_match("*", ""));
+        assert!(wildcard_match("*", "A-WALL"));
+        assert!(wildcard_match("a-wall", "A-WALL"));
+        assert!(wildcard_match("A-ROOF*", "a-roof-anno"));
+        assert!(wildcard_match("A-ROOF*", "A-ROOF"));
+        assert!(!wildcard_match("A-ROOF", "A-ROOF-ANNO"));
+        assert!(wildcard_match("A-?OOF", "A-ROOF"));
+        assert!(!wildcard_match("A-?OOF", "A-OOF"));
+        assert!(wildcard_match("*-ANNO-*", "A-ANNO-NOTE"));
+        assert!(wildcard_match("a*b*c", "aXXbYYc"));
+        assert!(!wildcard_match("a*b*c", "aXXbYY"));
+        assert!(wildcard_match("**x", "x"));
+        assert!(!wildcard_match("", "x"));
+        assert!(wildcard_match("", ""));
+        assert!(!wildcard_match(&"a".repeat(MAX_LAYER_PATTERN + 1), "a"));
+        assert!(!wildcard_match("*", &"a".repeat(256)));
+        assert!(wildcard_match(&"*a".repeat(100), &"a".repeat(200)));
+        assert!(!wildcard_match(&"*a".repeat(100), &format!("{}b", "a".repeat(200))));
+    }
+
+    #[test]
+    fn layer_state_apply_snapshot_then_rules() {
+        let mut layers = vec![layer("A-WALL", true, false, 0), layer("a-door", true, false, 0), layer("E-POWR", true, false, 0)];
+        let saved = Layer { on: false, transparency: 30, ..Layer::new("A-DOOR") };
+        let st = LayerState { name: "s".into(), layers: vec![saved], rules: vec![rule("*", Some(false), Some(10))] };
+        let n = st.apply(&mut layers);
+        assert_eq!(n, 3);
+        // The snapshot replaced the layer whole (name too); the rule did not touch it.
+        assert_eq!(layers[1].name, "A-DOOR");
+        assert!(!layers[1].on);
+        assert_eq!(layers[1].transparency, 30);
+        assert!(!layers[0].on && layers[0].transparency == 10);
+        assert!(!layers[2].on && layers[2].transparency == 10);
+    }
+
+    #[test]
+    fn layer_state_apply_last_rule_wins() {
+        let mut layers = vec![layer("A-WALL", true, false, 0), layer("E-POWR", true, false, 0)];
+        let st = LayerState {
+            name: "s".into(),
+            layers: Vec::new(),
+            rules: vec![rule("*", Some(false), Some(95)), rule("A-*", Some(true), None), rule("A-WALL", None, Some(60))],
+        };
+        st.apply(&mut layers);
+        assert_eq!((layers[0].on, layers[0].transparency), (true, 60));
+        assert_eq!((layers[1].on, layers[1].transparency), (false, 90));
+    }
+
+    #[test]
+    fn layer_state_apply_on_true_thaws_and_false_keeps_frozen() {
+        let mut layers = vec![layer("A", false, true, 0), layer("B", true, true, 0)];
+        let st = LayerState { name: "s".into(), layers: Vec::new(), rules: vec![rule("A", Some(true), None), rule("B", Some(false), None)] };
+        st.apply(&mut layers);
+        assert!(layers[0].on && !layers[0].frozen);
+        assert!(!layers[1].on && layers[1].frozen);
+    }
+
+    #[test]
+    fn electrical_template_rules_match_phase_15() {
+        let tpl = crate::arch::template_plan_views();
+        let v = tpl.iter().find(|v| v.name == "Electrical").cloned().unwrap_or_default();
+        assert_eq!(v.layers.rules.len(), 2);
+        let mut layers = vec![layer("A-WALL", true, true, 0), layer("A-DOOR", false, true, 0), layer("E-POWR", false, true, 0)];
+        v.layers.apply(&mut layers);
+        assert_eq!((layers[0].on, layers[0].frozen, layers[0].transparency), (true, true, 70));
+        assert_eq!((layers[1].on, layers[1].frozen, layers[1].transparency), (false, true, 70));
+        assert_eq!((layers[2].on, layers[2].frozen, layers[2].transparency), (true, false, 0));
+    }
+}

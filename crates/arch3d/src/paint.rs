@@ -247,6 +247,20 @@ pub fn materials(model: &ArchModel, scene: &mut Scene3d) {
                 scene.textures.insert(key, img.clone());
             }
         }
+        if let Some(key) = def.normal_texture.clone()
+            && !scene.textures.contains_key(&key)
+        {
+            if let Some(base) = key.strip_suffix(":normal").and_then(|s| s.strip_prefix("finish:")).and_then(Finish::parse) {
+                let t = crate::texture::normal_map(base);
+                let mut img = ImageRgba::default();
+                img.width = t.width;
+                img.height = t.height;
+                img.rgba = t.rgba;
+                scene.textures.insert(key, img);
+            } else if let Some(img) = model.images.get(&key) {
+                scene.textures.insert(key, img.clone());
+            }
+        }
         scene.materials.insert(name, def);
     }
 }

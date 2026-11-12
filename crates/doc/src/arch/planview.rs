@@ -46,11 +46,14 @@ pub struct RoomLabelShow {
     pub area: bool,
     pub dimensions: bool,
     pub ceiling: bool,
+    /// Schedule-number labels (phase 21); off by default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub numbers: bool,
 }
 
 impl Default for RoomLabelShow {
     fn default() -> Self {
-        Self { name: true, area: false, dimensions: false, ceiling: false }
+        Self { name: true, area: false, dimensions: false, ceiling: false, numbers: false }
     }
 }
 
@@ -189,7 +192,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
             kind: PlanKind::Floor,
             layers: LayerState { name: "Working".into(), layers: Vec::new(), rules: vec![rule("*", Some(true), Some(0))] },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: true, dimensions: false, ceiling: false },
+            labels: RoomLabelShow { name: true, area: true, dimensions: false, ceiling: false, numbers: false },
             reference: None,
             zoom: None,
         },
@@ -209,7 +212,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 ],
             },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: true, dimensions: true, ceiling: false },
+            labels: RoomLabelShow { name: true, area: true, dimensions: true, ceiling: false, numbers: false },
             reference: None,
             zoom: None,
         },
@@ -223,7 +226,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 rules: vec![rule("*", None, Some(70)), rule("E-*", Some(true), Some(0))],
             },
             annotation: AnnotationSet { layer: "E-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: false, dimensions: false, ceiling: false },
+            labels: RoomLabelShow { name: true, area: false, dimensions: false, ceiling: false, numbers: false },
             reference: None,
             zoom: None,
         },
@@ -248,7 +251,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 ],
             },
             annotation: AnnotationSet { layer: "A-CLNG-ANNO".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: false, dimensions: false, ceiling: true },
+            labels: RoomLabelShow { name: true, area: false, dimensions: false, ceiling: true, numbers: false },
             reference: None,
             zoom: None,
         },
@@ -269,7 +272,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 ],
             },
             annotation: AnnotationSet { layer: "A-ROOF-ANNO".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false },
+            labels: RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: false },
             reference: None,
             zoom: None,
         },
@@ -290,7 +293,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 ],
             },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: false, dimensions: true, ceiling: false },
+            labels: RoomLabelShow { name: true, area: false, dimensions: true, ceiling: false, numbers: false },
             reference: None,
             zoom: None,
         },
@@ -314,7 +317,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 ],
             },
             annotation: AnnotationSet { layer: "C-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false },
+            labels: RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: false },
             reference: None,
             zoom: None,
         },

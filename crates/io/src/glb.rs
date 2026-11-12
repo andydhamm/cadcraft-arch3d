@@ -240,7 +240,9 @@ fn paint_node_name(material: &str, object: cadcraft_doc::ArchId) -> String {
 }
 
 fn texture_image_name(key: &str) -> String {
-    if let Some(rest) = key.strip_prefix("sym:") {
+    if let Some(rest) = key.strip_suffix(":normal") {
+        format!("{}-normal", texture_image_name(rest))
+    } else if let Some(rest) = key.strip_prefix("sym:") {
         format!("sym-{}", rest.replace(':', "-"))
     } else if let Some(rest) = key.strip_prefix("item:") {
         rest.to_string()
@@ -337,6 +339,26 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                     }
                 }
             }
+            if let Some(tex) = &def.normal_texture {
+                if let Some(image) = scene.textures.get(tex) {
+                    if image.is_valid() {
+                        let key = tex.clone();
+                        if !texture_seen.contains_key(&key) {
+                            if let Ok(bytes) = crate::png::encode_rgba8(image.width, image.height, &image.rgba) {
+                                add_png(
+                                    &mut pngs,
+                                    &mut png_index,
+                                    &mut texture_order,
+                                    &mut texture_seen,
+                                    key.clone(),
+                                    bytes,
+                                    texture_image_name(&key),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -385,6 +407,19 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                                     "metallicFactor": d.metallic as f64,
                                     "roughnessFactor": d.roughness as f64,
                                 });
+                            }
+                        }
+                    }
+                }
+                if let Some(tex) = &d.normal_texture {
+                    if let Some(image) = scene.textures.get(tex) {
+                        if image.is_valid() {
+                            if let Some(index) = png_index.get(tex) {
+                                let mut normal = json!({ "index": *index });
+                                if d.normal_scale != 1.0 {
+                                    normal["scale"] = json!(d.normal_scale as f64);
+                                }
+                                mat["normalTexture"] = normal;
                             }
                         }
                     }
@@ -922,6 +957,55 @@ mod tests {
         let joist = &mats.iter().find(|m| m["name"] == "deck-joist").unwrap()["pbrMetallicRoughness"];
         assert!(joist.get("baseColorTexture").is_none());
         assert_eq!(node_names(&scene), ["deck-r4", "deck-r4-joists"]);
+    }
+
+    #[test]
+    fn normal_texture_for_brick_and_item_materials() {
+        let mut scene = Scene3d::default();
+        let mut brick = wall_mesh();
+        brick.material = "wall-brick".to_string();
+        brick.object = ArchId(1);
+        scene.materials.insert(
+            "wall-brick".to_string(),
+            MaterialDef {
+                base_color: [1.0; 4],
+                texture: Some("finish:brick".to_string()),
+                normal_texture: Some("finish:brick:normal".to_string()),
+                normal_scale: 1.5,
+                ..Default::default()
+            },
+        );
+        scene.textures.insert("finish:brick".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![255; 8 * 8 * 4], ..Default::default() });
+        scene.textures.insert("finish:brick:normal".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![128; 8 * 8 * 4], ..Default::default() });
+
+        let mut item = wall_mesh();
+        item.material = "paint:room/r0/floor".to_string();
+        item.object = ArchId(2);
+        scene.materials.insert(
+            "paint:room/r0/floor".to_string(),
+            MaterialDef {
+                base_color: [1.0; 4],
+                texture: Some("item:test-mat".to_string()),
+                normal_texture: Some("test-mat:normal".to_string()),
+                normal_scale: 1.0,
+                ..Default::default()
+            },
+        );
+        scene.textures.insert("item:test-mat".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![200; 8 * 8 * 4], ..Default::default() });
+        scene.textures.insert("test-mat:normal".to_string(), ImageRgba { width: 8, height: 8, rgba: vec![64; 8 * 8 * 4], ..Default::default() });
+        scene.meshes = vec![brick, item];
+
+        let json = glb_json_chunk(&write(&scene));
+        let names: Vec<&str> = json["images"].as_array().unwrap().iter().map(|v| v["name"].as_str().unwrap()).collect();
+        assert!(names.starts_with(&["brick", "brick-normal"]));
+        assert!(names.iter().any(|&name| name == "test-mat"));
+        assert!(names.iter().any(|&name| name == "test-mat-normal"));
+        let brick_mat = json["materials"].as_array().unwrap().iter().find(|m| m["name"] == "wall-brick").unwrap();
+        assert_eq!(brick_mat["normalTexture"]["index"], 1);
+        assert_eq!(brick_mat["normalTexture"]["scale"], 1.5);
+        let item_mat = json["materials"].as_array().unwrap().iter().find(|m| m["name"] == "paint:room/r0/floor").unwrap();
+        assert_eq!(item_mat["normalTexture"]["index"], 3);
+        assert_eq!(item_mat["normalTexture"].get("scale"), None);
     }
 
     #[test]

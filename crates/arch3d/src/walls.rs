@@ -4,7 +4,6 @@ use crate::mesh::Mesh;
 use crate::roof::underside_z;
 
 use cadcraft_arch::join::WallShape;
-use cadcraft_arch::opening::ROUGH_ALLOWANCE;
 use cadcraft_doc::ArchId;
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{Opening, OpeningKind, OpeningTop, Wall};
@@ -74,11 +73,12 @@ pub(crate) fn opening_holes(openings: &[&Opening], base: f64, _len: f64, _max_v:
     let mut holes = Vec::new();
     for op in openings {
         let rect = if op.top == OpeningTop::Square {
-            let half = (op.width + ROUGH_ALLOWANCE) / 2.0;
+            let allowance = cadcraft_arch::opening::cut_allowance(op);
+            let half = (op.width + allowance) / 2.0;
             let u0 = op.offset - half;
             let u1 = op.offset + half;
             let v0 = op.sill - base;
-            let v1 = op.sill + op.height + ROUGH_ALLOWANCE - base;
+            let v1 = op.sill + op.height + allowance - base;
 
             if !u0.is_finite() || !u1.is_finite() || !v0.is_finite() || !v1.is_finite() {
                 continue;
@@ -134,14 +134,15 @@ fn bottom_door_notches(openings: &[&Opening], base: f64, len: f64) -> Vec<(f64, 
             continue;
         }
 
-        let half = (op.width + ROUGH_ALLOWANCE) / 2.0;
+        let allowance = cadcraft_arch::opening::cut_allowance(op);
+        let half = (op.width + allowance) / 2.0;
         let u0 = (op.offset - half).clamp(0.0, len);
         let u1 = (op.offset + half).clamp(0.0, len);
         if u1 <= u0 || !u0.is_finite() || !u1.is_finite() {
             continue;
         }
 
-        let v1 = op.sill + op.height + ROUGH_ALLOWANCE - base;
+        let v1 = op.sill + op.height + allowance - base;
         if !v1.is_finite() || v1 <= 0.0 {
             continue;
         }

@@ -491,4 +491,173 @@ mod tests {
         let e = place(&m, &r).unwrap_err();
         assert!(e.starts_with("a cabinet part goes on a cabinet"), "{e}");
     }
+
+    #[test]
+    fn hostile_nan_size_is_refused() {
+        let m = ArchModel::default();
+        let e = place(&m, &req(Placement::Floor, "chair", [f64::NAN, 0.5, 0.9], [1.0, 2.0])).unwrap_err();
+        assert!(e.contains("item size must be finite"), "{e}");
+    }
+
+    #[test]
+    fn hostile_zero_size_is_refused() {
+        let m = ArchModel::default();
+        let e = place(&m, &req(Placement::Floor, "chair", [0.0, 0.5, 0.9], [1.0, 2.0])).unwrap_err();
+        assert!(e.contains("item size must be finite, positive"), "{e}");
+    }
+
+    #[test]
+    fn hostile_huge_size_is_refused() {
+        let m = ArchModel::default();
+        let e = place(&m, &req(Placement::Floor, "chair", [101.0, 0.5, 0.9], [1.0, 2.0])).unwrap_err();
+        assert!(e.contains("at most 100 m"), "{e}");
+    }
+
+    #[test]
+    fn hostile_nan_at_is_refused() {
+        let m = ArchModel::default();
+        let e = place(&m, &req(Placement::Floor, "chair", [0.5, 0.5, 0.9], [f64::NAN, 2.0])).unwrap_err();
+        assert!(e.contains("placement point must be finite"), "{e}");
+    }
+
+    #[test]
+    fn hostile_nan_elevation_is_refused() {
+        let m = wall_model();
+        let mut r = req(Placement::Wall, "light", [0.4, 0.1, 0.3], [2.0, 0.25]);
+        r.elevation = Some(f64::NAN);
+        let e = place(&m, &r).unwrap_err();
+        assert!(e.contains("elevation and rotation must be finite"), "{e}");
+    }
+
+    #[test]
+    fn hostile_nan_rotation_is_refused() {
+        let m = ArchModel::default();
+        let mut r = req(Placement::Floor, "chair", [0.5, 0.5, 0.9], [1.0, 2.0]);
+        r.rotation = Some(f64::NAN);
+        let e = place(&m, &r).unwrap_err();
+        assert!(e.contains("elevation and rotation must be finite"), "{e}");
+    }
+
+    #[test]
+    fn hostile_nan_cutout_is_refused() {
+        let m = model_with(vec![cab(0, 0.0)]);
+        let mut r = req(Placement::Counter, "sink", [0.5, 0.4, 0.2], [0.1, 0.2]);
+        r.cutout = Some([f64::NAN, 0.35]);
+        let e = place(&m, &r).unwrap_err();
+        assert!(e.contains("cut-out must be finite, positive"), "{e}");
+    }
+
+    #[test]
+    fn hostile_negative_cutout_is_refused() {
+        let m = model_with(vec![cab(0, 0.0)]);
+        let mut r = req(Placement::Counter, "sink", [0.5, 0.4, 0.2], [0.1, 0.2]);
+        r.cutout = Some([0.45, -0.1]);
+        let e = place(&m, &r).unwrap_err();
+        assert!(e.contains("cut-out must be finite, positive"), "{e}");
+    }
+
+    #[test]
+    fn explicit_rotation_overrides_wall() {
+        let m = wall_model();
+        let mut r = req(Placement::Wall, "light", [0.4, 0.1, 0.3], [2.0, 0.25]);
+        r.rotation = Some(45.0);
+        let (at, rot, el, host) = placed(place(&m, &r));
+        assert!((at[0] - 2.0).abs() < 1e-9 && (at[1] - 0.15).abs() < 1e-9, "{at:?}");
+        assert!((rot - 45.0).abs() < 1e-9, "{rot}");
+        assert_eq!(el, 0.0);
+        assert_eq!(host, FurnishingHost::Wall { wall: ArchId(1) });
+    }
+
+    #[test]
+    fn explicit_rotation_overrides_ceiling() {
+        let m = room_model();
+        let mut r = req(Placement::Ceiling, "light", [0.5, 0.5, 0.3], [2.0, 2.0]);
+        r.rotation = Some(90.0);
+        let (at, rot, el, host) = placed(place(&m, &r));
+        assert_eq!(at, [2.0, 2.0]);
+        assert!((rot - 90.0).abs() < 1e-9, "{rot}");
+        assert!((el - 2.1).abs() < 1e-9, "{el}");
+        assert_eq!(host, FurnishingHost::None);
+    }
+
+    #[test]
+    fn explicit_rotation_overrides_floor() {
+        let m = ArchModel::default();
+        let mut r = req(Placement::Floor, "chair", [0.5, 0.5, 0.9], [1.0, 2.0]);
+        r.rotation = Some(135.0);
+        let (at, rot, el, host) = placed(place(&m, &r));
+        assert_eq!((at, rot, el, host), ([1.0, 2.0], 135.0, 0.0, FurnishingHost::None));
+    }
+
+    #[test]
+    fn two_sinks_pick_the_one_containing() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level::default());
+        let sink1 = Furnishing {
+            id: ArchId(0),
+            symbol_type: "sink".into(),
+            at: [0.0, 0.0],
+            rotation: 0.0,
+            elevation: 0.0,
+            size: [0.5, 0.4, 0.2],
+            ..Default::default()
+        };
+        let sink2 = Furnishing {
+            id: ArchId(1),
+            symbol_type: "sink".into(),
+            at: [2.0, 0.0],
+            rotation: 0.0,
+            elevation: 0.0,
+            size: [0.5, 0.4, 0.2],
+            ..Default::default()
+        };
+        m.furnishings.push(sink1);
+        m.furnishings.push(sink2);
+        let faucet = req(Placement::Counter, "faucet", [0.1, 0.1, 0.25], [2.0, 0.0]);
+        let (_, _, _, host) = placed(place(&m, &faucet));
+        assert_eq!(host, FurnishingHost::Sink { furnishing: ArchId(1) });
+    }
+
+    #[test]
+    fn cabinet_part_on_wall_cabinet() {
+        let mut m = model_with(vec![cab(0, 0.0)]);
+        m.cabinets[0].kind = CabinetKind::Wall;
+        let r = req(Placement::Floor, "pull", [0.1, 0.02, 0.02], [0.1, 0.3]);
+        assert_eq!(place(&m, &r).unwrap(), PlaceOutcome::Swap { cabinet: ArchId(0), part: CabinetPart::Pull });
+    }
+
+    #[test]
+    fn counter_item_ignores_wall_cabinet() {
+        let mut m = model_with(vec![cab(0, 0.0)]);
+        m.cabinets[0].kind = CabinetKind::Wall;
+        let (at, _, el, host) = placed(place(&m, &req(Placement::Counter, "lamp", [0.2, 0.2, 0.4], [0.1, 0.3])));
+        assert_eq!((at, el, host), ([0.1, 0.3], 0.914, FurnishingHost::None));
+    }
+
+    #[test]
+    fn counter_item_ignores_base_cabinet_without_counter() {
+        let mut m = model_with(vec![cab(0, 0.0)]);
+        m.cabinets[0].counter = false;
+        let (at, _, el, host) = placed(place(&m, &req(Placement::Counter, "lamp", [0.2, 0.2, 0.4], [0.1, 0.3])));
+        assert_eq!((at, el, host), ([0.1, 0.3], 0.914, FurnishingHost::None));
+    }
+
+    #[test]
+    fn floor_item_at_gap_boundary() {
+        let m = model_with(vec![cab(0, 0.0), cab(1, 1.2)]);
+        let r = req(Placement::Floor, "dishwasher", [0.6, 0.6, 0.82], [0.9, 0.3]);
+        let (at, rot, el, host) = placed(place(&m, &r));
+        assert!((at[0] - 0.6).abs() < 1e-9 && (at[1] - 0.3).abs() < 1e-9, "{at:?}");
+        assert!((rot - 180.0).abs() < 1e-9);
+        assert_eq!(el, 0.0);
+        assert_eq!(host, FurnishingHost::Gap { left: ArchId(0), right: ArchId(1) });
+    }
+
+    #[test]
+    fn floor_item_too_wide_for_gap() {
+        let m = model_with(vec![cab(0, 0.0), cab(1, 1.2)]);
+        let r = req(Placement::Floor, "dishwasher", [0.61, 0.6, 0.82], [0.6, 0.3]);
+        let (at, _, _, host) = placed(place(&m, &r));
+        assert_eq!((at, host), ([0.6, 0.3], FurnishingHost::None));
+    }
 }
