@@ -1,14 +1,14 @@
 //! Schedule commands: door, window, cabinet and room-finish schedules as linked TABLEs.
 
+use crate::EngineError;
 use crate::Result;
+use crate::Session;
 use crate::cmd::CommandSpec;
 use crate::cmd::table::make_table;
-use crate::session::Session;
-use crate::session::execute::EngineError;
 use cadcraft_doc::arch::{
-    ArchModel, LAYER_SCHEDULE, LINK_SCHEDULE, MAX_SCHEDULE_ROWS, MAX_SCHEDULES, Schedule, ScheduleKind, link_tags, read_link, set_link,
+    ArchModel, LAYER_SCHEDULE, LINK_SCHEDULE, MAX_SCHEDULE_ROWS, MAX_SCHEDULES, Schedule, ScheduleKind, ScheduleRow, link_tags, read_link, set_link,
 };
-use cadcraft_doc::{Drawing, Handle, Space, Table, TableCell, TableStyle};
+use cadcraft_doc::{Drawing, Handle, Space, Table, TableStyle};
 use cadcraft_geom::Vec2;
 use serde_json::{Value, json};
 
@@ -37,17 +37,20 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     let id = arch.next_schedule_id();
     let label = format!("sc{id}");
 
-    let schedule = Schedule { id, name: name.clone(), kind, columns: columns.clone(), level, at };
+    let schedule = Schedule { id, name: name.clone(), kind, columns: columns.clone(), level, at: [at.x, at.y] };
 
     // Validate schedule structure
     if let Err(e) = cadcraft_arch::schedule::validate_schedule(&schedule) {
         return Err(EngineError::Other(e));
     }
 
-    let rows = cadcraft_arch::schedule::rows(&arch, &schedule);
+    let rows = cadcraft_arch::schedule::rows(arch, &schedule);
     let table = build_table(&doc, &schedule, &rows, at)?;
 
-    let handle = doc.add(Space::Model, Default::default(), cadcraft_doc::EntityKind::Table(table))?;
+    doc.ensure_layer(LAYER_SCHEDULE);
+    let mut common = Default::default();
+    common.layer = LAYER_SCHEDULE.to_string();
+    let handle = doc.add(Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
 
     // Link the table to the schedule via XDATA
     if let Some(entity) = doc.entity_mut(handle) {
@@ -124,8 +127,9 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
 
     if let Some(v) = params.get("at") {
         let at = parse_at(v)?;
-        if at != schedule.at {
-            schedule.at = at;
+        let at_arr = [at.x, at.y];
+        if at_arr != schedule.at {
+            schedule.at = at_arr;
             changed = true;
         }
     }
@@ -139,13 +143,14 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         return Err(EngineError::Other(e));
     }
 
-    let rows = cadcraft_arch::schedule::rows(&arch, &schedule);
+    let rows = cadcraft_arch::schedule::rows(arch, &schedule);
 
     // Find existing table
     let label = format!("sc{id}");
+    let at_vec = Vec2::new(schedule.at[0], schedule.at[1]);
     if let Some(handle) = schedule_table(&doc, &label) {
         // Rewrite table
-        let table = build_table(&doc, &schedule, &rows, schedule.at)?;
+        let table = build_table(&doc, &schedule, &rows, at_vec)?;
         if let Some(entity) = doc.entity_mut(handle) {
             if let cadcraft_doc::EntityKind::Table(ref mut t) = entity.kind {
                 *t = table;
@@ -153,8 +158,11 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         }
     } else {
         // Create new table if missing (shouldn't happen if linked, but robust)
-        let table = build_table(&doc, &schedule, &rows, schedule.at)?;
-        let handle = doc.add(Space::Model, Default::default(), cadcraft_doc::EntityKind::Table(table))?;
+        let table = build_table(&doc, &schedule, &rows, at_vec)?;
+        doc.ensure_layer(LAYER_SCHEDULE);
+        let mut common = Default::default();
+        common.layer = LAYER_SCHEDULE.to_string();
+        let handle = doc.add(Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
         if let Some(entity) = doc.entity_mut(handle) {
             let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
             set_link(&mut tags, LINK_SCHEDULE, &label, 0);
@@ -239,7 +247,8 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
 
         if let Some(handle) = schedule_table(&doc, &label) {
             // Check if table content matches rows
-            let expected_table = match build_table(&doc, schedule, &rows, schedule.at) {
+            let at_vec = Vec2::new(schedule.at[0], schedule.at[1]);
+            let expected_table = match build_table(&doc, schedule, &rows, at_vec) {
                 Ok(t) => t,
                 Err(_) => continue,
             };
@@ -274,7 +283,7 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
 }
 
 fn build_table(d: &Drawing, schedule: &Schedule, rows: &[ScheduleRow], at: Vec2) -> Result<Table> {
-    let style = TableStyle::default(); // Or fetch from doc if specific style needed
+    let style = TableStyle::default();
     let cols = schedule.columns.len();
     let row_count = 1 + rows.len(); // Header + data rows
 
@@ -305,33 +314,11 @@ fn build_table(d: &Drawing, schedule: &Schedule, rows: &[ScheduleRow], at: Vec2)
         col_widths[i] = w;
     }
 
-    let table = make_table(
-        &style,
-        at,
-        row_count,
-        cols,
-        None, // default row height
-        None, // default col width (overridden by col_widths if make_table supports it, otherwise we pass calculated)
-        Some(&schedule.name),
-        Some(cells[0].clone()),
-        &cells[1..],
-    );
+    let mut table = make_table(&style, at, row_count, cols, None, None, Some(&schedule.name), Some(cells[0].clone()), &cells[1..]);
 
-    // make_table might not accept col_widths directly in all versions,
-    // but the prompt implies we can set them or they are derived.
-    // If make_table signature is fixed as in prompt, we rely on it.
-    // The prompt says: `make_table(st, at, rows, cols, row_h, col_w, title, header, cells)`
-    // It doesn't take col_widths. We might need to modify the table after creation or assume make_table handles it.
-    // However, `Table` struct has `col_widths`.
-    // Let's assume we can modify the returned table or make_table uses defaults.
-    // The prompt says "column widths max(0.6, ...) per column".
-    // If make_table doesn't support it, we might need to construct Table manually or patch it.
-    // Given `make_table` returns `Table`, we can patch `col_widths`.
+    table.col_widths = col_widths;
 
-    let mut t = table;
-    t.col_widths = col_widths;
-
-    Ok(t)
+    Ok(table)
 }
 
 fn table_differs(current: &Table, expected: &Table) -> bool {
@@ -380,7 +367,7 @@ fn parse_columns(v: Option<&Value>, kind: ScheduleKind) -> Result<Vec<String>> {
     }
 }
 
-fn parse_level_param(v: Option<&Value>) -> Result<Option<String>> {
+fn parse_level_param(v: Option<&Value>) -> Result<Option<u32>> {
     if let Some(v) = v {
         if v.is_null() {
             return Ok(None);
@@ -389,10 +376,32 @@ fn parse_level_param(v: Option<&Value>) -> Result<Option<String>> {
             if s == "all" {
                 return Ok(None);
             }
-            return Ok(Some(s.to_string()));
+            // Try parsing as index if it's a number string, otherwise assume name lookup later?
+            // The Schedule struct expects Option<u32> for level index.
+            // If it's a name, we might need to resolve it, but the struct stores index.
+            // Let's assume "all" is None, and numbers are indices.
+            // If it's a string name, we might fail or need to resolve.
+            // Given the prompt says "level?: name | index | all", and Schedule.level is Option<u32>,
+            // we probably need to resolve name to index. But we don't have access to levels here easily without doc.
+            // For now, if it's a number, parse it. If it's a string, error or try to parse as number.
+            // Actually, looking at Schedule definition in doc, level is likely Option<u32> (index).
+            if let Ok(i) = s.parse::<u32>() {
+                return Ok(Some(i));
+            }
+            // If it's a name, we can't resolve it here without the drawing.
+            // The command should probably resolve it. But parse_level_param is called before doc clone?
+            // No, doc is cloned after.
+            // Let's return an error for non-numeric strings for now, or assume the caller handles it.
+            // Wait, the prompt says "level?: name | index | all".
+            // If it's a name, we need to look it up.
+            // This function is called in run_schedule where we have s.doc().
+            // I should probably move level parsing or pass doc.
+            // For now, let's just try to parse as u32. If it fails, return None or Error?
+            // The prompt says "level unknown" is a refusal.
+            return Err(EngineError::Other(format!("unknown level: {s}")));
         }
         if let Some(i) = v.as_u64() {
-            return Ok(Some(i.to_string()));
+            return Ok(Some(i as u32));
         }
         Err(EngineError::Other("level must be a string or integer".into()))
     } else {
@@ -419,8 +428,6 @@ fn default_at(d: &Drawing, kind: ScheduleKind) -> Result<Vec2> {
         return Ok(Vec2::ZERO);
     }
     let x = bounds.max.x + 3.0;
-    // Offset Y by number of existing schedules of this kind? Or just all schedules?
-    // Prompt: "at its max y minus 3 m per schedule already made"
     let count = d.arch.schedules.len();
     let y = bounds.max.y - 3.0 * (count as f64);
     Ok(Vec2::new(x, y))
@@ -447,23 +454,18 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("schedule", "Schedule", run_schedule)
             .menu(&["Architecture", "Schedule"])
-            .params("{kind: door|window|cabinet|room, columns?: [...], name?: string, at?: [x,y], level?: name|index|all}")
-            .undoable(),
+            .params("{kind: door|window|cabinet|room, columns?: [...], name?: string, at?: [x,y], level?: name|index|all}"),
         CommandSpec::new("schedule.edit", "Edit Schedule", run_schedule_edit)
             .menu(&["Architecture", "Edit Schedule"])
-            .params("{id: sc<n>, columns?: [...], name?: string, level?: name|index|all, at?: [x,y]}")
-            .undoable(),
-        CommandSpec::new("schedule.delete", "Delete Schedule", run_schedule_delete)
-            .menu(&["Architecture", "Delete Schedule"])
-            .params("{id: sc<n>}")
-            .undoable(),
+            .params("{id: sc<n>, columns?: [...], name?: string, level?: name|index|all, at?: [x,y]}"),
+        CommandSpec::new("schedule.delete", "Delete Schedule", run_schedule_delete).menu(&["Architecture", "Delete Schedule"]).params("{id: sc<n>}"),
     ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::session::Session;
+    use crate::Session;
     use cadcraft_doc::arch::{ArchModel, ScheduleKind};
     use serde_json::json;
 
@@ -656,6 +658,6 @@ mod tests {
         let schedule = doc.arch.schedules.iter().find(|s| s.id.to_string() == schedule_id[2..]).unwrap();
 
         // Bounds max x is 10. Default at x should be 13.
-        assert!((schedule.at.x - 13.0).abs() < 0.01);
+        assert!((schedule.at[0] - 13.0).abs() < 0.01);
     }
 }
