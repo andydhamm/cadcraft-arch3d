@@ -408,6 +408,7 @@ impl Placed {
             scale: self.nv.scale,
             at: [c.x, c.y],
             size: [self.rect.width(), self.rect.height()],
+            ..Default::default()
         }
     }
 }
@@ -606,8 +607,15 @@ fn make_sheet(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let new_views = parse_views(CMD, d, list)?;
     let placed = place_views(d, new_views, &[], 1, (pw, ph), landscape)?;
-    let mut sheet =
-        Sheet { name: name.clone(), number, title, size: paper_name.clone(), landscape, views: placed.iter().map(Placed::record).collect() };
+    let mut sheet = Sheet {
+        name: name.clone(),
+        number,
+        title,
+        size: paper_name.clone(),
+        landscape,
+        views: placed.iter().map(Placed::record).collect(),
+        ..Default::default()
+    };
     validate_sheet(&sheet, d.arch.levels.len()).map_err(|e| bad(CMD, e))?;
     // Validated: make it.
     crate::cmd::layout::new_bare_layout(s, &name, &paper_name, landscape)?;
@@ -703,6 +711,7 @@ fn edit_sheet(s: &mut Session, p: &Value) -> Result<Value> {
         size: old.size.clone(),
         landscape: old.landscape,
         views: remaining,
+        ..Default::default()
     };
     new.views.extend(placed.iter().map(Placed::record));
     validate_sheet(&new, d.arch.levels.len()).map_err(|e| bad(CMD, e))?;
