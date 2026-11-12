@@ -468,9 +468,10 @@ mod tests {
         let mut s = Session::new();
         let id = add_furnishing(&mut s, [1.0, 2.0], 0.0);
         let d = s.doc_mut().unwrap();
-        d.arch
-            .paints
-            .insert(Surface::Furnishing { furnishing: id, part: 0 }.key(), Paint { material: Some(MaterialRef::Item("oak".into())), tint: None });
+        d.arch.paints.insert(
+            Surface::Furnishing { furnishing: id, part: 0 }.key(),
+            Paint { material: Some(MaterialRef::Item("oak".into())), ..Default::default() },
+        );
         let copy = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::translate(Vec2::new(3.0, 0.0)), true).unwrap();
         let copied = furnishing_id_of_handle(copy[0]).unwrap();
         let d = s.doc().unwrap();
