@@ -18,6 +18,7 @@ pub use cadcraft_doc::{
 };
 
 pub mod area;
+pub mod autodim;
 pub mod backsplash;
 pub mod casework;
 pub mod casework_corner;
