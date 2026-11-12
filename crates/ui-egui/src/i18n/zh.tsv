@@ -1517,7 +1517,8 @@ menu	View	视图
 	Light Fixture	灯具
 	Light Fixture Types	灯具类型
 	Cabinet	橱柜
-	Cabinet Face	橱柜立面
+	Fill Cabinet Run	填充橱柜排
+	Architecture>Fill Cabinet Run	建筑>填充橱柜排
 	Edit Cabinet	编辑橱柜
 	Delete Cabinet	删除橱柜
 	Fixture	设备
@@ -1615,3 +1616,5 @@ menu	View	视图
 	List Sheets	图纸列表
 	Open Sheet	打开图纸
 	Sheet Set	图纸集
+	Niche	壁龛
+	Architecture>Niche	建筑>壁龛

@@ -460,6 +460,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::sheet_inspect::inspect_sheets(d, p, &mut out);
     super::plan_inspect::inspect_plan_views(&d.arch, p, &mut out);
     super::plan_inspect::inspect_plan(&d.arch, p, &mut out)?;
+    super::niche::inspect_niche_rows(&d.arch, &mut out);
 
     Ok(Value::Object(out))
 }
@@ -496,6 +497,12 @@ fn inspect_cabinet_parts(model: &ArchModel, numbers: &std::collections::BTreeMap
         obj.insert("doorStyle".to_string(), json!(c.door_style.name()));
         obj.insert("drawerStyle".to_string(), json!(c.drawer_style.name()));
         obj.insert("pull".to_string(), json!(c.pull));
+        obj.insert("filler".to_string(), json!(c.filler));
+        let shelves = cadcraft_arch::casework_shelves::shelf_levels(c)
+            .iter()
+            .map(|(bottom, top)| json!({ "bottom": *bottom, "top": *top }))
+            .collect::<Vec<_>>();
+        obj.insert("shelves".to_string(), if shelves.is_empty() { Value::Null } else { Value::Array(shelves) });
         obj.insert("falseFront".to_string(), json!(false_front));
         obj.insert("cutout".to_string(), json!(casework_layout::hosted_cutout(model, c).map(|(_, _, size)| size)));
         // `fronts` stays the phase-13 mode name (the cabinet command's own parameter, which phase-13 check 04 and
@@ -912,6 +919,32 @@ mod tests {
         assert_eq!(walls[0]["handle"], "a0000000");
         assert!(walls[0]["thickness"].is_number());
         assert!(walls[0]["exterior"].is_boolean());
+    }
+
+    #[test]
+    fn inspect_filler_and_shelves_rows() {
+        let mut s = Session::new();
+        let mut c = cadcraft_doc::arch::Cabinet::default();
+        c.id = cadcraft_doc::ArchId(0);
+        c.kind = cadcraft_doc::arch::CabinetKind::Wall;
+        c.level = 0;
+        c.position = Vec2::new(1.0, 0.5);
+        c.width = 0.762;
+        c.depth = 0.305;
+        c.height = 0.762;
+        c.elevation = 1.372;
+        c.fronts = cadcraft_doc::arch::Fronts::Open;
+        c.shelves = Some(2);
+        s.doc_mut().unwrap().arch.push_cabinet(c);
+
+        let v = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        let rows = v["cabinets"].as_array().expect("cabinets array missing");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0]["filler"].is_boolean());
+        assert!(rows[0]["shelves"].is_array(), "shelves should be reported for open cabinets");
+        assert_eq!(rows[0]["shelves"].as_array().unwrap().len(), 2);
+        assert!(rows[0]["shelves"][0]["bottom"].is_number());
+        assert!(rows[0]["shelves"][0]["top"].is_number());
     }
 
     #[test]
