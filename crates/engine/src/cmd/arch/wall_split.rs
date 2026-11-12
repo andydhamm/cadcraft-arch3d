@@ -80,7 +80,8 @@ fn run_wall_split(s: &mut Session, p: &Value) -> Result<Value> {
             if !(height >= 0.1 && height <= max_span - 0.1) {
                 return Err(bad("wall.split", format!("`height` must be in [0.1, {}] metres", (max_span - 0.1).max(0.0))));
             }
-            wall.split = Some(WallSplit { height, upper: "Glass".to_string(), upper_thickness: cadcraft_doc::arch::GLASS_THICKNESS });
+            wall.split =
+                Some(WallSplit { height, upper: "Glass".to_string(), upper_thickness: cadcraft_doc::arch::GLASS_THICKNESS, ..Default::default() });
             if let Some(lower) = p.get("lower").and_then(Value::as_str) {
                 if lower.trim().is_empty() {
                     return Err(bad("wall.split", "`lower` cannot be empty"));
@@ -113,7 +114,7 @@ fn run_wall_split(s: &mut Session, p: &Value) -> Result<Value> {
                     wall.layers = wall.layers.iter().map(|(name, t)| (name.clone(), *t * scale)).collect();
                 }
             }
-            wall.split = Some(WallSplit { height, upper: upper_name.clone(), upper_thickness });
+            wall.split = Some(WallSplit { height, upper: upper_name.clone(), upper_thickness, ..Default::default() });
             doc.arch.walls[wall_index] = wall;
             doc.touch_arch();
             return Ok(json!({
