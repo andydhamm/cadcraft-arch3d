@@ -6,7 +6,7 @@ use crate::Session;
 use crate::cmd::CommandSpec;
 use crate::cmd::table::make_table;
 use cadcraft_doc::arch::{
-    ArchModel, LAYER_SCHEDULE, LINK_SCHEDULE, MAX_SCHEDULE_ROWS, MAX_SCHEDULES, Schedule, ScheduleKind, ScheduleRow, link_tags, read_link, set_link,
+    ArchId, LAYER_SCHEDULE, LINK_SCHEDULE, MAX_SCHEDULE_ROWS, MAX_SCHEDULES, Schedule, ScheduleKind, link_tags, read_link, set_link,
 };
 use cadcraft_doc::{Drawing, Handle, Space, Table, TableStyle};
 use cadcraft_geom::Vec2;
@@ -34,7 +34,7 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
         return Err(EngineError::Other(format!("too many schedules (max {MAX_SCHEDULES})")));
     }
 
-    let id = arch.next_schedule_id();
+    let id = arch.next_schedule_id;
     let label = format!("sc{id}");
 
     let schedule = Schedule { id, name: name.clone(), kind, columns: columns.clone(), level, at: [at.x, at.y] };
@@ -50,7 +50,7 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     doc.ensure_layer(LAYER_SCHEDULE);
     let mut common = Default::default();
     common.layer = LAYER_SCHEDULE.to_string();
-    let handle = doc.add(Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
+    let handle = doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
 
     // Link the table to the schedule via XDATA
     if let Some(entity) = doc.entity_mut(handle) {
@@ -60,6 +60,7 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     }
 
     arch.schedules.push(schedule);
+    arch.next_schedule_id += 1;
 
     s.set_doc(doc);
 
@@ -162,7 +163,7 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         doc.ensure_layer(LAYER_SCHEDULE);
         let mut common = Default::default();
         common.layer = LAYER_SCHEDULE.to_string();
-        let handle = doc.add(Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
+        let handle = doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
         if let Some(entity) = doc.entity_mut(handle) {
             let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
             set_link(&mut tags, LINK_SCHEDULE, &label, 0);
@@ -282,7 +283,7 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
     }
 }
 
-fn build_table(d: &Drawing, schedule: &Schedule, rows: &[ScheduleRow], at: Vec2) -> Result<Table> {
+fn build_table(d: &Drawing, schedule: &Schedule, rows: &[cadcraft_arch::schedule::ScheduleRow], at: Vec2) -> Result<Table> {
     let style = TableStyle::default();
     let cols = schedule.columns.len();
     let row_count = 1 + rows.len(); // Header + data rows
@@ -376,28 +377,9 @@ fn parse_level_param(v: Option<&Value>) -> Result<Option<u32>> {
             if s == "all" {
                 return Ok(None);
             }
-            // Try parsing as index if it's a number string, otherwise assume name lookup later?
-            // The Schedule struct expects Option<u32> for level index.
-            // If it's a name, we might need to resolve it, but the struct stores index.
-            // Let's assume "all" is None, and numbers are indices.
-            // If it's a string name, we might fail or need to resolve.
-            // Given the prompt says "level?: name | index | all", and Schedule.level is Option<u32>,
-            // we probably need to resolve name to index. But we don't have access to levels here easily without doc.
-            // For now, if it's a number, parse it. If it's a string, error or try to parse as number.
-            // Actually, looking at Schedule definition in doc, level is likely Option<u32> (index).
             if let Ok(i) = s.parse::<u32>() {
                 return Ok(Some(i));
             }
-            // If it's a name, we can't resolve it here without the drawing.
-            // The command should probably resolve it. But parse_level_param is called before doc clone?
-            // No, doc is cloned after.
-            // Let's return an error for non-numeric strings for now, or assume the caller handles it.
-            // Wait, the prompt says "level?: name | index | all".
-            // If it's a name, we need to look it up.
-            // This function is called in run_schedule where we have s.doc().
-            // I should probably move level parsing or pass doc.
-            // For now, let's just try to parse as u32. If it fails, return None or Error?
-            // The prompt says "level unknown" is a refusal.
             return Err(EngineError::Other(format!("unknown level: {s}")));
         }
         if let Some(i) = v.as_u64() {
@@ -442,9 +424,9 @@ fn default_name(kind: ScheduleKind) -> String {
     }
 }
 
-fn parse_schedule_id(s: &str) -> Result<u32> {
+fn parse_schedule_id(s: &str) -> Result<ArchId> {
     if let Some(rest) = s.strip_prefix("sc") {
-        rest.parse::<u32>().map_err(|_| EngineError::Other(format!("invalid schedule id: {s}")))
+        rest.parse::<u32>().map(ArchId).map_err(|_| EngineError::Other(format!("invalid schedule id: {s}")))
     } else {
         Err(EngineError::Other(format!("invalid schedule id: {s}")))
     }
