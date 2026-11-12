@@ -17,7 +17,7 @@ use wgpu::util::DeviceExt;
 /// Layers of the phase-13 array: white plus one per finish. A scene's textures follow them.
 pub const LAYERS: u32 = 1 + Finish::ALL.len() as u32;
 /// Most layers a scene's textures add (256 layers in all, the WebGL2 limit).
-pub const MAX_SCENE_LAYERS: u32 = 251;
+pub const MAX_SCENE_LAYERS: u32 = 256 - LAYERS;
 /// Most layers the array holds.
 pub const MAX_LAYERS: u32 = LAYERS + MAX_SCENE_LAYERS;
 /// Mip levels of every layer (256 down to 1).
@@ -272,16 +272,17 @@ mod tests {
     #[test]
     fn texture_array_has_five_layers_with_mips() {
         let per_layer: usize = (0..MIP_LEVELS).map(|l| (256usize >> l).pow(2) * 4).sum();
-        assert_eq!(LAYERS, 5);
+        assert_eq!(LAYERS, 10);
+        assert_eq!(MAX_SCENE_LAYERS, 246);
         assert_eq!(MIP_LEVELS, 9);
         let data = array_data();
-        assert_eq!(data.len(), per_layer * 5);
+        assert_eq!(data.len(), per_layer * 10);
         assert!(data.iter().take(per_layer).all(|&b| b == 255), "layer 0 is white at every mip");
         assert_eq!(array_data(), data, "deterministic");
         if let Some((device, queue)) = crate::gputest::shared_device() {
             let layout = bind_group_layout(&device);
             let t = MaterialTextures::new(&device, &queue, &layout);
-            assert_eq!(t.texture.depth_or_array_layers(), 5);
+            assert_eq!(t.texture.depth_or_array_layers(), 10);
             assert_eq!(t.texture.mip_level_count(), 9);
             assert_eq!(t.texture.width(), 256);
             assert_eq!(t.texture.format(), TEXTURE_FORMAT);
@@ -499,21 +500,21 @@ mod tests {
         scene.textures.insert("sym:bad:t0".into(), image(2, 2, vec![0; 3]));
         let layers = SceneLayers::of(&scene);
         assert_eq!(layers.keys(), ["item:material-oak", "sym:a:t0", "sym:b:t0"]);
-        assert_eq!(layers.layer_of("item:material-oak"), Some(5));
-        assert_eq!(layers.layer_of("sym:a:t0"), Some(6));
-        assert_eq!(layers.layer_of("sym:b:t0"), Some(7));
+        assert_eq!(layers.layer_of("item:material-oak"), Some(10));
+        assert_eq!(layers.layer_of("sym:a:t0"), Some(11));
+        assert_eq!(layers.layer_of("sym:b:t0"), Some(12));
         assert_eq!(layers.layer_of("sym:bad:t0"), None, "an invalid image gets no layer");
         assert_eq!(layers.layer_of("sym:c:t0"), None);
-        assert_eq!(layers.layer_count(), 8);
+        assert_eq!(layers.layer_count(), 13);
         // The data: the phase-13 layers as they were, then each image resampled to 256 x 256, with mips.
         let per_layer: usize = (0..MIP_LEVELS).map(|l| (256usize >> l).pow(2) * 4).sum();
         let data = scene_array_data(&scene, &layers);
-        assert_eq!(data.len(), per_layer * 8);
-        assert!(data[..per_layer * 5] == array_data()[..], "the phase-13 layers are unchanged");
-        let oak = &data[per_layer * 5..per_layer * 5 + 256 * 256 * 4];
+        assert_eq!(data.len(), per_layer * 13);
+        assert!(data[..per_layer * 10] == array_data()[..], "the phase-13 layers are unchanged");
+        let oak = &data[per_layer * 10..per_layer * 10 + 256 * 256 * 4];
         assert!(oak.as_chunks::<4>().0.iter().all(|p| *p == [120, 80, 40, 255]), "a 1 x 1 image fills its layer");
         let rb = resample(&red_blue());
-        assert!(data[per_layer * 6..per_layer * 6 + 256 * 256 * 4] == rb[..]);
+        assert!(data[per_layer * 11..per_layer * 11 + 256 * 256 * 4] == rb[..]);
         // Bilinear between texel centres: red up to u = 0.375, blue from 0.625, a blend between.
         let texel = |x: usize| [rb[x * 4], rb[x * 4 + 1], rb[x * 4 + 2], rb[x * 4 + 3]];
         assert_eq!((texel(0), texel(95), texel(160), texel(255)), ([255, 0, 0, 255], [255, 0, 0, 255], [0, 0, 255, 255], [0, 0, 255, 255]));
@@ -527,8 +528,8 @@ mod tests {
             many.textures.insert(format!("sym:{i:03}:t0"), solid([200, 100, 50]));
         }
         let layers = SceneLayers::of(&many);
-        assert_eq!((layers.keys().len(), layers.layer_count()), (251, 256));
-        assert_eq!((layers.layer_of("sym:250:t0"), layers.layer_of("sym:251:t0")), (Some(255), None));
+        assert_eq!((layers.keys().len(), layers.layer_count()), (246, 256));
+        assert_eq!((layers.layer_of("sym:245:t0"), layers.layer_of("sym:246:t0")), (Some(255), None));
         many.materials
             .insert("sym:k:0".into(), MaterialDef { base_color: [0.5, 1.0, 1.0, 1.0], texture: Some("sym:255:t0".into()), ..Default::default() });
         many.materials.insert("sym:k:1".into(), MaterialDef { texture: Some("sym:003:t0".into()), ..Default::default() });
@@ -537,7 +538,7 @@ mod tests {
         let past = material_draw(&many, &layers, "sym:k:0");
         assert_eq!((past.layer, past.albedo), (0, [0.5 * mean[0], mean[1], mean[2]]));
         let within = material_draw(&many, &layers, "sym:k:1");
-        assert_eq!((within.layer, within.albedo, within.tile), (8, [1.0; 3], [1.0, 1.0]));
+        assert_eq!((within.layer, within.albedo, within.tile), (13, [1.0; 3], [1.0, 1.0]));
 
         // A textured quad furnishing draws its texture: one end red, the other blue.
         let Some(mut r) = renderer() else { return };
@@ -568,7 +569,7 @@ mod tests {
         let texture = Some("item:material-plaster".to_string());
         let tinted = painted(MaterialDef { base_color: [t[0], t[1], t[2], 1.0], texture: texture.clone(), tint: Some(tint), ..Default::default() });
         let d = material_draw(&tinted, &SceneLayers::of(&tinted), "paint:wall/w1/left");
-        assert_eq!((d.albedo, d.layer), (t, 5), "the base colour as given, the texture's layer");
+        assert_eq!((d.albedo, d.layer), (t, 10), "the base colour as given, the texture's layer");
         let untinted = painted(MaterialDef { texture, ..Default::default() });
         let flat = painted(MaterialDef { base_color: [t[0] * grey, t[1] * grey, t[2] * grey, 1.0], ..Default::default() });
         let Some(mut r) = renderer() else { return };

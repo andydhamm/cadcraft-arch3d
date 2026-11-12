@@ -517,21 +517,21 @@ impl Scene3d {
                     let well_holes = well_holes_for(model, room);
                     if well_holes.is_empty() {
                         if let Some(m) = floors::floor_slab(room, &level, "floor") {
-                            meshes.push(m);
+                            meshes.push(finish::room_floor(m, room));
                             floors += 1;
                         }
                     } else {
                         let mut clone = room.clone();
                         clone.holes = well_holes;
                         if let Some(m) = floors::floor_slab(&clone, &level, "floor") {
-                            meshes.push(m);
+                            meshes.push(finish::room_floor(m, room));
                             floors += 1;
                         }
                     }
                 } else {
                     if let Some(om) = prev_by_object.get(&room.id) {
                         for m in om {
-                            if m.material == "floor" {
+                            if m.material == "floor" || m.material.starts_with("floor-") {
                                 meshes.push(m.clone());
                                 floors += 1;
                             }
@@ -1415,7 +1415,7 @@ mod tests {
         let scene = Scene3d::build(&model);
         assert_eq!(scene.floors, 3, "floors={} expected 3", scene.floors);
         assert_eq!(scene.ceilings, 3, "ceilings={} expected 3", scene.ceilings);
-        let floor_meshes: Vec<&Mesh> = scene.meshes.iter().filter(|m| m.material == "floor").collect();
+        let floor_meshes: Vec<&Mesh> = scene.meshes.iter().filter(|m| m.material.starts_with("floor")).collect();
         assert_eq!(floor_meshes.len(), 3, "floor mesh count={}", floor_meshes.len());
     }
 
@@ -1426,7 +1426,7 @@ mod tests {
         model.rooms.push(square_room(7, 0, (0.0, 0.0), 3.0));
 
         let scene = Scene3d::build(&model);
-        assert!(scene.meshes.iter().any(|m| m.object == ArchId(7) && m.material == "floor"), "no floor mesh for room ArchId(7)",);
+        assert!(scene.meshes.iter().any(|m| m.object == ArchId(7) && m.material.starts_with("floor")), "no floor mesh for room ArchId(7)",);
     }
 
     #[test]
@@ -1443,8 +1443,8 @@ mod tests {
         assert_eq!(partial.floors, full.floors, "floors {} != {}", partial.floors, full.floors);
         assert_eq!(partial.ceilings, full.ceilings, "ceilings {} != {}", partial.ceilings, full.ceilings);
 
-        let full_floor = full.meshes.iter().find(|m| m.object == ArchId(1) && m.material == "floor");
-        let partial_floor = partial.meshes.iter().find(|m| m.object == ArchId(1) && m.material == "floor");
+        let full_floor = full.meshes.iter().find(|m| m.object == ArchId(1) && m.material.starts_with("floor"));
+        let partial_floor = partial.meshes.iter().find(|m| m.object == ArchId(1) && m.material.starts_with("floor"));
         match (full_floor, partial_floor) {
             (Some(fa), Some(pa)) => {
                 assert_eq!(fa.positions, pa.positions);
