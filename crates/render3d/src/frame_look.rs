@@ -232,7 +232,8 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     f.tone_map = tone_code(look.tone_map);
     f.lambert = lighting.lambert.filter(|a| a.is_finite());
     let intensity = if look.sun.intensity.is_finite() { look.sun.intensity.max(0.0) as f32 } else { 0.0 };
-    let sun = lighting.sun.is_some();
+    // The moon as the directional light is not the sun: `sun` is true only for a real sun.
+    let sun = lighting.sun.is_some() && lighting.moon.is_none();
     let directional = lighting.directional_lux();
     f.sun_lux = directional;
     // An environment lights through its SH: the stand-in ambient is off, the meter adds the SH.

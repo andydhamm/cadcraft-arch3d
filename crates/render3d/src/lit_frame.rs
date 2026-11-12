@@ -86,25 +86,25 @@ impl Lighting {
         }
         let d = [dir[0] / length, dir[1] / length, dir[2] / length];
         let lux = self.look.sky.moon.lux.max(0.0) as f32;
-        if lux > 0.0 {
+        if lux > 0.0 && d[2] > 0.0 {
             self.moon = Some((d, lux));
+            // The raster's directional light is the moon, with no shadow map.
+            self.sun = Some(Light::new([d[0] as f32, d[1] as f32, d[2] as f32], Light::DEFAULT.ambient));
+            self.sun_shadow = false;
         }
         self
     }
 
-    /// The current directional light's lux: the sun while it's up, else the moon while it lights.
+    /// The directional light's lux: the moon's while the moon is the directional light, else
+    /// `look.sun.intensity` while the sun is up, else 0.
     pub fn directional_lux(&self) -> f32 {
-        if let Some(sun) = self.sun {
-            let lux = if self.look.sun.on { self.look.sun.intensity as f32 } else { 0.0 };
-            if lux > 0.0 {
-                return lux;
-            }
-            let dir = sun.normalized().dir;
-            if dir[2] > 0.0 {
-                return self.look.sun.intensity as f32;
-            }
+        if let Some((_, lux)) = self.moon {
+            return lux;
         }
-        self.moon.map_or(0.0, |(_, lux)| lux)
+        match self.sun {
+            Some(_) if self.look.sun.intensity.is_finite() => self.look.sun.intensity.max(0.0) as f32,
+            _ => 0.0,
+        }
     }
 }
 

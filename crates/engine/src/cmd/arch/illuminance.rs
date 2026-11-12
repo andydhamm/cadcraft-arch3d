@@ -126,9 +126,19 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
         let sun_lux =
             toward_sun.map_or(0.0, |s| cadcraft_arch3d::light::sun_illuminance(&scene, point, normal, s, look.sun.intensity, look.sun.shadows));
 
+        // The moon lights only with the sky on and the sun below the horizon (or off).
+        let sun_up = toward_sun.is_some_and(|s| s.z > 0.0);
+        let moon_lux = match cadcraft_arch3d::sky::moon_dir(&doc.arch, &look.sky.moon) {
+            Some(m) if look.sky.on && !sun_up && look.sky.moon.lux.is_finite() && look.sky.moon.lux > 0.0 => {
+                cadcraft_arch3d::light::sun_illuminance(&scene, point, normal, Vec3::new(m[0], m[1], m[2]), look.sky.moon.lux, look.sun.shadows)
+            }
+            _ => 0.0,
+        };
+
         Ok(json!({
-            "lux": illumination.lux + sun_lux,
+            "lux": illumination.lux + sun_lux + moon_lux,
             "sun": sun_lux,
+            "moon": moon_lux,
             "lights": scene.lights.len(),
             "direct": true,
             "contributions": contributions,

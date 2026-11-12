@@ -150,7 +150,7 @@ impl PathTracer {
         let exposure = match opts.exposure {
             Exposure::Fixed(x) => x,
             Exposure::Auto if opts.furnace.is_some() => 1.0,
-            Exposure::Auto if lighting.sun.is_some() => DAY_EXPOSURE,
+            Exposure::Auto if lighting.sun.is_some() && lighting.moon.is_none() => DAY_EXPOSURE,
             Exposure::Auto => lighting.exposure,
         };
 
@@ -637,7 +637,8 @@ fn frame_lighting(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting,
 fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
     if let Some(sun) = lighting.sun {
         let d = sun.normalized().dir;
-        if lighting.look.sun.on && d[2] > 0.0 {
+        // The moon as the raster's directional light is `frame_moon`'s, not a sun.
+        if lighting.look.sun.on && d[2] > 0.0 && lighting.moon.is_none() {
             frame.flags |= FRAME_SUN;
             if !lighting.look.sun.shadows {
                 frame.flags |= FRAME_SUN_NO_SHADOW;
