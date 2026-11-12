@@ -133,7 +133,8 @@ mod tests {
         let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
         assert_eq!(text.matches("=IFCROOF(").count(), 2, "{text}");
         assert_eq!(text.matches("=IFCSLAB(").count(), 2, "{text}");
-        assert_eq!(text.matches("=IFCRELAGGREGATES(").count(), 2, "{text}");
+        // 3 base aggregations (project->site, site->building, building->storey) + 2 roof aggregations
+        assert_eq!(text.matches("=IFCRELAGGREGATES(").count(), 5, "{text}");
     }
 
     #[test]
@@ -155,7 +156,8 @@ mod tests {
         let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
         assert_eq!(text.matches("=IFCROOF(").count(), 1, "{text}");
         assert_eq!(text.matches("=IFCSLAB(").count(), 1, "{text}");
-        assert_eq!(text.matches("=IFCRELAGGREGATES(").count(), 1, "{text}");
+        // 3 base aggregations (project->site, site->building, building->storey) + 1 roof aggregation
+        assert_eq!(text.matches("=IFCRELAGGREGATES(").count(), 4, "{text}");
     }
 
     #[test]
