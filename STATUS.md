@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-12 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 9 of 35 segments merged · 1 of 20 acceptance checks**
 
-8,871 workspace tests passing at the last merge · 966 segments merged in all · 0 of 15 seats working
+8,875 workspace tests passing at the last merge · 968 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,14 +28,14 @@ Updated 2026-11-12 07:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 26.0 h so far · expected done Nov 12 14:57–Nov 17 20:25 UTC |
+| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 26.3 h so far · expected done Nov 12 15:12–Nov 17 20:40 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 1 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
 
 ## Phase 18 segments
 
-16 queued, 9 merged, 9 merging, 1 gate
+16 queued, 10 merging, 9 merged
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -48,12 +48,14 @@ Updated 2026-11-12 07:30 UTC. This page and the card in the README are regenerat
 | `p18-cabinet-fronts-1` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | bonsai-b |
 | `p18-corners` | Corner cabinets: a base or wall cabinet in an inside corner where two runs meet becomes blind, diagonal-door or lazy-susan (a plan symbol with its cut-out), and the counter runs round the corner in one piece | merging | claude-sonnet-c |
 | `p18-fillers-shelves` | Fillers and open shelves: `cabinet.fill` closes a run's gap to a wall with a filler up to 0.15 m (larger gaps reported, never stretched); open wall cabinets with an automatic or given shelf count, evenly spaced | merging | mai-flash-b |
-| `p18-glass-walls-1` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | gate | claude-sonnet-a |
+| `p18-glass-walls-1` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 07:30 | `p19-seeing-in-render-2` | merged | 8,875 pass | claude-sonnet-d |
+| Nov 12 07:30 | `harden-p15-showcase-lib-io` | merged | 8,875 pass | tturbo-mac |
 | Nov 12 07:01 | `p18-glass-walls-1` | refused | 8,879 pass | mai-flash |
 | Nov 12 06:42 | `upstream-sync-ca87680fb` | merged | 8,871 pass | claude-sonnet-a |
 | Nov 12 05:52 | `p18-glass-walls-1` | refused | 8,870 pass | claude-sonnet-d |
@@ -64,25 +66,23 @@ Updated 2026-11-12 07:30 UTC. This page and the card in the README are regenerat
 | Nov 12 02:38 | `p20-observables-3` | merged | 8,822 pass | claude-sonnet-b |
 | Nov 12 02:05 | `p18-room-finishes-1` | refused | 8,822 pass | claude-sonnet-c |
 | Nov 12 01:48 | `p20-observables-2` | merged | 8,807 pass | claude-sonnet-c |
-| Nov 12 01:37 | `p19-exposure-3` | merged | 8,807 pass | claude-sonnet-c |
-| Nov 12 01:37 | `p17f-showcase-phase17` | merged | 8,807 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1155 |
+| bonsai-a | bonsai2-27b | agent | 1156 |
 | bonsai-b | bonsai2-27b | agent | 1127 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1222 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1165 |
-| claude-sonnet-a | sonnet | gate | 130 |
-| claude-sonnet-b | sonnet | agent | 137 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1223 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1167 |
+| claude-sonnet-a | sonnet | idle | 131 |
+| claude-sonnet-b | sonnet | idle | 139 |
 | claude-sonnet-c | sonnet | idle | 70 |
 | claude-sonnet-d | sonnet | idle | 63 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1026 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1026 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 90 |
-| mai-flash-b | mai-code-1.1-flash | agent | 29 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 94 |
+| mai-flash-b | mai-code-1.1-flash | gate | 29 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 95 |
 | tturbo-mac | tturbo-ultraheretic | idle | 795 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 399 |
