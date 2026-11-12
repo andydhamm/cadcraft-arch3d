@@ -32,8 +32,11 @@ pub(super) fn emit(ctx: &mut Ctx) {
             &format!("light/{n}"),
             vec![
                 ("Type", P::typed("IFCLABEL", P::str(fixture.fixture.clone()))),
-                ("Lumens", P::typed("IFCLUMINOUSFLUXMEASURE", P::Real(fixture.lumens))),
-                ("ColourTemperature", P::typed("IFCTHERMODYNAMICTEMPERATUREMEASURE", P::Real(fixture.kelvin))),
+                ("Lumens", if fixture.lumens.is_finite() { P::typed("IFCLUMINOUSFLUXMEASURE", P::Real(fixture.lumens)) } else { P::Null }),
+                (
+                    "ColourTemperature",
+                    if fixture.kelvin.is_finite() { P::typed("IFCTHERMODYNAMICTEMPERATUREMEASURE", P::Real(fixture.kelvin)) } else { P::Null },
+                ),
                 ("On", P::typed("IFCBOOLEAN", P::Bool(fixture.on))),
             ],
             &[r],
@@ -119,6 +122,66 @@ mod tests {
         assert_eq!(text.matches("=IFCLIGHTFIXTURE(").count(), 1, "{text}");
         assert!(text.contains(",'light-lf0',$,$,#") && text.contains(",.DIRECTIONSOURCE.);"), "{text}");
         assert!(text.contains("IFCPROPERTYSINGLEVALUE('Lumens',$,IFCLUMINOUSFLUXMEASURE(1000.),$)"), "{text}");
+    }
+
+    #[test]
+    fn no_lights_produces_no_ifclightfixture() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, name: "Ground".into(), ..Level::default() }];
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCLIGHTFIXTURE(").count(), 0, "{text}");
+    }
+
+    #[test]
+    fn fixture_without_meshes_is_still_written() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, name: "Ground".into(), ..Level::default() }];
+        m.lights = vec![LightFixture::new(ArchId(0), "No mesh light", Vec2::new(1.0, 1.0))];
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCLIGHTFIXTURE(").count(), 1, "{text}");
+        assert!(text.contains(",'light-lf0',$,$,#"), "{text}");
+    }
+
+    #[test]
+    fn all_light_kinds_map_to_correct_source_type() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, name: "Ground".into(), ..Level::default() }];
+        m.lights = vec![
+            LightFixture { kind: LightKind::Point, ..LightFixture::new(ArchId(0), "Point", Vec2::new(1.0, 1.0)) },
+            LightFixture { kind: LightKind::Spot, ..LightFixture::new(ArchId(1), "Spot", Vec2::new(2.0, 2.0)) },
+            LightFixture { kind: LightKind::Area, ..LightFixture::new(ArchId(2), "Area", Vec2::new(3.0, 3.0)) },
+            LightFixture { kind: LightKind::Strip, ..LightFixture::new(ArchId(3), "Strip", Vec2::new(4.0, 4.0)) },
+        ];
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCLIGHTFIXTURE(").count(), 4, "{text}");
+        assert_eq!(text.matches(",.POINTSOURCE.);").count(), 2, "{text}");
+        assert_eq!(text.matches(",.DIRECTIONSOURCE.);").count(), 2, "{text}");
+    }
+
+    #[test]
+    fn zero_and_large_lumens_and_kelvin_are_written() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, name: "Ground".into(), ..Level::default() }];
+        m.lights = vec![
+            LightFixture { lumens: 0.0, kelvin: 0.0, ..LightFixture::new(ArchId(0), "Zero", Vec2::new(1.0, 1.0)) },
+            LightFixture { lumens: 500000.0, kelvin: 6500.0, ..LightFixture::new(ArchId(1), "Huge", Vec2::new(2.0, 2.0)) },
+        ];
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert!(text.contains("IFCLUMINOUSFLUXMEASURE(0.)"), "{text}");
+        assert!(text.contains("IFCTHERMODYNAMICTEMPERATUREMEASURE(0.)"), "{text}");
+        assert!(text.contains("IFCLUMINOUSFLUXMEASURE(500000.)"), "{text}");
+        assert!(text.contains("IFCTHERMODYNAMICTEMPERATUREMEASURE(6500.)"), "{text}");
+    }
+
+    #[test]
+    fn nan_lumens_and_kelvin_are_written_as_null() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, name: "Ground".into(), ..Level::default() }];
+        m.lights = vec![LightFixture { lumens: f64::NAN, kelvin: f64::NAN, ..LightFixture::new(ArchId(0), "NaN light", Vec2::new(1.0, 1.0)) }];
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCLIGHTFIXTURE(").count(), 1, "{text}");
+        assert!(text.contains("IFCPROPERTYSINGLEVALUE('Lumens',$,$,$)"), "{text}");
+        assert!(text.contains("IFCPROPERTYSINGLEVALUE('ColourTemperature',$,$,$)"), "{text}");
     }
 
     #[test]
