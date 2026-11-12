@@ -37,6 +37,9 @@ pub const MAT_NO_SHADOW: u32 = 4;
 pub const LIGHT_POINT: u32 = 0;
 pub const LIGHT_SPOT: u32 = 1;
 pub const LIGHT_AREA: u32 = 2;
+/// One straight segment of a strip light: `position` = start, `axis` = unit along, `length`,
+/// `direction` = the emitting normal, `rgb` = candela per metre × colour / luminance.
+pub const LIGHT_STRIP: u32 = 3;
 
 /// `GpuFrame::flags`.
 pub const FRAME_SUN: u32 = 1;
@@ -378,6 +381,10 @@ fn pack_lights(lights: &[SceneLight]) -> (Vec<GpuLight>, Vec<f32>) {
     let mut packed: Vec<(usize, u32)> = Vec::new();
     let mut out = Vec::with_capacity(lights.len());
     for light in lights {
+        if light.kind == LightKind::Strip {
+            out.extend(strip_gpu_lights(light));
+            continue;
+        }
         let mut g = gpu_light(light);
         if let Some(profile) = &light.ies {
             let key = std::sync::Arc::as_ptr(profile) as usize;
@@ -412,6 +419,33 @@ fn pack_ies(vertical: &[f64], horizontal: &[f64], candela: &[f64], ies: &mut Vec
     Some(offset)
 }
 
+/// The lights of a strip, one [`LIGHT_STRIP`] per straight segment ([`crate::lights::strip_runs`]);
+/// empty for a strip without samples. `rgb` is the segment's candela per metre × colour /
+/// luminance(colour), so `li = rgb × length × cos / d²` is lux on a surface facing the piece.
+fn strip_gpu_lights(l: &SceneLight) -> Vec<GpuLight> {
+    let colour = luminance_rgb(l.color);
+    let f = |v: cadcraft_geom::Vec3| [v.x as f32, v.y as f32, v.z as f32];
+    crate::lights::strip_runs(l)
+        .iter()
+        .filter_map(|r| {
+            let along = r.end - r.start;
+            let length = along.len();
+            if !length.is_finite() || length <= 0.0 {
+                return None;
+            }
+            Some(GpuLight {
+                position: f(r.start),
+                kind: LIGHT_STRIP,
+                direction: f(r.normal),
+                rgb: colour.map(|c| (r.cd_per_metre * f64::from(c)) as f32),
+                axis: f(along * (1.0 / length)),
+                length: length as f32,
+                ..Default::default()
+            })
+        })
+        .collect()
+}
+
 /// One light without its IES table. A point or spot light's `rgb` is `intensity` × colour /
 /// luminance(colour) (cd); an area light's is its radiance, `intensity / (width × length)` nits.
 fn gpu_light(l: &SceneLight) -> GpuLight {
@@ -419,8 +453,8 @@ fn gpu_light(l: &SceneLight) -> GpuLight {
         LightKind::Point => LIGHT_POINT,
         LightKind::Spot => LIGHT_SPOT,
         LightKind::Area => LIGHT_AREA,
-        // Skipped until p19-strip-render: treated as a point light here.
-        LightKind::Strip => LIGHT_POINT,
+        // A strip becomes one light per segment (`strip_gpu_lights`); this arm is not reached.
+        LightKind::Strip => LIGHT_STRIP,
     };
     let scale = if kind == LIGHT_AREA {
         let area = l.size[0] * l.size[1];
@@ -1133,6 +1167,34 @@ mod tests {
         let mirror = material_for("mirror-x");
         assert_eq!((mirror.albedo, mirror.metallic, mirror.roughness, mirror.flags), ([0.95; 3], 1.0, 0.02, 0));
         assert_eq!(mirror.ior, 1.5);
+    }
+
+    #[test]
+    fn strip_lens_camera_only_emissive() {
+        // A strip's 1 mm lens is the shared `light-lens-lit` material: per-light lens radiance is
+        // not available (materials are per name, not per fixture), so a strip's lens reads
+        // LENS_NITS for camera rays, not (lm/m / 0.012) / pi, and lights nothing by bounce.
+        let lens = material_for("light-lens-lit");
+        assert_eq!(lens.flags & MAT_EMIT_CAMERA_ONLY, MAT_EMIT_CAMERA_ONLY);
+        assert_eq!(lens.emission, [LENS_NITS; 3]);
+        // The light itself is the emissive strip: one LIGHT_STRIP per straight run, camera rays
+        // never see it as geometry.
+        let mut strip = SceneLight { kind: LightKind::Strip, color: [1.0; 3], direction: Vec3::new(0.0, 0.0, -1.0), ..Default::default() };
+        let pieces: Vec<cadcraft_arch3d::light::StripSample> = (0..10)
+            .map(|k| cadcraft_arch3d::light::StripSample {
+                position: Vec3::new(0.1 * k as f64 + 0.05, 0.0, 2.4),
+                normal: Vec3::new(0.0, 0.0, -1.0),
+                intensity: 0.1 * 500.0 / std::f64::consts::PI,
+            })
+            .collect();
+        strip.strip = Some(Arc::new(pieces));
+        let scene = Scene3d { lights: vec![strip], ..Default::default() };
+        let gpu = build_gpu_scene(&scene, false, None);
+        assert_eq!(gpu.lights.len(), 1);
+        let l = gpu.lights[0];
+        assert_eq!((l.kind, l.direction), (LIGHT_STRIP, [0.0, 0.0, -1.0]));
+        assert!((l.length - 1.0).abs() < 1e-5 && l.position[0].abs() < 1e-6 && (l.axis[0] - 1.0).abs() < 1e-6, "{l:?}");
+        assert!((luminance_of(l.rgb) - 500.0 / std::f64::consts::PI).abs() < 1e-2, "cd per metre {:?}", l.rgb);
     }
 
     fn luminance_of(rgb: [f32; 3]) -> f64 {

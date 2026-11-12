@@ -580,3 +580,55 @@ fn raster_lambert_plane_reads_ev_scaled_luminance() {
     let Some(got) = lit_centre(&mut r, &floor, &camera, &auto, false) else { return };
     assert!(near(got[0], 0.18, 0.03), "auto: {got:?}");
 }
+
+// ---- phase 19: strip lights ---------------------------------------------------------------------
+
+/// A white strip of 500 lm/m along (1,2)..(3,2) at 2.4 m, emitting down, in 0.143 m pieces.
+fn strip_light() -> cadcraft_arch3d::light::SceneLight {
+    use cadcraft_arch3d::light::{LightKind, SceneLight, StripSample};
+    let pieces = 14usize;
+    let samples: Vec<StripSample> = (0..pieces)
+        .map(|k| StripSample {
+            position: Vec3::new(1.0 + 2.0 * (k as f64 + 0.5) / pieces as f64, 2.0, 2.4),
+            normal: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 500.0 * (2.0 / pieces as f64) / std::f64::consts::PI,
+        })
+        .collect();
+    SceneLight {
+        id: ArchId(0),
+        kind: LightKind::Strip,
+        position: Vec3::new(2.0, 2.0, 2.4),
+        direction: Vec3::new(0.0, 0.0, -1.0),
+        color: [1.0; 3],
+        strip: Some(std::sync::Arc::new(samples)),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn raster_strip_lights_the_floor() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let mut lit = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [8.0, 8.0, 0.0])]);
+    let dark = lit.clone();
+    lit.lights = vec![strip_light()];
+    let mut lighting = plane_lighting(4.0, ToneMap::None);
+    lighting.sun = None;
+    let under = down_at([2.0, 2.0, 0.0]);
+    let away = down_at([2.0, 3.8, 0.0]);
+    let (Some(on), Some(off)) =
+        (lit_centre_keyed(&mut r, &lit, 20, &under, &lighting, false), lit_centre_keyed(&mut r, &dark, 21, &under, &lighting, false))
+    else {
+        return;
+    };
+    let Some(far) = lit_centre_keyed(&mut r, &lit, 20, &away, &lighting, false) else { return };
+    // 49.72 lx on a 0.5 albedo Lambert floor: 7.91 nits, scaled by the exposure.
+    let want = tone_map(49.72 * 0.5 / std::f64::consts::PI as f32 * crate::exposure::ev100_scale(4.0), crate::exposure::TONE_NONE);
+    let got = on[1] - off[1];
+    assert!(near(got, want, 0.05), "the strip adds {got}, want {want}");
+    assert!(on[1] > far[1] && on[1] > off[1] + 0.02, "brighter under the strip: {on:?}, away {far:?}, off {off:?}");
+    // One light against the budget, never shadowed.
+    let eye = under.eye();
+    let Some(frame) = r.lit_frame(&lit, 20, [eye.x, eye.y, eye.z], &lighting, false) else { return };
+    assert_eq!(frame.lights, 1);
+    assert_eq!(frame.shadowed, 0);
+}

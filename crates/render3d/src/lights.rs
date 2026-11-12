@@ -11,7 +11,8 @@
 //! - binding 1: the sun map, `texture_depth_2d` (a 1×1 map when there is none).
 //! - binding 2: `LightsU` ([`LIGHTS_UNIFORM_SIZE`] bytes): `count: vec4<u32>` (x = lights
 //!   drawn), `lights: array<GpuLight, 64>`, `spot_vp: array<mat4x4<f32>, 64>` (light i's spot
-//!   matrix in slot i).
+//!   matrix in slot i), `strip_segs: array<StripSeg, 128>` (the segments of the strip lights,
+//!   [`StripSeg`], 48 bytes each).
 //! - binding 3: the shadow atlas, `texture_depth_2d_array` (one layer per spot, six per point
 //!   light; a 1×1×1 array when nothing is shadowed).
 //!
@@ -20,6 +21,12 @@
 //! `color_cos_inner` (xyz = colour × intensity in candela, w = cos of half the cone), `shadow`
 //! (x = first atlas layer or −1 when unshadowed, y = 1 for a cube (point light), z = near
 //! plane, w = depth bias in metres).
+//!
+//! A **strip light** is one [`GpuLight`] (a marker: `dir_cos_outer.w` = −3, `pos_range.xyz` the
+//! mean of its samples, `color_cos_inner.xyz` the kelvin colour, `shadow.x` = −1 so it is never
+//! shadowed in the raster, `shadow.z`/`shadow.w` = its first segment and segment count) plus its
+//! [`StripSeg`]s; it counts once against [`MAX_GPU_LIGHTS`]. The shader sums its pieces (at most
+//! 0.15 m, at their midpoints); shadows from a strip are the path tracer's.
 //!
 //! Shadow maps store the perspective depth `far/(far−near)·(1 − near/z)` of the distance `z`
 //! along the face's forward axis; `shaders/light_math.wgsl` turns it back into metres with
@@ -31,7 +38,8 @@
 
 use std::cmp::Ordering;
 
-use cadcraft_arch3d::light::{LightKind, SceneLight};
+use cadcraft_arch3d::light::{LightKind, SceneLight, StripSample};
+use cadcraft_geom::Vec3;
 
 /// Most lights one frame draws (the uniform's array length).
 pub const MAX_GPU_LIGHTS: usize = 64;
@@ -50,7 +58,140 @@ pub const DEFAULT_EXPOSURE: f32 = 0.01;
 pub const NIGHT_AMBIENT: f32 = 0.02;
 /// Bytes of `FrameU` (binding 0) and `LightsU` (binding 2).
 pub const FRAME_UNIFORM_SIZE: u64 = 256;
-pub const LIGHTS_UNIFORM_SIZE: u64 = 16 + 64 * MAX_GPU_LIGHTS as u64 + 64 * MAX_GPU_LIGHTS as u64;
+/// Most strip segments one frame draws (the length of `LightsU::strip_segs`).
+pub const MAX_STRIP_SEGS: usize = 128;
+/// Bytes of one [`StripSeg`].
+pub const STRIP_SEG_SIZE: usize = 48;
+/// Byte offset of `strip_segs` in `LightsU`.
+pub const STRIP_SEGS_OFFSET: usize = 16 + 64 * MAX_GPU_LIGHTS + 64 * MAX_GPU_LIGHTS;
+/// 16 + 64 × 64 + 64 × 64 + 128 × 48 = 14 352 bytes, within the WebGL2 uniform limit of 16 384.
+pub const LIGHTS_UNIFORM_SIZE: u64 = (STRIP_SEGS_OFFSET + STRIP_SEG_SIZE * MAX_STRIP_SEGS) as u64;
+/// Longest piece (m) a strip segment is summed in: the spacing of the strip's samples.
+pub const STRIP_PIECE: f64 = cadcraft_doc::arch::STRIP_SAMPLE_SPACING;
+/// `dir_cos_outer.w` of a strip light's marker.
+pub const STRIP_MARKER: f32 = -3.0;
+/// Most pieces one segment is summed in (a guard for the shader's loop).
+pub const MAX_STRIP_PIECES: u32 = 1024;
+
+/// One straight run of a strip light in the uniform (`StripSeg` in `lit.wgsl`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StripSeg {
+    /// Start point; w = candela per metre of strip along the emitting normal.
+    pub a: [f32; 4],
+    /// End point; w = number of equal pieces the run is summed in.
+    pub b: [f32; 4],
+    /// Unit emitting normal; w unused.
+    pub n: [f32; 4],
+}
+
+/// A straight run of a strip light: `pieces` equal pieces from `start` to `end`, each a Lambertian
+/// emitter of `cd_per_metre` × its length along `normal`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StripRun {
+    pub start: Vec3,
+    pub end: Vec3,
+    pub normal: Vec3,
+    pub cd_per_metre: f64,
+    pub pieces: u32,
+}
+
+/// The runs of a strip light, rebuilt from its samples: consecutive samples with the same normal
+/// and intensity at an equal step are one run (spanning half a step beyond its end samples). A
+/// lone sample becomes a run of [`STRIP_PIECE`] across its normal, keeping its lumens. Empty for a
+/// light without samples.
+pub fn strip_runs(light: &SceneLight) -> Vec<StripRun> {
+    let samples: &[StripSample] = light.strip.as_ref().map_or(&[], |v| v.as_slice());
+    let mut out = Vec::new();
+    let mut i = 0;
+    while let Some(first) = samples.get(i) {
+        let mut count = 1usize;
+        let mut step = Vec3::new(0.0, 0.0, 0.0);
+        while let (Some(prev), Some(next)) = (samples.get(i + count - 1), samples.get(i + count)) {
+            let d = next.position - prev.position;
+            let same =
+                (next.normal - first.normal).len() < 1e-6 && (next.intensity - first.intensity).abs() <= 1e-9 * first.intensity.abs().max(1e-30);
+            let joins = if count == 1 { d.len() <= STRIP_PIECE + 1e-9 && d.len() > 1e-9 } else { (d - step).len() < 1e-7 };
+            if !(same && joins) {
+                break;
+            }
+            step = d;
+            count += 1;
+        }
+        let normal = first.normal;
+        let last = samples.get(i + count - 1).unwrap_or(first);
+        if count == 1 {
+            let c = normal.cross(Vec3::new(0.0, 0.0, 1.0));
+            let along = if c.len() > 1e-6 { c * (1.0 / c.len()) } else { Vec3::new(1.0, 0.0, 0.0) };
+            let half = along * (STRIP_PIECE * 0.5);
+            out.push(StripRun {
+                start: first.position - half,
+                end: first.position + half,
+                normal,
+                cd_per_metre: first.intensity / STRIP_PIECE,
+                pieces: 1,
+            });
+        } else {
+            out.push(StripRun {
+                start: first.position - step * 0.5,
+                end: last.position + step * 0.5,
+                normal,
+                cd_per_metre: first.intensity / step.len(),
+                pieces: count as u32,
+            });
+        }
+        i += count;
+    }
+    out
+}
+
+/// How many `strip_segs` entries a light needs (0 for anything but a strip).
+pub fn strip_seg_count(light: &SceneLight) -> usize {
+    if light.kind == LightKind::Strip { strip_runs(light).len() } else { 0 }
+}
+
+/// The mean of a strip's sample positions (its light point when it has none).
+fn strip_centre(light: &SceneLight) -> Vec3 {
+    match light.strip.as_ref().filter(|v| !v.is_empty()) {
+        Some(v) => {
+            let mut sum = Vec3::new(0.0, 0.0, 0.0);
+            for s in v.iter() {
+                sum = sum + s.position;
+            }
+            sum * (1.0 / v.len() as f64)
+        }
+        None => light.position,
+    }
+}
+
+/// The uniform's segment for a run, its candela per metre scaled by `scale`.
+pub fn strip_seg(run: &StripRun, scale: f64) -> StripSeg {
+    let f = |v: Vec3, w: f64| [v.x as f32, v.y as f32, v.z as f32, w as f32];
+    StripSeg { a: f(run.start, run.cd_per_metre * scale), b: f(run.end, f64::from(run.pieces)), n: f(run.normal, 0.0) }
+}
+
+/// CPU mirror of the strip sum in `fixture_light` (`lit.wgsl`): the illuminance (lux, white) the
+/// `segs` give a surface at `point` with unit `normal`. Every piece (at most [`STRIP_PIECE`]), at
+/// its midpoint, adds `I × piece length × max(0, n_e·−l) × max(0, n·l) / d²`, `l` the unit vector
+/// from the point to the piece, `I` the segment's candela per metre.
+pub fn strip_irradiance_cpu(segs: &[StripSeg], point: [f64; 3], normal: [f64; 3]) -> f64 {
+    let mut total = 0.0;
+    for s in segs {
+        let pieces = f64::from(s.b[3]).round().clamp(1.0, f64::from(MAX_STRIP_PIECES)) as u32;
+        let a = [f64::from(s.a[0]), f64::from(s.a[1]), f64::from(s.a[2])];
+        let d = [f64::from(s.b[0]) - a[0], f64::from(s.b[1]) - a[1], f64::from(s.b[2]) - a[2]];
+        let piece_len = dot(d, d).sqrt() / f64::from(pieces);
+        let ne = [f64::from(s.n[0]), f64::from(s.n[1]), f64::from(s.n[2])];
+        for k in 0..pieces {
+            let t = (f64::from(k) + 0.5) / f64::from(pieces);
+            let w = [a[0] + d[0] * t - point[0], a[1] + d[1] * t - point[1], a[2] + d[2] * t - point[2]];
+            let d2 = dot(w, w).max(1e-8);
+            let inv = 1.0 / d2.sqrt();
+            let l = [w[0] * inv, w[1] * inv, w[2] * inv];
+            total += f64::from(s.a[3]) * piece_len * (-dot(ne, l)).max(0.0) * dot(normal, l).max(0.0) / d2;
+        }
+    }
+    total
+}
 
 /// A light's shadow-map slot in the atlas.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -67,6 +208,14 @@ pub struct ShadowSlot {
     pub bias: f32,
 }
 
+/// The intensity (cd) a light ranks by: a strip's is the sum of its pieces' peak candela.
+fn priority_intensity(l: &SceneLight) -> f64 {
+    match (&l.strip, l.kind) {
+        (Some(v), LightKind::Strip) => v.iter().map(|s| s.intensity).sum(),
+        _ => l.intensity,
+    }
+}
+
 /// Indices of `lights` ordered by how much they matter from `eye`: intensity (cd) divided by
 /// max(squared distance from `eye` to the light, 1 m²), largest first; ties by lower index.
 /// Non-finite scores sort last.
@@ -79,7 +228,7 @@ pub fn shadow_priority(lights: &[SceneLight], eye: [f64; 3]) -> Vec<usize> {
             let dz = l.position.z - eye[2];
             let dsq = dx * dx + dy * dy + dz * dz;
             let finite = dx.is_finite() && dy.is_finite() && dz.is_finite() && dsq.is_finite() && l.intensity.is_finite();
-            let score = if finite { l.intensity / dsq.max(1.0) } else { f64::NAN };
+            let score = if finite { priority_intensity(l) / dsq.max(1.0) } else { f64::NAN };
             (i, score)
         })
         .collect();
@@ -98,22 +247,45 @@ pub fn shadow_priority(lights: &[SceneLight], eye: [f64; 3]) -> Vec<usize> {
 }
 
 /// The first `budget` of [`shadow_priority`], returned in ascending index order.
+///
+/// A strip light is never shadowed in the raster view, so it is never picked.
 pub fn select_shadowed(lights: &[SceneLight], eye: [f64; 3], budget: usize) -> Vec<usize> {
-    let mut sel: Vec<usize> = shadow_priority(lights, eye).iter().take(budget).copied().collect();
+    let mut sel: Vec<usize> =
+        shadow_priority(lights, eye).iter().filter(|&&i| lights.get(i).is_some_and(|l| l.kind != LightKind::Strip)).take(budget).copied().collect();
     sel.sort();
     sel
 }
 
 /// The lights a frame draws: all of them when there are at most [`MAX_GPU_LIGHTS`], else the
-/// first [`MAX_GPU_LIGHTS`] of [`shadow_priority`]; ascending index order.
+/// first [`MAX_GPU_LIGHTS`] of [`shadow_priority`]; ascending index order. A strip counts as one
+/// light; when the strips' segments exceed [`MAX_STRIP_SEGS`] the farthest strips from `eye` are
+/// dropped first (ties: the higher index), and a strip with more segments than fit is never drawn.
 pub fn select_drawn(lights: &[SceneLight], eye: [f64; 3]) -> Vec<usize> {
-    if lights.len() <= MAX_GPU_LIGHTS {
+    let mut sel: Vec<usize> = if lights.len() <= MAX_GPU_LIGHTS {
         (0..lights.len()).collect()
     } else {
         let mut sel: Vec<usize> = shadow_priority(lights, eye).iter().take(MAX_GPU_LIGHTS).copied().collect();
         sel.sort();
         sel
+    };
+    let segs = |i: usize| lights.get(i).map_or(0, strip_seg_count);
+    sel.retain(|&i| segs(i) <= MAX_STRIP_SEGS);
+    let mut total: usize = sel.iter().map(|&i| segs(i)).sum();
+    let dist = |i: usize| {
+        lights.get(i).map_or(f64::INFINITY, |l| {
+            let c = strip_centre(l);
+            let d = (c.x - eye[0]).powi(2) + (c.y - eye[1]).powi(2) + (c.z - eye[2]).powi(2);
+            if d.is_finite() { d } else { f64::INFINITY }
+        })
+    };
+    while total > MAX_STRIP_SEGS {
+        let farthest =
+            sel.iter().copied().filter(|&i| segs(i) > 0).max_by(|&a, &b| dist(a).partial_cmp(&dist(b)).unwrap_or(Ordering::Equal).then(a.cmp(&b)));
+        let Some(f) = farthest else { break };
+        total = total.saturating_sub(segs(f));
+        sel.retain(|&i| i != f);
     }
+    sel
 }
 
 /// The `LightsU` bytes ([`LIGHTS_UNIFORM_SIZE`] long, std140, little-endian) for the `drawn`
@@ -123,9 +295,39 @@ pub fn select_drawn(lights: &[SceneLight], eye: [f64; 3]) -> Vec<usize> {
 pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, ShadowSlot)]) -> Vec<u8> {
     let mut buf = vec![0u8; LIGHTS_UNIFORM_SIZE as usize];
     write_u32(&mut buf, 0, drawn.len().min(MAX_GPU_LIGHTS) as u32);
+    // The next free entry of `strip_segs`.
+    let mut next_seg = 0usize;
     for (k, &i) in drawn.iter().take(MAX_GPU_LIGHTS).enumerate() {
         let Some(l) = lights.get(i) else { continue };
         let base = 16 + 64 * k;
+        if l.kind == LightKind::Strip {
+            // A marker light plus its segments; a strip that no longer fits gets no segments.
+            let runs = strip_runs(l);
+            let first = next_seg;
+            let count = if first + runs.len() <= MAX_STRIP_SEGS { runs.len() } else { 0 };
+            let c = strip_centre(l);
+            let head = [c.x, c.y, c.z, 0.0, l.direction.x, l.direction.y, l.direction.z];
+            for (j, v) in head.iter().enumerate() {
+                write_f32(&mut buf, base + 4 * j, *v as f32);
+            }
+            write_f32(&mut buf, base + 28, STRIP_MARKER);
+            for (j, c) in l.color.iter().enumerate() {
+                write_f32(&mut buf, base + 32 + 4 * j, *c as f32);
+            }
+            // cos_inner 0; shadow = (-1: unshadowed, 0, first segment, segment count).
+            for (off, v) in [(44, 0.0), (48, -1.0), (52, 0.0), (56, first as f32), (60, count as f32)] {
+                write_f32(&mut buf, base + off, v);
+            }
+            for run in runs.iter().take(count) {
+                let seg = strip_seg(run, 1.0);
+                let sb = STRIP_SEGS_OFFSET + STRIP_SEG_SIZE * next_seg;
+                for (j, v) in seg.a.iter().chain(&seg.b).chain(&seg.n).enumerate() {
+                    write_f32(&mut buf, sb + 4 * j, *v);
+                }
+                next_seg += 1;
+            }
+            continue;
+        }
         // `slots` pairs a light index with its slot, in the atlas's order, not the light's.
         let slot = slots.iter().find(|(j, _)| *j == i).map(|(_, s)| s);
         let far = slot.map_or(0.0, |s| s.far);
@@ -508,5 +710,112 @@ mod tests {
         assert_eq!(read_f32(&buf, base1 + 52), 0.0);
         assert_eq!(read_f32(&buf, base1 + 56), 0.0);
         assert_eq!(read_f32(&buf, base1 + 60), 0.0);
+    }
+
+    /// A strip of `lm_per_m` lumens per metre from `a` to `b` at `z`, emitting down, in pieces of
+    /// at most 0.15 m (as `cadcraft_arch::light::strip_samples`).
+    fn strip(a: [f64; 2], b: [f64; 2], z: f64, lm_per_m: f64) -> SceneLight {
+        let len = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+        let pieces = ((len / 0.15).ceil() as usize).max(1);
+        let samples: Vec<StripSample> = (0..pieces)
+            .map(|k| {
+                let t = (k as f64 + 0.5) / pieces as f64;
+                StripSample {
+                    position: Vec3::new(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z),
+                    normal: Vec3::new(0.0, 0.0, -1.0),
+                    intensity: lm_per_m * len / pieces as f64 / std::f64::consts::PI,
+                }
+            })
+            .collect();
+        SceneLight {
+            kind: LightKind::Strip,
+            position: Vec3::new((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, z),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            color: [1.0, 0.8, 0.6],
+            strip: Some(std::sync::Arc::new(samples)),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn lights_uniform_fits_webgl2() {
+        assert_eq!(LIGHTS_UNIFORM_SIZE, 8208 + 6144);
+        assert_eq!(LIGHTS_UNIFORM_SIZE, 14_352);
+        assert!(LIGHTS_UNIFORM_SIZE <= 16_384, "the WebGL2 uniform block limit");
+        assert_eq!(STRIP_SEGS_OFFSET % 16, 0);
+        assert_eq!(STRIP_SEG_SIZE, 48);
+        assert_eq!(pack_lights(&[], &[], &[]).len() as u64, LIGHTS_UNIFORM_SIZE);
+    }
+
+    #[test]
+    fn strip_one_drawn_light_never_shadowed() {
+        // An L-shaped strip: two runs, one light.
+        let mut l = strip([0.5, 0.5], [3.5, 0.5], 2.4, 500.0);
+        let second = strip([3.5, 0.5], [3.5, 1.5], 2.4, 500.0);
+        if let (Some(a), Some(b)) = (l.strip.take(), second.strip) {
+            let mut v = (*a).clone();
+            v.extend(b.iter().copied());
+            l.strip = Some(std::sync::Arc::new(v));
+        }
+        assert_eq!(strip_runs(&l).len(), 2);
+        let mut lights = vec![l, spot_at(1, 1.0), spot_at(2, 2.0)];
+        let eye = [2.0, 2.0, 1.5];
+        assert_eq!(select_drawn(&lights, eye), vec![0, 1, 2], "a strip counts once");
+        // Never shadowed, even with a budget to spare.
+        assert_eq!(select_shadowed(&lights, eye, 8), vec![1, 2]);
+        assert_eq!(select_shadowed(&lights[..1], eye, 8), Vec::<usize>::new());
+        let buf = pack_lights(&lights, &[0, 1, 2], &[]);
+        assert_eq!(read_u32(&buf, 0), 3);
+        assert_eq!(read_f32(&buf, 16 + 28), STRIP_MARKER, "the marker");
+        assert_eq!(read_f32(&buf, 16 + 48), -1.0, "raster-unshadowed");
+        assert_eq!((read_f32(&buf, 16 + 56), read_f32(&buf, 16 + 60)), (0.0, 2.0), "first segment and count");
+        let seg0 = STRIP_SEGS_OFFSET;
+        assert!((read_f32(&buf, seg0 + 12) - (500.0 / std::f64::consts::PI) as f32).abs() < 1e-2, "cd per metre");
+        assert_eq!(read_f32(&buf, seg0 + 28), 20.0, "3 m in 20 pieces");
+        assert_eq!(read_f32(&buf, seg0 + 40), -1.0, "emitting down");
+        // Past 128 segments the farthest strips go first.
+        let many: Vec<SceneLight> = (0..3)
+            .map(|k| {
+                let mut s = strip([0.0, k as f64 * 10.0], [1.0, k as f64 * 10.0], 2.4, 500.0);
+                // 60 one-piece runs: alternate normals so none merge.
+                let samples: Vec<StripSample> = (0..60)
+                    .map(|j| StripSample {
+                        position: Vec3::new(j as f64, k as f64 * 10.0, 2.4),
+                        normal: Vec3::new(0.0, 0.0, if j % 2 == 0 { -1.0 } else { 1.0 }),
+                        intensity: 1.0,
+                    })
+                    .collect();
+                s.strip = Some(std::sync::Arc::new(samples));
+                s
+            })
+            .collect();
+        assert_eq!(strip_seg_count(&many[0]), 60);
+        assert_eq!(select_drawn(&many, [0.0, 0.0, 1.0]), vec![0, 1], "the farthest strip is dropped");
+        assert_eq!(select_drawn(&many, [0.0, 20.0, 1.0]), vec![1, 2]);
+        lights.extend(many);
+        let all: Vec<usize> = (0..lights.len()).collect();
+        let sel = select_drawn(&lights, [0.0, 0.0, 1.0]);
+        assert!(sel.iter().map(|&i| strip_seg_count(&lights[i])).sum::<usize>() <= MAX_STRIP_SEGS);
+        assert_eq!(pack_lights(&lights, &all, &[]).len() as u64, LIGHTS_UNIFORM_SIZE);
+    }
+
+    #[test]
+    fn strip_irradiance_cpu_matches_line_integral() {
+        // Check 05's strip: 2 m of 500 lm/m at 2.4 m: 49.72 lx under its centre.
+        let l = strip([1.0, 2.0], [3.0, 2.0], 2.4, 500.0);
+        let segs: Vec<StripSeg> = strip_runs(&l).iter().map(|r| strip_seg(r, 1.0)).collect();
+        assert_eq!(segs.len(), 1);
+        assert_eq!(segs[0].b[3], 14.0, "2 m in 14 pieces of at most 0.15 m");
+        let e = strip_irradiance_cpu(&segs, [2.0, 2.0, 0.0], [0.0, 0.0, 1.0]);
+        assert!((e - 49.72).abs() < 49.72 * 0.01, "{e}");
+        // Behind the emitting side, and facing away: nothing.
+        assert_eq!(strip_irradiance_cpu(&segs, [2.0, 2.0, 2.8], [0.0, 0.0, 1.0]), 0.0);
+        assert_eq!(strip_irradiance_cpu(&segs, [2.0, 2.0, 0.0], [0.0, 0.0, -1.0]), 0.0);
+        // The lone-piece run keeps its lumens: a 0.1 m strip is 50 lm, nearly a point source.
+        let short = strip([2.0, 2.0], [2.1, 2.0], 2.4, 500.0);
+        let s: Vec<StripSeg> = strip_runs(&short).iter().map(|r| strip_seg(r, 1.0)).collect();
+        let e = strip_irradiance_cpu(&s, [2.05, 2.0, 0.0], [0.0, 0.0, 1.0]);
+        let point = 50.0 / std::f64::consts::PI / (2.4 * 2.4);
+        assert!((e - point).abs() < point * 0.05, "{e} vs {point}");
     }
 }
