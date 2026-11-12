@@ -421,7 +421,13 @@ impl Session {
         }
         cmd::groups::after_command(self, before);
         cmd::constraints::after_command(self, before, ok);
+        if ok {
+            cmd::arch::autodim::detect_edits(self, before, uid);
+        }
         assoc::after_command(self, before, uid);
+        if ok {
+            cmd::arch::autodim::regenerate(self, before, uid);
+        }
     }
 
     fn resume_suspended(&mut self) {
