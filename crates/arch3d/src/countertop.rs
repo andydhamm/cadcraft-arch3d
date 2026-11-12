@@ -26,6 +26,11 @@ mod tests {
     use cadcraft_geom::Vec2;
 
     #[test]
+    fn the_stub_builds_nothing() {
+        assert!(countertop_meshes(&Countertop::default(), None, 0.0).is_empty());
+    }
+
+    #[test]
     fn no_outline_builds_nothing_and_an_outline_builds_one_slab() {
         assert!(countertop_meshes(&Countertop::default(), None, 0.0).is_empty());
         let mut m = ArchModel::default();
