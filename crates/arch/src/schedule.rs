@@ -40,20 +40,20 @@ pub fn rows(_model: &ArchModel, _s: &Schedule) -> Vec<ScheduleRow> {
 /// The full column list for a schedule kind.
 pub fn columns(kind: ScheduleKind) -> &'static [&'static str] {
     match kind {
-        ScheduleKind::Door => ["number", "count", "width", "height", "style", "kind", "swing", "level"],
-        ScheduleKind::Window => ["number", "count", "width", "height", "sill", "style", "level"],
-        ScheduleKind::Cabinet => ["number", "count", "kind", "width", "depth", "height", "fronts", "doors", "drawers", "level"],
-        ScheduleKind::Room => ["name", "number", "level", "floor", "walls", "ceiling", "area", "ceilingHeight"],
+        ScheduleKind::Door => &["number", "count", "width", "height", "style", "kind", "swing", "level"],
+        ScheduleKind::Window => &["number", "count", "width", "height", "sill", "style", "level"],
+        ScheduleKind::Cabinet => &["number", "count", "kind", "width", "depth", "height", "fronts", "doors", "drawers", "level"],
+        ScheduleKind::Room => &["name", "number", "level", "floor", "walls", "ceiling", "area", "ceilingHeight"],
     }
 }
 
 /// The default (minimum) column list for a schedule kind.
 pub fn default_columns(kind: ScheduleKind) -> &'static [&'static str] {
     match kind {
-        ScheduleKind::Door => ["number", "count", "width", "height", "style"],
-        ScheduleKind::Window => ["number", "count", "width", "height", "sill", "style"],
-        ScheduleKind::Cabinet => ["number", "count", "kind", "width", "depth", "height", "fronts"],
-        ScheduleKind::Room => ["name", "floor", "walls", "ceiling", "area"],
+        ScheduleKind::Door => &["number", "count", "width", "height", "style"],
+        ScheduleKind::Window => &["number", "count", "width", "height", "sill", "style"],
+        ScheduleKind::Cabinet => &["number", "count", "kind", "width", "depth", "height", "fronts"],
+        ScheduleKind::Room => &["name", "floor", "walls", "ceiling", "area"],
     }
 }
 
@@ -92,10 +92,10 @@ pub fn validate_columns(kind: ScheduleKind, cols: &[String]) -> Result<(), Strin
     let allowed = columns(kind);
     let mut seen: Vec<&str> = Vec::with_capacity(cols.len());
     for col in cols {
-        if !allowed.contains(col.as_str()) {
+        if !allowed.contains(&col.as_str()) {
             return Err(format!("column `{}` is not allowed for a {} schedule", col, kind.key()));
         }
-        if seen.contains(col.as_str()) {
+        if seen.contains(&col.as_str()) {
             return Err(format!("column `{}` is duplicated", col));
         }
         seen.push(col.as_str());
