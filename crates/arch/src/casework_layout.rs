@@ -47,6 +47,12 @@ pub struct FrontInfo {
     pub pull: Option<[f64; 2]>,
 }
 
+impl Default for FrontInfo {
+    fn default() -> Self {
+        Self { kind: FrontKind::False, rect: [0.0; 4], hinge: None, pull: None }
+    }
+}
+
 /// The furnishing hosted by `c` that has a cut-out: its id, `at` and the cut-out size.
 pub fn hosted_cutout(model: &ArchModel, c: &Cabinet) -> Option<(ArchId, [f64; 2], [f64; 2])> {
     model

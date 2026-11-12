@@ -10,8 +10,8 @@
 //! segment.
 
 use cadcraft_doc::ArchModel;
-use cadcraft_dxf::Tag;
 use cadcraft_geom::Vec2;
+use craft_dxf::Tag;
 use serde::{Deserialize, Serialize};
 
 /// Named-object-dictionary key of the architectural model XRECORD.

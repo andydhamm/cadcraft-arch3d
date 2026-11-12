@@ -320,10 +320,14 @@ mod tests {
         let mut off = Offscreen::with_device(device.clone(), queue, SIZE);
         off.lit_pipelines = LitPipelines::new(&device, &off.gpu);
         let params = LitParams { sun_on: false, exposure, tonemap, ..Default::default() };
-        let (frame, _atlas) = {
+        let (mut frame, _atlas) = {
             let pipelines = off.lit_pipelines.as_ref()?;
             test_frame(&device, &pipelines.layout, &params)
         };
+        // A hand-built night: the legacy per-lux scale `exposure`, and the curve `tonemap` asks for.
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.tone_map = if tonemap { cadcraft_doc::arch::ToneMap::Aces } else { cadcraft_doc::arch::ToneMap::None };
+        frame.lighting = crate::lit_frame::Lighting { sun: None, exposure, look, ..Default::default() };
         let opts = RenderOptions { lit: Some(&frame), ..Default::default() };
         off.render_with(&scene, 1, &camera, &Light::DEFAULT, &opts);
         Some((off.read_rgba().ok()?, camera))

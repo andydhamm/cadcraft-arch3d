@@ -5,20 +5,100 @@ use cadcraft_doc::ArchId;
 
 use crate::mesh::Mesh;
 
-/// The meshes of one room's moldings, one per run (`molding-room-*` materials, object = `room`),
+/// The meshes of one room's moldings, one per molding index (`molding-room-*` materials, object = `room`),
 /// `level` being the room level's elevation.
-///
-/// Stub: owner p18-room-moldings.
-pub fn room_molding_meshes(_room: ArchId, _level: f64, _runs: &[MoldingRun]) -> Vec<Mesh> {
-    Vec::new()
+pub fn room_molding_meshes(room: ArchId, level: f64, runs: &[MoldingRun]) -> Vec<Mesh> {
+    let mut meshes = Vec::new();
+
+    // Group runs by index
+    let mut by_index: std::collections::BTreeMap<usize, Vec<&MoldingRun>> = std::collections::BTreeMap::new();
+    for r in runs {
+        by_index.entry(r.index).or_default().push(r);
+    }
+
+    for (idx, group) in by_index {
+        if group.is_empty() {
+            continue;
+        }
+        let kind = group[0].kind;
+        let material = format!("molding-room-{}-{}", kind.key(), idx);
+        let mut mesh = Mesh::new(&material, room);
+        for run in group {
+            if run.path.len() < 2 || run.z.len() != run.path.len() {
+                continue;
+            }
+            if let Some(swept) = crate::sweep::sweep(&run.profile.points, &run.path, &run.z, run.closed, run.side, &material, room) {
+                let offset = mesh.positions.len() as u32;
+                mesh.positions.extend(swept.positions);
+                if !swept.normals.is_empty() {
+                    if mesh.normals.is_empty() {
+                        mesh.normals = vec![[0.0, 0.0, 0.0]; offset as usize];
+                    }
+                    mesh.normals.extend(swept.normals);
+                }
+                if !swept.uvs.is_empty() {
+                    if mesh.uvs.is_empty() {
+                        mesh.uvs = vec![[0.0, 0.0]; offset as usize];
+                    }
+                    mesh.uvs.extend(swept.uvs);
+                }
+                mesh.indices.extend(swept.indices.iter().map(|&i| i + offset));
+            }
+        }
+        if !mesh.positions.is_empty() {
+            mesh.level_elevation = level;
+            meshes.push(mesh);
+        }
+    }
+
+    meshes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cadcraft_arch::molding_runs::MoldingRun;
+    use cadcraft_doc::arch::MoldingKind;
+    use cadcraft_geom::Vec2;
 
     #[test]
     fn the_stub_builds_nothing() {
         assert!(room_molding_meshes(ArchId(0), 0.0, &[]).is_empty());
+    }
+
+    #[test]
+    fn base_mesh_probes() {
+        // Test that base molding mesh is created and probeable
+        let runs = vec![MoldingRun {
+            kind: MoldingKind::Base,
+            index: 0,
+            profile: cadcraft_arch::molding_profile::default_profile(MoldingKind::Base),
+            path: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)],
+            z: vec![0.0, 0.0],
+            closed: false,
+            side: 1.0,
+            ..Default::default()
+        }];
+        let meshes = room_molding_meshes(ArchId(0), 0.0, &runs);
+        assert_eq!(meshes.len(), 1);
+        assert!(meshes[0].material.starts_with("molding-room-base"));
+    }
+
+    #[test]
+    fn crown_is_a_closed_ring_mesh() {
+        // Test that crown molding creates a closed ring mesh
+        let runs = vec![MoldingRun {
+            kind: MoldingKind::Crown,
+            index: 0,
+            profile: cadcraft_arch::molding_profile::default_profile(MoldingKind::Crown),
+            path: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)],
+            z: vec![2.4, 2.4, 2.4, 2.4],
+            closed: true,
+            side: 1.0,
+            ..Default::default()
+        }];
+        let meshes = room_molding_meshes(ArchId(0), 0.0, &runs);
+        assert_eq!(meshes.len(), 1);
+        assert!(meshes[0].material.starts_with("molding-room-crown"));
     }
 }

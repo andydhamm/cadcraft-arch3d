@@ -7,7 +7,9 @@ use serde_json::{Value, json};
 use cadcraft_arch3d::Scene3d;
 use cadcraft_arch3d::camera::{Camera, FullCamera, MAX_DISTANCE, Orbit, ray_at};
 use cadcraft_arch3d::incremental::ObjectKind;
-use cadcraft_doc::arch::handle_json;
+use cadcraft_arch3d::pick::Bvh;
+use cadcraft_arch3d::view_filter::ViewFilter;
+use cadcraft_doc::arch::{Camera3d, CameraKind, handle_json};
 use cadcraft_doc::{ArchId, opening_label, railing_label, roof_label, room_label, stair_label, wall_label};
 use cadcraft_geom::Vec3;
 
@@ -147,18 +149,56 @@ fn label_and_handle(id: ArchId, part: &str, owner: ObjectKind) -> (String, Strin
     (label, handle_json(owner.handle(id)))
 }
 
+fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
+    match c.kind {
+        CameraKind::Orbit | CameraKind::Overview => {
+            let target = c.target.unwrap_or([0.0; 3]);
+            let azimuth = c.azimuth_deg.unwrap_or(0.0);
+            let elevation = c.elevation_deg.unwrap_or(30.0);
+            let distance = c.distance.unwrap_or(10.0);
+            let fov = c.fov_deg.unwrap_or(45.0);
+            Ok(Camera::Orbit(Orbit::new(Vec3::new(target[0], target[1], target[2]), azimuth, elevation, distance, fov)))
+        }
+        CameraKind::Full => {
+            let eye = c.eye.map(|e| Vec3::new(e[0], e[1], c.eye_height.unwrap_or(1.6))).unwrap_or(Vec3::new(0.0, -10.0, 1.6));
+            let target = c.target.unwrap_or([0.0; 3]);
+            let fov = c.fov_deg.unwrap_or(45.0);
+            Ok(Camera::Full(FullCamera::new(eye, Vec3::new(target[0], target[1], target[2]), fov)))
+        }
+    }
+}
+
+fn pick_camera<'a>(doc: &'a cadcraft_doc::ArchModel, v: &Value) -> Result<(Camera, Option<&'a Camera3d>), EngineError> {
+    match v {
+        Value::String(name) => {
+            let name = name.trim();
+            match doc.camera_by_name(name) {
+                Some(c) => Ok((camera_from_saved(c)?, Some(c))),
+                None => Err(bad("pick3d", format!("no camera named `{name}`"))),
+            }
+        }
+        _ => Ok((parse_camera(v)?, None)),
+    }
+}
+
 /// Cast the ray through `pixel` of a `size` viewport and report the nearest object hit.
 fn run_pick3d(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let cam = params.get("camera").filter(|v| !v.is_null()).ok_or_else(|| bad("pick3d", "`camera` is required"))?;
-    let camera = parse_camera(cam)?;
+    let doc = s.doc()?;
+    let (camera, saved_camera) = pick_camera(&doc.arch, cam)?;
     let size = parse_size(params.get("size"))?;
     let pixel = parse_pixel(params.get("pixel"), size)?;
     let Some((origin, dir)) = ray_at(&camera, size, pixel) else {
-        return Ok(json!({ "ok": true, "hit": null }));
+        return Ok(json!({ "ok": true, "hit": null, "filter": {"hidden": 0, "clip": false, "nearClip": null} }));
     };
-    let doc = s.doc()?;
+    let mut look = crate::cmd::arch::look::effective_look(&doc.arch, saved_camera);
+    let _ = crate::cmd::arch::look::apply_look_params("pick3d", params, &doc.arch, &mut look, true)?;
+    let filter = ViewFilter::from_look(&look, &doc.arch, &camera);
     let scene = Scene3d::build(&doc.arch);
-    Ok(match scene.pick(origin, dir) {
+    let filtered = filter.apply(&scene);
+    let bvh = Bvh::build(&filtered);
+    let hit = filtered.pick_filtered(&bvh, origin, dir, &|h| filter.accepts(h.point));
+    let reply = match hit {
         None => json!({ "ok": true, "hit": null }),
         Some(h) => {
             let (id, handle) = label_and_handle(h.object, h.part, h.owner);
@@ -167,7 +207,17 @@ fn run_pick3d(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 "point": [h.point.x, h.point.y, h.point.z],
             } })
         }
-    })
+    };
+    let mut out = reply.as_object().unwrap().clone();
+    out.insert(
+        "filter".to_string(),
+        json!({
+            "hidden": filter.hidden.len(),
+            "clip": filter.clip.is_some(),
+            "nearClip": filter.near
+        }),
+    );
+    Ok(Value::Object(out))
 }
 
 #[cfg(test)]
@@ -312,6 +362,49 @@ mod tests {
             let p = json!({ "camera": front(), "size": sz, "pixel": [1, 1] });
             assert!(s.execute("pick3d", &p).is_err());
         }
+    }
+
+    #[test]
+    fn pick3d_cutaway_clip_near_and_named_camera() {
+        let mut s = Session::new();
+        let doc = s.doc_mut().unwrap();
+        doc.arch.cameras.push(cadcraft_doc::arch::Camera3d {
+            name: "south".to_string(),
+            kind: CameraKind::Full,
+            eye: Some([3.0, -5.0]),
+            eye_height: Some(1.5),
+            target: Some([3.0, 0.0, 1.0]),
+            fov_deg: Some(45.0),
+            ..Default::default()
+        });
+        let r = s.execute(
+            "pick3d",
+            &json!({
+                "camera": "south",
+                "size": [100, 100],
+                "pixel": [50, 50],
+                "cutaway": true,
+                "clip": {"min": [-1.0, -1.0, 0.0], "max": [10.0, 10.0, 2.0]},
+                "nearClip": 0.2
+            }),
+        );
+        assert!(r.is_ok(), "{r:?}");
+        let v = r.unwrap();
+        assert!(v["filter"]["clip"].as_bool().unwrap());
+        assert_eq!(v["filter"]["nearClip"], 0.2);
+        assert!(v["ok"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn pick3d_refuses_bad_clip() {
+        let mut s = session();
+        let p = json!({
+            "camera": front(),
+            "size": [100, 100],
+            "pixel": [50, 50],
+            "clip": {"min": [2.0, 2.0, 2.0], "max": [1.0, 1.0, 1.0]}
+        });
+        assert!(s.execute("pick3d", &p).is_err());
     }
 
     #[test]

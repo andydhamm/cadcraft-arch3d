@@ -441,6 +441,18 @@ pub fn entry_record(v: &Value, catalog: &str) -> Result<ItemRecord, String> {
     if !safe_relative(&file) {
         return Err("the file must be a plain relative path inside the catalog's folder".into());
     }
+    if let Some(normal) = r.normal_map.as_deref() {
+        if normal.trim().is_empty() {
+            return Err("the normal map is empty".into());
+        }
+        if !safe_relative(normal) {
+            return Err("the normal map must be a plain relative path inside the catalog's folder".into());
+        }
+        match extension(normal).as_str() {
+            "png" | "jpg" | "jpeg" => {}
+            ext => return Err(format!("unsupported normal map type `.{}`", ext.chars().take(16).collect::<String>())),
+        }
+    }
     r.kind = match (extension(&file).as_str(), Category::parse(&r.category)) {
         ("glb", _) => ItemKind::Symbol,
         ("png" | "jpg" | "jpeg", Some(Category::Materials)) => ItemKind::Material,
@@ -629,7 +641,7 @@ mod native {
         let entries = catalog_entries(&bytes)?;
 
         let mut skipped = Vec::new();
-        let mut accepted: Vec<(Value, String, Vec<u8>)> = Vec::new();
+        let mut accepted: Vec<(Value, String, Vec<u8>, Option<String>, Option<Vec<u8>>)> = Vec::new();
         let mut ids = BTreeSet::new();
         for (i, v) in entries.iter().enumerate() {
             let label = entry_label(v, i);
@@ -643,6 +655,17 @@ mod native {
                     return Err("the file is not in the folder".into());
                 }
                 let data = read_item_file(&path)?;
+                let normal_data = if let Some(ref normal) = r.normal_map {
+                    let normal_path = join_relative(&from, normal);
+                    if !regular_file(&normal_path) {
+                        return Err("the normal map is not in the folder".into());
+                    }
+                    let bytes = read_item_file(&normal_path)?;
+                    (io.read_image)(&bytes, 1024)?;
+                    Some(bytes)
+                } else {
+                    None
+                };
                 match r.kind {
                     ItemKind::Symbol => {
                         let mesh = (io.read_glb)(&data)?;
@@ -654,10 +677,10 @@ mod native {
                         (io.read_image)(&data, 1024)?;
                     }
                 }
-                Ok((file, data))
+                Ok((file, data, r.normal_map, normal_data))
             });
             match checked {
-                Ok((file, data)) => accepted.push((v.clone(), file, data)),
+                Ok((file, data, normal_map, normal_data)) => accepted.push((v.clone(), file, data, normal_map, normal_data)),
                 Err(reason) => skipped.push(Skipped::new(label, reason)),
             }
         }
@@ -693,16 +716,24 @@ mod native {
     }
 
     /// The accepted entries' files and a catalog.json listing just them, in a fresh folder.
-    fn write_catalog(dir: &Path, accepted: &[(Value, String, Vec<u8>)]) -> Result<(), String> {
+    fn write_catalog(dir: &Path, accepted: &[(Value, String, Vec<u8>, Option<String>, Option<Vec<u8>>)]) -> Result<(), String> {
         std::fs::create_dir(dir).map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
-        for (_, file, data) in accepted {
+        for (_, file, data, normal_map, normal_data) in accepted {
             let path = join_relative(dir, file);
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| format!("cannot make {}: {e}", parent.display()))?;
             }
             std::fs::write(&path, data).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+            if let Some(normal_map) = normal_map {
+                let normal_path = join_relative(dir, normal_map);
+                if let Some(parent) = normal_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| format!("cannot make {}: {e}", parent.display()))?;
+                }
+                let bytes = normal_data.as_ref().ok_or_else(|| format!("the normal map {} is missing", normal_map))?;
+                std::fs::write(&normal_path, bytes).map_err(|e| format!("cannot write {}: {e}", normal_path.display()))?;
+            }
         }
-        let items: Vec<Value> = accepted.iter().map(|(v, _, _)| v.clone()).collect();
+        let items: Vec<Value> = accepted.iter().map(|(v, _, _, _, _)| v.clone()).collect();
         let catalog = serde_json::json!({ "version": 1, "items": items });
         let text = serde_json::to_vec_pretty(&catalog).map_err(|e| e.to_string())?;
         std::fs::write(dir.join("catalog.json"), text).map_err(|e| format!("cannot write catalog.json: {e}"))
