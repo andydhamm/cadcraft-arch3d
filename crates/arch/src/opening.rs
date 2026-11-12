@@ -7,7 +7,7 @@
 //! crate.
 
 use super::{ArchId, ArchModel, Wall};
-use cadcraft_doc::arch::{Opening, OpeningKind, OpeningTop};
+use cadcraft_doc::arch::{Opening, OpeningKind, OpeningTop, is_glass_type};
 use cadcraft_geom::Vec2;
 
 /// Minimum width of a hinged/pocket/sliding opening, in metres.
@@ -28,8 +28,34 @@ pub const MIN_SEPARATION: f64 = 0.05;
 /// Allowance added to finished dimensions to obtain the rough (cut) dimensions.
 pub const ROUGH_ALLOWANCE: f64 = 0.12;
 
+/// Wall material that must remain behind a niche's recess, in metres.
+pub const NICHE_BACKING: f64 = 0.012;
+
 /// The tolerance used when comparing spans for touching/overlap.
 const EPS: f64 = 1e-9;
+
+/// Whether `o` is a shower door: a frameless glass door (style "shower" in any case).
+pub fn is_shower(o: &Opening) -> bool {
+    o.kind == OpeningKind::Door && o.style.trim().eq_ignore_ascii_case("shower")
+}
+
+/// The allowance the 3D cut adds to the finished size: none for niches (the recess is exactly
+/// its size) and shower doors (frameless), [`ROUGH_ALLOWANCE`] for everything else.
+pub fn cut_allowance(o: &Opening) -> f64 {
+    if o.kind == OpeningKind::Niche || is_shower(o) { 0.0 } else { ROUGH_ALLOWANCE }
+}
+
+/// Refuse a niche whose recess leaves less than [`NICHE_BACKING`] of the wall behind it.
+pub fn validate_niche_depth(model: &ArchModel, host: ArchId, depth: f64) -> Result<(), PlacementError> {
+    let wall = model.wall(host).ok_or_else(|| PlacementError(format!("host wall {host} not found")))?;
+    if !depth.is_finite() || depth <= 0.0 {
+        return Err(PlacementError("the niche depth must be positive".into()));
+    }
+    if !wall.thickness.is_finite() || wall.thickness < depth + NICHE_BACKING - EPS {
+        return Err(PlacementError("the wall is not 12 mm thicker than the niche".into()));
+    }
+    Ok(())
+}
 
 /// A placement validation failure.
 #[derive(Debug, Clone, PartialEq)]
@@ -124,6 +150,15 @@ pub fn validate_placement(
     if width < min_w {
         return Err(PlacementError(format!("width {width} below minimum {min_w} for {kind:?}")));
     }
+    if kind == OpeningKind::Door && style.trim().eq_ignore_ascii_case("shower") {
+        let glass = match wall.split.as_ref() {
+            None => is_glass_type(&wall.wall_type),
+            Some(sp) => is_glass_type(&sp.upper) && sill >= sp.height - EPS,
+        };
+        if !glass {
+            return Err(PlacementError("a shower door goes in a glass wall".into()));
+        }
+    }
 
     if !wall.height.is_finite() || sill + height > wall.height {
         return Err(PlacementError(format!("sill+height {} exceeds wall height {}", sill + height, wall.height)));
@@ -187,6 +222,9 @@ pub fn check_height(model: &ArchModel, o: &Opening) -> f64 {
 pub fn place_opening(model: &ArchModel, mut o: Opening, fit: bool) -> Result<Opening, PlacementError> {
     let min_w = min_width(o.kind, &o.style);
     let ch = check_height(model, &o);
+    if o.kind == OpeningKind::Niche {
+        validate_niche_depth(model, o.host, o.depth)?;
+    }
 
     match validate_placement(model, o.host, o.offset, o.width, o.sill, ch, o.kind, &o.style, None) {
         Ok(offset) => {
@@ -766,5 +804,87 @@ mod tests {
         let offset4 = project_to_wall(&model, host, Vec2::new(15.0, 15.0)).unwrap();
         let wall_len = 10.0 * 2.0_f64.sqrt();
         assert!((offset4 - wall_len).abs() < 1e-9);
+    }
+
+    fn glass_wall(model: &mut ArchModel, thickness: f64) -> ArchId {
+        model.push_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness,
+            wall_type: "Glass".into(),
+            height: 2.0,
+            ..Wall::default()
+        })
+    }
+
+    fn niche(host: ArchId, offset: f64, depth: f64) -> Opening {
+        Opening { host, offset, width: 0.6, height: 0.9, sill: 1.0, kind: OpeningKind::Niche, style: "niche".into(), depth, ..Opening::default() }
+    }
+
+    #[test]
+    fn niche_needs_12_mm_more_wall() {
+        let mut m = ArchModel::default();
+        let h = wall(&mut m, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        assert!(place_opening(&m, niche(h, 4.0, 0.1), false).is_ok());
+        assert!(place_opening(&m, niche(h, 4.0, 0.188), false).is_ok());
+        let e = place_opening(&m, niche(h, 4.0, 0.19), false).unwrap_err();
+        assert_eq!(e.0, "the wall is not 12 mm thicker than the niche");
+        assert!(place_opening(&m, niche(h, 4.0, 0.0), false).is_err());
+        assert!(place_opening(&m, niche(h, 4.0, f64::NAN), false).is_err());
+    }
+
+    #[test]
+    fn niche_overlaps_like_openings() {
+        let mut m = ArchModel::default();
+        let h = wall(&mut m, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        let a = place_opening(&m, niche(h, 4.0, 0.1), false).unwrap();
+        m.push_opening(a);
+        assert!(place_opening(&m, niche(h, 4.5, 0.1), false).is_err());
+        assert!(place_opening(&m, niche(h, 6.0, 0.1), false).is_ok());
+        let mut tall = niche(h, 6.0, 0.1);
+        tall.sill = 2.0;
+        assert!(place_opening(&m, tall, false).is_err());
+    }
+
+    #[test]
+    fn shower_style_only_in_glass() {
+        let mut m = ArchModel::default();
+        let plain = wall(&mut m, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        let glass = glass_wall(&mut m, 0.01);
+        let door = |host| Opening { host, offset: 5.0, width: 0.7, height: 1.9, style: "Shower".into(), ..Opening::default() };
+        let e = place_opening(&m, door(plain), false).unwrap_err();
+        assert_eq!(e.0, "a shower door goes in a glass wall");
+        assert!(place_opening(&m, door(glass), false).is_ok());
+        let split = m.push_wall(Wall {
+            start: Vec2::new(0.0, 5.0),
+            end: Vec2::new(10.0, 5.0),
+            thickness: 0.1,
+            height: 2.4,
+            split: Some(cadcraft_doc::arch::WallSplit { height: 1.0, upper: "Glass".into(), upper_thickness: 0.01 }),
+            ..Wall::default()
+        });
+        let mut low = door(split);
+        low.height = 0.8;
+        assert!(place_opening(&m, low, false).is_err());
+        let mut high = door(split);
+        high.sill = 1.0;
+        high.height = 1.4;
+        assert!(place_opening(&m, high, false).is_ok());
+    }
+
+    #[test]
+    fn cut_allowance_is_zero_for_niches_and_shower_doors_only() {
+        let base = Opening::default();
+        assert_eq!(cut_allowance(&base), ROUGH_ALLOWANCE);
+        assert_eq!(cut_allowance(&Opening { kind: OpeningKind::Niche, ..base.clone() }), 0.0);
+        let shower = Opening { style: "SHOWER".into(), ..base.clone() };
+        assert!(is_shower(&shower));
+        assert_eq!(cut_allowance(&shower), 0.0);
+        let win = Opening { kind: OpeningKind::Window, style: "shower".into(), ..base.clone() };
+        assert!(!is_shower(&win));
+        assert_eq!(cut_allowance(&win), ROUGH_ALLOWANCE);
+        for kind in [OpeningKind::Window, OpeningKind::GarageDoor, OpeningKind::CasedOpening] {
+            assert_eq!(cut_allowance(&Opening { kind, ..base.clone() }), ROUGH_ALLOWANCE);
+        }
     }
 }
