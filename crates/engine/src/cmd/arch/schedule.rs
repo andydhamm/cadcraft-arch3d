@@ -1,12 +1,12 @@
 //! Schedule commands: door, window, cabinet and room-finish schedules as linked TABLEs.
 
+use crate::Result;
 use crate::cmd::CommandSpec;
 use crate::cmd::table::make_table;
-use crate::engine::Result;
-use crate::engine::session::Session;
-use crate::engine::session::execute::EngineError;
+use crate::session::Session;
+use crate::session::execute::EngineError;
 use cadcraft_doc::arch::{
-    ArchModel, LAYER_SCHEDULE, LINK_SCHEDULE, MAX_SCHEDULE_ROWS, MAX_SCHEDULES, Schedule, ScheduleKind, ScheduleRow, link_tags, read_link, set_link,
+    ArchModel, LAYER_SCHEDULE, LINK_SCHEDULE, MAX_SCHEDULE_ROWS, MAX_SCHEDULES, Schedule, ScheduleKind, link_tags, read_link, set_link,
 };
 use cadcraft_doc::{Drawing, Handle, Space, Table, TableCell, TableStyle};
 use cadcraft_geom::Vec2;
@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 /// Run the `schedule` command.
 pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     let kind_str = params.get("kind").and_then(Value::as_str).ok_or_else(|| EngineError::Other("kind is required".into()))?;
-    let kind = ScheduleKind::from_str(kind_str).ok_or_else(|| EngineError::Other(format!("unknown kind: {kind_str}")))?;
+    let kind = ScheduleKind::from_key(kind_str).ok_or_else(|| EngineError::Other(format!("unknown kind: {kind_str}")))?;
 
     let columns = parse_columns(params.get("columns"), kind)?;
     let name = params.get("name").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| default_name(kind));
@@ -282,7 +282,7 @@ fn build_table(d: &Drawing, schedule: &Schedule, rows: &[ScheduleRow], at: Vec2)
     // Header row
     let mut header = Vec::new();
     for col_key in &schedule.columns {
-        header.push(cadcraft_arch::schedule::column_title(*col_key).to_string());
+        header.push(cadcraft_arch::schedule::column_title(col_key).to_string());
     }
     cells.push(header);
 
@@ -348,7 +348,7 @@ fn table_differs(current: &Table, expected: &Table) -> bool {
         if c_row.len() != e_row.len() {
             return true;
         }
-        for (c_cell, e_cell) in c_row.iter().zip(e_cell.iter()) {
+        for (c_cell, e_cell) in c_row.iter().zip(e_row.iter()) {
             if c_cell.text != e_cell.text {
                 return true;
             }
@@ -366,8 +366,8 @@ fn parse_columns(v: Option<&Value>, kind: ScheduleKind) -> Result<Vec<String>> {
         let mut cols = Vec::new();
         for item in arr {
             let s = item.as_str().ok_or_else(|| EngineError::Other("column keys must be strings".into()))?;
-            if !cadcraft_arch::schedule::validate_columns(kind, &[s.to_string()]) {
-                return Err(EngineError::Other(format!("unknown or invalid column key: {s}")));
+            if let Err(e) = cadcraft_arch::schedule::validate_columns(kind, &[s.to_string()]) {
+                return Err(EngineError::Other(e));
             }
             if cols.contains(&s.to_string()) {
                 return Err(EngineError::Other(format!("duplicate column key: {s}")));
@@ -418,11 +418,11 @@ fn default_at(d: &Drawing, kind: ScheduleKind) -> Result<Vec2> {
     if bounds.is_empty() {
         return Ok(Vec2::ZERO);
     }
-    let x = bounds.max_x + 3.0;
+    let x = bounds.max.x + 3.0;
     // Offset Y by number of existing schedules of this kind? Or just all schedules?
     // Prompt: "at its max y minus 3 m per schedule already made"
     let count = d.arch.schedules.len();
-    let y = bounds.max_y - 3.0 * (count as f64);
+    let y = bounds.max.y - 3.0 * (count as f64);
     Ok(Vec2::new(x, y))
 }
 
