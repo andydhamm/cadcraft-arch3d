@@ -106,4 +106,91 @@ mod tests {
         assert_eq!(text.matches(",$,.CLADDING.);").count(), 2, "{text}");
         assert_eq!(text.matches("=IFCRELCONTAINEDINSPATIALSTRUCTURE(").count(), 1, "{text}");
     }
+
+    #[test]
+    fn no_roofs_produces_no_roof_entities() {
+        let m = ArchModel::default();
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCROOF(").count(), 0, "{text}");
+        assert_eq!(text.matches("=IFCSLAB(").count(), 0, "{text}");
+        assert_eq!(text.matches("=IFCCOVERING(").count(), 0, "{text}");
+    }
+
+    #[test]
+    fn multiple_roofs_get_separate_ifc_entities() {
+        let mut m = ArchModel::default();
+        let mut roof1 = Roof { level: 0, ..Roof::default() };
+        roof1.planes.push(plane(0.0, 4.0));
+        m.push_roof(roof1);
+        let mut roof2 = Roof { level: 0, ..Roof::default() };
+        roof2.planes.push(plane(0.0, 4.0));
+        m.push_roof(roof2);
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCROOF(").count(), 2, "{text}");
+        assert_eq!(text.matches("=IFCSLAB(").count(), 2, "{text}");
+        assert_eq!(text.matches("=IFCRELAGGREGATES(").count(), 2, "{text}");
+    }
+
+    #[test]
+    fn roof_with_no_planes_produces_no_mesh_entities() {
+        let mut m = ArchModel::default();
+        let roof = Roof { level: 0, ..Roof::default() };
+        m.push_roof(roof);
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCROOF(").count(), 0, "{text}");
+        assert_eq!(text.matches("=IFCSLAB(").count(), 0, "{text}");
+    }
+
+    #[test]
+    fn single_plane_roof() {
+        let mut m = ArchModel::default();
+        let mut roof = Roof { level: 0, ..Roof::default() };
+        roof.planes.push(plane(0.0, 4.0));
+        m.push_roof(roof);
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCROOF(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCSLAB(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCRELAGGREGATES(").count(), 1, "{text}");
+    }
+
+    #[test]
+    fn roof_with_many_planes() {
+        let mut m = ArchModel::default();
+        let mut roof = Roof { level: 0, ..Roof::default() };
+        for i in 0..10 {
+            let y0 = i as f64 * 2.0;
+            let y1 = y0 + 1.0;
+            roof.planes.push(plane(y0, y1));
+        }
+        m.push_roof(roof);
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCROOF(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCSLAB(").count(), 10, "{text}");
+    }
+
+    #[test]
+    fn roof_with_fascia_but_no_soffit() {
+        let mut m = ArchModel::default();
+        let mut roof = Roof { level: 0, fascia: true, soffit: false, ..Roof::default() };
+        roof.planes.push(plane(0.0, 4.0));
+        roof.planes.push(plane(8.0, 4.0));
+        m.push_roof(roof);
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCCOVERING(").count(), 1, "{text}");
+        assert!(text.contains("-fascia'"), "{text}");
+        assert!(!text.contains("-soffit'"), "{text}");
+    }
+
+    #[test]
+    fn roof_with_soffit_but_no_fascia() {
+        let mut m = ArchModel::default();
+        let mut roof = Roof { level: 0, fascia: false, soffit: true, ..Roof::default() };
+        roof.planes.push(plane(0.0, 4.0));
+        roof.planes.push(plane(8.0, 4.0));
+        m.push_roof(roof);
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCCOVERING(").count(), 1, "{text}");
+        assert!(text.contains("-soffit'"), "{text}");
+        assert!(!text.contains("-fascia'"), "{text}");
+    }
 }
