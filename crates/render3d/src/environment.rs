@@ -7,7 +7,7 @@
 //! `visible` means the environment also paints the picture background (a Sky/HDRI backdrop)
 //! as well as lighting; otherwise it is light only.
 
-use cadcraft_doc::arch::{ArchModel, Look};
+use cadcraft_doc::arch::{ArchModel, Backdrop, Look};
 use std::sync::Arc;
 
 /// An equirect environment map the path tracer importance-samples.
@@ -118,9 +118,28 @@ impl Environment {
     }
 }
 
-/// [p19-hdri] An environment built from the look's HDRI backdrop. Stub: not available yet.
-pub fn hdri_environment(_model: &ArchModel, _look: &Look) -> Option<Environment> {
-    None
+/// An environment built from the effective HDRI backdrop (the look's, else the model's): its
+/// stored image, intensity, rotation and horizon; visible and daylight. `None` when the backdrop
+/// is not an HDRI or its image is missing or invalid (the sky rules then apply).
+pub fn hdri_environment(model: &ArchModel, look: &Look) -> Option<Environment> {
+    let Some(Backdrop::Hdri { image, intensity, rotation, horizon }) = look.backdrop.as_ref().or(model.backdrop.as_ref()) else {
+        return None;
+    };
+    let img = model.hdr_images.get(image).filter(|i| i.is_valid())?;
+    let rgb: Vec<[f32; 3]> = img.to_rgb().iter().map(|c| [c[0] as f32, c[1] as f32, c[2] as f32]).collect();
+    let mut e = Environment {
+        width: img.width,
+        height: img.height,
+        rgb,
+        intensity: *intensity as f32,
+        rotation_deg: *rotation as f32,
+        horizon_deg: *horizon as f32,
+        visible: true,
+        daylight: true,
+        key: 0,
+    };
+    e.key = e.compute_key();
+    Some(e)
 }
 
 /// [p19-sky] The sky environment for the given sun. Stub: not available yet.
@@ -152,6 +171,41 @@ impl std::cmp::PartialEq for Environment {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hdri_environment_intensity_rotation_horizon() {
+        use cadcraft_doc::arch::ImageRgbe;
+        // Red for u < 0.5, blue otherwise; 8 x 4 texels; mantissa 128 with e = 129 is 1.0.
+        let mut rgbe = Vec::new();
+        for _ in 0..4 {
+            for x in 0..8 {
+                rgbe.extend_from_slice(if x < 4 { &[128, 0, 0, 129] } else { &[0, 0, 128, 129] });
+            }
+        }
+        let mut model = ArchModel::default();
+        model.hdr_images.insert("sky".into(), ImageRgbe { width: 8, height: 4, rgbe });
+        let look = Look::default();
+        assert!(hdri_environment(&model, &look).is_none(), "no backdrop, no environment");
+        model.backdrop = Some(Backdrop::Hdri { image: "sky".into(), intensity: 2.0, rotation: 180.0, horizon: 10.0 });
+        let e = hdri_environment(&model, &look).expect("environment");
+        assert!(e.visible && e.daylight && e.is_valid());
+        assert_eq!((e.intensity, e.rotation_deg, e.horizon_deg), (2.0, 180.0, 10.0));
+        // Looking along -Y is u = 0.25 (red) unrotated; turned 180 degrees it reads blue.
+        let mut flat = e.clone();
+        flat.rotation_deg = 0.0;
+        flat.horizon_deg = 0.0;
+        let r = flat.radiance([0.0, -1.0, 0.0]);
+        assert!((r[0] - 2.0).abs() < 1e-3 && r[2] < 1e-3, "{r:?}");
+        let b = e.radiance([0.0, -1.0, 0.0]);
+        assert!(b[2] > 1.9 && b[0] < 0.1, "{b:?}");
+        // A missing image falls back to the sky rules.
+        model.hdr_images.clear();
+        assert!(hdri_environment(&model, &look).is_none());
+        // The look's backdrop wins over the model's.
+        model.hdr_images.insert("other".into(), ImageRgbe { width: 1, height: 1, rgbe: vec![128, 128, 128, 129] });
+        let l = Look { backdrop: Some(Backdrop::Hdri { image: "other".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 }), ..Default::default() };
+        assert_eq!(hdri_environment(&model, &l).map(|e| e.width), Some(1));
+    }
 
     #[test]
     fn radiance_applies_rotation_and_horizon() {
