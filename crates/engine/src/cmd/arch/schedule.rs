@@ -11,6 +11,7 @@ use cadcraft_doc::arch::{
 use cadcraft_doc::{Drawing, Handle, Space, Table, TableStyle};
 use cadcraft_geom::Vec2;
 use serde_json::{Value, json};
+use std::sync::Arc;
 
 /// Run the `schedule` command.
 pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
@@ -37,12 +38,7 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     let id = arch.next_schedule_id;
     let label = format!("sc{id}");
 
-    let schedule = Schedule { id, name: name.clone(), kind, columns: columns.clone(), level, at: [at.x, at.y] };
-
-    // Validate schedule structure
-    if let Err(e) = cadcraft_arch::schedule::validate_schedule(&schedule) {
-        return Err(EngineError::Other(e));
-    }
+    let schedule = Schedule { id: ArchId(id), name: name.clone(), kind, columns: columns.clone(), level, at: [at.x, at.y] };
 
     let rows = cadcraft_arch::schedule::rows(arch, &schedule);
     let table = build_table(&doc, &schedule, &rows, at)?;
@@ -53,7 +49,7 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     let handle = doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
 
     // Link the table to the schedule via XDATA
-    if let Some(entity) = doc.entity_mut(handle) {
+    if let Some(entity) = doc.model.iter_mut().find(|e| e.handle == handle) {
         let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
         set_link(&mut tags, LINK_SCHEDULE, &label, 0);
         entity.common.xdata = tags;
@@ -62,7 +58,7 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     arch.schedules.push(schedule);
     arch.next_schedule_id += 1;
 
-    s.set_doc(doc);
+    s.state_mut()?.doc = Arc::new(doc);
 
     let row_json: Vec<Value> = rows
         .iter()
@@ -139,20 +135,15 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         return Err(EngineError::Other("no changes specified".into()));
     }
 
-    // Validate
-    if let Err(e) = cadcraft_arch::schedule::validate_schedule(&schedule) {
-        return Err(EngineError::Other(e));
-    }
-
     let rows = cadcraft_arch::schedule::rows(arch, &schedule);
 
     // Find existing table
-    let label = format!("sc{id}");
+    let label = format!("sc{}", id.0);
     let at_vec = Vec2::new(schedule.at[0], schedule.at[1]);
     if let Some(handle) = schedule_table(&doc, &label) {
         // Rewrite table
         let table = build_table(&doc, &schedule, &rows, at_vec)?;
-        if let Some(entity) = doc.entity_mut(handle) {
+        if let Some(entity) = doc.model.iter_mut().find(|e| e.handle == handle) {
             if let cadcraft_doc::EntityKind::Table(ref mut t) = entity.kind {
                 *t = table;
             }
@@ -164,7 +155,7 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         let mut common = Default::default();
         common.layer = LAYER_SCHEDULE.to_string();
         let handle = doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
-        if let Some(entity) = doc.entity_mut(handle) {
+        if let Some(entity) = doc.model.iter_mut().find(|e| e.handle == handle) {
             let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
             set_link(&mut tags, LINK_SCHEDULE, &label, 0);
             entity.common.xdata = tags;
@@ -172,7 +163,7 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
     }
 
     arch.schedules[idx] = schedule;
-    s.set_doc(doc);
+    s.state_mut()?.doc = Arc::new(doc);
 
     let row_json: Vec<Value> = rows
         .iter()
@@ -189,7 +180,7 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
     Ok(json!({
         "schedule": label,
         "name": schedule.name,
-        "kind": schedule.kind.as_str(),
+        "kind": kind_str(schedule.kind),
         "columns": schedule.columns,
         "rows": row_json
     }))
@@ -204,15 +195,15 @@ pub fn run_schedule_delete(s: &mut Session, params: &Value) -> Result<Value> {
     let arch = &mut doc.arch;
 
     let idx = arch.schedules.iter().position(|s| s.id == id).ok_or_else(|| EngineError::Other(format!("unknown schedule: {id_str}")))?;
-    let label = format!("sc{id}");
+    let label = format!("sc{}", id.0);
 
     // Erase table
     if let Some(handle) = schedule_table(&doc, &label) {
-        doc.remove(handle);
+        doc.model.retain(|e| e.handle != handle);
     }
 
     arch.schedules.remove(idx);
-    s.set_doc(doc);
+    s.state_mut()?.doc = Arc::new(doc);
 
     Ok(json!({ "deleted": label }))
 }
@@ -239,7 +230,7 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
     let mut to_remove = Vec::new();
 
     for schedule in &arch.schedules {
-        let label = format!("sc{}", schedule.id);
+        let label = format!("sc{}", schedule.id.0);
         let rows = cadcraft_arch::schedule::rows(arch, schedule);
 
         if rows.len() > MAX_SCHEDULE_ROWS {
@@ -254,11 +245,11 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
                 Err(_) => continue,
             };
 
-            if let Some(entity) = doc.entity(handle) {
+            if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
                 if let cadcraft_doc::EntityKind::Table(current_table) = &entity.kind {
                     if table_differs(current_table, &expected_table) {
                         // Rewrite table in place
-                        if let Some(entity_mut) = doc.entity_mut(handle) {
+                        if let Some(entity_mut) = doc.model.iter_mut().find(|e| e.handle == handle) {
                             if let cadcraft_doc::EntityKind::Table(ref mut t) = entity_mut.kind {
                                 *t = expected_table;
                                 changed = true;
@@ -279,7 +270,7 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
     }
 
     if changed {
-        s.set_doc(doc);
+        s.state_mut().ok().map(|st| st.doc = Arc::new(doc));
     }
 }
 
@@ -364,7 +355,7 @@ fn parse_columns(v: Option<&Value>, kind: ScheduleKind) -> Result<Vec<String>> {
         }
         Ok(cols)
     } else {
-        Ok(cadcraft_arch::schedule::default_columns(kind))
+        Ok(cadcraft_arch::schedule::default_columns(kind).iter().map(|s| s.to_string()).collect())
     }
 }
 
@@ -421,6 +412,15 @@ fn default_name(kind: ScheduleKind) -> String {
         ScheduleKind::Window => "Window Schedule".to_string(),
         ScheduleKind::Cabinet => "Cabinet Schedule".to_string(),
         ScheduleKind::Room => "Room Finish Schedule".to_string(),
+    }
+}
+
+fn kind_str(kind: ScheduleKind) -> String {
+    match kind {
+        ScheduleKind::Door => "door".to_string(),
+        ScheduleKind::Window => "window".to_string(),
+        ScheduleKind::Cabinet => "cabinet".to_string(),
+        ScheduleKind::Room => "room".to_string(),
     }
 }
 
