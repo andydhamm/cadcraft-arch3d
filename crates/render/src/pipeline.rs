@@ -1,6 +1,6 @@
-#[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashSet;
 
+#[cfg(not(target_arch = "wasm32"))]
 use super::display::append;
 use super::display::{DisplayList, Kind, NO_LAYER, PlotText, VIEWPORT_CONTENT};
 use super::draw::entity;
