@@ -244,7 +244,15 @@ mod tests {
 
     fn default_house() -> ArchModel {
         let mut m = ArchModel::default();
-        m.levels = vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::Floor }];
+        m.levels = vec![Level {
+            index: 0,
+            name: "Level 1".into(),
+            elevation: 0.0,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            kind: LevelKind::Floor,
+            ..Default::default()
+        }];
         m.walls = vec![
             Wall {
                 id: ArchId(0),
@@ -343,6 +351,7 @@ mod tests {
             roof_offset: 0.0,
             sill_sides: OpeningSides::RIGHT,
             casing_sides: OpeningSides::RIGHT,
+            ..Default::default()
         });
         let rows = exterior_rows(&model, 0, &[AutoRowKind::Openings]);
         assert!(rows.iter().any(|r| r.kind == AutoRowKind::Openings && r.side == "north"));
@@ -368,7 +377,15 @@ mod tests {
     #[test]
     fn l_footprint_sides_and_jogs() {
         let mut model = ArchModel::default();
-        model.levels = vec![Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, kind: LevelKind::Floor }];
+        model.levels = vec![Level {
+            index: 0,
+            name: "Level 1".into(),
+            elevation: 0.0,
+            ceiling_height: 2.4,
+            structure: 0.3,
+            kind: LevelKind::Floor,
+            ..Default::default()
+        }];
         model.walls = vec![
             Wall {
                 id: ArchId(0),
