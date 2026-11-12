@@ -592,6 +592,7 @@ fn strip_light() -> cadcraft_arch3d::light::SceneLight {
             position: Vec3::new(1.0 + 2.0 * (k as f64 + 0.5) / pieces as f64, 2.0, 2.4),
             normal: Vec3::new(0.0, 0.0, -1.0),
             intensity: 500.0 * (2.0 / pieces as f64) / std::f64::consts::PI,
+            ..Default::default()
         })
         .collect();
     SceneLight {

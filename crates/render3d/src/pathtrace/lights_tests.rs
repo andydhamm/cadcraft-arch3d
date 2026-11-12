@@ -578,6 +578,7 @@ fn strip_light(a: [f64; 2], b: [f64; 2], z: f64, lm_per_m: f64, colour: [f64; 3]
                 position: Vec3::new(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z),
                 normal: down(),
                 intensity: lm_per_m * len / pieces as f64 / std::f64::consts::PI,
+                ..Default::default()
             }
         })
         .collect();

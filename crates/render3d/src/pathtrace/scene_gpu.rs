@@ -1185,6 +1185,7 @@ mod tests {
                 position: Vec3::new(0.1 * k as f64 + 0.05, 0.0, 2.4),
                 normal: Vec3::new(0.0, 0.0, -1.0),
                 intensity: 0.1 * 500.0 / std::f64::consts::PI,
+                ..Default::default()
             })
             .collect();
         strip.strip = Some(Arc::new(pieces));

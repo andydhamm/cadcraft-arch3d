@@ -724,6 +724,7 @@ mod tests {
                     position: Vec3::new(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z),
                     normal: Vec3::new(0.0, 0.0, -1.0),
                     intensity: lm_per_m * len / pieces as f64 / std::f64::consts::PI,
+                    ..Default::default()
                 }
             })
             .collect();
@@ -783,6 +784,7 @@ mod tests {
                         position: Vec3::new(j as f64, k as f64 * 10.0, 2.4),
                         normal: Vec3::new(0.0, 0.0, if j % 2 == 0 { -1.0 } else { 1.0 }),
                         intensity: 1.0,
+                        ..Default::default()
                     })
                     .collect();
                 s.strip = Some(std::sync::Arc::new(samples));
