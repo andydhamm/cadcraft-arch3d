@@ -26,6 +26,11 @@ mod tests {
     use cadcraft_doc::arch::MoldingLine;
 
     #[test]
+    fn the_stub_builds_nothing() {
+        assert!(line_meshes(&MoldingLine::default(), 0.0).is_empty());
+    }
+
+    #[test]
     fn line_mesh_probes() {
         let profile = builtin_profile("molding:chair-rail").unwrap();
         let line = MoldingLine {
