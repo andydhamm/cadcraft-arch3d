@@ -1544,6 +1544,8 @@
 	Shortcut Menu: always enabled	Контекстне меню: завжди
 	Shortcut Menu: enabled when command options are present	Контекстне меню: коли команда має параметри
 	Cabinet	Шафа
+	Fill Cabinet Run	Заповнити ряд шаф
+	Architecture>Fill Cabinet Run	Архітектура>Заповнити ряд шаф
 	Contours	Контури
 	Cut and Fill	Виймання і насипання
 	Delete Cabinet	Видалити шафу
@@ -1636,6 +1638,12 @@
 	Delete Soffit	Видалити стельовий короб
 	Room Moldings	Молдинги кімнат
 	Architecture>Room Moldings	Архітектура>Молдинги кімнат
+	Molding Line	Лінія молдинга
+	Edit Molding Line	Редагувати лінію молдинга
+	Delete Molding Line	Видалити лінію молдинга
+	Architecture>Molding Line	Архітектура>Лінія молдинга
+	Architecture>Edit Molding Line	Архітектура>Редагувати лінію молдинга
+	Architecture>Delete Molding Line	Архітектура>Видалити лінію молдинга
 	Architecture>Split Wall	Архітектура>Розділити стіну
 	Sheet	Аркуш
 	Edit Sheet	Редагувати аркуш

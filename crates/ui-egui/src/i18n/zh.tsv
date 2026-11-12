@@ -1517,6 +1517,8 @@ menu	View	视图
 	Light Fixture	灯具
 	Light Fixture Types	灯具类型
 	Cabinet	橱柜
+	Fill Cabinet Run	填充橱柜排
+	Architecture>Fill Cabinet Run	建筑>填充橱柜排
 	Edit Cabinet	编辑橱柜
 	Delete Cabinet	删除橱柜
 	Fixture	设备
@@ -1608,6 +1610,12 @@ menu	View	视图
 	Architecture>Edit Deck	建筑>编辑平台
 	Room Moldings	房间装饰线
 	Architecture>Room Moldings	建筑>房间装饰线
+	Molding Line	装饰线
+	Edit Molding Line	编辑装饰线
+	Delete Molding Line	删除装饰线
+	Architecture>Molding Line	建筑>装饰线
+	Architecture>Edit Molding Line	建筑>编辑装饰线
+	Architecture>Delete Molding Line	建筑>删除装饰线
 	Sheet	图纸
 	Edit Sheet	编辑图纸
 	Delete Sheet	删除图纸
@@ -1616,7 +1624,4 @@ menu	View	视图
 	Sheet Set	图纸集
 	Niche	壁龛
 	Architecture>Niche	建筑>壁龛
-	Countertop	台面
-	Detach Countertop	分离台面
-	Edit Countertop	编辑台面
-	Delete Countertop	删除台面
+	Auto Exterior Dimensions	自动外部标注
