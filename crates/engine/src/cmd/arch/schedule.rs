@@ -136,12 +136,19 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
 
     if let Some(handle) = schedule_table(&doc, &label) {
         // Rewrite table
-        if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
-            let mut new_entity = (**entity).clone();
-            if let cadcraft_doc::EntityKind::Table(ref mut t) = new_entity.kind {
-                *t = table;
+        let mut new_entity = None;
+        for e in doc.model.iter() {
+            if e.handle == handle {
+                let mut ne = (**e).clone();
+                if let cadcraft_doc::EntityKind::Table(ref mut t) = ne.kind {
+                    *t = table;
+                }
+                new_entity = Some(ne);
+                break;
             }
-            doc.model.replace(new_entity);
+        }
+        if let Some(ne) = new_entity {
+            doc.model.replace(ne);
         }
     } else {
         // Create new table if missing (shouldn't happen if linked, but robust)
@@ -153,6 +160,11 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         common.xdata = tags;
         doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
     }
+
+    // Prepare JSON before moving schedule
+    let name = schedule.name.clone();
+    let kind_key = kind_str(schedule.kind);
+    let columns = schedule.columns.clone();
 
     doc.arch.schedules[idx] = schedule;
     s.state_mut()?.doc = Arc::new(doc);
@@ -171,9 +183,9 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
 
     Ok(json!({
         "schedule": label,
-        "name": schedule.name,
-        "kind": kind_str(schedule.kind),
-        "columns": schedule.columns,
+        "name": name,
+        "kind": kind_key,
+        "columns": columns,
         "rows": row_json
     }))
 }
@@ -184,17 +196,21 @@ pub fn run_schedule_delete(s: &mut Session, params: &Value) -> Result<Value> {
     let id = parse_schedule_id(id_str)?;
 
     let mut doc = s.doc()?.clone();
-    let arch = &mut doc.arch;
 
-    let idx = arch.schedules.iter().position(|s| s.id == id).ok_or_else(|| EngineError::Other(format!("unknown schedule: {id_str}")))?;
+    let idx = doc.arch.schedules.iter().position(|s| s.id == id).ok_or_else(|| EngineError::Other(format!("unknown schedule: {id_str}")))?;
     let label = format!("sc{}", id.0);
 
-    // Erase table
-    if let Some(handle) = schedule_table(&doc, &label) {
-        doc.model.retain(|e| e.handle != handle);
+    // Find handle first (immutable borrow)
+    let handle = schedule_table(&doc, &label);
+
+    // Remove from arch (mutable borrow)
+    doc.arch.schedules.remove(idx);
+
+    // Remove from model (mutable borrow)
+    if let Some(h) = handle {
+        doc.model.retain(|e| e.handle != h);
     }
 
-    arch.schedules.remove(idx);
     s.state_mut()?.doc = Arc::new(doc);
 
     Ok(json!({ "deleted": label }))
@@ -236,11 +252,20 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
                 Err(_) => continue,
             };
 
-            if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
-                if let cadcraft_doc::EntityKind::Table(current_table) = &entity.kind {
-                    if table_differs(current_table, &expected_table) {
-                        to_update.push((handle, expected_table));
+            // Find current table
+            let mut current_table = None;
+            for e in doc.model.iter() {
+                if e.handle == handle {
+                    if let cadcraft_doc::EntityKind::Table(t) = &e.kind {
+                        current_table = Some(t.clone());
                     }
+                    break;
+                }
+            }
+
+            if let Some(current) = current_table {
+                if table_differs(&current, &expected_table) {
+                    to_update.push((handle, expected_table));
                 }
             }
         } else {
@@ -257,12 +282,19 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
     }
 
     for (handle, table) in to_update {
-        if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
-            let mut new_entity = (**entity).clone();
-            if let cadcraft_doc::EntityKind::Table(ref mut t) = new_entity.kind {
-                *t = table;
+        let mut new_entity = None;
+        for e in doc.model.iter() {
+            if e.handle == handle {
+                let mut ne = (**e).clone();
+                if let cadcraft_doc::EntityKind::Table(ref mut t) = ne.kind {
+                    *t = table;
+                }
+                new_entity = Some(ne);
+                break;
             }
-            doc.model.replace(new_entity);
+        }
+        if let Some(ne) = new_entity {
+            doc.model.replace(ne);
             changed = true;
         }
     }
@@ -488,10 +520,13 @@ mod tests {
 
         let doc = s.doc().unwrap();
         if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
-            assert_eq!(t.title, "Door Schedule");
-            assert!(!t.header.is_empty());
-            assert_eq!(t.header[0], "No."); // Default first column
+            assert!(t.title);
+            assert!(t.header);
             assert!(!t.cells.is_empty());
+            // First row is title
+            assert_eq!(t.cells[0][0].text, "Door Schedule");
+            // Second row is header
+            assert_eq!(t.cells[1][0].text, "No.");
         } else {
             panic!("Not a table");
         }
@@ -560,8 +595,12 @@ mod tests {
 
         let doc = s.doc().unwrap();
         if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
-            assert_eq!(t.header.len(), 1);
-            assert_eq!(t.header[0], "Width");
+            assert!(t.header);
+            assert_eq!(t.cells.len(), 2); // Title + Header + 1 Data row? No, make_table adds title and header rows.
+            // Row 0: Title
+            // Row 1: Header
+            assert_eq!(t.cells[1].len(), 1);
+            assert_eq!(t.cells[1][0].text, "Width");
         }
     }
 
