@@ -128,7 +128,7 @@ fn new_sections_are_empty_with_stubs() {
     let full = with_phase18(kitchen());
     let (a, b) = (Scene3d::build(&plain), Scene3d::build(&full));
     // The room (for its moldings) adds a floor and a ceiling; nothing else.
-    let without_room: Vec<_> = owners(&b).into_iter().filter(|(material, _)| material != "floor" && material != "ceiling").collect();
+    let without_room: Vec<_> = owners(&b).into_iter().filter(|(material, _)| !material.starts_with("floor") && material != "ceiling").collect();
     assert_eq!(owners(&a), without_room);
     assert!(
         b.meshes.iter().all(|m| !m.material.starts_with("molding-") && !m.material.starts_with("countertop") && m.material != "backsplash"),

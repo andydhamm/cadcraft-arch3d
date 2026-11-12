@@ -1230,6 +1230,7 @@
 	W	Зх
 	WCS	ССК
 	Wall	Стіна
+	Split Wall	Розділити стіну
 	White	Білий
 	Width factor	Коефіцієнт ширини
 	Wipeout	Маскування
@@ -1635,3 +1636,12 @@
 	Soffit	Стельовий короб
 	Edit Soffit	Редагувати стельовий короб
 	Delete Soffit	Видалити стельовий короб
+	Room Moldings	Молдинги кімнат
+	Architecture>Room Moldings	Архітектура>Молдинги кімнат
+	Architecture>Split Wall	Архітектура>Розділити стіну
+	Sheet	Аркуш
+	Edit Sheet	Редагувати аркуш
+	Delete Sheet	Видалити аркуш
+	List Sheets	Список аркушів
+	Open Sheet	Відкрити аркуш
+	Sheet Set	Комплект аркушів
