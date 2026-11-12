@@ -12,9 +12,9 @@ use cadcraft_arch::room::room_at;
 use cadcraft_arch::symbol::opening_symbol;
 use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
 use cadcraft_doc::arch::{
-    ArchKind, ArchModel, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair,
-    StairShape, arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle, railing_handle, railing_label,
-    roof_handle, roof_label, room_handle, room_label, stair_handle, stair_label, wall_label,
+    ArchKind, ArchModel, Camera3d, CameraKind, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind,
+    RoofPlane, RoomType, Stair, StairShape, arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle,
+    railing_handle, railing_label, roof_handle, roof_label, room_handle, room_label, stair_handle, stair_label, wall_label,
 };
 use cadcraft_doc::{ArchId, Drawing, Handle};
 use std::f64::consts::PI;
@@ -706,6 +706,53 @@ fn room_type_key(t: RoomType) -> &'static str {
         RoomType::OpenBelow => "openBelow",
         RoomType::Other => "other",
     }
+}
+
+/// Lower-case key for a camera kind (`Orbit` -> `orbit`, `Full` -> `full`,
+/// `Overview` -> `overview`), matching the serde casing of [`CameraKind`].
+fn describe_camera_kind(k: CameraKind) -> &'static str {
+    match k {
+        CameraKind::Orbit => "orbit",
+        CameraKind::Full => "full",
+        CameraKind::Overview => "overview",
+    }
+}
+
+/// A compact JSON description of a camera's pose and look.
+/// Used for the `saved` field; a saved copy always has `saved: None`
+/// so no further nesting occurs.
+fn describe_camera(c: &Camera3d) -> Value {
+    let mut obj = JsonMap::new();
+    obj.insert("name".to_string(), json!(c.name));
+    obj.insert("kind".to_string(), json!(describe_camera_kind(c.kind)));
+    obj.insert("target".to_string(), json!(c.target));
+    obj.insert("azimuth".to_string(), json!(c.azimuth_deg));
+    obj.insert("elevation".to_string(), json!(c.elevation_deg));
+    obj.insert("distance".to_string(), json!(c.distance));
+    obj.insert("eye".to_string(), json!(c.eye));
+    obj.insert("eyeHeight".to_string(), json!(c.eye_height));
+    obj.insert("fov".to_string(), json!(c.fov_deg));
+    obj.insert("level".to_string(), json!(c.level));
+    obj.insert("lowerLevels".to_string(), json!(c.lower_levels));
+    obj.insert("look".to_string(), json!(c.look));
+    Value::Object(obj)
+}
+
+/// Whether the saved camera `s` and the live camera `c` match in pose and look.
+/// Uses a small tolerance on floating-point pose values; `look` is compared by `==`.
+fn cameras_equal(s: &Camera3d, c: &Camera3d) -> bool {
+    let eps = 1e-9;
+    (s.target.x - c.target.x).abs() <= eps
+        && (s.target.y - c.target.y).abs() <= eps
+        && (s.target.z - c.target.z).abs() <= eps
+        && (s.azimuth_deg - c.azimuth_deg).abs() <= eps
+        && (s.elevation_deg - c.elevation_deg).abs() <= eps
+        && (s.distance - c.distance).abs() <= eps
+        && (s.eye.x - c.eye.x).abs() <= eps
+        && (s.eye.y - c.eye.y).abs() <= eps
+        && (s.eye_height - c.eye_height).abs() <= eps
+        && (s.fov_deg - c.fov_deg).abs() <= eps
+        && s.look == c.look
 }
 
 /// `pts` as a JSON array of `[x, y]` pairs.
@@ -3316,5 +3363,54 @@ mod tests {
         // bottom and top are computed from the level, not the wall coordinates
         assert!(w["bottom"].is_number() || w["bottom"].is_null());
         assert!(w["top"].is_number() || w["top"].is_null());
+    }
+
+    /// `arch.inspect {"cameras": true}` returns a `cameras` array with all
+    /// pose/look fields and an `activeCamera` name (or null).
+    #[test]
+    fn cameras_rows() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.cameras.push(Camera3d {
+                    name: "test cam".into(),
+                    kind: CameraKind::Orbit,
+                    target: Vec2::new(0.0, 0.0),
+                    azimuth_deg: 30.0,
+                    elevation_deg: 50.0,
+                    distance: 10.0,
+                    eye: Vec2::new(0.0, 0.0),
+                    eye_height: 1.6,
+                    fov_deg: 50.0,
+                    light_set: None,
+                    look: None,
+                    saved: None,
+                    level: None,
+                    lower_levels: None,
+                    ..Camera3d::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "cameras": true }));
+        let cameras = v["cameras"].as_array().expect("cameras array missing");
+        assert_eq!(cameras.len(), 1, "expected exactly one camera");
+        let c = &cameras[0];
+        assert!(c["name"].is_string(), "name must be a string");
+        assert!(c["kind"].is_string(), "kind must be a string");
+        assert!(c["target"].is_array(), "target must be an array");
+        assert!(c["azimuth"].is_number(), "azimuth must be a number");
+        assert!(c["elevation"].is_number(), "elevation must be a number");
+        assert!(c["distance"].is_number(), "distance must be a number");
+        assert!(c["eye"].is_array(), "eye must be an array");
+        assert!(c["eyeHeight"].is_number(), "eyeHeight must be a number");
+        assert!(c["fov"].is_number(), "fov must be a number");
+        assert!(c["level"].is_number() || c["level"].is_null(), "level must be a number or null");
+        assert!(c["lowerLevels"].is_boolean() || c["lowerLevels"].is_null(), "lowerLevels must be a boolean or null");
+        assert!(c["look"].is_null() || c["look"].is_object(), "look must be null or an object");
+        assert!(c["saved"].is_null() || c["saved"].is_object(), "saved must be null or an object");
+        assert!(c["modified"].is_boolean(), "modified must be a boolean");
+        assert!(v["activeCamera"].is_null() || v["activeCamera"].is_string(), "activeCamera must be a string or null");
     }
 }
