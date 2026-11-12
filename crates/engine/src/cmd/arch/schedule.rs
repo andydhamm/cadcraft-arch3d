@@ -427,7 +427,7 @@ fn parse_at(v: &Value) -> Result<Vec2> {
     Ok(Vec2::new(x, y))
 }
 
-fn default_at(d: &Drawing, kind: ScheduleKind) -> Result<Vec2> {
+fn default_at(d: &Drawing, _kind: ScheduleKind) -> Result<Vec2> {
     let bounds = d.arch.bounds();
     if bounds.is_empty() {
         return Ok(Vec2::ZERO);
