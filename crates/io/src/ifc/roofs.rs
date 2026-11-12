@@ -18,6 +18,11 @@ pub(super) fn emit(ctx: &mut Ctx) {
             }
         }
     }
+    for roof in &ctx.model.roofs {
+        if !roof.planes.is_empty() && !ids.contains(&roof.id) {
+            ids.push(roof.id);
+        }
+    }
     for id in ids {
         let n = id.0;
         let slot = match ctx.model.roofs.iter().find(|r| r.id == id) {
