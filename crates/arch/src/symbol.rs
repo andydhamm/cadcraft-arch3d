@@ -70,7 +70,30 @@ pub fn opening_symbol(model: &ArchModel, o: &Opening) -> Option<Symbol> {
             let style_lower = o.style.to_ascii_lowercase();
             let is_fixed = style_lower.contains("fixed");
             let is_sliding = style_lower.contains("slid") || style_lower.contains("bifold") || style_lower.contains("pocket");
-            if is_fixed {
+            if crate::opening::is_shower(o) {
+                // Frameless glass door that swings both ways: the leaf line and one
+                // quarter-circle arc on each side of the wall.
+                let (hinge_t, closed_t, start_ang) = match o.hinge {
+                    Hinge::Left => (finished_start, finished_end, 0.0),
+                    Hinge::Right => (finished_end, finished_start, PI),
+                };
+                let hinge_pt = wp(hinge_t, 0.0)?;
+                let leaf_tip = wp(closed_t, 0.0)?;
+                polys.push(vec![hinge_pt, leaf_tip]);
+                let first = if start_ang == 0.0 { PI / 2.0 } else { -PI / 2.0 };
+                for sweep in [first, -first] {
+                    let mut arc: Vec<Vec2> = Vec::with_capacity(17);
+                    for i in 0..=16usize {
+                        let ang = start_ang + (i as f64 / 16.0) * sweep;
+                        let p = hinge_pt + dir * (width * ang.cos()) + perp * (width * ang.sin());
+                        if !p.is_finite() {
+                            return None;
+                        }
+                        arc.push(p);
+                    }
+                    polys.push(arc);
+                }
+            } else if is_fixed {
                 if let (Some(a), Some(b)) = (wp(rough_start, -half), wp(rough_start, half)) {
                     polys.push(vec![a, b]);
                 } else {
@@ -218,6 +241,8 @@ pub fn opening_symbol(model: &ArchModel, o: &Opening) -> Option<Symbol> {
                 }
             }
         }
+        // A niche does not go through the wall: no plan symbol (the poché notch draws it).
+        OpeningKind::Niche => return None,
         OpeningKind::CasedOpening => {
             if let (Some(a), Some(b)) = (wp(rough_start, -half), wp(rough_start, half)) {
                 polys.push(vec![a, b]);
@@ -258,6 +283,9 @@ pub fn opening_symbol(model: &ArchModel, o: &Opening) -> Option<Symbol> {
 pub fn poché_gaps(model: &ArchModel, host: ArchId) -> Vec<(f64, f64)> {
     let mut intervals: Vec<(f64, f64)> = Vec::new();
     for o in model.openings_on(host) {
+        if o.kind == OpeningKind::Niche {
+            continue;
+        }
         if !o.offset.is_finite() || !o.width.is_finite() || !o.rough_width.is_finite() {
             continue;
         }
@@ -542,5 +570,36 @@ mod tests {
         let s = opening_symbol(&m, o).unwrap();
         assert_finite(&s);
         assert_eq!(s.polylines.len(), 4);
+    }
+
+    #[test]
+    fn poche_gaps_skip_niches() {
+        let mut m = ArchModel::default();
+        let h = test_wall(&mut m, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        opening_on(&mut m, h, 4.0, 0.6, OpeningKind::Niche, "niche");
+        assert!(poché_gaps(&m, h).is_empty());
+        opening_on(&mut m, h, 7.0, 0.9, OpeningKind::Door, "hinged");
+        assert_eq!(poché_gaps(&m, h).len(), 1);
+    }
+
+    #[test]
+    fn niche_has_no_symbol() {
+        let mut m = ArchModel::default();
+        let h = test_wall(&mut m, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        let idx = opening_on(&mut m, h, 4.0, 0.6, OpeningKind::Niche, "niche");
+        assert!(opening_symbol(&m, &m.openings[idx]).is_none());
+    }
+
+    #[test]
+    fn shower_symbol_has_two_swing_arcs() {
+        let mut m = ArchModel::default();
+        let h = test_wall(&mut m, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.01);
+        let idx = opening_on(&mut m, h, 5.0, 0.7, OpeningKind::Door, "shower");
+        let s = opening_symbol(&m, &m.openings[idx]).unwrap();
+        assert_finite(&s);
+        assert_eq!(s.polylines.len(), 3);
+        let arcs: Vec<_> = s.polylines.iter().filter(|p| p.len() == 17).collect();
+        assert_eq!(arcs.len(), 2);
+        assert!(arcs.iter().any(|a| a[16].y > 0.5) && arcs.iter().any(|a| a[16].y < -0.5));
     }
 }

@@ -113,7 +113,7 @@ pub fn auto_scale(lavg: Option<f32>, daylight: bool, meter_night: bool) -> f32 {
 /// Whether the frame has daylight: the sun is on and above the horizon (`p19-env-path` adds the
 /// daylight environments).
 pub fn daylight(lighting: &Lighting) -> bool {
-    lighting.sun.is_some()
+    lighting.sun.is_some() || lighting.environment.as_ref().is_some_and(|e| e.daylight)
 }
 
 /// The exposure scale of a frame and how it was chosen (`"fixed"`, `"manual"` or `"auto"`): a
