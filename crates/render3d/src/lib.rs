@@ -25,6 +25,7 @@ pub mod look;
 pub mod offscreen;
 pub mod pathtrace;
 pub mod pipeline;
+pub mod sh;
 pub mod shadow;
 pub mod shadow_atlas;
 pub mod textures;
