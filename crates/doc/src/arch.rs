@@ -1801,7 +1801,7 @@ impl std::fmt::Display for ViewError {
 /// serialized as null) without failing deserialization; invalid cameras are dropped
 /// by `parse_arch`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Camera3d {
     /// Name of the camera, used for lookup and the active selection.
     pub name: String,
@@ -5203,7 +5203,7 @@ mod tests {
         let cam = Camera3d { name: "test".into(), saved: Some(Box::new(saved)), ..Default::default() };
         m.set_camera(cam).unwrap();
 
-        m.hdr_images.insert("saved-hdr".into(), ImageRgbe::default());
+        m.hdr_images.insert("saved-hdr".into(), ImageRgbe { width: 1, height: 1, rgbe: vec![0u8; 4] });
 
         m.prune_hdr_images();
 
