@@ -2102,6 +2102,7 @@ impl Default for ArchModel {
                     ],
                     reference: RefSide::Centre,
                 },
+                glass_wall_type(),
             ],
         }
     }
@@ -3333,11 +3334,12 @@ mod tests {
     }
 
     #[test]
-    fn arch_model_defaults_have_two_wall_types() {
+    fn arch_model_defaults_have_three_wall_types() {
         let m = ArchModel::default();
-        assert_eq!(m.types.len(), 2);
+        assert_eq!(m.types.len(), 3);
         assert_eq!(m.types[0].name, "Exterior");
         assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
     }
 
     #[test]

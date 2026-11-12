@@ -295,6 +295,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
 
     let mut out = JsonMap::new();
     out.insert("walls".to_string(), Value::Array(walls));
+    super::wall_split::inspect_wall_types(&d.arch, &mut out);
     out.insert("joins".to_string(), json!(joins));
     out.insert("revision".to_string(), json!(d.arch_revision));
     out.insert("bounds".to_string(), bounds_json);
