@@ -15,6 +15,7 @@ pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 pub mod archdetect;
 pub mod backdrop;
 pub mod build3d;
+pub mod cabinet_face;
 pub(crate) mod cabinet_fill;
 pub(crate) mod cabinet_molding_inspect;
 pub(crate) mod cabinet_opts;
@@ -154,5 +155,6 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(foundation::specs());
     v.extend(soffit::specs());
     v.extend(planview::specs());
+    v.extend(cabinet_face::specs());
     v
 }
