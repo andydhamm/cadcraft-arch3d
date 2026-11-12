@@ -67,7 +67,7 @@ mod tests {
     }
 
     fn ceiling_in(trays: Vec<Tray>) -> CeilingIn {
-        CeilingIn { room: test_room(), trays, level: test_level() }
+        CeilingIn { room: test_room(), trays, level: test_level(), above: vec![], cuts: vec![], roofs: vec![] }
     }
 
     #[test]
