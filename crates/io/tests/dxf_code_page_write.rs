@@ -1,7 +1,7 @@
 //! Pre-R2007 DXF text is written in the `$DWGCODEPAGE` code page: characters it has as their
 //! bytes, the others as `\U+XXXX` escapes; every form reads back to the same text.
 
-use cadcraft_dxf::{Tag, parse, write_ascii, write_ascii_in, write_binary_in};
+use craft_dxf::{Tag, parse, write_ascii, write_ascii_in, write_binary_in};
 
 fn file(code_page: &str, text: &str) -> Vec<Tag> {
     vec![
