@@ -330,7 +330,8 @@ const POSE_KEYS: &[&str] = &["target", "azimuth", "elevation", "distance", "eye"
 
 /// A level named by name or index, as the `index` the levels carry.
 fn level_param(arch: &cadcraft_doc::ArchModel, v: &Value) -> Result<u32, EngineError> {
-    let by_pos = |i: u64| usize::try_from(i).ok().and_then(|i| arch.levels.get(i)).map(|l| l.index).or((i == 0 && arch.levels.is_empty()).then_some(0));
+    let by_pos =
+        |i: u64| usize::try_from(i).ok().and_then(|i| arch.levels.get(i)).map(|l| l.index).or((i == 0 && arch.levels.is_empty()).then_some(0));
     let found = match v {
         Value::Number(n) => n.as_u64().and_then(by_pos),
         Value::String(n) => match n.trim().parse::<u64>() {
@@ -407,7 +408,11 @@ fn run_camera_orbit(s: &mut Session, params: &Value) -> Result<Value, EngineErro
     };
     let scaled = |d: f64, f: f64| -> Result<f64, EngineError> {
         let n = d * f;
-        if n.is_finite() && n > 0.0 && n <= MAX_DISTANCE { Ok(n) } else { Err(bad(CMD, format!("`distance` factor {f} takes the distance outside (0, {MAX_DISTANCE}]"))) }
+        if n.is_finite() && n > 0.0 && n <= MAX_DISTANCE {
+            Ok(n)
+        } else {
+            Err(bad(CMD, format!("`distance` factor {f} takes the distance outside (0, {MAX_DISTANCE}]")))
+        }
     };
     let (daz, del) = (daz.unwrap_or(0.0), del.unwrap_or(0.0));
     if cam.kind == CameraKind::Full {
@@ -443,7 +448,10 @@ fn run_camera_orbit(s: &mut Session, params: &Value) -> Result<Value, EngineErro
         cam.elevation_deg = Some(el.clamp(-89.0, 89.0));
         if let Some(f) = factor {
             let Some(d) = cam.distance else {
-                return Err(bad(CMD, format!("camera `{name}` has no distance yet (an overview fits it at render time): set one with camera.update")));
+                return Err(bad(
+                    CMD,
+                    format!("camera `{name}` has no distance yet (an overview fits it at render time): set one with camera.update"),
+                ));
             };
             cam.distance = Some(scaled(d, f)?);
         }
@@ -456,7 +464,10 @@ fn run_camera_update(s: &mut Session, params: &Value) -> Result<Value, EngineErr
     const CMD: &str = "camera.update";
     let name = target_camera(CMD, s, params)?;
     if !POSE_KEYS.iter().chain(LOOK_KEYS).any(|k| params.get(*k).is_some()) {
-        return Err(bad(CMD, "nothing to update: give pose keys (target, azimuth, elevation, distance, eye, eyeHeight, fov, level, lowerLevels) or look keys"));
+        return Err(bad(
+            CMD,
+            "nothing to update: give pose keys (target, azimuth, elevation, distance, eye, eyeHeight, fov, level, lowerLevels) or look keys",
+        ));
     }
     let doc = s.doc()?;
     let Some(mut cam) = doc.arch.camera_by_name(&name).cloned() else {
@@ -1107,5 +1118,50 @@ mod tests {
         s.execute("u", &json!({})).unwrap();
         let l = s.execute("camera", &json!({ "list": true })).unwrap();
         assert_eq!(l["active"], json!("b"));
+    }
+
+    #[test]
+    fn save_captures_global_look_and_ignores_later_changes() {
+        let mut s = Session::new();
+        // Set a global look
+        let doc = s.doc_mut().unwrap();
+        doc.arch.look.tone_map = cadcraft_doc::arch::ToneMap::Hable;
+        doc.arch.look.exposure = cadcraft_doc::arch::ExposureSetting::Manual { ev100: 3.0 };
+        doc.touch_arch();
+        // Save a camera — it captures the global look
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        // Change the global look
+        let doc = s.doc_mut().unwrap();
+        doc.arch.look.tone_map = cadcraft_doc::arch::ToneMap::Aces;
+        doc.arch.look.exposure = cadcraft_doc::arch::ExposureSetting::Manual { ev100: 6.0 };
+        doc.touch_arch();
+        // The camera still has the look it captured at save time
+        let cam = s.doc().unwrap().arch.camera_by_name("a").unwrap();
+        let look = cam.look.as_ref().unwrap();
+        assert_eq!(look.tone_map, cadcraft_doc::arch::ToneMap::Hable);
+        assert_eq!(look.exposure, cadcraft_doc::arch::ExposureSetting::Manual { ev100: 3.0 });
+    }
+
+    #[test]
+    fn orbit_changes_live_reset_restores_update_saves() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0, "distance": 10.0 })).unwrap();
+        // Orbit changes the live pose
+        s.execute("camera.orbit", &json!({ "name": "a", "azimuth": 30.0 })).unwrap();
+        let cam = s.doc().unwrap().arch.camera_by_name("a").unwrap();
+        assert_eq!(cam.azimuth_deg, Some(30.0));
+        // Reset restores the saved pose
+        s.execute("camera.reset", &json!({ "name": "a" })).unwrap();
+        let cam = s.doc().unwrap().arch.camera_by_name("a").unwrap();
+        assert_eq!(cam.azimuth_deg, Some(0.0));
+        // Update applies and saves
+        s.execute("camera.update", &json!({ "name": "a", "azimuth": 45.0 })).unwrap();
+        let cam = s.doc().unwrap().arch.camera_by_name("a").unwrap();
+        assert_eq!(cam.azimuth_deg, Some(45.0));
+        // After update, reset goes to the new saved state
+        s.execute("camera.orbit", &json!({ "name": "a", "azimuth": 10.0 })).unwrap();
+        s.execute("camera.reset", &json!({ "name": "a" })).unwrap();
+        let cam = s.doc().unwrap().arch.camera_by_name("a").unwrap();
+        assert_eq!(cam.azimuth_deg, Some(45.0));
     }
 }

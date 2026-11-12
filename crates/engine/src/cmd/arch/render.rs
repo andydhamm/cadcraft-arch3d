@@ -963,4 +963,31 @@ mod tests {
             assert!(err.contains("`albedo` must be a number with 0 < albedo < 1"), "{bad_value}: {err}");
         }
     }
+
+    #[test]
+    fn technique_picks_style_and_final() {
+        let d = Drawing::new_metric();
+        // Path technique -> final path, style shaded
+        let r = build_request(&d, &json!({"technique": "path"})).unwrap();
+        assert!(r.final_render);
+        assert_eq!(r.final_mode, FinalMode::Path);
+        assert_eq!(r.style, "shaded");
+        // Clay technique -> style clay, no final
+        let r = build_request(&d, &json!({"technique": "clay"})).unwrap();
+        assert_eq!(r.style, "clay");
+        assert!(!r.final_render);
+        // Technical technique -> style technical, no final
+        let r = build_request(&d, &json!({"technique": "technical"})).unwrap();
+        assert_eq!(r.style, "technical");
+        assert!(!r.final_render);
+        // Standard technique -> style shaded, no final
+        let r = build_request(&d, &json!({"technique": "standard"})).unwrap();
+        assert_eq!(r.style, "shaded");
+        assert!(!r.final_render);
+        // Explicit params win over technique
+        let r = build_request(&d, &json!({"technique": "path", "final": false})).unwrap();
+        assert!(!r.final_render);
+        let r = build_request(&d, &json!({"technique": "clay", "style": "shaded"})).unwrap();
+        assert_eq!(r.style, "shaded");
+    }
 }
