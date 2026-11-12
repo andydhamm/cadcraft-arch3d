@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-12 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 9 of 35 segments merged · 1 of 20 acceptance checks**
 
-8,907 workspace tests passing at the last merge · 971 segments merged in all · 0 of 15 seats working
+8,944 workspace tests passing at the last merge · 974 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,9 +28,9 @@ Updated 2026-11-12 08:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 26.8 h so far · expected done Nov 12 15:42–Nov 17 21:10 UTC |
+| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 27.0 h so far · expected done Nov 12 15:57–Nov 17 21:25 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
-| 20 | Plan views and dimensions | building | 1 / 13 | — |
+| 20 | Plan views and dimensions | building | 2 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
 
 ## Phase 18 segments
@@ -54,6 +54,9 @@ Updated 2026-11-12 08:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 08:28 | `p20-dims-model` | merged | 8,944 pass | mai-flash-b |
+| Nov 12 08:28 | `p19-seeing-in-render-1` | merged | 8,944 pass | claude-sonnet-b |
+| Nov 12 08:28 | `harden-p15-arch-circuits` | merged | 8,944 pass | tturbo-mac |
 | Nov 12 08:10 | `p20-plan-views` | merged | 8,907 pass | mai-flash |
 | Nov 12 08:10 | `p21-observables-1` | merged | 8,907 pass | claude-sonnet-b |
 | Nov 12 07:50 | `p19-sun-1` | merged | 8,877 pass | mai-flash |
@@ -63,26 +66,23 @@ Updated 2026-11-12 08:15 UTC. This page and the card in the README are regenerat
 | Nov 12 06:42 | `upstream-sync-ca87680fb` | merged | 8,871 pass | claude-sonnet-a |
 | Nov 12 05:52 | `p18-glass-walls-1` | refused | 8,870 pass | claude-sonnet-d |
 | Nov 12 05:32 | `p19-normal-maps-2` | merged | 8,862 pass | mai-flash-b |
-| Nov 12 04:42 | `upstream-sync-e5021f017` | merged | 8,858 pass | claude-sonnet-d |
-| Nov 12 03:58 | `p19-seeing-in` | merged | 8,837 pass | mai-flash-esc |
-| Nov 12 03:58 | `harden-p16-vault-walls` | merged | 8,837 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1159 |
-| bonsai-b | bonsai2-27b | agent | 1129 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1228 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1171 |
-| claude-sonnet-a | sonnet | agent | 131 |
+| bonsai-a | bonsai2-27b | agent | 1160 |
+| bonsai-b | bonsai2-27b | gate | 1129 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1230 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1172 |
+| claude-sonnet-a | sonnet | gate | 131 |
 | claude-sonnet-b | sonnet | agent | 139 |
 | claude-sonnet-c | sonnet | agent | 72 |
-| claude-sonnet-d | sonnet | idle | 63 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1027 |
+| claude-sonnet-d | sonnet | agent | 63 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1028 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 90 |
-| mai-flash-b | mai-code-1.1-flash | gate | 30 |
+| mai-flash | mai-code-1.1-flash | agent | 90 |
+| mai-flash-b | mai-code-1.1-flash | idle | 31 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 95 |
 | tturbo-mac | tturbo-ultraheretic | idle | 795 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 399 |
