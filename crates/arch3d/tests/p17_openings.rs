@@ -340,3 +340,88 @@ fn top_only_two_by_one_has_one_vertical_bar_in_upper_half() {
     assert!((bars[0][2] - 0.5).abs() < 1e-9, "bar should start at z=0.5, got {}", bars[0][2]);
     assert!((bars[0][3] - 1.0).abs() < 1e-9, "bar should end at z=1.0, got {}", bars[0][3]);
 }
+
+#[test]
+fn grille_bars_respect_glass_bounds() {
+    let o = helper_grille(3, 3, false);
+    let rect = GlassRect::new(-0.5, 0.5, 0.0, 1.0);
+    let bars = grille_bars(&o, &rect);
+    for b in &bars {
+        assert!(b[0] >= rect.u0 - 0.011, "bar left edge outside glass: {}", b[0]);
+        assert!(b[1] <= rect.u1 + 0.011, "bar right edge outside glass: {}", b[1]);
+        assert!(b[2] >= rect.z0 - 0.011, "bar bottom edge outside glass: {}", b[2]);
+        assert!(b[3] <= rect.z1 + 0.011, "bar top edge outside glass: {}", b[3]);
+    }
+}
+
+#[test]
+fn grille_with_down_one_has_no_horizontal_bars() {
+    let o = helper_grille(3, 1, false);
+    let rect = GlassRect::new(-0.5, 0.5, 0.0, 1.0);
+    let bars = grille_bars(&o, &rect);
+    let horizontal = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).count();
+    let vertical = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).count();
+    assert_eq!(horizontal, 0, "down=1 should have no horizontal bars");
+    assert_eq!(vertical, 2, "across=3 should have 2 vertical bars");
+}
+
+#[test]
+fn fixed_door_with_grille() {
+    let mut o = door_opening();
+    o.style = "fixed".to_string();
+    o.grille = Some(Grille { across: 2, down: 2, top_only: false, ..Default::default() });
+    let model = wall_model();
+    let walls = [(ArchId(1), &model.walls[0])].into_iter().collect();
+    let meshes = opening_meshes(&walls, &o, None);
+    assert!(meshes.iter().any(|m| m.material.contains("glass")), "fixed door with grille should have glass");
+    assert!(meshes.iter().any(|m| m.material.contains("grille")), "fixed door with grille should have grille");
+    assert!(meshes.iter().any(|m| m.material.contains("leaf")), "fixed door with grille should have leaf frame");
+}
+
+#[test]
+fn sill_sides_none_produces_no_sill() {
+    let model = wall_model();
+    let mut o = window_opening();
+    o.sill_depth = 0.04;
+    o.sill_sides = cadcraft_doc::arch::OpeningSides::NONE;
+    let walls = [(ArchId(1), &model.walls[0])].into_iter().collect();
+    let meshes = opening_meshes(&walls, &o, None);
+    assert!(!meshes.iter().any(|m| m.material.contains("sill")), "sill_sides NONE should produce no sill");
+}
+
+#[test]
+fn casing_sides_none_produces_no_casing() {
+    let model = wall_model();
+    let mut o = window_opening();
+    o.casing_width = 0.05;
+    o.casing_sides = cadcraft_doc::arch::OpeningSides::NONE;
+    let walls = [(ArchId(1), &model.walls[0])].into_iter().collect();
+    let meshes = opening_meshes(&walls, &o, None);
+    assert!(!meshes.iter().any(|m| m.material.contains("casing")), "casing_sides NONE should produce no casing");
+}
+
+#[test]
+fn grille_bars_finite_for_all_inputs() {
+    let o = helper_grille(4, 3, false);
+    let cases = vec![
+        GlassRect::new(0.0, 1.0, 0.0, 1.0),
+        GlassRect::new(f64::NAN, 1.0, 0.0, 1.0),
+        GlassRect::new(0.0, f64::NAN, 0.0, 1.0),
+        GlassRect::new(0.0, 1.0, f64::NAN, 1.0),
+        GlassRect::new(0.0, 1.0, 0.0, f64::NAN),
+        GlassRect::new(f64::INFINITY, 1.0, 0.0, 1.0),
+        GlassRect::new(0.0, f64::INFINITY, 0.0, 1.0),
+        GlassRect::new(0.0, 1.0, f64::INFINITY, 1.0),
+        GlassRect::new(0.0, 1.0, 0.0, f64::INFINITY),
+        GlassRect::new(-f64::INFINITY, 1.0, 0.0, 1.0),
+        GlassRect::new(0.0, -f64::INFINITY, 0.0, 1.0),
+        GlassRect::new(0.0, 1.0, -f64::INFINITY, 1.0),
+        GlassRect::new(0.0, 1.0, 0.0, -f64::INFINITY),
+    ];
+    for rect in cases {
+        let bars = grille_bars(&o, &rect);
+        for b in &bars {
+            assert!(b[0].is_finite() && b[1].is_finite() && b[2].is_finite() && b[3].is_finite(), "non-finite bar for rect {:?}", rect);
+        }
+    }
+}
