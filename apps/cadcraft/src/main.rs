@@ -459,7 +459,8 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{filters_for_save, follow_desktop, saved_window, window_options};
+    use super::{filters_for_save, follow_desktop, install_io, saved_window, window_options};
+    use cadcraft_engine::Session;
 
     #[test]
     fn save_dialog_offers_dwg_with_the_drawing_format_first() {
@@ -516,5 +517,14 @@ mod tests {
         let mut raw = egui::RawInput::default();
         follow_desktop(&mut raw, None);
         assert_eq!(raw.system_theme, None);
+    }
+
+    #[test]
+    fn desktop_installs_library_readers() {
+        install_io();
+        assert!(cadcraft_engine::library::library_io().is_some());
+        let mut s = Session::new();
+        let r = s.execute("library", &serde_json::json!({})).expect("library lists");
+        assert!(r.to_string().contains("sample"), "sample items listed: {r}");
     }
 }

@@ -167,6 +167,39 @@ mod tests {
         assert!(r.to_string().contains("sample"), "sample items are listed: {r}");
     }
 
+    #[test]
+    fn install_io_is_idempotent() {
+        install_io();
+        install_io();
+        install_io();
+        assert!(cadcraft_engine::library::library_io().is_some());
+        let mut s = Session::new();
+        let r = s.execute("library", &json!({})).expect("library lists");
+        assert!(r.to_string().contains("sample"), "sample items listed after repeated install: {r}");
+    }
+
+    #[test]
+    fn library_listing_is_deterministic() {
+        install_io();
+        let mut s = Session::new();
+        let r1 = s.execute("library", &json!({})).expect("first list");
+        let r2 = s.execute("library", &json!({})).expect("second list");
+        assert_eq!(r1.to_string(), r2.to_string(), "library listing must be deterministic");
+    }
+
+    #[test]
+    fn library_io_survives_session_recreation() {
+        install_io();
+        {
+            let mut s = Session::new();
+            let r = s.execute("library", &json!({})).expect("library lists");
+            assert!(r.to_string().contains("sample"));
+        }
+        let mut s2 = Session::new();
+        let r2 = s2.execute("library", &json!({})).expect("library lists again");
+        assert!(r2.to_string().contains("sample"), "library still works after session recreation: {r2}");
+    }
+
     struct FailingWriter(std::io::ErrorKind);
 
     impl Write for FailingWriter {
