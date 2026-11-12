@@ -307,8 +307,12 @@ fn push_views(d: &Drawing, list: &mut DisplayList, plotting: bool) {
         crate::ink(Color::ByLayer, c, Color::Index(7))
     };
     for view in &d.arch.views {
-        let Some(g) = &view.generated else { continue };
+        let Some(g) = &view.generated else {
+            crate::arch_views::push_view_extras(d, view, list, plotting);
+            continue;
+        };
         if !g.extent.iter().all(|v| v.is_finite()) || !view.insert.iter().all(|v| v.is_finite()) {
+            crate::arch_views::push_view_extras(d, view, list, plotting);
             continue;
         }
         let handle = cadcraft_doc::arch::view_handle(view.id);
@@ -371,12 +375,14 @@ fn push_views(d: &Drawing, list: &mut DisplayList, plotting: bool) {
                 push_dim(list, handle, &ink, transparency, k, a, b, on, &dim.text);
             }
         }
+
+        crate::arch_views::push_view_extras(d, view, list, plotting);
     }
 }
 
 /// One dimension: extension lines, dimension line, 45-degree ticks and centred text.
 #[allow(clippy::too_many_arguments)]
-fn push_dim(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, transparency: u8, k: f64, a: Vec2, b: Vec2, on: Vec2, text: &str) {
+pub(crate) fn push_dim(list: &mut DisplayList, handle: Handle, ink: &crate::Ink, transparency: u8, k: f64, a: Vec2, b: Vec2, on: Vec2, text: &str) {
     let len = a.dist(b);
     if len < 1e-12 || !len.is_finite() {
         return;
