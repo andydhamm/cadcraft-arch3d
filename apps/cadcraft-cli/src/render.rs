@@ -98,8 +98,14 @@ fn valid_time(t: &str) -> bool {
     if parts.len() != 2 {
         return false;
     }
-    let h: u32 = parts[0].parse().ok()?;
-    let m: u32 = parts[1].parse().ok()?;
+    let h: u32 = match parts[0].parse() {
+        Ok(h) => h,
+        Err(_) => return false,
+    };
+    let m: u32 = match parts[1].parse() {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
     h < 24 && m < 60
 }
 
