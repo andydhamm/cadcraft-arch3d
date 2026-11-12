@@ -31,6 +31,7 @@ const SHARED_ROOTS: &[&str] = &[
     "crates/doc/src/arch/casework.rs",
     "crates/doc/src/arch/ceiling.rs",
     "crates/doc/src/arch/planview.rs",
+    "crates/doc/src/arch/sheet.rs",
     "crates/doc/src/arch/detail.rs",
     "crates/doc/src/arch/foundation.rs",
     "crates/doc/src/arch/furnishing.rs",
