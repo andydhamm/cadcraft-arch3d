@@ -25,15 +25,15 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 
 | Crate | L | Contents |
 |---|---|---|
-| `doc/src/arch.rs`, `doc/src/arch/*` | L1 | `ArchModel` on `Drawing::arch` with `arch_revision`/`touch_arch()`: walls, openings, rooms, levels, roofs, stairs, railings, cameras, views, `site` (location, terrain, modifiers, plants), `light` fixtures, `finish`, `casework` (cabinets, fixtures), `furnishing` + `symbols`/`images`, `paint`, `backdrop`, `defaults`, `electrical` (devices, connections, light sets), `LevelKind`, `Wall.top_level`, `plan_level`. **Phase 16:** `Room.flat_ceiling`/`ceiling_stack` (finish layers), `Tray` (tr<n>, +0x78000), `Soffit` (sf<n>, +0x80000), `Foundation` (fd<n>, +0x88000). Phases 17–19 (in progress) add stair/railing/deck/opening detail fields, `countertop`, `molding`, `look`. Handle offsets by kind below `ARCH_HANDLE_SPAN 0x100000` (decision 10). |
+| `doc/src/arch.rs`, `doc/src/arch/*` | L1 | `ArchModel` on `Drawing::arch` with `arch_revision`/`touch_arch()`: walls, openings, rooms, levels, roofs, stairs, railings, cameras, views, `site` (location, terrain, modifiers, plants), `light` fixtures, `finish`, `casework` (cabinets, fixtures), `furnishing` + `symbols`/`images`, `paint`, `backdrop`, `defaults`, `electrical` (devices, connections, light sets), `LevelKind`, `Wall.top_level`, `plan_level`. **Phase 16:** `Room.flat_ceiling`/`ceiling_stack` (finish layers), `Tray` (tr<n>, +0x78000), `Soffit` (sf<n>, +0x80000), `Foundation` (fd<n>, +0x88000). **Phase 17:** `detail.rs` (stair risers/stringers/underside/plan cut and per-side rails; railing `inset`, `host`, `auto`; deck board direction and rails; opening grille, top, sill and casing sides; door style `fixed`). Phases 18–20 (in progress) add `countertop`, `molding`, `look`, `planview`. Handle offsets by kind below `ARCH_HANDLE_SPAN 0x100000` (decision 10). |
 | `geom` | L0 | `skeleton` (straight and weighted/roof skeleton, inset/outset), `region::Arrangement`, `tin`, `cdt`, `tin_ops`. |
-| `arch` | L2 | `wall`, `graph`, `join`, `opening`, `symbol`, `room` (detection, `room_at`), `poly`, `area`, `label`, `roof`, `roofedge`, `stair`, `railing`, `sun`, `detect` (ARCHDETECT pipeline + `score`), `terrain` (`SiteSurface`, mesh, contours, volumes, csv, pad, retaining), `plant`, `site`, `light`, `ies`, `casework`, `casework_layout`, `library` (records, search, history, fits, place), `furnishing`, `paint`, `electrical`, `connections`, `outlets`, `grade`. **Phase 16:** `ceiling` (`mod`: the ceiling point query — rough, finished, roof underside, hang height; `stack`, `vault`, `tray`, `soffit`, `overhead`: what lies over a point), `foundation`. Phases 17–18 in progress: `stair_geom`, `stair_symbol`, `deck`, `flight_cut`, `railing_auto`, `opening_top`, `countertop`, `backsplash`, `casework_corner`, `casework_face`, `molding_profile`, `molding_runs`. |
-| `arch3d` | L2 | `build`/`SceneCache` → `Scene3d`; `mesh`, `walls` (elevation profiles + holes), `openings`, `floors`, `roof`, `stairs`, `railing`, `probe` + `ray`, `camera`, `pick` (BVH), `edges`/`hlr`/`section`/`views`, `site`, `plant`, `fixture`, `light` (illuminance), `incremental`, `finish`, `uv`, `texture`, `casework`, `furnishing`, `paint`, `icon`, `electrical`. **Phase 16:** `ceiling` (`stack` layer solids, `vault`, `tray`, `overhead` clipping), `soffit`, foundation meshes (stem walls, footings, slabs), wall-rise meshes; probe parts `soffit`, `foundation`, `footing`, `slab`; `build3d` `parts` counts meshes per part. |
-| `render` | L2 | `arch.rs` (arch geometry → DisplayList tagged with proxy handles; views; the plan of `plan_level`), `arch_site.rs`, `arch_casework.rs`, `arch_furnishing.rs`, `arch_electrical.rs`, **`arch_ceiling.rs` (soffit outlines dashed on `A-CLNG`, footings dashed; phase 16)**. |
-| `io` | L3 | `dxf_arch.rs` (`CADCRAFT_ARCH` XRECORD v9, accepts 1–9, payload up to 64 MiB; save-time proxies), `dxf_site`, `dxf_casework`, `dxf_furnishing`, `dxf_electrical`, **`dxf_ceiling` (phase 16)**, `glb.rs` (own glTF 2.0; `node_names`), `obj`, `png`, `step`, `ifc/*` (one module per element kind; **`foundations` in phase 16**), `gltf_read`, `image_read`, `library` (embedded sample set). |
+| `arch` | L2 | `wall`, `graph`, `join`, `opening`, `symbol`, `room` (detection, `room_at`), `poly`, `area`, `label`, `roof`, `roofedge`, `stair`, `railing`, `sun`, `detect` (ARCHDETECT pipeline + `score`), `terrain` (`SiteSurface`, mesh, contours, volumes, csv, pad, retaining), `plant`, `site`, `light`, `ies`, `casework`, `casework_layout`, `library` (records, search, history, fits, place), `furnishing`, `paint`, `electrical`, `connections`, `outlets`, `grade`. **Phase 16:** `ceiling` (`mod`: the ceiling point query — rough, finished, roof underside, hang height; `stack`, `vault`, `tray`, `soffit`, `overhead`: what lies over a point), `foundation`. **Phase 17:** `stair_geom` (treads, nosing line), `stair_symbol` (plan symbol), `flight_cut` (walls under flights), `deck` (contact, frame, grade), `railing` (`RailSurface`, posts), `railing_auto`, `opening_top` (round, segment and roof tops). Phases 18–20 in progress: `countertop`, `backsplash`, `casework_corner`, `casework_face`, `molding_profile`, `molding_runs`, `plan`. |
+| `arch3d` | L2 | `build`/`SceneCache` → `Scene3d`; `mesh`, `walls` (elevation profiles + holes), `openings`, `floors`, `roof`, `stairs`, `railing`, `probe` + `ray`, `camera`, `pick` (BVH), `edges`/`hlr`/`section`/`views`, `site`, `plant`, `fixture`, `light` (illuminance), `incremental`, `finish`, `uv`, `texture`, `casework`, `furnishing`, `paint`, `icon`, `electrical`. **Phase 16:** `ceiling` (`stack` layer solids, `vault`, `tray`, `overhead` clipping), `soffit`, foundation meshes (stem walls, footings, slabs), wall-rise meshes; probe parts `soffit`, `foundation`, `footing`, `slab`; `build3d` `parts` counts meshes per part. **Phase 17:** `stair_parts` (treads, risers, stringers, skirts), `flight_cut`, `railing_parts` (posts, rails, balusters, panels), `deck_frame` (ledger, joists, rims, beams, posts, piers, boards), grilles and shaped tops in `openings`; `texture::board_finish`. |
+| `render` | L2 | `arch.rs` (arch geometry → DisplayList tagged with proxy handles; views; the plan of `plan_level`; the phase-17 stair symbol), `arch_site.rs`, `arch_casework.rs`, `arch_furnishing.rs`, `arch_electrical.rs`, `arch_ceiling.rs` (soffit outlines dashed on `A-CLNG`, footings dashed; phase 16). |
+| `io` | L3 | `dxf_arch.rs` (`CADCRAFT_ARCH` XRECORD v9, accepts 1–9, payload up to 64 MiB; save-time proxies incl. `CADCRAFT-STAIR` symbol roles), `dxf_site`, `dxf_casework`, `dxf_furnishing`, `dxf_electrical`, `dxf_ceiling` (phase 16), `glb.rs` (own glTF 2.0; `node_names`, `shares_a_node`), `obj`, `png`, `step`, `ifc/*` (one module per element kind; `foundations` in phase 16; deck members and railings by host in phase 17), `gltf_read`, `image_read`, `library` (embedded sample set). |
 | `render3d` | L5 | `pipeline` (PBR), `light`, `shadow`, `shadow_atlas`, `edges`, `adapter` (one adapter request at a time per process since phase 16), `offscreen` (`Style`: shaded, shaded-edges, hidden-line, glass-house, clay, technical), `final_render`, `pathtrace/*` + WGSL `pt/*`, `textures`, `backdrop`. |
 | `gpu-optin` | — | The workspace's only unsafe code: wgpu's experimental-feature token for ray queries, a pipeline cache read from disk. |
-| `engine/src/cmd/arch/*` | L4 | One module per command family (walls, openings, rooms, levels, roofs, stairs, railings, decks, views, sheets, archdetect, site/terrain/plants, lights, render hooks, exports, material, casework, library, paint, electrical, levels). **Phase 16:** `tray`/`.edit`/`.delete`, `soffit`/`.edit`/`.delete`, `foundation`/`.edit`/`.delete`, `room {flatCeiling, ceilingStack}`, `build3d {ceiling, level}` and `parts`, `arch.inspect {trays, soffits, foundations}` and ceiling rows/warnings. `engine::library` (catalogs, `LibraryIo`). |
+| `engine/src/cmd/arch/*` | L4 | One module per command family (walls, openings, rooms, levels, roofs, stairs, railings, decks, views, sheets, archdetect, site/terrain/plants, lights, render hooks, exports, material, casework, library, paint, electrical, levels). **Phase 16:** `tray`/`.edit`/`.delete`, `soffit`/`.edit`/`.delete`, `foundation`/`.edit`/`.delete`, `room {flatCeiling, ceilingStack}`, `build3d {ceiling, level}` and `parts`, `arch.inspect {trays, soffits, foundations}` and ceiling rows/warnings. **Phase 17:** `stair` detail params and `stair.edit`, `deck {boards, rails}` and `deck.edit`, `railing {postSpacing, inset}`, `window {grille, top}`, door style `fixed`, `arch.inspect {decks}` and detail rows (`inspect_detail`, `deck_inspect`). `engine::library` (catalogs, `LibraryIo`). |
 | `ui-egui` | L5 | `pane3d.rs` (dockable 3D pane, styles incl. Clay and Technical since phase 16, walkthrough, pick → 2D selection, Finalize, own `SceneCache`), `archdetect_review.rs`, `library_panel.rs`, `electrical_tools.rs`. |
 | `cadcraft-cli` | — | `convert` (detects first when there are no arch objects; `.glb`, `.obj`, `.ifc`), `run --cmd / --commands FILE.json / --export`, `render … --camera --style --sun --ground --adapter --final [raster|path]` (exit 3 `NO_ADAPTER`), the session renderer (`render_hook`). |
 
@@ -41,7 +41,7 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 
 1. **Arch model lives in `Drawing`** (undo is a whole-`Drawing` snapshot). Data in `doc`, algorithms in `arch`.
 2. **One source of truth: the arch object, not its linework.** Plan geometry is generated at draw time; DXF proxies are written only on save and not read back when arch data is present.
-3. **No 3D CSG.** Walls are cut by 2D boolean on the wall *elevation profile*, then extruded; slabs/ceilings the same on room polygons; roof planes are prisms; stairs a stepped prism.
+3. **No 3D CSG.** Walls are cut by 2D boolean on the wall *elevation profile*, then extruded; slabs/ceilings the same on room polygons; roof planes are prisms; stairs a stepped prism. Since phase 17 the same profile carries flight cuts and shaped window tops.
 4. **Pure Rust, no new heavy deps.** Own glTF/OBJ/STEP writers and glTF reader; MIT/Apache-2.0/BSD/Zlib, wasm-compatible.
 5. **The 3D pane renders offscreen** into its own colour+depth textures and presents as an image; identical on WebGPU and WebGL2.
 6. **MCP stays generic.** Commands are the API.
@@ -52,7 +52,7 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 11. **Rough vs finished separate** (`ROUGH_ALLOWANCE` one constant).
 12. **Placement limits, area rules and code limits are data in `arch`**, so commands/CLI/MCP/`ARCHDETECT` agree. Commands validate through these and **refuse — never clamp**.
 13. **Shared structs** are built outside their declaring file only as `Type{required,..Default::default()}` or via a constructor; `cargo xtask literals` enforces it.
-14. **Derived, never stored,** when a quantity follows from others (`Level::floor_to_floor()`; grade classes; the finished ceiling).
+14. **Derived, never stored,** when a quantity follows from others (`Level::floor_to_floor()`; grade classes; the finished ceiling; a deck's frame).
 15. **Probing, not counting, proves geometry.** Any new 3D feature adds probeable solids.
 16. **Roofs are generated, then owned.** A `ROOFAUTO` roof regenerates while its walls change; `roofplane {edit}` sets `hand_edited`. Generation is all-or-nothing.
 17. **A stair's well is derived from headroom, and the hole is applied from the stair** (`well_holes_for`), so it exists even when the upper room was never detected; the code never invents a room to hold a hole.
@@ -64,7 +64,7 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 23. **Arch linework shows through paper-space viewports** and so in layout plots.
 24. **One meaning of opening offset (the centre), and arch drawings are metre drawings** (`$INSUNITS 6`); accepting detection candidates in a non-metre drawing converts the whole drawing in the same undo step.
 25. **Detection is a pure pipeline in `arch::detect`**; candidates carry confidence and evidence; layer names raise a score and are never required.
-26. **The terrain is a surface; the mesh samples it.** `SiteSurface` is the one answer to "how high is the ground here". Constraints are only kinks and steps; a refinement is points. The mesh must be closed, and every mesh change carries a closed-mesh test.
+26. **The terrain is a surface; the mesh samples it.** `SiteSurface` is the one answer to "how high is the ground here" (deck posts ask it too). Constraints are only kinks and steps; a refinement is points. The mesh must be closed, and every mesh change carries a closed-mesh test.
 27. **Site location is data the sun reads** (`north_direction`, `true_to_drawing`).
 28. **Site objects have their own handles and probe parts.**
 29. **The path tracer accumulates sums; every reader divides.**
@@ -86,7 +86,11 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 45. **What lies over a point is one query** (`arch::ceiling::overhead`): the floor of the level above, an Open Below over it, or the roof underside. It clips ceilings and wall tops and bounds trays. Room, ceiling and level edits that would cross it are refused naming the room; roof edits are never refused, and leave a clipped ceiling and a warning.
 46. **Open Below rooms are owned, not detected.** A stair's well room and a drawn Open Below room cut their ring out of the room around them and out of the floor; `roomdetect` keeps them, with their ids, and cuts them again.
 47. **Foundations are derived from the exterior walls with no level below them.** `FOUNDATION` stores a type and a footing depth and creates no walls; the meshes follow the walls.
-48. **A demo the brief puts on the showcase house goes on the showcase house.** A side demo script is allowed for the checks, and the difference is recorded as a gap at the checkpoint (phase 16 did not put its features on the showcase).
+48. **A demo the brief puts on the showcase house goes on the showcase house.** A side demo script is allowed for the checks, and the difference is recorded as a gap at the checkpoint (phase 16 did not put its features on the showcase; phase 17 did, through `p17f-showcase-phase17`).
+49. **A stair's `start` is the centre of its bottom nosing line, everywhere** (command, well, 3D flight, plan symbol, flight cut). One module (`arch::stair_geom`) gives tread spans and the nosing line; nothing else re-derives them.
+50. **Automatic objects are made by the command that makes their host, never on load.** Stair and deck railings come from `railing_auto::regenerate` inside `stair`, `stair.edit`, `deck` and `deck.edit`; a drawing saved before the feature keeps exactly what it had. An automatic railing is an ordinary `Railing` with `auto` and `host` set, following its host.
+51. **A mesh's owner comes from its material prefix, its part from `part_of`.** `deck-` meshes belong to the deck room, `railing-` to the railing, `stair-` to the stair; a part name may be shared by kinds (`post`, `footing`), so a per-object count is read from `arch.inspect`, not from `build3d parts`.
+52. **A merge message is not evidence.** A segment's stated deliverable (a guide section, a test) is confirmed in the tree at the checkpoint; phase 17's user-guide text was claimed and is absent.
 
 ## Phase 1 — walls, joins, poché, first 3D (landed)
 
@@ -122,8 +126,8 @@ Precedent: **`constraints` (L2) — data in `doc`, algorithms in a peer crate.**
 - `stair` cuts the well in one mutation: a hole in the upper room that contains it, an Open Below room, a guard `Railing` with `follows`.
 - `deck` is a `RoomType::Deck` room with `deck_height`.
 - Numbers: 2.7 → 16 × 0.16875, 15 × 0.254, run 3.81; deck 0.9 → 5 × 0.18; well area 3.302.
-- Checks 01–09 PASS.
-- Gaps carried into phase 17: only `straight` meshed; railings a top rail per segment; no stair/railing grips; `A-RAIL` not in the template layers. Out of scope: winders, curved/spiral, ramps, goosenecks.
+- Checks 01–09 PASS (03 and 07 rewritten for phase 17's parts and hosts).
+- Closed in phase 17: railings a top rail per segment; `A-RAIL` in the template layers; the flight half a width off its well. Still open: L and U shapes in 3D (see phase 17's gaps), no stair/railing grips. Out of scope: winders, curved/spiral, ramps, goosenecks.
 
 ## Phase 6 — the 3D view, properly (landed)
 
@@ -339,13 +343,13 @@ Phase-1 house, walls 2.4, 6/12 gable roof with gables on x = 0 and x = 10 (under
 
 ### Phase-16 gaps
 - **Out of scope by the brief:** manual ceiling planes with their own pitch, barrel and shelf ceilings, wall, floor and roof framing and trusses, garage curbs, piers and grade beams.
-- **The demo is not on the showcase house** (decision 48). `bilevel.json` has no vault, tray, soffit, ceiling stack or foundation; the brief asks for a vaulted living room, a dining tray, kitchen soffits, a suspended utility ceiling, footings and a concrete basement there, re-rendered on the contact sheet.
+- **The demo is not on the showcase house** (decision 48). `bilevel.json` has no vault, tray, soffit, ceiling stack or foundation; the brief asks for a vaulted living room, a dining tray, kitchen soffits, a suspended utility ceiling, footings and a concrete basement there, re-rendered on the contact sheet. Still so at the phase-17 checkpoint.
 - **The demo house** draws its tray as a polygon (not `tray {room}`) and has no nested tray.
 - **The showcase is still not a designed house** (read from the script):
   - Dining, Bedroom 2 and Bedroom 3 are room polygons at y 18–23, outside the 26 × 16 m shell, each with one free-standing wall;
   - the kitchen's cabinets stand on Main's west wall (w7) and at (4, 8), in the x 0–10 bay, not in the kitchen;
   - Main is four large bays;
-  - five windows in all, on the east and north walls; the Front camera shows a blank wall;
+  - five windows in all; the Front camera shows a blank wall;
   - the plan images draw the whole model small, with the generated views beside it;
   - `README.md`'s room table does not match the script.
 - **`crates/engine/tests/showcase.rs` passes on that script** (decision 43): `the_showcase_rooms_lie_inside_their_levels` takes the level box from rooms as well as walls; `the_showcase_kitchen_holds_its_casework` counts cabinets on Main, not in the kitchen. Check 20 covers the split entry, the area and the committed renders, not the layout.
@@ -354,28 +358,111 @@ Phase-1 house, walls 2.4, 6/12 gable roof with gables on x = 0 and x = 10 (under
   - a level edit still rebuilds every object;
   - `ifc_step_grammar.rs` should be checked for `IfcFooting` and the electrical entities.
 
+## Phase 17 — stairs, decks, railings and openings in detail (landed)
+
+14/14 checks on 2026-11-12 after one fix cycle.
+
+- **What merged:** the 13 planned segments (p17-observables as -model and -inspect; p17-scene-plumbing as -arch, -scene, -export and -pick; p17-commands, -stair-flight, -wall-under-flight, -stair-plan, -railing-parts, -railing-auto, -deck-frame, -grilles-doors, -window-tops, -exports-rebuild, -demo), the fix cycle (p17f-railing-auto-contact, p17f-grille-top-part, p17f-showcase-phase17), two upstream syncs (e5021f017, ca87680fb) and harden passes.
+- **Checks:** planned against arch3d at 820b8d2; revised once by the lead (3e4c8b77e). The operator landed phase-5 check 03 (probing `tread`, `riser`, `stringer`) and 07 (the well guard selected by host), dropped a stray scratch test (7efb9bd81) and re-rendered the showcase gallery (b97e23f24).
+
+### One stair convention (decision 49)
+- `start` is the centre of the bottom nosing line for the command, the well, the 3D flight, the plan symbol and the flight cut.
+- Tread k has its top at k·rh and spans u in [(k−1)·td − 0.025, k·td]; the nosing line is nosing_v(u) = rh + (u + 0.025)·rh / td, so tread 1's nosing is 25 mm before `start`.
+
+### Stairs in detail
+- Treads 25 mm thick with a 25 mm nosing; risers closed or open (`openRisers`); stringers `two` (default), `centre` or `none` (a skirt board on a wall side).
+- `stair {…, openRisers?, stringers?, underside?, railLeft?, railRight?, planCut?}` and `stair.edit {id, …}`.
+- **Wall under a flight:** `arch::flight_cut::flight_cuts` finds the walls a flight runs over; `arch3d::flight_cut::apply` cuts each wall's elevation profile at the flight's underside, `underside` (default 0.3 m) below the nosing line measured vertically. Outside the flight the wall keeps its height. No CSG (decision 3).
+- **Plan symbol** (`arch::stair_symbol`): on the lower level, solid nosing lines for treads whose top is under the plan cut, a diagonal break line, dashed nosing lines beyond and a walk arrow labelled `UP`; on the upper level the part seen through the well, solid, labelled `DN`. On the stair's layer, in the plan, exports and the DXF proxies (`CADCRAFT-STAIR`, each line with a role). The cut height is stored per stair (`Stair.plan_cut`, default 1.2): levels have no plan settings.
+
+### Railings as built
+- `arch::railing`: 90 mm posts at every end, corner and turn and at most `post_spacing` apart in equal bays (posts at k·L/n per segment); a top rail; a bottom rail 0.05 m above the walking surface; balusters or a panel between; an optional horizontal `inset`.
+- `Railing::default().post_spacing` went 1.2 → 1.8. The field was always serialised, so railings saved before keep 1.2.
+- New `Railing` fields `inset`, `host` (well | stairLeft | stairRight | deck) and `auto`; a railing saved before phase 17 loads as host Well, auto false.
+- **Automatic railings** (decision 50): `railing_auto::regenerate`, called only by `stair`, `stair.edit`, `deck` and `deck.edit`.
+  - Stair sides not against a wall, from the first riser line to the top riser, inset 0.045 into the flight, 0.914 high, a newel at each flight end.
+  - Deck free edges, inset 0.045 with the posts on the rim joists; ends against a wall pulled back 0.045; an edge against the house stays open.
+  - Per side `auto` (default), `on` or `off` (`railLeft`/`railRight`; `rails` on a deck, one value or one per edge).
+  - Wall contact is real contact with a wall face (p17f-railing-auto-contact), not a bounding-box test.
+
+### Decks you can stand under
+- The frame is derived with the deck (`arch::deck::frame`, `arch3d::deck_frame`), never stored (decision 14):
+  - a ledger on the house wall it touches (the longer contact when it touches two);
+  - 38 × 184 mm joists away from the ledger in equal bays of at most 0.406 m, rim joists on the free edges;
+  - a 76 × 235 mm drop beam under the joists, 0.3 m back from the outer edge;
+  - 0.14 m square posts under the beam from grade to its bottom, end posts 0.3 m in from the sides, bays at most 2.4 m, each on a 0.3 m round pier;
+  - 25 mm boards on top.
+- A deck touching no wall has no ledger: joists span the shorter side with a beam 0.3 m in from each end.
+- Grade is `SiteSurface` under each post when there is terrain, else z = 0 (`deck::site_grade`).
+- `deck {boards?: deg | null, rails?}` and `deck.edit`. The board direction (default parallel to the ledger) turns the texture only: boards keep material `deck` but show the Wood board texture (`texture::board_finish`, consulted first by render3d's and io's `finish_of`) with UVs along the direction.
+- `arch.inspect {decks}` lists the ledger, joists, rims, beams and posts.
+
+### Openings in detail
+- **Grilles:** `grille {across, down, part?: "top"}`: 20 × 20 mm bars in the glass plane dividing the glass evenly; the top part is divided on its own; 1 × n and n × 1 grids work (p17f-grille-top-part). `arch.inspect` reports the glass plane and centre.
+- **Tops** (`arch::opening_top`): `square`, `round` (a half circle across the width), `segment` (an arc of a given rise), `roof`. Outlines are built in the host wall's profile coordinates from the wall's bottom with v0 = `sill`; only `walls::opening_holes` keeps its legacy `sill − base`, so square holes stay byte-identical. The rough opening is cut to the shape.
+- **Roof tops:** the height is derived (T(c) − 0.12 − sill, i.e. the roof underside less the 0.15 m offset at the rough opening) when the window is placed or moved; `opening::check_height` skips the wall-height head check; no header. A roof re-pitch leaves the stored height until the window is placed or moved again, while the 3D top always follows the roof.
+- **Fixed doors:** style `fixed`, a glazed leaf that does not open (a sidelight).
+- **Sill and casing sides:** each can be off on either side; the default is the single side used before (the wall's right side), so goldens and old drawings are unchanged.
+
+### Parts, owners, exports, rebuild
+- **Part names** (`probe::part_of`): `tread`, `riser`, `stringer`, `skirt`, `stair` (the landing), `post` (railing and deck posts), `railing` (rails, panels, balusters), `ledger`, `joist`, `rim`, `beam`, `footing` (deck piers and phase-16 footings), `deck` (the boards), `grille`, `sill`, `casing`.
+- **Owners** (decision 51): by material prefix (`deck-` → the deck room, `railing-` → the railing, `stair-` → the stair). `build3d parts.post` counts both kinds of post; per-deck counts come from `arch.inspect {decks}`. `mesh_label` names stairs and railings.
+- **GLB / OBJ:** one node per stair (`stair-s<n>`), per railing (`railing-ra<n>`) and per deck-structure kind (`deck-r<n>-ledger` / `-joists` / `-rims` / `-beams` / `-posts` / `-piers`), each part mesh a primitive of that node (`glb::shares_a_node`; `obj::groups` follows it).
+- **IFC:** ledgers, joists, rims and beams as `IfcMember`; deck posts as `IfcColumn`; piers as `IfcFooting`; `IfcRailing` HANDRAIL for stair sides and well guards, GUARDRAIL for deck and drawn railings.
+- **Rebuild:** `scene_cache_equals_full` gained deck structure, railings, stair parts and grilles, with dependency bounds.
+
+### Demo
+- `docs/arch3d/showcase/phase-17-demo.json`: a two-storey 10 × 8 m house. A stair at (1, 2) heading +x on its well with both side railings; a rear deck (2, 8.1)–(7, 11.1), 0.9 m up, framed and railed; windows with 3 × 2 and 2 × 2 grilles; a round top with a top-part grille; a 0.4 m fixed sidelight; cameras `Deck` and `Stair`. Both plans show the full symbol (`UP` below, `DN` above).
+- **The showcase** (`bilevel.json`, p17f-showcase-phase17): both half flights railed on their open sides; a rear deck x 11…17, y 16.1…19.1, 2.7 m above the Lower floor, framed and railed; 2 × 2 grilles on its five windows; one round top (w6). The Entry plan carries `UP` and `DN`. The committed gallery (`renders/`, `manifest.json`) is of this script (the manifest's SHA-256 matches).
+
+### Numbers locked
+Phase-1 house, walls 2.4; level 2 at 2.7 for the stairs; the roof-top window under phase 16's gable roof.
+- **Deck** (2,8.1)–(6,11.1), 0.9 up: 9 joists at x = 2.4 … 5.6 (10 bays of 0.4) plus rims; posts at x = 2.3, 4.0, 5.7 on y = 10.8. Post at (4.0,10.8,0.2); nothing at (3.15,10.8,0.2); beam at (3.15,10.8,0.6); joist at (2.8,9.5,0.8); nothing at (3.0,9.5,0.8); boards at (3.0,9.5,0.89).
+- **Railing** path (0,0) (0,3) (4,3) (4,0): 8 posts, the four path points plus (0,1.5), (1.3333,3), (2.6667,3), (4,1.5); a post at (1.3333,3,0.5).
+- **Stair plan** (16 risers of 0.16875): 7 solid nosing lines, one break line, 8 dashed on level 1; `DN` and no dashed line on level 2.
+- **Wall under a flight:** stair at (1,1) heading +x, 0.9 wide; wall (3,0)–(3,3). Nosing line 1.5141 at x = 3.0, wall top 1.2141: hit at (3.0,1.0,1.15), nothing at (3.0,1.0,1.27), full height at (3.0,2.5,2.0). 16 `riser` parts closed, 0 open.
+- **Grilles** 2 × 2 on the phase-4 window: `grille` at the glass centre and 0.15 m beside it; `glass` 0.15 m beside and 0.15 m above it.
+- **Round top** 0.9 × 1.5, sill 0.6 (radius 0.45, spring line 1.65; rough arc 1.9664 at du 0.4): no wall at (4.0,8.0,2.0), wall at (3.6,8.0,2.05). Segment: 2.0235 at du 0.45.
+- **Roof top** at y = 1.5 in the x = 0 gable, sill 1.2: top 3.05 at y = 1.5 and 2.825 at y = 1.05 (stored height 1.73); no wall at (0,1.5,3.0), wall at (0,1.05,2.9).
+
+### Acceptance (all PASS)
+`01_observables` · `02_commands` · `03_stair_detail` · `04_wall_under_flight` · `05_stair_plan` · `06_railings` · `07_auto_railings` · `08_deck_frame` · `09_grilles_doors` · `10_window_tops` · `11_rebuild_exports` · `12_hostile` · `13_layers_wasm_i18n` · `14_demo`.
+
+### Phase-17 gaps
+- **Out of scope by the brief:** winders, curved, spiral and wrapped stairs, flights of different widths, starter and flared treads, horizontal and cable rails, deck border and transition boards, dormers, shed roofs.
+- **USER-GUIDE.md has no phase-17 section** (decision 52). `p17-demo`'s merge message names the user guide, but the file has nothing on stair parts, deck frames, automatic railings, grilles or window tops, and no check asks for it.
+- **`ifc_step_grammar.rs` has no counts for `IfcMember`, `IfcColumn` or `IfcRailing`** (decision 32); phase-17 check 11 parses the STEP file in Python instead. `IfcFooting` and the electrical entities are still missing there too.
+- **Stair shapes:** `arch3d::stairs` and `stair_parts` show no L or U handling; the detailed parts appear to be built for straight flights only (carried from phase 5, not checked here).
+- **Roof-top windows** keep their stored height after a roof re-pitch until placed or moved again; `arch.inspect` then disagrees with the 3D top.
+- **Automatic railings are decided only by the stair and deck commands:** a wall moved against (or away from) a stair side or deck edge does not change them until the next `stair.edit` or `deck.edit`.
+- **Shared part names:** `post` and `footing` each cover two kinds of thing in `build3d parts`.
+- **No grips** for stairs, railings or decks.
+- **The showcase** has its phase-17 details but is otherwise as phase 16 left it (not a designed house; no phase-16 ceilings or foundation; loose containment tests).
+
 ## Open items vs Chief Architect
 
 - **Showcase:** a house designed to the brief (rooms inside its walls, a kitchen with its casework and island, windows on every side, the phase-16 ceilings and foundation), with containment tests against walls.
+- **Docs:** a USER-GUIDE.md section for phase 17 (stair details, deck frames, railings, grilles, window tops).
 - **3D view and rendering:** sun in the pane and site materials (phase 19's looks); SSAO/TAA/cascaded shadows; raster window glass opaque; Russian roulette without a survival floor; textures in the path tracer; shaded icons.
-- **Walls and openings:** arc walls and their openings; main-layer joins and the standard-area basis; `reversed`; curtain walls; opening sub-items (mullions, jambs, hardware, display states); door classification.
-- **Roofs:** dormers, crickets, roof returns, skylights, gutters; interactive roof-plane joining; dynamic roof topology.
-- **Stairs:** winders, curved and spiral stairs, ramps.
+- **Walls and openings:** arc walls and their openings; main-layer joins and the standard-area basis; `reversed`; curtain walls; opening sub-items (mullions, jambs, hardware, display states); door classification; bay, box and bow geometry.
+- **Roofs:** dormers, crickets, roof returns, skylights, gutters, shed roofs; interactive roof-plane joining; dynamic roof topology.
+- **Stairs:** winders, curved and spiral stairs, ramps; L and U flights in detail; flights of different widths; starter treads; grips.
+- **Railings and decks:** horizontal and cable rails, goosenecks; deck border and transition boards; railings re-decided when walls move; grips.
 - **Ceilings:** manual ceiling planes, barrel and shelf ceilings.
-- **Structure:** framing; piers, grade beams, garage curbs.
+- **Structure:** wall, floor and roof framing; piers, grade beams, garage curbs.
 - **Services:** plumbing and HVAC; load calculations, panel schedules, wiring runs, low-voltage; connections and circuits in exports.
 - **Site:** terrain/plant tools, grips and a site panel in the UI.
-- **Exports:** IFC materials and colours; parametric IFC bodies.
+- **Exports:** IFC materials and colours; parametric IFC bodies; grammar-test counts for footings, deck members, railings and electrical entities.
 - **Recognition:** `ARCHDETECT` on real plans; scale from dimensions; editing candidates before accept.
 - **Rooms:** room boxes, dynamic defaults.
 - **Library:** `move` refusing handles it cannot resolve; `arch.inspect` handles in the form commands take; furnishing outlines beyond the hull; emitting symbol lights.
 - **Rebuild:** a level edit that rebuilds only what it touches.
 - **Georeferencing:** transforms between coordinate systems.
-- Planned for phases 17–21: pony walls, moldings, reference display, schedules, sheet title blocks and view titles.
+- Planned for phases 18–21: pony walls, moldings, reference display, schedules, sheet title blocks and view titles.
 
 ## Phase plan
 
-0–15 ✅ → **16 ✅ ceilings and foundations** (2026-11-11; the showcase split entry reworked, its layout still open) → 17 stairs, decks, railings and openings in detail (in progress: most segments merged, fix cycle running) → 18 interior finish, kitchen and bath (started: observables, scene plumbing, molding kit) → 19 light, sky and cameras (started: foundation, groundwork, normal maps, strip model) → 20 plan views and dimensions → 21 schedules, elevations and sheets.
+0–16 ✅ → **17 ✅ stairs, decks, railings and openings in detail** (2026-11-12; the user-guide section and the showcase layout still open) → 18 interior finish, kitchen and bath (started: observables, scene plumbing, molding kit) → 19 light, sky and cameras (in progress: foundation, groundwork, exposure 1–3, sun, seeing-in model, normal maps 1–2, strip model) → 20 plan views and dimensions (started: observables 1–3) → 21 schedules, elevations and sheets.
 
 ## Building blocks added outside the swarm (assisted)
 
@@ -398,25 +485,11 @@ Phase-1 house, walls 2.4, 6/12 gable roof with gables on x = 0 and x = 10 (under
 
   Also CHIEF-REFERENCE §7 for phases 16–21 (0dcace523). A CC-0 sky HDRI for phase 19 was added (576538153) and reverted (6f0b65d23); p19-hdri restores it from that commit.
 - **Phase-16 operator work:** the earlier-phase checks that phases 16–19 change (bfaa016c6); phase-14 check 01 pinning the nine finishes for phase 18 (52a669156).
-
-## Phase 17 plan
-
-Phase 17 (stairs, decks, railings and openings in detail) was planned against arch3d at 820b8d2 in 13 segments: p17-observables first, then p17-scene-plumbing and p17-commands in parallel, then the feature segments each filling only its own stubs (p17-stair-flight, p17-wall-under-flight, p17-stair-plan, p17-railing-parts, p17-railing-auto, p17-deck-frame, p17-grilles-doors, p17-window-tops), last p17-exports-rebuild and p17-demo. Checks 01-14 under tests/acceptance/phase-17 with p17lib.inc, plus phase-5 check 03 (rewritten to probe tread / riser / stringer) and 07 (the well guard selected by host), landed by the operator. Status at the phase-16 checkpoint: every planned segment has merged; fix cycle segments p17f-railing-auto-contact and p17f-grille-top-part merged; the checks were revised once (3e4c8b77e).
-
-- Stair convention: `start` is the centre of the bottom nosing line. Tread k has its top at k*rh and spans u in [(k-1)*td - 0.025, k*td]; the nosing line is nosing_v(u) = rh + (u + 0.025) * rh / td, so tread 1's nosing is 25 mm before `start`. The plan cut height is stored per stair (Stair.plan_cut, param planCut, default 1.2): levels have no plan settings.
-- Railing.post_spacing: Railing::default() goes 1.2 -> 1.8; the field was always serialised, so railings saved before keep 1.2. New Railing fields inset, host (well | stairLeft | stairRight | deck) and auto; a railing saved before phase 17 loads as host Well, auto false. Automatic railings are made only by the stair, stair.edit, deck and deck.edit commands (railing_auto::regenerate); nothing runs on load. Stair side railings run from the first riser line to the top riser, inset 0.045 into the flight, 0.914 high; deck railings follow the free edges inset 0.045, ends against a wall pulled back 0.045.
-- Sill and casing sides default to today's single side (the wall's right side: the exterior of a counter-clockwise ring), so goldens and old drawings are unchanged.
-- Part names (probe::part_of): tread, riser, stringer, skirt, stair (the landing), post (railing AND deck posts), railing (rails, panels, balusters), ledger, joist, rim, beam, footing (deck piers AND phase-16 footings), deck (the boards), grille, sill, casing. Ownership goes by material prefix: `deck-` -> the deck room, `railing-` -> the railing, `stair-` -> the stair. build3d parts.post counts both kinds, so deck checks read deck posts from arch.inspect {decks}. mesh_label names stairs and railings.
-- GLB / OBJ: one node per stair (stair-s<n>), per railing (railing-ra<n>) and per deck-structure kind (deck-r<n>-ledger / -joists / -rims / -beams / -posts / -piers), each part mesh a primitive of that node (glb::shares_a_node; obj::groups follows it). IFC: IfcMember / IfcColumn / IfcFooting per deck member mesh, IfcRailing HANDRAIL for stair sides and well guards, GUARDRAIL for deck and drawn railings.
-- Deck boards keep material `deck` but show the Wood board texture (arch3d texture::board_finish, consulted first by render3d's and io's finish_of) with UVs along board_dir; the direction never re-frames the joists.
-- Window tops: outlines are built in the host wall's profile coordinates from the wall's bottom with v0 = o.sill; only walls::opening_holes keeps its legacy `sill - base` so square holes stay byte-identical. A roof-top window's height is derived (T(c) - 0.12 - sill) when it is placed or moved (opening::check_height skips the wall-height head check for roof tops); a roof re-pitch leaves the stored height until the window is placed or moved again, while the 3D top always follows the roof; roof tops get no header.
-- Stub ownership: arch stair_geom.rs, deck.rs, flight_cut.rs, railing.rs RailSurface -> p17-scene-plumbing; deck::frame and arch3d deck_frame.rs, engine deck_inspect.rs -> p17-deck-frame; flight_cut::flight_cuts + arch3d flight_cut::apply -> p17-wall-under-flight; arch3d stair_parts.rs -> p17-stair-flight; railing_parts.rs -> p17-railing-parts; arch railing_auto.rs -> p17-railing-auto; arch opening_top.rs -> p17-window-tops; arch3d openings.rs opening_meshes_with -> p17-grilles-doors then p17-window-tops.
-- Demo: p17-demo edits bilevel.json additively (grilles on its five windows, one round top, a rear deck) and ships phase-17-demo.json (a small two-storey house).
-- Numbers: recomputed from the geometry (deck joists 10 bays of 0.4, posts at 2.3 / 4.0 / 5.7; railing posts at k*L/n; 7 solid nosing lines under the 1.2 m cut; the 1.2141 cut; grille bars at the glass centre lines; round rough arc 1.9664 at du 0.4; segment 2.0235 at du 0.45; roof top 3.05 / 2.825 and height 1.73), 1e-6 for closed-form values and 1e-3 for mesh-derived ones.
+- **Phase-17 operator work:** phase-5 checks 03 and 07 for the new parts and railing hosts; a stray scratch test removed (7efb9bd81); the showcase gallery re-rendered from today's `bilevel.json` (b97e23f24); phase-16 check 20 notes, rather than fails, renders of an earlier script (f111186e3).
 
 ## Phase 18 plan
 
-Phase 18 (interior finish, kitchen and bath) was planned against arch3d at febe33d on top of the phase-17 plan. 20 segments, several split by size into numbered parts (each part's listed files under 300 KB): p18-observables (-1..-3), p18-scene-plumbing (-1..-4), p18-room-finishes (-1..-3), p18-molding-kit (-1, -2), then p18-room-moldings, p18-molding-lines (-1, -2), p18-cabinet-moldings, p18-countertops, p18-backsplash, p18-cabinet-fronts (-1, -2), p18-corners, p18-fillers-shelves, p18-glass-walls (-1..-3); second-level p18-countertop-shapes, p18-face-appliances, p18-shower-niche (-1..-4), p18-crown-wrap; last p18-exports, p18-rebuild, p18-demo. Checks 01-20 under tests/acceptance/phase-18 with p18lib.inc (loads p17lib.inc, else p16lib.inc). Status at the phase-16 checkpoint: observables 1-3, scene-plumbing 1-3 and molding-kit 1-2 merged.
+Phase 18 (interior finish, kitchen and bath) was planned against arch3d at febe33d on top of the phase-17 plan. 20 segments, several split by size into numbered parts (each part's listed files under 300 KB): p18-observables (-1..-3), p18-scene-plumbing (-1..-4), p18-room-finishes (-1..-3), p18-molding-kit (-1, -2), then p18-room-moldings, p18-molding-lines (-1, -2), p18-cabinet-moldings, p18-countertops, p18-backsplash, p18-cabinet-fronts (-1, -2), p18-corners, p18-fillers-shelves, p18-glass-walls (-1..-3); second-level p18-countertop-shapes, p18-face-appliances, p18-shower-niche (-1..-4), p18-crown-wrap; last p18-exports, p18-rebuild, p18-demo. Checks 01-20 under tests/acceptance/phase-18 with p18lib.inc (loads p17lib.inc, else p16lib.inc). Status at the phase-17 checkpoint: observables 1-3, scene-plumbing 1-3 and molding-kit 1-2 merged.
 
 - Earlier checks, landed by the operator: phase-13 check 02's last part exports the walls alone (a detected room's floor now takes its type's template finish); phase-14 check 01 pins the nine finish items (off the passing record until the finish segments land).
 - Room-type finishes are derived, never stored: `cadcraft_arch::room_finish::template(RoomType)` gives floor / wall / ceiling finishes (walls Drywall, ceilings Plaster, floors wood / carpet / tile / concrete by type; Kitchen floors are tile); `unpainted_finish` resolves a surface's material as paint > explicit finish > template > default. A type change clears the phase-13 floor_finish. In 3D only floors take the template texture; wall faces and ceilings keep their unsplit meshes while the surface rows and the eyedropper report the template finish. Finish gains Concrete, Tile, Carpet, Drywall, Plaster (nine in all); render3d's texture array keeps 256 layers.
@@ -432,7 +505,7 @@ Phase 18 (interior finish, kitchen and bath) was planned against arch3d at febe3
 
 ## Phase 19 plan
 
-Phase 19 (light, sky and cameras) was planned against arch3d at febe33d37 and the phase-17 plan. 19 segments in five waves, several split by size into numbered parts; checks 01-17 under tests/acceptance/phase-19 with p19lib.inc (loads p17lib.inc, else p16lib.inc; not phase 18's). Status at the phase-16 checkpoint: p19-foundation 1, 2 and 4, p19-r3d-groundwork-1, the path-tracer groundwork (frame layout, frame lighting), p19-normal-maps-1 and p19-strip-model-1 merged.
+Phase 19 (light, sky and cameras) was planned against arch3d at febe33d37 and the phase-17 plan. 19 segments in five waves, several split by size into numbered parts; checks 01-17 under tests/acceptance/phase-19 with p19lib.inc (loads p17lib.inc, else p16lib.inc; not phase 18's). Status at the phase-17 checkpoint: p19-foundation 1, 2 and 4, p19-r3d-groundwork-1, the path-tracer groundwork (frame layout, frame lighting), p19-exposure 1-3, p19-sun-2, p19-seeing-in, p19-normal-maps 1-2 and p19-strip-model-1 merged.
 
 - Waves: 0 (no deps) p19-foundation (look data, the `look` command, apply_look_params as the one look parser, `backdrop {kind: sky}`), p19-r3d-groundwork (GPU layout: PbrUniform 128 B, frame uniform 256 B, GpuFrame fields and flags, shader and tracer hook stubs; byte-identical images), p19-horizon, p19-strip-model, p19-normal-maps; 1 p19-exposure, p19-sun, p19-env-path, p19-seeing-in, p19-strip-tray; 2 p19-env-raster, p19-strip-render, p19-normal-maps-render, p19-seeing-in-render; 3 p19-sky, p19-hdri, p19-cameras; 4 p19-pane, p19-demo. Critical path: foundation -> exposure -> env-raster -> sky -> demo.
 - The render look: `Look` (crates/doc/src/arch/look.rs) is stored globally (ArchModel.look; its backdrop stays ArchModel.backdrop) and complete per saved camera (Camera3d.look, captured at save; Camera3d.saved for camera.reset). A camera without a look follows the global look. Every render, illuminance and pick3d resolves the effective look and overlays its own params through apply_look_params. Named sun angles live in ArchModel.sun_angles.
@@ -450,11 +523,9 @@ Phase 19 (light, sky and cameras) was planned against arch3d at febe33d37 and th
 - Phase-17 names relied on: probe::pick_part and probe::arch_kind, the new parts, ui-egui pane3d.rs proxy_handle/locate, arch3d texture::board_finish. Phase 16: arch ceiling::tray::outline for p19-strip-tray.
 - Shared files (union merges; each package edits only its own functions): engine cmd/arch/mod.rs registration, inspect.rs dispatch, uk.tsv rows; render3d Lighting fields; apps/cadcraft-cli/src/render_hook.rs; tracer.rs (groundwork owns frame_lighting; each package fills its own frame_* stub); frame_look.rs.
 
-## Phase 20 plan
-
 ## Phase 20 plan: plan views and dimensions
 
-Planned against arch3d at 1f9b04c81 (phase 16 merged: trays, soffits, vaults, foundations, ceiling stacks with the "suspended" template) and against the reviewed phase-17 and phase-19 plans, which merge first; phase 18 (planned in parallel) is not a dependency. Kept from the 11-08 draft (written on op/next 15d9af8fa, an ancestor of 1f9b04c81): its 13 packages, its decisions and both review passes, re-checked against this tree (every file, type and function named below exists here or is created by the segment that names it). 13 segments; checks 01-13 under tests/acceptance/phase-20 with the lead's p20lib.inc.
+Planned against arch3d at 1f9b04c81 (phase 16 merged: trays, soffits, vaults, foundations, ceiling stacks with the "suspended" template) and against the reviewed phase-17 and phase-19 plans, which merge first; phase 18 (planned in parallel) is not a dependency. Kept from the 11-08 draft (written on op/next 15d9af8fa, an ancestor of 1f9b04c81): its 13 packages, its decisions and both review passes, re-checked against this tree (every file, type and function named below exists here or is created by the segment that names it). 13 segments; checks 01-13 under tests/acceptance/phase-20 with the lead's p20lib.inc. Status at the phase-17 checkpoint: p20-observables 1-3 merged.
 
 ### Segments, waves, critical paths
 - Wave 0 (no deps): p20-observables (plan-view data on CADCraft layer states, the seven templates, Room.label_area, the arch::plan annotation pipeline with stubs, arch.inspect plan / planViews / rooms labelArea + ceilingText) and p20-dims-model (Arch attachments on CADCraft associative dimensions, DXF, AUDIT, arch.inspect dimensions).
@@ -464,7 +535,7 @@ Planned against arch3d at 1f9b04c81 (phase 16 merged: trays, soffits, vaults, fo
 - Check -> segment: 01 plan-views, 02 view-export (plan-views numbers), 03 reference, 04 rcp, 05 roof-plan, 06 room-labels, 07 dims-model (associative), 08 auto-dims, 09 dims-drive, 10 hostile (every command owner), 11 layers/literals/wasm/assets/i18n/user guide (all), 12 demo, 13 observables. Phase-15 check 04 (electrical view) must keep passing unchanged (p20-view-export). No earlier check is rewritten (no earlier_checks).
 - Brief items: plan views (named object, level or any, layer state with transparency, annotation set, zoom) -> p20-observables (data) + p20-plan-views (commands); seven templates -> p20-observables; "view.electrical becomes this view" -> p20-view-export; tabs -> p20-plan-views (state) + p20-ui-plan-tabs (UI); create/duplicate/rename/delete -> p20-plan-views; reference display -> p20-reference; reflected ceiling plan -> p20-rcp (+ room ceiling text in p20-observables, its label in p20-room-labels); roof plan -> p20-roof-plan (ridges/hips/valleys are today's linework moved into the pipeline by p20-observables); dimensions that know the building -> p20-dims-model; driving -> p20-dims-drive; auto exterior dimensions -> p20-auto-dims; room labels -> p20-room-labels; drawing the pipeline -> p20-plan-render; demo -> p20-demo. Out of scope (framing plans, story poles, construction lines, shadow plans, interior auto-dimensions other than phase 21's cabinet runs): nobody; p20-auto-dims makes exterior rows only.
 
-### What to add to docs/arch3d/DESIGN.md
+### Design
 - Plan views extend CADCraft, they don't duplicate it: a PlanView (crates/doc/src/arch/planview.rs, stored in ArchModel.plan_views with the open tabs open_plan_views and active_plan_view) embeds a CADCraft LayerState that gains wildcard rules (LayerRule {pattern, on?, transparency?}: `*`/`?`, case-insensitive, the last matching rule wins; the snapshot's layers win over the rules; layerstate.restore applies rules too) and restores its zoom through the named-view path. No VIEW/LAYERSTATE records are written per view; view.electrical still saves its 'Electrical' state as phase 15 did (the layers from before the view plus those it creates, so the UI toggle undims everything when it turns the view off).
 - The seven templates (Working, Floor Plan, Electrical, Reflected Ceiling, Roof Plan, Kitchen & Bath, Site) are implicit defaults: present in every drawing, not serialized until changed; deleting them sticks ("plan_views": []). Floor Plan hides E-*, A-ROOF*, C-*, L-* and keeps A-CLNG (phase 16 draws soffits dashed and footings in floor plans); Reflected Ceiling, Roof Plan and Site hide A-ANNO-DIMS; Electrical is exactly phase 15's rule set. The plan with no view open is unchanged prim for prim.
 - Opening a view first creates every layer the plan can draw the model's objects on (cadcraft_arch::plan::layers_in_use: walls, rooms, stairs, railings, terrain C-TOPO-*/C-ROAD, the north arrow, plants, trays/soffits, foundations, devices, casework, views) and the view's annotation layer, because arch_layer_skipped draws objects on a missing layer and wall/room/stair/terrain/plant commands create none; without it a view's rules could not hide them.
@@ -492,7 +563,6 @@ Planned against arch3d at 1f9b04c81 (phase 16 merged: trays, soffits, vaults, fo
 ### Shared registration edits within phase 20 (the merger takes unions)
 engine cmd/arch/mod.rs (plan_inspect, dim_inspect by observables/dims-model; planview, roomlabel, autodim, dimdrive); inspect.rs dispatch lines (plan x2 + rooms keys by p20-observables, dimensions by p20-dims-model, autoDims by p20-auto-dims); uk.tsv rows (p20-plan-views 7, p20-ui-plan-tabs 7, p20-auto-dims 1, p20-dims-drive 1, p20-room-labels 1); crates/arch/src/lib.rs (plan, dimension, autodim, drive); doc arch.rs (planview module + fields by p20-observables; autodim module + field by p20-auto-dims); doc tables.rs (LayerRule/rules by p20-observables; wildcard_match/apply by p20-plan-views: different items); xtask SHARED_ROOTS (planview.rs, autodim.rs); crates/arch/src/plan/mod.rs (p20-observables; one `pub mod layers` line by p20-plan-views). Nobody edits arch.inspect's `.params` string.
 
-### Verification on this run
+### Verification at planning time
 Built cadcraft-cli (debug) at 1f9b04c81 with CARGO_TARGET_DIR=/usr/local/cx-swarm/targets-checks/op-gate and ran every Python check from the repository root (CADCRAFT_CLI pointing at that binary, which the libraries' cli_args honour; the same binary cargo run uses). Each fails on the missing feature, never on a typo or a Python error: 01 `unknown command planview.list`; 02 the Floor Plan SVG still draws E-LITE (#c8a000: export ignores planView); 03 `unknown command planview`; 04, 05, 06 no arch.inspect plan object; 07 no arch.inspect dimensions list; 08, 09, 10 `unknown command dimauto`; 12 phase-20-demo.json missing; 13 no planViews. p20lib's helpers and template table were exercised separately (template spec round trip, SVG colour parsing, handle spelling, the showcase's exterior-wall spans 26.2 x 16.2). All files pass python3 -m py_compile / bash -n. Check 11 ran in full under nice (cargo xtask layers, literals, wasm and assets all passed on this tree) and failed at its first phase-20 item: crates/doc/src/arch/planview.rs does not exist.
 - Splits (engineer context budget, files over 300 KB): p20-observables (635 KB) -> p20-observables-1 (doc data: tables.rs, planview.rs, arch.rs, xtask literals; 237 KB), p20-observables-2 (LayerState literal fixes in engine and io; 247 KB, after -1), p20-observables-3 (arch::plan pipeline and arch.inspect; 151 KB, after -1 and -2); p20-auto-dims (482 KB) -> p20-auto-dims-1 (doc AutoDims, arch exterior_rows, render filter, xtask literals; 219 KB), p20-auto-dims-2 (engine dimauto / regeneration / inspect and uk.tsv; 263 KB, after -1). Dependents and `# needs:` lines name every part.
-
