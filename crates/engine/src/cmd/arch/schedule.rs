@@ -338,7 +338,7 @@ fn build_table(d: &Drawing, schedule: &Schedule, rows: &[cadcraft_arch::schedule
         col_widths[i] = w;
     }
 
-    let mut table = make_table(&style, at, row_count, cols, None, None, Some(&schedule.name), Some(cells[0].clone()), &cells[1..]);
+    let mut table = make_table(&style, at, rows.len(), cols, None, None, Some(&schedule.name), Some(cells[0].clone()), &cells[1..]);
 
     table.col_widths = col_widths;
 
@@ -429,6 +429,7 @@ fn parse_at(v: &Value) -> Result<Vec2> {
 
 fn default_at(d: &Drawing, kind: ScheduleKind) -> Result<Vec2> {
     let bounds = d.arch.bounds();
+    let bounds = if bounds.is_empty() { d.bounds() } else { bounds };
     if bounds.is_empty() {
         return Ok(Vec2::ZERO);
     }
@@ -543,7 +544,8 @@ mod tests {
         let handle = Handle::parse_hex(table_handle).unwrap();
 
         // Add another door to change the schedule (count or new row)
-        s.execute("door", &json!({"wall": "w0", "offset": 6.0})).unwrap();
+        // Use offset 7.0 to avoid overlap (min separation 0.05, width 0.9)
+        s.execute("door", &json!({"wall": "w0", "offset": 7.0})).unwrap();
 
         // Check table updated
         let doc = s.doc().unwrap();
@@ -567,7 +569,7 @@ mod tests {
         let handle = Handle::parse_hex(table_handle).unwrap();
 
         // Add another door
-        s.execute("door", &json!({"wall": "w0", "offset": 6.0})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 7.0})).unwrap();
 
         // Undo
         s.execute("undo", &json!({})).unwrap();
