@@ -58,8 +58,9 @@ pub struct ElectricalTools {
     pub armed: Option<Tool>,
     /// The switch a Connection drag started on.
     pub drag_from: Option<ArchId>,
-    /// Whether the Electrical View is on (so the toggle knows to restore the previous state).
-    pub view_on: bool,
+    /// The current layer (CLAYER) as it was when this toggle turned the Electrical View on, so
+    /// turning it off can put it back; `None` when the toggle did not open the view.
+    pub saved_clayer: Option<String>,
     /// The light set chosen for 3D renders (`None`: the lights as they are).
     pub light_set: Option<String>,
     /// What the last tool command reported.
@@ -247,15 +248,31 @@ pub fn grip_drag(session: &mut Session, grip: &ArcGrip, p: Vec2) -> Result<Value
     session.execute("connection.edit", &json!({ "id": connection_label(grip.connection), "bulge": bulge })).map_err(|e| e.to_string())
 }
 
-/// Turn the Electrical View on, or off by restoring the layer state it saved.
+/// Whether the Electrical View is on: the active plan view tab is the Electrical one, however it
+/// was opened.
+pub fn view_on(model: &ArchModel) -> bool {
+    model.active_plan_view.as_deref().is_some_and(|n| n.trim().eq_ignore_ascii_case(ELECTRICAL_STATE))
+}
+
+/// Turn the Electrical View on (`view.electrical`), or off: restore the layer state it saved (when
+/// this toggle turned it on), close its tab, and put the current layer back.
 pub fn toggle_view(session: &mut Session, tools: &mut ElectricalTools) -> Result<Value, String> {
-    let r = if tools.view_on {
-        session.execute("layerstate.restore", &json!({ "name": ELECTRICAL_STATE }))
-    } else {
-        session.execute("view.electrical", &json!({}))
+    let on = session.doc().map(|d| view_on(&d.arch)).map_err(|e| e.to_string())?;
+    if !on {
+        let clayer = session.doc().map(|d| d.header.str("CLAYER", "0")).map_err(|e| e.to_string())?;
+        let r = session.execute("view.electrical", &json!({})).map_err(|e| e.to_string())?;
+        tools.saved_clayer = Some(clayer);
+        return Ok(r);
     }
-    .map_err(|e| e.to_string())?;
-    tools.view_on = !tools.view_on;
+    let saved = tools.saved_clayer.take();
+    if saved.is_some() {
+        session.execute("layerstate.restore", &json!({ "name": ELECTRICAL_STATE })).map_err(|e| e.to_string())?;
+    }
+    let r = session.execute("planview.close", &json!({ "name": ELECTRICAL_STATE })).map_err(|e| e.to_string())?;
+    let none_active = session.doc().map(|d| d.arch.active_plan_view.is_none()).unwrap_or(false);
+    if let Some(name) = saved.filter(|n| none_active && session.doc().is_ok_and(|d| d.layer(n).is_some())) {
+        session.execute("layer.current", &json!({ "name": name })).map_err(|e| e.to_string())?;
+    }
     Ok(r)
 }
 
@@ -350,7 +367,7 @@ pub fn plan_toolbar(app: &mut crate::CadApp, ui: &mut egui::Ui) {
                 }
             }
         });
-        let mut view = app.electrical.view_on;
+        let mut view = app.session.doc().is_ok_and(|d| view_on(&d.arch));
         if ui.checkbox(&mut view, crate::i18n::t("Electrical View")).changed() {
             let mut tools = std::mem::take(&mut app.electrical);
             if let Err(e) = toggle_view(&mut app.session, &mut tools) {
@@ -536,11 +553,51 @@ mod tests {
     fn the_electrical_view_toggles_back() {
         let mut s = session_with_wall();
         let mut tools = ElectricalTools::default();
+        s.execute("layer.new", &json!({ "name": "Marker" })).expect("layer");
+        s.execute("layer.current", &json!({ "name": "Marker" })).expect("current");
+        let before = s.doc().expect("doc").layers.clone();
         toggle_view(&mut s, &mut tools).expect("on");
-        assert!(tools.view_on);
+        {
+            let d = s.doc().expect("doc");
+            assert!(view_on(&d.arch));
+            assert_eq!(d.arch.active_plan_view.as_deref(), Some("Electrical"));
+            assert!(d.arch.open_plan_views.iter().any(|n| n == "Electrical"));
+            assert_eq!(d.layer("A-WALL").map(|l| l.transparency), Some(70));
+            assert_eq!(d.header.str("CLAYER", "0"), "E-ANNO-NOTE");
+        }
         toggle_view(&mut s, &mut tools).expect("off");
-        assert!(!tools.view_on);
+        let d = s.doc().expect("doc");
+        assert!(!view_on(&d.arch));
+        assert!(d.arch.active_plan_view.is_none());
+        assert!(!d.arch.open_plan_views.iter().any(|n| n == "Electrical"));
+        assert_eq!(d.header.str("CLAYER", "0"), "Marker");
+        for l in &before {
+            let now = d.layer(&l.name).expect("layer kept");
+            assert_eq!((now.on, now.frozen, now.transparency), (l.on, l.frozen, l.transparency), "{}", l.name);
+        }
         let p = with_light_set(json!({ "out": "a.png" }), &ElectricalTools { light_set: Some("Evening".into()), ..Default::default() });
         assert_eq!(p["lightSet"], "Evening");
+    }
+
+    #[test]
+    fn the_checkbox_follows_the_electrical_tab() {
+        let mut s = session_with_wall();
+        let mut tools = ElectricalTools::default();
+        assert!(!view_on(&s.doc().expect("doc").arch));
+        s.execute("planview.open", &json!({ "name": "Electrical" })).expect("open");
+        assert!(view_on(&s.doc().expect("doc").arch));
+        // Turning it off only closes the tab: this toggle did not open it, so nothing is restored.
+        let undo = s.state().expect("state").undo.len();
+        toggle_view(&mut s, &mut tools).expect("off");
+        let d = s.doc().expect("doc");
+        assert!(!view_on(&d.arch));
+        assert!(!d.arch.open_plan_views.iter().any(|n| n == "Electrical"));
+        assert_eq!(d.layer("A-WALL").map(|l| l.transparency), Some(70), "no layerstate.restore ran");
+        assert_eq!(s.state().expect("state").undo.len(), undo + 1);
+        // Closing the tab by hand also turns the checkbox off.
+        s.execute("planview.open", &json!({ "name": "Electrical" })).expect("open");
+        assert!(view_on(&s.doc().expect("doc").arch));
+        s.execute("planview.close", &json!({ "name": "Electrical" })).expect("close");
+        assert!(!view_on(&s.doc().expect("doc").arch));
     }
 }
