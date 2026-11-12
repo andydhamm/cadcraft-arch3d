@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 10:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 11 of 35 segments merged · 1 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-12 10:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 29.0 h so far · expected done Nov 15 20:47–Nov 28 18:30 UTC |
+| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 29.3 h so far · expected done Nov 15 21:02–Nov 28 18:45 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 2 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
@@ -40,7 +40,7 @@ Updated 2026-11-12 10:30 UTC. This page and the card in the README are regenerat
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-room-finishes-1` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | merging | claude-sonnet-b |
-| `p18-room-moldings` | Room moldings: each room's base, chair rail and crown along its wall faces, base and chair stopping at opening trim, crown round a flat ceiling; `room.moldings`, the trim widths in arch.inspect, the brief's molding numbers | merging | claude-sonnet-b |
+| `p18-room-moldings` | Room moldings: each room's base, chair rail and crown along its wall faces, base and chair stopping at opening trim, crown round a flat ceiling; `room.moldings`, the trim widths in arch.inspect, the brief's molding numbers | merging | mai-flash |
 | `p18-molding-lines-1` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | merging | mai-flash-esc |
 | `p18-cabinet-moldings` | Cabinet moldings: crown and light rail on wall (and tall) cabinets from a profile with a size override, following the door faces or the box front where there is no door, returning at exposed ends | merging | mai-flash-esc |
 | `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-d |
@@ -55,6 +55,7 @@ Updated 2026-11-12 10:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 10:32 | `p18-room-moldings` | refused | 9,006 pass | claude-sonnet-b |
 | Nov 12 09:36 | `p20-plan-render` | merged | 8,982 pass | claude-sonnet-b |
 | Nov 12 09:36 | `p19-cameras-1` | merged | 8,982 pass | claude-sonnet-d |
 | Nov 12 09:36 | `p21-observables-2` | merged | 8,982 pass | bonsai-ws2-a |
@@ -66,23 +67,22 @@ Updated 2026-11-12 10:30 UTC. This page and the card in the README are regenerat
 | Nov 12 08:28 | `harden-p15-arch-circuits` | merged | 8,944 pass | tturbo-mac |
 | Nov 12 08:10 | `p20-plan-views` | merged | 8,907 pass | mai-flash |
 | Nov 12 08:10 | `p21-observables-1` | merged | 8,907 pass | claude-sonnet-b |
-| Nov 12 07:50 | `p19-sun-1` | merged | 8,877 pass | mai-flash |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1165 |
+| bonsai-a | bonsai2-27b | gate | 1167 |
 | bonsai-b | bonsai2-27b | merging | 1135 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1238 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1181 |
-| claude-sonnet-a | sonnet | idle | 132 |
-| claude-sonnet-b | sonnet | idle | 142 |
-| claude-sonnet-c | sonnet | idle | 73 |
-| claude-sonnet-d | sonnet | idle | 68 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1035 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1240 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1182 |
+| claude-sonnet-a | sonnet | down | 132 |
+| claude-sonnet-b | sonnet | down | 142 |
+| claude-sonnet-c | sonnet | down | 73 |
+| claude-sonnet-d | sonnet | down | 68 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1036 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 94 |
+| mai-flash | mai-code-1.1-flash | idle | 95 |
 | mai-flash-b | mai-code-1.1-flash | gate | 33 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 95 |
 | tturbo-mac | tturbo-ultraheretic | gate | 797 |
