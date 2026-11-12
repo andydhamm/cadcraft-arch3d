@@ -218,7 +218,7 @@ fn generate_for_level(doc: &mut Drawing, level: u32, kinds: &[AutoRowKind]) -> V
                 h
             })
             .collect();
-        out.push(AutoDimRow { side: row.side, kind: row.kind, handles, edited: false });
+        out.push(AutoDimRow { side: row.side, kind: row.kind, handles, edited: false, ..Default::default() });
     }
     out
 }
@@ -277,7 +277,7 @@ fn run_dimauto(s: &mut Session, p: &Value) -> Result<Value> {
         doc.arch.auto_dims.remove(pos);
     }
     let generated = generate_for_level(&mut doc, level, &kinds);
-    doc.arch.auto_dims.push(AutoDims { level, rows: kinds.clone(), generated });
+    doc.arch.auto_dims.push(AutoDims { level, rows: kinds.clone(), generated, ..Default::default() });
     doc.touch_arch();
     let count =
         doc.arch.auto_dims.iter().find(|r| r.level == level).map(|r| r.generated.iter().map(|row| row.handles.len()).sum::<usize>()).unwrap_or(0);
@@ -384,7 +384,7 @@ pub(crate) fn regenerate(s: &mut Session, before: Option<&Arc<Drawing>>, uid: Op
                     doc.model.push(entity);
                     handles.push(h);
                 }
-                next.push(AutoDimRow { side: row.side, kind: row.kind, handles, edited: false });
+                next.push(AutoDimRow { side: row.side, kind: row.kind, handles, edited: false, ..Default::default() });
             }
         }
         for old in &rec.generated {
