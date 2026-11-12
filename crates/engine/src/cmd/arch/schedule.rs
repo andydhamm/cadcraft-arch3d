@@ -44,16 +44,12 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     let table = build_table(&doc, &schedule, &rows, at)?;
 
     doc.ensure_layer(LAYER_SCHEDULE);
-    let mut common = Default::default();
+    let mut common: cadcraft_doc::Common = Default::default();
     common.layer = LAYER_SCHEDULE.to_string();
+    let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
+    set_link(&mut tags, LINK_SCHEDULE, &label, 0);
+    common.xdata = tags;
     let handle = doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
-
-    // Link the table to the schedule via XDATA
-    if let Some(entity) = doc.model.iter_mut().find(|e| e.handle == handle) {
-        let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
-        set_link(&mut tags, LINK_SCHEDULE, &label, 0);
-        entity.common.xdata = tags;
-    }
 
     arch.schedules.push(schedule);
     arch.next_schedule_id += 1;
@@ -143,23 +139,23 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
     if let Some(handle) = schedule_table(&doc, &label) {
         // Rewrite table
         let table = build_table(&doc, &schedule, &rows, at_vec)?;
-        if let Some(entity) = doc.model.iter_mut().find(|e| e.handle == handle) {
-            if let cadcraft_doc::EntityKind::Table(ref mut t) = entity.kind {
+        if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
+            let mut new_entity = (**entity).clone();
+            if let cadcraft_doc::EntityKind::Table(ref mut t) = new_entity.kind {
                 *t = table;
             }
+            doc.model.replace(new_entity);
         }
     } else {
         // Create new table if missing (shouldn't happen if linked, but robust)
         let table = build_table(&doc, &schedule, &rows, at_vec)?;
         doc.ensure_layer(LAYER_SCHEDULE);
-        let mut common = Default::default();
+        let mut common: cadcraft_doc::Common = Default::default();
         common.layer = LAYER_SCHEDULE.to_string();
-        let handle = doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
-        if let Some(entity) = doc.model.iter_mut().find(|e| e.handle == handle) {
-            let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
-            set_link(&mut tags, LINK_SCHEDULE, &label, 0);
-            entity.common.xdata = tags;
-        }
+        let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
+        set_link(&mut tags, LINK_SCHEDULE, &label, 0);
+        common.xdata = tags;
+        doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
     }
 
     arch.schedules[idx] = schedule;
@@ -249,12 +245,12 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
                 if let cadcraft_doc::EntityKind::Table(current_table) = &entity.kind {
                     if table_differs(current_table, &expected_table) {
                         // Rewrite table in place
-                        if let Some(entity_mut) = doc.model.iter_mut().find(|e| e.handle == handle) {
-                            if let cadcraft_doc::EntityKind::Table(ref mut t) = entity_mut.kind {
-                                *t = expected_table;
-                                changed = true;
-                            }
+                        let mut new_entity = (**entity).clone();
+                        if let cadcraft_doc::EntityKind::Table(ref mut t) = new_entity.kind {
+                            *t = expected_table;
+                            changed = true;
                         }
+                        doc.model.replace(new_entity);
                     }
                 }
             }
@@ -270,7 +266,9 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
     }
 
     if changed {
-        s.state_mut().ok().map(|st| st.doc = Arc::new(doc));
+        if let Ok(st) = s.state_mut() {
+            st.doc = Arc::new(doc);
+        }
     }
 }
 
@@ -467,7 +465,7 @@ mod tests {
 
         // Verify table exists and is linked
         let doc = s.doc().unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
         let entity = doc.entity(handle).unwrap();
         assert!(matches!(entity.kind, cadcraft_doc::EntityKind::Table(_)));
 
@@ -484,7 +482,7 @@ mod tests {
 
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
 
         let doc = s.doc().unwrap();
         if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
@@ -505,7 +503,7 @@ mod tests {
 
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
 
         // Resize door
         s.execute("opening.edit", &json!({"id": "o0", "width": 1.2})).unwrap();
@@ -529,7 +527,7 @@ mod tests {
 
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
 
         // Resize door
         s.execute("opening.edit", &json!({"id": "o0", "width": 1.2})).unwrap();
@@ -553,7 +551,7 @@ mod tests {
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
 
         // Edit columns to just width
         s.execute("schedule.edit", &json!({"id": schedule_id, "columns": ["width"]})).unwrap();
@@ -574,7 +572,7 @@ mod tests {
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
 
         s.execute("schedule.delete", &json!({"id": schedule_id})).unwrap();
 
@@ -591,7 +589,7 @@ mod tests {
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
 
         // Erase table manually
         s.execute("erase", &json!({"handles": [table_handle]})).unwrap();
@@ -612,7 +610,7 @@ mod tests {
 
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
-        let handle = Handle::from_hex(table_handle).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
 
         // Get revision before
         let rev_before = s.state().unwrap().revision;
