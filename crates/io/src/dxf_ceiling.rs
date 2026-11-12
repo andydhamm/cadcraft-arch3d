@@ -9,8 +9,8 @@ use std::collections::BTreeSet;
 use cadcraft_arch::ceiling::soffit::soffit_ring;
 use cadcraft_arch::foundation::{footing_outline, foundation_walls};
 use cadcraft_doc::arch::{ArchModel, CEILING_LAYER, FOUNDATION_LAYER};
-use cadcraft_dxf::Tag;
 use cadcraft_geom::Vec2;
+use craft_dxf::Tag;
 
 /// Marker in the `CADCRAFT` xdata of every ceiling/foundation proxy.
 pub(crate) const CEILING_PROXY_MARKER: &str = "CADCRAFT-CEILING";
