@@ -57,7 +57,7 @@ fn room_lines(model: &ArchModel, r: &Room, show: RoomLabelShow) -> Vec<(PlanLabe
             LabelArea::Standard => r.standard_area,
             _ => r.interior_area,
         };
-        if a.is_finite() {
+        if a.is_finite() && a > 1e-9 {
             lines.push((PlanLabelKind::RoomArea, format!("{a:.2} m2"), DETAIL_HEIGHT));
         }
     }
