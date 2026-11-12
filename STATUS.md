@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 23:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 24 of 35 segments merged · 6 of 20 acceptance checks**
 
@@ -28,18 +28,18 @@ Updated 2026-11-12 23:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 6 / 20 | 41.5 h so far · expected done Nov 13 07:07–Nov 14 03:05 UTC |
+| 18 | Interior finish, kitchen and bath | building | 6 / 20 | 41.8 h so far · expected done Nov 13 07:22–Nov 14 03:19 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 6 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-24 merged, 5 merging, 5 queued, 1 gate
+24 merged, 6 merging, 5 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p18-room-finishes-3` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | gate | mai-flash |
+| `p18-room-finishes-3` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | merging | mai-flash |
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
 | `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-b |
 | `p18-backsplash` | Backsplash: `backsplash {run | wall}` covers the wall face behind a counter from the counter top to the underside of the wall cabinets (else a set height, default 0.45), 10 mm thick, its own material, top to the ceiling on demand, per-cabinet on / off | merging | bonsai-ws2-a |
@@ -67,18 +67,18 @@ Updated 2026-11-12 23:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1207 |
-| bonsai-b | bonsai2-27b | agent | 1165 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1286 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1241 |
-| claude-sonnet-a | sonnet | gate | 144 |
+| bonsai-a | bonsai2-27b | gate | 1208 |
+| bonsai-b | bonsai2-27b | gate | 1166 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1288 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1242 |
+| claude-sonnet-a | sonnet | idle | 145 |
 | claude-sonnet-b | sonnet | idle | 153 |
 | claude-sonnet-c | sonnet | idle | 87 |
-| claude-sonnet-d | sonnet | idle | 80 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1073 |
+| claude-sonnet-d | sonnet | agent | 80 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1075 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 101 |
+| mai-flash | mai-code-1.1-flash | idle | 102 |
 | mai-flash-b | mai-code-1.1-flash | idle | 47 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 107 |
-| tturbo-mac | tturbo-ultraheretic | agent | 815 |
+| tturbo-mac | tturbo-ultraheretic | gate | 815 |
 | tturbo-mac2 | tturbo-ultraheretic | agent | 427 |
