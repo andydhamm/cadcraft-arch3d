@@ -148,7 +148,7 @@ mod tests {
                 img.write_to(&mut out, f).expect("PNG encode");
             }
             image::ImageFormat::Jpeg => {
-                let rgb = image::imageops::color_to_rgb(img);
+                let rgb = img.to_rgb8();
                 rgb.write_to(&mut out, f).expect("JPEG encode");
             }
             _ => panic!("unsupported format in test"),
