@@ -266,13 +266,13 @@ mod tests {
     #[test]
     fn moon_dir_follows_true_north() {
         let m = ArchModel::default();
-        let look = MoonLook { lux: 0.25, azimuth: 90.0, elevation: 0.0 };
+        let look = MoonLook { azimuth: 90.0, elevation: 0.0, ..Default::default() };
         let d = moon_dir(&m, &look).unwrap_or([0.0; 3]);
         assert!((d[0] - 1.0).abs() < 1e-9 && d[1].abs() < 1e-9 && d[2].abs() < 1e-9, "{d:?}");
         let up = moon_dir(&m, &MoonLook { elevation: 30.0, ..look.clone() }).unwrap_or([0.0; 3]);
         assert!((up[2] - 0.5).abs() < 1e-9);
         let rotated = ArchModel { site: Some(cadcraft_doc::arch::SiteLocation { true_north: 90.0, ..Default::default() }), ..Default::default() };
-        let north = MoonLook { azimuth: 0.0, elevation: 0.0, lux: 0.25 };
+        let north = MoonLook { azimuth: 0.0, elevation: 0.0, ..Default::default() };
         let d = moon_dir(&rotated, &north).unwrap_or([0.0; 3]);
         assert!((d[0] + 1.0).abs() < 1e-9 && d[1].abs() < 1e-9, "{d:?}");
         assert!(moon_dir(&m, &MoonLook { azimuth: f64::NAN, ..look }).is_none());
