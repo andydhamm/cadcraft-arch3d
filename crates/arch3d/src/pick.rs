@@ -389,7 +389,7 @@ mod tests {
             normals: vec![[0.0, 0.0, 1.0]; 3],
             uvs: vec![[0.0, 0.0]; 3],
             indices: vec![0, 1, 2],
-            ..Mesh::new("test", ArchId(9)),
+            ..Mesh::new("test", ArchId(9))
         };
         tri1.level_elevation = 0.0;
         let mut tri2 = Mesh {
@@ -397,7 +397,7 @@ mod tests {
             normals: vec![[0.0, 0.0, 1.0]; 3],
             uvs: vec![[0.0, 0.0]; 3],
             indices: vec![0, 1, 2],
-            ..Mesh::new("test", ArchId(10)),
+            ..Mesh::new("test", ArchId(10))
         };
         tri2.level_elevation = 0.0;
         let scene = Scene3d { meshes: vec![tri1, tri2], ..Scene3d::default() };
