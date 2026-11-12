@@ -6,7 +6,8 @@
 # nothing (no slab, ceiling or wall) crosses either flight within 2 m above its treads; the up flight arrives on a Main
 # room with a floor. The above-grade area (Main's rooms, Open Below, Garage, Porch and Deck left out) is at least
 # 371.6 m². The rendered views are committed: docs/arch3d/showcase/renders/manifest.json lists every view kind of
-# phase 15's check 11, rendered from today's bilevel.json (its scriptSha256), each image and the contact sheet tracked in
+# phase 15's check 11 (rendered from bilevel.json: a manifest of an earlier script is noted, not failed, since 11-11: the
+# operator re-renders when a phase closes), each image and the contact sheet tracked in
 # git, non-blank (5..99 % of the pixels differ from the clear colour, luma sd > 2), 15 MB at most in all.
 # A stub fails: today's script's lower flight ends 12 m from the landing, its upper flight runs into Main's floor slab,
 # the landing has 1.05 m of headroom under Main's floor, and no render is committed.
@@ -139,7 +140,12 @@ if not os.path.exists(man_path):
 man = json.load(open(man_path, encoding='utf-8'))
 sha = hashlib.sha256(open(SHOWCASE, 'rb').read()).hexdigest()
 if man.get('scriptSha256') != sha:
-    fail(f"the committed renders are of today's bilevel.json: manifest scriptSha256 {man.get('scriptSha256')!r}, bilevel.json {sha}")
+    # Operator 2026-11-11: not a failure any more. Every segment that edits bilevel.json had to re-render and commit all
+    # 19 images (binary files that conflict between segments): p17f-showcase-phase17 and p18-room-finishes-1 were refused
+    # on this line alone, and each refusal cost merge cycles. The operator re-renders when a phase closes
+    # (tools/showcase/render_all.py --out docs/arch3d/showcase/renders); between closes the images may trail the script.
+    print(f"note: the committed renders are of an earlier bilevel.json (manifest scriptSha256 {str(man.get('scriptSha256'))[:12]}, "
+          f"bilevel.json {sha[:12]}); the operator re-renders at the phase's close")
 tracked = set(subprocess.run(['git', 'ls-files', 'docs/arch3d/showcase/renders'], capture_output=True, text=True, cwd=ROOT).stdout.split())
 kinds = {}
 total = 0

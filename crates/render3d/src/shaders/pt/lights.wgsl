@@ -133,13 +133,183 @@ fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
 }
 
 // [p19-sun] what of the sun reaches o along d (cast shadows on/off).
-fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { return visibility(o, d, 1.0e6); }
-// [p19-env-path]
-fn env_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }
-// [p19-env-path] the radiance an escaping ray sees (sky or environment map); depth, mode and prev_pdf are for MIS.
-fn env_escape(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32> { return sky_radiance(d); }
-// [p19-env-path]
-fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }
+fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { if ((frame.flags & FRAME_SUN_NO_SHADOW) != 0u) { return vec3<f32>(1.0); } return visibility(o, d, 1.0e6); }
+// ---- Environment map (p19-env-path) -------------------------------------------------------------
+// The baked map lives in ies[]: radiance (3 per texel, row 0 the zenith) at frame.env.x, the
+// marginal CDF over rows (h + 1) at frame.env_aux.x and the conditional CDFs (h rows of w + 1) at
+// frame.env_aux.y. frame.env = (offset, width, height, flags: 1 present, 2 visible). View
+// direction d -> u = 0.5 + atan2(d.y, d.x) / 2pi, v = 0.5 - asin(d.z) / pi. The table is piecewise
+// constant, so lookup, sampling and pdf all read the same texel (EnvTable in pathtrace/env.rs).
+
+struct EnvSample { dir: vec3<f32>, li: vec3<f32>, pdf: f32 };
+
+fn env_present() -> bool {
+    return (frame.flags & FRAME_ENV) != 0u && frame.env.y > 0u && frame.env.z > 0u;
+}
+
+fn env_texel(row: u32, col: u32) -> vec3<f32> {
+    let i = frame.env.x + (row * frame.env.y + col) * 3u;
+    return vec3<f32>(ies[i], ies[i + 1u], ies[i + 2u]);
+}
+
+// The largest i in 0..n with ies[base + i] <= u (a CDF of n + 1 entries); bounded binary search.
+fn env_search(base: u32, n: u32, u: f32) -> u32 {
+    var lo = 0u;
+    var hi = n;
+    for (var k = 0u; k < 16u; k = k + 1u) {
+        if (lo >= hi) {
+            break;
+        }
+        let mid = (lo + hi + 1u) / 2u;
+        if (ies[base + mid] <= u) {
+            lo = mid;
+        } else {
+            hi = mid - 1u;
+        }
+    }
+    return min(lo, max(n, 1u) - 1u);
+}
+
+fn env_row_col(d: vec3<f32>) -> vec2<u32> {
+    let u = clamp(0.5 + atan2(d.y, d.x) / (2.0 * PT_PI), 0.0, 1.0);
+    let v = clamp(0.5 - asin(clamp(d.z, -1.0, 1.0)) / PT_PI, 0.0, 1.0);
+    let col = min(u32(u * f32(frame.env.y)), frame.env.y - 1u);
+    let row = min(u32(v * f32(frame.env.z)), frame.env.z - 1u);
+    return vec2<u32>(row, col);
+}
+
+// The map's radiance toward unit d (world space; rotation, horizon and intensity are baked in).
+fn env_lookup(d: vec3<f32>) -> vec3<f32> {
+    if (!env_present()) {
+        return vec3<f32>(0.0);
+    }
+    let rc = env_row_col(d);
+    return env_texel(rc.x, rc.y);
+}
+
+// The solid-angle density of sampling texel (row, col) whose centre is at v = vv.
+fn env_texel_pdf(row: u32, col: u32, vv: f32) -> f32 {
+    let w = frame.env.y;
+    let h = frame.env.z;
+    let m = ies[frame.env_aux.x + row + 1u] - ies[frame.env_aux.x + row];
+    let cb = frame.env_aux.y + row * (w + 1u) + col;
+    let c = ies[cb + 1u] - ies[cb];
+    let sin_t = sin(vv * PT_PI);
+    if (!(sin_t > 1.0e-6)) {
+        return 0.0;
+    }
+    return m * c * f32(w * h) / (2.0 * PT_PI * PT_PI * sin_t);
+}
+
+// The density per steradian of env_sample choosing unit d.
+fn env_pdf(d: vec3<f32>) -> f32 {
+    if (!env_present() || !(frame.env_params.x > 0.0)) {
+        return 0.0;
+    }
+    let rc = env_row_col(d);
+    let vv = (f32(rc.x) + 0.5) / f32(frame.env.z);
+    return env_texel_pdf(rc.x, rc.y, vv);
+}
+
+// A direction drawn in proportion to luminance x sin(theta), its radiance and density (pdf 0: none).
+fn env_sample(u: vec2<f32>) -> EnvSample {
+    var s: EnvSample;
+    s.dir = vec3<f32>(0.0, 0.0, 1.0);
+    s.li = vec3<f32>(0.0);
+    s.pdf = 0.0;
+    if (!env_present() || !(frame.env_params.x > 0.0)) {
+        return s;
+    }
+    let w = frame.env.y;
+    let h = frame.env.z;
+    let u0 = clamp(u.x, 0.0, 1.0);
+    let u1 = clamp(u.y, 0.0, 1.0);
+    let row = env_search(frame.env_aux.x, h, u0);
+    let m0 = ies[frame.env_aux.x + row];
+    let m1 = ies[frame.env_aux.x + row + 1u];
+    var fv = 0.5;
+    if (m1 > m0) {
+        fv = clamp((u0 - m0) / (m1 - m0), 0.0, 1.0);
+    }
+    let cbase = frame.env_aux.y + row * (w + 1u);
+    let col = env_search(cbase, w, u1);
+    let c0 = ies[cbase + col];
+    let c1 = ies[cbase + col + 1u];
+    var fu = 0.5;
+    if (c1 > c0) {
+        fu = clamp((u1 - c0) / (c1 - c0), 0.0, 1.0);
+    }
+    let uu = (f32(col) + fu) / f32(w);
+    let vv = (f32(row) + fv) / f32(h);
+    let az = (uu - 0.5) * 2.0 * PT_PI;
+    let el = (0.5 - vv) * PT_PI;
+    s.dir = vec3<f32>(cos(el) * cos(az), cos(el) * sin(az), sin(el));
+    s.li = env_texel(row, col);
+    s.pdf = env_texel_pdf(row, col, vv);
+    return s;
+}
+
+// One environment sample at a non-glass vertex: visibility out to 1e6, MIS power heuristic against
+// the BSDF pdf (the escape of a diffuse/glossy bounce is weighted by the other half).
+fn env_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> {
+    if (!env_present()) {
+        return vec3<f32>(0.0);
+    }
+    let s = env_sample(vec2<f32>(rand(r), rand(r)));
+    if (!(s.pdf > 0.0) || !(light_luminance(s.li) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let f = bsdf_eval(m, n, wo, s.dir);
+    if (!(light_luminance(f) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let o = p + n * PT_EPS;
+    let v = visibility(o, s.dir, 1.0e6);
+    if (!(light_luminance(v) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let w = power_heuristic(s.pdf, bsdf_pdf(m, n, wo, s.dir));
+    return f * s.li * v * (w / s.pdf);
+}
+
+// The radiance an escaping ray sees. With an environment: a camera ray (depth 0) sees it only when
+// it is visible (else 0: the pixel stays a miss for the backdrop); a ray whose light a direct
+// estimate already counted (AREA_SKIP) adds nothing; after a specular bounce it is full; after a
+// diffuse/glossy bounce MIS-weighted against env_direct. Without one, the gradient sky.
+fn env_escape(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32> {
+    if (!env_present()) {
+        return sky_radiance(d);
+    }
+    if (depth == 0u) {
+        if ((frame.env.w & 2u) != 0u) {
+            return env_lookup(d);
+        }
+        return vec3<f32>(0.0);
+    }
+    if (mode == AREA_SKIP) {
+        return vec3<f32>(0.0);
+    }
+    var w = 1.0;
+    if (mode == AREA_MIS) {
+        w = power_heuristic(prev_pdf, env_pdf(d));
+    }
+    return env_lookup(d) * w;
+}
+
+// The irradiance from the environment at o facing n: one sample, cos / pdf (no MIS: the bounce that
+// follows is AREA_SKIP and adds nothing for the environment).
+fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> {
+    if (!env_present()) {
+        return vec3<f32>(0.0);
+    }
+    let s = env_sample(vec2<f32>(rand(r), rand(r)));
+    let cos_n = max(dot(n, s.dir), 0.0);
+    if (!(s.pdf > 0.0) || !(cos_n > 0.0) || !(light_luminance(s.li) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let v = visibility(o, s.dir, 1.0e6);
+    return s.li * v * (cos_n / s.pdf);
+}
 // [p19-sky]
 fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }
 // [p19-sky]

@@ -163,3 +163,82 @@ fn a_model_without_views_writes_no_view_fields() {
     assert!(back.views.is_empty());
     assert_eq!(back.next_view_id, 1);
 }
+
+#[test]
+fn arch_kind_maps_casework_parts() {
+    for part in ["cabinet", "counter", "pull"] {
+        assert_eq!(ArchKind::from_part(part), ArchKind::Cabinet, "{part}");
+    }
+    assert_eq!(ArchKind::from_part("fixture"), ArchKind::Fixture);
+    let id = ArchId(3);
+    assert_eq!(ArchKind::Cabinet.key(), "cabinet");
+    assert_eq!(ArchKind::Fixture.key(), "fixture");
+    assert_eq!(ArchKind::Cabinet.handle(id), cabinet_handle(id));
+    assert_eq!(ArchKind::Fixture.handle(id), fixture_handle(id));
+    assert_eq!(ArchKind::Cabinet.label(id), "cb3");
+    assert_eq!(ArchKind::Fixture.label(id), "fx3");
+    assert_eq!(ArchKind::from_part("wall"), ArchKind::Wall);
+}
+
+#[test]
+fn interior_view_validation() {
+    let base = ArchView { name: "Kitchen".into(), kind: ViewKind::Interior, look: [0.0, 1.0], ..ArchView::default() };
+    assert_eq!(base.validate(), Err(ViewError::MissingRoom));
+    let with_room = ArchView { room: Some(ArchId(0)), room_point: Some([1.0, 1.0]), ..base.clone() };
+    assert_eq!(with_room.validate(), Err(ViewError::MissingWall));
+    let no_point = ArchView { room_point: None, wall: Some(ArchId(0)), ..with_room.clone() };
+    assert_eq!(no_point.validate(), Err(ViewError::MissingRoom));
+    let nan_point = ArchView { room_point: Some([f64::NAN, 0.0]), wall: Some(ArchId(0)), ..with_room.clone() };
+    assert_eq!(nan_point.validate(), Err(ViewError::MissingRoom));
+    let ok = ArchView { wall: Some(ArchId(0)), ..with_room.clone() };
+    assert_eq!(ok.validate(), Ok(()));
+    let cut = ArchView { cut: Some([[0.0, 0.0], [1.0, 0.0]]), ..ok.clone() };
+    assert_eq!(cut.validate(), Err(ViewError::UnexpectedCut));
+    assert!(!ViewError::MissingRoom.to_string().is_empty());
+    assert_eq!(ViewKind::Interior.key(), "interior");
+    assert_eq!(ViewKind::Elevation.key(), "elevation");
+    assert_eq!(ViewKind::Section.key(), "section");
+    // New fields stay out of an old payload.
+    let plain = serde_json::to_value(ArchView::default()).unwrap();
+    for k in ["room", "room_point", "wall", "level", "notes", "next_note_id"] {
+        assert!(plain.get(k).is_none(), "{k}");
+    }
+}
+
+#[test]
+fn view_notes_validate() {
+    let note = ViewNote { id: 0, text: "Note".into(), ..ViewNote::default() };
+    let view = |n: ViewNote| ArchView { name: "E".into(), notes: vec![n], ..ArchView::default() };
+    assert_eq!(view(note.clone()).validate(), Ok(()));
+    let bad = |n: ViewNote| matches!(view(n).validate(), Err(ViewError::BadNote(_)));
+    assert!(bad(ViewNote { text: String::new(), ..note.clone() }));
+    assert!(bad(ViewNote { text: "x".repeat(300), ..note.clone() }));
+    assert!(bad(ViewNote { text: "a\u{7}b".into(), ..note.clone() }));
+    assert!(bad(ViewNote { at: [f64::NAN, 0.0], ..note.clone() }));
+    assert!(bad(ViewNote { b: Some([2e6, 0.0]), ..note.clone() }));
+    assert!(bad(ViewNote { offset: [f64::INFINITY, 0.0], ..note.clone() }));
+    assert!(bad(ViewNote { height: 0.0, ..note.clone() }));
+    assert!(bad(ViewNote { height: 11.0, ..note.clone() }));
+    assert!(bad(ViewNote { layer: String::new(), ..note.clone() }));
+    let many = ArchView { name: "E".into(), notes: vec![note.clone(); MAX_VIEW_NOTES + 1], ..ArchView::default() };
+    assert!(matches!(many.validate(), Err(ViewError::BadNote(_))));
+    // ArchModel::validate drops bad notes and keeps the view.
+    let mut m = ArchModel::default();
+    m.views.push(ArchView { name: "E".into(), notes: vec![note, ViewNote { text: String::new(), ..ViewNote::default() }], ..ArchView::default() });
+    let msgs = m.validate();
+    assert_eq!(m.views.len(), 1);
+    assert_eq!(m.views[0].notes.len(), 1);
+    assert_eq!(msgs.iter().filter(|s| s.contains("note")).count(), 1);
+}
+
+#[test]
+fn room_label_show_numbers_defaults_off() {
+    assert!(!RoomLabelShow::default().numbers);
+    let old: RoomLabelShow = serde_json::from_str(r#"{"name":true,"area":false,"dimensions":false,"ceiling":false}"#).unwrap();
+    assert!(!old.numbers);
+    let j = serde_json::to_value(RoomLabelShow::default()).unwrap();
+    assert!(j.get("numbers").is_none());
+    let on = RoomLabelShow { numbers: true, ..RoomLabelShow::default() };
+    let back: RoomLabelShow = serde_json::from_value(serde_json::to_value(on).unwrap()).unwrap();
+    assert!(back.numbers);
+}

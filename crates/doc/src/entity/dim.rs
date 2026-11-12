@@ -160,6 +160,39 @@ pub struct DimAssoc {
     pub snap: AssocSnap,
 }
 
+/// A feature of an architectural object used by `AssocSnap::Arch`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArchFeature {
+    Centre,
+    LeftFace,
+    RightFace,
+    Edge(u32),
+}
+
+impl ArchFeature {
+    /// The canonical key spelling used in DXF xdata and JSON.
+    pub fn key(self) -> &'static str {
+        match self {
+            ArchFeature::Centre => "centre",
+            ArchFeature::LeftFace => "leftFace",
+            ArchFeature::RightFace => "rightFace",
+            ArchFeature::Edge(_) => "edge",
+        }
+    }
+
+    /// Parse a DXF/JSON feature key, optionally with a numeric edge index.
+    pub fn from_key(key: &str, edge: Option<u32>) -> Option<Self> {
+        match key.trim() {
+            "centre" | "center" => Some(Self::Centre),
+            "leftFace" | "leftface" => Some(Self::LeftFace),
+            "rightFace" | "rightface" => Some(Self::RightFace),
+            "edge" => Some(Self::Edge(edge?)),
+            _ => None,
+        }
+    }
+}
+
 /// Where on the object an associative definition point sits.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -182,6 +215,11 @@ pub enum AssocSnap {
     /// Vertex `index` of a polyline.
     Vertex {
         index: usize,
+    },
+    /// A location on a structural feature, measured `along` metres from that feature's origin.
+    Arch {
+        feature: ArchFeature,
+        along: f64,
     },
 }
 

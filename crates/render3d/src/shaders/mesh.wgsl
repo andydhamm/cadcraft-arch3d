@@ -44,10 +44,50 @@ struct PbrUniforms {
 // block counts as [1, 1]). Samples, so call it from uniform control flow only.
 fn base_albedo(uv: vec2<f32>) -> vec3<f32> {
     let per_repeat = select(vec2<f32>(1.0), p._p6.zw, p._p6.zw > vec2<f32>(0.0));
-    return u.albedo * textureSample(mat_tex, mat_samp, uv * per_repeat, i32(p._p6.y)).rgb;
+    let textured = u.albedo * textureSample(mat_tex, mat_samp, uv * per_repeat, i32(p._p6.y)).rgb;
+    // The calibration look (PBR_FLAG_LAMBERT) ignores the material and its texture; the texture is
+    // still sampled above so the control flow stays uniform.
+    return select(textured, vec3<f32>(p.lambert_albedo), lambert_on());
+}
+
+// A physically scaled frame (phase 19): `tone_map` is non-zero. Zero is the unlit legacy look.
+fn physical() -> bool {
+    return p.tone_map != 0u;
+}
+
+// The plain Lambert calibration look of a physically scaled frame.
+fn lambert_on() -> bool {
+    return p.tone_map != 0u && (p.flags & 1u) != 0u;
 }
 
 const PI: f32 = 3.14159265;
+
+// Tone curves: a copy of tonemap.wgsl (a test keeps the two identical).
+fn tone_aces(x: vec3<f32>) -> vec3<f32> {
+    let numerator = x * (2.51 * x + vec3<f32>(0.03));
+    let denominator = x * (2.43 * x + vec3<f32>(0.59)) + vec3<f32>(0.14);
+    return clamp(numerator / denominator, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+fn tone_hable_curve(x: vec3<f32>) -> vec3<f32> {
+    return (x * (0.15 * x + vec3<f32>(0.05)) + vec3<f32>(0.004)) / (x * (0.15 * x + vec3<f32>(0.5)) + vec3<f32>(0.06)) - vec3<f32>(0.02 / 0.3);
+}
+
+fn tone_hable(x: vec3<f32>) -> vec3<f32> {
+    let white = tone_hable_curve(vec3<f32>(11.2));
+    return clamp(tone_hable_curve(2.0 * x) / white, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+fn tone_map_rgb(rgb: vec3<f32>, code: u32) -> vec3<f32> {
+    let x = clamp(select(vec3<f32>(0.0), rgb, rgb == rgb), vec3<f32>(0.0), vec3<f32>(1.0e6));
+    if (code == 1u) {
+        return tone_aces(x);
+    }
+    if (code == 2u) {
+        return tone_hable(x);
+    }
+    return clamp(x, vec3<f32>(0.0), vec3<f32>(1.0));
+}
 // Matches `offscreen::CLEAR`: hidden-line draws faces in the background colour.
 const CLEAR_COLOR: vec3<f32> = vec3<f32>(0.02, 0.025, 0.034);
 const GLASS_ALPHA: f32 = 0.35;
@@ -96,9 +136,12 @@ struct Shade {
     keep: u32,
 };
 
-// Hook [p19-seeing-in-render]: true when the fragment lies outside the clip box.
+// True when the draw has a clip box (flag 2) and the fragment lies outside it (the box is inclusive).
 fn clip_discard(wpos: vec3<f32>) -> bool {
-    return false;
+    if ((p.flags & 2u) == 0u) {
+        return false;
+    }
+    return any(wpos < p.clip_min) || any(wpos > p.clip_max);
 }
 
 // Hook [p19-normal-maps-render]: the normal after the draw's normal map.
@@ -109,16 +152,27 @@ fn shading_normal(n: vec3<f32>, uv: vec2<f32>, wpos: vec3<f32>) -> vec3<f32> {
 // Irradiance the sun adds on a face square to it; it carries (1 - ambient) of the light so a white
 // diffuse face at ndl = 1 is fully lit.
 fn sun_irradiance() -> f32 {
+    if (physical()) {
+        // Lux: the frame's sun illuminance (0 without a sun).
+        return p.sun_intensity;
+    }
     return p.sun_intensity * (1.0 - p.ambient) * PI;
 }
 
 // The ambient term of the phase-6 look.
 fn base_ambient(albedo: vec3<f32>, metallic: f32, n: vec3<f32>) -> vec3<f32> {
+    if (physical()) {
+        // Ambient illuminance in lux on a Lambert surface.
+        return albedo / PI * p.ambient_lux * (1.0 - metallic * 0.5);
+    }
     return albedo * p.ambient * (1.0 - metallic * 0.5);
 }
 
-// Hook [p19-exposure]: the last step on a lit colour.
+// The last step on a lit colour: a physically scaled frame multiplies by its exposure and tone maps.
 fn finish_color(rgb: vec3<f32>) -> vec3<f32> {
+    if (physical()) {
+        return tone_map_rgb(rgb * p.exposure, p.tone_map);
+    }
     return rgb;
 }
 
@@ -159,15 +213,16 @@ fn shade_parts(v: VOut) -> Shade {
     let ndh = max(dot(n, h), 0.0);
     let vdh = max(dot(vdir, h), 0.0);
 
-    let metallic = clamp(p.metallic, 0.0, 1.0);
+    let lam = lambert_on();
+    let metallic = select(clamp(p.metallic, 0.0, 1.0), 0.0, lam);
     let rough = clamp(p.roughness, 0.045, 1.0);
     let f0 = mix(vec3<f32>(0.04), albedo, metallic);
     let f = fresnel_schlick(vdh, f0);
     let d = distribution_ggx(ndh, rough * rough);
     let g = geometry_smith(ndv, ndl, rough);
-    let spec = d * g * f / max(4.0 * ndv * ndl, 1e-4);
-    // Lambert diffuse for dielectrics; metals have none.
-    let kd = (vec3<f32>(1.0) - f) * (1.0 - metallic);
+    let spec = select(d * g * f / max(4.0 * ndv * ndl, 1e-4), vec3<f32>(0.0), lam);
+    // Lambert diffuse for dielectrics; metals have none. The calibration look is pure Lambert.
+    let kd = select((vec3<f32>(1.0) - f) * (1.0 - metallic), vec3<f32>(1.0), lam);
     let diffuse = kd * albedo / PI;
 
     s.direct = (diffuse + spec) * sun_irradiance() * ndl;

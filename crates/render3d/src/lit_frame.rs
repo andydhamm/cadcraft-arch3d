@@ -22,10 +22,12 @@ pub struct LitState {
     /// `occluder_key` of the scene uploaded under this key.
     occluders: Option<(u64, u64)>,
     /// The sun map and the (scene, ground, direction bits) it was built for.
-    sun_key: Option<(u64, bool, [u32; 3])>,
+    sun_key: Option<(u64, bool, [u32; 3], Option<[[f32; 3]; 2]>)>,
     sun_map: Option<crate::shadow::ShadowMap>,
     /// Slots in the last frame.
     slots: usize,
+    /// The convolved SH of the environment with this key (p19-env-raster).
+    sh: Option<(u64, [[f32; 3]; 9])>,
 }
 
 /// A hash of every light's shadow key and intensity.
@@ -49,12 +51,21 @@ pub struct Lighting {
     pub sun_shadow: bool,
     /// Lights shadowed at most (`lights::DEFAULT_SHADOW_BUDGET`); the rest light unshadowed.
     pub budget: usize,
-    /// Display units per lux (`lights::DEFAULT_EXPOSURE`).
+    /// Display units per lux (`lights::DEFAULT_EXPOSURE`). A value other than the default is a
+    /// bare-number exposure of the request: the frame uses it as its fixed exposure scale.
     pub exposure: f32,
     /// The render look the frame is lit for (phase 19; read by later packages).
     pub look: cadcraft_doc::arch::Look,
     /// The explicit toward-sun direction in drawing space, when one was given.
     pub sun_dir: Option<[f64; 3]>,
+    /// The calibration albedo: every surface reads as plain Lambert with it (`render {albedo}`).
+    pub lambert: Option<f32>,
+    /// Meter an automatic exposure on a frame without daylight (false keeps the legacy 0.01 scale,
+    /// as `render {sun: false}` and hand-built night lightings always had).
+    pub meter_night: bool,
+    /// The environment (light and/or background) the frame lights with; `None` when there is
+    /// none (p19-env-path).
+    pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
 }
 
 impl Default for Lighting {
@@ -66,6 +77,9 @@ impl Default for Lighting {
             exposure: crate::lights::DEFAULT_EXPOSURE,
             look: cadcraft_doc::arch::Look::default(),
             sun_dir: None,
+            lambert: None,
+            meter_night: false,
+            environment: None,
         }
     }
 }
@@ -105,11 +119,15 @@ impl Offscreen {
             }
         };
 
-        // The sun map, once per scene and direction.
+        // The view's clip box: geometry outside it casts no shadow, and both shadow caches key on it.
+        let clip = crate::frame_look::look_clip(&lighting.look);
+        self.shadow_clip = clip;
+
+        // The sun map, once per scene, direction and clip box.
         match lighting.sun.filter(|_| lighting.sun_shadow) {
             Some(sun) => {
                 let d = sun.normalized().dir;
-                let sk = (scene_key, ground, [d[0].to_bits(), d[1].to_bits(), d[2].to_bits()]);
+                let sk = (scene_key, ground, [d[0].to_bits(), d[1].to_bits(), d[2].to_bits()], clip);
                 if self.lit_state.sun_key != Some(sk) {
                     self.lit_state.sun_map = self.build_shadow(scene, scene_key, &sun, ground);
                     self.lit_state.sun_key = Some(sk);
@@ -129,14 +147,29 @@ impl Offscreen {
         };
         let atlas =
             self.lit_state.atlas.get_or_insert_with(|| crate::shadow_atlas::ShadowAtlas::new(&self.device, crate::lights::INTERACTIVE_SHADOW_SIZE));
+        atlas.set_clip(clip);
         let (_, meshes) = self.meshes.as_ref()?;
         let before = atlas.maps_built();
         let slots = atlas.update(&self.device, &self.queue, meshes, occluders, &scene.lights, &self.lit_state.shadowed, far);
         self.shadows_built += atlas.maps_built().saturating_sub(before);
         self.lit_state.slots = slots.len();
 
+        // The environment's diffuse light: nine convolved SH coefficients, projected once per key.
+        let sh = match lighting.environment.as_deref().filter(|e| e.is_valid()) {
+            Some(env) => {
+                if self.lit_state.sh.as_ref().is_none_or(|(k, _)| *k != env.key) {
+                    self.lit_state.sh = Some((env.key, crate::sh::convolve(&crate::sh::project(env))));
+                }
+                self.lit_state.sh.map(|(_, c)| c)
+            }
+            None => {
+                self.lit_state.sh = None;
+                None
+            }
+        };
         let sun_map = self.lit_state.sun_map.as_ref();
         let params = crate::lit::LitParams {
+            sh,
             sun_on: lighting.sun.is_some(),
             ambient: lighting.sun.map_or(crate::lights::NIGHT_AMBIENT, |l| l.ambient),
             exposure: lighting.exposure,
