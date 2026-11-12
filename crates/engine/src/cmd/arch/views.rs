@@ -7,6 +7,12 @@
 
 use serde_json::{Value, json};
 
+use cadcraft_arch::interior::{face_of, wall_on_side};
+use cadcraft_arch::plan::ring_label_point;
+use cadcraft_doc::ArchId;
+use cadcraft_doc::arch::Room;
+use cadcraft_geom::Vec2;
+
 use cadcraft_doc::arch::{
     ArchKind, ArchModel, ArchView, DimKind, NoteKind, ViewKind, handle_json, note_label, room_label, view_handle, view_label, wall_label,
 };
@@ -25,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("elevation", "Elevation", run_elevation)
             .menu(&["Architecture", "Elevation"])
             .alias(&["elev"])
-            .params("{side?: south|north|east|west, look?: [dx,dy], name?, insert?: [x,y], scale?, scope?: [[x0,y0],[x1,y1]], dimensions?: bool}"),
+            .params("{side?: south|north|east|west, look?: [dx,dy], name?, insert?: [x,y], scale?, scope?: [[x0,y0],[x1,y1]], dimensions?: bool, room?: \"r0\"|name, level?: name|index, wall?: \"w5\"}"),
         CommandSpec::new("section", "Section", run_section)
             .menu(&["Architecture", "Section"])
             .alias(&["sect"])
@@ -110,8 +116,114 @@ fn create(s: &mut Session, cmd: &str, view: ArchView, layers: &[&str]) -> Result
     Ok(json!({ "view": view_label(id), "handle": handle_json(view_handle(id)), "name": v.name, "lines": lines, "rings": rings }))
 }
 
+/// The id of a label such as `r3` (prefix `r`), case-insensitive.
+fn label_id(raw: &str, prefix: char) -> Option<ArchId> {
+    let t = raw.trim().to_ascii_lowercase();
+    t.strip_prefix(prefix)?.parse::<u32>().ok().map(ArchId)
+}
+
+/// A level index from a name or an index.
+fn level_of(cmd: &str, arch: &ArchModel, v: &Value) -> Result<u32> {
+    let found = match v {
+        Value::Number(n) => n.as_u64().and_then(|i| u32::try_from(i).ok()).filter(|i| arch.level(*i).is_some()),
+        Value::String(n) => arch.levels.iter().find(|l| l.name.trim().eq_ignore_ascii_case(n.trim())).map(|l| l.index),
+        _ => None,
+    };
+    found.ok_or_else(|| bad(cmd, "`level` must be the name or index of a level of the drawing"))
+}
+
+/// The room `raw` names (a label or a room name), among the rooms of `level` when given.
+fn find_room<'a>(cmd: &str, arch: &'a ArchModel, raw: &str, level: Option<u32>) -> Result<&'a Room> {
+    let on_level = |r: &&Room| level.is_none_or(|l| r.level == l);
+    let mut found: Vec<&Room> = label_id(raw, 'r').and_then(|id| arch.room(id)).into_iter().filter(on_level).collect();
+    if found.is_empty() {
+        let name = raw.trim();
+        found = arch.rooms.iter().filter(|r| !name.is_empty() && r.name.trim().eq_ignore_ascii_case(name)).filter(on_level).collect();
+    }
+    match found.as_slice() {
+        [r] => Ok(r),
+        [] => Err(bad(cmd, format!("`room`: no room `{}`", raw.trim()))),
+        _ => Err(bad(cmd, format!("`room`: `{}` names several rooms; give a room label or a `level`", raw.trim()))),
+    }
+}
+
+/// The compass word nearest to a look direction.
+fn compass(look: [f64; 2]) -> &'static str {
+    if look[0].abs() >= look[1].abs() {
+        if look[0] >= 0.0 { "East" } else { "West" }
+    } else if look[1] >= 0.0 {
+        "North"
+    } else {
+        "South"
+    }
+}
+
+/// `elevation` with a `room`: the interior elevation of one wall of a room.
+fn run_interior_elevation(s: &mut Session, p: &Value, room_v: &Value) -> Result<Value> {
+    const CMD: &str = "elevation";
+    if present(p, "look").is_some() {
+        return Err(bad(CMD, "`look` cannot be given with `room`; name the `wall` or the `side`"));
+    }
+    if present(p, "scope").is_some() {
+        return Err(bad(CMD, "`scope` cannot be given with `room`"));
+    }
+    let raw = room_v.as_str().ok_or_else(|| bad(CMD, "`room` must be a room label or name"))?;
+    let (wall_v, side_v) = (present(p, "wall"), present(p, "side"));
+    let (face, level, room_id, room_name, point) = {
+        let arch = &s.doc()?.arch;
+        let level = present(p, "level").map(|v| level_of(CMD, arch, v)).transpose()?;
+        let room = find_room(CMD, arch, raw, level)?;
+        let face = match (wall_v, side_v) {
+            (Some(_), Some(_)) => return Err(bad(CMD, "give `wall` or `side`, not both")),
+            (None, None) => return Err(bad(CMD, "`wall` (such as \"w5\") or `side` (south|north|east|west) is required with `room`")),
+            (Some(w), None) => {
+                let label = w.as_str().ok_or_else(|| bad(CMD, "`wall` must be a wall label such as \"w5\""))?;
+                let id = label_id(label, 'w').filter(|id| arch.wall(*id).is_some()).ok_or_else(|| bad(CMD, format!("`wall`: no wall `{label}`")))?;
+                face_of(arch, room, id).ok_or_else(|| bad(CMD, format!("`wall`: {label} does not bound the room")))?
+            }
+            (None, Some(sd)) => {
+                let side = sd
+                    .as_str()
+                    .filter(|t| matches!(*t, "south" | "north" | "east" | "west"))
+                    .ok_or_else(|| bad(CMD, "`side` must be south, north, east or west"))?;
+                wall_on_side(arch, room, side).ok_or_else(|| bad(CMD, format!("`side`: the room has no wall on its {side} side")))?
+            }
+        };
+        let n = room.polygon.len();
+        let point = ring_label_point(&room.polygon, &room.holes).or_else(|| {
+            let (sx, sy) = room.polygon.iter().fold((0.0, 0.0), |a, v| (a.0 + v.x, a.1 + v.y));
+            (n > 0).then(|| Vec2::new(sx / n as f64, sy / n as f64))
+        });
+        let point = point.filter(|q| q.is_finite()).ok_or_else(|| bad(CMD, "the room has no usable outline"))?;
+        (face, room.level, room.id, room.name.trim().to_string(), point)
+    };
+    // Axis-aligned walls give exactly axis-aligned looks (no 1e-16 residue from the wall's rotation).
+    let snap = |c: f64| if c.abs() < 1e-12 { 0.0 } else { c };
+    let look = [snap(face.look.x), snap(face.look.y)];
+    let n_views = s.doc()?.arch.views.len();
+    let who = if room_name.is_empty() { room_label(room_id) } else { room_name };
+    let mut v = ArchView {
+        name: format!("{who} {} Interior", compass(look)),
+        kind: ViewKind::Interior,
+        look,
+        insert: [0.0, -15.0 * (n_views as f64 + 1.0)],
+        dimensions: true,
+        layer: "A-ELEV".into(),
+        room: Some(room_id),
+        room_point: Some([point.x, point.y]),
+        wall: Some(face.wall),
+        level: Some(level),
+        ..Default::default()
+    };
+    common(CMD, p, &mut v)?;
+    create(s, CMD, v, &["A-ELEV"])
+}
+
 fn run_elevation(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "elevation";
+    if let Some(room) = present(p, "room") {
+        return run_interior_elevation(s, p, room);
+    }
     let side = present(p, "side");
     let look = pair_opt(CMD, p, "look")?;
     let (look, default_name) = match (side, look) {
@@ -374,5 +486,101 @@ mod tests {
         for k in ["patterns", "indicators", "labels", "notes"] {
             assert_eq!(row[k], json!([]), "{k}");
         }
+    }
+
+    use crate::Session;
+
+    fn run(s: &mut Session, cmd: &str, p: Value) -> Result<Value> {
+        s.execute(cmd, &p)
+    }
+
+    /// A 10 x 8 house split by an interior wall at x = 5 into a west room and an east room.
+    fn two_rooms() -> (Session, String, String) {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "wall", json!({"points":[[5,0],[5,8]],"thickness":0.2,"height":2.4})));
+        ok(run(&mut s, "roomdetect", json!({})));
+        let (west, east) = room_labels(&s);
+        (s, west, east)
+    }
+
+    /// Labels of the rooms west and east of x = 5.
+    fn room_labels(s: &Session) -> (String, String) {
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let at = |west: bool| {
+            arch.rooms
+                .iter()
+                .find(|r| ((r.polygon.iter().map(|p| p.x).sum::<f64>() / r.polygon.len().max(1) as f64) < 5.0) == west)
+                .map(|r| room_label(r.id))
+                .unwrap_or_default()
+        };
+        (at(true), at(false))
+    }
+
+    #[test]
+    fn interior_command_refusals() {
+        let (mut s, west, east) = two_rooms();
+        let before = s.doc().map(|d| (d.arch_revision, d.arch.views.len())).ok();
+        let bads = [
+            json!({"room": west}),
+            json!({"room": west, "wall": "w9"}),
+            json!({"room": west, "wall": "nope"}),
+            json!({"room": west, "wall": 3}),
+            json!({"room": west, "wall": "w0", "side": "east"}),
+            json!({"room": west, "side": "up"}),
+            json!({"room": west, "side": 4}),
+            json!({"room": west, "side": "east", "look": [1, 0]}),
+            json!({"room": west, "side": "east", "scope": [[0, 0], [1, 1]]}),
+            json!({"room": "nobody", "side": "east"}),
+            json!({"room": 7, "side": "east"}),
+            json!({"room": "r99", "side": "east"}),
+            json!({"room": west, "side": "east", "level": "Attic"}),
+            json!({"room": west, "side": "east", "level": 5}),
+            json!({"room": west, "side": "east", "level": true}),
+            json!({"room": west, "side": "east", "scale": "x"}),
+            json!({"room": west, "side": "east", "insert": [1]}),
+            json!({"room": west, "side": "east", "name": 3}),
+            json!({"room": west, "side": "east", "dimensions": "yes"}),
+            // The east room's outer wall w1 (x = 10) does not bound the west room.
+            json!({"room": west, "wall": "w1"}),
+            json!({"room": east, "wall": "w3"}),
+        ];
+        for p in bads {
+            let r = run(&mut s, "elevation", p.clone());
+            assert!(r.is_err(), "{p} was accepted: {r:?}");
+        }
+        let after = s.doc().map(|d| (d.arch_revision, d.arch.views.len())).ok();
+        assert_eq!(before, after);
+        assert!(s.doc().is_ok_and(|d| d.arch.views.is_empty()));
+    }
+
+    #[test]
+    fn interior_view_regenerates_live() {
+        let (mut s, west, _) = two_rooms();
+        let r = run(&mut s, "elevation", json!({"room": west, "side": "east"}));
+        assert!(r.is_ok(), "{r:?}");
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let v = arch.views.first().cloned().unwrap_or_default();
+        assert_eq!(v.kind, ViewKind::Interior);
+        assert_eq!(v.look, [1.0, 0.0]);
+        assert!(v.name.ends_with("East Interior"), "{}", v.name);
+        let g = v.generated.clone().unwrap_or_default();
+        assert!(g.error.is_none(), "{:?}", g.error);
+        assert!(!g.lines.is_empty());
+        // Every line lies within the room's width (y 0.1..7.9, so u = -y) and height.
+        for l in &g.lines {
+            for q in [l.a, l.b] {
+                assert!(q[0] >= -7.9 - 1e-3 && q[0] <= -0.1 + 1e-3 && q[1] >= -1e-3 && q[1] <= 2.4 + 1e-3, "{q:?}");
+            }
+        }
+        // Re-detecting renumbers the rooms; the view follows.
+        let old = v.room;
+        assert!(run(&mut s, "roomdetect", json!({})).is_ok());
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let v = arch.views.first().cloned().unwrap_or_default();
+        assert_ne!(v.room, old);
+        assert!(v.room.is_some_and(|id| arch.room(id).is_some()));
+        assert!(v.generated.as_ref().is_some_and(|g| g.error.is_none() && !g.lines.is_empty()));
     }
 }

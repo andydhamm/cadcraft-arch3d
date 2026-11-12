@@ -283,12 +283,12 @@ mod tests {
     }
 
     #[test]
-    fn interior_stub_reports_an_error() {
+    fn interior_without_a_room_reports_an_error() {
         let m = ArchModel::default();
         let v = ArchView { kind: ViewKind::Interior, look: [0.0, 1.0], ..Default::default() };
         let g = generate(&m, &Scene3d::default(), &v, 3);
         assert_eq!(g.revision, 3);
-        assert_eq!(g.error.as_deref(), Some("interior elevations are not available yet"));
+        assert_eq!(g.error.as_deref(), Some("the room of  is gone"));
         assert!(g.lines.is_empty() && g.rings.is_empty() && g.dims.is_empty());
     }
 
