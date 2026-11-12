@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 02:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 02:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 17 of 21: Stairs, decks, railings and openings in detail — 20 of 21 segments merged · 14 of 14 acceptance checks**
 
@@ -27,7 +27,7 @@ Updated 2026-11-12 02:00 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 14 / 14 | 44.3 h so far · expected done Nov 12 06:48–Nov 25 20:00 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 14 / 14 | 44.5 h so far · expected done Nov 12 07:03–Nov 25 20:15 UTC |
 | 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
 | 19 | Light, sky and cameras | building | 1 / 17 | — |
 | 20 | Plan views and dimensions | building | 0 / 13 | — |
@@ -45,6 +45,7 @@ Updated 2026-11-12 02:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 02:05 | `p18-room-finishes-1` | refused | 8,822 pass | claude-sonnet-c |
 | Nov 12 01:48 | `p20-observables-2` | merged | 8,807 pass | claude-sonnet-c |
 | Nov 12 01:37 | `p19-exposure-3` | merged | 8,807 pass | claude-sonnet-c |
 | Nov 12 01:37 | `p17f-showcase-phase17` | merged | 8,807 pass | claude-sonnet-a |
@@ -56,18 +57,17 @@ Updated 2026-11-12 02:00 UTC. This page and the card in the README are regenerat
 | Nov 11 23:42 | `harden-p16-soffit-input` | merged | 8,782 pass | tturbo-mac |
 | Nov 11 23:15 | `p18-glass-walls-1` | refused | 8,786 pass | mai-flash |
 | Nov 11 21:48 | `p19-sun-2` | merged | 8,778 pass | claude-sonnet-d |
-| Nov 11 21:48 | `p19-exposure-1` | merged | 8,778 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1143 |
-| bonsai-b | bonsai2-27b | idle | 1102 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1194 |
-| bonsai-ws2-b | bonsai2-27b | idle | 1145 |
+| bonsai-a | bonsai2-27b | idle | 1145 |
+| bonsai-b | bonsai2-27b | agent | 1103 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1196 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1147 |
 | claude-sonnet-a | sonnet | idle | 127 |
-| claude-sonnet-b | sonnet | agent | 129 |
+| claude-sonnet-b | sonnet | gate | 130 |
 | claude-sonnet-c | sonnet | idle | 70 |
 | claude-sonnet-d | sonnet | idle | 58 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1011 |
@@ -75,5 +75,5 @@ Updated 2026-11-12 02:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 86 |
 | mai-flash-b | mai-code-1.1-flash | idle | 29 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 92 |
-| tturbo-mac | tturbo-ultraheretic | agent | 781 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 391 |
+| tturbo-mac | tturbo-ultraheretic | agent | 782 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 392 |
