@@ -5,7 +5,10 @@
 //!
 //! Owner: p21-plan-numbers.
 
-use cadcraft_doc::arch::{ArchKind, ArchModel, Cabinet, Opening, OpeningKind, RoomLabelShow, Wall, cabinet_handle, opening_handle};
+use cadcraft_doc::{
+    ArchId,
+    arch::{ArchKind, ArchModel, Cabinet, Opening, OpeningKind, RoomLabelShow, Wall, cabinet_handle, opening_handle},
+};
 use cadcraft_geom::Vec2;
 
 use super::{PlanAnnotation, PlanLabel, PlanLabelKind};
@@ -55,6 +58,7 @@ pub fn schedule_labels(model: &ArchModel, level: Option<u32>, show: RoomLabelSho
         let layer = match opening.kind {
             OpeningKind::Door | OpeningKind::GarageDoor | OpeningKind::CasedOpening => LAYER_DOOR_TAG,
             OpeningKind::Window => LAYER_WINDOW_TAG,
+            OpeningKind::Niche => continue,
         };
         out.push_label(PlanLabel::new(layer, PlanLabelKind::ScheduleNumber, number.clone(), at, 0.2, opening_handle(opening.id)));
     }
@@ -86,14 +90,47 @@ mod tests {
         model.walls.push(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, base_level: 0, ..Default::default() });
         // Wall on level 1
         model.walls.push(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, base_level: 1, ..Default::default() });
-        // Door opening on wall 0 at offset 5
-        model.openings.push(Opening { host: 0, offset: 5.0, kind: OpeningKind::Door, ..Default::default() });
-        // Window opening on wall 0 at offset 2
-        model.openings.push(Opening { host: 0, offset: 2.0, kind: OpeningKind::Window, ..Default::default() });
+        // Door opening on wall 0 at offset 5 with a standard 0.9 x 2.1 door.
+        model.openings.push(Opening {
+            id: ArchId(0),
+            host: ArchId(0),
+            offset: 5.0,
+            width: 0.9,
+            height: 2.1,
+            kind: OpeningKind::Door,
+            ..Default::default()
+        });
+        // Window opening on wall 0 at offset 2 with a 0.9 x 1.2 window.
+        model.openings.push(Opening {
+            id: ArchId(1),
+            host: ArchId(0),
+            offset: 2.0,
+            width: 0.9,
+            height: 1.2,
+            sill: 0.9,
+            kind: OpeningKind::Window,
+            ..Default::default()
+        });
         // Door opening on wall 1 (level 1)
-        model.openings.push(Opening { host: 1, offset: 3.0, kind: OpeningKind::Door, ..Default::default() });
-        // Cabinet at (1,1) with depth 0.6, no rotation
-        model.cabinets.push(Cabinet { position: Vec2::new(1.0, 1.0), depth: 0.6, rotation: 0.0, ..Default::default() });
+        model.openings.push(Opening {
+            id: ArchId(2),
+            host: ArchId(1),
+            offset: 3.0,
+            width: 0.9,
+            height: 2.1,
+            kind: OpeningKind::Door,
+            ..Default::default()
+        });
+        // Cabinet at (1,1) with width 0.6, depth 0.6, height 0.8, no rotation.
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            position: Vec2::new(1.0, 1.0),
+            width: 0.6,
+            depth: 0.6,
+            height: 0.8,
+            rotation: 0.0,
+            ..Default::default()
+        });
         model
     }
 
