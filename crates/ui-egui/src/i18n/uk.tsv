@@ -1430,6 +1430,7 @@
 	Plane	Площина
 	Room	Кімната
 	Room Detect	Виявити кімнати
+	Room Label	Мітка кімнати
 	Stair	Сходи
 	Edit Stair	Редагувати сходи
 	Deck	Тераса
@@ -1472,6 +1473,7 @@
 	cmd.level	Рівень
 	Architecture>Room	Архітектура>Кімната
 	Architecture>Room Detect	Архітектура>Виявити кімнати
+	Architecture>Room Label	Архітектура>Мітка кімнати
 	Architecture>Level	Архітектура>Рівень
 	Architecture>Stair	Архітектура>Сходи
 	Architecture>Edit Stair	Архітектура>Редагувати сходи
@@ -1634,6 +1636,7 @@
 	Soffit	Стельовий короб
 	Edit Soffit	Редагувати стельовий короб
 	Delete Soffit	Видалити стельовий короб
+# Phase 20: room labels.
 	Room Moldings	Молдинги кімнат
 	Architecture>Room Moldings	Архітектура>Молдинги кімнат
 	Architecture>Split Wall	Архітектура>Розділити стіну
