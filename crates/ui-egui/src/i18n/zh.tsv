@@ -1489,6 +1489,13 @@ menu	View	视图
 	Arch Inspect	建筑检查
 	Arch Sample	建筑示例
 	Architecture	建筑
+	Plan Views	计划视图
+	New Plan View	新建计划视图
+	Open Plan View	打开计划视图
+	Close Plan View	关闭计划视图
+	Edit Plan View	编辑计划视图
+	Delete Plan View	删除计划视图
+	List Plan Views	列出计划视图
 	Architecture>Stair	建筑>楼梯
 	Automatic	自动
 	Build 3D	生成三维
