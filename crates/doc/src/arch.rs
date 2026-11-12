@@ -1378,6 +1378,10 @@ pub enum CameraKind {
     Orbit,
     /// A full (framed) camera.
     Full,
+    /// A floor overview: the camera level and the ones below, no ceilings.
+    /// Posed like an orbit camera.
+    #[serde(alias = "overview")]
+    Overview,
 }
 
 /// The kind of an architectural view.
@@ -1800,6 +1804,17 @@ pub struct Camera3d {
     /// This camera's render look; `None` = follow the global look.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub look: Option<Look>,
+    /// The saved state `camera.reset` returns to (its own `saved` is always
+    /// `None`); `None` = never saved with a state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved: Option<Box<Camera3d>>,
+    /// Overview cameras: the level shown (index into the levels); `None` =
+    /// the plan level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
+    /// Overview cameras: whether the levels below are shown; `None` = true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lower_levels: Option<bool>,
 }
 
 impl Default for Camera3d {
@@ -1816,6 +1831,9 @@ impl Default for Camera3d {
             fov_deg: Some(45.0),
             light_set: None,
             look: None,
+            saved: None,
+            level: None,
+            lower_levels: None,
         }
     }
 }
@@ -2648,6 +2666,7 @@ impl ArchModel {
             && c.target.map_or(true, |t| t.iter().all(|v| v.is_finite()))
             && c.eye.map_or(true, |e| e.iter().all(|v| v.is_finite()))
             && c.look.as_ref().is_none_or(|l| l.validate().is_ok())
+            && c.saved.as_ref().is_none_or(|s| s.saved.is_none() && Self::camera_is_finite(s))
     }
 
     /// Add or update a saved camera, storing it on the model so that it
@@ -4359,8 +4378,7 @@ mod tests {
             eye: Some([5.0, -15.0]),
             eye_height: Some(1.7),
             fov_deg: Some(50.0),
-            light_set: None,
-            look: None,
+            ..Camera3d::default()
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: Camera3d = serde_json::from_str(&json).unwrap();
@@ -4386,6 +4404,39 @@ mod tests {
         let back_full: CameraKind = serde_json::from_str("\"Full\"").unwrap();
         assert_eq!(back_orbit, CameraKind::Orbit);
         assert_eq!(back_full, CameraKind::Full);
+    }
+
+    #[test]
+    fn overview_camera_and_saved_state_serde() {
+        let saved = Camera3d { name: "ov".into(), ..Camera3d::default() };
+        let cam = Camera3d {
+            name: "ov".into(),
+            kind: CameraKind::Overview,
+            level: Some(1),
+            lower_levels: Some(false),
+            saved: Some(Box::new(saved)),
+            ..Camera3d::default()
+        };
+        let json = serde_json::to_string(&cam).unwrap();
+        assert!(json.contains("\"Overview\""));
+        let back: Camera3d = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, cam);
+        let lower: CameraKind = serde_json::from_str("\"overview\"").unwrap();
+        assert_eq!(lower, CameraKind::Overview);
+        // Older drawings (no new keys) open unchanged and omit the keys again.
+        let plain = Camera3d { name: "p".into(), ..Camera3d::default() };
+        let pj = serde_json::to_string(&plain).unwrap();
+        assert!(!pj.contains("saved") && !pj.contains("level") && !pj.contains("lower_levels"));
+        let old: Camera3d = serde_json::from_str("{\"name\":\"o\"}").unwrap();
+        assert!(old.saved.is_none() && old.level.is_none() && old.lower_levels.is_none());
+        // A non-finite saved state is refused.
+        let mut m = ArchModel::default();
+        let mut bad = cam.clone();
+        if let Some(s) = bad.saved.as_mut() {
+            s.distance = Some(f64::NAN);
+        }
+        assert_eq!(m.set_camera(bad), Err(CameraError::NotFinite));
+        assert_eq!(m.set_camera(cam), Ok(()));
     }
 
     #[test]

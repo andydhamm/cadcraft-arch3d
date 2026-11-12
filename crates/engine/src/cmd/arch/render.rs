@@ -490,7 +490,7 @@ pub fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineEr
 
 fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
     match c.kind {
-        CameraKind::Orbit => {
+        CameraKind::Orbit | CameraKind::Overview => {
             let target = c.target.unwrap_or([0.0; 3]);
             let azimuth = c.azimuth_deg.unwrap_or(0.0);
             let elevation = c.elevation_deg.unwrap_or(30.0);
