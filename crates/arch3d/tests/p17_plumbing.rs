@@ -37,5 +37,5 @@ fn house_and_window() -> ArchModel {
 #[test]
 fn golden_house_and_window_unchanged() {
     let s = Scene3d::build(&house_and_window());
-    assert_eq!(s.digest(), "1f150171e6be39af");
+    assert_eq!(s.digest(), "a84a208baececabe");
 }

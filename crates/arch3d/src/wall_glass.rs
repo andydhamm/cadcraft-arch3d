@@ -60,7 +60,9 @@ fn upper_mesh(i: &WallIn, base: f64, top: f64, upper: &str) -> Option<Mesh> {
     let clipped = segment_openings(i, base, top);
     let refs: Vec<&Opening> = clipped.iter().collect();
     let profile = crate::walls::elevation_profile(&shape, &i.wall, base, top, i.clip.as_ref(), i.roof_top.as_deref(), &refs)?;
-    crate::walls::extrude_wall_profile(&shape, profile, base, upper)
+    // Not `extrude_wall_profile`: its rectangle fast path is left as it was for ordinary walls.
+    let frame = cadcraft_doc::arch::Wall { start: shape.centre.0, end: shape.centre.1, thickness, ..Default::default() };
+    crate::walls::profile_prism(&profile.outer, &profile.holes, &frame, base, upper, shape.id)
 }
 
 /// The meshes of a glass (or glass-split) wall, or `None` for an ordinary wall, which then builds
