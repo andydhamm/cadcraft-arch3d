@@ -145,8 +145,7 @@ mod tests {
         m
     }
 
-    #[test]
-    fn name_only_is_unchanged() {
+    fn assert_name_only_matches_todays_render() {
         let mut m = ArchModel::default();
         let a = m.push_room(Room { polygon: quad(0.0, 0.0), name: "Living".into(), ..Room::default() });
         let b = m.push_room(Room { polygon: quad(10.0, 0.0), level: 1, ..Room::default() });
@@ -165,6 +164,16 @@ mod tests {
         assert_eq!(out.labels.len(), 1);
         assert_eq!(out.labels[0].handle, room_handle(b));
         assert!(run(&m, RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, ..Default::default() }).is_empty());
+    }
+
+    #[test]
+    fn name_only_is_unchanged() {
+        assert_name_only_matches_todays_render();
+    }
+
+    #[test]
+    fn room_labels_name_only_matches_todays_render() {
+        assert_name_only_matches_todays_render();
     }
 
     #[test]
