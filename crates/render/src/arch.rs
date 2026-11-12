@@ -107,6 +107,25 @@ pub(crate) fn build_arch_with(d: &Drawing, plotting: bool, ann: &cadcraft_arch::
                 }
             }
 
+            // Niches: a notch from the recessed face inward by the depth (even-odd fill).
+            for o in d.arch.openings.iter().filter(|o| o.host == wall.id && o.kind == cadcraft_doc::arch::OpeningKind::Niche) {
+                if !(o.depth.is_finite() && o.depth > 0.0 && o.depth < wall.thickness && o.offset.is_finite() && o.width.is_finite() && o.width > 0.0)
+                {
+                    continue;
+                }
+                // Distance from the centre line (positive to the left) to the face, extended 1e-6
+                // outside it, and to the recess bottom.
+                let sgn = if o.face == Some(cadcraft_doc::arch::paint::Side::Right) { -1.0 } else { 1.0 };
+                let n_out = sgn * (half + 1e-6);
+                let n_in = sgn * (half - o.depth);
+                let q = |u: f64, n: f64| wall.start + dir * u + perp * n;
+                let (u0, u1) = (o.offset - o.width / 2.0, o.offset + o.width / 2.0);
+                let ring_n = [q(u0, n_out), q(u1, n_out), q(u1, n_in), q(u0, n_in)];
+                if ring_n.iter().all(|p| p.is_finite()) {
+                    polys.push(ring_n.to_vec());
+                }
+            }
+
             // Filled poché with holes (glass walls draw outline only, no fill)
             if !wall.is_glass() {
                 let tris = crate::triangulate_evenodd(&polys);
