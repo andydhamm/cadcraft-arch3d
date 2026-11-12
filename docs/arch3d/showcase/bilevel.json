@@ -140,7 +140,6 @@
 {"cmd":"lightset","params":{"name":"Evening","lights":{"lf0":{"on":true,"brightness":0.7},"lf1":{"on":true,"brightness":0.7},"lf4":{"on":true,"brightness":0.7},"lf7":{"on":true,"brightness":0.7},"lf10":{"on":true,"brightness":0.7},"lf11":{"on":true,"brightness":0.7}}}},
 {"cmd":"roofauto","params":{"pitchRise":6,"pitchRun":12,"overhang":0.5,"level":"Main"}},
 {"cmd":"paint.material","params":{"material":"#e8e0d0","target":"wall/w0/left","scope":"plan"}},
-{"cmd":"paint.material","params":{"material":"#c9bba0","target":"wall/w0/right","scope":"plan"}},
 {"cmd":"paint.material","params":{"material":"#b08050","target":"room/r2/floor","scope":"plan"}},
 {"cmd":"paint.material","params":{"material":"#f4f4f0","target":"room/r2/ceiling","scope":"plan"}},
 {"cmd":"paint.material","params":{"material":"#d8d4c8","target":"cabinet/cb0/carcass","scope":"plan"}},
