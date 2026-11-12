@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-12 11:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 11 of 35 segments merged · 1 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 12 of 35 segments merged · 2 of 20 acceptance checks**
 
-8,994 workspace tests passing at the last merge · 980 segments merged in all · 0 of 15 seats working
+9,018 workspace tests passing at the last merge · 982 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,21 +28,20 @@ Updated 2026-11-12 11:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 30.0 h so far · expected done Nov 15 21:47–Nov 28 19:30 UTC |
+| 18 | Interior finish, kitchen and bath | building | 2 / 20 | 30.3 h so far · expected done Nov 15 01:05–Nov 21 13:45 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 2 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
 
 ## Phase 18 segments
 
-13 queued, 11 merged, 11 merging
+13 queued, 12 merged, 10 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-room-finishes-1` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | merging | claude-sonnet-b |
 | `p18-room-moldings` | Room moldings: each room's base, chair rail and crown along its wall faces, base and chair stopping at opening trim, crown round a flat ceiling; `room.moldings`, the trim widths in arch.inspect, the brief's molding numbers | merging | mai-flash |
 | `p18-molding-lines-1` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | merging | mai-flash-esc |
-| `p18-cabinet-moldings` | Cabinet moldings: crown and light rail on wall (and tall) cabinets from a profile with a size override, following the door faces or the box front where there is no door, returning at exposed ends | merging | mai-flash-esc |
 | `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-d |
 | `p18-backsplash` | Backsplash: `backsplash {run | wall}` covers the wall face behind a counter from the counter top to the underside of the wall cabinets (else a set height, default 0.45), 10 mm thick, its own material, top to the ceiling on demand, per-cabinet on / off | merging | claude-sonnet-a |
 | `p18-cabinet-fronts-2` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | claude-sonnet-d |
@@ -55,6 +54,8 @@ Updated 2026-11-12 11:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 11:40 | `harden-p15-cli-commands-file` | merged | 9,018 pass | tturbo-mac |
+| Nov 12 11:40 | `p18-cabinet-moldings` | merged | 9,018 pass | mai-flash-esc |
 | Nov 12 11:07 | `harden-p16-tray-arch` | merged | 8,994 pass | tturbo-mac |
 | Nov 12 10:32 | `p18-room-moldings` | refused | 9,006 pass | claude-sonnet-b |
 | Nov 12 09:36 | `p20-plan-render` | merged | 8,982 pass | claude-sonnet-b |
@@ -65,17 +66,15 @@ Updated 2026-11-12 11:30 UTC. This page and the card in the README are regenerat
 | Nov 12 08:54 | `p18-glass-walls-1` | merged | 8,952 pass | claude-sonnet-a |
 | Nov 12 08:28 | `p20-dims-model` | merged | 8,944 pass | mai-flash-b |
 | Nov 12 08:28 | `p19-seeing-in-render-1` | merged | 8,944 pass | claude-sonnet-b |
-| Nov 12 08:28 | `harden-p15-arch-circuits` | merged | 8,944 pass | tturbo-mac |
-| Nov 12 08:10 | `p20-plan-views` | merged | 8,907 pass | mai-flash |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1171 |
+| bonsai-a | bonsai2-27b | idle | 1172 |
 | bonsai-b | bonsai2-27b | merging | 1135 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1242 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1190 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1243 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1192 |
 | claude-sonnet-a | sonnet | idle | 132 |
 | claude-sonnet-b | sonnet | idle | 142 |
 | claude-sonnet-c | sonnet | idle | 73 |
