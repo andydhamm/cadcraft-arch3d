@@ -306,7 +306,7 @@ fn run_view_set(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn run_layout_set(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn run_layout_set(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").unwrap_or("Model");
     let space = if name.eq_ignore_ascii_case("model") {
         Space::Model

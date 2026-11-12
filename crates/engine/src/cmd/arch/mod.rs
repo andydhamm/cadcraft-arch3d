@@ -47,6 +47,7 @@ pub mod paint;
 pub mod pick;
 pub mod plan_inspect;
 pub mod plant;
+pub mod planview;
 pub mod railing;
 pub mod render;
 pub mod roofauto;
@@ -136,5 +137,6 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(tray::specs());
     v.extend(foundation::specs());
     v.extend(soffit::specs());
+    v.extend(planview::specs());
     v
 }

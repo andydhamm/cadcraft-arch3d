@@ -11,6 +11,8 @@ use cadcraft_geom::{Vec2, point_in_polygon};
 
 pub mod ceiling;
 pub mod labels;
+pub mod layers;
+pub use layers::layers_in_use;
 pub mod reference;
 pub mod roof;
 
