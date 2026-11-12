@@ -310,6 +310,7 @@ pub(crate) fn build_arch_with(d: &Drawing, plotting: bool, ann: &cadcraft_arch::
     crate::arch_light::push_lights(d, &mut list, plotting);
     crate::arch_electrical::push_electrical(d, &mut list, plotting);
     crate::arch_casework::push_casework(d, &mut list, plotting);
+    crate::arch_molding::push_molding_lines(d, &mut list, plotting);
     crate::arch_ceiling::push_ceiling(d, &mut list, plotting);
     crate::arch_foundation::push_foundations(d, &mut list, plotting);
     crate::arch_furnishing::push_furnishings(d, &mut list, plotting);
