@@ -355,33 +355,56 @@ impl Scene3d {
     pub fn pick_filtered(&self, bvh: &Bvh, origin: Vec3, dir: Vec3, accept: &dyn Fn(&PickHit) -> bool) -> Option<PickHit> {
         let mut t_min = 0.0f64;
         for _ in 0..64 {
-            let (origin, dir) = (origin, dir);
             let hits = bvh.rays_all(origin, dir);
             let accepted = hits
                 .into_iter()
                 .filter(|h| h.distance >= t_min)
                 .filter(|h| accept(h))
-                .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|h| {
-                    let d = h.distance;
-                    h
-                })
-                .map_or(None, |h| Some((h.distance, h)));
-            match accepted {
-                Some((t, h)) => return Some(h),
-                None => {
-                    // Advance past the nearest rejected hit to re-cast.
-                    if let Some(nearest) = bvh.nearest_rejected(origin, dir, t_min) {
-                        t_min = nearest + 1e-6;
-                        if t_min >= f64::MAX {
-                            return None;
-                        }
-                    } else {
-                        return None;
-                    }
+                .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+            if let Some(h) = accepted {
+                return Some(h);
+            }
+            if let Some(nearest) = bvh.nearest_rejected(origin, dir, t_min) {
+                t_min = nearest + 1e-6;
+                if t_min >= f64::MAX {
+                    return None;
                 }
+            } else {
+                return None;
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Mesh;
+
+    #[test]
+    fn pick_filtered_skips_rejected() {
+        let tri1 = Mesh {
+            positions: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]].map(|p| [p[0], p[1], p[2]]).to_vec(),
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            material: "test".to_string(),
+            object: ArchId(9),
+            level_elevation: 0.0,
+        };
+        let tri2 = Mesh {
+            positions: [[0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [0.0, 1.0, 1.0]].map(|p| [p[0], p[1], p[2]]).to_vec(),
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            material: "test".to_string(),
+            object: ArchId(10),
+            level_elevation: 0.0,
+        };
+        let scene = Scene3d { meshes: vec![tri1, tri2], ..Scene3d::default() };
+        let bvh = Bvh::build(&scene);
+        let hit = scene.pick_filtered(&bvh, Vec3::new(0.5, -1.0, 0.5), Vec3::new(0.0, 1.0, 0.0), &|h| h.distance > 1.0);
+        assert!(hit.is_none());
     }
 }

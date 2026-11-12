@@ -596,6 +596,16 @@ mod tests {
     /// transposed, so at azimuth 90 a wall's vertical edge drew horizontally and `ray_at` could not invert
     /// `project_point`.
     #[test]
+    fn view_proj_with_near() {
+        let cam = Camera::Full(FullCamera::new(Vec3::new(0.0, 0.0, 2.0), Vec3::new(0.0, 0.0, 0.0), 60.0));
+        let near = super::view_proj_with_near(&cam, 1.0, 0.5);
+        let default = super::view_proj(&cam, 1.0);
+        assert!(near[2][2] < default[2][2]);
+        assert!(near[2][2].is_finite());
+        assert!(near[3][2].is_finite());
+    }
+
+    #[test]
     fn world_up_projects_straight_up_the_screen() {
         let size = (100u32, 100u32);
         let cams = [

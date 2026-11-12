@@ -80,6 +80,15 @@ fn level(model: &ArchModel) -> u32 {
 }
 
 impl ViewFilter {
+    /// Build a filter from a saved `Look`, the model, and a live camera.
+    pub fn from_look(look: &Look, model: &ArchModel, camera: &Camera) -> Self {
+        let eye = camera.eye();
+        let forward = crate::camera::forward(camera);
+        let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
+        let clip = look.clip.as_ref().map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
+        Self { hidden, clip, near: look.near_clip, eye, forward }
+    }
+
     /// Whether the filter is the no-op (nothing hidden, no clip, no near).
     pub fn is_empty(&self) -> bool {
         self.hidden.is_empty() && self.clip.is_none() && self.near.is_none()
@@ -297,4 +306,92 @@ fn point_in_ring(p: Vec2, ring: &[Vec2]) -> bool {
 /// Insert a hidden entry.
 fn push_hidden(hidden: &mut Hidden, kind: &'static str, id: ArchId) {
     hidden.insert((kind, id));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{Room, Wall};
+    use cadcraft_geom::Vec2;
+
+    fn room(rect: [[f64; 2]; 4]) -> Room {
+        Room {
+            id: ArchId(7),
+            name: "A".to_string(),
+            level: 0,
+            polygon: rect.iter().map(|[x, y]| Vec2::new(*x, *y)).collect(),
+            holes: Vec::new(),
+            ..Room::default()
+        }
+    }
+
+    #[test]
+    fn cutaway_hides_facing_exterior_walls_and_hosted() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let room = room([[0.1, 0.1], [3.9, 0.1], [3.9, 3.9], [0.1, 3.9]]);
+        let model = ArchModel {
+            walls: vec![wall.clone()],
+            rooms: vec![room],
+            openings: vec![cadcraft_doc::arch::Opening::new(wall.id, 2.0, 1.0, 1.8, cadcraft_doc::arch::OpeningKind::Window)],
+            ..ArchModel::default()
+        };
+        let hidden = cutaway_hidden(&model, Vec3::new(2.0, -5.0, 1.2), 0);
+        assert!(hidden.contains(&("wall", wall.id)));
+        assert!(hidden.contains(&("opening", model.openings[0].id)));
+    }
+
+    #[test]
+    fn from_inside_hides_nothing_and_level_only() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let room = room([[0.1, 0.1], [3.9, 0.1], [3.9, 3.9], [0.1, 3.9]]);
+        let model = ArchModel { walls: vec![wall], rooms: vec![room], ..ArchModel::default() };
+        assert!(cutaway_hidden(&model, Vec3::new(1.5, 1.5, 1.0), 0).is_empty());
+        assert!(cutaway_hidden(&model, Vec3::new(1.5, 1.5, 1.0), 1).is_empty());
+    }
+
+    #[test]
+    fn outer_side_without_rooms_uses_centroid() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let model = ArchModel { walls: vec![wall], ..ArchModel::default() };
+        let hidden = cutaway_hidden(&model, Vec3::new(2.0, 5.0, 1.0), 0);
+        assert!(hidden.contains(&("wall", ArchId(1))));
+    }
+
+    #[test]
+    fn accepts_clip_and_near() {
+        let f = ViewFilter {
+            hidden: Hidden::default(),
+            clip: Some(ClipBox { min: Vec3::new(-1.0, -1.0, -1.0), max: Vec3::new(1.0, 1.0, 3.0) }),
+            near: Some(1.0),
+            eye: Vec3::new(0.0, 0.0, 0.0),
+            forward: Vec3::new(0.0, 0.0, 1.0),
+        };
+        assert!(f.accepts(Vec3::new(0.0, 0.0, 2.0)));
+        assert!(!f.accepts(Vec3::new(0.0, 0.0, 0.5)));
+        assert!(!f.accepts(Vec3::new(2.0, 0.0, 2.0)));
+    }
 }
