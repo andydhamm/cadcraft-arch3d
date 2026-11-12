@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 11:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 11 of 35 segments merged · 1 of 20 acceptance checks**
 
@@ -28,14 +28,14 @@ Updated 2026-11-12 11:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 29.8 h so far · expected done Nov 15 21:32–Nov 28 19:15 UTC |
+| 18 | Interior finish, kitchen and bath | building | 1 / 20 | 30.0 h so far · expected done Nov 15 21:47–Nov 28 19:30 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 2 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 0 / 13 | — |
 
 ## Phase 18 segments
 
-13 queued, 11 merged, 10 merging, 1 gate
+13 queued, 11 merged, 11 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -48,7 +48,7 @@ Updated 2026-11-12 11:15 UTC. This page and the card in the README are regenerat
 | `p18-cabinet-fronts-2` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | claude-sonnet-d |
 | `p18-corners` | Corner cabinets: a base or wall cabinet in an inside corner where two runs meet becomes blind, diagonal-door or lazy-susan (a plan symbol with its cut-out), and the counter runs round the corner in one piece | merging | claude-sonnet-c |
 | `p18-fillers-shelves` | Fillers and open shelves: `cabinet.fill` closes a run's gap to a wall with a filler up to 0.15 m (larger gaps reported, never stretched); open wall cabinets with an automatic or given shelf count, evenly spaced | merging | mai-flash-b |
-| `p18-glass-walls-2` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | gate | mai-flash-b |
+| `p18-glass-walls-2` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | merging | mai-flash-b |
 | `p18-glass-walls-3` | Glass and pony walls: wall type "Glass" (10 mm clear glass, no poché fill, its own material, default height 2.0 m) and `wall.split` into a lower and an upper type (a solid base with glass above) | merging | tturbo-mac |
 
 ## Recent merges
@@ -72,10 +72,10 @@ Updated 2026-11-12 11:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1170 |
+| bonsai-a | bonsai2-27b | gate | 1171 |
 | bonsai-b | bonsai2-27b | merging | 1135 |
 | bonsai-ws2-a | bonsai2-27b | agent | 1242 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1187 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1190 |
 | claude-sonnet-a | sonnet | idle | 132 |
 | claude-sonnet-b | sonnet | idle | 142 |
 | claude-sonnet-c | sonnet | idle | 73 |
@@ -83,7 +83,7 @@ Updated 2026-11-12 11:15 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1037 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 95 |
-| mai-flash-b | mai-code-1.1-flash | gate | 34 |
+| mai-flash-b | mai-code-1.1-flash | idle | 35 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 95 |
-| tturbo-mac | tturbo-ultraheretic | agent | 798 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 404 |
+| tturbo-mac | tturbo-ultraheretic | gate | 798 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 405 |
