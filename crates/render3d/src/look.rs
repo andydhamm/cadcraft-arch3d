@@ -1,8 +1,7 @@
 //! Turning a render look into the lighting a frame is drawn with (phase 19).
 
-use cadcraft_doc::arch::{ExposureSetting, Look};
+use cadcraft_doc::arch::Look;
 
-use crate::exposure::ev100_scale;
 use crate::light::{Light, Sun};
 use crate::lights::DEFAULT_EXPOSURE;
 use crate::lit_frame::Lighting;
@@ -22,15 +21,11 @@ pub fn lighting_for(look: &Look, sun_dir: Option<[f64; 3]>, budget: usize) -> Li
             Some(_) => None,
         }
     };
-    let exposure = match look.exposure {
-        ExposureSetting::Manual { ev100 } => ev100_scale(ev100),
-        ExposureSetting::Auto => DEFAULT_EXPOSURE,
-    };
     Lighting {
         sun_shadow: sun.is_some() && sun_dir.is_some() && look.sun.shadows,
         sun,
         budget,
-        exposure,
+        exposure: DEFAULT_EXPOSURE,
         look: look.clone(),
         sun_dir,
         ..Default::default()
@@ -73,17 +68,5 @@ mod tests {
         look.sun.on = false;
         let l = lighting_for(&look, Some(d), 8);
         assert!(l.sun.is_none() && !l.sun_shadow, "sun off");
-    }
-
-    #[test]
-    fn lighting_for_honours_manual_exposure() {
-        let mut look = Look::default();
-        look.exposure = ExposureSetting::Manual { ev100: 4.0 };
-        let l = lighting_for(&look, None, 8);
-        assert!((l.exposure - ev100_scale(4.0)).abs() < 1e-6);
-
-        look.exposure = ExposureSetting::Auto;
-        let l = lighting_for(&look, None, 8);
-        assert_eq!(l.exposure, DEFAULT_EXPOSURE);
     }
 }
