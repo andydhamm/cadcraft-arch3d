@@ -422,7 +422,14 @@ pub fn probe(scene: &Scene3d, p: Vec3) -> Option<Hit> {
         }
     }
     // After every real mesh: the horizon slab (never in `meshes`); it has no level.
+    // It starts a little beyond the site (2 m past the scene's bounds), so the ground just outside
+    // the skirt stays empty space as before.
+    const HORIZON_MARGIN: f64 = 2.0;
+    let b = &scene.bounds;
+    let near_site =
+        p.x >= b.min[0] - HORIZON_MARGIN && p.x <= b.max[0] + HORIZON_MARGIN && p.y >= b.min[1] - HORIZON_MARGIN && p.y <= b.max[1] + HORIZON_MARGIN;
     if let Some(h) = &scene.horizon
+        && !near_site
         && probe_mesh(h, p)
     {
         return Some(Hit { id: "horizon".to_string(), part: "horizon".to_string(), level: f64::NAN });

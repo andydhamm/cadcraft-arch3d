@@ -547,6 +547,14 @@ impl Offscreen {
         pass.set_vertex_buffer(0, meshes.vertex_buffer.slice(..));
         pass.set_index_buffer(meshes.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         let shadow = if lit.is_some() { None } else { opts.shadow.zip(self.shadowed.as_ref()) };
+        // The horizon plane only matters when the horizon line can be in view: a camera looking down
+        // past half its field of view shows nothing but the site, so the plane is skipped there.
+        let horizon_in_view = {
+            let f = crate::camera::forward(camera);
+            let pitch = f.z.clamp(-1.0, 1.0).asin().to_degrees();
+            pitch + camera.fov_deg() * 0.5 > -1.0
+        };
+        let horizon_skip = if scene.horizon.is_some() && !horizon_in_view { Some(filtered_meshes.len() + usize::from(opts.ground)) } else { None };
         let draw_indices: Vec<usize> = if style_is_glass_house {
             let mut draw_index_by_scene_mesh = Vec::new();
             let mut draw_index = 0usize;
@@ -564,7 +572,7 @@ impl Offscreen {
             }
             // The horizon plane is opaque too, drawn after the ground quad.
             let horizon_at = draw_index + usize::from(opts.ground);
-            if scene.horizon.is_some() && meshes.draws.len() > horizon_at {
+            if scene.horizon.is_some() && horizon_in_view && meshes.draws.len() > horizon_at {
                 order.push(horizon_at);
             }
             let mut translucent = Vec::new();
@@ -583,7 +591,7 @@ impl Offscreen {
             order.extend(translucent.into_iter().map(|(draw_index, _)| draw_index));
             order
         } else {
-            (0..meshes.draws.len()).collect()
+            (0..meshes.draws.len()).filter(|i| Some(*i) != horizon_skip).collect()
         };
         let draw_pipeline = |is_ground: bool| match (lit, shadow, is_ground) {
             (Some((_, lp)), _, false) => &lp.glass,
@@ -644,7 +652,7 @@ impl Offscreen {
                 } else if let Some((map, _)) = shadow {
                     pass.set_bind_group(2, &map.bind_group, &[]);
                 }
-                for (i, d) in meshes.draws.iter().enumerate().filter(|(_, d)| d.is_blended() == blended) {
+                for (i, d) in meshes.draws.iter().enumerate().filter(|(i, d)| d.is_blended() == blended && Some(*i) != horizon_skip) {
                     let offset = [(i as u64 * self.stride) as u32];
                     pass.set_bind_group(0, &slots.bind_group, &offset);
                     pass.set_bind_group(1, &slots.pbr_bind_group, &offset);
