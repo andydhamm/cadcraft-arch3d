@@ -749,7 +749,7 @@ fn f64_close_opt(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
 
 /// Whether two `Option` vectors are equal, within `eps` per component
 /// (a `None` matches only a `None`).
-fn vec_close_opt<N>(a: Option<[f64; N]>, b: Option<[f64; N]>, eps: f64) -> bool {
+fn vec_close_opt<const N: usize>(a: Option<[f64; N]>, b: Option<[f64; N]>, eps: f64) -> bool {
     match (a, b) {
         (None, None) => true,
         (Some(x), Some(y)) => x.iter().zip(y.iter()).all(|(px, py)| (px - py).abs() <= eps),
