@@ -387,7 +387,7 @@ mod tests {
         let scene = Scene3d::default();
         // The look's box and near reach the frame look.
         let mut lighting = Lighting::default();
-        lighting.look.clip = Some(ClipBox { min: [-1.0, -2.0, -3.0], max: [4.0, 5.0, 2.0] });
+        lighting.look.clip = Some(ClipBox { min: [-1.0, -2.0, -3.0], max: [4.0, 5.0, 2.0], ..Default::default() });
         lighting.look.near_clip = Some(0.75);
         let mut f = FrameLook::default();
         view_look(&mut f, &lighting);
@@ -412,7 +412,7 @@ mod tests {
         fill_draw(&mut q, &none, &scene, "wall");
         assert_eq!(bytemuck::bytes_of(&before), bytemuck::bytes_of(&q));
         // Hostile values are ignored, never clamped.
-        lighting.look.clip = Some(ClipBox { min: [f64::NAN, 0.0, 0.0], max: [1.0; 3] });
+        lighting.look.clip = Some(ClipBox { min: [f64::NAN, 0.0, 0.0], max: [1.0; 3], ..Default::default() });
         for near in [0.0, -1.0, f64::NAN, 1.0e6] {
             lighting.look.near_clip = Some(near);
             let mut g = FrameLook::default();

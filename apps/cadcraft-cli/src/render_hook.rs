@@ -930,7 +930,8 @@ mod tests {
 
         // The same hidden set again, with a clip box and a near clip: the filtered scene and its
         // upload are reused (neither changes the scene's meshes).
-        let clipped = Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 5.0] }), near_clip: Some(1.0), ..cut.clone() };
+        let clipped =
+            Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 5.0], ..Default::default() }), near_clip: Some(1.0), ..cut.clone() };
         let Some(v) = go(full([2.0, -7.0, 1.5], [2.0, 2.0, 1.5]), clipped, vec![wall_point]) else { return };
         assert_eq!((filtered_key(), uploads()), (key.clone(), up), "{v}");
         assert_eq!((v["filter"]["clip"].clone(), v["filter"]["nearClip"].clone()), (json!(true), json!(1.0)), "{v}");
@@ -940,7 +941,7 @@ mod tests {
         let north = [2.0, 4.0, 1.0];
         let Some(v) = go(inside.clone(), Look::default(), vec![north]) else { return };
         assert!(seen(&v, 0), "{v}");
-        let low = Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 0.5] }), ..Look::default() };
+        let low = Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 0.5], ..Default::default() }), ..Look::default() };
         let Some(v) = go(inside.clone(), low, vec![north]) else { return };
         assert!(!seen(&v, 0), "clipped away: {v}");
         assert!(v["samples"][0]["pixel"].is_array() && v["samples"][0]["rgb"].is_array(), "pixel and rgb stay reported: {v}");

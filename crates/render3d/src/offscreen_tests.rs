@@ -531,13 +531,13 @@ fn raster_clip_discards_and_near_hides() {
     assert!((ceiling[0] - floor[0]).abs() + (ceiling[2] - floor[2]).abs() > 0.02, "ceiling {ceiling:?} and floor {floor:?} differ");
 
     // A clip box below the ceiling discards it (the box is inclusive) and shows the floor.
-    lighting.look.clip = Some(ClipBox { min: [-20.0; 3], max: [20.0, 20.0, 1.5] });
+    lighting.look.clip = Some(ClipBox { min: [-20.0; 3], max: [20.0, 20.0, 1.5], ..Default::default() });
     let Some(clipped) = lit_centre_keyed(&mut r, &both, 10, &camera, &lighting, false) else { return };
     for k in 0..3 {
         assert!(near(clipped[k], floor[k], 0.01), "clipped {clipped:?} want the floor {floor:?}");
     }
     // A box holding everything (the floor's top lies exactly on its lower face) changes nothing.
-    lighting.look.clip = Some(ClipBox { min: [-20.0, -20.0, 0.0], max: [20.0, 20.0, 2.1] });
+    lighting.look.clip = Some(ClipBox { min: [-20.0, -20.0, 0.0], max: [20.0, 20.0, 2.1], ..Default::default() });
     let Some(held) = lit_centre_keyed(&mut r, &both, 10, &camera, &lighting, false) else { return };
     for k in 0..3 {
         assert!(near(held[k], ceiling[k], 0.01), "inclusive box {held:?} want the ceiling {ceiling:?}");
