@@ -3241,7 +3241,7 @@ mod tests {
                 eye: Some([-6.0, -6.0]),
                 eye_height: Some(1.6),
                 fov_deg: Some(50.0),
-                light_set: "Evening".into(),
+                light_set: Some("Evening".into()),
                 look: None,
                 saved: None,
                 level: None,
