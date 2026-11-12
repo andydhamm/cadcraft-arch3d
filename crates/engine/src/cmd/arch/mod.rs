@@ -15,6 +15,7 @@ pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 pub mod archdetect;
 pub mod backdrop;
 pub mod build3d;
+mod cabinet_corner_inspect;
 pub(crate) mod cabinet_molding_inspect;
 pub(crate) mod cabinet_opts;
 pub mod casework;
