@@ -175,6 +175,13 @@ mod tests {
     #[test]
     fn hdri_environment_intensity_rotation_horizon() {
         use cadcraft_doc::arch::ImageRgbe;
+        // Not an exhaustive literal: other segments may add fields to `ImageRgbe`.
+        let image = |width: u32, height: u32, rgbe: Vec<u8>| {
+            let mut img = ImageRgbe { width, ..Default::default() };
+            img.height = height;
+            img.rgbe = rgbe;
+            img
+        };
         // Red for u < 0.5, blue otherwise; 8 x 4 texels; mantissa 128 with e = 129 is 1.0.
         let mut rgbe = Vec::new();
         for _ in 0..4 {
@@ -183,7 +190,7 @@ mod tests {
             }
         }
         let mut model = ArchModel::default();
-        model.hdr_images.insert("sky".into(), ImageRgbe { width: 8, height: 4, rgbe });
+        model.hdr_images.insert("sky".into(), image(8, 4, rgbe));
         let look = Look::default();
         assert!(hdri_environment(&model, &look).is_none(), "no backdrop, no environment");
         model.backdrop = Some(Backdrop::Hdri { image: "sky".into(), intensity: 2.0, rotation: 180.0, horizon: 10.0 });
@@ -202,7 +209,7 @@ mod tests {
         model.hdr_images.clear();
         assert!(hdri_environment(&model, &look).is_none());
         // The look's backdrop wins over the model's.
-        model.hdr_images.insert("other".into(), ImageRgbe { width: 1, height: 1, rgbe: vec![128, 128, 128, 129] });
+        model.hdr_images.insert("other".into(), image(1, 1, vec![128, 128, 128, 129]));
         let l = Look { backdrop: Some(Backdrop::Hdri { image: "other".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 }), ..Default::default() };
         assert_eq!(hdri_environment(&model, &l).map(|e| e.width), Some(1));
     }
