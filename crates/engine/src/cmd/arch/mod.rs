@@ -42,6 +42,7 @@ pub mod lightfixture;
 pub mod lightset;
 pub mod look;
 pub mod material;
+pub mod moldingline;
 pub mod opening;
 pub mod outlets_auto;
 pub mod paint;
@@ -104,6 +105,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(opening::specs());
     v.extend(room::specs());
     v.extend(room_moldings::specs());
+    v.extend(moldingline::specs());
     v.extend(library::specs());
     v.extend(roomdetect::specs());
     v.extend(inspect::specs());
