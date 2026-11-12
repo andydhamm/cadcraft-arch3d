@@ -246,7 +246,14 @@ mod tests {
         let mut d = Drawing::new_metric();
         d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }, Level { index: 1, elevation: 3.0, ..Default::default() }];
         d.arch.add_wall(Wall { start: Vec2::ZERO, end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
-        let up = d.arch.add_wall(Wall { base_level: 1, start: Vec2::new(0.0, 5.0), end: Vec2::new(4.0, 5.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        let up = d.arch.add_wall(Wall {
+            base_level: 1,
+            start: Vec2::new(0.0, 5.0),
+            end: Vec2::new(4.0, 5.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
         let mut v = PlanView::default();
         v.name = "Ref".into();
         v.level = Some(1);
@@ -338,7 +345,14 @@ mod tests {
         let r0 = d.arch.push_room(Room { polygon: sq(0.0, 0.0), name: "Down".into(), level: 0, ..Room::default() });
         let r1 = d.arch.push_room(Room { polygon: sq(0.0, 10.0), name: "Up".into(), level: 1, ..Room::default() });
         d.arch.add_wall(Wall { start: Vec2::ZERO, end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
-        d.arch.add_wall(Wall { base_level: 1, start: Vec2::new(0.0, 10.0), end: Vec2::new(4.0, 10.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        d.arch.add_wall(Wall {
+            base_level: 1,
+            start: Vec2::new(0.0, 10.0),
+            end: Vec2::new(4.0, 10.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
         let mut v = PlanView::default();
         v.name = "Upper".into();
         v.level = Some(1);
