@@ -520,7 +520,11 @@ fn plan_end(
     }
 
     // Collinear: butt. Only trim this wall if it's the one that should be trimmed.
-    if let Some(Neighbour::Collinear { id: nid, end: nend }) = nbrs.iter().find(|n| matches!(n, Neighbour::Collinear { .. })) {
+    // If there are also EndToEnd neighbours (a fan), fall through to the L/mitre
+    // handling instead of butting the collinear pair.
+    if let Some(Neighbour::Collinear { id: nid, end: nend }) = nbrs.iter().find(|n| matches!(n, Neighbour::Collinear { .. }))
+        && !nbrs.iter().any(|n| matches!(n, Neighbour::EndToEnd { .. }))
+    {
         let Some(nw) = model.walls.iter().find(|w| w.id == *nid) else {
             return Ok(EndPlan { left: raw.0, right: raw.1, join: None });
         };
