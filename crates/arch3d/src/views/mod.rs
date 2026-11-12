@@ -283,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn interior_without_a_room_reports_an_error() {
+    fn interior_stub_reports_an_error() {
         let m = ArchModel::default();
         let v = ArchView { kind: ViewKind::Interior, look: [0.0, 1.0], ..Default::default() };
         let g = generate(&m, &Scene3d::default(), &v, 3);
