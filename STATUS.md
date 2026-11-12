@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 17 of 21: Stairs, decks, railings and openings in detail — 21 of 22 segments merged · 14 of 14 acceptance checks**
 
@@ -27,7 +27,7 @@ Updated 2026-11-12 06:15 UTC. This page and the card in the README are regenerat
 | 14 | The library | done | 13 / 13 | 36.9 h |
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
-| 17 | Stairs, decks, railings and openings in detail | building | 14 / 14 | 48.5 h so far · expected done Nov 12 09:40–Nov 17 01:45 UTC |
+| 17 | Stairs, decks, railings and openings in detail | building | 14 / 14 | 48.8 h so far · expected done Nov 12 09:56–Nov 17 02:00 UTC |
 | 18 | Interior finish, kitchen and bath | building | 1 / 20 | — |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 1 / 13 | — |
@@ -62,17 +62,17 @@ Updated 2026-11-12 06:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1151 |
-| bonsai-b | bonsai2-27b | gate | 1121 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1212 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1163 |
-| claude-sonnet-a | sonnet | down | 130 |
-| claude-sonnet-b | sonnet | down | 137 |
-| claude-sonnet-c | sonnet | down | 70 |
-| claude-sonnet-d | sonnet | down | 60 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1019 |
+| bonsai-a | bonsai2-27b | agent | 1152 |
+| bonsai-b | bonsai2-27b | agent | 1123 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1214 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1164 |
+| claude-sonnet-a | sonnet | idle | 130 |
+| claude-sonnet-b | sonnet | idle | 137 |
+| claude-sonnet-c | sonnet | idle | 70 |
+| claude-sonnet-d | sonnet | idle | 62 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1020 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 89 |
+| mai-flash | mai-code-1.1-flash | idle | 90 |
 | mai-flash-b | mai-code-1.1-flash | idle | 29 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 92 |
 | tturbo-mac | tturbo-ultraheretic | idle | 795 |
