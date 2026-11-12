@@ -70,6 +70,13 @@ pub struct GlassRect {
     pub z1: f64,
 }
 
+impl GlassRect {
+    /// A glass rectangle from `u0` to `u1` horizontally and `z0` to `z1` vertically.
+    pub const fn new(u0: f64, u1: f64, z0: f64, z1: f64) -> Self {
+        GlassRect { u0, u1, z0, z1 }
+    }
+}
+
 /// The grille bars for a glass rectangle as `(u0, u1, z0, z1)` boxes in the
 /// glass plane. Bars are split into independent rectangles so they never overlap.
 pub fn grille_bars(o: &Opening, glass: &GlassRect) -> Vec<[f64; 4]> {
@@ -486,7 +493,7 @@ pub fn opening_meshes_with(walls: &BTreeMap<ArchId, &Wall>, o: &Opening, span: O
     // before the glass mesh so a probe on the glass centre reports the grille.
     if has_glass(o) && !shaped {
         let glass_off = band_offset(o.recess - wall_t / 2.0 + fd / 2.0, 0.006, wall_t);
-        let glass_rect = GlassRect { u0: -w / 2.0 + fw, u1: w / 2.0 - fw, z0: frame_z0 + fw, z1: frame_z1 - fw, ..Default::default() };
+        let glass_rect = GlassRect::new(-w / 2.0 + fw, w / 2.0 - fw, frame_z0 + fw, frame_z1 - fw);
         if o.grille.is_some() {
             for [u0, u1, z0, z1] in grille_bars(o, &glass_rect) {
                 push_box(

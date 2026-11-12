@@ -217,3 +217,59 @@ fn hostile_trays_build_nothing() {
     assert!((got - want).abs() < 1e-5, "invalid trays are ignored and the plain room ceiling remains");
     assert!(s.meshes.iter().any(|mesh| mesh.object == room && mesh.material == "ceiling"), "a valid ceiling stays present");
 }
+
+#[test]
+fn zero_depth_tray_changes_nothing() {
+    let mut m = house(Some(6.0));
+    m.rooms[1].flat_ceiling = false;
+    let room = m.rooms[1].id;
+    m.push_tray(Tray { room, level: 0, inset: 0.6, depth: 0.0, ..Default::default() });
+    let s = Scene3d::build(&m);
+    let room_mesh = ceiling_of(&s, room.0);
+    let p = Vec2::new(3.025, 5.475);
+    let want = rough_ceiling_in(&m, &m.rooms[1], p).unwrap();
+    let got = top_at(room_mesh, p).unwrap();
+    assert!((got - want).abs() < 1e-5, "zero-depth tray should not change the ceiling");
+}
+
+#[test]
+fn tray_in_flat_ceiling_room() {
+    let mut m = house(Some(6.0));
+    m.rooms[1].flat_ceiling = true;
+    let room = m.rooms[1].id;
+    m.push_tray(Tray { room, level: 0, inset: 0.6, depth: 0.3, ..Default::default() });
+    let s = Scene3d::build(&m);
+    let room_mesh = ceiling_of(&s, room.0);
+    let p = Vec2::new(3.025, 5.475);
+    let want = rough_ceiling_in(&m, &m.rooms[1], p).unwrap();
+    let got = top_at(room_mesh, p).unwrap();
+    assert!((got - want).abs() < 1e-5, "tray in flat ceiling room should raise the ceiling");
+    assert!(got > 2.4, "tray should raise the ceiling above the flat ceiling height");
+}
+
+#[test]
+fn tray_with_self_parent_is_skipped() {
+    let mut m = house(Some(6.0));
+    m.rooms[1].flat_ceiling = false;
+    let room = m.rooms[1].id;
+    let t = m.push_tray(Tray { room, level: 0, inset: 0.6, depth: 0.3, ..Default::default() });
+    m.trays[0].parent = Some(t);
+    let s = Scene3d::build(&m);
+    let room_mesh = ceiling_of(&s, room.0);
+    let p = Vec2::new(3.025, 5.475);
+    let want = rough_ceiling_in(&m, &m.rooms[1], p).unwrap();
+    let got = top_at(room_mesh, p).unwrap();
+    assert!((got - want).abs() < 1e-5, "tray with self as parent should be skipped");
+}
+
+#[test]
+fn side_band_height_equals_tray_depth() {
+    let mut m = house(Some(6.0));
+    m.rooms[1].flat_ceiling = false;
+    let room = m.rooms[1].id;
+    m.push_tray(Tray { room, level: 0, inset: 0.6, depth: 0.3, ..Default::default() });
+    let s = Scene3d::build(&m);
+    let band = s.meshes.iter().find(|mesh| mesh.object == room && mesh.material == "ceiling" && mesh.bounds().max[2] < 3.0).expect("side band mesh");
+    let band_height = band.bounds().max[2] - band.bounds().min[2];
+    assert!((band_height - 0.3).abs() < 1e-3, "side band height should equal the tray depth");
+}

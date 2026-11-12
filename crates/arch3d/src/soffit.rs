@@ -131,4 +131,53 @@ mod tests {
         let s = Soffit { level: 0, polygon: rect(10.0, 10.0, 11.0, 11.0), bottom: Some(2.0), ..Default::default() };
         assert!(soffit_input(&m, &s).cells.is_empty());
     }
+
+    #[test]
+    fn soffit_input_with_nan_in_polygon() {
+        let m = model();
+        let poly = vec![Vec2::new(1.0, 1.0), Vec2::new(2.0, 1.0), Vec2::new(f64::NAN, 2.0), Vec2::new(1.0, 2.0)];
+        let s = Soffit { level: 0, polygon: poly, bottom: Some(2.0), ..Default::default() };
+        let i = soffit_input(&m, &s);
+        // A NaN point should either give no ring or empty cells; never a panic or a non-finite cell.
+        assert!(i.ring.is_none() || i.cells.is_empty());
+        assert!(i.cells.iter().all(|(poly, plane)| poly.iter().all(|p| p.x.is_finite() && p.y.is_finite()) && plane.is_finite()));
+    }
+
+    #[test]
+    fn soffit_input_multiple_rooms_different_ceiling_heights() {
+        let mut m = model();
+        let mut room2 = Room { polygon: rect(4.0, 0.0, 8.0, 3.0), ..Default::default() };
+        room2.ceiling_height = Some(3.0);
+        m.push_room(room2);
+
+        let s = Soffit { level: 0, polygon: rect(2.0, 1.0, 6.0, 2.0), bottom: Some(2.0), ..Default::default() };
+        let i = soffit_input(&m, &s);
+        assert!(i.ring.is_some());
+        assert!(i.cells.len() >= 2);
+        if i.cells.len() >= 2 {
+            assert!((i.cells[0].1.c - i.cells[1].1.c).abs() > 1e-9);
+        }
+    }
+
+    #[test]
+    fn soffit_input_bottom_above_ceiling_still_gives_cells() {
+        let m = model();
+        let s = Soffit { level: 0, polygon: rect(1.0, 1.0, 2.0, 2.0), bottom: Some(3.0), ..Default::default() };
+        let i = soffit_input(&m, &s);
+        assert!(i.ring.is_some());
+        assert_eq!(i.cells.len(), 1);
+        assert!((i.cells[0].1.c - 2.4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn soffit_input_huge_coordinates() {
+        let mut m = ArchModel::default();
+        let huge = 1e300;
+        m.push_room(Room { polygon: rect(0.0, 0.0, huge, huge), ..Default::default() });
+        let s =
+            Soffit { level: 0, polygon: rect(huge / 2.0, huge / 2.0, huge / 2.0 + 1.0, huge / 2.0 + 1.0), bottom: Some(2.0), ..Default::default() };
+        let i = soffit_input(&m, &s);
+        assert!(i.ring.as_ref().is_some_and(|r| r.iter().all(|p| p.x.is_finite() && p.y.is_finite())));
+        assert!(i.cells.iter().all(|(_, plane)| plane.is_finite()));
+    }
 }

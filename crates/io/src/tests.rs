@@ -396,6 +396,16 @@ fn many_distinct_symbol_names_read_quickly() {
     assert_eq!(d.text_style("ST0").map(|s| s.height), Some(2.0));
 }
 
+/// Elements with many duplicate attributes are read in bounded time.
+#[test]
+fn svg_duplicate_attributes_are_not_rescanned() {
+    let dup = " x=\"1\"".repeat(20_000);
+    let svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\">{}</svg>", format!("<rect{dup} width=\"1\" height=\"1\"/>").repeat(20));
+    let started = std::time::Instant::now();
+    let _ = read(svg.as_bytes(), "dup.svg");
+    assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
+}
+
 #[test]
 fn hostile_dxf_does_not_panic() {
     for t in [
@@ -1993,12 +2003,12 @@ fn layer_states_roundtrip_next_to_constraints() {
         description: "walls \\ hidden".into(),
         ..Layer::default()
     });
-    d.layer_states.push(LayerState { name: "Plot".into(), layers: d.layers.clone() });
+    d.layer_states.push(LayerState { name: "Plot".into(), layers: d.layers.clone(), ..Default::default() });
     let mut off = d.layers.clone();
     for l in &mut off {
         (l.on, l.frozen, l.locked, l.plot) = (false, true, true, false);
     }
-    d.layer_states.push(LayerState { name: "All off".into(), layers: off });
+    d.layer_states.push(LayerState { name: "All off".into(), layers: off, ..Default::default() });
     let text = write_dxf(&d);
     assert!(text.contains("CADCRAFT_LAYERSTATES"));
     let back = read_dxf(text.as_bytes()).unwrap();

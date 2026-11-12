@@ -486,16 +486,24 @@ impl DimStyle {
 
     /// Set fields from a JSON object of field or DIM* variable names (numbers, booleans as
     /// 0/1, colours as ACI numbers or names). Returns the names that were not recognised or
-    /// had unusable values.
+    /// had unusable values. When several spellings name one field, the last one wins and the
+    /// superseded ones are not validated.
     pub fn apply_fields(&mut self, src: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
         use serde_json::Value;
         let mut rejected = Vec::new();
         let Ok(mut cur) = serde_json::to_value(&*self) else { return src.keys().cloned().collect() };
+        // Spellings of one field (`DIMPOST`, `dimpost`, `textPrefix`…): only the last is applied, so
+        // the style is checked once per field, not once per spelling (each check copies its strings).
+        let last_spelling: std::collections::HashMap<&str, &String> =
+            src.keys().filter_map(|k| DimStyle::field_name(k).filter(|f| *f != "name").map(|f| (f, k))).collect();
         for (k, v) in src {
             let Some(field) = DimStyle::field_name(k).filter(|f| *f != "name") else {
                 rejected.push(k.clone());
                 continue;
             };
+            if last_spelling.get(field) != Some(&k) {
+                continue;
+            }
             let Some(obj) = cur.as_object_mut() else { break };
             let Some(old) = obj.get(field).cloned() else {
                 rejected.push(k.clone());
@@ -922,12 +930,29 @@ pub struct Ucs {
     pub y_axis: Vec3,
 }
 
+/// A wildcard rule that matches layer names case-insensitively.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LayerRule {
+    pub pattern: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transparency: Option<u8>,
+}
+
 /// A saved layer state (LAYERSTATE).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LayerState {
     pub name: String,
     pub layers: Vec<Layer>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<LayerRule>,
 }
+
+pub const MAX_LAYER_RULES: usize = 256;
+pub const MAX_LAYER_PATTERN: usize = 255;
 
 /// A named group of entities (GROUP).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

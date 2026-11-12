@@ -47,6 +47,7 @@ pub mod opening;
 pub mod opening_top;
 pub mod outlets;
 pub mod paint;
+pub mod plan;
 pub mod plant;
 pub mod poly;
 pub mod railing;
