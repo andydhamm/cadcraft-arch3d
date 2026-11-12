@@ -541,7 +541,7 @@ mod tests {
     fn rotate_360_returns_to_original() {
         let mut s = Session::new();
         let id = add_furnishing(&mut s, [3.0, 2.0], 45.0);
-        let m = Mat3::rotate_about(Vec2::ZERO, std::f64::consts::TWO_PI);
+        let m = Mat3::rotate_about(Vec2::ZERO, 2.0 * std::f64::consts::PI);
         let moved = transform_entities(&mut s, &[furnishing_handle(id)], &m, false).unwrap();
         assert_eq!(moved, vec![furnishing_handle(id)]);
         let f = s.doc().unwrap().arch.furnishing(id).unwrap();
