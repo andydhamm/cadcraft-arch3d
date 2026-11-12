@@ -156,7 +156,7 @@ mod tests {
         assert_eq!(fp["name"], "Floor Plan");
         assert_eq!(fp["kind"], "floor");
         assert!(fp["level"].is_null() && fp["reference"].is_null() && fp["zoom"].is_null());
-        assert_eq!(fp["labels"], json!({"name": true, "area": true, "dimensions": true, "ceiling": false}));
+        assert_eq!(fp["labels"], json!({"name": true, "area": true, "dimensions": true, "ceiling": false, "numbers": true}));
         assert_eq!(fp["annotation"]["layer"], "A-ANNO-NOTE");
         assert_eq!(fp["rules"][0], json!({"pattern": "*", "on": true, "transparency": 0}));
         assert_eq!(fp["rules"][1], json!({"pattern": "E-*", "on": false, "transparency": null}));

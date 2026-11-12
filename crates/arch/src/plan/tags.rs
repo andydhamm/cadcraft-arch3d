@@ -138,7 +138,7 @@ mod tests {
     fn openings_label_beyond_the_right_face() {
         let model = test_model();
         let mut out = PlanAnnotation::default();
-        let show = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: true };
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
 
         // Wall 0: (0,0) to (10,0), dir=(1,0), right normal = -(0,1) = (0,-1)
@@ -157,7 +157,7 @@ mod tests {
     fn cabinets_label_at_their_plan_centre() {
         let model = test_model();
         let mut out = PlanAnnotation::default();
-        let show = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: true };
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
 
         // Cabinet at (1,1), depth 0.6, rotation 0: centre = (1,1) + (0,0.3).rotate(0) = (1, 1.3)
@@ -170,7 +170,7 @@ mod tests {
     fn labels_carry_the_object_handle_and_layer() {
         let model = test_model();
         let mut out = PlanAnnotation::default();
-        let show = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: true };
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
 
         let door_label = out.labels.iter().find(|l| l.text == "D01").expect("D01 label");
@@ -190,7 +190,7 @@ mod tests {
     fn level_filter() {
         let model = test_model();
         let mut out = PlanAnnotation::default();
-        let show = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: true };
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
         // Only level 0
         schedule_labels(&model, Some(0), show, &mut out);
 
@@ -206,7 +206,7 @@ mod tests {
     fn numbers_off_draws_nothing() {
         let model = test_model();
         let mut out = PlanAnnotation::default();
-        let show = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: false };
+        let show = RoomLabelShow { numbers: false, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
         assert!(out.labels.is_empty(), "no labels when numbers off");
     }

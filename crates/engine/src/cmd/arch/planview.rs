@@ -20,7 +20,7 @@ const MENU: &str = "Plan Views";
 /// The plan view commands.
 macro_rules! view_fields {
     () => {
-        "level?: name|index|\"any\"|null, kind?: \"floor\"|\"reflectedCeiling\"|\"roof\", layers?: {rules?: [{pattern, on?: bool, transparency?: 0..90}], capture?: bool}, annotation?: {layer?, textStyle?, dimStyle?}, labels?: {name?, area?, dimensions?, ceiling?: bool}, reference?: {level, color?: \"#rrggbb\", transparency?: 0..90}|null, zoom?: \"current\"|{center: [x, y], width, height}|null"
+        "level?: name|index|\"any\"|null, kind?: \"floor\"|\"reflectedCeiling\"|\"roof\", layers?: {rules?: [{pattern, on?: bool, transparency?: 0..90}], capture?: bool}, annotation?: {layer?, textStyle?, dimStyle?}, labels?: {name?, area?, dimensions?, ceiling?, numbers?: bool}, reference?: {level, color?: \"#rrggbb\", transparency?: 0..90}|null, zoom?: \"current\"|{center: [x, y], width, height}|null"
     };
 }
 
