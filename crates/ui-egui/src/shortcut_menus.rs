@@ -89,6 +89,48 @@ pub fn drawing_tab_entries(app: &CadApp, index: usize) -> Vec<Vec<Entry>> {
     groups
 }
 
+/// A plan view tab's menu (`name` is the view): Duplicate, Rename..., Delete and Close; the four
+/// room label toggles (a tick marks the ones on); and the Reference Level submenu (None and every
+/// level but the view's own). Ids are `planview:<action>:<name>`, read by [`choose`].
+pub fn plan_tab_entries(app: &CadApp, name: &str) -> Vec<Vec<Entry>> {
+    let Ok(d) = app.session.doc() else { return Vec::new() };
+    let Some(view) = d.arch.plan_view(name) else { return Vec::new() };
+    let view_name = view.name.clone();
+    let act = |label: &str, action: &str| action_entry(label, format!("planview:{action}:{view_name}"));
+    let mut groups = vec![vec![act("Duplicate", "duplicate"), act("Rename...", "rename"), act("Delete", "delete"), act("Close", "close")]];
+    let l = view.labels;
+    let tick = |label: &str, on: bool, action: &str| action_entry(&tick_text(label, on), format!("planview:{action}:{view_name}"));
+    groups.push(vec![
+        tick("Room Names", l.name, "label.name"),
+        tick("Room Areas", l.area, "label.area"),
+        tick("Room Dimensions", l.dimensions, "label.dimensions"),
+        tick("Ceiling Heights", l.ceiling, "label.ceiling"),
+    ]);
+    let current = view.reference.map(|r| r.level);
+    let mut refs = vec![action_entry(&tick_text("None", current.is_none()), format!("planview:ref.none:{view_name}"))];
+    for (i, level) in d.arch.levels.iter().enumerate().take(MAX_REFERENCE_LEVELS) {
+        let Ok(index) = u32::try_from(i) else { break };
+        if view.level == Some(index) {
+            continue;
+        }
+        refs.push(action_entry(&tick_text(&level.name, current == Some(index)), format!("planview:ref.{index}:{view_name}")));
+    }
+    groups.push(vec![Entry::Sub { label: "Reference Level".into(), children: refs }]);
+    groups
+}
+
+/// How many levels the Reference Level submenu lists at most.
+const MAX_REFERENCE_LEVELS: usize = 64;
+
+fn tick_text(label: &str, on: bool) -> String {
+    let text = crate::i18n::t(label);
+    if on { format!("\u{2713} {text}") } else { text.to_string() }
+}
+
+fn action_entry(label: &str, id: String) -> Entry {
+    action(label, id, true)
+}
+
 /// A layout tab's menu (`name` is the layout, "Model" the model tab): New Layout, From Template,
 /// Delete, Rename and Copy (layouts only), Page Setup Manager and Print. Delete, Rename and Copy
 /// go through LAYOUT's prompts, so Rename and Copy ask for the new name on the command line.
@@ -159,6 +201,9 @@ pub fn choose(app: &mut CadApp, ctx: &egui::Context, id: &str) {
         let Some((op, index)) = rest.split_once(':') else { return };
         let Ok(index) = index.parse::<usize>() else { return };
         drawing_action(app, ctx, op, index);
+    } else if let Some(rest) = id.strip_prefix("planview:") {
+        let Some((op, name)) = rest.split_once(':') else { return };
+        crate::plan_tabs::plan_action(app, op, name);
     } else if let Some(rest) = id.strip_prefix("layout:") {
         let Some((op, name)) = rest.split_once(':') else { return };
         layout_action(app, op, name);
