@@ -95,7 +95,7 @@ mod tests {
     }
 
     fn ann_of(lines: Vec<PlanLine>, labels: Vec<PlanLabel>) -> PlanAnnotation {
-        PlanAnnotation { lines, labels }
+        PlanAnnotation { lines, labels, ..Default::default() }
     }
 
     fn lines_list(d: &Drawing, plotting: bool, ann: &PlanAnnotation, reference: bool) -> DisplayList {
