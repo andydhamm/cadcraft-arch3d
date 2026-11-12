@@ -13,6 +13,7 @@ pub mod adapter;
 pub mod backdrop;
 pub mod camera;
 pub mod edges;
+pub mod environment;
 pub mod exposure;
 pub mod final_render;
 pub mod frame_look;
@@ -24,6 +25,7 @@ pub mod look;
 pub mod offscreen;
 pub mod pathtrace;
 pub mod pipeline;
+pub mod sh;
 pub mod shadow;
 pub mod shadow_atlas;
 pub mod textures;
@@ -43,6 +45,7 @@ mod tests {
 }
 
 pub use camera::{Camera, Orbit, projected_bounds, projected_scene_bounds};
+pub use environment::{Environment, environment_for};
 pub use final_render::{FinalRender, FinalStatus, render_final};
 pub use light::Light;
 pub use lit_frame::Lighting;

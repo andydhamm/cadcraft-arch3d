@@ -151,7 +151,7 @@ fn label_and_handle(id: ArchId, part: &str, owner: ObjectKind) -> (String, Strin
 
 fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
     match c.kind {
-        CameraKind::Orbit => {
+        CameraKind::Orbit | CameraKind::Overview => {
             let target = c.target.unwrap_or([0.0; 3]);
             let azimuth = c.azimuth_deg.unwrap_or(0.0);
             let elevation = c.elevation_deg.unwrap_or(30.0);
@@ -321,6 +321,26 @@ mod tests {
         assert_eq!(hit["id"], "o0", "{v}");
         assert_eq!(hit["handle"], "a0008000", "{v}");
         assert_ne!(hit["handle"], "a0000000", "{v}");
+    }
+
+    #[test]
+    fn pick3d_on_a_glass_wall_names_the_wall() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        let wall_id = d.arch.push_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(2.0, 0.0),
+            thickness: cadcraft_doc::arch::GLASS_THICKNESS,
+            height: cadcraft_doc::arch::GLASS_WALL_HEIGHT,
+            wall_type: "Glass".to_string(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let cam = json!({ "kind": "full", "eye": [1.0, -2.0, 1.0], "target": [1.0, 0.0, 1.0], "fov": 45 });
+        let v = s.execute("pick3d", &params(cam, json!([50, 50]))).unwrap_or(Value::Null);
+        let hit = &v["hit"];
+        assert_eq!(hit["id"], wall_id.to_string());
+        assert_eq!(hit["part"], "glass");
     }
 
     #[test]

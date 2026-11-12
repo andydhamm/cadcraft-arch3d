@@ -10,7 +10,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-use cadcraft_doc::{Block, DimStyle, Drawing, Entity, EntityKind, EntityStore, Handle, Layer, Linetype, MLeaderStyle, TableStyle, TextStyle};
+use cadcraft_doc::{
+    AssocSnap, Block, DimStyle, Drawing, Entity, EntityKind, EntityStore, Handle, Layer, Linetype, MLeaderStyle, TableStyle, TextStyle,
+};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -487,7 +489,10 @@ fn references(d: &mut Drawing, out: &mut Vec<Issue>) {
                         dim.block = None;
                     }
                     let before = dim.assoc.len();
-                    dim.assoc.retain(|a| all.contains(&a.handle));
+                    dim.assoc.retain(|a| match &a.snap {
+                        AssocSnap::Arch { .. } => cadcraft_arch::dimension::object_of(&d.arch, a.handle).is_some(),
+                        _ => all.contains(&a.handle),
+                    });
                     if dim.assoc.len() < before {
                         out.push(issue(
                             "danglingReference",

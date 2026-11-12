@@ -74,6 +74,21 @@
 	Append to current selection set	Додати до поточного набору вибраних об'єктів
 	Arch Inspect	Архітектурний огляд
 	Architecture	Архітектура
+	Plan Views	Види плану
+	New Plan View	Новий вид плану
+	Open Plan View	Відкрити вид плану
+	Close Plan View	Закрити вид плану
+	Edit Plan View	Редагувати вид плану
+	Delete Plan View	Видалити вид плану
+	List Plan Views	Список видів плану
+	Auto Exterior Dimensions	Автоматичні зовнішні розміри
+	Drive Dimension	Привести розмір
+	Room Label	Підпис кімнати
+	Room Names	Імена кімнат
+	Room Areas	Площі кімнат
+	Room Dimensions	Розміри кімнат
+	Ceiling Heights	Висоти стелі
+	Reference Level	Рівень посилання
 	Arch Sample	Архітектурний зразок
 	Roof	Дах
 	Roof Automatic	Автоматичний дах
@@ -1215,6 +1230,7 @@
 	W	Зх
 	WCS	ССК
 	Wall	Стіна
+	Split Wall	Розділити стіну
 	White	Білий
 	Width factor	Коефіцієнт ширини
 	Wipeout	Маскування
@@ -1414,7 +1430,6 @@
 	Plane	Площина
 	Room	Кімната
 	Room Detect	Виявити кімнати
-	Room Label	Мітка кімнати
 	Stair	Сходи
 	Edit Stair	Редагувати сходи
 	Deck	Тераса
@@ -1445,6 +1460,7 @@
 	Pick 3D	Вибір 3D
 	Section	Різ
 	Sun	Сонце
+	Sun Angle	Сонечний кут
 	View Sheet	Аркуш видів
 	Walkthrough	Обхід
 	cmd.room	Кімната
@@ -1456,7 +1472,6 @@
 	cmd.level	Рівень
 	Architecture>Room	Архітектура>Кімната
 	Architecture>Room Detect	Архітектура>Виявити кімнати
-	Architecture>Room Label	Архітектура>Мітка кімнати
 	Architecture>Level	Архітектура>Рівень
 	Architecture>Stair	Архітектура>Сходи
 	Architecture>Edit Stair	Архітектура>Редагувати сходи
@@ -1619,4 +1634,14 @@
 	Soffit	Стельовий короб
 	Edit Soffit	Редагувати стельовий короб
 	Delete Soffit	Видалити стельовий короб
-# Phase 20: room labels.
+	Room Moldings	Молдинги кімнат
+	Architecture>Room Moldings	Архітектура>Молдинги кімнат
+	Architecture>Split Wall	Архітектура>Розділити стіну
+	Sheet	Аркуш
+	Edit Sheet	Редагувати аркуш
+	Delete Sheet	Видалити аркуш
+	List Sheets	Список аркушів
+	Open Sheet	Відкрити аркуш
+	Sheet Set	Комплект аркушів
+	Niche	Ніша
+	Architecture>Niche	Архітектура>Ніша

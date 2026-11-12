@@ -1,0 +1,3 @@
+# Translation catalogs: every segment appends rows at the end, so two branches always touched the same lines.
+# A union merge keeps both sides' rows (a duplicated row still fails the i18n catalog test).
+crates/ui-egui/src/i18n/*.tsv merge=union

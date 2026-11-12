@@ -11,8 +11,12 @@ use cadcraft_geom::{Vec2, point_in_polygon};
 
 pub mod ceiling;
 pub mod labels;
+pub mod layers;
+pub use layers::layers_in_use;
+pub mod callouts;
 pub mod reference;
 pub mod roof;
+pub mod tags;
 
 /// The kind of a [`PlanLine`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,6 +35,7 @@ pub enum PlanLineKind {
     CeilingItem,
     Soffit,
     Reference,
+    Callout,
 }
 
 impl PlanLineKind {
@@ -51,6 +56,7 @@ impl PlanLineKind {
             PlanLineKind::CeilingItem => "ceilingItem",
             PlanLineKind::Soffit => "soffit",
             PlanLineKind::Reference => "reference",
+            PlanLineKind::Callout => "callout",
         }
     }
 }
@@ -64,6 +70,8 @@ pub enum PlanLabelKind {
     RoomCeiling,
     Pitch,
     TrayHeight,
+    ScheduleNumber,
+    Callout,
 }
 
 impl PlanLabelKind {
@@ -76,6 +84,8 @@ impl PlanLabelKind {
             PlanLabelKind::RoomCeiling => "roomCeiling",
             PlanLabelKind::Pitch => "pitch",
             PlanLabelKind::TrayHeight => "trayHeight",
+            PlanLabelKind::ScheduleNumber => "scheduleNumber",
+            PlanLabelKind::Callout => "callout",
         }
     }
 }
@@ -203,6 +213,8 @@ pub fn annotate(model: &ArchModel, view: Option<&PlanView>, level: Option<u32>) 
         ceiling::ceiling_plan(model, level, &mut out);
     }
     labels::room_labels(model, level, view.map_or_else(RoomLabelShow::default, |v| v.labels), &mut out);
+    tags::schedule_labels(model, level, view.map_or_else(RoomLabelShow::default, |v| v.labels), &mut out);
+    callouts::callouts(model, level, &mut out);
     out
 }
 
@@ -319,6 +331,33 @@ mod tests {
         assert_eq!(pitch_text(f64::INFINITY), None);
         assert_eq!(pitch_text(1e-12), None);
         assert_eq!(pitch_text(1e300), None);
+    }
+
+    #[test]
+    fn plan_label_kinds_have_keys() {
+        assert_eq!(PlanLabelKind::RoomName.key(), "roomName");
+        assert_eq!(PlanLabelKind::RoomArea.key(), "roomArea");
+        assert_eq!(PlanLabelKind::RoomDimensions.key(), "roomDimensions");
+        assert_eq!(PlanLabelKind::RoomCeiling.key(), "roomCeiling");
+        assert_eq!(PlanLabelKind::Pitch.key(), "pitch");
+        assert_eq!(PlanLabelKind::TrayHeight.key(), "trayHeight");
+        assert_eq!(PlanLabelKind::ScheduleNumber.key(), "scheduleNumber");
+        assert_eq!(PlanLabelKind::Callout.key(), "callout");
+        assert_eq!(PlanLineKind::Ridge.key(), "ridge");
+        assert_eq!(PlanLineKind::Hip.key(), "hip");
+        assert_eq!(PlanLineKind::Valley.key(), "valley");
+        assert_eq!(PlanLineKind::GableEnd.key(), "gableEnd");
+        assert_eq!(PlanLineKind::Eave.key(), "eave");
+        assert_eq!(PlanLineKind::Rake.key(), "rake");
+        assert_eq!(PlanLineKind::SlopeArrow.key(), "slopeArrow");
+        assert_eq!(PlanLineKind::SlopeArrowHead.key(), "slopeArrowHead");
+        assert_eq!(PlanLineKind::TrayOutline.key(), "trayOutline");
+        assert_eq!(PlanLineKind::TrayTop.key(), "trayTop");
+        assert_eq!(PlanLineKind::VaultLine.key(), "vaultLine");
+        assert_eq!(PlanLineKind::CeilingItem.key(), "ceilingItem");
+        assert_eq!(PlanLineKind::Soffit.key(), "soffit");
+        assert_eq!(PlanLineKind::Reference.key(), "reference");
+        assert_eq!(PlanLineKind::Callout.key(), "callout");
     }
 
     #[test]

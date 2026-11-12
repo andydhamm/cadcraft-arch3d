@@ -40,6 +40,9 @@ fn arc_geom(a: &cadcraft_doc::Arc) -> cadcraft_geom::Arc {
 
 /// Where a snap sits on an object now.
 pub fn snap_point(d: &Drawing, a: &DimAssoc) -> Option<Vec2> {
+    if let AssocSnap::Arch { feature, along } = &a.snap {
+        return cadcraft_arch::dimension::feature_point(&d.arch, a.handle, *feature, *along);
+    }
     snap_on(d, &d.entity(a.handle)?.kind, &a.snap)
 }
 
@@ -244,7 +247,7 @@ fn circle_at(d: &Drawing, space: &Space, c: Vec2, r: Option<f64>) -> Option<Hand
 /// Work out the associations of a dimension from the geometry under its definition points
 /// (DIMREASSOCIATE).
 pub fn reassociate(d: &Drawing, space: &Space, dm: &Dimension) -> Vec<DimAssoc> {
-    match dm.kind {
+    let mut out = match dm.kind {
         DimKind::Linear { .. } | DimKind::Aligned => auto_assoc(d, space, &[("p13", dm.p13.xy()), ("p14", dm.p14.xy())]),
         DimKind::Radius => {
             let (c, p) = (dm.defpt.xy(), dm.p15.xy());
@@ -270,7 +273,25 @@ pub fn reassociate(d: &Drawing, space: &Space, dm: &Dimension) -> Vec<DimAssoc> 
         DimKind::Angular3P | DimKind::ArcLength => auto_assoc(d, space, &[("p13", dm.p13.xy()), ("p14", dm.p14.xy()), ("p15", dm.p15.xy())]),
         DimKind::Angular => auto_assoc(d, space, &[("p13", dm.p13.xy()), ("p14", dm.p14.xy()), ("defpt", dm.defpt.xy()), ("p15", dm.p15.xy())]),
         DimKind::Ordinate { .. } => auto_assoc(d, space, &[("p13", dm.p13.xy())]),
+    };
+    if *space == Space::Model && matches!(dm.kind, DimKind::Linear { .. } | DimKind::Aligned) {
+        let dir = match dm.kind {
+            DimKind::Linear { rotation } => Some(Vec2::from_angle(rotation)),
+            DimKind::Aligned => Some((dm.p14.xy() - dm.p13.xy()).normalized()),
+            _ => None,
+        };
+        if let Some(dir) = dir {
+            for (name, p) in [("p13", dm.p13.xy()), ("p14", dm.p14.xy())] {
+                if out.iter().any(|a| a.point == name) {
+                    continue;
+                }
+                if let Some((handle, feature, along)) = cadcraft_arch::dimension::find_feature(&d.arch, p, Some(dir)) {
+                    out.push(DimAssoc { point: name.into(), handle, snap: AssocSnap::Arch { feature, along } });
+                }
+            }
+        }
     }
+    out
 }
 
 /// Associations for a radius/diameter dimension made by picking a circle or arc.
@@ -375,6 +396,7 @@ pub fn update(after: &mut Arc<Drawing>, before: &Drawing) -> usize {
                     src_changed(before, d, a.handle)
                         || matches!(a.snap, AssocSnap::Intersection { other } if src_changed(before, d, other))
                         || prev.is_some_and(|p| !p.assoc.contains(a))
+                        || before.arch_revision != d.arch_revision
                 });
                 if !touched {
                     continue;

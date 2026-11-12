@@ -1489,6 +1489,13 @@ menu	View	视图
 	Arch Inspect	建筑检查
 	Arch Sample	建筑示例
 	Architecture	建筑
+	Plan Views	计划视图
+	New Plan View	新建计划视图
+	Open Plan View	打开计划视图
+	Close Plan View	关闭计划视图
+	Edit Plan View	编辑计划视图
+	Delete Plan View	删除计划视图
+	List Plan Views	列出计划视图
 	Architecture>Stair	建筑>楼梯
 	Automatic	自动
 	Build 3D	生成三维
@@ -1546,6 +1553,7 @@ menu	View	视图
 	Stair	楼梯
 	Stretch Wall	拉伸墙
 	Sun	太阳
+	Sun Angle	太阳角
 	Sun Study	日照分析
 	Terrain	地形
 	Terrain Elevation	地形标高
@@ -1553,6 +1561,7 @@ menu	View	视图
 	View Sheet	视图图纸
 	Walkthrough	漫游
 	Wall	墙
+	Split Wall	分割墙
 	Material	材质
 # Phase 15: electrical, split levels, showcase house.
 	240 V Outlet	240 伏插座
@@ -1597,4 +1606,13 @@ menu	View	视图
 	Edit Deck	编辑平台
 	Architecture>Edit Stair	建筑>编辑楼梯
 	Architecture>Edit Deck	建筑>编辑平台
-	Room Label	房间标签
+	Room Moldings	房间装饰线
+	Architecture>Room Moldings	建筑>房间装饰线
+	Sheet	图纸
+	Edit Sheet	编辑图纸
+	Delete Sheet	删除图纸
+	List Sheets	图纸列表
+	Open Sheet	打开图纸
+	Sheet Set	图纸集
+	Niche	壁龛
+	Architecture>Niche	建筑>壁龛
