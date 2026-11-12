@@ -57,6 +57,7 @@ pub mod room;
 pub mod room_moldings;
 pub mod roomdetect;
 pub mod sample;
+pub mod schedule;
 pub mod sheet;
 pub(crate) mod sheet_camera;
 pub(crate) mod sheet_inspect;
@@ -150,5 +151,6 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(foundation::specs());
     v.extend(soffit::specs());
     v.extend(planview::specs());
+    v.extend(schedule::specs());
     v
 }

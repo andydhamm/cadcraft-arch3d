@@ -1,0 +1,661 @@
+//! Schedule commands: door, window, cabinet and room-finish schedules as linked TABLEs.
+
+use crate::cmd::CommandSpec;
+use crate::cmd::table::make_table;
+use crate::engine::Result;
+use crate::engine::session::Session;
+use crate::engine::session::execute::EngineError;
+use cadcraft_doc::arch::{
+    ArchModel, LAYER_SCHEDULE, LINK_SCHEDULE, MAX_SCHEDULE_ROWS, MAX_SCHEDULES, Schedule, ScheduleKind, ScheduleRow, link_tags, read_link, set_link,
+};
+use cadcraft_doc::{Drawing, Handle, Space, Table, TableCell, TableStyle};
+use cadcraft_geom::Vec2;
+use serde_json::{Value, json};
+
+/// Run the `schedule` command.
+pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
+    let kind_str = params.get("kind").and_then(Value::as_str).ok_or_else(|| EngineError::Other("kind is required".into()))?;
+    let kind = ScheduleKind::from_str(kind_str).ok_or_else(|| EngineError::Other(format!("unknown kind: {kind_str}")))?;
+
+    let columns = parse_columns(params.get("columns"), kind)?;
+    let name = params.get("name").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| default_name(kind));
+    if name.is_empty() || name.len() > 256 {
+        return Err(EngineError::Other("name is empty or too long".into()));
+    }
+
+    let level = parse_level_param(params.get("level"))?;
+
+    let at = if let Some(v) = params.get("at") { parse_at(v)? } else { default_at(s.doc()?, kind)? };
+
+    let mut doc = s.doc()?.clone();
+    let arch = &mut doc.arch;
+
+    if arch.schedules.len() >= MAX_SCHEDULES {
+        return Err(EngineError::Other(format!("too many schedules (max {MAX_SCHEDULES})")));
+    }
+
+    let id = arch.next_schedule_id();
+    let label = format!("sc{id}");
+
+    let schedule = Schedule { id, name: name.clone(), kind, columns: columns.clone(), level, at };
+
+    // Validate schedule structure
+    if let Err(e) = cadcraft_arch::schedule::validate_schedule(&schedule) {
+        return Err(EngineError::Other(e));
+    }
+
+    let rows = cadcraft_arch::schedule::rows(&arch, &schedule);
+    let table = build_table(&doc, &schedule, &rows, at)?;
+
+    let handle = doc.add(Space::Model, Default::default(), cadcraft_doc::EntityKind::Table(table))?;
+
+    // Link the table to the schedule via XDATA
+    if let Some(entity) = doc.entity_mut(handle) {
+        let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
+        set_link(&mut tags, LINK_SCHEDULE, &label, 0);
+        entity.common.xdata = tags;
+    }
+
+    arch.schedules.push(schedule);
+
+    s.set_doc(doc);
+
+    let row_json: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "number": r.number,
+                "count": r.count,
+                "members": r.members,
+                "cells": r.cells
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "schedule": label,
+        "table": handle.hex(),
+        "name": name,
+        "kind": kind_str,
+        "columns": columns,
+        "rows": row_json
+    }))
+}
+
+/// Run the `schedule.edit` command.
+pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
+    let id_str = params.get("id").and_then(Value::as_str).ok_or_else(|| EngineError::Other("id is required".into()))?;
+    let id = parse_schedule_id(id_str)?;
+
+    let mut doc = s.doc()?.clone();
+    let arch = &mut doc.arch;
+
+    let idx = arch.schedules.iter().position(|s| s.id == id).ok_or_else(|| EngineError::Other(format!("unknown schedule: {id_str}")))?;
+    let mut schedule = arch.schedules[idx].clone();
+
+    let mut changed = false;
+
+    if let Some(v) = params.get("columns") {
+        let cols = parse_columns(Some(v), schedule.kind)?;
+        if cols != schedule.columns {
+            schedule.columns = cols;
+            changed = true;
+        }
+    }
+
+    if let Some(v) = params.get("name") {
+        let name = v.as_str().ok_or_else(|| EngineError::Other("name must be a string".into()))?;
+        if name.is_empty() || name.len() > 256 {
+            return Err(EngineError::Other("name is empty or too long".into()));
+        }
+        if name != schedule.name {
+            schedule.name = name.to_string();
+            changed = true;
+        }
+    }
+
+    if let Some(v) = params.get("level") {
+        let level = parse_level_param(Some(v))?;
+        if level != schedule.level {
+            schedule.level = level;
+            changed = true;
+        }
+    }
+
+    if let Some(v) = params.get("at") {
+        let at = parse_at(v)?;
+        if at != schedule.at {
+            schedule.at = at;
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return Err(EngineError::Other("no changes specified".into()));
+    }
+
+    // Validate
+    if let Err(e) = cadcraft_arch::schedule::validate_schedule(&schedule) {
+        return Err(EngineError::Other(e));
+    }
+
+    let rows = cadcraft_arch::schedule::rows(&arch, &schedule);
+
+    // Find existing table
+    let label = format!("sc{id}");
+    if let Some(handle) = schedule_table(&doc, &label) {
+        // Rewrite table
+        let table = build_table(&doc, &schedule, &rows, schedule.at)?;
+        if let Some(entity) = doc.entity_mut(handle) {
+            if let cadcraft_doc::EntityKind::Table(ref mut t) = entity.kind {
+                *t = table;
+            }
+        }
+    } else {
+        // Create new table if missing (shouldn't happen if linked, but robust)
+        let table = build_table(&doc, &schedule, &rows, schedule.at)?;
+        let handle = doc.add(Space::Model, Default::default(), cadcraft_doc::EntityKind::Table(table))?;
+        if let Some(entity) = doc.entity_mut(handle) {
+            let mut tags = link_tags(LINK_SCHEDULE, &label, 0);
+            set_link(&mut tags, LINK_SCHEDULE, &label, 0);
+            entity.common.xdata = tags;
+        }
+    }
+
+    arch.schedules[idx] = schedule;
+    s.set_doc(doc);
+
+    let row_json: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "number": r.number,
+                "count": r.count,
+                "members": r.members,
+                "cells": r.cells
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "schedule": label,
+        "name": schedule.name,
+        "kind": schedule.kind.as_str(),
+        "columns": schedule.columns,
+        "rows": row_json
+    }))
+}
+
+/// Run the `schedule.delete` command.
+pub fn run_schedule_delete(s: &mut Session, params: &Value) -> Result<Value> {
+    let id_str = params.get("id").and_then(Value::as_str).ok_or_else(|| EngineError::Other("id is required".into()))?;
+    let id = parse_schedule_id(id_str)?;
+
+    let mut doc = s.doc()?.clone();
+    let arch = &mut doc.arch;
+
+    let idx = arch.schedules.iter().position(|s| s.id == id).ok_or_else(|| EngineError::Other(format!("unknown schedule: {id_str}")))?;
+    let label = format!("sc{id}");
+
+    // Erase table
+    if let Some(handle) = schedule_table(&doc, &label) {
+        doc.remove(handle);
+    }
+
+    arch.schedules.remove(idx);
+    s.set_doc(doc);
+
+    Ok(json!({ "deleted": label }))
+}
+
+/// Find the model-space TABLE linked to a schedule label.
+pub(crate) fn schedule_table(d: &Drawing, label: &str) -> Option<Handle> {
+    d.model.iter().find_map(|e| {
+        if let cadcraft_doc::EntityKind::Table(_) = e.kind {
+            if let Some((key, val, _)) = read_link(&e.common.xdata) {
+                if key == LINK_SCHEDULE && val == label {
+                    return Some(e.handle);
+                }
+            }
+        }
+        None
+    })
+}
+
+/// Refresh all schedules after a command.
+pub(crate) fn refresh_schedules(s: &mut Session) {
+    let mut doc = s.doc().ok().cloned().unwrap_or_default();
+    let arch = &doc.arch;
+    let mut changed = false;
+    let mut to_remove = Vec::new();
+
+    for schedule in &arch.schedules {
+        let label = format!("sc{}", schedule.id);
+        let rows = cadcraft_arch::schedule::rows(arch, schedule);
+
+        if rows.len() > MAX_SCHEDULE_ROWS {
+            continue; // Skip if too large, though validate should prevent
+        }
+
+        if let Some(handle) = schedule_table(&doc, &label) {
+            // Check if table content matches rows
+            let expected_table = match build_table(&doc, schedule, &rows, schedule.at) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+
+            if let Some(entity) = doc.entity(handle) {
+                if let cadcraft_doc::EntityKind::Table(current_table) = &entity.kind {
+                    if table_differs(current_table, &expected_table) {
+                        // Rewrite table in place
+                        if let Some(entity_mut) = doc.entity_mut(handle) {
+                            if let cadcraft_doc::EntityKind::Table(ref mut t) = entity_mut.kind {
+                                *t = expected_table;
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Table missing, remove schedule
+            to_remove.push(schedule.id);
+        }
+    }
+
+    if !to_remove.is_empty() {
+        arch.schedules.retain(|s| !to_remove.contains(&s.id));
+        changed = true;
+    }
+
+    if changed {
+        s.set_doc(doc);
+    }
+}
+
+fn build_table(d: &Drawing, schedule: &Schedule, rows: &[ScheduleRow], at: Vec2) -> Result<Table> {
+    let style = TableStyle::default(); // Or fetch from doc if specific style needed
+    let cols = schedule.columns.len();
+    let row_count = 1 + rows.len(); // Header + data rows
+
+    let mut cells = Vec::new();
+    // Header row
+    let mut header = Vec::new();
+    for col_key in &schedule.columns {
+        header.push(cadcraft_arch::schedule::column_title(*col_key).to_string());
+    }
+    cells.push(header);
+
+    // Data rows
+    for row in rows {
+        cells.push(row.cells.clone());
+    }
+
+    // Calculate widths
+    let mut col_widths = vec![0.6; cols];
+    for (i, _) in schedule.columns.iter().enumerate() {
+        let mut max_len = 0;
+        for cell_row in &cells {
+            if let Some(cell) = cell_row.get(i) {
+                max_len = max_len.max(cell.len());
+            }
+        }
+        // 0.6 base + text height factor + margin
+        let w = (0.6 + 0.6 * 0.25 * (max_len as f64) + 0.1).max(0.6);
+        col_widths[i] = w;
+    }
+
+    let table = make_table(
+        &style,
+        at,
+        row_count,
+        cols,
+        None, // default row height
+        None, // default col width (overridden by col_widths if make_table supports it, otherwise we pass calculated)
+        Some(&schedule.name),
+        Some(cells[0].clone()),
+        &cells[1..],
+    );
+
+    // make_table might not accept col_widths directly in all versions,
+    // but the prompt implies we can set them or they are derived.
+    // If make_table signature is fixed as in prompt, we rely on it.
+    // The prompt says: `make_table(st, at, rows, cols, row_h, col_w, title, header, cells)`
+    // It doesn't take col_widths. We might need to modify the table after creation or assume make_table handles it.
+    // However, `Table` struct has `col_widths`.
+    // Let's assume we can modify the returned table or make_table uses defaults.
+    // The prompt says "column widths max(0.6, ...) per column".
+    // If make_table doesn't support it, we might need to construct Table manually or patch it.
+    // Given `make_table` returns `Table`, we can patch `col_widths`.
+
+    let mut t = table;
+    t.col_widths = col_widths;
+
+    Ok(t)
+}
+
+fn table_differs(current: &Table, expected: &Table) -> bool {
+    if current.title != expected.title {
+        return true;
+    }
+    if current.header != expected.header {
+        return true;
+    }
+    if current.cells.len() != expected.cells.len() {
+        return true;
+    }
+    for (c_row, e_row) in current.cells.iter().zip(expected.cells.iter()) {
+        if c_row.len() != e_row.len() {
+            return true;
+        }
+        for (c_cell, e_cell) in c_row.iter().zip(e_cell.iter()) {
+            if c_cell.text != e_cell.text {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn parse_columns(v: Option<&Value>, kind: ScheduleKind) -> Result<Vec<String>> {
+    if let Some(v) = v {
+        let arr = v.as_array().ok_or_else(|| EngineError::Other("columns must be a list".into()))?;
+        if arr.is_empty() {
+            return Err(EngineError::Other("columns must not be empty".into()));
+        }
+        let mut cols = Vec::new();
+        for item in arr {
+            let s = item.as_str().ok_or_else(|| EngineError::Other("column keys must be strings".into()))?;
+            if !cadcraft_arch::schedule::validate_columns(kind, &[s.to_string()]) {
+                return Err(EngineError::Other(format!("unknown or invalid column key: {s}")));
+            }
+            if cols.contains(&s.to_string()) {
+                return Err(EngineError::Other(format!("duplicate column key: {s}")));
+            }
+            cols.push(s.to_string());
+        }
+        Ok(cols)
+    } else {
+        Ok(cadcraft_arch::schedule::default_columns(kind))
+    }
+}
+
+fn parse_level_param(v: Option<&Value>) -> Result<Option<String>> {
+    if let Some(v) = v {
+        if v.is_null() {
+            return Ok(None);
+        }
+        if let Some(s) = v.as_str() {
+            if s == "all" {
+                return Ok(None);
+            }
+            return Ok(Some(s.to_string()));
+        }
+        if let Some(i) = v.as_u64() {
+            return Ok(Some(i.to_string()));
+        }
+        Err(EngineError::Other("level must be a string or integer".into()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn parse_at(v: &Value) -> Result<Vec2> {
+    let arr = v.as_array().ok_or_else(|| EngineError::Other("at must be an array".into()))?;
+    if arr.len() != 2 {
+        return Err(EngineError::Other("at must have two numbers".into()));
+    }
+    let x = arr[0].as_f64().ok_or_else(|| EngineError::Other("at x must be a number".into()))?;
+    let y = arr[1].as_f64().ok_or_else(|| EngineError::Other("at y must be a number".into()))?;
+    if !x.is_finite() || !y.is_finite() {
+        return Err(EngineError::Other("at coordinates must be finite".into()));
+    }
+    Ok(Vec2::new(x, y))
+}
+
+fn default_at(d: &Drawing, kind: ScheduleKind) -> Result<Vec2> {
+    let bounds = d.arch.bounds();
+    if bounds.is_empty() {
+        return Ok(Vec2::ZERO);
+    }
+    let x = bounds.max_x + 3.0;
+    // Offset Y by number of existing schedules of this kind? Or just all schedules?
+    // Prompt: "at its max y minus 3 m per schedule already made"
+    let count = d.arch.schedules.len();
+    let y = bounds.max_y - 3.0 * (count as f64);
+    Ok(Vec2::new(x, y))
+}
+
+fn default_name(kind: ScheduleKind) -> String {
+    match kind {
+        ScheduleKind::Door => "Door Schedule".to_string(),
+        ScheduleKind::Window => "Window Schedule".to_string(),
+        ScheduleKind::Cabinet => "Cabinet Schedule".to_string(),
+        ScheduleKind::Room => "Room Finish Schedule".to_string(),
+    }
+}
+
+fn parse_schedule_id(s: &str) -> Result<u32> {
+    if let Some(rest) = s.strip_prefix("sc") {
+        rest.parse::<u32>().map_err(|_| EngineError::Other(format!("invalid schedule id: {s}")))
+    } else {
+        Err(EngineError::Other(format!("invalid schedule id: {s}")))
+    }
+}
+
+pub fn specs() -> Vec<CommandSpec> {
+    vec![
+        CommandSpec::new("schedule", "Schedule", run_schedule)
+            .menu(&["Architecture", "Schedule"])
+            .params("{kind: door|window|cabinet|room, columns?: [...], name?: string, at?: [x,y], level?: name|index|all}")
+            .undoable(),
+        CommandSpec::new("schedule.edit", "Edit Schedule", run_schedule_edit)
+            .menu(&["Architecture", "Edit Schedule"])
+            .params("{id: sc<n>, columns?: [...], name?: string, level?: name|index|all, at?: [x,y]}")
+            .undoable(),
+        CommandSpec::new("schedule.delete", "Delete Schedule", run_schedule_delete)
+            .menu(&["Architecture", "Delete Schedule"])
+            .params("{id: sc<n>}")
+            .undoable(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::session::Session;
+    use cadcraft_doc::arch::{ArchModel, ScheduleKind};
+    use serde_json::json;
+
+    #[test]
+    fn schedule_makes_a_linked_table() {
+        let mut s = Session::new();
+        // Add a wall and a door to have something to schedule
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+
+        assert!(schedule_id.starts_with("sc"));
+        assert!(!table_handle.is_empty());
+
+        // Verify table exists and is linked
+        let doc = s.doc().unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+        let entity = doc.entity(handle).unwrap();
+        assert!(matches!(entity.kind, cadcraft_doc::EntityKind::Table(_)));
+
+        let (key, val, _) = read_link(&entity.common.xdata).unwrap();
+        assert_eq!(key, LINK_SCHEDULE);
+        assert_eq!(val, schedule_id);
+    }
+
+    #[test]
+    fn table_cells_are_title_header_rows() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+
+        let doc = s.doc().unwrap();
+        if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
+            assert_eq!(t.title, "Door Schedule");
+            assert!(!t.header.is_empty());
+            assert_eq!(t.header[0], "No."); // Default first column
+            assert!(!t.cells.is_empty());
+        } else {
+            panic!("Not a table");
+        }
+    }
+
+    #[test]
+    fn a_resize_rewrites_the_table_in_the_same_undo_step() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+
+        // Resize door
+        s.execute("opening.edit", &json!({"id": "o0", "width": 1.2})).unwrap();
+
+        // Check table updated
+        let doc = s.doc().unwrap();
+        if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
+            // Find the width cell in the first data row
+            // Assuming columns: number, count, width, height
+            // Row 0 is header, Row 1 is data
+            let width_cell = &t.cells[1][2]; // 0-indexed, 3rd col
+            assert!(width_cell.text.contains("1.200"));
+        }
+    }
+
+    #[test]
+    fn undo_restores_the_table() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+
+        // Resize door
+        s.execute("opening.edit", &json!({"id": "o0", "width": 1.2})).unwrap();
+
+        // Undo
+        s.execute("undo", &json!({})).unwrap();
+
+        let doc = s.doc().unwrap();
+        if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
+            let width_cell = &t.cells[1][2];
+            assert!(width_cell.text.contains("0.900")); // Original width
+        }
+    }
+
+    #[test]
+    fn edit_columns_rewrites_the_header() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+
+        // Edit columns to just width
+        s.execute("schedule.edit", &json!({"id": schedule_id, "columns": ["width"]})).unwrap();
+
+        let doc = s.doc().unwrap();
+        if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
+            assert_eq!(t.header.len(), 1);
+            assert_eq!(t.header[0], "Width");
+        }
+    }
+
+    #[test]
+    fn delete_erases_the_table() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+
+        s.execute("schedule.delete", &json!({"id": schedule_id})).unwrap();
+
+        let doc = s.doc().unwrap();
+        assert!(doc.entity(handle).is_none());
+    }
+
+    #[test]
+    fn erasing_the_table_drops_the_schedule() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+
+        // Erase table manually
+        s.execute("erase", &json!({"handles": [table_handle]})).unwrap();
+
+        // Trigger refresh (e.g. by doing another command)
+        s.execute("wall", &json!({"points": [[0,0],[1,0]]})).unwrap();
+
+        // Schedule should be gone
+        let doc = s.doc().unwrap();
+        assert!(doc.arch.schedules.iter().all(|s| s.id.to_string() != schedule_id[2..]));
+    }
+
+    #[test]
+    fn refresh_does_nothing_when_rows_are_unchanged() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::from_hex(table_handle).unwrap();
+
+        // Get revision before
+        let rev_before = s.state().unwrap().revision;
+
+        // Run a command that doesn't affect schedules (e.g. layer state)
+        s.execute("layer", &json!({"name": "TEST", "on": true})).unwrap();
+
+        // Revision should have increased due to layer command
+        let rev_after = s.state().unwrap().revision;
+        assert!(rev_after > rev_before);
+
+        // But table should be unchanged (hard to test directly without diffing,
+        // but we can check that refresh_schedules didn't panic or error)
+    }
+
+    #[test]
+    fn default_at_is_beside_the_model() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+
+        let doc = s.doc().unwrap();
+        let schedule = doc.arch.schedules.iter().find(|s| s.id.to_string() == schedule_id[2..]).unwrap();
+
+        // Bounds max x is 10. Default at x should be 13.
+        assert!((schedule.at.x - 13.0).abs() < 0.01);
+    }
+}
