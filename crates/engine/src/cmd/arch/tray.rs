@@ -744,10 +744,13 @@ mod tests {
 
     #[test]
     fn parse_level_by_name_and_index() {
-        let mut s = Session::new();
-        s.execute("level", &json!({"name": "Ground", "elevation": 0.0})).unwrap();
-        s.execute("level", &json!({"name": "Upper", "elevation": 3.0})).unwrap();
-        let model = s.doc().unwrap().arch.clone();
+        let model = cadcraft_doc::arch::ArchModel {
+            levels: vec![
+                cadcraft_doc::arch::Level { index: 0, name: "Ground".into(), ..Default::default() },
+                cadcraft_doc::arch::Level { index: 1, name: "Upper".into(), ..Default::default() },
+            ],
+            ..Default::default()
+        };
         assert_eq!(parse_level("tray", &model, &json!(0)).unwrap(), 0);
         assert_eq!(parse_level("tray", &model, &json!(1)).unwrap(), 1);
         assert_eq!(parse_level("tray", &model, &json!("Ground")).unwrap(), 0);
