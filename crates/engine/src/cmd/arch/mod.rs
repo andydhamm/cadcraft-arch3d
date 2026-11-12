@@ -45,6 +45,7 @@ pub mod opening;
 pub mod outlets_auto;
 pub mod paint;
 pub mod pick;
+pub mod plan_inspect;
 pub mod plant;
 pub mod railing;
 pub mod render;
