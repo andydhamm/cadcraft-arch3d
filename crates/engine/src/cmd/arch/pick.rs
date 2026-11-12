@@ -324,6 +324,26 @@ mod tests {
     }
 
     #[test]
+    fn pick3d_on_a_glass_wall_names_the_wall() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        let wall_id = d.arch.push_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(2.0, 0.0),
+            thickness: cadcraft_doc::arch::GLASS_THICKNESS,
+            height: cadcraft_doc::arch::GLASS_WALL_HEIGHT,
+            wall_type: "Glass".to_string(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let cam = json!({ "kind": "full", "eye": [1.0, -2.0, 1.0], "target": [1.0, 0.0, 1.0], "fov": 45 });
+        let v = s.execute("pick3d", &params(cam, json!([50, 50]))).unwrap_or(Value::Null);
+        let hit = &v["hit"];
+        assert_eq!(hit["id"], wall_id.to_string());
+        assert_eq!(hit["part"], "glass");
+    }
+
+    #[test]
     fn pick3d_at_the_sky_returns_null() {
         let mut s = session();
         let cam = json!({ "kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, -4.0, 50.0] });
