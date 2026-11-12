@@ -127,9 +127,10 @@ fn run(session: &mut Session, params: &Value) -> Result<Value> {
             toward_sun.map_or(0.0, |s| cadcraft_arch3d::light::sun_illuminance(&scene, point, normal, s, look.sun.intensity, look.sun.shadows));
 
         // The moon lights only with the sky on and the sun below the horizon (or off).
-        let sun_up = toward_sun.is_some_and(|s| s.z > 0.0);
+        // An absent `sun` is the plain night of phases 10 and 11: no sun direction, no moon.
+        let sun_below = params.get("sun").is_some() && sun_dir.is_some_and(|d| d[2] < 0.0);
         let moon_lux = match cadcraft_arch3d::sky::moon_dir(&doc.arch, &look.sky.moon) {
-            Some(m) if look.sky.on && !sun_up && look.sky.moon.lux.is_finite() && look.sky.moon.lux > 0.0 => {
+            Some(m) if look.sky.on && sun_below && look.sky.moon.lux.is_finite() && look.sky.moon.lux > 0.0 => {
                 cadcraft_arch3d::light::sun_illuminance(&scene, point, normal, Vec3::new(m[0], m[1], m[2]), look.sky.moon.lux, look.sun.shadows)
             }
             _ => 0.0,
