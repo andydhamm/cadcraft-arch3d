@@ -20,7 +20,15 @@ pub(crate) fn tag_labels(model: &ArchModel, _view: &ArchView, ov: &OrthoView, li
     let mut push = |text: &String, c: [f64; 3], kind: ArchKind, object: ArchId| {
         let p = ov.project(c);
         if p[0].is_finite() && p[1].is_finite() && out.len() < MAX_TAGS {
-            out.push(ViewLabel { text: text.clone(), at: [p[0], p[1]], height: TAG_HEIGHT, layer: LAYER_ELEV_TAG.into(), kind, object });
+            out.push(ViewLabel {
+                text: text.clone(),
+                at: [p[0], p[1]],
+                height: TAG_HEIGHT,
+                layer: LAYER_ELEV_TAG.into(),
+                kind,
+                object,
+                ..ViewLabel::default()
+            });
         }
     };
     for o in &model.openings {
@@ -61,7 +69,7 @@ mod tests {
     }
 
     fn line(kind: ArchKind, object: ArchId) -> ViewLine {
-        ViewLine { a: [0.0, 0.0], b: [1.0, 1.0], kind, object }
+        ViewLine { a: [0.0, 0.0], b: [1.0, 1.0], kind, object, ..ViewLine::default() }
     }
 
     fn south() -> OrthoView {

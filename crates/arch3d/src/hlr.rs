@@ -374,7 +374,7 @@ pub(crate) fn visible_lines_beyond(scene: &Scene3d, view: &OrthoView, keep: Opti
 }
 
 /// A 3D segment to test against the scene (an extra such as a door swing), tagged with its owner.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Seg3 {
     pub a: [f64; 3],
     pub b: [f64; 3],

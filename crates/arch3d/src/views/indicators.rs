@@ -174,7 +174,7 @@ pub(crate) fn indicator_lines(model: &ArchModel, sc: &Scene3d, _view: &ArchView,
         }
         let Some(b) = opening_box(model, o, Some(ov)) else { continue };
         for (p, q) in swing_lines(door, &o.style, o.hinge == Hinge::Left, b.s, b.z).into_iter().take(MAX_PER_ITEM) {
-            segs.push(Seg3 { a: b.point(p[0], p[1]), b: b.point(q[0], q[1]), kind: ArchKind::Opening, object: o.id });
+            segs.push(Seg3 { a: b.point(p[0], p[1]), b: b.point(q[0], q[1]), kind: ArchKind::Opening, object: o.id, ..Seg3::default() });
         }
     }
     for c in &model.cabinets {
@@ -202,13 +202,21 @@ pub(crate) fn indicator_lines(model: &ArchModel, sc: &Scene3d, _view: &ArchView,
                     break;
                 }
                 n += 1;
-                segs.push(Seg3 { a: f.point(p[0], p[1], LIFT), b: f.point(q[0], q[1], LIFT), kind: ArchKind::Cabinet, object: c.id });
+                segs.push(Seg3 {
+                    a: f.point(p[0], p[1], LIFT),
+                    b: f.point(q[0], q[1], LIFT),
+                    kind: ArchKind::Cabinet,
+                    object: c.id,
+                    ..Seg3::default()
+                });
             }
         }
     }
     segs.truncate(MAX_INDICATOR_LINES);
-    let mut out: Vec<ViewLine> =
-        visible_segments(sc, ov, &segs).into_iter().map(|l| ViewLine { a: l.a, b: l.b, kind: l.kind, object: l.object }).collect();
+    let mut out: Vec<ViewLine> = visible_segments(sc, ov, &segs)
+        .into_iter()
+        .map(|l| ViewLine { a: l.a, b: l.b, kind: l.kind, object: l.object, ..ViewLine::default() })
+        .collect();
     out.truncate(MAX_INDICATOR_LINES);
     out
 }
