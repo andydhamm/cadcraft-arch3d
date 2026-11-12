@@ -249,9 +249,15 @@ fn parse_fields(cmd: &str, p: &Map<String, Value>, view: &mut PlanView, d: &Draw
         view.annotation = a;
     }
     if let Some(v) = p.get("labels") {
-        let m = object(cmd, "labels", v, &["name", "area", "dimensions", "ceiling"])?;
+        let m = object(cmd, "labels", v, &["name", "area", "dimensions", "ceiling", "numbers"])?;
         let mut l: RoomLabelShow = view.labels;
-        for (key, slot) in [("name", &mut l.name), ("area", &mut l.area), ("dimensions", &mut l.dimensions), ("ceiling", &mut l.ceiling)] {
+        for (key, slot) in [
+            ("name", &mut l.name),
+            ("area", &mut l.area),
+            ("dimensions", &mut l.dimensions),
+            ("ceiling", &mut l.ceiling),
+            ("numbers", &mut l.numbers),
+        ] {
             if let Some(x) = m.get(key) {
                 *slot = boolean(cmd, &format!("labels.{key}"), x)?;
             }
