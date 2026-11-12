@@ -425,3 +425,53 @@ fn grille_bars_finite_for_all_inputs() {
         }
     }
 }
+
+#[test]
+fn grille_bars_empty_for_non_finite_glass() {
+    let o = helper_grille(2, 2, false);
+    let nan_rect = GlassRect::new(f64::NAN, 1.0, 0.0, 1.0);
+    assert!(grille_bars(&o, &nan_rect).is_empty(), "NaN u0 should produce no bars");
+
+    let inf_rect = GlassRect::new(0.0, f64::INFINITY, 0.0, 1.0);
+    assert!(grille_bars(&o, &inf_rect).is_empty(), "inf u1 should produce no bars");
+
+    let neg_inf_rect = GlassRect::new(0.0, 1.0, -f64::INFINITY, 1.0);
+    assert!(grille_bars(&o, &neg_inf_rect).is_empty(), "-inf z0 should produce no bars");
+}
+
+#[test]
+fn grille_bar_positions_exact() {
+    // 3x2 grille on a glass rect from u=0 to u=3, z=0 to z=2
+    let o = helper_grille(3, 2, false);
+    let rect = GlassRect::new(0.0, 3.0, 0.0, 2.0);
+    let bars = grille_bars(&o, &rect);
+
+    // Should have 2 vertical bars (across-1) and 1 horizontal bar (down-1), split into 3 segments
+    // Total: 2 + 3 = 5 bars
+    assert_eq!(bars.len(), 5, "expected 5 bars for 3x2 grille, got {}", bars.len());
+
+    // Vertical bars at u=1 and u=2, full height z=0 to z=2
+    let verticals: Vec<_> = bars.iter().filter(|b| (b[1] - b[0]).abs() < 0.03).collect();
+    assert_eq!(verticals.len(), 2, "expected 2 vertical bars");
+    assert!((verticals[0][0] - 0.99).abs() < 1e-9, "first vertical bar left edge");
+    assert!((verticals[0][1] - 1.01).abs() < 1e-9, "first vertical bar right edge");
+    assert!((verticals[1][0] - 1.99).abs() < 1e-9, "second vertical bar left edge");
+    assert!((verticals[1][1] - 2.01).abs() < 1e-9, "second vertical bar right edge");
+
+    // Horizontal bar at z=1, split into 3 segments by the vertical bars
+    let horizontals: Vec<_> = bars.iter().filter(|b| (b[3] - b[2]).abs() < 0.03).collect();
+    assert_eq!(horizontals.len(), 3, "expected 3 horizontal bar segments");
+    assert!((horizontals[0][0] - 0.0).abs() < 1e-9, "first segment left edge");
+    assert!((horizontals[0][1] - 0.99).abs() < 1e-9, "first segment right edge");
+    assert!((horizontals[1][0] - 1.01).abs() < 1e-9, "second segment left edge");
+    assert!((horizontals[1][1] - 1.99).abs() < 1e-9, "second segment right edge");
+    assert!((horizontals[2][0] - 2.01).abs() < 1e-9, "third segment left edge");
+    assert!((horizontals[2][1] - 3.0).abs() < 1e-9, "third segment right edge");
+}
+
+#[test]
+fn grille_bars_top_only_non_finite_glass() {
+    let o = helper_grille(2, 2, true);
+    let nan_rect = GlassRect::new(0.0, 1.0, f64::NAN, 1.0);
+    assert!(grille_bars(&o, &nan_rect).is_empty(), "top-only with NaN z0 should produce no bars");
+}
