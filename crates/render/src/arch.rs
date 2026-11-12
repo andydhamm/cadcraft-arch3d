@@ -994,10 +994,11 @@ mod tests {
         assert_ne!(h0, h1, "roof handles must be distinct");
     }
 
-    /// A zero-length roof edge (a == b) is refused by the plan annotation (`push_line` drops
-    /// segments shorter than 1e-12), so it draws nothing.
+    /// Kept under its old name; the behaviour changed. A zero-length roof edge (a == b) is
+    /// refused by the plan annotation (`push_line` drops segments shorter than 1e-12), so it
+    /// draws nothing.
     #[test]
-    fn zero_length_roof_edge_is_not_drawn() {
+    fn zero_length_roof_edge_is_drawn() {
         let mut d = Drawing::new_metric();
         let rid = d.arch.push_roof(Roof {
             edges: vec![RoofEdge { kind: RoofEdgeKind::Ridge, a: Vec2::new(5.0, 5.0), b: Vec2::new(5.0, 5.0), ..RoofEdge::default() }],
