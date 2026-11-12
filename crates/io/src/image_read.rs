@@ -142,9 +142,21 @@ mod tests {
     use super::*;
 
     fn encode(img: &image::RgbaImage, f: image::ImageFormat) -> Vec<u8> {
-        let mut out = Vec::new();
-        assert!(img.write_to(&mut Cursor::new(&mut out), f).is_ok());
-        out
+        let mut out = std::io::Cursor::new(Vec::new());
+        match f {
+            image::ImageFormat::Png => {
+                img.write_to(&mut out, f).expect("PNG encode");
+            }
+            image::ImageFormat::Jpeg => {
+                let rgb = image::RgbImage::from_fn(img.width(), img.height(), |x, y| {
+                    let rgba = img.get_pixel(x, y);
+                    image::Rgb([rgba[0], rgba[1], rgba[2]])
+                });
+                rgb.write_to(&mut out, f).expect("JPEG encode");
+            }
+            _ => panic!("unsupported format in test"),
+        }
+        out.into_inner()
     }
 
     fn png(w: u32, h: u32) -> Vec<u8> {
@@ -169,6 +181,31 @@ mod tests {
         let r = read_image(&encode(&flat, image::ImageFormat::Png), 100).expect("decodes");
         assert_eq!((r.width, r.height), (100, 67));
         assert!(r.rgba.chunks_exact(4).all(|p| p == [10, 200, 30, 255]));
+    }
+
+    #[test]
+    fn read_image_exactly_max_side_not_resized() {
+        let img = image::RgbaImage::from_fn(256, 256, |x, y| image::Rgba([(x % 256) as u8, (y % 256) as u8, 128, 255]));
+        let bytes = encode(&img, image::ImageFormat::Png);
+        let r = read_image(&bytes, 256).expect("decodes");
+        assert_eq!((r.width, r.height), (256, 256));
+    }
+
+    #[test]
+    fn read_image_handles_1x1() {
+        let img = image::RgbaImage::from_pixel(1, 1, image::Rgba([10, 20, 30, 255]));
+        let bytes = encode(&img, image::ImageFormat::Png);
+        let r = read_image(&bytes, 256).expect("decodes");
+        assert_eq!((r.width, r.height), (1, 1));
+        assert_eq!(r.rgba, vec![10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn read_image_handles_jpeg() {
+        let img = image::RgbaImage::from_fn(100, 100, |x, y| image::Rgba([(x % 256) as u8, (y % 256) as u8, 128, 255]));
+        let bytes = encode(&img, image::ImageFormat::Jpeg);
+        let r = read_image(&bytes, 256).expect("decodes");
+        assert_eq!((r.width, r.height), (100, 100));
     }
 
     #[test]

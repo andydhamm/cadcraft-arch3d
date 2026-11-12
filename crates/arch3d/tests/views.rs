@@ -70,7 +70,7 @@ fn section() -> ArchView {
 }
 
 fn view_of(m: &ArchModel, v: &ArchView) -> ViewGeometry {
-    generate(&build(m), v, 1)
+    generate(m, &build(m), v, 1)
 }
 
 fn kind_lines(g: &ViewGeometry, k: ArchKind) -> Vec<&ViewLine> {
@@ -192,8 +192,21 @@ fn generation_is_deterministic() {
     m.push_opening(Opening::new(s, 3.0, 0.9, 2.1, OpeningKind::Door));
     let scene = build(&m);
     for v in [south(), section()] {
-        assert_eq!(generate(&scene, &v, 1), generate(&scene, &v, 1));
+        assert_eq!(generate(&m, &scene, &v, 1), generate(&m, &scene, &v, 1));
     }
+}
+
+#[test]
+fn elevations_and_sections_are_unchanged() {
+    let (mut m, s, _) = house();
+    m.push_opening(Opening::new(s, 3.0, 0.9, 2.1, OpeningKind::Door));
+    let scene = build(&m);
+    let e = generate(&m, &scene, &south(), 2);
+    assert!(e.error.is_none() && !e.lines.is_empty());
+    assert!(e.rings.is_empty() && e.patterns.is_empty() && e.indicators.is_empty() && e.labels.is_empty());
+    let s = generate(&m, &scene, &section(), 2);
+    assert!(s.error.is_none() && !s.rings.is_empty());
+    assert!(s.patterns.is_empty() && s.indicators.is_empty() && s.labels.is_empty());
 }
 
 #[test]

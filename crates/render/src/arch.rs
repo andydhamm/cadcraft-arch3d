@@ -107,24 +107,45 @@ pub(crate) fn build_arch_with(d: &Drawing, plotting: bool, ann: &cadcraft_arch::
                 }
             }
 
-            // Filled poché with holes
-            let tris = crate::triangulate_evenodd(&polys);
-            if tris.len() >= 3 {
-                let start = u32::try_from(list.tris.len()).unwrap_or(u32::MAX);
-                for q in &tris {
-                    list.bounds.add(*q);
-                    list.tris.push(*q);
+            // Niches: a notch from the recessed face inward by the depth (even-odd fill).
+            for o in d.arch.openings.iter().filter(|o| o.host == wall.id && o.kind == cadcraft_doc::arch::OpeningKind::Niche) {
+                if !(o.depth.is_finite() && o.depth > 0.0 && o.depth < wall.thickness && o.offset.is_finite() && o.width.is_finite() && o.width > 0.0)
+                {
+                    continue;
                 }
-                list.prims.push(DPrim {
-                    handle: arch_handle(wall.id),
-                    color: ink.rgb,
-                    aci7: ink.aci7,
-                    lw: 0.0,
-                    transparency: wall_t,
-                    kind: Kind::Tris,
-                    start,
-                    len: u32::try_from(tris.len()).unwrap_or(u32::MAX),
-                });
+                // Distance from the centre line (positive to the left) to the face, extended 1e-6
+                // outside it, and to the recess bottom.
+                let sgn = if o.face == Some(cadcraft_doc::arch::paint::Side::Right) { -1.0 } else { 1.0 };
+                let n_out = sgn * (half + 1e-6);
+                let n_in = sgn * (half - o.depth);
+                let q = |u: f64, n: f64| wall.start + dir * u + perp * n;
+                let (u0, u1) = (o.offset - o.width / 2.0, o.offset + o.width / 2.0);
+                let ring_n = [q(u0, n_out), q(u1, n_out), q(u1, n_in), q(u0, n_in)];
+                if ring_n.iter().all(|p| p.is_finite()) {
+                    polys.push(ring_n.to_vec());
+                }
+            }
+
+            // Filled poché with holes (glass walls draw outline only, no fill)
+            if !wall.is_glass() {
+                let tris = crate::triangulate_evenodd(&polys);
+                if tris.len() >= 3 {
+                    let start = u32::try_from(list.tris.len()).unwrap_or(u32::MAX);
+                    for q in &tris {
+                        list.bounds.add(*q);
+                        list.tris.push(*q);
+                    }
+                    list.prims.push(DPrim {
+                        handle: arch_handle(wall.id),
+                        color: ink.rgb,
+                        aci7: ink.aci7,
+                        lw: 0.0,
+                        transparency: wall_t,
+                        kind: Kind::Tris,
+                        start,
+                        len: u32::try_from(tris.len()).unwrap_or(u32::MAX),
+                    });
+                }
             }
 
             // Outline
@@ -289,6 +310,7 @@ pub(crate) fn build_arch_with(d: &Drawing, plotting: bool, ann: &cadcraft_arch::
     crate::arch_light::push_lights(d, &mut list, plotting);
     crate::arch_electrical::push_electrical(d, &mut list, plotting);
     crate::arch_casework::push_casework(d, &mut list, plotting);
+    crate::arch_molding::push_molding_lines(d, &mut list, plotting);
     crate::arch_ceiling::push_ceiling(d, &mut list, plotting);
     crate::arch_foundation::push_foundations(d, &mut list, plotting);
     crate::arch_furnishing::push_furnishings(d, &mut list, plotting);
@@ -1867,6 +1889,56 @@ mod tests {
         let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(wid)).collect();
         assert!(!wall_prims.is_empty(), "wall should still draw with missing layer");
         assert!(wall_prims.iter().all(|p| p.transparency == 0), "missing layer should give zero transparency");
+    }
+
+    /// A glass wall draws its outline but no filled poché triangles.
+    #[test]
+    fn glass_wall_draws_an_outline_without_fill() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.01,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        // Glass wall: outline only (1 polyline), no filled poché (no tris).
+        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
+        assert!(tris.is_empty(), "glass wall should have no filled poché, got {} tris prims", tris.len());
+        let outlines: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len >= 4).collect();
+        assert_eq!(outlines.len(), 1, "glass wall should have exactly one outline polyline");
+    }
+
+    /// A split (pony) wall keeps its lower type's filled poché.
+    #[test]
+    fn pony_wall_keeps_the_lower_fill() {
+        use cadcraft_doc::arch::WallSplit;
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.1,
+            height: 2.0,
+            wall_type: "Interior".into(),
+            split: Some(WallSplit { height: 1.07, upper: "Glass".into(), upper_thickness: 0.01, ..Default::default() }),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        // Split wall: lower type is solid, so it keeps the filled poché.
+        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
+        assert!(!tris.is_empty(), "split wall should keep the lower filled poché");
+        let outlines: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len >= 4).collect();
+        assert_eq!(outlines.len(), 1, "split wall should have one outline polyline");
     }
 
     #[test]

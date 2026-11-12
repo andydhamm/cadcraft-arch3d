@@ -13,8 +13,11 @@ pub const DEFAULT_INT_THICKNESS: f64 = 0.1;
 pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 
 pub mod archdetect;
+pub mod autodim;
 pub mod backdrop;
 pub mod build3d;
+pub(crate) mod cabinet_fill;
+pub(crate) mod cabinet_molding_inspect;
 pub(crate) mod cabinet_opts;
 pub mod casework;
 pub mod connections;
@@ -41,6 +44,8 @@ pub mod lightfixture;
 pub mod lightset;
 pub mod look;
 pub mod material;
+pub mod moldingline;
+pub mod niche;
 pub mod opening;
 pub mod outlets_auto;
 pub mod paint;
@@ -53,9 +58,13 @@ pub mod render;
 pub mod roofauto;
 pub mod roofplane;
 pub mod room;
+pub mod room_moldings;
 pub mod roomdetect;
 pub mod sample;
 pub mod sheet;
+pub(crate) mod sheet_camera;
+pub(crate) mod sheet_inspect;
+pub mod sheets;
 pub mod site;
 pub(crate) mod site_inspect;
 pub mod soffit;
@@ -67,11 +76,13 @@ pub mod sunstudy;
 pub mod terrain;
 pub mod terrain_modify;
 pub mod terrain_query;
+pub(crate) mod title_block;
 pub mod tray;
 pub(crate) mod units;
 pub mod view;
 pub mod views;
 pub mod wall;
+pub mod wall_split;
 
 /// Default layered wall band thicknesses for the given wall side.
 ///
@@ -93,10 +104,15 @@ pub(crate) fn wall_layers(exterior: bool) -> Vec<(String, f64)> {
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = Vec::new();
     v.extend(wall::specs());
+    v.extend(wall_split::specs());
     v.extend(opening::specs());
+    v.extend(niche::specs());
     v.extend(room::specs());
+    v.extend(room_moldings::specs());
+    v.extend(moldingline::specs());
     v.extend(library::specs());
     v.extend(roomdetect::specs());
+    v.extend(autodim::specs());
     v.extend(inspect::specs());
     v.extend(pick::specs());
     v.extend(level::specs());
@@ -117,6 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(railing::specs());
     v.extend(sun::specs());
     v.extend(sheet::specs());
+    v.extend(sheets::specs());
     v.extend(paint::specs());
     v.extend(archdetect::specs());
     v.extend(site::specs());
@@ -131,6 +148,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(lightset::specs());
     v.extend(connections::specs());
     v.extend(casework::specs());
+    v.extend(cabinet_fill::specs());
     v.extend(material::specs());
     v.extend(illuminance::specs());
     v.extend(render::specs());

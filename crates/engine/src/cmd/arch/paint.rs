@@ -579,9 +579,10 @@ mod tests {
         let dir = TempDir::new("paint-plan");
         let mut s = setup(&dir);
         let r = paint(&mut s, "brick", "wall/w0/right", "plan");
-        // Every wall side shares the default wall material, so all four are like surfaces.
-        assert_eq!(r["painted"], json!(["wall/w0/left", "wall/w0/right", "wall/w1/left", "wall/w1/right"]));
-        assert_eq!(material(&s, "wall/w1/left"), Some(MaterialRef::Finish(Finish::Brick)));
+        // The right sides share the default wall material; the left sides face rooms (drywall).
+        assert_eq!(r["painted"], json!(["wall/w0/right", "wall/w1/right"]));
+        assert_eq!(material(&s, "wall/w1/right"), Some(MaterialRef::Finish(Finish::Brick)));
+        assert_eq!(material(&s, "wall/w1/left"), None);
         let r = paint(&mut s, "#ffffff", "room/r0/ceiling", "plan");
         assert_eq!(r["painted"], json!(["room/r0/ceiling", "room/r1/ceiling"]));
         // Object scope: every surface of the clicked cabinet.
@@ -676,8 +677,8 @@ mod tests {
         assert_eq!(material(&s, "room/r1/floor"), Some(MaterialRef::Item("material-oak".into())));
         assert_eq!(s.doc().unwrap().arch.images.len(), 1);
         // A library finish item paints the finish and stores no image.
-        paint(&mut s, "finish:wood", "room/r1/floor", "component");
-        assert_eq!(material(&s, "room/r1/floor"), Some(MaterialRef::Finish(Finish::Wood)));
+        paint(&mut s, "finish:carpet", "room/r1/floor", "component");
+        assert_eq!(material(&s, "room/r1/floor"), Some(MaterialRef::Finish(Finish::Carpet)));
         assert_eq!(s.doc().unwrap().arch.images.len(), 1);
     }
 
@@ -736,13 +737,13 @@ mod tests {
         let before = s.doc().unwrap().arch.clone();
         let depth = undo_depth(&s);
         let r = paint(&mut s, "#c04020", "wall/w0/right", "plan");
-        assert_eq!(r["painted"].as_array().map(Vec::len), Some(4));
-        assert_eq!(s.doc().unwrap().arch.paints.len(), 4);
+        assert_eq!(r["painted"].as_array().map(Vec::len), Some(2));
+        assert_eq!(s.doc().unwrap().arch.paints.len(), 2);
         assert_eq!(undo_depth(&s), depth + 1);
         run(&mut s, "undo", json!({}));
         assert_eq!(s.doc().unwrap().arch, before);
         run(&mut s, "redo", json!({}));
-        assert_eq!(s.doc().unwrap().arch.paints.len(), 4);
+        assert_eq!(s.doc().unwrap().arch.paints.len(), 2);
         // Painting a surface back to its unpainted material removes its entry.
         s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(Finish::Wood);
         paint(&mut s, "#c04020", "room/r0/floor", "component");
@@ -856,7 +857,7 @@ mod tests {
         let dir = TempDir::new("paint-pick");
         let mut s = setup(&dir);
         let r = run(&mut s, "paint.pick", json!({"target": "wall/w0/left"}));
-        assert_eq!(r, json!({"material": "default:wall", "tint": null}));
+        assert_eq!(r, json!({"material": "finish:drywall", "tint": null}));
         paint(&mut s, "brick", "wall/w0/left", "component");
         run(&mut s, "paint.material", json!({"material": "#c04020", "target": "wall/w0/left", "scope": "component", "mode": "blend"}));
         let r = run(&mut s, "paint.pick", json!({"target": "wall/w0/left"}));
@@ -911,7 +912,7 @@ mod tests {
         assert_eq!(pulls, ["own:pull-knob-32"; 3]);
         // A pick the painter cannot use (a default material) is not offered.
         s.start("paint.pick").unwrap();
-        s.input(Input::Text("room/r0/floor".into())).unwrap();
+        s.input(Input::Text("cabinet/cb2/carcass".into())).unwrap();
         s.start("paint.material").unwrap();
         assert!(s.current_prompt().unwrap().message.starts_with("Enter a material"));
         s.input(Input::Cancel).unwrap();

@@ -8,6 +8,7 @@ use crate::Handle;
 use cadcraft_geom::{Bounds2, Vec2};
 use serde::{Deserialize, Serialize};
 
+pub mod autodim;
 pub mod backdrop;
 pub mod casework;
 pub mod ceiling;
@@ -24,6 +25,7 @@ pub mod paint;
 pub mod planview;
 pub mod sheet;
 pub mod site;
+pub use autodim::*;
 pub use backdrop::*;
 pub use casework::*;
 pub use ceiling::*;
@@ -259,6 +261,10 @@ pub const MAX_VIEWS: usize = 64;
 
 /// Maximum number of lines + ring points per view geometry.
 pub const MAX_VIEW_LINES: usize = 200_000;
+/// Maximum HDR backdrop images a drawing keeps.
+pub const MAX_HDR_IMAGES: usize = 4;
+/// Maximum size of the raw RGBE payload a drawing keeps, in bytes.
+pub const MAX_HDR_BYTES: usize = 8 * 1024 * 1024;
 
 /// The synthetic proxy handle for an architectural view.
 pub fn view_handle(id: ArchId) -> Handle {
@@ -688,6 +694,8 @@ pub enum OpeningKind {
     GarageDoor,
     /// A cased opening (no swing).
     CasedOpening,
+    /// A recess in one face of a wall that does not go through.
+    Niche,
 }
 
 /// Which side the hinge is on.
@@ -812,6 +820,15 @@ pub struct Opening {
     /// Which sides of the host wall carry the casing.
     #[serde(default, skip_serializing_if = "OpeningSides::is_right_only")]
     pub casing_sides: OpeningSides,
+    /// Niche recess depth in metres (0 for every other opening).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub depth: f64,
+    /// The face a niche is recessed from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<paint::Side>,
+    /// Material key of a niche's back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<String>,
 }
 
 impl Default for Opening {
@@ -846,6 +863,9 @@ impl Default for Opening {
             roof_offset: DEFAULT_ROOF_OFFSET,
             sill_sides: OpeningSides::RIGHT,
             casing_sides: OpeningSides::RIGHT,
+            depth: 0.0,
+            face: None,
+            material: None,
         }
     }
 }
@@ -863,6 +883,7 @@ impl Opening {
             OpeningKind::Window => "slider".to_string(),
             OpeningKind::GarageDoor => "garage".to_string(),
             OpeningKind::CasedOpening => "cased".to_string(),
+            OpeningKind::Niche => "niche".to_string(),
             OpeningKind::Door => "hinged".to_string(),
         };
         let layer = if kind == OpeningKind::Window { "A-GLAZ" } else { "A-DOOR" };
@@ -896,6 +917,9 @@ impl Opening {
             roof_offset: DEFAULT_ROOF_OFFSET,
             sill_sides: OpeningSides::RIGHT,
             casing_sides: OpeningSides::RIGHT,
+            depth: 0.0,
+            face: None,
+            material: None,
         }
     }
 }
@@ -1918,6 +1942,8 @@ pub struct ArchModel {
     pub cameras: Vec<Camera3d>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_camera: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_dims: Vec<AutoDims>,
     /// The one level the plan draws; `None` = all levels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_level: Option<u32>,
@@ -1981,6 +2007,9 @@ pub struct ArchModel {
     /// Library material and backdrop images by item id.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub images: std::collections::BTreeMap<String, ImageRgba>,
+    /// HDR environment images keyed by library item id.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub hdr_images: std::collections::BTreeMap<String, ImageRgbe>,
     /// Paint by surface key.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub paints: std::collections::BTreeMap<String, Paint>,
@@ -2052,6 +2081,7 @@ impl Default for ArchModel {
             next_railing_id: 0,
             cameras: Vec::new(),
             active_camera: None,
+            auto_dims: Vec::new(),
             plan_level: None,
             plan_views: template_plan_views(),
             open_plan_views: Vec::new(),
@@ -2077,6 +2107,7 @@ impl Default for ArchModel {
             next_furnishing_id: 0,
             symbols: Default::default(),
             images: Default::default(),
+            hdr_images: Default::default(),
             paints: Default::default(),
             backdrop: None,
             look: Look::default(),
@@ -2120,6 +2151,7 @@ impl Default for ArchModel {
                     ],
                     reference: RefSide::Centre,
                 },
+                glass_wall_type(),
             ],
         }
     }
@@ -2208,6 +2240,7 @@ impl ArchModel {
             && self.furnishings.is_empty()
             && self.symbols.is_empty()
             && self.images.is_empty()
+            && self.hdr_images.is_empty()
             && self.paints.is_empty()
             && self.backdrop.is_none()
             && self.look.is_default()
@@ -2706,6 +2739,51 @@ impl ArchModel {
         } else {
             false
         }
+    }
+
+    /// Keep only the HDR backdrop images still referenced by the current scene while enforcing
+    /// the per-drawing caps. Invalid or stale entries are dropped before the count and byte
+    /// budget are applied.
+    pub fn prune_hdr_images(&mut self) {
+        let mut keep = std::collections::BTreeSet::new();
+        if let Some(b) = &self.backdrop {
+            if let Backdrop::Hdri { image, .. } = b {
+                keep.insert(image.clone());
+            }
+        }
+        if let Some(b) = &self.look.backdrop {
+            if let Backdrop::Hdri { image, .. } = b {
+                keep.insert(image.clone());
+            }
+        }
+        for camera in &self.cameras {
+            if let Some(Look { backdrop: Some(Backdrop::Hdri { image, .. }), .. }) = &camera.look {
+                keep.insert(image.clone());
+            }
+        }
+
+        self.hdr_images.retain(|key, img| keep.contains(key) && img.is_valid());
+
+        let mut ordered: Vec<_> = self.hdr_images.iter().map(|(k, v)| (k.clone(), v.rgbe.len())).collect();
+        ordered.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut total = 0usize;
+        let mut keep_order = std::collections::BTreeSet::new();
+        for (key, len) in ordered {
+            if keep_order.len() >= MAX_HDR_IMAGES {
+                break;
+            }
+            if total.checked_add(len).is_some() && total + len <= MAX_HDR_BYTES {
+                total += len;
+                keep_order.insert(key);
+            }
+        }
+        let mut filtered = std::collections::BTreeMap::new();
+        for (key, img) in self.hdr_images.iter() {
+            if keep_order.contains(key) {
+                filtered.insert(key.clone(), img.clone());
+            }
+        }
+        self.hdr_images = filtered;
     }
 
     /// A message when `counter` is at or below the largest id already in use, or
@@ -3354,9 +3432,19 @@ mod tests {
     #[test]
     fn arch_model_defaults_have_two_wall_types() {
         let m = ArchModel::default();
-        assert_eq!(m.types.len(), 2);
+        assert_eq!(m.types.len(), 3);
         assert_eq!(m.types[0].name, "Exterior");
         assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
+    }
+
+    #[test]
+    fn arch_model_defaults_have_three_wall_types() {
+        let m = ArchModel::default();
+        assert_eq!(m.types.len(), 3);
+        assert_eq!(m.types[0].name, "Exterior");
+        assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
     }
 
     #[test]
@@ -5090,5 +5178,27 @@ mod tests {
         m.types.clear();
         m.push_backsplash(Backsplash::default());
         assert!(!m.is_empty());
+    }
+
+    #[test]
+    fn opening_without_niche_fields_writes_the_same_json() {
+        let v = serde_json::to_value(Opening::default()).unwrap();
+        let obj = v.as_object().unwrap();
+        assert!(!obj.contains_key("depth") && !obj.contains_key("face") && !obj.contains_key("material"));
+        let back: Opening = serde_json::from_value(v).unwrap();
+        assert_eq!(back, Opening::default());
+    }
+
+    #[test]
+    fn niche_kind_round_trips() {
+        let o = Opening { kind: OpeningKind::Niche, depth: 0.1, face: Some(paint::Side::Right), material: Some("tile".into()), ..Opening::default() };
+        let v = serde_json::to_value(&o).unwrap();
+        assert_eq!(v["kind"], "niche");
+        assert_eq!(v["face"], "right");
+        assert_eq!(v["depth"], 0.1);
+        assert_eq!(v["material"], "tile");
+        let back: Opening = serde_json::from_value(v).unwrap();
+        assert_eq!(back, o);
+        assert_eq!(Opening::new(ArchId(0), 1.0, 0.6, 0.9, OpeningKind::Niche).style, "niche");
     }
 }

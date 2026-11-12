@@ -26,6 +26,8 @@ pub struct LitState {
     sun_map: Option<crate::shadow::ShadowMap>,
     /// Slots in the last frame.
     slots: usize,
+    /// The convolved SH of the environment with this key (p19-env-raster).
+    sh: Option<(u64, [[f32; 3]; 9])>,
 }
 
 /// A hash of every light's shadow key and intensity.
@@ -61,6 +63,9 @@ pub struct Lighting {
     /// Meter an automatic exposure on a frame without daylight (false keeps the legacy 0.01 scale,
     /// as `render {sun: false}` and hand-built night lightings always had).
     pub meter_night: bool,
+    /// The environment (light and/or background) the frame lights with; `None` when there is
+    /// none (p19-env-path).
+    pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
 }
 
 impl Default for Lighting {
@@ -74,6 +79,7 @@ impl Default for Lighting {
             sun_dir: None,
             lambert: None,
             meter_night: false,
+            environment: None,
         }
     }
 }
@@ -148,8 +154,22 @@ impl Offscreen {
         self.shadows_built += atlas.maps_built().saturating_sub(before);
         self.lit_state.slots = slots.len();
 
+        // The environment's diffuse light: nine convolved SH coefficients, projected once per key.
+        let sh = match lighting.environment.as_deref().filter(|e| e.is_valid()) {
+            Some(env) => {
+                if self.lit_state.sh.as_ref().is_none_or(|(k, _)| *k != env.key) {
+                    self.lit_state.sh = Some((env.key, crate::sh::convolve(&crate::sh::project(env))));
+                }
+                self.lit_state.sh.map(|(_, c)| c)
+            }
+            None => {
+                self.lit_state.sh = None;
+                None
+            }
+        };
         let sun_map = self.lit_state.sun_map.as_ref();
         let params = crate::lit::LitParams {
+            sh,
             sun_on: lighting.sun.is_some(),
             ambient: lighting.sun.map_or(crate::lights::NIGHT_AMBIENT, |l| l.ambient),
             exposure: lighting.exposure,

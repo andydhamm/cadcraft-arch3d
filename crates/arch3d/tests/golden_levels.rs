@@ -198,12 +198,12 @@ fn south_room_slab_has_the_loop_hole() {
     assert!(inner.holes.is_empty(), "inner room should have no holes");
 
     // Find the floor mesh for each room.
-    let south_mesh = scene.meshes.iter().filter(|m| m.object == south.id && m.material == "floor").collect::<Vec<_>>();
+    let south_mesh = scene.meshes.iter().filter(|m| m.object == south.id && m.material.starts_with("floor")).collect::<Vec<_>>();
     assert_eq!(south_mesh.len(), 1, "south room should have exactly 1 floor mesh");
     let south_cap = cap_area(south_mesh[0], 0.0);
     assert!((south_cap - 26.72).abs() < 1e-2, "south slab top cap area = {}, expected 26.72", south_cap);
 
-    let inner_mesh = scene.meshes.iter().filter(|m| m.object == inner.id && m.material == "floor").collect::<Vec<_>>();
+    let inner_mesh = scene.meshes.iter().filter(|m| m.object == inner.id && m.material.starts_with("floor")).collect::<Vec<_>>();
     assert_eq!(inner_mesh.len(), 1, "inner room should have exactly 1 floor mesh");
     let inner_cap = cap_area(inner_mesh[0], 0.0);
     assert!((inner_cap - 0.81).abs() < 1e-3, "inner slab top cap area = {}, expected 0.81", inner_cap);
@@ -444,7 +444,7 @@ fn floor_slab_has_correct_z_range() {
     let south = model.rooms.iter().find(|r| point_in_polygon(&r.polygon, Vec2::new(1.0, 1.0))).expect("south room not found");
 
     // Find the floor mesh.
-    let floor_mesh = scene.meshes.iter().find(|m| m.object == south.id && m.material == "floor").expect("south floor mesh not found");
+    let floor_mesh = scene.meshes.iter().find(|m| m.object == south.id && m.material.starts_with("floor")).expect("south floor mesh not found");
 
     // Collect all unique z values from the floor mesh vertices.
     let mut z_values: Vec<f64> = Vec::new();

@@ -18,7 +18,7 @@
 use crate::edges::{CREASE_DEG, cross, dot, sub, unit, weld, welded_edges};
 use crate::section::Plane;
 use crate::{ArchId, Scene3d};
-use cadcraft_doc::arch::ArchKind;
+use cadcraft_doc::arch::{ArchKind, MAX_VIEW_LINES};
 
 /// Points this close to a triangle's outline on the sheet (metres) count as covered by it.
 pub const EPS_SHEET: f64 = 1e-5;
@@ -370,7 +370,36 @@ pub(crate) fn visible_lines_beyond(scene: &Scene3d, view: &OrthoView, keep: Opti
             }
         }
     }
-    let grid = Grid::new(&tris);
+    runs_of(&tris, &edges, caps)
+}
+
+/// A 3D segment to test against the scene (an extra such as a door swing), tagged with its owner.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Seg3 {
+    pub a: [f64; 3],
+    pub b: [f64; 3],
+    pub kind: ArchKind,
+    pub object: ArchId,
+}
+
+/// The visible runs of `segs` behind the scene's triangles in `view`, by the same hiding code as [`visible_lines`].
+/// A segment lying on a triangle's plane is not hidden by it. At most [`MAX_VIEW_LINES`] segments are used.
+pub(crate) fn visible_segments(scene: &Scene3d, view: &OrthoView, segs: &[Seg3]) -> Vec<Line2> {
+    let mut tris: Vec<Tri> = Vec::new();
+    for mesh in &scene.meshes {
+        let w = weld(mesh);
+        for t in &w.tris {
+            tris.extend(Tri::new(w.corners(t).map(|q| view.project(q))));
+        }
+    }
+    let edges: Vec<_> = segs.iter().take(MAX_VIEW_LINES).map(|s| (view.project(s.a), view.project(s.b), s.kind, s.object)).collect();
+    runs_of(&tris, &edges, &[])
+}
+
+/// The visible runs of `edges` (sheet segments with their owner) behind `tris`, with `caps` hiding what is behind
+/// them, merged per object.
+fn runs_of(tris: &[Tri], edges: &[([f64; 3], [f64; 3], ArchKind, ArchId)], caps: &[Cap]) -> Vec<Line2> {
+    let grid = Grid::new(tris);
     let mut stamp: Vec<usize> = vec![usize::MAX; tris.len()];
     let mut out = Vec::new();
     let mut hidden: Vec<(f64, f64)> = Vec::new();
@@ -498,4 +527,41 @@ pub fn merge_collinear(lines: Vec<Line2>) -> Vec<Line2> {
         i = j;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Mesh;
+
+    /// A scene with one quad in the plane y = 0 spanning x 0..2, z 0..2.
+    fn quad_scene() -> Scene3d {
+        let mut m = Mesh::new("m", ArchId(0));
+        m.positions = vec![[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 0.0, 2.0], [0.0, 0.0, 2.0]];
+        m.normals = vec![[0.0, -1.0, 0.0]; 4];
+        m.uvs = vec![[0.0, 0.0]; 4];
+        m.indices = vec![0, 1, 2, 0, 2, 3];
+        Scene3d { meshes: vec![m], ..Scene3d::default() }
+    }
+
+    fn seg(y: f64) -> Seg3 {
+        Seg3 { a: [0.5, y, 1.0], b: [1.5, y, 1.0], kind: ArchKind::Wall, object: ArchId(1) }
+    }
+
+    #[test]
+    fn segment_on_a_face_stays_visible() {
+        // Looking north (+y) at the quad's south face; a segment 1e-4 in front of it is whole.
+        let Some(ov) = OrthoView::elevation([0.0, 1.0]) else { return };
+        let out = visible_segments(&quad_scene(), &ov, &[seg(-1e-4)]);
+        assert_eq!(out.len(), 1);
+        assert!((out[0].length() - 1.0).abs() < 1e-9);
+        // Exactly on the plane is not hidden either.
+        assert_eq!(visible_segments(&quad_scene(), &ov, &[seg(0.0)]).len(), 1);
+    }
+
+    #[test]
+    fn segment_behind_a_face_is_hidden() {
+        let Some(ov) = OrthoView::elevation([0.0, 1.0]) else { return };
+        assert!(visible_segments(&quad_scene(), &ov, &[seg(0.5)]).is_empty());
+    }
 }
