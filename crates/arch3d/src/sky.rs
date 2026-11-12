@@ -277,4 +277,87 @@ mod tests {
         assert!((d[0] + 1.0).abs() < 1e-9 && d[1].abs() < 1e-9, "{d:?}");
         assert!(moon_dir(&m, &MoonLook { azimuth: f64::NAN, ..look }).is_none());
     }
+
+    #[test]
+    fn twilight_factor_is_monotonic() {
+        let mut prev = f64::INFINITY;
+        for i in 0..=120 {
+            let elev = (i as f64 / 120.0) * -6.0;
+            let f = twilight_factor(elev);
+            assert!(f <= prev, "twilight_factor not monotonic at elev={}: {} > {}", elev, f, prev);
+            prev = f;
+        }
+    }
+
+    #[test]
+    fn sky_is_rotationally_symmetric_around_sun_at_zenith() {
+        let sun = [0.0, 0.0, 1.0];
+        let v1 = [0.7071, 0.0, 0.7071];
+        let v2 = [0.0, 0.7071, 0.7071];
+        let c1 = sky_radiance(v1, sun, 3.0);
+        let c2 = sky_radiance(v2, sun, 3.0);
+        for i in 0..3 {
+            assert!((c1[i] - c2[i]).abs() < 1e-9, "sky not rotationally symmetric: {} vs {}", c1[i], c2[i]);
+        }
+    }
+
+    #[test]
+    fn ground_is_darker_than_sky() {
+        let sun = sun_at(45.0, 0.0);
+        let sky = sky_radiance([0.0, 0.5, 0.5], sun, 3.0);
+        let ground = sky_radiance([0.0, -0.5, -0.5], sun, 3.0);
+        for i in 0..3 {
+            assert!(ground[i] < sky[i], "ground should be darker: ground[{}]={} sky[{}]={}", i, ground[i], i, sky[i]);
+        }
+    }
+
+    #[test]
+    fn high_turbidity_makes_sky_more_diffuse() {
+        let sun = sun_at(30.0, 0.0);
+        let low_near = sky_radiance(sun_at(30.0, 0.0), sun, 2.0);
+        let low_far = sky_radiance([0.0, 0.0, 1.0], sun, 2.0);
+        let high_near = sky_radiance(sun_at(30.0, 0.0), sun, 8.0);
+        let high_far = sky_radiance([0.0, 0.0, 1.0], sun, 8.0);
+        let low_ratio = low_near[1] / low_far[1];
+        let high_ratio = high_near[1] / high_far[1];
+        assert!(high_ratio < low_ratio, "higher turbidity should be more diffuse: high={:.3} low={:.3}", high_ratio, low_ratio);
+    }
+
+    #[test]
+    fn moon_at_zenith_points_up() {
+        let m = ArchModel::default();
+        let look = MoonLook { azimuth: 0.0, elevation: 90.0, ..Default::default() };
+        let d = moon_dir(&m, &look).unwrap_or([0.0; 3]);
+        assert!((d[2] - 1.0).abs() < 1e-9, "moon at zenith should point up: {:?}", d);
+    }
+
+    #[test]
+    fn moon_at_horizon_has_zero_z() {
+        let m = ArchModel::default();
+        let look = MoonLook { azimuth: 0.0, elevation: 0.0, ..Default::default() };
+        let d = moon_dir(&m, &look).unwrap_or([0.0; 3]);
+        assert!(d[2].abs() < 1e-9, "moon at horizon should have z=0: {:?}", d);
+    }
+
+    #[test]
+    fn sky_radiance_at_horizon_is_finite() {
+        let sun = sun_at(45.0, 0.0);
+        let c = sky_radiance([1.0, 0.0, 0.0], sun, 3.0);
+        assert!(c.iter().all(|x| x.is_finite() && *x >= 0.0), "horizon sky should be finite and non-negative: {:?}", c);
+    }
+
+    #[test]
+    fn star_density_is_about_one_percent() {
+        let n = 100_000;
+        let mut count = 0;
+        for i in 0..n {
+            let a = i as f64 * 0.37;
+            let v = [a.cos() * 0.6, a.sin() * 0.6, 0.2 + 0.8 * (i as f64 / n as f64)];
+            if star(v) > 0.0 {
+                count += 1;
+            }
+        }
+        let density = count as f64 / n as f64;
+        assert!(density > 0.005 && density < 0.02, "star density should be about 1%, got {}", density);
+    }
 }
