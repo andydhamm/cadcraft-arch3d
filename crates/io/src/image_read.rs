@@ -172,6 +172,31 @@ mod tests {
     }
 
     #[test]
+    fn read_image_exactly_max_side_not_resized() {
+        let img = image::RgbaImage::from_fn(256, 256, |x, y| image::Rgba([(x % 256) as u8, (y % 256) as u8, 128, 255]));
+        let bytes = encode(&img, image::ImageFormat::Png);
+        let r = read_image(&bytes, 256).expect("decodes");
+        assert_eq!((r.width, r.height), (256, 256));
+    }
+
+    #[test]
+    fn read_image_handles_1x1() {
+        let img = image::RgbaImage::from_pixel(1, 1, image::Rgba([10, 20, 30, 255]));
+        let bytes = encode(&img, image::ImageFormat::Png);
+        let r = read_image(&bytes, 256).expect("decodes");
+        assert_eq!((r.width, r.height), (1, 1));
+        assert_eq!(r.rgba, vec![10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn read_image_handles_jpeg() {
+        let img = image::RgbaImage::from_fn(100, 100, |x, y| image::Rgba([(x % 256) as u8, (y % 256) as u8, 128, 255]));
+        let bytes = encode(&img, image::ImageFormat::Jpeg);
+        let r = read_image(&bytes, 256).expect("decodes");
+        assert_eq!((r.width, r.height), (100, 100));
+    }
+
+    #[test]
     fn read_image_refuses_other_formats() {
         assert!(read_image(&[], 256).is_err());
         assert!(read_image(b"GIF89a\x01\x00\x01\x00\x00\x00\x00;", 256).is_err());
