@@ -38,6 +38,7 @@ pub(crate) fn inspect_decks(model: &ArchModel, p: &Value, out: &mut JsonMap<Stri
             let boards = if boards.is_finite() { boards } else { 0.0 };
             let mut row = json!({
                 "id": room_label(r.id),
+                "name": r.name,
                 "level": r.level,
                 "top": elevation + r.deck_height.unwrap_or(0.0),
                 "boardDirection": boards,
