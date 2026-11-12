@@ -289,6 +289,14 @@ mod tests {
         }
     }
 
+    #[test]
+    fn layers_fit_webgl2() {
+        assert_eq!(LAYERS, 10);
+        assert_eq!(MAX_SCENE_LAYERS, 256 - LAYERS);
+        assert_eq!(MAX_LAYERS, 256);
+        assert!(MAX_SCENE_LAYERS <= 256);
+    }
+
     use crate::camera::{Camera, Orbit};
     use crate::light::Light;
     use crate::offscreen::Offscreen;
