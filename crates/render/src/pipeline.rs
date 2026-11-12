@@ -1,4 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
+use std::collections::HashSet;
+
 use super::display::append;
 use super::display::{DisplayList, Kind, NO_LAYER, PlotText, VIEWPORT_CONTENT};
 use super::draw::entity;
@@ -100,6 +102,16 @@ pub(crate) fn top_ctx<'a>(d: &'a Drawing, xf: Mat3, top: Handle, frozen: &'a [St
 
 fn build_space(d: &Drawing, space: &Space, opts: &Options, plotting: bool) -> DisplayList {
     let opts = &with_point_view(d, space, opts);
+    let hidden_handles: HashSet<Handle> = match d.arch.plan_level {
+        Some(level) => d
+            .arch
+            .auto_dims
+            .iter()
+            .filter(|r| r.level != level)
+            .flat_map(|r| r.generated.iter().flat_map(|row| row.handles.iter().copied()))
+            .collect(),
+        None => HashSet::new(),
+    };
     let styler = style_table(d, space, opts, plotting).map(|t| plotstyle::Styler::new(d, t));
     let mut b = Builder { list: DisplayList::default(), opts, plotting, styles: styler.as_ref(), named: None, shared_budget: None, transparency: 0 };
     if let Space::Paper(name) = space {
