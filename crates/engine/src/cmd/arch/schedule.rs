@@ -683,8 +683,10 @@ mod tests {
         let doc = s.doc().unwrap();
         let schedule = doc.arch.schedules.iter().find(|s| s.id.0 == id_num).unwrap();
 
-        // Bounds max x is 10. Default at x should be 13.
-        assert!((schedule.at[0] - 13.0).abs() < 0.01);
+        // 3 m right of the model's bounds (the wall faces, not its centre lines).
+        let expect = doc.arch.bounds().max.x + 3.0;
+        assert!((schedule.at[0] - expect).abs() < 1e-9, "{} vs {expect}", schedule.at[0]);
+        assert!(schedule.at[0] > 13.0 - 1e-9);
     }
 
     #[test]
