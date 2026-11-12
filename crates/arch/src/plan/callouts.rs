@@ -169,7 +169,7 @@ fn section_marker_centers(_model: &ArchModel, view: &ArchView) -> Option<(Vec2, 
     if dir.len() < 1e-9 {
         return None;
     }
-    let dir_norm = dir.normalize();
+    let dir_norm = dir.normalized();
 
     // Push outward along the cut direction
     // "both ends of the cut line, each pushed 0.6 m outward along the cut direction"
@@ -187,7 +187,7 @@ fn interior_marker_center(_model: &ArchModel, view: &ArchView, level: Option<u32
             return None;
         }
     }
-    view.room_point
+    view.room_point.map(|p| Vec2::new(p[0], p[1]))
 }
 
 fn push_marker(out: &mut PlanAnnotation, center: Vec2, look: Vec2, text: &str, handle: cadcraft_doc::Handle) {
@@ -225,7 +225,7 @@ fn push_marker(out: &mut PlanAnnotation, center: Vec2, look: Vec2, text: &str, h
     // Let's pick two points on the circle that are symmetric around the look axis.
     // Angle offset from look: 150 degrees?
     let angle_offset = std::f64::consts::FRAC_PI_6; // 30 degrees
-    let look_angle = look.atan2();
+    let look_angle = look.y.atan2(look.x);
 
     let p1_angle = look_angle + std::f64::consts::PI - angle_offset;
     let p2_angle = look_angle + std::f64::consts::PI + angle_offset;
@@ -248,7 +248,7 @@ mod tests {
     use cadcraft_geom::Vec2;
 
     fn make_view(id: u32, kind: ViewKind, look: Vec2, level: Option<u32>, room_point: Option<Vec2>, cut: Option<[[f64; 2]; 2]>) -> ArchView {
-        ArchView { id: ArchId::new(id), kind, look, cut, room_point, level, ..Default::default() }
+        ArchView { id: ArchId::view(id), kind, look: [look.x, look.y], cut, room_point: room_point.map(|p| [p.x, p.y]), level, ..Default::default() }
     }
 
     fn make_sheet(name: &str, number: &str, views: Vec<SheetView>) -> Sheet {
@@ -256,14 +256,14 @@ mod tests {
     }
 
     fn make_sheet_view(number: &str, id: u32) -> SheetView {
-        SheetView { number: number.to_string(), source: SheetSource::View { id: ArchId::new(id) }, ..Default::default() }
+        SheetView { number: number.parse().unwrap_or(0), source: SheetSource::View { id: ArchId::view(id) }, ..Default::default() }
     }
 
     fn setup_model() -> ArchModel {
         let mut model = ArchModel::default();
         // Add a wall to give bounds
         model.walls.push(Wall {
-            id: ArchId::new(0),
+            id: ArchId::wall(0),
             a: Vec2::new(0.0, 0.0),
             b: Vec2::new(10.0, 0.0),
             thickness: 0.2,
@@ -271,7 +271,7 @@ mod tests {
             ..Default::default()
         });
         model.walls.push(Wall {
-            id: ArchId::new(1),
+            id: ArchId::wall(1),
             a: Vec2::new(10.0, 0.0),
             b: Vec2::new(10.0, 10.0),
             thickness: 0.2,
@@ -279,7 +279,7 @@ mod tests {
             ..Default::default()
         });
         model.walls.push(Wall {
-            id: ArchId::new(2),
+            id: ArchId::wall(2),
             a: Vec2::new(10.0, 10.0),
             b: Vec2::new(0.0, 10.0),
             thickness: 0.2,
@@ -287,7 +287,7 @@ mod tests {
             ..Default::default()
         });
         model.walls.push(Wall {
-            id: ArchId::new(3),
+            id: ArchId::wall(3),
             a: Vec2::new(0.0, 10.0),
             b: Vec2::new(0.0, 0.0),
             thickness: 0.2,
@@ -415,7 +415,7 @@ mod tests {
         let mut out = PlanAnnotation::default();
         callouts(&model, None, &mut out);
 
-        let expected_handle = cadcraft_doc::arch::view_handle(ArchId::new(0));
+        let expected_handle = cadcraft_doc::arch::view_handle(ArchId::view(0));
 
         for line in &out.lines {
             assert_eq!(line.handle, expected_handle);
@@ -454,7 +454,7 @@ mod tests {
 
         // Find it
         let found = callout_at(&model, None, marker_pos, 0.1);
-        assert_eq!(found, Some(ArchId::new(0)));
+        assert_eq!(found, Some(ArchId::view(0)));
 
         // Too far
         let far = marker_pos + Vec2::X * 10.0;
