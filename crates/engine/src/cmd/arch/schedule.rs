@@ -37,7 +37,7 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     let id = doc.arch.next_schedule_id;
     let label = format!("sc{id}");
 
-    let schedule = Schedule { id: ArchId(id), name: name.clone(), kind, columns: columns.clone(), level, at: [at.x, at.y] };
+    let schedule = Schedule { id: ArchId(id), name: name.clone(), kind, columns: columns.clone(), level, at: [at.x, at.y], ..Default::default() };
 
     let rows = cadcraft_arch::schedule::rows(&doc.arch, &schedule);
     let table = build_table(&doc, &schedule, &rows, at)?;
@@ -542,17 +542,17 @@ mod tests {
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
         let handle = Handle::parse_hex(table_handle).unwrap();
 
-        // Resize door
-        s.execute("opening.edit", &json!({"id": "o0", "width": 1.2})).unwrap();
+        // Add another door to change the schedule (count or new row)
+        s.execute("door", &json!({"wall": "w0", "offset": 6.0})).unwrap();
 
         // Check table updated
         let doc = s.doc().unwrap();
         if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
-            // Find the width cell in the first data row
-            // Assuming columns: number, count, width, height
-            // Row 0 is header, Row 1 is data
-            let width_cell = &t.cells[1][2]; // 0-indexed, 3rd col
-            assert!(width_cell.text.contains("1.200"));
+            // Row 0 is title, Row 1 is header, Row 2 is first data row
+            // Assuming default columns include count
+            // If identical doors, count becomes 2
+            let count_cell = &t.cells[2][1]; // 0-indexed, 2nd col (Count)
+            assert!(count_cell.text.contains("2"));
         }
     }
 
@@ -566,16 +566,17 @@ mod tests {
         let table_handle = res.get("table").and_then(Value::as_str).unwrap();
         let handle = Handle::parse_hex(table_handle).unwrap();
 
-        // Resize door
-        s.execute("opening.edit", &json!({"id": "o0", "width": 1.2})).unwrap();
+        // Add another door
+        s.execute("door", &json!({"wall": "w0", "offset": 6.0})).unwrap();
 
         // Undo
         s.execute("undo", &json!({})).unwrap();
 
         let doc = s.doc().unwrap();
         if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
-            let width_cell = &t.cells[1][2];
-            assert!(width_cell.text.contains("0.900")); // Original width
+            // Row 0 title, Row 1 header, Row 2 data
+            let count_cell = &t.cells[2][1];
+            assert!(count_cell.text.contains("1")); // Back to 1 door
         }
     }
 
@@ -596,9 +597,9 @@ mod tests {
         let doc = s.doc().unwrap();
         if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
             assert!(t.header);
-            assert_eq!(t.cells.len(), 2); // Title + Header + 1 Data row? No, make_table adds title and header rows.
-            // Row 0: Title
-            // Row 1: Header
+            // Title + Header + 1 Data row = 3 rows
+            assert_eq!(t.cells.len(), 3);
+            // Row 1 is Header
             assert_eq!(t.cells[1].len(), 1);
             assert_eq!(t.cells[1][0].text, "Width");
         }
@@ -656,15 +657,16 @@ mod tests {
         // Get revision before
         let rev_before = s.state().unwrap().revision;
 
-        // Run a command that doesn't affect schedules (e.g. layer state)
-        s.execute("layer", &json!({"name": "TEST", "on": true})).unwrap();
+        // Run a command that changes the drawing but not the schedule (add a wall)
+        s.execute("wall", &json!({"points": [[11,0],[12,0]]})).unwrap();
 
-        // Revision should have increased due to layer command
+        // Revision should have increased due to wall command
         let rev_after = s.state().unwrap().revision;
         assert!(rev_after > rev_before);
 
-        // But table should be unchanged (hard to test directly without diffing,
-        // but we can check that refresh_schedules didn't panic or error)
+        // Table should still exist and be valid
+        let doc = s.doc().unwrap();
+        assert!(doc.entity(handle).is_some());
     }
 
     #[test]
@@ -674,11 +676,36 @@ mod tests {
 
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        // schedule_id is "sc0"
+        let id_num = schedule_id.trim_start_matches("sc").parse::<u32>().unwrap_or(0);
 
         let doc = s.doc().unwrap();
-        let schedule = doc.arch.schedules.iter().find(|s| s.id.to_string() == schedule_id[2..]).unwrap();
+        let schedule = doc.arch.schedules.iter().find(|s| s.id.0 == id_num).unwrap();
 
         // Bounds max x is 10. Default at x should be 13.
         assert!((schedule.at[0] - 13.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn refusals_change_nothing_and_push_no_undo() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let rev_before = s.state().unwrap().revision;
+
+        // Invalid kind
+        let res = s.execute("schedule", &json!({"kind": "invalid"}));
+        assert!(res.is_err());
+
+        // Invalid columns
+        let res = s.execute("schedule", &json!({"kind": "door", "columns": ["invalid_col"]}));
+        assert!(res.is_err());
+
+        // Invalid at
+        let res = s.execute("schedule", &json!({"kind": "door", "at": [1, "bad"]}));
+        assert!(res.is_err());
+
+        let rev_after = s.state().unwrap().revision;
+        assert_eq!(rev_before, rev_after);
     }
 }
