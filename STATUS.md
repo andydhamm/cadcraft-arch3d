@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-12 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 18:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 17 of 35 segments merged · 4 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 18 of 35 segments merged · 4 of 20 acceptance checks**
 
-9,182 workspace tests passing at the last merge · 999 segments merged in all · 0 of 15 seats working
+9,191 workspace tests passing at the last merge · 1000 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,20 +28,20 @@ Updated 2026-11-12 18:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 36.5 h so far · expected done Nov 13 15:36–Nov 15 04:45 UTC |
+| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 36.8 h so far · expected done Nov 13 12:23–Nov 14 20:48 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 3 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-17 merged, 9 queued, 8 merging, 1 gate
+18 merged, 8 queued, 7 merging, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-room-finishes-1` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | merging | claude-sonnet-d |
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
-| `p18-molding-lines-1` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | merging | mai-flash-esc |
+| `p18-molding-lines-2` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | working | claude-sonnet-d |
 | `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-d |
 | `p18-backsplash` | Backsplash: `backsplash {run | wall}` covers the wall face behind a counter from the counter top to the underside of the wall cabinets (else a set height, default 0.45), 10 mm thick, its own material, top to the ceiling on demand, per-cabinet on / off | merging | claude-sonnet-a |
 | `p18-cabinet-fronts-2` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | claude-sonnet-d |
@@ -53,6 +53,7 @@ Updated 2026-11-12 18:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 18:07 | `p18-molding-lines-1` | merged | 9,191 pass | mai-flash-esc |
 | Nov 12 17:41 | `p18-room-finishes-1` | refused | 0 pass | claude-sonnet-b |
 | Nov 12 17:41 | `p18-shower-niche-2` | merged | 9,182 pass | claude-sonnet-d |
 | Nov 12 17:19 | `p19-env-path` | merged | 9,172 pass, 1 fail | claude-sonnet-b |
@@ -64,24 +65,23 @@ Updated 2026-11-12 18:00 UTC. This page and the card in the README are regenerat
 | Nov 12 16:19 | `p18-molding-lines-1` | refused | 9,120 pass | mai-flash-esc |
 | Nov 12 15:31 | `p19-env-path` | refused | 0 pass | claude-sonnet-b |
 | Nov 12 15:31 | `p18-glass-walls-2` | merged | 9,112 pass | claude-sonnet-c |
-| Nov 12 15:12 | `p21-view-plumbing` | merged | 9,102 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1195 |
-| bonsai-b | bonsai2-27b | agent | 1155 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1268 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1222 |
+| bonsai-a | bonsai2-27b | agent | 1196 |
+| bonsai-b | bonsai2-27b | agent | 1156 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1269 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1223 |
 | claude-sonnet-a | sonnet | idle | 140 |
 | claude-sonnet-b | sonnet | idle | 147 |
-| claude-sonnet-c | sonnet | gate | 83 |
-| claude-sonnet-d | sonnet | idle | 77 |
+| claude-sonnet-c | sonnet | gate | 84 |
+| claude-sonnet-d | sonnet | agent | 77 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1061 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 99 |
-| mai-flash-b | mai-code-1.1-flash | gate | 40 |
+| mai-flash | mai-code-1.1-flash | idle | 100 |
+| mai-flash-b | mai-code-1.1-flash | agent | 41 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 103 |
 | tturbo-mac | tturbo-ultraheretic | agent | 806 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 415 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 416 |
