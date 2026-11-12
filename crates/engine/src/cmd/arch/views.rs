@@ -317,12 +317,19 @@ mod tests {
         let attached = ViewNote {
             id: 1,
             text: "t".into(),
-            attach: Some(NoteAttach { kind: ArchKind::Cabinet, object: ArchId(2), corner: Corner::TopLeft }),
+            attach: Some(NoteAttach { kind: ArchKind::Cabinet, object: ArchId(2), corner: Corner::TopLeft, ..Default::default() }),
             ..ViewNote::default()
         };
         let geometry = ViewGeometry {
-            patterns: vec![ViewPatternLine { a: [0.0, 0.0], b: [1.0, 0.0], kind: ArchKind::Wall, object: ArchId(0), material: "wood".into() }],
-            indicators: vec![ViewLine { a: [0.0, 0.0], b: [0.0, 1.0], kind: ArchKind::Opening, object: ArchId(1) }],
+            patterns: vec![ViewPatternLine {
+                a: [0.0, 0.0],
+                b: [1.0, 0.0],
+                kind: ArchKind::Wall,
+                object: ArchId(0),
+                material: "wood".into(),
+                ..Default::default()
+            }],
+            indicators: vec![ViewLine { a: [0.0, 0.0], b: [0.0, 1.0], kind: ArchKind::Opening, object: ArchId(1), ..Default::default() }],
             labels: vec![ViewLabel {
                 text: "D1".into(),
                 at: [1.0, 1.0],
@@ -330,6 +337,7 @@ mod tests {
                 layer: "A-ELEV-IDEN".into(),
                 kind: ArchKind::Opening,
                 object: ArchId(1),
+                ..Default::default()
             }],
             ..Default::default()
         };
