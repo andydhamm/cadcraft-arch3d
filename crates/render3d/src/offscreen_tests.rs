@@ -474,10 +474,15 @@ fn down_at(target: [f64; 3]) -> Camera {
 
 /// The centre pixel of an interactive lit frame, as linear.
 fn lit_centre(r: &mut Offscreen, s: &Scene3d, camera: &Camera, lighting: &Lighting, ground: bool) -> Option<[f32; 3]> {
+    lit_centre_keyed(r, s, 1, camera, lighting, ground)
+}
+
+/// [`lit_centre`] for a scene uploaded under `key` (distinct scenes need distinct keys).
+fn lit_centre_keyed(r: &mut Offscreen, s: &Scene3d, key: u64, camera: &Camera, lighting: &Lighting, ground: bool) -> Option<[f32; 3]> {
     let eye = camera.eye();
-    let frame = r.lit_frame(s, 1, [eye.x, eye.y, eye.z], lighting, ground)?;
+    let frame = r.lit_frame(s, key, [eye.x, eye.y, eye.z], lighting, ground)?;
     let light = lighting.sun.unwrap_or(Light::DEFAULT);
-    r.render_with(s, 1, camera, &light, &RenderOptions { lit: Some(&frame), ground, ..Default::default() });
+    r.render_with(s, key, camera, &light, &RenderOptions { lit: Some(&frame), ground, ..Default::default() });
     let (w, h) = r.size();
     let img = r.read_rgba().ok()?;
     let p = px(&img, w, w / 2, h / 2);
@@ -509,6 +514,50 @@ fn lambert_albedo_overrides_ground_quad_and_texture() {
     let plain = Lighting { lambert: None, ..lighting };
     let Some(p) = lit_centre(&mut r, &floor, &down_at([0.0, 0.0, 0.0]), &plain, false) else { return };
     assert!((p[0] - p[2]).abs() > 0.02, "the floor material is not neutral: {p:?}");
+}
+
+#[test]
+fn raster_clip_discards_and_near_hides() {
+    use cadcraft_doc::arch::ClipBox;
+    let Some(mut r) = renderer((32, 32)) else { return };
+    // A floor, and a ceiling slab 2 m over it; the camera is 5 m above the floor looking down.
+    let both = scene(vec![cuboid("floor", [-8.0, -8.0, -0.3], [8.0, 8.0, 0.0]), cuboid("wall", [-8.0, -8.0, 2.0], [8.0, 8.0, 2.1])]);
+    let camera = Camera::Orbit(Orbit::at_origin(0.0, 89.0, 5.0, 45.0));
+    let mut lighting = plane_lighting(14.0, ToneMap::None);
+    lighting.lambert = None;
+    let Some(ceiling) = lit_centre_keyed(&mut r, &both, 10, &camera, &lighting, false) else { return };
+    let floor_only = scene(vec![cuboid("floor", [-8.0, -8.0, -0.3], [8.0, 8.0, 0.0])]);
+    let Some(floor) = lit_centre_keyed(&mut r, &floor_only, 11, &camera, &lighting, false) else { return };
+    assert!((ceiling[0] - floor[0]).abs() + (ceiling[2] - floor[2]).abs() > 0.02, "ceiling {ceiling:?} and floor {floor:?} differ");
+
+    // A clip box below the ceiling discards it (the box is inclusive) and shows the floor.
+    lighting.look.clip = Some(ClipBox { min: [-20.0; 3], max: [20.0, 20.0, 1.5], ..Default::default() });
+    let Some(clipped) = lit_centre_keyed(&mut r, &both, 10, &camera, &lighting, false) else { return };
+    for k in 0..3 {
+        assert!(near(clipped[k], floor[k], 0.01), "clipped {clipped:?} want the floor {floor:?}");
+    }
+    // A box holding everything (the floor's top lies exactly on its lower face) changes nothing.
+    lighting.look.clip = Some(ClipBox { min: [-20.0, -20.0, 0.0], max: [20.0, 20.0, 2.1], ..Default::default() });
+    let Some(held) = lit_centre_keyed(&mut r, &both, 10, &camera, &lighting, false) else { return };
+    for k in 0..3 {
+        assert!(near(held[k], ceiling[k], 0.01), "inclusive box {held:?} want the ceiling {ceiling:?}");
+    }
+
+    // A near clip of 4 m removes the ceiling (about 2.9 m away) and keeps the floor (5 m).
+    lighting.look.clip = None;
+    lighting.look.near_clip = Some(4.0);
+    let Some(near4) = lit_centre_keyed(&mut r, &both, 10, &camera, &lighting, false) else { return };
+    for k in 0..3 {
+        assert!(near(near4[k], floor[k], 0.01), "near 4 {near4:?} want the floor {floor:?}");
+    }
+    // Beyond everything: only the background is left.
+    lighting.look.near_clip = Some(8.0);
+    let Some(gone) = lit_centre_keyed(&mut r, &both, 10, &camera, &lighting, false) else { return };
+    let Some(empty) = lit_centre_keyed(&mut r, &scene(Vec::new()), 12, &camera, &lighting, false) else { return };
+    for k in 0..3 {
+        assert!(near(gone[k], empty[k], 0.01), "near 8 {gone:?} want the background {empty:?}");
+    }
+    assert_eq!(r.last_frame_look().near, Some(8.0));
 }
 
 #[test]

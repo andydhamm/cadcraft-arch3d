@@ -443,6 +443,7 @@ fn snap_code(s: &AssocSnap) -> i64 {
         AssocSnap::OnCircle { .. } => 4,
         AssocSnap::Intersection { .. } => 5,
         AssocSnap::Vertex { .. } => 6,
+        AssocSnap::Arch { .. } => 7,
     }
 }
 
@@ -459,6 +460,13 @@ pub(crate) fn assoc_xdata(assoc: &[DimAssoc]) -> Vec<Tag> {
             AssocSnap::OnCircle { angle } => v.push(Tag::f(1040, *angle)),
             AssocSnap::Intersection { other } => v.push(Tag::s(1005, other.hex())),
             AssocSnap::Vertex { index } => v.push(Tag::i(1071, i64::try_from(*index).unwrap_or(i64::from(i32::MAX)).min(i64::from(i32::MAX)))),
+            AssocSnap::Arch { feature, along } => {
+                v.push(Tag::s(1000, feature.key()));
+                v.push(Tag::f(1040, *along));
+                if let AssocSnap::Arch { feature: cadcraft_doc::ArchFeature::Edge(index), .. } = &a.snap {
+                    v.push(Tag::i(1071, i64::try_from(*index).unwrap_or(i64::from(i32::MAX)).min(i64::from(i32::MAX))));
+                }
+            }
             _ => {}
         }
         v.push(Tag::s(1002, "}"));
@@ -626,6 +634,20 @@ pub(crate) fn read_assoc(tags: &[Tag]) -> Vec<DimAssoc> {
                 Some(index) => AssocSnap::Vertex { index },
                 None => continue,
             },
+            7 => {
+                let key = body.iter().filter(|x| x.code == 1000).nth(1).map(Tag::str).unwrap_or_default();
+                let along = body.iter().find(|x| x.code == 1040).map(Tag::f64).filter(|a| a.is_finite());
+                let edge = body.iter().find(|x| x.code == 1071).and_then(|x| u32::try_from(x.i64()).ok());
+                let feature = match (key.trim(), edge) {
+                    ("centre" | "center", _) => cadcraft_doc::ArchFeature::Centre,
+                    ("leftFace" | "leftface", _) => cadcraft_doc::ArchFeature::LeftFace,
+                    ("rightFace" | "rightface", _) => cadcraft_doc::ArchFeature::RightFace,
+                    ("edge", Some(index)) => cadcraft_doc::ArchFeature::Edge(index),
+                    _ => continue,
+                };
+                let Some(along) = along else { continue };
+                AssocSnap::Arch { feature, along }
+            }
             _ => continue,
         };
         out.push(DimAssoc { point: point.to_string(), handle, snap });
