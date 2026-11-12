@@ -447,7 +447,10 @@ mod tests {
         let mut doc = s.doc_mut().unwrap();
         for i in 0..5 {
             let k = format!("cap-{i}");
-            doc.arch.hdr_images.insert(k.clone(), cadcraft_doc::arch::ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128] });
+            doc.arch.hdr_images.insert(
+                k.clone(),
+                cadcraft_doc::arch::ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() },
+            );
             doc.arch.cameras.push(cadcraft_doc::arch::Camera3d {
                 name: format!("cam-{i}"),
                 look: Some(cadcraft_doc::arch::Look {
@@ -544,7 +547,7 @@ mod tests {
         assert!(e.contains("`colour` does not apply to a sky backdrop"), "{e}");
         assert_eq!(s.doc().unwrap().arch.backdrop, Some(Backdrop::Sky));
         let e = s.execute("backdrop", &json!({"kind": "nebula"})).unwrap_err().to_string();
-        assert!(e.contains("colour, gradient, image, sky or none"), "{e}");
+        assert!(e.contains("colour, gradient, image, hdri, sky or none"), "{e}");
     }
 
     #[test]
