@@ -738,20 +738,36 @@ fn describe_camera(c: &Camera3d) -> Value {
     Value::Object(obj)
 }
 
+/// Whether two `Option` floats are equal within `eps` (`None` matches only `None`).
+fn f64_close_opt(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(x), Some(y)) => (x - y).abs() <= eps,
+        _ => false,
+    }
+}
+
+/// Whether two `Option` vectors are equal, within `eps` per component
+/// (a `None` matches only a `None`).
+fn vec_close_opt<N>(a: Option<[f64; N]>, b: Option<[f64; N]>, eps: f64) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(x), Some(y)) => x.iter().zip(y.iter()).all(|(px, py)| (px - py).abs() <= eps),
+        _ => false,
+    }
+}
+
 /// Whether the saved camera `s` and the live camera `c` match in pose and look.
 /// Uses a small tolerance on floating-point pose values; `look` is compared by `==`.
 fn cameras_equal(s: &Camera3d, c: &Camera3d) -> bool {
-    let eps = 1e-9;
-    (s.target.x - c.target.x).abs() <= eps
-        && (s.target.y - c.target.y).abs() <= eps
-        && (s.target.z - c.target.z).abs() <= eps
-        && (s.azimuth_deg - c.azimuth_deg).abs() <= eps
-        && (s.elevation_deg - c.elevation_deg).abs() <= eps
-        && (s.distance - c.distance).abs() <= eps
-        && (s.eye.x - c.eye.x).abs() <= eps
-        && (s.eye.y - c.eye.y).abs() <= eps
-        && (s.eye_height - c.eye_height).abs() <= eps
-        && (s.fov_deg - c.fov_deg).abs() <= eps
+    let eps: f64 = 1e-9;
+    vec_close_opt(s.target, c.target, eps)
+        && f64_close_opt(s.azimuth_deg, c.azimuth_deg, eps)
+        && f64_close_opt(s.elevation_deg, c.elevation_deg, eps)
+        && f64_close_opt(s.distance, c.distance, eps)
+        && vec_close_opt(s.eye, c.eye, eps)
+        && f64_close_opt(s.eye_height, c.eye_height, eps)
+        && f64_close_opt(s.fov_deg, c.fov_deg, eps)
         && s.look == c.look
 }
 
@@ -3375,13 +3391,13 @@ mod tests {
                 d.arch.cameras.push(Camera3d {
                     name: "test cam".into(),
                     kind: CameraKind::Orbit,
-                    target: Vec2::new(0.0, 0.0),
-                    azimuth_deg: 30.0,
-                    elevation_deg: 50.0,
-                    distance: 10.0,
-                    eye: Vec2::new(0.0, 0.0),
-                    eye_height: 1.6,
-                    fov_deg: 50.0,
+                    target: Some([0.0, 0.0, 0.0]),
+                    azimuth_deg: Some(30.0),
+                    elevation_deg: Some(50.0),
+                    distance: Some(10.0),
+                    eye: Some([0.0, 0.0]),
+                    eye_height: Some(1.6),
+                    fov_deg: Some(50.0),
                     light_set: None,
                     look: None,
                     saved: None,
