@@ -1416,7 +1416,7 @@ mod tests {
         let plain = build_gpu_scene(&Scene3d { meshes: vec![uv_quad("plain", 1)], ..Default::default() }, false, None);
         assert!(plain.ies.is_empty() && plain.tex == [0; 4] && plain.tris.iter().all(|t| t._pad == 0));
         // A furnace is diffuse: no maps either.
-        let furnace = build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, emission: 1.0 }));
+        let furnace = build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, ..Default::default() }));
         assert!(furnace.ies.is_empty() && furnace.tex == [0; 4]);
     }
 
