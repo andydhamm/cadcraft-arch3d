@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use cadcraft_arch::furnishing::{furnishing_layer, plan_outline};
 use cadcraft_doc::arch::ArchModel;
-use cadcraft_dxf::Tag;
+use craft_dxf::Tag;
 
 /// Marker in the `CADCRAFT` xdata of every furnishing proxy.
 pub(crate) const FURNISHING_PROXY_MARKER: &str = "CADCRAFT-FURNISHING";
