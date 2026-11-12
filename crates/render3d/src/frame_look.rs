@@ -442,7 +442,9 @@ mod tests {
         image.height = 2;
         image.rgba = crate::textures::FLAT_NORMAL.repeat(4);
         scene.textures.insert("sym:x:normal".to_string(), image);
-        scene.materials.insert("own".to_string(), MaterialDef { normal_texture: Some("sym:x:normal".to_string()), normal_scale: 0.5, ..Default::default() });
+        scene
+            .materials
+            .insert("own".to_string(), MaterialDef { normal_texture: Some("sym:x:normal".to_string()), normal_scale: 0.5, ..Default::default() });
         scene.materials.insert("none".to_string(), MaterialDef::default());
         scene.materials.insert("missing".to_string(), MaterialDef { normal_texture: Some("gone:normal".to_string()), ..Default::default() });
         let base = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_SHADED, [0.0; 3]);

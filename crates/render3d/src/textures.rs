@@ -372,7 +372,8 @@ impl MaterialTextures {
             wgpu::util::TextureDataOrder::LayerMajor,
             &normal_array_data(scene, normal_layers),
         );
-        let normal_view = normals.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
+        let normal_view =
+            normals.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
         let view = texture.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("render3d material sampler"),
@@ -852,10 +853,16 @@ mod tests {
             .materials
             .insert("sym:x:0".into(), MaterialDef { base_color: [1.0, 0.0, 0.0, 1.0], texture: Some("sym:x:t0".into()), ..Default::default() });
         let gpu = |s: &Scene3d| crate::pathtrace::scene_gpu::build_gpu_scene(s, true, None);
-        assert_eq!(gpu(&scene), gpu(&extra));
+        // (The aux buffer holds RGBA8 texels bitcast to f32, which are NaN: compare it by bits.)
+        let (x, y) = (gpu(&scene), gpu(&extra));
+        let bits = |s: &crate::pathtrace::scene_gpu::GpuScene| s.ies.iter().map(|f| f.to_bits()).collect::<Vec<u32>>();
+        assert!(x.nodes == y.nodes && x.tris == y.tris && x.materials == y.materials && x.lights == y.lights && x.tex == y.tex);
+        assert!(bits(&x) == bits(&y));
         let plain = gpu(&scene);
         for (m, g) in scene.meshes.iter().zip(&plain.materials) {
-            assert_eq!(*g, crate::pathtrace::scene_gpu::material_for(&m.material), "{}", m.material);
+            // `_pad` is the normal-map layer + 1 (brick has one); the rest is the phase-13 material.
+            let g = crate::pathtrace::scene_gpu::GpuMaterial { _pad: 0, ..*g };
+            assert_eq!(g, crate::pathtrace::scene_gpu::material_for(&m.material), "{}", m.material);
         }
         let Some(mut r) = renderer() else { return };
         let (Some(a), Some(b), Some(c)) = (shot(&mut r, &scene, 1), shot(&mut r, &extra, 2), shot(&mut r, &scene, 3)) else { return };

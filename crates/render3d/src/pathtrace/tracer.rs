@@ -7,7 +7,8 @@
 use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
-    FRAME_FURNACE, FRAME_GROUND, FRAME_NORMAL_MAPS, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES, build_gpu_scene,
+    FRAME_FURNACE, FRAME_GROUND, FRAME_NORMAL_MAPS, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES,
+    build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
 use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS};

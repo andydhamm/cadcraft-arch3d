@@ -1003,7 +1003,9 @@ mod tests {
             prism("sym:k:0", 1, [4.0, 0.0, 0.0], [5.0, 1.0, 1.0]),
         ];
         let gpu = build_gpu_scene(&scene, false, None);
-        assert_eq!(gpu.materials, vec![m, material_for("wall-brick"), m]);
+        // (`_pad` is the normal-map layer + 1: brick has a map.)
+        let bare: Vec<GpuMaterial> = gpu.materials.iter().map(|g| GpuMaterial { _pad: 0, ..*g }).collect();
+        assert_eq!(bare, vec![m, material_for("wall-brick"), m]);
     }
 
     #[test]
