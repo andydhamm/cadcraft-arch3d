@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-12 15:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 16:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 15 of 35 segments merged · 4 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-12 15:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 34.3 h so far · expected done Nov 13 23:45–Nov 16 03:05 UTC |
+| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 34.5 h so far · expected done Nov 14 00:00–Nov 16 03:20 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 2 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
@@ -72,11 +72,11 @@ Updated 2026-11-12 15:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | agent | 1185 |
 | bonsai-b | bonsai2-27b | agent | 1147 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1257 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1212 |
-| claude-sonnet-a | sonnet | agent | 137 |
-| claude-sonnet-b | sonnet | gate | 144 |
-| claude-sonnet-c | sonnet | agent | 77 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1258 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1214 |
+| claude-sonnet-a | sonnet | idle | 138 |
+| claude-sonnet-b | sonnet | idle | 145 |
+| claude-sonnet-c | sonnet | agent | 78 |
 | claude-sonnet-d | sonnet | gate | 72 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1052 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
@@ -84,4 +84,4 @@ Updated 2026-11-12 15:45 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 39 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 100 |
 | tturbo-mac | tturbo-ultraheretic | idle | 805 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 411 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 411 |
