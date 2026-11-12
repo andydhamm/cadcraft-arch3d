@@ -459,6 +459,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::sheet_inspect::inspect_sheets(d, p, &mut out);
     super::plan_inspect::inspect_plan_views(&d.arch, p, &mut out);
     super::plan_inspect::inspect_plan(&d.arch, p, &mut out)?;
+    super::niche::inspect_niche_rows(&d.arch, &mut out);
 
     Ok(Value::Object(out))
 }
