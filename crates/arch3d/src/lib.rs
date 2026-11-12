@@ -52,6 +52,7 @@ pub mod stairs;
 pub mod sweep;
 pub mod texture;
 pub mod uv;
+pub mod view_filter;
 pub mod views;
 pub(crate) mod wall_rise;
 pub mod walls;
