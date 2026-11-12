@@ -6,8 +6,8 @@
 use std::collections::BTreeSet;
 
 use cadcraft_doc::arch::{ArchId, ArchModel, MAX_CONNECTIONS, MAX_ELECTRICAL};
-use cadcraft_dxf::Tag;
 use cadcraft_geom::Vec2;
+use craft_dxf::Tag;
 
 use cadcraft_arch::{connections, electrical};
 
