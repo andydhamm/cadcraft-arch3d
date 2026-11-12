@@ -29,18 +29,17 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     let at = if let Some(v) = params.get("at") { parse_at(v)? } else { default_at(s.doc()?, kind)? };
 
     let mut doc = s.doc()?.clone();
-    let arch = &mut doc.arch;
 
-    if arch.schedules.len() >= MAX_SCHEDULES {
+    if doc.arch.schedules.len() >= MAX_SCHEDULES {
         return Err(EngineError::Other(format!("too many schedules (max {MAX_SCHEDULES})")));
     }
 
-    let id = arch.next_schedule_id;
+    let id = doc.arch.next_schedule_id;
     let label = format!("sc{id}");
 
     let schedule = Schedule { id: ArchId(id), name: name.clone(), kind, columns: columns.clone(), level, at: [at.x, at.y] };
 
-    let rows = cadcraft_arch::schedule::rows(arch, &schedule);
+    let rows = cadcraft_arch::schedule::rows(&doc.arch, &schedule);
     let table = build_table(&doc, &schedule, &rows, at)?;
 
     doc.ensure_layer(LAYER_SCHEDULE);
@@ -51,8 +50,8 @@ pub fn run_schedule(s: &mut Session, params: &Value) -> Result<Value> {
     common.xdata = tags;
     let handle = doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
 
-    arch.schedules.push(schedule);
-    arch.next_schedule_id += 1;
+    doc.arch.schedules.push(schedule);
+    doc.arch.next_schedule_id += 1;
 
     s.state_mut()?.doc = Arc::new(doc);
 
@@ -84,10 +83,9 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
     let id = parse_schedule_id(id_str)?;
 
     let mut doc = s.doc()?.clone();
-    let arch = &mut doc.arch;
 
-    let idx = arch.schedules.iter().position(|s| s.id == id).ok_or_else(|| EngineError::Other(format!("unknown schedule: {id_str}")))?;
-    let mut schedule = arch.schedules[idx].clone();
+    let idx = doc.arch.schedules.iter().position(|s| s.id == id).ok_or_else(|| EngineError::Other(format!("unknown schedule: {id_str}")))?;
+    let mut schedule = doc.arch.schedules[idx].clone();
 
     let mut changed = false;
 
@@ -131,14 +129,13 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         return Err(EngineError::Other("no changes specified".into()));
     }
 
-    let rows = cadcraft_arch::schedule::rows(arch, &schedule);
-
-    // Find existing table
+    let rows = cadcraft_arch::schedule::rows(&doc.arch, &schedule);
     let label = format!("sc{}", id.0);
     let at_vec = Vec2::new(schedule.at[0], schedule.at[1]);
+    let table = build_table(&doc, &schedule, &rows, at_vec)?;
+
     if let Some(handle) = schedule_table(&doc, &label) {
         // Rewrite table
-        let table = build_table(&doc, &schedule, &rows, at_vec)?;
         if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
             let mut new_entity = (**entity).clone();
             if let cadcraft_doc::EntityKind::Table(ref mut t) = new_entity.kind {
@@ -148,7 +145,6 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         }
     } else {
         // Create new table if missing (shouldn't happen if linked, but robust)
-        let table = build_table(&doc, &schedule, &rows, at_vec)?;
         doc.ensure_layer(LAYER_SCHEDULE);
         let mut common: cadcraft_doc::Common = Default::default();
         common.layer = LAYER_SCHEDULE.to_string();
@@ -158,7 +154,7 @@ pub fn run_schedule_edit(s: &mut Session, params: &Value) -> Result<Value> {
         doc.add(&Space::Model, common, cadcraft_doc::EntityKind::Table(table))?;
     }
 
-    arch.schedules[idx] = schedule;
+    doc.arch.schedules[idx] = schedule;
     s.state_mut()?.doc = Arc::new(doc);
 
     let row_json: Vec<Value> = rows
@@ -221,20 +217,19 @@ pub(crate) fn schedule_table(d: &Drawing, label: &str) -> Option<Handle> {
 /// Refresh all schedules after a command.
 pub(crate) fn refresh_schedules(s: &mut Session) {
     let mut doc = s.doc().ok().cloned().unwrap_or_default();
-    let arch = &doc.arch;
-    let mut changed = false;
     let mut to_remove = Vec::new();
+    let mut to_update: Vec<(Handle, Table)> = Vec::new();
 
-    for schedule in &arch.schedules {
+    // First pass: identify changes (read-only on doc)
+    for schedule in &doc.arch.schedules {
         let label = format!("sc{}", schedule.id.0);
-        let rows = cadcraft_arch::schedule::rows(arch, schedule);
+        let rows = cadcraft_arch::schedule::rows(&doc.arch, schedule);
 
         if rows.len() > MAX_SCHEDULE_ROWS {
-            continue; // Skip if too large, though validate should prevent
+            continue;
         }
 
         if let Some(handle) = schedule_table(&doc, &label) {
-            // Check if table content matches rows
             let at_vec = Vec2::new(schedule.at[0], schedule.at[1]);
             let expected_table = match build_table(&doc, schedule, &rows, at_vec) {
                 Ok(t) => t,
@@ -244,25 +239,32 @@ pub(crate) fn refresh_schedules(s: &mut Session) {
             if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
                 if let cadcraft_doc::EntityKind::Table(current_table) = &entity.kind {
                     if table_differs(current_table, &expected_table) {
-                        // Rewrite table in place
-                        let mut new_entity = (**entity).clone();
-                        if let cadcraft_doc::EntityKind::Table(ref mut t) = new_entity.kind {
-                            *t = expected_table;
-                            changed = true;
-                        }
-                        doc.model.replace(new_entity);
+                        to_update.push((handle, expected_table));
                     }
                 }
             }
         } else {
-            // Table missing, remove schedule
             to_remove.push(schedule.id);
         }
     }
 
+    let mut changed = false;
+
+    // Second pass: apply changes (mutable on doc)
     if !to_remove.is_empty() {
-        arch.schedules.retain(|s| !to_remove.contains(&s.id));
+        doc.arch.schedules.retain(|s| !to_remove.contains(&s.id));
         changed = true;
+    }
+
+    for (handle, table) in to_update {
+        if let Some(entity) = doc.model.iter().find(|e| e.handle == handle) {
+            let mut new_entity = (**entity).clone();
+            if let cadcraft_doc::EntityKind::Table(ref mut t) = new_entity.kind {
+                *t = table;
+            }
+            doc.model.replace(new_entity);
+            changed = true;
+        }
     }
 
     if changed {
