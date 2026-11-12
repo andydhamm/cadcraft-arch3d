@@ -83,6 +83,21 @@ mod tests {
     }
 
     #[test]
+    fn test_keeps_the_hdri_item() {
+        // The sample set carries the CC-0 sky HDRI and its file is embedded as a Radiance picture.
+        let files = sample_files();
+        let catalog = files.first().map(|f| f.1).unwrap_or_default();
+        let v: serde_json::Value = serde_json::from_slice(catalog).expect("catalog parses");
+        let items = v["items"].as_array().expect("items array");
+        let item = items.iter().find(|i| i["id"] == "polyhaven:kloofendal-puresky");
+        assert!(item.is_some(), "the HDRI item is missing from the catalog");
+        let file = item.and_then(|i| i["file"].as_str()).unwrap_or_default();
+        assert!(file.ends_with(".hdr"));
+        let bytes = files.iter().find(|f| f.0 == file).map(|f| f.1).unwrap_or_default();
+        assert!(bytes.starts_with(b"#?RADIANCE") || bytes.starts_with(b"#?RGBE"));
+    }
+
+    #[test]
     fn sample_files_are_not_empty() {
         for (name, bytes) in sample_files() {
             assert!(!bytes.is_empty(), "{name} is empty");

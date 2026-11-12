@@ -601,7 +601,7 @@ mod tests {
         for (i, name) in ["a", "b", "c", "d"].iter().enumerate() {
             let rgbe: Vec<u8> = (0..1024 * 512 * 4).map(|k| ((k * 7 + i * 31) % 251) as u8).collect();
             total += rgbe.len();
-            d.arch.hdr_images.insert((*name).to_string(), ImageRgbe { width: 1024, height: 512, rgbe });
+            d.arch.hdr_images.insert((*name).to_string(), ImageRgbe { width: 1024, height: 512, rgbe, ..Default::default() });
         }
         assert_eq!((d.arch.hdr_images.len(), total), (MAX_HDR_IMAGES, MAX_HDR_BYTES));
         let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
