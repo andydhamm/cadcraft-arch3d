@@ -84,7 +84,7 @@ fn back_block_takes_the_wall_finish_and_paint() {
             .any(|p| (f64::from(p[1]) - 8.0).abs() < 1e-4 && (f64::from(p[0]) - 4.0).abs() < 0.3 && f64::from(p[2]) > 1.0 && f64::from(p[2]) < 1.9)
     };
     assert!(plain.meshes.iter().any(|m| m.material == "wall" && in_block(m)), "the block is wall");
-    model.paints.insert(Surface::WallSide { wall: w, side: Side::Left }.key(), Paint { material: None, tint: Some([200, 30, 30]) });
+    model.paints.insert(Surface::WallSide { wall: w, side: Side::Left }.key(), Paint { tint: Some([200, 30, 30]), ..Default::default() });
     let painted = Scene3d::build(&model);
     // The painted face is split off the wall mesh around the niche; the block stays in the wall's
     // own mesh, which the paint split sees like any other wall solid.
