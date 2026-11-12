@@ -14,6 +14,7 @@ mod arch_electrical;
 mod arch_foundation;
 mod arch_furnishing;
 mod arch_light;
+mod arch_plan;
 mod arch_site;
 pub mod clip;
 mod dim;
