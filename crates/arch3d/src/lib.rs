@@ -45,6 +45,7 @@ pub mod ray;
 pub mod roof;
 pub mod section;
 pub mod site;
+pub mod sky;
 pub(crate) mod soffit;
 pub mod solid;
 pub(crate) mod stair_parts;
