@@ -60,6 +60,7 @@ pub mod railing_auto;
 pub mod roof;
 pub mod roofedge;
 pub mod room;
+pub mod room_finish;
 pub mod schedule;
 pub mod site;
 pub mod stair;
