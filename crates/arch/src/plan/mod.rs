@@ -368,16 +368,19 @@ mod tests {
         let none = annotate(&m, None, None);
         assert_eq!(none.lines.len(), 1);
         assert_eq!(none.lines[0].handle, roof_handle(rid));
-        assert_eq!(none.labels.len(), 1);
+        // Default view (Floor Plan) shows name, area, dimensions.
+        assert_eq!(none.labels.len(), 3);
         for v in template_plan_views() {
             let a = annotate(&m, Some(&v), Some(0));
             assert_eq!(a.lines.len(), 1, "{}", v.name);
-            assert_eq!(a.labels.len(), usize::from(v.labels.name), "{}", v.name);
+            let expected_labels =
+                usize::from(v.labels.name) + usize::from(v.labels.area) + usize::from(v.labels.dimensions) + usize::from(v.labels.ceiling);
+            assert_eq!(a.labels.len(), expected_labels, "{}", v.name);
         }
         // A level other than the room's drops its label.
         assert!(annotate(&m, None, Some(1)).labels.is_empty());
         let mut v = PlanView::default();
-        v.labels = RoomLabelShow { name: false, ..RoomLabelShow::default() };
+        v.labels = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false };
         assert!(annotate(&m, Some(&v), None).labels.is_empty());
         // active_view / opened_level.
         assert!(active_view(&m).is_none());
