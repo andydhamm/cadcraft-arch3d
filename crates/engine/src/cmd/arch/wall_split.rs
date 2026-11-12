@@ -58,7 +58,7 @@ pub(crate) fn inspect_wall_types(model: &ArchModel, out: &mut serde_json::Map<St
 
 fn run_wall_split(s: &mut Session, p: &Value) -> Result<Value> {
     let id = read_id(p.get("id").ok_or_else(|| bad("wall.split", "`id` (\"w0\") is required"))?)?;
-    let mut doc = s.doc_mut()?;
+    let doc = s.doc_mut()?;
     let wall_index = doc.arch.walls.iter().position(|w| w.id == id).ok_or_else(|| bad("wall.split", format!("unknown wall id `{id}`")))?;
     let mut wall = doc.arch.walls[wall_index].clone();
 
@@ -97,7 +97,7 @@ fn run_wall_split(s: &mut Session, p: &Value) -> Result<Value> {
             let lower = wall_type_default(&doc.arch, &lower_name).ok_or_else(|| bad("wall.split", format!("unknown wall type `{lower_name}`")))?;
             let upper = wall_type_default(&doc.arch, &upper_name).ok_or_else(|| bad("wall.split", format!("unknown wall type `{upper_name}`")))?;
             let lower_thickness = p.get("lowerThickness").and_then(Value::as_f64).filter(|x| x.is_finite() && *x > 0.0).unwrap_or(lower.2);
-            let mut upper_thickness = p.get("upperThickness").and_then(Value::as_f64).filter(|x| x.is_finite() && *x > 0.0).unwrap_or(upper.2);
+            let upper_thickness = p.get("upperThickness").and_then(Value::as_f64).filter(|x| x.is_finite() && *x > 0.0).unwrap_or(upper.2);
             if upper_thickness > lower_thickness + 1e-9 {
                 return Err(bad("wall.split", "`upperThickness` must be <= lower thickness"));
             }
