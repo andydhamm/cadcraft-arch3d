@@ -151,7 +151,7 @@ fn label_and_handle(id: ArchId, part: &str, owner: ObjectKind) -> (String, Strin
 
 fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
     match c.kind {
-        CameraKind::Orbit => {
+        CameraKind::Orbit | CameraKind::Overview => {
             let target = c.target.unwrap_or([0.0; 3]);
             let azimuth = c.azimuth_deg.unwrap_or(0.0);
             let elevation = c.elevation_deg.unwrap_or(30.0);
