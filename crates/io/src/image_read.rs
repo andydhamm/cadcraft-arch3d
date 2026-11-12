@@ -143,7 +143,8 @@ mod tests {
 
     fn encode(img: &image::RgbaImage, f: image::ImageFormat) -> Vec<u8> {
         let mut out = Vec::new();
-        assert!(img.write_to(&mut out, f).is_ok());
+        let mut cursor = std::io::Cursor::new(&mut out);
+        assert!(img.write_to(&mut cursor, f).is_ok());
         out
     }
 
