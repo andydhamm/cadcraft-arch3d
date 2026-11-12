@@ -48,11 +48,12 @@ fn vertex_average(polygon: &[Vec2]) -> Vec2 {
 /// The label lines of one room, top to bottom.
 fn room_lines(model: &ArchModel, r: &Room, show: RoomLabelShow) -> Vec<(PlanLabelKind, String, f64)> {
     let mut lines = Vec::new();
+    let usable = r.polygon.len() >= 3 && r.polygon.iter().all(|p| p.is_finite()) && dimensions_text(&r.polygon).is_some();
     if show.name {
         let text = if r.name.is_empty() { format!("r{}", r.id.0) } else { r.name.clone() };
         lines.push((PlanLabelKind::RoomName, text, NAME_HEIGHT));
     }
-    if show.area {
+    if show.area && usable {
         let a = match r.label_area {
             LabelArea::Standard => r.standard_area,
             _ => r.interior_area,
@@ -62,11 +63,13 @@ fn room_lines(model: &ArchModel, r: &Room, show: RoomLabelShow) -> Vec<(PlanLabe
         }
     }
     if show.dimensions
+        && usable
         && let Some(t) = dimensions_text(&r.polygon)
     {
         lines.push((PlanLabelKind::RoomDimensions, t, DETAIL_HEIGHT));
     }
     if show.ceiling
+        && usable
         && let Some(t) = room_ceiling_text(model, r)
     {
         lines.push((PlanLabelKind::RoomCeiling, t, DETAIL_HEIGHT));

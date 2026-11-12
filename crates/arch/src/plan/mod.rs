@@ -186,6 +186,9 @@ pub fn opened_level(model: &ArchModel, view: Option<&PlanView>) -> Option<u32> {
 /// Everything `view` (the plan with no view when `None`) adds at plan level `level`.
 pub fn annotate(model: &ArchModel, view: Option<&PlanView>, level: Option<u32>) -> PlanAnnotation {
     let mut out = PlanAnnotation::default();
+    let view = view
+        .or_else(|| model.plan_views.iter().find(|v| v.kind == PlanKind::Floor && v.name.eq_ignore_ascii_case("Floor Plan")))
+        .or_else(|| model.plan_views.iter().find(|v| v.kind == PlanKind::Floor));
     let kind = view.map_or(PlanKind::Floor, |v| v.kind);
     if let (Some(r), Some(l)) = (view.and_then(|v| v.reference), level) {
         if r.level != l {
