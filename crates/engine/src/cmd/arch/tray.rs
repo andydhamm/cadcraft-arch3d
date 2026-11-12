@@ -718,4 +718,41 @@ mod tests {
             assert!(pair[1].is_number());
         }
     }
+
+    #[test]
+    fn parse_ring_rejects_open_ring() {
+        let ring = json!([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+        let err = parse_ring("tray", &ring).unwrap_err();
+        assert!(err.to_string().contains("closed ring"));
+    }
+
+    #[test]
+    fn parse_ring_rejects_too_few_points() {
+        let ring = json!([[0.0, 0.0], [1.0, 0.0], [0.0, 0.0]]);
+        let err = parse_ring("tray", &ring).unwrap_err();
+        assert!(err.to_string().contains("at least 4 points"));
+    }
+
+    #[test]
+    fn parse_sides_handles_all_forms() {
+        assert!(matches!(parse_sides("tray", &json!({})).unwrap(), TraySides::Vertical));
+        assert!(matches!(parse_sides("tray", &json!({"sides": null})).unwrap(), TraySides::Vertical));
+        assert!(matches!(parse_sides("tray", &json!({"sides": "vertical"})).unwrap(), TraySides::Vertical));
+        assert!(matches!(parse_sides("tray", &json!({"sides": 45.0})).unwrap(), TraySides::Pitched(45.0)));
+        assert!(parse_sides("tray", &json!({"sides": "bad"})).is_err());
+    }
+
+    #[test]
+    fn parse_level_by_name_and_index() {
+        let mut s = Session::new();
+        s.execute("level", &json!({"name": "Ground", "elevation": 0.0})).unwrap();
+        s.execute("level", &json!({"name": "Upper", "elevation": 3.0})).unwrap();
+        let model = s.doc().unwrap().arch.clone();
+        assert_eq!(parse_level("tray", &model, &json!(0)).unwrap(), 0);
+        assert_eq!(parse_level("tray", &model, &json!(1)).unwrap(), 1);
+        assert_eq!(parse_level("tray", &model, &json!("Ground")).unwrap(), 0);
+        assert_eq!(parse_level("tray", &model, &json!("Upper")).unwrap(), 1);
+        assert!(parse_level("tray", &model, &json!(99)).is_err());
+        assert!(parse_level("tray", &model, &json!("Missing")).is_err());
+    }
 }
