@@ -31,7 +31,7 @@ pub fn schedule_labels(model: &ArchModel, level: Option<u32>, show: RoomLabelSho
             Some(n) => n,
             None => continue,
         };
-        let wall = match model.walls.get(opening.host as usize) {
+        let wall = match model.walls.get(opening.host.0 as usize) {
             Some(w) => w,
             None => continue,
         };
