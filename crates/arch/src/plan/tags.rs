@@ -5,7 +5,7 @@
 //!
 //! Owner: p21-plan-numbers.
 
-use cadcraft_doc::arch::{ArchId, ArchModel, Cabinet, Opening, OpeningKind, RoomLabelShow, Wall, cabinet_handle, opening_handle};
+use cadcraft_doc::arch::{ArchKind, ArchModel, Cabinet, Opening, OpeningKind, RoomLabelShow, Wall, cabinet_handle, opening_handle};
 use cadcraft_geom::Vec2;
 
 use super::{PlanAnnotation, PlanLabel, PlanLabelKind};
@@ -25,13 +25,13 @@ pub fn schedule_labels(model: &ArchModel, level: Option<u32>, show: RoomLabelSho
 
     let numbers = crate::schedule::numbers(model);
 
-    // Openings by index (deterministic order)
-    for (i, opening) in model.openings.iter().enumerate() {
-        let number = match numbers.openings.get(&i) {
+    // Openings in deterministic order
+    for opening in &model.openings {
+        let number = match numbers.get(&(ArchKind::Opening, opening.id)) {
             Some(n) => n,
             None => continue,
         };
-        let wall = match model.walls.get(opening.wall as usize) {
+        let wall = match model.walls.get(opening.host as usize) {
             Some(w) => w,
             None => continue,
         };
@@ -56,17 +56,17 @@ pub fn schedule_labels(model: &ArchModel, level: Option<u32>, show: RoomLabelSho
             OpeningKind::Door | OpeningKind::GarageDoor | OpeningKind::CasedOpening => LAYER_DOOR_TAG,
             OpeningKind::Window => LAYER_WINDOW_TAG,
         };
-        out.push_label(PlanLabel::new(layer, PlanLabelKind::ScheduleNumber, number.clone(), at, 0.2, opening_handle(ArchId(i))));
+        out.push_label(PlanLabel::new(layer, PlanLabelKind::ScheduleNumber, number.clone(), at, 0.2, opening_handle(opening.id)));
     }
 
-    // Cabinets by index (deterministic order)
-    for (i, cabinet) in model.cabinets.iter().enumerate() {
-        let number = match numbers.cabinets.get(&i) {
+    // Cabinets in deterministic order
+    for cabinet in &model.cabinets {
+        let number = match numbers.get(&(ArchKind::Cabinet, cabinet.id)) {
             Some(n) => n,
             None => continue,
         };
         let at = cabinet.position + Vec2::new(0.0, cabinet.depth / 2.0).rotate(cabinet.rotation);
-        out.push_label(PlanLabel::new(LAYER_CASE_TAG, PlanLabelKind::ScheduleNumber, number.clone(), at, 0.2, cabinet_handle(ArchId(i))));
+        out.push_label(PlanLabel::new(LAYER_CASE_TAG, PlanLabelKind::ScheduleNumber, number.clone(), at, 0.2, cabinet_handle(cabinet.id)));
     }
 }
 
@@ -87,11 +87,11 @@ mod tests {
         // Wall on level 1
         model.walls.push(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, base_level: 1, ..Default::default() });
         // Door opening on wall 0 at offset 5
-        model.openings.push(Opening { wall: 0, offset: 5.0, kind: OpeningKind::Door, ..Default::default() });
+        model.openings.push(Opening { host: 0, offset: 5.0, kind: OpeningKind::Door, ..Default::default() });
         // Window opening on wall 0 at offset 2
-        model.openings.push(Opening { wall: 0, offset: 2.0, kind: OpeningKind::Window, ..Default::default() });
+        model.openings.push(Opening { host: 0, offset: 2.0, kind: OpeningKind::Window, ..Default::default() });
         // Door opening on wall 1 (level 1)
-        model.openings.push(Opening { wall: 1, offset: 3.0, kind: OpeningKind::Door, ..Default::default() });
+        model.openings.push(Opening { host: 1, offset: 3.0, kind: OpeningKind::Door, ..Default::default() });
         // Cabinet at (1,1) with depth 0.6, no rotation
         model.cabinets.push(Cabinet { position: Vec2::new(1.0, 1.0), depth: 0.6, rotation: 0.0, ..Default::default() });
         model
