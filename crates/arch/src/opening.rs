@@ -860,7 +860,7 @@ mod tests {
             end: Vec2::new(10.0, 5.0),
             thickness: 0.1,
             height: 2.4,
-            split: Some(cadcraft_doc::arch::WallSplit { height: 1.0, upper: "Glass".into(), upper_thickness: 0.01 }),
+            split: Some(cadcraft_doc::arch::WallSplit { height: 1.0, upper: "Glass".into(), upper_thickness: 0.01, ..Default::default() }),
             ..Wall::default()
         });
         let mut low = door(split);

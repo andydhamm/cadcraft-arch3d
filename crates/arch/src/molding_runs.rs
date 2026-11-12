@@ -863,11 +863,11 @@ mod tests {
         assert!(face_carries(&model, &mk("Interior", None), base));
         let glass = mk("Glass", None);
         assert!(!face_carries(&model, &glass, base) && !face_carries(&model, &glass, chair));
-        let pony = mk("Interior", Some(WallSplit { height: 1.1, upper: "Glass".into(), upper_thickness: 0.01 }));
+        let pony = mk("Interior", Some(WallSplit { height: 1.1, upper: "Glass".into(), upper_thickness: 0.01, ..Default::default() }));
         assert!(face_carries(&model, &pony, base) && face_carries(&model, &pony, chair));
         assert!(!face_carries(&model, &pony, (1.0, 1.2)));
         assert!(!face_carries(&model, &pony, (2.3, 2.4)));
-        let inv = mk("Glass", Some(WallSplit { height: 1.1, upper: "Interior".into(), upper_thickness: 0.1 }));
+        let inv = mk("Glass", Some(WallSplit { height: 1.1, upper: "Interior".into(), upper_thickness: 0.1, ..Default::default() }));
         assert!(!face_carries(&model, &inv, base) && face_carries(&model, &inv, (1.2, 1.3)));
     }
 }
