@@ -461,4 +461,92 @@ mod tests {
         assert!((f.at[1] - 3.0).abs() < 1e-9);
         assert!((0.0..360.0).contains(&f.rotation));
     }
+
+    #[test]
+    fn copy_preserves_paints() {
+        use cadcraft_doc::arch::{MaterialRef, Paint, Surface};
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 2.0], 0.0);
+        let d = s.doc_mut().unwrap();
+        d.arch
+            .paints
+            .insert(Surface::Furnishing { furnishing: id, part: 0 }.key(), Paint { material: Some(MaterialRef::Item("oak".into())), tint: None });
+        let copy = transform_entities(&mut s, &[furnishing_handle(id)], &Mat3::translate(Vec2::new(3.0, 0.0)), true).unwrap();
+        let copied = furnishing_id_of_handle(copy[0]).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.paints.contains_key(&Surface::Furnishing { furnishing: id, part: 0 }.key()));
+        assert!(d.arch.paints.contains_key(&Surface::Furnishing { furnishing: copied, part: 0 }.key()));
+    }
+
+    #[test]
+    fn duplicate_handles_transformed_once() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [1.0, 2.0], 0.0);
+        let h = furnishing_handle(id);
+        let moved = transform_entities(&mut s, &[h, h], &Mat3::translate(Vec2::new(3.0, 4.0)), false).unwrap();
+        assert_eq!(moved, vec![h]);
+        assert_eq!(s.doc().unwrap().arch.furnishing(id).unwrap().at, [4.0, 6.0]);
+    }
+
+    #[test]
+    fn rotation_normalization_edge_cases() {
+        assert_eq!(norm_degrees(0.0), 0.0);
+        assert_eq!(norm_degrees(360.0), 0.0);
+        assert_eq!(norm_degrees(720.0), 0.0);
+        assert_eq!(norm_degrees(-360.0), 0.0);
+        assert_eq!(norm_degrees(-0.0), 0.0);
+        assert_eq!(norm_degrees(359.9), 359.9);
+        assert_eq!(norm_degrees(0.1), 0.1);
+        assert_eq!(norm_degrees(f64::NAN), 0.0);
+        assert_eq!(norm_degrees(f64::INFINITY), 0.0);
+        assert_eq!(norm_degrees(f64::NEG_INFINITY), 0.0);
+    }
+
+    #[test]
+    fn empty_selection_is_noop() {
+        let mut s = Session::new();
+        let moved = transform_entities(&mut s, &[], &Mat3::translate(Vec2::new(1.0, 2.0)), false).unwrap();
+        assert!(moved.is_empty());
+    }
+
+    #[test]
+    fn mirror_across_diagonal_line() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 0.0], 0.0);
+        let m = Mat3::mirror(Vec2::ZERO, Vec2::new(1.0, 1.0));
+        let moved = transform_entities(&mut s, &[furnishing_handle(id)], &m, false).unwrap();
+        assert_eq!(moved, vec![furnishing_handle(id)]);
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!((f.at[0]).abs() < 1e-9);
+        assert!((f.at[1] - 3.0).abs() < 1e-9);
+        assert!(f.mirrored);
+        assert!((f.rotation - 90.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mirror_twice_returns_to_original() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 2.0], 45.0);
+        let m = Mat3::mirror(Vec2::ZERO, Vec2::new(1.0, 1.0));
+        transform_entities(&mut s, &[furnishing_handle(id)], &m, false).unwrap();
+        transform_entities(&mut s, &[furnishing_handle(id)], &m, false).unwrap();
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!((f.at[0] - 3.0).abs() < 1e-9);
+        assert!((f.at[1] - 2.0).abs() < 1e-9);
+        assert!(!f.mirrored);
+        assert!((f.rotation - 45.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn rotate_360_returns_to_original() {
+        let mut s = Session::new();
+        let id = add_furnishing(&mut s, [3.0, 2.0], 45.0);
+        let m = Mat3::rotate_about(Vec2::ZERO, std::f64::consts::TWO_PI);
+        let moved = transform_entities(&mut s, &[furnishing_handle(id)], &m, false).unwrap();
+        assert_eq!(moved, vec![furnishing_handle(id)]);
+        let f = s.doc().unwrap().arch.furnishing(id).unwrap();
+        assert!((f.at[0] - 3.0).abs() < 1e-9);
+        assert!((f.at[1] - 2.0).abs() < 1e-9);
+        assert!((f.rotation - 45.0).abs() < 1e-9);
+    }
 }
