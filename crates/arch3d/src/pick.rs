@@ -384,24 +384,22 @@ mod tests {
 
     #[test]
     fn pick_filtered_skips_rejected() {
-        let tri1 = Mesh {
+        let mut tri1 = Mesh {
             positions: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]].map(|p| [p[0], p[1], p[2]]).to_vec(),
             normals: vec![[0.0, 0.0, 1.0]; 3],
             uvs: vec![[0.0, 0.0]; 3],
             indices: vec![0, 1, 2],
-            material: "test".to_string(),
-            object: ArchId(9),
-            level_elevation: 0.0,
+            ..Mesh::new("test", ArchId(9)),
         };
-        let tri2 = Mesh {
+        tri1.level_elevation = 0.0;
+        let mut tri2 = Mesh {
             positions: [[0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [0.0, 1.0, 1.0]].map(|p| [p[0], p[1], p[2]]).to_vec(),
             normals: vec![[0.0, 0.0, 1.0]; 3],
             uvs: vec![[0.0, 0.0]; 3],
             indices: vec![0, 1, 2],
-            material: "test".to_string(),
-            object: ArchId(10),
-            level_elevation: 0.0,
+            ..Mesh::new("test", ArchId(10)),
         };
+        tri2.level_elevation = 0.0;
         let scene = Scene3d { meshes: vec![tri1, tri2], ..Scene3d::default() };
         let bvh = Bvh::build(&scene);
         let hit = scene.pick_filtered(&bvh, Vec3::new(0.5, -1.0, 0.5), Vec3::new(0.0, 1.0, 0.0), &|h| h.distance > 1.0);
