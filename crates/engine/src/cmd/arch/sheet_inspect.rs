@@ -124,8 +124,8 @@ pub(crate) fn inspect_sheets(d: &Drawing, p: &Value, out: &mut JsonMap<String, V
 mod tests {
     use super::*;
     use crate::Session;
-    use cadraft_doc::arch::sheet::{Schedule, Sheet, SheetSet};
-    use cadraft_doc::arch::{ArchId, Opening, OpeningKind};
+    use cadcraft_doc::arch::sheet::{Schedule, Sheet, SheetSet};
+    use cadcraft_doc::arch::{ArchId, Opening, OpeningKind};
 
     fn inspect(s: &mut Session, p: Value) -> Value {
         s.execute("arch.inspect", &p).unwrap_or(Value::Null)
