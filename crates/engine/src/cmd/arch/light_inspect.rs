@@ -3,9 +3,9 @@
 //! peak}`, or `null` without a profile).
 
 use cadcraft_arch::ies::{peak_candela, scaled};
-use cadcraft_arch::light::{intensity_cd, light_point};
+use cadcraft_arch::light::{intensity_cd, light_point, strip_length};
 use cadcraft_arch::room::room_at;
-use cadcraft_doc::arch::{ArchModel, LightFixture, LightKind, LightMount, handle_json, light_handle, room_label};
+use cadcraft_doc::arch::{ArchModel, LightFixture, LightKind, LightMount, StripFacing, handle_json, light_handle, room_label, tray_label};
 use serde_json::{Map, Value, json};
 
 fn kind_name(kind: LightKind) -> &'static str {
@@ -82,6 +82,16 @@ pub(crate) fn inspect_lights(model: &ArchModel, p: &Value, out: &mut Map<String,
                 object.insert("width".to_string(), json!(fixture.width));
                 object.insert("length".to_string(), json!(fixture.length));
             }
+            if let (Some(object), LightKind::Strip) = (light.as_object_mut(), fixture.kind) {
+                // A strip's height is its own (the level's elevation is not added): `z` is the world value.
+                object.insert("path".to_string(), Value::Array(fixture.path.iter().map(|p| json!([p.x, p.y])).collect()));
+                object.insert("closed".to_string(), json!(fixture.closed));
+                object.insert("height".to_string(), json!(fixture.height));
+                object.insert("lumensPerMetre".to_string(), json!(fixture.lumens_per_metre));
+                object.insert("facing".to_string(), json!(if fixture.facing == StripFacing::Out { "out" } else { "down" }));
+                object.insert("length".to_string(), json!(strip_length(fixture)));
+                object.insert("tray".to_string(), fixture.tray.map_or(Value::Null, |id| json!(tray_label(id))));
+            }
             light
         })
         .collect::<Vec<_>>();
@@ -116,6 +126,52 @@ mod tests {
         assert_eq!(lights[0]["handle"], "a0048000");
         assert_eq!(lights[0]["z"], 2.4);
         assert!((lights[0]["candela"].as_f64().unwrap() - 950.36).abs() < 0.02);
+    }
+
+    #[test]
+    fn strip_rows() {
+        use cadcraft_doc::arch::{FixtureShape, StripFacing};
+        let mut model = ArchModel::default();
+        model.lights.push(LightFixture {
+            kind: LightKind::Strip,
+            shape: FixtureShape::Strip,
+            path: vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)],
+            height: Some(2.4),
+            lumens_per_metre: 500.0,
+            lumens: 1000.0,
+            facing: StripFacing::Out,
+            tray: Some(ArchId(2)),
+            ..LightFixture::new(ArchId(0), "LED strip", Vec2::new(2.0, 2.0))
+        });
+        model.lights.push(LightFixture::new(ArchId(1), "Recessed pot light", Vec2::new(1.0, 1.0)));
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        let lights = out["lights"].as_array().unwrap();
+        let s = &lights[0];
+        assert_eq!(s["kind"], "strip");
+        assert_eq!(s["path"], json!([[1.0, 2.0], [3.0, 2.0]]));
+        assert_eq!((s["closed"].clone(), s["facing"].clone()), (json!(false), json!("out")));
+        assert_eq!((s["height"].as_f64(), s["lumensPerMetre"].as_f64()), (Some(2.4), Some(500.0)));
+        assert_eq!((s["length"].as_f64(), s["lumens"].as_f64()), (Some(2.0), Some(1000.0)));
+        assert_eq!(s["tray"], "tr2");
+        // Without a tray the row says null; other lights have no strip keys.
+        model.lights[0].tray = None;
+        let mut out = Map::new();
+        inspect_lights(&model, &json!({"lights": true}), &mut out);
+        assert!(out["lights"][0]["tray"].is_null());
+        assert!(out["lights"][1].get("path").is_none() && out["lights"][1].get("lumensPerMetre").is_none());
+
+        // Through the commands: a strip made by `lightfixture` reads back, an edit shows at once.
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"type": "LED strip", "path": [[0, 0], [1, 0], [1, 1]], "closed": true, "height": 2.0})).unwrap();
+        let row = session.execute("arch.inspect", &json!({"lights": true})).unwrap()["lights"][0].clone();
+        assert_eq!((row["kind"].clone(), row["closed"].clone(), row["facing"].clone()), (json!("strip"), json!(true), json!("down")));
+        assert!((row["length"].as_f64().unwrap() - (2.0 + 2.0_f64.sqrt())).abs() < 1e-9, "{row}");
+        assert!((row["lumens"].as_f64().unwrap() - 500.0 * (2.0 + 2.0_f64.sqrt())).abs() < 1e-6, "{row}");
+        session.execute("lightfixture.edit", &json!({"id": "lf0", "lumensPerMetre": 100, "facing": "out"})).unwrap();
+        let row = session.execute("arch.inspect", &json!({"lights": true})).unwrap()["lights"][0].clone();
+        assert_eq!((row["lumensPerMetre"].as_f64(), row["facing"].clone()), (Some(100.0), json!("out")));
+        assert!((row["lumens"].as_f64().unwrap() - 100.0 * (2.0 + 2.0_f64.sqrt())).abs() < 1e-6, "{row}");
     }
 
     #[test]

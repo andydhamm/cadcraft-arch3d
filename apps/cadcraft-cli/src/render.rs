@@ -313,6 +313,8 @@ pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError
         budget: usize::try_from(a.budget).unwrap_or(0).min(64),
         exposure: DEFAULT_EXPOSURE,
         look: d.arch.look.clone(),
+        // `--night` keeps the fixed night scale (0.01); any other frame is metered.
+        meter_night: !a.night,
         ..Lighting::default()
     };
     let eye = camera.eye();

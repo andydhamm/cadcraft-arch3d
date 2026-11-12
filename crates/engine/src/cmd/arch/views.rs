@@ -7,7 +7,9 @@
 
 use serde_json::{Value, json};
 
-use cadcraft_doc::arch::{ArchKind, ArchModel, ArchView, DimKind, ViewKind, handle_json, view_handle, view_label};
+use cadcraft_doc::arch::{
+    ArchKind, ArchModel, ArchView, DimKind, NoteKind, ViewKind, handle_json, note_label, room_label, view_handle, view_label, wall_label,
+};
 
 use crate::cmd::{CommandSpec, bad};
 use crate::{EngineError, Result, Session};
@@ -236,11 +238,48 @@ pub(crate) fn views_json(arch: &ArchModel) -> Value {
                             .collect()
                     })
                     .unwrap_or_default();
+                let patterns: Vec<Value> = g
+                    .map(|g| {
+                        g.patterns
+                            .iter()
+                            .map(|p| json!({ "a": pt(p.a), "b": pt(p.b), "id": p.kind.label(p.object), "material": p.material }))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let indicators: Vec<Value> = g
+                    .map(|g| g.indicators.iter().map(|l| json!({ "a": pt(l.a), "b": pt(l.b), "id": l.kind.label(l.object) })).collect())
+                    .unwrap_or_default();
+                let labels: Vec<Value> = g
+                    .map(|g| {
+                        g.labels
+                            .iter()
+                            .map(|l| json!({ "text": l.text, "at": pt(l.at), "height": l.height, "layer": l.layer, "id": l.kind.label(l.object) }))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let notes: Vec<Value> = v
+                    .notes
+                    .iter()
+                    .map(|n| {
+                        let value = match (n.kind, n.b) {
+                            (NoteKind::Dimension, Some(b)) => json!((b[0] - n.at[0]).hypot(b[1] - n.at[1])),
+                            _ => Value::Null,
+                        };
+                        json!({
+                            "id": note_label(n.id), "kind": n.kind.key(), "text": n.text, "at": pt(n.at), "b": n.b.map_or(Value::Null, pt),
+                            "placed": pt(v.placed(n.at)), "height": n.height, "layer": n.layer,
+                            "attach": n.attach.map_or(Value::Null, |a| json!({ "object": a.kind.label(a.object), "corner": a.corner.key() })),
+                            "value": value, "detached": n.detached,
+                        })
+                    })
+                    .collect();
                 json!({
                     "id": view_label(v.id),
                     "handle": handle_json(ArchKind::View.handle(v.id)),
                     "name": v.name,
-                    "kind": match v.kind { ViewKind::Elevation => "elevation", ViewKind::Section => "section" },
+                    "kind": v.kind.key(),
+                    "room": v.room.map(|r| room_label(r)),
+                    "wall": v.wall.map(|w| wall_label(w)),
                     "look": pt(v.look),
                     "cut": rect(v.cut),
                     "depth": v.depth,
@@ -255,9 +294,85 @@ pub(crate) fn views_json(arch: &ArchModel) -> Value {
                     "lines": lines,
                     "rings": rings,
                     "dims": dims,
+                    "patterns": patterns,
+                    "indicators": indicators,
+                    "labels": labels,
+                    "notes": notes,
                     "error": g.and_then(|g| g.error.clone()),
                 })
             })
             .collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{ArchId, Corner, NoteAttach, ViewGeometry, ViewLabel, ViewLine, ViewNote, ViewPatternLine};
+
+    #[test]
+    fn inspect_views_report_the_new_lists() {
+        let mut m = ArchModel::default();
+        let dim = ViewNote { id: 0, kind: NoteKind::Dimension, text: "d".into(), at: [0.0, 0.0], b: Some([3.0, 4.0]), ..ViewNote::default() };
+        let attached = ViewNote {
+            id: 1,
+            text: "t".into(),
+            attach: Some(NoteAttach { kind: ArchKind::Cabinet, object: ArchId(2), corner: Corner::TopLeft, ..Default::default() }),
+            ..ViewNote::default()
+        };
+        let geometry = ViewGeometry {
+            patterns: vec![ViewPatternLine {
+                a: [0.0, 0.0],
+                b: [1.0, 0.0],
+                kind: ArchKind::Wall,
+                object: ArchId(0),
+                material: "wood".into(),
+                ..Default::default()
+            }],
+            indicators: vec![ViewLine { a: [0.0, 0.0], b: [0.0, 1.0], kind: ArchKind::Opening, object: ArchId(1), ..Default::default() }],
+            labels: vec![ViewLabel {
+                text: "D1".into(),
+                at: [1.0, 1.0],
+                height: 0.1,
+                layer: "A-ELEV-IDEN".into(),
+                kind: ArchKind::Opening,
+                object: ArchId(1),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        m.views.push(ArchView {
+            name: "I".into(),
+            kind: ViewKind::Interior,
+            room: Some(ArchId(1)),
+            wall: Some(ArchId(5)),
+            notes: vec![dim, attached],
+            generated: Some(geometry),
+            ..ArchView::default()
+        });
+        let rows = views_json(&m);
+        let row = &rows[0];
+        assert_eq!(row["kind"], "interior");
+        assert_eq!(row["room"], "r1");
+        assert_eq!(row["wall"], "w5");
+        assert_eq!(row["patterns"][0]["id"], "w0");
+        assert_eq!(row["patterns"][0]["material"], "wood");
+        assert_eq!(row["indicators"][0]["id"], "o1");
+        assert_eq!(row["labels"][0]["text"], "D1");
+        assert_eq!(row["labels"][0]["id"], "o1");
+        assert_eq!(row["notes"][0]["id"], "n0");
+        assert_eq!(row["notes"][0]["kind"], "dimension");
+        assert_eq!(row["notes"][0]["value"], 5.0);
+        assert_eq!(row["notes"][0]["b"], json!([3.0, 4.0]));
+        assert_eq!(row["notes"][1]["attach"], json!({ "object": "cb2", "corner": "topLeft" }));
+        assert!(row["notes"][1]["value"].is_null());
+        assert!(row["notes"][1]["b"].is_null());
+        let mut m2 = ArchModel::default();
+        m2.views.push(ArchView { name: "E".into(), ..ArchView::default() });
+        let row = &views_json(&m2)[0];
+        assert!(row["room"].is_null() && row["wall"].is_null());
+        for k in ["patterns", "indicators", "labels", "notes"] {
+            assert_eq!(row[k], json!([]), "{k}");
+        }
+    }
 }

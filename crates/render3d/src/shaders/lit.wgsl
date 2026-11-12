@@ -109,7 +109,25 @@ fn lit_cube_shadow(i: u32, delta: vec3<f32>) -> f32 {
 
 // Hook [p19-env-raster]: the ambient term of the lit pipelines.
 fn lit_ambient(albedo: vec3<f32>, metallic: f32, n: vec3<f32>) -> vec3<f32> {
+    if (physical() && fr.ext.y > 0.5) {
+        return albedo / LIT_PI * max(sh_irradiance(n), vec3<f32>(0.0)) * (1.0 - metallic * 0.5);
+    }
     return base_ambient(albedo, metallic, n);
+}
+
+// Illuminance (lux) of the environment on a face with normal `n`: the stored coefficients are
+// already convolved with the clamped cosine (sh.rs `convolve`), so this is their sum with the basis.
+fn sh_irradiance(n: vec3<f32>) -> vec3<f32> {
+    var e = fr.sh[0].xyz * 0.282095;
+    e = e + fr.sh[1].xyz * (0.488603 * n.y);
+    e = e + fr.sh[2].xyz * (0.488603 * n.z);
+    e = e + fr.sh[3].xyz * (0.488603 * n.x);
+    e = e + fr.sh[4].xyz * (1.092548 * n.x * n.y);
+    e = e + fr.sh[5].xyz * (1.092548 * n.y * n.z);
+    e = e + fr.sh[6].xyz * (0.315392 * (3.0 * n.z * n.z - 1.0));
+    e = e + fr.sh[7].xyz * (1.092548 * n.x * n.z);
+    e = e + fr.sh[8].xyz * (0.546274 * (n.x * n.x - n.y * n.y));
+    return e;
 }
 
 // Hook [p19-exposure]: display units per lux of fixture light.

@@ -77,7 +77,7 @@ fn frame_point(origin: Vec2, rotation: f64, dy: f64) -> Vec2 {
 }
 
 /// The room a wall side faces.
-fn wall_side_room(model: &ArchModel, wall: &cadcraft_doc::Wall, side: Side) -> Option<ArchId> {
+pub(crate) fn wall_side_room(model: &ArchModel, wall: &cadcraft_doc::Wall, side: Side) -> Option<ArchId> {
     let dir = (wall.end - wall.start).normalized();
     let n = match side {
         Side::Left => dir.perp(),
@@ -97,19 +97,17 @@ fn unpainted(model: &ArchModel, s: &Surface) -> String {
     let finish = |f: Finish| format!("finish:{}", f.name());
     let default = |n: &str| format!("default:{n}");
     match s {
-        Surface::WallSide { wall, side } => match (side, model.wall(*wall).and_then(|w| w.finish)) {
-            (Side::Right, Some(f)) => finish(f),
-            _ => default("wall"),
-        },
-        Surface::RoomFloor(r) => match model.room(*r).and_then(|r| r.floor_finish) {
-            Some(f) => finish(f),
-            None => default("floor"),
-        },
-        Surface::RoomCeiling(_) => default("ceiling"),
-        Surface::Roof(r) => match model.roof(*r).and_then(|r| r.covering) {
-            Some(f) => finish(f),
-            None => default("roof"),
-        },
+        Surface::WallSide { .. } | Surface::RoomFloor(_) | Surface::RoomCeiling(_) | Surface::Roof(_) => {
+            match crate::room_finish::unpainted_finish(model, s) {
+                Some(f) => finish(f),
+                None => default(match s {
+                    Surface::WallSide { .. } => "wall",
+                    Surface::RoomFloor(_) => "floor",
+                    Surface::RoomCeiling(_) => "ceiling",
+                    _ => "roof",
+                }),
+            }
+        }
         Surface::Cabinet { cabinet, part } => {
             let c = model.cabinets.iter().find(|c| c.id == *cabinet);
             match part {
@@ -302,6 +300,7 @@ pub fn finish_fits(surface: &Surface, f: Finish) -> bool {
         Surface::WallSide { .. } => f.for_walls(),
         Surface::Roof(_) => f.for_roofs(),
         Surface::RoomFloor(_) => f.for_floors(),
+        Surface::RoomCeiling(_) => f.for_ceilings(),
         _ => true,
     }
 }
@@ -410,13 +409,15 @@ mod tests {
     #[test]
     fn effective_materials_follow_paints_and_finishes() {
         let (mut m, w, r) = boxed();
-        assert_eq!(effective_material(&m, &wall_side(w, Side::Left)), "default:wall");
-        assert_eq!(effective_material(&m, &Surface::RoomFloor(r)), "default:floor");
-        assert_eq!(effective_material(&m, &Surface::RoomCeiling(r)), "default:ceiling");
+        // The room (type Other) lends its template: drywall walls, a wood floor, a plaster ceiling.
+        assert_eq!(effective_material(&m, &wall_side(w, Side::Left)), "finish:drywall");
+        assert_eq!(effective_material(&m, &wall_side(w, Side::Right)), "default:wall", "faces no room");
+        assert_eq!(effective_material(&m, &Surface::RoomFloor(r)), "finish:wood");
+        assert_eq!(effective_material(&m, &Surface::RoomCeiling(r)), "finish:plaster");
         m.walls[0].finish = Some(Finish::Brick);
         m.rooms[0].floor_finish = Some(Finish::Wood);
         assert_eq!(effective_material(&m, &wall_side(w, Side::Right)), "finish:brick");
-        assert_eq!(effective_material(&m, &wall_side(w, Side::Left)), "default:wall");
+        assert_eq!(effective_material(&m, &wall_side(w, Side::Left)), "finish:drywall");
         assert_eq!(effective_material(&m, &Surface::RoomFloor(r)), "finish:wood");
         let s = wall_side(w, Side::Right);
         m.paints.insert(s.key(), Paint { material: Some(MaterialRef::Colour([0xc0, 0x40, 0x20])), tint: Some([1, 2, 3]), ..Default::default() });
@@ -462,8 +463,8 @@ mod tests {
         let (m, w) = two_rooms();
         let t = wall_side(w[0], Side::Left);
         let got = select(&m, &t, Scope::Plan).unwrap();
-        // Six wall sides share default:wall.
-        assert_eq!(got.len(), 6);
+        // The three left sides face rooms and share finish:drywall; the right sides are default:wall.
+        assert_eq!(got.len(), 3);
         assert!(got.windows(2).all(|p| p[0].key() < p[1].key()));
     }
 
@@ -472,8 +473,46 @@ mod tests {
         let (m, w) = two_rooms();
         let t = wall_side(w[0], Side::Left);
         let got = select(&m, &t, Scope::Floor).unwrap();
-        assert_eq!(got.len(), 4);
+        // The left sides of w0 and w1 (w2 is on level 1).
+        assert_eq!(got.len(), 2);
         assert!(!got.contains(&wall_side(w[2], Side::Left)));
+    }
+
+    #[test]
+    fn room_scope_from_a_wall_side_takes_the_walls_not_the_ceiling() {
+        let mut m = ArchModel::default();
+        let w0 = wall(&mut m, (0.0, 0.0), (4.0, 0.0));
+        let w1 = wall(&mut m, (4.0, 4.0), (0.0, 4.0));
+        let r = room(&mut m, rect(0.0, 0.0, 4.0, 4.0), 0);
+        let t = wall_side(w0, Side::Left);
+        let got = select(&m, &t, Scope::Room).unwrap();
+        assert_eq!(got, vec![t.clone(), wall_side(w1, Side::Left)]);
+        assert!(!got.contains(&Surface::RoomCeiling(r)));
+    }
+
+    #[test]
+    fn finish_fits_ceiling_uses_for_ceilings() {
+        let c = Surface::RoomCeiling(ArchId(0));
+        for f in Finish::ALL {
+            assert_eq!(finish_fits(&c, f), f.for_ceilings(), "{f:?}");
+        }
+    }
+
+    #[test]
+    fn surfaces_of_a_detected_house_have_no_default_room_materials() {
+        // Rooms of every type (detected rooms are Other) never read default:floor / default:ceiling,
+        // and a wall side facing a room never reads default:wall.
+        let (mut m, _) = two_rooms();
+        m.rooms[1].room_type = cadcraft_doc::arch::RoomType::Garage;
+        for i in surfaces(&m) {
+            match i.surface {
+                Surface::RoomFloor(_) | Surface::RoomCeiling(_) => assert!(i.material.starts_with("finish:"), "{}", i.material),
+                Surface::WallSide { .. } if i.room.is_some() => assert_eq!(i.material, "finish:drywall"),
+                Surface::WallSide { .. } => assert_eq!(i.material, "default:wall"),
+                _ => {}
+            }
+        }
+        assert_eq!(effective_material(&m, &Surface::RoomFloor(ArchId(1))), "finish:concrete");
     }
 
     #[test]

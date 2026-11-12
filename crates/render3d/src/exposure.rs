@@ -113,7 +113,7 @@ pub fn auto_scale(lavg: Option<f32>, daylight: bool, meter_night: bool) -> f32 {
 /// Whether the frame has daylight: the sun is on and above the horizon (`p19-env-path` adds the
 /// daylight environments).
 pub fn daylight(lighting: &Lighting) -> bool {
-    lighting.sun.is_some()
+    lighting.sun.is_some() || lighting.environment.as_ref().is_some_and(|e| e.daylight)
 }
 
 /// The exposure scale of a frame and how it was chosen (`"fixed"`, `"manual"` or `"auto"`): a
@@ -250,5 +250,31 @@ mod tests {
         let lum = [1.0, 2.0, 5.0];
         let e = auto_exposure_from_luminances(&lum, &[true, true, true]);
         assert_eq!(e, NIGHT_EXPOSURE, "bright hits should clamp to the night exposure: {e}");
+    }
+
+    #[test]
+    fn resolve_tone_maps_by_code() {
+        // Each tone-map code resolves to the correct curve.
+        let x = 0.5f32;
+
+        // TONE_NONE: clamp to 0..=1.
+        assert_eq!(tone_map(x, TONE_NONE), 0.5);
+        assert_eq!(tone_map(2.0, TONE_NONE), 1.0);
+        assert_eq!(tone_map(-1.0, TONE_NONE), 0.0);
+
+        // TONE_ACES: the ACES curve (as in lit.wgsl).
+        let aces = x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14);
+        assert!((tone_map(x, TONE_ACES) - aces).abs() < 1e-6, "aces");
+
+        // TONE_HABLE: the Hable (filmic) curve.
+        let hable = |t: f32| (t * (0.15 * t + 0.05) + 0.004) / (t * (0.15 * t + 0.5) + 0.06) - 0.02 / 0.3;
+        let hable_result = hable(2.0 * x) / hable(11.2);
+        assert!((tone_map(x, TONE_HABLE) - hable_result).abs() < 1e-6, "hable");
+
+        // The codes are distinct and in the right order.
+        assert_eq!((TONE_ACES, TONE_HABLE, TONE_NONE), (1, 2, 3));
+
+        // tone_code maps the enum to the right codes.
+        assert_eq!([ToneMap::Aces, ToneMap::Hable, ToneMap::None].map(tone_code), [TONE_ACES, TONE_HABLE, TONE_NONE],);
     }
 }

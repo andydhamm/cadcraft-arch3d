@@ -24,6 +24,7 @@ mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
+pub mod env;
 pub mod rt;
 pub mod scene_gpu;
 pub mod shaders;
@@ -254,5 +255,48 @@ mod tests {
         let lum = [1.0, 2.0, 5.0];
         let e = auto_exposure_from_luminances(&lum, &[true, true, true]);
         assert_eq!(e, NIGHT_EXPOSURE, "bright hits should clamp to the night exposure: {e}");
+    }
+
+    #[test]
+    fn apply_lambert_makes_every_material_diffuse() {
+        use super::scene_gpu::{GpuMaterial, GpuScene, LENS_NITS, MAT_EMIT_CAMERA_ONLY, apply_lambert};
+
+        let mut scene = GpuScene::default();
+        scene.materials.push(GpuMaterial {
+            albedo: [0.1, 0.2, 0.3],
+            metallic: 0.5,
+            roughness: 0.2,
+            ior: 1.5,
+            transmission: 0.5,
+            emission: [0.1, 0.2, 0.3],
+            flags: 0,
+            ..Default::default()
+        });
+        scene.materials.push(GpuMaterial {
+            albedo: [0.5, 0.5, 0.5],
+            metallic: 1.0,
+            roughness: 0.0,
+            ior: 1.0,
+            transmission: 1.0,
+            emission: [LENS_NITS, LENS_NITS, LENS_NITS],
+            flags: MAT_EMIT_CAMERA_ONLY,
+            ..Default::default()
+        });
+
+        apply_lambert(&mut scene, 0.5);
+
+        // Every material is now a pure Lambert.
+        for m in &scene.materials {
+            assert_eq!(m.albedo, [0.5, 0.5, 0.5]);
+            assert_eq!(m.metallic, 0.0);
+            assert_eq!(m.roughness, 1.0);
+            assert_eq!(m.ior, 1.0);
+            assert_eq!(m.transmission, 0.0);
+        }
+
+        // Emission is kept only on light lenses (MAT_EMIT_CAMERA_ONLY).
+        assert_eq!(scene.materials[0].emission, [0.0, 0.0, 0.0], "non-lens emission cleared");
+        assert_eq!(scene.materials[1].emission, [LENS_NITS, LENS_NITS, LENS_NITS], "lens emission kept");
+        assert_eq!(scene.materials[1].flags, MAT_EMIT_CAMERA_ONLY, "lens flag kept");
     }
 }

@@ -5,7 +5,7 @@
 
 use cadcraft_arch::stair_symbol::{StairSymbol, stair_symbol};
 use cadcraft_doc::arch::{ArchModel, MAX_STAIRS};
-use cadcraft_dxf::Tag;
+use craft_dxf::Tag;
 
 /// Marker in the `CADCRAFT` xdata of every stair proxy.
 pub(crate) const STAIR_PROXY_MARKER: &str = "CADCRAFT-STAIR";

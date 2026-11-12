@@ -649,4 +649,61 @@ mod tests {
         let back: FaceLayout = serde_json::from_value(v).unwrap();
         assert_eq!(back, fl);
     }
+
+    #[test]
+    fn front_style_parse_is_case_sensitive() {
+        assert_eq!(FrontStyle::parse("Slab"), None);
+        assert_eq!(FrontStyle::parse("SLAB"), None);
+        assert_eq!(FrontStyle::parse("Shaker"), None);
+        assert_eq!(FrontStyle::parse("SHAKER"), None);
+        assert_eq!(FrontStyle::parse("Raised-Panel"), None);
+        assert_eq!(FrontStyle::parse("raised panel"), None);
+        assert_eq!(FrontStyle::parse("slab "), None);
+        assert_eq!(FrontStyle::parse(" slab"), None);
+        assert_eq!(FrontStyle::parse("raised-panel "), None);
+    }
+
+    #[test]
+    fn cabinet_with_default_styles_serializes_without_style_fields() {
+        let c = cab();
+        let json = serde_json::to_value(&c).unwrap();
+        assert!(json.get("door_style").is_none(), "door_style should be omitted when default");
+        assert!(json.get("drawer_style").is_none(), "drawer_style should be omitted when default");
+        assert!(json.get("pull").is_none(), "pull should be omitted when None");
+        assert!(json.get("pull_symbol").is_none(), "pull_symbol should be omitted when None");
+    }
+
+    #[test]
+    fn cabinet_serde_refuses_unknown_front_style() {
+        let json = serde_json::json!({
+            "id": 1,
+            "kind": "base",
+            "position": [0.0, 0.0],
+            "width": 0.6,
+            "depth": 0.6,
+            "height": 0.876,
+            "door_style": "shaker-x"
+        });
+        let result: Result<Cabinet, _> = serde_json::from_value(json);
+        assert!(result.is_err(), "unknown door_style should fail to parse");
+    }
+
+    #[test]
+    fn cabinet_pull_without_symbol_is_valid() {
+        let c = Cabinet { pull: Some("pull-01".to_owned()), pull_symbol: None, ..cab() };
+        let json = serde_json::to_value(&c).unwrap();
+        assert_eq!(json.get("pull"), Some(&serde_json::Value::String("pull-01".into())));
+        assert!(json.get("pull_symbol").is_none());
+        let back: Cabinet = serde_json::from_value(json).unwrap();
+        assert_eq!(back, c);
+    }
+
+    #[test]
+    fn cabinet_empty_pull_string_is_valid() {
+        let c = Cabinet { pull: Some("".to_owned()), ..cab() };
+        let json = serde_json::to_value(&c).unwrap();
+        assert_eq!(json.get("pull"), Some(&serde_json::Value::String("".into())));
+        let back: Cabinet = serde_json::from_value(json).unwrap();
+        assert_eq!(back, c);
+    }
 }

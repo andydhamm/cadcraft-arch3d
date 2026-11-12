@@ -210,10 +210,12 @@ mod tests {
     fn layer_materials_are_library_keys_or_names() {
         // A Materials item id from `library {"for": "room/<id>/ceiling"}`, its key form, a finish
         // and a plain name are all accepted; a key that does not parse is not.
-        for m in ["material-oak", "item:material-oak", "finish:wood", "wood", "drywall", "ceiling-tile", "#c0c0c0", "colour:#c0c0c0"] {
+        for m in
+            ["material-oak", "item:material-oak", "finish:wood", "finish:drywall", "wood", "drywall", "ceiling-tile", "#c0c0c0", "colour:#c0c0c0"]
+        {
             assert!(validate(&[layer(Some(m), 0.0127)]).is_ok(), "{m}");
         }
-        for m in ["item:", "colour:#zz0000", "#12", "finish:", "finish:drywall"] {
+        for m in ["item:", "colour:#zz0000", "#12", "finish:"] {
             assert!(validate(&[layer(Some(m), 0.0127)]).is_err(), "{m}");
         }
     }

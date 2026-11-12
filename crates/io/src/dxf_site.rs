@@ -6,9 +6,9 @@ use cadcraft_arch::terrain::contour::{label_point, label_text, site_contours};
 use cadcraft_arch::terrain::mesh::site_mesh;
 use cadcraft_arch::terrain::surface::SiteSurface;
 use cadcraft_doc::arch::{ArchModel, DEFAULT_CONTOUR_MAJOR, DEFAULT_CONTOUR_MINOR, ModifierKind};
-use cadcraft_dxf::Tag;
 use cadcraft_geom::Vec2;
 use cadcraft_geom::tin_ops::ContourLine;
+use craft_dxf::Tag;
 
 /// Marker in the `CADCRAFT` xdata of every site proxy.
 pub(crate) const SITE_PROXY_MARKER: &str = "CADCRAFT-SITE";

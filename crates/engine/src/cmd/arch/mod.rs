@@ -14,8 +14,8 @@ pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 
 pub mod archdetect;
 pub mod backdrop;
-pub mod backsplash;
 pub mod build3d;
+pub(crate) mod cabinet_molding_inspect;
 pub(crate) mod cabinet_opts;
 pub mod casework;
 pub mod connections;
@@ -46,30 +46,39 @@ pub mod opening;
 pub mod outlets_auto;
 pub mod paint;
 pub mod pick;
+pub mod plan_inspect;
 pub mod plant;
+pub mod planview;
 pub mod railing;
 pub mod render;
 pub mod roofauto;
 pub mod roofplane;
 pub mod room;
+pub mod room_moldings;
 pub mod roomdetect;
 pub mod sample;
 pub mod sheet;
+pub(crate) mod sheet_camera;
+pub(crate) mod sheet_inspect;
+pub mod sheets;
 pub mod site;
 pub(crate) mod site_inspect;
 pub mod soffit;
 pub mod stair;
 pub mod stretch;
 pub mod sun;
+pub mod sunangle;
 pub mod sunstudy;
 pub mod terrain;
 pub mod terrain_modify;
 pub mod terrain_query;
+pub(crate) mod title_block;
 pub mod tray;
 pub(crate) mod units;
 pub mod view;
 pub mod views;
 pub mod wall;
+pub mod wall_split;
 
 /// Default layered wall band thicknesses for the given wall side.
 ///
@@ -91,8 +100,10 @@ pub(crate) fn wall_layers(exterior: bool) -> Vec<(String, f64)> {
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = Vec::new();
     v.extend(wall::specs());
+    v.extend(wall_split::specs());
     v.extend(opening::specs());
     v.extend(room::specs());
+    v.extend(room_moldings::specs());
     v.extend(library::specs());
     v.extend(roomdetect::specs());
     v.extend(inspect::specs());
@@ -115,6 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(railing::specs());
     v.extend(sun::specs());
     v.extend(sheet::specs());
+    v.extend(sheets::specs());
     v.extend(paint::specs());
     v.extend(archdetect::specs());
     v.extend(site::specs());
@@ -133,9 +145,10 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(illuminance::specs());
     v.extend(render::specs());
     v.extend(sunstudy::specs());
+    v.extend(sunangle::specs());
     v.extend(tray::specs());
     v.extend(foundation::specs());
     v.extend(soffit::specs());
-    v.extend(backsplash::specs());
+    v.extend(planview::specs());
     v
 }

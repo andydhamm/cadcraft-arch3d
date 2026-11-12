@@ -96,6 +96,7 @@ struct Resolved {
     material: MaterialRef,
     mean: [u8; 3],
     image: Option<(String, ImageRgba)>,
+    normal: Option<(String, ImageRgba)>,
 }
 
 fn finish_mean(f: Finish) -> [u8; 3] {
@@ -106,8 +107,8 @@ fn resolve_material(s: &mut Session, raw: &str) -> Result<Resolved> {
     const CMD: &str = "paint.material";
     let m = MaterialRef::parse(raw).ok_or_else(|| bad(CMD, format!("`{}` is not a material", clip(raw))))?;
     match m {
-        MaterialRef::Finish(f) => Ok(Resolved { material: m, mean: finish_mean(f), image: None }),
-        MaterialRef::Colour(c) => Ok(Resolved { material: m, mean: c, image: None }),
+        MaterialRef::Finish(f) => Ok(Resolved { material: m, mean: finish_mean(f), image: None, normal: None }),
+        MaterialRef::Colour(c) => Ok(Resolved { material: m, mean: c, image: None, normal: None }),
         MaterialRef::Item(id) => {
             s.library.sync_io();
             let rec = s.library.item(&id).cloned().ok_or_else(|| bad(CMD, format!("no library item `{}`", clip(&id))))?;
@@ -117,11 +118,22 @@ fn resolve_material(s: &mut Session, raw: &str) -> Result<Resolved> {
                         .strip_prefix("finish:")
                         .and_then(Finish::parse)
                         .ok_or_else(|| bad(CMD, format!("`{}` is not a finish this build knows", clip(&id))))?;
-                    Ok(Resolved { material: MaterialRef::Finish(f), mean: finish_mean(f), image: None })
+                    Ok(Resolved { material: MaterialRef::Finish(f), mean: finish_mean(f), image: None, normal: None })
                 }
                 ItemKind::Material => {
                     let img = s.library.image(&id).map_err(|e| bad(CMD, e))?;
-                    Ok(Resolved { material: MaterialRef::Item(id.clone()), mean: img.mean_srgb(), image: Some((id, img)) })
+                    let normal = match s.library.normal_map_bytes(&id).map_err(|e| bad(CMD, e))? {
+                        Some(bytes) => {
+                            let io = crate::library::library_io().ok_or_else(|| bad(CMD, crate::library::NO_READERS))?;
+                            let img = (io.read_image)(&bytes, 1024).map_err(|e| bad(CMD, e))?;
+                            if !img.is_valid() {
+                                return Err(bad(CMD, format!("`{}`'s normal map is not valid", clip(&id))));
+                            }
+                            Some((format!("{id}:normal"), img))
+                        }
+                        None => None,
+                    };
+                    Ok(Resolved { material: MaterialRef::Item(id.clone()), mean: img.mean_srgb(), image: Some((id, img)), normal })
                 }
                 _ => Err(bad(CMD, format!("`{}` is not a material", clip(&id)))),
             }
@@ -165,8 +177,13 @@ fn run_material(s: &mut Session, p: &Value) -> Result<Value> {
             d.arch.paints.insert(key, paint);
         }
     }
-    if uses_image && let Some((id, img)) = res.image {
-        d.arch.images.insert(id, img);
+    if uses_image {
+        if let Some((id, img)) = res.image {
+            d.arch.images.insert(id, img);
+        }
+        if let Some((id, img)) = res.normal {
+            d.arch.images.insert(id, img);
+        }
     }
     d.touch_arch();
     let mut painted: Vec<String> = chosen.iter().map(Surface::key).collect();
@@ -562,9 +579,10 @@ mod tests {
         let dir = TempDir::new("paint-plan");
         let mut s = setup(&dir);
         let r = paint(&mut s, "brick", "wall/w0/right", "plan");
-        // Every wall side shares the default wall material, so all four are like surfaces.
-        assert_eq!(r["painted"], json!(["wall/w0/left", "wall/w0/right", "wall/w1/left", "wall/w1/right"]));
-        assert_eq!(material(&s, "wall/w1/left"), Some(MaterialRef::Finish(Finish::Brick)));
+        // The right sides share the default wall material; the left sides face rooms (drywall).
+        assert_eq!(r["painted"], json!(["wall/w0/right", "wall/w1/right"]));
+        assert_eq!(material(&s, "wall/w1/right"), Some(MaterialRef::Finish(Finish::Brick)));
+        assert_eq!(material(&s, "wall/w1/left"), None);
         let r = paint(&mut s, "#ffffff", "room/r0/ceiling", "plan");
         assert_eq!(r["painted"], json!(["room/r0/ceiling", "room/r1/ceiling"]));
         // Object scope: every surface of the clicked cabinet.
@@ -659,9 +677,57 @@ mod tests {
         assert_eq!(material(&s, "room/r1/floor"), Some(MaterialRef::Item("material-oak".into())));
         assert_eq!(s.doc().unwrap().arch.images.len(), 1);
         // A library finish item paints the finish and stores no image.
-        paint(&mut s, "finish:wood", "room/r1/floor", "component");
-        assert_eq!(material(&s, "room/r1/floor"), Some(MaterialRef::Finish(Finish::Wood)));
+        paint(&mut s, "finish:carpet", "room/r1/floor", "component");
+        assert_eq!(material(&s, "room/r1/floor"), Some(MaterialRef::Finish(Finish::Carpet)));
         assert_eq!(s.doc().unwrap().arch.images.len(), 1);
+    }
+
+    #[test]
+    fn item_normal_map_loads_with_paint() {
+        let dir = TempDir::new("paint-normal-item");
+        let mut s = setup(&dir);
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        let image = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![255; 64 * 64 * 4], ..Default::default() };
+        let mut normal = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![0; 64 * 64 * 4], ..Default::default() };
+        for (i, px) in normal.rgba.iter_mut().enumerate() {
+            if i % 4 == 0 {
+                *px = 255;
+            } else if i % 4 == 1 {
+                *px = 128;
+            } else if i % 4 == 2 {
+                *px = 255;
+            } else {
+                *px = 255;
+            }
+        }
+        std::fs::write(dir.join("user").join("test-mat.png"), cadcraft_io::png::encode_rgba8(image.width, image.height, &image.rgba).unwrap())
+            .unwrap();
+        std::fs::write(
+            dir.join("user").join("test-mat-normal.png"),
+            cadcraft_io::png::encode_rgba8(normal.width, normal.height, &normal.rgba).unwrap(),
+        )
+        .unwrap();
+        s.library.add_user_item(ItemRecord {
+            id: "test-mat".into(),
+            name: "Test Mat".into(),
+            category: "Materials".into(),
+            folder: "Images".into(),
+            kind: ItemKind::Material,
+            file: Some("test-mat.png".into()),
+            normal_map: Some("test-mat-normal.png".into()),
+            licence: "CC0-1.0".into(),
+            source: "local".into(),
+            catalog: "user".into(),
+            read_only: false,
+            ..Default::default()
+        });
+        let before = s.doc().unwrap().arch.clone();
+        let result = paint(&mut s, "test-mat", "room/r0/floor", "component");
+        assert_eq!(result["painted"], json!(["room/r0/floor"]));
+        assert_eq!(material(&s, "room/r0/floor"), Some(MaterialRef::Item("test-mat".into())));
+        assert_eq!(s.doc().unwrap().arch.images.get("test-mat").map(|img| img.is_valid()), Some(true));
+        assert_eq!(s.doc().unwrap().arch.images.get("test-mat:normal").map(|img| img.is_valid()), Some(true));
+        assert_ne!(s.doc().unwrap().arch, before);
     }
 
     #[test]
@@ -671,13 +737,13 @@ mod tests {
         let before = s.doc().unwrap().arch.clone();
         let depth = undo_depth(&s);
         let r = paint(&mut s, "#c04020", "wall/w0/right", "plan");
-        assert_eq!(r["painted"].as_array().map(Vec::len), Some(4));
-        assert_eq!(s.doc().unwrap().arch.paints.len(), 4);
+        assert_eq!(r["painted"].as_array().map(Vec::len), Some(2));
+        assert_eq!(s.doc().unwrap().arch.paints.len(), 2);
         assert_eq!(undo_depth(&s), depth + 1);
         run(&mut s, "undo", json!({}));
         assert_eq!(s.doc().unwrap().arch, before);
         run(&mut s, "redo", json!({}));
-        assert_eq!(s.doc().unwrap().arch.paints.len(), 4);
+        assert_eq!(s.doc().unwrap().arch.paints.len(), 2);
         // Painting a surface back to its unpainted material removes its entry.
         s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(Finish::Wood);
         paint(&mut s, "#c04020", "room/r0/floor", "component");
@@ -791,7 +857,7 @@ mod tests {
         let dir = TempDir::new("paint-pick");
         let mut s = setup(&dir);
         let r = run(&mut s, "paint.pick", json!({"target": "wall/w0/left"}));
-        assert_eq!(r, json!({"material": "default:wall", "tint": null}));
+        assert_eq!(r, json!({"material": "finish:drywall", "tint": null}));
         paint(&mut s, "brick", "wall/w0/left", "component");
         run(&mut s, "paint.material", json!({"material": "#c04020", "target": "wall/w0/left", "scope": "component", "mode": "blend"}));
         let r = run(&mut s, "paint.pick", json!({"target": "wall/w0/left"}));
@@ -846,7 +912,7 @@ mod tests {
         assert_eq!(pulls, ["own:pull-knob-32"; 3]);
         // A pick the painter cannot use (a default material) is not offered.
         s.start("paint.pick").unwrap();
-        s.input(Input::Text("room/r0/floor".into())).unwrap();
+        s.input(Input::Text("cabinet/cb2/carcass".into())).unwrap();
         s.start("paint.material").unwrap();
         assert!(s.current_prompt().unwrap().message.starts_with("Enter a material"));
         s.input(Input::Cancel).unwrap();

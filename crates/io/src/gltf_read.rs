@@ -271,7 +271,7 @@ impl<'a> Reader<'a> {
 
     fn buffer_view(&self, i: usize) -> Result<(&'a [u8], Option<usize>), String> {
         let bv = arr(self.json, "bufferViews").get(i).ok_or("bufferView index out of range")?;
-        if opt_usize(bv, "buffer")?.ok_or("bufferView has no buffer")? != 0 {
+        if opt_usize(bv, "buffer")?.unwrap_or(0) != 0 {
             return Err("only the first (embedded) buffer is supported".into());
         }
         let off = opt_usize(bv, "byteOffset")?.unwrap_or(0);
@@ -956,6 +956,114 @@ mod tests {
             "meshes": [{"primitives": [{"attributes": {"POSITION": p}}]}],
         }));
         assert!(read_glb(&g).is_err());
+    }
+
+    #[test]
+    fn buffer_view_defaults_to_buffer_zero() {
+        let mut b = Builder::default();
+        let bytes: Vec<u8> = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0].iter().flat_map(|f| f.to_le_bytes()).collect();
+        let bv = b.view(&bytes);
+        let acc = b.acc(&bytes, 5126, 3, "VEC3", json!({}));
+        if let Some(obj) = b.views[bv].as_object_mut() {
+            obj.remove("buffer");
+        }
+        let g = b.finish(json!({"nodes": [{"mesh": 0}], "meshes": [{"primitives": [{"attributes": {"POSITION": acc}}]}]}));
+        assert!(read_glb(&g).is_ok());
+    }
+
+    #[test]
+    fn skips_primitives_with_mode_other_than_triangles() {
+        let mut b = Builder::default();
+        let p = b.floats(&[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 3, "VEC3");
+        let prim = json!({"attributes": {"POSITION": p}, "mode": 1});
+        let g = b.finish(json!({"nodes": [{"mesh": 0}], "meshes": [{"primitives": [prim]}]}));
+        let e = read_glb(&g).expect_err("no triangles");
+        assert!(e.contains("no triangles"), "{e}");
+    }
+
+    #[test]
+    fn material_without_pbr_defaults_to_metallic_rough() {
+        let mut b = Builder::default();
+        let p = b.floats(&[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 3, "VEC3");
+        let prim = json!({"attributes": {"POSITION": p}, "material": 0});
+        let g = b.finish(json!({
+            "nodes": [{"mesh": 0}],
+            "meshes": [{"primitives": [prim]}],
+            "materials": [{}],
+        }));
+        let m = read_glb(&g).expect("reads");
+        assert_eq!(m.parts[0].metallic, 1.0);
+        assert_eq!(m.parts[0].roughness, 1.0);
+        assert_eq!(m.parts[0].base_color, [1.0; 4]);
+    }
+
+    #[test]
+    fn refuses_position_accessor_with_wrong_type() {
+        let mut b = Builder::default();
+        let bytes: Vec<u8> = [0.0f32, 0.0, 1.0, 0.0, 0.0, 1.0].iter().flat_map(|f| f.to_le_bytes()).collect();
+        let bv = b.view(&bytes);
+        let acc = b.acc(&bytes, 5126, 3, "VEC2", json!({}));
+        let g = b.finish(json!({
+            "nodes": [{"mesh": 0}],
+            "meshes": [{"primitives": [{"attributes": {"POSITION": acc}}]}],
+        }));
+        let e = read_glb(&g).expect_err("wrong type");
+        assert!(e.contains("type"), "{e}");
+    }
+
+    #[test]
+    fn node_with_no_mesh_is_skipped() {
+        let mut b = Builder::default();
+        let p = b.floats(&[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 3, "VEC3");
+        let prim = json!({"attributes": {"POSITION": p}});
+        let g = b.finish(json!({
+            "scenes": [{"nodes": [0, 1]}],
+            "nodes": [{"name": "empty"}, {"mesh": 0}],
+            "meshes": [{"primitives": [prim]}],
+        }));
+        let m = read_glb(&g).expect("reads");
+        assert_eq!(m.parts.len(), 1);
+    }
+
+    #[test]
+    fn node_with_zero_scale_collapses_mesh() {
+        let mut b = Builder::default();
+        let p = b.floats(&[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 3, "VEC3");
+        let prim = json!({"attributes": {"POSITION": p}});
+        let g = b.finish(json!({
+            "nodes": [{"mesh": 0, "scale": [0.0, 0.0, 0.0]}],
+            "meshes": [{"primitives": [prim]}],
+        }));
+        let m = read_glb(&g).expect("reads");
+        let e = m.extents();
+        assert!(e[0].abs() < 1e-6 && e[1].abs() < 1e-6 && e[2].abs() < 1e-6, "{e:?}");
+    }
+
+    #[test]
+    fn reads_a_single_triangle() {
+        let mut b = Builder::default();
+        let p = b.floats(&[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 3, "VEC3");
+        let prim = json!({"attributes": {"POSITION": p}});
+        let g = b.finish(json!({
+            "nodes": [{"mesh": 0}],
+            "meshes": [{"primitives": [prim]}],
+        }));
+        let m = read_glb(&g).expect("reads");
+        assert_eq!(m.triangles(), 1);
+        assert_eq!(m.parts[0].positions.len(), 3);
+    }
+
+    #[test]
+    fn negative_scale_fixes_winding() {
+        let mut b = Builder::default();
+        let p = b.floats(&[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 3, "VEC3");
+        let prim = json!({"attributes": {"POSITION": p}});
+        let g = b.finish(json!({
+            "nodes": [{"mesh": 0, "scale": [-1.0, 1.0, 1.0]}],
+            "meshes": [{"primitives": [prim]}],
+        }));
+        let m = read_glb(&g).expect("reads");
+        assert_eq!(m.parts[0].indices, vec![0, 2, 1]);
     }
 
     #[test]

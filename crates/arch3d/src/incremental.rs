@@ -786,7 +786,7 @@ impl Sections {
                 } else {
                     floors::floor_slab(&floor, &i.level, "floor")
                 };
-                out.extend(slab.map(|m| crate::finish::finish_floor(m, i.room.floor_finish)));
+                out.extend(slab.map(|m| crate::finish::room_floor(m, &i.room)));
             }
             out.extend(crate::ceiling::ceiling_meshes(&i.ceiling));
             painted(model, out)

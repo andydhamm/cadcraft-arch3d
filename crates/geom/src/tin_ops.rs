@@ -5,7 +5,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::Vec2;
-use crate::Vec3;
 use crate::tin::{ContourSegment, Tin, barycentric};
 
 /// A uniform grid over a TIN's triangles for fast point location.
@@ -335,6 +334,7 @@ fn walk_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Vec3;
 
     #[test]
     fn tin_index_locates_like_a_full_scan() {
