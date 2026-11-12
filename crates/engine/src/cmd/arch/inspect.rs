@@ -13,9 +13,9 @@ use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
 use cadcraft_doc::ArchId;
 use cadcraft_doc::Handle;
 use cadcraft_doc::arch::{
-    ArchModel, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair, StairShape,
-    arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle, railing_handle, railing_label, roof_handle,
-    roof_label, room_handle, room_label, stair_handle, stair_label, wall_label,
+    ArchKind, ArchModel, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair,
+    StairShape, arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle, railing_handle, railing_label,
+    roof_handle, roof_label, room_handle, room_label, stair_handle, stair_label, wall_label,
 };
 use std::f64::consts::PI;
 // RoofId might be ArchId or a new type. If it's not found, we might need to use ArchId or import it if it exists.
@@ -254,6 +254,11 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
 
     // Arch openings are reported read-only: no `doc_mut`, no `touch_arch`.
     let mut opening_objects = Vec::new();
+    let schedule_numbers = if openings_flag || p.get("cabinets").and_then(Value::as_bool) == Some(true) {
+        cadcraft_arch::schedule::numbers(&d.arch)
+    } else {
+        std::collections::BTreeMap::new()
+    };
     if openings_flag {
         for o in &d.arch.openings {
             let mut obj = JsonMap::new();
@@ -262,6 +267,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             obj.insert("host".to_string(), json!(format!("w{}", o.host.0)));
             obj.insert("kind".to_string(), json!(kind_label(o.kind)));
             obj.insert("style".to_string(), json!(o.style));
+            obj.insert("number".to_string(), json!(schedule_numbers.get(&(ArchKind::Opening, o.id))));
             obj.insert("offset".to_string(), json!(o.offset));
             obj.insert("width".to_string(), json!(o.width));
             obj.insert("height".to_string(), json!(o.height));
@@ -434,7 +440,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::site_inspect::inspect_site(&d.arch, p, &mut out);
     super::light_inspect::inspect_lights(&d.arch, p, &mut out);
     super::casework::inspect_casework(&d.arch, p, &mut out);
-    inspect_cabinet_parts(&d.arch, &mut out);
+    inspect_cabinet_parts(&d.arch, &schedule_numbers, &mut out);
     inspect_furnishings(&d.arch, p, &mut out);
     super::electrical_inspect::inspect_electrical(&d.arch, p, &mut out);
     super::foundation::inspect_foundations(&d.arch, p, &mut out);
@@ -444,6 +450,8 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::deck_inspect::inspect_decks(&d.arch, p, &mut out);
     super::inspect_detail::inspect_details(&d.arch, &mut out);
     super::look::inspect_look(&d.arch, p, &mut out);
+    super::sheet_inspect::inspect_schedules(d, p, &mut out);
+    super::sheet_inspect::inspect_sheets(d, p, &mut out);
     super::plan_inspect::inspect_plan_views(&d.arch, p, &mut out);
     super::plan_inspect::inspect_plan(&d.arch, p, &mut out)?;
 
@@ -452,7 +460,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
 
 /// Add the cabinet-part fields (styles, pull, fronts, false front, cut-out) to the
 /// `cabinets` rows already in `out`. Read-only.
-fn inspect_cabinet_parts(model: &ArchModel, out: &mut JsonMap<String, Value>) {
+fn inspect_cabinet_parts(model: &ArchModel, numbers: &std::collections::BTreeMap<(ArchKind, ArchId), String>, out: &mut JsonMap<String, Value>) {
     let Some(Value::Array(rows)) = out.get_mut("cabinets") else { return };
     for (row, c) in rows.iter_mut().zip(model.cabinets.iter()) {
         let Value::Object(obj) = row else { continue };
@@ -478,6 +486,7 @@ fn inspect_cabinet_parts(model: &ArchModel, out: &mut JsonMap<String, Value>) {
                 })
             })
             .collect();
+        obj.insert("number".to_string(), json!(numbers.get(&(ArchKind::Cabinet, c.id))));
         obj.insert("doorStyle".to_string(), json!(c.door_style.name()));
         obj.insert("drawerStyle".to_string(), json!(c.drawer_style.name()));
         obj.insert("pull".to_string(), json!(c.pull));
