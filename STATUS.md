@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-12 17:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-12 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 16 of 35 segments merged · 4 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 17 of 35 segments merged · 4 of 20 acceptance checks**
 
-9,172 workspace tests passing at the last merge · 998 segments merged in all · 0 of 15 seats working
+9,182 workspace tests passing at the last merge · 999 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,18 +28,18 @@ Updated 2026-11-12 17:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 36.0 h so far · expected done Nov 13 19:33–Nov 15 14:47 UTC |
+| 18 | Interior finish, kitchen and bath | building | 4 / 20 | 36.3 h so far · expected done Nov 13 15:21–Nov 15 04:30 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 3 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-16 merged, 10 queued, 9 merging
+17 merged, 9 queued, 7 merging, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p18-room-finishes-1` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | merging | claude-sonnet-b |
+| `p18-room-finishes-1` | Room-type finishes: Concrete / Tile / Carpet / Drywall / Plaster finishes and a room-type template of floor, wall and ceiling materials that rooms take when detected or retyped, painter edits winning | gate | claude-sonnet-d |
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
 | `p18-molding-lines-1` | Molding lines: `moldingline` sweeps a profile along a drawn 2D path at an elevation (a tray's edge, a wainscot cap) with mitred corners, drawn in plan, inspectable | merging | mai-flash-esc |
 | `p18-countertops` | Countertops: `countertop.detach` turns an automatic counter into a custom one that keeps its outline, `countertop` draws one from scratch, edges move by a typed distance, sink cut-outs carry over; drawn in plan and saved as DXF proxies | merging | claude-sonnet-d |
@@ -47,12 +47,14 @@ Updated 2026-11-12 17:30 UTC. This page and the card in the README are regenerat
 | `p18-cabinet-fronts-2` | Cabinet construction and face layouts: framed or frameless boxes, overlay or inset fronts, `cabinet.face` rows of door / drawer / false / opening items with heights, split across or down, door pairs above 0.686 m (27 in) | merging | claude-sonnet-d |
 | `p18-corners` | Corner cabinets: a base or wall cabinet in an inside corner where two runs meet becomes blind, diagonal-door or lazy-susan (a plan symbol with its cut-out), and the counter runs round the corner in one piece | merging | claude-sonnet-c |
 | `p18-fillers-shelves` | Fillers and open shelves: `cabinet.fill` closes a run's gap to a wall with a filler up to 0.15 m (larger gaps reported, never stretched); open wall cabinets with an automatic or given shelf count, evenly spaced | merging | claude-sonnet-d |
-| `p18-shower-niche-2` | Bath openings: a "Shower" door style (frameless glass, swings both ways) for glass walls, and wall niches: opening kind `niche`, recessed `depth` from one face with a width, height, sill and back material, refused unless the wall is 12 mm thicker; no molding on glass | merging | claude-sonnet-d |
+| `p18-shower-niche-3` | Bath openings: a "Shower" door style (frameless glass, swings both ways) for glass walls, and wall niches: opening kind `niche`, recessed `depth` from one face with a width, height, sill and back material, refused unless the wall is 12 mm thicker; no molding on glass | working | claude-sonnet-c |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 12 17:41 | `p18-room-finishes-1` | refused | 0 pass | claude-sonnet-b |
+| Nov 12 17:41 | `p18-shower-niche-2` | merged | 9,182 pass | claude-sonnet-d |
 | Nov 12 17:19 | `p19-env-path` | merged | 9,172 pass, 1 fail | claude-sonnet-b |
 | Nov 12 17:03 | `p21-schedule-model` | merged | 9,166 pass | mai-flash-esc |
 | Nov 12 17:03 | `p21-sheet-command` | merged | 9,166 pass | claude-sonnet-c |
@@ -63,25 +65,23 @@ Updated 2026-11-12 17:30 UTC. This page and the card in the README are regenerat
 | Nov 12 15:31 | `p19-env-path` | refused | 0 pass | claude-sonnet-b |
 | Nov 12 15:31 | `p18-glass-walls-2` | merged | 9,112 pass | claude-sonnet-c |
 | Nov 12 15:12 | `p21-view-plumbing` | merged | 9,102 pass | claude-sonnet-d |
-| Nov 12 14:36 | `p18-fillers-shelves` | refused | 0 pass | mai-flash-b |
-| Nov 12 14:36 | `p18-glass-walls-2` | refused | 9,103 pass, 2 fail | claude-sonnet-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1193 |
-| bonsai-b | bonsai2-27b | gate | 1152 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1265 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1220 |
+| bonsai-a | bonsai2-27b | agent | 1194 |
+| bonsai-b | bonsai2-27b | agent | 1154 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1266 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1221 |
 | claude-sonnet-a | sonnet | gate | 139 |
-| claude-sonnet-b | sonnet | gate | 145 |
-| claude-sonnet-c | sonnet | idle | 82 |
-| claude-sonnet-d | sonnet | agent | 75 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1058 |
+| claude-sonnet-b | sonnet | idle | 147 |
+| claude-sonnet-c | sonnet | agent | 82 |
+| claude-sonnet-d | sonnet | gate | 76 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1060 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 98 |
-| mai-flash-b | mai-code-1.1-flash | gate | 39 |
+| mai-flash | mai-code-1.1-flash | gate | 99 |
+| mai-flash-b | mai-code-1.1-flash | agent | 40 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 103 |
 | tturbo-mac | tturbo-ultraheretic | gate | 805 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 414 |
