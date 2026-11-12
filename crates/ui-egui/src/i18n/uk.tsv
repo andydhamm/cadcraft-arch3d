@@ -1640,6 +1640,12 @@
 # Phase 20: room labels.
 	Room Moldings	Молдинги кімнат
 	Architecture>Room Moldings	Архітектура>Молдинги кімнат
+	Molding Line	Лінія молдинга
+	Edit Molding Line	Редагувати лінію молдинга
+	Delete Molding Line	Видалити лінію молдинга
+	Architecture>Molding Line	Архітектура>Лінія молдинга
+	Architecture>Edit Molding Line	Архітектура>Редагувати лінію молдинга
+	Architecture>Delete Molding Line	Архітектура>Видалити лінію молдинга
 	Architecture>Split Wall	Архітектура>Розділити стіну
 	Sheet	Аркуш
 	Edit Sheet	Редагувати аркуш
