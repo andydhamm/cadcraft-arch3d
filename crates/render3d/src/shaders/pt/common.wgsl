@@ -139,6 +139,13 @@ fn onb(n: vec3<f32>) -> mat3x3<f32> {
 }
 
 // [p19-seeing-in-render] true when a hit at world point p is cut away by the clip box.
-fn hit_clipped(p: vec3<f32>) -> bool { return false; }
+fn hit_clipped(p: vec3<f32>) -> bool {
+    if ((frame.flags & FRAME_CLIP) == 0u) {
+        return false;
+    }
+    return any(p < frame.clip_min.xyz) || any(p > frame.clip_max.xyz);
+}
 // [p19-seeing-in-render] the distance along a camera ray of direction d at which it starts (near clip).
-fn camera_t_min(d: vec3<f32>) -> f32 { return 0.0; }
+fn camera_t_min(d: vec3<f32>) -> f32 {
+    return frame.view.w / max(dot(d, frame.view.xyz), 1.0e-4);
+}

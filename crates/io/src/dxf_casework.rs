@@ -6,8 +6,8 @@
 use cadcraft_arch::casework::{cabinet_layer, fixture_layer, fixture_symbol};
 use cadcraft_arch::casework_symbol::cabinet_symbol_in;
 use cadcraft_doc::arch::ArchModel;
-use cadcraft_dxf::Tag;
 use cadcraft_geom::Vec2;
+use craft_dxf::Tag;
 
 /// Marker in the `CADCRAFT` xdata of every casework proxy.
 pub(crate) const CASEWORK_PROXY_MARKER: &str = "CADCRAFT-CASEWORK";

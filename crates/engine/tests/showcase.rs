@@ -859,6 +859,60 @@ fn the_showcase_replay_is_deterministic() {
 }
 
 #[test]
+fn the_showcase_has_its_phase17_details() {
+    install_io();
+    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
+    let mut session = Session::new();
+    session.new_drawing(true);
+    replay(&script, &mut session);
+
+    let reply = session
+        .execute("arch.inspect", &serde_json::json!({"stairs": true, "railings": true, "openings": true, "decks": true, "rooms": true}))
+        .unwrap();
+    println!("phase17 reply: {}", serde_json::to_string_pretty(&reply).unwrap());
+
+    let stairs: Vec<Value> = reply.get("stairs").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    assert_eq!(stairs.len(), 2, "expected exactly two stairs, found {}", stairs.len());
+    let railings: Vec<Value> = reply.get("railings").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    for stair in &stairs {
+        let auto_count = railings.iter().filter(|r| boold(r, "auto", false) && field_text(r, "follows") == field_text(stair, "id")).count();
+        assert!(auto_count >= 2, "stair {} has only {} auto-following railings", field_text(stair, "id"), auto_count);
+    }
+    assert!(
+        railings.iter().filter(|r| (strd(r, "host", "") == "stairLeft" || strd(r, "host", "") == "stairRight") && boold(r, "auto", false)).count()
+            >= 4,
+        "expected automatic stair railings on both sides"
+    );
+
+    let openings: Vec<Value> = reply.get("openings").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let grille_count = openings
+        .iter()
+        .filter(|opening| {
+            let Some(grille) = opening.get("grille").filter(|v| !v.is_null()) else {
+                return false;
+            };
+            let across = grille.get("across").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+            let down = grille.get("down").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+            across * down > 1
+        })
+        .count();
+    assert!(grille_count >= 3, "expected at least three grilles with across * down > 1, found {}", grille_count);
+    assert!(openings.iter().any(|o| strd(o, "top", "") == "round"), "expected a round-topped opening");
+
+    let decks: Vec<Value> = reply.get("decks").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let deck = decks.iter().find(|d| strd(d, "name", "") == "Rear deck").expect("Rear deck not found");
+    assert!(deck.get("ledger").is_some_and(|ledger| ledger.is_object()), "deck ledger is empty");
+    let joists = deck.get("joists").and_then(|v| v.as_array()).unwrap();
+    assert!(joists.len() >= 9, "deck has {} joists, expected at least 9", joists.len());
+    assert!(!deck.get("posts").and_then(|v| v.as_array()).unwrap_or(&Vec::new()).is_empty(), "deck posts are empty");
+    let deck_railing =
+        railings.iter().find(|r| strd(r, "host", "") == "deck" && field_text(r, "follows") == field_text(deck, "id")).expect("deck railing missing");
+    assert_eq!(strd(deck_railing, "host", ""), "deck", "deck railing host should be `deck`");
+
+    let _ = session.execute("export", &serde_json::json!({"path": "phase17-showcase.glb", "level": "Entry"})).unwrap();
+}
+
+#[test]
 fn the_showcase_inspect_has_expected_keys() {
     install_io();
     let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");

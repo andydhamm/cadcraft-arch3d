@@ -128,10 +128,12 @@ fn new_sections_are_empty_with_stubs() {
     let full = with_phase18(kitchen());
     let (a, b) = (Scene3d::build(&plain), Scene3d::build(&full));
     // The room (for its moldings) adds a floor and a ceiling; nothing else.
-    let without_room: Vec<_> =
-        owners(&b).into_iter().filter(|(material, _)| material != "floor" && material != "ceiling" && material != "countertop").collect();
+    let without_room: Vec<_> = owners(&b).into_iter().filter(|(material, _)| !material.starts_with("floor") && material != "ceiling").collect();
     assert_eq!(owners(&a), without_room);
-    assert!(b.meshes.iter().all(|m| !m.material.starts_with("molding-") && m.material != "backsplash"), "the stubs build nothing");
+    assert!(
+        b.meshes.iter().all(|m| !m.material.starts_with("molding-") && !m.material.starts_with("countertop") && m.material != "backsplash"),
+        "the stubs build nothing"
+    );
 }
 
 #[test]
@@ -231,15 +233,14 @@ fn cabinet_neighbours_are_projections() {
     assert_eq!(cache.update(&m).rebuilt, 2);
     check(&cache, &m, "crown toggle");
 
-    // A countertop's polygon is read by no cabinet mesh: only the countertop rebuilds.
+    // A countertop's polygon is read by no cabinet mesh.
     m.countertops[0].polygon[2] = Vec2::new(3.5, 3.2);
-    assert_eq!(cache.update(&m).rebuilt, 1);
+    assert_eq!(cache.update(&m).rebuilt, 0);
     check(&cache, &m, "countertop polygon");
 
     // Claiming a cabinet changes the claimed ids of the level: every cabinet on it is rebuilt.
     m.countertops[0].cabinets.push(ArchId(0));
-    // The countertop holding the claim is rebuilt too.
-    let level = m.cabinets.len() + 1;
+    let level = m.cabinets.len();
     assert_eq!(cache.update(&m).rebuilt, level);
     check(&cache, &m, "claimed cabinet");
 }
