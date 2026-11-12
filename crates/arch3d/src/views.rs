@@ -71,7 +71,8 @@ fn cmp_pts(a: &[[f64; 2]], b: &[[f64; 2]]) -> Ordering {
 /// direction, no section line, too many lines) gives an empty geometry with `error` set.
 pub fn generate(scene: &Scene3d, view: &ArchView, revision: u64) -> ViewGeometry {
     let (lines, rings): (Vec<Line2>, Vec<ViewRing>) = match view.kind {
-        ViewKind::Elevation => {
+        // Interior: the elevation branch until the view plumbing replaces it.
+        ViewKind::Elevation | ViewKind::Interior => {
             let Some(ov) = OrthoView::elevation(view.look) else { return failed(revision, "the look direction is not usable") };
             let sc = restrict(scene, view, None);
             (merge_collinear(visible_lines(&sc, &ov)), Vec::new())

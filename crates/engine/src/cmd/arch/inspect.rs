@@ -237,6 +237,8 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             obj.insert("roughCeiling".to_string(), json!(rough));
             obj.insert("finishedCeiling".to_string(), json!(finished));
             obj.insert("ceilingWarning".to_string(), json!(cadcraft_arch::ceiling::vault::ceiling_warning(&d.arch, r)));
+            obj.insert("labelArea".to_string(), json!(r.label_area.key()));
+            obj.insert("ceilingText".to_string(), json!(cadcraft_arch::plan::ceiling::room_ceiling_text(&d.arch, r)));
             obj.insert("deckHeight".to_string(), json!(r.deck_height));
             obj.insert("floorFinish".to_string(), json!(r.floor_finish.map(cadcraft_doc::arch::Finish::name)));
             obj.insert("hasFloor".to_string(), json!(r.room_type.has_floor()));
@@ -442,7 +444,8 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::deck_inspect::inspect_decks(&d.arch, p, &mut out);
     super::inspect_detail::inspect_details(&d.arch, &mut out);
     super::look::inspect_look(&d.arch, p, &mut out);
-    super::room_moldings::inspect_moldings(&d.arch, p, &mut out);
+    super::plan_inspect::inspect_plan_views(&d.arch, p, &mut out);
+    super::plan_inspect::inspect_plan(&d.arch, p, &mut out)?;
 
     Ok(Value::Object(out))
 }

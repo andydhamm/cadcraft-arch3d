@@ -359,6 +359,25 @@ fn run_look(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     Ok(json!({"look": describe_look(&global_look(&s.doc()?.arch))}))
 }
 
+fn resolved_sun(model: &ArchModel, a: &SunAngle) -> Option<(f64, f64, [f64; 3])> {
+    match (&a.date, &a.time, a.azimuth, a.elevation) {
+        (Some(date), Some(time), None, None) => {
+            let site = model.site.as_ref()?;
+            let sun = sun_position(site.latitude, date, time)?;
+            let dir = true_to_drawing(Some(site), sun_dir(&sun));
+            Some((sun.azimuth_deg, sun.elevation_deg, dir))
+        }
+        (None, None, Some(azimuth), Some(elevation)) => {
+            if !azimuth.is_finite() || !elevation.is_finite() || !(-90.0..=90.0).contains(&elevation) {
+                return None;
+            }
+            let dir = true_to_drawing(model.site.as_ref(), sun_dir(&Sun { azimuth_deg: azimuth, elevation_deg: elevation, ..Sun::default() }));
+            Some((azimuth, elevation, dir))
+        }
+        _ => None,
+    }
+}
+
 /// `arch.inspect` keys `look` (the global look) and `sunAngles`.
 pub(crate) fn inspect_look(model: &ArchModel, p: &Value, out: &mut Map<String, Value>) {
     if p.get("look").and_then(Value::as_bool).unwrap_or(false) {
@@ -369,9 +388,18 @@ pub(crate) fn inspect_look(model: &ArchModel, p: &Value, out: &mut Map<String, V
             .sun_angles
             .iter()
             .map(|a| {
+                let resolved = resolved_sun(model, a);
+                let (sun_azimuth, sun_elevation, dir) = resolved.unwrap_or((f64::NAN, f64::NAN, [0.0; 3]));
+                let ok = sun_azimuth.is_finite() && sun_elevation.is_finite();
                 json!({
-                    "name": a.name, "date": a.date, "time": a.time, "azimuth": a.azimuth, "elevation": a.elevation,
-                    "dir": sun_angle_dir(model, a),
+                    "name": a.name,
+                    "date": a.date,
+                    "time": a.time,
+                    "azimuth": a.azimuth,
+                    "elevation": a.elevation,
+                    "dir": ok.then_some(dir),
+                    "sunElevation": ok.then_some(sun_elevation),
+                    "sunAzimuth": ok.then_some(sun_azimuth),
                 })
             })
             .collect();

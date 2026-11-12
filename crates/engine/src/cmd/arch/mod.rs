@@ -45,7 +45,9 @@ pub mod opening;
 pub mod outlets_auto;
 pub mod paint;
 pub mod pick;
+pub mod plan_inspect;
 pub mod plant;
+pub mod planview;
 pub mod railing;
 pub mod render;
 pub mod roofauto;
@@ -61,6 +63,7 @@ pub mod soffit;
 pub mod stair;
 pub mod stretch;
 pub mod sun;
+pub mod sunangle;
 pub mod sunstudy;
 pub mod terrain;
 pub mod terrain_modify;
@@ -134,8 +137,10 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(illuminance::specs());
     v.extend(render::specs());
     v.extend(sunstudy::specs());
+    v.extend(sunangle::specs());
     v.extend(tray::specs());
     v.extend(foundation::specs());
     v.extend(soffit::specs());
+    v.extend(planview::specs());
     v
 }

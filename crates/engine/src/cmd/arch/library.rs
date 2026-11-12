@@ -718,6 +718,58 @@ mod tests {
     }
 
     #[test]
+    fn install_copies_and_validates_the_normal_map() {
+        let dir = TempDir::new("library-install-normal");
+        let user = dir.join("user-dir");
+        let mut s = session(&user);
+
+        let mut good = entry("test-mat", "test-mat.png");
+        good["category"] = json!("Materials");
+        good["normalMap"] = json!("test-mat-normal.png");
+        let image = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![255; 64 * 64 * 4], ..Default::default() };
+        let normal = cadcraft_doc::arch::ImageRgba { width: 64, height: 64, rgba: vec![128; 64 * 64 * 4], ..Default::default() };
+        let src = catalog_folder(
+            &dir,
+            "mat",
+            json!([good]),
+            &[
+                ("test-mat.png", cadcraft_io::png::encode_rgba8(image.width, image.height, &image.rgba).unwrap()),
+                ("test-mat-normal.png", cadcraft_io::png::encode_rgba8(normal.width, normal.height, &normal.rgba).unwrap()),
+            ],
+        );
+        let r = run(&mut s, "library.install", json!({"from": src.to_string_lossy()}));
+        assert_eq!(r["items"], json!(1));
+        assert_eq!(r["skipped"], json!([]));
+        let installed = user.join("installed").join("mat");
+        assert!(installed.join("test-mat.png").is_file());
+        assert!(installed.join("test-mat-normal.png").is_file());
+        assert_eq!(
+            s.library.normal_map_bytes("test-mat").unwrap().unwrap(),
+            cadcraft_io::png::encode_rgba8(normal.width, normal.height, &normal.rgba).unwrap()
+        );
+
+        let bad = catalog_folder(
+            &dir,
+            "bad-mat",
+            json!([{
+                "id": "bad-mat",
+                "name": "Bad Mat",
+                "category": "Materials",
+                "licence": "CC0-1.0",
+                "source": "https://example.org",
+                "author": "A. Maker",
+                "file": "bad-mat.png",
+                "normalMap": "../outside.png"
+            }]),
+            &[("bad-mat.png", cadcraft_io::png::encode_rgba8(8, 8, &vec![255; 8 * 8 * 4]).unwrap())],
+        );
+        let r = run(&mut s, "library.install", json!({"from": bad.to_string_lossy()}));
+        assert_eq!(r["items"], json!(0));
+        assert_eq!(r["skipped"].as_array().map(Vec::len), Some(1));
+        assert!(r["skipped"][0]["reason"].as_str().unwrap().contains("normal map"));
+    }
+
+    #[test]
     fn install_skips_unlicensed_items() {
         let dir = TempDir::new("library-install-skip");
         let user = dir.join("user-dir");
