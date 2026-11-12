@@ -137,11 +137,14 @@ mod tests {
         assert_eq!(v["schedules"], json!([]), "{v}");
         assert_eq!(v["sheets"], json!([]), "{v}");
         assert_eq!(v["sheetSet"], json!({"project": "", "date": ""}), "{v}");
-        s.doc_mut(|d| {
+        {
+            let d = s.doc_mut();
+            assert!(d.is_ok());
+            let Ok(d) = d else { return };
             d.arch.schedules.push(Schedule { name: "Doors".into(), columns: vec!["number".into()], ..Schedule::default() });
             d.arch.sheets.push(Sheet { name: "A101".into(), number: "A101".into(), ..Sheet::default() });
             d.arch.sheet_set = SheetSet { project: "House".into(), date: "2026-11-12".into() };
-        });
+        }
         let v = inspect(&mut s, json!({"schedules": true, "sheets": true}));
         assert_eq!(v["schedules"][0]["id"], "sc0", "{v}");
         assert_eq!(v["schedules"][0]["kind"], "door", "{v}");
