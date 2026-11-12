@@ -995,7 +995,9 @@ impl Sections {
     /// The scene these parts make (a copy; the cache keeps its parts).
     pub(crate) fn scene(&self, model: &ArchModel) -> Scene3d {
         let meshes = self.all_parts().flatten().filter(|m| keep(m)).cloned().collect();
-        with_meshes(self.counts(model), meshes)
+        let mut scene = with_meshes(self.counts(model), meshes);
+        scene.horizon = crate::site::horizon_mesh(model);
+        scene
     }
 
     /// The scene these parts make, moving their meshes into it.
@@ -1045,7 +1047,9 @@ impl Sections {
             .chain(meshes(molding_lines))
             .chain(meshes(countertops))
             .chain(meshes(backsplashes));
-        with_meshes(counts, all.filter(keep).collect())
+        let mut scene = with_meshes(counts, all.filter(keep).collect());
+        scene.horizon = crate::site::horizon_mesh(model);
+        scene
     }
 
     /// A scene without meshes, counted the way [`Scene3d::build`] counts: an object counts when its
@@ -1310,6 +1314,9 @@ impl Scene3d {
     /// equal digests; a scene without materials digests as it did before phase 14.
     pub fn digest(&self) -> String {
         let mut digests: Vec<u64> = self.meshes.iter().map(mesh_digest).collect();
+        if let Some(h) = &self.horizon {
+            digests.push(mesh_digest(h));
+        }
         digests.sort_unstable();
         let mut hash = digests.iter().fold(FNV_OFFSET_BASIS, |h, d| fnv1a(&d.to_le_bytes(), h));
         // `materials` is a BTreeMap: its iteration is sorted by name.
@@ -1646,6 +1653,39 @@ mod tests {
             }
             cache.update(&next);
             assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest(), "step {step} (edit {pick})");
+            model = next;
+        }
+    }
+
+    #[test]
+    fn scene_cache_equals_full_with_strips() {
+        use cadcraft_doc::arch::StripFacing;
+        let mut model = p17_house(false);
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(0), &t, Vec2::new(5.0, 4.0));
+        f.path = vec![Vec2::new(3.0, 4.0), Vec2::new(7.0, 4.0)];
+        f.height = Some(2.3);
+        model.lights.push(f);
+        model.next_light_id = 1;
+        let (mut cache, _) = SceneCache::new(&model);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&model).digest());
+        assert_eq!(cache.scene().lights.len(), 1);
+        for step in 0..6 {
+            let mut next = model.clone();
+            if let Some(l) = next.lights.get_mut(0) {
+                match step {
+                    0 => l.path.push(Vec2::new(7.0, 6.0)),
+                    1 => l.lumens_per_metre = 300.0,
+                    2 => l.facing = StripFacing::Out,
+                    3 => l.closed = true,
+                    4 => l.height = Some(2.0),
+                    _ => l.on = false,
+                }
+            }
+            cache.update(&next);
+            let full = Scene3d::build(&next);
+            assert_eq!(cache.scene().digest(), full.digest(), "step {step}");
+            assert_eq!(cache.scene().lights, full.lights, "step {step}");
             model = next;
         }
     }

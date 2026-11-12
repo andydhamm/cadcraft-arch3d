@@ -68,6 +68,43 @@ pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
     model.lights.iter().flat_map(|f| fixture_housing(f, light_point(model, f))).collect()
 }
 
+/// One strip light's housing: a 12 mm wide by 6 mm high box (`light-strip`) along each segment of
+/// the path at the light height, plus a 1 mm lens (`light-lens-lit` when on, `light-lens` when
+/// off) on the bottom face. Empty when the path has fewer than two points.
+fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
+    if f.path.len() < 2 {
+        return Vec::new();
+    }
+    let lens = if f.on { "light-lens-lit" } else { "light-lens" };
+    let hw = 0.012 / 2.0;
+    let mut parts: Vec<Option<Mesh>> = Vec::new();
+    let mut segments: Vec<(Vec2, Vec2)> = f.path.windows(2).map(|w| (w[0], w[1])).collect();
+    if f.closed && f.path.len() > 2 {
+        if let (Some(last), Some(first)) = (f.path.last(), f.path.first()) {
+            segments.push((*last, *first));
+        }
+    }
+    for (a, b) in segments {
+        if !a.is_finite() || !b.is_finite() {
+            continue;
+        }
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 1e-6 || !len.is_finite() {
+            continue;
+        }
+        let ux = dx / len;
+        let uy = dy / len;
+        let px = -uy * hw;
+        let py = ux * hw;
+        let ring = vec![Vec2::new(a.x + px, a.y + py), Vec2::new(b.x + px, b.y + py), Vec2::new(b.x - px, b.y - py), Vec2::new(a.x - px, a.y - py)];
+        parts.push(prism("light-strip", f, &ring, zp - 0.006, zp));
+        parts.push(prism(lens, f, &ring, zp - 0.006, zp - 0.005));
+    }
+    parts
+}
+
 /// One fixture's housing with its light at `point` ([`light_point`]); none without a point. The
 /// incremental rebuild reuses it while the fixture and its point are unchanged.
 pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> Vec<Mesh> {
@@ -118,6 +155,7 @@ pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> 
             let diffuser = prism(lens, f, &inner, zp - 0.004, zp - 0.002);
             vec![finish(frame_m), diffuser]
         }
+        FixtureShape::Strip => strip_housing(f, zp),
     };
     parts.into_iter().flatten().collect()
 }
@@ -220,6 +258,34 @@ pub fn ceiling_cutouts(model: &ArchModel, room: &Room, level: &Level) -> Vec<Vec
 mod tests {
     use super::*;
     use cadcraft_doc::ArchId;
+
+    #[test]
+    fn strip_housing_follows_path() {
+        let mut m = ArchModel::default();
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0), Vec2::new(3.0, 3.0)];
+        f.height = Some(2.4);
+        m.lights.push(f.clone());
+        let meshes = fixture_meshes(&m);
+        let housing: Vec<_> = meshes.iter().filter(|x| x.material == "light-strip").collect();
+        assert_eq!(housing.len(), 2);
+        assert_eq!(meshes.iter().filter(|x| x.material == "light-lens-lit").count(), 2);
+        for h in &housing {
+            assert!(h.is_manifold());
+            let b = h.bounds();
+            assert!((b.max[2] - 2.4).abs() < 1e-5 && (b.min[2] - 2.394).abs() < 1e-5, "{b:?}");
+        }
+        let b = housing[0].bounds();
+        assert!((b.min[0] - 1.0).abs() < 1e-5 && (b.max[0] - 3.0).abs() < 1e-5);
+        assert!((b.max[1] - b.min[1] - 0.012).abs() < 1e-5);
+        // A closed path adds the closing segment; an off strip gets the unlit lens.
+        m.lights[0].closed = true;
+        m.lights[0].on = false;
+        let meshes = fixture_meshes(&m);
+        assert_eq!(meshes.iter().filter(|x| x.material == "light-strip").count(), 3);
+        assert_eq!(meshes.iter().filter(|x| x.material == "light-lens").count(), 3);
+    }
 
     fn model_with(names: &[&str]) -> ArchModel {
         let mut m = ArchModel::default();

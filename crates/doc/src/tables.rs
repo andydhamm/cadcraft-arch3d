@@ -922,12 +922,29 @@ pub struct Ucs {
     pub y_axis: Vec3,
 }
 
+/// A wildcard rule that matches layer names case-insensitively.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LayerRule {
+    pub pattern: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transparency: Option<u8>,
+}
+
 /// A saved layer state (LAYERSTATE).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct LayerState {
     pub name: String,
     pub layers: Vec<Layer>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<LayerRule>,
 }
+
+pub const MAX_LAYER_RULES: usize = 256;
+pub const MAX_LAYER_PATTERN: usize = 255;
 
 /// A named group of entities (GROUP).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

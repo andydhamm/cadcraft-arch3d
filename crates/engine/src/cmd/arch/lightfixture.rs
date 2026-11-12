@@ -72,6 +72,7 @@ fn kind_name(kind: LightKind) -> &'static str {
         LightKind::Point => "point",
         LightKind::Spot => "spot",
         LightKind::Area => "area",
+        LightKind::Strip => "strip",
     }
 }
 
@@ -500,7 +501,7 @@ mod tests {
         let mut session = Session::new();
         let out = session.execute("lightfixture.types", &json!({})).unwrap();
         let types = out["types"].as_array().unwrap();
-        assert_eq!(types.len(), 6);
+        assert_eq!(types.len(), 7);
         assert_eq!(types[0]["name"], "Recessed pot light");
         assert_eq!(types[0]["shape"], "recessed-can");
     }

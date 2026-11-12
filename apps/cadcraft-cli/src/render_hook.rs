@@ -6,14 +6,16 @@ use std::sync::Mutex;
 
 use cadcraft_arch3d::camera::{project_point, ray_at};
 use cadcraft_arch3d::light::scene_lights_with;
-use cadcraft_engine::doc::arch::LightSet;
+use cadcraft_engine::doc::arch::{ExposureSetting, LightSet, Look};
 use cadcraft_engine::{FinalMode, IlluminanceRequest, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, set_render_hooks};
 use cadcraft_geom::Vec3;
 use cadcraft_render3d::adapter::AdapterChoice;
 use cadcraft_render3d::camera::{Camera, Orbit};
+use cadcraft_render3d::exposure::{ev100_scale, scale_ev100, tone_code, tone_name};
 use cadcraft_render3d::final_render::render_final_with;
-use cadcraft_render3d::light::{Light, Sun};
+use cadcraft_render3d::light::Light;
 use cadcraft_render3d::lights::DEFAULT_EXPOSURE;
+use cadcraft_render3d::look::lighting_for;
 use cadcraft_render3d::offscreen::{Offscreen, RenderOptions, png_rgba};
 use cadcraft_render3d::pathtrace::cache;
 use cadcraft_render3d::pathtrace::{CacheOutcome, ComputeGpu, Exposure, Furnace, PathOptions, irradiance, luminance, request_compute};
@@ -130,24 +132,43 @@ fn ready<'a>(
     Ok(state)
 }
 
-fn lighting_for(sun: SunChoice, budget: usize) -> Lighting {
-    let light = match sun {
-        SunChoice::Default => Some(Light::DEFAULT),
-        SunChoice::Off => None,
-        SunChoice::Dir(d) => Some(Light::from_sun(&Sun { dir: [d[0] as f32, d[1] as f32, d[2] as f32], ..Sun::default() }, Light::DEFAULT.ambient)),
-    };
-    Lighting { sun: light, sun_shadow: matches!(sun, SunChoice::Dir(_)), budget, exposure: DEFAULT_EXPOSURE, ..Lighting::default() }
+/// The reply keys every render reports: the exposure scale, its EV100, how it was chosen and the
+/// tone map (`code` as `exposure::tone_code` gives it).
+fn exposure_keys(scale: f32, mode: &str, code: u32) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    m.insert("exposure".into(), json!(scale));
+    m.insert("ev100".into(), json!(scale_ev100(scale)));
+    m.insert("exposureMode".into(), json!(if mode.is_empty() { "auto" } else { mode }));
+    m.insert("toneMap".into(), json!(tone_name(code)));
+    m
 }
 
-/// The path-tracer options a request asks for.
-fn path_options(p: &PathParams) -> PathOptions {
+/// How the path tracer's exposure was chosen: a bare number is `fixed`, a look's EV100 `manual`.
+fn path_exposure_mode(p: &PathParams, look: &Look) -> &'static str {
+    match (p.exposure, look.exposure) {
+        (Some(_), _) => "fixed",
+        (None, ExposureSetting::Manual { .. }) => "manual",
+        _ => "auto",
+    }
+}
+
+/// The path-tracer options a request asks for: `look` gives the exposure (a bare number first,
+/// then a manual EV100, else metered) and the tone map; `albedo` is the Lambert calibration.
+fn path_options(p: &PathParams, look: &Look, albedo: Option<f64>) -> PathOptions {
+    let exposure = match (p.exposure, look.exposure) {
+        (Some(x), _) => Exposure::Fixed(x as f32),
+        (None, ExposureSetting::Manual { ev100 }) => Exposure::Fixed(ev100_scale(ev100)),
+        _ => Exposure::Auto,
+    };
     PathOptions {
         spp: p.spp,
         bounces: p.bounces,
         seed: p.seed,
         denoise: p.denoise,
         rt: p.rt,
-        exposure: p.exposure.map(|x| Exposure::Fixed(x as f32)).unwrap_or(Exposure::Auto),
+        exposure,
+        tone_map: tone_code(look.tone_map),
+        lambert: albedo.map(|a| a as f32),
         furnace: p.furnace.map(|(albedo, emission)| Furnace { albedo: albedo as f32, emission: emission as f32, ..Furnace::default() }),
         snapshots: p.snapshots.clone(),
         ..PathOptions::default()
@@ -209,18 +230,30 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         state.cache = Some(cache::open(c, cache::cache_dir().as_deref()));
     }
     let State { off, scene, cache: pcache, cache_saved, path_traces, .. } = state;
-    let scene = &scene.as_ref().ok_or("renderer unavailable")?.2;
+    let (look, sun_dir) = req.resolved_sun();
+    let scene = &mut scene.as_mut().ok_or("renderer unavailable")?.2;
+    // The effective look's backdrop replaces the cached scene's (no rebuild).
+    cadcraft_arch3d::set_backdrop(&req.drawing.arch, scene, look.backdrop.as_ref());
+    let scene = &*scene;
     off.resize(req.size);
 
     let camera = req.camera.clone().unwrap_or_else(|| Camera::Orbit(Orbit::fit(&scene.bounds)));
     let eye = camera.eye();
-    let lighting = lighting_for(req.sun, req.budget);
+    let mut lighting = lighting_for(&look, sun_dir, req.budget);
+    // The calibration albedo, the metered night (all but the legacy `sun: false`) and a bare-number
+    // exposure, which the raster uses as its fixed scale too.
+    lighting.lambert = req.albedo.map(|a| a as f32);
+    lighting.meter_night = !req.legacy_night;
+    if let Some(x) = req.path.exposure {
+        lighting.exposure = x as f32;
+    }
     let maps_before = off.shadow_maps_built();
 
     let mut final_mode: Option<&str> = None;
     let mut path_info = serde_json::Map::new();
+    let mut exposure_info: Option<serde_json::Map<String, Value>> = None;
     let (rgba, size, drawn, shadowed, png) = if want_path {
-        let mut opts = path_options(&req.path);
+        let mut opts = path_options(&req.path, &look, req.albedo);
         // The default 256 spp is too slow on a software (CPU) adapter: lower an unchanged default
         // to 64 (an explicit spp, or snapshots that may need more samples, are kept).
         let on_cpu = compute.as_ref().is_some_and(|c| c.info.adapter_type == "Cpu");
@@ -247,7 +280,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                 if let Some(e) = &st.rt_error {
                     path_info.insert("rtError".into(), json!(e));
                 }
-                path_info.insert("exposure".into(), json!(st.exposure));
+                exposure_info = Some(exposure_keys(st.exposure, path_exposure_mode(&req.path, &look), opts.tone_map));
                 path_info.insert("pipelineCache".into(), json!(outcome.name()));
                 path_info.insert("radiance".into(), st.radiance.map_or(Value::Null, |r| json!({ "min": r.min, "max": r.max, "mean": r.mean })));
                 let mut snaps = Vec::new();
@@ -297,6 +330,11 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         write_png(out, png)?;
     }
 
+    // The raster (interactive, Finalize, or the path's fallback) reports the frame it drew.
+    let exposure_info = exposure_info.unwrap_or_else(|| {
+        let f = off.last_frame_look();
+        exposure_keys(f.exposure, f.exposure_mode, if f.tone_map == 0 { tone_code(look.tone_map) } else { f.tone_map })
+    });
     let samples: Vec<Value> = req.samples.iter().take(MAX_SAMPLES).map(|p| sample(scene, &camera, size, &rgba, *p)).collect();
     let mut reply = json!({
         "ok": true,
@@ -316,6 +354,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     });
     if let Some(map) = reply.as_object_mut() {
         map.extend(path_info);
+        map.extend(exposure_info);
     }
     Ok(reply)
 }
@@ -329,8 +368,9 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
         return Err("path-traced illuminance needs compute shaders on this GPU".into());
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
-    let lighting = lighting_for(req.sun, 8);
-    let opts = path_options(&req.path);
+    let (look, sun_dir) = req.resolved_sun();
+    let lighting = lighting_for(&look, sun_dir, 8);
+    let opts = path_options(&req.path, &look, None);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
     let results: Vec<Value> = req
         .probes
@@ -381,6 +421,28 @@ mod tests {
     use cadcraft_engine::doc::Drawing;
     use cadcraft_engine::doc::arch::{ArchId, LightFixture, Wall};
     use cadcraft_geom::Vec2;
+
+    #[test]
+    fn replies_report_exposure_mode_ev100_tone_map() {
+        let k = exposure_keys(ev100_scale(2.0), "manual", cadcraft_render3d::exposure::TONE_HABLE);
+        assert_eq!(k["exposureMode"], "manual");
+        assert_eq!(k["toneMap"], "hable");
+        assert!((k["ev100"].as_f64().unwrap_or(f64::NAN) - 2.0).abs() < 1e-4, "{k:?}");
+        assert!((k["exposure"].as_f64().unwrap_or(f64::NAN) - 1.0 / 4.8).abs() < 1e-6, "{k:?}");
+        let k = exposure_keys(0.01, "", 0);
+        assert_eq!((k["exposureMode"].clone(), k["toneMap"].clone()), (json!("auto"), json!("none")));
+        assert!((k["ev100"].as_f64().unwrap_or(f64::NAN) - 6.3808).abs() < 1e-3, "{k:?}");
+        // The path's mode follows the request: a bare number, a manual EV100, else metered.
+        let mut look = Look::default();
+        assert_eq!(path_exposure_mode(&PathParams::default(), &look), "auto");
+        look.exposure = ExposureSetting::Manual { ev100: 3.0 };
+        assert_eq!(path_exposure_mode(&PathParams::default(), &look), "manual");
+        let fixed = PathParams { exposure: Some(0.5), ..PathParams::default() };
+        assert_eq!(path_exposure_mode(&fixed, &look), "fixed");
+        let o = path_options(&PathParams::default(), &look, Some(0.5));
+        assert_eq!((o.exposure, o.lambert, o.tone_map), (Exposure::Fixed(ev100_scale(3.0)), Some(0.5), 1));
+        assert_eq!(path_options(&fixed, &look, None).exposure, Exposure::Fixed(0.5));
+    }
 
     #[test]
     fn software_spp_lowers_only_an_unchanged_default() {

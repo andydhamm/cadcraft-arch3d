@@ -66,6 +66,8 @@ pub struct RenderRequest<'a> {
     pub sun_dir: Option<[f64; 3]>,
     /// The render's own `sun: false`: sun and sky both off, whatever the look says.
     pub legacy_night: bool,
+    /// The calibration albedo (`render {albedo}`): every surface reads as plain Lambert with it.
+    pub albedo: Option<f64>,
 }
 
 /// Which Finalize Render a request runs (phase 11): the phase-10 shadow-mapped still, or the path
@@ -112,12 +114,39 @@ pub struct IlluminanceRequest<'a> {
     /// Night (`SunChoice::Off`), the default light, or a sun direction.
     pub sun: SunChoice,
     pub path: PathParams,
+    /// The look the light is measured under (phase 19): sun intensity and cast shadows, sky on or off.
+    pub look: Look,
+    /// An explicit toward-sun direction (drawing space) from the look; `None` = see `sun`.
+    pub sun_dir: Option<[f64; 3]>,
 }
 
 impl<'a> IlluminanceRequest<'a> {
     /// Build a request. Each probe is a `(point, normal)` pair.
     pub fn new(drawing: &'a Drawing, probes: Vec<[[f64; 3]; 2]>, sun: SunChoice, path: PathParams) -> Self {
-        Self { drawing, probes, sun, path }
+        Self { drawing, probes, sun, path, look: Look::default(), sun_dir: None }
+    }
+
+    /// The same request with a look and its explicit sun direction (phase 19).
+    pub fn with_look(mut self, look: Look, sun_dir: Option<[f64; 3]>) -> Self {
+        self.look = look;
+        self.sun_dir = sun_dir;
+        self
+    }
+
+    /// The look and sun direction the renderer lights with: `Dir(d)` is the direction when none is
+    /// explicit, `Off` is night (sun and sky off), `Default` leaves the look as it is.
+    pub fn resolved_sun(&self) -> (Look, Option<[f64; 3]>) {
+        let mut look = self.look.clone();
+        let mut dir = self.sun_dir;
+        match self.sun {
+            SunChoice::Dir(d) if dir.is_none() => dir = Some(d),
+            SunChoice::Off => {
+                look.sun.on = false;
+                look.sky.on = false;
+            }
+            _ => {}
+        }
+        (look, dir)
     }
 }
 
@@ -154,7 +183,14 @@ impl<'a> RenderRequest<'a> {
             look: Look::default(),
             sun_dir: None,
             legacy_night: matches!(sun, SunChoice::Off),
+            albedo: None,
         }
+    }
+
+    /// The same request with the Lambert calibration albedo (0 < a < 1).
+    pub fn with_albedo(mut self, albedo: Option<f64>) -> Self {
+        self.albedo = albedo;
+        self
     }
 
     /// The same request with a render look and its explicit sun direction (phase 19).
@@ -528,7 +564,20 @@ fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'
         .with_final(final_mode, path)
         .with_look(look, sun_dir);
     request.legacy_night = legacy_night;
+    request.albedo = parse_albedo(params.get("albedo"))?;
     Ok(request)
+}
+
+/// The `albedo` param: a number with 0 < albedo < 1, else a refusal naming the key and value.
+fn parse_albedo(v: Option<&Value>) -> Result<Option<f64>, EngineError> {
+    match v {
+        None => Ok(None),
+        Some(val) => val
+            .as_f64()
+            .filter(|a| a.is_finite() && *a > 0.0 && *a < 1.0)
+            .map(Some)
+            .ok_or_else(|| bad("render", format!("`albedo` must be a number with 0 < albedo < 1 (got {val})"))),
+    }
 }
 
 /// `render`: render a 3D still through the installed render hook.
@@ -541,6 +590,7 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     if let Value::Object(m) = &mut reply {
         m.insert("look".to_string(), describe_look(&request.look));
         m.insert("sunDir".to_string(), request.sun_dir.map_or(Value::Null, |d| json!(d)));
+        m.insert("albedo".to_string(), request.albedo.map_or(Value::Null, |a| json!(a)));
     }
     Ok(reply)
 }
@@ -842,5 +892,18 @@ mod tests {
         assert_eq!(describe_look(&r.look)["exposure"], "auto");
         let err = build_request(&d, &json!({"exposure": 0.0})).unwrap_err().to_string();
         assert!(err.contains("`exposure` must be \"auto\" or a positive number"), "{err}");
+    }
+
+    #[test]
+    fn albedo_param_parsed_and_refused() {
+        let d = Drawing::new_metric();
+        assert_eq!(build_request(&d, &json!({})).unwrap().albedo, None);
+        assert_eq!(build_request(&d, &json!({"albedo": 0.5})).unwrap().albedo, Some(0.5));
+        let r = RenderRequest::new(&d, None, (8, 8), None, false, SunChoice::Default, "shaded".into(), true, 8, Vec::new()).with_albedo(Some(0.1));
+        assert_eq!(r.albedo, Some(0.1));
+        for bad_value in [json!(0), json!(0.0), json!(1.0), json!(1.5), json!(-0.2), json!("0.5"), json!(null), json!(true), json!([0.5])] {
+            let err = build_request(&d, &json!({"albedo": bad_value.clone()})).unwrap_err().to_string();
+            assert!(err.contains("`albedo` must be a number with 0 < albedo < 1"), "{bad_value}: {err}");
+        }
     }
 }

@@ -307,10 +307,14 @@ pub(crate) fn render(a: &RenderArgs, io: &mut Streams) -> Result<(), RenderError
     let mut off = Offscreen::create_with(a.adapter, size).map_err(gpu)?;
     io.errln(format_args!("{}", off.device_info().line()));
     let lighting = Lighting {
-        sun: if a.night { None } else { Some(light) },
+        // The drawing's own look: its sun switch is honoured; the scene already carries its backdrop.
+        sun: if a.night || !d.arch.look.sun.on { None } else { Some(light) },
         sun_shadow: a.sun.is_some() || a.ground,
         budget: usize::try_from(a.budget).unwrap_or(0).min(64),
         exposure: DEFAULT_EXPOSURE,
+        look: d.arch.look.clone(),
+        // `--night` keeps the fixed night scale (0.01); any other frame is metered.
+        meter_night: !a.night,
         ..Lighting::default()
     };
     let eye = camera.eye();

@@ -261,6 +261,23 @@ fn finish_mean_linear(finish: cadcraft_doc::arch::Finish) -> [f32; 3] {
 /// Radiance of a lit lens (nits), seen directly.
 pub const LENS_NITS: f32 = 20_000.0;
 
+/// Make every material in `scene` a pure Lambert (albedo `a`, metallic 0, roughness 1, ior 1,
+/// no transmission), keeping emission only on light lenses (the [`MAT_EMIT_CAMERA_ONLY`] flag).
+/// Called after [`build_gpu_scene`] when the `lambert` render parameter is set, so the path
+/// tracer treats every surface as a diffuse reflector of the given albedo.
+pub fn apply_lambert(scene: &mut GpuScene, albedo: f32) {
+    for m in scene.materials.iter_mut() {
+        m.albedo = [albedo, albedo, albedo];
+        m.metallic = 0.0;
+        m.roughness = 1.0;
+        m.ior = 1.0;
+        m.transmission = 0.0;
+        if m.flags & MAT_EMIT_CAMERA_ONLY == 0 {
+            m.emission = [0.0, 0.0, 0.0];
+        }
+    }
+}
+
 /// The object id of the ground quad (`shadow::GROUND_OBJECT`).
 const GROUND_OBJECT: u32 = u32::MAX;
 /// Half the side of the ground square (m), centred on the origin.
@@ -402,6 +419,8 @@ fn gpu_light(l: &SceneLight) -> GpuLight {
         LightKind::Point => LIGHT_POINT,
         LightKind::Spot => LIGHT_SPOT,
         LightKind::Area => LIGHT_AREA,
+        // Skipped until p19-strip-render: treated as a point light here.
+        LightKind::Strip => LIGHT_POINT,
     };
     let scale = if kind == LIGHT_AREA {
         let area = l.size[0] * l.size[1];

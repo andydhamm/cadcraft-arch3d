@@ -41,7 +41,7 @@ fn lights_hash(scene: &Scene3d) -> u64 {
 }
 
 /// What a lit frame lights with.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Lighting {
     /// The sun (`None` = night: the sun is off).
     pub sun: Option<Light>,
@@ -49,8 +49,18 @@ pub struct Lighting {
     pub sun_shadow: bool,
     /// Lights shadowed at most (`lights::DEFAULT_SHADOW_BUDGET`); the rest light unshadowed.
     pub budget: usize,
-    /// Display units per lux (`lights::DEFAULT_EXPOSURE`).
+    /// Display units per lux (`lights::DEFAULT_EXPOSURE`). A value other than the default is a
+    /// bare-number exposure of the request: the frame uses it as its fixed exposure scale.
     pub exposure: f32,
+    /// The render look the frame is lit for (phase 19; read by later packages).
+    pub look: cadcraft_doc::arch::Look,
+    /// The explicit toward-sun direction in drawing space, when one was given.
+    pub sun_dir: Option<[f64; 3]>,
+    /// The calibration albedo: every surface reads as plain Lambert with it (`render {albedo}`).
+    pub lambert: Option<f32>,
+    /// Meter an automatic exposure on a frame without daylight (false keeps the legacy 0.01 scale,
+    /// as `render {sun: false}` and hand-built night lightings always had).
+    pub meter_night: bool,
 }
 
 impl Default for Lighting {
@@ -60,6 +70,10 @@ impl Default for Lighting {
             sun_shadow: false,
             budget: crate::lights::DEFAULT_SHADOW_BUDGET,
             exposure: crate::lights::DEFAULT_EXPOSURE,
+            look: cadcraft_doc::arch::Look::default(),
+            sun_dir: None,
+            lambert: None,
+            meter_night: false,
         }
     }
 }
@@ -148,7 +162,7 @@ impl Offscreen {
             &params,
             (drawn.len(), slots.len()),
         );
-        frame.lighting = *lighting;
+        frame.lighting = lighting.clone();
         Some(frame)
     }
 }
