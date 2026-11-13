@@ -432,6 +432,7 @@ mod tests {
 
     #[test]
     fn ifc_casework_skips_cabinets_without_meshes() {
+        use cadcraft_doc::arch::{Cabinet, CabinetKind};
         let mut model = ArchModel::default();
         model.levels = vec![Level::default()];
         model.cabinets.push(Cabinet {
