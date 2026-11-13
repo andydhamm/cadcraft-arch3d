@@ -286,6 +286,13 @@ mod tests {
     }
 
     #[test]
+    fn ceiling_stubs_are_empty() {
+        let m = one_room(Room { polygon: quad(0.0, 0.0), ceiling_height: Some(2.4), interior_area: 12.0, ..Room::default() });
+        assert!(ceiling_label_holes(&m, &m.rooms[0]).is_empty());
+        assert_eq!(crate::plan::ceiling::vault_text(&m, &m.rooms[0]), None);
+    }
+
+    #[test]
     fn ceiling_label_holes_only_with_the_ceiling_component() {
         // The stub supplies no holes, so the block with the ceiling component matches the one
         // without it; the anchor is the same either way until trays exist.

@@ -516,7 +516,12 @@ impl Library {
         };
         let io = library_io().ok_or(NO_READERS)?;
         let bytes = self.file_bytes(id)?;
-        let img = (io.read_image)(&bytes, side)?;
+        let img = if r.kind == ItemKind::Backdrop && r.file.as_deref().is_some_and(|f| f.to_ascii_lowercase().ends_with(".hdr")) {
+            let hdr = cadcraft_arch::hdr::read_hdr(&bytes).map_err(|e| format!("`{id}` is not a valid HDR image: {e}"))?;
+            cadcraft_arch::hdr::display_image(&hdr, side)
+        } else {
+            (io.read_image)(&bytes, side)?
+        };
         if !img.is_valid() {
             return Err(format!("`{id}`'s image is not valid"));
         }

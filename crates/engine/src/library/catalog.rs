@@ -254,6 +254,24 @@ pub fn builtin_items() -> Vec<ItemRecord> {
         r.elevation = positive(f.elevation);
         v.push(r);
     }
+    for (id, name, size, words) in [
+        ("appliance:microwave-drawer", "Microwave drawer", [0.762, 0.6, 0.381], ["appliance", "face", "microwave drawer"]),
+        ("appliance:wall-oven", "Wall oven", [0.762, 0.6, 0.737], ["appliance", "face", "oven"]),
+        ("appliance:warming-drawer", "Warming drawer", [0.762, 0.6, 0.254], ["appliance", "face", "warming drawer"]),
+    ] {
+        let mut r = builtin(
+            id.to_string(),
+            name.to_string(),
+            Category::AppliancesAndPlumbing,
+            "Built-in appliances",
+            ItemKind::FaceAppliance,
+            "appliance",
+            &words,
+        );
+        r.placement = Some("in-cabinet".to_string());
+        r.size = Some(size);
+        v.push(r);
+    }
     for part in ["door", "drawer"] {
         for style in FrontStyle::ALL {
             let mut r = builtin(
@@ -463,6 +481,8 @@ pub fn entry_record(v: &Value, catalog: &str) -> Result<ItemRecord, String> {
         ("png" | "jpg" | "jpeg", Some(Category::Materials)) => ItemKind::Material,
         ("png" | "jpg" | "jpeg", Some(Category::Backdrops)) => ItemKind::Backdrop,
         ("png" | "jpg" | "jpeg", _) => return Err("an image item belongs in Materials or Backdrops".into()),
+        ("hdr", Some(Category::Backdrops)) => ItemKind::Backdrop,
+        ("hdr", _) => return Err("an HDR item belongs in Backdrops".into()),
         (ext, _) => return Err(format!("unsupported file type `.{}`", ext.chars().take(16).collect::<String>())),
     };
     if r.folder.is_empty() {
@@ -677,6 +697,9 @@ mod native {
                         if mesh.triangles() > cadcraft_doc::arch::MAX_SYMBOL_TRIANGLES {
                             return Err(format!("more than {} triangles", cadcraft_doc::arch::MAX_SYMBOL_TRIANGLES));
                         }
+                    }
+                    ItemKind::Backdrop if r.file.as_deref().is_some_and(|f| f.to_ascii_lowercase().ends_with(".hdr")) => {
+                        cadcraft_arch::hdr::read_hdr(&data).map_err(|e| format!("`{}` is not a valid HDR image: {e}", r.id))?;
                     }
                     _ => {
                         (io.read_image)(&data, 1024)?;
@@ -973,6 +996,12 @@ mod tests {
             let style = r.style.as_deref().unwrap_or_default();
             assert!(FrontStyle::parse(style).is_some() && r.id.ends_with(style), "{}", r.id);
         }
+
+        assert_eq!(ids(items, "appliance:"), ["appliance:microwave-drawer", "appliance:wall-oven", "appliance:warming-drawer"]);
+        assert!(items.iter().filter(|r| r.id.starts_with("appliance:")).all(|r| r.category == "Appliances and plumbing fixtures"
+            && r.kind == ItemKind::FaceAppliance
+            && r.folder == "Built-in appliances"
+            && r.placement.as_deref() == Some("in-cabinet")));
 
         // Backdrops.
         assert_eq!(ids(items, "backdrop:"), ["backdrop:colour", "backdrop:gradient"]);
