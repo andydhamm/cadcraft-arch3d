@@ -100,4 +100,53 @@ mod tests {
     fn open_shelves_follow_the_level_elevation() {
         check(2.7);
     }
+
+    #[test]
+    fn closed_cabinet_has_no_shelves_or_carcass() {
+        let (m, c) = model(0.0);
+        let closed = Cabinet { fronts: Fronts::Doors, ..c };
+        assert!(shelf_meshes(&m, &closed).is_empty(), "closed cabinet should have no shelves");
+        assert!(open_carcass(&m, &closed).is_none(), "closed cabinet should have no open carcass");
+    }
+
+    #[test]
+    fn open_shelves_short_cabinet_has_no_shelves() {
+        let (m, _) = model(0.0);
+        let short = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.05,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &short);
+        assert!(shelves.is_empty(), "cabinet too short for shelves should have none");
+    }
+
+    #[test]
+    fn open_shelves_with_toe_kick_stays_within_bounds() {
+        let (m, _) = model(0.0);
+        let with_toe = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.876,
+            elevation: 0.0,
+            toe_kick: true,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &with_toe);
+        let levels = cadcraft_arch::casework_shelves::shelf_levels(&with_toe);
+        for (b, t) in &levels {
+            assert!(*b >= with_toe.elevation + 0.019 - 1e-9, "shelf bottom below carcass");
+            assert!(*t <= with_toe.elevation + with_toe.height - 0.019 + 1e-9, "shelf top above carcass");
+        }
+        assert!(!shelves.is_empty(), "base cabinet with toe kick should have shelves");
+    }
 }

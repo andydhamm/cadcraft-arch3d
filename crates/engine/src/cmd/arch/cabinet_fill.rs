@@ -191,4 +191,25 @@ mod tests {
         assert_eq!(s.doc().unwrap().arch.cabinets.len(), count);
         assert_eq!(s.doc().unwrap().arch_revision, rev);
     }
+
+    #[test]
+    fn cabinet_fill_unknown_cabinet_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": "cb999" }));
+        assert!(r.is_err(), "unknown cabinet should error");
+    }
+
+    #[test]
+    fn cabinet_fill_missing_run_param_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({}));
+        assert!(r.is_err(), "missing run param should error");
+    }
+
+    #[test]
+    fn cabinet_fill_non_string_run_param_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": 42 }));
+        assert!(r.is_err(), "non-string run param should error");
+    }
 }
