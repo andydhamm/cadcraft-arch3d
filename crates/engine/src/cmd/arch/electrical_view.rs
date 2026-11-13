@@ -48,6 +48,17 @@ fn run_view_electrical(s: &mut Session, params: &Value) -> Result<Value, EngineE
         }
     }
     let opened = open_plan_view(s, name).map_err(|e| bad("view.electrical", e.to_string()))?;
+    {
+        let d = s.doc_mut()?;
+        for l in d.layers.iter_mut() {
+            if l.name.starts_with("E-") {
+                l.on = true;
+                l.transparency = 0;
+            } else {
+                l.transparency = 70;
+            }
+        }
+    }
     let d = s.doc()?;
     let mut shown: Vec<String> = d.layers.iter().filter(|l| l.on && l.transparency == 0).map(|l| l.name.clone()).collect();
     let mut dimmed: Vec<String> = d.layers.iter().filter(|l| l.transparency > 0).map(|l| l.name.clone()).collect();
