@@ -196,7 +196,8 @@ fn visibility(o: vec3<f32>, d: vec3<f32>, t_max: f32) -> vec3<f32> {
                 return vec3<f32>(0.0);
             }
         }
-        total = total + hit.t + PT_EPS;
+        let step = pt_eps(o + d * total);
+        total = total + hit.t + step;
         origin = o + d * total;
         hits = hits + 1u;
     }
