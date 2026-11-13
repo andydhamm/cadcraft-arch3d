@@ -62,6 +62,7 @@ pub mod render;
 pub mod roofauto;
 pub mod roofplane;
 pub mod room;
+pub mod room_finish_inspect;
 pub mod room_moldings;
 pub mod roomdetect;
 pub mod roomlabel;
