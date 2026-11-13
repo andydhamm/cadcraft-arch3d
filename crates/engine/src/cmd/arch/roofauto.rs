@@ -938,6 +938,99 @@ mod tests {
         assert_eq!(s.doc().unwrap().arch.roofs.len(), 0, "no roof should be created");
     }
 
+    /// Multiple roofs on different levels, each with its own covering, rebuild
+    /// independently and each keeps its own covering.
+    #[test]
+    fn multiple_roofs_each_keep_their_own_covering() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = new_session_with_level();
+        // Add a second level
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(Level { name: "upper".to_string(), ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.touch_arch();
+
+        // Walls on both levels
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]], "closed": true, "thickness": 0.2, "exterior": true, "level": "ground"})).unwrap();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]], "closed": true, "thickness": 0.2, "exterior": true, "level": "upper"})).unwrap();
+
+        // Build roofs on both levels
+        s.execute("roofauto", &json!({"pitchRise": 6.0, "pitchRun": 12.0, "level": "ground"})).unwrap();
+        s.execute("roofauto", &json!({"pitchRise": 6.0, "pitchRun": 12.0, "level": "upper"})).unwrap();
+
+        // Give each a different covering
+        {
+            let d = s.doc_mut().unwrap();
+            for roof in d.arch.roofs.iter_mut() {
+                if roof.level == 0 {
+                    roof.covering = Some(Finish::Shingles);
+                } else {
+                    roof.covering = Some(Finish::Metal);
+                }
+            }
+        }
+
+        // Rebuild both via refresh
+        let rebuilt = refresh_auto_roofs(s.doc_mut().unwrap());
+        assert_eq!(rebuilt, 2);
+
+        let d = s.doc().unwrap();
+        let ground = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
+        let upper = d.arch.roofs.iter().find(|r| r.level == 1).unwrap();
+        assert_eq!(ground.covering, Some(Finish::Shingles));
+        assert_eq!(upper.covering, Some(Finish::Metal));
+        assert!(!ground.planes.is_empty());
+        assert!(!upper.planes.is_empty());
+    }
+
+    /// A wall edit triggers refresh_auto_roofs, which must preserve the covering.
+    #[test]
+    fn wall_edit_rebuild_keeps_covering() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]], "closed": true, "thickness": 0.2, "exterior": true}))
+            .unwrap();
+        s.execute("roofauto", &json!({"pitchRise": 6.0, "pitchRun": 12.0})).unwrap();
+
+        s.doc_mut().unwrap().arch.roofs[0].covering = Some(Finish::Shingles);
+
+        // Wall edit triggers rebuild
+        s.execute("wall", &json!({"points": [[2.0, 2.0], [8.0, 2.0]], "type": "interior"})).unwrap();
+
+        let d = s.doc().unwrap();
+        let roof = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
+        assert_eq!(roof.covering, Some(Finish::Shingles));
+        assert!(!roof.planes.is_empty());
+    }
+
+    /// Mixed manual, hand-edited and auto roofs: only the auto roof rebuilds and
+    /// keeps its covering; the others are untouched.
+    #[test]
+    fn refresh_auto_roofs_with_mixed_roofs_keeps_covering() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]], "closed": true, "thickness": 0.2, "exterior": true}))
+            .unwrap();
+        s.execute("roofauto", &json!({"pitchRise": 6.0, "pitchRun": 12.0})).unwrap();
+
+        // Add a manual roof on a different level (no walls needed for manual)
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.roofs[0].covering = Some(Finish::Shingles);
+            d.arch.roofs.push(Roof { level: 99, manual: true, covering: Some(Finish::Metal), ..Roof::default() });
+            d.touch_arch();
+        }
+
+        let rebuilt = refresh_auto_roofs(s.doc_mut().unwrap());
+        assert_eq!(rebuilt, 1, "only the auto roof should rebuild");
+
+        let d = s.doc().unwrap();
+        let auto = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
+        let manual = d.arch.roofs.iter().find(|r| r.level == 99).unwrap();
+        assert_eq!(auto.covering, Some(Finish::Shingles));
+        assert_eq!(manual.covering, Some(Finish::Metal));
+        assert!(manual.manual);
+    }
+
     #[test]
     fn roofauto_is_never_refused_and_reseats_ceiling_items() {
         use cadcraft_doc::arch::{Furnishing, Placement};
