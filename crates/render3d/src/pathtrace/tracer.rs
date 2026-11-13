@@ -1817,4 +1817,84 @@ mod tests {
         let want = 160.0 - 80.0 * (4.0 * (0.5 - 20.0 / 180.0) - 1.5);
         assert!((f64::from(level[t]) - want).abs() <= 3.0, "looking level, top centre: {:?}, expected red {want:.0}", &level[t..t + 3]);
     }
+
+    /// The moon sets FRAME_MOON, moon_dir and moon_rgb when lighting has a moon.
+    #[test]
+    fn frame_moon_sets_directional_light_fields() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        let lighting = Lighting { sun: None, moon: Some(([0.0, 0.0, 1.0], 1000.0)), look, ..Lighting::default() };
+        let mut f = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux = vec![1.0f32, 2.0, 3.0];
+        frame_lighting(&mut f, &mut aux, &lighting, None, &PathOptions::default());
+        assert_ne!(f.flags & FRAME_MOON, 0, "FRAME_MOON must be set");
+        assert_eq!(f.moon_dir, [0.0, 0.0, 1.0, 0.0]);
+        assert_eq!(f.moon_rgb, [1000.0, 1000.0, 1000.0, 0.0]);
+        assert_eq!(aux, [1.0, 2.0, 3.0], "aux must be untouched");
+    }
+
+    /// A clip box in the look sets FRAME_CLIP, clip_min and clip_max.
+    #[test]
+    fn frame_view_sets_clip_box_and_forward() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        look.clip = Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [10.0, 10.0, 10.0] });
+        look.near_clip = Some(0.1);
+        let lighting = Lighting { sun: None, look, ..Lighting::default() };
+        let cam = camera();
+        let mut f = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux = vec![];
+        frame_lighting(&mut f, &mut aux, &lighting, Some(&cam), &PathOptions::default());
+        assert_ne!(f.flags & FRAME_CLIP, 0, "FRAME_CLIP must be set");
+        assert_eq!(f.clip_min, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(f.clip_max, [10.0, 10.0, 10.0, 0.0]);
+        // view.w should be the near clip
+        assert!((f.view[3] - 0.1).abs() < 1e-6, "view.w must be near clip: {}", f.view[3]);
+        // view.xyz should be the camera forward
+        let fwd = crate::camera::forward(&cam);
+        assert!((f.view[0] - fwd.x as f32).abs() < 1e-6, "view.x must be forward.x");
+        assert!((f.view[1] - fwd.y as f32).abs() < 1e-6, "view.y must be forward.y");
+        assert!((f.view[2] - fwd.z as f32).abs() < 1e-6, "view.z must be forward.z");
+    }
+
+    /// A NaN clip box is rejected (no FRAME_CLIP flag).
+    #[test]
+    fn frame_view_rejects_nan_clip_box() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        look.clip = Some(cadcraft_doc::arch::ClipBox { min: [0.0, f64::NAN, 0.0], max: [10.0, 10.0, 10.0] });
+        let lighting = Lighting { sun: None, look, ..Lighting::default() };
+        let mut f = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux = vec![];
+        frame_lighting(&mut f, &mut aux, &lighting, None, &PathOptions::default());
+        assert_eq!(f.flags & FRAME_CLIP, 0, "NaN clip box must not set FRAME_CLIP");
+    }
+
+    /// Zero-intensity sun still sets the sun flags and fields.
+    #[test]
+    fn zero_intensity_sun_still_sets_flags() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.intensity = 0.0;
+        let lighting = Lighting { look, ..Lighting::default() };
+        let mut f = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux = vec![];
+        frame_lighting(&mut f, &mut aux, &lighting, None, &PathOptions::default());
+        assert_ne!(f.flags & FRAME_SUN, 0, "zero-intensity sun must still set FRAME_SUN");
+        assert_eq!(f.sun_rgb, [0.0, 0.0, 0.0, 0.0]);
+    }
+
+    /// frame_lighting is idempotent: calling it twice with the same inputs gives the same frame.
+    #[test]
+    fn frame_lighting_is_idempotent() {
+        let lighting = Lighting::default();
+        let opts = PathOptions::default();
+        let mut f1 = GpuFrame { flags: FRAME_GROUND, look: [1, 0, 0, 0], ..Default::default() };
+        let mut f2 = GpuFrame { flags: FRAME_GROUND, look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux1 = vec![1.0f32, 2.0, 3.0];
+        let mut aux2 = vec![1.0f32, 2.0, 3.0];
+        frame_lighting(&mut f1, &mut aux1, &lighting, None, &opts);
+        frame_lighting(&mut f2, &mut aux2, &lighting, None, &opts);
+        assert_eq!(f1, f2, "two calls must give identical frames");
+        assert_eq!(aux1, aux2, "two calls must give identical aux");
+    }
 }
