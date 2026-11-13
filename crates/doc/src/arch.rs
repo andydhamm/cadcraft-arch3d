@@ -79,7 +79,7 @@ impl std::str::FromStr for ArchId {
 /// which are arbitrary 64-bit hex values — can never collide with it.
 /// Arch objects are not entities in the store; render, grip and pick layers
 /// route on [`is_arch_handle`] to distinguish them from real entity handles.
-pub const ARCH_HANDLE_BASE: u64 = 0xA0_00_00_00;
+pub const ARCH_HANDLE_BASE: u64 = 0xFFFF_FFFF_0000_0000;
 
 /// The synthetic proxy handle for an architectural object.
 ///
