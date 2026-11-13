@@ -1,9 +1,14 @@
 //! Room molding runs (phase 18): the resolved paths a room's moldings follow.
 
+use crate::ceiling::finished_ceiling_in;
 use crate::join::polygon_area;
 use crate::molding_wrap;
-use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding, Wall};
+use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding, TraySides, Wall};
 use cadcraft_geom::Vec2;
+
+/// The width of a tray's side band (phase 16 builds a 0.02 m `ceiling` band just inside the
+/// tray outline; the crown's back sits on the band's inner face, not the outline itself).
+const TRAY_SIDE: f64 = 0.02;
 
 /// One continuous run of a room molding along the surface its back is fixed to.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -355,6 +360,58 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             }
         }
 
+        // Tray crown runs (crown only)
+        if molding.kind == MoldingKind::Crown {
+            for tray in &model.trays {
+                if tray.room != room.id {
+                    continue;
+                }
+                // Get the tray outline: use the polygon if given, else inset the room by tray.inset
+                let outline = if tray.polygon.is_empty() {
+                    let regions = cadcraft_geom::skeleton::inset(&room.polygon, &room.holes, tray.inset).ok();
+                    let Some(regions) = regions else {
+                        continue;
+                    };
+                    if regions.len() != 1 {
+                        continue;
+                    }
+                    regions[0].outer.clone()
+                } else {
+                    tray.polygon.clone()
+                };
+
+                // For vertical sides in flat ceiling rooms, inset by TRAY_SIDE to get the crown path
+                let path = if let TraySides::Vertical = tray.sides {
+                    let regions = cadcraft_geom::skeleton::inset(&outline, &[], TRAY_SIDE).ok();
+                    let Some(regions) = regions else {
+                        continue;
+                    };
+                    if regions.len() != 1 {
+                        continue;
+                    }
+                    regions[0].outer.clone()
+                } else {
+                    outline
+                };
+
+                // Ensure CCW
+                let mut path = path;
+                if polygon_area(&path) < 0.0 {
+                    path.reverse();
+                }
+
+                // Compute z for each vertex: finished ceiling at the point - offset - profile height
+                let n = path.len();
+                let mut z = Vec::with_capacity(n);
+                for p in &path {
+                    let zc = finished_ceiling_in(model, room, *p).unwrap_or(e + ceiling_h);
+                    z.push(zc - molding.offset - h);
+                }
+
+                runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: true, side: 1.0 });
+            }
+        }
+
         // Cap path points
         let mut total_pts: usize = 0;
         for r in &mut runs {
@@ -467,7 +524,7 @@ pub fn run_length(r: &MoldingRun) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::arch::{ArchModel, Level, MoldingKind, Room, RoomMolding, RoomType, Wall};
+    use cadcraft_doc::arch::{ArchModel, Level, MoldingKind, Room, RoomMolding, RoomType, Tray, TraySides, Wall};
     use cadcraft_geom::Vec2;
 
     #[test]
@@ -891,6 +948,39 @@ mod tests {
         // No segment runs along the low south wall (y = 0.1).
         assert!(!crown_runs.is_empty());
         assert!(crown_runs.iter().all(|r| r.path.windows(2).all(|s| !(s[0].y < 0.15 && s[1].y < 0.15))));
+    }
+
+    #[test]
+    fn crown_offset_lowers_z() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        let room_poly = vec![Vec2::new(0.1, 0.1), Vec2::new(4.1, 0.1), Vec2::new(4.1, 3.1), Vec2::new(0.1, 3.1)];
+        let room = Room {
+            polygon: room_poly,
+            room_type: RoomType::Living,
+            level: 0,
+            ceiling_height: Some(2.4),
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.1,
+                ..Default::default()
+            }],
+            ..Room::default()
+        };
+        model.push_room(room.clone());
+        model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.2, 0.0), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(4.2, 0.0), end: Vec2::new(4.2, 3.2), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(4.2, 3.2), end: Vec2::new(0.0, 3.2), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(0.0, 3.2), end: Vec2::new(0.0, 0.0), thickness: 0.2, ..Wall::default() });
+
+        let runs = room_runs(&model, &room);
+        let crown_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Crown).collect();
+        assert!(!crown_runs.is_empty());
+        // Crown z = e + ceiling_h - offset - h = 0 + 2.4 - 0.1 - h = 2.3 - h
+        // With offset 0, z is in (2.0, 2.4) per z_values_per_kind, so h is in (0, 0.4).
+        // With offset 0.1, z should be 0.1 lower.
+        assert!(crown_runs.iter().all(|r| r.z.iter().all(|&z| z > 1.9 && z < 2.3)));
     }
 
     #[test]
