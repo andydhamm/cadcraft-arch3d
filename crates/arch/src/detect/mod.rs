@@ -444,6 +444,18 @@ mod tests {
     }
 
     #[test]
+    fn units_named_reads_unit_names() {
+        assert_eq!(units_named("mm"), Some(("mm", 0.001)));
+        assert_eq!(units_named("cm"), Some(("cm", 0.01)));
+        assert_eq!(units_named("dm"), Some(("dm", 0.1)));
+        assert_eq!(units_named("m"), Some(("m", 1.0)));
+        assert_eq!(units_named("in"), Some(("in", 0.0254)));
+        assert_eq!(units_named("ft"), Some(("ft", 0.3048)));
+        assert_eq!(units_named("MM"), Some(("mm", 0.001)));
+        assert_eq!(units_named("unknown"), None);
+    }
+
+    #[test]
     fn an_unexplained_gap_splits_a_wall_run() {
         // Hand-made run with a gap
         let mut walls = vec![WallRun {
