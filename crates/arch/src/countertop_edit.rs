@@ -467,6 +467,26 @@ mod tests {
     }
 
     #[test]
+    fn set_sagitta_zero_is_a_no_op() {
+        let ct = rect(1.8, 0.625);
+        let out = set_sagitta(&ct, 0, 0.0).unwrap();
+        assert_eq!(out.edge(0).sagitta, 0.0);
+    }
+
+    #[test]
+    fn sagitta_for_radius_exact_half_chord() {
+        let s = sagitta_for_radius(1.0, 0.5, false).unwrap();
+        assert!((s - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn set_profile_on_arc_edge_refused() {
+        let ct = rect(1.8, 0.625);
+        let arc = set_sagitta(&ct, 0, 0.1).unwrap();
+        assert!(set_profile(&arc, 0, EdgeProfile::Bullnose).is_err());
+    }
+
+    #[test]
     fn sampled_ring_arc_vertices_lie_on_the_circle() {
         let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
         let s = 0.2;
