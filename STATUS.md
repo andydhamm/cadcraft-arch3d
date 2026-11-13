@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 13:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 32 of 35 segments merged · 11 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 32 of 36 segments merged · 11 of 20 acceptance checks**
 
-9,729 workspace tests passing at the last merge · 1067 segments merged in all · 0 of 15 seats working
+9,765 workspace tests passing at the last merge · 1073 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,47 +28,48 @@ Updated 2026-11-13 13:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 11 / 20 | 55.8 h so far · expected done Nov 13 18:47–Nov 15 16:30 UTC |
+| 18 | Interior finish, kitchen and bath | building | 11 / 20 | 56.0 h so far · expected done Nov 13 20:53–Nov 15 19:52 UTC |
 | 19 | Light, sky and cameras | building | 4 / 17 | — |
 | 20 | Plan views and dimensions | building | 9 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 6 / 13 | — |
 
 ## Phase 18 segments
 
-32 merged, 3 merging
+32 merged, 3 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-exports` | Exports: IfcCovering (SKIRTINGBOARD, MOLDING) for room moldings and molding lines, glass walls as IfcWall with a Glass material, countertops and backsplashes inside their cabinets' IfcFurniture, niches as recesses; glTF node and OBJ group names for every phase-18 mesh | merging | mai-flash-esc |
 | `p18-rebuild` | Incremental rebuild: scene_cache_equals_full gains every phase-18 object and edit; each edit rebuilds only what it touches | merging | mai-flash-esc |
 | `p18-demo` | Demo: docs/arch3d/showcase/phase-18-demo.json (a small house with the kitchen, two baths and moldings) and the showcase house's kitchen and baths finished; the user guide's Interior finish and Kitchen and bath sections | merging | mai-flash |
+| `upstream-sync-ddfa833bc` | merge upstream upstream/main up to ddfa833bc (2 commits) | gate | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 13:25 | `harden-p15-arch-spanning-walls` | merged | 9,765 pass | tturbo-mac |
+| Nov 13 13:25 | `p21-ui-callout-open` | merged | 9,765 pass | claude-sonnet-d |
+| Nov 13 13:25 | `harden-p20-view-export` | merged | 9,765 pass | tturbo-mac |
+| Nov 13 13:25 | `harden-p20-reference` | merged | 9,765 pass | tturbo-mac2 |
+| Nov 13 13:25 | `harden-p16-soffit-meshes` | merged | 9,765 pass | tturbo-mac |
+| Nov 13 13:25 | `harden-p20-roof-plan` | merged | 9,765 pass | tturbo-mac |
 | Nov 13 12:49 | `harden-p19-sky-1` | merged | 9,729 pass | tturbo-mac |
 | Nov 13 12:49 | `harden-p17-grilles-doors` | merged | 9,729 pass | tturbo-mac |
 | Nov 13 12:49 | `harden-p19-cameras-1` | merged | 9,729 pass | tturbo-mac |
 | Nov 13 12:49 | `harden-p21-schedule-model` | merged | 9,729 pass | tturbo-mac |
 | Nov 13 12:49 | `p20f-dim-inspect` | merged | 9,729 pass | mai-flash-b |
 | Nov 13 12:49 | `p20f-rcp-soffits-once` | merged | 9,729 pass | claude-sonnet-a |
-| Nov 13 12:14 | `p19-horizon-2` | merged | 9,687 pass | mai-flash |
-| Nov 13 11:39 | `p21-plot-sheets` | merged | 9,683 pass | claude-sonnet-a |
-| Nov 13 11:04 | `harden-p12-ifc-lights` | merged | 9,679 pass | tturbo-mac2 |
-| Nov 13 11:04 | `harden-p6-cli-render` | merged | 9,679 pass | tturbo-mac |
-| Nov 13 11:04 | `p18-crown-wrap` | merged | 9,679 pass | mai-flash |
-| Nov 13 11:04 | `harden-p16-trays-check` | merged | 9,679 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1245 |
-| bonsai-b | bonsai2-27b | agent | 1193 |
+| bonsai-b | bonsai2-27b | agent | 1194 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1316 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1268 |
-| claude-sonnet-a | sonnet | idle | 148 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1271 |
+| claude-sonnet-a | sonnet | gate | 148 |
 | claude-sonnet-b | sonnet | idle | 153 |
 | claude-sonnet-c | sonnet | idle | 89 |
 | claude-sonnet-d | sonnet | idle | 82 |
@@ -78,4 +79,4 @@ Updated 2026-11-13 13:15 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 53 |
 | mai-flash-esc | mai-code-1.1-flash | down | 121 |
 | tturbo-mac | tturbo-ultraheretic | agent | 850 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 475 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 476 |
