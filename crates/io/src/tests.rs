@@ -3835,3 +3835,46 @@ fn reading_a_drawing_with_arch_objects_reports_metres() {
     assert_eq!(back.arch.walls.len(), 1);
     assert_eq!(back.header.i64("INSUNITS", 0), 6);
 }
+
+#[test]
+fn reading_an_imperial_drawing_with_arch_objects_reports_metres() {
+    let mut d = Drawing::new_imperial();
+    assert_eq!(d.header.i64("INSUNITS", 0), 1);
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    let back = roundtrip(&d);
+    assert_eq!(back.arch.walls.len(), 1);
+    assert_eq!(back.header.i64("INSUNITS", 0), 6);
+    assert_eq!(back.header.i64("MEASUREMENT", 0), 1);
+}
+
+#[test]
+fn reading_a_unitless_drawing_with_arch_objects_reports_metres() {
+    let mut d = Drawing::new_metric();
+    d.header.set_i64("INSUNITS", 0);
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    let back = roundtrip(&d);
+    assert_eq!(back.arch.walls.len(), 1);
+    assert_eq!(back.header.i64("INSUNITS", 0), 6);
+    assert_eq!(back.header.i64("MEASUREMENT", 0), 1);
+}
+
+#[test]
+fn reading_a_drawing_with_arch_objects_sets_measurement() {
+    let mut d = Drawing::new_metric();
+    d.header.set_i64("INSUNITS", 4);
+    d.header.set_i64("MEASUREMENT", 0);
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    let back = roundtrip(&d);
+    assert_eq!(back.header.i64("INSUNITS", 0), 6);
+    assert_eq!(back.header.i64("MEASUREMENT", 0), 1, "MEASUREMENT must be set to 1 when arch objects are present");
+}
+
+#[test]
+fn reading_a_drawing_with_only_an_opening_reports_metres() {
+    let mut d = Drawing::new_metric();
+    d.header.set_i64("INSUNITS", 4);
+    d.arch.openings.push(Opening { id: ArchId(0), ..Default::default() });
+    let back = roundtrip(&d);
+    assert_eq!(back.arch.openings.len(), 1);
+    assert_eq!(back.header.i64("INSUNITS", 0), 6);
+}

@@ -64,6 +64,7 @@ pub mod options;
 pub mod palettes;
 pub mod pane3d;
 pub mod parametric;
+mod plan_tabs;
 pub mod plotstyles;
 pub mod quick;
 pub mod save_loss;
@@ -99,6 +100,9 @@ pub struct UiState {
     /// The last ARCHDETECT dry-run reply the Detection Review panel lists.
     #[serde(skip)]
     pub archdetect: Option<Value>,
+    /// The plan view being renamed (its name) and the text typed so far; `Some` shows the rename box.
+    #[serde(skip)]
+    pub plan_rename: Option<(String, String)>,
     /// The candidate ids ticked in the Detection Review panel.
     #[serde(skip)]
     pub archdetect_checked: std::collections::BTreeSet<String>,
@@ -212,6 +216,7 @@ impl Default for UiState {
         UiState {
             docking: docking::default_workspace(),
             archdetect: None,
+            plan_rename: None,
             archdetect_checked: Default::default(),
             archdetect_note: String::new(),
             archdetect_rect: None,
@@ -1125,6 +1130,7 @@ impl CadApp {
         if self.ui.show_file_tabs {
             chrome::file_tabs(self, ui);
         }
+        plan_tabs::plan_tabs(self, ui);
         let has_doc = !self.session.docs.is_empty() && !self.ui.start_tab;
         if has_doc && !self.ui.show_toolsets {
             palettes::toolsets_strip(self, ui);

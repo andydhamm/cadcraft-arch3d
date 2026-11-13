@@ -261,7 +261,13 @@ pub fn file_tabs(app: &mut CadApp, ui: &mut egui::Ui) {
 
 /// `text` laid out on one line no wider than `max_width`, ending in "…" when it had to be cut;
 /// and whether it was.
-fn elided(p: &egui::Painter, text: &str, font: egui::FontId, color: egui::Color32, max_width: f32) -> (std::sync::Arc<egui::Galley>, bool) {
+pub(crate) fn elided(
+    p: &egui::Painter,
+    text: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    max_width: f32,
+) -> (std::sync::Arc<egui::Galley>, bool) {
     let mut job = egui::text::LayoutJob::simple_singleline(text.to_string(), font, color);
     job.wrap = egui::text::TextWrapping { max_width: max_width.max(0.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     let galley = p.layout_job(job);

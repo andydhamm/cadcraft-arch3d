@@ -88,6 +88,7 @@
 	Room Dimensions	Розміри кімнат
 	Ceiling Heights	Висоти стелі
 	Reference Level	Рівень посилання
+	Edit Opening	Редагувати проріз
 	Arch Sample	Архітектурний зразок
 	Roof	Дах
 	Roof Automatic	Автоматичний дах
@@ -1673,3 +1674,5 @@
 	Reset Camera	Скинути камеру
 	Orbit Camera	Обертати камеру
 	Update Camera	Оновити камеру
+	Plan View Tabs	Вкладки видів плану
+	Duplicate	Дублювати

@@ -51,6 +51,7 @@ pub mod material;
 pub mod moldingline;
 pub mod niche;
 pub mod opening;
+pub mod opening_edit;
 pub mod outlets_auto;
 pub mod paint;
 pub mod pick;
@@ -115,6 +116,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(wall_split::specs());
     v.extend(opening::specs());
     v.extend(niche::specs());
+    v.extend(opening_edit::specs());
     v.extend(room::specs());
     v.extend(room_moldings::specs());
     v.extend(moldingline::specs());

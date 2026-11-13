@@ -203,4 +203,82 @@ mod tests {
         assert!((hit.point - Vec2::new(10.0, 0.0)).len() < 1e-9);
         assert_eq!(hit.name, "Endpoint");
     }
+
+    #[test]
+    fn empty_drawing_no_snap() {
+        let d = Drawing::new_imperial();
+        assert!(arch_snap(&d, Vec2::new(0.0, 0.0), 1.0, mode::END | mode::MID | mode::NEA).is_none());
+    }
+
+    #[test]
+    fn off_mode_disables_arch_snap() {
+        let d = wall_drawing();
+        assert!(arch_snap(&d, Vec2::new(10.0, 0.15), 0.1, mode::END | mode::OFF).is_none());
+    }
+
+    #[test]
+    fn wall_end_beats_opening_edge_at_same_point() {
+        let mut d = wall_drawing();
+        // Opening at offset 0: its left edge coincides with the wall's start endpoint.
+        let opening = Opening { id: cadcraft_arch::ArchId(100), host: cadcraft_arch::ArchId(1), offset: 0.0, width: 1.0, ..Default::default() };
+        d.arch.openings.push(opening);
+        // Cursor at the wall's top-face start endpoint (0.0, 0.15).
+        let hit = arch_snap(&d, Vec2::new(0.0, 0.15), 0.1, mode::END).unwrap();
+        // Wall end (priority 0) must win over opening edge (priority 2).
+        assert_eq!(hit.name, "wall end");
+        assert!((hit.point - Vec2::new(0.0, 0.15)).len() < 0.01);
+    }
+
+    #[test]
+    fn nearest_point_on_wall_face() {
+        let d = wall_drawing();
+        // Cursor above the middle of the top face line; NEA should snap to the face line.
+        let hit = arch_snap(&d, Vec2::new(5.0, 0.5), 0.5, mode::NEA).unwrap();
+        assert_eq!(hit.name, "wall nearest");
+        // Closest point on the top face line (y = 0.15) is (5.0, 0.15).
+        assert!((hit.point - Vec2::new(5.0, 0.15)).len() < 0.01);
+    }
+
+    #[test]
+    fn aperture_boundary_is_inclusive() {
+        let d = wall_drawing();
+        // Wall endpoint at (10.0, 0.15); cursor exactly 0.1 away.
+        let hit = arch_snap(&d, Vec2::new(10.0, 0.25), 0.1, mode::END);
+        assert!(hit.is_some(), "point exactly at aperture distance must snap");
+        assert_eq!(hit.unwrap().name, "wall end");
+    }
+
+    #[test]
+    fn opening_on_missing_host_is_skipped() {
+        let mut d = Drawing::new_imperial();
+        // Opening whose host wall does not exist.
+        let opening = Opening { id: cadcraft_arch::ArchId(100), host: cadcraft_arch::ArchId(999), offset: 2.0, width: 1.0, ..Default::default() };
+        d.arch.openings.push(opening);
+        assert!(arch_snap(&d, Vec2::new(2.0, 0.15), 0.1, mode::END).is_none());
+    }
+
+    #[test]
+    fn closest_of_two_walls_wins() {
+        let mut d = Drawing::new_imperial();
+        let w1 = cadcraft_doc::Wall {
+            id: cadcraft_arch::ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            ..Default::default()
+        };
+        let w2 = cadcraft_doc::Wall {
+            id: cadcraft_arch::ArchId(2),
+            start: Vec2::new(0.0, 10.0),
+            end: Vec2::new(10.0, 10.0),
+            thickness: 0.3,
+            ..Default::default()
+        };
+        d.arch.walls.push(w1);
+        d.arch.walls.push(w2);
+        // Cursor closer to w1's endpoint (10.0, 0.15) than w2's (10.0, 9.85).
+        let hit = arch_snap(&d, Vec2::new(10.0, 0.15), 2.0, mode::END).unwrap();
+        assert_eq!(hit.name, "wall end");
+        assert!((hit.point - Vec2::new(10.0, 0.15)).len() < 0.01);
+    }
 }
