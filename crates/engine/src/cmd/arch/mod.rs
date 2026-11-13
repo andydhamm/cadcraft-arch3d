@@ -29,6 +29,7 @@ mod countertop_inspect;
 pub mod deck;
 mod deck_inspect;
 pub(crate) mod defaults;
+pub mod dimdrive;
 pub mod electrical;
 pub(crate) mod electrical_inspect;
 pub mod electrical_view;
@@ -124,6 +125,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(roomdetect::specs());
     v.extend(roomlabel::specs());
     v.extend(autodim::specs());
+    v.extend(dimdrive::specs());
     v.extend(inspect::specs());
     v.extend(pick::specs());
     v.extend(level::specs());
