@@ -17,6 +17,7 @@ mod arch_light;
 mod arch_molding;
 mod arch_plan;
 mod arch_site;
+mod arch_views;
 pub mod clip;
 mod dim;
 mod fill;
