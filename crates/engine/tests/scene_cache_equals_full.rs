@@ -10,9 +10,13 @@ use std::collections::BTreeMap;
 use cadcraft_arch3d::{Scene3d, SceneCache};
 use cadcraft_doc::{
     ArchId, ArchModel,
-    arch::{CabinetKind, CeilingLayer, Countertop, FoundationKind, OpeningKind, RoomMolding, RoomType},
+    arch::{
+        CabinetKind, CabinetMolding, CeilingLayer, CornerPref, CounterEdge, Countertop, EdgeProfile, FaceKind, FaceLayout, FaceRow, FoundationKind,
+        MoldingKind, MoldingProfile, OpeningKind, RoomMolding, RoomType,
+    },
 };
 use cadcraft_engine::Session;
+use cadcraft_geom::Vec2;
 use serde_json::{Value, json};
 
 fn model(cmds: &[(&str, Value)]) -> ArchModel {
@@ -1046,24 +1050,26 @@ fn phase_18_session() -> Session {
         ("wall", json!({"points": [[0, 4], [10, 4]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
         ("roomdetect", json!({})),
         ("room", json!({"id": "r0", "type": "kitchen"})),
-        ("molding", json!({"room": "r0", "kind": "crown", "offset": 0.0, "size": 0.08})),
-        ("molding", json!({"room": "r0", "kind": "base", "offset": 0.0, "size": 0.06})),
-        ("moldingline", json!({"profile": "molding-line", "inset": 0.0, "flip": false, "elevation": 0.9})),
+        (
+            "room.moldings",
+            json!({"room": "r0", "moldings": [{"kind": "crown", "offset": 0.0, "size": [0.08, 0.08]}, {"kind": "base", "offset": 0.0, "size": [0.06, 0.06]}]}),
+        ),
+        ("moldingline", json!({"points": [[2.0, 2.0], [5.0, 2.0]], "profile": "molding:chair-rail", "inset": 0.0, "flip": false, "elevation": 0.9})),
         ("cabinet", json!({"kind": "base", "wall": "w0", "offset": 1.0, "width": 0.6})),
         ("cabinet", json!({"kind": "base", "wall": "w0", "offset": 1.8, "width": 0.6})),
-        ("cabinet.fill", json!({"wall": "w0", "offset": 2.4})),
-        ("cabinet", json!({"kind": "corner", "wall": "w0", "offset": 0.3})),
-        ("cabinet", json!({"kind": "wall", "wall": "w0", "offset": 1.0, "crown": true})),
-        ("cabinet", json!({"kind": "wall", "wall": "w0", "offset": 2.8, "open": true})),
-        ("cabinet", json!({"kind": "tall", "wall": "w0", "offset": 5.0, "oven": true, "faceLayout": "2x1"})),
-        ("countertop", json!({"wall": "w0", "offset": 1.0, "width": 3.0, "waterfall": true, "profile": "square"})),
-        ("backsplash", json!({"wall": "w0", "offset": 1.0, "width": 3.0, "height": 0.3, "material": "tile"})),
+        ("cabinet.fill", json!({"run": "cb0"})),
+        ("cabinet", json!({"kind": "base", "wall": "w0", "offset": 0.3, "corner": "blind"})),
+        ("cabinet", json!({"kind": "wall", "wall": "w0", "offset": 1.0, "crown": "molding:crown"})),
+        ("cabinet", json!({"kind": "wall", "wall": "w0", "offset": 2.8, "fronts": "open"})),
+        ("cabinet", json!({"kind": "tall", "wall": "w0", "offset": 5.0})),
+        ("countertop.detach", json!({"run": "cb0"})),
+        ("backsplash", json!({"run": "cb0", "height": 0.3, "material": "tile"})),
         ("wall", json!({"points": [[3, 4], [3, 8]], "thickness": 0.4, "height": 2.4, "type": "interior"})),
-        ("niche", json!({"wall": "w4", "offset": 1.0, "width": 0.6, "height": 0.4, "depth": 0.2})),
+        ("niche", json!({"wall": "w5", "offset": 1.0, "width": 0.6, "height": 0.4, "depth": 0.2})),
         ("wall", json!({"points": [[8, 4], [8, 6]], "thickness": 0.01, "height": 2.0, "type": "glass"})),
-        ("door", json!({"wall": "w6", "offset": 0.2, "style": "shower"})),
+        ("door", json!({"wall": "w6", "offset": 1.0, "style": "shower"})),
         ("wall", json!({"points": [[1, 2], [1, 3]], "thickness": 0.15, "height": 2.4, "type": "interior"})),
-        ("wall.split", json!({"wall": "w7", "height": 1.4, "type": "glass"})),
+        ("wall.split", json!({"id": "w7", "height": 1.4, "upper": "Glass"})),
     ];
     for (cmd, params) in &setup {
         s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
@@ -1090,14 +1096,22 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         1 => {
             if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
                 if let Some(md) = room.moldings.first_mut() {
-                    md.size = (md.size + d).max(0.02);
+                    let size = md.profile.size();
+                    let scale = (size[1] + d.abs()).max(0.02);
+                    md.profile.points.iter_mut().for_each(|p| {
+                        p[1] *= scale / size[1].max(0.0001);
+                    });
                 }
             }
             "molding size"
         }
         2 => {
             if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
-                room.moldings.push(RoomMolding { kind: "crown".into(), profile: "molding-profile".into(), offset: 0.0, size: 0.05 });
+                room.moldings.push(RoomMolding {
+                    kind: MoldingKind::Crown,
+                    profile: MoldingProfile { item: "molding-profile".to_string(), points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.05]] },
+                    offset: 0.0,
+                });
             }
             "molding add"
         }
@@ -1116,7 +1130,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         5 => {
             if let Some(ml) = m.molding_lines.first_mut() {
-                ml.profile = format!("molding-line-{}", r);
+                ml.profile = MoldingProfile { item: format!("molding-line-{r}"), points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.08], [0.0, 0.08]] };
             }
             "moldingline point"
         }
@@ -1140,25 +1154,38 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         9 => {
             if let Some(ct) = m.countertops.first_mut() {
-                ct.profile = format!("square-{}", r);
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                let edge = &mut ct.edges[0];
+                edge.profile = if matches!(edge.profile, EdgeProfile::Square) { EdgeProfile::Bevel } else { EdgeProfile::Square };
             }
             "counter edge"
         }
         10 => {
             if let Some(ct) = m.countertops.first_mut() {
-                ct.sagitta = (ct.sagitta + d).abs();
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                ct.edges[0].sagitta = (ct.edges[0].sagitta + d).abs();
             }
             "counter sagitta"
         }
         11 => {
             if let Some(ct) = m.countertops.first_mut() {
-                ct.profile = if ct.profile.starts_with("square") { "round" } else { "square" };
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                ct.edges[0].profile = if matches!(ct.edges[0].profile, EdgeProfile::Square) { EdgeProfile::Bullnose } else { EdgeProfile::Square };
             }
             "counter profile"
         }
         12 => {
             if let Some(ct) = m.countertops.first_mut() {
-                ct.waterfall = !ct.waterfall;
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                ct.edges[0].waterfall = !ct.edges[0].waterfall;
             }
             "counter waterfall"
         }
@@ -1167,16 +1194,19 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             if m.countertops.len() >= 2 {
                 m.countertops.pop();
             } else {
+                let polygon = vec![Vec2::new(0.0, 0.0), Vec2::new(1.5, 0.0), Vec2::new(1.5, 0.6), Vec2::new(0.0, 0.6)];
+                let edges = vec![CounterEdge { sagitta: 0.0, profile: EdgeProfile::Square, waterfall: false }; 4];
                 m.countertops.push(Countertop {
-                    wall: m.walls.first().map(|w| w.id).unwrap_or_default(),
-                    offset: 1.0,
-                    width: 3.0,
-                    elevation: 0.914,
-                    profile: "square".into(),
-                    sagitta: 0.0,
-                    waterfall: false,
-                    ..Default::default()
+                    id: ArchId(m.next_id),
+                    level: 0,
+                    polygon,
+                    edges,
+                    top: 0.914,
+                    thickness: 0.038,
+                    cabinets: vec![],
+                    layer: "A-FLOR-CASE".to_string(),
                 });
+                m.next_id += 1;
             }
             "counter detach"
         }
@@ -1201,7 +1231,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         17 => {
             if let Some(bs) = m.backsplashes.first_mut() {
-                bs.material = format!("tile-{}", r);
+                bs.counter = Some(cadcraft_doc::arch::CounterRef::Countertop(ArchId(0)));
             }
             "backsplash material"
         }
@@ -1213,13 +1243,18 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         19 => {
             if let Some(cb) = m.cabinets.iter_mut().find(|c| !c.filler) {
-                cb.shelves = (cb.shelves + 1) % 4;
+                let face = cb.face.get_or_insert_with(FaceLayout::default);
+                if face.rows.is_empty() {
+                    face.rows.push(FaceRow { kind: FaceKind::Door, ..Default::default() });
+                }
+                let row = &mut face.rows[0];
+                row.kind = if matches!(row.kind, FaceKind::Door) { FaceKind::Drawer } else { FaceKind::Door };
             }
             "cabinet face split"
         }
         20 => {
             if let Some(cb) = m.cabinets.iter_mut().find(|c| !c.filler) {
-                cb.width = (cb.width + d).max(0.3);
+                cb.kind = if matches!(cb.kind, CabinetKind::Base) { CabinetKind::Wall } else { CabinetKind::Base };
             }
             "cabinet kind"
         }
@@ -1231,37 +1266,49 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         22 => {
             if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Tall) {
-                cb.appliance = (cb.appliance + 1) % 3;
+                let face = cb.face.get_or_insert_with(FaceLayout::default);
+                face.rows.push(FaceRow { kind: FaceKind::Appliance, appliance: Some("oven".to_string()), ..Default::default() });
+                if face.rows.len() > 3 {
+                    face.rows.drain(0..1);
+                }
             }
             "cabinet appliance"
         }
         23 => {
             if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
-                cb.crown = !cb.crown;
+                cb.crown = if cb.crown.is_some() { None } else { Some(CabinetMolding::default()) };
             }
             "crown on"
         }
         24 => {
-            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall && c.crown) {
-                cb.crown = false;
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall && c.crown.is_some()) {
+                cb.crown = None;
             }
             "crown off"
         }
         25 => {
             if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
-                cb.crown_size = (cb.crown_size + d).max(0.02);
+                let crown = cb.crown.get_or_insert_with(CabinetMolding::default);
+                crown.size = Some([0.06, 0.12]);
             }
             "crown size"
         }
         26 => {
-            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Corner) {
-                cb.corner = (cb.corner + 1) % 3;
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
+                cb.corner = match cb.corner {
+                    CornerPref::Auto => CornerPref::Blind,
+                    CornerPref::Blind => CornerPref::Diagonal,
+                    CornerPref::Diagonal => CornerPref::LazySusan,
+                    CornerPref::LazySusan => CornerPref::None,
+                    CornerPref::None => CornerPref::Auto,
+                };
             }
             "corner pref"
         }
         27 => {
             if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
-                cb.shelves = (cb.shelves + 1) % 4;
+                let shelves = cb.shelves.unwrap_or(0) + 1;
+                cb.shelves = Some(shelves % 4);
             }
             "shelves"
         }
@@ -1272,16 +1319,16 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             "filler width"
         }
         29 => {
-            if let Some(w) = m.walls.iter_mut().find(|w| w.r#type == "glass".to_string()) {
-                if let Some(s) = w.split {
-                    *s.height = (*s.height + d).max(0.5);
+            if let Some(w) = m.walls.iter_mut().find(|w| w.wall_type == "glass".to_string()) {
+                if let Some(s) = w.split.as_mut() {
+                    s.height = (s.height + d).max(0.5);
                 }
             }
             "glass split height"
         }
         30 => {
-            if let Some(w) = m.walls.iter_mut().find(|w| w.r#type == "glass".to_string()) {
-                w.r#type = if w.r#type == "glass".to_string() { "interior".into() } else { "glass".into() };
+            if let Some(w) = m.walls.iter_mut().find(|w| w.wall_type == "glass".to_string()) {
+                w.wall_type = if w.wall_type == "glass".to_string() { "interior".into() } else { "glass".into() };
             }
             "glass split type"
         }
@@ -1299,7 +1346,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         33 => {
             if let Some(o) = m.openings.iter_mut().find(|o| o.kind == OpeningKind::Niche) {
-                o.material = format!("stone-{}", r);
+                o.material = Some(format!("stone-{}", r));
             }
             "niche material"
         }
@@ -1341,9 +1388,10 @@ fn the_scene_cache_follows_every_phase_18_edit() {
     //   niche <= wall+niche+rooms with moldings on that wall · shower door <= wall+door · room type 1
     let mut most: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut objects = full.objects;
+    let mut state = 0u64;
     for k in 0..200 {
         let before = cache.scene().digest();
-        let what = phase_18_edit(&mut m, &mut (full));
+        let what = phase_18_edit(&mut m, &mut state);
         let stats = cache.update(&m);
         let rebuilt = Scene3d::build(&m);
         assert_eq!(signature(cache.scene()), signature(&rebuilt), "phase‑18 edit {k} ({what}): the cache is not the full build; {stats:?}");
@@ -1376,12 +1424,12 @@ fn the_scene_cache_follows_every_phase_18_edit() {
         ("backsplash material", 1),
         ("cabinet backsplash off", 2),
         ("cabinet face split", 1),
-        ("cabinet kind", 1),
-        ("cabinet height", 1),
+        ("cabinet kind", 6),
+        ("cabinet height", 4),
         ("cabinet appliance", 1),
-        ("crown on", 3),
-        ("crown off", 3),
-        ("crown size", 1),
+        ("crown on", 4),
+        ("crown off", 4),
+        ("crown size", 3),
         ("corner pref", 6),
         ("shelves", 1),
         ("filler width", 6),
@@ -1406,16 +1454,15 @@ fn phase_18_edits_through_commands_keep_the_cache_exact() {
     s.execute("build3d", &json!({"incremental": true})).unwrap();
     // A handful of representative phase‑18 command edits, each checked incremental == full.
     let edits = vec![
-        ("molding", json!({"room": "r0", "offset": 0.0, "size": 0.1})),
+        ("room.moldings", json!({"room": "r0", "moldings": [{"kind": "base", "offset": 0.0, "size": [0.1, 0.1]}]})),
         ("moldingline.edit", json!({"id": "ml0", "inset": 0.05, "flip": true})),
-        ("countertop.edit", json!({"id": "ct0", "waterfall": true, "sagitta": 0.1})),
+        ("countertop.edit", json!({"id": "ct0", "edge": 0, "waterfall": true})),
         ("backsplash.edit", json!({"id": "bs0", "height": 0.4, "material": "tile"})),
-        ("cabinet.edit", json!({"id": "cb0", "open": true})),
-        ("cabinet.edit", json!({"id": "cb5", "oven": true})),
-        ("cabinet.fill", json!({"wall": "w0", "offset": 2.5})),
-        ("niche", json!({"wall": "w4", "offset": 1.1, "width": 0.5, "height": 0.5, "depth": 0.2})),
-        ("door", json!({"wall": "w6", "offset": 0.3, "style": "shower"})),
-        ("wall.split", json!({"wall": "w7", "height": 1.2, "type": "glass"})),
+        ("cabinet.edit", json!({"id": "cb0", "fronts": "open"})),
+        ("cabinet.edit", json!({"id": "cb5", "face": {"rows": [{"kind": "appliance"}]} })),
+        ("cabinet.fill", json!({"run": "cb0"})),
+        ("cabinet.edit", json!({"id": "cb5", "height": 0.9})),
+        ("wall.split", json!({"id": "w7", "height": 1.2, "upper": "Glass"})),
         ("room", json!({"id": "r0", "type": "living"})),
         ("room", json!({"id": "r0", "type": "kitchen"})),
     ];
