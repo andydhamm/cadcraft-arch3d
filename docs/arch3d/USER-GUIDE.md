@@ -713,6 +713,88 @@ python3 tools/showcase/render_all.py --out target/showcase
 `--size WxH` and `--spp N` set the 3D renders' size and samples; `tools/showcase/README.md` lists every file it
 writes.
 
+## Schedules and labels
+
+A schedule is a live TABLE in the drawing, linked to a `Schedule` record by id (`sc0`, `sc1`, …). The four kinds are
+`door`, `window`, `cabinet` and `room`. `schedule {"kind": "door", "at": [x, y]}` places one on `A-ANNO-SCHD`; its
+rows are recomputed after every command that changes the model, so a resized door moves into its group at once.
+Identical items share one number: doors (and garage doors and cased openings) group by kind, style, width and height;
+windows by style, width, height and sill; cabinets by kind, width, depth, height, fronts, doors and drawers; rooms by
+their floor, wall and ceiling finishes. Numbers are `D01`, `W01`, `C01`, … in order of each group's lowest id, derived
+on every read, never stored. `opening.edit {"id", "width"?, "height"?, "sill"?, "style"?}` resizes an opening and
+re-validates it against the placement limits.
+
+The numbers also draw in the plan: a plan view whose `labels.numbers` is on (Working, Floor Plan, Kitchen & Bath)
+puts each door, window and cabinet number beside it on `A-DOOR-IDEN`, `A-GLAZ-IDEN` and `A-FLOR-CASE-IDEN`, and every
+elevation tags its openings and cabinets on `A-ELEV-IDEN`.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'door {"wall":"w0","offset":1.5,"width":0.9,"height":2.1,"style":"hinged"}' \
+  --cmd 'window {"wall":"w2","offset":3.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'schedule {"kind":"door","at":[0,-8]}' \
+  --cmd 'schedule {"kind":"window","at":[8,-8]}' \
+  --cmd 'schedule {"kind":"room","at":[16,-8]}' \
+  --cmd 'arch.inspect {"schedules":true}' \
+  --save schedules.dxf
+```
+
+## Interior elevations and view notes
+
+`elevation {"room": "Kitchen", "level": "Main", "side": "west", "insert": [x, y]}` makes an interior elevation: it
+looks at one wall of one room and restricts the scene to that room box. The side names the wall it faces (`north`,
+`east`, `south`, `west`); `wall` names a wall id instead. Interior elevations draw the cabinet door swings on
+`A-ELEV-SWNG`, the schedule numbers on `A-ELEV-IDEN`, and material patterns (courses and joints from the surface's
+texture) on `A-ELEV-PATT`; each cabinet run and the floor-to-ceiling height are dimensioned automatically. None of
+this grows the view's extent or its overall dimensions.
+
+A view note is text, a marker or a dimension attached to the view, not the model: `view.note {"view":"v6","text":
+"backsplash to ceiling","at":[u,v]}` adds one, `view.dim {"view":"v6","from":[u,v],"to":[u,v]}` adds a dimension,
+and `view.note.delete {"view":"v6","id":"n0"}` removes one. Notes live in view coordinates (u across, v up) and
+survive every regeneration; a note attached to an object corner follows it, and detaches to its last position if the
+object goes. Notes change no 3D and bump no revision.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'cabinet {"kind":"base","wall":"w3","offset":1.0,"width":1.5}' \
+  --cmd 'elevation {"room":"r0","level":0,"side":"north","insert":[0,-12]}' \
+  --cmd 'view.note {"view":"v0","text":"base run","at":[1.0,0.9]}' \
+  --cmd 'arch.inspect {"views":true}' \
+  --save interior.dxf
+```
+
+## Sheets
+
+A sheet is a paper-space layout with a locked viewport per view at the view's scale (one model metre is 1000/scale
+paper mm), a master title block and callout markers. `sheetset {"project", "date"}` sets the project name and date
+used by the title-block macros. `sheet {"name", "number", "title", ...}` makes a sheet: `"camera": name` puts a 3D
+render on it (the cover), `"planView": name` puts a phase-20 plan view on it (drawn from a copy of the drawing with
+that view applied, so one sheet can show Lower and another Main whatever the session shows), and `"views": [...]`
+places elevations, sections and interior elevations. `sheet.edit` changes a sheet, `sheet.delete` removes one, and
+`sheetset` renumbers them.
+
+The master title block is the block `ARCH-TITLE-BLOCK`, made once and never overwritten; its attribute defaults are
+macros (`%sheet_number%`, `%sheet_title%`, `%project%`, `%date%`, `%scale%`) and each sheet's INSERT holds the
+expansions. Every placed elevation, section and interior elevation gets a callout in the plan (`<view number>/<sheet
+number>` on `A-ANNO-SYMB`); `sheet.open {"view": name}` and a double-click on a callout open the sheet. `plot
+{"sheets": "all", "path": "set.pdf"}` (or a list of sheet names) writes one PDF, a page per sheet in sheet order.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'door {"wall":"w0","offset":3.0,"width":0.9,"height":2.1,"style":"hinged"}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'elevation {"side":"south","insert":[0,-20]}' \
+  --cmd 'sheetset {"project":"Demo","date":"2026-11-09"}' \
+  --cmd 'sheet {"name":"Elevations","number":"A-301","title":"Elevations","views":["v0"],"scale":100}' \
+  --cmd 'plot {"sheets":"all","path":"set.pdf"}' \
+  --save sheets.dxf
+```
+
 ## Out of scope
 
 Not part of arch3d so far: SSAO, TAA, cascaded shadows, animated walkthrough paths, and gamepad or 3D-mouse input.
