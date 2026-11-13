@@ -1,8 +1,13 @@
 //! Room molding runs (phase 18): the resolved paths a room's moldings follow.
 
+use crate::ceiling::finished_ceiling_in;
 use crate::join::polygon_area;
-use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding, Wall};
+use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding, TraySides, Wall};
 use cadcraft_geom::Vec2;
+
+/// The width of a tray's side band (phase 16 builds a 0.02 m `ceiling` band just inside the
+/// tray outline; the crown's back sits on the band's inner face, not the outline itself).
+const TRAY_SIDE: f64 = 0.02;
 
 /// One continuous run of a room molding along the surface its back is fixed to.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -359,6 +364,52 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     let z = vec![z0; path.len()];
                     runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: false, side: 1.0 });
                 }
+            }
+        }
+
+        // Tray crown runs (crown only)
+        if molding.kind == MoldingKind::Crown {
+            for tray in &model.trays {
+                if tray.room != room.id {
+                    continue;
+                }
+                // Get the tray outline: use the polygon if given, else inset the room by tray.inset
+                let outline = if tray.polygon.is_empty() {
+                    let regions = cadcraft_geom::skeleton::inset(&room.polygon, &room.holes, tray.inset);
+                    if regions.len() != 1 {
+                        continue;
+                    }
+                    regions[0].clone()
+                } else {
+                    tray.polygon.clone()
+                };
+
+                // For vertical sides in flat ceiling rooms, inset by TRAY_SIDE to get the crown path
+                let path = if let TraySides::Vertical = tray.sides {
+                    let regions = cadcraft_geom::skeleton::inset(&outline, &[], TRAY_SIDE);
+                    if regions.len() != 1 {
+                        continue;
+                    }
+                    regions[0].clone()
+                } else {
+                    outline
+                };
+
+                // Ensure CCW
+                let mut path = path;
+                if polygon_area(&path) < 0.0 {
+                    path.reverse();
+                }
+
+                // Compute z for each vertex: finished ceiling at the point - offset - profile height
+                let n = path.len();
+                let mut z = Vec::with_capacity(n);
+                for p in &path {
+                    let zc = finished_ceiling_in(model, room, *p);
+                    z.push(zc - molding.offset - h);
+                }
+
+                runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: true, side: 1.0 });
             }
         }
 
