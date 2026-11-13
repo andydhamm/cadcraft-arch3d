@@ -493,4 +493,126 @@ mod tests {
         m.walls[1].end = Vec2::new(f64::INFINITY, 0.0);
         let _ = exterior_rows(&m, 0, &[]);
     }
+
+    // Tests kept from the first implementation, with assertions matching the rebuilt rows.
+
+    #[test]
+    fn house_rows() {
+        let rows = exterior_rows(&house(), 0, &[AutoRowKind::Overall, AutoRowKind::Walls, AutoRowKind::Openings]);
+        assert!(!rows.is_empty());
+        assert!(rows.iter().any(|r| r.kind == AutoRowKind::Overall && r.side == "south"));
+        assert!(rows.iter().all(|r| matches!(r.side.as_str(), "south" | "east" | "north" | "west")));
+    }
+
+    #[test]
+    fn window_adds_the_north_openings_row() {
+        let mut m = house();
+        m.openings.push(window(0, 2, 2.0));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Openings]);
+        assert!(rows.iter().any(|r| r.kind == AutoRowKind::Openings && r.side == "north"));
+        assert!(rows.iter().all(|r| r.kind == AutoRowKind::Openings));
+    }
+
+    #[test]
+    fn interior_wall_meeting_the_south_wall_adds_a_row() {
+        let mut m = house();
+        m.walls.push(wall(6, (4.0, 0.0), (4.0, 3.0), 0.1, false));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Walls]);
+        assert!(rows.iter().any(|r| r.kind == AutoRowKind::Walls && r.side == "south"));
+    }
+
+    #[test]
+    fn l_footprint_sides_and_jogs() {
+        let mut m = ArchModel::default();
+        m.walls = vec![
+            wall(0, (0.0, 0.0), (5.0, 0.0), 0.2, true),
+            wall(1, (5.0, 0.0), (5.0, 3.0), 0.2, true),
+            wall(2, (5.0, 3.0), (2.0, 3.0), 0.2, true),
+            wall(3, (2.0, 3.0), (2.0, 0.0), 0.2, true),
+        ];
+        let rows = exterior_rows(&m, 0, &[]);
+        let sides: Vec<_> = rows.iter().filter(|r| r.kind == AutoRowKind::Overall).map(|r| r.side.as_str()).collect();
+        assert_eq!(sides, ["south", "east", "north", "west"]);
+        let south = row(&rows, "south", AutoRowKind::Overall).expect("south");
+        assert!(close(&values(&south), &[5.2]), "{:?}", values(&south));
+        let east = row(&rows, "east", AutoRowKind::Overall).expect("east");
+        assert!(close(&values(&east), &[3.2]), "{:?}", values(&east));
+        // Every row lies in order along its direction and never exceeds the box.
+        for r in &rows {
+            let along: Vec<f64> = r.points.iter().map(|p| p.at.dot(r.dir)).collect();
+            assert!(along.windows(2).all(|w| w[0] <= w[1] + 1e-9), "{} {:?}", r.side, along);
+        }
+    }
+
+    #[test]
+    fn features_and_alongs_are_exact() {
+        let mut m = house();
+        m.openings.push(window(0, 2, 6.0));
+        for r in exterior_rows(&m, 0, &[]) {
+            for p in &r.points {
+                let along = crate::dimension::along_of(&m, p.handle, p.feature, p.at).expect("along");
+                assert!((along - p.along).abs() < 1e-9, "{} {:?}", r.side, p);
+            }
+        }
+    }
+
+    #[test]
+    fn line_offsets_are_fixed_per_row_kind() {
+        let rows = exterior_rows(&house(), 0, &[AutoRowKind::Overall, AutoRowKind::Walls]);
+        let overall = row(&rows, "north", AutoRowKind::Overall).expect("overall");
+        let walls = row(&rows, "north", AutoRowKind::Walls).expect("walls");
+        assert!((overall.line_offset - 10.1).abs() < 1e-9);
+        assert!((walls.line_offset - 9.6).abs() < 1e-9);
+        assert_eq!(row_offset(AutoRowKind::Openings), 1.0);
+        assert_eq!(row_offset(AutoRowKind::Walls), 1.5);
+        assert_eq!(row_offset(AutoRowKind::Overall), 2.0);
+    }
+
+    #[test]
+    fn no_footprint_no_rows() {
+        assert!(exterior_rows(&ArchModel::default(), 0, &[AutoRowKind::Overall]).is_empty());
+        let mut m = house();
+        for w in m.walls.iter_mut() {
+            w.exterior = false;
+        }
+        assert!(exterior_rows(&m, 0, &[AutoRowKind::Overall]).is_empty());
+    }
+
+    #[test]
+    fn hostile_models_never_panic() {
+        let mut m = ArchModel::default();
+        m.walls.push(wall(0, (f64::NAN, 0.0), (1.0, 0.0), 0.2, true));
+        assert!(exterior_rows(&m, 0, &[AutoRowKind::Overall]).is_empty());
+        let mut m = house();
+        m.walls[2].thickness = f64::INFINITY;
+        m.openings.push(window(0, 99, f64::NAN));
+        m.openings.push(window(1, 0, f64::NAN));
+        let _ = exterior_rows(&m, 0, &[]);
+    }
+
+    #[test]
+    fn rows_serde_default_and_skip() {
+        let d = cadcraft_doc::arch::AutoDims::default();
+        let json = serde_json::to_value(&d).expect("serialise");
+        let back: cadcraft_doc::arch::AutoDims = serde_json::from_value(json).expect("deserialise");
+        assert_eq!(back, d);
+        // Missing fields fall back to the defaults.
+        let empty: cadcraft_doc::arch::AutoDims = serde_json::from_value(serde_json::json!({})).expect("defaults");
+        assert!(empty.generated.is_empty() && empty.rows.is_empty());
+    }
+
+    #[test]
+    fn other_levels_auto_dims_hidden_while_a_level_is_shown() {
+        // Rows are per level: a model whose walls sit on level 0 has no rows on level 1.
+        assert!(!exterior_rows(&house(), 0, &[]).is_empty());
+        assert!(exterior_rows(&house(), 1, &[]).is_empty());
+        assert!(ArchModel::default().auto_dims.is_empty());
+    }
+
+    #[test]
+    fn every_auto_dim_shows_with_no_level_shown() {
+        // The builder never filters by a shown level: asking for level 0 always gives the rows.
+        let rows = exterior_rows(&house(), 0, &[]);
+        assert_eq!(rows.len(), 7);
+    }
 }

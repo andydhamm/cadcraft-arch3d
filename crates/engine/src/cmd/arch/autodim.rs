@@ -706,4 +706,172 @@ mod tests {
             assert!(dm.assoc.iter().all(|a| matches!(a.snap, AssocSnap::Arch { .. })));
         }
     }
+
+    // Tests kept from the first implementation, with assertions matching the rebuilt command.
+
+    #[test]
+    fn angled_side_uses_aligned_dimensions() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points":[[0,0],[4,4],[8,4],[8,0],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})).unwrap();
+        let r = s.execute("dimauto", &json!({"level": 0, "on": true})).unwrap();
+        assert!(r["dimensions"].as_u64().unwrap() > 0, "{r}");
+        for h in all_handles(&s, 0) {
+            let dm = dim(&s, h);
+            assert!(matches!(dm.kind, DimKind::Linear { .. }));
+            assert_eq!(dm.assoc.len(), 2);
+        }
+    }
+
+    #[test]
+    fn dimauto_creates_rows_on_a_dims_layer_with_the_arch_style() {
+        let mut s = house();
+        s.execute("dimauto", &json!({"level": 0, "on": true})).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.layer("A-ANNO-DIMS").is_some());
+        assert!(d.dim_style("Arch").is_some());
+        for h in all_handles(&s, 0) {
+            assert_eq!(d.entity(h).unwrap().common.layer, "A-ANNO-DIMS");
+            assert_eq!(dim(&s, h).style, "Arch");
+        }
+    }
+
+    #[test]
+    fn regenerated_after_a_wall_or_opening_edit_in_the_same_undo_step() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let undo = s.state().unwrap().undo.len();
+        s.execute("window", &json!({"wall": "w2", "offset": 6.0, "width": 1.0, "height": 1.2, "sill": 0.9})).unwrap();
+        assert_eq!(s.state().unwrap().undo.len(), undo + 1, "one step for the window and the rows");
+        assert!(row(&s, 0, "north", AutoRowKind::Openings).is_some());
+        s.undo().unwrap();
+        assert!(row(&s, 0, "north", AutoRowKind::Openings).is_none());
+        assert!(s.doc().unwrap().arch.openings.is_empty());
+    }
+
+    #[test]
+    fn unchanged_rows_keep_their_handles() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let before = all_handles(&s, 0);
+        assert!(!before.is_empty());
+        s.execute("dimauto", &json!({"rows": ["overall", "walls", "openings"]})).unwrap();
+        assert_eq!(all_handles(&s, 0), before);
+        assert!(record(&s, 0).generated.iter().all(|r| !r.handles.is_empty()));
+    }
+
+    #[test]
+    fn adding_a_window_keeps_the_other_rows_in_place() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let before: Vec<_> = record(&s, 0).generated.iter().map(|r| (r.side.clone(), r.kind, r.handles.clone())).collect();
+        s.execute("window", &json!({"wall": "w2", "offset": 6.0, "width": 1.0, "height": 1.2, "sill": 0.9})).unwrap();
+        for (side, kind, handles) in before {
+            assert_eq!(row(&s, 0, &side, kind).unwrap().handles, handles, "{side} {kind:?}");
+        }
+        assert_eq!(record(&s, 0).generated.len(), 8);
+    }
+
+    #[test]
+    fn a_kept_row_follows_its_side_out_in_place() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let east = row(&s, 0, "east", AutoRowKind::Overall).unwrap();
+        let line = |s: &Session| dim(s, east.handles[0]).defpt.x;
+        assert!((line(&s) - 12.1).abs() < 1e-9);
+        // Widen the house: w1 (the east wall) moves 2 m out.
+        let north = row(&s, 0, "north", AutoRowKind::Overall).unwrap();
+        s.execute("dimdrive", &json!({"dimension": north.handles[0].hex(), "value": 12.2, "object": "w1"})).unwrap();
+        let moved = s.doc().unwrap().arch.wall(ArchId(1)).map(|w| w.start.x).unwrap_or(10.0);
+        assert!(moved > 10.5, "w1 moved to {moved}");
+        assert_eq!(row(&s, 0, "east", AutoRowKind::Overall).unwrap().handles, east.handles);
+        assert!((line(&s) - (12.1 + (moved - 10.0))).abs() < 1e-9, "{}", line(&s));
+    }
+
+    #[test]
+    fn hand_edit_marks_the_row_edited_and_it_is_left_alone() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let h = row(&s, 0, "south", AutoRowKind::Overall).unwrap().handles[0];
+        s.execute("dimedit", &json!({"handles": [h.hex()], "mode": "new", "text": "HAND"})).unwrap();
+        assert!(row(&s, 0, "south", AutoRowKind::Overall).unwrap().edited);
+        s.execute("dimauto", &json!({})).unwrap();
+        assert!(row(&s, 0, "south", AutoRowKind::Overall).unwrap().edited);
+        assert_eq!(dim(&s, h).text, "HAND");
+    }
+
+    #[test]
+    fn erase_of_an_auto_dim_marks_edited() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let g = row(&s, 0, "east", AutoRowKind::Overall).unwrap().handles[0];
+        s.execute("erase", &json!({"handles": [g.hex()]})).unwrap();
+        assert!(row(&s, 0, "east", AutoRowKind::Overall).unwrap().edited);
+        assert!(!row(&s, 0, "west", AutoRowKind::Overall).unwrap().edited);
+    }
+
+    #[test]
+    fn edited_rows_still_follow_associatively() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let north = row(&s, 0, "north", AutoRowKind::Walls).unwrap();
+        let h = north.handles[0];
+        s.execute("dimedit", &json!({"handles": [h.hex()], "mode": "new", "text": "KEEP"})).unwrap();
+        assert!(row(&s, 0, "north", AutoRowKind::Walls).unwrap().edited);
+        // Moving w5 through another row's dimension: the edited dimension still reads the wall.
+        let east = row(&s, 0, "east", AutoRowKind::Walls).unwrap();
+        s.execute("dimdrive", &json!({"dimension": east.handles[0].hex(), "value": 3.6, "object": "w4"})).unwrap();
+        assert_eq!(row(&s, 0, "north", AutoRowKind::Walls).unwrap().handles, north.handles);
+        assert!(matches!(dim(&s, h).assoc[0].snap, AssocSnap::Arch { .. }));
+        assert_eq!(dim(&s, h).text, "KEEP");
+    }
+
+    #[test]
+    fn dimauto_off_removes_the_rows() {
+        let mut s = house();
+        s.execute("dimauto", &json!({"level": 0, "on": true})).unwrap();
+        let handles = all_handles(&s, 0);
+        assert!(!handles.is_empty());
+        s.execute("dimauto", &json!({"level": 0, "on": false})).unwrap();
+        assert!(s.doc().unwrap().arch.auto_dims.is_empty());
+        assert!(handles.iter().all(|h| s.doc().unwrap().entity(*h).is_none()));
+    }
+
+    #[test]
+    fn undo_restores_rows_and_flags() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let h = row(&s, 0, "north", AutoRowKind::Walls).unwrap().handles[0];
+        s.execute("dimedit", &json!({"handles": [h.hex()], "mode": "new", "text": "X"})).unwrap();
+        assert!(row(&s, 0, "north", AutoRowKind::Walls).unwrap().edited);
+        s.undo().unwrap();
+        assert!(!row(&s, 0, "north", AutoRowKind::Walls).unwrap().edited);
+        assert_eq!(all_handles(&s, 0).len(), 10);
+        s.undo().unwrap();
+        assert!(s.doc().unwrap().arch.auto_dims.is_empty());
+    }
+
+    #[test]
+    fn inspect_auto_dims_rows() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let r = s.execute("arch.inspect", &json!({"autoDims": true})).unwrap();
+        let rows = r["autoDims"].as_array().unwrap();
+        assert_eq!(rows.len(), 7);
+        let north = rows.iter().find(|v| v["side"] == "north" && v["row"] == "walls").unwrap();
+        assert_eq!(north["edited"], false);
+        let vals: Vec<f64> = north["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+        assert!(close(&vals, &[6.1, 4.1]), "{vals:?}");
+    }
+
+    #[test]
+    fn refusals_change_nothing() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+        let before = s.doc().unwrap().arch.auto_dims.clone();
+        let undo = s.state().unwrap().undo.len();
+        assert!(s.execute("dimauto", &json!({"level": 99, "on": true})).is_err());
+        assert!(s.execute("dimauto", &json!({"rows": ["bogus"]})).is_err());
+        assert_eq!(s.doc().unwrap().arch.auto_dims, before);
+        assert_eq!(s.state().unwrap().undo.len(), undo);
+    }
 }
