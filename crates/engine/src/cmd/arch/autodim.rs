@@ -264,7 +264,7 @@ fn reconcile(doc: &mut Drawing, level: u32, kinds: &[AutoRowKind], old: &[AutoDi
         }
         let handles: Vec<Handle> = fresh.into_iter().map(|dm| add_dimension(doc, dm)).collect();
         changed = true;
-        out.push(AutoDimRow { side: row.side, kind: row.kind, handles, edited: false });
+        out.push(AutoDimRow { side: row.side, kind: row.kind, handles, ..Default::default() });
     }
     for (o, used) in old.iter().zip(&used) {
         if !o.edited && !used {
@@ -349,7 +349,7 @@ fn run_dimauto(s: &mut Session, p: &Value) -> Result<Value> {
             rec.rows = kinds;
             rec.generated = generated;
         }
-        None => work.arch.auto_dims.push(AutoDims { level, rows: kinds, generated }),
+        None => work.arch.auto_dims.push(AutoDims { level, rows: kinds, generated, ..Default::default() }),
     }
     let out = reply(&work, level);
     if changed {
