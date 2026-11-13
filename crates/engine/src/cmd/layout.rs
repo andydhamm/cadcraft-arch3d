@@ -1008,8 +1008,8 @@ mod harden_tests {
         for name in names {
             d.layouts.push(Layout::new(name, 0));
         }
-        for (i, name) in names.iter().enumerate() {
-            d.arch.sheets.push(Sheet { name: name.to_string(), tab_order: i, ..Default::default() });
+        for name in names {
+            d.arch.sheets.push(Sheet { name: name.to_string(), ..Default::default() });
         }
         d
     }
@@ -1067,7 +1067,7 @@ mod harden_tests {
     fn plot_arch_sheets_sheet_without_layout_error() {
         let mut d = Drawing::new_metric();
         // Sheet exists but has no corresponding layout
-        d.arch.sheets.push(Sheet { name: "Orphan".to_string(), tab_order: 0, ..Default::default() });
+        d.arch.sheets.push(Sheet { name: "Orphan".to_string(), ..Default::default() });
         let err = plot_arch_sheets("plot", &d, &json!("all")).unwrap_err();
         assert!(err.to_string().contains("no layout"), "error: {}", err);
     }
@@ -1077,7 +1077,7 @@ mod harden_tests {
         let mut d = Drawing::new_metric();
         d.model.push(Entity {
             handle: Handle(1),
-            kind: EntityKind::Line(cadcraft_geom::Line::new(cadcraft_geom::Vec3::ZERO, cadcraft_geom::Vec3::new(1.0, 0.0, 0.0))),
+            kind: EntityKind::Line(cadcraft_doc::Line { a: cadcraft_geom::Vec2::ZERO, b: cadcraft_geom::Vec2::new(1.0, 0.0) }),
             common: Default::default(),
         });
         d.layouts.push(Layout::new("L1", 0));
@@ -1113,7 +1113,7 @@ mod harden_tests {
         let mut d = Drawing::new_metric();
         d.model.push(Entity {
             handle: Handle(1),
-            kind: EntityKind::Line(cadcraft_geom::Line::new(cadcraft_geom::Vec3::ZERO, cadcraft_geom::Vec3::new(1.0, 0.0, 0.0))),
+            kind: EntityKind::Line(cadcraft_doc::Line { a: cadcraft_geom::Vec2::ZERO, b: cadcraft_geom::Vec2::new(1.0, 0.0) }),
             common: Default::default(),
         });
         let names = plot_sheets("plot", &d, &json!(["MODEL"])).unwrap();
