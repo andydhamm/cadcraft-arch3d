@@ -359,4 +359,21 @@ mod tests {
         // Should not panic; may succeed or return an error.
         let _ = restrict(&m, &scene, &v);
     }
+
+    #[test]
+    fn restrict_empty_scene() {
+        let (m, v) = room_model();
+        let scene = Scene3d::default();
+        let out = restrict(&m, &scene, &v).unwrap();
+        assert!(out.meshes.is_empty());
+    }
+
+    #[test]
+    fn resolve_room_no_room_point() {
+        let (m, v) = room_model();
+        // A view with no room_point
+        let v2 = ArchView { room_point: None, ..v.clone() };
+        // Should still resolve to the room by id
+        assert_eq!(resolve_room(&m, &v2), v.room);
+    }
 }
