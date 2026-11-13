@@ -221,4 +221,110 @@ mod tests {
             assert_eq!((now.on, now.frozen, now.transparency), (l.on, l.frozen, l.transparency), "{}", l.name);
         }
     }
+
+    #[test]
+    fn electrical_view_with_no_layers() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        assert_eq!(result["shown"].as_array().unwrap().len(), 0);
+        assert_eq!(result["dimmed"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn electrical_view_all_e_layers() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-POWR"));
+            d.layers.push(Layer::new("E-LITE"));
+            d.layers.push(Layer::new("E-DATA"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        assert_eq!(result["shown"].as_array().unwrap().len(), 3);
+        assert_eq!(result["dimmed"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn electrical_view_no_e_layers() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("A-WALL"));
+            d.layers.push(Layer::new("A-DOOR"));
+            d.layers.push(Layer::new("A-WINDOW"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        assert_eq!(result["shown"].as_array().unwrap().len(), 0);
+        assert_eq!(result["dimmed"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn electrical_view_case_sensitive_prefix() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-POWR"));
+            d.layers.push(Layer::new("e-powr"));
+            d.layers.push(Layer::new("EL"));
+            d.layers.push(Layer::new("EPOWR"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        // Only "E-POWR" matches (case-sensitive, requires dash)
+        assert_eq!(result["shown"].as_array().unwrap().len(), 1);
+        assert_eq!(result["dimmed"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn electrical_view_output_is_sorted() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-ZONE"));
+            d.layers.push(Layer::new("E-ALPHA"));
+            d.layers.push(Layer::new("A-MIDDLE"));
+            d.layers.push(Layer::new("A-FIRST"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        let shown: Vec<String> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+        let dimmed: Vec<String> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+        let mut shown_sorted = shown.clone();
+        shown_sorted.sort();
+        let mut dimmed_sorted = dimmed.clone();
+        dimmed_sorted.sort();
+        assert_eq!(shown, shown_sorted);
+        assert_eq!(dimmed, dimmed_sorted);
+    }
+
+    #[test]
+    fn electrical_view_shows_exactly_e_layers() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-POWR"));
+            d.layers.push(Layer::new("A-WALL"));
+            d.layers.push(Layer::new("E-LITE"));
+            d.layers.push(Layer::new("A-DOOR"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        let shown: Vec<String> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+        let dimmed: Vec<String> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+
+        // All shown layers should start with "E-"
+        for name in &shown {
+            assert!(name.starts_with("E-"), "{} should start with E-", name);
+        }
+        // All dimmed layers should not start with "E-"
+        for name in &dimmed {
+            assert!(!name.starts_with("E-"), "{} should not start with E-", name);
+        }
+    }
 }
