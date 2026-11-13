@@ -106,4 +106,45 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn sample_files_count_is_49() {
+        // The spec says 49 items: catalog.json + 48 sample files.
+        assert_eq!(sample_files().len(), 49);
+    }
+
+    #[test]
+    fn sample_files_are_sorted_after_catalog() {
+        let files = sample_files();
+        let names: Vec<&str> = files.iter().skip(1).map(|f| f.0).collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        assert_eq!(names, sorted, "files after catalog.json must be sorted by name");
+    }
+
+    #[test]
+    fn sample_files_have_no_duplicate_names() {
+        let files = sample_files();
+        let names: Vec<&str> = files.iter().map(|f| f.0).collect();
+        let mut unique = names.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(names.len(), unique.len(), "file names must be unique");
+    }
+
+    #[test]
+    fn material_images_are_jpeg() {
+        let files = sample_files();
+        for name in ["material-fabric.jpg", "material-marble.jpg", "material-oak.jpg"] {
+            let bytes = files.iter().find(|f| f.0 == name).map(|f| f.1).expect(name);
+            assert!(bytes.starts_with(&[0xFF, 0xD8, 0xFF]), "{name} is not a JPEG");
+        }
+    }
+
+    #[test]
+    fn backdrop_is_png() {
+        let files = sample_files();
+        let bytes = files.iter().find(|f| f.0 == "backdrop-sky.png").map(|f| f.1).expect("backdrop-sky.png");
+        assert!(bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), "backdrop-sky.png is not a PNG");
+    }
 }
