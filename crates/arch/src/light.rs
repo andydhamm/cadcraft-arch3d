@@ -72,6 +72,9 @@ pub fn tray_strip_path(model: &ArchModel, tray: &str, inset: f64) -> Result<(u32
     let ceiling = crate::ceiling::finished_ceiling_at(model, t.level, probe).ok_or_else(|| format!("no ceiling beside tray `{label}`"))?;
     let elevation = model.levels.iter().rev().find(|l| l.index == t.level).or_else(|| model.levels.last()).map_or(0.0, |l| l.elevation);
     let height = ceiling - elevation + 0.02;
+    if !height.is_finite() {
+        return Err(format!("no finite ceiling beside tray `{label}`"));
+    }
 
     let mut ring = if inset > 0.0 {
         let regions = cadcraft_geom::skeleton::inset(&outline, &[], inset).map_err(|_| no_path())?;
@@ -1148,5 +1151,55 @@ mod tests {
         assert!((height - (outside + 0.02)).abs() < 1e-9, "{height} vs {outside}");
         assert!(tray_strip_path(&model, "tr9", 0.05).unwrap_err().contains("tr9"));
         assert!(tray_strip_path(&model, "tr0", 2.0).unwrap_err().contains("tr0"));
+    }
+
+    #[test]
+    fn tray_strip_path_inset_zero_returns_outline() {
+        let model = tray_model();
+        let (_, ring, height) = tray_strip_path(&model, "tr0", 0.0).unwrap();
+        // With inset 0, the ring is the tray outline itself (0.6 inset from the room)
+        let (x0, x1) = ring.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.x), b.max(p.x)));
+        let (y0, y1) = ring.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.y), b.max(p.y)));
+        assert!((x0 - 0.6).abs() < 1e-6 && (x1 - 5.4).abs() < 1e-6, "x range {x0}..{x1}");
+        assert!((y0 - 0.6).abs() < 1e-6 && (y1 - 4.4).abs() < 1e-6, "y range {y0}..{y1}");
+        assert!(height.is_finite());
+    }
+
+    #[test]
+    fn tray_strip_path_refuses_non_finite_inset() {
+        let model = tray_model();
+        let err = tray_strip_path(&model, "tr0", f64::NAN).unwrap_err();
+        assert!(err.contains("inset") && err.contains("tr0"), "{err}");
+        let err = tray_strip_path(&model, "tr0", f64::INFINITY).unwrap_err();
+        assert!(err.contains("inset"), "{err}");
+        let err = tray_strip_path(&model, "tr0", -0.1).unwrap_err();
+        assert!(err.contains("inset") && err.contains("-0.1"), "{err}");
+    }
+
+    #[test]
+    fn tray_strip_path_polygon_tray() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.push_room(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)],
+            ..Room::default()
+        });
+        // A drawn polygon tray (not room-based)
+        model.push_tray(cadcraft_doc::arch::Tray {
+            room: ArchId(0),
+            polygon: Some(vec![Vec2::new(2.0, 2.0), Vec2::new(8.0, 2.0), Vec2::new(8.0, 6.0), Vec2::new(2.0, 6.0)]),
+            depth: 0.25,
+            ..Default::default()
+        });
+        let (level, ring, height) = tray_strip_path(&model, "tr0", 0.05).unwrap();
+        assert_eq!(level, 0);
+        // The ring should be inset 0.05 from the polygon (2.05..7.95 x, 2.05..5.95 y)
+        let (x0, x1) = ring.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.x), b.max(p.x)));
+        let (y0, y1) = ring.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.y), b.max(p.y)));
+        assert!((x0 - 2.05).abs() < 1e-6 && (x1 - 7.95).abs() < 1e-6, "x range {x0}..{x1}");
+        assert!((y0 - 2.05).abs() < 1e-6 && (y1 - 5.95).abs() < 1e-6, "y range {y0}..{y1}");
+        assert!(height.is_finite());
     }
 }
