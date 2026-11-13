@@ -33,10 +33,12 @@ pub fn callouts(model: &ArchModel, level: Option<u32>, out: &mut PlanAnnotation)
                 }
 
                 if let Some(view) = model.views.iter().find(|v| v.id == id) {
-                    // Filter by level if requested
-                    if let Some(lvl) = level {
-                        if view.level != Some(lvl) {
-                            continue;
+                    // Only interior views are level-filtered; a view with no level shows on all levels
+                    if view.kind == ViewKind::Interior {
+                        if let Some(lvl) = level {
+                            if view.level.is_some() && view.level != Some(lvl) {
+                                continue;
+                            }
                         }
                     }
 
@@ -86,9 +88,11 @@ pub fn callout_at(model: &ArchModel, level: Option<u32>, p: Vec2, tol: f64) -> O
                 }
 
                 if let Some(view) = model.views.iter().find(|v| v.id == id) {
-                    if let Some(lvl) = level {
-                        if view.level != Some(lvl) {
-                            continue;
+                    if view.kind == ViewKind::Interior {
+                        if let Some(lvl) = level {
+                            if view.level.is_some() && view.level != Some(lvl) {
+                                continue;
+                            }
                         }
                     }
 
