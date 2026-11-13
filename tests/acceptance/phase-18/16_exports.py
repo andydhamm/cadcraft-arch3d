@@ -99,8 +99,9 @@ walls = {n: a for n, (e, a) in inst.items() if e == 'IFCWALL'}
 w4 = [n for n, a in walls.items() if isinstance(a[2], str) and decode_step_string(a[2]) == 'wall-w4']
 if len(w4) != 1:
     fail(f"IFC: an IfcWall named wall-w4 (the glass wall): {sorted(str(n) for n in ifc_names(inst, 'IFCWALL') if n)}")
-assoc = [a for _, a in of_type(inst, 'IFCRELASSOCIATESMATERIAL') if any(r.n == w4[0] for r in refs_of(a[4]))]
-if not assoc or not any(deref(inst, r)[0] == 'IFCMATERIAL' for a in assoc for r in refs_of(a[5])):
+# refs_of yields instance numbers (ints).
+assoc = [a for _, a in of_type(inst, 'IFCRELASSOCIATESMATERIAL') if len(a) > 5 and any(r == w4[0] for r in refs_of(a[4]))]
+if not assoc or not any(inst.get(r, (None,))[0] == 'IFCMATERIAL' for a in assoc for r in refs_of(a[5])):
     fail("IFC: an IfcRelAssociatesMaterial relates wall-w4 to the Glass material")
 furniture = [str(n) for n in ifc_names(inst, 'IFCFURNITURE')]
 if len(furniture) != 4:
