@@ -152,6 +152,78 @@ fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<f
     return sum;
 }
 
+// One texel of normal map `layer` (`frame.tex`: texel offset, edge, count) as a tangent-space vector;
+// the coordinates wrap. The texels are RGBA8 packed one per aux word, red in the low byte.
+fn normal_texel(layer: u32, x: i32, y: i32) -> vec3<f32> {
+    let edge = i32(frame.tex.y);
+    let xi = u32(((x % edge) + edge) % edge);
+    let yi = u32(((y % edge) + edge) % edge);
+    let i = frame.tex.x + layer * frame.tex.y * frame.tex.y + yi * frame.tex.y + xi;
+    if (i >= arrayLength(&ies)) {
+        return vec3<f32>(0.0, 0.0, 1.0);
+    }
+    let c = unpack4x8unorm(bitcast<u32>(ies[i]));
+    return c.xyz * 2.0 - vec3<f32>(1.0);
+}
+
+// [p19-normal-maps-render] The shading normal at barycentrics (u, v) of triangle `tri`; `n` is the
+// geometric normal facing the ray. A triangle with a normal map (`Tri._pad` = its UVs' offset in the
+// aux buffer + 1, its material's `_pad` = the map + 1) gets the UVs interpolated, a tangent frame
+// from the edges and the UV deltas (the same frame as the raster's: dP/du and dP/dv, both scaled by
+// one over the longer), a bilinear wrapped fetch, the perturbed normal, flipped to `n`'s side. A
+// degenerate UV mapping, or no map, returns `n`.
+fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> {
+    if ((frame.flags & FRAME_NORMAL_MAPS) == 0u) {
+        return n;
+    }
+    let t = tris[tri];
+    let layer1 = materials[t.material]._pad;
+    if (t._pad == 0u || layer1 == 0u || layer1 > frame.tex.z) {
+        return n;
+    }
+    let base = t._pad - 1u;
+    if (base + 6u > arrayLength(&ies)) {
+        return n;
+    }
+    let uv0 = vec2<f32>(ies[base], ies[base + 1u]);
+    let uv1 = vec2<f32>(ies[base + 2u], ies[base + 3u]);
+    let uv2 = vec2<f32>(ies[base + 4u], ies[base + 5u]);
+    let d1 = uv1 - uv0;
+    let d2 = uv2 - uv0;
+    let det = d1.x * d2.y - d2.x * d1.y;
+    if (!(abs(det) > 1.0e-12)) {
+        return n;
+    }
+    let r = 1.0 / det;
+    let tangent = (t.e1 * d2.y - t.e2 * d1.y) * r;
+    let bitangent = (t.e2 * d1.x - t.e1 * d2.x) * r;
+    let longest = max(length(tangent), length(bitangent));
+    if (!(longest > 1.0e-12)) {
+        return n;
+    }
+    // The frame's own normal: the winding normal turned by the sign of the UV mapping.
+    let frame_n = select(-t.n, t.n, det > 0.0);
+    let uv = uv0 + d1 * u + d2 * v;
+    let st = uv * f32(frame.tex.y) - vec2<f32>(0.5);
+    let f = floor(st);
+    let w = st - f;
+    let x0 = i32(f.x);
+    let y0 = i32(f.y);
+    let layer = layer1 - 1u;
+    let a = mix(normal_texel(layer, x0, y0), normal_texel(layer, x0 + 1, y0), w.x);
+    let b = mix(normal_texel(layer, x0, y0 + 1), normal_texel(layer, x0 + 1, y0 + 1), w.x);
+    let nt = mix(a, b, w.y);
+    var mapped = tangent / longest * nt.x + bitangent / longest * nt.y + frame_n * nt.z;
+    if (!(dot(mapped, mapped) > 1.0e-12)) {
+        return n;
+    }
+    mapped = normalize(mapped);
+    if (dot(mapped, n) < 0.0) {
+        mapped = -mapped;
+    }
+    return mapped;
+}
+
 // What a path adds up to and what its first hit looked like.
 struct PathResult { radiance: vec3<f32>, albedo: vec3<f32>, normal: vec3<f32>, t: f32, hit: u32 };
 

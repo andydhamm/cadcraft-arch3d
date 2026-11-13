@@ -188,7 +188,11 @@ pub struct GpuScene {
     pub tris: Vec<GpuTri>,
     pub materials: Vec<GpuMaterial>,
     pub lights: Vec<GpuLight>,
+    /// The aux buffer: the IES tables, then the normal-mapped triangles' UVs, then the maps' texels.
     pub ies: Vec<f32>,
+    /// Where the normal maps are in `ies`, as `GpuFrame::tex`: texel offset, map edge, map count and
+    /// one unused. All zero without normal maps.
+    pub tex: [u32; 4],
 }
 
 /// `rgb / luminance(rgb)`, or white for a black or non-finite colour.
@@ -302,11 +306,109 @@ pub fn build_gpu_scene(scene: &Scene3d, ground: bool, furnace: Option<Furnace>) 
     if let Some(f) = furnace {
         materials.iter_mut().for_each(|m| *m = furnace_material(f));
     }
-    let Some(tris) = collect_triangles(scene, ground, &materials) else { return GpuScene::default() };
+    // The normal-mapped meshes: the map each takes (a layer of the maps below) and its UV tile. A
+    // furnace is pure diffuse: no maps.
+    let mut maps = NormalMaps::default();
+    let mesh_maps: Vec<Option<[f32; 2]>> = scene
+        .meshes
+        .iter()
+        .enumerate()
+        .map(|(mi, mesh)| {
+            let (key, tile) = if furnace.is_some() { return None } else { mesh_normal_map(scene, &mesh.material)? };
+            let layer = maps.layer_of(scene, &key)?;
+            materials.get_mut(mi)?._pad = layer + 1;
+            Some(tile)
+        })
+        .collect();
+    let mut uvs: Vec<f32> = Vec::new();
+    let Some(mut tris) = collect_triangles(scene, ground, &materials, &mesh_maps, &mut uvs) else { return GpuScene::default() };
+    let (lights, mut ies) = if furnace.is_some() { (Vec::new(), Vec::new()) } else { pack_lights(&scene.lights) };
+    // Append the UVs and the texels after the IES tables; a table that would not fit the 32-bit
+    // offsets (or the cap) is left out, and the maps with it.
+    let mut tex = [0u32; 4];
+    let texel_words = maps.texels.len();
+    let total = ies.len().checked_add(uvs.len()).and_then(|n| n.checked_add(texel_words));
+    match total {
+        Some(total) if !maps.texels.is_empty() && total <= MAX_AUX_FLOATS => {
+            let base = ies.len() as u32;
+            for t in tris.iter_mut().filter(|t| t._pad != 0) {
+                t._pad += base;
+            }
+            let texel_offset = base + uvs.len() as u32;
+            ies.extend_from_slice(&uvs);
+            ies.extend(maps.texels.iter().map(|w| f32::from_bits(*w)));
+            tex = [texel_offset, NORMAL_MAP_EDGE, maps.count, 0];
+        }
+        _ => {
+            for t in tris.iter_mut() {
+                t._pad = 0;
+            }
+            for m in materials.iter_mut() {
+                m._pad = 0;
+            }
+        }
+    }
     let (nodes, order) = build_bvh(&tris);
     let tris = order.iter().filter_map(|&i| tris.get(i as usize).copied()).collect();
-    let (lights, ies) = if furnace.is_some() { (Vec::new(), Vec::new()) } else { pack_lights(&scene.lights) };
-    GpuScene { nodes, tris, materials, lights, ies }
+    GpuScene { nodes, tris, materials, lights, ies, tex }
+}
+
+/// Edge of every normal map in the aux buffer (texels), `GpuFrame::tex.y`.
+pub const NORMAL_MAP_EDGE: u32 = cadcraft_arch3d::texture::TEXTURE_SIZE;
+/// Most normal maps one still carries (each is 256 KiB in the aux buffer); a mesh past them is flat.
+pub const MAX_PT_NORMAL_MAPS: u32 = 16;
+/// Most floats the aux buffer takes (128 MiB, the default storage binding limit); past it the
+/// scene's normal maps are dropped.
+const MAX_AUX_FLOATS: usize = 1 << 25;
+
+/// The normal map a mesh of `material` shows and its UV tile (metres per repeat for face-aligned
+/// UVs, `[1, 1]` when the mesh's UVs are texture coordinates): a `MaterialDef`'s `normal_texture`
+/// when it has an image (or is a built-in finish map), else the finish map of a finish with
+/// relief. The key names the map (`finish:<name>:normal` or a scene texture key).
+fn mesh_normal_map(scene: &Scene3d, material: &str) -> Option<(String, [f32; 2])> {
+    if let Some(def) = scene.materials.get(material) {
+        let key = def.normal_texture.as_deref()?;
+        crate::textures::normal_layer_of_key(scene, key)?;
+        let tile = def.tile.map(|t| if t.is_finite() && t > 0.0 { t } else { 1.0 });
+        return Some((key.to_string(), tile));
+    }
+    let f = crate::textures::finish_of(material).filter(|f| crate::textures::has_relief(*f))?;
+    Some((format!("finish:{}:normal", f.name()), [1.0, 1.0]))
+}
+
+/// The distinct normal maps of a scene, as the RGBA8 texels packed one per word (the aux buffer
+/// bitcasts them), in the order their first mesh asks for them.
+#[derive(Default)]
+struct NormalMaps {
+    keys: BTreeMap<String, u32>,
+    texels: Vec<u32>,
+    count: u32,
+}
+
+impl NormalMaps {
+    /// The index of map `key`, adding its texels the first time; `None` past [`MAX_PT_NORMAL_MAPS`]
+    /// or when the map has no image.
+    fn layer_of(&mut self, scene: &Scene3d, key: &str) -> Option<u32> {
+        if let Some(l) = self.keys.get(key) {
+            return Some(*l);
+        }
+        if self.count >= MAX_PT_NORMAL_MAPS {
+            return None;
+        }
+        let rgba = match key.strip_suffix(":normal").and_then(|s| s.strip_prefix("finish:")).and_then(cadcraft_doc::arch::Finish::parse) {
+            Some(f) => cadcraft_arch3d::texture::normal_map(f).rgba,
+            None => crate::textures::resample(scene.textures.get(key).filter(|i| i.is_valid())?),
+        };
+        let words = (NORMAL_MAP_EDGE * NORMAL_MAP_EDGE) as usize;
+        if rgba.len() != words * 4 {
+            return None;
+        }
+        self.texels.extend(rgba.as_chunks::<4>().0.iter().map(|px| u32::from_le_bytes(*px)));
+        let layer = self.count;
+        self.count += 1;
+        self.keys.insert(key.to_string(), layer);
+        Some(layer)
+    }
 }
 
 /// The furnace's material: diffuse, `albedo`, emitting `emission` nits, nothing else.
@@ -334,12 +436,23 @@ fn gpu_tri(v: [[f32; 3]; 3], material: u32, object: u32, flags: u32) -> Option<G
 }
 
 /// Every valid triangle of the meshes in scene order, then the ground. `None` past the cap.
-fn collect_triangles(scene: &Scene3d, ground: bool, materials: &[GpuMaterial]) -> Option<Vec<GpuTri>> {
+///
+/// `mesh_maps[i]` is the UV tile of mesh `i` when it takes a normal map: its triangles then get
+/// their three corner UVs (divided by the tile) appended to `uvs`, and `_pad` = their float index
+/// in `uvs` + 1 (0 = none; the caller adds the table's offset in the aux buffer).
+fn collect_triangles(
+    scene: &Scene3d,
+    ground: bool,
+    materials: &[GpuMaterial],
+    mesh_maps: &[Option<[f32; 2]>],
+    uvs: &mut Vec<f32>,
+) -> Option<Vec<GpuTri>> {
     let mut tris: Vec<GpuTri> = Vec::new();
     for (mi, mesh) in scene.meshes.iter().enumerate() {
         let material = u32::try_from(mi).ok()?;
         let flags = materials.get(mi).map_or(0, |m| m.flags);
-        if !push_mesh(&mut tris, mesh, material, flags) {
+        let tile = mesh_maps.get(mi).copied().flatten();
+        if !push_mesh(&mut tris, mesh, material, flags, tile.map(|t| (&mut *uvs, t))) {
             return None;
         }
     }
@@ -359,11 +472,21 @@ fn collect_triangles(scene: &Scene3d, ground: bool, materials: &[GpuMaterial]) -
 }
 
 /// Append a mesh's valid triangles; `false` when the cap is passed.
-fn push_mesh(tris: &mut Vec<GpuTri>, mesh: &Mesh, material: u32, flags: u32) -> bool {
+/// With `uv` (the table and the mesh's tile) each triangle whose corners all have finite UVs
+/// appends them and records where in its `_pad`.
+fn push_mesh(tris: &mut Vec<GpuTri>, mesh: &Mesh, material: u32, flags: u32, mut uv: Option<(&mut Vec<f32>, [f32; 2])>) -> bool {
     for g in mesh.indices.chunks_exact(3) {
         let at = |k: usize| g.get(k).and_then(|&i| corner(mesh.positions.get(i as usize)));
         let (Some(a), Some(b), Some(c)) = (at(0), at(1), at(2)) else { continue };
-        tris.extend(gpu_tri([a, b, c], material, mesh.object.0, flags));
+        let Some(mut tri) = gpu_tri([a, b, c], material, mesh.object.0, flags) else { continue };
+        if let Some((table, tile)) = uv.as_mut() {
+            let corner_uv = |k: usize| g.get(k).and_then(|&i| mesh.uvs.get(i as usize)).copied().filter(|t| t.iter().all(|v| v.is_finite()));
+            if let (Some(p), Some(q), Some(r), Ok(at)) = (corner_uv(0), corner_uv(1), corner_uv(2), u32::try_from(table.len() + 1)) {
+                table.extend([p, q, r].iter().flat_map(|t| [t[0] / tile[0], t[1] / tile[1]]));
+                tri._pad = at;
+            }
+        }
+        tris.push(tri);
         if tris.len() > MAX_GPU_TRIANGLES {
             return false;
         }
@@ -880,7 +1003,9 @@ mod tests {
             prism("sym:k:0", 1, [4.0, 0.0, 0.0], [5.0, 1.0, 1.0]),
         ];
         let gpu = build_gpu_scene(&scene, false, None);
-        assert_eq!(gpu.materials, vec![m, material_for("wall-brick"), m]);
+        // (`_pad` is the normal-map layer + 1: brick has a map.)
+        let bare: Vec<GpuMaterial> = gpu.materials.iter().map(|g| GpuMaterial { _pad: 0, ..*g }).collect();
+        assert_eq!(bare, vec![m, material_for("wall-brick"), m]);
     }
 
     #[test]
@@ -1233,6 +1358,66 @@ mod tests {
         let normal = build_gpu_scene(&scene, true, None);
         assert_eq!(normal.lights.len(), 1);
         assert_eq!(gpu.tris.len(), normal.tris.len());
+    }
+
+    /// A 4 x 2 m quad on the plane y = 0 with UVs in metres, as two triangles.
+    fn uv_quad(material: &str, object: u32) -> Mesh {
+        let mut m = Mesh::new(material, ArchId(object));
+        for (p, uv) in [([0.0, 0.0, 0.0], [0.0, 0.0]), ([4.0, 0.0, 0.0], [4.0, 0.0]), ([4.0, 0.0, 2.0], [4.0, 2.0]), ([0.0, 0.0, 2.0], [0.0, 2.0])] {
+            m.positions.push(p);
+            m.normals.push([0.0, -1.0, 0.0]);
+            m.uvs.push(uv);
+        }
+        m.indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
+        m
+    }
+
+    #[test]
+    fn uv_table_matches_mesh_uvs() {
+        let mut scene = Scene3d { meshes: vec![uv_quad("bricky", 1), uv_quad("plain", 2), uv_quad("wall-brick", 3)], ..Default::default() };
+        scene.materials.insert(
+            "bricky".to_string(),
+            crate::types::MaterialDef { normal_texture: Some("finish:brick:normal".to_string()), tile: [2.0, 0.5], ..Default::default() },
+        );
+        let gpu = build_gpu_scene(&scene, false, None);
+        // One map (bricky and the plain finish share the brick map), 256 texels a side.
+        assert_eq!((gpu.tex[1], gpu.tex[2]), (NORMAL_MAP_EDGE, 1));
+        let texels = gpu.tex[0] as usize;
+        assert_eq!(gpu.ies.len(), texels + 256 * 256, "the texels are the last thing in the aux buffer");
+        let brick = cadcraft_arch3d::texture::normal_map(cadcraft_doc::arch::Finish::Brick).rgba;
+        let word = |i: usize| gpu.ies.get(texels + i).map_or(0, |f| f.to_bits());
+        for i in [0usize, 1, 777, 65535] {
+            let want = brick.get(i * 4..i * 4 + 4).map(|px| u32::from_le_bytes([px[0], px[1], px[2], px[3]]));
+            assert_eq!(Some(word(i)), want, "texel {i}");
+        }
+        assert_eq!((gpu.materials[0]._pad, gpu.materials[1]._pad, gpu.materials[2]._pad), (1, 0, 1));
+        // Every triangle of a mapped mesh points at its three UVs divided by the tile.
+        let tiles = [[2.0f32, 0.5], [1.0, 1.0], [1.0, 1.0]];
+        let mut seen = [0usize; 3];
+        for t in &gpu.tris {
+            let m = t.material as usize;
+            if m == 1 {
+                assert_eq!(t._pad, 0, "an unmapped mesh has no UVs");
+                continue;
+            }
+            assert_ne!(t._pad, 0);
+            seen[m] += 1;
+            let at = (t._pad - 1) as usize;
+            let mesh = &scene.meshes[m];
+            for (k, c) in corners(t).iter().enumerate() {
+                let src = mesh.positions.iter().position(|p| p == c).expect("a corner of the quad");
+                let uv = mesh.uvs[src];
+                let want = [uv[0] / tiles[m][0], uv[1] / tiles[m][1]];
+                assert_eq!(gpu.ies.get(at + 2 * k..at + 2 * k + 2), Some(&want[..]), "mesh {m} corner {k}");
+            }
+        }
+        assert_eq!(seen, [2, 0, 2]);
+        // No maps: nothing appended, nothing marked.
+        let plain = build_gpu_scene(&Scene3d { meshes: vec![uv_quad("plain", 1)], ..Default::default() }, false, None);
+        assert!(plain.ies.is_empty() && plain.tex == [0; 4] && plain.tris.iter().all(|t| t._pad == 0));
+        // A furnace is diffuse: no maps either.
+        let furnace = build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, ..Default::default() }));
+        assert!(furnace.ies.is_empty() && furnace.tex == [0; 4]);
     }
 
     #[test]

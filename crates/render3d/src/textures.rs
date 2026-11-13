@@ -8,6 +8,10 @@
 //! with a box filter, and one sampler repeats, filters linearly and blends mips. The array is
 //! rebuilt only when the scene's set of texture keys changes
 //! ([`crate::pipeline::GpuPipeline::prepare_textures`]).
+//!
+//! A second array in LINEAR `Rgba8Unorm` (binding 2, [`NormalLayers`]) holds the tangent-space normal
+//! maps: layer 0 flat (128, 128, 255), then one per finish, then the scene's `:normal` textures
+//! (phase 19).
 
 use crate::types::Scene3d;
 use cadcraft_arch3d::texture::{TEXTURE_SIZE, texture};
@@ -74,6 +78,85 @@ impl SceneLayers {
     pub fn layer_count(&self) -> u32 {
         LAYERS + self.keys.len().min(MAX_SCENE_LAYERS as usize) as u32
     }
+}
+
+/// Texture format of the normal-map array: LINEAR, so a texel's rgb is the vector `n * 0.5 + 0.5`.
+pub const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+/// The flat tangent-space normal `(0, 0, 1)` as a texel.
+pub const FLAT_NORMAL: [u8; 4] = [128, 128, 255, 255];
+
+/// Whether `finish` has relief: its [`cadcraft_arch3d::texture::normal_map`] is not flat.
+pub fn has_relief(finish: Finish) -> bool {
+    matches!(finish, Finish::Brick | Finish::Siding | Finish::Shingles | Finish::Wood)
+}
+
+/// Whether `key` names a scene normal map (`"<name>:normal"`) whose image is valid.
+fn is_normal_key(key: &str, image: &ImageRgba) -> bool {
+    key.ends_with(":normal") && image.is_valid()
+}
+
+/// The finish a built-in normal-map key (`"finish:<name>:normal"`) belongs to.
+fn finish_of_normal_key(key: &str) -> Option<Finish> {
+    key.strip_suffix(":normal").and_then(|s| s.strip_prefix("finish:")).and_then(Finish::parse)
+}
+
+/// The scene's `":normal"` textures that have a layer of the normal array: the valid ones, in key
+/// order, at most [`MAX_SCENE_LAYERS`]. Key `i` is layer [`LAYERS`] + `i`; layer 0 is flat and layers
+/// 1..[`LAYERS`] are the finishes' own maps. Two scenes with equal `NormalLayers` share one array.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NormalLayers {
+    keys: Vec<String>,
+}
+
+impl NormalLayers {
+    /// The layered normal-map keys of `scene`.
+    pub fn of(scene: &Scene3d) -> Self {
+        let keys = scene
+            .textures
+            .iter()
+            .filter(|(key, image)| is_normal_key(key, image))
+            .take(MAX_SCENE_LAYERS as usize)
+            .map(|(key, _)| key.clone())
+            .collect();
+        NormalLayers { keys }
+    }
+
+    /// The keys, in layer order.
+    pub fn keys(&self) -> &[String] {
+        &self.keys
+    }
+
+    /// Layers of the array.
+    pub fn layer_count(&self) -> u32 {
+        LAYERS + self.keys.len().min(MAX_SCENE_LAYERS as usize) as u32
+    }
+}
+
+/// The layer of the normal array holding map `key` in `scene` (the answer [`NormalLayers::of`]
+/// gives, without building the list): a built-in `finish:<f>:normal` is the finish's own layer, a
+/// scene `":normal"` texture the layer after its predecessors; `None` when it has none.
+pub fn normal_layer_of_key(scene: &Scene3d, key: &str) -> Option<u32> {
+    if let Some(f) = finish_of_normal_key(key) {
+        return Finish::ALL.iter().position(|a| *a == f).map(|i| i as u32 + 1);
+    }
+    let image = scene.textures.get(key)?;
+    if !is_normal_key(key, image) {
+        return None;
+    }
+    let before = scene.textures.iter().take_while(|(k, _)| k.as_str() < key).filter(|(k, i)| is_normal_key(k, i)).count();
+    (before < MAX_SCENE_LAYERS as usize).then(|| LAYERS + before as u32)
+}
+
+/// The normal-array layer a mesh of `material` shows and the map's strength: a
+/// [`crate::types::MaterialDef`]'s `normal_texture` (when the map has a layer), else the finish map
+/// of `wall-<f>` / `roof-<f>` / `floor-<f>` / `deck` for the finishes with relief.
+pub fn normal_layer_for(scene: &Scene3d, material: &str) -> Option<(u32, f32)> {
+    if let Some(def) = scene.materials.get(material) {
+        let key = def.normal_texture.as_deref()?;
+        return normal_layer_of_key(scene, key).map(|l| (l, def.normal_scale));
+    }
+    let f = finish_of(material).filter(|f| has_relief(*f))?;
+    Finish::ALL.iter().position(|a| *a == f).map(|i| (i as u32 + 1, 1.0))
 }
 
 /// sRGB byte to linear light.
@@ -185,7 +268,20 @@ pub fn scene_array_data(scene: &Scene3d, layers: &SceneLayers) -> Vec<u8> {
     all.into_iter().flat_map(mip_chain).flatten().collect()
 }
 
-/// Layout of group 3: the texture array (binding 0) and its sampler (binding 1).
+/// The normal array's texel data in `LayerMajor` order: layer 0 flat, one map per finish (flat for
+/// the finishes without relief), then each of `layers`' images [`resample`]d (flat when the scene
+/// no longer has it), every layer with its mips (box filtered).
+pub fn normal_array_data(scene: &Scene3d, layers: &NormalLayers) -> Vec<u8> {
+    let side = TEXTURE_SIZE as usize;
+    let flat = || FLAT_NORMAL.repeat(side * side);
+    let mut all = vec![flat()];
+    all.extend(Finish::ALL.iter().map(|f| if has_relief(*f) { cadcraft_arch3d::texture::normal_map(*f).rgba } else { flat() }));
+    all.extend(layers.keys().iter().map(|key| scene.textures.get(key).filter(|i| i.is_valid()).map_or_else(flat, resample)));
+    all.into_iter().flat_map(mip_chain).flatten().collect()
+}
+
+/// Layout of group 3: the texture array (binding 0), its sampler (binding 1) and the linear
+/// normal-map array (binding 2, sampled with the same sampler).
 pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("render3d material textures layout"),
@@ -206,6 +302,16 @@ pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                    multisampled: false,
+                },
+                count: None,
+            },
         ],
     })
 }
@@ -214,19 +320,28 @@ pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 pub struct MaterialTextures {
     /// The array texture: [`LAYERS`] plus one layer per scene texture key.
     pub texture: wgpu::Texture,
-    /// Group 3 over the array and the sampler.
+    /// The normal-map array texture: layer 0 flat, the finishes' maps, then the scene's.
+    pub normals: wgpu::Texture,
+    /// Group 3 over the arrays and the sampler.
     pub bind_group: wgpu::BindGroup,
 }
 
 impl MaterialTextures {
     /// Upload the phase-13 array (all mips) and build the bind group over `layout`.
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout) -> Self {
-        Self::with_layers(device, queue, layout, &Scene3d::default(), &SceneLayers::default())
+        Self::with_layers(device, queue, layout, &Scene3d::default(), &SceneLayers::default(), &NormalLayers::default())
     }
 
     /// [`MaterialTextures::new`] with `layers`' images of `scene` after the phase-13 layers
     /// ([`scene_array_data`]).
-    pub fn with_layers(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout, scene: &Scene3d, layers: &SceneLayers) -> Self {
+    pub fn with_layers(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layout: &wgpu::BindGroupLayout,
+        scene: &Scene3d,
+        layers: &SceneLayers,
+        normal_layers: &NormalLayers,
+    ) -> Self {
         let texture = device.create_texture_with_data(
             queue,
             &wgpu::TextureDescriptor {
@@ -242,6 +357,23 @@ impl MaterialTextures {
             wgpu::util::TextureDataOrder::LayerMajor,
             &scene_array_data(scene, layers),
         );
+        let normals = device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: Some("render3d normal maps"),
+                size: wgpu::Extent3d { width: TEXTURE_SIZE, height: TEXTURE_SIZE, depth_or_array_layers: normal_layers.layer_count() },
+                mip_level_count: MIP_LEVELS,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: NORMAL_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            &normal_array_data(scene, normal_layers),
+        );
+        let normal_view =
+            normals.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
         let view = texture.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("render3d material sampler"),
@@ -259,15 +391,52 @@ impl MaterialTextures {
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&normal_view) },
             ],
         });
-        MaterialTextures { texture, bind_group }
+        MaterialTextures { texture, normals, bind_group }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normal_array_linear_flat_layer_zero() {
+        assert_eq!(NORMAL_FORMAT, wgpu::TextureFormat::Rgba8Unorm, "linear, not sRGB");
+        let per_layer: usize = (0..MIP_LEVELS).map(|l| (256usize >> l).pow(2) * 4).sum();
+        let data = normal_array_data(&Scene3d::default(), &NormalLayers::default());
+        assert_eq!(data.len(), per_layer * LAYERS as usize);
+        assert!(data.get(..per_layer).is_some_and(|l| l.chunks(4).all(|c| c == FLAT_NORMAL)), "layer 0 is flat at every mip");
+        let brick = Finish::ALL.iter().position(|f| *f == Finish::Brick).map_or(0, |i| i + 1);
+        let want = cadcraft_arch3d::texture::normal_map(Finish::Brick).rgba;
+        assert_eq!(data.get(brick * per_layer..brick * per_layer + want.len()), Some(&want[..]), "the brick layer is arch3d's map");
+        if let Some((device, queue)) = crate::gputest::shared_device() {
+            let layout = bind_group_layout(&device);
+            let t = MaterialTextures::new(&device, &queue, &layout);
+            assert_eq!((t.normals.depth_or_array_layers(), t.normals.format(), t.normals.mip_level_count()), (LAYERS, NORMAL_FORMAT, MIP_LEVELS));
+        }
+    }
+
+    #[test]
+    fn normal_layers_follow_the_scene_keys() {
+        let mut scene = Scene3d::default();
+        let mut img = ImageRgba::default();
+        img.width = 2;
+        img.height = 2;
+        img.rgba = FLAT_NORMAL.repeat(4);
+        for key in ["z:normal", "a:normal", "plain"] {
+            scene.textures.insert(key.to_string(), img.clone());
+        }
+        let layers = NormalLayers::of(&scene);
+        assert_eq!(layers.keys(), ["a:normal", "z:normal"]);
+        assert_eq!((normal_layer_of_key(&scene, "a:normal"), normal_layer_of_key(&scene, "z:normal")), (Some(LAYERS), Some(LAYERS + 1)));
+        assert_eq!((normal_layer_of_key(&scene, "plain"), normal_layer_of_key(&scene, "finish:brick:normal")), (None, Some(3)));
+        assert_eq!(normal_layer_for(&scene, "wall-brick"), Some((3, 1.0)));
+        assert_eq!(normal_layer_for(&scene, "wall-paint"), None);
+        assert_eq!(normal_layer_for(&scene, "wall"), None);
+    }
 
     #[test]
     fn texture_array_has_five_layers_with_mips() {
@@ -693,10 +862,16 @@ mod tests {
             .materials
             .insert("sym:x:0".into(), MaterialDef { base_color: [1.0, 0.0, 0.0, 1.0], texture: Some("sym:x:t0".into()), ..Default::default() });
         let gpu = |s: &Scene3d| crate::pathtrace::scene_gpu::build_gpu_scene(s, true, None);
-        assert_eq!(gpu(&scene), gpu(&extra));
+        // (The aux buffer holds RGBA8 texels bitcast to f32, which are NaN: compare it by bits.)
+        let (x, y) = (gpu(&scene), gpu(&extra));
+        let bits = |s: &crate::pathtrace::scene_gpu::GpuScene| s.ies.iter().map(|f| f.to_bits()).collect::<Vec<u32>>();
+        assert!(x.nodes == y.nodes && x.tris == y.tris && x.materials == y.materials && x.lights == y.lights && x.tex == y.tex);
+        assert!(bits(&x) == bits(&y));
         let plain = gpu(&scene);
         for (m, g) in scene.meshes.iter().zip(&plain.materials) {
-            assert_eq!(*g, crate::pathtrace::scene_gpu::material_for(&m.material), "{}", m.material);
+            // `_pad` is the normal-map layer + 1 (brick has one); the rest is the phase-13 material.
+            let g = crate::pathtrace::scene_gpu::GpuMaterial { _pad: 0, ..*g };
+            assert_eq!(g, crate::pathtrace::scene_gpu::material_for(&m.material), "{}", m.material);
         }
         let Some(mut r) = renderer() else { return };
         let (Some(a), Some(b), Some(c)) = (shot(&mut r, &scene, 1), shot(&mut r, &extra, 2), shot(&mut r, &scene, 3)) else { return };
