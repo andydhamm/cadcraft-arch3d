@@ -32,7 +32,7 @@ fn profile_section(profile: EdgeProfile, thickness: f64) -> Vec<[f64; 2]> {
             vec![[0.0, 0.0], [r, 0.0], [r, t - r], [0.0, t]]
         }
         EdgeProfile::Bullnose => {
-            let r = t / 2.0 + 0.001;
+            let r = t / 2.0;
             let mut pts = vec![[0.0, 0.0]];
             let steps = 12usize;
             for i in 1..=steps {
@@ -96,7 +96,9 @@ pub fn countertop_meshes(ct: &Countertop, outline: Option<&CounterOutline>, leve
             continue;
         }
         let outward = edge_normal(a, b, ccw);
-        let path = vec![a + outward * 0.001, b + outward * 0.001];
+        let inward = -outward;
+        let profile_proud = if edge.profile == EdgeProfile::Bullnose { 0.002 } else { 0.001 };
+        let path = vec![a + inward * profile_proud, b + inward * profile_proud];
         let z = [level + ct.top - ct.thickness, level + ct.top - ct.thickness];
         let prof = profile_section(edge.profile, ct.thickness);
         // Keep the profile slightly proud of the edge line so the curve sits just off the slab face
