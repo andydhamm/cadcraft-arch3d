@@ -84,11 +84,11 @@ pub fn specs() -> Vec<CommandSpec> {
             .menu(&["File", "Print..."])
             .key("Cmd+P")
             .alias(&["print"])
-            .params("{path? (else returns base64 `data`), layout?: current|\"Model\", device?: \"CADCraft PDF\"|\"CADCraft PNG\"|\"CADCraft SVG\" | a plotter from PLOTTERMANAGER | \"None\" (default: a layout's page setup device; Model, or \"None\": no device, PDF; a device sets the output format and the papers), paper?: the device's paper (default: a layout keeps its page setup's; Model takes the device's default), landscape?, fit?: bool, scale?: number | \"1:50\", center?: bool (Model, default true), offset?: [x,y] mm (Model, when center is false; each within ±100000), lineweights?: bool, plotTransparency?: bool (default: the page setup's; PLOTTRANSPARENCYOVERRIDE 0/2 overrides it), plotArea?: extents|display|limits|window (Model) | layout, window?: [[x1,y1],[x2,y2]]} (typed or from the menu: the Plot dialog)")
+            .params("{path? (else returns base64 `data`), layout?: current|\"Model\", device?: \"CADCraft PDF\"|\"CADCraft PNG\"|\"CADCraft SVG\" | a plotter from PLOTTERMANAGER | \"None\" (default: a layout's page setup device; Model, or \"None\": no device, PDF; a device sets the output format and the papers), paper?: the device's paper (default: a layout keeps its page setup's; Model takes the device's default), landscape?, fit?: bool, scale?: number | \"1:50\", center?: bool (Model, default true), offset?: [x,y] mm (Model, when center is false; each within ±100000), lineweights?: bool, plotTransparency?: bool (default: the page setup's; PLOTTRANSPARENCYOVERRIDE 0/2 overrides it), plotArea?: extents|display|limits|window (Model) | layout, window?: [[x1,y1],[x2,y2]], layouts?: [name | \"Model\"] | \"all\" (one PDF, a page each), sheets?: \"all\" | [sheet names] (arch sheets, in sheet order)} (typed or from the menu: the Plot dialog)")
             .noundo(),
         CommandSpec::new("exportpdf", "Export to PDF...", |s, p| run_plot(s, &super::plotters::plot_options(s, p, "exportpdf")?, "exportpdf"))
             .menu(&["File", "Export to PDF..."])
-            .params("{path? (else returns base64 `data`), layout?, device? (its papers; the output stays PDF), paper?, landscape?, fit?, scale?, center?: bool (Model, default true), offset?: [x,y] mm (Model, when center is false; each within ±100000), lineweights?, plotTransparency?, plotArea?, window?} (as PLOT)")
+            .params("{path? (else returns base64 `data`), layout?, device? (its papers; the output stays PDF), paper?, landscape?, fit?, scale?, center?: bool (Model, default true), offset?: [x,y] mm (Model, when center is false; each within ±100000), lineweights?, plotTransparency?, plotArea?, window?, sheets?: \"all\" | [sheet names] (arch sheets, in sheet order)} (as PLOT)")
             .noundo(),
         CommandSpec::new("mspace", "Model Space (in viewport)", run_mspace)
             .alias(&["ms"])
@@ -793,12 +793,74 @@ fn plot_sheets(cmd: &str, d: &cadcraft_doc::Drawing, v: &Value) -> Result<Vec<St
     Ok(names)
 }
 
+/// The layout names of an arch sheet plot: `"all"` is every sheet in `d.arch.sheets` order, a list
+/// names sheets (any case, no repeats) in the order given. Each sheet must still have its layout.
+fn plot_arch_sheets(cmd: &str, d: &cadcraft_doc::Drawing, v: &Value) -> Result<Vec<String>> {
+    let sheets = &d.arch.sheets;
+    let mut picked: Vec<usize> = Vec::new();
+    match v {
+        Value::String(a) if a.eq_ignore_ascii_case("all") => {
+            if sheets.is_empty() {
+                return Err(bad(cmd, "the drawing has no sheets"));
+            }
+            picked.extend(0..sheets.len());
+        }
+        Value::Array(a) => {
+            if a.len() > MAX_PLOT_SHEETS {
+                return Err(bad(cmd, format!("at most {MAX_PLOT_SHEETS} sheets fit in one PDF")));
+            }
+            for n in a {
+                let Some(n) = n.as_str() else {
+                    return Err(bad(cmd, "`sheets` must be \"all\" or a list of sheet names"));
+                };
+                let Some(i) = sheets.iter().position(|sh| sh.name.eq_ignore_ascii_case(n)) else {
+                    return Err(bad(cmd, format!("`sheets`: no sheet `{n}`")));
+                };
+                if picked.contains(&i) {
+                    return Err(bad(cmd, format!("`sheets`: sheet `{n}` is listed twice")));
+                }
+                picked.push(i);
+            }
+        }
+        _ => return Err(bad(cmd, "`sheets` must be \"all\" or a list of sheet names")),
+    }
+    if picked.is_empty() {
+        return Err(bad(cmd, "`sheets` names no sheets"));
+    }
+    if picked.len() > MAX_PLOT_SHEETS {
+        return Err(bad(cmd, format!("at most {MAX_PLOT_SHEETS} sheets fit in one PDF")));
+    }
+    picked
+        .iter()
+        .filter_map(|&i| sheets.get(i))
+        .map(|sh| d.layout(&sh.name).map(|l| l.name.clone()).ok_or_else(|| bad(cmd, format!("`sheets`: sheet `{}` has no layout", sh.name))))
+        .collect()
+}
+
 /// PLOT / EXPORTPDF. Besides the page setup overrides, the plotter takes `layouts?: [name |
 /// "Model"] | "all"` (several sheets in one PDF, one page each, labelled with the layout names),
 /// `layers?: bool` (drawing layers as PDF layers, default on), `offLayers?: bool` (layers that
 /// are off on hidden PDF layers), `links?: [{handle, url}]` (hyperlinks) and `title?`.
 fn run_plot(s: &mut Session, p: &Value, cmd: &str) -> Result<Value> {
     let hook = io().and_then(|h| h.plot).ok_or_else(|| bad(cmd, "plotting is not available in this build"))?;
+    // `sheets` (arch sheets) becomes `layouts`, so PDF output, page labels and the image rule follow.
+    let with_sheets;
+    let p = match p.get("sheets") {
+        Some(v) => {
+            if p.get("layout").is_some() || p.get("layouts").is_some() {
+                return Err(bad(cmd, "`sheets` can't be combined with `layout` or `layouts`; give only one of them"));
+            }
+            let names = plot_arch_sheets(cmd, s.doc()?, v)?;
+            let mut q = p.clone();
+            if let Some(o) = q.as_object_mut() {
+                o.remove("sheets");
+                o.insert("layouts".into(), json!(names));
+            }
+            with_sheets = q;
+            &with_sheets
+        }
+        None => p,
+    };
     // Checked here for a clear error; the plotter resolves the names the same way.
     let sheets = p.get("layouts").map(|v| plot_sheets(cmd, s.doc()?, v)).transpose()?;
 
