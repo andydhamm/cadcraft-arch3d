@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 40 of 42 segments merged · 19 of 20 acceptance checks**
 
-9,922 workspace tests passing at the last merge · 1098 segments merged in all · 0 of 15 seats working
+9,923 workspace tests passing at the last merge · 1099 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,24 +28,25 @@ Updated 2026-11-13 19:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 61.5 h so far · expected done Nov 13 21:08–Nov 14 16:30 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 61.8 h so far · expected done Nov 13 21:23–Nov 14 16:45 UTC |
 | 19 | Light, sky and cameras | building | 6 / 17 | — |
 | 20 | Plan views and dimensions | building | 12 / 13 | — |
-| 21 | Schedules, elevations and sheets | building | 6 / 13 | — |
+| 21 | Schedules, elevations and sheets | building | 7 / 13 | — |
 
 ## Phase 18 segments
 
-40 merged, 2 working
+40 merged, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p18g-demo-script` | Rewrite docs/arch3d/showcase/phase-18-demo.json so it replays cleanly and shows every phase-18 feature | working | mai-flash-b |
+| `p18g-demo-script` | Rewrite docs/arch3d/showcase/phase-18-demo.json so it replays cleanly and shows every phase-18 feature | gate | mai-flash-b |
 | `p18g-showcase-phase18` | The showcase house (bilevel.json) gains the phase-18 kitchen and bath features | working | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 19:06 | `p21-demo` | merged | 9,923 pass | mai-flash |
 | Nov 13 18:31 | `p19f-pt-strip-clear-of-housing` | merged | 9,922 pass | mai-flash-b |
 | Nov 13 18:31 | `p19f-hdr-resolution-line` | merged | 9,922 pass | mai-flash |
 | Nov 13 18:31 | `p20f-auto-dim-rows` | merged | 9,922 pass | claude-sonnet-a |
@@ -57,7 +58,6 @@ Updated 2026-11-13 19:00 UTC. This page and the card in the README are regenerat
 | Nov 13 16:41 | `harden-p21-title-block` | merged | 9,881 pass | tturbo-mac2 |
 | Nov 13 16:41 | `harden-p21-elevation-marks` | merged | 9,881 pass | tturbo-mac2 |
 | Nov 13 16:41 | `harden-p21-patterns` | merged | 9,881 pass | tturbo-mac2 |
-| Nov 13 16:41 | `harden-p21-interior-dims` | merged | 9,881 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -74,7 +74,7 @@ Updated 2026-11-13 19:00 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1134 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 113 |
-| mai-flash-b | mai-code-1.1-flash | agent | 57 |
+| mai-flash-b | mai-code-1.1-flash | gate | 57 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 121 |
-| tturbo-mac | tturbo-ultraheretic | agent | 861 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 493 |
+| tturbo-mac | tturbo-ultraheretic | agent | 862 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 493 |
