@@ -1,3 +1,6 @@
 # Translation catalogs: every segment appends rows at the end, so two branches always touched the same lines.
 # A union merge keeps both sides' rows (a duplicated row still fails the i18n catalog test).
 crates/ui-egui/src/i18n/*.tsv merge=union
+# The arch command registry: one `pub mod` line and one `v.extend(..::specs())` line per command file, which every
+# segment that adds a command inserts at the same place. Both sides' lines are kept.
+crates/engine/src/cmd/arch/mod.rs merge=union

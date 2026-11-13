@@ -1517,6 +1517,7 @@ menu	View	视图
 	Light Fixture	灯具
 	Light Fixture Types	灯具类型
 	Cabinet	橱柜
+	Cabinet Face	橱柜立面
 	Fill Cabinet Run	填充橱柜排
 	Architecture>Fill Cabinet Run	建筑>填充橱柜排
 	Edit Cabinet	编辑橱柜
@@ -1625,3 +1626,7 @@ menu	View	视图
 	Niche	壁龛
 	Architecture>Niche	建筑>壁龛
 	Auto Exterior Dimensions	自动外部标注
+	Countertop	台面
+	Detach Countertop	分离台面
+	Edit Countertop	编辑台面
+	Delete Countertop	删除台面
