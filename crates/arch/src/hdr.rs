@@ -69,15 +69,18 @@ fn decode_rle_scanlines(data: &[u8], width: usize, height: usize) -> Result<Vec<
     let mut out = vec![0u8; expected];
     let mut pos = 0usize;
     let mut out_pos = 0usize;
+
     for _ in 0..height {
         if pos + 4 > data.len() {
             return Err("truncated HDR scanline header".to_string());
         }
         let row_hdr = &data[pos..pos + 4];
         pos += 4;
-        if row_hdr[0] != 2 || row_hdr[1] != 2 || ((u16::from(row_hdr[2]) << 8) | u16::from(row_hdr[3])) as usize != width {
+        let row_width = (u16::from(row_hdr[2]) as usize) << 8 | usize::from(row_hdr[3]);
+        if row_hdr[0] != 2 || row_hdr[1] != 2 || row_width != width {
             return Err("bad HDR scanline header".to_string());
         }
+
         let mut channels = vec![vec![0u8; width]; 4];
         for ch in 0..4 {
             let mut n = 0usize;
@@ -85,41 +88,44 @@ fn decode_rle_scanlines(data: &[u8], width: usize, height: usize) -> Result<Vec<
                 if pos >= data.len() {
                     return Err("truncated HDR RLE data".to_string());
                 }
-                let count = data[pos] as usize;
+                let count = data[pos];
                 pos += 1;
-                if count == 0 || count == 128 {
-                    return Err("invalid HDR RLE count".to_string());
+
+                if count == 0 {
+                    return Err("HDR RLE packet count 0 is invalid".to_string());
                 }
-                if count > 128 {
-                    let run = count - 128;
-                    if run == 0 || pos >= data.len() {
-                        return Err("truncated HDR RLE run".to_string());
+
+                if count <= 128 {
+                    let lit_len = (width - n).min(count as usize);
+                    if lit_len == 0 {
+                        return Err("HDR RLE literal run exceeds scanline width".to_string());
+                    }
+                    if pos + lit_len > data.len() {
+                        return Err("truncated HDR RLE literal data".to_string());
+                    }
+                    for i in 0..lit_len {
+                        channels[ch][n + i] = data[pos + i];
+                    }
+                    pos += lit_len;
+                    n += lit_len;
+                } else {
+                    let run_len = (width - n).min((count - 128) as usize);
+                    if run_len == 0 {
+                        return Err("HDR RLE run exceeds scanline width".to_string());
+                    }
+                    if pos >= data.len() {
+                        return Err("truncated HDR RLE repeat value".to_string());
                     }
                     let value = data[pos];
                     pos += 1;
-                    for _ in 0..run {
-                        if n >= width {
-                            return Err("HDR RLE overrun".to_string());
-                        }
-                        channels[ch][n] = value;
-                        n += 1;
+                    for i in 0..run_len {
+                        channels[ch][n + i] = value;
                     }
-                } else {
-                    let lit = count;
-                    if pos + lit > data.len() {
-                        return Err("truncated HDR RLE literal run".to_string());
-                    }
-                    for _ in 0..lit {
-                        if n >= width {
-                            return Err("HDR RLE overrun".to_string());
-                        }
-                        channels[ch][n] = data[pos];
-                        pos += 1;
-                        n += 1;
-                    }
+                    n += run_len;
                 }
             }
         }
+
         for x in 0..width {
             let i = out_pos + x * 4;
             out[i] = channels[0][x];
@@ -129,6 +135,7 @@ fn decode_rle_scanlines(data: &[u8], width: usize, height: usize) -> Result<Vec<
         }
         out_pos += width * 4;
     }
+
     if pos != data.len() {
         return Err("trailing HDR data".to_string());
     }
@@ -275,6 +282,17 @@ mod tests {
     }
 
     #[test]
+    fn polyhaven_hdr_sample_decodes() {
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/library/sample/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr");
+        let bytes = std::fs::read(path).expect("sample HDR should exist in the repo");
+        let img = read_hdr(&bytes).expect("Poly Haven HDR sample should decode");
+        assert_eq!(img.width, 1024);
+        assert_eq!(img.height, 512);
+        assert_eq!(img.rgbe.len(), 1024 * 512 * 4);
+    }
+
+    #[test]
     fn flat_and_rle_scanlines() {
         let flat = make_hdr(1, 1, 55);
         let flat_img = read_hdr(&flat).unwrap();
@@ -283,6 +301,150 @@ mod tests {
         assert_eq!(flat_img.width, rle_img.width);
         assert_eq!(flat_img.height, rle_img.height);
         assert_eq!(flat_img.rgbe, rle_img.rgbe);
+    }
+
+    #[test]
+    fn inspect_polyhaven_sample_counts() {
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/library/sample/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr");
+        let bytes = std::fs::read(path).expect("sample HDR should exist");
+        let header_end = read_until_blank(&bytes).unwrap();
+        let (_, (width, height)) = read_resolution_line_after_blank(&bytes[header_end..]).unwrap();
+        let payload = &bytes[header_end + 1 + bytes[header_end..].iter().position(|&b| b == b'\n').unwrap()..];
+        println!("width={width} height={height} payload_len={}", payload.len());
+        let mut pos = 0usize;
+        for row in 0..height as usize {
+            if pos + 4 > payload.len() {
+                println!("row {row} ended early pos={pos}");
+                return;
+            }
+            let row_hdr = &payload[pos..pos + 4];
+            if row < 4 {
+                println!("row {row} hdr={row_hdr:?}");
+            }
+            pos += 4;
+            if row_hdr[0] != 2 || row_hdr[1] != 2 || ((u16::from(row_hdr[2]) << 8) | u16::from(row_hdr[3])) as usize != width as usize {
+                println!("bad row header at row {row} pos={pos} hdr={row_hdr:?}");
+                return;
+            }
+            for ch in 0..4 {
+                let mut n = 0usize;
+                let mut steps = 0usize;
+                while n < width as usize {
+                    if pos >= payload.len() {
+                        println!("stop ch={ch} empty pos={pos}");
+                        return;
+                    }
+                    let count = payload[pos] as usize;
+                    pos += 1;
+                    steps += 1;
+                    if count == 0 {
+                        println!("zero count row {row} ch {ch} step {steps} pos={pos} n={n} width={width}");
+                        continue;
+                    }
+                    if count == 128 {
+                        println!("128 count row {row} ch {ch} step {steps} pos={pos} n={n} width={width}");
+                    }
+                    if count >= 128 {
+                        let run = if count == 128 { 128 } else { count - 128 };
+                        if pos >= payload.len() {
+                            println!("missing value ch={ch} step={steps} pos={pos} count={count}");
+                            return;
+                        }
+                        let value = payload[pos];
+                        pos += 1;
+                        n += run;
+                        if n >= width as usize {
+                            if row < 4 {
+                                println!("after ch={ch} run count={count} run={run} value={value} final_n={n}");
+                            }
+                            break;
+                        }
+                    } else {
+                        let lit = count;
+                        if pos + lit > payload.len() {
+                            println!("literal overflow ch={ch} step={steps} pos={pos} lit={lit}");
+                            return;
+                        }
+                        pos += lit;
+                        n += lit;
+                        if n >= width as usize {
+                            if row < 4 {
+                                println!("after ch={ch} lit count={count} lit={lit} final_n={n}");
+                            }
+                            break;
+                        }
+                    }
+                }
+                if row < 4 {
+                    println!("ch={ch} ended n={n} steps={steps} pos={pos}");
+                }
+            }
+            if row < 20 || row % 32 == 0 {
+                println!("row {row} finished pos={pos}");
+            }
+        }
+        println!("finished all rows pos={pos} expected={}", payload.len());
+    }
+
+    #[test]
+    fn rle_1024_scanline_decodes() {
+        let width = 1024u32;
+        let mut hdr = Vec::new();
+        hdr.extend_from_slice(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        hdr.extend_from_slice(format!("-Y 1 +X {width}\n").as_bytes());
+        hdr.push(2);
+        hdr.push(2);
+        hdr.push((width >> 8) as u8);
+        hdr.push((width & 0xff) as u8);
+        let mut vals = vec![0u8; width as usize];
+        for i in 0..width as usize {
+            vals[i] = (i % 256) as u8;
+        }
+        for ch in 0..4 {
+            let mut i = 0usize;
+            while i < width as usize {
+                let mut j = i;
+                while j < width as usize && j - i < 127 && vals[j] == vals[i] {
+                    j += 1;
+                }
+                if j - i >= 2 {
+                    hdr.push((128 + (j - i)) as u8);
+                    hdr.push(vals[i]);
+                    i = j;
+                } else {
+                    hdr.push(1);
+                    hdr.push(vals[i]);
+                    i += 1;
+                }
+            }
+        }
+        let img = read_hdr(&hdr).unwrap();
+        assert_eq!(img.width, width);
+        assert_eq!(img.height, 1);
+    }
+
+    #[test]
+    fn rle_128_literal_packet_decodes() {
+        let width = 128u32;
+        let mut hdr = Vec::new();
+        hdr.extend_from_slice(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        hdr.extend_from_slice(format!("-Y 1 +X {width}\n").as_bytes());
+        hdr.push(2);
+        hdr.push(2);
+        hdr.push((width >> 8) as u8);
+        hdr.push((width & 0xff) as u8);
+        for _ in 0..4 {
+            hdr.push(128);
+            for _ in 0..width {
+                hdr.push(42);
+            }
+        }
+        let img = read_hdr(&hdr).unwrap();
+        assert_eq!(img.width, width);
+        assert_eq!(img.height, 1);
+        assert_eq!(img.rgbe.len(), (width as usize) * 4);
+        assert!(img.rgbe.iter().all(|&b| b == 42));
     }
 
     #[test]
@@ -385,6 +547,25 @@ mod tests {
         assert!(thumb.rgba.iter().all(|&v| v <= 255));
         let rgb = thumb.rgba.chunks_exact(4).map(|px| [px[0], px[1], px[2]]).collect::<Vec<_>>();
         assert!(rgb.iter().any(|px| px[0] != rgb[0][0] || px[1] != rgb[0][1] || px[2] != rgb[0][2]));
+    }
+
+    #[test]
+    #[test]
+    fn debug_dump_sample_near_failure() {
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/library/sample/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr");
+        let bytes = std::fs::read(path).expect("sample HDR should exist in the repo");
+        let header_end = read_until_blank(&bytes).unwrap();
+        let (_, (_, _)) = read_resolution_line_after_blank(&bytes[header_end..]).unwrap();
+        let offset = header_end + 1 + bytes[header_end..].iter().position(|&b| b == b'\n').unwrap() + 1;
+        let slice = &bytes[offset + 16000..offset + 16600];
+        for (i, b) in slice.iter().enumerate().take(600).step_by(1) {
+            if i % 16 == 0 {
+                print!("\n{:04x}: ", i);
+            }
+            print!("{:02x} ", b);
+        }
+        println!();
     }
 
     #[test]
