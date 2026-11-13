@@ -54,11 +54,12 @@ pub(crate) fn clip_outside(a: Vec2, b: Vec2, rings: &[Vec<Vec2>]) -> Vec<(f64, f
         return intervals;
     }
 
-    let mut breaks = vec![0.0, a.dist(b)];
     let l = a.dist(b);
     if l <= 1e-9 {
         return intervals;
     }
+
+    let mut breaks = vec![0.0, l];
 
     // Find all crossing points with ring edges
     for ring in rings {
