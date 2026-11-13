@@ -83,29 +83,67 @@ fn perez(c: [f64; 5], cos_t: f64, gamma: f64) -> f64 {
 }
 
 /// The day sky (no twilight scaling) in linear nits; `s` has z >= 0, both unit.
-fn day_sky(v: [f64; 3], s: [f64; 3], t: f64) -> [f64; 3] {
-    let theta_s = s[2].clamp(-1.0, 1.0).acos();
-    let gamma = (v[0] * s[0] + v[1] * s[1] + v[2] * s[2]).clamp(-1.0, 1.0).acos();
+/// Everything in the Perez day-sky that is fixed by the sun and turbidity alone.
+/// View-dependent work (the `gamma` angle, the cosine of the view's zenith
+/// angle) is left to `day_sky`; this struct is what `sky_radiance` and
+/// `horizontal_illuminance` used to re-derive per texel.
+#[derive(Clone, Copy)]
+struct DaySky {
+    /// Unit sun, clamped to `z >= 0`.
+    sun: [f64; 3],
+    /// Luminance base `zenith_luminance(theta_s, t) * 1000.0` (times 1000 to
+    /// get cd/m² from kcd/m²).
+    lum_base: f64,
+    cy: [f64; 5],
+    cx: [f64; 5],
+    cyy: [f64; 5],
+    /// Sun-zenith polynomial coefficients, pre-multiplied.
+    xz: f64,
+    yz: f64,
+    /// `perez(c, 1.0, theta_s)` denominators, one per coefficient set.
+    d_cy: f64,
+    d_cx: f64,
+    d_cyy: f64,
+}
+
+impl DaySky {
+    fn new(s: [f64; 3], t: f64) -> Self {
+        let theta_s = s[2].clamp(-1.0, 1.0).acos();
+        let (th2, th3) = (theta_s * theta_s, theta_s * theta_s * theta_s);
+        let t2 = t * t;
+        let cy = [0.1787 * t - 1.4630, -0.3554 * t + 0.4275, -0.0227 * t + 5.3251, 0.1206 * t - 2.5771, -0.0670 * t + 0.3703];
+        let cx = [-0.0193 * t - 0.2592, -0.0665 * t + 0.0008, -0.0004 * t + 0.2125, -0.0641 * t - 0.8989, -0.0033 * t + 0.0452];
+        let cyy = [-0.0167 * t - 0.2608, -0.0950 * t + 0.0092, -0.0079 * t + 0.2102, -0.0441 * t - 1.6537, -0.0109 * t + 0.0529];
+        Self {
+            sun: s,
+            lum_base: zenith_luminance(theta_s, t) * 1000.0,
+            cy,
+            cx,
+            cyy,
+            xz: t2 * (0.00166 * th3 - 0.00375 * th2 + 0.00209 * theta_s)
+                + t * (-0.02903 * th3 + 0.06377 * th2 - 0.03202 * theta_s + 0.00394)
+                + (0.11693 * th3 - 0.21196 * theta_s * theta_s + 0.06052 * theta_s + 0.25886),
+            yz: t2 * (0.00275 * th3 - 0.00610 * th2 + 0.00317 * theta_s)
+                + t * (-0.04214 * th3 + 0.08970 * theta_s * theta_s - 0.04153 * theta_s + 0.00516)
+                + (0.15346 * th3 - 0.26756 * theta_s * theta_s + 0.06670 * theta_s + 0.26688),
+            d_cy: perez(cy, 1.0, theta_s),
+            d_cx: perez(cx, 1.0, theta_s),
+            d_cyy: perez(cyy, 1.0, theta_s),
+        }
+    }
+}
+
+/// The day sky (no twilight scaling) in linear nits; `v` is unit, `pre` was
+/// precomputed from the sun and turbidity.
+fn day_sky(v: [f64; 3], pre: &DaySky) -> [f64; 3] {
+    let gamma = (v[0] * pre.sun[0] + v[1] * pre.sun[1] + v[2] * pre.sun[2]).clamp(-1.0, 1.0).acos();
     let cos_t = v[2].max(0.0);
-    let cy = [0.1787 * t - 1.4630, -0.3554 * t + 0.4275, -0.0227 * t + 5.3251, 0.1206 * t - 2.5771, -0.0670 * t + 0.3703];
-    let cx = [-0.0193 * t - 0.2592, -0.0665 * t + 0.0008, -0.0004 * t + 0.2125, -0.0641 * t - 0.8989, -0.0033 * t + 0.0452];
-    let cyy = [-0.0167 * t - 0.2608, -0.0950 * t + 0.0092, -0.0079 * t + 0.2102, -0.0441 * t - 1.6537, -0.0109 * t + 0.0529];
-    let th = theta_s;
-    let (th2, th3) = (th * th, th * th * th);
-    let t2 = t * t;
-    let xz = t2 * (0.00166 * th3 - 0.00375 * th2 + 0.00209 * th)
-        + t * (-0.02903 * th3 + 0.06377 * th2 - 0.03202 * th + 0.00394)
-        + (0.11693 * th3 - 0.21196 * th2 + 0.06052 * th + 0.25886);
-    let yz = t2 * (0.00275 * th3 - 0.00610 * th2 + 0.00317 * th)
-        + t * (-0.04214 * th3 + 0.08970 * th2 - 0.04153 * th + 0.00516)
-        + (0.15346 * th3 - 0.26756 * th2 + 0.06670 * th + 0.26688);
-    let ratio = |c: [f64; 5]| {
-        let d = perez(c, 1.0, theta_s);
+    let ratio = |c: [f64; 5], d: f64| {
         if d.abs() < 1e-9 { 1.0 } else { perez(c, cos_t, gamma) / d }
     };
-    let lum = zenith_luminance(theta_s, t) * 1000.0 * ratio(cy);
-    let x = (xz * ratio(cx)).clamp(0.0, 0.8);
-    let y = (yz * ratio(cyy)).clamp(0.02, 0.85);
+    let lum = pre.lum_base * ratio(pre.cy, pre.d_cy);
+    let x = (pre.xz * ratio(pre.cx, pre.d_cx)).clamp(0.0, 0.8);
+    let y = (pre.yz * ratio(pre.cyy, pre.d_cyy)).clamp(0.02, 0.85);
     let lum = if lum.is_finite() { lum.max(0.0) } else { 0.0 };
     let big_x = x / y * lum;
     let big_z = (1.0 - x - y) / y * lum;
@@ -142,13 +180,14 @@ fn horizontal_illuminance(s: [f64; 3], tw: f64, t: f64) -> f64 {
         return e;
     }
     let (nt, np) = (6, 12);
+    let pre = DaySky::new(s, t);
     let mut sum = 0.0;
     for i in 0..nt {
         let theta = (i as f64 + 0.5) / nt as f64 * std::f64::consts::FRAC_PI_2;
         let (st, ct) = theta.sin_cos();
         for j in 0..np {
             let phi = (j as f64 + 0.5) / np as f64 * std::f64::consts::TAU;
-            let c = day_sky([st * phi.cos(), st * phi.sin(), ct], s, t);
+            let c = day_sky([st * phi.cos(), st * phi.sin(), ct], &pre);
             let lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
             sum += lum * ct * st;
         }
@@ -166,8 +205,9 @@ fn horizontal_illuminance(s: [f64; 3], tw: f64, t: f64) -> f64 {
 pub fn sky_radiance(view: [f64; 3], sun: [f64; 3], turbidity: f64) -> [f64; 3] {
     let t = if turbidity.is_finite() { turbidity.clamp(1.7, 10.0) } else { 3.0 };
     let (Some(v), Some((s, tw))) = (unit(view), sun_for_day(sun)) else { return NIGHT_SKY };
+    let pre = DaySky::new(s, t);
     let mut out = if v[2] >= 0.0 {
-        day_sky(v, s, t).map(|c| c * tw)
+        day_sky(v, &pre).map(|c| c * tw)
     } else {
         let g = GROUND_ALBEDO / std::f64::consts::PI * horizontal_illuminance(s, tw, t);
         [g, g, g]
