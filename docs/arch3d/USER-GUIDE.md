@@ -250,6 +250,52 @@ ceiling-hung items, and their underside values are available in `arch.inspect` a
 The basement level is still below the main floor, so its exterior walls convert to `Concrete 0.2` and keep their
 footings under the floor structure.
 
+## Light, sky and cameras
+
+The renderer keeps a drawing-wide look and a per-camera override, so each saved camera can hold its own
+exposure, tone map, sun angle, habitat, backdrop, light set and cutaway state. Exposure is controlled with
+`EV100` (`render` and `camera` keys both accept `"auto"` or `{"ev100": n}`), and tone mapping stays in the
+look as `aces`, `hable` or `none`.
+
+`sunangle` stores a named sun direction in the drawing. A new angle can be added from a date and time at the
+site (`{"name": "dusk", "date": "2026-06-21", "time": "19:30"}`) or directly from a compass azimuth and
+altitude (`{"name": "noon", "azimuth": 180, "elevation": 62}`); the renderer resolves it to a sun vector in
+site-drawing coordinates. The look can reference it with `"sun": {"angle": "dusk"}` while a one-off render can
+also override it with `{"sun": {"azimuth": 300, "elevation": -3}}`.
+
+`backdrop` selects the sky or HDRI that fills the background behind the model, and its intensity and rotation
+are part of the environment. `{"kind": "sky"}` gives a procedural twilight sky; `{"kind": "hdri", "item":
+"polyhaven:kloofendal-puresky", "rotation": 25, "horizon": 5}` uses the sample HDRI. `lightset` stores named
+lighting groups so a camera can say `"lightSet": "Evening"` while the same drawing keeps `"Day"` as its all-off
+reference; a render can also take a temporary `lightSet` without changing the model. For interior scenes, the
+same pattern applies to lineal strips: `lightfixture {"type": "LED strip", "under": [...]}` is a cabinet strip,
+`lightfixture {"type": "LED strip", "room": "r0", "inset": 0.5}` wraps a room perimeter, and
+`lightfixture {"type": "LED strip", "tray": "tr0"}` follows a recessed ceiling tray.
+
+`camera` saves a view with its own pose and own look. A `full` camera stores `eye`, `target` and `fov`; an
+`overview` camera stores `level`, `lowerLevels` and `cutaway` settings; `camera.reset` goes back to the saved
+state, `camera.orbit` rotates or scales the live orbit camera, and `camera.update` applies new pose or look keys
+without leaving the saved version behind. `pick3d` uses the same camera parameters and a near clip or cutaway
+accepts the filter values from the final draw.
+
+```json
+[
+  {"cmd": "site", "params": {"latitude": 51.05, "longitude": -114.07, "trueNorth": 0}},
+  {"cmd": "sunangle", "params": {"name": "dusk", "azimuth": 300, "elevation": -3}},
+  {"cmd": "sunangle", "params": {"name": "noon", "date": "2026-06-21", "time": "solar-noon"}},
+  {"cmd": "backdrop", "params": {"kind": "sky"}},
+  {"cmd": "look", "params": {"exposure": {"ev100": 4}, "sun": {"angle": "dusk"}, "lightSet": "Evening"}},
+  {"cmd": "camera", "params": {"save": "dusk", "kind": "full", "eye": [5, -18, 1.7], "target": [5, 6, 1.35], "fov": 58}},
+  {"cmd": "backdrop", "params": {"kind": "hdri", "item": "polyhaven:kloofendal-puresky", "rotation": 25, "intensity": 1.0, "horizon": 6}},
+  {"cmd": "camera", "params": {"save": "noon-hdri", "kind": "full", "eye": [5, -18, 2.2], "target": [5, 8, 1.5], "fov": 55, "technique": "path", "sun": {"angle": "noon"}}},
+  {"cmd": "camera", "params": {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true}}
+]
+```
+
+The saved views are the same camera object the render and pick commands use, so a single drawing can keep a dusk
+sky view, a noon HDRI path-trace and a cutaway floor overview side by side. The `docs/arch3d/showcase/phase-19-demo.json`
+script in the showcase folder replays the whole set and saves the three named cameras as a single record.
+
 ## Lighting and final renders
 
 The lighting model is built from the same room model as the 3D view: fixtures sit on the ceiling, wall or floor,
@@ -688,6 +734,52 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --cmd 'stair {"start": [8,0.5], "direction": 90, "width": 1.0, "fromLevel": "Landing", "toLevel": "Upper"}' \
   --cmd 'arch.inspect {"levels": true}' \
   --save split-level.dxf
+```
+
+## Interior finish
+
+A room's `type` sets its default finish layers: kitchens, baths, utility rooms and entries use tile or stone floors,
+bedrooms and living areas use carpet or wood, and each wall and ceiling takes the room's finish template unless a paint
+material overrides it. A room can also carry base and crown moldings from `room.moldings` without changing the underlying
+finish assignment.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'room {"id":"r0","type":"kitchen"}' \
+  --cmd 'room.moldings {"room":"r0","moldings":[{"kind":"base"},{"kind":"crown"}]}' \
+  --cmd 'arch.inspect {"rooms":true,"moldings":true}'
+```
+
+For a trim-only run, pass the profile or size on each molding entry:
+
+```json
+{"room":"r0","moldings":[{"kind":"base","profile":"molding:base"},{"kind":"crown","profile":"molding:crown","size":[0.07,0.12]}]}
+```
+
+## Kitchen and bath
+
+Cabinet runs become kitchen objects: base and wall cabinets, a corner cabinet with a shared countertop, fillers against the
+wall, and a backsplash on the wall behind the run. Bath rooms get shower enclosures, glass pony walls and niches as wall
+openings, while the room's finishes and moldings keep the room visually complete.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'room {"id":"r0","type":"kitchen"}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":1.0,"width":0.6,"depth":0.6,"counter":true}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":2.2,"width":0.8,"depth":0.6,"counter":true}' \
+  --cmd 'cabinet {"kind":"wall","wall":"w0","offset":1.0,"width":0.8,"crown":"molding:crown"}' \
+  --cmd 'fixture {"kind":"sink","at":[2.0,1.5]}' \
+  --cmd 'fixture {"kind":"range","at":[4.3,1.5]}' \
+  --cmd 'room.moldings {"room":"r0","moldings":[{"kind":"base"},{"kind":"crown"}]}' \
+  --cmd 'arch.inspect {"cabinets":true,"fixtures":true,"rooms":true,"moldings":true}'
+```
+
+```json
+{"kind": "base", "wall": "w0", "offset": 1.2, "width": 0.6, "depth": 0.6, "counter": true}
 ```
 
 ## The showcase house

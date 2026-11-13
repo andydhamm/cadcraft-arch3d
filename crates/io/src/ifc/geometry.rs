@@ -14,6 +14,19 @@ use std::collections::BTreeMap;
 /// parts `sym:…` and its painted parts `paint:furnishing/…`), `electrical` (`electrical:…`, the plate of
 /// an outlet or switch), else `other`.
 pub(crate) fn kind_of(material: &str) -> &'static str {
+    if let Some(key) = material.strip_prefix("paint:") {
+        let Some(surface) = cadcraft_doc::arch::Surface::parse(key) else {
+            return if material.starts_with("paint:furnishing/") { "furnishing" } else { "other" };
+        };
+        return match surface {
+            cadcraft_doc::arch::Surface::Countertop(_) => "countertop",
+            cadcraft_doc::arch::Surface::Backsplash(_) => "backsplash",
+            _ => match material {
+                m if m.starts_with("paint:furnishing/") => "furnishing",
+                _ => "other",
+            },
+        };
+    }
     match material {
         "wall" => "wall",
         "floor" => "floor",
@@ -31,6 +44,13 @@ pub(crate) fn kind_of(material: &str) -> &'static str {
         "deck-ledger" | "deck-joist" | "deck-rim" | "deck-beam" => "deck-member",
         "deck-post" => "deck-post",
         "deck-footing" => "deck-pier",
+        "molding-line" => "moldingline",
+        m if m.starts_with("molding-room-") => "molding",
+        "countertop" | "countertop-waterfall" => "countertop",
+        "backsplash" => "backsplash",
+        "glass-wall" | "niche-back:" => "wall",
+        m if m.starts_with("niche-back:") => "wall",
+        m if m.starts_with("glass-shower") || m.starts_with("door-leaf-hardware") => "opening",
         m if m.starts_with("stair-") => "stair",
         m if m.starts_with("railing-") => "railing",
         "terrain" => "terrain",
@@ -146,6 +166,24 @@ mod tests {
         assert_eq!(kind_of("sym:missing:0"), "furnishing");
         assert_eq!(kind_of("paint:furnishing/f2/0"), "furnishing");
         assert_eq!(kind_of("something"), "other");
+    }
+
+    #[test]
+    fn kind_of_phase18_materials() {
+        assert_eq!(kind_of("molding-room-base-2"), "molding");
+        assert_eq!(kind_of("molding-room-crown-2"), "molding");
+        assert_eq!(kind_of("molding-line"), "moldingline");
+        assert_eq!(kind_of("countertop"), "countertop");
+        assert_eq!(kind_of("countertop-waterfall"), "countertop");
+        assert_eq!(kind_of("backsplash"), "backsplash");
+        assert_eq!(kind_of("glass-wall"), "wall");
+        assert_eq!(kind_of("niche-back:o3"), "wall");
+        assert_eq!(kind_of("cabinet-crown"), "cabinet");
+        assert_eq!(kind_of("cabinet-frame"), "cabinet");
+        assert_eq!(kind_of("paint:countertop/ct3"), "countertop");
+        assert_eq!(kind_of("paint:backsplash/bs2"), "backsplash");
+        assert_eq!(kind_of("paint:furnishing/f0/0"), "furnishing");
+        assert_eq!(kind_of("paint:wall/w0/left"), "other");
     }
 
     #[test]

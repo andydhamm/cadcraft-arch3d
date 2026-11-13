@@ -112,4 +112,44 @@ mod tests {
         // A wall line with the same id is not an opening line.
         assert!(tag_labels(&m, &ArchView::default(), &south(), &[line(ArchKind::Wall, ArchId(0))]).is_empty());
     }
+
+    #[test]
+    fn empty_model_has_no_tags() {
+        let m = ArchModel::default();
+        let t = tag_labels(&m, &ArchView::default(), &south(), &[]);
+        assert!(t.is_empty());
+    }
+
+    #[test]
+    fn tags_use_correct_layer_and_height() {
+        let m = model();
+        let lines = [line(ArchKind::Opening, ArchId(0))];
+        let t = tag_labels(&m, &ArchView::default(), &south(), &lines);
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].layer, LAYER_ELEV_TAG.to_string());
+        assert_eq!(t[0].height, TAG_HEIGHT);
+        assert_eq!(t[0].height, 0.15);
+    }
+
+    #[test]
+    fn large_coordinates_still_tagged() {
+        let mut m = ArchModel::default();
+        let w = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1e10, 0.0), 0.2));
+        m.push_opening(Opening::new(w, 5e9, 0.9, 2.1, OpeningKind::Door));
+        let lines = [line(ArchKind::Opening, ArchId(0))];
+        let t = tag_labels(&m, &ArchView::default(), &south(), &lines);
+        assert_eq!(t.len(), 1);
+        assert!(t[0].at[0].is_finite() && t[0].at[1].is_finite());
+    }
+
+    #[test]
+    fn opening_at_wall_start_is_tagged() {
+        let mut m = ArchModel::default();
+        let w = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        m.push_opening(Opening::new(w, 0.45, 0.9, 2.1, OpeningKind::Door));
+        let lines = [line(ArchKind::Opening, ArchId(0))];
+        let t = tag_labels(&m, &ArchView::default(), &south(), &lines);
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].text, "D01");
+    }
 }

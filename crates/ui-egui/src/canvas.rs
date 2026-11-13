@@ -590,6 +590,73 @@ struct DoubleClickContext<'a> {
     active_clip: &'a Option<cadcraft_render::clip::PolyClip>,
 }
 
+/// The label (`v<n>`) of the view whose plan callout marker lies under `world`, within `px_world`
+/// (a pixel tolerance in world units), on the plan level being shown.
+fn callout_under(app: &CadApp, world: Vec2, px_world: f64) -> Option<String> {
+    let st = app.session.state().ok()?;
+    let id = cadcraft_arch::plan::callouts::callout_at(&st.doc.arch, st.doc.arch.plan_level, world, px_world)?;
+    Some(cadcraft_doc::arch::view_label(id))
+}
+
+#[cfg(test)]
+mod callout_open_tests {
+    use super::callout_under;
+    use crate::{CadApp, Services};
+    use cadcraft_doc::arch::Wall;
+    use cadcraft_engine::Session;
+    use cadcraft_geom::Vec2;
+    use serde_json::json;
+
+    fn app_with_sheet() -> CadApp {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let c = [Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0)];
+            for i in 0..4 {
+                d.arch.push_wall(Wall { start: c[i], end: c[(i + 1) % 4], thickness: 0.2, height: 2.7, ..Wall::default() });
+            }
+            d.touch_arch();
+        }
+        let _ = s.execute("elevation", &json!({"side": "south", "dimensions": false}));
+        let _ = s.execute("sheet", &json!({"name": "Elev", "views": [{"view": "v0", "scale": 100}]}));
+        let _ = s.execute("model", &json!({}));
+        CadApp::new(s, Services::default())
+    }
+
+    /// The marker's centre, found by scanning for the points that resolve to v0.
+    fn marker_centre(app: &CadApp) -> Option<Vec2> {
+        let (mut sx, mut sy, mut n) = (0.0, 0.0, 0.0);
+        for i in -100..=250 {
+            for j in -100..=250 {
+                let p = Vec2::new(f64::from(i) * 0.1, f64::from(j) * 0.1);
+                if callout_under(app, p, 0.0).is_some() {
+                    sx += p.x;
+                    sy += p.y;
+                    n += 1.0;
+                }
+            }
+        }
+        (n > 0.0).then(|| Vec2::new(sx / n, sy / n))
+    }
+
+    #[test]
+    fn double_click_on_a_callout_opens_its_sheet() {
+        let mut app = app_with_sheet();
+        let c = marker_centre(&app).expect("a callout marker");
+        let view = callout_under(&app, c, 0.0).expect("marker under centre");
+        assert_eq!(view, "v0");
+        assert!(app.session.layout_space().layout().is_none());
+        app.run("sheet.open", json!({ "view": view })).expect("sheet.open");
+        assert_eq!(app.session.layout_space().layout(), Some("Elev"));
+    }
+
+    #[test]
+    fn double_click_elsewhere_is_unchanged() {
+        let app = app_with_sheet();
+        assert_eq!(callout_under(&app, Vec2::new(5.0, 4.0), 0.1), None);
+        assert!(app.session.layout_space().layout().is_none());
+    }
+}
+
 fn handle_double_click(app: &mut CadApp, ctx: DoubleClickContext<'_>) -> Option<bool> {
     let DoubleClickContext { inside, double, hover, xf, xf_paper, scale, active_viewport, active_clip } = ctx;
     if inside
@@ -613,6 +680,18 @@ fn handle_double_click(app: &mut CadApp, ctx: DoubleClickContext<'_>) -> Option<
             app.canvas.list = None;
             return None;
         }
+    }
+    // Double-click a callout marker in plan to open the sheet that shows its view.
+    if inside
+        && double
+        && app.session.running.is_none()
+        && matches!(app.session.layout_space(), cadcraft_doc::Space::Model)
+        && let Some(hp) = hover
+        && let Some(view) = callout_under(app, xf.to_world(hp), 8.0 / scale.max(1e-12))
+    {
+        // An error from the command is echoed by the session as usual.
+        let _ = app.run("sheet.open", serde_json::json!({ "view": view }));
+        return None;
     }
     // Double-click text to edit it, as in AutoCAD: TEXTEDIT with that object already picked.
     if inside
@@ -1126,7 +1205,9 @@ fn paint_canvas(frame: CanvasPaint<'_>) {
     {
         let gs = app.session.settings.gripsize as f32;
         for h in sel.iter().take(200) {
-            if let Some(e) = st.doc.entity(*h) {
+            if let Some(e) = st.doc.entity(*h)
+                && st.doc.is_visible(e)
+            {
                 let grips = e.kind.grips();
                 let count = grips.len();
                 for (gi, g) in grips.into_iter().enumerate() {

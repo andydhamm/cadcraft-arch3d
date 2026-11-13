@@ -198,6 +198,9 @@ pub fn host_wall(model: &ArchModel, c: &Cabinet) -> Option<(ArchId, f64, f64)> {
     }
     let mut best: Option<(f64, ArchId, f64, f64)> = None;
     for w in &model.walls {
+        if !crate::room::wall_on_level(model, w, c.level) {
+            continue;
+        }
         if !w.start.is_finite() || !w.end.is_finite() || !w.thickness.is_finite() {
             continue;
         }
@@ -504,5 +507,48 @@ mod tests {
         let mut c = cabinet_at(Vec2::new(2.0, 0.1), 0.0);
         c.width = 5.0;
         assert!(host_wall(&m, &c).is_none());
+    }
+
+    #[test]
+    fn host_wall_with_spanning_wall() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        m.levels.push(cadcraft_doc::Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        // A spanning wall from level 0 to level 1
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.base_level = 0;
+        w.top_level = Some(1);
+        w.height = 5.1;
+        let wall_id = m.push_wall(w);
+        // A cabinet on level 0 against the wall
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.position = Vec2::new(5.0, 0.1);
+        c.rotation = 0.0;
+        c.level = 0;
+        let (wid, s0, s1) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, wall_id);
+        assert!((s0 - 4.7).abs() < 1e-9 && (s1 - 5.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn host_wall_cabinet_on_level_one_ignores_level_zero_wall() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        m.levels.push(cadcraft_doc::Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        // Wall on level 0
+        let mut w0 = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w0.base_level = 0;
+        m.push_wall(w0);
+        // Wall on level 1
+        let mut w1 = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w1.base_level = 1;
+        let wall_id = m.push_wall(w1);
+        // Cabinet on level 1
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.position = Vec2::new(5.0, 0.1);
+        c.rotation = 0.0;
+        c.level = 1;
+        let (wid, _, _) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, wall_id);
     }
 }

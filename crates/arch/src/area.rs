@@ -832,4 +832,28 @@ mod tests {
         assert!(standard >= interior);
         assert!(standard.is_finite());
     }
+
+    #[test]
+    fn spanning_wall_contributes_to_standard_area() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Level::default() });
+        // A spanning wall on level 0
+        let mut w = Wall::new(pt(0.0, 0.0), pt(10.0, 0.0), 0.2);
+        w.base_level = 0;
+        w.top_level = Some(1);
+        w.height = 5.1;
+        w.exterior = true;
+        model.push_wall(w);
+        // Other exterior walls
+        push_exterior(&mut model, pt(10.0, 0.0), pt(10.0, 8.0));
+        push_exterior(&mut model, pt(10.0, 8.0), pt(0.0, 8.0));
+        push_exterior(&mut model, pt(0.0, 8.0), pt(0.0, 0.0));
+        push_interior(&mut model, pt(0.0, 3.0), pt(10.0, 3.0), 0.1);
+
+        let room = south_room();
+        let area = standard_area(&model, &room);
+        // The spanning wall should contribute to the standard area just like a normal wall
+        assert!((area - 31.62).abs() < 1e-3);
+    }
 }

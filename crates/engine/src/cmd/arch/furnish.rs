@@ -1244,4 +1244,39 @@ mod tests {
         let e = f(&mut s, &ItemRecord::default(), Vec2::ZERO, 0.0).map(|_| ()).map_err(|e| e.to_string());
         assert_eq!(e, Err("user items are placed by p14-cmd-user-catalog".to_string()));
     }
+
+    #[test]
+    fn image_backdrop_params_forward_horizon_when_given() {
+        let s = session();
+        let rec = record(&s, "own:backdrop-sky");
+        let params = super::backdrop_params(&rec, Some(&serde_json::from_str(r#"{"projection":"equirect","horizon":15.0}"#).unwrap()));
+        assert_eq!(params["kind"], "image");
+        assert_eq!(params["projection"], "equirect");
+        assert_eq!(params["horizon"], 15.0);
+    }
+
+    #[test]
+    fn hdr_backdrop_params_without_forwarding() {
+        let s = session();
+        let rec = cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-nofwd".to_string(),
+            name: "No Fwd HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("nofwd.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        };
+        let params = super::backdrop_params(&rec, None);
+        assert_eq!(params["kind"], "hdri");
+        assert_eq!(params["item"], "user:hdr-nofwd");
+        assert!(params.get("intensity").is_none());
+        assert!(params.get("rotation").is_none());
+        assert!(params.get("horizon").is_none());
+    }
 }

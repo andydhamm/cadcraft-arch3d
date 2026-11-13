@@ -823,6 +823,47 @@ fn the_showcase_meets_the_brief() {
 }
 
 #[test]
+fn showcase_meets_the_brief_with_phase_18_features() {
+    install_io();
+    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
+    let mut session = Session::new();
+    session.new_drawing(true);
+    replay(&script, &mut session);
+
+    let reply = session
+        .execute(
+            "arch.inspect",
+            &serde_json::json!({
+                "rooms": true,
+                "cabinets": true,
+                "openings": true,
+                "walls": true,
+                "levels": true,
+            }),
+        )
+        .unwrap();
+
+    let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let room_types: Vec<String> = rooms.iter().map(|r| strd(r, "type", "")).collect();
+    assert!(room_types.iter().any(|t| t == "kitchen"), "showcase has a kitchen");
+    assert!(room_types.iter().filter(|t| *t == "bath").count() >= 2, "showcase has two baths");
+
+    let cabinets: Vec<Value> = reply.get("cabinets").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    assert!(!cabinets.is_empty(), "showcase has cabinets");
+    assert!(cabinets.iter().any(|c| boold(c, "counter", false)), "showcase has a countertop run");
+    assert!(cabinets.iter().any(|c| boold(c, "backsplash", false)), "showcase has a backsplash");
+
+    let openings: Vec<Value> = reply.get("openings").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    assert!(!openings.is_empty(), "showcase has openings");
+    assert!(openings.iter().any(|o| strd(o, "kind", "") == "window"), "showcase has windows");
+    assert!(openings.iter().any(|o| strd(o, "kind", "") == "door"), "showcase has doors");
+
+    let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    assert!(levels.iter().any(|l| strd(l, "kind", "") == "floor"), "showcase has a floor level");
+    assert!(levels.iter().any(|l| strd(l, "kind", "") == "landing"), "showcase has a landing level");
+}
+
+#[test]
 fn the_showcase_script_is_valid_json() {
     let path = script_path();
     assert!(path.exists(), "showcase script not found at {}", path.display());

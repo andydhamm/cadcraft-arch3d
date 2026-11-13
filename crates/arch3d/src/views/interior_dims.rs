@@ -6,9 +6,9 @@ use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{ArchView, Cabinet, CabinetKind, DimKind, ViewDim};
 use cadcraft_geom::Vec2;
 
-// Cabinet front edges within 100 mm are considered part of the same run for automatic
+// Cabinet front edges within 1 mm are considered part of the same run for automatic
 // dimensioning. This keeps adjacent cabinets in a run from being split by a small gap.
-const EPS_RUN: f64 = 1e-1;
+const EPS_RUN: f64 = 1e-3;
 
 fn project_u(point: [f64; 2], look: [f64; 2]) -> f64 {
     point[0] * look[1] - point[1] * look[0]
@@ -41,7 +41,12 @@ fn cabinet_visible(scene: &Scene3d, cabinet: &Cabinet) -> bool {
 }
 
 fn cabinet_interval(cabinet: &Cabinet, look: [f64; 2]) -> Option<(f64, f64)> {
-    if !cabinet.width.is_finite() || !cabinet.depth.is_finite() || !cabinet.position.x.is_finite() || !cabinet.position.y.is_finite() {
+    if !cabinet.width.is_finite()
+        || !cabinet.depth.is_finite()
+        || !cabinet.position.x.is_finite()
+        || !cabinet.position.y.is_finite()
+        || !cabinet.rotation.is_finite()
+    {
         return None;
     }
     let rotation = cabinet.rotation.to_radians();
@@ -111,6 +116,9 @@ pub(crate) fn interior_dims(model: &ArchModel, view: &ArchView, sc: &Scene3d, _o
         };
         let width = cabinet.width;
         if !width.is_finite() || width <= 0.0 {
+            continue;
+        }
+        if !cabinet.height.is_finite() || !cabinet.elevation.is_finite() {
             continue;
         }
         let entry = (left.min(right), left.max(right), width, cabinet);
@@ -213,7 +221,7 @@ mod tests {
         };
         let mut b = Cabinet {
             kind: CabinetKind::Base,
-            position: Vec2::new(0.0, 5.4),
+            position: Vec2::new(0.0, 5.35),
             rotation: 90.0,
             width: 0.5,
             depth: 0.3,
@@ -308,5 +316,185 @@ mod tests {
         let scene = with_scene(&cabinet);
         let dims = interior_dims(&model, &view, &scene, &crate::hlr::OrthoView::elevation(view.look).unwrap(), [0.0, 0.0, 1.0, 2.4]);
         assert!(dims.is_empty());
+    }
+
+    #[test]
+    fn cabinets_with_fifty_mm_gap_are_separate_runs() {
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let mut a = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 4.8),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        let mut b = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 5.4),
+            rotation: 90.0,
+            width: 0.5,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        a.id = model.push_cabinet(a.clone());
+        b.id = model.push_cabinet(b.clone());
+        let scene = Scene3d { meshes: vec![crate::Mesh::new("cabinet-front", a.id), crate::Mesh::new("cabinet-front", b.id)], ..Default::default() };
+        let view = ArchView { kind: ViewKind::Interior, look: [1.0, 0.0], level: Some(0), dimensions: true, ..Default::default() };
+        let dims = interior_dims(&model, &view, &scene, &crate::hlr::OrthoView::elevation(view.look).unwrap(), [0.0, 0.0, 1.0, 2.4]);
+        let widths: Vec<_> = dims.iter().filter(|d| d.kind == DimKind::Width && d.value > 0.0).collect();
+        assert!(widths.iter().any(|d| (d.value - 0.6).abs() < 1e-6), "missing 0.6: {dims:?}");
+        assert!(widths.iter().any(|d| (d.value - 0.5).abs() < 1e-6), "missing 0.5: {dims:?}");
+        assert!(!widths.iter().any(|d| (d.value - 1.1).abs() < 1e-6), "unexpected total 1.1: {dims:?}");
+    }
+
+    #[test]
+    fn cabinets_with_half_mm_gap_form_one_run() {
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let mut a = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 4.8),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        let mut b = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 5.3495),
+            rotation: 90.0,
+            width: 0.5,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        a.id = model.push_cabinet(a.clone());
+        b.id = model.push_cabinet(b.clone());
+        let scene = Scene3d { meshes: vec![crate::Mesh::new("cabinet-front", a.id), crate::Mesh::new("cabinet-front", b.id)], ..Default::default() };
+        let view = ArchView { kind: ViewKind::Interior, look: [1.0, 0.0], level: Some(0), dimensions: true, ..Default::default() };
+        let dims = interior_dims(&model, &view, &scene, &crate::hlr::OrthoView::elevation(view.look).unwrap(), [0.0, 0.0, 1.0, 2.4]);
+        let widths: Vec<_> = dims.iter().filter(|d| d.kind == DimKind::Width && d.value > 0.0).collect();
+        assert!(widths.iter().any(|d| (d.value - 0.6).abs() < 1e-6), "missing 0.6: {dims:?}");
+        assert!(widths.iter().any(|d| (d.value - 0.5).abs() < 1e-6), "missing 0.5: {dims:?}");
+        assert!(widths.iter().any(|d| (d.value - 1.1).abs() < 1e-6), "missing total 1.1: {dims:?}");
+    }
+
+    #[test]
+    fn nan_rotation_cabinet_is_ignored() {
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let mut cabinet = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 5.0),
+            rotation: f64::NAN,
+            width: 0.6,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        cabinet.id = model.push_cabinet(cabinet.clone());
+        let scene = with_scene(&cabinet);
+        let view = ArchView { kind: ViewKind::Interior, look: [1.0, 0.0], level: Some(0), dimensions: true, ..Default::default() };
+        let dims = interior_dims(&model, &view, &scene, &crate::hlr::OrthoView::elevation(view.look).unwrap(), [0.0, 0.0, 1.0, 2.4]);
+        assert!(
+            !dims.iter().any(|d| d.kind == DimKind::Width && (d.value - 0.6).abs() < 1e-6),
+            "cabinet with NaN rotation should be ignored: {dims:?}"
+        );
+    }
+
+    #[test]
+    fn nan_height_cabinet_is_ignored() {
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let mut cabinet = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 5.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.3,
+            height: f64::NAN,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        cabinet.id = model.push_cabinet(cabinet.clone());
+        let scene = with_scene(&cabinet);
+        let view = ArchView { kind: ViewKind::Interior, look: [1.0, 0.0], level: Some(0), dimensions: true, ..Default::default() };
+        let dims = interior_dims(&model, &view, &scene, &crate::hlr::OrthoView::elevation(view.look).unwrap(), [0.0, 0.0, 1.0, 2.4]);
+        assert!(
+            !dims.iter().any(|d| d.kind == DimKind::Width && (d.value - 0.6).abs() < 1e-6),
+            "cabinet with NaN height should be ignored: {dims:?}"
+        );
+    }
+
+    #[test]
+    fn huge_coordinates_produce_correct_dims() {
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let mut cabinet = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(1e15, 1e15),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        cabinet.id = model.push_cabinet(cabinet.clone());
+        let scene = with_scene(&cabinet);
+        let view = ArchView { kind: ViewKind::Interior, look: [1.0, 0.0], level: Some(0), dimensions: true, ..Default::default() };
+        let dims = interior_dims(&model, &view, &scene, &crate::hlr::OrthoView::elevation(view.look).unwrap(), [0.0, 0.0, 1.0, 2.4]);
+        assert!(dims.iter().any(|d| d.kind == DimKind::Width && (d.value - 0.6).abs() < 1e-6), "dims: {dims:?}");
+    }
+
+    #[test]
+    fn coincident_cabinets_form_a_run() {
+        let mut model = ArchModel::default();
+        model.levels.clear();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let mut a = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 5.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        let mut b = Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 5.0),
+            rotation: 90.0,
+            width: 0.5,
+            depth: 0.3,
+            height: 0.8,
+            elevation: 0.0,
+            ..Default::default()
+        };
+        a.id = model.push_cabinet(a.clone());
+        b.id = model.push_cabinet(b.clone());
+        let scene = Scene3d { meshes: vec![crate::Mesh::new("cabinet-front", a.id), crate::Mesh::new("cabinet-front", b.id)], ..Default::default() };
+        let view = ArchView { kind: ViewKind::Interior, look: [1.0, 0.0], level: Some(0), dimensions: true, ..Default::default() };
+        let dims = interior_dims(&model, &view, &scene, &crate::hlr::OrthoView::elevation(view.look).unwrap(), [0.0, 0.0, 1.0, 2.4]);
+        let widths: Vec<_> = dims.iter().filter(|d| d.kind == DimKind::Width && d.value > 0.0).collect();
+        assert!(widths.iter().any(|d| (d.value - 0.6).abs() < 1e-6), "missing 0.6: {dims:?}");
+        assert!(widths.iter().any(|d| (d.value - 0.5).abs() < 1e-6), "missing 0.5: {dims:?}");
+        assert!(widths.iter().any(|d| (d.value - 1.1).abs() < 1e-6), "missing total 1.1: {dims:?}");
     }
 }

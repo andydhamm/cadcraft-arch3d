@@ -81,6 +81,9 @@ impl GlassRect {
 /// glass plane. Bars are split into independent rectangles so they never overlap.
 pub fn grille_bars(o: &Opening, glass: &GlassRect) -> Vec<[f64; 4]> {
     let Some(g) = o.grille else { return Vec::new() };
+    if !glass.u0.is_finite() || !glass.u1.is_finite() || !glass.z0.is_finite() || !glass.z1.is_finite() {
+        return Vec::new();
+    }
     let across = g.across.max(1).min(MAX_GRILLE_LITES);
     let down = g.down.max(1).min(MAX_GRILLE_LITES);
     if across * down <= 1 {
