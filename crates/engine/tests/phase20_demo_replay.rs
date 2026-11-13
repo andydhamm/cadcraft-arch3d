@@ -4,7 +4,7 @@
 //! labels meet the phase-20 brief.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use cadcraft_engine::Session;
 use cadcraft_engine::cmd::file::{IoHooks, set_io};
@@ -135,7 +135,7 @@ fn plan_view_name(v: &Value) -> String {
 }
 
 /// Find the single row in `rows` whose field `key` equals `want`, panicking otherwise.
-fn find_row<'a>(rows: &'a [Value], key: &str, want: &str) -> Option<&'a Value> {
+fn find_row<'a>(rows: &'a [Value], key: &str, want: &str) -> &'a Value {
     rows.iter().find(|r| strd(r, key, "") == want).unwrap_or_else(|| panic!("find_row: no row with {}={}: rows = {rows:?}", key, want))
 }
 
@@ -177,7 +177,7 @@ fn phase20_demo_is_a_non_empty_step_array() {
     let steps = steps_of(&demo_script_path());
     assert!(!steps.is_empty(), "phase-20-demo.json has no steps");
     for (i, step) in steps.iter().enumerate() {
-        assert!(!step.cmd.is_empty(), "step {i} has an empty cmd", i);
+        assert!(!step.cmd.is_empty(), "step {i} has an empty cmd");
     }
 }
 
@@ -215,7 +215,7 @@ fn phase20_demo_has_the_eight_views_bound_to_their_levels() {
     ];
     let mut got_names: Vec<String> = views.iter().map(plan_view_name).collect();
     got_names.sort();
-    let mut want_names: Vec<String> = expected.iter().map(str::to_string).collect();
+    let mut want_names: Vec<String> = expected.iter().map(|s| s.to_string()).collect();
     want_names.sort();
     assert_eq!(got_names, want_names, "plan view names mismatch; got {:?}", got_names);
 
@@ -224,10 +224,7 @@ fn phase20_demo_has_the_eight_views_bound_to_their_levels() {
     let l1 = ["Level 1 Floor Plan", "Level 1 Electrical", "Level 1 Reflected Ceiling"];
     let l2 = ["Level 2 Floor Plan", "Level 2 Electrical", "Level 2 Reflected Ceiling"];
     let get_levels = |names: &[&str]| -> Vec<String> {
-        names
-            .iter()
-            .map(|n| views.iter().find(|v| plan_view_name(v) == n.map_or("", str::as_ref)).map_or_else(|| String::from("?"), |v| level_str(v)))
-            .collect()
+        names.iter().map(|n| views.iter().find(|v| plan_view_name(v) == n.to_string()).map_or_else(|| String::from("?"), |v| level_str(v))).collect()
     };
     let lv1 = get_levels(&l1);
     let lv2 = get_levels(&l2);
@@ -287,7 +284,12 @@ fn phase20_demo_bedroom_reads_2_17_and_one_tray_is_labelled() {
     let reply = inspect(&session, serde_json::json!({"rooms": true, "trays": true}));
     let rooms = rooms_of(&reply);
     let bedroom = find_row(&rooms, "name", "Bedroom");
-    assert_eq!(strd(bedroom, "ceilingText", ""), "2.17", "Bedroom ceilingText is `{}`, expected `2.17`", strd(bedroom, "ceilingText", ""));
+    assert_eq!(
+        strd(bedroom, "ceilingText", ""),
+        "2.17".to_string(),
+        "Bedroom ceilingText is `{}`, expected `2.17`",
+        strd(bedroom, "ceilingText", "")
+    );
 
     // Exactly one tray exists and the Level-2 reflected ceiling labels it.
     let trays = trays_of(&reply);
