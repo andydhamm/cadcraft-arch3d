@@ -138,9 +138,12 @@ struct Shade {
     keep: u32,
 };
 
-// Hook [p19-seeing-in-render]: true when the fragment lies outside the clip box.
+// True when the draw has a clip box (flag 2) and the fragment lies outside it (the box is inclusive).
 fn clip_discard(wpos: vec3<f32>) -> bool {
-    return false;
+    if ((p.flags & 2u) == 0u) {
+        return false;
+    }
+    return any(wpos < p.clip_min) || any(wpos > p.clip_max);
 }
 
 // The normal after the draw's normal map (`normal_layer` is the map's array layer + 1, 0 = none, and

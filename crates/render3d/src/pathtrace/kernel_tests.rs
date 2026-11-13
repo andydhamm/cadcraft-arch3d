@@ -329,6 +329,34 @@ fn aovs_hold_the_first_hit() {
     assert_eq!(aov[1], [0.0; 4]);
 }
 
+#[test]
+fn pt_clip_box_and_near_clip() {
+    use super::scene_gpu::FRAME_CLIP;
+    let Some(gpu) = gpu_or_skip() else { return };
+    // A floor at z = 0 under a slab at z 1.0..1.1, seen from (0, 0, 2) looking down.
+    let scene = build_gpu_scene(
+        &Scene3d {
+            meshes: vec![prism("floor", 1, [-1.0, -1.0, -0.1], [1.0, 1.0, 0.0]), prism("ceiling", 2, [-1.0, -1.0, 1.0], [1.0, 1.0, 1.1])],
+            ..Default::default()
+        },
+        false,
+        None,
+    );
+    let base = GpuFrame { spp_this_pass: 1, ..camera_frame([0.0, 0.0, 2.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) };
+    let t_at = |frame: &GpuFrame| run_with_aov(&gpu, &scene, frame)[2 * (3 * 8 + 3) + 1][3];
+    // Nothing set: the slab is the first hit (about 0.9 away).
+    let open = t_at(&base);
+    assert!(open > 0.8 && open < 1.2, "{open}");
+    // A clip box under the slab: the ray skips it and lands on the floor, about 2 away.
+    let clipped = GpuFrame { flags: FRAME_CLIP, clip_min: [-9.0, -9.0, -9.0, 0.0], clip_max: [9.0, 9.0, 0.5, 0.0], ..base };
+    let floor = t_at(&clipped);
+    assert!(floor > 1.9 && floor < 2.3, "{floor}");
+    // A near clip of 1.5 starts the ray below the slab: the floor is then about 0.5 away.
+    let near = GpuFrame { view: [0.0, 0.0, -1.0, 1.5], ..base };
+    let started = t_at(&near);
+    assert!(started > 0.4 && started < 0.8, "{started}");
+}
+
 /// Run `trace_main` once over `frame`'s 8 x 8 pixels and read back the AOV buffer.
 fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f32; 4]> {
     let d = &gpu.device;
@@ -424,61 +452,79 @@ fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f3
     out
 }
 
-/// A 4 x 2 m wall on the plane y = 0 facing -y, UVs in metres (u along x, v up).
-fn uv_wall(material: &str) -> Mesh {
-    let mut m = Mesh::new(material, ArchId(1));
-    for (p, uv) in [([0.0, 0.0, 0.0], [0.0, 0.0]), ([4.0, 0.0, 0.0], [4.0, 0.0]), ([4.0, 0.0, 2.0], [4.0, 2.0]), ([0.0, 0.0, 2.0], [0.0, 2.0])] {
-        m.positions.push(p);
-        m.normals.push([0.0, -1.0, 0.0]);
-        m.uvs.push(uv);
-    }
-    m.indices.extend([0, 1, 2, 0, 2, 3]);
-    m
+// ---- Environment map (p19-env-path) ------------------------------------------------------------
+
+/// A 100 m x 100 m slab under z = 0 (diffuse albedo 0.5 through the furnace materials, no lights).
+fn lambert_plane() -> GpuScene {
+    let scene = Scene3d { meshes: vec![prism("wall", 1, [-50.0, -50.0, -1.0], [50.0, 50.0, 0.0])], ..Default::default() };
+    build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, ..Default::default() }))
 }
 
-/// The wall's 8 x 8 image under a raking sun (azimuth mirrored by `side`), luminance per pixel;
-/// `maps` = false leaves the frame's `FRAME_NORMAL_MAPS` off.
-fn wall_under_sun(gpu: &ComputeGpu, material: &str, side: f32, maps: bool) -> Vec<f32> {
-    use super::scene_gpu::{FRAME_NORMAL_MAPS, FRAME_SUN};
-    let scene = build_gpu_scene(&Scene3d { meshes: vec![uv_wall(material)], ..Default::default() }, false, None);
-    let sun = [0.8 * side, -0.5, 0.3];
-    let len = (sun[0] * sun[0] + sun[1] * sun[1] + sun[2] * sun[2]).sqrt();
-    let mut flags = FRAME_SUN;
-    if maps && scene.tex[2] > 0 {
-        flags |= FRAME_NORMAL_MAPS;
-    }
-    let frame = GpuFrame {
-        flags,
-        tex: scene.tex,
-        sun_dir: [sun[0] / len, sun[1] / len, sun[2] / len, 0.0],
-        sun_rgb: [1.0e5; 4],
-        look: [1, 0, 0, 0],
-        spp_this_pass: 4,
-        ..camera_frame([2.0, -2.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0])
-    };
-    trace(gpu, &scene, &frame).iter().map(|a| luminance([a[0], a[1], a[2]]) / a[3].max(1.0)).collect()
+/// `base` with `e` baked into `scene`'s aux buffer (no sun).
+fn with_environment(scene: &mut GpuScene, e: crate::environment::Environment, base: GpuFrame) -> GpuFrame {
+    let lighting = crate::lit_frame::Lighting { sun: None, environment: Some(std::sync::Arc::new(e)), ..Default::default() };
+    let mut frame = base;
+    super::tracer::frame_environment(&mut frame, &mut scene.ies, &lighting);
+    frame
+}
+
+/// Mean red radiance over the 8 x 8 pixels of a camera 5 m above the plane looking down.
+fn plane_mean(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame, spp: u32) -> f64 {
+    let out = trace(gpu, scene, frame);
+    assert_eq!(out.len(), 64);
+    out.iter().map(|a| f64::from(a[0]) / f64::from(spp)).sum::<f64>() / 64.0
+}
+
+fn down_frame(bounces: u32, spp: u32) -> GpuFrame {
+    GpuFrame { bounces, spp_this_pass: spp, seed: 11, ..camera_frame([0.0, 0.0, 5.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) }
 }
 
 #[test]
-fn pt_normal_map_differs_under_mirrored_suns() {
+fn uniform_environment_lights_a_lambert_plane() {
     let Some(gpu) = gpu_or_skip() else { return };
-    // Mean |A - B| over the image, relative to the mean luminance.
-    let relative_diff = |material: &str, maps: bool| {
-        let (a, b) = (wall_under_sun(&gpu, material, 1.0, maps), wall_under_sun(&gpu, material, -1.0, maps));
-        let mean = a.iter().sum::<f32>() / a.len() as f32;
-        let diff = a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f32>() / a.len() as f32;
-        assert!(mean > 100.0, "{material} is lit: {mean}");
-        diff / mean
-    };
-    // Flat shading reads (nearly) the same under mirrored suns: what is left is the specular lobe
-    // seen from a pixel on one side of the wall.
-    let flat = relative_diff("wall", true);
-    assert!(flat < 0.02, "flat wall: {flat}");
-    // The brick wall without its maps is as flat; with them the joints catch one sun and shade the
-    // other.
-    let bare = relative_diff("wall-brick", false);
-    let mapped = relative_diff("wall-brick", true);
-    // (Brick is glossier than the plain wall, so its specular lobe leaves a little more.)
-    assert!(bare < 0.05, "brick without maps: {bare}");
-    assert!(mapped > 0.05 && mapped > 2.0 * bare, "brick with maps: {mapped} (without {bare})");
+    let mut scene = lambert_plane();
+    let frame = with_environment(&mut scene, crate::environment::Environment::uniform([1.0; 3], 16, 8), down_frame(2, 1024));
+    assert_eq!(frame.flags & super::scene_gpu::FRAME_ENV, super::scene_gpu::FRAME_ENV);
+    let mean = plane_mean(&gpu, &scene, &frame, 1024);
+    // L = albedo * E / pi = 0.5 * pi / pi.
+    assert!((mean - 0.5).abs() <= 0.005, "plane radiance {mean}");
+}
+
+#[test]
+fn env_irradiance_up_pi_down_zero() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = lambert_plane();
+    let spp = 16_384;
+    let frame = with_environment(
+        &mut scene,
+        crate::environment::Environment::uniform([1.0; 3], 16, 8),
+        GpuFrame { probe_count: 2, bounces: 0, spp_this_pass: spp, seed: 5, ..Default::default() },
+    );
+    let buffers = upload_scene(&gpu, &scene);
+    let probes = [up_probe(0.0, 0.0), GpuProbe { point: [0.0, 0.0, 0.0], normal: [0.0, 0.0, -1.0], ..Default::default() }];
+    let out = check(run_entry(&gpu, &buffers, "irradiance_main", &frame, &probes));
+    let lux = |a: &[f32; 4]| f64::from(luminance([a[0], a[1], a[2]])) / f64::from(spp);
+    let (up, down) = (lux(&out[0]), lux(&out[1]));
+    assert!((up - std::f64::consts::PI).abs() <= 0.03 * std::f64::consts::PI, "up {up}");
+    assert!(down.abs() < 1e-3, "down {down}");
+}
+
+/// A map with a bright patch 34 degrees above the horizon on a dim sky.
+fn patchy() -> crate::environment::Environment {
+    let mut e = crate::environment::Environment::uniform([1.0; 3], 16, 8);
+    e.rgb[2 * 16 + 3] = [20.0; 3];
+    e
+}
+
+#[test]
+fn env_mis_matches_bsdf_only() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = lambert_plane();
+    let frame = with_environment(&mut scene, patchy(), down_frame(2, 1024));
+    let mis = plane_mean(&gpu, &scene, &frame, 1024);
+    // No total importance: no light sample, and every escape is the whole BSDF-sampled share.
+    let bsdf_only = GpuFrame { env_params: [0.0; 4], ..frame };
+    let plain = plane_mean(&gpu, &scene, &bsdf_only, 1024);
+    assert!(mis > 0.5 && plain > 0.5, "mis {mis}, bsdf only {plain}");
+    assert!((mis - plain).abs() <= 0.02 * plain, "mis {mis}, bsdf only {plain}");
 }

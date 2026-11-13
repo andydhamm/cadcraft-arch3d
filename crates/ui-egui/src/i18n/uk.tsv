@@ -74,6 +74,20 @@
 	Append to current selection set	Додати до поточного набору вибраних об'єктів
 	Arch Inspect	Архітектурний огляд
 	Architecture	Архітектура
+	Plan Views	Види плану
+	New Plan View	Новий вид плану
+	Open Plan View	Відкрити вид плану
+	Close Plan View	Закрити вид плану
+	Edit Plan View	Редагувати вид плану
+	Delete Plan View	Видалити вид плану
+	List Plan Views	Список видів плану
+	Auto Exterior Dimensions	Автоматичні зовнішні розміри
+	Drive Dimension	Привести розмір
+	Room Names	Імена кімнат
+	Room Areas	Площі кімнат
+	Room Dimensions	Розміри кімнат
+	Ceiling Heights	Висоти стелі
+	Reference Level	Рівень посилання
 	Arch Sample	Архітектурний зразок
 	Roof	Дах
 	Roof Automatic	Автоматичний дах
@@ -1215,6 +1229,7 @@
 	W	Зх
 	WCS	ССК
 	Wall	Стіна
+	Split Wall	Розділити стіну
 	White	Білий
 	Width factor	Коефіцієнт ширини
 	Wipeout	Маскування
@@ -1414,6 +1429,7 @@
 	Plane	Площина
 	Room	Кімната
 	Room Detect	Виявити кімнати
+	Room Label	Мітка кімнати
 	Stair	Сходи
 	Edit Stair	Редагувати сходи
 	Deck	Тераса
@@ -1444,6 +1460,7 @@
 	Pick 3D	Вибір 3D
 	Section	Різ
 	Sun	Сонце
+	Sun Angle	Сонечний кут
 	View Sheet	Аркуш видів
 	Walkthrough	Обхід
 	cmd.room	Кімната
@@ -1454,7 +1471,9 @@
 	cmd.roomdetect	Виявити кімнати
 	cmd.level	Рівень
 	Architecture>Room	Архітектура>Кімната
+	Architecture>Cabinet Face	Архітектура>Фасад шафи
 	Architecture>Room Detect	Архітектура>Виявити кімнати
+	Architecture>Room Label	Архітектура>Мітка кімнати
 	Architecture>Level	Архітектура>Рівень
 	Architecture>Stair	Архітектура>Сходи
 	Architecture>Edit Stair	Архітектура>Редагувати сходи
@@ -1527,6 +1546,9 @@
 	Shortcut Menu: always enabled	Контекстне меню: завжди
 	Shortcut Menu: enabled when command options are present	Контекстне меню: коли команда має параметри
 	Cabinet	Шафа
+	Cabinet Face	Фасад шафи
+	Fill Cabinet Run	Заповнити ряд шаф
+	Architecture>Fill Cabinet Run	Архітектура>Заповнити ряд шаф
 	Contours	Контури
 	Cut and Fill	Виймання і насипання
 	Delete Cabinet	Видалити шафу
@@ -1617,3 +1639,28 @@
 	Soffit	Стельовий короб
 	Edit Soffit	Редагувати стельовий короб
 	Delete Soffit	Видалити стельовий короб
+# Phase 20: room labels.
+	Room Moldings	Молдинги кімнат
+	Architecture>Room Moldings	Архітектура>Молдинги кімнат
+	Molding Line	Лінія молдинга
+	Edit Molding Line	Редагувати лінію молдинга
+	Delete Molding Line	Видалити лінію молдинга
+	Architecture>Molding Line	Архітектура>Лінія молдинга
+	Architecture>Edit Molding Line	Архітектура>Редагувати лінію молдинга
+	Architecture>Delete Molding Line	Архітектура>Видалити лінію молдинга
+	Architecture>Split Wall	Архітектура>Розділити стіну
+	Sheet	Аркуш
+	Edit Sheet	Редагувати аркуш
+	Delete Sheet	Видалити аркуш
+	List Sheets	Список аркушів
+	Open Sheet	Відкрити аркуш
+	Sheet Set	Комплект аркушів
+	Niche	Ніша
+	Architecture>Niche	Архітектура>Ніша
+	Countertop	Стільниця
+	Detach Countertop	Відокремити стільницю
+	Edit Countertop	Редагувати стільницю
+	Delete Countertop	Видалити стільницю
+	Reset Camera	Скинути камеру
+	Orbit Camera	Обертати камеру
+	Update Camera	Оновити камеру

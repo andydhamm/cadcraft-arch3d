@@ -13,7 +13,7 @@ use cadcraft_arch::site::true_to_drawing;
 use cadcraft_arch::sun::{sun_dir, sun_position};
 use cadcraft_arch3d::camera::{Camera, FullCamera, Orbit};
 use cadcraft_doc::Drawing;
-use cadcraft_doc::arch::{Camera3d, CameraKind, Look};
+use cadcraft_doc::arch::{Camera3d, CameraKind, Look, Technique};
 use cadcraft_geom::Vec3;
 use serde_json::{Value, json};
 
@@ -68,6 +68,8 @@ pub struct RenderRequest<'a> {
     pub legacy_night: bool,
     /// The calibration albedo (`render {albedo}`): every surface reads as plain Lambert with it.
     pub albedo: Option<f64>,
+    /// A floor overview (phase 19): `(level index, lower levels shown)`; `None` = every level.
+    pub overview: Option<(u32, bool)>,
 }
 
 /// Which Finalize Render a request runs (phase 11): the phase-10 shadow-mapped still, or the path
@@ -184,7 +186,15 @@ impl<'a> RenderRequest<'a> {
             sun_dir: None,
             legacy_night: matches!(sun, SunChoice::Off),
             albedo: None,
+            overview: None,
         }
+    }
+
+    /// The same request as a floor overview of `level` (with the levels below when
+    /// `lower_levels`), or the whole house for `None` (phase 19).
+    pub fn with_overview(mut self, overview: Option<(u32, bool)>) -> Self {
+        self.overview = overview;
+        self
     }
 
     /// The same request with the Lambert calibration albedo (0 < a < 1).
@@ -488,17 +498,46 @@ pub fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineEr
     }
 }
 
-fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
-    match c.kind {
-        CameraKind::Orbit => {
-            let target = c.target.unwrap_or([0.0; 3]);
-            let azimuth = c.azimuth_deg.unwrap_or(0.0);
-            let elevation = c.elevation_deg.unwrap_or(30.0);
-            let distance = c.distance.unwrap_or(10.0);
-            let fov = c.fov_deg.unwrap_or(45.0);
-            let target_vec = Vec3::new(target[0], target[1], target[2]);
-            Ok(Camera::Orbit(Orbit::new(target_vec, azimuth, elevation, distance, fov)))
+/// The level an overview camera shows and whether the levels below are kept; `None` for the
+/// other camera kinds.
+pub(crate) fn overview_of(c: &Camera3d, arch: &cadcraft_doc::ArchModel) -> Option<(u32, bool)> {
+    (c.kind == CameraKind::Overview).then(|| (c.level.unwrap_or_else(|| arch.plan_level.unwrap_or(0)), c.lower_levels.unwrap_or(true)))
+}
+
+/// The orbit of a saved orbit or overview camera. An overview camera without a `target` or
+/// `distance` is fitted to the plan of its level and the ones below.
+pub(crate) fn saved_orbit(c: &Camera3d, arch: &cadcraft_doc::ArchModel) -> Orbit {
+    let overview = c.kind == CameraKind::Overview;
+    let fov = c.fov_deg.unwrap_or(45.0);
+    let azimuth = c.azimuth_deg.unwrap_or(if overview { 30.0 } else { 0.0 });
+    let elevation = c.elevation_deg.unwrap_or(if overview { 50.0 } else { 30.0 });
+    let mut target = c.target;
+    let mut distance = c.distance;
+    if overview && (target.is_none() || distance.is_none()) {
+        let level = overview_of(c, arch).map_or(0, |(l, _)| l);
+        let z = arch.levels.iter().rev().find(|l| l.index == level).map_or(0.0, |l| l.elevation);
+        let walls = arch.walls.iter().filter(|w| w.base_level <= level).flat_map(|w| [w.start, w.end]);
+        let rooms = arch.rooms.iter().filter(|r| r.level <= level).flat_map(|r| r.polygon.iter().copied());
+        let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+        for p in walls.chain(rooms).filter(|p| p.x.is_finite() && p.y.is_finite()) {
+            lo = [lo[0].min(p.x), lo[1].min(p.y)];
+            hi = [hi[0].max(p.x), hi[1].max(p.y)];
         }
+        if lo[0] <= hi[0] && lo[1] <= hi[1] {
+            let (dx, dy) = (hi[0] - lo[0], hi[1] - lo[1]);
+            let r = 0.5 * (dx * dx + dy * dy).sqrt();
+            let s = (fov.clamp(1.0, 179.0).to_radians() / 2.0).sin();
+            target.get_or_insert([(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, z]);
+            distance.get_or_insert((1.1 * r.max(0.5) / s).clamp(1.0, 1_000_000.0));
+        }
+    }
+    let t = target.unwrap_or([0.0; 3]);
+    Orbit::new(Vec3::new(t[0], t[1], t[2]), azimuth, elevation, distance.unwrap_or(10.0), fov)
+}
+
+pub(crate) fn camera_from_saved(c: &Camera3d, arch: &cadcraft_doc::ArchModel) -> Result<Camera, EngineError> {
+    match c.kind {
+        CameraKind::Orbit | CameraKind::Overview => Ok(Camera::Orbit(saved_orbit(c, arch))),
         CameraKind::Full => {
             let eye_x = c.eye.as_ref().map_or(0.0, |e| e[0]);
             let eye_y = c.eye.as_ref().map_or(0.0, |e| e[1]);
@@ -517,7 +556,7 @@ fn camera_from_params<'a>(v: Option<&Value>, doc: &'a Drawing) -> Result<(Option
     match v {
         None | Some(Value::Null) => match &doc.arch.active_camera {
             Some(name) => match doc.arch.camera_by_name(name) {
-                Some(c) => Ok((Some(camera_from_saved(c)?), Some(c))),
+                Some(c) => Ok((Some(camera_from_saved(c, &doc.arch)?), Some(c))),
                 None => Ok((None, None)),
             },
             None => Ok((None, None)),
@@ -525,7 +564,7 @@ fn camera_from_params<'a>(v: Option<&Value>, doc: &'a Drawing) -> Result<(Option
         Some(Value::String(name)) => {
             let name = name.trim();
             match doc.arch.camera_by_name(name) {
-                Some(c) => Ok((Some(camera_from_saved(c)?), Some(c))),
+                Some(c) => Ok((Some(camera_from_saved(c, &doc.arch)?), Some(c))),
                 None => Err(bad("render", format!("no camera named `{name}`"))),
             }
         }
@@ -538,8 +577,8 @@ fn camera_from_params<'a>(v: Option<&Value>, doc: &'a Drawing) -> Result<(Option
 fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'a>, EngineError> {
     let size = parse_size(params.get("size"))?;
     let (camera, saved) = camera_from_params(params.get("camera"), doc)?;
-    let (final_render, final_mode) = parse_final(params.get("final"))?;
-    let style = parse_style(params.get("style"))?;
+    let (mut final_render, mut final_mode) = parse_final(params.get("final"))?;
+    let mut style = parse_style(params.get("style"))?;
     let ground = params.get("ground").and_then(Value::as_bool).unwrap_or(false);
     let budget = parse_budget(params.get("budget"))?;
     let samples = parse_samples(params.get("samples"))?;
@@ -548,6 +587,13 @@ fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'
 
     let mut look = effective_look(&doc.arch, saved);
     let explicit = apply_look_params("render", params, &doc.arch, &mut look, true)?;
+    // The technique picks the style and the Finalize mode the request leaves unnamed.
+    if params.get("style").is_none() {
+        style = technique_style(look.technique).to_string();
+    }
+    if params.get("final").is_none() && look.technique == Technique::Path {
+        (final_render, final_mode) = (true, FinalMode::Path);
+    }
     let sun_dir = effective_sun_dir(&doc.arch, &look, explicit);
     let sun = if !look.sun.on {
         SunChoice::Off
@@ -565,7 +611,18 @@ fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'
         .with_look(look, sun_dir);
     request.legacy_night = legacy_night;
     request.albedo = parse_albedo(params.get("albedo"))?;
+    request.overview = saved.and_then(|c| overview_of(c, &doc.arch));
     Ok(request)
+}
+
+/// The render `style` a technique asks for when the render names none (path renders `shaded`
+/// when it is not finalized).
+fn technique_style(t: Technique) -> &'static str {
+    match t {
+        Technique::Clay => "clay",
+        Technique::Technical => "technical",
+        Technique::Standard | Technique::Path => "shaded",
+    }
 }
 
 /// The `albedo` param: a number with 0 < albedo < 1, else a refusal naming the key and value.
@@ -905,5 +962,32 @@ mod tests {
             let err = build_request(&d, &json!({"albedo": bad_value.clone()})).unwrap_err().to_string();
             assert!(err.contains("`albedo` must be a number with 0 < albedo < 1"), "{bad_value}: {err}");
         }
+    }
+
+    #[test]
+    fn technique_picks_style_and_final() {
+        let d = Drawing::new_metric();
+        // Path technique -> final path, style shaded
+        let r = build_request(&d, &json!({"technique": "path"})).unwrap();
+        assert!(r.final_render);
+        assert_eq!(r.final_mode, FinalMode::Path);
+        assert_eq!(r.style, "shaded");
+        // Clay technique -> style clay, no final
+        let r = build_request(&d, &json!({"technique": "clay"})).unwrap();
+        assert_eq!(r.style, "clay");
+        assert!(!r.final_render);
+        // Technical technique -> style technical, no final
+        let r = build_request(&d, &json!({"technique": "technical"})).unwrap();
+        assert_eq!(r.style, "technical");
+        assert!(!r.final_render);
+        // Standard technique -> style shaded, no final
+        let r = build_request(&d, &json!({"technique": "standard"})).unwrap();
+        assert_eq!(r.style, "shaded");
+        assert!(!r.final_render);
+        // Explicit params win over technique
+        let r = build_request(&d, &json!({"technique": "path", "final": false})).unwrap();
+        assert!(!r.final_render);
+        let r = build_request(&d, &json!({"technique": "clay", "style": "shaded"})).unwrap();
+        assert_eq!(r.style, "shaded");
     }
 }

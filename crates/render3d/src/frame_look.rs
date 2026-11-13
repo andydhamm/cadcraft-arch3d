@@ -14,7 +14,7 @@ use crate::camera::{Camera, ray_at};
 use crate::exposure::{daylight, exposure_scale, tone_code};
 use crate::lit_frame::Lighting;
 use crate::pathtrace::luminance;
-use crate::pipeline::{PBR_FLAG_LAMBERT, PbrUniform, STYLE_HIDDEN_LINE, STYLE_TECHNICAL};
+use crate::pipeline::{PBR_FLAG_CLIP, PBR_FLAG_LAMBERT, PbrUniform, STYLE_HIDDEN_LINE, STYLE_TECHNICAL};
 use crate::types::{ArchId, Mesh, Scene3d};
 
 /// What one frame looks like, decided once and written into every draw.
@@ -58,6 +58,8 @@ pub struct Meter {
     /// Per BVH object id: the index of the scene mesh, or `GROUND` / `HORIZON` for the extras.
     sources: Vec<usize>,
     ground: Option<Mesh>,
+    /// The radiance SH of the environment with this key, for the ambient term of a ray.
+    sh: Option<(u64, [[f32; 3]; 9])>,
 }
 
 const GROUND: usize = usize::MAX;
@@ -113,6 +115,15 @@ impl Meter {
         f: &FrameLook,
     ) -> Option<f32> {
         self.prepare(scene, ground);
+        match lighting.environment.as_deref().filter(|e| e.is_valid()) {
+            Some(env) => {
+                if self.sh.as_ref().is_none_or(|(k, _)| *k != env.key) {
+                    self.sh = Some((env.key, crate::sh::project(env)));
+                }
+            }
+            None => self.sh = None,
+        }
+        let sh = self.sh.map(|(_, c)| c);
         let bvh = self.bvh.as_ref()?;
         let sun = lighting.sun.map(|l| {
             let d = l.normalized().dir;
@@ -137,7 +148,14 @@ impl Meter {
                     n = n * -1.0;
                 }
                 let albedo = lighting.lambert.unwrap_or_else(|| luminance(crate::pipeline::material_albedo(&mesh.material)));
-                let mut irradiance = f64::from(f.ambient_lux);
+                let mut irradiance = match &sh {
+                    // The environment lights the surface instead of the stand-in ambient.
+                    Some(sh) => {
+                        let e = crate::sh::irradiance(sh, [n.x as f32, n.y as f32, n.z as f32]);
+                        f64::from(luminance(e).max(0.0))
+                    }
+                    None => f64::from(f.ambient_lux),
+                };
                 if let Some(s) = sun {
                     let ndl = n.dot(s).max(0.0);
                     if ndl > 0.0 && f.sun_lux > 0.0 {
@@ -214,12 +232,18 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     f.tone_map = tone_code(look.tone_map);
     f.lambert = lighting.lambert.filter(|a| a.is_finite());
     let intensity = if look.sun.intensity.is_finite() { look.sun.intensity.max(0.0) as f32 } else { 0.0 };
-    let sun = lighting.sun.is_some();
-    f.sun_lux = if sun { intensity } else { 0.0 };
-    f.ambient_lux = match (sun, look.sky.on) {
-        (true, true) => 0.25 * intensity,
-        (true, false) => 0.0,
-        (false, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
+    // The moon as the directional light is not the sun: `sun` is true only for a real sun.
+    let sun = lighting.sun.is_some() && lighting.moon.is_none();
+    let directional = lighting.directional_lux();
+    f.sun_lux = directional;
+    // An environment lights through its SH: the stand-in ambient is off, the meter adds the SH.
+    let has_env = lighting.environment.as_ref().is_some_and(|e| e.is_valid());
+    f.ambient_lux = match (sun, look.sky.on, lighting.moon.is_some()) {
+        _ if has_env => 0.0,
+        (true, true, _) => 0.25 * intensity,
+        (true, false, _) => 0.0,
+        (false, true, true) => 0.25 * directional,
+        (false, _, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
     };
     // A bare-number exposure of the request arrives as a `Lighting::exposure` off the default.
     let legacy = (lighting.exposure.to_bits() != crate::lights::DEFAULT_EXPOSURE.to_bits() && lighting.exposure.is_finite())
@@ -232,8 +256,23 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     f.exposure_mode = mode;
 }
 
-/// Clip box, near plane and Lambert override of the view [p19-seeing-in-render]. A stub.
-pub fn view_look(_f: &mut FrameLook, _lighting: &Lighting) {}
+/// The clip box of a look as `[min, max]` in drawing space; `None` without one or when a corner is
+/// not finite (a hostile box clips nothing rather than everything).
+pub fn look_clip(look: &cadcraft_doc::arch::Look) -> Option<[[f32; 3]; 2]> {
+    let c = look.clip.as_ref()?;
+    if !c.min.iter().chain(c.max.iter()).all(|v| v.is_finite()) {
+        return None;
+    }
+    let f = |v: [f64; 3]| [v[0] as f32, v[1] as f32, v[2] as f32];
+    Some([f(c.min), f(c.max)])
+}
+
+/// Clip box and near plane of the view: copied from the look (`Look::clip`, `Look::near_clip`). A
+/// near clip outside (0, 1000] m is ignored. The Lambert override is `exposure_look`'s.
+pub fn view_look(f: &mut FrameLook, lighting: &Lighting) {
+    f.clip = look_clip(&lighting.look);
+    f.near = lighting.look.near_clip.filter(|n| n.is_finite() && *n > 0.0 && *n <= 1000.0).map(|n| n as f32);
+}
 
 /// Copy the frame's look into one draw's block; `material` is the draw's mesh material name (the
 /// ground quad's is `"ground"`).
@@ -281,8 +320,14 @@ pub fn fill_normal_map(p: &mut PbrUniform, f: &FrameLook, scene: &Scene3d, mater
     }
 }
 
-/// Clip box and Lambert override into the draw [p19-seeing-in-render]. A stub.
-pub fn fill_clip(_p: &mut PbrUniform, _f: &FrameLook) {}
+/// The clip box and `PBR_FLAG_CLIP` into the draw; a frame without a clip leaves the block as it is.
+pub fn fill_clip(p: &mut PbrUniform, f: &FrameLook) {
+    if let Some([min, max]) = f.clip {
+        p.flags |= PBR_FLAG_CLIP;
+        p.clip_min = min;
+        p.clip_max = max;
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -375,6 +420,65 @@ mod tests {
         // With nothing hit the daylight scale is the day exposure.
         let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
         assert_eq!(f.exposure, crate::pathtrace::DAY_EXPOSURE);
+    }
+
+    #[test]
+    fn meter_uses_sh_ambient() {
+        // A plane under a uniform environment of radiance 1 (E = pi) and no sun: L = 0.5 / pi * pi.
+        let scene = plane();
+        let camera = down_at([0.0, 0.0, 0.0]);
+        let env = crate::environment::Environment::uniform([1.0; 3], 32, 16);
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.exposure = ExposureSetting::Auto;
+        let lighting =
+            Lighting { sun: None, look, lambert: Some(0.5), meter_night: true, environment: Some(std::sync::Arc::new(env)), ..Lighting::default() };
+        let mut meter = Meter::default();
+        let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
+        let l = meter.log_average(&scene, &camera, (64, 48), &lighting, false, &f);
+        assert!(l.is_some_and(|l| (l - 0.5).abs() < 0.5 * 0.01), "{l:?}");
+        assert_eq!(f.exposure_mode, "auto");
+        assert!((f.exposure - 0.18 / 0.5).abs() < 0.36 * 0.03, "{}", f.exposure);
+        assert_eq!(f.ambient_lux, 0.0, "the stand-in ambient is off under an environment");
+    }
+
+    #[test]
+    fn fill_clip_box_and_flag() {
+        use cadcraft_doc::arch::ClipBox;
+        let scene = Scene3d::default();
+        // The look's box and near reach the frame look.
+        let mut lighting = Lighting::default();
+        lighting.look.clip = Some(ClipBox { min: [-1.0, -2.0, -3.0], max: [4.0, 5.0, 2.0], ..Default::default() });
+        lighting.look.near_clip = Some(0.75);
+        let mut f = FrameLook::default();
+        view_look(&mut f, &lighting);
+        assert_eq!((f.clip, f.near), (Some([[-1.0, -2.0, -3.0], [4.0, 5.0, 2.0]]), Some(0.75)));
+        let before = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_SHADED, [0.0; 3]);
+        let mut p = before;
+        fill_draw(&mut p, &f, &scene, "wall");
+        assert_eq!(p.flags & PBR_FLAG_CLIP, PBR_FLAG_CLIP);
+        assert_eq!((p.clip_min, p.clip_max), ([-1.0, -2.0, -3.0], [4.0, 5.0, 2.0]));
+        // Hidden-line and technical draws are clipped too, and the Lambert bit is untouched.
+        let mut h = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_HIDDEN_LINE, [0.0; 3]);
+        fill_draw(&mut h, &f, &scene, "wall");
+        assert_eq!(h.flags & PBR_FLAG_CLIP, PBR_FLAG_CLIP);
+        assert_eq!(p.flags & PBR_FLAG_LAMBERT, 0);
+        // No box: the draw is exactly as it was made.
+        let mut none = FrameLook::default();
+        lighting.look.clip = None;
+        lighting.look.near_clip = None;
+        view_look(&mut none, &lighting);
+        assert_eq!((none.clip, none.near), (None, None));
+        let mut q = before;
+        fill_draw(&mut q, &none, &scene, "wall");
+        assert_eq!(bytemuck::bytes_of(&before), bytemuck::bytes_of(&q));
+        // Hostile values are ignored, never clamped.
+        lighting.look.clip = Some(ClipBox { min: [f64::NAN, 0.0, 0.0], max: [1.0; 3], ..Default::default() });
+        for near in [0.0, -1.0, f64::NAN, 1.0e6] {
+            lighting.look.near_clip = Some(near);
+            let mut g = FrameLook::default();
+            view_look(&mut g, &lighting);
+            assert_eq!((g.clip, g.near), (None, None), "near {near}");
+        }
     }
 
     #[test]

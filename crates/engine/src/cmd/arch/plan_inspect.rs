@@ -94,7 +94,14 @@ pub(crate) fn inspect_plan(m: &ArchModel, p: &Value, out: &mut JsonMap<String, V
         }
         Some(_) => return Err(bad("arch.inspect", "`plan` must be true or the name of a plan view")),
     };
-    let a = annotate(m, view, level);
+    let a = if view.is_none() {
+        let mut a = annotate(m, None, level);
+        a.labels.clear();
+        cadcraft_arch::plan::labels::room_labels(m, level, cadcraft_doc::arch::RoomLabelShow::default(), &mut a);
+        a
+    } else {
+        annotate(m, view, level)
+    };
     out.insert("plan".to_string(), plan_json(view, level, &a));
     Ok(())
 }
@@ -208,7 +215,8 @@ mod tests {
         let r = s.execute("arch.inspect", &json!({"plan": "floor plan"})).unwrap();
         assert_eq!(r["plan"]["view"], "Floor Plan");
         assert_eq!(r["plan"]["level"], 1);
-        assert_eq!(texts(&r["plan"]), vec!["Up"]);
+        // Floor Plan shows name, area, dimensions.
+        assert_eq!(texts(&r["plan"]), vec!["Up", "0.00 m2", "4.00 x 3.00"]);
         let r = s.execute("arch.inspect", &json!({"plan": "Roof Plan"})).unwrap();
         assert_eq!(r["plan"]["kind"], "roof");
         assert_eq!(r["plan"]["lines"].as_array().map(Vec::len), Some(1));
@@ -257,9 +265,10 @@ mod tests {
         }
         let r = s.execute("arch.inspect", &json!({"plan": true})).unwrap();
         assert_eq!(r["plan"]["level"], 0);
-        assert_eq!(texts(&r["plan"]), vec!["Down"]);
+        // Floor Plan shows name, area, dimensions.
+        assert_eq!(texts(&r["plan"]), vec!["Down", "0.00 m2", "4.00 x 3.00"]);
         let r = s.execute("arch.inspect", &json!({"plan": "Floor Plan"})).unwrap();
         assert_eq!(r["plan"]["level"], 1);
-        assert_eq!(texts(&r["plan"]), vec!["Up"]);
+        assert_eq!(texts(&r["plan"]), vec!["Up", "0.00 m2", "4.00 x 3.00"]);
     }
 }

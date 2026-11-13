@@ -11,8 +11,12 @@ use cadcraft_geom::{Vec2, point_in_polygon};
 
 pub mod ceiling;
 pub mod labels;
+pub mod layers;
+pub use layers::layers_in_use;
+pub mod callouts;
 pub mod reference;
 pub mod roof;
+pub mod tags;
 
 /// The kind of a [`PlanLine`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,6 +35,7 @@ pub enum PlanLineKind {
     CeilingItem,
     Soffit,
     Reference,
+    Callout,
 }
 
 impl PlanLineKind {
@@ -51,6 +56,7 @@ impl PlanLineKind {
             PlanLineKind::CeilingItem => "ceilingItem",
             PlanLineKind::Soffit => "soffit",
             PlanLineKind::Reference => "reference",
+            PlanLineKind::Callout => "callout",
         }
     }
 }
@@ -64,6 +70,8 @@ pub enum PlanLabelKind {
     RoomCeiling,
     Pitch,
     TrayHeight,
+    ScheduleNumber,
+    Callout,
 }
 
 impl PlanLabelKind {
@@ -76,6 +84,8 @@ impl PlanLabelKind {
             PlanLabelKind::RoomCeiling => "roomCeiling",
             PlanLabelKind::Pitch => "pitch",
             PlanLabelKind::TrayHeight => "trayHeight",
+            PlanLabelKind::ScheduleNumber => "scheduleNumber",
+            PlanLabelKind::Callout => "callout",
         }
     }
 }
@@ -186,6 +196,9 @@ pub fn opened_level(model: &ArchModel, view: Option<&PlanView>) -> Option<u32> {
 /// Everything `view` (the plan with no view when `None`) adds at plan level `level`.
 pub fn annotate(model: &ArchModel, view: Option<&PlanView>, level: Option<u32>) -> PlanAnnotation {
     let mut out = PlanAnnotation::default();
+    let view = view
+        .or_else(|| model.plan_views.iter().find(|v| v.kind == PlanKind::Floor && v.name.eq_ignore_ascii_case("Floor Plan")))
+        .or_else(|| model.plan_views.iter().find(|v| v.kind == PlanKind::Floor));
     let kind = view.map_or(PlanKind::Floor, |v| v.kind);
     if let (Some(r), Some(l)) = (view.and_then(|v| v.reference), level) {
         if r.level != l {
@@ -200,6 +213,8 @@ pub fn annotate(model: &ArchModel, view: Option<&PlanView>, level: Option<u32>) 
         ceiling::ceiling_plan(model, level, &mut out);
     }
     labels::room_labels(model, level, view.map_or_else(RoomLabelShow::default, |v| v.labels), &mut out);
+    tags::schedule_labels(model, level, view.map_or_else(RoomLabelShow::default, |v| v.labels), &mut out);
+    callouts::callouts(model, level, &mut out);
     out
 }
 
@@ -319,6 +334,33 @@ mod tests {
     }
 
     #[test]
+    fn plan_label_kinds_have_keys() {
+        assert_eq!(PlanLabelKind::RoomName.key(), "roomName");
+        assert_eq!(PlanLabelKind::RoomArea.key(), "roomArea");
+        assert_eq!(PlanLabelKind::RoomDimensions.key(), "roomDimensions");
+        assert_eq!(PlanLabelKind::RoomCeiling.key(), "roomCeiling");
+        assert_eq!(PlanLabelKind::Pitch.key(), "pitch");
+        assert_eq!(PlanLabelKind::TrayHeight.key(), "trayHeight");
+        assert_eq!(PlanLabelKind::ScheduleNumber.key(), "scheduleNumber");
+        assert_eq!(PlanLabelKind::Callout.key(), "callout");
+        assert_eq!(PlanLineKind::Ridge.key(), "ridge");
+        assert_eq!(PlanLineKind::Hip.key(), "hip");
+        assert_eq!(PlanLineKind::Valley.key(), "valley");
+        assert_eq!(PlanLineKind::GableEnd.key(), "gableEnd");
+        assert_eq!(PlanLineKind::Eave.key(), "eave");
+        assert_eq!(PlanLineKind::Rake.key(), "rake");
+        assert_eq!(PlanLineKind::SlopeArrow.key(), "slopeArrow");
+        assert_eq!(PlanLineKind::SlopeArrowHead.key(), "slopeArrowHead");
+        assert_eq!(PlanLineKind::TrayOutline.key(), "trayOutline");
+        assert_eq!(PlanLineKind::TrayTop.key(), "trayTop");
+        assert_eq!(PlanLineKind::VaultLine.key(), "vaultLine");
+        assert_eq!(PlanLineKind::CeilingItem.key(), "ceilingItem");
+        assert_eq!(PlanLineKind::Soffit.key(), "soffit");
+        assert_eq!(PlanLineKind::Reference.key(), "reference");
+        assert_eq!(PlanLineKind::Callout.key(), "callout");
+    }
+
+    #[test]
     fn plan_line_and_label_constructors_default_the_optional_fields() {
         let l = PlanLine::new("A-ROOF", PlanLineKind::Ridge, Vec2::ZERO, Vec2::new(3.0, 4.0), Handle(7));
         assert!(!l.dashed && l.color.is_none() && l.transparency.is_none());
@@ -364,20 +406,23 @@ mod tests {
             edges: vec![RoofEdge { kind: RoofEdgeKind::Ridge, a: Vec2::ZERO, b: Vec2::new(4.0, 0.0), ..RoofEdge::default() }],
             ..Roof::default()
         });
-        m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 3.0), name: "A".into(), ..Room::default() });
+        m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 3.0), name: "A".into(), interior_area: 12.0, ..Room::default() });
         let none = annotate(&m, None, None);
         assert_eq!(none.lines.len(), 1);
         assert_eq!(none.lines[0].handle, roof_handle(rid));
-        assert_eq!(none.labels.len(), 1);
+        // Default view (Floor Plan) shows name, area, dimensions.
+        assert_eq!(none.labels.len(), 3);
         for v in template_plan_views() {
             let a = annotate(&m, Some(&v), Some(0));
             assert_eq!(a.lines.len(), 1, "{}", v.name);
-            assert_eq!(a.labels.len(), usize::from(v.labels.name), "{}", v.name);
+            let expected_labels =
+                usize::from(v.labels.name) + usize::from(v.labels.area) + usize::from(v.labels.dimensions) + usize::from(v.labels.ceiling);
+            assert_eq!(a.labels.len(), expected_labels, "{}", v.name);
         }
         // A level other than the room's drops its label.
         assert!(annotate(&m, None, Some(1)).labels.is_empty());
         let mut v = PlanView::default();
-        v.labels = RoomLabelShow { name: false, ..RoomLabelShow::default() };
+        v.labels = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, ..Default::default() };
         assert!(annotate(&m, Some(&v), None).labels.is_empty());
         // active_view / opened_level.
         assert!(active_view(&m).is_none());

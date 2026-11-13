@@ -89,6 +89,39 @@ mod tests {
     }
 
     #[test]
+    fn strip_dxf_proxy_and_ifc_light_fixture() {
+        use cadcraft_doc::arch::{FixtureShape, StripFacing};
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, name: "Ground".into(), ..Level::default() }];
+        m.lights = vec![LightFixture {
+            kind: LightKind::Strip,
+            shape: FixtureShape::Strip,
+            path: vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)],
+            lumens_per_metre: 500.0,
+            lumens: 1000.0,
+            facing: StripFacing::Down,
+            height: Some(2.4),
+            ..LightFixture::new(ArchId(0), "LED strip", Vec2::new(2.0, 2.0))
+        }];
+
+        // The DXF plan proxy is the path as an LWPOLYLINE on E-LITE through both ends.
+        let proxies = crate::dxf_light::proxy_light_entities(&m);
+        assert_eq!(proxies.len(), 1, "one polyline for the strip");
+        let (kind, layer, tags) = &proxies[0];
+        assert_eq!((kind.as_str(), layer.as_str()), ("LWPOLYLINE", "E-LITE"));
+        let xs: Vec<f64> = tags.iter().filter(|t| t.code == 10).map(|t| t.f64()).collect();
+        let ys: Vec<f64> = tags.iter().filter(|t| t.code == 20).map(|t| t.f64()).collect();
+        assert_eq!((xs, ys), (vec![1.0, 3.0], vec![2.0, 2.0]));
+        assert!(crate::dxf_light::is_light_proxy(tags));
+
+        // The IFC element is an IfcLightFixture named light-lf0, direction source, with its lumens.
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCLIGHTFIXTURE(").count(), 1, "{text}");
+        assert!(text.contains(",'light-lf0',$,$,#") && text.contains(",.DIRECTIONSOURCE.);"), "{text}");
+        assert!(text.contains("IFCPROPERTYSINGLEVALUE('Lumens',$,IFCLUMINOUSFLUXMEASURE(1000.),$)"), "{text}");
+    }
+
+    #[test]
     fn a_fixture_carries_its_lumens_and_kelvin() {
         let mut m = model();
         m.lights.truncate(1);

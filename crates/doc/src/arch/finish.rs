@@ -1,10 +1,12 @@
-//! Surface finishes (phase 13): a wall's exterior face, a roof's covering, a room's floor. Plain
-//! data on [`super::ArchModel`]; the `material` command, the inspect keys and the 3D materials
-//! live elsewhere.
+//! Surface finishes (phase 13-18): a wall's exterior face, a roof's covering, a room's floor, and
+//! the phase-18 interior finishes (concrete, tile, carpet, drywall, plaster) that room-type
+//! templates pick. Plain data on [`super::ArchModel`]; the `material` command, the inspect keys
+//! and the 3D materials live elsewhere.
 
 use serde::{Deserialize, Serialize};
 
-/// A surface finish: a wall's exterior face, a roof's covering, a room's floor.
+/// A surface finish: a wall's exterior face, a roof's covering, a room's floor, or an interior
+/// (wall, floor, ceiling) finish.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Finish {
@@ -16,19 +18,45 @@ pub enum Finish {
     Brick,
     /// Wood (walls, roofs, floors).
     Wood,
+    /// Concrete (walls and floors).
+    Concrete,
+    /// Tile (walls and floors).
+    Tile,
+    /// Carpet (floors).
+    Carpet,
+    /// Drywall (walls and ceilings).
+    Drywall,
+    /// Plaster (ceilings).
+    Plaster,
 }
 
 impl Finish {
     /// Every finish, in declaration order.
-    pub const ALL: [Finish; 4] = [Finish::Siding, Finish::Shingles, Finish::Brick, Finish::Wood];
+    pub const ALL: [Finish; 9] = [
+        Finish::Siding,
+        Finish::Shingles,
+        Finish::Brick,
+        Finish::Wood,
+        Finish::Concrete,
+        Finish::Tile,
+        Finish::Carpet,
+        Finish::Drywall,
+        Finish::Plaster,
+    ];
 
-    /// The JSON/DXF name: "siding" | "shingles" | "brick" | "wood".
+    /// The JSON/DXF name: "siding" | "shingles" | "brick" | "wood" | "concrete" | "tile"
+    /// | "carpet" | "drywall" | "plaster".
     pub fn name(self) -> &'static str {
         match self {
             Finish::Siding => "siding",
             Finish::Shingles => "shingles",
             Finish::Brick => "brick",
             Finish::Wood => "wood",
+            Finish::Concrete => "concrete",
+            Finish::Tile => "tile",
+            Finish::Carpet => "carpet",
+            Finish::Drywall => "drywall",
+            Finish::Plaster => "plaster",
         }
     }
 
@@ -39,13 +67,18 @@ impl Finish {
             "shingles" => Some(Finish::Shingles),
             "brick" => Some(Finish::Brick),
             "wood" => Some(Finish::Wood),
+            "concrete" => Some(Finish::Concrete),
+            "tile" => Some(Finish::Tile),
+            "carpet" => Some(Finish::Carpet),
+            "drywall" => Some(Finish::Drywall),
+            "plaster" => Some(Finish::Plaster),
             _ => None,
         }
     }
 
-    /// siding, brick, wood.
+    /// siding, brick, wood, tile, drywall, concrete.
     pub fn for_walls(self) -> bool {
-        matches!(self, Finish::Siding | Finish::Brick | Finish::Wood)
+        matches!(self, Finish::Siding | Finish::Brick | Finish::Wood | Finish::Tile | Finish::Drywall | Finish::Concrete)
     }
 
     /// shingles, wood.
@@ -53,9 +86,14 @@ impl Finish {
         matches!(self, Finish::Shingles | Finish::Wood)
     }
 
-    /// wood.
+    /// wood, tile, carpet, concrete.
     pub fn for_floors(self) -> bool {
-        matches!(self, Finish::Wood)
+        matches!(self, Finish::Wood | Finish::Tile | Finish::Carpet | Finish::Concrete)
+    }
+
+    /// plaster, drywall, wood.
+    pub fn for_ceilings(self) -> bool {
+        matches!(self, Finish::Plaster | Finish::Drywall | Finish::Wood)
     }
 }
 
@@ -67,7 +105,7 @@ mod tests {
     #[test]
     fn finish_names_round_trip() {
         let names: Vec<&str> = Finish::ALL.iter().map(|f| f.name()).collect();
-        assert_eq!(names, ["siding", "shingles", "brick", "wood"]);
+        assert_eq!(names, ["siding", "shingles", "brick", "wood", "concrete", "tile", "carpet", "drywall", "plaster"]);
         for f in Finish::ALL {
             assert_eq!(Finish::parse(f.name()), Some(f));
             let json = serde_json::to_string(&f).unwrap();
@@ -86,12 +124,23 @@ mod tests {
             (Finish::Shingles, false, true, false),
             (Finish::Brick, true, false, false),
             (Finish::Wood, true, true, true),
+            (Finish::Concrete, true, false, true),
+            (Finish::Tile, true, false, true),
+            (Finish::Carpet, false, false, true),
+            (Finish::Drywall, true, false, false),
+            (Finish::Plaster, false, false, false),
         ];
         for (f, w, r, fl) in rows {
             assert_eq!(f.for_walls(), w, "{f:?} walls");
             assert_eq!(f.for_roofs(), r, "{f:?} roofs");
             assert_eq!(f.for_floors(), fl, "{f:?} floors");
         }
+    }
+
+    #[test]
+    fn for_ceilings() {
+        let ceilings: Vec<Finish> = Finish::ALL.into_iter().filter(|f| f.for_ceilings()).collect();
+        assert_eq!(ceilings, [Finish::Wood, Finish::Drywall, Finish::Plaster]);
     }
 
     #[test]

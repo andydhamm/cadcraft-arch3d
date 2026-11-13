@@ -445,7 +445,9 @@ impl Pane3d {
                 }
                 self.full = Some(FullCamera::new(eye, target, fov.unwrap_or(45.0)));
             }
-            CameraKind::Orbit => {
+            // Overview loads like Orbit (azimuth, elevation, distance, target); p19-pane adds
+            // the overview level filter on top of this pose.
+            CameraKind::Orbit | CameraKind::Overview => {
                 self.full = None;
                 self.orbit_target = target;
                 self.orbit_fov = fov;
@@ -2383,6 +2385,32 @@ mod tests {
         pane.use_orbit();
         off.render(&scene, key, &pane.camera(), &cadcraft_render3d::Light::DEFAULT);
         assert_eq!(off.uploads(), 1);
+    }
+
+    #[test]
+    fn overview_camera_loads_like_orbit() {
+        use cadcraft_doc::arch::{Camera3d, CameraKind};
+        let mut arch = house();
+        arch.set_camera(Camera3d {
+            name: "ov".into(),
+            kind: CameraKind::Overview,
+            azimuth_deg: Some(30.0),
+            elevation_deg: Some(50.0),
+            distance: Some(20.0),
+            target: Some([4.0, 2.5, 0.0]),
+            ..Camera3d::default()
+        })
+        .expect("camera");
+        arch.active_camera = Some("ov".into());
+        let mut pane = Pane3d::new();
+        assert!(pane.sync(1, Some(&arch)));
+        match pane.camera() {
+            cadcraft_render3d::Camera::Orbit(o) => {
+                assert!((o.azimuth - 30.0).abs() < 1e-9 && (o.elevation - 50.0).abs() < 1e-9 && (o.distance - 20.0).abs() < 1e-9);
+                assert!((o.target.x - 4.0).abs() < 1e-9 && (o.target.y - 2.5).abs() < 1e-9);
+            }
+            _ => panic!("an overview camera loads as an orbit"),
+        }
     }
 
     #[test]

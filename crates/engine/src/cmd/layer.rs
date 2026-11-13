@@ -408,7 +408,7 @@ fn run_state_restore(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").ok_or_else(|| bad("layerstate.restore", "`name` is required"))?;
     let d = s.doc_mut()?;
     let st = d.layer_states.iter().find(|st| st.name == name).cloned().ok_or_else(|| bad("layerstate.restore", "no such layer state"))?;
-    restore_layers(d, st.layers);
+    st.apply(&mut d.layers);
     ok()
 }
 
@@ -487,6 +487,30 @@ mod tests {
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
         assert!(d.layer("L7").is_some_and(|l| l.frozen));
         assert_eq!(d.layers.len(), 20_000);
+    }
+
+    #[test]
+    fn layerstate_restore_applies_rules() {
+        let mut s = Session::new();
+        s.execute("layer.new", &json!({ "name": "E-POWR", "color": 1 })).unwrap();
+        s.execute("layerstate.save", &json!({ "name": "rules" })).unwrap();
+        {
+            let d = s.doc_mut().unwrap();
+            if let Some(st) = d.layer_states.iter_mut().find(|st| st.name == "rules") {
+                st.layers.clear();
+                st.rules = vec![
+                    cadcraft_doc::LayerRule { pattern: "*".into(), on: Some(true), transparency: Some(0) },
+                    cadcraft_doc::LayerRule { pattern: "E-*".into(), on: Some(false), transparency: Some(40) },
+                ];
+            }
+            if let Some(l) = d.layers.iter_mut().find(|l| l.name == "A-WALL") {
+                l.on = false;
+            }
+        }
+        s.execute("layerstate.restore", &json!({ "name": "rules" })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.layer("A-WALL").is_some_and(|l| l.on && l.transparency == 0));
+        assert!(d.layer("E-POWR").is_some_and(|l| !l.on && l.transparency == 40));
     }
 
     #[test]

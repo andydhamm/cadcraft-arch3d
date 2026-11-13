@@ -78,9 +78,10 @@ fn signature(s: &Scene3d) -> (String, Vec<(String, u32)>, [usize; 7]) {
 
 #[test]
 fn flat_house_digest_unchanged_by_the_pipeline() {
-    // Measured on op/next before phase 16, re-recorded when phase 17 framed the deck (the only change).
+    // Measured on op/next before phase 16, re-recorded when phase 17 framed the deck and again
+    // when phase 18 gave the room floors their room-type finish (the only change).
     let s = Scene3d::build(&house());
-    assert_eq!(s.digest(), "3ef0652c227f6d1a");
+    assert_eq!(s.digest(), "2f858ffc6757ece4");
     let meshes: Vec<(&str, u32)> = s.meshes.iter().map(|m| (m.material.as_str(), m.object.0)).collect();
     let want = [
         ("wall", 0),
@@ -89,11 +90,11 @@ fn flat_house_digest_unchanged_by_the_pipeline() {
         ("wall", 3),
         ("wall", 4),
         ("wall", 5),
-        ("floor", 0),
+        ("floor-wood", 0),
         ("paint:room/r0/ceiling", 0),
-        ("floor", 1),
+        ("floor-wood", 1),
         ("ceiling", 1),
-        ("floor", 2),
+        ("floor-wood", 2),
         ("ceiling", 2),
         ("roof", 0),
         ("fascia", 0),
@@ -163,7 +164,7 @@ fn slab_level_rooms_build_a_0p1_slab() {
         let mut m = house();
         m.push_foundation(f);
         let s = Scene3d::build(&m);
-        let floors: Vec<&Mesh> = s.meshes.iter().filter(|x| x.material == "floor").collect();
+        let floors: Vec<&Mesh> = s.meshes.iter().filter(|x| x.material.starts_with("floor")).collect();
         assert_eq!(floors.len(), 3);
         assert!(floors.iter().all(|x| (x.bounds().min[2] + 0.3).abs() < 1e-6));
     }

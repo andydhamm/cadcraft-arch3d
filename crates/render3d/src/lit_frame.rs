@@ -22,10 +22,12 @@ pub struct LitState {
     /// `occluder_key` of the scene uploaded under this key.
     occluders: Option<(u64, u64)>,
     /// The sun map and the (scene, ground, direction bits) it was built for.
-    sun_key: Option<(u64, bool, [u32; 3])>,
+    sun_key: Option<(u64, bool, [u32; 3], Option<[[f32; 3]; 2]>)>,
     sun_map: Option<crate::shadow::ShadowMap>,
     /// Slots in the last frame.
     slots: usize,
+    /// The convolved SH of the environment with this key (p19-env-raster).
+    sh: Option<(u64, [[f32; 3]; 9])>,
 }
 
 /// A hash of every light's shadow key and intensity.
@@ -45,6 +47,8 @@ fn lights_hash(scene: &Scene3d) -> u64 {
 pub struct Lighting {
     /// The sun (`None` = night: the sun is off).
     pub sun: Option<Light>,
+    /// The moon as a directional light (direction, lux) when the sun is down and the sky is on.
+    pub moon: Option<([f64; 3], f32)>,
     /// Build and use the sun's shadow map (`--sun` / a site sun; the default light casts none).
     pub sun_shadow: bool,
     /// Lights shadowed at most (`lights::DEFAULT_SHADOW_BUDGET`); the rest light unshadowed.
@@ -61,12 +65,54 @@ pub struct Lighting {
     /// Meter an automatic exposure on a frame without daylight (false keeps the legacy 0.01 scale,
     /// as `render {sun: false}` and hand-built night lightings always had).
     pub meter_night: bool,
+    /// The environment (light and/or background) the frame lights with; `None` when there is
+    /// none (p19-env-path).
+    pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
+}
+
+impl Lighting {
+    /// Moon as the directional light only when the sun is below the horizon and the sky is on.
+    pub fn with_moon(mut self, moon_dir: Option<[f64; 3]>) -> Self {
+        self.moon = None;
+        if !self.look.sky.on || self.sun.is_some() {
+            return self;
+        }
+        let Some(dir) = moon_dir else {
+            return self;
+        };
+        let length = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+        if !length.is_finite() || length <= 0.0 {
+            return self;
+        }
+        let d = [dir[0] / length, dir[1] / length, dir[2] / length];
+        let lux = self.look.sky.moon.lux.max(0.0) as f32;
+        if lux > 0.0 && d[2] > 0.0 {
+            self.moon = Some((d, lux));
+            // The raster's directional light is the moon, with no shadow map.
+            self.sun = Some(Light::new([d[0] as f32, d[1] as f32, d[2] as f32], Light::DEFAULT.ambient));
+            self.sun_shadow = false;
+        }
+        self
+    }
+
+    /// The directional light's lux: the moon's while the moon is the directional light, else
+    /// `look.sun.intensity` while the sun is up, else 0.
+    pub fn directional_lux(&self) -> f32 {
+        if let Some((_, lux)) = self.moon {
+            return lux;
+        }
+        match self.sun {
+            Some(_) if self.look.sun.intensity.is_finite() => self.look.sun.intensity.max(0.0) as f32,
+            _ => 0.0,
+        }
+    }
 }
 
 impl Default for Lighting {
     fn default() -> Self {
         Lighting {
             sun: Some(Light::DEFAULT),
+            moon: None,
             sun_shadow: false,
             budget: crate::lights::DEFAULT_SHADOW_BUDGET,
             exposure: crate::lights::DEFAULT_EXPOSURE,
@@ -74,6 +120,7 @@ impl Default for Lighting {
             sun_dir: None,
             lambert: None,
             meter_night: false,
+            environment: None,
         }
     }
 }
@@ -113,11 +160,15 @@ impl Offscreen {
             }
         };
 
-        // The sun map, once per scene and direction.
+        // The view's clip box: geometry outside it casts no shadow, and both shadow caches key on it.
+        let clip = crate::frame_look::look_clip(&lighting.look);
+        self.shadow_clip = clip;
+
+        // The sun map, once per scene, direction and clip box.
         match lighting.sun.filter(|_| lighting.sun_shadow) {
             Some(sun) => {
                 let d = sun.normalized().dir;
-                let sk = (scene_key, ground, [d[0].to_bits(), d[1].to_bits(), d[2].to_bits()]);
+                let sk = (scene_key, ground, [d[0].to_bits(), d[1].to_bits(), d[2].to_bits()], clip);
                 if self.lit_state.sun_key != Some(sk) {
                     self.lit_state.sun_map = self.build_shadow(scene, scene_key, &sun, ground);
                     self.lit_state.sun_key = Some(sk);
@@ -137,14 +188,29 @@ impl Offscreen {
         };
         let atlas =
             self.lit_state.atlas.get_or_insert_with(|| crate::shadow_atlas::ShadowAtlas::new(&self.device, crate::lights::INTERACTIVE_SHADOW_SIZE));
+        atlas.set_clip(clip);
         let (_, meshes) = self.meshes.as_ref()?;
         let before = atlas.maps_built();
         let slots = atlas.update(&self.device, &self.queue, meshes, occluders, &scene.lights, &self.lit_state.shadowed, far);
         self.shadows_built += atlas.maps_built().saturating_sub(before);
         self.lit_state.slots = slots.len();
 
+        // The environment's diffuse light: nine convolved SH coefficients, projected once per key.
+        let sh = match lighting.environment.as_deref().filter(|e| e.is_valid()) {
+            Some(env) => {
+                if self.lit_state.sh.as_ref().is_none_or(|(k, _)| *k != env.key) {
+                    self.lit_state.sh = Some((env.key, crate::sh::convolve(&crate::sh::project(env))));
+                }
+                self.lit_state.sh.map(|(_, c)| c)
+            }
+            None => {
+                self.lit_state.sh = None;
+                None
+            }
+        };
         let sun_map = self.lit_state.sun_map.as_ref();
         let params = crate::lit::LitParams {
+            sh,
             sun_on: lighting.sun.is_some(),
             ambient: lighting.sun.map_or(crate::lights::NIGHT_AMBIENT, |l| l.ambient),
             exposure: lighting.exposure,
@@ -335,5 +401,45 @@ mod tests {
         let l = Lighting::default();
         assert!(o.lit_frame(&s, 1, orbit(0.0), &l, false).is_some());
         assert!(o.lit_frame(&s, 1, orbit(0.0), &l, true).is_some());
+    }
+
+    #[test]
+    fn with_moon_only_when_sun_down_and_sky_on() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        let zero = Lighting { look: look.clone(), sun: Some(Light::DEFAULT), ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(zero.moon.is_none(), "sun in daylight overrides the moon");
+
+        let moon = Lighting { look: look.clone(), sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(moon.moon.is_some());
+
+        look.sky.on = false;
+        let sky_off = Lighting { look, sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(sky_off.moon.is_none());
+    }
+
+    #[test]
+    fn moon_direct_light() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        let light = Lighting { look, sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(light.moon.is_some());
+        assert!((light.directional_lux() - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn direct_moon_is_lux_times_sin_elevation() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        let el = 30.0_f64;
+        let dir = [0.0, el.to_radians().cos(), el.to_radians().sin()];
+        let light = Lighting { look, sun: None, ..Default::default() }.with_moon(Some(dir));
+        let Some((moon_dir, lux)) = light.moon else {
+            panic!("moon must be active");
+        };
+        assert!((lux - 0.25).abs() < 1e-6);
+        assert!((moon_dir[2] - el.to_radians().sin()).abs() < 1e-6);
     }
 }

@@ -13,7 +13,7 @@ use cadcraft_doc::arch::{CabinetKind, Finish, FixtureKind, FrontStyle, LightMoun
 use serde_json::Value;
 
 /// The door styles the `door` command accepts (`crates/engine/src/cmd/arch/opening.rs`).
-pub const DOOR_STYLES: [&str; 4] = ["hinged", "sliding", "pocket", "bifold"];
+pub const DOOR_STYLES: [&str; 5] = ["hinged", "sliding", "pocket", "bifold", "shower"];
 
 /// The window styles the `window` command accepts (`crates/engine/src/cmd/arch/opening.rs`).
 pub const WINDOW_STYLES: [&str; 10] = ["single-hung", "double-hung", "slider", "casement", "picture", "bay", "box", "bow", "awning", "fixed"];
@@ -165,7 +165,7 @@ pub fn builtin_items() -> Vec<ItemRecord> {
             &["door", style],
         );
         r.style = Some(style.to_string());
-        r.size = Some([0.9, 0.2, 2.1]);
+        r.size = Some(if style == "shower" { [0.7, 0.01, 1.9] } else { [0.9, 0.2, 2.1] });
         v.push(r);
     }
     for style in WINDOW_STYLES {
@@ -216,6 +216,11 @@ pub fn builtin_items() -> Vec<ItemRecord> {
             Finish::Siding | Finish::Brick => &["finish", "wall"],
             Finish::Shingles => &["finish", "roof"],
             Finish::Wood => &["finish", "wall", "roof", "floor"],
+            Finish::Concrete => &["finish", "wall", "floor"],
+            Finish::Tile => &["finish", "wall", "floor"],
+            Finish::Carpet => &["finish", "floor"],
+            Finish::Drywall => &["finish", "wall", "ceiling"],
+            Finish::Plaster => &["finish", "ceiling"],
         };
         v.push(builtin(format!("finish:{}", f.name()), capitalised(f.name()), Category::Materials, "Finishes", ItemKind::Finish, "finish", uses));
     }
@@ -857,12 +862,23 @@ mod tests {
             assert_eq!(r.category, "Doors and windows");
             let door = r.id.starts_with("door:");
             assert_eq!(r.kind, if door { ItemKind::Door } else { ItemKind::Window });
-            assert_eq!(r.size, Some(if door { [0.9, 0.2, 2.1] } else { [1.2, 0.2, 1.2] }), "{}", r.id);
+            let want = if r.id == "door:shower" {
+                [0.7, 0.01, 1.9]
+            } else if door {
+                [0.9, 0.2, 2.1]
+            } else {
+                [1.2, 0.2, 1.2]
+            };
+            assert_eq!(r.size, Some(want), "{}", r.id);
         }
         for (cmd, styles) in [("door", DOOR_STYLES.as_slice()), ("window", WINDOW_STYLES.as_slice())] {
             for style in styles {
                 let mut s = Session::new();
-                s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall");
+                let mut wall = json!({"points": [[0.0, 0.0], [10.0, 0.0]]});
+                if *style == "shower" {
+                    wall["type"] = json!("glass");
+                }
+                s.execute("wall", &wall).expect("wall");
                 let r = s.execute(cmd, &json!({"wall": "w0", "offset": 5.0, "style": style}));
                 assert!(r.is_ok(), "{cmd} refuses the built-in style {style}: {r:?}");
             }
@@ -895,13 +911,23 @@ mod tests {
         }
     }
 
-    /// The four finishes, with their names.
+    /// The nine finishes, with their names.
     fn finishes(items: &[ItemRecord]) {
         let finishes: Vec<(String, String)> = items.iter().filter(|r| r.id.starts_with("finish:")).map(|r| (r.id.clone(), r.name.clone())).collect();
         assert_eq!(
             finishes,
-            [("finish:siding", "Siding"), ("finish:shingles", "Shingles"), ("finish:brick", "Brick"), ("finish:wood", "Wood")]
-                .map(|(a, b)| (a.to_string(), b.to_string()))
+            [
+                ("finish:siding", "Siding"),
+                ("finish:shingles", "Shingles"),
+                ("finish:brick", "Brick"),
+                ("finish:wood", "Wood"),
+                ("finish:concrete", "Concrete"),
+                ("finish:tile", "Tile"),
+                ("finish:carpet", "Carpet"),
+                ("finish:drywall", "Drywall"),
+                ("finish:plaster", "Plaster"),
+            ]
+            .map(|(a, b)| (a.to_string(), b.to_string()))
         );
         assert!(items.iter().filter(|r| r.id.starts_with("finish:")).all(|r| r.category == "Materials" && r.kind == ItemKind::Finish));
         for f in Finish::ALL {

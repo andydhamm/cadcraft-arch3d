@@ -12,7 +12,7 @@
 //! `p10-r3d-shadow-atlas`: [`ShadowAtlas::update`], [`light_key`], [`occluder_key`].
 
 use crate::lights::{MAX_SHADOW_LAYERS, SHADOW_NEAR, ShadowSlot, cube_face_view_proj, spot_view_proj};
-use crate::pipeline::{DEPTH_FORMAT, GpuMeshes, vertex_layout};
+use crate::pipeline::{DEPTH_FORMAT, GpuMeshes};
 use crate::types::{ArchId, Scene3d};
 use cadcraft_arch3d::light::{LightKind, SceneLight};
 use std::collections::BTreeMap;
@@ -20,15 +20,6 @@ use std::hash::{Hash, Hasher};
 
 /// The wgpu texture type (aliased so the name does not collide with arch3d's `Texture` struct).
 type GpuTexture = wgpu::Texture;
-
-/// WGSL of the depth-only pass (the same as the sun's).
-const DEPTH_SHADER: &str = "
-struct Light { vp: mat4x4<f32> };
-@group(0) @binding(0) var<uniform> light: Light;
-@vertex fn vs(@location(0) pos: vec3<f32>) -> @builtin(position) vec4<f32> {
-    return light.vp * vec4<f32>(pos, 1.0);
-}
-";
 
 /// Depth bias of every fixture map (m).
 const SLOT_BIAS: f32 = 0.02;
@@ -46,6 +37,10 @@ pub struct ShadowAtlas {
     cache: BTreeMap<ArchId, (u64, u32, bool, f32)>,
     /// The [`occluder_key`] the cached maps were rendered against.
     occluders: u64,
+    /// The view's clip box `[min, max]` (set by [`ShadowAtlas::set_clip`]), and the one the cached
+    /// maps were rendered with: a change renders every light's maps again.
+    clip: Option<[[f32; 3]; 2]>,
+    rendered_clip: Option<[[f32; 3]; 2]>,
 }
 
 impl ShadowAtlas {
@@ -54,7 +49,14 @@ impl ShadowAtlas {
     pub fn new(device: &wgpu::Device, size: u32) -> Self {
         let size = size.clamp(1, device.limits().max_texture_dimension_2d.max(1));
         let (texture, view) = Self::create(device, 1, 1);
-        ShadowAtlas { size, layers: 0, texture, view, built: 0, capacity: 0, cache: BTreeMap::new(), occluders: 0 }
+        ShadowAtlas { size, layers: 0, texture, view, built: 0, capacity: 0, cache: BTreeMap::new(), occluders: 0, clip: None, rendered_clip: None }
+    }
+
+    /// The clip box of the view the next [`ShadowAtlas::update`] renders for: geometry outside it
+    /// casts no fixture shadow (the clipped depth pipeline). A box different from the one the cached
+    /// maps used renders them all again.
+    pub fn set_clip(&mut self, clip: Option<[[f32; 3]; 2]>) {
+        self.clip = clip;
     }
 
     /// A `side`² × `layers` depth array and its `D2Array` view.
@@ -138,7 +140,8 @@ impl ShadowAtlas {
             total += need;
         }
 
-        let mut full = self.occluders != occluders;
+        let mut full = self.occluders != occluders || self.rendered_clip != self.clip;
+        self.rendered_clip = self.clip;
         if total > self.capacity {
             let (texture, view) = Self::create(device, self.size, total);
             self.texture = texture;
@@ -190,62 +193,23 @@ impl ShadowAtlas {
 
     /// Render one depth map per `(layer, matrix)` job.
     fn render(&self, device: &wgpu::Device, queue: &wgpu::Queue, meshes: &GpuMeshes, jobs: &[(u32, [[f32; 4]; 4])]) {
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("render3d fixture shadow pass layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: std::num::NonZero::new(64),
-                },
-                count: None,
-            }],
-        });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("render3d fixture shadow depth"),
-            source: wgpu::ShaderSource::Wgsl(DEPTH_SHADER.into()),
-        });
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("render3d fixture shadow pipeline layout"),
-            bind_group_layouts: &[Some(&bgl)],
-            immediate_size: 0,
-        });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render3d fixture shadow pipeline"),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module: &module,
-                entry_point: Some("vs"),
-                buffers: &[Some(vertex_layout())],
-                compilation_options: Default::default(),
-            },
-            primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleList, cull_mode: None, ..Default::default() },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState { count: 1, mask: !0, alpha_to_coverage_enabled: false },
-            fragment: None,
-            multiview_mask: None,
-            cache: None,
-        });
+        // The default pipeline is fragment-free (64-byte uniform); a clipped view uses the second
+        // one that discards outside the box (96 bytes).
+        let clip = self.clip;
+        let depth = crate::shadow::depth_pass(device, "render3d fixture shadow depth", clip.is_some());
+        let (bgl, pipeline) = (&depth.bgl, &depth.pipeline);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render3d fixture shadows") });
         for &(layer, matrix) in jobs {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("render3d fixture shadow uniform"),
-                size: 64,
+                size: depth.uniform_size,
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
-            queue.write_buffer(&buffer, 0, bytemuck::bytes_of(&matrix));
+            queue.write_buffer(&buffer, 0, &crate::shadow::pass_bytes(&matrix, clip));
             let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("render3d fixture shadow bind group"),
-                layout: &bgl,
+                layout: bgl,
                 entries: &[wgpu::BindGroupEntry { binding: 0, resource: buffer.as_entire_binding() }],
             });
             let target = self.texture.create_view(&wgpu::TextureViewDescriptor {
@@ -268,7 +232,7 @@ impl ShadowAtlas {
                 multiview_mask: None,
             });
             if !meshes.draws.is_empty() {
-                pass.set_pipeline(&pipeline);
+                pass.set_pipeline(pipeline);
                 pass.set_bind_group(0, &group, &[]);
                 pass.set_vertex_buffer(0, meshes.vertex_buffer.slice(..));
                 pass.set_index_buffer(meshes.index_buffer.slice(..), wgpu::IndexFormat::Uint32);

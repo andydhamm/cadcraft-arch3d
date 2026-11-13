@@ -6,6 +6,8 @@ use std::sync::Mutex;
 
 use cadcraft_arch3d::camera::{project_point, ray_at};
 use cadcraft_arch3d::light::scene_lights_with;
+use cadcraft_arch3d::pick::Bvh;
+use cadcraft_arch3d::view_filter::ViewFilter;
 use cadcraft_engine::doc::arch::{ExposureSetting, LightSet, Look};
 use cadcraft_engine::{FinalMode, IlluminanceRequest, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, set_render_hooks};
 use cadcraft_geom::Vec3;
@@ -32,6 +34,9 @@ struct State {
     off: Offscreen,
     /// The `arch_revision` and light set key the scene below was built for, and the scene.
     scene: Option<(u64, String, Scene3d)>,
+    /// The scene with the cutaway's hidden objects removed, and the (revision, light-set key,
+    /// hidden-set key) it was made for; rebuilt only when one of the three changes.
+    filtered: Option<((u64, String, u64), Scene3d)>,
     /// The compute device, requested once on the first path request (`Some(None)`: none available);
     /// replaced once by a device with ray queries on the first `rt` request (see `compute_of`).
     compute: Option<Option<ComputeGpu>>,
@@ -90,7 +95,7 @@ fn ready<'a>(
 ) -> Result<&'a mut State, String> {
     if guard.is_none() {
         let off = Offscreen::create_with(adapter_choice(), size).map_err(gpu)?;
-        *guard = Some(State { off, scene: None, compute: None, rt_asked: false, cache: None, cache_saved: false, path_traces: 0 });
+        *guard = Some(State { off, scene: None, filtered: None, compute: None, rt_asked: false, cache: None, cache_saved: false, path_traces: 0 });
     }
     let state = guard.as_mut().ok_or("renderer unavailable")?;
     let key = drawing.arch_revision;
@@ -219,27 +224,81 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
     crate::output::write_atomic(out, png).map_err(|e| e.to_string()).map(|_| ())
 }
 
+/// The last environment built and the key it was built for.
+type EnvCache = Option<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>)>;
+static ENV_CACHE: Mutex<EnvCache> = Mutex::new(None);
+
+/// The environment for the drawing and look, rebuilt only when the look's sky fields, its
+/// backdrop, the sun direction or the arch revision change (an HDRI decode is not cheap).
+fn environment_cached(
+    model: &cadcraft_engine::doc::arch::ArchModel,
+    revision: u64,
+    look: &Look,
+    sun_dir: Option<[f64; 3]>,
+) -> Option<std::sync::Arc<cadcraft_render3d::Environment>> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{:?}", look.sky).hash(&mut h);
+    format!("{:?}", look.backdrop).hash(&mut h);
+    sun_dir.map(|d| d.map(f64::to_bits)).hash(&mut h);
+    revision.hash(&mut h);
+    let key = h.finish();
+    if let Ok(guard) = ENV_CACHE.lock() {
+        if let Some((k, env)) = guard.as_ref() {
+            if *k == key {
+                return env.clone();
+            }
+        }
+    }
+    let env = cadcraft_render3d::environment_for(model, look, sun_dir);
+    if let Ok(mut guard) = ENV_CACHE.lock() {
+        *guard = Some((key, env.clone()));
+    }
+    env
+}
+
 fn render_one(req: &RenderRequest) -> Result<Value, String> {
     let style = crate::render::parse_style(&req.style).ok_or_else(|| format!("`{}` is not one of {}", req.style, crate::render::STYLE_NAMES))?;
     let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
     let state = ready(&mut guard, req.drawing, req.size, req.light_set.as_deref())?;
-    let key = req.drawing.arch_revision;
+    let revision = req.drawing.arch_revision;
     let want_path = req.final_render && req.final_mode == FinalMode::Path;
     let compute = if want_path { compute_of(state, req.path.rt)? } else { None };
     if let (Some(c), None) = (&compute, &state.cache) {
         state.cache = Some(cache::open(c, cache::cache_dir().as_deref()));
     }
-    let State { off, scene, cache: pcache, cache_saved, path_traces, .. } = state;
+    let State { off, scene, filtered, cache: pcache, cache_saved, path_traces, .. } = state;
     let (look, sun_dir) = req.resolved_sun();
-    let scene = &mut scene.as_mut().ok_or("renderer unavailable")?.2;
+    let (base_light_key, base) = scene.as_mut().map(|(_, k, s)| (k.clone(), s)).ok_or("renderer unavailable")?;
     // The effective look's backdrop replaces the cached scene's (no rebuild).
-    cadcraft_arch3d::set_backdrop(&req.drawing.arch, scene, look.backdrop.as_ref());
-    let scene = &*scene;
+    cadcraft_arch3d::set_backdrop(&req.drawing.arch, base, look.backdrop.as_ref());
+    let base = &*base;
     off.resize(req.size);
 
-    let camera = req.camera.clone().unwrap_or_else(|| Camera::Orbit(Orbit::fit(&scene.bounds)));
+    let camera = req.camera.clone().unwrap_or_else(|| Camera::Orbit(Orbit::fit(&base.bounds)));
     let eye = camera.eye();
-    let mut lighting = lighting_for(&look, sun_dir, req.budget);
+    // The view's filter: the cutaway's hidden objects leave the scene (a filtered copy, cached by
+    // revision, light set and hidden set, with its own scene key so uploads and shadow maps follow);
+    // the clip box and near clip reach the raster and the path tracer through the look.
+    let mut filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
+    if let Some((level, lower)) = req.overview {
+        filter = filter.with_overview(&req.drawing.arch, level, lower);
+    }
+    let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() && filter.levels.is_none() {
+        (base, revision)
+    } else {
+        let hidden_key = hidden_set_key(&filter);
+        let want = (revision, base_light_key, hidden_key);
+        if filtered.as_ref().is_none_or(|(k, _)| *k != want) {
+            *filtered = Some((want, filter.apply(base)));
+        }
+        let Some((_, f)) = filtered.as_mut() else { return Err("renderer unavailable".into()) };
+        cadcraft_arch3d::set_backdrop(&req.drawing.arch, f, look.backdrop.as_ref());
+        (&*f, filtered_scene_key(revision, hidden_key))
+    };
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, req.budget).with_moon(moon_dir);
+    lighting.environment = environment_cached(&req.drawing.arch, revision, &look, sun_dir);
     // The calibration albedo, the metered night (all but the legacy `sun: false`) and a bare-number
     // exposure, which the raster uses as its fixed scale too.
     lighting.lambert = req.albedo.map(|a| a as f32);
@@ -272,6 +331,10 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                 *path_traces += 1;
                 // The first open reports miss/hit; later renders in this process report the same.
                 let outcome = pcache.as_ref().map_or(st.pipeline_cache, |(_, o)| *o);
+                path_info.insert(
+                    "environment".into(),
+                    lighting.environment.as_ref().map_or(Value::Null, |e| json!({ "width": e.width, "height": e.height, "visible": e.visible })),
+                );
                 path_info.insert("spp".into(), json!(st.spp_done));
                 path_info.insert("bounces".into(), json!(opts.bounces));
                 path_info.insert("seed".into(), json!(opts.seed));
@@ -335,7 +398,12 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         let f = off.last_frame_look();
         exposure_keys(f.exposure, f.exposure_mode, if f.tone_map == 0 { tone_code(look.tone_map) } else { f.tone_map })
     });
-    let samples: Vec<Value> = req.samples.iter().take(MAX_SAMPLES).map(|p| sample(scene, &camera, size, &rgba, *p)).collect();
+    // Visibility is read from the filtered scene, ignoring hits the clip box or near clip remove.
+    let bvh = (!req.samples.is_empty()).then(|| Bvh::build(scene));
+    let samples: Vec<Value> = match &bvh {
+        Some(bvh) => req.samples.iter().take(MAX_SAMPLES).map(|p| sample(scene, bvh, &filter, &camera, size, &rgba, *p)).collect(),
+        None => Vec::new(),
+    };
     let mut reply = json!({
         "ok": true,
         "out": req.out.as_ref().map(|p| p.display().to_string()),
@@ -351,6 +419,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         "device": off.device_info().line(),
         "finalMode": final_mode,
         "pathTraces": *path_traces,
+        "filter": { "hidden": filter.hidden.len(), "clip": filter.clip.is_some(), "nearClip": filter.near },
     });
     if let Some(map) = reply.as_object_mut() {
         map.extend(path_info);
@@ -369,7 +438,9 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
     let (look, sun_dir) = req.resolved_sun();
-    let lighting = lighting_for(&look, sun_dir, 8);
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, 8).with_moon(moon_dir);
+    lighting.environment = environment_cached(&req.drawing.arch, req.drawing.arch_revision, &look, sun_dir);
     let opts = path_options(&req.path, &look, None);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
     let results: Vec<Value> = req
@@ -394,7 +465,7 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
 /// Pixel `x` spans `[x, x + 1)` in `project_point`'s coordinates, and the visibility ray goes
 /// through `p`'s exact projection: a ray through a pixel's corner misses `p` by centimetres
 /// where the surface is seen at a grazing angle.
-fn sample(scene: &Scene3d, camera: &Camera, size: (u32, u32), rgba: &[u8], p: [f64; 3]) -> Value {
+fn sample(scene: &Scene3d, bvh: &Bvh, filter: &ViewFilter, camera: &Camera, size: (u32, u32), rgba: &[u8], p: [f64; 3]) -> Value {
     let pixel = project_point(camera, size, p).and_then(|px| {
         let (x, y) = (px[0].floor(), px[1].floor());
         let inside = x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x < size.0 as f32 && y < size.1 as f32;
@@ -406,9 +477,23 @@ fn sample(scene: &Scene3d, camera: &Camera, size: (u32, u32), rgba: &[u8], p: [f
     let at = (usize::try_from(y).unwrap_or(0)).saturating_mul(size.0 as usize).saturating_add(x as usize).saturating_mul(4);
     let rgb = rgba.get(at..at.saturating_add(3)).map(<[u8]>::to_vec);
     let visible = ray_at(camera, size, px)
-        .and_then(|(origin, dir)| scene.pick(origin, dir))
+        .and_then(|(origin, dir)| scene.pick_filtered(bvh, origin, dir, &|h| filter.accepts(h.point)))
         .is_some_and(|hit| distance(hit.point, Vec3::new(p[0], p[1], p[2])) <= VISIBLE_TOLERANCE);
     json!({ "point": p, "pixel": [x, y], "rgb": rgb, "visible": visible })
+}
+
+/// A key for the cutaway's hidden set alone (the clip box and near clip do not change the scene).
+fn hidden_set_key(filter: &ViewFilter) -> u64 {
+    let mut only_hidden = filter.clone();
+    only_hidden.clip = None;
+    only_hidden.near = None;
+    only_hidden.key()
+}
+
+/// The scene key a filtered scene is uploaded and shadowed under: the drawing's revision mixed with
+/// the hidden set's key, never equal to the plain revision's.
+fn filtered_scene_key(revision: u64, hidden_key: u64) -> u64 {
+    (revision ^ hidden_key.rotate_left(32).wrapping_mul(0x9E37_79B9_7F4A_7C15)) | (1 << 63)
 }
 
 fn distance(a: Vec3, b: Vec3) -> f64 {
@@ -485,7 +570,7 @@ mod tests {
         for k in 1..8 {
             for z in [0.3, 1.0, 1.7] {
                 for p in [[f64::from(k) * 0.5, 0.0, z], [0.0, f64::from(k) * 0.5, z]] {
-                    let s = sample(&scene, &camera, size, &rgba, p);
+                    let s = sample(&scene, &Bvh::build(&scene), &ViewFilter::default(), &camera, size, &rgba, p);
                     let Some(px) = project_point(&camera, size, p) else { continue };
                     let (x, y) = (px[0].floor(), px[1].floor());
                     if x < 0.0 || y < 0.0 || x >= size.0 as f32 || y >= size.1 as f32 {
@@ -848,6 +933,71 @@ mod tests {
         let Some(v) = render(&request(&d, None, None, false)) else { return };
         assert_eq!(v["shadowMapsBuilt"], 6, "{v}");
         assert_eq!(v["frameShadowMaps"], 1, "{v}");
+    }
+
+    #[test]
+    fn filtered_scene_cached_per_filter_and_samples_honour_it() {
+        use cadcraft_engine::doc::arch::ClipBox;
+        let _g = reset();
+        let d = room();
+        let full = |eye: [f64; 3], target: [f64; 3]| {
+            Camera::Full(cadcraft_render3d::camera::FullCamera::new(
+                Vec3::new(eye[0], eye[1], eye[2]),
+                Vec3::new(target[0], target[1], target[2]),
+                70.0,
+            ))
+        };
+        let uploads = || STATE.lock().ok().and_then(|g| g.as_ref().map(|s| s.off.uploads())).unwrap_or(0);
+        let filtered_key = || STATE.lock().ok().and_then(|g| g.as_ref().and_then(|s| s.filtered.as_ref().map(|(k, _)| k.clone())));
+        let go = |camera: Camera, look: Look, samples: Vec<[f64; 3]>| {
+            let mut req = request(&d, Some(camera), None, false);
+            req.look = look;
+            req.samples = samples;
+            render(&req)
+        };
+        let seen = |v: &Value, i: usize| v["samples"][i]["visible"].as_bool().unwrap_or(false);
+
+        // Cutaway from the south: the south wall's outside is visible without it, gone with it.
+        let outside = full([2.0, -8.0, 1.5], [2.0, 2.0, 1.5]);
+        let wall_point = [2.0, -0.2, 1.0];
+        let Some(plain) = go(outside.clone(), Look::default(), vec![wall_point]) else { return };
+        assert!(seen(&plain, 0), "{plain}");
+        assert_eq!(plain["filter"], json!({ "hidden": 0, "clip": false, "nearClip": null }), "{plain}");
+        assert!(filtered_key().is_none(), "nothing hidden builds no filtered scene");
+        let cut = Look { cutaway: true, ..Look::default() };
+        let Some(v) = go(outside.clone(), cut.clone(), vec![wall_point]) else { return };
+        assert!(v["filter"]["hidden"].as_u64().unwrap_or(0) >= 1, "{v}");
+        assert!(!seen(&v, 0), "the cut wall is not visible: {v}");
+        let key = filtered_key();
+        assert!(key.is_some());
+        let up = uploads();
+
+        // The same hidden set again, with a clip box and a near clip: the filtered scene and its
+        // upload are reused (neither changes the scene's meshes).
+        let clipped =
+            Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 5.0], ..Default::default() }), near_clip: Some(1.0), ..cut.clone() };
+        let Some(v) = go(full([2.0, -7.0, 1.5], [2.0, 2.0, 1.5]), clipped, vec![wall_point]) else { return };
+        assert_eq!((filtered_key(), uploads()), (key.clone(), up), "{v}");
+        assert_eq!((v["filter"]["clip"].clone(), v["filter"]["nearClip"].clone()), (json!(true), json!(1.0)), "{v}");
+
+        // Inside the room: a clip box below the sample's height and a near clip beyond it each hide it.
+        let inside = full([2.0, 2.0, 1.5], [2.0, 4.0, 1.5]);
+        let north = [2.0, 4.0, 1.0];
+        let Some(v) = go(inside.clone(), Look::default(), vec![north]) else { return };
+        assert!(seen(&v, 0), "{v}");
+        let low = Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 0.5], ..Default::default() }), ..Look::default() };
+        let Some(v) = go(inside.clone(), low, vec![north]) else { return };
+        assert!(!seen(&v, 0), "clipped away: {v}");
+        assert!(v["samples"][0]["pixel"].is_array() && v["samples"][0]["rgb"].is_array(), "pixel and rgb stay reported: {v}");
+        let near = Look { near_clip: Some(3.0), ..Look::default() };
+        let Some(v) = go(inside, near, vec![north]) else { return };
+        assert!(!seen(&v, 0), "nearer than the near clip: {v}");
+        assert!(filtered_key() == key, "a clip and a near clip leave the filtered scene alone");
+
+        // A different hidden set (the camera on the other side) builds another filtered scene.
+        let Some(v) = go(full([2.0, 12.0, 1.5], [2.0, 2.0, 1.5]), cut, vec![[2.0, 4.2, 1.0]]) else { return };
+        assert!(v["filter"]["hidden"].as_u64().unwrap_or(0) >= 1, "{v}");
+        assert!(filtered_key() != key, "a new hidden set builds a new filtered scene");
     }
 
     #[test]

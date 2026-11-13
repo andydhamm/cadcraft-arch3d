@@ -149,16 +149,10 @@ fn label_and_handle(id: ArchId, part: &str, owner: ObjectKind) -> (String, Strin
     (label, handle_json(owner.handle(id)))
 }
 
-fn camera_from_saved(c: &Camera3d) -> Result<Camera, EngineError> {
+fn camera_from_saved(c: &Camera3d, arch: &cadcraft_doc::ArchModel) -> Result<Camera, EngineError> {
     match c.kind {
-        CameraKind::Orbit => {
-            let target = c.target.unwrap_or([0.0; 3]);
-            let azimuth = c.azimuth_deg.unwrap_or(0.0);
-            let elevation = c.elevation_deg.unwrap_or(30.0);
-            let distance = c.distance.unwrap_or(10.0);
-            let fov = c.fov_deg.unwrap_or(45.0);
-            Ok(Camera::Orbit(Orbit::new(Vec3::new(target[0], target[1], target[2]), azimuth, elevation, distance, fov)))
-        }
+        // An overview camera without a target or distance is fitted to its level's plan.
+        CameraKind::Orbit | CameraKind::Overview => Ok(Camera::Orbit(crate::cmd::arch::render::saved_orbit(c, arch))),
         CameraKind::Full => {
             let eye = c.eye.map(|e| Vec3::new(e[0], e[1], c.eye_height.unwrap_or(1.6))).unwrap_or(Vec3::new(0.0, -10.0, 1.6));
             let target = c.target.unwrap_or([0.0; 3]);
@@ -173,7 +167,7 @@ fn pick_camera<'a>(doc: &'a cadcraft_doc::ArchModel, v: &Value) -> Result<(Camer
         Value::String(name) => {
             let name = name.trim();
             match doc.camera_by_name(name) {
-                Some(c) => Ok((camera_from_saved(c)?, Some(c))),
+                Some(c) => Ok((camera_from_saved(c, doc)?, Some(c))),
                 None => Err(bad("pick3d", format!("no camera named `{name}`"))),
             }
         }
@@ -193,7 +187,10 @@ fn run_pick3d(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     };
     let mut look = crate::cmd::arch::look::effective_look(&doc.arch, saved_camera);
     let _ = crate::cmd::arch::look::apply_look_params("pick3d", params, &doc.arch, &mut look, true)?;
-    let filter = ViewFilter::from_look(&look, &doc.arch, &camera);
+    let mut filter = ViewFilter::from_look(&look, &doc.arch, &camera);
+    if let Some((level, lower)) = saved_camera.and_then(|c| crate::cmd::arch::render::overview_of(c, &doc.arch)) {
+        filter = filter.with_overview(&doc.arch, level, lower);
+    }
     let scene = Scene3d::build(&doc.arch);
     let filtered = filter.apply(&scene);
     let bvh = Bvh::build(&filtered);
@@ -321,6 +318,26 @@ mod tests {
         assert_eq!(hit["id"], "o0", "{v}");
         assert_eq!(hit["handle"], "a0008000", "{v}");
         assert_ne!(hit["handle"], "a0000000", "{v}");
+    }
+
+    #[test]
+    fn pick3d_on_a_glass_wall_names_the_wall() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        let wall_id = d.arch.push_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(2.0, 0.0),
+            thickness: cadcraft_doc::arch::GLASS_THICKNESS,
+            height: cadcraft_doc::arch::GLASS_WALL_HEIGHT,
+            wall_type: "Glass".to_string(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let cam = json!({ "kind": "full", "eye": [1.0, -2.0, 1.0], "target": [1.0, 0.0, 1.0], "fov": 45 });
+        let v = s.execute("pick3d", &params(cam, json!([50, 50]))).unwrap_or(Value::Null);
+        let hit = &v["hit"];
+        assert_eq!(hit["id"], wall_id.to_string());
+        assert_eq!(hit["part"], "glass");
     }
 
     #[test]
