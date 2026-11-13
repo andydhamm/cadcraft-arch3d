@@ -117,43 +117,64 @@ pub(crate) fn clip_outside(a: Vec2, b: Vec2, rings: &[Vec<Vec2>]) -> Vec<(f64, f
 /// Returns directed segments for the free sides of carrying soffits.
 pub(crate) fn soffit_segments(room: &Room, soffits: &[(Vec<Vec2>, bool)]) -> Vec<(Vec2, Vec2)> {
     let mut segments = Vec::new();
-    let carrying: Vec<&Vec<Vec2>> = soffits.iter().filter(|(_, c)| *c).map(|(r, _)| r).collect();
-
-    for ring in &carrying {
-        if ring.len() < 3 {
+    for (si, (ring, carries)) in soffits.iter().enumerate() {
+        if !*carries || ring.len() < 3 {
             continue;
         }
         let n = ring.len();
-        // Walk in reverse (clockwise) order
+        // Walk in reverse (clockwise) order.
         for i in (0..n).rev() {
-            let a = ring[i];
-            let b = ring[(i + n - 1) % n];
-
-            // Midpoint of edge
-            let mid = (a + b) * 0.5;
-
-            // Must be strictly inside room polygon
-            if !point_in_poly(&mid, &room.polygon) {
+            let (Some(&a), Some(&b)) = (ring.get(i), ring.get((i + n - 1) % n)) else {
+                continue;
+            };
+            if !a.is_finite() || !b.is_finite() {
                 continue;
             }
-            // Must not be inside a room hole
-            let in_hole = room.holes.iter().any(|h| point_in_poly(&mid, h));
-            if in_hole {
+            let l = a.dist(b);
+            if l <= 1e-9 {
                 continue;
             }
-
-            // Must not be inside or on any OTHER soffit ring
-            let in_other = soffits.iter().any(|(other_ring, _)| {
-                if other_ring == *ring {
-                    return false;
+            // Split at every crossing with the room boundary, holes and other soffits.
+            let mut others: Vec<&[Vec2]> = vec![room.polygon.as_slice()];
+            others.extend(room.holes.iter().map(|h| h.as_slice()));
+            others.extend(soffits.iter().enumerate().filter(|(j, _)| *j != si).map(|(_, (r, _))| r.as_slice()));
+            let mut breaks = vec![0.0, l];
+            for r in &others {
+                let m = r.len();
+                for k in 0..m {
+                    if let (Some(&p), Some(&q)) = (r.get(k), r.get((k + 1) % m)) {
+                        if let Some(t) = seg_seg_intersection_t(a, b, p, q) {
+                            if t > 1e-9 && t < l - 1e-9 {
+                                breaks.push(t);
+                            }
+                        }
+                    }
                 }
-                point_in_poly(&mid, other_ring) || dist_to_poly_boundary(&mid, other_ring) < 1e-6
-            });
-            if in_other {
-                continue;
             }
-
-            segments.push((a, b));
+            breaks.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+            breaks.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+            let unit = (b - a) / l;
+            for w in breaks.windows(2) {
+                let (t0, t1) = (w[0], w[1]);
+                if t1 - t0 < 1e-9 || segments.len() >= 4096 {
+                    continue;
+                }
+                let mid = a + unit * ((t0 + t1) * 0.5);
+                if !point_in_poly(&mid, &room.polygon) || dist_to_poly_boundary(&mid, &room.polygon) <= 1e-6 {
+                    continue;
+                }
+                if room.holes.iter().any(|h| point_in_poly(&mid, h)) {
+                    continue;
+                }
+                let in_other =
+                    soffits.iter().enumerate().any(|(j, (r, _))| j != si && (point_in_poly(&mid, r) || dist_to_poly_boundary(&mid, r) < 1e-6));
+                if in_other {
+                    continue;
+                }
+                let p0 = if t0 <= 1e-9 { a } else { a + unit * t0 };
+                let p1 = if t1 >= l - 1e-9 { b } else { a + unit * t1 };
+                segments.push((p0, p1));
+            }
         }
     }
     segments
@@ -226,91 +247,35 @@ pub(crate) fn tray_paths(model: &ArchModel, room: &Room) -> Vec<(Vec<Vec2>, f64)
 pub(crate) fn chain(segments: &[(Vec2, Vec2)]) -> Vec<(Vec<Vec2>, bool)> {
     let mut used = vec![false; segments.len()];
     let mut chains = Vec::new();
-
-    // Find starts: segments whose start is not another segment's end
-    let mut starts = Vec::new();
-    for (i, (s, _)) in segments.iter().enumerate() {
-        let is_end_of_other = segments.iter().enumerate().any(|(j, (_, e))| i != j && !used[j] && s.dist(*e) < 1e-6);
-        if !is_end_of_other {
-            starts.push(i);
-        }
-    }
-
-    // Process starts
-    for start_idx in starts {
-        if used[start_idx] {
-            continue;
-        }
-        let mut path = Vec::new();
-        let mut curr_idx = Some(start_idx);
-
-        while let Some(idx) = curr_idx {
-            if used[idx] {
-                break;
+    loop {
+        let open_start = segments.iter().enumerate().position(|(i, (s, _))| {
+            !used.get(i).copied().unwrap_or(true)
+                && !segments.iter().enumerate().any(|(j, (_, e))| j != i && !used.get(j).copied().unwrap_or(true) && s.dist(*e) < 1e-6)
+        });
+        let Some(first) = open_start.or_else(|| used.iter().position(|u| !*u)) else {
+            break;
+        };
+        let mut path: Vec<Vec2> = Vec::new();
+        let mut cur = Some(first);
+        while let Some(i) = cur {
+            if let Some(u) = used.get_mut(i) {
+                *u = true;
             }
-            used[idx] = true;
-            let (s, e) = segments[idx];
+            let Some(&(s, e)) = segments.get(i) else {
+                break;
+            };
             if path.is_empty() {
                 path.push(s);
             }
             path.push(e);
-
-            // Find next
-            curr_idx = None;
-            for (j, (ns, _)) in segments.iter().enumerate() {
-                if !used[j] && ns.dist(e) < 1e-6 {
-                    curr_idx = Some(j);
-                    break;
-                }
-            }
+            cur = segments.iter().enumerate().position(|(j, (ns, _))| !used.get(j).copied().unwrap_or(true) && ns.dist(e) < 1e-6);
         }
-
-        if path.len() >= 2 {
-            let closed = path.first().map(|p| p.dist(*path.last().unwrap_or(p)) < 1e-6).unwrap_or(false);
-            if closed && path.len() > 1 {
-                path.pop(); // Remove repeated point
-            }
-            chains.push((path, closed));
+        let closed = path.len() > 2 && matches!((path.first(), path.last()), (Some(f), Some(l)) if f.dist(*l) < 1e-6);
+        if closed {
+            path.pop();
         }
+        chains.push((path, closed));
     }
-
-    // Process remaining (closed loops)
-    for (i, _) in segments.iter().enumerate() {
-        if used[i] {
-            continue;
-        }
-        let mut path = Vec::new();
-        let mut curr_idx = Some(i);
-
-        while let Some(idx) = curr_idx {
-            if used[idx] {
-                break;
-            }
-            used[idx] = true;
-            let (s, e) = segments[idx];
-            if path.is_empty() {
-                path.push(s);
-            }
-            path.push(e);
-
-            curr_idx = None;
-            for (j, (ns, _)) in segments.iter().enumerate() {
-                if !used[j] && ns.dist(e) < 1e-6 {
-                    curr_idx = Some(j);
-                    break;
-                }
-            }
-        }
-
-        if path.len() >= 2 {
-            let closed = path.first().map(|p| p.dist(*path.last().unwrap_or(p)) < 1e-6).unwrap_or(false);
-            if closed && path.len() > 1 {
-                path.pop();
-            }
-            chains.push((path, closed));
-        }
-    }
-
     chains
 }
 
