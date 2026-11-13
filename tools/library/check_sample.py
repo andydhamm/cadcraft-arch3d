@@ -162,8 +162,11 @@ def problems(sample_dir, attribution='ATTRIBUTION.md'):
                 if i['symbolType'] == 'light' and light_problem(i):
                     out.append(f'{tag}: {light_problem(i)}')
             glbs.append(path)
+        elif i['file'].endswith('.hdr') and i['symbolType'] == 'backdrop':
+            if not (data.startswith(b'#?RADIANCE') or data.startswith(b'#?RGBE')):
+                out.append(f'{tag}: {i["file"]} is not a Radiance .hdr')
         elif not (data.startswith(PNG_MAGIC) or data.startswith(JPEG_MAGIC)):
-            out.append(f'{tag}: {i["file"]} is neither a .glb nor a PNG or JPEG')
+            out.append(f'{tag}: {i["file"]} is neither a .glb nor a PNG, JPEG or Radiance .hdr')
         rel = os.path.relpath(path).replace(os.sep, '/')
         if f'`{rel}`' not in md:
             out.append(f'{tag}: `{rel}` is not in {attribution}')
