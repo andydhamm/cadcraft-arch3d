@@ -7,6 +7,7 @@ A split-entry bi-level house built from a single JSON command script.
 - **Lower** — a basement level at elevation **-1.2 m** (below finished grade).
 - **Entry** — a landing level at elevation **0.15 m** holding the front door (wall `w0`, offset 4.5, y = 0) and a small utility room.
 - **Main** — the above-grade level at elevation **1.5 m**, with **at least 371.6 m²** of above-grade room area.
+- **Phase 18 finish** — the showcase kitchen gains a corner base run, a detached island counter with a seating overhang and waterfall edge, crown on the wall cabinets, a backsplash, a tall wall-oven cabinet, fillers and open shelves; both baths add frameless glass shower doors, a split pony wall and a niche; room moldings run on the finished rooms.
 
 The site is a sloping lot that rises about **1.5 m** from the front (y = -5) to the back (y = 35), so the Main level stays above grade all round while the Lower level sits below it. A driveway, two sidewalks and two mulch planting beds are draped on the terrain, and ten plants (four trees, six shrubs) sit outside the house footprint.
 
