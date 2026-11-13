@@ -19,7 +19,7 @@ fn view_row(v: &PlanView) -> Value {
         "name": v.name,
         "level": v.level,
         "kind": v.kind.key(),
-        "labels": {"name": v.labels.name, "area": v.labels.area, "dimensions": v.labels.dimensions, "ceiling": v.labels.ceiling},
+        "labels": {"name": v.labels.name, "area": v.labels.area, "dimensions": v.labels.dimensions, "ceiling": v.labels.ceiling, "numbers": v.labels.numbers},
         "annotation": {"layer": v.annotation.layer, "textStyle": v.annotation.text_style, "dimStyle": v.annotation.dim_style},
         "reference": v.reference.map(|r| json!({"level": r.level, "color": hex(r.color), "transparency": r.transparency})),
         "zoom": v.zoom.map(|z| json!({"center": z.center, "width": z.width, "height": z.height})),
@@ -163,7 +163,7 @@ mod tests {
         assert_eq!(fp["name"], "Floor Plan");
         assert_eq!(fp["kind"], "floor");
         assert!(fp["level"].is_null() && fp["reference"].is_null() && fp["zoom"].is_null());
-        assert_eq!(fp["labels"], json!({"name": true, "area": true, "dimensions": true, "ceiling": false}));
+        assert_eq!(fp["labels"], json!({"name": true, "area": true, "dimensions": true, "ceiling": false, "numbers": true}));
         assert_eq!(fp["annotation"]["layer"], "A-ANNO-NOTE");
         assert_eq!(fp["rules"][0], json!({"pattern": "*", "on": true, "transparency": 0}));
         assert_eq!(fp["rules"][1], json!({"pattern": "E-*", "on": false, "transparency": null}));
@@ -250,6 +250,41 @@ mod tests {
         assert_eq!(rows[0]["labelArea"], "interior");
         assert_eq!(rows[1]["labelArea"], "standard");
         assert_eq!(rows[0]["ceilingText"], "2.40");
+    }
+
+    #[test]
+    fn planview_labels_numbers_param() {
+        let mut s = session();
+        // Create a view with numbers on
+        let r = s.execute("planview", &json!({ "name": "TestView", "labels": { "numbers": true } })).unwrap();
+        assert_eq!(r["planView"], "TestView");
+        // Edit it to turn numbers off
+        let r = s.execute("planview.edit", &json!({ "name": "TestView", "labels": { "numbers": false } })).unwrap();
+        assert_eq!(r["planView"], "TestView");
+        // Verify via inspect
+        let r = s.execute("arch.inspect", &json!({ "planViews": true })).unwrap();
+        let rows = r["planViews"].as_array().unwrap();
+        let test_view = rows.iter().find(|v| v["name"] == "TestView").unwrap();
+        assert_eq!(test_view["labels"]["numbers"], false);
+    }
+
+    #[test]
+    fn plan_views_rows_report_numbers() {
+        let mut s = session();
+        let r = s.execute("arch.inspect", &json!({ "planViews": true })).unwrap();
+        let rows = r["planViews"].as_array().unwrap();
+        // Working should have numbers: true
+        let working = rows.iter().find(|v| v["name"] == "Working").unwrap();
+        assert_eq!(working["labels"]["numbers"], true);
+        // Floor Plan should have numbers: true
+        let floor = rows.iter().find(|v| v["name"] == "Floor Plan").unwrap();
+        assert_eq!(floor["labels"]["numbers"], true);
+        // Kitchen & Bath should have numbers: true
+        let kb = rows.iter().find(|v| v["name"] == "Kitchen & Bath").unwrap();
+        assert_eq!(kb["labels"]["numbers"], true);
+        // Electrical should have numbers: false
+        let elec = rows.iter().find(|v| v["name"] == "Electrical").unwrap();
+        assert_eq!(elec["labels"]["numbers"], false);
     }
 
     #[test]
