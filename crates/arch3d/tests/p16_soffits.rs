@@ -216,3 +216,64 @@ fn cache_equals_full_after_soffit_edits() {
     }
     assert_eq!(cache.update(&m).rebuilt, 0, "without an edit nothing is rebuilt");
 }
+
+#[test]
+fn multiple_soffits_build_separate_meshes() {
+    let mut m = house();
+    m.push_soffit(test_soffit(Some(2.1)));
+    let s2 = Soffit { level: 0, polygon: rect(1.0, 1.0, 3.0, 2.0), bottom: Some(2.0), ..Default::default() };
+    m.push_soffit(s2);
+    let s = Scene3d::build(&m);
+    let meshes = part_meshes(&s, "soffit");
+    assert_eq!(meshes.len(), 2, "one mesh per soffit");
+    // First soffit at (8, 7.6)
+    assert_eq!(hit(&s, 8.0, 7.6, 2.2), Some(("sf0".to_string(), "soffit".to_string())));
+    // Second soffit at (2, 1.5)
+    assert_eq!(hit(&s, 2.0, 1.5, 2.05), Some(("sf1".to_string(), "soffit".to_string())));
+    // Outside both
+    assert_eq!(hit(&s, 5.0, 1.5, 2.05), None);
+}
+
+#[test]
+fn soffit_with_unparseable_material_falls_back() {
+    let mut m = house();
+    let mut s = test_soffit(Some(2.1));
+    s.material = Some("not-a-real-material".to_string());
+    m.push_soffit(s);
+    let scene = Scene3d::build(&m);
+    let meshes = part_meshes(&scene, "soffit");
+    assert_eq!(meshes.len(), 1);
+    // MaterialRef::parse treats a bare string as an item reference.
+    assert_eq!(meshes[0].material, "soffit-box:item:not-a-real-material");
+    assert!(hit(&scene, 8.0, 7.6, 2.2) == Some(("sf0".to_string(), "soffit".to_string())));
+}
+
+#[test]
+fn soffit_hanging_by_depth() {
+    let mut m = house();
+    let s = Soffit { level: 0, polygon: rect(7.0, 7.3, 9.0, 7.9), bottom: None, depth: Some(0.2), ..Default::default() };
+    m.push_soffit(s);
+    let scene = Scene3d::build(&m);
+    let meshes = part_meshes(&scene, "soffit");
+    assert_eq!(meshes.len(), 1);
+    // Ceiling is 2.4, depth 0.2 -> bottom at 2.2
+    assert!((meshes[0].bounds().min[2] - 2.2).abs() < 1e-6, "bottom at 2.2");
+    assert!((meshes[0].bounds().max[2] - 2.4).abs() < 1e-6, "top at 2.4");
+    assert_eq!(hit(&scene, 8.0, 7.6, 2.3), Some(("sf0".to_string(), "soffit".to_string())));
+    assert_eq!(hit(&scene, 8.0, 7.6, 2.15), None, "below the depth-hung soffit");
+}
+
+#[test]
+fn two_overlapping_soffits_both_build() {
+    let mut m = house();
+    m.push_soffit(test_soffit(Some(2.1)));
+    // Overlaps the first soffit in plan
+    let s2 = Soffit { level: 0, polygon: rect(8.0, 7.0, 10.0, 8.0), bottom: Some(2.0), ..Default::default() };
+    m.push_soffit(s2);
+    let s = Scene3d::build(&m);
+    let meshes = part_meshes(&s, "soffit");
+    assert_eq!(meshes.len(), 2, "each soffit builds its own mesh");
+    // In the overlap region, both exist at different heights
+    assert_eq!(hit(&s, 8.5, 7.5, 2.15), Some(("sf0".to_string(), "soffit".to_string())));
+    assert_eq!(hit(&s, 8.5, 7.5, 2.05), Some(("sf1".to_string(), "soffit".to_string())));
+}
