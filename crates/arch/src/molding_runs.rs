@@ -305,6 +305,24 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
         }
 
         if all_pieces.is_empty() {
+            // Even if no wall pieces, check for trays for Crown
+            if molding.kind == MoldingKind::Crown {
+                let tray_paths = molding_wrap::tray_paths(model, room);
+                for (ring, z) in tray_paths {
+                    if ring.len() >= 3 {
+                        let z_vec = vec![z; ring.len()];
+                        runs.push(MoldingRun {
+                            kind: molding.kind,
+                            index: idx,
+                            profile: molding.profile.clone(),
+                            path: ring,
+                            z: z_vec,
+                            closed: true,
+                            side: 1.0,
+                        });
+                    }
+                }
+            }
             continue;
         }
 
