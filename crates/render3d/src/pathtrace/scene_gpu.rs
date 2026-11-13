@@ -1516,6 +1516,39 @@ mod tests {
     }
 
     #[test]
+    fn gpu_scene_horizon_traces_correctly() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, None);
+        // Ray from above should hit the horizon
+        let hit = gpu.trace_cpu([500.0, 500.0, 10.0], [0.0, 0.0, -1.0], 100.0);
+        assert!(hit.is_some(), "ray should hit horizon");
+        assert!((hit.unwrap().t - 10.5).abs() < 1e-4, "hit distance should be 10.5");
+        // Ray from below should miss
+        let miss = gpu.trace_cpu([500.0, 500.0, -1.0], [0.0, 0.0, 1.0], 100.0);
+        assert!(miss.is_none(), "ray from below should miss horizon");
+    }
+
+    #[test]
+    fn gpu_scene_horizon_with_furnace() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, emission: 1.0, ..Default::default() }));
+        // In furnace mode, the horizon material should be the furnace material
+        assert_eq!(gpu.tris.len(), 2);
+        for m in &gpu.materials {
+            assert_eq!(m.albedo, [0.5; 3], "furnace albedo");
+            assert_eq!(m.emission, [1.0; 3], "furnace emission");
+        }
+    }
+
+    #[test]
     fn ground_adds_two_triangles() {
         let scene = random_prisms(&mut Rng(5), 3);
         let without = build_gpu_scene(&scene, false, None);

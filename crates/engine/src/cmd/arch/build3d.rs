@@ -1629,6 +1629,44 @@ mod tests {
     }
 
     #[test]
+    fn build3d_horizon_stable_across_incremental_builds() {
+        let mut s = fresh_session();
+        let boundary = json!([[0, 0], [40, 0], [40, 30], [0, 30]]);
+        s.execute("terrain", &json!({"boundary": boundary, "elevation": 0})).unwrap();
+        // Full build
+        let r1 = s.execute("build3d", &json!({})).unwrap();
+        assert_eq!(r1["horizon"], 1);
+        // Incremental build with no changes
+        let r2 = s.execute("build3d", &json!({"incremental": true})).unwrap();
+        assert_eq!(r2["horizon"], 1, "horizon must be stable across incremental builds");
+        assert_eq!(r2["rebuilt"], 0, "no changes should mean 0 rebuilt");
+    }
+
+    #[test]
+    fn build3d_horizon_with_ceiling_query() {
+        let mut s = fresh_session();
+        let boundary = json!([[0, 0], [40, 0], [40, 30], [0, 30]]);
+        s.execute("terrain", &json!({"boundary": boundary, "elevation": 0})).unwrap();
+        // Horizon and ceiling query together
+        let r = s.execute("build3d", &json!({"ceiling": [[20, 15]], "probe": [[500, 500, -0.5]]})).unwrap();
+        assert_eq!(r["horizon"], 1);
+        assert_eq!(r["probe"][0]["part"], "horizon");
+        assert!(r.get("ceiling").is_some(), "ceiling query should still work with horizon");
+    }
+
+    #[test]
+    fn build3d_horizon_with_digest() {
+        let mut s = fresh_session();
+        let boundary = json!([[0, 0], [40, 0], [40, 30], [0, 30]]);
+        s.execute("terrain", &json!({"boundary": boundary, "elevation": 0})).unwrap();
+        let r = s.execute("build3d", &json!({"digest": true})).unwrap();
+        assert_eq!(r["horizon"], 1);
+        assert!(r.get("digest").is_some(), "digest should be present");
+        let digest = r["digest"].as_str().expect("digest must be a string");
+        assert_eq!(digest.len(), 16, "digest must be 16 hex chars");
+    }
+
+    #[test]
     fn build3d_parts_counts_meshes_by_part() {
         let mut s = house();
         let r = s.execute("build3d", &json!({})).unwrap();

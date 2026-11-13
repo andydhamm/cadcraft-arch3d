@@ -462,6 +462,116 @@ mod tests {
         assert_eq!(own.part, "terrain");
     }
 
+    #[test]
+    fn probe_horizon_at_exact_top_face() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        // Point exactly on the horizon slab's top face (z = 0.0)
+        let hit = probe(&scene, Vec3::new(500.0, 500.0, 0.0));
+        // Top face interior is outside (per probe_mesh semantics)
+        assert!(hit.is_none(), "point on horizon top face should be outside");
+    }
+
+    #[test]
+    fn probe_horizon_at_exact_bottom_face() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        // Point exactly on the horizon slab's bottom face (z = -1.0)
+        let hit = probe(&scene, Vec3::new(500.0, 500.0, -1.0));
+        // Bottom face is inside (per probe_mesh semantics)
+        assert!(hit.is_some(), "point on horizon bottom face should be inside");
+        assert_eq!(hit.unwrap().part, "horizon");
+    }
+
+    #[test]
+    fn probe_horizon_beyond_square_edge() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        // Point far beyond the 9500m half-side square
+        assert!(probe(&scene, Vec3::new(10000.0, 10000.0, -0.5)).is_none(), "point beyond horizon square should miss");
+        // Point at the edge of the square should hit
+        assert!(probe(&scene, Vec3::new(9499.0, 0.0, -0.5)).is_some(), "point at horizon square edge should hit");
+    }
+
+    #[test]
+    fn probe_horizon_with_nan_coordinates() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        assert!(probe(&scene, Vec3::new(f64::NAN, 500.0, -0.5)).is_none(), "NaN x should miss");
+        assert!(probe(&scene, Vec3::new(500.0, f64::NAN, -0.5)).is_none(), "NaN y should miss");
+        assert!(probe(&scene, Vec3::new(500.0, 500.0, f64::NAN)).is_none(), "NaN z should miss");
+    }
+
+    #[test]
+    fn probe_horizon_just_outside_site_margin() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        // Scene bounds are roughly x: -1..41, y: -1..31 (with skirt). Margin is 2m.
+        // Point at x=43.5 is just outside the margin (41 + 2 = 43).
+        let hit = probe(&scene, Vec3::new(43.5, 15.0, -0.5));
+        assert!(hit.is_some(), "point just outside site margin should hit horizon");
+        assert_eq!(hit.unwrap().part, "horizon");
+    }
+
+    #[test]
+    fn probe_horizon_just_inside_site_margin() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        // Point at x=42.5 is inside the 2m margin (41 + 2 = 43), so it should hit terrain, not horizon.
+        let hit = probe(&scene, Vec3::new(42.5, 15.0, -0.5));
+        if hit.is_some() {
+            assert_eq!(hit.unwrap().part, "terrain", "point inside site margin should hit terrain, not horizon");
+        }
+    }
+
     fn named(material: &str, id: u32) -> Mesh {
         Mesh::new(material, ArchId(id))
     }

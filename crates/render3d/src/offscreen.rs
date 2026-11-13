@@ -1190,6 +1190,58 @@ mod offscreen_behavior_tests {
     }
 
     #[test]
+    fn horizon_not_visible_when_camera_looks_straight_down() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let size = (80u32, 60u32);
+        let mut scene = Scene3d::default();
+        let mut plane = crate::types::Mesh::new("terrain", cadcraft_doc::arch::ArchId(0));
+        let h = 9500.0f32;
+        plane.positions = vec![[-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0]];
+        plane.normals = vec![[0.0, 0.0, 1.0]; 4];
+        plane.uvs = vec![[0.0, 0.0]; 4];
+        plane.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(plane);
+        // Camera looking straight down (eye at 0,0,100, target at 0,0,0)
+        let camera = Camera::Orbit(crate::camera::Orbit::at_origin(0.0, 0.0, 100.0, 0.0));
+        let mut off = Offscreen::with_device(device, queue, size);
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &RenderOptions { style: Style::Shaded, ground: false, ..Default::default() });
+        let rgba = off.read_rgba().expect("readback");
+        let bg = |p: &[u8]| p[..3].iter().zip([39u8, 44, 52]).all(|(a, b)| a.abs_diff(b) <= 2);
+        // When looking straight down, the horizon should not be visible (all background)
+        let non_bg: Vec<usize> = rgba.chunks_exact(4).enumerate().filter(|(_, p)| !bg(p)).map(|(i, _)| i).collect();
+        assert!(non_bg.is_empty(), "horizon should not be visible when looking straight down");
+    }
+
+    #[test]
+    fn horizon_with_no_terrain_mesh() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let size = (80u32, 60u32);
+        // Scene with only a horizon, no other meshes
+        let mut scene = Scene3d::default();
+        let mut plane = crate::types::Mesh::new("terrain", cadcraft_doc::arch::ArchId(0));
+        let h = 9500.0f32;
+        plane.positions = vec![[-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0]];
+        plane.normals = vec![[0.0, 0.0, 1.0]; 4];
+        plane.uvs = vec![[0.0, 0.0]; 4];
+        plane.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(plane);
+        let camera = Camera::Orbit(crate::camera::Orbit::at_origin(0.0, 10.0, 5.0, 45.0));
+        let mut off = Offscreen::with_device(device, queue, size);
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &RenderOptions { style: Style::Shaded, ground: false, ..Default::default() });
+        let rgba = off.read_rgba().expect("readback");
+        assert!(!rgba.is_empty(), "scene with only horizon should render");
+        let bg = |p: &[u8]| p[..3].iter().zip([39u8, 44, 52]).all(|(a, b)| a.abs_diff(b) <= 2);
+        let px = |row: usize| &rgba[(row * size.0 as usize + 40) * 4..][..4];
+        assert!(!bg(px(58)), "bottom row should show horizon");
+    }
+
+    #[test]
     fn glass_house_ground_stays_opaque() {
         let Some((device, queue)) = crate::gputest::shared_device() else {
             eprintln!("SKIP: no GPU adapter available");
