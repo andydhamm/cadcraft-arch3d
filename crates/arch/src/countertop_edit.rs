@@ -183,9 +183,11 @@ pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result
     if ct.edge(edge).waterfall && profile != EdgeProfile::Square {
         return Err(format!("edge {edge}: a waterfall is only allowed on straight, square edges"));
     }
+    if ct.edge(edge).sagitta != 0.0 {
+        return Err(format!("edge {edge}: a profiled edge must be straight; clear the sagitta first"));
+    }
     let mut out = ct.clone();
     out.edges.resize(n, CounterEdge::default());
-    out.edges[edge].sagitta = 0.0;
     out.edges[edge].profile = profile;
     validate(&out)?;
     Ok(out)
