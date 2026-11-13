@@ -1020,6 +1020,9 @@ fn phase_17_edits_through_commands_keep_the_cache_exact() {
         let inc = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
         let full = s.execute("build3d", &json!({"digest": true})).unwrap();
         assert_eq!(inc["incremental"], true, "{cmd} {params}");
+        assert_eq!(inc["digest"], full["digest"], "{cmd} {params}: the cache differs from the full build");
+    }
+}
 // ---------- phase 18: interior finish, kitchen and bath ----------
 //
 // Proves the phase‑18 incremental sections (p18-scene-plumbing) rebuild exactly the
