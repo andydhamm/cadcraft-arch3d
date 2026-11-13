@@ -447,6 +447,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::light_inspect::inspect_lights(&d.arch, p, &mut out);
     super::casework::inspect_casework(&d.arch, p, &mut out);
     inspect_cabinet_parts(&d.arch, &schedule_numbers, &mut out);
+    super::cabinet_corner_inspect::inspect_cabinet_corners(&d.arch, p, &mut out);
     super::cabinet_face::inspect_cabinet_faces(&d.arch, &mut out);
     cabinet_molding_inspect::inspect_cabinet_moldings(&d.arch, &mut out);
     inspect_furnishings(&d.arch, p, &mut out);
@@ -455,6 +456,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::tray::inspect_trays(&d.arch, p, &mut out);
     super::soffit::inspect_soffits(&d.arch, p, &mut out);
     super::countertop_inspect::inspect_countertops(&d.arch, p, &mut out);
+    super::backsplash::inspect_backsplashes(&d.arch, p, &mut out);
     super::deck_inspect::inspect_decks(&d.arch, p, &mut out);
     super::inspect_detail::inspect_details(&d.arch, &mut out);
     super::look::inspect_look(&d.arch, p, &mut out);

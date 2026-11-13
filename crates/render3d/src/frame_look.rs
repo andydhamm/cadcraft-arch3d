@@ -232,15 +232,18 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     f.tone_map = tone_code(look.tone_map);
     f.lambert = lighting.lambert.filter(|a| a.is_finite());
     let intensity = if look.sun.intensity.is_finite() { look.sun.intensity.max(0.0) as f32 } else { 0.0 };
-    let sun = lighting.sun.is_some();
-    f.sun_lux = if sun { intensity } else { 0.0 };
+    // The moon as the directional light is not the sun: `sun` is true only for a real sun.
+    let sun = lighting.sun.is_some() && lighting.moon.is_none();
+    let directional = lighting.directional_lux();
+    f.sun_lux = directional;
     // An environment lights through its SH: the stand-in ambient is off, the meter adds the SH.
     let has_env = lighting.environment.as_ref().is_some_and(|e| e.is_valid());
-    f.ambient_lux = match (sun, look.sky.on) {
+    f.ambient_lux = match (sun, look.sky.on, lighting.moon.is_some()) {
         _ if has_env => 0.0,
-        (true, true) => 0.25 * intensity,
-        (true, false) => 0.0,
-        (false, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
+        (true, true, _) => 0.25 * intensity,
+        (true, false, _) => 0.0,
+        (false, true, true) => 0.25 * directional,
+        (false, _, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
     };
     // A bare-number exposure of the request arrives as a `Lighting::exposure` off the default.
     let legacy = (lighting.exposure.to_bits() != crate::lights::DEFAULT_EXPOSURE.to_bits() && lighting.exposure.is_finite())

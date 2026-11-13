@@ -83,7 +83,6 @@
 	List Plan Views	Список видів плану
 	Auto Exterior Dimensions	Автоматичні зовнішні розміри
 	Drive Dimension	Привести розмір
-	Room Label	Підпис кімнати
 	Room Names	Імена кімнат
 	Room Areas	Площі кімнат
 	Room Dimensions	Розміри кімнат
@@ -1430,6 +1429,7 @@
 	Plane	Площина
 	Room	Кімната
 	Room Detect	Виявити кімнати
+	Room Label	Мітка кімнати
 	Stair	Сходи
 	Edit Stair	Редагувати сходи
 	Deck	Тераса
@@ -1473,6 +1473,7 @@
 	Architecture>Room	Архітектура>Кімната
 	Architecture>Cabinet Face	Архітектура>Фасад шафи
 	Architecture>Room Detect	Архітектура>Виявити кімнати
+	Architecture>Room Label	Архітектура>Мітка кімнати
 	Architecture>Level	Архітектура>Рівень
 	Architecture>Stair	Архітектура>Сходи
 	Architecture>Edit Stair	Архітектура>Редагувати сходи
@@ -1638,6 +1639,10 @@
 	Soffit	Стельовий короб
 	Edit Soffit	Редагувати стельовий короб
 	Delete Soffit	Видалити стельовий короб
+# Phase 20: room labels.
+	Backsplash	Фартух
+	Edit Backsplash	Редагувати фартух
+	Delete Backsplash	Видалити фартух
 	Room Moldings	Молдинги кімнат
 	Architecture>Room Moldings	Архітектура>Молдинги кімнат
 	Molding Line	Лінія молдинга
@@ -1659,3 +1664,6 @@
 	Detach Countertop	Відокремити стільницю
 	Edit Countertop	Редагувати стільницю
 	Delete Countertop	Видалити стільницю
+	Reset Camera	Скинути камеру
+	Orbit Camera	Обертати камеру
+	Update Camera	Оновити камеру

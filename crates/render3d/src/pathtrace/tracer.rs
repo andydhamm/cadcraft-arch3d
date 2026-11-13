@@ -7,7 +7,7 @@
 use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
-    FRAME_CLIP, FRAME_FURNACE, FRAME_GROUND, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES,
+    FRAME_CLIP, FRAME_FURNACE, FRAME_GROUND, FRAME_MOON, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES,
     build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
@@ -150,7 +150,7 @@ impl PathTracer {
         let exposure = match opts.exposure {
             Exposure::Fixed(x) => x,
             Exposure::Auto if opts.furnace.is_some() => 1.0,
-            Exposure::Auto if lighting.sun.is_some() => DAY_EXPOSURE,
+            Exposure::Auto if lighting.sun.is_some() && lighting.moon.is_none() => DAY_EXPOSURE,
             Exposure::Auto => lighting.exposure,
         };
 
@@ -637,7 +637,8 @@ fn frame_lighting(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting,
 fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
     if let Some(sun) = lighting.sun {
         let d = sun.normalized().dir;
-        if lighting.look.sun.on && d[2] > 0.0 {
+        // The moon as the raster's directional light is `frame_moon`'s, not a sun.
+        if lighting.look.sun.on && d[2] > 0.0 && lighting.moon.is_none() {
             frame.flags |= FRAME_SUN;
             if !lighting.look.sun.shadows {
                 frame.flags |= FRAME_SUN_NO_SHADOW;
@@ -681,8 +682,16 @@ pub(super) fn frame_environment(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighti
     frame.env_params[0] = table.total;
 }
 
-/// Moon (stub): will set `frame.moon_dir` / `moon_rgb` from `lighting`. Does nothing yet.
-fn frame_moon(_frame: &mut GpuFrame, _lighting: &Lighting) {}
+/// Moon: set the directional moon light fields when the moon is the active directional light.
+fn frame_moon(frame: &mut GpuFrame, lighting: &Lighting) {
+    if let Some((dir, lux)) = lighting.moon {
+        frame.flags |= FRAME_MOON;
+        let dir = [dir[0] as f32, dir[1] as f32, dir[2] as f32, 0.0];
+        let rgb = [lux, lux, lux, 0.0];
+        frame.moon_dir = dir;
+        frame.moon_rgb = rgb;
+    }
+}
 
 /// View: the look's clip box (`FRAME_CLIP`, `clip_min`, `clip_max`) and, when a camera is given, its
 /// unit forward direction and the look's near clip in `view` (`xyz`, `w`). A near clip is camera-only

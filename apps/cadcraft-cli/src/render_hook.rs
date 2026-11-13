@@ -280,8 +280,11 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     // The view's filter: the cutaway's hidden objects leave the scene (a filtered copy, cached by
     // revision, light set and hidden set, with its own scene key so uploads and shadow maps follow);
     // the clip box and near clip reach the raster and the path tracer through the look.
-    let filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
-    let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() {
+    let mut filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
+    if let Some((level, lower)) = req.overview {
+        filter = filter.with_overview(&req.drawing.arch, level, lower);
+    }
+    let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() && filter.levels.is_none() {
         (base, revision)
     } else {
         let hidden_key = hidden_set_key(&filter);
@@ -293,7 +296,8 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         cadcraft_arch3d::set_backdrop(&req.drawing.arch, f, look.backdrop.as_ref());
         (&*f, filtered_scene_key(revision, hidden_key))
     };
-    let mut lighting = lighting_for(&look, sun_dir, req.budget);
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, req.budget).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, revision, &look, sun_dir);
     // The calibration albedo, the metered night (all but the legacy `sun: false`) and a bare-number
     // exposure, which the raster uses as its fixed scale too.
@@ -434,7 +438,8 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
     let (look, sun_dir) = req.resolved_sun();
-    let mut lighting = lighting_for(&look, sun_dir, 8);
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, 8).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, req.drawing.arch_revision, &look, sun_dir);
     let opts = path_options(&req.path, &look, None);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;

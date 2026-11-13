@@ -196,6 +196,9 @@ pub fn opened_level(model: &ArchModel, view: Option<&PlanView>) -> Option<u32> {
 /// Everything `view` (the plan with no view when `None`) adds at plan level `level`.
 pub fn annotate(model: &ArchModel, view: Option<&PlanView>, level: Option<u32>) -> PlanAnnotation {
     let mut out = PlanAnnotation::default();
+    let view = view
+        .or_else(|| model.plan_views.iter().find(|v| v.kind == PlanKind::Floor && v.name.eq_ignore_ascii_case("Floor Plan")))
+        .or_else(|| model.plan_views.iter().find(|v| v.kind == PlanKind::Floor));
     let kind = view.map_or(PlanKind::Floor, |v| v.kind);
     if let (Some(r), Some(l)) = (view.and_then(|v| v.reference), level) {
         if r.level != l {
@@ -403,20 +406,23 @@ mod tests {
             edges: vec![RoofEdge { kind: RoofEdgeKind::Ridge, a: Vec2::ZERO, b: Vec2::new(4.0, 0.0), ..RoofEdge::default() }],
             ..Roof::default()
         });
-        m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 3.0), name: "A".into(), ..Room::default() });
+        m.push_room(Room { polygon: rect(0.0, 0.0, 4.0, 3.0), name: "A".into(), interior_area: 12.0, ..Room::default() });
         let none = annotate(&m, None, None);
         assert_eq!(none.lines.len(), 1);
         assert_eq!(none.lines[0].handle, roof_handle(rid));
-        assert_eq!(none.labels.len(), 1);
+        // Default view (Floor Plan) shows name, area, dimensions.
+        assert_eq!(none.labels.len(), 3);
         for v in template_plan_views() {
             let a = annotate(&m, Some(&v), Some(0));
             assert_eq!(a.lines.len(), 1, "{}", v.name);
-            assert_eq!(a.labels.len(), usize::from(v.labels.name), "{}", v.name);
+            let expected_labels =
+                usize::from(v.labels.name) + usize::from(v.labels.area) + usize::from(v.labels.dimensions) + usize::from(v.labels.ceiling);
+            assert_eq!(a.labels.len(), expected_labels, "{}", v.name);
         }
         // A level other than the room's drops its label.
         assert!(annotate(&m, None, Some(1)).labels.is_empty());
         let mut v = PlanView::default();
-        v.labels = RoomLabelShow { name: false, ..RoomLabelShow::default() };
+        v.labels = RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, ..Default::default() };
         assert!(annotate(&m, Some(&v), None).labels.is_empty());
         // active_view / opened_level.
         assert!(active_view(&m).is_none());

@@ -109,7 +109,11 @@ pub(crate) fn cabinet_meshes_in(model: &ArchModel, c: &Cabinet, runs: &[CounterR
         }
     }
 
-    meshes.extend(pull_meshes(model, c, &layout));
+    // A blind corner's doors use the reduced layout, so its pulls do too.
+    match corner.as_ref().and_then(|i| crate::cabinet_parts::corner::blind_view(c, i)) {
+        Some(reduced) => meshes.extend(pull_meshes(model, &reduced, &fronts(model, &reduced))),
+        None => meshes.extend(pull_meshes(model, c, &layout)),
+    }
     meshes.extend(crate::cabinet_parts::appliance::appliance_meshes(model, c, &layout));
     meshes.extend(crate::cabinet_parts::shelves::shelf_meshes(model, c));
     meshes.extend(crate::cabinet_parts::molding::molding_meshes(model, c));
@@ -180,7 +184,7 @@ const FIELD_BACK: f64 = 0.002;
 
 /// One front of `style`: the same outer box (y `plane` = (y0, y1), by default depth-0.019..depth)
 /// whatever the style.
-fn push_front(mesh: &mut Mesh, fr: &Frame, style: FrontStyle, depth: f64, plane: (f64, f64), rect: [f64; 4]) {
+pub(crate) fn push_front(mesh: &mut Mesh, fr: &Frame, style: FrontStyle, depth: f64, plane: (f64, f64), rect: [f64; 4]) {
     let [u0, z0, u1, z1] = rect;
     if !(u0.is_finite() && u1.is_finite() && z0.is_finite() && z1.is_finite()) || u1 <= u0 || z1 <= z0 {
         return;
