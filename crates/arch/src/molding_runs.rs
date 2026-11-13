@@ -375,7 +375,10 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 }
                 // Get the tray outline: use the polygon if given, else inset the room by tray.inset
                 let outline = if tray.polygon.is_empty() {
-                    let regions = cadcraft_geom::skeleton::inset(&room.polygon, &room.holes, tray.inset);
+                    let regions = cadcraft_geom::skeleton::inset(&room.polygon, &room.holes, tray.inset).ok();
+                    let Some(regions) = regions else {
+                        continue;
+                    };
                     if regions.len() != 1 {
                         continue;
                     }
@@ -386,7 +389,10 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
 
                 // For vertical sides in flat ceiling rooms, inset by TRAY_SIDE to get the crown path
                 let path = if let TraySides::Vertical = tray.sides {
-                    let regions = cadcraft_geom::skeleton::inset(&outline, &[], TRAY_SIDE);
+                    let regions = cadcraft_geom::skeleton::inset(&outline, &[], TRAY_SIDE).ok();
+                    let Some(regions) = regions else {
+                        continue;
+                    };
                     if regions.len() != 1 {
                         continue;
                     }
@@ -405,7 +411,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 let n = path.len();
                 let mut z = Vec::with_capacity(n);
                 for p in &path {
-                    let zc = finished_ceiling_in(model, room, *p);
+                    let zc = finished_ceiling_in(model, room, *p).unwrap_or(e + ceiling_h);
                     z.push(zc - molding.offset - h);
                 }
 
