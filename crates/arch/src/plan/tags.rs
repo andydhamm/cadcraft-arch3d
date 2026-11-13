@@ -52,6 +52,12 @@ pub fn schedule_labels(model: &ArchModel, level: Option<u32>, show: RoomLabelSho
         if len < 1e-9 {
             continue;
         }
+        if !wall.thickness.is_finite() {
+            continue;
+        }
+        if !opening.offset.is_finite() {
+            continue;
+        }
         let dir = (end - start).normalized();
         let right = -dir.perp();
         let at = start + dir * opening.offset + right * (wall.thickness / 2.0 + 0.35);
@@ -69,6 +75,9 @@ pub fn schedule_labels(model: &ArchModel, level: Option<u32>, show: RoomLabelSho
             Some(n) => n,
             None => continue,
         };
+        if !cabinet.position.is_finite() || !cabinet.depth.is_finite() || !cabinet.rotation.is_finite() {
+            continue;
+        }
         let at = cabinet.position + Vec2::new(0.0, cabinet.depth / 2.0).rotate(cabinet.rotation);
         out.push_label(PlanLabel::new(LAYER_CASE_TAG, PlanLabelKind::ScheduleNumber, number.clone(), at, 0.2, cabinet_handle(cabinet.id)));
     }
@@ -209,5 +218,66 @@ mod tests {
         let show = RoomLabelShow { numbers: false, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
         assert!(out.labels.is_empty(), "no labels when numbers off");
+    }
+
+    #[test]
+    fn non_finite_wall_geometry_is_skipped() {
+        let mut model = test_model();
+        model.walls[0].start = Vec2::new(f64::NAN, 0.0);
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let texts: Vec<&str> = out.labels.iter().map(|l| l.text.as_str()).collect();
+        assert!(!texts.contains(&"D01"), "D01 should be skipped: {:?}", texts);
+        assert!(!texts.contains(&"W01"), "W01 should be skipped: {:?}", texts);
+        assert!(texts.contains(&"D02"), "D02 should be present: {:?}", texts);
+    }
+
+    #[test]
+    fn degenerate_wall_is_skipped() {
+        let mut model = test_model();
+        model.walls[0].end = model.walls[0].start;
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let texts: Vec<&str> = out.labels.iter().map(|l| l.text.as_str()).collect();
+        assert!(!texts.contains(&"D01"), "D01 should be skipped: {:?}", texts);
+        assert!(!texts.contains(&"W01"), "W01 should be skipped: {:?}", texts);
+        assert!(texts.contains(&"D02"), "D02 should be present: {:?}", texts);
+    }
+
+    #[test]
+    fn non_finite_cabinet_position_is_skipped() {
+        let mut model = test_model();
+        model.cabinets[0].position = Vec2::new(f64::NAN, 1.0);
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let texts: Vec<&str> = out.labels.iter().map(|l| l.text.as_str()).collect();
+        assert!(!texts.contains(&"C01"), "C01 should be skipped: {:?}", texts);
+    }
+
+    #[test]
+    fn cabinet_rotation_affects_label_position() {
+        let mut model = test_model();
+        model.cabinets[0].rotation = std::f64::consts::FRAC_PI_2;
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let cab_label = out.labels.iter().find(|l| l.text == "C01").expect("C01 label");
+        assert!((cab_label.at.x - 1.3).abs() < 1e-9, "cabinet x: {}", cab_label.at.x);
+        assert!((cab_label.at.y - 1.0).abs() < 1e-9, "cabinet y: {}", cab_label.at.y);
+    }
+
+    #[test]
+    fn opening_with_non_finite_offset_is_skipped() {
+        let mut model = test_model();
+        model.openings[0].offset = f64::NAN;
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let texts: Vec<&str> = out.labels.iter().map(|l| l.text.as_str()).collect();
+        assert!(!texts.contains(&"D01"), "D01 should be skipped: {:?}", texts);
+        assert!(texts.contains(&"W01"), "W01 should be present: {:?}", texts);
     }
 }
