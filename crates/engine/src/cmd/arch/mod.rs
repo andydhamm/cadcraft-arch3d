@@ -29,6 +29,7 @@ mod countertop_inspect;
 pub mod deck;
 mod deck_inspect;
 pub(crate) mod defaults;
+pub(crate) mod dim_inspect;
 pub mod dimdrive;
 pub mod electrical;
 pub(crate) mod electrical_inspect;

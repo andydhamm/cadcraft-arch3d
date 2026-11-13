@@ -268,11 +268,10 @@ pub fn rows(model: &ArchModel, s: &Schedule) -> Vec<ScheduleRow> {
         }
         ScheduleKind::Room => {
             let surfaces = crate::paint::surfaces(model);
+            let mut rooms: Vec<&Room> = model.rooms.iter().filter(|r| !s.level.is_some_and(|level| r.level != level)).collect();
+            rooms.sort_by_key(|r| r.id);
             let mut room_rows = Vec::new();
-            for room in &model.rooms {
-                if s.level.is_some_and(|level| room.level != level) {
-                    continue;
-                }
+            for room in rooms {
                 let mut walls = BTreeSet::new();
                 for info in &surfaces {
                     if info.room == Some(room.id) && matches!(info.surface, Surface::WallSide { .. }) {
@@ -295,7 +294,6 @@ pub fn rows(model: &ArchModel, s: &Schedule) -> Vec<ScheduleRow> {
                 }
                 room_rows.push(ScheduleRow { number: room_label(room.id), count: 1, members: vec![room_label(room.id)], cells });
             }
-            room_rows.sort_by_key(|row| row.number.clone());
             rows.extend(room_rows);
         }
     }
@@ -671,5 +669,141 @@ mod tests {
         let schedule = Schedule { kind: ScheduleKind::Room, columns: vec!["name".into()], ..Schedule::default() };
         let rows = rows(&model, &schedule);
         assert_eq!(rows.len(), cadcraft_doc::arch::MAX_SCHEDULE_ROWS);
+    }
+
+    #[test]
+    fn rooms_ordered_by_id_not_label() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        model.rooms.push(Room { id: ArchId(10), name: "Ten".into(), level: 0, interior_area: 10.0, ..Room::default() });
+        model.rooms.push(Room { id: ArchId(1), name: "One".into(), level: 0, interior_area: 10.0, ..Room::default() });
+        model.rooms.push(Room { id: ArchId(0), name: "Zero".into(), level: 0, interior_area: 10.0, ..Room::default() });
+        model.rooms.push(Room { id: ArchId(2), name: "Two".into(), level: 0, interior_area: 10.0, ..Room::default() });
+        let schedule = Schedule { kind: ScheduleKind::Room, columns: vec!["name".into()], ..Schedule::default() };
+        let rows = rows(&model, &schedule);
+        assert_eq!(rows[0].number, "r0");
+        assert_eq!(rows[1].number, "r1");
+        assert_eq!(rows[2].number, "r2");
+        assert_eq!(rows[3].number, "r10");
+    }
+
+    #[test]
+    fn empty_model_gives_no_rows() {
+        let model = ArchModel::default();
+        let schedule = Schedule { kind: ScheduleKind::Door, columns: vec!["number".into()], ..Schedule::default() };
+        assert!(rows(&model, &schedule).is_empty());
+        let schedule = Schedule { kind: ScheduleKind::Window, columns: vec!["number".into()], ..Schedule::default() };
+        assert!(rows(&model, &schedule).is_empty());
+        let schedule = Schedule { kind: ScheduleKind::Cabinet, columns: vec!["number".into()], ..Schedule::default() };
+        assert!(rows(&model, &schedule).is_empty());
+        let schedule = Schedule { kind: ScheduleKind::Room, columns: vec!["name".into()], ..Schedule::default() };
+        assert!(rows(&model, &schedule).is_empty());
+    }
+
+    #[test]
+    fn zero_dimension_items_get_numbers() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        model.walls.push(Wall { id: ArchId(1), base_level: 0, ..Wall::default() });
+        let o = opening_with_id(&mut model, 0, 1, 0.0, 2.1, 0.0, OpeningKind::Door, "hinged");
+        let n = numbers(&model);
+        assert_eq!(n.get(&(ArchKind::Opening, o)), Some(&"D01".to_string()));
+    }
+
+    #[test]
+    fn values_at_range_boundaries() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        model.walls.push(Wall { id: ArchId(1), base_level: 0, ..Wall::default() });
+        let o0 = opening_with_id(&mut model, 0, 1, 1_000_000.0, 2.1, 0.0, OpeningKind::Door, "hinged");
+        let o1 = opening_with_id(&mut model, 1, 1, 1_000_000.001, 2.1, 0.0, OpeningKind::Door, "hinged");
+        let n = numbers(&model);
+        assert_eq!(n.get(&(ArchKind::Opening, o0)), Some(&"D01".to_string()));
+        assert!(n.get(&(ArchKind::Opening, o1)).is_none());
+    }
+
+    #[test]
+    fn negative_values_get_no_number() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        model.walls.push(Wall { id: ArchId(1), base_level: 0, ..Wall::default() });
+        let o = opening_with_id(&mut model, 0, 1, -1.0, 2.1, 0.0, OpeningKind::Door, "hinged");
+        let n = numbers(&model);
+        assert!(n.get(&(ArchKind::Opening, o)).is_none());
+    }
+
+    #[test]
+    fn room_with_multiple_wall_materials() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        let mut room = Room { id: ArchId(0), name: "Room".into(), level: 0, interior_area: 10.0, ..Room::default() };
+        room.polygon = vec![
+            cadcraft_geom::Vec2::new(-2.0, -2.0),
+            cadcraft_geom::Vec2::new(2.0, -2.0),
+            cadcraft_geom::Vec2::new(2.0, 2.0),
+            cadcraft_geom::Vec2::new(-2.0, 2.0),
+        ];
+        model.rooms.push(room);
+        let w0 = ArchId(1);
+        let w1 = ArchId(2);
+        model.walls.push(Wall {
+            id: w0,
+            start: cadcraft_geom::Vec2::new(-2.0, 0.0),
+            end: cadcraft_geom::Vec2::new(2.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            ..Wall::default()
+        });
+        model.walls.push(Wall {
+            id: w1,
+            start: cadcraft_geom::Vec2::new(0.0, -2.0),
+            end: cadcraft_geom::Vec2::new(0.0, 2.0),
+            thickness: 0.2,
+            base_level: 0,
+            ..Wall::default()
+        });
+        model.paints.insert(
+            Surface::WallSide { wall: w0, side: Side::Left }.key(),
+            Paint { material: Some(MaterialRef::Finish(Finish::Wood)), ..Default::default() },
+        );
+        model.paints.insert(
+            Surface::WallSide { wall: w1, side: Side::Left }.key(),
+            Paint { material: Some(MaterialRef::Colour([0xff, 0x00, 0x00])), ..Default::default() },
+        );
+        let schedule = Schedule { kind: ScheduleKind::Room, columns: vec!["walls".into()], ..Schedule::default() };
+        let rows = rows(&model, &schedule);
+        assert!(rows[0].cells[0].contains("wood"));
+        assert!(rows[0].cells[0].contains("#ff0000"));
+    }
+
+    #[test]
+    fn cabinet_level_filter() {
+        let mut model = ArchModel::default();
+        model.levels =
+            vec![Level { index: 0, name: "Ground".into(), ..Level::default() }, Level { index: 1, name: "First".into(), ..Level::default() }];
+        let _c0 = cabinet_with_id(&mut model, 0, 0, CabinetKind::Base, 0.6, 0.6, 0.8, Fronts::Doors, 2, 0);
+        let c1 = cabinet_with_id(&mut model, 1, 1, CabinetKind::Base, 0.6, 0.6, 0.8, Fronts::Doors, 2, 0);
+        let schedule =
+            Schedule { kind: ScheduleKind::Cabinet, columns: vec!["number".into(), "count".into()], level: Some(1), ..Schedule::default() };
+        let row = rows(&model, &schedule);
+        assert_eq!(row.len(), 1);
+        assert_eq!(row[0].count, 1);
+        assert_eq!(row[0].members, vec![format!("cb{}", c1.0)]);
+    }
+
+    #[test]
+    fn door_swing_in_cells() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        model.walls.push(Wall { id: ArchId(1), base_level: 0, ..Wall::default() });
+        let oid = opening_with_id(&mut model, 0, 1, 0.9, 2.1, 0.0, OpeningKind::Door, "hinged");
+        for o in &mut model.openings {
+            if o.id == oid {
+                o.swing = Swing::Out;
+            }
+        }
+        let schedule = Schedule { kind: ScheduleKind::Door, columns: vec!["number".into(), "swing".into()], ..Schedule::default() };
+        let row = rows(&model, &schedule);
+        assert_eq!(row[0].cells, vec!["D01".to_string(), "out".to_string()]);
     }
 }

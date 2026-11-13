@@ -990,4 +990,21 @@ mod tests {
         // But not zero (some cells still visible)
         assert!(shadowed.lux > 0.0, "some cells must be visible: {}", shadowed.lux);
     }
+
+    #[test]
+    fn moon_illuminance_is_directed_light() {
+        let mut m = ArchModel::default();
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.2, 0.0), 0.2);
+        w.height = 3.0;
+        m.push_wall(w);
+        let scene = crate::build(&m);
+        let up = Vec3::new(0.0, 0.0, 1.0);
+        let moon_dir = Vec3::new(0.0, 0.0, 1.0);
+        let moon_lux = 0.25;
+        let open = Vec3::new(5.0, 5.0, 0.0);
+        let e = sun_illuminance(&scene, open, up, moon_dir, moon_lux, true);
+        assert!((e - 0.25).abs() < 0.001, "moon illuminance should be 0.25 lux, got {}", e);
+        let e2 = sun_illuminance(&scene, open, up, Vec3::new(0.0, 0.0, -1.0), moon_lux, true);
+        assert_eq!(e2, 0.0, "moon below horizon should give 0 lux");
+    }
 }

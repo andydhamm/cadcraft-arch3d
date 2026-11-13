@@ -602,4 +602,15 @@ mod tests {
         assert_eq!(arcs.len(), 2);
         assert!(arcs.iter().any(|a| a[16].y > 0.5) && arcs.iter().any(|a| a[16].y < -0.5));
     }
+
+    #[test]
+    fn fixed_door_with_grille_symbol_has_no_swing_arc() {
+        let mut m = ArchModel::default();
+        let h = test_wall(&mut m, Vec2::ZERO, Vec2::new(10.0, 0.0), 0.2);
+        let idx = opening_on(&mut m, h, 3.0, 0.9, OpeningKind::Door, "fixed");
+        m.openings[idx].grille = Some(cadcraft_doc::arch::Grille { across: 2, down: 2, top_only: false, ..Default::default() });
+        let s = opening_symbol(&m, &m.openings[idx]).unwrap();
+        assert_finite(&s);
+        assert!(s.polylines.iter().all(|p| p.len() == 2), "fixed door with grille should have only straight lines, no swing arc");
+    }
 }
