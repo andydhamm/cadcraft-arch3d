@@ -59,6 +59,9 @@ pub(crate) fn opening_box(model: &ArchModel, o: &Opening, ov: Option<&OrthoView>
     if !(len > 1e-9) {
         return None;
     }
+    if !(wall.thickness > 1e-9) {
+        return None;
+    }
     let along = [(ex - sx) / len, (ey - sy) / len];
     let normal = [-along[1], along[0]];
     let (mut face, mut lift) = (normal, 0.0);
@@ -182,6 +185,9 @@ pub(crate) fn indicator_lines(model: &ArchModel, sc: &Scene3d, _view: &ArchView,
             break;
         }
         let Some(f) = FrontFrame::new(model, c) else { continue };
+        if c.doors == 0 {
+            continue;
+        }
         let d = ov.dir();
         if f.front[0] * d[0] + f.front[1] * d[1] >= -0.7 {
             continue;
