@@ -436,4 +436,117 @@ mod tests {
         );
         assert!(out.lines.iter().any(|l| matches!(l.kind, PlanLineKind::Ridge | PlanLineKind::Hip | PlanLineKind::Valley | PlanLineKind::GableEnd)));
     }
+
+    #[test]
+    fn nan_slope_is_skipped() {
+        let mut m = ArchModel::default();
+        let roof = Roof {
+            id: ArchId(9),
+            planes: vec![roof_plane(&[(0.0, 0.0), (4.0, 0.0), (2.0, 2.0)], f64::NAN, [0.0, 0.0, 4.0, 0.0], 0.0)],
+            ..Roof::default()
+        };
+        m.roofs.push(roof);
+        let mut out = PlanAnnotation::default();
+        roof_plan(&m, &mut out);
+        assert!(out.labels.iter().all(|l| l.kind != PlanLabelKind::Pitch));
+        assert!(out.lines.iter().all(|l| l.kind != PlanLineKind::SlopeArrow));
+    }
+
+    #[test]
+    fn zero_slope_is_skipped() {
+        let mut m = ArchModel::default();
+        let roof = Roof {
+            id: ArchId(10),
+            planes: vec![roof_plane(&[(0.0, 0.0), (4.0, 0.0), (2.0, 2.0)], 0.0, [0.0, 0.0, 4.0, 0.0], 0.0)],
+            ..Roof::default()
+        };
+        m.roofs.push(roof);
+        let mut out = PlanAnnotation::default();
+        roof_plan(&m, &mut out);
+        assert!(out.labels.iter().all(|l| l.kind != PlanLabelKind::Pitch));
+        assert!(out.lines.iter().all(|l| l.kind != PlanLineKind::SlopeArrow));
+    }
+
+    #[test]
+    fn roof_with_no_planes_draws_nothing() {
+        let mut m = ArchModel::default();
+        m.push_roof(Roof::default());
+        let mut out = PlanAnnotation::default();
+        roof_edges(&m, &mut out);
+        roof_plan(&m, &mut out);
+        assert!(out.lines.is_empty());
+        assert!(out.labels.is_empty());
+    }
+
+    #[test]
+    fn single_plane_roof_draws_outline_label_and_arrow() {
+        let mut m = ArchModel::default();
+        let roof = Roof {
+            id: ArchId(11),
+            planes: vec![roof_plane(&[(0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)], 0.5, [0.0, 0.0, 4.0, 0.0], 0.0)],
+            ..Roof::default()
+        };
+        m.roofs.push(roof);
+        let mut out = PlanAnnotation::default();
+        roof_plan(&m, &mut out);
+        let outline = out.lines.iter().filter(|l| l.kind == PlanLineKind::Eave || l.kind == PlanLineKind::Rake).count();
+        assert_eq!(outline, 4);
+        assert_eq!(out.labels.iter().filter(|l| l.kind == PlanLabelKind::Pitch).count(), 1);
+        assert_eq!(out.lines.iter().filter(|l| l.kind == PlanLineKind::SlopeArrow).count(), 1);
+    }
+
+    #[test]
+    fn huge_coordinates_scale_tolerance() {
+        let mut m = ArchModel::default();
+        let s = 1e15;
+        let roof = Roof {
+            id: ArchId(12),
+            planes: vec![
+                roof_plane(&[(0.0, 0.0), (4.0 * s, 0.0), (4.0 * s, 2.0 * s), (0.0, 2.0 * s)], 0.5, [0.0, 0.0, 4.0 * s, 0.0], 0.0),
+                roof_plane(&[(4.0 * s, 0.0), (8.0 * s, 0.0), (8.0 * s, 2.0 * s), (4.0 * s, 2.0 * s)], 0.5, [4.0 * s, 0.0, 8.0 * s, 0.0], 0.0),
+            ],
+            ..Roof::default()
+        };
+        m.roofs.push(roof);
+        let mut out = PlanAnnotation::default();
+        roof_plan(&m, &mut out);
+        let outline = out.lines.iter().filter(|l| l.kind == PlanLineKind::Eave || l.kind == PlanLineKind::Rake).count();
+        assert_eq!(outline, 6);
+    }
+
+    #[test]
+    fn collinear_ring_points_do_not_crash() {
+        let mut m = ArchModel::default();
+        let roof = Roof {
+            id: ArchId(13),
+            planes: vec![roof_plane(&[(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (2.0, 0.0)], 0.5, [0.0, 0.0, 2.0, 0.0], 0.0)],
+            ..Roof::default()
+        };
+        m.roofs.push(roof);
+        let mut out = PlanAnnotation::default();
+        roof_plan(&m, &mut out);
+        assert!(out.lines.iter().all(|l| l.a.is_finite() && l.b.is_finite()));
+    }
+
+    #[test]
+    fn two_roofs_are_drawn_independently() {
+        let mut m = ArchModel::default();
+        let r0 = m.push_roof(Roof {
+            id: ArchId(14),
+            planes: vec![roof_plane(&[(0.0, 0.0), (2.0, 0.0), (1.0, 1.0)], 0.5, [0.0, 0.0, 2.0, 0.0], 0.0)],
+            ..Roof::default()
+        });
+        let r1 = m.push_roof(Roof {
+            id: ArchId(15),
+            planes: vec![roof_plane(&[(5.0, 0.0), (7.0, 0.0), (6.0, 1.0)], 0.25, [5.0, 0.0, 7.0, 0.0], 0.0)],
+            ..Roof::default()
+        });
+        let mut out = PlanAnnotation::default();
+        roof_plan(&m, &mut out);
+        let labels: Vec<_> = out.labels.iter().filter(|l| l.kind == PlanLabelKind::Pitch).collect();
+        assert_eq!(labels.len(), 2);
+        let handles: Vec<_> = labels.iter().map(|l| l.handle).collect();
+        assert!(handles.contains(&roof_handle(r0)));
+        assert!(handles.contains(&roof_handle(r1)));
+    }
 }
