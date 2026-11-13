@@ -318,7 +318,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 let mut clipped_pieces: Vec<(f64, f64, usize)> = Vec::new();
 
                 for (t0, t1, ei) in &all_pieces {
-                    let ring_idx = ei;
+                    let ring_idx = *ei;
                     if ring_idx >= all_rings.len() {
                         continue;
                     }
@@ -342,7 +342,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 // Collect segments from clipped pieces
                 let mut segments: Vec<(Vec2, Vec2)> = Vec::new();
                 for (t0, t1, ei) in &clipped_pieces {
-                    let ring_idx = ei;
+                    let ring_idx = *ei;
                     if ring_idx >= all_rings.len() {
                         continue;
                     }

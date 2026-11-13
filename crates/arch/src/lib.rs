@@ -54,6 +54,7 @@ pub mod light_symbol;
 pub mod molding_line;
 pub mod molding_profile;
 pub mod molding_runs;
+pub mod molding_wrap;
 pub mod opening;
 pub mod opening_top;
 pub mod opening_trim;
