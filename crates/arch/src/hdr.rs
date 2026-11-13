@@ -69,15 +69,19 @@ fn decode_rle_scanlines(data: &[u8], width: usize, height: usize) -> Result<Vec<
     let mut out = vec![0u8; expected];
     let mut pos = 0usize;
     let mut out_pos = 0usize;
+
     for _ in 0..height {
         if pos + 4 > data.len() {
             return Err("truncated HDR scanline header".to_string());
         }
         let row_hdr = &data[pos..pos + 4];
         pos += 4;
-        if row_hdr[0] != 2 || row_hdr[1] != 2 || ((u16::from(row_hdr[2]) << 8) | u16::from(row_hdr[3])) as usize != width {
+
+        let row_width = (u16::from(row_hdr[2]) as usize) << 8 | usize::from(row_hdr[3]);
+        if row_hdr[0] != 2 || row_hdr[1] != 2 || row_width != width {
             return Err("bad HDR scanline header".to_string());
         }
+
         let mut channels = vec![vec![0u8; width]; 4];
         for ch in 0..4 {
             let mut n = 0usize;
@@ -85,41 +89,44 @@ fn decode_rle_scanlines(data: &[u8], width: usize, height: usize) -> Result<Vec<
                 if pos >= data.len() {
                     return Err("truncated HDR RLE data".to_string());
                 }
-                let count = data[pos] as usize;
+                let count = data[pos];
                 pos += 1;
-                if count == 0 || count == 128 {
-                    return Err("invalid HDR RLE count".to_string());
+
+                if count == 0 {
+                    return Err("HDR RLE packet count 0 is invalid".to_string());
                 }
-                if count > 128 {
-                    let run = count - 128;
-                    if run == 0 || pos >= data.len() {
-                        return Err("truncated HDR RLE run".to_string());
+
+                if count <= 128 {
+                    let lit_len = (width - n).min(count as usize);
+                    if lit_len == 0 {
+                        return Err("HDR RLE literal run exceeds scanline width".to_string());
+                    }
+                    if pos + lit_len > data.len() {
+                        return Err("truncated HDR RLE literal data".to_string());
+                    }
+                    for i in 0..lit_len {
+                        channels[ch][n + i] = data[pos + i];
+                    }
+                    pos += lit_len;
+                    n += lit_len;
+                } else {
+                    let run_len = (width - n).min((count - 128) as usize);
+                    if run_len == 0 {
+                        return Err("HDR RLE run exceeds scanline width".to_string());
+                    }
+                    if pos >= data.len() {
+                        return Err("truncated HDR RLE repeat value".to_string());
                     }
                     let value = data[pos];
                     pos += 1;
-                    for _ in 0..run {
-                        if n >= width {
-                            return Err("HDR RLE overrun".to_string());
-                        }
-                        channels[ch][n] = value;
-                        n += 1;
+                    for i in 0..run_len {
+                        channels[ch][n + i] = value;
                     }
-                } else {
-                    let lit = count;
-                    if pos + lit > data.len() {
-                        return Err("truncated HDR RLE literal run".to_string());
-                    }
-                    for _ in 0..lit {
-                        if n >= width {
-                            return Err("HDR RLE overrun".to_string());
-                        }
-                        channels[ch][n] = data[pos];
-                        pos += 1;
-                        n += 1;
-                    }
+                    n += run_len;
                 }
             }
         }
+
         for x in 0..width {
             let i = out_pos + x * 4;
             out[i] = channels[0][x];
@@ -129,6 +136,7 @@ fn decode_rle_scanlines(data: &[u8], width: usize, height: usize) -> Result<Vec<
         }
         out_pos += width * 4;
     }
+
     if pos != data.len() {
         return Err("trailing HDR data".to_string());
     }
@@ -272,6 +280,17 @@ mod tests {
             }
         }
         data
+    }
+
+    #[test]
+    fn polyhaven_hdr_sample_decodes() {
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/library/sample/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr");
+        let bytes = std::fs::read(path).expect("sample HDR should exist in the repo");
+        let img = read_hdr(&bytes).expect("Poly Haven HDR sample should decode");
+        assert_eq!(img.width, 1024);
+        assert_eq!(img.height, 512);
+        assert_eq!(img.rgbe.len(), 1024 * 512 * 4);
     }
 
     #[test]
