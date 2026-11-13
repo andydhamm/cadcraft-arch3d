@@ -93,3 +93,9 @@ cadcraft-cli run --metric --commands docs/arch3d/showcase/bilevel.json --cmd 'ar
 ```sh
 CADCRAFT_RENDER_ADAPTER=fallback python3 tools/showcase/render_all.py --out docs/arch3d/showcase/renders
 ```
+
+`docs/arch3d/showcase/phase-21-showcase.json` adds the full drawing set on top of the two files above (schedules, interior elevations and the sheet set); replay it after them and plot the whole set as one PDF:
+
+```sh
+cadcraft-cli run --metric --commands docs/arch3d/showcase/bilevel.json --commands docs/arch3d/showcase/phase-20-showcase.json --commands docs/arch3d/showcase/phase-21-showcase.json --cmd 'plot {"sheets": "all", "path": "showcase-set.pdf"}'
+```
