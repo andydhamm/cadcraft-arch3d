@@ -93,9 +93,11 @@ fn ends_near(a: &WallRun, b: &WallRun, tol: f64) -> bool {
 }
 
 pub fn snap_junctions(runs: &mut Vec<WallRun>) {
-    let n = runs.len();
-    'outer: for i in 0..n {
-        for end_kind in ["start", "end"] {
+    loop {
+        let n = runs.len();
+        let mut merged = false;
+        'outer: for i in 0..n {
+            for end_kind in ["start", "end"] {
             let e_start = runs[i].start;
             let e_end = runs[i].end;
             let e_dir = dir_of(&runs[i]);
@@ -248,11 +250,15 @@ pub fn snap_junctions(runs: &mut Vec<WallRun>) {
                                 runs[i].start = f_start;
                             }
                             runs.remove(j);
+                            merged = true;
                             break 'outer;
                         }
                     }
                 }
             }
+        }
+        if !merged {
+            break;
         }
     }
 }
