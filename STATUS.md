@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-13 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 30 of 35 segments merged · 10 of 20 acceptance checks**
 
@@ -28,19 +28,19 @@ Updated 2026-11-13 05:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 47.8 h so far · expected done Nov 13 08:41–Nov 14 00:54 UTC |
+| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 48.0 h so far · expected done Nov 13 08:55–Nov 14 01:08 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-30 merged, 3 queued, 1 merging, 1 working
+30 merged, 3 queued, 1 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
-| `p18-countertop-shapes` | Countertop shapes: edges bulge into arcs (a sagitta, with a radius grip), take an edge profile, and an end turns down to the floor as a waterfall of the same material and thickness | working | mai-flash-esc |
+| `p18-countertop-shapes` | Countertop shapes: edges bulge into arcs (a sagitta, with a radius grip), take an edge profile, and an end turns down to the floor as a waterfall of the same material and thickness | gate | mai-flash-esc |
 
 ## Recent merges
 
@@ -63,18 +63,18 @@ Updated 2026-11-13 05:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1228 |
-| bonsai-b | bonsai2-27b | agent | 1182 |
+| bonsai-a | bonsai2-27b | agent | 1229 |
+| bonsai-b | bonsai2-27b | gate | 1183 |
 | bonsai-ws2-a | bonsai2-27b | gate | 1303 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1250 |
-| claude-sonnet-a | sonnet | down | 146 |
-| claude-sonnet-b | sonnet | down | 153 |
-| claude-sonnet-c | sonnet | down | 89 |
-| claude-sonnet-d | sonnet | down | 82 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1097 |
+| claude-sonnet-a | sonnet | idle | 146 |
+| claude-sonnet-b | sonnet | idle | 153 |
+| claude-sonnet-c | sonnet | idle | 89 |
+| claude-sonnet-d | sonnet | idle | 82 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1098 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | agent | 105 |
-| mai-flash-b | mai-code-1.1-flash | gate | 49 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 116 |
-| tturbo-mac | tturbo-ultraheretic | agent | 828 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 447 |
+| mai-flash | mai-code-1.1-flash | idle | 107 |
+| mai-flash-b | mai-code-1.1-flash | agent | 50 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 116 |
+| tturbo-mac | tturbo-ultraheretic | agent | 829 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 448 |
