@@ -166,6 +166,9 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 Some(Value::String(p)) if p == "equirect" => Projection::Equirect,
                 Some(_) => return Err(bad("backdrop", "`projection` must be flat or equirect")),
             };
+            if projection == Projection::Flat && obj.get("horizon").is_some_and(|v| !v.is_null()) {
+                return Err(bad("backdrop", "`horizon` applies only to equirectangular images"));
+            }
             let horizon = horizon_param(obj, "horizon")?.unwrap_or(0.0);
             match s.library.item(item) {
                 Some(r) if r.kind == ItemKind::Backdrop && r.file.is_some() => {
@@ -576,6 +579,142 @@ mod tests {
         assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
         assert_eq!(s.doc().unwrap().arch.backdrop.as_ref().unwrap(), &Backdrop::Colour { colour: [0x10, 0x20, 0x30] });
         assert_eq!(s.undo().unwrap(), Some("Backdrop".to_string()));
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn hdri_refuses_neither_file_nor_item() {
+        let mut s = session();
+        let err = s.execute("backdrop", &json!({"kind": "hdri"})).unwrap_err().to_string();
+        assert!(err.contains("one of `item` or `file` is required"), "{err}");
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn hdri_refuses_both_file_and_item() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-both-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("test.hdr");
+        std::fs::write(&file, hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        let err = s
+            .execute("backdrop", &json!({"kind": "hdri", "file": file.to_string_lossy().to_string(), "item": "own:backdrop-sky"}))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("only one of `item` or `file`"), "{err}");
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn hdri_refuses_negative_intensity() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-negint-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        std::fs::write(dir.join("user/neg.hdr"), hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        s.library.add_user_item(cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-neg".to_string(),
+            name: "Neg HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("neg.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        });
+        let err = s.execute("backdrop", &json!({"kind": "hdri", "item": "user:hdr-neg", "intensity": -0.1})).unwrap_err().to_string();
+        assert!(err.contains("intensity") && err.contains("0 and 100"), "{err}");
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn hdri_rotation_wraps_beyond_360() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-rot-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        std::fs::write(dir.join("user/rot.hdr"), hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        s.library.add_user_item(cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-rot".to_string(),
+            name: "Rot HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("rot.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        });
+        let r = s.execute("backdrop", &json!({"kind": "hdri", "item": "user:hdr-rot", "rotation": 400.0})).unwrap();
+        assert_eq!(r["backdrop"]["rotation"], 40.0);
+        let r = s.execute("backdrop", &json!({"kind": "hdri", "item": "user:hdr-rot", "rotation": -90.0})).unwrap();
+        assert_eq!(r["backdrop"]["rotation"], 270.0);
+    }
+
+    #[test]
+    fn hdri_refuses_horizon_out_of_range() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-hor-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        std::fs::write(dir.join("user/hor.hdr"), hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        s.library.add_user_item(cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-hor".to_string(),
+            name: "Hor HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("hor.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        });
+        let err = s.execute("backdrop", &json!({"kind": "hdri", "item": "user:hdr-hor", "horizon": 46.0})).unwrap_err().to_string();
+        assert!(err.contains("horizon") && err.contains("-45 and 45"), "{err}");
+        let err = s.execute("backdrop", &json!({"kind": "hdri", "item": "user:hdr-hor", "horizon": -46.0})).unwrap_err().to_string();
+        assert!(err.contains("horizon") && err.contains("-45 and 45"), "{err}");
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn flat_projection_refuses_horizon() {
+        let mut s = session();
+        let err = s
+            .execute("backdrop", &json!({"kind": "image", "item": "own:backdrop-sky", "projection": "flat", "horizon": 5.0}))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("horizon"), "{err}");
+        assert!(s.doc().unwrap().arch.backdrop.is_none());
+    }
+
+    #[test]
+    fn hdri_refuses_nonexistent_file() {
+        let mut s = session();
+        let err = s.execute("backdrop", &json!({"kind": "hdri", "file": "/nonexistent/path/test.hdr"})).unwrap_err().to_string();
+        assert!(err.contains("file") || err.contains("nonexistent"), "{err}");
         assert!(s.doc().unwrap().arch.backdrop.is_none());
     }
 }
