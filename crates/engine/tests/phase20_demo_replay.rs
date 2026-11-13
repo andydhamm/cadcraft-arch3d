@@ -113,7 +113,7 @@ fn level_str(v: &Value) -> String {
 }
 
 /// Run `arch.inspect` with the given parameter map and return the reply.
-fn inspect(session: &Session, params: Value) -> Value {
+fn inspect(session: &mut Session, params: Value) -> Value {
     session.execute("arch.inspect", &params).unwrap_or_else(|e| panic!("arch.inspect was refused: {e}"))
 }
 
@@ -155,7 +155,7 @@ fn trays_of(reply: &Value) -> Vec<Value> {
 }
 
 /// The `plan` object (`{"plan": name}`) for a view, with its `lines` and `labels`.
-fn plan_of_view(session: &Session, view_name: &str) -> Value {
+fn plan_of_view(session: &mut Session, view_name: &str) -> Value {
     let reply = session
         .execute("arch.inspect", &serde_json::json!({"plan": view_name}))
         .unwrap_or_else(|e| panic!("arch.inspect plan {view_name} refused: {e}"));
