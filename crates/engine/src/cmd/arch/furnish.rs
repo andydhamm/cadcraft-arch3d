@@ -259,16 +259,22 @@ fn built_in_name<'a>(item: &'a ItemRecord, prefix: &str) -> Result<&'a str> {
 }
 
 /// The backdrop command's parameters for a backdrop item: the built-in colour and gradient take
-/// the call's `colour` or `top` and `bottom`; an image item its `projection`.
-fn backdrop_params(item: &ItemRecord, m: Option<&Map<String, Value>>) -> Value {
-    let (mut q, forward): (Value, &[&str]) = match item.id.as_str() {
-        "backdrop:colour" => (json!({ "kind": "colour" }), &["colour"]),
-        "backdrop:gradient" => (json!({ "kind": "gradient" }), &["top", "bottom"]),
-        _ => (json!({ "kind": "image", "item": item.id }), &["projection"]),
+/// the call's `colour` or `top` and `bottom`; image and HDR items forward the relevant projection,
+/// horizon and intensity settings.
+pub(crate) fn backdrop_params(item: &ItemRecord, m: Option<&Map<String, Value>>) -> Value {
+    let is_hdr = item.file.as_deref().is_some_and(|f| f.to_ascii_lowercase().ends_with(".hdr"));
+    let (mut q, forward): (Value, &[&str]) = if item.id == "backdrop:colour" {
+        (json!({ "kind": "colour" }), &["colour"])
+    } else if item.id == "backdrop:gradient" {
+        (json!({ "kind": "gradient" }), &["top", "bottom"])
+    } else if is_hdr {
+        (json!({ "kind": "hdri", "item": item.id }), &["intensity", "rotation", "horizon"])
+    } else {
+        (json!({ "kind": "image", "item": item.id }), &["projection", "horizon"])
     };
     for k in forward {
         if let Some(v) = get(m, k) {
-            q[*k] = v.clone();
+            q[k] = v.clone();
         }
     }
     q
