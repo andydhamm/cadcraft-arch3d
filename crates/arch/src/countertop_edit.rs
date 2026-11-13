@@ -182,11 +182,12 @@ pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result
     if ct.edge(edge).waterfall && profile != EdgeProfile::Square {
         return Err(format!("edge {edge}: a waterfall is only allowed on straight, square edges"));
     }
+    if ct.edge(edge).sagitta != 0.0 {
+        return Err(format!("edge {edge}: a profiled edge must stay straight"));
+    }
     let mut out = ct.clone();
     out.edges.resize(n, CounterEdge::default());
-    out.edges[edge].sagitta = 0.0;
     out.edges[edge].profile = profile;
-    out.edges[edge].waterfall = false;
     validate(&out)?;
     Ok(out)
 }
@@ -272,7 +273,7 @@ pub fn sampled_ring(ring: &[Vec2], sagittas: &[f64]) -> Vec<Vec2> {
         let dir = (q - p) * (1.0 / chord);
         let normal = Vec2::new(dir.y, -dir.x);
         let mid = p.mid(q);
-        let centre = mid + normal * (s - s.signum() * r);
+        let centre = mid + normal * s.signum() * (r - m);
         let half = (chord / 2.0).atan2(r - m);
         let total = 2.0 * half;
         let segs = ((total.to_degrees() / MAX_SEGMENT_DEG).ceil() as usize).clamp(MIN_ARC_SEGMENTS, MAX_ARC_SEGMENTS);
