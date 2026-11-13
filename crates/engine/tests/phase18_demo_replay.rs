@@ -152,7 +152,7 @@ fn phase18_demo_kitchen_has_every_feature() {
         })
         .unwrap();
     assert!(
-        edges.iter().any(|edge| edge.get("index") == Some(&Value::Number(first_move_edge as u64).into())),
+        edges.iter().any(|edge| edge.get("index") == Some(&Value::Number((first_move_edge as u64).into()))),
         "the first moved edge must exist in the final countertop"
     );
 
@@ -163,7 +163,7 @@ fn phase18_demo_kitchen_has_every_feature() {
     );
 
     let cabinets = as_array(&inspect, "cabinets");
-    let corner_cabinets = cabinets.iter().filter(|cab| cab.get("corner").is_some()).collect::<Vec<_>>();
+    let corner_cabinets = cabinets.iter().filter(|cab| cab.get("corner").and_then(Value::as_object).is_some()).collect::<Vec<_>>();
     assert_eq!(corner_cabinets.len(), 1, "demo should include exactly one corner cabinet");
     let corner_id = corner_cabinets[0].get("id").and_then(Value::as_str).unwrap().to_string();
     let partner = corner_cabinets[0].get("corner").and_then(|c| c.get("partner")).and_then(Value::as_str).unwrap().to_string();
@@ -171,8 +171,8 @@ fn phase18_demo_kitchen_has_every_feature() {
     assert!(!auto_rows.is_empty(), "demo should include an automatic countertop");
     assert!(
         auto_rows.iter().any(|row| {
-            let ids = row.get("cabinets").and_then(Value::as_array).unwrap_or(&Vec::new());
-            let ids = ids.iter().filter_map(Value::as_str).collect::<Vec<_>>();
+            let ids =
+                row.get("cabinets").and_then(Value::as_array).map(|arr| arr.iter().filter_map(Value::as_str).collect::<Vec<_>>()).unwrap_or_default();
             ids.iter().any(|id| *id == corner_id) && ids.iter().any(|id| *id == partner)
         }),
         "automatic countertop should include the corner cabinet and its partner"
@@ -183,12 +183,12 @@ fn phase18_demo_kitchen_has_every_feature() {
         "demo should include at least two filler cabinets"
     );
     assert!(
-        cabinets.iter().any(|cab| cab.get("kind") == Some(&Value::String("wall".into())) && cab.get("crown").is_some()),
+        cabinets.iter().any(|cab| cab.get("kind") == Some(&Value::String("wall".into())) && cab.get("crown").and_then(Value::as_object).is_some()),
         "demo should include a wall cabinet with a crown"
     );
     assert!(
         cabinets.iter().any(|cab| cab.get("fronts") == Some(&Value::String("open".into()))
-            && cab.get("shelves").and_then(Value::as_array).map_or(false, |shelves| !shelves.is_empty())),
+            && cab.get("shelves").and_then(Value::as_array).is_some_and(|shelves| !shelves.is_empty())),
         "demo should include an open cabinet with a shelf"
     );
     assert!(
