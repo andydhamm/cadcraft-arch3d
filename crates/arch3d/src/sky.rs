@@ -200,22 +200,44 @@ fn horizontal_illuminance(s: [f64; 3], tw: f64, t: f64) -> f64 {
     e
 }
 
+/// A sky for one sun and turbidity with the per-sun constants computed once, so a bake of
+/// many texels costs one `radiance` call each and nothing more.
+#[derive(Clone)]
+pub struct SkyModel {
+    /// `None` when the sun direction is unusable (the night sky applies everywhere).
+    day: Option<(DaySky, f64, f64)>,
+    /// Grey-ground radiance below the horizon, computed on first use.
+    ground: std::cell::OnceCell<f64>,
+}
+
+impl SkyModel {
+    /// The sky for `sun` (toward the sun) and `turbidity` (clamped to 1.7..=10, 3 if not finite).
+    pub fn new(sun: [f64; 3], turbidity: f64) -> Self {
+        let t = if turbidity.is_finite() { turbidity.clamp(1.7, 10.0) } else { 3.0 };
+        let day = sun_for_day(sun).map(|(s, tw)| (DaySky::new(s, t), tw, t));
+        Self { day, ground: std::cell::OnceCell::new() }
+    }
+
+    /// Radiance in linear nits looking along `view`; the value [`sky_radiance`] returns.
+    pub fn radiance(&self, view: [f64; 3]) -> [f64; 3] {
+        let (Some(v), Some((pre, tw, t))) = (unit(view), self.day.as_ref()) else { return NIGHT_SKY };
+        let mut out = if v[2] >= 0.0 {
+            day_sky(v, pre).map(|c| c * tw)
+        } else {
+            let g = *self.ground.get_or_init(|| GROUND_ALBEDO / std::f64::consts::PI * horizontal_illuminance(pre.sun, *tw, *t));
+            [g, g, g]
+        };
+        for (o, n) in out.iter_mut().zip(NIGHT_SKY) {
+            *o = if o.is_finite() { *o + n } else { n };
+        }
+        out
+    }
+}
+
 /// Sky radiance in linear nits (Rec.709) looking along `view` with the sun toward `sun`.
 /// Below the horizon: a grey ground of albedo 0.2 lit by the sky and sun. Never NaN.
 pub fn sky_radiance(view: [f64; 3], sun: [f64; 3], turbidity: f64) -> [f64; 3] {
-    let t = if turbidity.is_finite() { turbidity.clamp(1.7, 10.0) } else { 3.0 };
-    let (Some(v), Some((s, tw))) = (unit(view), sun_for_day(sun)) else { return NIGHT_SKY };
-    let pre = DaySky::new(s, t);
-    let mut out = if v[2] >= 0.0 {
-        day_sky(v, &pre).map(|c| c * tw)
-    } else {
-        let g = GROUND_ALBEDO / std::f64::consts::PI * horizontal_illuminance(s, tw, t);
-        [g, g, g]
-    };
-    for (o, n) in out.iter_mut().zip(NIGHT_SKY) {
-        *o = if o.is_finite() { *o + n } else { n };
-    }
-    out
+    SkyModel::new(sun, turbidity).radiance(view)
 }
 
 /// Unit vector toward the moon in drawing space: compass azimuth (0 north, 90 east) and
