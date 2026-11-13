@@ -78,7 +78,7 @@ pub(crate) fn clip_outside(a: Vec2, b: Vec2, rings: &[Vec<Vec2>]) -> Vec<(f64, f
     }
 
     breaks.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    breaks.dedup_by(|a, b| (a - b).abs() < 1e-9);
+    breaks.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
 
     // Keep sub-intervals whose midpoint is outside all rings
     for w in breaks.windows(2) {
@@ -143,7 +143,7 @@ pub(crate) fn soffit_segments(room: &Room, soffits: &[(Vec<Vec2>, bool)]) -> Vec
 
             // Must not be inside or on any OTHER soffit ring
             let in_other = soffits.iter().any(|(other_ring, _)| {
-                if other_ring == ring {
+                if other_ring == *ring {
                     return false;
                 }
                 point_in_poly(&mid, other_ring) || dist_to_poly_boundary(&mid, other_ring) < 1e-6
@@ -185,10 +185,9 @@ pub(crate) fn tray_paths(model: &ArchModel, room: &Room) -> Vec<(Vec<Vec2>, f64)
             let regions = cadcraft_geom::skeleton::inset(&final_ring, &[], TRAY_SIDE);
             if let Ok(regions) = regions {
                 if regions.len() == 1 {
-                    if let Some(outer) = regions[0].outer.as_ref() {
-                        if outer.len() >= 3 {
-                            final_ring = outer.clone();
-                        }
+                    let outer = &regions[0].outer;
+                    if outer.len() >= 3 {
+                        final_ring = outer.clone();
                     }
                 }
             }
