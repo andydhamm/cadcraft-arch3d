@@ -335,7 +335,7 @@ mod tests {
             d.layers.clear();
             for i in 0..1000 {
                 let name = if i % 2 == 0 { format!("E-LAYER{}", i) } else { format!("A-LAYER{}", i) };
-                d.layers.push(Layer::new(name));
+                d.layers.push(Layer::new(&name));
             }
         }
         let result = s.execute("view.electrical", &json!({})).unwrap();
