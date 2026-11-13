@@ -41,7 +41,12 @@ fn cabinet_visible(scene: &Scene3d, cabinet: &Cabinet) -> bool {
 }
 
 fn cabinet_interval(cabinet: &Cabinet, look: [f64; 2]) -> Option<(f64, f64)> {
-    if !cabinet.width.is_finite() || !cabinet.depth.is_finite() || !cabinet.position.x.is_finite() || !cabinet.position.y.is_finite() {
+    if !cabinet.width.is_finite()
+        || !cabinet.depth.is_finite()
+        || !cabinet.position.x.is_finite()
+        || !cabinet.position.y.is_finite()
+        || !cabinet.rotation.is_finite()
+    {
         return None;
     }
     let rotation = cabinet.rotation.to_radians();
@@ -216,7 +221,7 @@ mod tests {
         };
         let mut b = Cabinet {
             kind: CabinetKind::Base,
-            position: Vec2::new(0.0, 5.4),
+            position: Vec2::new(0.0, 5.35),
             rotation: 90.0,
             width: 0.5,
             depth: 0.3,
