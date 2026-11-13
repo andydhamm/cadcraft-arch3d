@@ -1484,3 +1484,76 @@ fn phase_18_edits_through_commands_keep_the_cache_exact() {
         assert_eq!(inc["digest"], full["digest"], "{cmd} {params}: the cache differs from the full build");
     }
 }
+
+#[test]
+fn phase_18_degenerate_objects_keep_the_cache_exact() {
+    let s = phase_18_session();
+    let mut m = s.doc().expect("a drawing").arch.clone();
+    // Degenerate phase-18 objects: zero-width cabinet, zero-height backsplash, zero-thickness countertop.
+    if let Some(cb) = m.cabinets.first_mut() {
+        cb.width = 0.0;
+    }
+    if let Some(bs) = m.backsplashes.first_mut() {
+        bs.height = 0.0;
+    }
+    if let Some(ct) = m.countertops.first_mut() {
+        ct.thickness = 0.0;
+    }
+    let (mut cache, full) = SceneCache::new(&m);
+    assert!(!full.incremental);
+    assert_eq!(signature(cache.scene()), signature(&Scene3d::build(&m)));
+    let mut state = 100u64;
+    for k in 0..50 {
+        let what = phase_18_edit(&mut m, &mut state);
+        let stats = cache.update(&m);
+        let rebuilt = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&rebuilt), "degenerate edit {k} ({what})");
+        assert!(stats.incremental && stats.rebuilt <= stats.objects, "degenerate edit {k} ({what}): {stats:?}");
+    }
+}
+
+#[test]
+fn phase_18_hostile_command_input_is_refused() {
+    let mut s = phase_18_session();
+    let m = arch_of(&s);
+    let (mut cache, _) = SceneCache::new(&m);
+    let before = signature(cache.scene());
+    // Non-existent ids are refused with an error, never clamped.
+    assert!(s.execute("cabinet.edit", &json!({"id": "cb999", "width": 0.5})).is_err());
+    assert!(s.execute("backsplash.edit", &json!({"id": "bs999", "height": 0.3})).is_err());
+    assert!(s.execute("countertop.edit", &json!({"id": "ct999", "thickness": 0.038})).is_err());
+    assert!(s.execute("moldingline.edit", &json!({"id": "ml999", "inset": 0.0})).is_err());
+    assert!(s.execute("room.moldings", &json!({"room": "r999", "moldings": []})).is_err());
+    assert!(s.execute("wall.split", &json!({"id": "w999", "height": 1.0})).is_err());
+    // The cache must be unchanged by refused edits.
+    let after = signature(cache.scene());
+    assert_eq!(after, before, "hostile edits must not change the cache");
+    assert_eq!(after, signature(&Scene3d::build(&arch_of(&s))), "cache must equal the full build");
+}
+
+#[test]
+fn phase_18_undo_all_edits_restores_original_scene() {
+    let mut s = phase_18_session();
+    let m0 = arch_of(&s);
+    let (mut cache, _) = SceneCache::new(&m0);
+    let before = signature(cache.scene());
+    // Three phase-18 edits through commands.
+    s.execute("cabinet.edit", &json!({"id": "cb0", "width": 0.7})).unwrap();
+    s.execute("backsplash.edit", &json!({"id": "bs0", "height": 0.4})).unwrap();
+    s.execute("moldingline.edit", &json!({"id": "ml0", "inset": 0.05})).unwrap();
+    // The scene must have changed.
+    let m1 = arch_of(&s);
+    cache.update(&m1);
+    let after = signature(cache.scene());
+    assert_ne!(before, after, "edits should change the scene");
+    // Undo all three edits.
+    for _ in 0..3 {
+        s.execute("undo", &json!({})).unwrap();
+    }
+    // The scene must be exactly restored.
+    let m2 = arch_of(&s);
+    cache.update(&m2);
+    let restored = signature(cache.scene());
+    assert_eq!(restored, before, "undo should restore the original scene");
+    assert_eq!(restored, signature(&Scene3d::build(&m2)), "cache must equal the full build after undo");
+}

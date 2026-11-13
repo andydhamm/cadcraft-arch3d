@@ -326,4 +326,54 @@ mod tests {
         let g = super::super::generate(&m, &Scene3d::default(), &v, 2);
         assert_eq!(g.error.as_deref(), Some("the room of R East is gone"));
     }
+
+    #[test]
+    fn restrict_non_convex_room() {
+        let (mut m, v) = room_model();
+        // Make the room L-shaped (non-convex) by cutting a corner.
+        let mut room = m.room(v.room.unwrap()).cloned().unwrap();
+        room.polygon =
+            vec![Vec2::new(0.0, 0.05), Vec2::new(6.0, 0.05), Vec2::new(6.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+        m.rooms.clear();
+        m.push_room(room);
+        let scene = Scene3d { meshes: vec![quad_x(5.95, -10.0, 10.0, -1.0, 5.0, 1, 0.0)], ..Default::default() };
+        let out = restrict(&m, &scene, &v).unwrap();
+        // The clipped result should only contain geometry within the L-shaped room's extent.
+        let (lo, hi) = bounds(&out);
+        assert!(hi[1] <= 4.0 + 1e-5, "y max {hi:?} exceeds room");
+        assert!(lo[1] >= 0.05 - 1e-5, "y min {lo:?} below room");
+    }
+
+    #[test]
+    fn restrict_nan_coordinates() {
+        let (mut m, v) = room_model();
+        // Add a wall with NaN coordinates.
+        m.push_wall(cadcraft_doc::Wall {
+            start: Vec2::new(f64::NAN, 0.0),
+            end: Vec2::new(1.0, 0.0),
+            thickness: 0.1,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d { meshes: vec![quad_x(5.95, 0.5, 3.0, 0.0, 2.0, 1, 0.0)], ..Default::default() };
+        // Should not panic; may succeed or return an error.
+        let _ = restrict(&m, &scene, &v);
+    }
+
+    #[test]
+    fn restrict_empty_scene() {
+        let (m, v) = room_model();
+        let scene = Scene3d::default();
+        let out = restrict(&m, &scene, &v).unwrap();
+        assert!(out.meshes.is_empty());
+    }
+
+    #[test]
+    fn resolve_room_no_room_point() {
+        let (m, v) = room_model();
+        // A view with no room_point
+        let v2 = ArchView { room_point: None, ..v.clone() };
+        // Should still resolve to the room by id
+        assert_eq!(resolve_room(&m, &v2), v.room);
+    }
 }
