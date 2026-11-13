@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-13 01:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 27 of 35 segments merged · 8 of 20 acceptance checks**
 
@@ -28,14 +28,14 @@ Updated 2026-11-13 01:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 8 / 20 | 43.8 h so far · expected done Nov 13 06:44–Nov 14 00:06 UTC |
+| 18 | Interior finish, kitchen and bath | building | 8 / 20 | 44.0 h so far · expected done Nov 13 06:59–Nov 14 00:21 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-27 merged, 3 merging, 3 queued, 1 working, 1 gate
+27 merged, 4 merging, 3 queued, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -43,7 +43,7 @@ Updated 2026-11-13 01:15 UTC. This page and the card in the README are regenerat
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
 | `p18-countertop-shapes` | Countertop shapes: edges bulge into arcs (a sagitta, with a radius grip), take an edge profile, and an end turns down to the floor as a waterfall of the same material and thickness | working | mai-flash-b |
 | `p18-backsplash` | Backsplash: `backsplash {run | wall}` covers the wall face behind a counter from the counter top to the underside of the wall cabinets (else a set height, default 0.45), 10 mm thick, its own material, top to the ceiling on demand, per-cabinet on / off | merging | claude-sonnet-c |
-| `p18-face-appliances` | Face appliances: a microwave drawer, wall oven or warming drawer placed on a cabinet face replaces that front item at the appliance's height; a tall cabinet stacks two | gate | mai-flash |
+| `p18-face-appliances` | Face appliances: a microwave drawer, wall oven or warming drawer placed on a cabinet face replaces that front item at the appliance's height; a tall cabinet stacks two | merging | mai-flash |
 
 ## Recent merges
 
@@ -66,18 +66,18 @@ Updated 2026-11-13 01:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1216 |
-| bonsai-b | bonsai2-27b | agent | 1176 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1293 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1246 |
-| claude-sonnet-a | sonnet | gate | 145 |
+| bonsai-a | bonsai2-27b | agent | 1218 |
+| bonsai-b | bonsai2-27b | agent | 1177 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1294 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1248 |
+| claude-sonnet-a | sonnet | idle | 146 |
 | claude-sonnet-b | sonnet | idle | 153 |
 | claude-sonnet-c | sonnet | idle | 89 |
 | claude-sonnet-d | sonnet | gate | 81 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1080 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1081 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 103 |
+| mai-flash | mai-code-1.1-flash | idle | 104 |
 | mai-flash-b | mai-code-1.1-flash | agent | 48 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 109 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 109 |
 | tturbo-mac | tturbo-ultraheretic | gate | 819 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 434 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 435 |
