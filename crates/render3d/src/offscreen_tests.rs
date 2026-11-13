@@ -590,6 +590,7 @@ fn strip_raster_light() -> cadcraft_arch3d::light::SceneLight {
                 position: Vec3::new(1.0 + (3.0 - 1.0) * t, 2.0, 2.4),
                 normal: Vec3::new(0.0, 0.0, -1.0),
                 intensity: 500.0 * (3.0 - 1.0) / pieces as f64 / std::f64::consts::PI,
+                ..Default::default()
             }
         })
         .collect();
