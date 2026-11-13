@@ -165,4 +165,57 @@ mod tests {
         reference_lines(&m, 1, &ReferenceDisplay { level: 0, ..ReferenceDisplay::default() }, &mut out);
         assert!(out.lines.is_empty());
     }
+
+    #[test]
+    fn zero_and_negative_thickness_walls_are_skipped() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, elevation: 0.0, ..Level::default() }, Level { index: 1, elevation: 3.0, ..Level::default() }];
+        let zero_thick = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.0, height: 2.4, ..Wall::default() };
+        m.push_wall(zero_thick);
+        let neg_thick = Wall { start: Vec2::new(0.0, 1.0), end: Vec2::new(4.0, 1.0), thickness: -0.1, height: 2.4, ..Wall::default() };
+        m.push_wall(neg_thick);
+        let good = Wall { start: Vec2::new(0.0, 2.0), end: Vec2::new(4.0, 2.0), thickness: 0.2, height: 2.4, ..Wall::default() };
+        let good_id = m.push_wall(good);
+        let mut out = PlanAnnotation::default();
+        reference_lines(&m, 1, &ReferenceDisplay { level: 0, ..ReferenceDisplay::default() }, &mut out);
+        let handles: BTreeSet<_> = out.lines.iter().map(|l| l.handle).collect();
+        assert!(handles.contains(&arch_handle(good_id)));
+        assert_eq!(handles.len(), 1);
+    }
+
+    #[test]
+    fn non_finite_thickness_walls_are_skipped() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, elevation: 0.0, ..Level::default() }, Level { index: 1, elevation: 3.0, ..Level::default() }];
+        let nan_thick = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: f64::NAN, height: 2.4, ..Wall::default() };
+        m.push_wall(nan_thick);
+        let inf_thick = Wall { start: Vec2::new(0.0, 1.0), end: Vec2::new(4.0, 1.0), thickness: f64::INFINITY, height: 2.4, ..Wall::default() };
+        m.push_wall(inf_thick);
+        let mut out = PlanAnnotation::default();
+        reference_lines(&m, 1, &ReferenceDisplay { level: 0, ..ReferenceDisplay::default() }, &mut out);
+        assert!(out.lines.is_empty());
+    }
+
+    #[test]
+    fn empty_model_produces_no_lines() {
+        let m = ArchModel::default();
+        let mut out = PlanAnnotation::default();
+        reference_lines(&m, 0, &ReferenceDisplay::default(), &mut out);
+        assert!(out.lines.is_empty());
+    }
+
+    #[test]
+    fn shown_level_missing_falls_back_to_base_level() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, elevation: 0.0, ..Level::default() }];
+        let on_ref = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.4, base_level: 0, ..Wall::default() };
+        let on_ref_id = m.push_wall(on_ref);
+        let on_shown = Wall { start: Vec2::new(0.0, 1.0), end: Vec2::new(4.0, 1.0), thickness: 0.2, height: 2.4, base_level: 5, ..Wall::default() };
+        let on_shown_id = m.push_wall(on_shown);
+        let mut out = PlanAnnotation::default();
+        reference_lines(&m, 5, &ReferenceDisplay { level: 0, ..ReferenceDisplay::default() }, &mut out);
+        let handles: BTreeSet<_> = out.lines.iter().map(|l| l.handle).collect();
+        assert!(handles.contains(&arch_handle(on_ref_id)));
+        assert!(!handles.contains(&arch_handle(on_shown_id)));
+    }
 }
