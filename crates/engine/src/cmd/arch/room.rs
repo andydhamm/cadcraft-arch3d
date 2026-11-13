@@ -1640,6 +1640,81 @@ mod tests {
     /// A room edit that moves the ceiling re-seats the ceiling items hung from it; an item moved
     /// off the ceiling by hand stays.
     #[test]
+    fn room_type_key_covers_all_variants() {
+        // Every RoomType variant must map to a stable lowerCamelCase key.
+        assert_eq!(room_type_key(RoomType::Living), "living");
+        assert_eq!(room_type_key(RoomType::Bedroom), "bedroom");
+        assert_eq!(room_type_key(RoomType::Kitchen), "kitchen");
+        assert_eq!(room_type_key(RoomType::Bath), "bath");
+        assert_eq!(room_type_key(RoomType::Closet), "closet");
+        assert_eq!(room_type_key(RoomType::Utility), "utility");
+        assert_eq!(room_type_key(RoomType::Dining), "dining");
+        assert_eq!(room_type_key(RoomType::Family), "family");
+        assert_eq!(room_type_key(RoomType::Entry), "entry");
+        assert_eq!(room_type_key(RoomType::Laundry), "laundry");
+        assert_eq!(room_type_key(RoomType::Garage), "garage");
+        assert_eq!(room_type_key(RoomType::Porch), "porch");
+        assert_eq!(room_type_key(RoomType::Deck), "deck");
+        assert_eq!(room_type_key(RoomType::OpenBelow), "openBelow");
+        assert_eq!(room_type_key(RoomType::Other), "other");
+    }
+
+    #[test]
+    fn room_type_name_delegates_to_key() {
+        // room_type_name must agree with room_type_key for every variant.
+        for (input, variant) in [
+            ("living", RoomType::Living),
+            ("bedroom", RoomType::Bedroom),
+            ("kitchen", RoomType::Kitchen),
+            ("bath", RoomType::Bath),
+            ("closet", RoomType::Closet),
+            ("utility", RoomType::Utility),
+            ("dining", RoomType::Dining),
+            ("family", RoomType::Family),
+            ("entry", RoomType::Entry),
+            ("laundry", RoomType::Laundry),
+            ("garage", RoomType::Garage),
+            ("porch", RoomType::Porch),
+            ("deck", RoomType::Deck),
+            ("openbelow", RoomType::OpenBelow),
+            ("other", RoomType::Other),
+        ] {
+            assert_eq!(room_type_name(variant), room_type_key(variant), "mismatch for {input}");
+        }
+    }
+
+    #[test]
+    fn room_level_guard_creates_ground_level() {
+        // When `level` is specified but no levels exist, the ground level is created
+        // before the edit-path branch, and a refused call leaves no undo step.
+        // Session::new() already creates a ground level, so the guard is a no-op here,
+        // but the refusal path (level 1 doesn't exist on a one-level drawing) is still
+        // exercised: no room is created and the level count is unchanged.
+        let mut s = new_session();
+        let levels_before = s.doc().unwrap().arch.levels.len();
+        // This should refuse (level 1 doesn't exist yet).
+        let r = s.execute("room", &json!({ "points": square_points(), "level": 1 }));
+        assert!(r.is_err());
+        // The level count is unchanged.
+        assert_eq!(s.doc().unwrap().arch.levels.len(), levels_before);
+        // And no room was created.
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
+    }
+
+    #[test]
+    fn room_find_level_rejects_empty_and_whitespace() {
+        let mut s = new_session();
+        s.doc_mut().unwrap().arch.ensure_ground_level();
+        // Empty string is unknown.
+        let r = s.execute("room", &json!({ "points": square_points(), "level": "" }));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })));
+        // Whitespace-only string is unknown.
+        let r = s.execute("room", &json!({ "points": square_points(), "level": "   " }));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })));
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
+    }
+
+    #[test]
     fn room_edit_reseats_ceiling_items() {
         use cadcraft_doc::arch::{Furnishing, Placement};
         let mut s = new_session();

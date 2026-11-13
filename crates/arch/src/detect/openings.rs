@@ -885,6 +885,18 @@ mod tests {
     }
 
     #[test]
+    fn a_window_with_one_jamb_is_found() {
+        let (mut items, walls) = wall_with_jambs(true);
+        // Glass line from the left jamb to the middle of the gap
+        items.push(seg((1.94, 0.0), (2.6, 0.0), "0"));
+        let found = find_openings(&lw(items), &walls);
+        assert_eq!(found.len(), 1, "{found:#?}");
+        let w = &found[0];
+        assert_eq!(w.kind, CandKind::Window);
+        assert!((w.width - 0.66).abs() < 0.01, "{w:?}");
+    }
+
+    #[test]
     fn hostile_linework_never_panics() {
         let big = 1.0e300;
         let walls = [
