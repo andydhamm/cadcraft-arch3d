@@ -395,7 +395,7 @@ pub fn run_length(r: &MoldingRun) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::arch::{ArchModel, Level, MoldingKind, Room, RoomMolding, RoomType, Wall};
+    use cadcraft_doc::arch::{ArchModel, Level, MoldingKind, Room, RoomMolding, RoomType, Tray, TraySides, Wall};
     use cadcraft_geom::Vec2;
 
     #[test]
@@ -842,6 +842,74 @@ mod tests {
         let (b, t) = span.unwrap();
         assert!((b - 0.0).abs() < 1e-9);
         assert!((t - 5.1).abs() < 1e-9); // 2.7 + 2.4
+    }
+
+    #[test]
+    fn crown_offset_lowers_z() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        let room_poly = vec![Vec2::new(0.1, 0.1), Vec2::new(4.1, 0.1), Vec2::new(4.1, 3.1), Vec2::new(0.1, 3.1)];
+        let room = Room {
+            polygon: room_poly,
+            room_type: RoomType::Living,
+            level: 0,
+            ceiling_height: Some(2.4),
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.1,
+                ..Default::default()
+            }],
+            ..Room::default()
+        };
+        model.push_room(room.clone());
+        model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.2, 0.0), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(4.2, 0.0), end: Vec2::new(4.2, 3.2), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(4.2, 3.2), end: Vec2::new(0.0, 3.2), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(0.0, 3.2), end: Vec2::new(0.0, 0.0), thickness: 0.2, ..Wall::default() });
+
+        let runs = room_runs(&model, &room);
+        let crown_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Crown).collect();
+        assert!(!crown_runs.is_empty());
+        // Crown z = e + ceiling_h - offset - h = 0 + 2.4 - 0.1 - h = 2.3 - h
+        // With offset 0, z is in (2.0, 2.4) per z_values_per_kind, so h is in (0, 0.4).
+        // With offset 0.1, z should be in (1.9, 2.3).
+        for r in &crown_runs {
+            assert!(r.z[0] > 1.9 && r.z[0] < 2.3, "crown z {} out of range with offset 0.1", r.z[0]);
+        }
+    }
+
+    #[test]
+    fn tray_empty_polygon_uses_inset() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        let room_poly = vec![Vec2::new(0.1, 0.1), Vec2::new(4.1, 0.1), Vec2::new(4.1, 3.1), Vec2::new(0.1, 3.1)];
+        let room = Room {
+            polygon: room_poly,
+            room_type: RoomType::Living,
+            level: 0,
+            ceiling_height: Some(2.4),
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.0,
+                ..Default::default()
+            }],
+            ..Room::default()
+        };
+        model.push_room(room.clone());
+        model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.2, 0.0), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(4.2, 0.0), end: Vec2::new(4.2, 3.2), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(4.2, 3.2), end: Vec2::new(0.0, 3.2), thickness: 0.2, ..Wall::default() });
+        model.push_wall(Wall { start: Vec2::new(0.0, 3.2), end: Vec2::new(0.0, 0.0), thickness: 0.2, ..Wall::default() });
+
+        // Tray with empty polygon, uses inset to derive outline
+        model.trays.push(Tray { room: room.id, level: 0, polygon: vec![], inset: 0.5, depth: 0.2, sides: TraySides::Vertical, ..Default::default() });
+
+        let runs = room_runs(&model, &room);
+        let crown_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Crown).collect();
+        // Should have the wall crown and the tray crown
+        assert!(crown_runs.len() >= 2, "expected at least 2 crown runs, got {}", crown_runs.len());
     }
 
     #[test]

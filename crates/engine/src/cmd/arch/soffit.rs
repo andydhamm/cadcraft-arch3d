@@ -422,6 +422,15 @@ mod tests {
     }
 
     #[test]
+    fn soffit_moldings_param_sets_no_moldings() {
+        let mut s = house();
+        let r = s.execute("soffit", &json!({"rect": [[7.0, 7.3], [9.0, 7.9]], "bottom": 2.1, "moldings": false})).unwrap();
+        assert_eq!(r["moldings"], false);
+        let d = s.doc().unwrap();
+        assert!(d.arch.soffits[0].no_moldings);
+    }
+
+    #[test]
     fn moving_a_soffit_reseats_ceiling_items_and_lights() {
         crate::library::testing::install_io();
         let mut s = house();
