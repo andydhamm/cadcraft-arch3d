@@ -183,12 +183,10 @@ pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result
     if ct.edge(edge).waterfall && profile != EdgeProfile::Square {
         return Err(format!("edge {edge}: a waterfall is only allowed on straight, square edges"));
     }
-    if ct.edge(edge).sagitta != 0.0 {
-        return Err(format!("edge {edge}: a profiled edge must be straight; clear the sagitta first"));
-    }
     let mut out = ct.clone();
     out.edges.resize(n, CounterEdge::default());
     out.edges[edge].profile = profile;
+    out.edges[edge].sagitta = 0.0;
     validate(&out)?;
     Ok(out)
 }
@@ -485,7 +483,9 @@ mod tests {
     fn set_profile_on_arc_edge_refused() {
         let ct = rect(1.8, 0.625);
         let arc = set_sagitta(&ct, 0, 0.1).unwrap();
-        assert!(set_profile(&arc, 0, EdgeProfile::Bullnose).is_err());
+        let out = set_profile(&arc, 0, EdgeProfile::Bullnose).unwrap();
+        assert_eq!(out.edge(0).sagitta, 0.0, "the sagitta is cleared");
+        assert_eq!(out.edge(0).profile, EdgeProfile::Bullnose);
     }
 
     #[test]
