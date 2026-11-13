@@ -615,4 +615,57 @@ mod tests {
         let rows = exterior_rows(&house(), 0, &[]);
         assert_eq!(rows.len(), 7);
     }
+
+    #[test]
+    fn square_house_all_sides_equal() {
+        let mut m = ArchModel::default();
+        m.walls = vec![
+            wall(0, (0.0, 0.0), (5.0, 0.0), 0.2, true),
+            wall(1, (5.0, 0.0), (5.0, 5.0), 0.2, true),
+            wall(2, (5.0, 5.0), (0.0, 5.0), 0.2, true),
+            wall(3, (0.0, 5.0), (0.0, 0.0), 0.2, true),
+        ];
+        m.next_id = 4;
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Overall]);
+        assert_eq!(rows.len(), 4);
+        for r in &rows {
+            assert!(close(&values(r), &[5.2]), "{} {:?}", r.side, values(r));
+            assert_eq!(r.points.len(), 2);
+        }
+    }
+
+    #[test]
+    fn two_interior_walls_split_one_side() {
+        let mut m = house();
+        m.walls.push(wall(6, (3.0, 3.0), (3.0, 8.0), 0.1, false));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Walls]);
+        let north = row(&rows, "north", AutoRowKind::Walls).expect("north walls");
+        assert!(close(&values(&north), &[3.1, 3.0, 4.1]), "{:?}", values(&north));
+        assert_eq!(north.points.len(), 4);
+        assert_eq!(north.points[1].handle, arch_handle(ArchId(6)));
+        assert_eq!(north.points[2].handle, arch_handle(ArchId(5)));
+    }
+
+    #[test]
+    fn opening_at_wall_start() {
+        let mut m = house();
+        m.openings.push(window(0, 2, 0.0));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Openings]);
+        let north = row(&rows, "north", AutoRowKind::Openings).expect("north openings");
+        // Walls points: (-0.1,8), (6,8), (10.1,8); opening at (10,8)
+        assert!(close(&values(&north), &[6.1, 4.0, 0.1]), "{:?}", values(&north));
+        let opening_pt = north.points.iter().find(|p| p.handle == opening_handle(ArchId(0))).expect("opening point");
+        assert_eq!(opening_pt.at, Vec2::new(10.0, 8.0));
+    }
+
+    #[test]
+    fn max_points_capped() {
+        let mut m = house();
+        for i in 0..20 {
+            m.openings.push(window(i, 2, 0.5 + i as f64 * 0.45));
+        }
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Openings]);
+        let north = row(&rows, "north", AutoRowKind::Openings).expect("north openings");
+        assert!(north.points.len() <= cadcraft_doc::arch::MAX_AUTO_DIMS_PER_LEVEL);
+    }
 }
