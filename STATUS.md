@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 30 of 35 segments merged · 10 of 20 acceptance checks**
 
-9,432 workspace tests passing at the last merge · 1028 segments merged in all · 0 of 15 seats working
+9,434 workspace tests passing at the last merge · 1029 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,7 +28,7 @@ Updated 2026-11-13 05:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 47.5 h so far · expected done Nov 13 08:12–Nov 13 23:20 UTC |
+| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 47.8 h so far · expected done Nov 13 08:41–Nov 14 00:54 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
@@ -46,6 +46,8 @@ Updated 2026-11-13 05:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 05:05 | `p19-strip-render` | refused | 0 pass | claude-sonnet-c |
+| Nov 13 05:05 | `p19-hdri-4` | merged | 9,434 pass | claude-sonnet-a |
 | Nov 13 03:49 | `p19-hdri-2` | merged | 9,432 pass | mai-flash-b |
 | Nov 13 03:49 | `p20-rcp` | merged | 9,432 pass | mai-flash-esc |
 | Nov 13 03:49 | `p19-cameras-3` | merged | 9,432 pass | bonsai-b |
@@ -56,25 +58,23 @@ Updated 2026-11-13 05:00 UTC. This page and the card in the README are regenerat
 | Nov 13 01:03 | `p19-normal-maps-render` | refused | 0 pass | claude-sonnet-d |
 | Nov 13 01:03 | `p19-sky-2` | merged | 9,371 pass | claude-sonnet-b |
 | Nov 13 01:03 | `p21-callouts` | merged | 9,371 pass | darwin-ws3 |
-| Nov 13 01:03 | `p19-cameras-2` | merged | 9,371 pass | tturbo-mac |
-| Nov 13 01:03 | `p18-corners` | merged | 9,371 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1228 |
-| bonsai-b | bonsai2-27b | idle | 1182 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1303 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1250 |
+| bonsai-a | bonsai2-27b | agent | 1228 |
+| bonsai-b | bonsai2-27b | agent | 1182 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1303 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1250 |
 | claude-sonnet-a | sonnet | down | 146 |
 | claude-sonnet-b | sonnet | down | 153 |
 | claude-sonnet-c | sonnet | down | 89 |
 | claude-sonnet-d | sonnet | down | 82 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1097 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 104 |
-| mai-flash-b | mai-code-1.1-flash | agent | 49 |
+| mai-flash | mai-code-1.1-flash | agent | 105 |
+| mai-flash-b | mai-code-1.1-flash | gate | 49 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 116 |
 | tturbo-mac | tturbo-ultraheretic | agent | 828 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 446 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 447 |
