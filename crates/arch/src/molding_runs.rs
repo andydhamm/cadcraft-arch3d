@@ -368,15 +368,8 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 let chains = molding_wrap::chain(&segments);
                 for (path, closed) in chains {
                     if path.len() >= 2 {
-                        runs.push(MoldingRun {
-                            kind: molding.kind,
-                            index: idx,
-                            profile: molding.profile.clone(),
-                            path,
-                            z: vec![z0; path.len()],
-                            closed,
-                            side: 1.0,
-                        });
+                        let z = vec![z0; path.len()];
+                        runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed, side: 1.0 });
                     }
                 }
             } else {
@@ -407,12 +400,13 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             let tray_paths = molding_wrap::tray_paths(model, room);
             for (ring, z) in tray_paths {
                 if ring.len() >= 3 {
+                    let z_vec = vec![z; ring.len()];
                     runs.push(MoldingRun {
                         kind: molding.kind,
                         index: idx,
                         profile: molding.profile.clone(),
                         path: ring,
-                        z: vec![z; ring.len()],
+                        z: z_vec,
                         closed: true,
                         side: 1.0,
                     });

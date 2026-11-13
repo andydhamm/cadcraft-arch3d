@@ -33,7 +33,7 @@ pub(crate) fn room_soffits(model: &ArchModel, room: &Room) -> Vec<(Vec<Vec2>, bo
             }
         }
         if !inside {
-            if let Some(ip) = crate::ceiling::soffit::interior_point(model, s) {
+            if let Some(ip) = crate::ceiling::soffit::interior_point(&ring) {
                 if point_in_poly(&ip, &room.polygon) {
                     inside = true;
                 }
@@ -183,10 +183,12 @@ pub(crate) fn tray_paths(model: &ArchModel, room: &Room) -> Vec<(Vec<Vec2>, f64)
         let mut final_ring = ring;
         if t.sides == TraySides::Vertical {
             let regions = cadcraft_geom::skeleton::inset(&final_ring, &[], TRAY_SIDE);
-            if regions.len() == 1 {
-                if let Some(outer) = regions[0].outer.as_ref() {
-                    if outer.len() >= 3 {
-                        final_ring = outer.clone();
+            if let Ok(regions) = regions {
+                if regions.len() == 1 {
+                    if let Some(outer) = regions[0].outer.as_ref() {
+                        if outer.len() >= 3 {
+                            final_ring = outer.clone();
+                        }
                     }
                 }
             }
@@ -264,7 +266,7 @@ pub(crate) fn chain(segments: &[(Vec2, Vec2)]) -> Vec<(Vec<Vec2>, bool)> {
         }
 
         if path.len() >= 2 {
-            let closed = path.first().map(|p| p.dist(path.last().unwrap_or(p)) < 1e-6).unwrap_or(false);
+            let closed = path.first().map(|p| p.dist(*path.last().unwrap_or(p)) < 1e-6).unwrap_or(false);
             if closed && path.len() > 1 {
                 path.pop(); // Remove repeated point
             }
@@ -301,7 +303,7 @@ pub(crate) fn chain(segments: &[(Vec2, Vec2)]) -> Vec<(Vec<Vec2>, bool)> {
         }
 
         if path.len() >= 2 {
-            let closed = path.first().map(|p| p.dist(path.last().unwrap_or(p)) < 1e-6).unwrap_or(false);
+            let closed = path.first().map(|p| p.dist(*path.last().unwrap_or(p)) < 1e-6).unwrap_or(false);
             if closed && path.len() > 1 {
                 path.pop();
             }
