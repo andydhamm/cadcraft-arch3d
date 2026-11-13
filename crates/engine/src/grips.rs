@@ -5,7 +5,9 @@
 //! undoable and reachable from scripts, the control channel and MCP.
 
 use cadcraft_doc::arch::ROOM_HANDLE_OFFSET;
-use cadcraft_doc::arch::{CONNECTION_HANDLE_OFFSET, ELECTRICAL_HANDLE_OFFSET, Opening, is_connection_handle, is_electrical_handle};
+use cadcraft_doc::arch::{
+    CONNECTION_HANDLE_OFFSET, ELECTRICAL_HANDLE_OFFSET, Opening, is_connection_handle, is_countertop_handle, is_electrical_handle,
+};
 use cadcraft_doc::{
     ARCH_HANDLE_BASE, ArchId, DimKind, EntityKind, Handle, LwPolyline, OPENING_HANDLE_OFFSET, is_arch_handle, is_opening_handle, is_room_handle,
 };
@@ -546,6 +548,8 @@ pub enum ArchTarget {
     Wall(ArchId),
     /// An opening, resolved through `ArchModel::opening`.
     Opening(ArchId),
+    /// A countertop, resolved through `ArchModel::countertop`.
+    Countertop(ArchId),
     /// A room, resolved through `ArchModel::room`.
     Room(ArchId),
     /// An electrical device, resolved through `ArchModel::electrical`.
@@ -575,6 +579,9 @@ pub fn arch_id_from_handle(h: Handle) -> Option<ArchTarget> {
     }
     if is_connection_handle(h) {
         return Some(ArchTarget::Connection(ArchId((h.0 - ARCH_HANDLE_BASE - CONNECTION_HANDLE_OFFSET) as u32)));
+    }
+    if is_countertop_handle(h) {
+        return Some(ArchTarget::Countertop(ArchId((h.0 - ARCH_HANDLE_BASE - cadcraft_doc::arch::COUNTERTOP_HANDLE_OFFSET) as u32)));
     }
     if is_arch_handle(h) {
         return Some(ArchTarget::Wall(ArchId((h.0 - ARCH_HANDLE_BASE) as u32)));
@@ -607,11 +614,44 @@ impl Session {
                     ArchTarget::Room(_) | ArchTarget::View(_) | ArchTarget::Electrical(_) | ArchTarget::Connection(_) => Ok(()),
                     ArchTarget::Opening(_) => Err(EngineError::Other("arch openings support only the stretch grip".into())),
                     ArchTarget::Wall(_) => Err(EngineError::Other("arch walls support only the stretch grip".into())),
+                    ArchTarget::Countertop(_) => Err(EngineError::Other("arch countertops support only the stretch grip".into())),
                 };
             }
             let d = self.doc()?;
             return match target {
                 ArchTarget::Room(_) | ArchTarget::View(_) | ArchTarget::Electrical(_) | ArchTarget::Connection(_) => Ok(()),
+                ArchTarget::Countertop(id) => {
+                    if !new_point.is_finite() {
+                        return Err(EngineError::Other("non-finite point".into()));
+                    }
+                    let ct = d.arch.countertop(id).ok_or_else(|| EngineError::Other("no such countertop".into()))?;
+                    if d.layer(&ct.layer).is_some_and(|l| l.locked) {
+                        return Err(EngineError::Other("The object is on a locked layer.".into()));
+                    }
+                    if grip_index >= ct.polygon.len() * 2 {
+                        return Err(EngineError::Other("countertop grip index out of range".into()));
+                    }
+                    if grip_index < ct.polygon.len() {
+                        let to = [new_point.x, new_point.y];
+                        let cmd = json!({"id": ct.id, "vertex": grip_index, "to": to });
+                        return self.execute("countertop.edit", &cmd).map(|_| ());
+                    }
+                    let edge = grip_index - ct.polygon.len();
+                    let a = ct.polygon[edge];
+                    let b = ct.polygon[(edge + 1) % ct.polygon.len()];
+                    let dag = b - a;
+                    let dir = if dag.len() > 1e-12 { dag / dag.len() } else { Vec2::ZERO };
+                    let outward = Vec2::new(dir.y, -dir.x);
+                    let mid = (a + b) * 0.5;
+                    let move_amt = (new_point - mid).dot(outward);
+                    let cmd = json!({"id": ct.id, "edge": edge, "move": move_amt});
+                    if ct.edge(edge).sagitta.abs() > 1e-12 {
+                        let chord_mid = (a + b) * 0.5;
+                        let sag = (new_point - chord_mid).dot(outward);
+                        return self.execute("countertop.edit", &json!({"id": ct.id, "edge": edge, "sagitta": sag})).map(|_| ());
+                    }
+                    self.execute("countertop.edit", &cmd).map(|_| ())
+                }
                 ArchTarget::Opening(id) => {
                     if !new_point.is_finite() {
                         return Err(EngineError::Other("non-finite point".into()));
@@ -708,6 +748,29 @@ impl Session {
                     Some(w) => Ok(vec![w.start, w.end]),
                     None => Err(EngineError::Other("no such object".into())),
                 },
+                ArchTarget::Countertop(id) => {
+                    let ct = d.arch.countertop(id).ok_or_else(|| EngineError::Other("no such object".into()))?;
+                    let mut out = ct.polygon.clone();
+                    let mut midpoints = Vec::new();
+                    for i in 0..ct.polygon.len() {
+                        let a = ct.polygon[i];
+                        let b = ct.polygon[(i + 1) % ct.polygon.len()];
+                        let mid = (a + b) * 0.5;
+                        if ct.edge(i).sagitta.abs() > 1e-12 {
+                            let chord = b - a;
+                            let dir = chord / chord.len();
+                            let normal = Vec2::new(dir.y, -dir.x);
+                            let sag = ct.edge(i).sagitta;
+                            let ring = cadcraft_arch::countertop_edit::sampled_ring(&[a, b], &[sag]);
+                            let pt = ring.get(ring.len().saturating_sub(1) / 2).copied().unwrap_or(mid);
+                            midpoints.push(pt);
+                        } else {
+                            midpoints.push(mid);
+                        }
+                    }
+                    out.extend(midpoints);
+                    Ok(out)
+                }
             };
         }
         self.doc()?.entity(handle).map(|e| e.kind.grips()).ok_or_else(|| EngineError::Other("no such object".into()))

@@ -35,6 +35,65 @@ pub struct FixtureType {
     pub length: f64,
 }
 
+/// A strip round tray `tray` (`tr<n>`): the tray's outline inset by `inset` metres, as one
+/// counter-clockwise closed ring. Returns the tray's level, the ring and the default height above
+/// that level: the finished ceiling just outside the outline minus the level's elevation, plus
+/// 0.02 m (the strip sits on the recess's bottom edge).
+pub fn tray_strip_path(model: &ArchModel, tray: &str, inset: f64) -> Result<(u32, Vec<Vec2>, f64), String> {
+    let label = tray.trim();
+    let unknown = || format!("unknown tray `{label}`");
+    let n = label.strip_prefix("tr").or_else(|| label.strip_prefix("TR")).and_then(|d| d.parse::<u32>().ok()).ok_or_else(unknown)?;
+    let t = model.trays.iter().find(|t| t.id.0 == n).ok_or_else(unknown)?;
+    if !inset.is_finite() || inset < 0.0 {
+        return Err(format!("`inset` must be 0 m or more; got {inset}"));
+    }
+    let no_path = || format!("the inset leaves no strip path inside tray `{label}`");
+    let mut outline = crate::ceiling::tray::outline(model, t).map_err(|e| format!("tray `{label}`: {e}"))?;
+    if outline.len() > 1 && outline.first() == outline.last() {
+        outline.pop();
+    }
+    if outline.len() < 3 || outline.iter().any(|p| !p.is_finite()) {
+        return Err(format!("tray `{label}` has no usable outline"));
+    }
+    let signed_area = |r: &[Vec2]| -> f64 { r.iter().zip(r.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum() };
+    // The ceiling just outside the outline: its first edge's midpoint moved 0.01 m outward.
+    let (a, b) = match (outline.first(), outline.get(1)) {
+        (Some(a), Some(b)) => (*a, *b),
+        _ => return Err(format!("tray `{label}` has no usable outline")),
+    };
+    let edge = b - a;
+    let len = edge.len();
+    if len <= 0.0 {
+        return Err(format!("tray `{label}` has no usable outline"));
+    }
+    let right = Vec2::new(edge.y, -edge.x) * (1.0 / len);
+    let outward = if signed_area(&outline) >= 0.0 { right } else { right * -1.0 };
+    let probe = (a + b) * 0.5 + outward * 0.01;
+    let ceiling = crate::ceiling::finished_ceiling_at(model, t.level, probe).ok_or_else(|| format!("no ceiling beside tray `{label}`"))?;
+    let elevation = model.levels.iter().rev().find(|l| l.index == t.level).or_else(|| model.levels.last()).map_or(0.0, |l| l.elevation);
+    let height = ceiling - elevation + 0.02;
+
+    let mut ring = if inset > 0.0 {
+        let regions = cadcraft_geom::skeleton::inset(&outline, &[], inset).map_err(|_| no_path())?;
+        match regions.as_slice() {
+            [r] if r.holes.is_empty() => r.outer.clone(),
+            _ => return Err(no_path()),
+        }
+    } else {
+        outline
+    };
+    if ring.len() > 1 && ring.first() == ring.last() {
+        ring.pop();
+    }
+    if ring.len() < 3 {
+        return Err(no_path());
+    }
+    if signed_area(&ring) < 0.0 {
+        ring.reverse();
+    }
+    Ok((t.level, ring, height))
+}
+
 /// Lumens per metre of the catalogue's LED strip.
 pub const LED_STRIP_LUMENS_PER_METRE: f64 = 500.0;
 
@@ -1060,5 +1119,34 @@ mod tests {
         let f2 = fixture_from_type(ArchId(1), &t, Vec2::new(5.0, 5.0));
         let p2 = light_point(&model, &f2).unwrap();
         assert!((p2.z - 2.4).abs() < 1e-9, "z: {}", p2.z);
+    }
+
+    fn tray_model() -> ArchModel {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+        model.push_room(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 5.0), Vec2::new(0.0, 5.0)],
+            ..Room::default()
+        });
+        model.push_tray(cadcraft_doc::arch::Tray { room: ArchId(0), inset: 0.6, depth: 0.3, ..Default::default() });
+        model
+    }
+
+    #[test]
+    fn tray_strip_path_insets_the_outline_ccw() {
+        let model = tray_model();
+        let (level, ring, height) = tray_strip_path(&model, "tr0", 0.05).unwrap();
+        assert_eq!(level, 0);
+        let area: f64 = ring.iter().zip(ring.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum();
+        assert!(area > 0.0, "counter-clockwise");
+        let (x0, x1) = ring.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.x), b.max(p.x)));
+        let (y0, y1) = ring.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.y), b.max(p.y)));
+        assert!((x0 - 0.65).abs() < 1e-6 && (x1 - 5.35).abs() < 1e-6 && (y0 - 0.65).abs() < 1e-6 && (y1 - 4.35).abs() < 1e-6, "{ring:?}");
+        let outside = crate::ceiling::finished_ceiling_at(&model, 0, Vec2::new(0.55, 2.5)).unwrap();
+        assert!((height - (outside + 0.02)).abs() < 1e-9, "{height} vs {outside}");
+        assert!(tray_strip_path(&model, "tr9", 0.05).unwrap_err().contains("tr9"));
+        assert!(tray_strip_path(&model, "tr0", 2.0).unwrap_err().contains("tr0"));
     }
 }

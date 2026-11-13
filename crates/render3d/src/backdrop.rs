@@ -117,12 +117,16 @@ pub fn backdrop_rgb(b: &Backdrop, textures: &BTreeMap<String, ImageRgba>, x: u32
         Backdrop::Sky | Backdrop::Hdri { .. } => CLEAR_RGB,
         Backdrop::Image { .. } => {
             let Some((img, projection)) = image_of(b, textures) else { return CLEAR_RGB };
+            let horizon = if let Backdrop::Image { horizon, .. } = b { *horizon } else { 0.0 };
             let rgb = match projection {
                 Projection::Flat => sample(img, (f64::from(x) + 0.5) / wf, (f64::from(y) + 0.5) / hf, false),
                 Projection::Equirect => {
                     let (dx, dy, dz) = (f64::from(ray[0]), f64::from(ray[1]), f64::from(ray[2]));
                     let u = 0.5 + dy.atan2(dx) / std::f64::consts::TAU;
-                    let v = 0.5 - dz.clamp(-1.0, 1.0).asin() / std::f64::consts::PI;
+                    // A positive horizon raises the picture's horizon: sample lower in it.
+                    let half = std::f64::consts::FRAC_PI_2;
+                    let el = (dz.clamp(-1.0, 1.0).asin() - horizon.to_radians()).clamp(-half, half);
+                    let v = 0.5 - el / std::f64::consts::PI;
                     sample(img, u, v, true)
                 }
             };
@@ -406,6 +410,9 @@ impl BackdropPass {
                 u.size[2] = res.size.0 as f32;
                 u.size[3] = res.size.1 as f32;
                 u.kind[0] = if *projection == Projection::Equirect { 3 } else { 2 };
+                if let Backdrop::Image { horizon, .. } = b {
+                    u.top[3] = *horizon as f32;
+                }
             }
         }
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&u));
@@ -512,6 +519,28 @@ mod tests {
 
     fn with(item: &str, img: ImageRgba) -> BTreeMap<String, ImageRgba> {
         BTreeMap::from([(image_key(item), img)])
+    }
+
+    #[test]
+    fn equirect_picture_horizon_offset() {
+        // Bright above the middle row, dark below.
+        let mut rgba = Vec::new();
+        for y in 0..32u32 {
+            for _ in 0..64u32 {
+                let v = if y < 16 { 250 } else { 10 };
+                rgba.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        let img = ImageRgba { width: 64, height: 32, rgba, ..Default::default() };
+        let t = BTreeMap::from([("item:sky".to_string(), img)]);
+        let at = |horizon: f64| {
+            let b = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon };
+            let e = 5f32.to_radians();
+            backdrop_rgb(&b, &t, 0, 0, 1, 1, [e.cos(), 0.0, e.sin()])[0]
+        };
+        assert!(at(0.0) > 200, "5 degrees up is bright at horizon 0");
+        assert!(at(10.0) < 60, "raising the horizon by 10 puts 5 degrees up below it");
+        assert!(at(-10.0) > 200);
     }
 
     #[test]

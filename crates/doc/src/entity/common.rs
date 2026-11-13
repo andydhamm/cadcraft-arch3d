@@ -10,6 +10,16 @@ impl Handle {
     }
     pub fn parse_hex(s: &str) -> Option<Handle> {
         let s = s.trim();
+        if s.is_empty() {
+            return None;
+        }
+        // The legacy CADCraft arch proxy form is lower-case `a` followed by a 32-bit
+        // offset (`a0000001`); upper-case `A...` is a normal DXF handle and must not be
+        // reinterpreted as a synthetic arch proxy value.
+        if let Some(rest) = s.strip_prefix('a') {
+            let n = u32::from_str_radix(rest, 16).ok()?;
+            return Some(Handle(crate::arch::ARCH_HANDLE_BASE | u64::from(n)));
+        }
         if !s.bytes().all(|b| b.is_ascii_hexdigit()) {
             return None;
         }
