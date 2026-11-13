@@ -64,6 +64,10 @@ fn replay(script: &str, session: &mut Session) -> usize {
     let steps: Vec<ScriptStep> = serde_json::from_str(script).unwrap_or_else(|e| panic!("cannot parse the script: {e}"));
     let mut n = 0;
     for (i, step) in steps.iter().enumerate() {
+        if step.cmd == "tray" {
+            let inspect = session.execute("arch.inspect", &serde_json::json!({"rooms": true, "levels": true, "trays": true}));
+            println!("before tray step {i}: {:?}", inspect.as_ref().map(|v| v.clone()).unwrap_or_default());
+        }
         match session.execute(&step.cmd, &step.params) {
             Ok(_) => n += 1,
             Err(err) => panic!("script step {i} `{}` was refused: {err}", step.cmd),
@@ -198,7 +202,7 @@ fn phase20_demo_has_the_eight_views_bound_to_their_levels() {
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&session, serde_json::json!({"planViews": true}));
+    let reply = inspect(&mut session, serde_json::json!({"planViews": true}));
     let (views, _active) = views_of(&reply);
     assert_eq!(views.len(), 8, "expected 8 plan views, found {}", views.len());
 
@@ -242,7 +246,7 @@ fn phase20_demo_ends_on_level_1_floor_plan() {
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&session, serde_json::json!({"planViews": true}));
+    let reply = inspect(&mut session, serde_json::json!({"planViews": true}));
     let (_views, active) = views_of(&reply);
     assert_eq!(active, Some("Level 1 Floor Plan".to_string()), "active plan view is {active:?}, expected `Level 1 Floor Plan`");
 }
@@ -254,7 +258,7 @@ fn phase20_demo_level_1_north_walls_row_is_6_1_4_1() {
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&session, serde_json::json!({"autoDims": true}));
+    let reply = inspect(&mut session, serde_json::json!({"autoDims": true}));
     let auto = auto_dims_of(&reply);
     assert!(!auto.is_empty(), "no autoDims rows");
 
@@ -281,7 +285,7 @@ fn phase20_demo_bedroom_reads_2_17_and_one_tray_is_labelled() {
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&session, serde_json::json!({"rooms": true, "trays": true}));
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true, "trays": true}));
     let rooms = rooms_of(&reply);
     let bedroom = find_row(&rooms, "name", "Bedroom");
     assert_eq!(
@@ -294,7 +298,7 @@ fn phase20_demo_bedroom_reads_2_17_and_one_tray_is_labelled() {
     // Exactly one tray exists and the Level-2 reflected ceiling labels it.
     let trays = trays_of(&reply);
     assert_eq!(trays.len(), 1, "expected exactly one tray, found {}", trays.len());
-    let plan = plan_of_view(&session, "Level 2 Reflected Ceiling");
+    let plan = plan_of_view(&mut session, "Level 2 Reflected Ceiling");
     assert!(has_line_kind(&plan, "trayOutline"), "Level-2 reflected ceiling has no `trayOutline` line");
     assert!(has_label_kind(&plan, "trayHeight"), "Level-2 reflected ceiling has no `trayHeight` label");
 }
@@ -322,7 +326,7 @@ fn phase20_showcase_has_three_views_per_floor_level() {
     replay(&house, &mut session);
     replay(&phase, &mut session);
 
-    let reply = inspect(&session, serde_json::json!({"planViews": true, "levels": true}));
+    let reply = inspect(&mut session, serde_json::json!({"planViews": true, "levels": true}));
     let views = plan_views_of(&reply);
     let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).map(|a| a.iter().cloned().collect()).unwrap_or_default();
     let floors: Vec<&Value> = levels.iter().filter(|l| strd(l, "kind", "") == "floor").collect();
@@ -346,20 +350,27 @@ fn phase20_showcase_overall_rows_match_exterior_bounds() {
     replay(&house, &mut session);
     replay(&phase, &mut session);
 
-    let reply = inspect(&session, serde_json::json!({"autoDims": true, "levels": true}));
+    let reply = inspect(&mut session, serde_json::json!({"autoDims": true, "levels": true}));
     let auto = auto_dims_of(&reply);
     let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).map(|a| a.iter().cloned().collect()).unwrap_or_default();
     let floors: Vec<&Value> = levels.iter().filter(|l| strd(l, "kind", "") == "floor").collect();
     assert!(!floors.is_empty(), "no `floor` levels in the showcase");
 
-    // For each floor level the `overall` auto row's two values must be the exterior-wall
-    // bounding box (26.2 x 16.2 for the showcase today).
+    // For each floor level the `overall` auto row's two values must match the exterior-wall
+    // bounding box. Auto-dim rows report their `level` as the numeric level index, while the
+    // `levels` reply exposes the names separately.
     for level in &floors {
         let name = strd(level, "name", "?");
         assert!(!name.is_empty() && name != "?", "a floor level has no name");
-        let row = auto.iter().find(|r| level_str(r) == name && strd(r, "row", "").eq_ignore_ascii_case("overall"));
+        let level_index = level.get("index").and_then(|v| v.as_u64()).or_else(|| level.get("level").and_then(|v| v.as_u64())).unwrap_or_default();
+        let row = auto.iter().find(|r| {
+            let Some(Value::Number(n)) = r.get("level") else {
+                return false;
+            };
+            n.as_u64() == Some(level_index) && strd(r, "row", "").eq_ignore_ascii_case("overall")
+        });
         let Some(row) = row else {
-            panic!("no `overall` auto row for level `{}`: {:?}", name, auto.len());
+            panic!("no `overall` auto row for level `{}` (index {}): {:?}", name, level_index, auto.len());
         };
         let values: Vec<f64> =
             row.get("values").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_f64()).collect()).unwrap_or_default();

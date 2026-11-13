@@ -1,185 +1,39 @@
 [
-  {
-    "cmd": "wall",
-    "params": {
-      "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
-      "thickness": 0.2,
-      "height": 2.4,
-      "exterior": true
-    }
-  },
-  {
-    "cmd": "wall",
-    "params": {
-      "points": [[0.0, 3.0], [10.0, 3.0]],
-      "thickness": 0.1,
-      "height": 2.4,
-      "type": "interior"
-    }
-  },
-  {
-    "cmd": "wall",
-    "params": {
-      "points": [[6.0, 3.0], [6.0, 8.0]],
-      "thickness": 0.1,
-      "height": 2.4,
-      "type": "interior"
-    }
-  },
-  {
-    "cmd": "roomdetect",
-    "params": {}
-  },
-  {
-    "cmd": "room",
-    "params": {
-      "id": "r0",
-      "name": "Bedroom",
-      "type": "bedroom",
-      "ceilingStack": [
-        { "name": "drywall", "material": "drywall", "thickness": 0.0127 },
-        { "name": "air", "material": null, "thickness": 0.2 },
-        { "name": "ceiling tile", "material": "ceiling-tile", "thickness": 0.016 }
-      ]
-    }
-  },
-  {
-    "cmd": "level",
-    "params": { "above": 0 }
-  },
-  {
-    "cmd": "wall",
-    "params": {
-      "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
-      "thickness": 0.2,
-      "height": 2.4,
-      "exterior": true,
-      "level": 1
-    }
-  },
-  {
-    "cmd": "wall",
-    "params": {
-      "points": [[5.0, 0.0], [5.0, 8.0]],
-      "thickness": 0.1,
-      "height": 2.4,
-      "type": "interior",
-      "level": 1
-    }
-  },
-  {
-    "cmd": "roomdetect",
-    "params": { "level": 1 }
-  },
-  {
-    "cmd": "roofauto",
-    "params": { "pitchRise": 6, "pitchRun": 12, "level": 1 }
-  },
-  {
-    "cmd": "tray",
-    "params": { "room": "r3", "inset": 0.6, "depth": 0.3 }
-  },
-  {
-    "cmd": "opening",
-    "params": {
-      "wall": "w0",
-      "offset": 2.0,
-      "kind": "window",
-      "width": 0.9,
-      "height": 1.5,
-      "sill": 0.6
-    }
-  },
-  {
-    "cmd": "opening",
-    "params": {
-      "wall": "w0",
-      "offset": 7.0,
-      "kind": "door",
-      "width": 0.9,
-      "height": 2.1,
-      "sill": 0.0
-    }
-  },
-  {
-    "cmd": "library.place",
-    "params": { "item": "bed-double-wood", "at": [3.0, 5.5], "level": 0 }
-  },
-  {
-    "cmd": "library.place",
-    "params": { "item": "light-ceiling", "at": [3.0, 5.5], "level": 0 }
-  },
-  {
-    "cmd": "electrical",
-    "params": { "type": "outlet", "wall": "w1", "level": 0 }
-  },
-  {
-    "cmd": "electrical",
-    "params": { "type": "switch", "wall": "w1", "level": 0 }
-  },
-  {
-    "cmd": "electrical",
-    "params": { "type": "outlet", "wall": "w3", "level": 1 }
-  },
-  {
-    "cmd": "terrain",
-    "params": {
-      "boundary": [[-15.0, -11.0], [25.0, -11.0], [25.0, 19.0], [-15.0, 19.0]],
-      "points": [[-15.0, -11.0, 0.0], [25.0, -11.0, 2.0], [25.0, 19.0, 2.0], [-15.0, 19.0, 0.0]]
-    }
-  },
-  {
-    "cmd": "plant",
-    "params": { "species": "Sugar Maple", "at": [-8.0, 14.0], "age": 10 }
-  },
-  {
-    "cmd": "dimauto",
-    "params": { "level": 0 }
-  },
-  {
-    "cmd": "dimauto",
-    "params": { "level": 1 }
-  },
-  {
-    "cmd": "layer.set",
-    "params": { "name": "A-ANNO-DIMS", "color": "#108040" }
-  },
-  {
-    "cmd": "layer.new",
-    "params": { "name": "A-ROOF-ANNO", "color": "#a05010" }
-  },
-  {
-    "cmd": "planview",
-    "params": { "name": "Level 1 Floor Plan", "from": "Floor Plan", "level": 0, "open": false }
-  },
-  {
-    "cmd": "planview",
-    "params": {
-      "name": "Level 2 Floor Plan",
-      "from": "Floor Plan",
-      "level": 1,
-      "reference": { "level": 0, "color": "#b4b4b4" },
-      "open": false
-    }
-  },
-  {
-    "cmd": "planview",
-    "params": { "name": "Level 1 Electrical", "from": "Electrical", "level": 0, "open": false }
-  },
-  {
-    "cmd": "planview",
-    "params": { "name": "Level 2 Electrical", "from": "Electrical", "level": 1, "open": false }
-  },
-  {
-    "cmd": "planview",
-    "params": { "name": "Level 1 Reflected Ceiling", "from": "Reflected Ceiling", "level": 0, "open": false }
-  },
-  {
-    "cmd": "planview",
-    "params": { "name": "Level 2 Reflected Ceiling", "from": "Reflected Ceiling", "level": 1, "open": false }
-  },
-  {
-    "cmd": "planview.open",
-    "params": { "name": "Level 1 Floor Plan" }
-  }
+  {"cmd":"wall","params":{"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}},
+  {"cmd":"wall","params":{"points":[[0,3],[10,3]],"thickness":0.1,"height":2.4,"type":"interior"}},
+  {"cmd":"wall","params":{"points":[[6,3],[6,8]],"thickness":0.1,"height":2.4,"type":"interior"}},
+  {"cmd":"roomdetect","params":{"level":0}},
+  {"cmd":"room","params":{"id":"r0","name":"Bedroom","type":"bedroom","ceilingStack":[{"name":"drywall","material":"drywall","thickness":0.0127},{"name":"air","material":null,"thickness":0.2},{"name":"ceiling tile","material":"ceiling-tile","thickness":0.016}]}},
+  {"cmd":"level","params":{"above":0}},
+  {"cmd":"wall","params":{"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true,"level":1}},
+  {"cmd":"wall","params":{"points":[[5,0],[5,8]],"thickness":0.1,"height":2.4,"type":"interior","level":1}},
+  {"cmd":"roomdetect","params":{"level":1}},
+  {"cmd":"room","params":{"points":[[0,0],[5,0],[5,8],[0,8],[0,0]],"name":"West Room","type":"bedroom","level":1}},
+  {"cmd":"roofauto","params":{"pitchRise":6,"pitchRun":12,"level":1}},
+  {"cmd":"tray","params":{"room":"r5","inset":0.6,"depth":0.3}},
+  {"cmd":"window","params":{"wall":"w0","offset":2.0,"width":1.0,"height":1.2,"sill":0.9,"grille":{"across":2,"down":2}}},
+  {"cmd":"door","params":{"wall":"w1","offset":2.0,"width":0.9,"height":2.1,"style":"hinged"}},
+  {"cmd":"library.place","params":{"item":"bed-double-wood","at":[2.5,2.0],"level":0}},
+  {"cmd":"library.place","params":{"item":"light-ceiling","at":[5.0,5.0],"level":0}},
+  {"cmd":"outlet","params":{"kind":"duplex","wall":"w0","offset":1.5,"side":"left","level":0}},
+  {"cmd":"switch","params":{"kind":"single-pole","wall":"w3","offset":7.0,"side":"left","level":0}},
+  {"cmd":"outlet","params":{"kind":"duplex","wall":"w1","offset":2.0,"side":"right","level":1}},
+  {"cmd":"switch","params":{"kind":"single-pole","wall":"w2","offset":3.0,"side":"left","level":1}},
+  {"cmd":"layer.new","params":{"name":"I-FURN","color":"#13579b"}},
+  {"cmd":"layer.new","params":{"name":"A-ANNO-DIMS","color":"#108040"}},
+  {"cmd":"layer.new","params":{"name":"E-POWR","color":"#c02060"}},
+  {"cmd":"layer.new","params":{"name":"A-CLNG","color":"#2468ac"}},
+  {"cmd":"layer.new","params":{"name":"A-ROOF-ANNO","color":"#a05010"}},
+  {"cmd":"layer.new","params":{"name":"C-TOPO-MAJR","color":"#5a3c1e"}},
+  {"cmd":"terrain","params":{"boundary":[[-15,-11],[25,-11],[25,19],[-15,19]],"points":[[-15,-11,0.0],[25,-11,2.0],[25,19,2.0],[-15,19,0.0]]}},
+  {"cmd":"plant","params":{"species":"Sugar Maple","at":[-8,14],"age":10}},
+  {"cmd":"dimauto","params":{"level":0}},
+  {"cmd":"dimauto","params":{"level":1}},
+  {"cmd":"planview","params":{"name":"Level 1 Floor Plan","from":"Floor Plan","level":0,"open":false}},
+  {"cmd":"planview","params":{"name":"Level 2 Floor Plan","from":"Floor Plan","level":1,"reference":{"level":0,"color":"#b4b4b4"},"open":false}},
+  {"cmd":"planview","params":{"name":"Level 1 Electrical","from":"Electrical","level":0,"open":false}},
+  {"cmd":"planview","params":{"name":"Level 2 Electrical","from":"Electrical","level":1,"open":false}},
+  {"cmd":"planview","params":{"name":"Level 1 Reflected Ceiling","from":"Reflected Ceiling","level":0,"open":false}},
+  {"cmd":"planview","params":{"name":"Level 2 Reflected Ceiling","from":"Reflected Ceiling","level":1,"open":false}},
+  {"cmd":"planview.open","params":{"name":"Level 1 Floor Plan"}}
 ]
