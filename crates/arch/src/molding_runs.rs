@@ -304,29 +304,6 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
             }
         }
 
-        if all_pieces.is_empty() {
-            // Even if no wall pieces, check for trays for Crown
-            if molding.kind == MoldingKind::Crown {
-                let tray_paths = molding_wrap::tray_paths(model, room);
-                for (ring, z) in tray_paths {
-                    if ring.len() >= 3 {
-                        let z_vec = vec![z; ring.len()];
-                        runs.push(MoldingRun {
-                            kind: molding.kind,
-                            index: idx,
-                            profile: molding.profile.clone(),
-                            path: ring,
-                            z: z_vec,
-                            closed: true,
-                            side: 1.0,
-                        });
-                    }
-                }
-            }
-            continue;
-        }
-
-        // Handle Crown molding with soffit/tray wrapping
         if molding.kind == MoldingKind::Crown {
             let soffits = molding_wrap::room_soffits(model, room);
 
@@ -426,30 +403,28 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     });
                 }
             }
+        } else {
+            // Non-Crown molding: use existing logic
+            let mut pieces = all_pieces;
+            pieces.sort_by(|a, b| a.2.cmp(&b.2).then(a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)));
 
-            continue;
-        }
+            // Group by ring
+            let mut current_ring_idx = usize::MAX;
+            let mut ring_pieces: Vec<(f64, f64, usize)> = Vec::new();
 
-        // Non-Crown molding: use existing logic
-        let mut pieces = all_pieces;
-        pieces.sort_by(|a, b| a.2.cmp(&b.2).then(a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)));
-
-        // Group by ring
-        let mut current_ring_idx = usize::MAX;
-        let mut ring_pieces: Vec<(f64, f64, usize)> = Vec::new();
-
-        for p in pieces {
-            if p.2 != current_ring_idx {
-                if !ring_pieces.is_empty() {
-                    process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
+            for p in pieces {
+                if p.2 != current_ring_idx {
+                    if !ring_pieces.is_empty() {
+                        process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
+                    }
+                    current_ring_idx = p.2;
+                    ring_pieces.clear();
                 }
-                current_ring_idx = p.2;
-                ring_pieces.clear();
+                ring_pieces.push(p);
             }
-            ring_pieces.push(p);
-        }
-        if !ring_pieces.is_empty() {
-            process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
+            if !ring_pieces.is_empty() {
+                process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
+            }
         }
 
         // Cap path points
