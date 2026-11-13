@@ -1189,7 +1189,7 @@ mod tests {
         // A drawn polygon tray (not room-based)
         model.push_tray(cadcraft_doc::arch::Tray {
             room: ArchId(0),
-            polygon: Some(vec![Vec2::new(2.0, 2.0), Vec2::new(8.0, 2.0), Vec2::new(8.0, 6.0), Vec2::new(2.0, 6.0)]),
+            polygon: vec![Vec2::new(2.0, 2.0), Vec2::new(8.0, 2.0), Vec2::new(8.0, 6.0), Vec2::new(2.0, 6.0)],
             depth: 0.25,
             ..Default::default()
         });
