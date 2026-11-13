@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use cadcraft_arch3d::{Scene3d, SceneCache};
 use cadcraft_doc::{
     ArchId, ArchModel,
-    arch::{CeilingLayer, FoundationKind},
+    arch::{CabinetKind, CeilingLayer, Countertop, FoundationKind, OpeningKind, RoomMolding, RoomType},
 };
 use cadcraft_engine::Session;
 use serde_json::{Value, json};
@@ -1080,8 +1080,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
     let d = if r & 1 == 0 { 0.05 } else { -0.05 };
     match r % 36 {
         0 => {
-            if let Some(room) = m.rooms.iter_mut().find(|r| r.type == RoomType::Kitchen)
-            {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
                 if let Some(md) = room.moldings.first_mut() {
                     md.offset = (md.offset + d).abs();
                 }
@@ -1089,8 +1088,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             "molding offset"
         }
         1 => {
-            if let Some(room) = m.rooms.iter_mut().find(|r| r.type == RoomType::Kitchen)
-            {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
                 if let Some(md) = room.moldings.first_mut() {
                     md.size = (md.size + d).max(0.02);
                 }
@@ -1098,15 +1096,13 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             "molding size"
         }
         2 => {
-            if let Some(room) = m.rooms.iter_mut().find(|r| r.type == RoomType::Kitchen)
-            {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
                 room.moldings.push(RoomMolding { kind: "crown".into(), profile: "molding-profile".into(), offset: 0.0, size: 0.05 });
             }
             "molding add"
         }
         3 => {
-            if let Some(room) = m.rooms.iter_mut().find(|r| r.type == RoomType::Kitchen)
-            {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
                 room.moldings.pop();
             }
             "molding remove"
@@ -1171,7 +1167,16 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             if m.countertops.len() >= 2 {
                 m.countertops.pop();
             } else {
-                m.countertops.push(Countertop { wall: m.walls.first().map(|w| w.id).unwrap_or_default(), offset: 1.0, width: 3.0, elevation: 0.914, profile: "square".into(), sagitta: 0.0, waterfall: false, ..Default::default() });
+                m.countertops.push(Countertop {
+                    wall: m.walls.first().map(|w| w.id).unwrap_or_default(),
+                    offset: 1.0,
+                    width: 3.0,
+                    elevation: 0.914,
+                    profile: "square".into(),
+                    sagitta: 0.0,
+                    waterfall: false,
+                    ..Default::default()
+                });
             }
             "counter detach"
         }
@@ -1267,7 +1272,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             "filler width"
         }
         29 => {
-            if let Some(w) = m.walls.iter_mut().find(|w| w.type == "glass".to_string()) {
+            if let Some(w) = m.walls.iter_mut().find(|w| w.r#type == "glass".to_string()) {
                 if let Some(s) = w.split {
                     *s.height = (*s.height + d).max(0.5);
                 }
@@ -1275,8 +1280,8 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             "glass split height"
         }
         30 => {
-            if let Some(w) = m.walls.iter_mut().find(|w| w.type == "glass".to_string()) {
-                w.type = if w.type == "glass".to_string() { "interior".into() } else { "glass".into() };
+            if let Some(w) = m.walls.iter_mut().find(|w| w.r#type == "glass".to_string()) {
+                w.r#type = if w.r#type == "glass".to_string() { "interior".into() } else { "glass".into() };
             }
             "glass split type"
         }
@@ -1306,8 +1311,8 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         35 => {
             // Room type change: floor finish follows the type.
-            if let Some(room) = m.rooms.iter_mut().find(|r| r.type == RoomType::Kitchen) {
-                room.type = RoomType::Living;
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
+                room.room_type = RoomType::Living;
             }
             "room type"
         }
@@ -1320,10 +1325,8 @@ fn the_scene_cache_follows_every_phase_18_edit() {
     let s = phase_18_session();
     let m0 = s.doc().expect("a drawing").arch.clone();
     assert!(
-        m0.rooms.iter().any(|r| r.type == RoomType::Kitchen)
-            && !m0.countertops.is_empty()
-            && !m0.backsplashes.is_empty()
-            && m0.molding_lines.is_empty() || !m0.molding_lines.is_empty(),
+        m0.rooms.iter().any(|r| r.room_type == RoomType::Kitchen) && !m0.countertops.is_empty() && !m0.backsplashes.is_empty()
+            || !m0.molding_lines.is_empty(),
         "the scene has its phase‑18 objects"
     );
     let mut m = m0;
@@ -1392,7 +1395,8 @@ fn the_scene_cache_follows_every_phase_18_edit() {
     ]);
     for (label, bound) in bounds {
         assert!(most.get(label).is_some(), "{label} never ran: {most:?}");
-        assert!(most[label] <= bound, "{label}: rebuilt {most[label]} > {bound}; most: {most:?}");
+        let rebuilt = most[label];
+        assert!(rebuilt <= bound, "{label}: rebuilt {rebuilt} > {bound}; most: {most:?}");
     }
 }
 
