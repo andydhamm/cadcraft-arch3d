@@ -33,12 +33,15 @@ pub fn shelf_meshes(model: &ArchModel, c: &Cabinet) -> Vec<Mesh> {
     let mut out = Vec::new();
     // `shelf_levels` is measured from the level floor already (elevation and toe kick included).
     let floor = level_elevation(model, c.level);
-    let count = cadcraft_arch::casework_shelves::shelf_count(c) as usize;
-    if count == 0 {
+    let levels = cadcraft_arch::casework_shelves::shelf_levels(c);
+    if levels.is_empty() {
         return out;
     }
     let mut shelves = Mesh::new("cabinet-shelves", c.id);
-    for (bottom, top) in cadcraft_arch::casework_shelves::shelf_levels(c) {
+    for (bottom, top) in levels {
+        if top <= bottom {
+            continue;
+        }
         let (z0, z1) = (floor + bottom, floor + top);
         push_box(&mut shelves, c.position, c.rotation, -c.width / 2.0 + 0.019, c.width / 2.0 - 0.019, 0.019, c.depth - 0.019, z0, z1);
     }
@@ -148,5 +151,62 @@ mod tests {
             assert!(*t <= with_toe.elevation + with_toe.height - 0.019 + 1e-9, "shelf top above carcass");
         }
         assert!(!shelves.is_empty(), "base cabinet with toe kick should have shelves");
+    }
+
+    #[test]
+    fn open_shelves_zero_height_cabinet_has_no_shelves() {
+        let (m, _) = model(0.0);
+        let zero = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.0,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &zero);
+        assert!(shelves.is_empty(), "zero-height cabinet should have no shelves");
+    }
+
+    #[test]
+    fn open_shelves_very_wide_cabinet_still_has_shelves() {
+        let (m, _) = model(0.0);
+        let wide = Cabinet {
+            fronts: Fronts::Open,
+            width: 3.0,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &wide);
+        assert!(!shelves.is_empty(), "wide cabinet should have shelves");
+        let levels = cadcraft_arch::casework_shelves::shelf_levels(&wide);
+        assert_eq!(levels.len(), 2);
+    }
+
+    #[test]
+    fn open_shelves_rotated_cabinet_meshes_correctly() {
+        let (m, _) = model(0.0);
+        let rotated = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(1.0, 1.0),
+            rotation: std::f64::consts::PI / 2.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &rotated);
+        assert!(!shelves.is_empty(), "rotated cabinet should have shelves");
+        assert_eq!(shelves.len(), 1);
     }
 }

@@ -212,4 +212,26 @@ mod tests {
         let r = s.execute("cabinet.fill", &json!({ "run": 42 }));
         assert!(r.is_err(), "non-string run param should error");
     }
+
+    #[test]
+    fn cabinet_fill_empty_run_string_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": "" }));
+        assert!(r.is_err(), "empty run string should error");
+    }
+
+    #[test]
+    fn cabinet_fill_whitespace_run_string_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": "   " }));
+        assert!(r.is_err(), "whitespace-only run string should error");
+    }
+
+    #[test]
+    fn cabinet_fill_run_with_extra_fields_ignored() {
+        let mut s = room();
+        s.execute("cabinet", &json!({ "kind": "base", "wall": "w0", "offset": 0.35, "widths": [0.6, 0.6] })).unwrap();
+        let r = s.execute("cabinet.fill", &json!({ "run": "cb1", "extra": "ignored", "count": 5 })).unwrap();
+        assert_eq!(r["fillers"], json!(["cb2"]));
+    }
 }
