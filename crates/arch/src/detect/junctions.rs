@@ -398,6 +398,19 @@ mod tests {
     }
 
     #[test]
+    fn three_collinear_runs_merge_into_one() {
+        let mut runs = vec![
+            wr(Vec2::new(0.0, 0.0), Vec2::new(3.0, 0.0), 0.2),
+            wr(Vec2::new(3.01, 0.0), Vec2::new(6.0, 0.0), 0.2),
+            wr(Vec2::new(6.01, 0.0), Vec2::new(10.0, 0.0), 0.2),
+        ];
+        snap_junctions(&mut runs);
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].start, Vec2::new(0.0, 0.0));
+        assert_eq!(runs[0].end, Vec2::new(10.0, 0.0));
+    }
+
+    #[test]
     fn apartment_runs_end_on_the_truth_centre_lines() {
         let mut runs = vec![
             // Bottom
