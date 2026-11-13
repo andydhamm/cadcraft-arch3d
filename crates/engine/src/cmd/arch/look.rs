@@ -70,7 +70,7 @@ pub(crate) fn sun_angle_dir(model: &ArchModel, a: &SunAngle) -> Option<[f64; 3]>
 
 /// The sun direction a look asks for: the explicit one, else its named angle's, else `None`
 /// (the default light).
-pub(crate) fn effective_sun_dir(model: &ArchModel, look: &Look, explicit: Option<[f64; 3]>) -> Option<[f64; 3]> {
+pub fn effective_sun_dir(model: &ArchModel, look: &Look, explicit: Option<[f64; 3]>) -> Option<[f64; 3]> {
     if explicit.is_some() {
         return explicit;
     }
@@ -80,7 +80,7 @@ pub(crate) fn effective_sun_dir(model: &ArchModel, look: &Look, explicit: Option
 
 /// The look a view uses: the camera's own, else the global one with the drawing's backdrop (and a
 /// legacy camera's light set).
-pub(crate) fn effective_look(model: &ArchModel, camera: Option<&Camera3d>) -> Look {
+pub fn effective_look(model: &ArchModel, camera: Option<&Camera3d>) -> Look {
     if let Some(l) = camera.and_then(|c| c.look.as_ref()) {
         return l.clone();
     }
@@ -527,5 +527,26 @@ mod tests {
         let d = describe_look(&own);
         let keys: Vec<&str> = d.as_object().map(|o| o.keys().map(String::as_str).collect()).unwrap_or_default();
         assert_eq!(keys.len(), 10, "{keys:?}");
+    }
+
+    #[test]
+    fn view_look_uses_active_camera() {
+        let mut d = cadcraft_doc::Drawing::new_imperial();
+        d.arch.look.tone_map = ToneMap::Hable;
+        let cam = Camera3d {
+            name: "active".into(),
+            kind: cadcraft_doc::arch::CameraKind::Overview,
+            level: Some(2),
+            lower_levels: Some(false),
+            look: Some(Look { tone_map: ToneMap::None, ..Look::default() }),
+            ..Default::default()
+        };
+        d.arch.cameras.push(cam.clone());
+        d.arch.active_camera = Some("active".to_string());
+
+        let v = crate::view_look(&d);
+        assert_eq!(v.look.tone_map, ToneMap::None);
+        assert_eq!(v.overview, Some((2, false)));
+        assert_eq!(v.sun_dir, None);
     }
 }

@@ -74,6 +74,26 @@
 	Append to current selection set	Додати до поточного набору вибраних об'єктів
 	Arch Inspect	Архітектурний огляд
 	Architecture	Архітектура
+	Look	Вигляд
+	Technique	Техніка
+	Exposure	Експозиція
+	Auto	Авто
+	EV100	EV100
+	Tone map	Карта тонів
+	Sun intensity	Інтенсивність сонця
+	Cast shadows	Кидати тіні
+	Sun angle	Кут сонця
+	Sky	Небо
+	Stars	Зірки
+	Cutaway	Виріз
+	Clip box	Контур обрізки
+	Near clip	Ближня обрізка
+	Reset camera	Скинути камеру
+	Floor overview	Огляд поверху
+	Lower levels	Нижчі рівні
+	Path	Шлях
+	ACES	ACES
+	Hable	Hable
 	Plan Views	Види плану
 	New Plan View	Новий вид плану
 	Open Plan View	Відкрити вид плану

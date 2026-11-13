@@ -1494,8 +1494,60 @@ mod tests {
         assert!(n[2] > 0.9, "{n:?}");
     }
 
+    use cadcraft_doc::arch::{Camera3d, CameraKind, ClipBox, ExposureSetting, Look, ToneMap};
     use cadcraft_engine::Session;
     use serde_json::json;
+
+    #[test]
+    fn lighting_follows_active_camera_look() {
+        let mut d = cadcraft_doc::Drawing::new_imperial();
+        d.arch.look = Look { exposure: ExposureSetting::Manual { ev100: 5.0 }, tone_map: ToneMap::Hable, ..Look::default() };
+        let cam = Camera3d {
+            name: "active".into(),
+            look: Some(Look { exposure: ExposureSetting::Manual { ev100: 3.0 }, tone_map: ToneMap::None, ..Look::default() }),
+            ..Default::default()
+        };
+        d.arch.cameras.push(cam);
+        d.arch.active_camera = Some("active".to_string());
+
+        let view = cadcraft_engine::view_look(&d);
+        let lighting = cadcraft_render3d::look::lighting_for(&view.look, view.sun_dir, 8);
+        assert_eq!(view.look.exposure, ExposureSetting::Manual { ev100: 3.0 });
+        assert_eq!(lighting.look.exposure, ExposureSetting::Manual { ev100: 3.0 });
+    }
+
+    #[test]
+    fn cutaway_toggle_one_command() {
+        let mut s = Session::new();
+        let r = s.execute("look", &json!({"cutaway": true})).unwrap();
+        assert!(r["look"]["cutaway"].as_bool().unwrap());
+        assert!(s.doc().unwrap().arch.look.cutaway);
+        assert!(s.undo().is_ok());
+        assert!(!s.doc().unwrap().arch.look.cutaway);
+    }
+
+    #[test]
+    fn clip_face_drag_moves_one_plane() {
+        let mut clip = ClipBox { min: [0.0, 0.0, 0.0], max: [10.0, 10.0, 10.0] };
+        let delta = 2.5;
+        clip.max[2] += delta;
+        assert_eq!(clip.min, [0.0, 0.0, 0.0]);
+        assert_eq!(clip.max[2], 12.5);
+        assert!(clip.max[2] > clip.min[2]);
+    }
+
+    #[test]
+    fn reset_and_overview_buttons() {
+        let mut s = Session::new();
+        let mut cam =
+            Camera3d { name: "Floor overview".into(), kind: CameraKind::Overview, level: Some(1), lower_levels: Some(false), ..Default::default() };
+        cam.saved = Some(Box::new(cam.clone()));
+        s.doc_mut().unwrap().arch.cameras.push(cam.clone());
+        s.doc_mut().unwrap().arch.active_camera = Some("Floor overview".to_string());
+        let view = cadcraft_engine::view_look(s.doc().unwrap());
+        assert_eq!(view.overview, Some((1, false)));
+        assert!(s.execute("camera.reset", &json!({"name": "Floor overview"})).is_ok());
+    }
 
     /// The phase-1 house (four exterior walls) with the phase-2 front door on `w0` at offset
     /// 3.0 — the same two commands as `tests/acceptance/phase-7/p7lib.inc::HOUSE`.
