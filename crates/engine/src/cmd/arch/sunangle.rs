@@ -284,6 +284,67 @@ mod tests {
     }
 
     #[test]
+    fn date_time_without_site_is_refused() {
+        let mut s = Session::new();
+        let r = s.execute("sunangle", &json!({"name": "noon", "date": "2026-06-21", "time": "solar-noon"}));
+        assert!(r.is_err(), "date/time form without site should be refused");
+        let err = r.unwrap_err().to_string();
+        assert!(err.contains("site"), "error should mention site: {err}");
+    }
+
+    #[test]
+    fn compass_angle_with_nan_values_is_refused() {
+        let mut s = Session::new();
+        let r = s.execute("sunangle", &json!({"name": "NAN", "azimuth": f64::NAN, "elevation": 45.0}));
+        assert!(r.is_err(), "NaN azimuth should be refused");
+        let r = s.execute("sunangle", &json!({"name": "NAN", "azimuth": 180.0, "elevation": f64::NAN}));
+        assert!(r.is_err(), "NaN elevation should be refused");
+        let r = s.execute("sunangle", &json!({"name": "INF", "azimuth": f64::INFINITY, "elevation": 45.0}));
+        assert!(r.is_err(), "inf azimuth should be refused");
+    }
+
+    #[test]
+    fn replace_date_time_with_compass_and_back() {
+        let mut s = Session::new();
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.site = Some(SiteLocation { latitude: 51.05, ..SiteLocation::default() });
+            d.touch_arch();
+        }
+        s.execute("sunangle", &json!({"name": "noon", "date": "2026-06-21", "time": "solar-noon"})).expect("add date/time");
+        let v: Value = s.execute("sunangle", &json!({"list": true})).expect("list");
+        assert_eq!(v["sunAngles"][0]["date"], json!("2026-06-21"));
+        assert_eq!(v["sunAngles"][0]["azimuth"], json!(null));
+
+        s.execute("sunangle", &json!({"name": "noon", "azimuth": 90.0, "elevation": 30.0, "replace": true})).expect("replace with compass");
+        let v: Value = s.execute("sunangle", &json!({"list": true})).expect("list");
+        assert_eq!(v["sunAngles"][0]["date"], json!(null));
+        assert_eq!(v["sunAngles"][0]["azimuth"], json!(90.0));
+
+        s.execute("sunangle", &json!({"name": "noon", "date": "2026-12-21", "time": "solar-noon", "replace": true})).expect("replace with date/time");
+        let v: Value = s.execute("sunangle", &json!({"list": true})).expect("list");
+        assert_eq!(v["sunAngles"][0]["date"], json!("2026-12-21"));
+        assert_eq!(v["sunAngles"][0]["azimuth"], json!(null));
+    }
+
+    #[test]
+    fn list_with_no_angles_returns_empty_array() {
+        let mut s = Session::new();
+        let v: Value = s.execute("sunangle", &json!({"list": true})).expect("list");
+        let arr = v["sunAngles"].as_array().expect("sunAngles should be an array");
+        assert!(arr.is_empty(), "list should be empty");
+    }
+
+    #[test]
+    fn elevation_boundary_values_accepted() {
+        let mut s = Session::new();
+        s.execute("sunangle", &json!({"name": "ZENITH", "azimuth": 0.0, "elevation": 90.0})).expect("elevation 90 should be accepted");
+        s.execute("sunangle", &json!({"name": "NADIR", "azimuth": 0.0, "elevation": -90.0})).expect("elevation -90 should be accepted");
+        let v: Value = s.execute("sunangle", &json!({"list": true})).expect("list");
+        assert_eq!(v["sunAngles"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
     fn refuses_bad_forms_duplicates_and_used_deletes() {
         let mut s = Session::new();
 
