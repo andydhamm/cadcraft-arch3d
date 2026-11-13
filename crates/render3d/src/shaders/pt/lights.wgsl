@@ -45,6 +45,22 @@ fn light_sample(i: u32, p: vec3<f32>, u: vec2<f32>) -> LightSample {
         return s;
     }
     let l = lights[i];
+    if (l.kind == LIGHT_STRIP) {
+        // A strip segment: a point uniformly along it (u.x), on the emitting side 2 mm below the
+        // housing face; li = rgb (cd per metre) x length x max(0, n_e.-dir) / d^2, pdf 1, delta (the
+        // lens is camera-only emissive, so no MIS).
+        let q = l.position + l.axis * (u.x * l.length) + l.direction * 0.002;
+        let to_q = q - p;
+        let d2 = dot(to_q, to_q);
+        if (!(d2 > 1.0e-12)) {
+            return s;
+        }
+        let dist = sqrt(d2);
+        s.dir = to_q / dist;
+        s.dist = dist;
+        s.li = l.rgb * (l.length * max(0.0, dot(-s.dir, l.direction)) / d2);
+        return s;
+    }
     if (l.kind != LIGHT_AREA || l.ies_v > 0u) {
         let to_light = l.position - p;
         let d2 = dot(to_light, to_light);
@@ -343,8 +359,6 @@ fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     }
     return li * visibility(o, d, 1.0e6) * cos_n;
 }
-// [p19-normal-maps-render] the shading normal at barycentrics (u, v) of triangle tri; n is the geometric normal facing the ray.
-fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }
 
 // Two neighbouring entries of an angle list and how far between them (0 = lo, 1 = hi).
 struct IesBracket { lo: u32, hi: u32, t: f32 };

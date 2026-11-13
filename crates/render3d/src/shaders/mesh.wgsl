@@ -38,6 +38,8 @@ struct PbrUniforms {
 // finishes; then the scene's textures (phase 14).
 @group(3) @binding(0) var mat_tex: texture_2d_array<f32>;
 @group(3) @binding(1) var mat_samp: sampler;
+// The tangent-space normal maps (LINEAR): layer 0 flat, then the finishes', then the scene's.
+@group(3) @binding(2) var normal_tex: texture_2d_array<f32>;
 
 // Albedo of the draw at `uv`: the draw colour times its texture layer (`_p6.y`), the UVs divided by
 // the draw's tile (`_p6.zw` holds 1 / tile; [1, 1] multiplies them by exactly one, and a zeroed
@@ -144,9 +146,36 @@ fn clip_discard(wpos: vec3<f32>) -> bool {
     return any(wpos < p.clip_min) || any(wpos > p.clip_max);
 }
 
-// Hook [p19-normal-maps-render]: the normal after the draw's normal map.
+// The normal after the draw's normal map (`normal_layer` is the map's array layer + 1, 0 = none, and
+// `normal_strength` scales its xy). The tangent frame is the cotangent frame of Schueler (2013) from
+// the screen derivatives of the world position and of the UVs per repeat, so it needs no vertex
+// tangents (arch3d's vertex normals are not trusted). The map is sampled whatever the draw, in
+// uniform control flow, and only then selected. Without a map `n` is returned unchanged.
 fn shading_normal(n: vec3<f32>, uv: vec2<f32>, wpos: vec3<f32>) -> vec3<f32> {
-    return n;
+    let per_repeat = select(vec2<f32>(1.0), p._p6.zw, p._p6.zw > vec2<f32>(0.0));
+    let st = uv * per_repeat;
+    let layer = i32(max(p.normal_layer, 1u)) - 1;
+    let texel = textureSample(normal_tex, mat_samp, st, layer).rgb;
+    let dp1 = dpdx(wpos);
+    let dp2 = dpdy(wpos);
+    let duv1 = dpdx(st);
+    let duv2 = dpdy(st);
+    let dp2perp = cross(dp2, n);
+    let dp1perp = cross(n, dp1);
+    let t = dp2perp * duv1.x + dp1perp * duv2.x;
+    let b = dp2perp * duv1.y + dp1perp * duv2.y;
+    let invmax = inverseSqrt(max(max(dot(t, t), dot(b, b)), 1e-30));
+    var nt = texel * 2.0 - vec3<f32>(1.0);
+    nt = vec3<f32>(nt.xy * p.normal_strength, nt.z);
+    let nt_len = length(nt);
+    let mapped_world = normalize(t * invmax * nt.x + b * invmax * nt.y + n * nt.z);
+    var mapped = mapped_world;
+    // Keep the result on the camera side of the face.
+    if (dot(mapped, n) < 0.0) {
+        mapped = -mapped;
+    }
+    let ok = p.normal_layer > 0u && nt_len > 1e-4 && mapped_world.x == mapped_world.x && invmax < 1.0e18;
+    return select(n, mapped, ok);
 }
 
 // Irradiance the sun adds on a face square to it; it carries (1 - ambient) of the light so a white

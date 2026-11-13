@@ -193,7 +193,7 @@ mod tests {
         assert!(source.contains("fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { if ((frame.flags & FRAME_SUN_NO_SHADOW) != 0u) { return vec3<f32>(1.0); } return visibility(o, d, 1.0e6); }"), "sun visibility hook missing");
         assert!(source.contains("fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32>"), "moon direct hook missing");
         assert!(source.contains("fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32>"), "moon irradiance hook missing");
-        assert!(source.contains("fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }"), "normal hook missing");
+        assert!(source.contains("fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> {"), "normal hook missing");
         assert_eq!(source.matches("sun_visibility(o, sun.dir)").count(), 2, "sun visibility uses");
         assert!(source.contains("env_escape(d, depth, mode, prev_pdf)"));
         assert!(source.contains("pt_shading_normal(h.tri, n, h.u, h.v)"));

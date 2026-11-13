@@ -20,7 +20,7 @@ const MENU: &str = "Plan Views";
 /// The plan view commands.
 macro_rules! view_fields {
     () => {
-        "level?: name|index|\"any\"|null, kind?: \"floor\"|\"reflectedCeiling\"|\"roof\", layers?: {rules?: [{pattern, on?: bool, transparency?: 0..90}], capture?: bool}, annotation?: {layer?, textStyle?, dimStyle?}, labels?: {name?, area?, dimensions?, ceiling?: bool}, reference?: {level, color?: \"#rrggbb\", transparency?: 0..90}|null, zoom?: \"current\"|{center: [x, y], width, height}|null"
+        "level?: name|index|\"any\"|null, kind?: \"floor\"|\"reflectedCeiling\"|\"roof\", layers?: {rules?: [{pattern, on?: bool, transparency?: 0..90}], capture?: bool}, annotation?: {layer?, textStyle?, dimStyle?}, labels?: {name?, area?, dimensions?, ceiling?, numbers?: bool}, reference?: {level, color?: \"#rrggbb\", transparency?: 0..90}|null, zoom?: \"current\"|{center: [x, y], width, height}|null"
     };
 }
 
@@ -249,9 +249,15 @@ fn parse_fields(cmd: &str, p: &Map<String, Value>, view: &mut PlanView, d: &Draw
         view.annotation = a;
     }
     if let Some(v) = p.get("labels") {
-        let m = object(cmd, "labels", v, &["name", "area", "dimensions", "ceiling"])?;
+        let m = object(cmd, "labels", v, &["name", "area", "dimensions", "ceiling", "numbers"])?;
         let mut l: RoomLabelShow = view.labels;
-        for (key, slot) in [("name", &mut l.name), ("area", &mut l.area), ("dimensions", &mut l.dimensions), ("ceiling", &mut l.ceiling)] {
+        for (key, slot) in [
+            ("name", &mut l.name),
+            ("area", &mut l.area),
+            ("dimensions", &mut l.dimensions),
+            ("ceiling", &mut l.ceiling),
+            ("numbers", &mut l.numbers),
+        ] {
             if let Some(x) = m.get(key) {
                 *slot = boolean(cmd, &format!("labels.{key}"), x)?;
             }

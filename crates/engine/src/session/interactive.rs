@@ -418,6 +418,7 @@ impl Session {
         crate::guard::tests::panic_if_armed();
         if ok {
             cmd::arch::views::refresh_views(self);
+            cmd::arch::schedule::refresh_schedules(self);
             cmd::arch::sheets::prune_sheets(self);
         }
         cmd::groups::after_command(self, before);

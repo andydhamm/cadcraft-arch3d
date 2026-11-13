@@ -762,6 +762,78 @@ mod tests {
         assert_eq!(o.final_renders(), 1);
     }
 
+    /// An empty scene (no meshes, no lights) renders to a valid PNG of the requested size.
+    #[test]
+    fn final_render_empty_scene() {
+        let Some(mut o) = off() else { return };
+        let meshes: Vec<Mesh> = vec![];
+        let bounds = cadcraft_arch3d::mesh::Bounds3::empty();
+        let s = Scene3d { meshes, bounds, lights: vec![], ..Default::default() };
+        let png = render_final(&mut o, &s, 1, &camera(), &night(), false, SIZE);
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        let Ok(png) = png else { return };
+        let len = crate::offscreen::png_rgba(&png).map(|r| r.len()).ok();
+        assert_eq!(len, Some((SIZE.0 * SIZE.1 * 4) as usize));
+        assert_eq!(o.final_renders(), 1);
+    }
+
+    /// A scene with meshes but no lights renders correctly in raster mode.
+    #[test]
+    fn final_render_no_lights_raster() {
+        let Some(mut o) = off() else { return };
+        let mut s = scene(false);
+        s.lights.clear();
+        let png = render_final(&mut o, &s, 1, &camera(), &night(), false, SIZE);
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        let Ok(png) = png else { return };
+        let len = crate::offscreen::png_rgba(&png).map(|r| r.len()).ok();
+        assert_eq!(len, Some((SIZE.0 * SIZE.1 * 4) as usize));
+        assert_eq!(o.final_renders(), 1);
+    }
+
+    /// With scale=1 the downsample is a passthrough (each pixel is its own 1x1 block).
+    #[test]
+    fn downsample_scale_one_is_identity() {
+        let rgba = [255u8, 128, 64, 255, 10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255];
+        let out = downsample(&rgba, 2, (2, 2), 1);
+        assert!(out.is_some());
+        let out = out.unwrap();
+        assert_eq!(out.len(), 16);
+        for i in 0..16 {
+            assert_eq!(out[i], rgba[i], "pixel {i} changed with scale=1");
+        }
+    }
+
+    /// Downsample averages in linear light: two black and two white sRGB pixels in a 2x2 block
+    /// give linear 0.5, which encodes to sRGB 188.
+    #[test]
+    fn downsample_averages_linearly() {
+        let rgba = [0u8, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255];
+        let out = downsample(&rgba, 2, (1, 1), 2);
+        assert!(out.is_some());
+        let out = out.unwrap();
+        assert_eq!(out.len(), 4);
+        let expected = linear_to_srgb(0.5);
+        assert_eq!(out[0], expected, "R channel");
+        assert_eq!(out[1], expected, "G channel");
+        assert_eq!(out[2], expected, "B channel");
+        assert_eq!(out[3], 255, "alpha");
+    }
+
+    /// A scene with exactly one light renders without error.
+    #[test]
+    fn final_render_single_light() {
+        let Some(mut o) = off() else { return };
+        let mut s = scene(false);
+        s.lights = vec![spot(10, -2.0, 0.0, 50.0)];
+        let png = render_final(&mut o, &s, 1, &camera(), &night(), false, SIZE);
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        let Ok(png) = png else { return };
+        let len = crate::offscreen::png_rgba(&png).map(|r| r.len()).ok();
+        assert_eq!(len, Some((SIZE.0 * SIZE.1 * 4) as usize));
+        assert_eq!(o.final_renders(), 1);
+    }
+
     /// The pane's lit frame and the raster Finalize tone-map alike: the same plane under the same
     /// sun, manual exposure and curve gives the same pixel in both (and the curve's value).
     #[test]
