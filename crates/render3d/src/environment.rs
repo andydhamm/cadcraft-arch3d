@@ -123,9 +123,52 @@ pub fn hdri_environment(_model: &ArchModel, _look: &Look) -> Option<Environment>
     None
 }
 
-/// [p19-sky] The sky environment for the given sun. Stub: not available yet.
-pub fn sky_environment(_model: &ArchModel, _look: &Look, _sun_dir: Option<[f64; 3]>) -> Option<Environment> {
-    None
+/// [p19-sky] The sky environment for the given sun.
+pub fn sky_environment(model: &ArchModel, look: &Look, sun_dir: Option<[f64; 3]>) -> Option<Environment> {
+    if !look.sky.on {
+        return None;
+    }
+    if !matches!(look.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky))
+        && !matches!(model.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky))
+    {
+        return None;
+    }
+    let sun = sun_dir.unwrap_or_else(|| crate::light::Light::DEFAULT.dir.map(f64::from));
+    let visible = matches!(look.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky))
+        || matches!(model.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky));
+    let daylight = cadcraft_arch3d::sky::sky_radiance([0.0, 0.0, 1.0], sun, look.sky.turbidity)[0].is_finite();
+    let mut env =
+        Environment { width: 512, height: 256, rgb: vec![[0.0f32; 3]; 512 * 256], intensity: 1.0, visible, daylight: daylight, ..Default::default() };
+    let w = env.width as f64;
+    let h = env.height as f64;
+    let sun_elev = sun[2].clamp(-1.0, 1.0).asin().to_degrees();
+    for y in 0..env.height {
+        for x in 0..env.width {
+            let u = (x as f64 + 0.5) / w;
+            let v = (y as f64 + 0.5) / h;
+            let az = (u - 0.5) * std::f64::consts::TAU;
+            let el = (0.5 - v) * std::f64::consts::PI;
+            let r = el.cos();
+            let dir = [r * az.cos(), r * az.sin(), el.sin()];
+            let mut rgb = cadcraft_arch3d::sky::sky_radiance(dir, sun, look.sky.turbidity);
+            if look.sky.stars {
+                let star = cadcraft_arch3d::sky::star_radiance(dir, sun);
+                if star.is_finite() {
+                    rgb[0] += star as f64;
+                    rgb[1] += star as f64;
+                    rgb[2] += star as f64;
+                }
+            }
+            if !rgb.iter().all(|c| c.is_finite()) {
+                rgb = [0.0; 3];
+            }
+            let i = (y as usize) * (env.width as usize) + (x as usize);
+            env.rgb[i] = [rgb[0] as f32, rgb[1] as f32, rgb[2] as f32];
+        }
+    }
+    env.daylight = sun_elev > -6.0;
+    env.key = env.compute_key();
+    Some(env)
 }
 
 /// The one environment for the drawing and look: an HDRI (if the look names one),
@@ -181,5 +224,19 @@ mod tests {
         assert!((at(&e, 0.0, el) - 20.0).abs() < 1e-2);
         assert_eq!(e.radiance([f32::NAN, 0.0, 1.0]), [0.0; 3]);
         assert_eq!(Environment::default().radiance([0.0, 0.0, 1.0]), [0.0; 3]);
+    }
+
+    #[test]
+    fn sky_visible_only_with_sky_backdrop() {
+        let mut look = Look::default();
+        look.sky.on = true;
+        let model = ArchModel::default();
+        assert!(sky_environment(&model, &look, None).is_none());
+        look.backdrop = Some(cadcraft_doc::arch::Backdrop::Sky);
+        let env = sky_environment(&model, &look, None).unwrap();
+        assert!(env.visible);
+        let mut no_sky_look = look.clone();
+        no_sky_look.backdrop = Some(cadcraft_doc::arch::Backdrop::Hdri { image: "sky".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        assert!(sky_environment(&model, &no_sky_look, None).is_none());
     }
 }

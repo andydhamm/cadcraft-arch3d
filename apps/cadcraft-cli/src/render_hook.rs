@@ -296,7 +296,8 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         cadcraft_arch3d::set_backdrop(&req.drawing.arch, f, look.backdrop.as_ref());
         (&*f, filtered_scene_key(revision, hidden_key))
     };
-    let mut lighting = lighting_for(&look, sun_dir, req.budget);
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, req.budget).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, revision, &look, sun_dir);
     // The calibration albedo, the metered night (all but the legacy `sun: false`) and a bare-number
     // exposure, which the raster uses as its fixed scale too.
@@ -437,7 +438,8 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
     let (look, sun_dir) = req.resolved_sun();
-    let mut lighting = lighting_for(&look, sun_dir, 8);
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, 8).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, req.drawing.arch_revision, &look, sun_dir);
     let opts = path_options(&req.path, &look, None);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;

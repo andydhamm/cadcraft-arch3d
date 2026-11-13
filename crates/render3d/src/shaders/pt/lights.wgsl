@@ -311,9 +311,38 @@ fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32
     return s.li * v * (cos_n / s.pdf);
 }
 // [p19-sky]
-fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }
+fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> {
+    if ((frame.flags & FRAME_MOON) == 0u) {
+        return vec3<f32>(0.0);
+    }
+    let d = frame.moon_dir.xyz;
+    let li = frame.moon_rgb.xyz;
+    if (!(light_luminance(li) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let f = bsdf_eval(m, n, wo, d);
+    if (!(light_luminance(f) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    let v = visibility(p + n * PT_EPS, d, 1.0e6);
+    if (!(light_luminance(v) > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    return f * li * v;
+}
 // [p19-sky]
-fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }
+fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    if ((frame.flags & FRAME_MOON) == 0u) {
+        return vec3<f32>(0.0);
+    }
+    let d = frame.moon_dir.xyz;
+    let li = frame.moon_rgb.xyz;
+    let cos_n = max(dot(n, d), 0.0);
+    if (!(light_luminance(li) > 0.0) || !(cos_n > 0.0)) {
+        return vec3<f32>(0.0);
+    }
+    return li * visibility(o, d, 1.0e6) * cos_n;
+}
 // [p19-normal-maps-render] the shading normal at barycentrics (u, v) of triangle tri; n is the geometric normal facing the ray.
 fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }
 
