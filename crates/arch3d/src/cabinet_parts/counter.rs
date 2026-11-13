@@ -1,6 +1,8 @@
 //! A cabinet's counter: its run's counter when it owns the run, else a lone counter.
 
+use cadcraft_arch::casework_corner::merged_outline_of;
 use cadcraft_arch::casework_layout::CounterRun;
+use cadcraft_arch::countertop::CounterKey;
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::Cabinet;
 
@@ -12,6 +14,22 @@ use crate::casework::{level_elevation, push_box, run_counter};
 /// countertop claims.
 pub fn counter_meshes(model: &ArchModel, c: &Cabinet, runs: &[CounterRun]) -> Vec<Mesh> {
     let mut meshes = Vec::new();
+    // A counter that runs round a corner is one polygon: the cabinet that owns it builds the one mesh.
+    // Only a run's owner can build a counter, so only it asks (the merge costs a pass over the model).
+    if runs.iter().any(|r| r.owner == c.id)
+        && let Some(o) = merged_outline_of(model, c)
+    {
+        if o.key == Some(CounterKey::Auto(c.id)) {
+            let level = level_elevation(model, c.level);
+            let mut counter = Mesh::new("counter", c.id);
+            counter.level_elevation = level;
+            counter.push_prism_with_holes(&o.ring, &o.holes, level + o.top - o.thickness, level + o.top);
+            if !counter.indices.is_empty() {
+                meshes.push(counter);
+            }
+        }
+        return meshes;
+    }
     let level_z = level_elevation(model, c.level) + c.elevation;
     let run = runs.iter().find(|r| r.cabinets.contains(&c.id));
     match run {

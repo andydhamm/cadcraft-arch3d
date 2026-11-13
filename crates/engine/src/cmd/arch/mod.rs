@@ -16,6 +16,7 @@ pub mod archdetect;
 pub mod autodim;
 pub mod backdrop;
 pub mod build3d;
+mod cabinet_corner_inspect;
 pub mod cabinet_face;
 pub(crate) mod cabinet_fill;
 pub(crate) mod cabinet_molding_inspect;
