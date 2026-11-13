@@ -53,6 +53,35 @@ fn polygon_area(poly: &[Value]) -> f64 {
     area.abs() / 2.0
 }
 
+#[test]
+fn debug_phase18_layout() {
+    install_io();
+    let script = load_demo();
+    let mut session = replay(&script);
+    let inspect = session.execute("arch.inspect", &json!({"walls": true, "cabinets": true, "rooms": true, "openings": true})).unwrap();
+    for wall in inspect["walls"].as_array().unwrap() {
+        println!(
+            "wall {} start {:?} end {:?} glass={} split={:?}",
+            wall["id"],
+            wall["start"],
+            wall["end"],
+            wall.get("glass").unwrap_or(&Value::Null),
+            wall.get("split")
+        );
+    }
+    for cab in inspect["cabinets"].as_array().unwrap() {
+        println!(
+            "cab {} kind={} wall={:?} at={:?} id={} corner={:?}",
+            cab["id"],
+            cab["kind"],
+            cab.get("wall"),
+            cab.get("at"),
+            cab["id"],
+            cab.get("corner")
+        );
+    }
+}
+
 fn first_move_step(script: &[Value]) -> Option<(usize, f64)> {
     for (i, step) in script.iter().enumerate() {
         if step.get("cmd") == Some(&Value::String("countertop.edit".into())) {
@@ -164,6 +193,8 @@ fn phase18_demo_kitchen_has_every_feature() {
 
     let cabinets = as_array(&inspect, "cabinets");
     let corner_cabinets = cabinets.iter().filter(|cab| cab.get("corner").and_then(Value::as_object).is_some()).collect::<Vec<_>>();
+    println!("inspect cabinets: {cabinets:#?}");
+    println!("corner cabinets: {corner_cabinets:#?}");
     assert_eq!(corner_cabinets.len(), 1, "demo should include exactly one corner cabinet");
     let corner_id = corner_cabinets[0].get("id").and_then(Value::as_str).unwrap().to_string();
     let partner = corner_cabinets[0].get("corner").and_then(|c| c.get("partner")).and_then(Value::as_str).unwrap().to_string();
