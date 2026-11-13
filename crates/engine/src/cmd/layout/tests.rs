@@ -375,7 +375,8 @@ fn plot_sheets_refusals() {
         assert!(s.execute("plot", &p).is_err(), "{p}");
     }
     // A sheet whose layout is gone is refused naming it.
-    s.execute("layout.delete", &json!({"name": "A102"})).unwrap();
+    // (LAYOUT.DELETE drops the sheet too, so remove the layout from the document directly.)
+    s.doc_mut().unwrap().layouts.retain(|l| l.name != "A102");
     let e = s.execute("plot", &json!({"sheets": "all"})).unwrap_err().to_string();
     assert!(e.contains("A102"), "{e}");
     // No sheets at all.
