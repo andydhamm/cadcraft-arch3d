@@ -41,6 +41,11 @@ mod tests {
     }
 
     #[test]
+    fn the_stub_builds_nothing() {
+        assert!(backsplash_meshes(&Backsplash::default(), &[], 0.0).is_empty());
+    }
+
+    #[test]
     fn one_mesh_with_a_box_per_segment_into_the_room() {
         let b = Backsplash { id: ArchId(3), ..Default::default() };
         let m = backsplash_meshes(&b, &[seg(0.0, 1.0, 1.3), seg(1.0, 2.0, 1.4)], 0.0);
