@@ -305,4 +305,55 @@ mod tests {
         assert_eq!(tile_size(Finish::Brick), crate::texture::texture(Finish::Brick).tile);
         assert_eq!(tile_size(Finish::Wood), crate::texture::texture(Finish::Wood).tile);
     }
+
+    #[test]
+    fn tile_pattern_is_a_grid() {
+        let p = pattern_for("tile", [0.6, 0.6]).unwrap();
+        // Tile is a square grid: course == joint, no stagger.
+        assert!((p.course - 0.15).abs() < 1e-9);
+        assert_eq!(p.joint, Some(0.15));
+        assert!(!p.stagger);
+    }
+
+    #[test]
+    fn pattern_for_rejects_bad_tiles() {
+        // NaN in either component.
+        assert!(pattern_for("brick", [f64::NAN, 0.6]).is_none());
+        assert!(pattern_for("brick", [0.84, f64::NAN]).is_none());
+        // Zero in either component.
+        assert!(pattern_for("brick", [0.0, 0.6]).is_none());
+        assert!(pattern_for("brick", [0.84, 0.0]).is_none());
+        // Negative in either component.
+        assert!(pattern_for("brick", [-0.84, 0.6]).is_none());
+        assert!(pattern_for("brick", [0.84, -0.6]).is_none());
+        // Infinity in either component.
+        assert!(pattern_for("brick", [f64::INFINITY, 0.6]).is_none());
+        assert!(pattern_for("brick", [0.84, f64::INFINITY]).is_none());
+    }
+
+    #[test]
+    fn pattern_for_finish_prefix_is_equivalent() {
+        // "brick" and "finish:brick" must produce identical patterns.
+        let p1 = pattern_for("brick", [0.84, 0.6]).unwrap();
+        let p2 = pattern_for("finish:brick", [0.84, 0.6]).unwrap();
+        assert_eq!(p1, p2);
+        // Same for siding.
+        let s1 = pattern_for("siding", [1.2, 1.2]).unwrap();
+        let s2 = pattern_for("finish:siding", [1.2, 1.2]).unwrap();
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn segment_on_axis_finds_chord() {
+        // Triangle in the xy-plane: (0,0,0), (2,0,0), (0,2,0).
+        let points: [[f64; 3]; 3] = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0]];
+        // Plane x = 1 cuts the triangle at (1,0,0) and (1,1,0).
+        let chord = segment_on_axis(&points, [1.0, 0.0, 0.0], 1.0).unwrap();
+        assert!((chord.0[0] - 1.0).abs() < 1e-9);
+        assert!((chord.0[1] - 0.0).abs() < 1e-9);
+        assert!((chord.1[0] - 1.0).abs() < 1e-9);
+        assert!((chord.1[1] - 1.0).abs() < 1e-9);
+        // A plane that misses the triangle returns None.
+        assert!(segment_on_axis(&points, [1.0, 0.0, 0.0], 5.0).is_none());
+    }
 }
