@@ -1,64 +1,12 @@
 [
-  {
-    "cmd": "planview",
-    "params": {
-      "name": "Lower Floor Plan",
-      "from": "Floor Plan",
-      "level": "Lower",
-      "open": false
-    }
-  },
-  {
-    "cmd": "planview",
-    "params": {
-      "name": "Lower Electrical",
-      "from": "Electrical",
-      "level": "Lower",
-      "open": false
-    }
-  },
-  {
-    "cmd": "planview",
-    "params": {
-      "name": "Lower Reflected Ceiling",
-      "from": "Reflected Ceiling",
-      "level": "Lower",
-      "open": false
-    }
-  },
-  {
-    "cmd": "dimauto",
-    "params": { "level": "Lower" }
-  },
-  {
-    "cmd": "planview",
-    "params": {
-      "name": "Main Floor Plan",
-      "from": "Floor Plan",
-      "level": "Main",
-      "open": false
-    }
-  },
-  {
-    "cmd": "planview",
-    "params": {
-      "name": "Main Electrical",
-      "from": "Electrical",
-      "level": "Main",
-      "open": false
-    }
-  },
-  {
-    "cmd": "planview",
-    "params": {
-      "name": "Main Reflected Ceiling",
-      "from": "Reflected Ceiling",
-      "level": "Main",
-      "open": false
-    }
-  },
-  {
-    "cmd": "dimauto",
-    "params": { "level": "Main" }
-  }
+  {"cmd": "planview", "params": {"name": "Lower Floor Plan", "level": "Lower", "kind": "floor"}},
+  {"cmd": "planview", "params": {"name": "Main Floor Plan", "level": "Main", "kind": "floor"}},
+  {"cmd": "planview", "params": {"name": "Lower Electrical", "level": "Lower", "kind": "electrical"}},
+  {"cmd": "planview", "params": {"name": "Main Electrical", "level": "Main", "kind": "electrical"}},
+  {"cmd": "planview", "params": {"name": "Lower Reflected Ceiling", "level": "Lower", "kind": "reflectedCeiling"}},
+  {"cmd": "planview", "params": {"name": "Main Reflected Ceiling", "level": "Main", "kind": "reflectedCeiling"}},
+  {"cmd": "planview", "params": {"name": "Roof Plan", "kind": "roof"}},
+  {"cmd": "planview", "params": {"name": "Site", "kind": "site"}},
+  {"cmd": "dimauto", "params": {"level": "Lower"}},
+  {"cmd": "dimauto", "params": {"level": "Main"}}
 ]
