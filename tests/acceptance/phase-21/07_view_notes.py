@@ -71,7 +71,8 @@ for l in sh_items(vb, 'lines'):
             fail(f"after the move the view still shows only the room: {l}")
 
 # The cabinet moves 1 m along w5 (y 4.2..4.8): the attached note and the dimension follow, the free note stays.
-rr = sh_run_ok(SET + [cmd('cabinet.edit', {"id": "cb0", "offset": 1.5}), INSPECT21], "the cabinet move")
+# cabinet.edit places along a wall as `cabinet` does: an `offset` is given with its `wall`.
+rr = sh_run_ok(SET + [cmd('cabinet.edit', {"id": "cb0", "wall": "w5", "offset": 1.5}), INSPECT21], "the cabinet move")
 vc, nc = notes(inspected(rr), "after the cabinet moved")
 base = sh_pt(nc['BASE'].get('at'), 'attached note')
 if abs(base[0] - (-4.8)) > SH_TOL or abs(base[1] - (top + 0.1)) > SH_TOL:

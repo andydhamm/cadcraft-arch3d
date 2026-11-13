@@ -20,7 +20,8 @@ SET = HOUSE + [cmd('elevation', {"side": "south"}),                             
                cmd('sheet', {"name": "Interiors", "number": "A-301", "views": [{"view": "v2", "scale": "1:50", "at": [300, 300]}]})]
 rr = sh_run_ok(SET + [INSPECT21, cmd('arch.inspect', {"plan": True}), cmd('sheet.open', {"view": "v1"}),
                       'layout.list {}'], "the callouts")
-insp = inspected(rr)
+# The plan reply is an arch.inspect reply too (it carries walls and levels): the views are in the first one.
+insp = inspected(rr, 0)
 vh = {v.get('id'): v.get('handle') for v in sh_list(insp, 'views')}
 plan = sh_plan(rr)
 calls = sh_plan_labels(plan, 'callout')

@@ -214,4 +214,62 @@ mod tests {
         assert_eq!(wall_on_side(&m, &room, "west").map(|f| f.wall), Some(ArchId(3)));
         assert!(wall_on_side(&m, &room, "up").is_none());
     }
+
+    #[test]
+    fn bounding_faces_zero_area_room() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, ..Default::default() });
+        // Collinear points: zero area.
+        let room = Room { polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(2.0, 0.0)], ..Default::default() };
+        assert!(bounding_faces(&m, &room).is_empty());
+    }
+
+    #[test]
+    fn face_of_wall_not_bounding_room() {
+        let (mut m, room) = house();
+        // Add a wall far away that does not bound the room.
+        let id = m.push_wall(Wall { start: Vec2::new(10.0, 0.0), end: Vec2::new(10.0, 4.0), thickness: 0.1, height: 2.4, ..Default::default() });
+        assert!(face_of(&m, &room, id).is_none());
+    }
+
+    #[test]
+    fn ring_contains_point_on_boundary() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        // Point exactly on the edge
+        assert!(ring_contains(&ring, Vec2::new(0.5, 0.0), 1e-9));
+        // Point inside
+        assert!(ring_contains(&ring, Vec2::new(0.5, 0.5), 1e-9));
+        // Point outside
+        assert!(!ring_contains(&ring, Vec2::new(2.0, 0.5), 1e-9));
+        // Point just outside tolerance
+        assert!(!ring_contains(&ring, Vec2::new(0.5, -0.001), 1e-9));
+    }
+
+    #[test]
+    fn bounding_faces_nan_room_polygon() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, ..Default::default() });
+        // Room with a NaN vertex
+        let room = Room { polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 1.0)], ..Default::default() };
+        assert!(bounding_faces(&m, &room).is_empty());
+    }
+
+    #[test]
+    fn wall_on_side_no_wall_on_side() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, ..Default::default() });
+        // A room with only one wall (on the south side)
+        let t = 0.1;
+        let h = t / 2.0;
+        m.push_wall(Wall { start: Vec2::new(-h, -h), end: Vec2::new(6.0 + h, -h), thickness: t, height: 2.4, ..Default::default() });
+        let room = Room { polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)], ..Default::default() };
+        // South wall exists
+        assert!(wall_on_side(&m, &room, "south").is_some());
+        // East wall does not exist
+        assert!(wall_on_side(&m, &room, "east").is_none());
+        // North wall does not exist
+        assert!(wall_on_side(&m, &room, "north").is_none());
+        // West wall does not exist
+        assert!(wall_on_side(&m, &room, "west").is_none());
+    }
 }
