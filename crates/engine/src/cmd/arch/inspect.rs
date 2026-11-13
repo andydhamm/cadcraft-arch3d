@@ -11,13 +11,12 @@ use cadcraft_arch::opening::rough_offset;
 use cadcraft_arch::room::room_at;
 use cadcraft_arch::symbol::opening_symbol;
 use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
-use cadcraft_doc::ArchId;
-use cadcraft_doc::Handle;
 use cadcraft_doc::arch::{
     ArchKind, ArchModel, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind, RoofPlane, RoomType, Stair,
     StairShape, arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle, railing_handle, railing_label,
     roof_handle, roof_label, room_handle, room_label, stair_handle, stair_label, wall_label,
 };
+use cadcraft_doc::{ArchId, Drawing, Handle};
 use std::f64::consts::PI;
 // RoofId might be ArchId or a new type. If it's not found, we might need to use ArchId or import it if it exists.
 // Assuming RoofId is in cadcraft_doc::arch based on naming convention, but if E0425 says not found,
@@ -86,6 +85,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     let railings_flag = p.get("railings").and_then(Value::as_bool).unwrap_or(false);
     let views_flag = p.get("views").and_then(Value::as_bool).unwrap_or(false);
     let levels_flag = p.get("levels").and_then(Value::as_bool).unwrap_or(false);
+    let auto_dims_flag = p.get("autoDims").and_then(Value::as_bool).unwrap_or(false);
 
     let shapes = solve_joins(&d.arch);
     let mut solved: std::collections::BTreeMap<ArchId, &Vec<cadcraft_geom::Vec2>> = std::collections::BTreeMap::new();
@@ -440,10 +440,14 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     }
 
     // Site, terrain and plants (phase 9).
+    if auto_dims_flag {
+        inspect_auto_dims(&d, p, &mut out);
+    }
     super::site_inspect::inspect_site(&d.arch, p, &mut out);
     super::light_inspect::inspect_lights(&d.arch, p, &mut out);
     super::casework::inspect_casework(&d.arch, p, &mut out);
     inspect_cabinet_parts(&d.arch, &schedule_numbers, &mut out);
+    super::cabinet_face::inspect_cabinet_faces(&d.arch, &mut out);
     cabinet_molding_inspect::inspect_cabinet_moldings(&d.arch, &mut out);
     inspect_furnishings(&d.arch, p, &mut out);
     super::electrical_inspect::inspect_electrical(&d.arch, p, &mut out);
@@ -456,12 +460,63 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     super::inspect_detail::inspect_details(&d.arch, &mut out);
     super::look::inspect_look(&d.arch, p, &mut out);
     super::room_moldings::inspect_moldings(&d.arch, p, &mut out);
+    super::moldingline::inspect_molding_lines(&d.arch, p, &mut out);
     super::sheet_inspect::inspect_schedules(d, p, &mut out);
     super::sheet_inspect::inspect_sheets(d, p, &mut out);
     super::plan_inspect::inspect_plan_views(&d.arch, p, &mut out);
     super::plan_inspect::inspect_plan(&d.arch, p, &mut out)?;
+    super::niche::inspect_niche_rows(&d.arch, &mut out);
 
     Ok(Value::Object(out))
+}
+
+pub(crate) fn inspect_auto_dims(d: &Drawing, p: &Value, out: &mut JsonMap<String, Value>) {
+    let mut rows = Vec::new();
+    for rec in &d.arch.auto_dims {
+        for row in &rec.generated {
+            let mut values = Vec::new();
+            for handle in &row.handles {
+                if let Some(entity) = d.entity(*handle) {
+                    if let cadcraft_doc::EntityKind::Dimension(dim) = &entity.kind {
+                        values.push(dim.measurement);
+                    }
+                }
+            }
+            rows.push(json!({
+                "level": rec.level,
+                "side": row.side,
+                "row": row.kind.key(),
+                "edited": row.edited,
+                "handles": row.handles.iter().map(|h| h.hex()).collect::<Vec<_>>(),
+                "values": values,
+            }));
+        }
+    }
+    rows.sort_by(|a, b| {
+        let a_obj = a.as_object().unwrap();
+        let b_obj = b.as_object().unwrap();
+        let a_level = a_obj.get("level").and_then(Value::as_u64).unwrap_or(0) as u32;
+        let b_level = b_obj.get("level").and_then(Value::as_u64).unwrap_or(0) as u32;
+        let side_order = |s: &str| match s {
+            "south" => 0,
+            "east" => 1,
+            "north" => 2,
+            "west" => 3,
+            _ => 4,
+        };
+        let a_side = a_obj.get("side").and_then(Value::as_str).unwrap_or("");
+        let b_side = b_obj.get("side").and_then(Value::as_str).unwrap_or("");
+        let row_rank = |k: &str| match k {
+            "openings" => 0,
+            "walls" => 1,
+            "overall" => 2,
+            _ => 3,
+        };
+        a_level.cmp(&b_level).then(side_order(a_side).cmp(&side_order(b_side))).then(a_side.cmp(b_side)).then(
+            row_rank(a_obj.get("row").and_then(Value::as_str).unwrap_or("")).cmp(&row_rank(b_obj.get("row").and_then(Value::as_str).unwrap_or(""))),
+        )
+    });
+    out.insert("autoDims".to_string(), Value::Array(rows));
 }
 
 /// Add the cabinet-part fields (styles, pull, fronts, false front, cut-out) to the
@@ -496,6 +551,12 @@ fn inspect_cabinet_parts(model: &ArchModel, numbers: &std::collections::BTreeMap
         obj.insert("doorStyle".to_string(), json!(c.door_style.name()));
         obj.insert("drawerStyle".to_string(), json!(c.drawer_style.name()));
         obj.insert("pull".to_string(), json!(c.pull));
+        obj.insert("filler".to_string(), json!(c.filler));
+        let shelves = cadcraft_arch::casework_shelves::shelf_levels(c)
+            .iter()
+            .map(|(bottom, top)| json!({ "bottom": *bottom, "top": *top }))
+            .collect::<Vec<_>>();
+        obj.insert("shelves".to_string(), if shelves.is_empty() { Value::Null } else { Value::Array(shelves) });
         obj.insert("falseFront".to_string(), json!(false_front));
         obj.insert("cutout".to_string(), json!(casework_layout::hosted_cutout(model, c).map(|(_, _, size)| size)));
         // `fronts` stays the phase-13 mode name (the cabinet command's own parameter, which phase-13 check 04 and
@@ -912,6 +973,32 @@ mod tests {
         assert_eq!(walls[0]["handle"], "a0000000");
         assert!(walls[0]["thickness"].is_number());
         assert!(walls[0]["exterior"].is_boolean());
+    }
+
+    #[test]
+    fn inspect_filler_and_shelves_rows() {
+        let mut s = Session::new();
+        let mut c = cadcraft_doc::arch::Cabinet::default();
+        c.id = cadcraft_doc::ArchId(0);
+        c.kind = cadcraft_doc::arch::CabinetKind::Wall;
+        c.level = 0;
+        c.position = Vec2::new(1.0, 0.5);
+        c.width = 0.762;
+        c.depth = 0.305;
+        c.height = 0.762;
+        c.elevation = 1.372;
+        c.fronts = cadcraft_doc::arch::Fronts::Open;
+        c.shelves = Some(2);
+        s.doc_mut().unwrap().arch.push_cabinet(c);
+
+        let v = exec(&mut s, "arch.inspect", &json!({ "cabinets": true }));
+        let rows = v["cabinets"].as_array().expect("cabinets array missing");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0]["filler"].is_boolean());
+        assert!(rows[0]["shelves"].is_array(), "shelves should be reported for open cabinets");
+        assert_eq!(rows[0]["shelves"].as_array().unwrap().len(), 2);
+        assert!(rows[0]["shelves"][0]["bottom"].is_number());
+        assert!(rows[0]["shelves"][0]["top"].is_number());
     }
 
     #[test]

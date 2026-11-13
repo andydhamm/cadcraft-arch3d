@@ -1471,6 +1471,7 @@
 	cmd.roomdetect	Виявити кімнати
 	cmd.level	Рівень
 	Architecture>Room	Архітектура>Кімната
+	Architecture>Cabinet Face	Архітектура>Фасад шафи
 	Architecture>Room Detect	Архітектура>Виявити кімнати
 	Architecture>Level	Архітектура>Рівень
 	Architecture>Stair	Архітектура>Сходи
@@ -1544,6 +1545,9 @@
 	Shortcut Menu: always enabled	Контекстне меню: завжди
 	Shortcut Menu: enabled when command options are present	Контекстне меню: коли команда має параметри
 	Cabinet	Шафа
+	Cabinet Face	Фасад шафи
+	Fill Cabinet Run	Заповнити ряд шаф
+	Architecture>Fill Cabinet Run	Архітектура>Заповнити ряд шаф
 	Contours	Контури
 	Cut and Fill	Виймання і насипання
 	Delete Cabinet	Видалити шафу
@@ -1639,6 +1643,12 @@
 	Delete Backsplash	Видалити фартух
 	Room Moldings	Молдинги кімнат
 	Architecture>Room Moldings	Архітектура>Молдинги кімнат
+	Molding Line	Лінія молдинга
+	Edit Molding Line	Редагувати лінію молдинга
+	Delete Molding Line	Видалити лінію молдинга
+	Architecture>Molding Line	Архітектура>Лінія молдинга
+	Architecture>Edit Molding Line	Архітектура>Редагувати лінію молдинга
+	Architecture>Delete Molding Line	Архітектура>Видалити лінію молдинга
 	Architecture>Split Wall	Архітектура>Розділити стіну
 	Sheet	Аркуш
 	Edit Sheet	Редагувати аркуш
@@ -1646,3 +1656,9 @@
 	List Sheets	Список аркушів
 	Open Sheet	Відкрити аркуш
 	Sheet Set	Комплект аркушів
+	Niche	Ніша
+	Architecture>Niche	Архітектура>Ніша
+	Countertop	Стільниця
+	Detach Countertop	Відокремити стільницю
+	Edit Countertop	Редагувати стільницю
+	Delete Countertop	Видалити стільницю

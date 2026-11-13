@@ -13,13 +13,16 @@ pub const DEFAULT_INT_THICKNESS: f64 = 0.1;
 pub const DEFAULT_WALL_HEIGHT: f64 = 2.7;
 
 pub mod archdetect;
+pub mod autodim;
 pub mod backdrop;
-pub mod backsplash;
 pub mod build3d;
+pub mod cabinet_face;
+pub(crate) mod cabinet_fill;
 pub(crate) mod cabinet_molding_inspect;
 pub(crate) mod cabinet_opts;
 pub mod casework;
 pub mod connections;
+pub mod countertop;
 mod countertop_inspect;
 pub mod deck;
 mod deck_inspect;
@@ -43,6 +46,8 @@ pub mod lightfixture;
 pub mod lightset;
 pub mod look;
 pub mod material;
+pub mod moldingline;
+pub mod niche;
 pub mod opening;
 pub mod outlets_auto;
 pub mod paint;
@@ -103,10 +108,13 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(wall::specs());
     v.extend(wall_split::specs());
     v.extend(opening::specs());
+    v.extend(niche::specs());
     v.extend(room::specs());
     v.extend(room_moldings::specs());
+    v.extend(moldingline::specs());
     v.extend(library::specs());
     v.extend(roomdetect::specs());
+    v.extend(autodim::specs());
     v.extend(inspect::specs());
     v.extend(pick::specs());
     v.extend(level::specs());
@@ -142,6 +150,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(lightset::specs());
     v.extend(connections::specs());
     v.extend(casework::specs());
+    v.extend(cabinet_fill::specs());
     v.extend(material::specs());
     v.extend(illuminance::specs());
     v.extend(render::specs());
@@ -150,7 +159,8 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(tray::specs());
     v.extend(foundation::specs());
     v.extend(soffit::specs());
-    v.extend(backsplash::specs());
+    v.extend(countertop::specs());
     v.extend(planview::specs());
+    v.extend(cabinet_face::specs());
     v
 }
