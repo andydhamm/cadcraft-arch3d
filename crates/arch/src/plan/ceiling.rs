@@ -218,34 +218,35 @@ pub fn ceiling_plan(model: &ArchModel, level: Option<u32>, out: &mut PlanAnnotat
                 }
             }
         }
+    }
 
-        for soffit in &model.soffits {
-            if level.is_some_and(|l| soffit.level != l) {
-                continue;
-            }
-            let Some(ring) = crate::ceiling::soffit::soffit_ring(model, soffit) else { continue };
-            if ring.len() < 3 || !ring.iter().all(|p| p.is_finite()) {
-                continue;
-            }
-            for (a, b) in ring_edges(&ring) {
-                if !out.push_line(PlanLine::new(soffit_layer(soffit), PlanLineKind::Soffit, a, b, soffit_handle(soffit.id))) {
-                    return;
-                }
+    // Soffits and ceiling items belong to the level, not to a room: drawn once per call.
+    for soffit in &model.soffits {
+        if level.is_some_and(|l| soffit.level != l) {
+            continue;
+        }
+        let Some(ring) = crate::ceiling::soffit::soffit_ring(model, soffit) else { continue };
+        if ring.len() < 3 || !ring.iter().all(|p| p.is_finite()) {
+            continue;
+        }
+        for (a, b) in ring_edges(&ring) {
+            if !out.push_line(PlanLine::new(soffit_layer(soffit), PlanLineKind::Soffit, a, b, soffit_handle(soffit.id))) {
+                return;
             }
         }
+    }
 
-        for furnishing in &model.furnishings {
-            if furnishing.placement != Placement::Ceiling || level.is_some_and(|l| furnishing.level != l) {
-                continue;
-            }
-            let ring = plan_outline(model, furnishing);
-            if ring.len() < 3 || !ring.iter().all(|p| p.is_finite()) {
-                continue;
-            }
-            for (a, b) in ring_edges(&ring) {
-                if !out.push_line(PlanLine::new("A-CLNG", PlanLineKind::CeilingItem, a, b, furnishing_handle(furnishing.id))) {
-                    return;
-                }
+    for furnishing in &model.furnishings {
+        if furnishing.placement != Placement::Ceiling || level.is_some_and(|l| furnishing.level != l) {
+            continue;
+        }
+        let ring = plan_outline(model, furnishing);
+        if ring.len() < 3 || !ring.iter().all(|p| p.is_finite()) {
+            continue;
+        }
+        for (a, b) in ring_edges(&ring) {
+            if !out.push_line(PlanLine::new("A-CLNG", PlanLineKind::CeilingItem, a, b, furnishing_handle(furnishing.id))) {
+                return;
             }
         }
     }
@@ -355,6 +356,71 @@ mod tests {
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
         vec![Vec2::new(x0, y0), Vec2::new(x1, y0), Vec2::new(x1, y1), Vec2::new(x0, y1)]
+    }
+
+    fn level_model(rooms: usize) -> ArchModel {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { elevation: 0.0, ceiling_height: 2.4, ..Level::default() }];
+        for i in 0..rooms {
+            let x = 4.0 * i as f64;
+            m.push_room(Room { level: 0, room_type: RoomType::Living, polygon: rect(x, 0.0, x + 3.5, 3.5), ..Room::default() });
+        }
+        m
+    }
+
+    fn lines_of(m: &ArchModel, level: Option<u32>, kind: PlanLineKind) -> Vec<PlanLine> {
+        let mut out = PlanAnnotation::default();
+        ceiling_plan(m, level, &mut out);
+        out.lines.into_iter().filter(|l| l.kind == kind).collect()
+    }
+
+    fn assert_closed_ring(lines: &[PlanLine]) {
+        for (i, l) in lines.iter().enumerate() {
+            for end in [l.a, l.b] {
+                let meets = lines.iter().enumerate().filter(|(j, o)| *j != i && (o.a == end || o.b == end)).count();
+                assert_eq!(meets, 1, "end {end:?} of line {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn soffit_outline_is_drawn_once_with_three_rooms() {
+        let mut m = level_model(3);
+        let id = m.push_soffit(Soffit { level: 0, polygon: rect(7.0, 7.3, 9.0, 7.9), ..Soffit::default() });
+        let lines = lines_of(&m, Some(0), PlanLineKind::Soffit);
+        assert_eq!(lines.len(), 4);
+        assert!(lines.iter().all(|l| l.handle == soffit_handle(id)));
+        let total: f64 = lines.iter().map(|l| (l.b - l.a).len()).sum();
+        assert!((total - 5.2).abs() < 1e-9, "total {total}");
+        assert_closed_ring(&lines);
+    }
+
+    #[test]
+    fn ceiling_item_outline_is_drawn_once_with_three_rooms() {
+        let item = Furnishing { level: 0, placement: Placement::Ceiling, at: [8.0, 7.6], size: [2.0, 0.6, 0.2], ..Furnishing::default() };
+        let mut three = level_model(3);
+        let id = three.push_furnishing(item.clone());
+        let mut one = level_model(1);
+        one.push_furnishing(item);
+        let lines = lines_of(&three, Some(0), PlanLineKind::CeilingItem);
+        assert_eq!(lines.len(), lines_of(&one, Some(0), PlanLineKind::CeilingItem).len());
+        assert_eq!(lines.len(), 4);
+        assert!(lines.iter().all(|l| l.handle == furnishing_handle(id)));
+        assert_closed_ring(&lines);
+    }
+
+    #[test]
+    fn soffit_draws_without_rooms() {
+        let mut m = level_model(0);
+        m.push_soffit(Soffit { level: 0, polygon: rect(7.0, 7.3, 9.0, 7.9), ..Soffit::default() });
+        assert_eq!(lines_of(&m, Some(0), PlanLineKind::Soffit).len(), 4);
+    }
+
+    #[test]
+    fn soffit_on_another_level_is_not_drawn() {
+        let mut m = level_model(3);
+        m.push_soffit(Soffit { level: 0, polygon: rect(7.0, 7.3, 9.0, 7.9), ..Soffit::default() });
+        assert!(lines_of(&m, Some(1), PlanLineKind::Soffit).is_empty());
     }
 
     #[test]
