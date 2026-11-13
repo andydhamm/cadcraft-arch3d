@@ -318,6 +318,12 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     }
     let maps_before = off.shadow_maps_built();
 
+    // The manual EV100 from the look, if any, used for exact echo in replies.
+    let manual_ev = match look.exposure {
+        ExposureSetting::Manual { ev100 } => Some(ev100),
+        _ => None,
+    };
+
     let mut final_mode: Option<&str> = None;
     let mut path_info = serde_json::Map::new();
     let mut exposure_info: Option<serde_json::Map<String, Value>> = None;
@@ -406,13 +412,9 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     }
 
     // The raster (interactive, Finalize, or the path's fallback) reports the frame it drew.
-    let manual_ev = match look.exposure {
-        ExposureSetting::Manual { ev100 } => Some(ev100),
-        _ => None,
-    };
     let exposure_info = exposure_info.unwrap_or_else(|| {
         let f = off.last_frame_look();
-        let mode = if f.exposure_mode.is_empty() { "" } else { f.exposure_mode.as_str() };
+        let mode = if f.exposure_mode.is_empty() { "" } else { &f.exposure_mode };
         // If the frame reports manual mode, we prefer the look's exact EV100 if available.
         let manual = if mode == "manual" { manual_ev } else { None };
         exposure_keys(f.exposure, mode, if f.tone_map == 0 { tone_code(look.tone_map) } else { f.tone_map }, manual)
