@@ -173,14 +173,12 @@ pub fn sagitta_for_radius(chord: f64, r: f64, inward: bool) -> Result<f64, Strin
     Ok(s)
 }
 
-/// Set the edge profile of `edge` on `ct`.
+/// Set the edge profile of `edge` on `ct`. A profiled edge must be straight: if the edge has a
+/// sagitta, it is cleared. A waterfall edge must stay square.
 pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result<Countertop, String> {
     let n = ct.polygon.len();
     if edge >= n {
         return Err(format!("edge {edge} does not exist (the countertop has {n})"));
-    }
-    if ct.edge(edge).sagitta != 0.0 {
-        return Err(format!("edge {edge}: a profiled edge must stay straight"));
     }
     if ct.edge(edge).waterfall && profile != EdgeProfile::Square {
         return Err(format!("edge {edge}: a waterfall is only allowed on straight, square edges"));
