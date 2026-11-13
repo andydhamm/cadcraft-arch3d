@@ -139,10 +139,14 @@ fn ready<'a>(
 
 /// The reply keys every render reports: the exposure scale, its EV100, how it was chosen and the
 /// tone map (`code` as `exposure::tone_code` gives it).
-fn exposure_keys(scale: f32, mode: &str, code: u32) -> serde_json::Map<String, Value> {
+///
+/// `manual_ev100` is the requested EV100 when the exposure mode is manual; if present, it is
+/// echoed exactly instead of being recomputed from the f32 scale (which loses precision).
+fn exposure_keys(scale: f32, mode: &str, code: u32, manual_ev100: Option<f64>) -> serde_json::Map<String, Value> {
     let mut m = serde_json::Map::new();
     m.insert("exposure".into(), json!(scale));
-    m.insert("ev100".into(), json!(scale_ev100(scale)));
+    let ev100 = manual_ev100.unwrap_or_else(|| scale_ev100(scale));
+    m.insert("ev100".into(), json!(ev100));
     m.insert("exposureMode".into(), json!(if mode.is_empty() { "auto" } else { mode }));
     m.insert("toneMap".into(), json!(tone_name(code)));
     m
@@ -349,7 +353,9 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                 if let Some(e) = &st.rt_error {
                     path_info.insert("rtError".into(), json!(e));
                 }
-                exposure_info = Some(exposure_keys(st.exposure, path_exposure_mode(&req.path, &look), opts.tone_map));
+                let path_mode = path_exposure_mode(&req.path, &look);
+                let path_manual = if path_mode == "manual" { manual_ev } else { None };
+                exposure_info = Some(exposure_keys(st.exposure, path_mode, opts.tone_map, path_manual));
                 path_info.insert("pipelineCache".into(), json!(outcome.name()));
                 path_info.insert("radiance".into(), st.radiance.map_or(Value::Null, |r| json!({ "min": r.min, "max": r.max, "mean": r.mean })));
                 let mut snaps = Vec::new();
@@ -400,15 +406,45 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     }
 
     // The raster (interactive, Finalize, or the path's fallback) reports the frame it drew.
+    let manual_ev = match look.exposure {
+        ExposureSetting::Manual { ev100 } => Some(ev100),
+        _ => None,
+    };
     let exposure_info = exposure_info.unwrap_or_else(|| {
         let f = off.last_frame_look();
-        exposure_keys(f.exposure, f.exposure_mode, if f.tone_map == 0 { tone_code(look.tone_map) } else { f.tone_map })
+        let mode = if f.exposure_mode.is_empty() { "" } else { f.exposure_mode.as_str() };
+        // If the frame reports manual mode, we prefer the look's exact EV100 if available.
+        let manual = if mode == "manual" { manual_ev } else { None };
+        exposure_keys(f.exposure, mode, if f.tone_map == 0 { tone_code(look.tone_map) } else { f.tone_map }, manual)
     });
+
     // Visibility is read from the filtered scene, ignoring hits the clip box or near clip remove.
-    let bvh = (!req.samples.is_empty()).then(|| Bvh::build(scene));
-    let samples: Vec<Value> = match &bvh {
-        Some(bvh) => req.samples.iter().take(MAX_SAMPLES).map(|p| sample(scene, bvh, &filter, &camera, size, &rgba, *p)).collect(),
-        None => Vec::new(),
+    // When ground is drawn, the ground mesh (and horizon plane) are not in scene.meshes, so we
+    // build a temporary scene clone including them for picking, ensuring ground samples are visible.
+    let pick_scene: Option<Scene3d> = if req.ground && !req.samples.is_empty() {
+        let mut s = scene.clone();
+        s.meshes.push(cadcraft_render3d::shadow::ground_mesh(&scene.bounds));
+        if let Some(ref horizon) = scene.horizon {
+            s.meshes.push(horizon.clone());
+        }
+        Some(s)
+    } else {
+        None
+    };
+
+    let (bvh, pick_target) = if let Some(ref s) = pick_scene {
+        (Bvh::build(s), s)
+    } else if !req.samples.is_empty() {
+        (Bvh::build(scene), scene)
+    } else {
+        // No samples, no BVH needed.
+        (Bvh::default(), scene)
+    };
+
+    let samples: Vec<Value> = if !req.samples.is_empty() {
+        req.samples.iter().take(MAX_SAMPLES).map(|p| sample(pick_target, &bvh, &filter, &camera, size, &rgba, *p)).collect()
+    } else {
+        Vec::new()
     };
     let mut reply = json!({
         "ok": true,
@@ -515,12 +551,12 @@ mod tests {
 
     #[test]
     fn replies_report_exposure_mode_ev100_tone_map() {
-        let k = exposure_keys(ev100_scale(2.0), "manual", cadcraft_render3d::exposure::TONE_HABLE);
+        let k = exposure_keys(ev100_scale(2.0), "manual", cadcraft_render3d::exposure::TONE_HABLE, None);
         assert_eq!(k["exposureMode"], "manual");
         assert_eq!(k["toneMap"], "hable");
         assert!((k["ev100"].as_f64().unwrap_or(f64::NAN) - 2.0).abs() < 1e-4, "{k:?}");
         assert!((k["exposure"].as_f64().unwrap_or(f64::NAN) - 1.0 / 4.8).abs() < 1e-6, "{k:?}");
-        let k = exposure_keys(0.01, "", 0);
+        let k = exposure_keys(0.01, "", 0, None);
         assert_eq!((k["exposureMode"].clone(), k["toneMap"].clone()), (json!("auto"), json!("none")));
         assert!((k["ev100"].as_f64().unwrap_or(f64::NAN) - 6.3808).abs() < 1e-3, "{k:?}");
         // The path's mode follows the request: a bare number, a manual EV100, else metered.
@@ -533,6 +569,76 @@ mod tests {
         let o = path_options(&PathParams::default(), &look, Some(0.5));
         assert_eq!((o.exposure, o.lambert, o.tone_map), (Exposure::Fixed(ev100_scale(3.0)), Some(0.5), 1));
         assert_eq!(path_options(&fixed, &look, None).exposure, Exposure::Fixed(0.5));
+    }
+
+    #[test]
+    fn manual_ev100_is_echoed_exactly() {
+        // A manual EV100 of 1.0 should be echoed as exactly 1.0, not the f32 approximation.
+        let scale = ev100_scale(1.0);
+        let k = exposure_keys(scale, "manual", 0, Some(1.0));
+        assert_eq!(k["ev100"].as_f64(), Some(1.0), "manual EV100 must be exact: {:?}", k["ev100"]);
+
+        // Auto mode uses the scale-derived EV100.
+        let k_auto = exposure_keys(scale, "auto", 0, None);
+        assert!((k_auto["ev100"].as_f64().unwrap() - scale_ev100(scale)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ground_samples_are_visible_with_ground_on() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.ground = true;
+        // Sample a point on the ground plane (z=0) inside the room bounds.
+        req.samples = vec![[2.0, 2.0, 0.0]];
+
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), 1, "{v}");
+        assert_eq!(s[0]["visible"], true, "ground sample should be visible when ground is drawn: {v}");
+    }
+
+    #[test]
+    fn ground_sample_behind_a_wall_is_not_visible() {
+        let _g = reset();
+        let mut d = room();
+        // Add a wall in the middle of the room to block the view.
+        let mut w = Wall::new(Vec2::new(1.0, 1.0), Vec2::new(3.0, 1.0), 0.2);
+        w.height = 2.4;
+        d.arch.push_wall(w);
+        d.touch_arch();
+
+        let mut req = request(&d, None, None, false);
+        req.ground = true;
+        // Sample a point behind the new wall from the default camera (which is likely outside or high).
+        // The default camera is Orbit::fit. Let's pick a point clearly occluded.
+        // The room is 4x4. The wall is at y=1 from x=1 to 3.
+        // A point at (2.0, 0.5, 0.0) is "behind" the wall relative to a camera looking from y > 1.
+        // However, the default camera fits the scene. Let's just check that a point *on* the wall itself or behind it
+        // behaves correctly.
+        // Actually, simpler test: A point on the ground that is occluded by the column in block_scene?
+        // No, we are using `room()`.
+        // Let's use the `block_scene` equivalent or just verify that a point *inside* a wall mesh is not visible?
+        // The requirement is "A point hidden behind real geometry stays not visible".
+
+        // Let's place a point on the ground at (2.0, 2.0, 0.0) which is visible.
+        // Then place a point at (2.0, 0.5, 0.0) which might be visible depending on camera.
+        // Let's use a specific camera to ensure occlusion.
+
+        let eye = Vec3::new(2.0, 5.0, 1.5);
+        let target = Vec3::new(2.0, 2.0, 0.0);
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
+
+        let mut req = request(&d, Some(camera), None, false);
+        req.ground = true;
+        // Point behind the wall (y < 1.0) from camera at y=5.0.
+        req.samples = vec![[2.0, 0.5, 0.0]];
+
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), 1, "{v}");
+        // The wall at y=1.0 should block the view of the ground at y=0.5.
+        assert_eq!(s[0]["visible"], false, "ground sample behind wall should not be visible: {v}");
     }
 
     #[test]
