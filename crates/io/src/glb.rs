@@ -174,6 +174,25 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
                 let kind = mat.trim_start_matches("path-").split('-').next().unwrap_or("path");
                 format!("{kind}-tm{}", m.object.0)
             }
+            "molding-line" => format!("molding-ml{}", m.object.0),
+            mat if mat.starts_with("molding-room-") => {
+                let rest = mat.strip_prefix("molding-room-").unwrap_or(mat);
+                let (kind, index) = rest.rsplit_once('-').unwrap_or((rest, "0"));
+                format!("molding-r{}-{}-{}", m.object.0, kind, index)
+            }
+            "countertop" => format!("countertop-ct{}", m.object.0),
+            "countertop-waterfall" => format!("countertop-ct{}-waterfall", m.object.0),
+            "backsplash" => format!("backsplash-bs{}", m.object.0),
+            "glass-wall" => format!("wall-w{}-glass", m.object.0),
+            mat if mat.starts_with("niche-back:") => {
+                let rest = mat.strip_prefix("niche-back:o").unwrap_or("0");
+                format!("wall-w{}-niche-o{}", m.object.0, rest)
+            }
+            "cabinet-crown" => format!("cabinet-cb{}-crown", m.object.0),
+            "cabinet-lightrail" => format!("cabinet-cb{}-lightrail", m.object.0),
+            "cabinet-frame" => format!("cabinet-cb{}-frame", m.object.0),
+            "cabinet-shelves" => format!("cabinet-cb{}-shelves", m.object.0),
+            "cabinet-appliance" => format!("cabinet-cb{}-appliance", m.object.0),
             "cabinet-box" => format!("cabinet-cb{}", m.object.0),
             "cabinet-front" => format!("cabinet-cb{}-front", m.object.0),
             "counter" => format!("cabinet-cb{}-counter", m.object.0),
@@ -1106,6 +1125,47 @@ mod tests {
             })
             .collect();
         Scene3d { meshes, ..Scene3d::default() }
+    }
+
+    #[test]
+    fn node_names_for_phase18_meshes() {
+        let scene = p17_scene(&[
+            ("molding-room-base-2", 5),
+            ("molding-room-crown-2", 5),
+            ("molding-line", 6),
+            ("countertop", 7),
+            ("countertop-waterfall", 7),
+            ("backsplash", 8),
+            ("glass-wall", 9),
+            ("niche-back:o3", 9),
+            ("cabinet-crown", 10),
+            ("cabinet-lightrail", 10),
+            ("cabinet-frame", 10),
+            ("cabinet-shelves", 10),
+            ("cabinet-appliance", 10),
+            ("cabinet-box", 11),
+            ("cabinet-front", 11),
+        ]);
+        assert_eq!(
+            node_names(&scene),
+            [
+                "molding-r5-base-2",
+                "molding-r5-crown-2",
+                "molding-ml6",
+                "countertop-ct7",
+                "countertop-ct7-waterfall",
+                "backsplash-bs8",
+                "wall-w9-glass",
+                "wall-w9-niche-o3",
+                "cabinet-cb10-crown",
+                "cabinet-cb10-lightrail",
+                "cabinet-cb10-frame",
+                "cabinet-cb10-shelves",
+                "cabinet-cb10-appliance",
+                "cabinet-cb11",
+                "cabinet-cb11-front",
+            ]
+        );
     }
 
     #[test]

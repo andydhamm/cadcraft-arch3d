@@ -16,6 +16,8 @@ mod furnishing;
 pub mod geometry;
 pub mod guid;
 mod lights;
+mod materials;
+mod moldings;
 mod openings;
 mod roofs;
 mod site;
@@ -67,6 +69,7 @@ pub fn write_drawing(d: &Drawing, opts: &IfcOptions) -> String {
 pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> String {
     let mut ctx = Ctx::new(model, scene);
     walls::emit(&mut ctx);
+    materials::emit(&mut ctx);
     openings::emit(&mut ctx);
     slabs::emit(&mut ctx);
     decks::emit(&mut ctx);
@@ -76,6 +79,7 @@ pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> Str
     spaces::emit(&mut ctx);
     site::emit(&mut ctx);
     lights::emit(&mut ctx);
+    moldings::emit(&mut ctx);
     casework::emit(&mut ctx);
     furnishing::emit(&mut ctx);
     electrical::emit(&mut ctx);
