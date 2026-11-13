@@ -343,23 +343,6 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 process_ring_pieces(&mut runs, ring, pieces, molding, idx, z0);
             }
         }
-        if molding.kind == MoldingKind::Crown {
-            for (ring, top) in molding_wrap::tray_paths(model, room) {
-                let n = ring.len();
-                if n >= 3 {
-                    runs.push(MoldingRun {
-                        kind: molding.kind,
-                        index: idx,
-                        profile: molding.profile.clone(),
-                        path: ring,
-                        z: vec![top - molding.offset - h; n],
-                        closed: true,
-                        side: 1.0,
-                    });
-                }
-            }
-        }
-
         // Tray crown runs (crown only)
         if molding.kind == MoldingKind::Crown {
             for tray in &model.trays {
