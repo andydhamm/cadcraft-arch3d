@@ -1,6 +1,7 @@
 //! Room molding runs (phase 18): the resolved paths a room's moldings follow.
 
 use crate::join::polygon_area;
+use crate::molding_wrap;
 use cadcraft_doc::arch::{ArchModel, MoldingKind, MoldingProfile, Room, RoomMolding, Wall};
 use cadcraft_geom::Vec2;
 
@@ -126,6 +127,9 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
         }
 
         // Process each ring
+        let mut all_pieces: Vec<(f64, f64, usize)> = Vec::new(); // (t_start, t_end, edge_idx)
+        let mut all_rings: Vec<(Vec<Vec2>, bool)> = Vec::new(); // (ring, is_outer)
+
         for (ring, is_outer) in rings {
             if ring.len() < 3 {
                 continue;
@@ -289,77 +293,155 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                 }
             }
 
-            // Build runs from pieces
-            if pieces.is_empty() {
-                continue;
-            }
-
-            // Sort pieces by edge index and start
-            pieces.sort_by(|a, b| a.2.cmp(&b.2).then(a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)));
-
-            let is_end = |t: f64, ei: usize| -> bool {
-                let a = ring[ei];
-                let b = ring[(ei + 1) % n];
-                (t - (b - a).len()).abs() <= 1e-9
-            };
-            // One full piece per edge: one closed run starting at ring vertex 0.
-            let full = pieces.len() == n && pieces.iter().enumerate().all(|(k, (t0, t1, ei))| *ei == k && t0.abs() <= 1e-9 && is_end(*t1, *ei));
-            if full {
-                runs.push(MoldingRun {
-                    kind: molding.kind,
-                    index: idx,
-                    profile: molding.profile.clone(),
-                    path: ring.clone(),
-                    z: vec![z0; n],
-                    closed: true,
-                    side: 1.0,
-                });
-                continue;
-            }
-            let mut groups: Vec<Vec<usize>> = Vec::new();
-            for k in 0..pieces.len() {
-                let joins = k > 0 && {
-                    let (_, pt1, pei) = pieces[k - 1];
-                    let (qt0, _, qei) = pieces[k];
-                    is_end(pt1, pei) && qt0.abs() <= 1e-9 && qei == (pei + 1) % n
-                };
-                match groups.last_mut() {
-                    Some(g) if joins => g.push(k),
-                    _ => groups.push(vec![k]),
+            if !pieces.is_empty() {
+                // Offset edge indices by the number of rings already processed
+                let offset = all_rings.len();
+                for p in &mut pieces {
+                    p.2 += offset;
                 }
+                all_pieces.extend(pieces);
+                all_rings.push((ring, is_outer));
             }
-            // Wrap-around: the last group continues into the first.
-            if groups.len() > 1 {
-                let (lt1, lei) = pieces.last().map(|p| (p.1, p.2)).unwrap_or((0.0, 0));
-                let (ft0, fei) = pieces.first().map(|p| (p.0, p.2)).unwrap_or((1.0, 0));
-                if is_end(lt1, lei) && ft0.abs() <= 1e-9 && fei == (lei + 1) % n {
-                    let first = groups.remove(0);
-                    if let Some(last) = groups.last_mut() {
-                        last.extend(first);
+        }
+
+        if all_pieces.is_empty() {
+            continue;
+        }
+
+        // Handle Crown molding with soffit/tray wrapping
+        if molding.kind == MoldingKind::Crown {
+            let soffits = molding_wrap::room_soffits(model, room);
+
+            if !soffits.is_empty() {
+                // Cut pieces with soffit rings
+                let soffit_rings: Vec<Vec<Vec2>> = soffits.iter().map(|(r, _)| r.clone()).collect();
+                let mut clipped_pieces: Vec<(f64, f64, usize)> = Vec::new();
+
+                for (t0, t1, ei) in &all_pieces {
+                    let ring_idx = ei;
+                    if ring_idx >= all_rings.len() {
+                        continue;
+                    }
+                    let (ring, _) = &all_rings[ring_idx];
+                    let n = ring.len();
+                    let a = ring[*ei % n];
+                    let b = ring[(*ei + 1) % n];
+
+                    let intervals = molding_wrap::clip_outside(a, b, &soffit_rings);
+                    for (s, e) in intervals {
+                        if e > s + 1e-9 {
+                            clipped_pieces.push((s, e, *ei));
+                        }
                     }
                 }
-            }
-            for g in groups {
-                let mut path: Vec<Vec2> = Vec::new();
-                for (gi, k) in g.iter().enumerate() {
-                    let (t0, t1, ei) = pieces[*k];
-                    let a = ring[ei];
-                    let b = ring[(ei + 1) % n];
-                    let l = (b - a).len();
+
+                if clipped_pieces.is_empty() {
+                    continue;
+                }
+
+                // Collect segments from clipped pieces
+                let mut segments: Vec<(Vec2, Vec2)> = Vec::new();
+                for (t0, t1, ei) in &clipped_pieces {
+                    let ring_idx = ei;
+                    if ring_idx >= all_rings.len() {
+                        continue;
+                    }
+                    let (ring, _) = &all_rings[ring_idx];
+                    let n = ring.len();
+                    let a = ring[*ei % n];
+                    let b = ring[(*ei + 1) % n];
+                    let l = a.dist(b);
                     if l <= 1e-9 {
                         continue;
                     }
                     let unit = (b - a) / l;
-                    if gi == 0 {
-                        path.push(a + unit * t0);
-                    }
-                    path.push(if is_end(t1, ei) { b } else { a + unit * t1 });
+                    let p0 = a + unit * *t0;
+                    let p1 = a + unit * *t1;
+                    segments.push((p0, p1));
                 }
-                if path.len() >= 2 {
-                    let z = vec![z0; path.len()];
-                    runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: false, side: 1.0 });
+
+                // Add soffit segments
+                let mut soffit_segs = molding_wrap::soffit_segments(room, &soffits);
+                segments.extend(soffit_segs);
+
+                // Chain segments
+                let chains = molding_wrap::chain(&segments);
+                for (path, closed) in chains {
+                    if path.len() >= 2 {
+                        runs.push(MoldingRun {
+                            kind: molding.kind,
+                            index: idx,
+                            profile: molding.profile.clone(),
+                            path,
+                            z: vec![z0; path.len()],
+                            closed,
+                            side: 1.0,
+                        });
+                    }
+                }
+            } else {
+                // No soffits: use existing logic for wall runs
+                let mut pieces = all_pieces;
+                pieces.sort_by(|a, b| a.2.cmp(&b.2).then(a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)));
+
+                // Group by ring
+                let mut current_ring_idx = usize::MAX;
+                let mut ring_pieces: Vec<(f64, f64, usize)> = Vec::new();
+
+                for p in pieces {
+                    if p.2 != current_ring_idx {
+                        if !ring_pieces.is_empty() {
+                            process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
+                        }
+                        current_ring_idx = p.2;
+                        ring_pieces.clear();
+                    }
+                    ring_pieces.push(p);
+                }
+                if !ring_pieces.is_empty() {
+                    process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
                 }
             }
+
+            // Add tray runs
+            let tray_paths = molding_wrap::tray_paths(model, room);
+            for (ring, z) in tray_paths {
+                if ring.len() >= 3 {
+                    runs.push(MoldingRun {
+                        kind: molding.kind,
+                        index: idx,
+                        profile: molding.profile.clone(),
+                        path: ring,
+                        z: vec![z; ring.len()],
+                        closed: true,
+                        side: 1.0,
+                    });
+                }
+            }
+
+            continue;
+        }
+
+        // Non-Crown molding: use existing logic
+        let mut pieces = all_pieces;
+        pieces.sort_by(|a, b| a.2.cmp(&b.2).then(a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)));
+
+        // Group by ring
+        let mut current_ring_idx = usize::MAX;
+        let mut ring_pieces: Vec<(f64, f64, usize)> = Vec::new();
+
+        for p in pieces {
+            if p.2 != current_ring_idx {
+                if !ring_pieces.is_empty() {
+                    process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
+                }
+                current_ring_idx = p.2;
+                ring_pieces.clear();
+            }
+            ring_pieces.push(p);
+        }
+        if !ring_pieces.is_empty() {
+            process_ring_pieces(&mut runs, &all_rings, current_ring_idx, &ring_pieces, molding, idx, z0);
         }
 
         // Cap path points
@@ -375,6 +457,95 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
     }
 
     runs
+}
+
+/// Helper to process pieces for a single ring (non-crown logic).
+fn process_ring_pieces(
+    runs: &mut Vec<MoldingRun>,
+    all_rings: &[(Vec<Vec2>, bool)],
+    ring_idx: usize,
+    pieces: &[(f64, f64, usize)],
+    molding: &RoomMolding,
+    idx: usize,
+    z0: f64,
+) {
+    if ring_idx >= all_rings.len() {
+        return;
+    }
+    let (ring, _) = &all_rings[ring_idx];
+    let n = ring.len();
+
+    if pieces.is_empty() {
+        return;
+    }
+
+    let is_end = |t: f64, ei: usize| -> bool {
+        let a = ring[ei];
+        let b = ring[(ei + 1) % n];
+        (t - (b - a).len()).abs() <= 1e-9
+    };
+
+    // One full piece per edge: one closed run starting at ring vertex 0.
+    let full = pieces.len() == n && pieces.iter().enumerate().all(|(k, (t0, t1, ei))| *ei == k && t0.abs() <= 1e-9 && is_end(*t1, *ei));
+    if full {
+        runs.push(MoldingRun {
+            kind: molding.kind,
+            index: idx,
+            profile: molding.profile.clone(),
+            path: ring.clone(),
+            z: vec![z0; n],
+            closed: true,
+            side: 1.0,
+        });
+        return;
+    }
+
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    for k in 0..pieces.len() {
+        let joins = k > 0 && {
+            let (_, pt1, pei) = pieces[k - 1];
+            let (qt0, _, qei) = pieces[k];
+            is_end(pt1, pei) && qt0.abs() <= 1e-9 && qei == (pei + 1) % n
+        };
+        match groups.last_mut() {
+            Some(g) if joins => g.push(k),
+            _ => groups.push(vec![k]),
+        }
+    }
+
+    // Wrap-around: the last group continues into the first.
+    if groups.len() > 1 {
+        let (lt1, lei) = pieces.last().map(|p| (p.1, p.2)).unwrap_or((0.0, 0));
+        let (ft0, fei) = pieces.first().map(|p| (p.0, p.2)).unwrap_or((1.0, 0));
+        if is_end(lt1, lei) && ft0.abs() <= 1e-9 && fei == (lei + 1) % n {
+            let first = groups.remove(0);
+            if let Some(last) = groups.last_mut() {
+                last.extend(first);
+            }
+        }
+    }
+
+    for g in groups {
+        let mut path: Vec<Vec2> = Vec::new();
+        for (gi, k) in g.iter().enumerate() {
+            let (t0, t1, ei) = pieces[*k];
+            let a = ring[ei];
+            let b = ring[(ei + 1) % n];
+            let l = (b - a).len();
+            if l <= 1e-9 {
+                continue;
+            }
+            let unit = (b - a) / l;
+            if gi == 0 {
+                path.push(a + unit * t0);
+            }
+            path.push(if is_end(t1, ei) { b } else { a + unit * t1 });
+        }
+        if path.len() >= 2 {
+            let z = vec![z0; path.len()];
+            runs.push(MoldingRun { kind: molding.kind, index: idx, profile: molding.profile.clone(), path, z, closed: false, side: 1.0 });
+        }
+    }
 }
 
 /// The length of a run: the sum of its segment lengths, plus the closing segment when closed;
