@@ -169,7 +169,7 @@ mod tests {
     fn viewport_with_wrong_link_role_returns_none() {
         let d = Drawing::new_metric();
         let mut e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
-        e.common.xdata = link_tags(0, "S1", 1).into_iter().collect();
+        e.common.xdata = link_tags("", "S1", 1).into_iter().collect();
         assert!(plan_view_drawing(&d, &e).is_none());
     }
 
