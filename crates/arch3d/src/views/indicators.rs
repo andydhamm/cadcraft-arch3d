@@ -359,4 +359,76 @@ mod tests {
         m.push_wall(w);
         assert!(lines_of(&m, &ov).is_empty());
     }
+
+    #[test]
+    fn hopper_window_triangle() {
+        let (_, ov) = south();
+        let mut m = base();
+        window(&mut m, "hopper");
+        let l = lines_of(&m, &ov);
+        assert_eq!(l.len(), 2, "{l:?}");
+        // Apex at bottom centre (s=7.0, z=0.9), ends at top corners.
+        assert!(oriented(&l, |p| near(p, 7.0, 0.9)).iter().all(|x| near(x.0, 7.0, 0.9) && (x.1[1] - 2.1).abs() < 1e-6));
+    }
+
+    #[test]
+    fn zero_width_opening_has_no_indicator() {
+        let (_, ov) = south();
+        let mut m = base();
+        let mut o = Opening::new(ArchId(0), 3.0, 0.0, 2.1, OpeningKind::Door);
+        o.style = "hinged".into();
+        m.push_opening(o);
+        assert!(lines_of(&m, &ov).is_empty());
+    }
+
+    #[test]
+    fn zero_height_opening_has_no_indicator() {
+        let (_, ov) = south();
+        let mut m = base();
+        let mut o = Opening::new(ArchId(0), 3.0, 0.9, 0.0, OpeningKind::Window);
+        o.style = "casement".into();
+        m.push_opening(o);
+        assert!(lines_of(&m, &ov).is_empty());
+    }
+
+    #[test]
+    fn missing_host_wall_is_skipped() {
+        let (_, ov) = south();
+        let mut m = ArchModel::default();
+        let mut o = Opening::new(ArchId(0), 3.0, 0.9, 2.1, OpeningKind::Door);
+        o.style = "hinged".into();
+        m.push_opening(o);
+        assert!(lines_of(&m, &ov).is_empty());
+    }
+
+    #[test]
+    fn cabinet_with_no_doors_has_no_indicator() {
+        let mut m = ArchModel::default();
+        let c = Cabinet { position: Vec2::new(5.0, 2.0), width: 1.2, depth: 0.6, height: 0.9, doors: 0, ..Cabinet::default() };
+        m.push_cabinet(c);
+        let ov = OrthoView::elevation([0.0, -1.0]).expect("view");
+        assert!(lines_of(&m, &ov).is_empty());
+    }
+
+    #[test]
+    fn wall_with_zero_thickness_is_skipped() {
+        let (_, ov) = south();
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0));
+        let mut o = Opening::new(ArchId(0), 3.0, 0.9, 2.1, OpeningKind::Door);
+        o.style = "hinged".into();
+        m.push_opening(o);
+        assert!(lines_of(&m, &ov).is_empty());
+    }
+
+    #[test]
+    fn wall_with_coincident_endpoints_is_skipped() {
+        let (_, ov) = south();
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(5.0, 0.0), Vec2::new(5.0, 0.0), 0.2));
+        let mut o = Opening::new(ArchId(0), 0.0, 0.9, 2.1, OpeningKind::Door);
+        o.style = "hinged".into();
+        m.push_opening(o);
+        assert!(lines_of(&m, &ov).is_empty());
+    }
 }
