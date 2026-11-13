@@ -31,6 +31,7 @@ pub mod casework_symbol;
 pub mod ceiling;
 pub mod connections;
 pub mod countertop;
+pub mod countertop_edit;
 pub mod deck;
 pub mod detect;
 pub mod dimension;
