@@ -63,21 +63,27 @@ pub(super) fn emit(ctx: &mut Ctx) {
 
         let placement = ctx.placement_in_storey(slot);
         let body = ctx.body(&[&mesh], 0.0).map_or(P::Null, P::Ref);
+        let (opening_name, predefined) =
+            if o.kind == OpeningKind::Niche { (format!("niche-o{n}"), "RECESS") } else { (format!("opening-o{n}"), "OPENING") };
         let void = ctx.w.add(
             "IfcOpeningElement",
             vec![
                 P::str(global_id(&format!("opening/{n}"))),
                 P::Null,
-                P::str(&format!("opening-o{n}")),
+                P::str(&opening_name),
                 P::Null,
                 P::Null,
                 P::Ref(placement),
                 body,
                 P::Null,
-                P::Enum("OPENING"),
+                P::Enum(predefined),
             ],
         );
         ctx.rel("IfcRelVoidsElement", &format!("rel/voids/{n}"), vec![P::Ref(wall_ref), P::Ref(void)]);
+
+        if o.kind == OpeningKind::Niche {
+            continue;
+        }
 
         let meshes = ctx.pieces.get("opening", o.id).to_vec();
         let (entity, key, name, kind) = if o.kind == OpeningKind::Window {
@@ -138,6 +144,18 @@ mod tests {
         assert!(text.contains(",$,2.1,0.9,.DOOR.,.NOTDEFINED.,$);"), "{text}");
         assert!(text.contains(",$,1.1,1.2,.WINDOW.,.NOTDEFINED.,$);"), "{text}");
         assert!(!text.contains(".GATE."));
+    }
+
+    #[test]
+    fn niche_is_a_recess_not_a_door() {
+        let mut m = model(&[OpeningKind::Niche]);
+        let text = export(&m);
+        assert_eq!(text.matches("=IFCOPENINGELEMENT(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCRELVOIDSELEMENT(").count(), 1, "{text}");
+        assert_eq!(text.matches("=IFCDOOR(").count(), 0, "niche is not a door");
+        assert_eq!(text.matches("=IFCWINDOW(").count(), 0, "niche is not a window");
+        assert_eq!(text.matches("=IFCRELFILLSELEMENT(").count(), 0, "niche does not fill an opening");
+        assert!(text.contains(".RECESS."), "recess predefined type");
     }
 
     #[test]

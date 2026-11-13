@@ -10,9 +10,13 @@ use std::collections::BTreeMap;
 use cadcraft_arch3d::{Scene3d, SceneCache};
 use cadcraft_doc::{
     ArchId, ArchModel,
-    arch::{CeilingLayer, FoundationKind},
+    arch::{
+        CabinetKind, CabinetMolding, CeilingLayer, CornerPref, CounterEdge, Countertop, EdgeProfile, FaceKind, FaceLayout, FaceRow, FoundationKind,
+        MoldingKind, MoldingProfile, OpeningKind, RoomMolding, RoomType,
+    },
 };
 use cadcraft_engine::Session;
+use cadcraft_geom::Vec2;
 use serde_json::{Value, json};
 
 fn model(cmds: &[(&str, Value)]) -> ArchModel {
@@ -1017,6 +1021,463 @@ fn phase_17_edits_through_commands_keep_the_cache_exact() {
     ];
     for (cmd, params) in &edits {
         s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+        let inc = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
+        let full = s.execute("build3d", &json!({"digest": true})).unwrap();
+        assert_eq!(inc["incremental"], true, "{cmd} {params}");
+        assert_eq!(inc["digest"], full["digest"], "{cmd} {params}: the cache differs from the full build");
+    }
+}
+// ---------- phase 18: interior finish, kitchen and bath ----------
+//
+// Proves the phase‑18 incremental sections (p18-scene-plumbing) rebuild exactly the
+// full build after any phase‑18 edit. The model is pinned from commands so ids are
+// deterministic; the direct edits touch the phase‑18 inputs (room moldings, molding
+// lines, countertops, backsplashes, cabinet face/crown/corner/shelf/filler, glass
+// splits, niches, shower doors, room type). Bounds come from each section's `In`
+// struct: a base cabinet sees the base cabinets of its level, a wall/tall cabinet the
+// wall and tall cabinets of its level, its kind group, and the claimed ids of its level.
+
+/// The phase‑18 scene: a two‑room house, the lower room as a KITCHEN with room
+/// moldings and a molding line; an L kitchen run (corner cabinet + filler) with a
+/// detached, water‑falled countertop and a backsplash; wall cabinets (crown, open‑shelf)
+/// and a tall cabinet with a face layout and an oven; a thick partition with a niche;
+/// a glass partition with a shower door; and a pony wall (split).
+fn phase_18_session() -> Session {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let setup: Vec<(&str, Value)> = vec![
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("wall", json!({"points": [[0, 4], [10, 4]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("roomdetect", json!({})),
+        ("room", json!({"id": "r0", "type": "kitchen"})),
+        (
+            "room.moldings",
+            json!({"room": "r0", "moldings": [{"kind": "crown", "offset": 0.0, "size": [0.08, 0.08]}, {"kind": "base", "offset": 0.0, "size": [0.06, 0.06]}]}),
+        ),
+        ("moldingline", json!({"points": [[2.0, 2.0], [5.0, 2.0]], "profile": "molding:chair-rail", "inset": 0.0, "flip": false, "elevation": 0.9})),
+        ("cabinet", json!({"kind": "base", "wall": "w0", "offset": 1.0, "width": 0.6})),
+        ("cabinet", json!({"kind": "base", "wall": "w0", "offset": 1.8, "width": 0.6})),
+        ("cabinet.fill", json!({"run": "cb0"})),
+        ("cabinet", json!({"kind": "base", "wall": "w0", "offset": 0.3, "corner": "blind"})),
+        ("cabinet", json!({"kind": "wall", "wall": "w0", "offset": 1.0, "crown": "molding:crown"})),
+        ("cabinet", json!({"kind": "wall", "wall": "w0", "offset": 2.8, "fronts": "open"})),
+        ("cabinet", json!({"kind": "tall", "wall": "w0", "offset": 5.0})),
+        ("countertop.detach", json!({"run": "cb0"})),
+        ("backsplash", json!({"run": "cb0", "height": 0.3, "material": "tile"})),
+        ("wall", json!({"points": [[3, 4], [3, 8]], "thickness": 0.4, "height": 2.4, "type": "interior"})),
+        ("niche", json!({"wall": "w5", "offset": 1.0, "width": 0.6, "height": 0.4, "depth": 0.2})),
+        ("wall", json!({"points": [[8, 4], [8, 6]], "thickness": 0.01, "height": 2.0, "type": "glass"})),
+        ("door", json!({"wall": "w6", "offset": 1.0, "style": "shower"})),
+        ("wall", json!({"points": [[1, 2], [1, 3]], "thickness": 0.15, "height": 2.4, "type": "interior"})),
+        ("wall.split", json!({"id": "w7", "height": 1.4, "upper": "Glass"})),
+    ];
+    for (cmd, params) in &setup {
+        s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    s
+}
+
+/// A labelled direct edit of the phase‑18 model; returns its label. Edits are applied
+/// to the `ArchModel` fields the phase‑18 incremental sections read (the `In` structs
+/// built by p18-scene-plumbing).
+fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
+    *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    let r = (*state >> 33) as usize;
+    let d = if r & 1 == 0 { 0.05 } else { -0.05 };
+    match r % 36 {
+        0 => {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
+                if let Some(md) = room.moldings.first_mut() {
+                    md.offset = (md.offset + d).abs();
+                }
+            }
+            "molding offset"
+        }
+        1 => {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
+                if let Some(md) = room.moldings.first_mut() {
+                    let size = md.profile.size();
+                    let scale = (size[1] + d.abs()).max(0.02);
+                    md.profile.points.iter_mut().for_each(|p| {
+                        p[1] *= scale / size[1].max(0.0001);
+                    });
+                }
+            }
+            "molding size"
+        }
+        2 => {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
+                room.moldings.push(RoomMolding {
+                    kind: MoldingKind::Crown,
+                    profile: MoldingProfile {
+                        item: "molding-profile".to_string(),
+                        points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.05]],
+                        ..Default::default()
+                    },
+                    offset: 0.0,
+                    ..Default::default()
+                });
+            }
+            "molding add"
+        }
+        3 => {
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
+                room.moldings.pop();
+            }
+            "molding remove"
+        }
+        4 => {
+            // A door moved along a wall whose base moldings run: the runs recompute.
+            if let Some(o) = m.openings.first_mut() {
+                o.offset = (o.offset + d).max(0.3);
+            }
+            "door move"
+        }
+        5 => {
+            if let Some(ml) = m.molding_lines.first_mut() {
+                ml.profile = MoldingProfile {
+                    item: format!("molding-line-{r}"),
+                    points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.08], [0.0, 0.08]],
+                    ..Default::default()
+                };
+            }
+            "moldingline point"
+        }
+        6 => {
+            if let Some(ml) = m.molding_lines.first_mut() {
+                ml.inset = (ml.inset + d).abs();
+            }
+            "moldingline inset"
+        }
+        7 => {
+            if let Some(ml) = m.molding_lines.first_mut() {
+                ml.flip = !ml.flip;
+            }
+            "moldingline flip"
+        }
+        8 => {
+            if let Some(ml) = m.molding_lines.first_mut() {
+                ml.elevation = (ml.elevation + d).max(0.1);
+            }
+            "moldingline elevation"
+        }
+        9 => {
+            if let Some(ct) = m.countertops.first_mut() {
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                let edge = &mut ct.edges[0];
+                edge.profile = if matches!(edge.profile, EdgeProfile::Square) { EdgeProfile::Bevel } else { EdgeProfile::Square };
+            }
+            "counter edge"
+        }
+        10 => {
+            if let Some(ct) = m.countertops.first_mut() {
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                ct.edges[0].sagitta = (ct.edges[0].sagitta + d).abs();
+            }
+            "counter sagitta"
+        }
+        11 => {
+            if let Some(ct) = m.countertops.first_mut() {
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                ct.edges[0].profile = if matches!(ct.edges[0].profile, EdgeProfile::Square) { EdgeProfile::Bullnose } else { EdgeProfile::Square };
+            }
+            "counter profile"
+        }
+        12 => {
+            if let Some(ct) = m.countertops.first_mut() {
+                if ct.edges.is_empty() {
+                    ct.edges.push(CounterEdge::default());
+                }
+                ct.edges[0].waterfall = !ct.edges[0].waterfall;
+            }
+            "counter waterfall"
+        }
+        13 => {
+            // Detach/create a countertop object.
+            if m.countertops.len() >= 2 {
+                m.countertops.pop();
+            } else {
+                let polygon = vec![Vec2::new(0.0, 0.0), Vec2::new(1.5, 0.0), Vec2::new(1.5, 0.6), Vec2::new(0.0, 0.6)];
+                let edges = vec![CounterEdge { sagitta: 0.0, profile: EdgeProfile::Square, waterfall: false, ..Default::default() }; 4];
+                m.countertops.push(Countertop {
+                    id: ArchId(m.next_id),
+                    level: 0,
+                    polygon,
+                    edges,
+                    top: 0.914,
+                    thickness: 0.038,
+                    cabinets: vec![],
+                    layer: "A-FLOR-CASE".to_string(),
+                    ..Default::default()
+                });
+                m.next_id += 1;
+            }
+            "counter detach"
+        }
+        14 => {
+            if let Some(ct) = m.countertops.first() {
+                let id = ct.id;
+                m.countertops.retain(|c| c.id != id);
+            }
+            "counter delete"
+        }
+        15 => {
+            if let Some(bs) = m.backsplashes.first_mut() {
+                bs.height = (bs.height + d).max(0.2);
+            }
+            "backsplash height"
+        }
+        16 => {
+            if let Some(bs) = m.backsplashes.first_mut() {
+                bs.to_ceiling = !bs.to_ceiling;
+            }
+            "backsplash toCeiling"
+        }
+        17 => {
+            if let Some(bs) = m.backsplashes.first_mut() {
+                bs.counter = Some(cadcraft_doc::arch::CounterRef::Countertop(ArchId(0)));
+            }
+            "backsplash material"
+        }
+        18 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| !c.filler) {
+                cb.backsplash_off = !cb.backsplash_off;
+            }
+            "cabinet backsplash off"
+        }
+        19 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| !c.filler) {
+                let face = cb.face.get_or_insert_with(FaceLayout::default);
+                if face.rows.is_empty() {
+                    face.rows.push(FaceRow { kind: FaceKind::Door, ..Default::default() });
+                }
+                let row = &mut face.rows[0];
+                row.kind = if matches!(row.kind, FaceKind::Door) { FaceKind::Drawer } else { FaceKind::Door };
+            }
+            "cabinet face split"
+        }
+        20 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| !c.filler) {
+                cb.kind = if matches!(cb.kind, CabinetKind::Base) { CabinetKind::Wall } else { CabinetKind::Base };
+            }
+            "cabinet kind"
+        }
+        21 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Tall) {
+                cb.height = (cb.height + d).max(1.8);
+            }
+            "cabinet height"
+        }
+        22 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Tall) {
+                let face = cb.face.get_or_insert_with(FaceLayout::default);
+                face.rows.push(FaceRow { kind: FaceKind::Appliance, appliance: Some("oven".to_string()), ..Default::default() });
+                if face.rows.len() > 3 {
+                    face.rows.drain(0..1);
+                }
+            }
+            "cabinet appliance"
+        }
+        23 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
+                cb.crown = if cb.crown.is_some() { None } else { Some(CabinetMolding::default()) };
+            }
+            "crown on"
+        }
+        24 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall && c.crown.is_some()) {
+                cb.crown = None;
+            }
+            "crown off"
+        }
+        25 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
+                let crown = cb.crown.get_or_insert_with(CabinetMolding::default);
+                crown.size = Some([0.06, 0.12]);
+            }
+            "crown size"
+        }
+        26 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
+                cb.corner = match cb.corner {
+                    CornerPref::Auto => CornerPref::Blind,
+                    CornerPref::Blind => CornerPref::Diagonal,
+                    CornerPref::Diagonal => CornerPref::LazySusan,
+                    CornerPref::LazySusan => CornerPref::None,
+                    CornerPref::None => CornerPref::Auto,
+                };
+            }
+            "corner pref"
+        }
+        27 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.kind == CabinetKind::Wall) {
+                let shelves = cb.shelves.unwrap_or(0) + 1;
+                cb.shelves = Some(shelves % 4);
+            }
+            "shelves"
+        }
+        28 => {
+            if let Some(cb) = m.cabinets.iter_mut().find(|c| c.filler) {
+                cb.width = (cb.width + d).max(0.05);
+            }
+            "filler width"
+        }
+        29 => {
+            if let Some(w) = m.walls.iter_mut().find(|w| w.wall_type == "glass".to_string()) {
+                if let Some(s) = w.split.as_mut() {
+                    s.height = (s.height + d).max(0.5);
+                }
+            }
+            "glass split height"
+        }
+        30 => {
+            if let Some(w) = m.walls.iter_mut().find(|w| w.wall_type == "glass".to_string()) {
+                w.wall_type = if w.wall_type == "glass".to_string() { "interior".into() } else { "glass".into() };
+            }
+            "glass split type"
+        }
+        31 => {
+            if let Some(o) = m.openings.iter_mut().find(|o| o.kind == OpeningKind::Niche) {
+                o.offset = (o.offset + d).max(0.05);
+            }
+            "niche offset"
+        }
+        32 => {
+            if let Some(o) = m.openings.iter_mut().find(|o| o.kind == OpeningKind::Niche) {
+                o.depth = (o.depth + d).max(0.05);
+            }
+            "niche depth"
+        }
+        33 => {
+            if let Some(o) = m.openings.iter_mut().find(|o| o.kind == OpeningKind::Niche) {
+                o.material = Some(format!("stone-{}", r));
+            }
+            "niche material"
+        }
+        34 => {
+            if let Some(o) = m.openings.iter_mut().find(|o| o.style == "shower".to_string()) {
+                o.offset = (o.offset + d).max(0.05);
+            }
+            "shower door offset"
+        }
+        35 => {
+            // Room type change: floor finish follows the type.
+            if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
+                room.room_type = RoomType::Living;
+            }
+            "room type"
+        }
+        _ => unreachable!("unexpected phase‑18 label: {}", r),
+    }
+}
+
+#[test]
+fn the_scene_cache_follows_every_phase_18_edit() {
+    let s = phase_18_session();
+    let m0 = s.doc().expect("a drawing").arch.clone();
+    assert!(
+        m0.rooms.iter().any(|r| r.room_type == RoomType::Kitchen) && !m0.countertops.is_empty() && !m0.backsplashes.is_empty()
+            || !m0.molding_lines.is_empty(),
+        "the scene has its phase‑18 objects"
+    );
+    let mut m = m0;
+    let (mut cache, full) = SceneCache::new(&m);
+    assert!(!full.incremental && full.rebuilt == full.objects, "{full:?}");
+    // Fixed per‑label bounds from the dependency rule (what an edit can reach):
+    //   molding* 1 (the room's key) · door move <= 2 + rooms with moldings on its wall
+    //   moldingline* 1 · counter edge/sagitta/profile/waterfall 1 + its backsplash(es)
+    //   counter detach/delete <= 1 + level cabinets + level backsplashes
+    //   backsplash* 1 · cabinet face/shelves/crown size 1 · crown on/off <= wall+tall cabs
+    //   corner/filler <= kind‑group cabinets + backsplashes · glass split <= wall+openings+moldings
+    //   niche <= wall+niche+rooms with moldings on that wall · shower door <= wall+door · room type 1
+    let mut most: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut objects = full.objects;
+    let mut state = 0u64;
+    for k in 0..200 {
+        let before = cache.scene().digest();
+        let what = phase_18_edit(&mut m, &mut state);
+        let stats = cache.update(&m);
+        let rebuilt = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&rebuilt), "phase‑18 edit {k} ({what}): the cache is not the full build; {stats:?}");
+        assert!(stats.incremental && stats.rebuilt <= stats.objects, "phase‑18 edit {k} ({what}): {stats:?}");
+        if rebuilt.digest() != before && stats.objects >= objects {
+            assert!(stats.rebuilt >= 1, "phase‑18 edit {k} ({what}) changed the scene but rebuilt nothing: {stats:?}");
+        }
+        objects = stats.objects;
+        let e = most.entry(what).or_default();
+        *e = (*e).max(stats.rebuilt);
+    }
+    let bounds: BTreeMap<&str, usize> = BTreeMap::from([
+        ("molding offset", 1),
+        ("molding size", 1),
+        ("molding add", 1),
+        ("molding remove", 1),
+        ("door move", 4),
+        ("moldingline point", 1),
+        ("moldingline inset", 1),
+        ("moldingline flip", 1),
+        ("moldingline elevation", 1),
+        ("counter edge", 2),
+        ("counter sagitta", 2),
+        ("counter profile", 2),
+        ("counter waterfall", 2),
+        ("counter detach", 8),
+        ("counter delete", 8),
+        ("backsplash height", 1),
+        ("backsplash toCeiling", 1),
+        ("backsplash material", 1),
+        ("cabinet backsplash off", 2),
+        ("cabinet face split", 1),
+        ("cabinet kind", 6),
+        ("cabinet height", 4),
+        ("cabinet appliance", 1),
+        ("crown on", 4),
+        ("crown off", 4),
+        ("crown size", 3),
+        ("corner pref", 6),
+        ("shelves", 1),
+        ("filler width", 6),
+        ("glass split height", 4),
+        ("glass split type", 4),
+        ("niche offset", 3),
+        ("niche depth", 3),
+        ("niche material", 3),
+        ("shower door offset", 3),
+        ("room type", 1),
+    ]);
+    for (label, bound) in bounds {
+        assert!(most.get(label).is_some(), "{label} never ran: {most:?}");
+        let rebuilt = most[label];
+        assert!(rebuilt <= bound, "{label}: rebuilt {rebuilt} > {bound}; most: {most:?}");
+    }
+}
+
+#[test]
+fn phase_18_edits_through_commands_keep_the_cache_exact() {
+    let mut s = phase_18_session();
+    s.execute("build3d", &json!({"incremental": true})).unwrap();
+    // A handful of representative phase‑18 command edits, each checked incremental == full.
+    let edits = vec![
+        ("room.moldings", json!({"room": "r0", "moldings": [{"kind": "base", "offset": 0.0, "size": [0.1, 0.1]}]})),
+        ("moldingline.edit", json!({"id": "ml0", "inset": 0.05, "flip": true})),
+        ("countertop.edit", json!({"id": "ct0", "edge": 0, "waterfall": true})),
+        ("backsplash.edit", json!({"id": "bs0", "height": 0.4, "material": "tile"})),
+        ("cabinet.edit", json!({"id": "cb0", "fronts": "open"})),
+        ("cabinet.edit", json!({"id": "cb5", "face": {"rows": [{"kind": "appliance"}]} })),
+        ("cabinet.fill", json!({"run": "cb0"})),
+        ("cabinet.edit", json!({"id": "cb5", "height": 0.9})),
+        ("wall.split", json!({"id": "w7", "height": 1.2, "upper": "Glass"})),
+        ("room", json!({"id": "r0", "type": "living"})),
+        ("room", json!({"id": "r0", "type": "kitchen"})),
+    ];
+    for (cmd, params) in &edits {
+        s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
         let inc = s.execute("build3d", &json!({"incremental": true, "digest": true})).unwrap();
         let full = s.execute("build3d", &json!({"digest": true})).unwrap();
         assert_eq!(inc["incremental"], true, "{cmd} {params}");
