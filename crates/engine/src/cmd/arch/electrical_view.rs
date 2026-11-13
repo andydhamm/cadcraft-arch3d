@@ -40,7 +40,7 @@ fn run_view_electrical(s: &mut Session, params: &Value) -> Result<Value, EngineE
             return Err(bad("view.electrical", "the Electrical plan view is not available"));
         };
         ensure_plan_layers(d, &v);
-        if !active {
+        if !active || !d.layer_states.iter().any(|st| st.name == name) {
             // The layers from before the view's rules (plus those just created, at their defaults).
             let saved = d.layers.clone();
             d.layer_states.retain(|st| st.name != name);
