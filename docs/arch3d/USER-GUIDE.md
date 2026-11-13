@@ -690,6 +690,52 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --save split-level.dxf
 ```
 
+## Interior finish
+
+A room's `type` sets its default finish layers: kitchens, baths, utility rooms and entries use tile or stone floors,
+bedrooms and living areas use carpet or wood, and each wall and ceiling takes the room's finish template unless a paint
+material overrides it. A room can also carry base and crown moldings from `room.moldings` without changing the underlying
+finish assignment.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'room {"id":"r0","type":"kitchen"}' \
+  --cmd 'room.moldings {"room":"r0","moldings":[{"kind":"base"},{"kind":"crown"}]}' \
+  --cmd 'arch.inspect {"rooms":true,"moldings":true}'
+```
+
+For a trim-only run, pass the profile or size on each molding entry:
+
+```json
+{"room":"r0","moldings":[{"kind":"base","profile":"molding:base"},{"kind":"crown","profile":"molding:crown","size":[0.07,0.12]}]}
+```
+
+## Kitchen and bath
+
+Cabinet runs become kitchen objects: base and wall cabinets, a corner cabinet with a shared countertop, fillers against the
+wall, and a backsplash on the wall behind the run. Bath rooms get shower enclosures, glass pony walls and niches as wall
+openings, while the room's finishes and moldings keep the room visually complete.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'room {"id":"r0","type":"kitchen"}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":1.0,"width":0.6,"depth":0.6,"counter":true}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":2.2,"width":0.8,"depth":0.6,"counter":true}' \
+  --cmd 'cabinet {"kind":"wall","wall":"w0","offset":1.0,"width":0.8,"crown":"molding:crown"}' \
+  --cmd 'fixture {"kind":"sink","at":[2.0,1.5]}' \
+  --cmd 'fixture {"kind":"range","at":[4.3,1.5]}' \
+  --cmd 'room.moldings {"room":"r0","moldings":[{"kind":"base"},{"kind":"crown"}]}' \
+  --cmd 'arch.inspect {"cabinets":true,"fixtures":true,"rooms":true,"moldings":true}'
+```
+
+```json
+{"kind": "base", "wall": "w0", "offset": 1.2, "width": 0.6, "depth": 0.6, "counter": true}
+```
+
 ## The showcase house
 
 The showcase house is a saved command script: `docs/arch3d/showcase/bilevel.json` is a JSON array of
