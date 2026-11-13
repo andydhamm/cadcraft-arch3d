@@ -180,9 +180,6 @@ pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result
     if edge >= n {
         return Err(format!("edge {edge} does not exist (the countertop has {n})"));
     }
-    if ct.edge(edge).sagitta != 0.0 {
-        return Err(format!("edge {edge}: a profiled edge must stay straight"));
-    }
     if ct.edge(edge).waterfall && profile != EdgeProfile::Square {
         return Err(format!("edge {edge}: a waterfall is only allowed on straight, square edges"));
     }
