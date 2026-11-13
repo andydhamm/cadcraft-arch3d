@@ -964,7 +964,7 @@ mod tests {
                 if roof.level == 0 {
                     roof.covering = Some(Finish::Shingles);
                 } else {
-                    roof.covering = Some(Finish::Metal);
+                    roof.covering = Some(Finish::Wood);
                 }
             }
         }
@@ -977,7 +977,7 @@ mod tests {
         let ground = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
         let upper = d.arch.roofs.iter().find(|r| r.level == 1).unwrap();
         assert_eq!(ground.covering, Some(Finish::Shingles));
-        assert_eq!(upper.covering, Some(Finish::Metal));
+        assert_eq!(upper.covering, Some(Finish::Wood));
         assert!(!ground.planes.is_empty());
         assert!(!upper.planes.is_empty());
     }
@@ -1016,7 +1016,7 @@ mod tests {
         {
             let d = s.doc_mut().unwrap();
             d.arch.roofs[0].covering = Some(Finish::Shingles);
-            d.arch.roofs.push(Roof { level: 99, manual: true, covering: Some(Finish::Metal), ..Roof::default() });
+            d.arch.roofs.push(Roof { level: 99, manual: true, covering: Some(Finish::Wood), ..Roof::default() });
             d.touch_arch();
         }
 
@@ -1027,7 +1027,7 @@ mod tests {
         let auto = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
         let manual = d.arch.roofs.iter().find(|r| r.level == 99).unwrap();
         assert_eq!(auto.covering, Some(Finish::Shingles));
-        assert_eq!(manual.covering, Some(Finish::Metal));
+        assert_eq!(manual.covering, Some(Finish::Wood));
         assert!(manual.manual);
     }
 
