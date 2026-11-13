@@ -22,6 +22,10 @@ pub fn sample_files() -> &'static [(&'static str, &'static [u8])] {
         ("dresser-6-drawers.glb", include_bytes!("../../../assets/library/sample/dresser-6-drawers.glb")),
         ("faucet-bathroom-chrome.glb", include_bytes!("../../../assets/library/sample/faucet-bathroom-chrome.glb")),
         ("faucet-kitchen-chrome.glb", include_bytes!("../../../assets/library/sample/faucet-kitchen-chrome.glb")),
+        (
+            "hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+            include_bytes!("../../../assets/library/sample/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr"),
+        ),
         ("lamp-desk.glb", include_bytes!("../../../assets/library/sample/lamp-desk.glb")),
         ("lamp-floor.glb", include_bytes!("../../../assets/library/sample/lamp-floor.glb")),
         ("lavatory-small.glb", include_bytes!("../../../assets/library/sample/lavatory-small.glb")),
@@ -76,6 +80,21 @@ mod tests {
         // Sorted and unique, and exactly the catalog's files.
         assert!(table.windows(2).all(|w| w[0] < w[1]));
         assert_eq!(named, table);
+    }
+
+    #[test]
+    fn test_keeps_the_hdri_item() {
+        // The sample set carries the CC-0 sky HDRI and its file is embedded as a Radiance picture.
+        let files = sample_files();
+        let catalog = files.first().map(|f| f.1).unwrap_or_default();
+        let v: serde_json::Value = serde_json::from_slice(catalog).expect("catalog parses");
+        let items = v["items"].as_array().expect("items array");
+        let item = items.iter().find(|i| i["id"] == "polyhaven:kloofendal-puresky");
+        assert!(item.is_some(), "the HDRI item is missing from the catalog");
+        let file = item.and_then(|i| i["file"].as_str()).unwrap_or_default();
+        assert!(file.ends_with(".hdr"));
+        let bytes = files.iter().find(|f| f.0 == file).map(|f| f.1).unwrap_or_default();
+        assert!(bytes.starts_with(b"#?RADIANCE") || bytes.starts_with(b"#?RGBE"));
     }
 
     #[test]
