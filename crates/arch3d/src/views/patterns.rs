@@ -349,10 +349,10 @@ mod tests {
         let points: [[f64; 3]; 3] = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0]];
         // Plane x = 1 cuts the triangle at (1,0,0) and (1,1,0).
         let chord = segment_on_axis(&points, [1.0, 0.0, 0.0], 1.0).unwrap();
-        assert!((chord[0][0] - 1.0).abs() < 1e-9);
-        assert!((chord[0][1] - 0.0).abs() < 1e-9);
-        assert!((chord[1][0] - 1.0).abs() < 1e-9);
-        assert!((chord[1][1] - 1.0).abs() < 1e-9);
+        assert!((chord.0[0] - 1.0).abs() < 1e-9);
+        assert!((chord.0[1] - 0.0).abs() < 1e-9);
+        assert!((chord.1[0] - 1.0).abs() < 1e-9);
+        assert!((chord.1[1] - 1.0).abs() < 1e-9);
         // A plane that misses the triangle returns None.
         assert!(segment_on_axis(&points, [1.0, 0.0, 0.0], 5.0).is_none());
     }
