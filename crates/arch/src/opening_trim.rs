@@ -1,6 +1,6 @@
 //! Opening trim widths for molding breaks (phase 18).
 
-use cadcraft_doc::arch::{ArchModel, Opening, OpeningSides, Side};
+use cadcraft_doc::arch::{ArchModel, Opening, OpeningKind, OpeningSides, Side};
 
 /// Whether the opening's casing is built on the given face of its host wall.
 ///
@@ -25,6 +25,14 @@ pub fn casing_on_face(o: &Opening, side: Side) -> bool {
 pub fn trim_interval(model: &ArchModel, o: &Opening, side: Side) -> Option<(f64, f64)> {
     let wall = model.wall(o.host)?;
     let w = o.width;
+    if o.kind == OpeningKind::Niche {
+        // A niche is open on its own face only.
+        if o.face.unwrap_or(Side::Left) != side {
+            return None;
+        }
+        let (s0, s1) = (o.offset - w / 2.0, o.offset + w / 2.0);
+        return if s0.is_finite() && s1.is_finite() { Some((s0, s1)) } else { None };
+    }
     let fw = if o.frame_width.is_finite() { o.frame_width.max(0.0) } else { 0.0 };
     let c = if casing_on_face(o, side) { o.casing_width } else { 0.0 };
     let half = w / 2.0 + fw / 2.0 + c;
@@ -95,5 +103,15 @@ mod tests {
         let o = Opening { host: w, offset: 5.0, width: 0.9, height: 2.1, frame_width: -0.1, casing_width: 0.0, ..Opening::default() };
         let (s0, s1) = trim_interval(&model, &o, Side::Right).unwrap();
         assert!((s1 - s0 - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn niche_trim_on_its_face_only() {
+        let mut model = ArchModel::default();
+        let w = model.push_wall(Wall { start: Vec2::ZERO, end: Vec2::new(10.0, 0.0), thickness: 0.2, ..Wall::default() });
+        let o = Opening { host: w, offset: 4.0, width: 0.6, kind: OpeningKind::Niche, depth: 0.1, face: Some(Side::Right), ..Opening::default() };
+        let (s0, s1) = trim_interval(&model, &o, Side::Right).unwrap();
+        assert!((s0 - 3.7).abs() < 1e-9 && (s1 - 4.3).abs() < 1e-9);
+        assert!(trim_interval(&model, &o, Side::Left).is_none());
     }
 }

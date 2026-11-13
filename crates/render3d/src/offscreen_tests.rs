@@ -580,3 +580,178 @@ fn raster_lambert_plane_reads_ev_scaled_luminance() {
     let Some(got) = lit_centre(&mut r, &floor, &camera, &auto, false) else { return };
     assert!(near(got[0], 0.18, 0.03), "auto: {got:?}");
 }
+
+fn strip_raster_light() -> cadcraft_arch3d::light::SceneLight {
+    let pieces = 14usize;
+    let samples: Vec<cadcraft_arch3d::light::StripSample> = (0..pieces)
+        .map(|k| {
+            let t = (k as f64 + 0.5) / pieces as f64;
+            cadcraft_arch3d::light::StripSample {
+                position: Vec3::new(1.0 + (3.0 - 1.0) * t, 2.0, 2.4),
+                normal: Vec3::new(0.0, 0.0, -1.0),
+                intensity: 500.0 * (3.0 - 1.0) / pieces as f64 / std::f64::consts::PI,
+                ..Default::default()
+            }
+        })
+        .collect();
+    cadcraft_arch3d::light::SceneLight {
+        kind: cadcraft_doc::arch::LightKind::Strip,
+        position: Vec3::new(2.0, 2.0, 2.4),
+        direction: Vec3::new(0.0, 0.0, -1.0),
+        color: [1.0, 0.8, 0.6],
+        strip: Some(std::sync::Arc::new(samples)),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn raster_strip_lights_the_floor() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let floor = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [5.0, 5.0, 0.0])]);
+    let camera = down_at([2.0, 2.0, 0.0]);
+    let mut plain = floor.clone();
+    plain.lights.clear();
+    let mut lit = floor.clone();
+    lit.lights.push(strip_raster_light());
+
+    let mut lighting = plane_lighting(14.0, ToneMap::None);
+    lighting.sun = None;
+    let Some(plain_px) = lit_centre_keyed(&mut r, &plain, 21, &camera, &lighting, false) else { return };
+    let Some(strip_px) = lit_centre_keyed(&mut r, &lit, 22, &camera, &lighting, false) else { return };
+
+    let plain_sum: f32 = plain_px.iter().sum();
+    let strip_sum: f32 = strip_px.iter().sum();
+    assert!(strip_sum > plain_sum, "strip: {strip_px:?} plain: {plain_px:?}");
+    assert!(strip_px.iter().zip(plain_px.iter()).all(|(a, b)| *a > *b), "strip should brighten the floor under it: {strip_px:?} vs {plain_px:?}");
+}
+
+// ---- phase 19: environment light in the raster views ---------------------------------------------
+
+/// A night frame lit only by a uniform environment of radiance 1 (so E = pi), Lambert albedo 0.5.
+fn env_lighting(ev100: f64, tone: ToneMap, visible: bool) -> Lighting {
+    let mut look = Look::default();
+    look.exposure = ExposureSetting::Manual { ev100 };
+    look.tone_map = tone;
+    let mut env = crate::environment::Environment::uniform([1.0; 3], 32, 16);
+    env.visible = visible;
+    env.key = env.compute_key();
+    Lighting { sun: None, look, lambert: Some(0.5), meter_night: true, environment: Some(std::sync::Arc::new(env)), ..Lighting::default() }
+}
+
+#[test]
+fn raster_lambert_plane_under_uniform_environment() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let floor = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [5.0, 5.0, 0.0])]);
+    // L = albedo / pi * E = 0.5; EV100 -1 scales by 2 / 1.2.
+    let Some(got) = lit_centre(&mut r, &floor, &down_at([0.0, 0.0, 0.0]), &env_lighting(-1.0, ToneMap::None, false), false) else { return };
+    for c in got {
+        assert!((c - 0.8333).abs() <= 0.8333 * 0.03, "plane under the environment: {got:?}");
+    }
+}
+
+#[test]
+fn environment_background_exposed_and_tone_mapped() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let empty = scene(Vec::new());
+    let camera = down_at([0.0, 0.0, 0.0]);
+    let Some(got) = lit_centre(&mut r, &empty, &camera, &env_lighting(0.0, ToneMap::None, true), false) else { return };
+    for c in got {
+        assert!((c - 0.8333).abs() <= 0.8333 * 0.02, "background: {got:?}");
+    }
+    let want = tone_map(1.0 / 1.2, crate::exposure::TONE_ACES);
+    let Some(aces) = lit_centre(&mut r, &empty, &camera, &env_lighting(0.0, ToneMap::Aces, true), false) else { return };
+    for c in aces {
+        assert!((c - want).abs() <= want * 0.02, "ACES background: {aces:?} want {want}");
+    }
+    // A visible environment wins over a picture backdrop.
+    let mut pic = scene(Vec::new());
+    pic.backdrop = Some(cadcraft_doc::arch::Backdrop::Colour { colour: [32, 64, 96] });
+    let Some(over) = lit_centre(&mut r, &pic, &camera, &env_lighting(0.0, ToneMap::None, true), false) else { return };
+    assert!((over[0] - 0.8333).abs() <= 0.8333 * 0.02, "environment over picture: {over:?}");
+}
+
+#[test]
+fn picture_backdrop_unchanged_with_light_only_env() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let mut pic = scene(Vec::new());
+    pic.backdrop = Some(cadcraft_doc::arch::Backdrop::Colour { colour: [32, 64, 96] });
+    let Some(got) = lit_centre(&mut r, &pic, &down_at([0.0, 0.0, 0.0]), &env_lighting(0.0, ToneMap::Aces, false), false) else { return };
+    for (c, byte) in got.iter().zip([32u8, 64, 96]) {
+        let want = srgb_to_linear(byte);
+        assert!((c - want).abs() <= want * 0.03 + 0.002, "picture colour kept: {got:?}");
+    }
+}
+
+/// A physically scaled sun lighting from `dir` (toward the sun), no sky, a manual 15 EV100.
+fn sun_from(dir: [f32; 3]) -> Lighting {
+    let mut look = Look::default();
+    look.exposure = ExposureSetting::Manual { ev100: 15.0 };
+    look.tone_map = ToneMap::None;
+    look.sky.on = false;
+    Lighting { sun: Some(Light::new(dir, 0.25)), look, meter_night: true, ..Lighting::default() }
+}
+
+/// The central 40 x 20 pixels (luminance, 0..255 levels) of `s` seen face-on from 6 m under
+/// `lighting`; `None` without a device.
+fn wall_patch(r: &mut Offscreen, key: u64, s: &Scene3d, lighting: &Lighting) -> Option<Vec<f32>> {
+    let camera = Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, -6.0, 1.5), Vec3::new(0.0, 0.0, 1.5), 40.0));
+    let eye = camera.eye();
+    let frame = r.lit_frame(s, key, [eye.x, eye.y, eye.z], lighting, false)?;
+    let light = lighting.sun.unwrap_or(Light::DEFAULT);
+    r.render_with(s, key, &camera, &light, &RenderOptions { lit: Some(&frame), ground: false, ..Default::default() });
+    let (w, h) = r.size();
+    let img = r.read_rgba().ok()?;
+    let mut out = Vec::new();
+    for y in (h / 2 - 10)..(h / 2 + 10) {
+        for x in (w / 2 - 20)..(w / 2 + 20) {
+            let p = px(&img, w, x, y);
+            out.push(0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2]));
+        }
+    }
+    Some(out)
+}
+
+/// Mean of `a` and mean |A - B| of two patches.
+fn patch_stats(a: &[f32], b: &[f32]) -> (f32, f32) {
+    let n = a.len().max(1) as f32;
+    (a.iter().sum::<f32>() / n, a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum::<f32>() / n)
+}
+
+#[test]
+fn brick_differs_under_mirrored_suns() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let (east, west) = (sun_from([0.6, -0.5, 0.4]), sun_from([-0.6, -0.5, 0.4]));
+    let brick = scene(vec![cuboid("wall-brick", [-4.0, -0.2, 0.0], [4.0, 0.0, 3.0])]);
+    let (Some(a), Some(b)) = (wall_patch(&mut r, 10, &brick, &east), wall_patch(&mut r, 10, &brick, &west)) else { return };
+    let (mean, diff) = patch_stats(&a, &b);
+    assert!(diff >= 1.5, "brick: mean |A - B| {diff} levels");
+    assert!((mean - b.iter().sum::<f32>() / b.len() as f32).abs() <= 0.03 * mean, "the means stay within 3 %");
+    // Flat shading reads the same under mirrored suns.
+    let plain = scene(vec![cuboid("wall", [-4.0, -0.2, 0.0], [4.0, 0.0, 3.0])]);
+    let (Some(a), Some(b)) = (wall_patch(&mut r, 11, &plain, &east), wall_patch(&mut r, 11, &plain, &west)) else { return };
+    let (_, flat) = patch_stats(&a, &b);
+    assert!(flat < 0.5, "plain wall: mean |A - B| {flat} levels");
+}
+
+#[test]
+fn flat_normal_layer_changes_nothing() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let lighting = sun_from([0.6, -0.5, 0.4]);
+    let mut with_flat = scene(vec![cuboid("flat-wall", [-4.0, -0.2, 0.0], [4.0, 0.0, 3.0])]);
+    let mut image = cadcraft_doc::arch::ImageRgba::default();
+    image.width = 4;
+    image.height = 4;
+    image.rgba = crate::textures::FLAT_NORMAL.repeat(16);
+    with_flat.textures.insert("test:flat:normal".to_string(), image);
+    let bare_def = crate::types::MaterialDef { base_color: [0.5, 0.4, 0.3, 1.0], ..Default::default() };
+    with_flat.materials.insert("flat-wall".to_string(), bare_def.clone());
+    let mut bare = with_flat.clone();
+    bare.textures.clear();
+    let Some(a) = wall_patch(&mut r, 12, &bare, &lighting) else { return };
+    let mapped = crate::types::MaterialDef { normal_texture: Some("test:flat:normal".to_string()), ..bare_def };
+    with_flat.materials.insert("flat-wall".to_string(), mapped);
+    let Some(b) = wall_patch(&mut r, 13, &with_flat, &lighting) else { return };
+    let (mean, diff) = patch_stats(&a, &b);
+    assert!(mean > 5.0, "the wall is lit: {mean}");
+    assert!(diff < 1.0, "a flat normal map changes the picture by {diff} levels");
+}

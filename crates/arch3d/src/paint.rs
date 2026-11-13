@@ -103,14 +103,11 @@ pub(crate) fn ref_def(model: &ArchModel, m: &MaterialRef) -> MaterialDef {
 /// The material a surface shows unpainted. Symbol parts need `scene` (their definitions are
 /// already in it); without it they fall back to the default colour.
 fn unpainted_def(model: &ArchModel, scene: Option<&Scene3d>, surface: &Surface) -> MaterialDef {
-    let finish_of = |f: Option<Finish>, ok: fn(Finish) -> bool| f.filter(|f| ok(*f)).map(finish_def);
     let from_scene = |name: String| scene.and_then(|s| s.materials.get(&name)).cloned();
     let found = match surface {
-        Surface::WallSide { wall, side: Side::Right } => {
-            model.walls.iter().find(|w| w.id == *wall).and_then(|w| finish_of(w.finish, Finish::for_walls))
+        Surface::WallSide { .. } | Surface::RoomFloor(_) | Surface::RoomCeiling(_) | Surface::Roof(_) => {
+            cadcraft_arch::room_finish::unpainted_finish(model, surface).map(finish_def)
         }
-        Surface::RoomFloor(r) => model.rooms.iter().find(|x| x.id == *r).and_then(|x| finish_of(x.floor_finish, Finish::for_floors)),
-        Surface::Roof(r) => model.roofs.iter().find(|x| x.id == *r).and_then(|x| finish_of(x.covering, Finish::for_roofs)),
         Surface::Furnishing { furnishing, part } => model.furnishings.iter().find(|f| f.id == *furnishing).and_then(|f| {
             let part = usize::try_from(*part).ok()?;
             from_scene(symbol_material(&f.symbol, part))
@@ -164,6 +161,8 @@ fn surface_of(mesh: &Mesh) -> Option<Surface> {
         Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Carcass })
     } else if m == "cabinet-front" {
         Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Front })
+    } else if m == "backsplash" {
+        Some(Surface::Backsplash(id))
     } else if m == "counter" {
         Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Counter })
     } else if m.starts_with("pull:") {

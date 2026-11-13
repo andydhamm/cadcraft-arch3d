@@ -1,7 +1,10 @@
 //! `backdrop` command: the background behind the 3D view (colour, gradient, library image).
 
+use std::path::Path;
+
+use cadcraft_arch::hdr::{display_image, read_hdr};
 use cadcraft_arch::library::ItemKind;
-use cadcraft_doc::arch::{Backdrop, Projection};
+use cadcraft_doc::arch::{Backdrop, MAX_HDR_BYTES, MAX_HDR_IMAGES, Projection};
 use serde_json::{Map, Value, json};
 
 use crate::{
@@ -9,7 +12,7 @@ use crate::{
     cmd::{CommandSpec, bad},
 };
 
-const KEYS: &[&str] = &["kind", "colour", "top", "bottom", "item", "projection"];
+const KEYS: &[&str] = &["kind", "colour", "top", "bottom", "item", "file", "projection", "intensity", "rotation", "horizon"];
 
 /// `backdrop` command spec.
 pub fn specs() -> Vec<CommandSpec> {
@@ -67,6 +70,52 @@ pub(crate) fn describe(b: &Backdrop) -> Value {
     }
 }
 
+fn horizon_param(obj: &Map<String, Value>, key: &str) -> Result<Option<f64>, EngineError> {
+    let Some(v) = obj.get(key) else {
+        return Ok(None);
+    };
+    let Some(n) = v.as_f64().filter(|x| x.is_finite()) else {
+        return Err(bad("backdrop", format!("`{key}` must be a finite number of degrees")));
+    };
+    if !(-45.0..=45.0).contains(&n) {
+        return Err(bad("backdrop", format!("`{key}` must be between -45 and 45 degrees; got {n}")));
+    }
+    Ok(Some(n))
+}
+
+fn intensity_param(obj: &Map<String, Value>) -> Result<Option<f64>, EngineError> {
+    let Some(v) = obj.get("intensity") else {
+        return Ok(None);
+    };
+    let Some(n) = v.as_f64().filter(|x| x.is_finite()) else {
+        return Err(bad("backdrop", "`intensity` must be a finite number"));
+    };
+    if !(0.0..=100.0).contains(&n) {
+        return Err(bad("backdrop", format!("`intensity` must be between 0 and 100; got {n}")));
+    }
+    Ok(Some(n))
+}
+
+fn rotation_param(obj: &Map<String, Value>) -> Result<Option<f64>, EngineError> {
+    let Some(v) = obj.get("rotation") else {
+        return Ok(None);
+    };
+    let Some(n) = v.as_f64().filter(|x| x.is_finite()) else {
+        return Err(bad("backdrop", "`rotation` must be a finite number of degrees"));
+    };
+    Ok(Some(n.rem_euclid(360.0)))
+}
+
+fn hdr_item_from_library(s: &mut Session, item: &str) -> Result<(String, cadcraft_doc::arch::ImageRgbe), EngineError> {
+    let record = s.library.item(item).ok_or_else(|| bad("backdrop", format!("no library item `{item}`")))?;
+    if record.kind != ItemKind::Backdrop || record.file.as_deref().is_none_or(|f| !f.to_ascii_lowercase().ends_with(".hdr")) {
+        return Err(bad("backdrop", format!("`{item}` is not an HDR image: use {{\"kind\": \"hdri\"}}")));
+    }
+    let _image = s.library.image(item).map_err(|e| bad("backdrop", e))?;
+    let hdr = read_hdr(&s.library.file_bytes(item).map_err(|e| bad("backdrop", e))?).map_err(|e| bad("backdrop", format!("`item` `{item}`: {e}")))?;
+    Ok((item.to_string(), hdr))
+}
+
 /// Report or set the backdrop. Anything invalid is refused, never clamped.
 fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let empty = Map::new();
@@ -89,14 +138,16 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let allowed: &[&str] = match kind {
         "colour" => &["kind", "colour"],
         "gradient" => &["kind", "top", "bottom"],
-        "image" => &["kind", "item", "projection"],
+        "image" => &["kind", "item", "projection", "horizon"],
+        "hdri" => &["kind", "file", "item", "intensity", "rotation", "horizon"],
         "sky" | "none" => &["kind"],
-        _ => return Err(bad("backdrop", "`kind` must be colour, gradient, image, sky or none")),
+        _ => return Err(bad("backdrop", "`kind` must be colour, gradient, image, hdri, sky or none")),
     };
     if let Some(k) = obj.keys().find(|k| !allowed.contains(&k.as_str())) {
         return Err(bad("backdrop", format!("`{k}` does not apply to a {kind} backdrop")));
     }
     let mut image = None;
+    let mut hdr_image = None;
     let colour_str = obj.get("colour").and_then(Value::as_str);
     let top_str = obj.get("top").and_then(Value::as_str);
     let bottom_str = obj.get("bottom").and_then(Value::as_str);
@@ -115,8 +166,13 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 Some(Value::String(p)) if p == "equirect" => Projection::Equirect,
                 Some(_) => return Err(bad("backdrop", "`projection` must be flat or equirect")),
             };
+            let horizon = horizon_param(obj, "horizon")?.unwrap_or(0.0);
             match s.library.item(item) {
-                Some(r) if r.kind == ItemKind::Backdrop && r.file.is_some() => {}
+                Some(r) if r.kind == ItemKind::Backdrop && r.file.is_some() => {
+                    if r.file.as_deref().is_some_and(|f| f.to_ascii_lowercase().ends_with(".hdr")) {
+                        return Err(bad("backdrop", format!("`{item}` is an HDR image: use {{\"kind\": \"hdri\"}}")));
+                    }
+                }
                 Some(r) if r.kind == ItemKind::Backdrop => {
                     return Err(bad("backdrop", format!("`{item}` is a kind of backdrop (use `kind`), not an image")));
                 }
@@ -124,23 +180,69 @@ fn run_backdrop(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
                 None => return Err(bad("backdrop", format!("no library item `{item}`"))),
             }
             image = Some((item.to_string(), s.library.image(item).map_err(|e| bad("backdrop", e))?));
-            Some(Backdrop::Image { item: item.to_string(), projection, horizon: 0.0 })
+            Some(Backdrop::Image { item: item.to_string(), projection, horizon })
+        }
+        "hdri" => {
+            let item = obj.get("item").and_then(Value::as_str).filter(|i| !i.is_empty());
+            let file = obj.get("file").and_then(Value::as_str).filter(|f| !f.trim().is_empty());
+            let (key, bytes) = match (item, file) {
+                (Some(item), None) => {
+                    let record = s.library.item(item).ok_or_else(|| bad("backdrop", format!("no library item `{item}`")))?;
+                    if record.kind != ItemKind::Backdrop || record.file.as_deref().is_none_or(|f| !f.to_ascii_lowercase().ends_with(".hdr")) {
+                        return Err(bad("backdrop", format!("`{item}` is not an HDR backdrop item")));
+                    }
+                    (item.to_string(), s.library.file_bytes(item).map_err(|e| bad("backdrop", e))?)
+                }
+                (None, Some(path)) => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let bytes = std::fs::read(path).map_err(|e| bad("backdrop", format!("`file` `{path}`: {e}")))?;
+                        (Path::new(path).file_stem().and_then(|s| s.to_str()).unwrap_or("hdr").to_string(), bytes)
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        return Err(bad("backdrop", "`file` is not available in the web build"));
+                    }
+                }
+                (Some(_), Some(_)) => return Err(bad("backdrop", "give only one of `item` or `file`")),
+                (None, None) => return Err(bad("backdrop", "one of `item` or `file` is required")),
+            };
+            let img = read_hdr(&bytes).map_err(|e| bad("backdrop", format!("`{key}`: {e}")))?;
+            if !img.is_valid() {
+                return Err(bad("backdrop", format!("`{key}` is not a valid HDR image")));
+            }
+            let intensity = intensity_param(obj)?.unwrap_or(1.0);
+            let rotation = rotation_param(obj)?.unwrap_or(0.0);
+            let horizon = horizon_param(obj, "horizon")?.unwrap_or(0.0);
+            hdr_image = Some((key.clone(), img.clone()));
+            image = Some((key.clone(), display_image(&img, 1024)));
+            Some(Backdrop::Hdri { image: key, intensity, rotation, horizon })
         }
         "sky" => Some(Backdrop::Sky),
         _ => None,
     };
     s.doc()?;
+    let before = s.state()?.doc.clone();
     let d = s.doc_mut()?;
     if let Some((id, img)) = image {
-        d.arch.images.insert(id, img);
+        d.arch.images.insert(id.clone(), img);
+    }
+    if let Some((id, img)) = hdr_image {
+        d.arch.hdr_images.insert(id, img);
     }
     d.arch.backdrop = new;
+    d.arch.prune_hdr_images();
+    let raw_len: usize = d.arch.hdr_images.values().map(|img| img.rgbe.len()).sum();
+    if d.arch.hdr_images.len() > MAX_HDR_IMAGES || raw_len > MAX_HDR_BYTES {
+        s.state_mut()?.doc = before;
+        return Err(bad("backdrop", format!("a drawing holds at most {MAX_HDR_IMAGES} HDR images ({MAX_HDR_BYTES} bytes)")));
+    }
     let reply = match kind {
         "colour" => json!({"kind": "colour", "colour": normalise_hex(colour_str.unwrap_or("#000000"))}),
         "gradient" => {
             json!({"kind": "gradient", "top": normalise_hex(top_str.unwrap_or("#000000")), "bottom": normalise_hex(bottom_str.unwrap_or("#000000"))})
         }
-        "image" | "sky" => d.arch.backdrop.as_ref().map_or(Value::Null, describe),
+        "image" | "hdri" | "sky" => d.arch.backdrop.as_ref().map_or(Value::Null, describe),
         _ => json!({"kind": "none"}),
     };
     d.touch_arch();
@@ -256,6 +358,184 @@ mod tests {
         }
     }
 
+    fn hdr_bytes() -> Vec<u8> {
+        let width = 4u32;
+        let height = 2u32;
+        let mut out = format!("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n-Y {height} +X {width}\n\n").into_bytes();
+        let pixel = [0x80, 0x80, 0x80, 0x80];
+        out.extend(std::iter::repeat(pixel).take((width * height) as usize).flatten());
+        out
+    }
+
+    #[test]
+    fn hdri_from_file_and_item_and_refusals_change_nothing() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        let file = dir.join("user/test.hdr");
+        std::fs::write(&file, hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        let rec = cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-test".to_string(),
+            name: "Test HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("test.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        };
+        s.library.add_user_item(rec.clone());
+        let before = s.doc().unwrap().arch.backdrop.clone();
+        assert!(s.execute("backdrop", &json!({"kind": "hdri", "file": file.to_string_lossy().to_string()})).is_ok());
+        assert!(s.execute("backdrop", &json!({"kind": "hdri", "item": "user:hdr-test", "intensity": 2.0})).is_ok());
+        let err = s.execute("backdrop", &json!({"kind": "hdri", "item": "own:backdrop-sky"}));
+        assert!(err.is_err());
+        let after = s.doc().unwrap().arch.backdrop.as_ref().unwrap();
+        assert!(matches!(after, Backdrop::Hdri { image, intensity, .. } if image == "user:hdr-test" && *intensity == 2.0));
+        let bad = s.execute("backdrop", &json!({"kind": "hdri", "item": "user:hdr-test", "intensity": 101.0}));
+        assert!(bad.is_err());
+        assert!(matches!(s.doc().unwrap().arch.backdrop.as_ref(), Some(Backdrop::Hdri { image, .. }) if image == "user:hdr-test"));
+        assert_eq!(
+            Some(Backdrop::Hdri { image: "user:hdr-test".to_string(), intensity: 2.0, rotation: 0.0, horizon: 0.0 }),
+            s.doc().unwrap().arch.backdrop.clone()
+        );
+    }
+
+    #[test]
+    fn equirect_image_horizon() {
+        let mut s = session();
+        let r = s.execute("backdrop", &json!({"kind": "image", "item": "own:backdrop-sky", "projection": "equirect", "horizon": 18.0})).unwrap();
+        assert_eq!(r["backdrop"]["horizon"], 18.0);
+        assert!(
+            matches!(s.doc().unwrap().arch.backdrop.as_ref(), Some(Backdrop::Image { projection: Projection::Equirect, horizon, .. }) if *horizon == 18.0)
+        );
+    }
+
+    #[test]
+    fn hdr_item_refused_as_a_picture_and_caps_refuse() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-caps-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        std::fs::write(dir.join("user/caps.hdr"), hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        s.library.add_user_item(cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-caps".to_string(),
+            name: "Caps HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("caps.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        });
+        assert!(s.execute("backdrop", &json!({"kind": "image", "item": "user:hdr-caps"})).is_err());
+        let mut doc = s.doc_mut().unwrap();
+        for i in 0..5 {
+            let k = format!("cap-{i}");
+            doc.arch.hdr_images.insert(
+                k.clone(),
+                cadcraft_doc::arch::ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() },
+            );
+            doc.arch.cameras.push(cadcraft_doc::arch::Camera3d {
+                name: format!("cam-{i}"),
+                look: Some(cadcraft_doc::arch::Look {
+                    backdrop: Some(Backdrop::Hdri { image: k.clone(), intensity: 1.0, rotation: 0.0, horizon: 0.0 }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
+        }
+        doc.arch.prune_hdr_images();
+        assert!(doc.arch.hdr_images.len() <= MAX_HDR_IMAGES);
+        drop(doc);
+    }
+
+    #[test]
+    fn hdr_backdrop_item_places_as_hdri() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-place-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        std::fs::write(dir.join("user/place.hdr"), hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        s.library.add_user_item(cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-place".to_string(),
+            name: "Place HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("place.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        });
+        let params = crate::cmd::arch::furnish::backdrop_params(
+            s.library.item("user:hdr-place").unwrap(),
+            Some(&serde_json::from_str(r#"{"intensity":2.0,"rotation":45.0,"horizon":10.0}"#).unwrap()),
+        );
+        assert_eq!(params["kind"], "hdri");
+        assert_eq!(params["intensity"], 2.0);
+        assert_eq!(params["rotation"], 45.0);
+        assert_eq!(params["horizon"], 10.0);
+    }
+
+    #[test]
+    fn hdr_backdrop_entry_and_install() {
+        let entry = serde_json::json!({"id":"x:hdr-sample","name":"HDR Sample","category":"Backdrops","folder":"HDR","symbolType":"backdrop","file":"hdr/sample.hdr","source":"test","licence":"CC0-1.0","author":"CADCraft","attribution":"test"});
+        let rec = crate::library::catalog::entry_record(&entry, "sample").unwrap();
+        assert_eq!(rec.kind, cadcraft_arch::library::ItemKind::Backdrop);
+        assert_eq!(rec.file.as_deref(), Some("hdr/sample.hdr"));
+    }
+
+    #[test]
+    fn hdr_backdrop_image_is_tone_mapped() {
+        let dir = std::env::temp_dir().join(format!(
+            "cadcraft-hdri-tone-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("user")).unwrap();
+        std::fs::write(dir.join("user/tone.hdr"), hdr_bytes()).unwrap();
+        let mut s = crate::library::testing::session(&dir);
+        s.library.add_user_item(cadcraft_arch::library::ItemRecord {
+            id: "user:hdr-tone".to_string(),
+            name: "Tone HDR".to_string(),
+            category: "Backdrops".to_string(),
+            folder: "Hdr".to_string(),
+            kind: cadcraft_arch::library::ItemKind::Backdrop,
+            symbol_type: "backdrop".to_string(),
+            file: Some("tone.hdr".to_string()),
+            licence: "CC0-1.0".to_string(),
+            source: "test".to_string(),
+            author: "CADCraft".to_string(),
+            attribution: "test".to_string(),
+            ..Default::default()
+        });
+        let img = s.library.image("user:hdr-tone").unwrap();
+        assert!(img.is_valid());
+        assert!(img.width > 0 && img.height > 0);
+    }
+
     #[test]
     fn backdrop_sky_sets_reports_and_refuses_extra_keys() {
         let mut s = session();
@@ -267,7 +547,7 @@ mod tests {
         assert!(e.contains("`colour` does not apply to a sky backdrop"), "{e}");
         assert_eq!(s.doc().unwrap().arch.backdrop, Some(Backdrop::Sky));
         let e = s.execute("backdrop", &json!({"kind": "nebula"})).unwrap_err().to_string();
-        assert!(e.contains("colour, gradient, image, sky or none"), "{e}");
+        assert!(e.contains("colour, gradient, image, hdri, sky or none"), "{e}");
     }
 
     #[test]

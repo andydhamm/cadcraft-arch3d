@@ -192,7 +192,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
             kind: PlanKind::Floor,
             layers: LayerState { name: "Working".into(), layers: Vec::new(), rules: vec![rule("*", Some(true), Some(0))] },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: true, dimensions: false, ceiling: false, numbers: false },
+            labels: RoomLabelShow { name: true, area: true, dimensions: false, ceiling: false, numbers: true },
             reference: None,
             zoom: None,
         },
@@ -212,7 +212,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 ],
             },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: true, dimensions: true, ceiling: false, numbers: false },
+            labels: RoomLabelShow { name: true, area: true, dimensions: true, ceiling: false, numbers: true },
             reference: None,
             zoom: None,
         },
@@ -293,7 +293,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 ],
             },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
-            labels: RoomLabelShow { name: true, area: false, dimensions: true, ceiling: false, numbers: false },
+            labels: RoomLabelShow { name: true, area: false, dimensions: true, ceiling: false, numbers: true },
             reference: None,
             zoom: None,
         },
@@ -520,6 +520,19 @@ mod tests {
         assert!(model.plan_views.len() <= MAX_PLAN_VIEWS);
         assert!(!model.open_plan_views.iter().any(|n| n.eq_ignore_ascii_case("Nope")));
         assert!(model.active_plan_view.is_none());
+    }
+
+    #[test]
+    fn templates_show_numbers_in_working_floor_plan_and_kitchen_bath() {
+        let views = template_plan_views();
+        let by_name: std::collections::HashMap<&str, &PlanView> = views.iter().map(|v| (v.name.as_str(), v)).collect();
+        assert!(by_name["Working"].labels.numbers, "Working should show numbers");
+        assert!(by_name["Floor Plan"].labels.numbers, "Floor Plan should show numbers");
+        assert!(by_name["Kitchen & Bath"].labels.numbers, "Kitchen & Bath should show numbers");
+        assert!(!by_name["Electrical"].labels.numbers, "Electrical should not show numbers");
+        assert!(!by_name["Reflected Ceiling"].labels.numbers, "Reflected Ceiling should not show numbers");
+        assert!(!by_name["Roof Plan"].labels.numbers, "Roof Plan should not show numbers");
+        assert!(!by_name["Site"].labels.numbers, "Site should not show numbers");
     }
 
     #[test]

@@ -189,6 +189,11 @@ pub fn material_pbr(material: &str) -> ([f32; 3], f32, f32, f32) {
             cadcraft_doc::arch::Finish::Shingles => 0.95,
             cadcraft_doc::arch::Finish::Brick => 0.9,
             cadcraft_doc::arch::Finish::Wood => 0.5,
+            cadcraft_doc::arch::Finish::Concrete => 0.9,
+            cadcraft_doc::arch::Finish::Tile => 0.3,
+            cadcraft_doc::arch::Finish::Carpet => 1.0,
+            cadcraft_doc::arch::Finish::Drywall => 0.9,
+            cadcraft_doc::arch::Finish::Plaster => 0.9,
         };
         return ([1.0; 3], 0.0, rough, 1.0);
     }
@@ -644,6 +649,8 @@ pub struct GpuPipeline {
     pub tex_bind_group: wgpu::BindGroup,
     /// The scene texture layers the array holds ([`GpuPipeline::prepare_textures`]).
     texture_layers: SceneLayers,
+    /// The normal-map layers the second array holds.
+    normal_layers: crate::textures::NormalLayers,
     /// How many times the array was rebuilt for a scene's textures.
     texture_builds: u64,
     pub uniform: wgpu::Buffer,
@@ -694,6 +701,7 @@ impl GpuPipeline {
             tex_bgl,
             tex_bind_group,
             texture_layers: SceneLayers::default(),
+            normal_layers: crate::textures::NormalLayers::default(),
             texture_builds: 0,
             uniform,
             bind_group,
@@ -709,11 +717,13 @@ impl GpuPipeline {
     /// Returns whether the array was rebuilt.
     pub fn prepare_textures(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scene: &Scene3d) -> bool {
         let layers = SceneLayers::of(scene);
-        if layers == self.texture_layers {
+        let normal_layers = crate::textures::NormalLayers::of(scene);
+        if layers == self.texture_layers && normal_layers == self.normal_layers {
             return false;
         }
-        self.tex_bind_group = crate::textures::MaterialTextures::with_layers(device, queue, &self.tex_bgl, scene, &layers).bind_group;
+        self.tex_bind_group = crate::textures::MaterialTextures::with_layers(device, queue, &self.tex_bgl, scene, &layers, &normal_layers).bind_group;
         self.texture_layers = layers;
+        self.normal_layers = normal_layers;
         self.texture_builds += 1;
         true
     }

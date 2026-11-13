@@ -17,10 +17,18 @@ struct GpuLight {
     color_cos_inner: vec4<f32>,
     shadow: vec4<f32>,
 };
+// One straight run of a strip light: a = start (w = candela per metre along n), b = end
+// (w = number of equal pieces, each at most 0.15 m), n = the emitting normal.
+struct StripSeg {
+    a: vec4<f32>,
+    b: vec4<f32>,
+    n: vec4<f32>,
+};
 struct LightsU {
     count: vec4<u32>,
     lights: array<GpuLight, 64>,
     spot_vp: array<mat4x4<f32>, 64>,
+    strip_segs: array<StripSeg, 128>,
 };
 @group(2) @binding(2) var<uniform> lu: LightsU;
 @group(2) @binding(3) var atlas: texture_depth_2d_array;
@@ -109,7 +117,25 @@ fn lit_cube_shadow(i: u32, delta: vec3<f32>) -> f32 {
 
 // Hook [p19-env-raster]: the ambient term of the lit pipelines.
 fn lit_ambient(albedo: vec3<f32>, metallic: f32, n: vec3<f32>) -> vec3<f32> {
+    if (physical() && fr.ext.y > 0.5) {
+        return albedo / LIT_PI * max(sh_irradiance(n), vec3<f32>(0.0)) * (1.0 - metallic * 0.5);
+    }
     return base_ambient(albedo, metallic, n);
+}
+
+// Illuminance (lux) of the environment on a face with normal `n`: the stored coefficients are
+// already convolved with the clamped cosine (sh.rs `convolve`), so this is their sum with the basis.
+fn sh_irradiance(n: vec3<f32>) -> vec3<f32> {
+    var e = fr.sh[0].xyz * 0.282095;
+    e = e + fr.sh[1].xyz * (0.488603 * n.y);
+    e = e + fr.sh[2].xyz * (0.488603 * n.z);
+    e = e + fr.sh[3].xyz * (0.488603 * n.x);
+    e = e + fr.sh[4].xyz * (1.092548 * n.x * n.y);
+    e = e + fr.sh[5].xyz * (1.092548 * n.y * n.z);
+    e = e + fr.sh[6].xyz * (0.315392 * (3.0 * n.z * n.z - 1.0));
+    e = e + fr.sh[7].xyz * (1.092548 * n.x * n.z);
+    e = e + fr.sh[8].xyz * (0.546274 * (n.x * n.x - n.y * n.y));
+    return e;
 }
 
 // Hook [p19-exposure]: display units per lux of fixture light.
@@ -125,6 +151,26 @@ fn fixture_scale() -> f32 {
 // `wpos`: its cone, the cosine, the inverse square and its shadow.
 fn fixture_light(i: u32, wpos: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     let light = lu.lights[i];
+    if (light.dir_cos_outer.w < -2.5) {
+        // A strip light (marker -3): the sum of its pieces' midpoints, I x piece length x
+        // max(0, n_e.-l) x max(0, n.l) / d^2, unshadowed (shadows are the path tracer's).
+        var lux = 0.0;
+        let first = u32(max(light.shadow.z, 0.0));
+        let last = min(first + u32(max(light.shadow.w, 0.0)), 128u);
+        for (var s = first; s < last; s = s + 1u) {
+            let seg = lu.strip_segs[s];
+            let pieces = clamp(u32(seg.b.w + 0.5), 1u, 1024u);
+            let step = (seg.b.xyz - seg.a.xyz) / f32(pieces);
+            let piece_len = length(step);
+            for (var k = 0u; k < pieces; k = k + 1u) {
+                let to_p = seg.a.xyz + step * (f32(k) + 0.5) - wpos;
+                let d2 = max(dot(to_p, to_p), 1e-8);
+                let l = to_p * inverseSqrt(d2);
+                lux = lux + seg.a.w * piece_len * max(0.0, -dot(seg.n.xyz, l)) * max(0.0, dot(n, l)) / d2;
+            }
+        }
+        return light.color_cos_inner.xyz * lux;
+    }
     let to_l = light.pos_range.xyz - wpos;
     let d2 = max(dot(to_l, to_l), 1e-8);
     let l = to_l / sqrt(d2);

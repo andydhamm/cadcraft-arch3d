@@ -125,8 +125,9 @@ pub fn rough_outline(o: &Opening, v0: f64, roof_top: Option<&[Vec2]>) -> Option<
     }
     let poly = match o.top {
         OpeningTop::Square => {
-            let half = (w + ROUGH_ALLOWANCE) / 2.0;
-            let v1 = v0 + o.height + ROUGH_ALLOWANCE;
+            let allowance = crate::opening::cut_allowance(o);
+            let half = (w + allowance) / 2.0;
+            let v1 = v0 + o.height + allowance;
             vec![Vec2::new(c - half, v0), Vec2::new(c + half, v0), Vec2::new(c + half, v1), Vec2::new(c - half, v1)]
         }
         OpeningTop::Round => {

@@ -8,6 +8,7 @@ use crate::Handle;
 use cadcraft_geom::{Bounds2, Vec2};
 use serde::{Deserialize, Serialize};
 
+pub mod autodim;
 pub mod backdrop;
 pub mod casework;
 pub mod ceiling;
@@ -24,6 +25,7 @@ pub mod paint;
 pub mod planview;
 pub mod sheet;
 pub mod site;
+pub use autodim::*;
 pub use backdrop::*;
 pub use casework::*;
 pub use ceiling::*;
@@ -137,14 +139,15 @@ pub fn is_opening_handle(h: Handle) -> bool {
         && h.0 < ARCH_HANDLE_BASE.saturating_add(OPENING_HANDLE_OFFSET).saturating_add(1u64 << 15)
 }
 
-/// The one JSON spelling of a handle: for an arch proxy, its low bits over
-/// `0xA000_0000`, lower-case hex (`w3` -> `a0000003`, `o0` -> `a0008000`);
-/// any other handle is plain lower-case hex.
+/// The one JSON spelling of a handle: for an arch proxy, the low 24 bits of the
+/// reserved range printed in the legacy `a0000000` style (`w3` -> `a0000003`, `o0`
+/// -> `a0008000`); any other handle is plain lower-case hex.
 pub fn handle_json(h: Handle) -> String {
-    match h.0.checked_sub(ARCH_HANDLE_BASE) {
-        Some(low) => format!("{:x}", 0xA000_0000u64.saturating_add(low)),
-        None => format!("{:x}", h.0),
+    if is_arch_handle(h) {
+        let low = (h.0 & 0x00FF_FFFF) as u32;
+        return format!("a{:07x}", low);
     }
+    format!("{:x}", h.0)
 }
 
 /// Proxy handle of the object a 3D probe `part` (see `arch3d::probe::part_of`)
@@ -692,6 +695,8 @@ pub enum OpeningKind {
     GarageDoor,
     /// A cased opening (no swing).
     CasedOpening,
+    /// A recess in one face of a wall that does not go through.
+    Niche,
 }
 
 /// Which side the hinge is on.
@@ -816,6 +821,15 @@ pub struct Opening {
     /// Which sides of the host wall carry the casing.
     #[serde(default, skip_serializing_if = "OpeningSides::is_right_only")]
     pub casing_sides: OpeningSides,
+    /// Niche recess depth in metres (0 for every other opening).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub depth: f64,
+    /// The face a niche is recessed from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<paint::Side>,
+    /// Material key of a niche's back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<String>,
 }
 
 impl Default for Opening {
@@ -850,6 +864,9 @@ impl Default for Opening {
             roof_offset: DEFAULT_ROOF_OFFSET,
             sill_sides: OpeningSides::RIGHT,
             casing_sides: OpeningSides::RIGHT,
+            depth: 0.0,
+            face: None,
+            material: None,
         }
     }
 }
@@ -867,6 +884,7 @@ impl Opening {
             OpeningKind::Window => "slider".to_string(),
             OpeningKind::GarageDoor => "garage".to_string(),
             OpeningKind::CasedOpening => "cased".to_string(),
+            OpeningKind::Niche => "niche".to_string(),
             OpeningKind::Door => "hinged".to_string(),
         };
         let layer = if kind == OpeningKind::Window { "A-GLAZ" } else { "A-DOOR" };
@@ -900,6 +918,9 @@ impl Opening {
             roof_offset: DEFAULT_ROOF_OFFSET,
             sill_sides: OpeningSides::RIGHT,
             casing_sides: OpeningSides::RIGHT,
+            depth: 0.0,
+            face: None,
+            material: None,
         }
     }
 }
@@ -1922,6 +1943,8 @@ pub struct ArchModel {
     pub cameras: Vec<Camera3d>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_camera: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_dims: Vec<AutoDims>,
     /// The one level the plan draws; `None` = all levels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_level: Option<u32>,
@@ -2059,6 +2082,7 @@ impl Default for ArchModel {
             next_railing_id: 0,
             cameras: Vec::new(),
             active_camera: None,
+            auto_dims: Vec::new(),
             plan_level: None,
             plan_views: template_plan_views(),
             open_plan_views: Vec::new(),
@@ -2128,6 +2152,7 @@ impl Default for ArchModel {
                     ],
                     reference: RefSide::Centre,
                 },
+                glass_wall_type(),
             ],
         }
     }
@@ -3408,9 +3433,19 @@ mod tests {
     #[test]
     fn arch_model_defaults_have_two_wall_types() {
         let m = ArchModel::default();
-        assert_eq!(m.types.len(), 2);
+        assert_eq!(m.types.len(), 3);
         assert_eq!(m.types[0].name, "Exterior");
         assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
+    }
+
+    #[test]
+    fn arch_model_defaults_have_three_wall_types() {
+        let m = ArchModel::default();
+        assert_eq!(m.types.len(), 3);
+        assert_eq!(m.types[0].name, "Exterior");
+        assert_eq!(m.types[1].name, "Interior");
+        assert_eq!(m.types[2].name, "Glass");
     }
 
     #[test]
@@ -5144,5 +5179,27 @@ mod tests {
         m.types.clear();
         m.push_backsplash(Backsplash::default());
         assert!(!m.is_empty());
+    }
+
+    #[test]
+    fn opening_without_niche_fields_writes_the_same_json() {
+        let v = serde_json::to_value(Opening::default()).unwrap();
+        let obj = v.as_object().unwrap();
+        assert!(!obj.contains_key("depth") && !obj.contains_key("face") && !obj.contains_key("material"));
+        let back: Opening = serde_json::from_value(v).unwrap();
+        assert_eq!(back, Opening::default());
+    }
+
+    #[test]
+    fn niche_kind_round_trips() {
+        let o = Opening { kind: OpeningKind::Niche, depth: 0.1, face: Some(paint::Side::Right), material: Some("tile".into()), ..Opening::default() };
+        let v = serde_json::to_value(&o).unwrap();
+        assert_eq!(v["kind"], "niche");
+        assert_eq!(v["face"], "right");
+        assert_eq!(v["depth"], 0.1);
+        assert_eq!(v["material"], "tile");
+        let back: Opening = serde_json::from_value(v).unwrap();
+        assert_eq!(back, o);
+        assert_eq!(Opening::new(ArchId(0), 1.0, 0.6, 0.9, OpeningKind::Niche).style, "niche");
     }
 }

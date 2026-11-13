@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use cadcraft_doc::arch::{Backdrop, ImageRgba, Projection};
 
+use crate::environment::Environment;
 use crate::pipeline::{COLOR_FORMAT, DEPTH_FORMAT};
 
 /// WGSL source of the backdrop pipeline.
@@ -16,6 +17,9 @@ const SHADER: &str = include_str!("shaders/backdrop.wgsl");
 /// The sRGB bytes of [`crate::offscreen::CLEAR`]: what a pixel shows when there is no backdrop or its
 /// image is missing.
 pub const CLEAR_RGB: [u8; 3] = [39, 44, 52];
+
+/// The resident texture key of the baked environment.
+const ENV_KEY: &str = "environment";
 
 /// Byte size of [`BackdropUniform`].
 const UNIFORM_SIZE: u64 = 128;
@@ -113,12 +117,16 @@ pub fn backdrop_rgb(b: &Backdrop, textures: &BTreeMap<String, ImageRgba>, x: u32
         Backdrop::Sky | Backdrop::Hdri { .. } => CLEAR_RGB,
         Backdrop::Image { .. } => {
             let Some((img, projection)) = image_of(b, textures) else { return CLEAR_RGB };
+            let horizon = if let Backdrop::Image { horizon, .. } = b { *horizon } else { 0.0 };
             let rgb = match projection {
                 Projection::Flat => sample(img, (f64::from(x) + 0.5) / wf, (f64::from(y) + 0.5) / hf, false),
                 Projection::Equirect => {
                     let (dx, dy, dz) = (f64::from(ray[0]), f64::from(ray[1]), f64::from(ray[2]));
                     let u = 0.5 + dy.atan2(dx) / std::f64::consts::TAU;
-                    let v = 0.5 - dz.clamp(-1.0, 1.0).asin() / std::f64::consts::PI;
+                    // A positive horizon raises the picture's horizon: sample lower in it.
+                    let half = std::f64::consts::FRAC_PI_2;
+                    let el = (dz.clamp(-1.0, 1.0).asin() - horizon.to_radians()).clamp(-half, half);
+                    let v = 0.5 - el / std::f64::consts::PI;
                     sample(img, u, v, true)
                 }
             };
@@ -286,8 +294,10 @@ fn make_texture(device: &wgpu::Device, queue: &wgpu::Queue, img: &ImageRgba) -> 
 impl BackdropPass {
     /// Build the pipeline for the main pass (1 sample, [`COLOR_FORMAT`], [`DEPTH_FORMAT`]).
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        // The tone curves go in front of the backdrop code (kind 4 tone maps the environment).
+        let source = format!("{}\n{}", crate::exposure::TONEMAP_WGSL, SHADER);
         let module = device
-            .create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("render3d backdrop"), source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
+            .create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("render3d backdrop"), source: wgpu::ShaderSource::Wgsl(source.into()) });
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("render3d backdrop bind group layout"),
             entries: &[
@@ -400,6 +410,9 @@ impl BackdropPass {
                 u.size[2] = res.size.0 as f32;
                 u.size[3] = res.size.1 as f32;
                 u.kind[0] = if *projection == Projection::Equirect { 3 } else { 2 };
+                if let Backdrop::Image { horizon, .. } = b {
+                    u.top[3] = *horizon as f32;
+                }
             }
         }
         queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&u));
@@ -410,6 +423,77 @@ impl BackdropPass {
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: self.uniform.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(view) },
+            ],
+        }));
+        true
+    }
+
+    /// Like [`BackdropPass::prepare`] for a visible environment (kind 4): a world-space equirect
+    /// copy (at most 1024 x 512, baked with [`Environment::radiance`], re-uploaded when `env.key`
+    /// changes) drawn with the frame's `exposure` scale and `tone` code. `false` for an invalid
+    /// environment.
+    pub fn prepare_environment(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        env: &Environment,
+        exposure: f32,
+        tone: u32,
+        size: (u32, u32),
+        view_proj: &[[f32; 4]; 4],
+    ) -> bool {
+        if !env.is_valid() {
+            return false;
+        }
+        let (w, h) = (env.width.clamp(256, 1024), env.height.clamp(128, 512));
+        let print = (w, h, 0usize, env.key);
+        if self.image.as_ref().is_none_or(|r| r.key != ENV_KEY || r.print != print) {
+            let pi = std::f32::consts::PI;
+            let mut texels: Vec<f32> = Vec::with_capacity((w as usize).saturating_mul(h as usize).saturating_mul(4));
+            for j in 0..h {
+                let el = (0.5 - (j as f32 + 0.5) / h as f32) * pi;
+                for i in 0..w {
+                    let az = ((i as f32 + 0.5) / w as f32 - 0.5) * 2.0 * pi;
+                    let c = env.radiance([el.cos() * az.cos(), el.cos() * az.sin(), el.sin()]);
+                    texels.extend_from_slice(&[c[0], c[1], c[2], 1.0]);
+                }
+            }
+            let extent = wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 };
+            let tex = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("render3d backdrop environment"),
+                size: extent,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba32Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo { texture: &tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                bytemuck::cast_slice(&texels),
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 16), rows_per_image: Some(h) },
+                extent,
+            );
+            self.image = Some(Resident { key: ENV_KEY.to_string(), print, size: (w, h), view: tex.create_view(&Default::default()) });
+            self.uploads += 1;
+        }
+        let Some(res) = &self.image else { return false };
+        let scale = if exposure.is_finite() { exposure.max(0.0) } else { 0.0 };
+        let u = BackdropUniform {
+            inv_view_proj: invert(view_proj),
+            top: [0.0; 4],
+            bottom: [scale, 0.0, 0.0, 0.0],
+            size: [size.0 as f32, size.1 as f32, res.size.0 as f32, res.size.1 as f32],
+            kind: [4, tone, 0, 0],
+        };
+        queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&u));
+        self.bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("render3d backdrop environment"),
+            layout: &self.bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.uniform.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&res.view) },
             ],
         }));
         true
@@ -435,6 +519,28 @@ mod tests {
 
     fn with(item: &str, img: ImageRgba) -> BTreeMap<String, ImageRgba> {
         BTreeMap::from([(image_key(item), img)])
+    }
+
+    #[test]
+    fn equirect_picture_horizon_offset() {
+        // Bright above the middle row, dark below.
+        let mut rgba = Vec::new();
+        for y in 0..32u32 {
+            for _ in 0..64u32 {
+                let v = if y < 16 { 250 } else { 10 };
+                rgba.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        let img = ImageRgba { width: 64, height: 32, rgba, ..Default::default() };
+        let t = BTreeMap::from([("item:sky".to_string(), img)]);
+        let at = |horizon: f64| {
+            let b = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon };
+            let e = 5f32.to_radians();
+            backdrop_rgb(&b, &t, 0, 0, 1, 1, [e.cos(), 0.0, e.sin()])[0]
+        };
+        assert!(at(0.0) > 200, "5 degrees up is bright at horizon 0");
+        assert!(at(10.0) < 60, "raising the horizon by 10 puts 5 degrees up below it");
+        assert!(at(-10.0) > 200);
     }
 
     #[test]

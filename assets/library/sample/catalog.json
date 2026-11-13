@@ -771,6 +771,27 @@
    "file": "plant-small.glb"
   },
   {
+   "id": "polyhaven:kloofendal-puresky",
+   "name": "Partly cloudy sky (HDR)",
+   "category": "Backdrops",
+   "symbolType": "backdrop",
+   "placement": null,
+   "size": null,
+   "keywords": [
+    "sky",
+    "hdri",
+    "hdr",
+    "clouds",
+    "day",
+    "backdrop"
+   ],
+   "file": "hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+   "source": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+   "licence": "CC0-1.0",
+   "author": "Greg Zaal (original), Jarod Guest (sky edits)",
+   "attribution": "Kloofendal 48d Partly Cloudy (Pure Sky) by Greg Zaal and Jarod Guest, Poly Haven, CC0-1.0"
+  },
+  {
    "id": "range-hood",
    "name": "Range hood",
    "category": "Appliances and plumbing fixtures",

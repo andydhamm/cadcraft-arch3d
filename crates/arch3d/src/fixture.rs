@@ -662,4 +662,71 @@ mod tests {
         let cuts = ceiling_cutouts(&m, &m.rooms[0], &m.levels[0]);
         assert!(cuts.is_empty());
     }
+
+    #[test]
+    fn fixture_with_nan_position_produces_no_meshes() {
+        let mut m = ArchModel::default();
+        let t = cadcraft_arch::light::find_type("Pendant").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(f64::NAN, 2.0));
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        assert!(meshes.is_empty());
+    }
+
+    #[test]
+    fn floor_lamp_respects_explicit_height() {
+        let mut m = ArchModel::default();
+        let t = cadcraft_arch::light::find_type("Floor lamp").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(1.0, 1.0));
+        f.height = Some(2.0);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let zp = light_point(&m, &m.lights[0]).map(|p| p.z).unwrap_or(f64::NAN);
+        let base = meshes.iter().find(|x| x.material == "light-trim").map(|t| t.bounds());
+        let base = base.unwrap_or(crate::mesh::Bounds3::empty());
+        assert!((base.min[2] - (zp - 2.0)).abs() < 1e-5);
+        assert!((base.max[2] - (zp - 2.0 + 0.02)).abs() < 1e-5);
+    }
+
+    #[test]
+    fn strip_light_skips_zero_length_segments() {
+        let mut m = ArchModel::default();
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing: Vec<_> = meshes.iter().filter(|x| x.material == "light-strip").collect();
+        assert_eq!(housing.len(), 1);
+    }
+
+    #[test]
+    fn sconce_housing_follows_rotation() {
+        let mut m = ArchModel::default();
+        let t = cadcraft_arch::light::find_type("Wall sconce").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(1.0, 1.0));
+        f.rotation = 90.0;
+        f.height = Some(1.8);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let shade = meshes.iter().find(|x| x.material == "light-shade").map(|s| s.bounds());
+        let shade = shade.unwrap_or(crate::mesh::Bounds3::empty());
+        assert!(shade.max[0] > shade.min[0]);
+        assert!(shade.max[1] > shade.min[1]);
+        assert!(shade.min[0] <= 1.0 && shade.max[0] >= 1.0);
+        assert!(shade.min[1] <= 1.0 && shade.max[1] >= 1.0);
+    }
+
+    #[test]
+    fn fixture_with_non_finite_height_is_skipped() {
+        let mut m = ArchModel::default();
+        let t = cadcraft_arch::light::find_type("Pendant").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(1.0, 1.0));
+        f.height = Some(f64::NAN);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        assert!(meshes.is_empty());
+    }
 }

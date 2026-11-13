@@ -177,7 +177,7 @@ pub(crate) fn add_scaled_viewport(s: &mut Session, layout: &str, rect: Bounds2, 
     Ok(h)
 }
 
-fn check_name(cmd: &str, d: &Drawing, name: &str, except: Option<&str>) -> Result<String> {
+pub(crate) fn check_name(cmd: &str, d: &Drawing, name: &str, except: Option<&str>) -> Result<String> {
     let n = name.trim();
     if n.is_empty() {
         return Err(bad(cmd, "layout name is empty"));
@@ -262,7 +262,7 @@ fn run_new(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "name": name, "viewport": vp }))
 }
 
-fn run_delete(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn run_delete(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").ok_or_else(|| bad("layout.delete", "`name` is required"))?;
     let name = layout_name("layout.delete", s.doc()?, name)?;
     if s.doc()?.layouts.len() <= 1 {
@@ -281,7 +281,7 @@ fn run_delete(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "deleted": name }))
 }
 
-fn run_rename(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn run_rename(s: &mut Session, p: &Value) -> Result<Value> {
     let from = match (str_param(p, "from"), s.layout_space().layout()) {
         (Some(f), _) => f.to_string(),
         (None, Some(n)) => n.to_string(),

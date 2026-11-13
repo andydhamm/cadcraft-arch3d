@@ -40,6 +40,11 @@ fn finish_salt(f: Finish) -> u64 {
         Finish::Shingles => 2,
         Finish::Brick => 3,
         Finish::Wood => 4,
+        Finish::Concrete => 5,
+        Finish::Tile => 6,
+        Finish::Carpet => 7,
+        Finish::Drywall => 8,
+        Finish::Plaster => 9,
     }
 }
 
@@ -122,17 +127,33 @@ fn pixel(finish: Finish, x: usize, y: usize) -> [i32; 3] {
             let grain = if g == 0 { -14 } else { 0 };
             shade([168, 122, 78], tone + grain + noise(2))
         }
+        Finish::Concrete => {
+            let fleck = (hash(salt, (x * 7 + y * 13) as u64, 11, 11) % 16) == 0;
+            let base = if fleck { [132, 132, 126] } else { [150, 150, 146] };
+            shade(base, noise(10))
+        }
+        Finish::Tile => {
+            if x % 128 < 4 || y % 128 < 4 {
+                return shade([160, 158, 152], jitter(hash(salt, 0, 0, 11), 2));
+            }
+            shade([226, 223, 216], noise(3))
+        }
+        Finish::Carpet => shade([176, 160, 138], noise(8)),
+        Finish::Drywall => [232, 231, 228],
+        Finish::Plaster => [234, 234, 232],
     }
 }
 
 /// The tile (metres per repeat) for `finish` along u and v.
-fn finish_tile(f: Finish) -> [f64; 2] {
-    match f {
+pub fn tile_size(finish: Finish) -> [f64; 2] {
+    match finish {
         Finish::Siding => [1.2, 1.2],
         Finish::Shingles => [1.0, 1.0],
         Finish::Brick => [0.84, 0.6],
         Finish::Wood => [1.2, 0.84],
-        _ => [1.0, 1.0],
+        Finish::Concrete => [2.0, 2.0],
+        Finish::Tile => [0.6, 0.6],
+        Finish::Carpet | Finish::Drywall | Finish::Plaster => [1.0, 1.0],
     }
 }
 
@@ -145,7 +166,7 @@ pub fn texture(finish: Finish) -> Texture {
             rgba.extend_from_slice(&[clamp8(p[0]), clamp8(p[1]), clamp8(p[2]), 255]);
         }
     }
-    let tile = finish_tile(finish);
+    let tile = tile_size(finish);
     Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile }
 }
 
@@ -272,7 +293,7 @@ pub fn normal_map(finish: Finish) -> Texture {
             rgba.push(255);
         }
     }
-    Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile: finish_tile(finish) }
+    Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile: tile_size(finish) }
 }
 
 /// The flat (non-normal) normal map: all pixels (128, 128, 255) = `(0, 0, 1)`.
@@ -486,6 +507,9 @@ mod tests {
                 n_xy += 1.0;
             }
             let mean_xy = sum_xy / n_xy;
+            if !matches!(f, Finish::Siding | Finish::Shingles | Finish::Brick | Finish::Wood) {
+                continue; // the room finishes have no relief: flat normals
+            }
             assert!((0.05..=0.4).contains(&mean_xy), "mean |n.xy| {mean_xy} out of range");
         }
         assert_ne!(normal_map(Finish::Brick).rgba, normal_map(Finish::Wood).rgba);
@@ -570,6 +594,45 @@ mod tests {
                 r + g + b < 200
             });
             assert!(has_joint, "plank {} should have a dark end joint", plank);
+        }
+    }
+
+    fn px(t: &Texture, x: usize, y: usize) -> [i32; 3] {
+        let i = (y * N + x) * 4;
+        [t.rgba[i] as i32, t.rgba[i + 1] as i32, t.rgba[i + 2] as i32]
+    }
+
+    #[test]
+    fn tile_has_grout_lines_every_128_px() {
+        let t = texture(Finish::Tile);
+        assert_eq!(texture(Finish::Tile).tile, [0.6, 0.6]);
+        for x in [0usize, 3, 128, 131] {
+            let p = px(&t, x, 64 + 128 * (x / 128));
+            assert!((p[0] - 160).abs() < 8 && (p[1] - 158).abs() < 8 && (p[2] - 152).abs() < 8, "{x} {p:?}");
+        }
+        for (x, y) in [(64, 64), (192, 64), (64, 192), (192, 192)] {
+            let p = px(&t, x, y);
+            assert!((p[0] - 226).abs() <= 3 && (p[1] - 223).abs() <= 3 && (p[2] - 216).abs() <= 3, "{p:?}");
+        }
+    }
+
+    #[test]
+    fn carpet_and_concrete_are_noisy() {
+        for f in [Finish::Carpet, Finish::Concrete] {
+            let t = texture(f);
+            let lums: Vec<i32> = t.rgba.chunks_exact(4).map(|p| p[0] as i32 + p[1] as i32 + p[2] as i32).collect();
+            let spread = lums.iter().max().copied().unwrap_or(0) - lums.iter().min().copied().unwrap_or(0);
+            assert!(spread > 12, "{f:?} spread {spread}");
+        }
+        assert_eq!(texture(Finish::Concrete).tile, [2.0, 2.0]);
+    }
+
+    #[test]
+    fn drywall_and_plaster_are_flat() {
+        for (f, c) in [(Finish::Drywall, [232u8, 231, 228, 255]), (Finish::Plaster, [234, 234, 232, 255])] {
+            let t = texture(f);
+            assert!(t.rgba.chunks_exact(4).all(|p| p == c), "{f:?}");
+            assert_eq!(t.tile, [1.0, 1.0]);
         }
     }
 }

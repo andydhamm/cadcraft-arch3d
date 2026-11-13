@@ -1,13 +1,19 @@
 use serde_json::{Value, json};
 
 use cadcraft_doc::LayerState;
+use cadcraft_doc::arch::{MAX_PLAN_VIEWS, template_plan_views};
 
 use crate::{
     EngineError, Session,
-    cmd::{CommandSpec, bad},
+    cmd::{
+        CommandSpec,
+        arch::planview::{ensure_plan_layers, open_plan_view},
+        bad,
+    },
 };
 
-/// Show the electrical layer state: keep all E-* layers on, dim every other layer.
+/// Open the Electrical plan view (E-* layers on, every other layer dimmed); the layers from
+/// before are saved as the layer state "Electrical".
 pub fn specs() -> Vec<CommandSpec> {
     vec![CommandSpec::new("view.electrical", "Electrical View", run_view_electrical).menu(&["Architecture", "Electrical View"]).params("{}")]
 }
@@ -18,33 +24,42 @@ fn run_view_electrical(s: &mut Session, params: &Value) -> Result<Value, EngineE
         return Err(bad("view.electrical", "`view.electrical` takes no parameters"));
     }
 
-    let d = s.doc_mut()?;
     let name = "Electrical";
-    let saved = d.layers.clone();
-    d.layer_states.retain(|st| st.name != name);
-    d.layer_states.push(LayerState { name: name.to_string(), layers: saved, ..Default::default() });
-
-    let mut shown = Vec::new();
-    let mut dimmed = Vec::new();
-    for layer in &mut d.layers {
-        if layer.name.starts_with("E-") {
-            layer.on = true;
-            layer.frozen = false;
-            layer.transparency = 0;
-            shown.push(layer.name.clone());
-        } else {
-            layer.transparency = 70;
-            dimmed.push(layer.name.clone());
+    let d = s.doc()?;
+    let missing = d.arch.plan_view(name).is_none();
+    if missing && d.arch.plan_views.len() >= MAX_PLAN_VIEWS {
+        return Err(bad("view.electrical", format!("a drawing holds at most {MAX_PLAN_VIEWS} plan views; delete one first")));
+    }
+    let active = d.arch.active_plan_view.as_deref().is_some_and(|a| a.trim().eq_ignore_ascii_case(name));
+    {
+        let d = s.doc_mut()?;
+        if missing && let Some(t) = template_plan_views().into_iter().find(|v| v.name.eq_ignore_ascii_case(name)) {
+            d.arch.plan_views.push(t);
+        }
+        let Some(v) = d.arch.plan_view(name).cloned() else {
+            return Err(bad("view.electrical", "the Electrical plan view is not available"));
+        };
+        ensure_plan_layers(d, &v);
+        if !active {
+            // The layers from before the view's rules (plus those just created, at their defaults).
+            let saved = d.layers.clone();
+            d.layer_states.retain(|st| st.name != name);
+            d.layer_states.push(LayerState { name: name.to_string(), layers: saved, ..Default::default() });
         }
     }
-
+    let opened = open_plan_view(s, name).map_err(|e| bad("view.electrical", e.to_string()))?;
+    let d = s.doc()?;
+    let mut shown: Vec<String> = d.layers.iter().filter(|l| l.on && l.transparency == 0).map(|l| l.name.clone()).collect();
+    let mut dimmed: Vec<String> = d.layers.iter().filter(|l| l.transparency > 0).map(|l| l.name.clone()).collect();
     shown.sort();
     dimmed.sort();
+    let plan_view = opened.get("planView").cloned().unwrap_or_else(|| json!(name));
 
     Ok(json!({
         "layerState": name,
         "shown": shown,
         "dimmed": dimmed,
+        "planView": plan_view,
     }))
 }
 
@@ -76,12 +91,12 @@ mod tests {
 
         let result = s.execute("view.electrical", &json!({})).unwrap();
         assert_eq!(result["layerState"], "Electrical");
-        assert_eq!(result["shown"].as_array().unwrap().len(), 2);
+        assert_eq!(result["shown"].as_array().unwrap().len(), 3);
         assert_eq!(result["dimmed"].as_array().unwrap().len(), 2);
 
         let doc = s.doc().unwrap();
         let state = doc.layer_states.iter().find(|st| st.name == "Electrical").unwrap();
-        assert_eq!(state.layers.len(), 4);
+        assert_eq!(state.layers.len(), 5);
         let e = doc.layers.iter().find(|l| l.name == "E-POWR").unwrap();
         assert!(e.on);
         assert!(!e.frozen);
@@ -90,5 +105,69 @@ mod tests {
         assert!(a.on);
         assert!(a.frozen);
         assert_eq!(a.transparency, 70);
+    }
+
+    fn rooms_session() -> Session {
+        let mut s = Session::new();
+        for pts in [[[0.0, 0.0], [6.0, 0.0]], [[6.0, 0.0], [6.0, 4.0]], [[6.0, 4.0], [0.0, 4.0]], [[0.0, 4.0], [0.0, 0.0]]] {
+            s.execute("wall", &json!({"points": pts, "thickness": 0.2})).unwrap();
+        }
+        s.execute("roomdetect", &json!({})).unwrap();
+        s
+    }
+
+    #[test]
+    fn view_electrical_saves_the_layers_from_before_the_view() {
+        let mut s = rooms_session();
+        let before = s.doc().unwrap().layers.clone();
+        assert!(before.iter().all(|l| l.name != "A-ROOM"));
+        s.execute("view.electrical", &json!({})).unwrap();
+        s.execute("layerstate.restore", &json!({"name": "Electrical"})).unwrap();
+        let after = &s.doc().unwrap().layers;
+        let room = after.iter().find(|l| l.name == "A-ROOM").expect("A-ROOM");
+        assert_eq!(room.transparency, 0);
+        for l in &before {
+            let now = after.iter().find(|x| x.name == l.name).unwrap();
+            assert_eq!((now.on, now.frozen, now.transparency), (l.on, l.frozen, l.transparency), "{}", l.name);
+        }
+    }
+
+    #[test]
+    fn view_electrical_twice_keeps_the_saved_state() {
+        let mut s = rooms_session();
+        s.execute("view.electrical", &json!({})).unwrap();
+        let first = s.doc().unwrap().layer_states.iter().find(|st| st.name == "Electrical").unwrap().layers.clone();
+        s.execute("view.electrical", &json!({})).unwrap();
+        let second = &s.doc().unwrap().layer_states.iter().find(|st| st.name == "Electrical").unwrap().layers;
+        assert_eq!(first.len(), second.len());
+        assert!(second.iter().all(|l| l.transparency == 0));
+    }
+
+    #[test]
+    fn view_electrical_opens_the_electrical_plan_view() {
+        let mut s = rooms_session();
+        let r = s.execute("view.electrical", &json!({})).unwrap();
+        assert_eq!(r["planView"], "Electrical");
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.active_plan_view.as_deref(), Some("Electrical"));
+        assert!(d.arch.open_plan_views.iter().any(|n| n == "Electrical"));
+    }
+
+    #[test]
+    fn view_electrical_re_adds_a_deleted_template() {
+        let mut s = rooms_session();
+        s.execute("planview.delete", &json!({"name": "Electrical"})).unwrap();
+        assert!(s.doc().unwrap().arch.plan_view("Electrical").is_none());
+        s.execute("view.electrical", &json!({})).unwrap();
+        assert!(s.doc().unwrap().arch.plan_view("Electrical").is_some());
+    }
+
+    #[test]
+    fn non_empty_params_still_refused() {
+        let mut s = rooms_session();
+        let depth = s.state().unwrap().undo.len();
+        assert!(s.execute("view.electrical", &json!({"x": 1})).is_err());
+        assert!(s.execute("view.electrical", &json!([])).is_err());
+        assert_eq!(s.state().unwrap().undo.len(), depth);
     }
 }

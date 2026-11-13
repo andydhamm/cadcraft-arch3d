@@ -64,6 +64,19 @@ fn sample_img(uv: vec2<f32>, wrap_x: bool) -> vec3<f32> {
 fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     var c = u.top.rgb;
     let k = u.kind.x;
+    if (k == 4u) {
+        // The environment: a world-space equirect of linear nits (size.zw texels), exposed with
+        // bottom.x and tone mapped with the code in kind.y (tonemap.wgsl is in front of this file).
+        let nx = frag.x / u.size.x * 2.0 - 1.0;
+        let ny = 1.0 - frag.y / u.size.y * 2.0;
+        let a = u.inv_view_proj * vec4<f32>(nx, ny, 0.3, 1.0);
+        let b = u.inv_view_proj * vec4<f32>(nx, ny, 0.9, 1.0);
+        let d = normalize(b.xyz / b.w - a.xyz / a.w);
+        let uu = 0.5 + atan2(d.y, d.x) / (2.0 * PI);
+        let vv = 0.5 - asin(clamp(d.z, -1.0, 1.0)) / PI;
+        let nits = sample_img(vec2<f32>(uu, vv), true) / 255.0;
+        return vec4<f32>(tone_map_rgb(nits * u.bottom.x, u.kind.y), 1.0);
+    }
     if (k == 1u) {
         let t = frag.y / u.size.y;
         c = round(mix(u.top.rgb, u.bottom.rgb, t));
@@ -76,7 +89,9 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
         let b = u.inv_view_proj * vec4<f32>(nx, ny, 0.9, 1.0);
         let d = normalize(b.xyz / b.w - a.xyz / a.w);
         let uu = 0.5 + atan2(d.y, d.x) / (2.0 * PI);
-        let vv = 0.5 - asin(clamp(d.z, -1.0, 1.0)) / PI;
+        // top.w is the horizon offset in degrees: + raises the picture's horizon.
+        let el = clamp(asin(clamp(d.z, -1.0, 1.0)) - u.top.w * PI / 180.0, -0.5 * PI, 0.5 * PI);
+        let vv = 0.5 - el / PI;
         c = sample_img(vec2<f32>(uu, vv), true);
     }
     return vec4<f32>(to_linear(clamp(c, vec3<f32>(0.0), vec3<f32>(255.0))), 1.0);

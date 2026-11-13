@@ -209,6 +209,12 @@ fn software_spp(p: &PathParams, on_cpu: bool) -> u32 {
     if on_cpu && !p.spp_given && p.snapshots.is_empty() { SOFTWARE_SPP } else { p.spp }
 }
 
+/// The fixtures that can cast a shadow: every light but a strip (a strip counts as one drawn light
+/// and is never shadow-mapped in the raster; its shadows are the path tracer's).
+fn shadow_casting_lights(scene: &Scene3d) -> usize {
+    scene.lights.iter().filter(|l| l.kind != cadcraft_arch3d::light::LightKind::Strip).count()
+}
+
 /// `<out without .png>-spp<n>.png`.
 fn snapshot_path(out: &std::path::Path, spp: u32) -> std::path::PathBuf {
     let stem = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -222,6 +228,39 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
     // `write_atomic` now returns the newly-created folder (if any); we only need the write to
     // succeed, so discard it.
     crate::output::write_atomic(out, png).map_err(|e| e.to_string()).map(|_| ())
+}
+
+/// The last environment built and the key it was built for.
+type EnvCache = Option<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>)>;
+static ENV_CACHE: Mutex<EnvCache> = Mutex::new(None);
+
+/// The environment for the drawing and look, rebuilt only when the look's sky fields, its
+/// backdrop, the sun direction or the arch revision change (an HDRI decode is not cheap).
+fn environment_cached(
+    model: &cadcraft_engine::doc::arch::ArchModel,
+    revision: u64,
+    look: &Look,
+    sun_dir: Option<[f64; 3]>,
+) -> Option<std::sync::Arc<cadcraft_render3d::Environment>> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{:?}", look.sky).hash(&mut h);
+    format!("{:?}", look.backdrop).hash(&mut h);
+    sun_dir.map(|d| d.map(f64::to_bits)).hash(&mut h);
+    revision.hash(&mut h);
+    let key = h.finish();
+    if let Ok(guard) = ENV_CACHE.lock() {
+        if let Some((k, env)) = guard.as_ref() {
+            if *k == key {
+                return env.clone();
+            }
+        }
+    }
+    let env = cadcraft_render3d::environment_for(model, look, sun_dir);
+    if let Ok(mut guard) = ENV_CACHE.lock() {
+        *guard = Some((key, env.clone()));
+    }
+    env
 }
 
 fn render_one(req: &RenderRequest) -> Result<Value, String> {
@@ -247,8 +286,11 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     // The view's filter: the cutaway's hidden objects leave the scene (a filtered copy, cached by
     // revision, light set and hidden set, with its own scene key so uploads and shadow maps follow);
     // the clip box and near clip reach the raster and the path tracer through the look.
-    let filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
-    let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() {
+    let mut filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
+    if let Some((level, lower)) = req.overview {
+        filter = filter.with_overview(&req.drawing.arch, level, lower);
+    }
+    let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() && filter.levels.is_none() {
         (base, revision)
     } else {
         let hidden_key = hidden_set_key(&filter);
@@ -260,7 +302,9 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         cadcraft_arch3d::set_backdrop(&req.drawing.arch, f, look.backdrop.as_ref());
         (&*f, filtered_scene_key(revision, hidden_key))
     };
-    let mut lighting = lighting_for(&look, sun_dir, req.budget);
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, req.budget).with_moon(moon_dir);
+    lighting.environment = environment_cached(&req.drawing.arch, revision, &look, sun_dir);
     // The calibration albedo, the metered night (all but the legacy `sun: false`) and a bare-number
     // exposure, which the raster uses as its fixed scale too.
     lighting.lambert = req.albedo.map(|a| a as f32);
@@ -293,6 +337,10 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                 *path_traces += 1;
                 // The first open reports miss/hit; later renders in this process report the same.
                 let outcome = pcache.as_ref().map_or(st.pipeline_cache, |(_, o)| *o);
+                path_info.insert(
+                    "environment".into(),
+                    lighting.environment.as_ref().map_or(Value::Null, |e| json!({ "width": e.width, "height": e.height, "visible": e.visible })),
+                );
                 path_info.insert("spp".into(), json!(st.spp_done));
                 path_info.insert("bounces".into(), json!(opts.bounces));
                 path_info.insert("seed".into(), json!(opts.seed));
@@ -325,13 +373,13 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
             }
         }
         let rgba = png_rgba(&png).map_err(gpu)?;
-        let lights = scene.lights.len();
-        (rgba, req.size, lights, lights, Some(png))
+        // A strip counts once as a fixture and is never shadowed.
+        (rgba, req.size, scene.lights.len(), shadow_casting_lights(scene), Some(png))
     } else if req.final_render {
         final_mode = Some("raster");
         let png = render_final(off, scene, key, &camera, &lighting, req.ground, req.size).map_err(gpu)?;
         let rgba = png_rgba(&png).map_err(gpu)?;
-        (rgba, req.size, scene.lights.len(), scene.lights.len(), Some(png))
+        (rgba, req.size, scene.lights.len(), shadow_casting_lights(scene), Some(png))
     } else {
         let frame = off.lit_frame(scene, key, [eye.x, eye.y, eye.z], &lighting, req.ground);
         let light = lighting.sun.unwrap_or(Light::DEFAULT);
@@ -396,7 +444,9 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
     let (look, sun_dir) = req.resolved_sun();
-    let lighting = lighting_for(&look, sun_dir, 8);
+    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let mut lighting = lighting_for(&look, sun_dir, 8).with_moon(moon_dir);
+    lighting.environment = environment_cached(&req.drawing.arch, req.drawing.arch_revision, &look, sun_dir);
     let opts = path_options(&req.path, &look, None);
     let rgb = irradiance(&device, scene, &lighting, false, &req.probes, &opts)?;
     let results: Vec<Value> = req
