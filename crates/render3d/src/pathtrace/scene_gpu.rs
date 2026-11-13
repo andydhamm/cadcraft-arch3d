@@ -1554,14 +1554,18 @@ mod tests {
         scene.horizon = Some(horizon);
         let with = build_gpu_scene(&scene, true, None);
         assert_eq!(with.tris.len(), without.tris.len() + 2);
-        // After the meshes and the ground quad, with the terrain material.
+        // After the meshes and the ground quad, with the terrain material (single-sided).
         assert_eq!(with.materials.len(), without.materials.len() + 1);
-        assert_eq!(with.materials[4], material_for("terrain"));
+        let mut expected = material_for("terrain");
+        expected.flags |= TRI_SINGLE_SIDED;
+        assert_eq!(with.materials[4], expected);
         assert_eq!(with.tris.iter().filter(|t| t.material == 4).count(), 2);
         // Without the ground quad the horizon takes the next material index.
         let bare = build_gpu_scene(&scene, false, None);
         assert_eq!(bare.tris.iter().filter(|t| t.material == 3).count(), 2);
-        assert_eq!(bare.materials[3], material_for("terrain"));
+        let mut expected_bare = material_for("terrain");
+        expected_bare.flags |= TRI_SINGLE_SIDED;
+        assert_eq!(bare.materials[3], expected_bare);
     }
 
     #[test]
