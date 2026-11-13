@@ -479,7 +479,7 @@ fn collect_triangles(
         let at = scene.meshes.len() + usize::from(ground);
         let material = u32::try_from(at).ok()?;
         let flags = materials.get(at).map_or(0, |m| m.flags);
-        if !push_mesh(&mut tris, h, material, flags) {
+        if !push_mesh(&mut tris, h, material, flags, None) {
             return None;
         }
     }
