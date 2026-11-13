@@ -283,7 +283,7 @@ mod tests {
         let shelves = shelf_meshes(&m, &nan_pos);
         // If shelves are returned, they should be finite.
         for shelf in &shelves {
-            for v in &shelf.vertices {
+            for v in &shelf.positions {
                 assert!(v.is_finite(), "shelf vertex should be finite");
             }
         }
