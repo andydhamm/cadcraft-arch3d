@@ -153,7 +153,21 @@ fn run_face(session: &mut Session, params: &Value) -> Result<Value> {
     let idx = doc.arch.cabinets.iter().position(|c| c.id == id).ok_or_else(|| bad(CMD, format!("unknown cabinet `{raw}`")))?;
     let mut cab = doc.arch.cabinets.get(idx).cloned().ok_or_else(|| bad(CMD, format!("unknown cabinet `{raw}`")))?;
     let start = cab.face.clone().unwrap_or_else(|| default_face(&cab));
-    cab.face = edited(&cab, start, params)?;
+    let face = if params.get("appliance").is_some() {
+        let i = index(params, &start)?;
+        Some(match params.get("appliance") {
+            Some(Value::Null) => cadcraft_arch::casework_face::remove_appliance(&cab, i).map_err(|e| bad(CMD, e))?,
+            Some(Value::String(item)) if !item.trim().is_empty() => {
+                let item = session.library.item(item).cloned().ok_or_else(|| bad(CMD, format!("no library item `{item}`")))?;
+                let size = item.size.ok_or_else(|| bad(CMD, format!("`{}` has no usable size", item.id)))?;
+                cadcraft_arch::casework_face::place_appliance(&cab, i, &item.id, size).map_err(|e| bad(CMD, e))?
+            }
+            _ => return Err(bad(CMD, "`appliance` must be a library item id or null")),
+        })
+    } else {
+        edited(&cab, start, params)?
+    };
+    cab.face = face;
     if let Some(f) = &cab.face
         && row_heights(&cab, f).is_none()
     {
@@ -361,5 +375,25 @@ mod tests {
         assert_eq!(rows[1]["items"].as_array().unwrap().len(), 2);
         assert_eq!(rows[1]["items"][0]["rect"].as_array().unwrap().len(), 4);
         assert_eq!(v["cabinets"][0]["frontParts"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn cabinet_face_appliance_key_and_null() {
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "cabinet",
+                &json!({"kind": "tall", "at": [1.0, 1.0], "width": 0.762, "height": 2.034, "fronts": "doors", "doorCount": 2, "toeKick": true}),
+            )
+            .unwrap();
+        let id = r["cabinets"][0].as_str().unwrap().to_string();
+        let r = s.execute(CMD, &json!({"id": id, "row": 0, "appliance": "appliance:wall-oven"})).unwrap();
+        let rows = r["face"]["rows"].as_array().unwrap();
+        assert_eq!(rows[0]["kind"], "appliance");
+        assert_eq!(rows[0]["appliance"], "appliance:wall-oven");
+        assert!(!rows[0]["items"].as_array().unwrap().is_empty());
+        let r = s.execute(CMD, &json!({"id": id, "row": 0, "appliance": null})).unwrap();
+        assert_eq!(r["face"]["rows"][0]["kind"], "door");
+        assert!(r["face"]["rows"][0]["appliance"].is_null());
     }
 }

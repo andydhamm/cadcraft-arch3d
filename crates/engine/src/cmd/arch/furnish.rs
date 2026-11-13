@@ -12,6 +12,7 @@
 //! Every parameter is checked before anything changes: a bad one is refused, never clamped, and a
 //! refused command leaves the drawing (and the undo history) as it was.
 
+use cadcraft_arch::casework_face::{default_face, face_box, row_heights};
 use cadcraft_arch::join::face_lines;
 use cadcraft_arch::library::place::{PlaceOutcome, PlaceRequest, place};
 use cadcraft_arch::library::{ItemKind, ItemRecord, layer_for};
@@ -244,6 +245,7 @@ fn place_record(s: &mut Session, item: &ItemRecord, req: &Request, m: Option<&Ma
         }
         ItemKind::Cabinet => via(s, "cabinet", casework_params(built_in_name(item, "cabinet:")?, req)),
         ItemKind::Fixture => via(s, "fixture", casework_params(built_in_name(item, "fixture:")?, req)),
+        ItemKind::FaceAppliance => place_face_appliance(s, item, req),
         ItemKind::Backdrop => via(s, "backdrop", backdrop_params(item, m)),
         ItemKind::Finish | ItemKind::Material => Err(bad(PLACE, "a material is painted: use paint.material")),
         ItemKind::Molding => Err(bad(PLACE, "a molding is applied with room.moldings, moldingline or a cabinet's crown")),
@@ -284,6 +286,64 @@ fn casework_params(kind: &str, req: &Request) -> Value {
         q["elevation"] = json!(e);
     }
     q
+}
+
+fn place_face_appliance(s: &mut Session, item: &ItemRecord, req: &Request) -> Result<Value> {
+    let doc = s.doc()?;
+    let size = item.size.ok_or_else(|| bad(PLACE, format!("`{}` has no size", item.id)))?;
+    let mut best: Option<(f64, ArchId)> = None;
+    for c in &doc.arch.cabinets {
+        if c.kind == cadcraft_doc::arch::CabinetKind::Base
+            || c.kind == cadcraft_doc::arch::CabinetKind::Wall
+            || c.kind == cadcraft_doc::arch::CabinetKind::Tall
+        {
+            if c.level != req.level {
+                continue;
+            }
+            let dx = req.at[0] - c.position.x;
+            let dy = req.at[1] - c.position.y;
+            let theta = c.rotation.to_radians();
+            let u = dx * theta.cos() + dy * theta.sin();
+            let y = -dx * theta.sin() + dy * theta.cos();
+            if !(u.abs() <= c.width / 2.0 + 1e-9 && y >= -1e-9 && y <= c.depth + 0.05 + 1e-9) {
+                continue;
+            }
+            let dist = (c.depth + 0.05 - y).abs();
+            match best {
+                None => best = Some((dist, c.id)),
+                Some((best_dist, _)) if dist < best_dist => best = Some((dist, c.id)),
+                _ => {}
+            }
+        }
+    }
+    let Some((_, cabinet)) = best else {
+        return Err(bad(PLACE, "a face appliance goes on a cabinet face"));
+    };
+    let c = doc.arch.cabinets.iter().find(|c| c.id == cabinet).ok_or_else(|| bad(PLACE, "a face appliance goes on a cabinet face"))?;
+    let face = c.face.clone().unwrap_or_else(|| default_face(c));
+    let b = face_box(c);
+    let heights = row_heights(c, &face).unwrap_or_default();
+    let mut row = None;
+    let mut top = b.v1;
+    for (i, r) in face.rows.iter().enumerate() {
+        let h = heights.get(i).copied().unwrap_or(0.0);
+        let (v0, v1) = (top - h, top);
+        let wants = req.elevation.unwrap_or(v1);
+        if (v0 - 1e-9 <= wants) && (wants <= v1 + 1e-9) {
+            row = Some(i);
+            break;
+        }
+        top = v0 - b.separator;
+    }
+    let row = match row {
+        Some(i) => i,
+        None => face
+            .rows
+            .iter()
+            .rposition(|r| matches!(r.kind, cadcraft_doc::arch::FaceKind::Door | cadcraft_doc::arch::FaceKind::Drawer))
+            .unwrap_or(face.rows.len().saturating_sub(1)),
+    };
+    via(s, "cabinet.face", json!({ "id": cabinet_label(cabinet), "row": row, "appliance": item.id }))
 }
 
 /// Run command `id` inside `library.place` (one undo step for both) and reply
@@ -663,6 +723,7 @@ mod tests {
     use super::*;
     use crate::library::testing::install_io;
     use cadcraft_doc::arch::Paint;
+    use cadcraft_geom::Vec2;
 
     /// A session with the test readers (the sample set, a fake glTF reader: every symbol a box).
     fn session() -> Session {
@@ -713,6 +774,64 @@ mod tests {
         let mut s = room();
         run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 1.0, "width": 0.9, "fronts": "drawerOverDoor" }));
         s
+    }
+
+    #[test]
+    fn library_place_over_a_cabinet_face_uses_the_row_at_the_elevation() {
+        let mut s = session();
+        let tall = cadcraft_doc::arch::Cabinet {
+            id: cadcraft_doc::ArchId(1),
+            kind: cadcraft_doc::arch::CabinetKind::Tall,
+            position: Vec2::new(2.5, 1.0),
+            width: 0.762,
+            depth: 0.6,
+            height: 2.034,
+            elevation: 0.0,
+            fronts: cadcraft_doc::arch::Fronts::Doors,
+            doors: 2,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Default::default()
+        };
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.cabinets.push(tall.clone());
+        }
+        let r = run(&mut s, PLACE, json!({ "item": "appliance:wall-oven", "at": [2.5, 1.0], "elevation": 1.6 }));
+        assert_eq!(r["via"], "cabinet.face");
+        let tall = s.doc().unwrap().arch.cabinets.iter().find(|c| c.id == cadcraft_doc::ArchId(1)).unwrap();
+        let rows = tall.face.as_ref().unwrap().rows.clone();
+        assert_eq!(rows[0].kind, cadcraft_doc::arch::FaceKind::Appliance);
+        assert_eq!(rows[0].height, Some(0.737));
+        assert_eq!(rows[1].kind, cadcraft_doc::arch::FaceKind::Door);
+    }
+
+    #[test]
+    fn default_row_is_the_topmost_door_or_drawer_row() {
+        let mut s = kitchen();
+        let c = s.doc().unwrap().arch.cabinets[0].clone();
+        let face = cadcraft_arch::casework_face::default_face(&c);
+        assert_eq!(
+            face.rows.iter().rposition(|r| matches!(r.kind, cadcraft_doc::arch::FaceKind::Door | cadcraft_doc::arch::FaceKind::Drawer)),
+            Some(face.rows.len() - 1)
+        );
+    }
+
+    #[test]
+    fn appliance_refusals_leave_nothing() {
+        let mut s = kitchen();
+        let before = model(&s);
+        let err = refused(&mut s, PLACE, json!({ "item": "appliance:wall-oven", "at": [0.5, 0.5], "elevation": 0.2 }));
+        assert!(err.contains("cabinet face") || err.contains("a face appliance goes on a cabinet face"));
+        assert_eq!(model(&s), before);
+    }
+
+    #[test]
+    fn library_lists_the_three_appliances_with_placement_in_cabinet() {
+        let items = crate::library::catalog::builtin_items();
+        let ids: Vec<_> = items.iter().filter(|r| r.id.starts_with("appliance:")).map(|r| r.id.clone()).collect();
+        assert_eq!(ids, ["appliance:microwave-drawer", "appliance:wall-oven", "appliance:warming-drawer"]);
+        assert!(items.iter().filter(|r| r.id.starts_with("appliance:")).all(|r| r.placement.as_deref() == Some("in-cabinet")));
     }
 
     #[test]
