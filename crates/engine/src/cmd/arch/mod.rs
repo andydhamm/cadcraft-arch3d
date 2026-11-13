@@ -62,6 +62,7 @@ pub mod roofplane;
 pub mod room;
 pub mod room_moldings;
 pub mod roomdetect;
+pub mod roomlabel;
 pub mod sample;
 pub mod sheet;
 pub(crate) mod sheet_camera;
@@ -114,6 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(moldingline::specs());
     v.extend(library::specs());
     v.extend(roomdetect::specs());
+    v.extend(roomlabel::specs());
     v.extend(autodim::specs());
     v.extend(inspect::specs());
     v.extend(pick::specs());
