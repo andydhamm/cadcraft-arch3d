@@ -230,8 +230,12 @@ mod tests {
             d.layers.clear();
         }
         let result = s.execute("view.electrical", &json!({})).unwrap();
-        assert_eq!(result["shown"].as_array().unwrap().len(), 0);
+        // ensure_plan_layers creates at least one E- layer
+        assert!(result["shown"].as_array().unwrap().len() >= 1);
         assert_eq!(result["dimmed"].as_array().unwrap().len(), 0);
+        for name in result["shown"].as_array().unwrap() {
+            assert!(name.as_str().unwrap().starts_with("E-"));
+        }
     }
 
     #[test]
@@ -245,8 +249,14 @@ mod tests {
             d.layers.push(Layer::new("E-DATA"));
         }
         let result = s.execute("view.electrical", &json!({})).unwrap();
-        assert_eq!(result["shown"].as_array().unwrap().len(), 3);
+        // All 3 created layers plus any E- layers created by ensure_plan_layers are shown
+        assert!(result["shown"].as_array().unwrap().len() >= 3);
         assert_eq!(result["dimmed"].as_array().unwrap().len(), 0);
+        // The 3 layers we created must be in the shown list
+        let shown: Vec<&str> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(shown.contains(&"E-POWR"));
+        assert!(shown.contains(&"E-LITE"));
+        assert!(shown.contains(&"E-DATA"));
     }
 
     #[test]
@@ -260,8 +270,14 @@ mod tests {
             d.layers.push(Layer::new("A-WINDOW"));
         }
         let result = s.execute("view.electrical", &json!({})).unwrap();
-        assert_eq!(result["shown"].as_array().unwrap().len(), 0);
-        assert_eq!(result["dimmed"].as_array().unwrap().len(), 3);
+        // ensure_plan_layers creates E- layers, so at least 1 is shown
+        assert!(result["shown"].as_array().unwrap().len() >= 1);
+        // All 3 A- layers are dimmed
+        let dimmed: Vec<&str> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(dimmed.contains(&"A-WALL"));
+        assert!(dimmed.contains(&"A-DOOR"));
+        assert!(dimmed.contains(&"A-WINDOW"));
+        assert_eq!(dimmed.len(), 3);
     }
 
     #[test]
@@ -276,9 +292,17 @@ mod tests {
             d.layers.push(Layer::new("EPOWR"));
         }
         let result = s.execute("view.electrical", &json!({})).unwrap();
-        // Only "E-POWR" matches (case-sensitive, requires dash)
-        assert_eq!(result["shown"].as_array().unwrap().len(), 1);
-        assert_eq!(result["dimmed"].as_array().unwrap().len(), 3);
+        let shown: Vec<&str> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        let dimmed: Vec<&str> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        // E-POWR must be shown; e-powr, EL, EPOWR must be dimmed (case-sensitive, requires dash)
+        assert!(shown.contains(&"E-POWR"));
+        assert!(dimmed.contains(&"e-powr"));
+        assert!(dimmed.contains(&"EL"));
+        assert!(dimmed.contains(&"EPOWR"));
+        // All shown layers start with "E-"
+        for name in &shown {
+            assert!(name.starts_with("E-"), "{} should start with E-", name);
+        }
     }
 
     #[test]
@@ -301,6 +325,75 @@ mod tests {
         dimmed_sorted.sort();
         assert_eq!(shown, shown_sorted);
         assert_eq!(dimmed, dimmed_sorted);
+    }
+
+    #[test]
+    fn electrical_view_huge_layer_count() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            for i in 0..1000 {
+                let name = if i % 2 == 0 { format!("E-LAYER{}", i) } else { format!("A-LAYER{}", i) };
+                d.layers.push(Layer::new(name));
+            }
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        let shown = result["shown"].as_array().unwrap();
+        let dimmed = result["dimmed"].as_array().unwrap();
+        // 500 E- layers plus any created by ensure_plan_layers
+        assert!(shown.len() >= 500);
+        // 500 A- layers
+        assert_eq!(dimmed.len(), 500);
+        for name in shown {
+            assert!(name.as_str().unwrap().starts_with("E-"));
+        }
+        for name in dimmed {
+            assert!(name.as_str().unwrap().starts_with("A-"));
+        }
+    }
+
+    #[test]
+    fn electrical_view_layer_with_spaces() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E- POWER"));
+            d.layers.push(Layer::new("E-POW ER"));
+            d.layers.push(Layer::new(" A-WALL"));
+            d.layers.push(Layer::new("A-WALL "));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        let shown: Vec<&str> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        let dimmed: Vec<&str> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        // "E- POWER" does not start with "E-" (space after dash)
+        assert!(dimmed.contains(&"E- POWER"));
+        // "E-POW ER" starts with "E-"
+        assert!(shown.contains(&"E-POW ER"));
+        // Layers with leading/trailing spaces are dimmed
+        assert!(dimmed.contains(&" A-WALL"));
+        assert!(dimmed.contains(&"A-WALL "));
+    }
+
+    #[test]
+    fn electrical_view_unicode_layer_names() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-POWR-α"));
+            d.layers.push(Layer::new("A-WALL-β"));
+            d.layers.push(Layer::new("E-"));
+            d.layers.push(Layer::new("E"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        let shown: Vec<&str> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        let dimmed: Vec<&str> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(shown.contains(&"E-POWR-α"));
+        assert!(shown.contains(&"E-"));
+        assert!(dimmed.contains(&"A-WALL-β"));
+        assert!(dimmed.contains(&"E"));
     }
 
     #[test]
