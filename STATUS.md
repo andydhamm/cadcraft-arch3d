@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-13 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 31 of 35 segments merged · 11 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-13 08:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 11 / 20 | 51.3 h so far · expected done Nov 13 12:35–Nov 14 10:45 UTC |
+| 18 | Interior finish, kitchen and bath | building | 11 / 20 | 51.5 h so far · expected done Nov 13 12:50–Nov 14 11:00 UTC |
 | 19 | Light, sky and cameras | building | 4 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 3 / 13 | — |
@@ -48,6 +48,7 @@ Updated 2026-11-13 08:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 08:57 | `p19-horizon-2` | refused | 0 pass | claude-sonnet-a |
 | Nov 13 08:42 | `p21-plot-sheets` | refused | 0 pass | claude-sonnet-a |
 | Nov 13 08:06 | `p21-sheet-camera` | merged | 9,569 pass | mai-flash-esc |
 | Nov 13 08:06 | `p19-strip-render` | merged | 9,569 pass | mai-flash |
@@ -59,24 +60,23 @@ Updated 2026-11-13 08:45 UTC. This page and the card in the README are regenerat
 | Nov 13 06:16 | `p21-title-block` | merged | 9,529 pass | mai-flash |
 | Nov 13 06:16 | `p21-elevation-marks` | merged | 9,529 pass | claude-sonnet-a |
 | Nov 13 06:16 | `p19-strip-tray` | merged | 9,529 pass | claude-sonnet-b |
-| Nov 13 06:16 | `p21-patterns` | merged | 9,529 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1236 |
+| bonsai-a | bonsai2-27b | agent | 1236 |
 | bonsai-b | bonsai2-27b | merging | 1188 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1304 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1251 |
-| claude-sonnet-a | sonnet | agent | 146 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1305 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1253 |
+| claude-sonnet-a | sonnet | idle | 147 |
 | claude-sonnet-b | sonnet | idle | 153 |
 | claude-sonnet-c | sonnet | idle | 89 |
 | claude-sonnet-d | sonnet | idle | 82 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1104 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 108 |
+| mai-flash | mai-code-1.1-flash | agent | 108 |
 | mai-flash-b | mai-code-1.1-flash | idle | 51 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 120 |
 | tturbo-mac | tturbo-ultraheretic | agent | 838 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 461 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 462 |
