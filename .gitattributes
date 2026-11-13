@@ -1,6 +1,8 @@
 # Translation catalogs: every segment appends rows at the end, so two branches always touched the same lines.
 # A union merge keeps both sides' rows (a duplicated row still fails the i18n catalog test).
-crates/ui-egui/src/i18n/*.tsv merge=union
+# The driver `tsvcatalog` is set in this checkout's git config (operator/tsv-merge.py): it never keeps two rows of
+# one key. A clone without it falls back to git's ordinary text merge.
+crates/ui-egui/src/i18n/*.tsv merge=tsvcatalog
 # The arch command registry: one `pub mod` line and one `v.extend(..::specs())` line per command file, which every
 # segment that adds a command inserts at the same place. Both sides' lines are kept.
 crates/engine/src/cmd/arch/mod.rs merge=union
