@@ -1077,7 +1077,7 @@ mod harden_tests {
         let mut d = Drawing::new_metric();
         d.model.push(Entity {
             handle: Handle(1),
-            kind: EntityKind::Line(cadcraft_doc::Line { a: cadcraft_geom::Vec2::ZERO, b: cadcraft_geom::Vec2::new(1.0, 0.0) }),
+            kind: EntityKind::Line(cadcraft_doc::Line { a: cadcraft_geom::Vec3::new(0.0, 0.0, 0.0), b: cadcraft_geom::Vec3::new(1.0, 0.0, 0.0) }),
             common: Default::default(),
         });
         d.layouts.push(Layout::new("L1", 0));
@@ -1113,7 +1113,7 @@ mod harden_tests {
         let mut d = Drawing::new_metric();
         d.model.push(Entity {
             handle: Handle(1),
-            kind: EntityKind::Line(cadcraft_doc::Line { a: cadcraft_geom::Vec2::ZERO, b: cadcraft_geom::Vec2::new(1.0, 0.0) }),
+            kind: EntityKind::Line(cadcraft_doc::Line { a: cadcraft_geom::Vec3::new(0.0, 0.0, 0.0), b: cadcraft_geom::Vec3::new(1.0, 0.0, 0.0) }),
             common: Default::default(),
         });
         let names = plot_sheets("plot", &d, &json!(["MODEL"])).unwrap();
