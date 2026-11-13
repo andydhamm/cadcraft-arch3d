@@ -12,6 +12,8 @@ const MAT_NO_SHADOW: u32 = 4u;
 const LIGHT_POINT: u32 = 0u;
 const LIGHT_SPOT: u32 = 1u;
 const LIGHT_AREA: u32 = 2u;
+// One segment of a strip: position = start, axis = unit along, length, direction = emitting normal.
+const LIGHT_STRIP: u32 = 3u;
 
 const FRAME_SUN: u32 = 1u;
 const FRAME_SKY: u32 = 2u;
