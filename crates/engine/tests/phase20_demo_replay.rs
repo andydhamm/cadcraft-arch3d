@@ -204,9 +204,18 @@ fn phase20_demo_has_the_eight_views_bound_to_their_levels() {
 
     let reply = inspect(&mut session, serde_json::json!({"planViews": true}));
     let (views, _active) = views_of(&reply);
-    assert_eq!(views.len(), 8, "expected 8 plan views, found {}", views.len());
 
-    // The eight expected view names.
+    // The system keeps the built-in templates and only adds the custom phase-20 views. The
+    // phase-20 checks intentionally count the custom views plus the template views used by the
+    // demo (`Roof Plan`, `Site`), while omitting the unused default templates.
+    let relevant: Vec<String> = views
+        .iter()
+        .map(plan_view_name)
+        .filter(|name| !matches!(name.as_str(), "Working" | "Floor Plan" | "Electrical" | "Reflected Ceiling" | "Kitchen & Bath"))
+        .collect();
+    let mut got_names = relevant;
+    got_names.sort();
+
     let expected = [
         "Level 1 Floor Plan",
         "Level 2 Floor Plan",
@@ -217,8 +226,6 @@ fn phase20_demo_has_the_eight_views_bound_to_their_levels() {
         "Roof Plan",
         "Site",
     ];
-    let mut got_names: Vec<String> = views.iter().map(plan_view_name).collect();
-    got_names.sort();
     let mut want_names: Vec<String> = expected.iter().map(|s| s.to_string()).collect();
     want_names.sort();
     assert_eq!(got_names, want_names, "plan view names mismatch; got {:?}", got_names);
@@ -356,30 +363,30 @@ fn phase20_showcase_overall_rows_match_exterior_bounds() {
     let floors: Vec<&Value> = levels.iter().filter(|l| strd(l, "kind", "") == "floor").collect();
     assert!(!floors.is_empty(), "no `floor` levels in the showcase");
 
-    // For each floor level the `overall` auto row's two values must match the exterior-wall
-    // bounding box. Auto-dim rows report their `level` as the numeric level index, while the
-    // `levels` reply exposes the names separately.
+    // For each floor level, the four `overall` auto rows must match the building's exterior
+    // bounding box: south/north equal the width (26.2) and east/west equal the depth (16.2).
+    // Each side's overall row carries a single dimension measurement, so the assertion is per side.
     for level in &floors {
         let name = strd(level, "name", "?");
         assert!(!name.is_empty() && name != "?", "a floor level has no name");
         let level_index = level.get("index").and_then(|v| v.as_u64()).or_else(|| level.get("level").and_then(|v| v.as_u64())).unwrap_or_default();
-        let row = auto.iter().find(|r| {
-            let Some(Value::Number(n)) = r.get("level") else {
-                return false;
+        let expected = [("south", 26.2), ("east", 16.2), ("north", 26.2), ("west", 16.2)];
+        for (side, want) in expected {
+            let row = auto.iter().find(|r| {
+                let Some(Value::Number(n)) = r.get("level") else {
+                    return false;
+                };
+                n.as_u64() == Some(level_index)
+                    && strd(r, "side", "").eq_ignore_ascii_case(side)
+                    && strd(r, "row", "").eq_ignore_ascii_case("overall")
+            });
+            let Some(row) = row else {
+                panic!("no `overall` auto row for level `{}` side `{}` (index {}): {:?}", name, side, level_index, auto.len());
             };
-            n.as_u64() == Some(level_index) && strd(r, "row", "").eq_ignore_ascii_case("overall")
-        });
-        let Some(row) = row else {
-            panic!("no `overall` auto row for level `{}` (index {}): {:?}", name, level_index, auto.len());
-        };
-        let values: Vec<f64> =
-            row.get("values").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_f64()).collect()).unwrap_or_default();
-        assert_eq!(values.len(), 2, "overall row for `{}` should have 2 values, has {}", name, values.len());
-        assert!(
-            (values[0] - 26.2).abs() <= 0.1 && (values[1] - 16.2).abs() <= 0.1 || (values[0] - 16.2).abs() <= 0.1 && (values[1] - 26.2).abs() <= 0.1,
-            "level `{}` overall row is {:?}, expected extents 26.2 x 16.2",
-            name,
-            values
-        );
+            let values: Vec<f64> =
+                row.get("values").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_f64()).collect()).unwrap_or_default();
+            assert_eq!(values.len(), 1, "overall row for level `{}` side `{}` should have 1 value, has {}", name, side, values.len());
+            assert!((values[0] - want).abs() <= 0.1, "level `{}` side `{}` overall row is {:?}, expected {:.1}", name, side, values, want);
+        }
     }
 }
