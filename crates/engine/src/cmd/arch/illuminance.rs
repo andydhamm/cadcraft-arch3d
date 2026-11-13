@@ -412,4 +412,32 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("sun needs a site location"), "error={err}");
     }
+
+    #[test]
+    fn illuminance_path_boundary_values() {
+        let mut s = fresh_session();
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "spp": 1})).unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "spp": 65536})).unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "bounces": 0})).unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "bounces": 32})).unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "seed": 0})).unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "seed": 4294967295})).unwrap_err();
+        assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
+    }
+
+    #[test]
+    fn illuminance_method_case_sensitive() {
+        let mut s = fresh_session();
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "Direct"})).unwrap_err();
+        assert!(err.to_string().contains("`method` must be"), "error={err}");
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "PATH"})).unwrap_err();
+        assert!(err.to_string().contains("`method` must be"), "error={err}");
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": " direct "})).unwrap_err();
+        assert!(err.to_string().contains("`method` must be"), "error={err}");
+    }
 }
