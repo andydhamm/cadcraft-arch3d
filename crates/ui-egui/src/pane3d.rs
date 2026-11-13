@@ -1528,7 +1528,7 @@ mod tests {
 
     #[test]
     fn clip_face_drag_moves_one_plane() {
-        let mut clip = ClipBox { min: [0.0, 0.0, 0.0], max: [10.0, 10.0, 10.0] };
+        let mut clip = ClipBox { min: [0.0, 0.0, 0.0], max: [10.0, 10.0, 10.0], ..Default::default() };
         let delta = 2.5;
         clip.max[2] += delta;
         assert_eq!(clip.min, [0.0, 0.0, 0.0]);
