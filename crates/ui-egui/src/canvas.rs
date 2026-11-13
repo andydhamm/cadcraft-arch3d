@@ -678,7 +678,7 @@ mod callout_open_tests {
         let _ = s.execute("sheet", &json!({"name": "South", "views": [{"view": "v0", "scale": 100}]}));
         let _ = s.execute("sheet", &json!({"name": "North", "views": [{"view": "v1", "scale": 100}]}));
         let _ = s.execute("model", &json!({}));
-        let app = CadApp::new(s, Services::default());
+        let mut app = CadApp::new(s, Services::default());
 
         // Scan for the v0 and v1 callout markers
         let (mut sx0, mut sy0, mut n0) = (0.0, 0.0, 0.0);
