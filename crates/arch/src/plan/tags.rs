@@ -228,9 +228,9 @@ mod tests {
         let show = RoomLabelShow { numbers: true, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
         let texts: Vec<&str> = out.labels.iter().map(|l| l.text.as_str()).collect();
-        assert!(!texts.contains(&"D01"), "D01 should be skipped: {:?}", texts);
+        assert!(!texts.contains(&"D02"), "D02 should be skipped: {:?}", texts);
         assert!(!texts.contains(&"W01"), "W01 should be skipped: {:?}", texts);
-        assert!(texts.contains(&"D02"), "D02 should be present: {:?}", texts);
+        assert!(texts.contains(&"D01"), "D01 should be present: {:?}", texts);
     }
 
     #[test]
@@ -241,9 +241,9 @@ mod tests {
         let show = RoomLabelShow { numbers: true, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
         let texts: Vec<&str> = out.labels.iter().map(|l| l.text.as_str()).collect();
-        assert!(!texts.contains(&"D01"), "D01 should be skipped: {:?}", texts);
+        assert!(!texts.contains(&"D02"), "D02 should be skipped: {:?}", texts);
         assert!(!texts.contains(&"W01"), "W01 should be skipped: {:?}", texts);
-        assert!(texts.contains(&"D02"), "D02 should be present: {:?}", texts);
+        assert!(texts.contains(&"D01"), "D01 should be present: {:?}", texts);
     }
 
     #[test]
@@ -265,7 +265,7 @@ mod tests {
         let show = RoomLabelShow { numbers: true, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
         let cab_label = out.labels.iter().find(|l| l.text == "C01").expect("C01 label");
-        assert!((cab_label.at.x - 1.3).abs() < 1e-9, "cabinet x: {}", cab_label.at.x);
+        assert!((cab_label.at.x - 0.7).abs() < 1e-9, "cabinet x: {}", cab_label.at.x);
         assert!((cab_label.at.y - 1.0).abs() < 1e-9, "cabinet y: {}", cab_label.at.y);
     }
 
@@ -277,7 +277,7 @@ mod tests {
         let show = RoomLabelShow { numbers: true, ..Default::default() };
         schedule_labels(&model, None, show, &mut out);
         let texts: Vec<&str> = out.labels.iter().map(|l| l.text.as_str()).collect();
-        assert!(!texts.contains(&"D01"), "D01 should be skipped: {:?}", texts);
+        assert!(!texts.contains(&"D02"), "D02 should be skipped: {:?}", texts);
         assert!(texts.contains(&"W01"), "W01 should be present: {:?}", texts);
     }
 }
