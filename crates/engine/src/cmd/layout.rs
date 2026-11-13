@@ -1075,6 +1075,7 @@ mod harden_tests {
     #[test]
     fn plot_sheets_all_model_first_when_model_nonempty() {
         let mut d = Drawing::new_metric();
+        d.layouts.clear();
         d.model.push(Entity {
             handle: Handle(1),
             kind: EntityKind::Line(cadcraft_doc::Line { a: cadcraft_geom::Vec3::new(0.0, 0.0, 0.0), b: cadcraft_geom::Vec3::new(1.0, 0.0, 0.0) }),
@@ -1088,6 +1089,7 @@ mod harden_tests {
     #[test]
     fn plot_sheets_all_no_model_when_empty() {
         let mut d = Drawing::new_metric();
+        d.layouts.clear();
         d.layouts.push(Layout::new("L1", 0));
         let names = plot_sheets("plot", &d, &json!("all")).unwrap();
         assert_eq!(names, vec!["L1"]);
