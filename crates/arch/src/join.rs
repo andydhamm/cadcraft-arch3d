@@ -520,7 +520,11 @@ fn plan_end(
     }
 
     // Collinear: butt. Only trim this wall if it's the one that should be trimmed.
-    if let Some(Neighbour::Collinear { id: nid, end: nend }) = nbrs.iter().find(|n| matches!(n, Neighbour::Collinear { .. })) {
+    // If there are also EndToEnd neighbours (a fan), fall through to the L/mitre
+    // handling instead of butting the collinear pair.
+    if let Some(Neighbour::Collinear { id: nid, end: nend }) = nbrs.iter().find(|n| matches!(n, Neighbour::Collinear { .. }))
+        && !nbrs.iter().any(|n| matches!(n, Neighbour::EndToEnd { .. }))
+    {
         let Some(nw) = model.walls.iter().find(|w| w.id == *nid) else {
             return Ok(EndPlan { left: raw.0, right: raw.1, join: None });
         };
@@ -2362,5 +2366,115 @@ mod tests {
         let pref = classify(&model, &graph, ArchId(0), End::End);
         let full = classify_full(&model, &graph, ArchId(0), End::End);
         assert_eq!(pref, full, "prefilter and full scan disagree");
+    }
+
+    #[test]
+    fn an_empty_model_yields_no_shapes() {
+        let model = cadcraft_doc::ArchModel::default();
+        let shapes = solve_joins(&model);
+        assert!(shapes.is_empty());
+    }
+
+    #[test]
+    fn a_single_isolated_wall_has_no_joins() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 1.0);
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 1);
+        assert!(shapes[0].joins.is_empty(), "an isolated wall should have no joins");
+    }
+
+    #[test]
+    fn x_join_with_different_thicknesses() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(0.0, 5.0), Vec2::new(10.0, 5.0), 1.0);
+        wall(&mut model, 1, Vec2::new(5.0, 0.0), Vec2::new(5.0, 10.0), 2.0);
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 2);
+
+        // Both walls record an X crossing.
+        assert!(shapes[0].joins.iter().any(|j| matches!(j, Join::X(_))));
+        assert!(shapes[1].joins.iter().any(|j| matches!(j, Join::X(_))));
+
+        // Both walls keep their full length (X joins do not trim).
+        let b0 = shapes[0].bounds();
+        assert!((b0.min.x - 0.0).abs() < 1e-9);
+        assert!((b0.max.x - 10.0).abs() < 1e-9);
+
+        let b1 = shapes[1].bounds();
+        assert!((b1.min.y - 0.0).abs() < 1e-9);
+        assert!((b1.max.y - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn eight_walls_at_one_point_are_not_capped() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        // Exactly 8 walls radiating from (0,0) — at the boundary, not capped.
+        for i in 0..8 {
+            let angle = (i as f64) * (std::f64::consts::PI / 4.0);
+            let far = Vec2::new(10.0 * angle.cos(), 10.0 * angle.sin());
+            wall(&mut model, i, Vec2::new(0.0, 0.0), far, 1.0);
+        }
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 8);
+
+        // Every shape has a Join at the shared (start) end.
+        for s in &shapes {
+            assert!(
+                s.joins.iter().any(|j| matches!(
+                    j,
+                    Join::Butt(End::Start) | Join::Square(End::Start) | Join::L(End::Start) | Join::X(End::Start) | Join::T(End::Start)
+                )),
+                "shape {:?} missing join at shared end",
+                s.id
+            );
+        }
+
+        // No polygon self-intersects.
+        for s in &shapes {
+            assert!(polygon_area(&s.polygon) > 0.0, "shape {:?} has non-positive area", s.id);
+        }
+    }
+
+    #[test]
+    fn a_crossing_at_the_exact_endpoint_is_not_an_x_join() {
+        // Two walls sharing an endpoint: this is an L join, not an X join.
+        // The crossing of their centre lines is at the shared endpoint, which is
+        // not interior to either wall.
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 1.0);
+        wall(&mut model, 1, Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), 1.0);
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 2);
+
+        // Both should have L joins, not X joins.
+        assert!(shapes[0].joins.iter().any(|j| matches!(j, Join::L(End::End))));
+        assert!(shapes[1].joins.iter().any(|j| matches!(j, Join::L(End::Start))));
+        assert!(!shapes[0].joins.iter().any(|j| matches!(j, Join::X(_))));
+        assert!(!shapes[1].joins.iter().any(|j| matches!(j, Join::X(_))));
+    }
+
+    #[test]
+    fn solve_joins_with_empty_overrides_is_same_as_solve_joins() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 1.0);
+        wall(&mut model, 1, Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), 1.0);
+
+        let plain = solve_joins(&model);
+        let with_overrides = solve_joins_with(&model, &JoinOverrides::new());
+        assert_eq!(plain, with_overrides);
+    }
+
+    #[test]
+    fn solve_joins_with_infinity_coordinates() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(f64::INFINITY, 0.0), Vec2::new(10.0, 0.0), 1.0);
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 0, "walls with infinity coordinates should produce no shapes");
     }
 }
