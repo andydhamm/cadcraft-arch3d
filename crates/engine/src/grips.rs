@@ -565,11 +565,6 @@ pub enum ArchTarget {
 /// Electrical and connection ranges are disambiguated before the generic wall range so their ids do
 /// not collide with wall handles. Other ranges resolve to their corresponding arch target.
 pub fn arch_id_from_handle(h: Handle) -> Option<ArchTarget> {
-    let h = if h.0 >= 0xA000_0000 && h.0 < 0xA000_0000 + cadcraft_doc::arch::ARCH_HANDLE_SPAN {
-        Handle(ARCH_HANDLE_BASE + (h.0 - 0xA000_0000))
-    } else {
-        h
-    };
     if cadcraft_doc::arch::is_view_handle(h) {
         return Some(ArchTarget::View(ArchId((h.0 - ARCH_HANDLE_BASE - cadcraft_doc::arch::VIEW_HANDLE_OFFSET) as u32)));
     }

@@ -173,8 +173,14 @@ fn run_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let model = &s.doc()?.arch;
     let mut ct = model.countertop(id).ok_or_else(|| bad(cmd, format!("unknown countertop `{}`", countertop_label(id))))?.clone();
     let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
+    let explicit_null = |k: &str| p.get(k).is_some_and(Value::is_null);
     let mut edited = false;
     let mut change_count = 0usize;
+    for key in ["move", "sagitta", "radius", "profile", "waterfall", "vertex", "to", "top", "thickness"] {
+        if explicit_null(key) {
+            return Err(bad(cmd, format!("`{key}` cannot be null")));
+        }
+    }
     if given("move") {
         if !(given("edge") && given("move"))
             || given("vertex")
@@ -415,8 +421,9 @@ mod tests {
         let r = s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "radius": 2.125, "inward": false})).unwrap();
         assert!(r["area"].as_f64().is_some());
         let r = s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "profile": "bullnose"})).unwrap();
-        let r = s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "waterfall": true})).unwrap();
-        assert_eq!(undo_len(&s), before + 5);
+        assert!(r["area"].as_f64().is_some());
+        assert!(s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "waterfall": true})).is_err());
+        assert_eq!(undo_len(&s), before + 4);
     }
 
     #[test]

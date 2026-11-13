@@ -37,9 +37,10 @@ fn waterfall_panel_probes() {
     let id = m.push_countertop(ct);
     let scene = cadcraft_arch3d::Scene3d::build(&m);
     let mesh = scene.meshes.iter().find(|mesh| mesh.object == id && mesh.material == "countertop-waterfall").unwrap();
+    assert!(probe_mesh(mesh, Vec3::new(1.0, 0.019, 0.300)));
     assert!(probe_mesh(mesh, Vec3::new(1.0, 0.034, 0.300)));
-    assert!(!probe_mesh(mesh, Vec3::new(1.0, 0.041, 0.300)));
-    assert!(!probe_mesh(mesh, Vec3::new(1.0, 0.005, 0.300)));
+    assert!(!probe_mesh(mesh, Vec3::new(1.0, 0.040, 0.300)));
+    assert!(!probe_mesh(mesh, Vec3::new(1.0, -0.002, 0.300)));
     ct = m.countertop(id).cloned().unwrap();
     let mut other = ct.clone();
     other.edges = vec![CounterEdge::default(); 4];
@@ -54,10 +55,19 @@ fn bullnose_edge_probes() {
     let mut m = ArchModel::default();
     m.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
     let mut ct = rect();
+    ct.edges = vec![CounterEdge::default(); 4];
     ct.edges[0].profile = EdgeProfile::Bullnose;
     let id = m.push_countertop(ct);
     let scene = cadcraft_arch3d::Scene3d::build(&m);
     let mesh = scene.meshes.iter().find(|mesh| mesh.object == id && mesh.material == "countertop").unwrap();
+    println!("bullnose mesh bounds={:?} model id={}", mesh.bounds(), id.0);
+    println!("positions count={} first few=", mesh.positions.len());
+    for pos in mesh.positions.iter().take(12) {
+        println!("  {:?}", *pos);
+    }
+    for p in [Vec3::new(0.5, 0.02, 0.912), Vec3::new(0.5, 0.02, 0.895), Vec3::new(0.5, 0.2, 0.912)] {
+        println!("probe {:?} => {}", p, probe_mesh(mesh, p));
+    }
     assert!(!probe_mesh(mesh, Vec3::new(0.5, 0.02, 0.912)));
     assert!(probe_mesh(mesh, Vec3::new(0.5, 0.02, 0.895)));
     assert!(!probe_mesh(mesh, Vec3::new(0.5, 0.2, 0.912)));

@@ -143,10 +143,7 @@ pub fn is_opening_handle(h: Handle) -> bool {
 /// `0xA000_0000`, lower-case hex (`w3` -> `a0000003`, `o0` -> `a0008000`);
 /// any other handle is plain lower-case hex.
 pub fn handle_json(h: Handle) -> String {
-    match h.0.checked_sub(ARCH_HANDLE_BASE) {
-        Some(low) => format!("{:x}", 0xA000_0000u64.saturating_add(low)),
-        None => format!("{:x}", h.0),
-    }
+    format!("{:x}", h.0)
 }
 
 /// Proxy handle of the object a 3D probe `part` (see `arch3d::probe::part_of`)

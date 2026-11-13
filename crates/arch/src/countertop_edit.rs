@@ -63,6 +63,16 @@ pub fn validate(ct: &Countertop) -> Result<(), String> {
         let (Some(p), Some(q)) = (ring.get(i), ring.get((i + 1) % n)) else { continue };
         let chord = p.dist(*q);
         let s = sags.get(i).copied().unwrap_or(0.0);
+        let edge = ct.edge(i);
+        if edge.waterfall && s.abs() > 1e-12 {
+            return Err(format!("edge {i}: a waterfall edge must stay straight"));
+        }
+        if edge.waterfall && edge.profile != EdgeProfile::Square {
+            return Err(format!("edge {i}: a waterfall edge must stay square"));
+        }
+        if edge.profile != EdgeProfile::Square && s.abs() > 1e-12 {
+            return Err(format!("edge {i}: a profiled edge must stay straight"));
+        }
         if !s.is_finite() || s.abs() > chord / 2.0 {
             return Err(format!("edge {i}: the arc bulge must be finite and at most half the edge length"));
         }
@@ -139,9 +149,16 @@ pub fn set_sagitta(ct: &Countertop, edge: usize, s: f64) -> Result<Countertop, S
     if ct.edge(edge).waterfall && s != 0.0 {
         return Err(format!("edge {edge}: a waterfall edge cannot be set to an arc"));
     }
+    if ct.edge(edge).profile != EdgeProfile::Square && s != 0.0 {
+        return Err(format!("edge {edge}: a profiled edge cannot also be set to an arc"));
+    }
     let mut out = ct.clone();
     out.edges.resize(n, CounterEdge::default());
     out.edges[edge].sagitta = s;
+    if s != 0.0 {
+        out.edges[edge].profile = EdgeProfile::Square;
+        out.edges[edge].waterfall = false;
+    }
     validate(&out)?;
     Ok(out)
 }
@@ -162,9 +179,14 @@ pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result
     if edge >= n {
         return Err(format!("edge {edge} does not exist (the countertop has {n})"));
     }
+    if ct.edge(edge).waterfall && profile != EdgeProfile::Square {
+        return Err(format!("edge {edge}: a waterfall is only allowed on straight, square edges"));
+    }
     let mut out = ct.clone();
     out.edges.resize(n, CounterEdge::default());
+    out.edges[edge].sagitta = 0.0;
     out.edges[edge].profile = profile;
+    out.edges[edge].waterfall = false;
     validate(&out)?;
     Ok(out)
 }
@@ -178,8 +200,13 @@ pub fn set_waterfall(ct: &Countertop, edge: usize, on: bool) -> Result<Counterto
     if ct.edge(edge).sagitta != 0.0 && on {
         return Err(format!("edge {edge}: a waterfall is only allowed on straight edges"));
     }
+    if ct.edge(edge).profile != EdgeProfile::Square && on {
+        return Err(format!("edge {edge}: a waterfall is only allowed on straight, square edges"));
+    }
     let mut out = ct.clone();
     out.edges.resize(n, CounterEdge::default());
+    out.edges[edge].sagitta = 0.0;
+    out.edges[edge].profile = EdgeProfile::Square;
     out.edges[edge].waterfall = on;
     validate(&out)?;
     Ok(out)
