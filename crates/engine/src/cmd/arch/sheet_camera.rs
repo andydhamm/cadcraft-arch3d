@@ -1,6 +1,7 @@
 //! A saved camera's render placed on a sheet (phase 21).
 
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use cadcraft_arch3d::camera::{Camera, FullCamera, Orbit};
@@ -65,6 +66,20 @@ fn render_request_for_camera<'a>(doc: &'a cadcraft_doc::Drawing, saved: &'a Came
 }
 
 /// Place the render of the camera view `view` on the sheet's layout; the image's name when one is made.
+/// The temporary PNG a sheet camera renders into. The web build has no renderer for it: an error there.
+#[cfg(not(target_arch = "wasm32"))]
+fn render_target(sheet_name: &str, number: &str) -> Result<PathBuf> {
+    let mut path = std::env::temp_dir();
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    path.push(format!("cadcraft-sheet-camera-{sheet_name}-{stamp}-{number}.png"));
+    Ok(path)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn render_target(_sheet_name: &str, _number: &str) -> Result<PathBuf> {
+    Err(bad("sheet-camera", "3D images on sheets need the desktop app or cadcraft-cli's renderer"))
+}
+
 pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView) -> Result<Option<String>> {
     let SheetSource::Camera { name, width, pixels } = &view.source else {
         return Ok(None);
@@ -91,17 +106,7 @@ pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView)
         return Err(bad("sheet-camera", format!("no sheet named `{sheet_name}`")));
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let out = {
-        let mut path = std::env::temp_dir();
-        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
-        path.push(format!("cadcraft-sheet-camera-{sheet_name}-{stamp}-{}.png", view.number));
-        path
-    };
-    #[cfg(target_arch = "wasm32")]
-    let out = {
-        return Err(bad("sheet-camera", "3D images on sheets need the desktop app or cadcraft-cli's renderer"));
-    };
+    let out = render_target(sheet_name, &view.number.to_string())?;
 
     let req = render_request_for_camera(doc, saved, [w, h], out.clone())?;
     let _ = (hooks.render)(&req).map_err(|e| bad("sheet-camera", e))?;
