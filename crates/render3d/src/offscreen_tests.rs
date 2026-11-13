@@ -581,6 +581,49 @@ fn raster_lambert_plane_reads_ev_scaled_luminance() {
     assert!(near(got[0], 0.18, 0.03), "auto: {got:?}");
 }
 
+fn strip_raster_light() -> cadcraft_arch3d::light::SceneLight {
+    let pieces = 14usize;
+    let samples: Vec<cadcraft_arch3d::light::StripSample> = (0..pieces)
+        .map(|k| {
+            let t = (k as f64 + 0.5) / pieces as f64;
+            cadcraft_arch3d::light::StripSample {
+                position: Vec3::new(1.0 + (3.0 - 1.0) * t, 2.0, 2.4),
+                normal: Vec3::new(0.0, 0.0, -1.0),
+                intensity: 500.0 * (3.0 - 1.0) / pieces as f64 / std::f64::consts::PI,
+            }
+        })
+        .collect();
+    cadcraft_arch3d::light::SceneLight {
+        kind: cadcraft_doc::arch::LightKind::Strip,
+        position: Vec3::new(2.0, 2.0, 2.4),
+        direction: Vec3::new(0.0, 0.0, -1.0),
+        color: [1.0, 0.8, 0.6],
+        strip: Some(std::sync::Arc::new(samples)),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn raster_strip_lights_the_floor() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let floor = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [5.0, 5.0, 0.0])]);
+    let camera = down_at([2.0, 2.0, 0.0]);
+    let mut plain = floor.clone();
+    plain.lights.clear();
+    let mut lit = floor.clone();
+    lit.lights.push(strip_raster_light());
+
+    let mut lighting = plane_lighting(14.0, ToneMap::None);
+    lighting.sun = None;
+    let Some(plain_px) = lit_centre_keyed(&mut r, &plain, 21, &camera, &lighting, false) else { return };
+    let Some(strip_px) = lit_centre_keyed(&mut r, &lit, 22, &camera, &lighting, false) else { return };
+
+    let plain_sum: f32 = plain_px.iter().sum();
+    let strip_sum: f32 = strip_px.iter().sum();
+    assert!(strip_sum > plain_sum, "strip: {strip_px:?} plain: {plain_px:?}");
+    assert!(strip_px.iter().zip(plain_px.iter()).all(|(a, b)| *a > *b), "strip should brighten the floor under it: {strip_px:?} vs {plain_px:?}");
+}
+
 // ---- phase 19: environment light in the raster views ---------------------------------------------
 
 /// A night frame lit only by a uniform environment of radiance 1 (so E = pi), Lambert albedo 0.5.
