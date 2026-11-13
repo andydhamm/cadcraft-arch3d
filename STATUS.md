@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-13 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 30 of 35 segments merged · 10 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-13 05:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 48.3 h so far · expected done Nov 13 09:26–Nov 14 02:54 UTC |
+| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 48.5 h so far · expected done Nov 13 09:41–Nov 14 03:09 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
@@ -65,7 +65,7 @@ Updated 2026-11-13 05:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1230 |
 | bonsai-b | bonsai2-27b | idle | 1184 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1303 |
+| bonsai-ws2-a | bonsai2-27b | merging | 1304 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1250 |
 | claude-sonnet-a | sonnet | idle | 146 |
 | claude-sonnet-b | sonnet | idle | 153 |
@@ -76,5 +76,5 @@ Updated 2026-11-13 05:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 107 |
 | mai-flash-b | mai-code-1.1-flash | idle | 51 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 117 |
-| tturbo-mac | tturbo-ultraheretic | agent | 830 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 449 |
+| tturbo-mac | tturbo-ultraheretic | agent | 831 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 449 |
