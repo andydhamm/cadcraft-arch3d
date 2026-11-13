@@ -402,3 +402,100 @@ fn render_final_night_prints_the_light_lines() {
     assert!(stderr.lines().any(|l| l.starts_with("LIGHTS 2 ")), "{stderr}");
     assert!(stderr.lines().any(|l| l.starts_with("SHADOWMAPS built=")), "{stderr}");
 }
+
+#[test]
+fn render_with_clay_style() {
+    let dir = temp_dir("render_with_clay_style");
+    let in_dxf = wall_plan(&dir);
+    let out_png = dir.join("clay.png");
+
+    let out = run_cli(&["render".into(), in_dxf.to_string_lossy().into(), out_png.to_string_lossy().into(), "--style".into(), "clay".into()]);
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    if out.status.success() {
+        assert!(is_png(&out_png), "render did not write a valid PNG with clay style");
+    } else {
+        assert_eq!(out.status.code(), Some(3), "no-adapter must exit 3");
+        assert!(stderr.contains("NO_ADAPTER"));
+    }
+}
+
+#[test]
+fn render_with_technical_style() {
+    let dir = temp_dir("render_with_technical_style");
+    let in_dxf = wall_plan(&dir);
+    let out_png = dir.join("technical.png");
+
+    let out = run_cli(&["render".into(), in_dxf.to_string_lossy().into(), out_png.to_string_lossy().into(), "--style".into(), "technical".into()]);
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    if out.status.success() {
+        assert!(is_png(&out_png), "render did not write a valid PNG with technical style");
+    } else {
+        assert_eq!(out.status.code(), Some(3), "no-adapter must exit 3");
+        assert!(stderr.contains("NO_ADAPTER"));
+    }
+}
+
+#[test]
+fn render_with_full_camera() {
+    let dir = temp_dir("render_with_full_camera");
+    let in_dxf = wall_plan(&dir);
+    let out_png = dir.join("full.png");
+
+    let out = run_cli(&[
+        "render".into(),
+        in_dxf.to_string_lossy().into(),
+        out_png.to_string_lossy().into(),
+        "--camera".into(),
+        "full,eye=-8,-10,6,target=5,4,1,fov=50".into(),
+    ]);
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    if out.status.success() {
+        assert!(is_png(&out_png), "render did not write a valid PNG with full camera");
+    } else {
+        assert_eq!(out.status.code(), Some(3), "no-adapter must exit 3");
+        assert!(stderr.contains("NO_ADAPTER"));
+    }
+}
+
+#[test]
+fn render_with_full_camera_eye_height() {
+    let dir = temp_dir("render_with_full_camera_eye_height");
+    let in_dxf = wall_plan(&dir);
+    let out_png = dir.join("full_eyeh.png");
+
+    let out = run_cli(&[
+        "render".into(),
+        in_dxf.to_string_lossy().into(),
+        out_png.to_string_lossy().into(),
+        "--camera".into(),
+        "full,eye=5,4,eyeHeight=1.6,target=5,4,0".into(),
+    ]);
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    if out.status.success() {
+        assert!(is_png(&out_png), "render did not write a valid PNG with full camera eye height");
+    } else {
+        assert_eq!(out.status.code(), Some(3), "no-adapter must exit 3");
+        assert!(stderr.contains("NO_ADAPTER"));
+    }
+}
+
+#[test]
+fn render_night_alone() {
+    let dir = temp_dir("render_night_alone");
+    let in_dxf = wall_plan(&dir);
+    let out_png = dir.join("night.png");
+
+    let out = run_cli(&["render".into(), in_dxf.to_string_lossy().into(), out_png.to_string_lossy().into(), "--night".into()]);
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+    if out.status.success() {
+        assert!(is_png(&out_png), "render did not write a valid PNG with night");
+    } else {
+        assert_eq!(out.status.code(), Some(3), "no-adapter must exit 3");
+        assert!(stderr.contains("NO_ADAPTER"));
+    }
+}
