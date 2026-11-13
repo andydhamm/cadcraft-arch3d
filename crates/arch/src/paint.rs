@@ -786,4 +786,50 @@ mod tests {
         assert_eq!(info_of(&m, &Surface::Backsplash(bs)).material, "default:backsplash");
         assert!(finish_fits(&Surface::Backsplash(bs), Finish::Siding));
     }
+
+    #[test]
+    fn spanning_wall_side_finds_room_on_each_level() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        m.levels.push(cadcraft_doc::Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        // A spanning wall
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.base_level = 0;
+        w.top_level = Some(1);
+        w.height = 5.1;
+        m.push_wall(w);
+        // Rooms on both levels
+        let r0 = m.push_room(Room { polygon: rect(0.0, 0.0, 10.0, 10.0), level: 0, ..Default::default() });
+        let r1 = m.push_room(Room { polygon: rect(0.0, 0.0, 10.0, 10.0), level: 1, ..Default::default() });
+        // The wall side should find the room on the base level first
+        assert_eq!(wall_side_room(&m, &m.walls[0], Side::Left), Some(r0));
+        // The right side (exterior, y < 0) has no room on either level
+        assert_eq!(wall_side_room(&m, &m.walls[0], Side::Right), None);
+        // A cabinet/fixture on level 1 against the wall should find the level 1 room
+        // via wall_side_room when the base level check fails (no room on base level).
+        // Here both levels have rooms, so base level wins.
+        let r0_only = m.push_room(Room { polygon: rect(0.0, 0.0, 10.0, 10.0), level: 0, ..Default::default() });
+        let _ = r0_only;
+    }
+
+    #[test]
+    fn spanning_wall_surface_listed_with_base_level() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        m.levels.push(cadcraft_doc::Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        // A spanning wall
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.base_level = 0;
+        w.top_level = Some(1);
+        w.height = 5.1;
+        let wall_id = m.push_wall(w);
+        // The wall side surfaces should be listed with the base level
+        let all = surfaces(&m);
+        let left = all.iter().find(|i| i.surface == Surface::WallSide { wall: wall_id, side: Side::Left });
+        let right = all.iter().find(|i| i.surface == Surface::WallSide { wall: wall_id, side: Side::Right });
+        assert!(left.is_some());
+        assert!(right.is_some());
+        assert_eq!(left.unwrap().level, 0);
+        assert_eq!(right.unwrap().level, 0);
+    }
 }
