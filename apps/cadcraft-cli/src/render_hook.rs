@@ -598,7 +598,12 @@ mod tests {
         let d = room();
         let mut req = request(&d, None, None, false);
         req.ground = true;
-        // Sample a point on the ground plane (z=0) inside the room bounds.
+        // Use a camera inside the room looking down at the floor/ground.
+        let eye = Vec3::new(2.0, 2.0, 1.5);
+        let target = Vec3::new(2.0, 2.0, 0.0);
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
+        req.camera = Some(camera);
+        // Sample the floor point.
         req.samples = vec![[2.0, 2.0, 0.0]];
 
         let Some(v) = render(&req) else { return };
