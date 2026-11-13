@@ -48,6 +48,99 @@ fn ordered_trays<'a>(i: &'a CeilingIn) -> Vec<&'a Tray> {
     out
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{ArchId, Level, Room, Tray, TraySides};
+    use cadcraft_geom::Vec2;
+
+    fn test_room() -> Room {
+        Room {
+            name: "Test".into(),
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)],
+            ..Default::default()
+        }
+    }
+
+    fn test_level() -> Level {
+        Level { index: 0, name: "Ground".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() }
+    }
+
+    fn ceiling_in(trays: Vec<Tray>) -> CeilingIn {
+        CeilingIn { room: test_room(), trays, level: test_level(), ..Default::default() }
+    }
+
+    #[test]
+    fn ordered_trays_topsorts() {
+        let parent = Tray { id: ArchId(0), parent: None, ..Default::default() };
+        let child = Tray { id: ArchId(1), parent: Some(ArchId(0)), ..Default::default() };
+        let grandchild = Tray { id: ArchId(2), parent: Some(ArchId(1)), ..Default::default() };
+        let ci = ceiling_in(vec![grandchild, parent, child]);
+        let ordered = ordered_trays(&ci);
+        assert_eq!(ordered.len(), 3);
+        assert_eq!(ordered[0].id, ArchId(0));
+        assert_eq!(ordered[1].id, ArchId(1));
+        assert_eq!(ordered[2].id, ArchId(2));
+    }
+
+    #[test]
+    fn ordered_trays_breaks_cycles() {
+        let a = Tray { id: ArchId(0), parent: Some(ArchId(1)), ..Default::default() };
+        let b = Tray { id: ArchId(1), parent: Some(ArchId(0)), ..Default::default() };
+        let ci = ceiling_in(vec![a, b]);
+        let ordered = ordered_trays(&ci);
+        // Should not loop; should include at most both trays.
+        assert!(ordered.len() <= 2);
+    }
+
+    #[test]
+    fn side_plane_computes_tilted_plane() {
+        let piece = Piece::new(vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)], vec![], PlaneZ::flat(0.0));
+        let a = Vec2::new(0.0, 0.0);
+        let b = Vec2::new(1.0, 0.0);
+        let plane = side_plane(&piece, a, b, 45.0).unwrap();
+        // At 45 degrees, the plane should rise 1 unit for every 1 unit inward.
+        assert!((plane.z_at(a) - 0.0).abs() < 1e-9);
+        assert!((plane.z_at(b) - 0.0).abs() < 1e-9);
+        // One unit inward (positive y) should be 1 unit higher.
+        assert!((plane.z_at(Vec2::new(0.5, 1.0)) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn side_plane_rejects_bad_angles() {
+        let piece = Piece::new(vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)], vec![], PlaneZ::flat(0.0));
+        let a = Vec2::new(0.0, 0.0);
+        let b = Vec2::new(1.0, 0.0);
+        assert!(side_plane(&piece, a, b, 0.0).is_none());
+        assert!(side_plane(&piece, a, b, 90.0).is_none());
+        assert!(side_plane(&piece, a, b, -1.0).is_none());
+        assert!(side_plane(&piece, a, b, f64::NAN).is_none());
+    }
+
+    #[test]
+    fn apply_raises_ceiling_inside_tray() {
+        let tray = Tray { id: ArchId(0), room: ArchId(0), level: 0, inset: 0.6, depth: 0.3, ..Default::default() };
+        let ci = ceiling_in(vec![tray]);
+        // A single piece covering the whole room at z=2.4.
+        let piece =
+            Piece::new(vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), Vec2::new(0.0, 10.0)], vec![], PlaneZ::flat(2.4));
+        let result = apply(&ci, vec![piece]);
+        // The result should have multiple pieces: one raised inside the tray, one at the original height outside.
+        assert!(result.len() >= 2, "apply should split the piece: got {} pieces", result.len());
+        // At least one piece should be at z=2.7 (raised by 0.3).
+        let has_raised = result.iter().any(|p| (p.plane.c - 2.7).abs() < 1e-6);
+        assert!(has_raised, "one piece should be raised to 2.7");
+    }
+
+    #[test]
+    fn side_meshes_produces_mesh_for_vertical_tray() {
+        let tray = Tray { id: ArchId(0), room: ArchId(0), level: 0, inset: 0.6, depth: 0.3, sides: TraySides::Vertical, ..Default::default() };
+        let ci = ceiling_in(vec![tray]);
+        let meshes = side_meshes(&ci, 0.02);
+        assert!(!meshes.is_empty(), "side_meshes should produce at least one mesh");
+    }
+}
+
 fn side_plane(piece: &Piece, a: Vec2, b: Vec2, deg: f64) -> Option<PlaneZ> {
     if !deg.is_finite() || !(0.0 < deg && deg < 90.0) {
         return None;
