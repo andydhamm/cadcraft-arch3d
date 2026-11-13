@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 30 of 35 segments merged · 10 of 20 acceptance checks**
 
-9,434 workspace tests passing at the last merge · 1029 segments merged in all · 0 of 15 seats working
+9,475 workspace tests passing at the last merge · 1035 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,53 +28,53 @@ Updated 2026-11-13 05:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 48.0 h so far · expected done Nov 13 08:55–Nov 14 01:08 UTC |
+| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 48.3 h so far · expected done Nov 13 09:26–Nov 14 02:54 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-30 merged, 3 queued, 1 merging, 1 gate
+30 merged, 3 queued, 2 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
-| `p18-countertop-shapes` | Countertop shapes: edges bulge into arcs (a sagitta, with a radius grip), take an edge profile, and an end turns down to the floor as a waterfall of the same material and thickness | gate | mai-flash-esc |
+| `p18-countertop-shapes` | Countertop shapes: edges bulge into arcs (a sagitta, with a radius grip), take an edge profile, and an end turns down to the floor as a waterfall of the same material and thickness | merging | mai-flash-esc |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 05:42 | `p21-view-notes` | merged | 9,475 pass, 1 fail | claude-sonnet-d |
+| Nov 13 05:42 | `p21-interior-elevation` | merged | 9,475 pass, 1 fail | claude-sonnet-a |
+| Nov 13 05:42 | `p21-interior-dims` | merged | 9,475 pass, 1 fail | mai-flash |
+| Nov 13 05:42 | `p21-plan-viewports` | merged | 9,475 pass, 1 fail | mai-flash-b |
+| Nov 13 05:42 | `p21-view-render` | merged | 9,475 pass, 1 fail | mai-flash |
+| Nov 13 05:42 | `harden-p11-arch-ies` | merged | 9,475 pass, 1 fail | tturbo-mac |
 | Nov 13 05:05 | `p19-strip-render` | refused | 0 pass | claude-sonnet-c |
 | Nov 13 05:05 | `p19-hdri-4` | merged | 9,434 pass | claude-sonnet-a |
 | Nov 13 03:49 | `p19-hdri-2` | merged | 9,432 pass | mai-flash-b |
 | Nov 13 03:49 | `p20-rcp` | merged | 9,432 pass | mai-flash-esc |
 | Nov 13 03:49 | `p19-cameras-3` | merged | 9,432 pass | bonsai-b |
 | Nov 13 03:49 | `p18-room-finishes-3` | merged | 9,432 pass | mai-flash |
-| Nov 13 03:49 | `p18-face-appliances` | merged | 9,432 pass | mai-flash |
-| Nov 13 03:49 | `harden-p10-arch3d-fixture-meshes` | merged | 9,432 pass | tturbo-mac2 |
-| Nov 13 01:39 | `p18-backsplash` | merged | 9,390 pass | claude-sonnet-c |
-| Nov 13 01:03 | `p19-normal-maps-render` | refused | 0 pass | claude-sonnet-d |
-| Nov 13 01:03 | `p19-sky-2` | merged | 9,371 pass | claude-sonnet-b |
-| Nov 13 01:03 | `p21-callouts` | merged | 9,371 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1229 |
-| bonsai-b | bonsai2-27b | gate | 1183 |
+| bonsai-a | bonsai2-27b | idle | 1230 |
+| bonsai-b | bonsai2-27b | idle | 1184 |
 | bonsai-ws2-a | bonsai2-27b | gate | 1303 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1250 |
 | claude-sonnet-a | sonnet | idle | 146 |
 | claude-sonnet-b | sonnet | idle | 153 |
 | claude-sonnet-c | sonnet | idle | 89 |
 | claude-sonnet-d | sonnet | idle | 82 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1098 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1098 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 107 |
-| mai-flash-b | mai-code-1.1-flash | agent | 50 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 116 |
-| tturbo-mac | tturbo-ultraheretic | agent | 829 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 448 |
+| mai-flash-b | mai-code-1.1-flash | idle | 51 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 117 |
+| tturbo-mac | tturbo-ultraheretic | agent | 830 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 449 |
