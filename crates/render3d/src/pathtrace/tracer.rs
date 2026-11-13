@@ -174,6 +174,10 @@ impl PathTracer {
         } else {
             frame_lighting(&mut frame, &mut gpu_scene.ies, lighting, Some(camera), opts);
         }
+        if gpu_scene.tex != [0; 4] {
+            frame.tex = gpu_scene.tex;
+            frame.flags |= super::scene_gpu::FRAME_NORMAL_MAPS;
+        }
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
 
         Ok(PathTracer {
@@ -781,6 +785,10 @@ pub fn irradiance(
     // As before, irradiance applies the sun whenever `lighting` has one, furnace or not.
     let mut lit = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
     frame_lighting(&mut lit, &mut gpu_scene.ies, lighting, None, opts);
+    if gpu_scene.tex != [0; 4] {
+        lit.tex = gpu_scene.tex;
+        lit.flags |= super::scene_gpu::FRAME_NORMAL_MAPS;
+    }
     let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
     let pipelines = PtPipelines::new(gpu, None)?;
 

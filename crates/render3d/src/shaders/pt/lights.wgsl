@@ -343,8 +343,6 @@ fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     }
     return li * visibility(o, d, 1.0e6) * cos_n;
 }
-// [p19-normal-maps-render] the shading normal at barycentrics (u, v) of triangle tri; n is the geometric normal facing the ray.
-fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }
 
 // Two neighbouring entries of an angle list and how far between them (0 = lo, 1 = hi).
 struct IesBracket { lo: u32, hi: u32, t: f32 };
