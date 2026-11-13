@@ -10,6 +10,13 @@ impl Handle {
     }
     pub fn parse_hex(s: &str) -> Option<Handle> {
         let s = s.trim();
+        if s.is_empty() {
+            return None;
+        }
+        if let Some(rest) = s.strip_prefix(['a', 'A']) {
+            let n = u32::from_str_radix(rest, 16).ok()?;
+            return Some(Handle(crate::arch::ARCH_HANDLE_BASE | u64::from(n)));
+        }
         if !s.bytes().all(|b| b.is_ascii_hexdigit()) {
             return None;
         }

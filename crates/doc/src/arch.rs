@@ -139,10 +139,14 @@ pub fn is_opening_handle(h: Handle) -> bool {
         && h.0 < ARCH_HANDLE_BASE.saturating_add(OPENING_HANDLE_OFFSET).saturating_add(1u64 << 15)
 }
 
-/// The one JSON spelling of a handle: for an arch proxy, lower-case hex of the
-/// reserved handle value itself (`w3` -> `a0000003`, `o0` -> `a0008000`); any
-/// other handle is plain lower-case hex.
+/// The one JSON spelling of a handle: for an arch proxy, the low 24 bits of the
+/// reserved range printed in the legacy `a0000000` style (`w3` -> `a0000003`, `o0`
+/// -> `a0008000`); any other handle is plain lower-case hex.
 pub fn handle_json(h: Handle) -> String {
+    if is_arch_handle(h) {
+        let low = (h.0 & 0x00FF_FFFF) as u32;
+        return format!("a{:07x}", low);
+    }
     format!("{:x}", h.0)
 }
 
