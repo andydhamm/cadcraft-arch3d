@@ -556,6 +556,125 @@ mod tests {
         assert_eq!(edit["depth"], 0.35);
     }
 
+    /// Two rooms with different finishes: each new room inherits the finish of
+    /// the old room whose polygon contains its label point.
+    #[test]
+    fn roomdetect_keeps_different_finishes_per_room() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = Session::new();
+        // Build a house with two rooms (split by a wall)
+        s.execute(
+            "wall",
+            &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2, "height": 2.4, "exterior": true}),
+        )
+        .unwrap();
+        s.execute("wall", &json!({"points": [[5.0, 0.0], [5.0, 8.0]], "thickness": 0.1, "height": 2.4, "type": "interior"})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 2);
+
+        // Give each room a different finish
+        {
+            let d = s.doc_mut().unwrap();
+            for r in d.arch.rooms.iter_mut() {
+                let avg_x = r.polygon.iter().map(|p| p.x).sum::<f64>() / (r.polygon.len() as f64);
+                r.floor_finish = if avg_x < 5.0 { Some(Finish::Wood) } else { Some(Finish::Tile) };
+            }
+        }
+
+        s.execute("roomdetect", &json!({})).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.rooms.len(), 2);
+        for r in &d.arch.rooms {
+            let avg_x = r.polygon.iter().map(|p| p.x).sum::<f64>() / (r.polygon.len() as f64);
+            let expected = if avg_x < 5.0 { Some(Finish::Wood) } else { Some(Finish::Tile) };
+            assert_eq!(r.floor_finish, expected, "room at x={:.1} should have {:?}", avg_x, expected);
+        }
+    }
+
+    /// When a room splits into two, both new rooms inherit the old room's finish.
+    #[test]
+    fn roomdetect_inherits_finish_when_room_splits() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = Session::new();
+        // Start with one big room
+        s.execute(
+            "wall",
+            &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2, "height": 2.4, "exterior": true}),
+        )
+        .unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms.len(), 1);
+
+        // Set a finish on the single room
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.rooms[0].floor_finish = Some(Finish::Carpet);
+        }
+
+        // Now add a wall that splits the room into two
+        s.execute("wall", &json!({"points": [[5.0, 0.0], [5.0, 8.0]], "thickness": 0.1, "height": 2.4, "type": "interior"})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.rooms.len(), 2, "split should produce two rooms");
+        for r in &d.arch.rooms {
+            assert_eq!(r.floor_finish, Some(Finish::Carpet), "both split rooms should inherit Carpet");
+        }
+    }
+
+    /// A level-filtered roomdetect must not touch floor finishes on other levels.
+    #[test]
+    fn roomdetect_level_filter_keeps_finish_on_other_levels() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = Session::new();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let ring = [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]];
+        s.execute("wall", &json!({ "points": ring, "level": 0, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("wall", &json!({ "points": ring, "level": 1, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+
+        // Set different finishes on each level
+        {
+            let d = s.doc_mut().unwrap();
+            for r in d.arch.rooms.iter_mut() {
+                r.floor_finish = if r.level == 0 { Some(Finish::Wood) } else { Some(Finish::Tile) };
+            }
+        }
+
+        // Re-detect only level 0
+        s.execute("roomdetect", &json!({ "level": 0 })).unwrap();
+
+        let d = s.doc().unwrap();
+        for r in &d.arch.rooms {
+            let expected = if r.level == 0 { Some(Finish::Wood) } else { Some(Finish::Tile) };
+            assert_eq!(r.floor_finish, expected, "level {} room should have {:?}", r.level, expected);
+        }
+    }
+
+    /// A dry-run roomdetect must not mutate any floor finishes.
+    #[test]
+    fn roomdetect_dry_run_does_not_mutate_floor_finish() {
+        use cadcraft_doc::arch::Finish;
+        let mut s = Session::new();
+        build_test_wall(&mut s);
+        s.execute("roomdetect", &json!({})).unwrap();
+        assert!(!s.doc().unwrap().arch.rooms.is_empty());
+
+        // Set finishes
+        for r in s.doc_mut().unwrap().arch.rooms.iter_mut() {
+            r.floor_finish = Some(Finish::Wood);
+        }
+
+        // Dry run must not change anything
+        let res = s.execute("roomdetect", &json!({"dryRun": true}));
+        assert!(res.is_ok());
+
+        let d = s.doc().unwrap();
+        for r in &d.arch.rooms {
+            assert_eq!(r.floor_finish, Some(Finish::Wood), "dry run must not change floor finish");
+        }
+    }
+
     /// `roomdetect` must be a single undo step: one revision bump, one labelled
     /// undo that restores both the rooms and the revision.
     #[test]

@@ -427,3 +427,14 @@ fn ten_thousand_entities_find_six_walls_per_tile_quickly() {
     }
     assert!(elapsed.as_secs_f64() < 2.0, "detection took {elapsed:?} for {} entities", drawing.model.len());
 }
+
+#[test]
+fn a_single_wall_is_detected() {
+    let mut items = Vec::new();
+    seg(&mut items, (0.0, 0.0), (5.0, 0.0), "A-WALL");
+    seg(&mut items, (0.0, 0.2), (5.0, 0.2), "A-WALL");
+    let lw = Linework { items, ..Default::default() };
+    let det = detect_linework(&lw);
+    assert_eq!(det.walls.len(), 1, "{det:#?}");
+    assert!((det.walls[0].thickness - 0.2).abs() < 1e-6, "{det:#?}");
+}

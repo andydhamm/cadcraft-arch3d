@@ -768,13 +768,6 @@ impl Sections {
                 (room.id, RoomIn { room: Room { moldings: Vec::new(), ..room.clone() }, level, wells, ceiling, slab, paints })
             })
             .collect();
-        for p in &pr {
-            if let Some(i) = room_items.iter().find(|(id, _)| *id == p.id) {
-                if p.input != i.1 {
-                    eprintln!("room input changed for {}: prev={:?} next={:?}", p.id, p.input, i.1);
-                }
-            }
-        }
         let rooms = parts(pr, room_items, |i| {
             let mut out = Vec::new();
             if i.room.room_type != RoomType::Deck {

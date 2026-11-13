@@ -168,12 +168,32 @@ pub(crate) fn node_names(scene: &Scene3d) -> Vec<String> {
             "plant-crown" => format!("plant-pl{}", m.object.0),
             "plant-trunk" => format!("plant-pl{}-trunk", m.object.0),
             "light-trim" => format!("light-lf{}", m.object.0),
+            "light-strip" => format!("light-lf{}", m.object.0),
             mat if mat.starts_with("light-lens") => format!("light-lf{}-lens", m.object.0),
             mat if mat.starts_with("light-") => format!("light-lf{}-{}", m.object.0, mat.trim_start_matches("light-")),
             mat if mat.starts_with("path-") => {
                 let kind = mat.trim_start_matches("path-").split('-').next().unwrap_or("path");
                 format!("{kind}-tm{}", m.object.0)
             }
+            "molding-line" => format!("molding-ml{}", m.object.0),
+            mat if mat.starts_with("molding-room-") => {
+                let rest = mat.strip_prefix("molding-room-").unwrap_or(mat);
+                let (kind, index) = rest.rsplit_once('-').unwrap_or((rest, "0"));
+                format!("molding-r{}-{}-{}", m.object.0, kind, index)
+            }
+            "countertop" => format!("countertop-ct{}", m.object.0),
+            "countertop-waterfall" => format!("countertop-ct{}-waterfall", m.object.0),
+            "backsplash" => format!("backsplash-bs{}", m.object.0),
+            "glass-wall" => format!("wall-w{}-glass", m.object.0),
+            mat if mat.starts_with("niche-back:") => {
+                let rest = mat.strip_prefix("niche-back:o").unwrap_or("0");
+                format!("wall-w{}-niche-o{}", m.object.0, rest)
+            }
+            "cabinet-crown" => format!("cabinet-cb{}-crown", m.object.0),
+            "cabinet-lightrail" => format!("cabinet-cb{}-lightrail", m.object.0),
+            "cabinet-frame" => format!("cabinet-cb{}-frame", m.object.0),
+            "cabinet-shelves" => format!("cabinet-cb{}-shelves", m.object.0),
+            "cabinet-appliance" => format!("cabinet-cb{}-appliance", m.object.0),
             "cabinet-box" => format!("cabinet-cb{}", m.object.0),
             "cabinet-front" => format!("cabinet-cb{}-front", m.object.0),
             "counter" => format!("cabinet-cb{}-counter", m.object.0),
@@ -209,6 +229,7 @@ pub(crate) fn shares_a_node(material: &str) -> bool {
         || material.starts_with("pull:")
         || material.starts_with("paint:furnishing/")
         || (material.starts_with("paint:cabinet/") && material.ends_with("/pull"))
+        || material == "light-strip"
 }
 
 fn paint_node_name(material: &str, object: cadcraft_doc::ArchId) -> String {
@@ -313,6 +334,20 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                     bytes,
                     f.name().to_string(),
                 );
+            }
+            if matches!(f, Finish::Brick | Finish::Siding | Finish::Shingles | Finish::Wood) {
+                let nt = texture::normal_map(f);
+                if let Ok(bytes) = crate::png::encode_rgba8(nt.width, nt.height, &nt.rgba) {
+                    add_png(
+                        &mut pngs,
+                        &mut png_index,
+                        &mut texture_order,
+                        &mut texture_seen,
+                        format!("finish:{}:normal", f.name()),
+                        bytes,
+                        format!("{}-normal", f.name()),
+                    );
+                }
             }
         }
     }
@@ -434,6 +469,9 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                         "metallicFactor": 0.0,
                         "roughnessFactor": finish_roughness(f),
                     });
+                    if let Some(norm_idx) = png_index.get(&format!("finish:{}:normal", f.name())) {
+                        mat["pbrMetallicRoughness"]["normalTexture"] = json!({ "index": *norm_idx });
+                    }
                 }
             }
             if is_glass {
@@ -906,7 +944,7 @@ mod tests {
         let json = glb_json_chunk(&bytes);
         let images = json["images"].as_array().unwrap();
         let names: Vec<&str> = images.iter().map(|i| i["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["shingles", "brick", "wood"]);
+        assert_eq!(names, ["shingles", "shingles-normal", "brick", "brick-normal", "wood", "wood-normal"]);
         let json_len = le32(&bytes, 12) as usize;
         let bin = 20 + json_len + 8;
         for (i, img) in images.iter().enumerate() {
@@ -932,7 +970,7 @@ mod tests {
         let mats = json["materials"].as_array().unwrap();
         let brick = mats.iter().find(|m| m["name"] == "wall-brick").unwrap();
         let pbr = &brick["pbrMetallicRoughness"];
-        assert_eq!(pbr["baseColorTexture"]["index"], 1);
+        assert_eq!(pbr["baseColorTexture"]["index"], 2);
         assert_eq!(pbr["baseColorFactor"], json!([1.0, 1.0, 1.0, 1.0]));
         assert_eq!(pbr["metallicFactor"].as_f64().unwrap(), 0.0);
         assert_eq!(pbr["roughnessFactor"].as_f64().unwrap(), 0.9);
@@ -949,7 +987,7 @@ mod tests {
         scene.meshes = vec![finished("deck", 4), finished("deck-joist", 4)];
         let json = glb_json_chunk(&write(&scene));
         let names: Vec<&str> = json["images"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["wood"]);
+        assert_eq!(names, ["wood", "wood-normal"]);
         let mats = json["materials"].as_array().unwrap();
         let deck = &mats.iter().find(|m| m["name"] == "deck").unwrap()["pbrMetallicRoughness"];
         assert_eq!(deck["baseColorTexture"]["index"], 0);
@@ -1106,6 +1144,47 @@ mod tests {
             })
             .collect();
         Scene3d { meshes, ..Scene3d::default() }
+    }
+
+    #[test]
+    fn node_names_for_phase18_meshes() {
+        let scene = p17_scene(&[
+            ("molding-room-base-2", 5),
+            ("molding-room-crown-2", 5),
+            ("molding-line", 6),
+            ("countertop", 7),
+            ("countertop-waterfall", 7),
+            ("backsplash", 8),
+            ("glass-wall", 9),
+            ("niche-back:o3", 9),
+            ("cabinet-crown", 10),
+            ("cabinet-lightrail", 10),
+            ("cabinet-frame", 10),
+            ("cabinet-shelves", 10),
+            ("cabinet-appliance", 10),
+            ("cabinet-box", 11),
+            ("cabinet-front", 11),
+        ]);
+        assert_eq!(
+            node_names(&scene),
+            [
+                "molding-r5-base-2",
+                "molding-r5-crown-2",
+                "molding-ml6",
+                "countertop-ct7",
+                "countertop-ct7-waterfall",
+                "backsplash-bs8",
+                "wall-w9-glass",
+                "wall-w9-niche-o3",
+                "cabinet-cb10-crown",
+                "cabinet-cb10-lightrail",
+                "cabinet-cb10-frame",
+                "cabinet-cb10-shelves",
+                "cabinet-cb10-appliance",
+                "cabinet-cb11",
+                "cabinet-cb11-front",
+            ]
+        );
     }
 
     #[test]
@@ -2834,5 +2913,101 @@ mod tests {
         assert!(!shares_a_node("floor"));
         assert!(!shares_a_node("window-grille"));
         assert!(!shares_a_node("door-casing-left"));
+        assert!(shares_a_node("light-strip"));
+        assert!(!shares_a_node("light-lens"));
+        assert!(!shares_a_node("light-trim"));
+    }
+
+    #[test]
+    fn strip_housing_node_is_light_lf() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-strip".to_string();
+            m.object = ArchId(0);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-lens".to_string();
+            m.object = ArchId(0);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert_eq!(mesh_names, vec!["light-lf0", "light-lf0-lens"]);
+        let node_names: Vec<String> = json["nodes"].as_array().unwrap().iter().skip(1).filter_map(|n| n["name"].as_str()).map(String::from).collect();
+        assert_eq!(node_names, vec!["light-lf0", "light-lf0-lens"]);
+    }
+
+    #[test]
+    fn finish_wall_material_exports_normal_texture() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-brick".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mat = &json["materials"][0];
+        let pbr = &mat["pbrMetallicRoughness"];
+        assert!(pbr.get("normalTexture").is_some(), "wall-brick should have normalTexture");
+        let norm = &pbr["normalTexture"];
+        let idx = norm["index"].as_u64().unwrap() as usize;
+        let images = json["images"].as_array().unwrap();
+        assert!(idx < images.len(), "normalTexture index out of range");
+        assert_eq!(images[idx]["name"], "brick-normal");
+    }
+
+    #[test]
+    fn finish_normal_image_is_named_after_its_base() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-siding".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let names: Vec<String> = json["images"].as_array().unwrap().iter().filter_map(|i| i["name"].as_str()).map(String::from).collect();
+        assert_eq!(names, vec!["siding", "siding-normal"]);
+    }
+
+    #[test]
+    fn plain_finishes_export_no_normal_texture() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-concrete".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mat = &json["materials"][0];
+        let pbr = &mat["pbrMetallicRoughness"];
+        assert!(pbr.get("normalTexture").is_none(), "concrete finish should not have normalTexture");
+        let names: Vec<String> = json["images"].as_array().unwrap().iter().filter_map(|i| i["name"].as_str()).map(String::from).collect();
+        assert!(names.iter().all(|n| !n.ends_with("-normal")), "{:?}", names);
+    }
+
+    #[test]
+    fn glb_node_names_ignore_rooms_without_moldings() {
+        let mut scene = scene_with(0);
+        // A wall mesh only - no moldings
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall".into();
+            m.object = ArchId(1);
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["wall-w1"]);
+        // No molding names should appear
+        assert!(!names.iter().any(|n| n.starts_with("molding-")));
     }
 }

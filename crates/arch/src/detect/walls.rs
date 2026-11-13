@@ -702,6 +702,22 @@ mod tests {
     }
 
     #[test]
+    fn walls_at_thickness_boundaries_are_detected() {
+        let mut it = Vec::new();
+        // Wall at exactly MIN_THICKNESS (0.04)
+        seg(&mut it, (0.0, 0.0), (5.0, 0.0), "A-WALL", None);
+        seg(&mut it, (0.0, 0.04), (5.0, 0.04), "A-WALL", None);
+        // Wall at exactly MAX_THICKNESS (0.6)
+        seg(&mut it, (0.0, 2.0), (5.0, 2.0), "A-WALL", None);
+        seg(&mut it, (0.0, 2.6), (5.0, 2.6), "A-WALL", None);
+        let runs = wall_runs(&lw(it));
+        assert_eq!(runs.len(), 2, "{runs:?}");
+        let ts: Vec<f64> = runs.iter().map(|r| r.thickness).collect();
+        assert!(ts.iter().any(|t| (t - 0.04).abs() < 1e-6), "{ts:?}");
+        assert!(ts.iter().any(|t| (t - 0.6).abs() < 1e-6), "{ts:?}");
+    }
+
+    #[test]
     fn random_segments_never_panic() {
         let mut s: u64 = 0x9E37_79B9_7F4A_7C15;
         let mut next = move || {

@@ -234,29 +234,88 @@ fn resolve_named(d: &Drawing, i: usize, name: &str) -> Result<Named> {
     found.pop().map(|(_, v)| v).ok_or_else(|| bad("sheet", format!("views[{i}].view: unknown view `{n}`")))
 }
 
+/// Normalise the older short forms that tolerated plain strings and a single `planView`/`view`/
+/// `camera` alongside a top-level `scale`.
+fn normalize_view_list(cmd: &str, p: &Value) -> Result<Vec<Value>> {
+    let scale = present(p, "scale").cloned();
+    if let Some(list) = opt_list(cmd, p, "views")? {
+        let mut out = Vec::with_capacity(list.len());
+        for (i, item) in list.iter().enumerate() {
+            match item {
+                Value::String(s) => {
+                    let mut obj = JsonMap::new();
+                    obj.insert("view".to_string(), Value::String(s.clone()));
+                    if let Some(scale) = &scale {
+                        obj.insert("scale".to_string(), scale.clone());
+                    }
+                    out.push(Value::Object(obj));
+                }
+                Value::Object(_) => out.push(item.clone()),
+                _ => return Err(bad(cmd, format!("views[{i}] must be a string or object"))),
+            }
+        }
+        return Ok(out);
+    }
+    if let Some(v) = present(p, "view") {
+        let mut obj = JsonMap::new();
+        obj.insert("view".to_string(), v.clone());
+        if let Some(scale) = &scale {
+            obj.insert("scale".to_string(), scale.clone());
+        }
+        return Ok(vec![Value::Object(obj)]);
+    }
+    if let Some(v) = present(p, "planView") {
+        let mut obj = JsonMap::new();
+        obj.insert("view".to_string(), v.clone());
+        if let Some(scale) = &scale {
+            obj.insert("scale".to_string(), scale.clone());
+        }
+        return Ok(vec![Value::Object(obj)]);
+    }
+    if let Some(v) = present(p, "camera") {
+        let mut obj = JsonMap::new();
+        obj.insert("camera".to_string(), v.clone());
+        for key in ["width", "pixels", "at"] {
+            if let Some(val) = present(p, key) {
+                obj.insert(key.to_string(), val.clone());
+            }
+        }
+        return Ok(vec![Value::Object(obj)]);
+    }
+    Err(bad(cmd, "`views` (list) is required or give a single `view`, `planView` or `camera`"))
+}
+
 /// Parse and resolve one entry of `views` / `add`.
 fn parse_view(cmd: &str, d: &Drawing, i: usize, v: &Value) -> Result<NewView> {
+    let v = match v {
+        Value::String(s) => {
+            let mut obj = JsonMap::new();
+            obj.insert("view".to_string(), Value::String(s.clone()));
+            Value::Object(obj)
+        }
+        _ => v.clone(),
+    };
     if !v.is_object() {
         return Err(bad(cmd, format!("views[{i}] must be an object")));
     }
-    let at = match present(v, "at") {
+    let at = match v.get("at") {
         None => None,
         Some(a) => Some(point_mm(cmd, a, &format!("views[{i}].at"))?),
     };
-    if present(v, "camera").is_some() {
-        if present(v, "view").is_some() || present(v, "scale").is_some() || present(v, "level").is_some() {
+    if v.get("camera").is_some() {
+        if v.get("view").is_some() || v.get("scale").is_some() || v.get("level").is_some() {
             return Err(bad(cmd, format!("views[{i}]: a camera view takes no `view`, `scale` or `level`")));
         }
-        let name = req_str(cmd, v, "camera").map_err(|_| bad(cmd, format!("views[{i}].camera must be a camera name")))?;
+        let name = req_str(cmd, &v, "camera").map_err(|_| bad(cmd, format!("views[{i}].camera must be a camera name")))?;
         let cam = d.arch.camera_by_name(&name).ok_or_else(|| bad(cmd, format!("views[{i}].camera: unknown camera `{name}`")))?;
-        let width = match present(v, "width") {
+        let width = match v.get("width") {
             None => CAMERA_WIDTH_MM,
             Some(w) => w
                 .as_f64()
                 .filter(|w| w.is_finite() && *w > 0.0 && *w <= 2000.0)
                 .ok_or_else(|| bad(cmd, format!("views[{i}].width must be in (0, 2000] mm")))?,
         };
-        let pixels = match present(v, "pixels") {
+        let pixels = match v.get("pixels") {
             None => CAMERA_PIXELS,
             Some(px) => {
                 let a = px.as_array().filter(|a| a.len() == 2).ok_or_else(|| bad(cmd, format!("views[{i}].pixels must be [width, height]")))?;
@@ -272,11 +331,12 @@ fn parse_view(cmd: &str, d: &Drawing, i: usize, v: &Value) -> Result<NewView> {
         };
         return Ok(NewView { title: cam.name.clone(), source: SheetSource::Camera { name: cam.name.clone(), width, pixels }, scale: 0.0, at });
     }
-    let name = req_str(cmd, v, "view").map_err(|_| bad(cmd, format!("views[{i}] needs a `view` name or a `camera`")))?;
-    let scale = present(v, "scale")
+    let name = req_str(cmd, &v, "view").map_err(|_| bad(cmd, format!("views[{i}] needs a `view` name or a `camera`")))?;
+    let scale = v
+        .get("scale")
         .ok_or_else(|| bad(cmd, format!("views[{i}].scale is required")))
         .and_then(|sv| parse_scale(sv).ok_or_else(|| bad(cmd, format!("views[{i}].scale must be \"1:n\" or a number n within 1..=10000"))))?;
-    let level_param = present(v, "level");
+    let level_param = v.get("level");
     let named = resolve_named(d, i, &name)?;
     let (source, title) = match named {
         Named::Plan(pv_name, pv_level) => {
@@ -601,11 +661,11 @@ fn make_sheet(s: &mut Session, p: &Value) -> Result<Value> {
     let size = opt_str(CMD, p, "size")?.unwrap_or_else(|| "ARCH D".to_string());
     let landscape = opt_bool(CMD, p, "landscape")?.unwrap_or(true);
     let (paper_name, pw, ph) = paper_dims(CMD, &size, landscape)?;
-    let list = opt_list(CMD, p, "views")?.ok_or_else(|| bad(CMD, "`views` (list) is required"))?;
+    let list = normalize_view_list(CMD, p)?;
     if list.is_empty() || list.len() > MAX_SHEET_VIEWS {
         return Err(bad(CMD, format!("`views` must hold 1..={MAX_SHEET_VIEWS} views")));
     }
-    let new_views = parse_views(CMD, d, list)?;
+    let new_views = parse_views(CMD, d, &list)?;
     let placed = place_views(d, new_views, &[], 1, (pw, ph), landscape)?;
     let mut sheet = Sheet {
         name: name.clone(),
@@ -951,6 +1011,18 @@ mod tests {
         assert_eq!(titles[0].1, "1  FLOOR PLAN  1:50");
         assert_eq!(d.arch.sheets.len(), 1);
         assert!(!d.arch.sheet_set.date.is_empty() || cfg!(target_arch = "wasm32"));
+    }
+
+    #[test]
+    fn legacy_short_sheet_forms_are_accepted() {
+        let mut s = house();
+        elevation(&mut s);
+        let r = run(&mut s, "sheet", json!({"name": "Legacy", "number": "A-1", "title": "Legacy", "views": ["v0"], "scale": 100}));
+        assert_eq!(r["sheet"], "Legacy", "{r}");
+        assert_eq!(r["views"][0]["source"]["kind"], "elevation", "{r}");
+        let r = run(&mut s, "sheet", json!({"name": "Plan", "planView": "Floor Plan", "scale": 100}));
+        assert_eq!(r["sheet"], "Plan", "{r}");
+        assert_eq!(r["views"][0]["source"]["kind"], "plan", "{r}");
     }
 
     #[test]

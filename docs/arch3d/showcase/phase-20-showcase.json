@@ -1,0 +1,12 @@
+[
+  {"cmd": "planview", "params": {"name": "Lower Floor Plan", "level": "Lower", "kind": "floor"}},
+  {"cmd": "planview", "params": {"name": "Main Floor Plan", "level": "Main", "kind": "floor"}},
+  {"cmd": "planview", "params": {"name": "Lower Electrical", "level": "Lower", "kind": "electrical"}},
+  {"cmd": "planview", "params": {"name": "Main Electrical", "level": "Main", "kind": "electrical"}},
+  {"cmd": "planview", "params": {"name": "Lower Reflected Ceiling", "level": "Lower", "kind": "reflectedCeiling"}},
+  {"cmd": "planview", "params": {"name": "Main Reflected Ceiling", "level": "Main", "kind": "reflectedCeiling"}},
+  {"cmd": "planview", "params": {"name": "Roof Plan", "kind": "roof"}},
+  {"cmd": "planview", "params": {"name": "Site", "kind": "site"}},
+  {"cmd": "dimauto", "params": {"level": "Lower"}},
+  {"cmd": "dimauto", "params": {"level": "Main"}}
+]

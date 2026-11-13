@@ -288,6 +288,74 @@ fn a_seed_fixes_every_sample() {
 }
 
 #[test]
+fn horizon_plane_is_lit_like_near_terrain() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = Scene3d::default();
+    scene.meshes.push(prism("terrain", 1, [-2.0, -2.0, 0.0], [2.0, 2.0, 0.0]));
+    let mut horizon = Mesh::new("terrain", ArchId(2));
+    horizon.positions = vec![[-500.0, -500.0, 0.0], [500.0, -500.0, 0.0], [500.0, 500.0, 0.0], [-500.0, 500.0, 0.0]];
+    horizon.indices = vec![0, 1, 2, 0, 2, 3];
+    scene.horizon = Some(horizon);
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let probes = [
+        GpuProbe { point: [0.0, 0.0, 0.001], normal: [0.0, 0.0, 1.0], ..Default::default() },
+        GpuProbe { point: [0.0, 250.0, 0.001], normal: [0.0, 0.0, 1.0], ..Default::default() },
+    ];
+    let frame = GpuFrame {
+        flags: FRAME_SUN,
+        sun_dir: [0.0, 0.8944272, 0.4472136, 0.0],
+        sun_rgb: [1.0e6, 1.0e6, 1.0e6, 0.0],
+        bounces: 0,
+        probe_count: probes.len() as u32,
+        light_count: gpu_scene.lights.len() as u32,
+        spp_this_pass: 256,
+        seed: 23,
+        ..Default::default()
+    };
+    let out = check(run_entry(&gpu, &upload_scene(&gpu, &gpu_scene), "irradiance_main", &frame, &probes));
+    let lux = |a: &[f32; 4]| f64::from(luminance([a[0] / 256.0, a[1] / 256.0, a[2] / 256.0]));
+    let (near, far) = (lux(&out[0]), lux(&out[1]));
+    assert!((near - far).abs() <= 0.03 * near.max(far), "near {near} lux, far {far} lux");
+}
+
+#[test]
+fn far_hit_shadow_rays_do_not_self_intersect() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = Scene3d::default();
+    let mut horizon = Mesh::new("terrain", ArchId(3));
+    horizon.positions = vec![[-5000.0, -5000.0, -0.5], [5000.0, -5000.0, -0.5], [5000.0, 5000.0, -0.5], [-5000.0, 5000.0, -0.5]];
+    horizon.indices = vec![0, 1, 2, 0, 2, 3];
+    scene.horizon = Some(horizon);
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let origin = [0.0f32, 500.0, 0.001];
+    let dir = [0.0f32, 1.0, 0.01];
+    let dir = [
+        dir[0] / (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt(),
+        dir[1] / (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt(),
+        dir[2] / (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt(),
+    ];
+    let probes = vec![GpuProbe { point: origin, normal: dir, _a: 20.0, ..Default::default() }];
+    let frame = GpuFrame { probe_count: 1, ..Default::default() };
+    let out = check(run_entry(&gpu, &upload_scene(&gpu, &gpu_scene), "visibility_test_main", &frame, &probes));
+    assert!(out[0][0..3].iter().all(|v| (v - 1.0).abs() < 1e-5), "self-shadowed horizon: {:?}", out[0]);
+}
+
+#[test]
+fn horizon_material_index_with_and_without_ground() {
+    let mut scene = Scene3d::default();
+    scene.meshes.push(prism("terrain", 1, [-1.0, -1.0, 0.0], [1.0, 1.0, 0.0]));
+    let mut horizon = Mesh::new("terrain", ArchId(2));
+    horizon.positions = vec![[-500.0, -500.0, 0.0], [500.0, -500.0, 0.0], [500.0, 500.0, 0.0], [-500.0, 500.0, 0.0]];
+    horizon.indices = vec![0, 1, 2, 0, 2, 3];
+    scene.horizon = Some(horizon);
+    let without = build_gpu_scene(&scene, false, None);
+    let with_ground = build_gpu_scene(&scene, true, None);
+    assert_eq!(with_ground.materials.len(), without.materials.len() + 1);
+    assert_eq!(with_ground.materials[with_ground.materials.len() - 1], material_for("terrain"));
+    assert_eq!(without.materials[1], material_for("terrain"));
+}
+
+#[test]
 fn camera_only_emitters_light_nothing() {
     let Some(gpu) = gpu_or_skip() else { return };
     // A lit lens above the probe, no lights: seen by a camera, it lights nothing.

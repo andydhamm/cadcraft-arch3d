@@ -1,0 +1,23 @@
+[
+  {"cmd": "sheetset", "params": {"project": "Bilevel Showcase", "date": "2026-11-09"}},
+  {"cmd": "schedule", "params": {"kind": "door", "at": [0, -30]}},
+  {"cmd": "schedule", "params": {"kind": "window", "at": [25, -30]}},
+  {"cmd": "schedule", "params": {"kind": "cabinet", "at": [50, -30]}},
+  {"cmd": "schedule", "params": {"kind": "room", "at": [75, -30]}},
+  {"cmd": "elevation", "params": {"room": "Kitchen", "level": "Main", "side": "west", "insert": [0, -55]}},
+  {"cmd": "elevation", "params": {"room": "Main Bath", "level": "Main", "side": "east", "insert": [25, -55]}},
+  {"cmd": "sheet", "params": {"name": "Cover", "number": "A-000", "title": "Cover", "camera": "Front", "width": 520}},
+  {"cmd": "sheet", "params": {"name": "Site Plan", "number": "A-001", "title": "Site Plan", "planView": "Site", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Lower Floor Plan", "number": "A-101", "title": "Lower Floor Plan", "planView": "Lower Floor Plan", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Lower Electrical", "number": "E-101", "title": "Lower Electrical", "planView": "Lower Electrical", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Lower Reflected Ceiling", "number": "A-102", "title": "Lower Reflected Ceiling", "planView": "Lower Reflected Ceiling", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Main Floor Plan", "number": "A-111", "title": "Main Floor Plan", "planView": "Main Floor Plan", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Main Electrical", "number": "E-111", "title": "Main Electrical", "planView": "Main Electrical", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Main Reflected Ceiling", "number": "A-112", "title": "Main Reflected Ceiling", "planView": "Main Reflected Ceiling", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Roof Plan", "number": "A-201", "title": "Roof Plan", "planView": "Roof Plan", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Elevations", "number": "A-301", "title": "Elevations", "views": ["v0", "v1", "v2", "v3"], "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Sections", "number": "A-302", "title": "Sections", "views": ["v4", "v5"], "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Interior Elevations", "number": "A-401", "title": "Interior Elevations", "views": ["v6", "v7"], "scale": 50}},
+  {"cmd": "sheet", "params": {"name": "Schedules", "number": "A-501", "title": "Schedules"}},
+  {"cmd": "layout.set", "params": {"name": "Model"}}
+]

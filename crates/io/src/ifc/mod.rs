@@ -16,6 +16,8 @@ mod furnishing;
 pub mod geometry;
 pub mod guid;
 mod lights;
+mod materials;
+mod moldings;
 mod openings;
 mod roofs;
 mod site;
@@ -67,6 +69,7 @@ pub fn write_drawing(d: &Drawing, opts: &IfcOptions) -> String {
 pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> String {
     let mut ctx = Ctx::new(model, scene);
     walls::emit(&mut ctx);
+    materials::emit(&mut ctx);
     openings::emit(&mut ctx);
     slabs::emit(&mut ctx);
     decks::emit(&mut ctx);
@@ -76,6 +79,7 @@ pub fn write_model(model: &ArchModel, scene: &Scene3d, opts: &IfcOptions) -> Str
     spaces::emit(&mut ctx);
     site::emit(&mut ctx);
     lights::emit(&mut ctx);
+    moldings::emit(&mut ctx);
     casework::emit(&mut ctx);
     furnishing::emit(&mut ctx);
     electrical::emit(&mut ctx);
@@ -534,5 +538,45 @@ mod tests {
         let scene = Scene3d::default();
         let ctx = Ctx::new(&model, &scene);
         assert_eq!((ctx.storey_for(0), ctx.storey_for(3), ctx.storey_for(7)), (0, 1, 1));
+    }
+
+    #[test]
+    fn every_new_product_has_a_body() {
+        use cadcraft_doc::arch::{ArchId, ArchModel, Backsplash, Cabinet, CabinetKind, CounterRef, Countertop, Level, Wall};
+        use cadcraft_geom::Vec2;
+
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, ..Level::default() });
+
+        // Wall
+        model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), thickness: 0.2, height: 2.4, ..Wall::default() });
+
+        // Cabinet
+        let cabinet = model.push_cabinet(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            position: Vec2::new(1.0, 0.1),
+            width: 0.6,
+            depth: 0.6,
+            height: 0.9,
+            ..Cabinet::default()
+        });
+
+        // Countertop owned by the cabinet
+        model.countertops.push(Countertop { id: ArchId(1), cabinets: vec![cabinet], level: 0, ..Countertop::default() });
+
+        // Backsplash for the countertop
+        model.backsplashes.push(Backsplash { id: ArchId(2), counter: Some(CounterRef::Countertop(ArchId(1))), level: 0, ..Backsplash::default() });
+
+        let scene = Scene3d::build(&model);
+        let text = write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+
+        // The wall should be exported
+        assert!(text.contains("IFCWALL("), "wall missing: {text}");
+        // The cabinet (with countertop and backsplash merged) should be one IfcFurniture
+        assert!(text.contains("IFCFURNITURE("), "cabinet furniture missing: {text}");
+        // Count the furniture entities - should be 1 (the cabinet with merged ct/bs)
+        let furniture_count = text.matches("=IFCFURNITURE(").count();
+        assert_eq!(furniture_count, 1, "expected 1 furniture (cabinet with ct/bs), got {furniture_count}: {text}");
     }
 }
