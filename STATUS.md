@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 15:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 32 of 36 segments merged · 11 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 35 of 36 segments merged · 13 of 20 acceptance checks**
 
-9,765 workspace tests passing at the last merge · 1073 segments merged in all · 0 of 15 seats working
+9,789 workspace tests passing at the last merge · 1079 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,38 +28,35 @@ Updated 2026-11-13 14:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 11 / 20 | 57.3 h so far · expected done Nov 13 23:28–Nov 16 14:38 UTC |
-| 19 | Light, sky and cameras | building | 4 / 17 | — |
+| 18 | Interior finish, kitchen and bath | building | 13 / 20 | 57.5 h so far · expected done Nov 13 16:22–Nov 14 21:55 UTC |
+| 19 | Light, sky and cameras | building | 5 / 17 | — |
 | 20 | Plan views and dimensions | building | 9 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 6 / 13 | — |
 
 ## Phase 18 segments
 
-32 merged, 4 merging
+35 merged, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p18-exports` | Exports: IfcCovering (SKIRTINGBOARD, MOLDING) for room moldings and molding lines, glass walls as IfcWall with a Glass material, countertops and backsplashes inside their cabinets' IfcFurniture, niches as recesses; glTF node and OBJ group names for every phase-18 mesh | merging | mai-flash-esc |
-| `p18-rebuild` | Incremental rebuild: scene_cache_equals_full gains every phase-18 object and edit; each edit rebuilds only what it touches | merging | mai-flash-esc |
-| `p18-demo` | Demo: docs/arch3d/showcase/phase-18-demo.json (a small house with the kitchen, two baths and moldings) and the showcase house's kitchen and baths finished; the user guide's Interior finish and Kitchen and bath sections | merging | mai-flash |
 | `upstream-sync-ddfa833bc` | merge upstream upstream/main up to ddfa833bc (2 commits) | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 14:46 | `p19-demo` | merged | 9,789 pass | mai-flash-b |
+| Nov 13 14:46 | `p18-rebuild` | merged | 9,789 pass | mai-flash-esc |
+| Nov 13 14:46 | `p18-exports` | merged | 9,789 pass | mai-flash-esc |
+| Nov 13 14:46 | `p18-demo` | merged | 9,789 pass | mai-flash |
+| Nov 13 14:46 | `p19-pane` | merged | 9,789 pass | mai-flash-b |
+| Nov 13 14:46 | `harden-p13-finish-regeneration` | merged | 9,789 pass | tturbo-mac |
 | Nov 13 13:25 | `harden-p15-arch-spanning-walls` | merged | 9,765 pass | tturbo-mac |
 | Nov 13 13:25 | `p21-ui-callout-open` | merged | 9,765 pass | claude-sonnet-d |
 | Nov 13 13:25 | `harden-p20-view-export` | merged | 9,765 pass | tturbo-mac |
 | Nov 13 13:25 | `harden-p20-reference` | merged | 9,765 pass | tturbo-mac2 |
 | Nov 13 13:25 | `harden-p16-soffit-meshes` | merged | 9,765 pass | tturbo-mac |
 | Nov 13 13:25 | `harden-p20-roof-plan` | merged | 9,765 pass | tturbo-mac |
-| Nov 13 12:49 | `harden-p19-sky-1` | merged | 9,729 pass | tturbo-mac |
-| Nov 13 12:49 | `harden-p17-grilles-doors` | merged | 9,729 pass | tturbo-mac |
-| Nov 13 12:49 | `harden-p19-cameras-1` | merged | 9,729 pass | tturbo-mac |
-| Nov 13 12:49 | `harden-p21-schedule-model` | merged | 9,729 pass | tturbo-mac |
-| Nov 13 12:49 | `p20f-dim-inspect` | merged | 9,729 pass | mai-flash-b |
-| Nov 13 12:49 | `p20f-rcp-soffits-once` | merged | 9,729 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
@@ -78,5 +75,5 @@ Updated 2026-11-13 14:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 109 |
 | mai-flash-b | mai-code-1.1-flash | idle | 53 |
 | mai-flash-esc | mai-code-1.1-flash | down | 121 |
-| tturbo-mac | tturbo-ultraheretic | agent | 853 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 481 |
+| tturbo-mac | tturbo-ultraheretic | agent | 854 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 482 |
