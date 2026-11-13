@@ -1687,14 +1687,17 @@ mod tests {
     fn room_level_guard_creates_ground_level() {
         // When `level` is specified but no levels exist, the ground level is created
         // before the edit-path branch, and a refused call leaves no undo step.
+        // Session::new() already creates a ground level, so the guard is a no-op here,
+        // but the refusal path (level 1 doesn't exist on a one-level drawing) is still
+        // exercised: no room is created and the level count is unchanged.
         let mut s = new_session();
-        assert!(s.doc().unwrap().arch.levels.is_empty());
-        // This should create the ground level and then refuse (level 1 doesn't exist yet).
+        let levels_before = s.doc().unwrap().arch.levels.len();
+        // This should refuse (level 1 doesn't exist yet).
         let r = s.execute("room", &json!({ "points": square_points(), "level": 1 }));
         assert!(r.is_err());
-        // The ground level was created by the guard.
-        assert_eq!(s.doc().unwrap().arch.levels.len(), 1);
-        // But no room was created.
+        // The level count is unchanged.
+        assert_eq!(s.doc().unwrap().arch.levels.len(), levels_before);
+        // And no room was created.
         assert_eq!(s.doc().unwrap().arch.rooms.len(), 0);
     }
 
