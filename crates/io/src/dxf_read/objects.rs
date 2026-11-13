@@ -158,13 +158,15 @@ impl Objects {
     fn apply_groups(&self, d: &mut Drawing) {
         // Names are matched through an index: a drawing can carry hundreds of thousands of
         // (often empty) anonymous groups, and a linear search per group made loading quadratic
-        // (#862).
+        // (#862). Keep the last definition for a case-insensitive name and update the slot in
+        // place rather than re-scanning the whole vector each time.
         let mut by_name: HashMap<String, usize> = HashMap::new();
         for (i, g) in d.groups.iter().enumerate() {
-            by_name.entry(g.name.to_ascii_lowercase()).or_insert(i);
+            by_name.insert(g.name.to_ascii_lowercase(), i);
         }
         for (h, tags) in &self.groups {
             let Some(name) = self.names.get(h).filter(|n| !n.is_empty()) else { continue };
+            let key = name.to_ascii_lowercase();
             let t = T(tags);
             let members: Vec<Handle> = tags
                 .iter()
@@ -174,13 +176,14 @@ impl Objects {
                 .take(MAX_OBJECTS)
                 .collect();
             let g = Group { name: name.clone(), description: t.s(300).unwrap_or_default(), selectable: t.i(71).unwrap_or(1) != 0, members };
-            match by_name.get(&name.to_ascii_lowercase()).and_then(|&i| d.groups.get_mut(i)) {
-                Some(x) => *x = g,
-                None => {
-                    by_name.insert(name.to_ascii_lowercase(), d.groups.len());
-                    d.groups.push(g);
+            if let Some(&i) = by_name.get(&key) {
+                if let Some(slot) = d.groups.get_mut(i) {
+                    *slot = g;
+                    continue;
                 }
             }
+            by_name.insert(key, d.groups.len());
+            d.groups.push(g);
         }
     }
 

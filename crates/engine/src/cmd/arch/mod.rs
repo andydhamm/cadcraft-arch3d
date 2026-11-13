@@ -86,6 +86,7 @@ pub(crate) mod title_block;
 pub mod tray;
 pub(crate) mod units;
 pub mod view;
+pub mod view_notes;
 pub mod views;
 pub mod wall;
 pub mod wall_split;
@@ -134,6 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(outlets_auto::specs());
     v.extend(electrical_view::specs());
     v.extend(views::specs());
+    v.extend(view_notes::specs());
     v.extend(roofauto::specs());
     v.extend(deck::specs());
     v.extend(library_user::specs());

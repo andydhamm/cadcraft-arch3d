@@ -288,7 +288,7 @@ mod tests {
         let v = ArchView { kind: ViewKind::Interior, look: [0.0, 1.0], ..Default::default() };
         let g = generate(&m, &Scene3d::default(), &v, 3);
         assert_eq!(g.revision, 3);
-        assert_eq!(g.error.as_deref(), Some("interior elevations are not available yet"));
+        assert_eq!(g.error.as_deref(), Some("the room of  is gone"));
         assert!(g.lines.is_empty() && g.rings.is_empty() && g.dims.is_empty());
     }
 

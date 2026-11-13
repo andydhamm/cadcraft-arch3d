@@ -43,6 +43,7 @@ pub mod grade;
 pub mod graph;
 pub mod hdr;
 pub mod ies;
+pub mod interior;
 pub mod join;
 pub mod label;
 pub mod library;
