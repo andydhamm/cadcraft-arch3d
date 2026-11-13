@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 40 of 42 segments merged · 19 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 41 of 42 segments merged · 19 of 20 acceptance checks**
 
-9,936 workspace tests passing at the last merge · 1103 segments merged in all · 0 of 15 seats working
+9,973 workspace tests passing at the last merge · 1109 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,53 +28,52 @@ Updated 2026-11-13 20:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 62.8 h so far · expected done Nov 13 22:23–Nov 14 17:38 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 63.0 h so far · expected done Nov 13 21:27–Nov 14 14:15 UTC |
 | 19 | Light, sky and cameras | building | 7 / 17 | — |
 | 20 | Plan views and dimensions | building | 12 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 7 / 13 | — |
 
 ## Phase 18 segments
 
-40 merged, 1 merging, 1 working
+41 merged, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p18g-demo-script` | Rewrite docs/arch3d/showcase/phase-18-demo.json so it replays cleanly and shows every phase-18 feature | merging | mai-flash-b |
 | `p18g-showcase-phase18` | The showcase house (bilevel.json) gains the phase-18 kitchen and bath features | working | mai-flash |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 20:25 | `harden-p18-rebuild` | merged | 9,973 pass | tturbo-mac2 |
+| Nov 13 20:25 | `harden-p18-exports` | merged | 9,973 pass | tturbo-mac |
+| Nov 13 20:25 | `harden-p21-interior-elevation` | merged | 9,973 pass | tturbo-mac2 |
+| Nov 13 20:25 | `harden-p19-strip-tray` | merged | 9,973 pass | tturbo-mac |
+| Nov 13 20:25 | `harden-p20f-rcp-soffits-once` | merged | 9,973 pass | tturbo-mac2 |
+| Nov 13 20:25 | `p18g-demo-script` | merged | 9,973 pass | mai-flash-b |
 | Nov 13 19:42 | `p19f-glb-strip-node-normals` | merged | 9,936 pass | bonsai-b |
 | Nov 13 19:42 | `p19f-pt-horizon-lit` | merged | 9,936 pass | mai-flash-b |
 | Nov 13 19:42 | `p19f-sunangle-date-form` | merged | 9,936 pass | bonsai-ws2-a |
 | Nov 13 19:42 | `p19f-cli-render-reply` | merged | 9,936 pass | darwin-ws3 |
 | Nov 13 19:06 | `p21-demo` | merged | 9,923 pass | mai-flash |
 | Nov 13 18:31 | `p19f-pt-strip-clear-of-housing` | merged | 9,922 pass | mai-flash-b |
-| Nov 13 18:31 | `p19f-hdr-resolution-line` | merged | 9,922 pass | mai-flash |
-| Nov 13 18:31 | `p20f-auto-dim-rows` | merged | 9,922 pass | claude-sonnet-a |
-| Nov 13 18:31 | `p18g-crown-soffit-tray` | merged | 9,922 pass | claude-sonnet-a |
-| Nov 13 18:31 | `p18g-fill-labels-shelves` | merged | 9,922 pass | claude-sonnet-b |
-| Nov 13 18:31 | `p18g-room-moldings-refusals` | merged | 9,922 pass | mai-flash |
-| Nov 13 17:57 | `p21-demo` | refused | 9,880 pass, 1 fail | darwin-ws3 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1257 |
-| bonsai-b | bonsai2-27b | agent | 1211 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1339 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1286 |
+| bonsai-a | bonsai2-27b | agent | 1258 |
+| bonsai-b | bonsai2-27b | gate | 1211 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1341 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1288 |
 | claude-sonnet-a | sonnet | idle | 153 |
 | claude-sonnet-b | sonnet | idle | 154 |
 | claude-sonnet-c | sonnet | idle | 91 |
 | claude-sonnet-d | sonnet | idle | 82 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1135 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1136 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 113 |
 | mai-flash-b | mai-code-1.1-flash | agent | 58 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 122 |
-| tturbo-mac | tturbo-ultraheretic | agent | 863 |
+| tturbo-mac | tturbo-ultraheretic | agent | 864 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 496 |
