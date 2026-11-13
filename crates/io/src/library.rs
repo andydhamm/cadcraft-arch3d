@@ -106,4 +106,79 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn sample_files_count_is_49() {
+        // The sample set is catalog.json + 50 sample files.
+        assert_eq!(sample_files().len(), 51);
+    }
+
+    #[test]
+    fn catalog_items_have_id_file_and_name() {
+        let files = sample_files();
+        let catalog = files.first().map(|f| f.1).unwrap_or_default();
+        let v: serde_json::Value = serde_json::from_slice(catalog).expect("catalog parses");
+        let items = v["items"].as_array().expect("items array");
+        for item in items {
+            assert!(item["id"].is_string(), "item missing string id");
+            assert!(item["file"].is_string(), "item missing string file");
+            assert!(item["name"].is_string(), "item missing string name");
+        }
+    }
+
+    #[test]
+    fn all_glbs_start_with_gltf_magic() {
+        let files = sample_files();
+        let glb_count = files.iter().filter(|f| f.0.ends_with(".glb")).count();
+        assert!(glb_count > 0, "no .glb files found");
+        for (name, bytes) in files {
+            if name.ends_with(".glb") {
+                assert!(bytes.starts_with(b"glTF"), "{name} does not start with glTF magic");
+            }
+        }
+    }
+
+    #[test]
+    fn total_embedded_bytes_are_reasonable() {
+        let files = sample_files();
+        let total: usize = files.iter().map(|f| f.1.len()).sum();
+        // The sample set is about 5.5 MB per the spec.
+        assert!(total > 1_000_000, "total embedded size too small: {total} bytes");
+        assert!(total < 20_000_000, "total embedded size too large: {total} bytes");
+    }
+
+    #[test]
+    fn sample_files_are_sorted_after_catalog() {
+        let files = sample_files();
+        let names: Vec<&str> = files.iter().skip(1).map(|f| f.0).collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        assert_eq!(names, sorted, "files after catalog.json must be sorted by name");
+    }
+
+    #[test]
+    fn sample_files_have_no_duplicate_names() {
+        let files = sample_files();
+        let names: Vec<&str> = files.iter().map(|f| f.0).collect();
+        let mut unique = names.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(names.len(), unique.len(), "file names must be unique");
+    }
+
+    #[test]
+    fn material_images_are_jpeg() {
+        let files = sample_files();
+        for name in ["material-fabric.jpg", "material-marble.jpg", "material-oak.jpg"] {
+            let bytes = files.iter().find(|f| f.0 == name).map(|f| f.1).expect(name);
+            assert!(bytes.starts_with(&[0xFF, 0xD8, 0xFF]), "{name} is not a JPEG");
+        }
+    }
+
+    #[test]
+    fn backdrop_is_png() {
+        let files = sample_files();
+        let bytes = files.iter().find(|f| f.0 == "backdrop-sky.png").map(|f| f.1).expect("backdrop-sky.png");
+        assert!(bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), "backdrop-sky.png is not a PNG");
+    }
 }

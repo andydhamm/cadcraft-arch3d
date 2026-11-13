@@ -275,6 +275,62 @@ mod tests {
     }
 
     #[test]
+    fn resolution_line_with_crlf() {
+        let mut hdr = Vec::from(b"#?RADIANCE\r\nFORMAT=32-bit_rle_rgbe\r\n\r\n");
+        hdr.extend_from_slice(b"-Y 2 +X 3\r\n");
+        hdr.extend_from_slice(&[0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128]);
+        let img = read_hdr(&hdr).unwrap();
+        assert_eq!(img.width, 3);
+        assert_eq!(img.height, 2);
+    }
+
+    #[test]
+    fn resolution_line_too_long() {
+        let mut hdr = Vec::from(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        hdr.extend_from_slice(b"-Y 2 +X 3 ");
+        for _ in 0..60 {
+            hdr.push(b' ');
+        }
+        hdr.push(b'\n');
+        hdr.extend_from_slice(&[0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128]);
+        assert!(read_hdr(&hdr).is_err());
+    }
+
+    #[test]
+    fn resolution_line_non_ascii() {
+        let mut hdr = Vec::from(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        hdr.extend_from_slice(b"-Y 2 +X \xc3\xa9\n");
+        hdr.extend_from_slice(&[0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128]);
+        assert!(read_hdr(&hdr).is_err());
+    }
+
+    #[test]
+    fn resolution_line_wrong_orientation() {
+        let mut hdr = Vec::from(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        hdr.extend_from_slice(b"+Y 2 -X 3\n");
+        hdr.extend_from_slice(&[0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128]);
+        assert!(read_hdr(&hdr).is_err());
+    }
+
+    #[test]
+    fn resolution_line_missing_numbers() {
+        let mut hdr = Vec::from(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        hdr.extend_from_slice(b"-Y +X 3\n");
+        hdr.extend_from_slice(&[0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128]);
+        assert!(read_hdr(&hdr).is_err());
+    }
+
+    #[test]
+    fn resolution_line_extra_whitespace() {
+        let mut hdr = Vec::from(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        hdr.extend_from_slice(b"  -Y   2   +X   3  \n");
+        hdr.extend_from_slice(&[0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128, 0, 0, 0, 128]);
+        let img = read_hdr(&hdr).unwrap();
+        assert_eq!(img.width, 3);
+        assert_eq!(img.height, 2);
+    }
+
+    #[test]
     fn flat_and_rle_scanlines() {
         let flat = make_hdr(1, 1, 55);
         let flat_img = read_hdr(&flat).unwrap();

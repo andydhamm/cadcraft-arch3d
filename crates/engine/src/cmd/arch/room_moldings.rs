@@ -106,7 +106,7 @@ fn run_room_moldings(s: &mut Session, p: &Value) -> Result<Value> {
                 let vals = v.as_array().filter(|a| a.len() == 2).ok_or_else(|| bad("room.moldings", "`size` must be [w, h]"))?;
                 let w = vals[0].as_f64().ok_or_else(|| bad("room.moldings", "`size` values must be numbers"))?;
                 let h = vals[1].as_f64().ok_or_else(|| bad("room.moldings", "`size` values must be numbers"))?;
-                if w < 0.002 || w > 0.5 || h < 0.002 || h > 0.5 {
+                if !w.is_finite() || !h.is_finite() || w < 0.002 || w > 0.5 || h < 0.002 || h > 0.5 {
                     return Err(bad("room.moldings", "`size` out of range [0.002, 0.5]"));
                 }
                 Some([w, h])
@@ -481,5 +481,79 @@ mod tests {
         let o = &v["openings"][0];
         assert!(o["trim"].is_object());
         assert!(o["trimWidth"].is_object());
+    }
+
+    /// NaN in size values must be refused (NaN < x and NaN > x are both false in Rust).
+    #[test]
+    fn nan_size_is_refused() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        let rev = s.doc().unwrap().arch_revision;
+
+        let res = s.execute("room.moldings", &json!({"room": "r0", "moldings": [{"kind": "base", "size": [f64::NAN, 0.1]}]}));
+        assert!(res.is_err(), "{res:?}");
+        assert_eq!(s.doc().unwrap().arch_revision, rev);
+
+        let res = s.execute("room.moldings", &json!({"room": "r0", "moldings": [{"kind": "base", "size": [0.1, f64::NAN]}]}));
+        assert!(res.is_err(), "{res:?}");
+        assert_eq!(s.doc().unwrap().arch_revision, rev);
+    }
+
+    /// Empty room array must be refused with "no rooms selected".
+    #[test]
+    fn empty_room_array_is_refused() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        let rev = s.doc().unwrap().arch_revision;
+
+        let res = s.execute("room.moldings", &json!({"room": [], "moldings": [{"kind": "base"}]}));
+        assert!(res.is_err(), "{res:?}");
+        assert_eq!(s.doc().unwrap().arch_revision, rev);
+    }
+
+    /// `moldings` as an object (not array) must be refused.
+    #[test]
+    fn moldings_as_object_is_refused() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        let rev = s.doc().unwrap().arch_revision;
+
+        let res = s.execute("room.moldings", &json!({"room": "r0", "moldings": {"kind": "base"}}));
+        assert!(res.is_err(), "{res:?}");
+        assert_eq!(s.doc().unwrap().arch_revision, rev);
+    }
+
+    /// `size` with wrong element count must be refused.
+    #[test]
+    fn size_wrong_length_is_refused() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        let rev = s.doc().unwrap().arch_revision;
+
+        let res = s.execute("room.moldings", &json!({"room": "r0", "moldings": [{"kind": "base", "size": [0.1]}]}));
+        assert!(res.is_err(), "{res:?}");
+        assert_eq!(s.doc().unwrap().arch_revision, rev);
+
+        let res = s.execute("room.moldings", &json!({"room": "r0", "moldings": [{"kind": "base", "size": [0.1, 0.1, 0.1]}]}));
+        assert!(res.is_err(), "{res:?}");
+        assert_eq!(s.doc().unwrap().arch_revision, rev);
+    }
+
+    /// `offset` at exact bounds 0.0 and 3.0 must be accepted.
+    #[test]
+    fn offset_at_bounds_accepted() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]], "thickness": 0.2})).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+
+        let res = s.execute("room.moldings", &json!({"room": "r0", "moldings": [{"kind": "base", "offset": 0.0}]}));
+        assert!(res.is_ok(), "{res:?}");
+
+        let res = s.execute("room.moldings", &json!({"room": "r0", "moldings": [{"kind": "base", "offset": 3.0}]}));
+        assert!(res.is_ok(), "{res:?}");
     }
 }
