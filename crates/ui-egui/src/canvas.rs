@@ -655,6 +655,89 @@ mod callout_open_tests {
         assert_eq!(callout_under(&app, Vec2::new(5.0, 4.0), 0.1), None);
         assert!(app.session.layout_space().layout().is_none());
     }
+
+    #[test]
+    fn callout_under_empty_model_returns_none() {
+        let app = CadApp::new(Session::new(), Services::default());
+        assert!(callout_under(&app, Vec2::new(5.0, 4.0), 1.0).is_none());
+        assert!(callout_under(&app, Vec2::ZERO, 100.0).is_none());
+    }
+
+    #[test]
+    fn callout_under_multiple_views_picks_correct_one() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let c = [Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0)];
+            for i in 0..4 {
+                d.arch.push_wall(Wall { start: c[i], end: c[(i + 1) % 4], thickness: 0.2, height: 2.7, ..Wall::default() });
+            }
+            d.touch_arch();
+        }
+        let _ = s.execute("elevation", &json!({"side": "south", "dimensions": false}));
+        let _ = s.execute("elevation", &json!({"side": "north", "dimensions": false}));
+        let _ = s.execute("sheet", &json!({"name": "South", "views": [{"view": "v0", "scale": 100}]}));
+        let _ = s.execute("sheet", &json!({"name": "North", "views": [{"view": "v1", "scale": 100}]}));
+        let _ = s.execute("model", &json!({}));
+        let app = CadApp::new(s, Services::default());
+
+        // Scan for the v0 and v1 callout markers
+        let (mut sx0, mut sy0, mut n0) = (0.0, 0.0, 0.0);
+        let (mut sx1, mut sy1, mut n1) = (0.0, 0.0, 0.0);
+        for i in -100..=250 {
+            for j in -100..=250 {
+                let p = Vec2::new(f64::from(i) * 0.1, f64::from(j) * 0.1);
+                match callout_under(&app, p, 0.0) {
+                    Some(v) if v == "v0" => {
+                        sx0 += p.x;
+                        sy0 += p.y;
+                        n0 += 1.0;
+                    }
+                    Some(v) if v == "v1" => {
+                        sx1 += p.x;
+                        sy1 += p.y;
+                        n1 += 1.0;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        assert!(n0 > 0.0, "v0 callout marker should exist");
+        assert!(n1 > 0.0, "v1 callout marker should exist");
+        let c0 = Vec2::new(sx0 / n0, sy0 / n0);
+        let c1 = Vec2::new(sx1 / n1, sy1 / n1);
+
+        // Each marker resolves to its own view
+        assert_eq!(callout_under(&app, c0, 0.0), Some("v0".to_string()));
+        assert_eq!(callout_under(&app, c1, 0.0), Some("v1".to_string()));
+
+        // Double-clicking each opens the correct sheet
+        app.run("sheet.open", json!({ "view": "v0" })).expect("sheet.open v0");
+        assert_eq!(app.session.layout_space().layout(), Some("South"));
+        let _ = app.run("model", json!({}));
+        app.run("sheet.open", json!({ "view": "v1" })).expect("sheet.open v1");
+        assert_eq!(app.session.layout_space().layout(), Some("North"));
+    }
+
+    #[test]
+    fn callout_under_tolerance_boundary() {
+        let app = app_with_sheet();
+        let c = marker_centre(&app).expect("a callout marker");
+        // At the centre with zero tolerance, it should find it
+        assert!(callout_under(&app, c, 0.0).is_some());
+        // Far away with a small tolerance, it should not
+        assert!(callout_under(&app, Vec2::new(c.x + 100.0, c.y + 100.0), 0.1).is_none());
+        // A large tolerance reaches far
+        assert!(callout_under(&app, Vec2::new(c.x + 5.0, c.y + 5.0), 10.0).is_some());
+    }
+
+    #[test]
+    fn callout_under_nan_point_returns_none() {
+        let app = app_with_sheet();
+        let nan = f64::NAN;
+        assert!(callout_under(&app, Vec2::new(nan, 4.0), 1.0).is_none());
+        assert!(callout_under(&app, Vec2::new(5.0, nan), 1.0).is_none());
+        assert!(callout_under(&app, Vec2::new(nan, nan), 1.0).is_none());
+    }
 }
 
 fn handle_double_click(app: &mut CadApp, ctx: DoubleClickContext<'_>) -> Option<bool> {
