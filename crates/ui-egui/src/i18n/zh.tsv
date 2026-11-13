@@ -1500,6 +1500,9 @@ menu	View	视图
 	Automatic	自动
 	Build 3D	生成三维
 	Camera	相机
+	Orbit Camera	旋转相机
+	Reset Camera	重置相机
+	Update Camera	更新相机
 	Contours	等高线
 	Cut and Fill	挖填方
 	Deck	平台

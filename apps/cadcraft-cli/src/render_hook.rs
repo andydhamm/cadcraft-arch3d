@@ -280,8 +280,11 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     // The view's filter: the cutaway's hidden objects leave the scene (a filtered copy, cached by
     // revision, light set and hidden set, with its own scene key so uploads and shadow maps follow);
     // the clip box and near clip reach the raster and the path tracer through the look.
-    let filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
-    let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() {
+    let mut filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
+    if let Some((level, lower)) = req.overview {
+        filter = filter.with_overview(&req.drawing.arch, level, lower);
+    }
+    let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() && filter.levels.is_none() {
         (base, revision)
     } else {
         let hidden_key = hidden_set_key(&filter);
