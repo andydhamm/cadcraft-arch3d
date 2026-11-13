@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-13 15:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 15:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 36 of 36 segments merged · 13 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 36 of 42 segments merged · 13 of 20 acceptance checks**
 
 9,799 workspace tests passing at the last merge · 1080 segments merged in all · 0 of 15 seats working
 
@@ -28,15 +28,21 @@ Updated 2026-11-13 15:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 13 / 20 | 58.0 h so far · expected done Nov 13 15:30–Nov 14 16:40 UTC |
+| 18 | Interior finish, kitchen and bath | building | 13 / 20 | 58.3 h so far · expected done Nov 13 22:57–Nov 14 22:23 UTC |
 | 19 | Light, sky and cameras | building | 5 / 17 | — |
 | 20 | Plan views and dimensions | building | 9 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 6 / 13 | — |
 
 ## Phase 18 segments
 
-36 merged
+36 merged, 4 working, 2 queued
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `p18g-crown-soffit-tray` | Room crown really wraps soffits (with opt-out) and runs round trays | working | darwin-ws3 |
+| `p18g-countertop-nose` | Countertop edge profiles round the slab's edge instead of overlaying a full square slab | working | claude-sonnet-c |
+| `p18g-fill-labels-shelves` | cabinet.fill replies with cabinet labels; open shelves are meshed where arch.inspect reports them | working | claude-sonnet-b |
+| `p18g-room-moldings-refusals` | room.moldings honours `profile`, the 8-molding limit, and refuses before touching the drawing | working | mai-flash |
 
 ## Recent merges
 
@@ -59,18 +65,18 @@ Updated 2026-11-13 15:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1245 |
-| bonsai-b | bonsai2-27b | idle | 1196 |
-| bonsai-ws2-a | bonsai2-27b | idle | 1316 |
-| bonsai-ws2-b | bonsai2-27b | idle | 1275 |
-| claude-sonnet-a | sonnet | agent | 149 |
-| claude-sonnet-b | sonnet | idle | 153 |
-| claude-sonnet-c | sonnet | idle | 89 |
+| bonsai-a | bonsai2-27b | agent | 1245 |
+| bonsai-b | bonsai2-27b | gate | 1196 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1316 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1275 |
+| claude-sonnet-a | sonnet | gate | 150 |
+| claude-sonnet-b | sonnet | agent | 153 |
+| claude-sonnet-c | sonnet | agent | 90 |
 | claude-sonnet-d | sonnet | idle | 82 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1113 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1113 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 109 |
+| mai-flash | mai-code-1.1-flash | agent | 109 |
 | mai-flash-b | mai-code-1.1-flash | idle | 53 |
 | mai-flash-esc | mai-code-1.1-flash | down | 121 |
-| tturbo-mac | tturbo-ultraheretic | agent | 855 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 484 |
+| tturbo-mac | tturbo-ultraheretic | agent | 856 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 484 |
