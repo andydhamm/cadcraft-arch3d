@@ -997,3 +997,126 @@ fn plot_window(s: &Session, p: &Value, cmd: &str, space: &Space) -> Result<Optio
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod harden_tests {
+    use super::*;
+    use cadcraft_doc::arch::Sheet;
+
+    fn drawing_with_sheets(names: &[&str]) -> Drawing {
+        let mut d = Drawing::new_metric();
+        for name in names {
+            d.layouts.push(Layout::new(name, 0));
+        }
+        for (i, name) in names.iter().enumerate() {
+            d.arch.sheets.push(Sheet { name: name.to_string(), tab_order: i, ..Default::default() });
+        }
+        d
+    }
+
+    #[test]
+    fn plot_arch_sheets_all_empty() {
+        let d = Drawing::new_metric();
+        let err = plot_arch_sheets("plot", &d, &json!("all")).unwrap_err();
+        assert!(err.to_string().contains("no sheets"), "error: {}", err);
+    }
+
+    #[test]
+    fn plot_arch_sheets_all_returns_model_order() {
+        let d = drawing_with_sheets(&["A", "B", "C"]);
+        let names = plot_arch_sheets("plot", &d, &json!("all")).unwrap();
+        assert_eq!(names, vec!["A", "B", "C"]);
+    }
+
+    #[test]
+    fn plot_arch_sheets_list_keeps_order() {
+        let d = drawing_with_sheets(&["A", "B", "C"]);
+        let names = plot_arch_sheets("plot", &d, &json!(["C", "A"])).unwrap();
+        assert_eq!(names, vec!["C", "A"]);
+    }
+
+    #[test]
+    fn plot_arch_sheets_case_insensitive() {
+        let d = drawing_with_sheets(&["Sheet1", "Sheet2"]);
+        let names = plot_arch_sheets("plot", &d, &json!(["sheet2", "SHEET1"])).unwrap();
+        assert_eq!(names, vec!["Sheet2", "Sheet1"]);
+    }
+
+    #[test]
+    fn plot_arch_sheets_duplicate_error() {
+        let d = drawing_with_sheets(&["A", "B"]);
+        let err = plot_arch_sheets("plot", &d, &json!(["A", "A"])).unwrap_err();
+        assert!(err.to_string().contains("twice"), "error: {}", err);
+    }
+
+    #[test]
+    fn plot_arch_sheets_missing_error() {
+        let d = drawing_with_sheets(&["A"]);
+        let err = plot_arch_sheets("plot", &d, &json!(["B"])).unwrap_err();
+        assert!(err.to_string().contains("no sheet"), "error: {}", err);
+    }
+
+    #[test]
+    fn plot_arch_sheets_non_string_error() {
+        let d = drawing_with_sheets(&["A"]);
+        let err = plot_arch_sheets("plot", &d, &json!([1])).unwrap_err();
+        assert!(err.to_string().contains("sheet names"), "error: {}", err);
+    }
+
+    #[test]
+    fn plot_arch_sheets_sheet_without_layout_error() {
+        let mut d = Drawing::new_metric();
+        // Sheet exists but has no corresponding layout
+        d.arch.sheets.push(Sheet { name: "Orphan".to_string(), tab_order: 0, ..Default::default() });
+        let err = plot_arch_sheets("plot", &d, &json!("all")).unwrap_err();
+        assert!(err.to_string().contains("no layout"), "error: {}", err);
+    }
+
+    #[test]
+    fn plot_sheets_all_model_first_when_model_nonempty() {
+        let mut d = Drawing::new_metric();
+        d.model.push(Entity {
+            handle: Handle(1),
+            kind: EntityKind::Line(cadcraft_geom::Line::new(cadcraft_geom::Vec3::ZERO, cadcraft_geom::Vec3::new(1.0, 0.0, 0.0))),
+            common: Default::default(),
+        });
+        d.layouts.push(Layout::new("L1", 0));
+        let names = plot_sheets("plot", &d, &json!("all")).unwrap();
+        assert_eq!(names, vec!["Model", "L1"]);
+    }
+
+    #[test]
+    fn plot_sheets_all_no_model_when_empty() {
+        let mut d = Drawing::new_metric();
+        d.layouts.push(Layout::new("L1", 0));
+        let names = plot_sheets("plot", &d, &json!("all")).unwrap();
+        assert_eq!(names, vec!["L1"]);
+    }
+
+    #[test]
+    fn plot_sheets_list_case_insensitive() {
+        let mut d = Drawing::new_metric();
+        d.layouts.push(Layout::new("Layout1", 0));
+        let names = plot_sheets("plot", &d, &json!(["layout1"])).unwrap();
+        assert_eq!(names, vec!["Layout1"]);
+    }
+
+    #[test]
+    fn plot_sheets_empty_list_error() {
+        let d = Drawing::new_metric();
+        let err = plot_sheets("plot", &d, &json!([])).unwrap_err();
+        assert!(err.to_string().contains("no sheets"), "error: {}", err);
+    }
+
+    #[test]
+    fn plot_sheets_model_case_insensitive() {
+        let mut d = Drawing::new_metric();
+        d.model.push(Entity {
+            handle: Handle(1),
+            kind: EntityKind::Line(cadcraft_geom::Line::new(cadcraft_geom::Vec3::ZERO, cadcraft_geom::Vec3::new(1.0, 0.0, 0.0))),
+            common: Default::default(),
+        });
+        let names = plot_sheets("plot", &d, &json!(["MODEL"])).unwrap();
+        assert_eq!(names, vec!["Model"]);
+    }
+}
