@@ -475,6 +475,10 @@ pub(crate) fn receiver_bounds(scene: &Bounds3, ground: bool) -> Bounds3 {
 
 /// One upward-facing quad at `z = bounds.min[2]` spanning `bounds` expanded by twice its largest
 /// side on every edge, material `"ground"`, object [`GROUND_OBJECT`]. Empty for non-finite bounds.
+///
+/// This mesh is drawn by the renderer when `ground: true` but is not part of `Scene3d::meshes`, so
+/// picking against the scene alone misses it. The CLI's sample visibility check adds it to a
+/// temporary scene clone when `ground` is on.
 pub fn ground_mesh(bounds: &Bounds3) -> Mesh {
     let mut m = Mesh::new("ground", GROUND_OBJECT);
     if !bounds.min.iter().chain(bounds.max.iter()).all(|v| v.is_finite()) {

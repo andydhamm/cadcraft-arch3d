@@ -268,6 +268,9 @@ fn valid_date(date: &str) -> bool {
 }
 
 fn valid_time(time: &str) -> bool {
+    if time == "solar-noon" {
+        return true;
+    }
     let mut it = time.split(':');
     let (Some(h), Some(m)) = (it.next(), it.next()) else { return false };
     let s = it.next();
