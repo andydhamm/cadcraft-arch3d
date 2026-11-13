@@ -15,8 +15,14 @@ fn model_of(c: Cabinet) -> ArchModel {
 fn appliance_face() -> FaceLayout {
     FaceLayout {
         rows: vec![
-            FaceRow { kind: FaceKind::Appliance, height: Some(0.737), across: 1, appliance: Some("appliance:wall-oven".to_string()) },
-            FaceRow { kind: FaceKind::Door, height: None, across: 0, ..FaceRow::default() },
+            FaceRow {
+                kind: FaceKind::Appliance,
+                height: Some(0.737),
+                across: 1,
+                appliance: Some("appliance:wall-oven".to_string()),
+                ..Default::default()
+            },
+            FaceRow { kind: FaceKind::Door, height: None, across: 0, ..Default::default() },
         ],
         ..FaceLayout::default()
     }

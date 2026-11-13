@@ -204,9 +204,9 @@ pub fn place_appliance(c: &Cabinet, row: usize, item: &str, size: [f64; 3]) -> R
     let split = old.kind != FaceKind::Appliance
         && old.height.is_none()
         && face.rows.iter().filter(|r| r.kind != FaceKind::Appliance && r.height.is_none()).count() == 1;
-    face.rows[row] = FaceRow { kind: FaceKind::Appliance, height: Some(size[2]), across: 1, appliance: Some(item.to_string()) };
+    face.rows[row] = FaceRow { kind: FaceKind::Appliance, height: Some(size[2]), across: 1, appliance: Some(item.to_string()), ..Default::default() };
     if split {
-        face.rows.insert(row + 1, FaceRow { kind: old.kind, height: None, across: 0, appliance: None });
+        face.rows.insert(row + 1, FaceRow { kind: old.kind, height: None, across: 0, appliance: None, ..Default::default() });
     }
     if row_heights(c, &face).is_none() {
         return Err("the appliance does not fit the cabinet face".to_string());
@@ -224,7 +224,7 @@ pub fn remove_appliance(c: &Cabinet, row: usize) -> Result<FaceLayout, String> {
     if old.kind != FaceKind::Appliance {
         return Err(format!("row {row} is not an appliance row"));
     }
-    face.rows[row] = FaceRow { kind: FaceKind::Door, height: None, across: 0, appliance: None };
+    face.rows[row] = FaceRow { kind: FaceKind::Door, height: None, across: 0, appliance: None, ..Default::default() };
     if row_heights(c, &face).is_none() {
         return Err("the row does not fit the cabinet face".to_string());
     }
