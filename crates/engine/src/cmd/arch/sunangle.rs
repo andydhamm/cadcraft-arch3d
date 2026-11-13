@@ -143,16 +143,12 @@ fn run_sunangle(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         let date = date.ok_or_else(|| EngineError::Other("sunangle: `date` is required with `time`".into()))?;
         let time = time.ok_or_else(|| EngineError::Other("sunangle: `time` is required with `date`".into()))?;
         let site = s.doc()?.arch.site.as_ref().ok_or_else(|| EngineError::Other("sunangle: date/time form needs a site location".into()))?;
-        let sun = sun_position(site.latitude, &date, &time)
+        // The date/time form stores only the date and time. The `sun_position` call is kept
+        // purely as the check that they resolve at the site's latitude; the resolved
+        // azimuth/elevation are derived on use by `resolved_sun`, never stored on the angle.
+        let _ = sun_position(site.latitude, &date, &time)
             .ok_or_else(|| EngineError::Other(format!("sunangle `{name}`: could not resolve sun for {date} {time}")))?;
-        let angle = SunAngle {
-            name,
-            date: Some(date),
-            time: Some(time),
-            azimuth: Some(sun.azimuth_deg),
-            elevation: Some(sun.elevation_deg),
-            ..Default::default()
-        };
+        let angle = SunAngle { name, date: Some(date), time: Some(time), azimuth: None, elevation: None, ..Default::default() };
         angle.validate().map_err(EngineError::Other)?;
         add_or_replace(s, angle, replace)?;
         return list_json(s);
@@ -213,6 +209,78 @@ mod tests {
 
         s.execute("sunangle", &json!({"delete": "NOON"})).expect("sunangle delete NOON");
         assert!(list(&mut s).is_empty());
+    }
+
+    #[test]
+    fn date_time_angle_is_accepted_and_resolves() {
+        let mut s = Session::new();
+        let mut d = s.doc_mut().unwrap();
+        d.arch.site = Some(SiteLocation { latitude: 51.05, ..SiteLocation::default() });
+        d.touch_arch();
+        let r = s.execute("sunangle", &json!({"name": "noon", "date": "2026-06-21", "time": "solar-noon"}));
+        assert!(r.is_ok(), "sunangle add should succeed");
+        let list: Value = s.execute("sunangle", &json!({"list": true})).expect("sunangle list");
+        let row = &list["sunAngles"][0];
+        let el: f64 = row["sunElevation"].as_f64().expect("sunElevation");
+        let az: f64 = row["sunAzimuth"].as_f64().expect("sunAzimuth");
+        assert!((el - 62.39).abs() < 0.1, "sunElevation {} not near 62.39", el);
+        assert!((az - 180.0).abs() < 0.1, "sunAzimuth {} not near 180", az);
+        let dir = row["dir"].as_array().expect("dir array");
+        let x = dir[0].as_f64().unwrap();
+        let y = dir[1].as_f64().unwrap();
+        let z = dir[2].as_f64().unwrap();
+        assert!((x * x + y * y + z * z - 1.0).abs() < 1e-6, "dir not unit: ({}, {}, {})", x, y, z);
+        assert!(z > 0.0, "dir z should be positive: {}", z);
+        assert!(y < 0.0, "dir y should be negative (south): {}", y);
+    }
+
+    #[test]
+    fn date_time_angle_lists_null_azimuth_and_elevation() {
+        let mut s = Session::new();
+        let mut d = s.doc_mut().unwrap();
+        d.arch.site = Some(SiteLocation { latitude: 51.05, ..SiteLocation::default() });
+        d.touch_arch();
+        let _ = s.execute("sunangle", &json!({"name": "noon", "date": "2026-06-21", "time": "solar-noon"})).expect("sunangle add");
+        let v: Value = s.execute("sunangle", &json!({"list": true})).expect("sunangle list");
+        let row = &v["sunAngles"][0];
+        assert_eq!(row["date"], json!("2026-06-21"));
+        assert_eq!(row["time"], json!("solar-noon"));
+        assert_eq!(row["azimuth"], json!(null));
+        assert_eq!(row["elevation"], json!(null));
+        assert!(row["sunElevation"].is_number());
+        assert!(row["sunAzimuth"].is_number());
+        assert!(row["dir"].is_array());
+    }
+
+    #[test]
+    fn look_uses_a_date_time_angle() {
+        let mut s = Session::new();
+        // Set the site first so the mutable borrow ends before the first `s.execute`.
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.site = Some(SiteLocation { latitude: 51.05, ..SiteLocation::default() });
+            d.touch_arch();
+        }
+        s.execute("sunangle", &json!({"name": "noon", "date": "2026-06-21", "time": "solar-noon"})).expect("sunangle add");
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.look.sun.angle = Some("noon".to_string());
+            d.touch_arch();
+        }
+        {
+            let model = &s.doc().unwrap().arch;
+            let angle = &model.sun_angles[0];
+            let site = model.site.as_ref();
+            let (az, el, dir) = resolved_sun(angle, site).expect("resolved_sun");
+            assert!((az - 180.0).abs() < 0.1, "sunAzimuth {} not near 180", az);
+            assert!((el - 62.39).abs() < 0.1, "sunElevation {} not near 62.39", el);
+            assert!((dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2] - 1.0).abs() < 1e-6, "dir not unit");
+            assert!(dir[2] > 0.0, "dir z positive");
+        }
+        // Deleting the angle used by the look is refused.
+        let del = s.execute("sunangle", &json!({"delete": "noon"}));
+        assert!(del.is_err(), "deleting an angle used by the look should be refused");
+        assert_eq!(s.doc().unwrap().arch.sun_angles.len(), 1, "angle still present after refused delete",);
     }
 
     #[test]
