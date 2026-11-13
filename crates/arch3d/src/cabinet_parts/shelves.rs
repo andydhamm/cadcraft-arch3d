@@ -266,6 +266,77 @@ mod tests {
     }
 
     #[test]
+    fn open_shelves_cabinet_at_offset_position() {
+        let (m, _) = model(0.0);
+        let offset = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(2.0, 3.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &offset);
+        assert!(!shelves.is_empty(), "offset cabinet should have shelves");
+        let levels = cadcraft_arch::casework_shelves::shelf_levels(&offset);
+        let mid = (levels[0].0 + levels[0].1) / 2.0;
+        let at = Vec3::new(2.0, 3.0 + offset.depth / 2.0, mid);
+        assert!(shelves.iter().any(|s| s.material == "cabinet-shelves" && probe_mesh(s, at)));
+    }
+
+    #[test]
+    fn open_shelves_cabinet_with_counter() {
+        let (m, _) = model(0.0);
+        let with_counter = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &with_counter);
+        assert!(!shelves.is_empty(), "cabinet with counter should have shelves");
+        let levels = cadcraft_arch::casework_shelves::shelf_levels(&with_counter);
+        for (b, t) in &levels {
+            assert!(*b >= with_counter.elevation + 0.019 - 1e-9, "shelf bottom below carcass");
+            assert!(*t <= with_counter.elevation + with_counter.height - 0.019 + 1e-9, "shelf top above carcass");
+        }
+    }
+
+    #[test]
+    fn open_shelves_cabinet_with_toe_kick_and_elevation() {
+        let (m, _) = model(0.0);
+        let with_both = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.876,
+            elevation: 0.0,
+            toe_kick: true,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &with_both);
+        assert!(!shelves.is_empty(), "cabinet with toe kick and elevation should have shelves");
+        let levels = cadcraft_arch::casework_shelves::shelf_levels(&with_both);
+        for (b, t) in &levels {
+            assert!(*b >= with_both.elevation + 0.019 - 1e-9, "shelf bottom below carcass");
+            assert!(*t <= with_both.elevation + with_both.height - 0.019 + 1e-9, "shelf top above carcass");
+        }
+    }
+
+    #[test]
     fn open_shelves_cabinet_with_nan_position_does_not_crash() {
         let (m, _) = model(0.0);
         let nan_pos = Cabinet {
@@ -284,7 +355,7 @@ mod tests {
         // If shelves are returned, they should be finite.
         for shelf in &shelves {
             for v in &shelf.positions {
-                assert!(v.is_finite(), "shelf vertex should be finite");
+                assert!(v[0].is_finite() && v[1].is_finite() && v[2].is_finite(), "shelf vertex should be finite");
             }
         }
     }
