@@ -45,7 +45,7 @@ pub fn tray_strip_path(model: &ArchModel, tray: &str, inset: f64) -> Result<(u32
     let n = label.strip_prefix("tr").or_else(|| label.strip_prefix("TR")).and_then(|d| d.parse::<u32>().ok()).ok_or_else(unknown)?;
     let t = model.trays.iter().find(|t| t.id.0 == n).ok_or_else(unknown)?;
     if !inset.is_finite() || inset < 0.0 {
-        return Err(format!("`inset` must be 0 m or more; got {inset}"));
+        return Err(format!("`inset` must be 0 m or more for tray `{label}`; got {inset}"));
     }
     let no_path = || format!("the inset leaves no strip path inside tray `{label}`");
     let mut outline = crate::ceiling::tray::outline(model, t).map_err(|e| format!("tray `{label}`: {e}"))?;
