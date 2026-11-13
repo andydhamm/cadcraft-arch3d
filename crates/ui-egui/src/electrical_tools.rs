@@ -600,4 +600,50 @@ mod tests {
         s.execute("planview.close", &json!({ "name": "Electrical" })).expect("close");
         assert!(!view_on(&s.doc().expect("doc").arch));
     }
+
+    #[test]
+    fn view_on_is_case_insensitive() {
+        let mut s = session_with_wall();
+        for name in ["Electrical", "electrical", "ELECTRICAL", " Electrical "] {
+            let d = s.doc_mut().unwrap();
+            d.arch.active_plan_view = Some(name.to_string());
+            assert!(view_on(&d.arch), "view_on should be true for `{}`", name);
+        }
+        let d = s.doc_mut().unwrap();
+        d.arch.active_plan_view = Some("Floor Plan".to_string());
+        assert!(!view_on(&d.arch));
+    }
+
+    #[test]
+    fn view_on_with_no_active_view() {
+        let mut s = session_with_wall();
+        let d = s.doc_mut().unwrap();
+        d.arch.active_plan_view = None;
+        assert!(!view_on(&d.arch));
+    }
+
+    #[test]
+    fn wall_face_at_with_no_walls() {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        let model = s.doc().unwrap().arch.clone();
+        assert!(wall_face_at(&model, Vec2::new(1.0, 1.0), None).is_none());
+    }
+
+    #[test]
+    fn wall_face_at_with_degenerate_wall() {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.push_wall(Wall::new(Vec2::new(1.0, 1.0), Vec2::new(1.0, 1.0), 0.2));
+        }
+        let model = s.doc().unwrap().arch.clone();
+        assert!(wall_face_at(&model, Vec2::new(1.0, 1.0), None).is_none());
+    }
+
+    #[test]
+    fn bulge_through_with_degenerate_chord() {
+        let grip = ArcGrip { connection: ArchId(0), at: Vec2::new(1.0, 1.0), from: Vec2::new(1.0, 1.0), to: Vec2::new(1.0, 1.0) };
+        assert!(bulge_through(&grip, Vec2::new(2.0, 2.0)).is_none());
+    }
 }

@@ -822,6 +822,44 @@ mod tests {
         assert!(e.contains("Nope"), "{e}");
     }
 
+    #[test]
+    fn export_plan_view_with_non_string_is_refused() {
+        let mut s = plan_view_session();
+        assert!(s.execute("export", &json!({"format": "svg", "planView": 3})).is_err());
+        assert!(s.execute("export", &json!({"format": "svg", "planView": true})).is_err());
+        assert!(s.execute("export", &json!({"format": "svg", "planView": []})).is_err());
+    }
+
+    #[test]
+    fn export_plan_view_null_is_treated_as_absent() {
+        let ours = our_hooks();
+        let mut s = plan_view_session();
+        if !ours {
+            return;
+        }
+        let r = s.execute("export", &json!({"format": "svg", "planView": null})).unwrap();
+        assert!(r["data"].is_string());
+    }
+
+    #[test]
+    fn export_plan_view_empty_string_is_refused() {
+        let mut s = plan_view_session();
+        let e = s.execute("export", &json!({"format": "svg", "planView": ""})).unwrap_err().to_string();
+        assert!(e.contains("no plan view"), "{e}");
+    }
+
+    #[test]
+    fn export_plan_view_restores_session_on_export_error() {
+        let ours = our_hooks();
+        let mut s = plan_view_session();
+        if !ours {
+            return;
+        }
+        let doc = s.state().unwrap().doc.clone();
+        assert!(s.execute("export", &json!({"format": "xyz", "planView": "Electrical"})).is_err());
+        assert!(Arc::ptr_eq(&doc, &s.state().unwrap().doc), "the session's drawing is put back");
+    }
+
     fn view_session() -> Session {
         use cadcraft_doc::arch::{ArchId, ArchView, ViewGeometry, ViewLine, ViewRing};
         let mut s = session();

@@ -40,7 +40,7 @@ fn run_view_electrical(s: &mut Session, params: &Value) -> Result<Value, EngineE
             return Err(bad("view.electrical", "the Electrical plan view is not available"));
         };
         ensure_plan_layers(d, &v);
-        if !active {
+        if !active || !d.layer_states.iter().any(|st| st.name == name) {
             // The layers from before the view's rules (plus those just created, at their defaults).
             let saved = d.layers.clone();
             d.layer_states.retain(|st| st.name != name);
@@ -169,5 +169,56 @@ mod tests {
         assert!(s.execute("view.electrical", &json!({"x": 1})).is_err());
         assert!(s.execute("view.electrical", &json!([])).is_err());
         assert_eq!(s.state().unwrap().undo.len(), depth);
+    }
+
+    #[test]
+    fn view_electrical_refused_at_max_plan_views() {
+        let mut s = rooms_session();
+        s.execute("planview.delete", &json!({"name": "Electrical"})).unwrap();
+        let d = s.doc_mut().unwrap();
+        let mut i = 0;
+        while d.arch.plan_views.len() < MAX_PLAN_VIEWS {
+            let name = format!("Test{}", i);
+            d.arch.plan_views.push(cadcraft_doc::arch::PlanView { name, ..Default::default() });
+            i += 1;
+        }
+        assert!(s.doc().unwrap().arch.plan_view("Electrical").is_none());
+        let e = s.execute("view.electrical", &json!({})).unwrap_err().to_string();
+        assert!(e.contains(&MAX_PLAN_VIEWS.to_string()), "{e}");
+    }
+
+    #[test]
+    fn view_electrical_case_insensitive_active_view() {
+        let mut s = rooms_session();
+        let d = s.doc_mut().unwrap();
+        d.arch.active_plan_view = Some("electrical".to_string());
+        s.execute("view.electrical", &json!({})).unwrap();
+        let state = s.doc().unwrap().layer_states.iter().find(|st| st.name == "Electrical").unwrap();
+        assert!(state.layers.iter().all(|l| l.transparency == 0), "saved state must not be dimmed");
+    }
+
+    #[test]
+    fn view_electrical_hostile_json_types() {
+        let mut s = rooms_session();
+        let depth = s.state().unwrap().undo.len();
+        for p in [json!(null), json!(1), json!("string"), json!(true)] {
+            assert!(s.execute("view.electrical", &p).is_err(), "{p}");
+        }
+        assert_eq!(s.state().unwrap().undo.len(), depth);
+    }
+
+    #[test]
+    fn view_electrical_undo_restores_layers() {
+        let mut s = rooms_session();
+        let before = s.doc().unwrap().layers.clone();
+        s.execute("view.electrical", &json!({})).unwrap();
+        let wall = s.doc().unwrap().layer("A-WALL").unwrap();
+        assert_eq!(wall.transparency, 70);
+        s.execute("undo", &json!({})).unwrap();
+        let after = &s.doc().unwrap().layers;
+        for l in &before {
+            let now = after.iter().find(|x| x.name == l.name).unwrap();
+            assert_eq!((now.on, now.frozen, now.transparency), (l.on, l.frozen, l.transparency), "{}", l.name);
+        }
     }
 }
