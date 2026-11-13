@@ -1,0 +1,184 @@
+[
+  {
+    "cmd": "wall",
+    "params": {
+      "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
+      "thickness": 0.2,
+      "height": 2.4,
+      "exterior": true
+    }
+  },
+  {
+    "cmd": "wall",
+    "params": {
+      "points": [[0.0, 3.0], [10.0, 3.0]],
+      "thickness": 0.1,
+      "height": 2.4,
+      "type": "interior"
+    }
+  },
+  {
+    "cmd": "wall",
+    "params": {
+      "points": [[6.0, 3.0], [6.0, 8.0]],
+      "thickness": 0.1,
+      "height": 2.4,
+      "type": "interior"
+    }
+  },
+  {
+    "cmd": "roomdetect",
+    "params": {}
+  },
+  {
+    "cmd": "room",
+    "params": {
+      "id": "r0",
+      "name": "Bedroom",
+      "type": "bedroom",
+      "ceilingStack": [
+        { "name": "drywall", "material": "drywall", "thickness": 0.0127 },
+        { "name": "air", "material": null, "thickness": 0.2 },
+        { "name": "ceiling tile", "material": "ceiling-tile", "thickness": 0.016 }
+      ]
+    }
+  },
+  {
+    "cmd": "level",
+    "params": { "above": 0 }
+  },
+  {
+    "cmd": "wall",
+    "params": {
+      "points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]],
+      "thickness": 0.2,
+      "height": 2.4,
+      "exterior": true,
+      "level": 1
+    }
+  },
+  {
+    "cmd": "wall",
+    "params": {
+      "points": [[5.0, 0.0], [5.0, 8.0]],
+      "thickness": 0.1,
+      "height": 2.4,
+      "type": "interior",
+      "level": 1
+    }
+  },
+  {
+    "cmd": "roomdetect",
+    "params": { "level": 1 }
+  },
+  {
+    "cmd": "roofauto",
+    "params": { "pitchRise": 6, "pitchRun": 12, "level": 1 }
+  },
+  {
+    "cmd": "tray",
+    "params": { "room": "r3", "inset": 0.6, "depth": 0.3 }
+  },
+  {
+    "cmd": "opening",
+    "params": {
+      "wall": "w0",
+      "offset": 2.0,
+      "kind": "window",
+      "width": 0.9,
+      "height": 1.5,
+      "sill": 0.6
+    }
+  },
+  {
+    "cmd": "opening",
+    "params": {
+      "wall": "w0",
+      "offset": 7.0,
+      "kind": "door",
+      "width": 0.9,
+      "height": 2.1,
+      "sill": 0.0
+    }
+  },
+  {
+    "cmd": "library.place",
+    "params": { "item": "bed-double-wood", "at": [3.0, 5.5], "level": 0 }
+  },
+  {
+    "cmd": "library.place",
+    "params": { "item": "light-ceiling", "at": [3.0, 5.5], "level": 0 }
+  },
+  {
+    "cmd": "electrical",
+    "params": { "type": "outlet", "wall": "w1", "level": 0 }
+  },
+  {
+    "cmd": "electrical",
+    "params": { "type": "switch", "wall": "w1", "level": 0 }
+  },
+  {
+    "cmd": "electrical",
+    "params": { "type": "outlet", "wall": "w3", "level": 1 }
+  },
+  {
+    "cmd": "terrain",
+    "params": {
+      "boundary": [[-15.0, -11.0], [25.0, -11.0], [25.0, 19.0], [-15.0, 19.0]],
+      "points": [[-15.0, -11.0, 0.0], [25.0, -11.0, 2.0], [25.0, 19.0, 2.0], [-15.0, 19.0, 0.0]]
+    }
+  },
+  {
+    "cmd": "plant",
+    "params": { "species": "Sugar Maple", "at": [-8.0, 14.0], "age": 10 }
+  },
+  {
+    "cmd": "dimauto",
+    "params": { "level": 0 }
+  },
+  {
+    "cmd": "dimauto",
+    "params": { "level": 1 }
+  },
+  {
+    "cmd": "layer.set",
+    "params": { "name": "A-ANNO-DIMS", "color": "#108040" }
+  },
+  {
+    "cmd": "layer.new",
+    "params": { "name": "A-ROOF-ANNO", "color": "#a05010" }
+  },
+  {
+    "cmd": "planview",
+    "params": { "name": "Level 1 Floor Plan", "template": "Floor Plan", "level": 0 }
+  },
+  {
+    "cmd": "planview",
+    "params": {
+      "name": "Level 2 Floor Plan",
+      "template": "Floor Plan",
+      "level": 1,
+      "reference": { "level": 0, "color": "#b4b4b4" }
+    }
+  },
+  {
+    "cmd": "planview",
+    "params": { "name": "Level 1 Electrical", "template": "Electrical", "level": 0 }
+  },
+  {
+    "cmd": "planview",
+    "params": { "name": "Level 2 Electrical", "template": "Electrical", "level": 1 }
+  },
+  {
+    "cmd": "planview",
+    "params": { "name": "Level 1 Reflected Ceiling", "template": "Reflected Ceiling", "level": 0 }
+  },
+  {
+    "cmd": "planview",
+    "params": { "name": "Level 2 Reflected Ceiling", "template": "Reflected Ceiling", "level": 1 }
+  },
+  {
+    "cmd": "planview.open",
+    "params": { "name": "Level 1 Floor Plan" }
+  }
+]
