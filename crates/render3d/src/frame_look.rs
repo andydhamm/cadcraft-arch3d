@@ -58,6 +58,8 @@ pub struct Meter {
     /// Per BVH object id: the index of the scene mesh, or `GROUND` / `HORIZON` for the extras.
     sources: Vec<usize>,
     ground: Option<Mesh>,
+    /// The radiance SH of the environment with this key, for the ambient term of a ray.
+    sh: Option<(u64, [[f32; 3]; 9])>,
 }
 
 const GROUND: usize = usize::MAX;
@@ -113,6 +115,15 @@ impl Meter {
         f: &FrameLook,
     ) -> Option<f32> {
         self.prepare(scene, ground);
+        match lighting.environment.as_deref().filter(|e| e.is_valid()) {
+            Some(env) => {
+                if self.sh.as_ref().is_none_or(|(k, _)| *k != env.key) {
+                    self.sh = Some((env.key, crate::sh::project(env)));
+                }
+            }
+            None => self.sh = None,
+        }
+        let sh = self.sh.map(|(_, c)| c);
         let bvh = self.bvh.as_ref()?;
         let sun = lighting.sun.map(|l| {
             let d = l.normalized().dir;
@@ -137,7 +148,14 @@ impl Meter {
                     n = n * -1.0;
                 }
                 let albedo = lighting.lambert.unwrap_or_else(|| luminance(crate::pipeline::material_albedo(&mesh.material)));
-                let mut irradiance = f64::from(f.ambient_lux);
+                let mut irradiance = match &sh {
+                    // The environment lights the surface instead of the stand-in ambient.
+                    Some(sh) => {
+                        let e = crate::sh::irradiance(sh, [n.x as f32, n.y as f32, n.z as f32]);
+                        f64::from(luminance(e).max(0.0))
+                    }
+                    None => f64::from(f.ambient_lux),
+                };
                 if let Some(s) = sun {
                     let ndl = n.dot(s).max(0.0);
                     if ndl > 0.0 && f.sun_lux > 0.0 {
@@ -214,12 +232,18 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     f.tone_map = tone_code(look.tone_map);
     f.lambert = lighting.lambert.filter(|a| a.is_finite());
     let intensity = if look.sun.intensity.is_finite() { look.sun.intensity.max(0.0) as f32 } else { 0.0 };
-    let sun = lighting.sun.is_some();
-    f.sun_lux = if sun { intensity } else { 0.0 };
-    f.ambient_lux = match (sun, look.sky.on) {
-        (true, true) => 0.25 * intensity,
-        (true, false) => 0.0,
-        (false, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
+    // The moon as the directional light is not the sun: `sun` is true only for a real sun.
+    let sun = lighting.sun.is_some() && lighting.moon.is_none();
+    let directional = lighting.directional_lux();
+    f.sun_lux = directional;
+    // An environment lights through its SH: the stand-in ambient is off, the meter adds the SH.
+    let has_env = lighting.environment.as_ref().is_some_and(|e| e.is_valid());
+    f.ambient_lux = match (sun, look.sky.on, lighting.moon.is_some()) {
+        _ if has_env => 0.0,
+        (true, true, _) => 0.25 * intensity,
+        (true, false, _) => 0.0,
+        (false, true, true) => 0.25 * directional,
+        (false, _, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
     };
     // A bare-number exposure of the request arrives as a `Lighting::exposure` off the default.
     let legacy = (lighting.exposure.to_bits() != crate::lights::DEFAULT_EXPOSURE.to_bits() && lighting.exposure.is_finite())
@@ -379,6 +403,25 @@ mod tests {
         // With nothing hit the daylight scale is the day exposure.
         let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
         assert_eq!(f.exposure, crate::pathtrace::DAY_EXPOSURE);
+    }
+
+    #[test]
+    fn meter_uses_sh_ambient() {
+        // A plane under a uniform environment of radiance 1 (E = pi) and no sun: L = 0.5 / pi * pi.
+        let scene = plane();
+        let camera = down_at([0.0, 0.0, 0.0]);
+        let env = crate::environment::Environment::uniform([1.0; 3], 32, 16);
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.exposure = ExposureSetting::Auto;
+        let lighting =
+            Lighting { sun: None, look, lambert: Some(0.5), meter_night: true, environment: Some(std::sync::Arc::new(env)), ..Lighting::default() };
+        let mut meter = Meter::default();
+        let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
+        let l = meter.log_average(&scene, &camera, (64, 48), &lighting, false, &f);
+        assert!(l.is_some_and(|l| (l - 0.5).abs() < 0.5 * 0.01), "{l:?}");
+        assert_eq!(f.exposure_mode, "auto");
+        assert!((f.exposure - 0.18 / 0.5).abs() < 0.36 * 0.03, "{}", f.exposure);
+        assert_eq!(f.ambient_lux, 0.0, "the stand-in ambient is off under an environment");
     }
 
     #[test]

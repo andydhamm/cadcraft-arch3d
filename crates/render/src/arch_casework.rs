@@ -31,6 +31,25 @@ pub(crate) fn push_casework(d: &Drawing, list: &mut DisplayList, plotting: bool)
             }
         }
     }
+    for ct in &d.arch.countertops {
+        if !on_shown_level(d, ct.level) || arch_layer_skipped(d, &ct.layer, plotting) {
+            continue;
+        }
+        let Some(o) = cadcraft_arch::countertop::custom_outline(&d.arch, ct) else { continue };
+        let mut ring = cadcraft_arch::countertop_edit::sampled_ring(&o.ring, &o.sagittas);
+        if let Some(first) = ring.first().copied() {
+            ring.push(first);
+        }
+        if ring.len() >= 3 {
+            push_polyline_with_transparency(
+                list,
+                cadcraft_doc::arch::countertop_handle(ct.id),
+                &ink_for(d, &ct.layer),
+                &ring,
+                layer_transparency(d, &ct.layer),
+            );
+        }
+    }
     for f in &d.arch.fixtures {
         if !on_shown_level(d, f.level) {
             continue;
@@ -55,6 +74,41 @@ mod tests {
     use cadcraft_arch::casework::{cabinet_defaults, fixture_defaults};
     use cadcraft_doc::ArchId;
     use cadcraft_doc::arch::{CabinetKind, FixtureKind};
+
+    #[test]
+    fn custom_outline_drawn_and_claimed_cabinets_drop_their_counter_rect() {
+        use cadcraft_doc::arch::{Cabinet, Countertop, countertop_handle};
+        let mut d = Drawing::default();
+        let base = Cabinet {
+            kind: CabinetKind::Base,
+            width: 0.9,
+            depth: 0.6,
+            counter: true,
+            ..cadcraft_arch::casework::cabinet_defaults(CabinetKind::Base)
+        };
+        let cid = d.arch.push_cabinet(base);
+        let prims = |d: &Drawing| {
+            let mut list = DisplayList::default();
+            push_casework(d, &mut list, false);
+            list
+        };
+        let n_before = prims(&d).prims.iter().filter(|p| p.handle == cabinet_handle(cid)).count();
+        let ct = Countertop {
+            polygon: vec![
+                cadcraft_geom::Vec2::new(0.0, 0.0),
+                cadcraft_geom::Vec2::new(2.0, 0.0),
+                cadcraft_geom::Vec2::new(2.0, 1.0),
+                cadcraft_geom::Vec2::new(0.0, 1.0),
+            ],
+            cabinets: vec![cid],
+            ..Default::default()
+        };
+        let tid = d.arch.push_countertop(ct);
+        let list = prims(&d);
+        assert_eq!(list.prims.iter().filter(|p| p.handle == countertop_handle(tid)).count(), 1, "one closed ring for the countertop");
+        let n_after = list.prims.iter().filter(|p| p.handle == cabinet_handle(cid)).count();
+        assert!(n_after < n_before, "the claimed cabinet drops its counter rectangle ({n_before} -> {n_after})");
+    }
 
     #[test]
     fn casework_draws_on_its_layers_with_handles() {

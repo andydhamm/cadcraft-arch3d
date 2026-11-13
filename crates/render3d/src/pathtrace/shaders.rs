@@ -190,18 +190,10 @@ mod tests {
     }
 
     fn assert_pt_hooks_are_stubbed(source: &str) {
-        let stubs = [
-            "fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { if ((frame.flags & FRAME_SUN_NO_SHADOW) != 0u) { return vec3<f32>(1.0); } return visibility(o, d, 1.0e6); }",
-            "fn env_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }",
-            "fn env_escape(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32> { return sky_radiance(d); }",
-            "fn env_irradiance(o: vec3<f32>, n: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> { return vec3<f32>(0.0); }",
-            "fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }",
-            "fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32> { return vec3<f32>(0.0); }",
-            "fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }",
-        ];
-        for stub in stubs {
-            assert_eq!(source.matches(stub).count(), 1, "missing stub: {stub}");
-        }
+        assert!(source.contains("fn sun_visibility(o: vec3<f32>, d: vec3<f32>) -> vec3<f32> { if ((frame.flags & FRAME_SUN_NO_SHADOW) != 0u) { return vec3<f32>(1.0); } return visibility(o, d, 1.0e6); }"), "sun visibility hook missing");
+        assert!(source.contains("fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32>"), "moon direct hook missing");
+        assert!(source.contains("fn moon_irradiance(o: vec3<f32>, n: vec3<f32>) -> vec3<f32>"), "moon irradiance hook missing");
+        assert!(source.contains("fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> { return n; }"), "normal hook missing");
         assert_eq!(source.matches("sun_visibility(o, sun.dir)").count(), 2, "sun visibility uses");
         assert!(source.contains("env_escape(d, depth, mode, prev_pdf)"));
         assert!(source.contains("pt_shading_normal(h.tri, n, h.u, h.v)"));

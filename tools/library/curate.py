@@ -34,6 +34,14 @@ PROPORTION_TOLERANCE = 0.05     # a mesh may differ from its catalog size's prop
 CHANGES = ('converted from OBJ/MTL to glTF binary by arch3d tools/library: triangulated, normals computed where the OBJ '
            'has none (smoothing groups averaged), moved to bottom-centre and scaled to the catalog size in metres, '
            'specular terms dropped, textures other than PNG or JPEG dropped')
+HDRI_FILE = 'hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr'     # the one item that is not converted or made here
+HDRI_README = 'hdri/README.md'
+HDRI_ITEM = {'id': 'polyhaven:kloofendal-puresky', 'name': 'Partly cloudy sky (HDR)', 'category': 'Backdrops',
+             'symbolType': 'backdrop', 'placement': None, 'size': None,
+             'keywords': ['sky', 'hdri', 'hdr', 'clouds', 'day', 'backdrop'], 'file': HDRI_FILE,
+             'source': 'https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky', 'licence': 'CC0-1.0',
+             'author': 'Greg Zaal (original), Jarod Guest (sky edits)',
+             'attribution': 'Kloofendal 48d Partly Cloudy (Pure Sky) by Greg Zaal and Jarod Guest, Poly Haven, CC0-1.0'}
 WALL_DEFAULT_ELEVATION = {'hood': 1.5}     # metres to the bottom of a wall item whose library gives no elevation
 
 
@@ -162,6 +170,12 @@ def attribution_rows(items, titles, out):
             f'the sample set\'s index |']
     for i in items:
         lic = f'[{i["licence"]}]({LICENCE_URL[i["licence"]]})'
+        if i['id'] == HDRI_ITEM['id']:
+            rows.append(f'| `{out}/{i["file"]}` | {i["author"]} | [Poly Haven]({i["source"]}) | {lic} | '
+                        f'1k Radiance HDR, unmodified |')
+            rows.append(f'| `{out}/{HDRI_README}` | CADCraft contributors | written for the sample set | '
+                        f'MIT OR Apache-2.0 | the sample HDRI\'s provenance note |')
+            continue
         note = 'made for the sample set' if i['id'].startswith('own:') else i['attribution'].split(', ' + i['licence'])[0]
         rows.append(f'| `{out}/{i["file"]}` | {i["author"]} | {i["source"].replace("|", "/")} | {lic} | '
                     f'{note.replace("|", "/")} |')
@@ -192,7 +206,7 @@ def curate(src, picks_path, out, attribution):
             cache[file] = read_sh3f(os.path.join(src, file))
         return cache[file]
     stale = sorted(set(os.listdir(out)) - {p['id'] + e for p in picks for e in ('.glb', '.png', '.jpg')}
-                   - {'catalog.json', *OWN_FILES}) if os.path.isdir(out) else []
+                   - {'catalog.json', 'hdri', *OWN_FILES}) if os.path.isdir(out) else []
     if stale:
         raise Refused(f'{out} holds files no pick makes (remove them first): {stale}')
     os.makedirs(out, exist_ok=True)
@@ -204,6 +218,10 @@ def curate(src, picks_path, out, attribution):
         items.append(item)
         titles[item['id']] = title
     items += own_items(out)
+    for f in (HDRI_FILE, HDRI_README):      # kept as committed: this item is neither converted nor made here
+        if not os.path.isfile(os.path.join(out, f)):
+            raise Refused(f'{out}/{f} is missing (restore it from git; curate.py keeps it)')
+    items.append(dict(HDRI_ITEM))
     items.sort(key=lambda i: i['id'])
     if len({i['id'] for i in items}) != len(items):
         raise Refused('two items share an id')

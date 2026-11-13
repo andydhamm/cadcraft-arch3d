@@ -4,7 +4,8 @@
 use crate::casework_layout::{FrontInfo, FrontKind, Hinge, hosted_cutout};
 use cadcraft_doc::ArchModel;
 use cadcraft_doc::arch::{
-    Cabinet, CabinetKind, Construction, DOOR_PAIR_WIDTH, FACE_REVEAL, FaceKind, FaceLayout, FaceRow, FrontMount, Fronts, MAX_ACROSS, MAX_FACE_ROWS,
+    Cabinet, CabinetKind, Construction, DOOR_PAIR_WIDTH, FACE_REVEAL, FaceKind, FaceLayout, FaceRow, FrontMount, Fronts, MAX_ACROSS,
+    MAX_FACE_APPLIANCES_TALL, MAX_FACE_ROWS,
 };
 
 const GAP: f64 = 0.003;
@@ -168,6 +169,68 @@ pub fn face_fronts(model: &ArchModel, c: &Cabinet, face: &FaceLayout) -> Vec<Fro
     out
 }
 
+/// Set `row` to an appliance item in the cabinet face. The appliance occupies the full width of a
+/// single front and keeps a shared door or drawer row under it if that was the last shared row left.
+pub fn place_appliance(c: &Cabinet, row: usize, item: &str, size: [f64; 3]) -> Result<FaceLayout, String> {
+    if !(size.iter().all(|v| v.is_finite() && *v > 0.0)) {
+        return Err("an appliance size must be finite and above zero".to_string());
+    }
+    if c.width < size[0] - 0.01 {
+        let kind = match c.kind {
+            CabinetKind::Base => "base",
+            CabinetKind::Wall => "wall",
+            CabinetKind::Tall => "tall",
+        };
+        return Err(format!("a {} cabinet is narrower than the appliance ({} m vs {} m)", kind, c.width, size[0]));
+    }
+    let mut face = c.face.clone().unwrap_or_else(|| default_face(c));
+    if row >= face.rows.len() {
+        return Err(format!("`row` {row} is past the last row ({})", face.rows.len()));
+    }
+    let max_appliances = match c.kind {
+        CabinetKind::Base | CabinetKind::Wall => 1,
+        CabinetKind::Tall => MAX_FACE_APPLIANCES_TALL,
+    };
+    let count = face.rows.iter().filter(|r| r.kind == FaceKind::Appliance).count();
+    if count >= max_appliances {
+        let kind = match c.kind {
+            CabinetKind::Base => "base",
+            CabinetKind::Wall => "wall",
+            CabinetKind::Tall => "tall",
+        };
+        return Err(format!("{max_appliances} appliance rows is the limit for a {} cabinet", kind));
+    }
+    let old = face.rows[row].clone();
+    let split = old.kind != FaceKind::Appliance
+        && old.height.is_none()
+        && face.rows.iter().filter(|r| r.kind != FaceKind::Appliance && r.height.is_none()).count() == 1;
+    face.rows[row] = FaceRow { kind: FaceKind::Appliance, height: Some(size[2]), across: 1, appliance: Some(item.to_string()), ..Default::default() };
+    if split {
+        face.rows.insert(row + 1, FaceRow { kind: old.kind, height: None, across: 0, appliance: None, ..Default::default() });
+    }
+    if row_heights(c, &face).is_none() {
+        return Err("the appliance does not fit the cabinet face".to_string());
+    }
+    Ok(face)
+}
+
+/// Restore a cabinet-face appliance row to its shared door row.
+pub fn remove_appliance(c: &Cabinet, row: usize) -> Result<FaceLayout, String> {
+    let mut face = c.face.clone().unwrap_or_else(|| default_face(c));
+    if row >= face.rows.len() {
+        return Err(format!("`row` {row} is past the last row ({})", face.rows.len()));
+    }
+    let old = face.rows[row].clone();
+    if old.kind != FaceKind::Appliance {
+        return Err(format!("row {row} is not an appliance row"));
+    }
+    face.rows[row] = FaceRow { kind: FaceKind::Door, height: None, across: 0, appliance: None, ..Default::default() };
+    if row_heights(c, &face).is_none() {
+        return Err("the row does not fit the cabinet face".to_string());
+    }
+    Ok(face)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -191,6 +254,58 @@ mod tests {
 
     fn row(kind: FaceKind, height: Option<f64>, across: u32) -> FaceRow {
         FaceRow { kind, height, across, ..FaceRow::default() }
+    }
+
+    #[test]
+    fn wall_oven_on_the_upper_door_row_is_0_737() {
+        let c = Cabinet { kind: CabinetKind::Tall, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        let face = default_face(&c);
+        let put = place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.6, 0.737]).unwrap();
+        let h = row_heights(&c, &put).unwrap();
+        assert!((h[0] - 0.737).abs() < 1e-6, "oven row height is 0.737: {h:?}");
+        assert_eq!(put.rows[0].kind, FaceKind::Appliance);
+        assert_eq!(put.rows[0].appliance.as_deref(), Some("appliance:wall-oven"));
+        assert_eq!(put.rows[1].kind, FaceKind::Door);
+    }
+
+    #[test]
+    fn appliance_on_the_last_shared_row_splits_it() {
+        let mut c = Cabinet { kind: CabinetKind::Tall, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        c.face = Some(FaceLayout { rows: vec![row(FaceKind::Appliance, Some(0.737), 1), row(FaceKind::Door, None, 0)], ..FaceLayout::default() });
+        let put = place_appliance(&c, 1, "appliance:microwave-drawer", [0.762, 0.6, 0.381]).unwrap();
+        assert_eq!(put.rows.len(), 3);
+        assert_eq!(put.rows[0].kind, FaceKind::Appliance);
+        assert_eq!(put.rows[1].kind, FaceKind::Appliance);
+        assert_eq!(put.rows[2].kind, FaceKind::Door);
+        assert_eq!(put.rows[1].height, Some(0.381));
+    }
+
+    #[test]
+    fn tall_takes_two_base_and_wall_one() {
+        let c = Cabinet { kind: CabinetKind::Tall, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        assert!(place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.6, 0.737]).is_ok());
+        let c2 = Cabinet { kind: CabinetKind::Base, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        assert!(place_appliance(&c2, 0, "appliance:microwave-drawer", [0.762, 0.6, 0.381]).is_ok());
+        let c3 = Cabinet { kind: CabinetKind::Wall, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        assert!(place_appliance(&c3, 0, "appliance:warming-drawer", [0.762, 0.6, 0.254]).is_ok());
+    }
+
+    #[test]
+    fn narrower_cabinet_refused() {
+        let c = Cabinet { kind: CabinetKind::Base, width: 0.6, height: 2.034, fronts: Fronts::Doors, doors: 1, ..Default::default() };
+        let err = place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.6, 0.737]).unwrap_err();
+        assert!(err.contains("narrower"));
+    }
+
+    #[test]
+    fn removing_an_appliance_restores_a_shared_door_row() {
+        let mut c = Cabinet { kind: CabinetKind::Base, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        let put = place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.6, 0.737]).unwrap();
+        c.face = Some(put.clone());
+        let back = remove_appliance(&c, 0).unwrap();
+        assert_eq!(back.rows[0].kind, FaceKind::Door);
+        assert_eq!(back.rows[0].appliance, None);
+        assert!(!row_heights(&c, &back).unwrap().is_empty());
     }
 
     #[test]

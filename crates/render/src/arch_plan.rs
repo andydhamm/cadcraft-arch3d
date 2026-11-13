@@ -21,7 +21,15 @@ const MAX_DASHES: f64 = 10_000.0;
 /// the view's own level: `level.show` and level exports change `plan_level` while a bound view
 /// stays active.
 pub(crate) fn plan_annotation(d: &Drawing) -> PlanAnnotation {
-    annotate(&d.arch, active_view(&d.arch), d.arch.plan_level)
+    let active = active_view(&d.arch);
+    let mut ann = annotate(&d.arch, active, d.arch.plan_level);
+    if active.is_none() {
+        let legacy = cadcraft_doc::arch::RoomLabelShow { name: true, area: false, dimensions: false, ceiling: false, ..Default::default() };
+        let mut room_only = PlanAnnotation::default();
+        cadcraft_arch::plan::labels::room_labels(&d.arch, d.arch.plan_level, legacy, &mut room_only);
+        ann.labels = room_only.labels;
+    }
+    ann
 }
 
 fn layer_ink(d: &Drawing, layer: &str, color: Option<[u8; 3]>) -> crate::Ink {

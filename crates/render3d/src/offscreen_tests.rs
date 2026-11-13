@@ -581,55 +581,59 @@ fn raster_lambert_plane_reads_ev_scaled_luminance() {
     assert!(near(got[0], 0.18, 0.03), "auto: {got:?}");
 }
 
-// ---- phase 19: strip lights ---------------------------------------------------------------------
+// ---- phase 19: environment light in the raster views ---------------------------------------------
 
-/// A white strip of 500 lm/m along (1,2)..(3,2) at 2.4 m, emitting down, in 0.143 m pieces.
-fn strip_light() -> cadcraft_arch3d::light::SceneLight {
-    use cadcraft_arch3d::light::{LightKind, SceneLight, StripSample};
-    let pieces = 14usize;
-    let samples: Vec<StripSample> = (0..pieces)
-        .map(|k| StripSample {
-            position: Vec3::new(1.0 + 2.0 * (k as f64 + 0.5) / pieces as f64, 2.0, 2.4),
-            normal: Vec3::new(0.0, 0.0, -1.0),
-            intensity: 500.0 * (2.0 / pieces as f64) / std::f64::consts::PI,
-            ..Default::default()
-        })
-        .collect();
-    SceneLight {
-        id: ArchId(0),
-        kind: LightKind::Strip,
-        position: Vec3::new(2.0, 2.0, 2.4),
-        direction: Vec3::new(0.0, 0.0, -1.0),
-        color: [1.0; 3],
-        strip: Some(std::sync::Arc::new(samples)),
-        ..Default::default()
+/// A night frame lit only by a uniform environment of radiance 1 (so E = pi), Lambert albedo 0.5.
+fn env_lighting(ev100: f64, tone: ToneMap, visible: bool) -> Lighting {
+    let mut look = Look::default();
+    look.exposure = ExposureSetting::Manual { ev100 };
+    look.tone_map = tone;
+    let mut env = crate::environment::Environment::uniform([1.0; 3], 32, 16);
+    env.visible = visible;
+    env.key = env.compute_key();
+    Lighting { sun: None, look, lambert: Some(0.5), meter_night: true, environment: Some(std::sync::Arc::new(env)), ..Lighting::default() }
+}
+
+#[test]
+fn raster_lambert_plane_under_uniform_environment() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let floor = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [5.0, 5.0, 0.0])]);
+    // L = albedo / pi * E = 0.5; EV100 -1 scales by 2 / 1.2.
+    let Some(got) = lit_centre(&mut r, &floor, &down_at([0.0, 0.0, 0.0]), &env_lighting(-1.0, ToneMap::None, false), false) else { return };
+    for c in got {
+        assert!((c - 0.8333).abs() <= 0.8333 * 0.03, "plane under the environment: {got:?}");
     }
 }
 
 #[test]
-fn raster_strip_lights_the_floor() {
+fn environment_background_exposed_and_tone_mapped() {
     let Some(mut r) = renderer((32, 32)) else { return };
-    let mut lit = scene(vec![cuboid("floor", [-5.0, -5.0, -0.3], [8.0, 8.0, 0.0])]);
-    let dark = lit.clone();
-    lit.lights = vec![strip_light()];
-    let mut lighting = plane_lighting(4.0, ToneMap::None);
-    lighting.sun = None;
-    let under = down_at([2.0, 2.0, 0.0]);
-    let away = down_at([2.0, 3.8, 0.0]);
-    let (Some(on), Some(off)) =
-        (lit_centre_keyed(&mut r, &lit, 20, &under, &lighting, false), lit_centre_keyed(&mut r, &dark, 21, &under, &lighting, false))
-    else {
-        return;
-    };
-    let Some(far) = lit_centre_keyed(&mut r, &lit, 20, &away, &lighting, false) else { return };
-    // 49.72 lx on a 0.5 albedo Lambert floor: 7.91 nits, scaled by the exposure.
-    let want = tone_map(49.72 * 0.5 / std::f64::consts::PI as f32 * crate::exposure::ev100_scale(4.0), crate::exposure::TONE_NONE);
-    let got = on[1] - off[1];
-    assert!(near(got, want, 0.05), "the strip adds {got}, want {want}");
-    assert!(on[1] > far[1] && on[1] > off[1] + 0.02, "brighter under the strip: {on:?}, away {far:?}, off {off:?}");
-    // One light against the budget, never shadowed.
-    let eye = under.eye();
-    let Some(frame) = r.lit_frame(&lit, 20, [eye.x, eye.y, eye.z], &lighting, false) else { return };
-    assert_eq!(frame.lights, 1);
-    assert_eq!(frame.shadowed, 0);
+    let empty = scene(Vec::new());
+    let camera = down_at([0.0, 0.0, 0.0]);
+    let Some(got) = lit_centre(&mut r, &empty, &camera, &env_lighting(0.0, ToneMap::None, true), false) else { return };
+    for c in got {
+        assert!((c - 0.8333).abs() <= 0.8333 * 0.02, "background: {got:?}");
+    }
+    let want = tone_map(1.0 / 1.2, crate::exposure::TONE_ACES);
+    let Some(aces) = lit_centre(&mut r, &empty, &camera, &env_lighting(0.0, ToneMap::Aces, true), false) else { return };
+    for c in aces {
+        assert!((c - want).abs() <= want * 0.02, "ACES background: {aces:?} want {want}");
+    }
+    // A visible environment wins over a picture backdrop.
+    let mut pic = scene(Vec::new());
+    pic.backdrop = Some(cadcraft_doc::arch::Backdrop::Colour { colour: [32, 64, 96] });
+    let Some(over) = lit_centre(&mut r, &pic, &camera, &env_lighting(0.0, ToneMap::None, true), false) else { return };
+    assert!((over[0] - 0.8333).abs() <= 0.8333 * 0.02, "environment over picture: {over:?}");
+}
+
+#[test]
+fn picture_backdrop_unchanged_with_light_only_env() {
+    let Some(mut r) = renderer((32, 32)) else { return };
+    let mut pic = scene(Vec::new());
+    pic.backdrop = Some(cadcraft_doc::arch::Backdrop::Colour { colour: [32, 64, 96] });
+    let Some(got) = lit_centre(&mut r, &pic, &down_at([0.0, 0.0, 0.0]), &env_lighting(0.0, ToneMap::Aces, false), false) else { return };
+    for (c, byte) in got.iter().zip([32u8, 64, 96]) {
+        let want = srgb_to_linear(byte);
+        assert!((c - want).abs() <= want * 0.03 + 0.002, "picture colour kept: {got:?}");
+    }
 }

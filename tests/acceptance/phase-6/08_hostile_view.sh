@@ -25,7 +25,10 @@ bad=(
 )
 for c in "${bad[@]}"; do
   r=$(cargo run -q -p cadcraft-cli -- run --metric --cmd "$c" 2>&1)
-  echo "$r" | grep -qi 'panicked\|index out of\|attempt to\|unwrap' && { echo "FAIL: panic on '$c'"; echo "$r" | head -5; exit 1; }
+  # cargo repeats the workspace's compiler warnings on every run: their lines (and the source lines they quote, which
+  # may well hold `unwrap_or`) are not the program's output and are left out before looking for a panic.
+  out=$(echo "$r" | grep -vE '^(warning|note|help)|^ *(-->|=|\.\.\.|[0-9]* *\|)')
+  echo "$out" | grep -qi 'panicked\|index out of\|attempt to\|unwrap' && { echo "FAIL: panic on '$c'"; echo "$out" | head -5; exit 1; }
 done
 for st in bogus '' 'Hidden-Line'; do
   cargo run -q -p cadcraft-cli -- render /dev/null /tmp/p6x.png --style "$st" 2>/dev/null

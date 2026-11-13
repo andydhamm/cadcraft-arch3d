@@ -26,7 +26,7 @@ use cadcraft_doc::{ARCH_HANDLE_BASE, Handle, is_arch_handle};
 use cadcraft_geom::Vec2;
 
 /// Allowed door styles.
-const DOOR_STYLES: [&str; 5] = ["hinged", "sliding", "pocket", "bifold", "fixed"];
+const DOOR_STYLES: [&str; 6] = ["hinged", "sliding", "pocket", "bifold", "fixed", "shower"];
 
 /// Allowed window styles.
 const WINDOW_STYLES: [&str; 10] = ["single-hung", "double-hung", "slider", "casement", "picture", "bay", "box", "bow", "awning", "fixed"];
@@ -316,7 +316,7 @@ impl Interactive for OpeningM {
 ///
 /// The caller validates that the returned id exists in the correct collection
 /// (wall vs opening); this function only parses the prefix and numeric part.
-fn parse_arch_id(s: &str, space: &str) -> Result<ArchId, String> {
+pub(crate) fn parse_arch_id(s: &str, space: &str) -> Result<ArchId, String> {
     let s = s.trim();
     let digits = if space == "opening" {
         // Accepts o{n}, O{n}, w{n}, W{n}, or bare {n}
@@ -475,6 +475,9 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
         OpeningKind::GarageDoor => (2.4, 2.1, 0.0),
         OpeningKind::Niche => (0.6, 0.9, 1.0),
     };
+    // A shower door is a frameless glass leaf, 0.7 x 1.9 unless sized.
+    let shower = kind == OpeningKind::Door && crate::cmd::str_param(p, "style").is_some_and(|st| st.trim().eq_ignore_ascii_case("shower"));
+    let (def_width, def_height) = if shower { (0.7, 1.9) } else { (def_width, def_height) };
     let width = crate::cmd::size_param(cmd, p, "width", false)?.unwrap_or(def_width);
     let height = crate::cmd::size_param(cmd, p, "height", false)?.unwrap_or(def_height);
     let sill = crate::cmd::size_param(cmd, p, "sill", true)?.unwrap_or(def_sill);
@@ -485,7 +488,7 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
     // `style` param overrides the kind default (`hinged` / `slider` /
     // `garage` / `cased`) that `Opening::new` stores; an omitted style keeps it.
     let style: Option<String> = if let Some(st) = crate::cmd::str_param(p, "style") {
-        let lower = st.to_ascii_lowercase();
+        let lower = st.trim().to_ascii_lowercase();
         let valid: &[&str] = match kind {
             OpeningKind::Door => DOOR_STYLES.as_slice(),
             OpeningKind::Window | OpeningKind::CasedOpening => WINDOW_STYLES.as_slice(),
@@ -561,6 +564,9 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
     o.casing_width = casing;
     o.hinge = hinge;
     o.swing = swing;
+    if shower {
+        (o.frame_width, o.frame_depth, o.casing_width) = (0.0, 0.0, 0.0);
+    }
     trim.apply(&mut o);
     validate_top(&d.arch, &mut o).map_err(|e| crate::cmd::bad(cmd, e))?;
 
@@ -571,6 +577,10 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
         validate_top(&d.arch, &mut placed).map_err(|e| crate::cmd::bad(cmd, e))?;
     }
 
+    if shower {
+        // Frameless: the plan gap is the exact cut (place_opening wrote size + ROUGH_ALLOWANCE).
+        (placed.rough_width, placed.rough_height) = (placed.width, placed.height);
+    }
     let placed_width = placed.width;
     let resized = (placed_width - requested_width).abs() > 1e-9;
 
@@ -696,7 +706,7 @@ pub fn specs() -> Vec<CommandSpec> {
             .menu(&["Architecture", "Door"])
             .alias(&["dr"])
             .params(
-                "{wall:\"w0\", offset?|point?, width?, height?, style? (hinged|sliding|pocket|bifold|fixed), hinge?, swing?, recess?, casing?, fit?, level?, \
+                "{wall:\"w0\", offset?|point?, width?, height?, style? (hinged|sliding|pocket|bifold|fixed|shower), hinge?, swing?, recess?, casing?, fit?, level?, \
                  grille?: null|{across,down,part?: whole|top}, sillSides?|casingSides?: left|right|both|none}",
             )
             .interactive(|_| Ok(Box::new(OpeningM::new(OpeningKind::Door)))),

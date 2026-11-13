@@ -50,9 +50,21 @@ impl ClipBox {
     }
 }
 
+/// The floor overview's level limit: what lies above `elevation` is dropped, and with
+/// `lower_levels` false what lies below it too.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LevelFilter {
+    /// The overview level's elevation, in metres.
+    pub elevation: f64,
+    /// Whether the levels below are kept.
+    pub lower_levels: bool,
+}
+
 /// A filter that hides objects and clips/near-limits picks.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ViewFilter {
+    /// The floor overview's level limit (None: every level).
+    pub levels: Option<LevelFilter>,
     /// Objects removed by the cutaway.
     pub hidden: Hidden,
     /// Inclusive six-plane clip box (None: no clipping).
@@ -71,7 +83,7 @@ pub fn from_look(look: &Look, model: &ArchModel, camera: &Camera) -> ViewFilter 
     let forward = crate::camera::forward(camera);
     let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
     let clip = look.clip.as_ref().map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
-    ViewFilter { hidden, clip, near: look.near_clip, eye, forward }
+    ViewFilter { hidden, clip, near: look.near_clip, eye, forward, levels: None }
 }
 
 /// The viewed level: the model's `plan_level` (the level walls are drawn at) or 0.
@@ -86,12 +98,24 @@ impl ViewFilter {
         let forward = crate::camera::forward(camera);
         let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
         let clip = look.clip.as_ref().map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
-        Self { hidden, clip, near: look.near_clip, eye, forward }
+        Self { hidden, clip, near: look.near_clip, eye, forward, levels: None }
     }
 
-    /// Whether the filter is the no-op (nothing hidden, no clip, no near).
+    /// The floor overview of `level`: higher levels, every ceiling and every roof leave the
+    /// scene, and with `lower_levels` false the lower levels too. A cutaway (hidden set) is
+    /// recomputed for the overview level.
+    pub fn with_overview(mut self, model: &ArchModel, level: u32, lower_levels: bool) -> Self {
+        let elevation = model.levels.iter().rev().find(|l| l.index == level).map_or(0.0, |l| l.elevation);
+        if !self.hidden.is_empty() {
+            self.hidden = cutaway_hidden(model, self.eye, level);
+        }
+        self.levels = Some(LevelFilter { elevation, lower_levels });
+        self
+    }
+
+    /// Whether the filter is the no-op (nothing hidden, no clip, no near, no level limit).
     pub fn is_empty(&self) -> bool {
-        self.hidden.is_empty() && self.clip.is_none() && self.near.is_none()
+        self.hidden.is_empty() && self.clip.is_none() && self.near.is_none() && self.levels.is_none()
     }
 
     /// A stable key for caching; `0` is the no-op filter.
@@ -100,6 +124,10 @@ impl ViewFilter {
             return 0;
         }
         let mut h: u64 = 0;
+        if let Some(l) = &self.levels {
+            h = combine(h, l.elevation.to_bits());
+            h = combine(h, u64::from(l.lower_levels) + 1);
+        }
         for (kind, id) in &self.hidden {
             h = combine(h, kind.len() as u64);
             h = combine(h, id.0 as u64);
@@ -116,10 +144,20 @@ impl ViewFilter {
         h
     }
 
-    /// Drop the meshes (and furnishing/electrical boxes) of hidden objects, keep
-    /// `scene.horizon` and everything else.
+    /// Drop the meshes (and furnishing/electrical boxes) of hidden objects and, for an overview,
+    /// of the levels it leaves out; keep `scene.horizon`, the site and everything else.
     pub fn apply(&self, scene: &Scene3d) -> Scene3d {
         let mut s: Scene3d = scene.clone();
+        if let Some(l) = self.levels {
+            s.meshes.retain(|m| {
+                if matches!(crate::probe::part_of(m), "roof" | "ceiling") {
+                    return false;
+                }
+                // A mesh with no level (NaN) is kept.
+                let e = m.level_elevation;
+                !(e.is_finite() && (e > l.elevation + 1e-6 || (!l.lower_levels && e < l.elevation - 1e-6)))
+            });
+        }
         if self.hidden.is_empty() {
             return s;
         }
@@ -389,9 +427,45 @@ mod tests {
             near: Some(1.0),
             eye: Vec3::new(0.0, 0.0, 0.0),
             forward: Vec3::new(0.0, 0.0, 1.0),
+            levels: None,
         };
         assert!(f.accepts(Vec3::new(0.0, 0.0, 2.0)));
         assert!(!f.accepts(Vec3::new(0.0, 0.0, 0.5)));
         assert!(!f.accepts(Vec3::new(2.0, 0.0, 2.0)));
+    }
+
+    #[test]
+    fn overview_drops_higher_levels_ceilings_roofs_lower_optional() {
+        use crate::mesh::Mesh;
+        use cadcraft_doc::arch::Level;
+        let model = ArchModel {
+            levels: vec![
+                Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() },
+                Level { index: 1, name: "Upper".into(), elevation: 3.0, ..Level::default() },
+            ],
+            ..ArchModel::default()
+        };
+        let mesh = |material: &str, id: u32, e: f64| {
+            let mut m = Mesh::new(material, ArchId(id));
+            m.level_elevation = e;
+            m
+        };
+        let scene = Scene3d {
+            meshes: vec![
+                mesh("floor", 1, 0.0),
+                mesh("ceiling", 2, 0.0),
+                mesh("roof", 3, f64::NAN),
+                mesh("floor", 4, 3.0),
+                mesh("terrain", 5, f64::NAN),
+            ],
+            ..Scene3d::default()
+        };
+        let ids = |f: &ViewFilter| f.apply(&scene).meshes.iter().map(|m| m.object.0).collect::<Vec<_>>();
+        let base = ViewFilter::default();
+        assert_eq!(ids(&base.clone().with_overview(&model, 0, true)), vec![1, 5], "level 0: no upper floor, ceiling or roof");
+        assert_eq!(ids(&base.clone().with_overview(&model, 1, true)), vec![1, 4, 5], "level 1 with the lower level");
+        assert_eq!(ids(&base.clone().with_overview(&model, 1, false)), vec![4, 5], "level 1 alone");
+        assert_ne!(base.clone().with_overview(&model, 1, true).key(), base.clone().with_overview(&model, 1, false).key());
+        assert_eq!(base.key(), 0);
     }
 }

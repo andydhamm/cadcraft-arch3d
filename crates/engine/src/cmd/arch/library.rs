@@ -395,7 +395,7 @@ mod tests {
         assert_eq!(ids(&r), ["sofa-chaise", "sofa-futon"]);
         assert_eq!(r["folders"], json!([{"name": "Sofas", "items": 2}]));
         let r = run(&mut s, "library", json!({"chips": [{"kind": "category", "value": "Doors and windows"}]}));
-        assert_eq!(r["folders"], json!([{"name": "Doors", "items": 4}, {"name": "Windows", "items": 10}]));
+        assert_eq!(r["folders"], json!([{"name": "Doors", "items": 5}, {"name": "Windows", "items": 10}]));
         // Results sorted by category order, folder, name, id.
         let r = run(&mut s, "library", json!({"chips": [{"kind": "style", "value": "shaker"}]}));
         assert_eq!(ids(&r), ["frontstyle:door-shaker", "frontstyle:drawer-shaker"]);

@@ -98,6 +98,14 @@ pub fn finish_floor(mesh: Mesh, finish: Option<Finish>) -> Mesh {
     restyle(mesh, finish.filter(|f| f.for_floors()), "floor")
 }
 
+/// A room's floor mesh: its own floor finish if it fits floors, else the floor of its room type's
+/// template ([`cadcraft_arch::room_finish::template`]). A structural slab (material `slab`) takes
+/// only an explicit finish, never the template.
+pub fn room_floor(mesh: Mesh, room: &cadcraft_doc::arch::Room) -> Mesh {
+    let template = (mesh.material == "floor").then(|| cadcraft_arch::room_finish::template(room.room_type).floor);
+    finish_floor(mesh, room.floor_finish.filter(|f| f.for_floors()).or(template))
+}
+
 fn restyle(mesh: Mesh, finish: Option<Finish>, prefix: &str) -> Mesh {
     let Some(f) = finish else {
         return mesh;
@@ -254,8 +262,9 @@ mod tests {
             polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
             ..Default::default()
         });
+        // A room of type Other takes the wood template, so the floor is wood with or without the field.
         let plain = Scene3d::build(&model);
-        assert!(plain.meshes.iter().any(|m| m.material == "floor"));
+        assert!(plain.meshes.iter().any(|m| m.material == "floor-wood"));
         model.rooms[0].floor_finish = Some(Finish::Wood);
         let wood = Scene3d::build(&model);
         assert!(wood.meshes.iter().all(|m| m.material != "floor"));
@@ -266,9 +275,92 @@ mod tests {
         assert_eq!(wood.floors, plain.floors);
         assert_eq!(wood.ceilings, plain.ceilings);
         assert_eq!(crate::object_key(floor).kind, crate::ObjectKind::Room);
-        // A brick floor is not a floor finish: it stays "floor".
+        // A brick floor is not a floor finish: the type's template floor shows instead.
         model.rooms[0].floor_finish = Some(Finish::Brick);
-        assert!(Scene3d::build(&model).meshes.iter().any(|m| m.material == "floor"));
+        assert!(Scene3d::build(&model).meshes.iter().any(|m| m.material == "floor-wood"));
+    }
+
+    fn typed_room(t: cadcraft_doc::arch::RoomType) -> ArchModel {
+        let mut model = ArchModel::default();
+        model.rooms.push(Room {
+            id: ArchId(1),
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
+            room_type: t,
+            ..Default::default()
+        });
+        model
+    }
+
+    fn floor_materials(scene: &Scene3d) -> Vec<String> {
+        scene.meshes.iter().filter(|m| crate::probe::part_of(m) == "floor").map(|m| m.material.clone()).collect()
+    }
+
+    #[test]
+    fn a_typed_room_floor_is_its_template_finish() {
+        use cadcraft_doc::arch::RoomType;
+        for (t, want) in [
+            (RoomType::Garage, "floor-concrete"),
+            (RoomType::Bath, "floor-tile"),
+            (RoomType::Bedroom, "floor-carpet"),
+            (RoomType::Living, "floor-wood"),
+        ] {
+            let scene = Scene3d::build(&typed_room(t));
+            assert!(floor_materials(&scene).iter().any(|m| m == want), "{t:?} {:?}", floor_materials(&scene));
+        }
+        // Retyping rebuilds the floor incrementally and matches a fresh build.
+        let model = typed_room(RoomType::Bath);
+        let (mut cache, _) = SceneCache::new(&model);
+        let mut next = model.clone();
+        next.rooms[0].room_type = RoomType::Garage;
+        cache.update(&next);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest());
+        assert!(floor_materials(cache.scene()).iter().any(|m| m == "floor-concrete"));
+    }
+
+    #[test]
+    fn explicit_floor_finish_wins() {
+        use cadcraft_doc::arch::RoomType;
+        let mut model = typed_room(RoomType::Garage);
+        model.rooms[0].floor_finish = Some(Finish::Carpet);
+        let scene = Scene3d::build(&model);
+        assert!(floor_materials(&scene).iter().any(|m| m == "floor-carpet"));
+        assert!(floor_materials(&scene).iter().all(|m| m != "floor-concrete"));
+    }
+
+    #[test]
+    fn paint_still_wins() {
+        use cadcraft_doc::arch::{MaterialRef, Paint, RoomType, Surface};
+        let mut model = typed_room(RoomType::Bath);
+        let key = Surface::RoomFloor(ArchId(1)).key();
+        model.paints.insert(key.clone(), Paint { material: Some(MaterialRef::Colour([200, 30, 30])), ..Default::default() });
+        let scene = Scene3d::build(&model);
+        assert!(scene.meshes.iter().any(|m| m.material == format!("paint:{key}")));
+        assert!(floor_materials(&scene).iter().all(|m| m != "floor-tile"));
+    }
+
+    #[test]
+    fn wall_and_ceiling_meshes_unchanged_by_the_template() {
+        use cadcraft_doc::arch::RoomType;
+        // Wall and ceiling meshes are identical whatever the room's type; only the floor differs.
+        let mut a = ring(None);
+        a.rooms.push(Room {
+            id: ArchId(10),
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Default::default()
+        });
+        let mut b = a.clone();
+        b.rooms[0].room_type = RoomType::Garage;
+        let (sa, sb) = (Scene3d::build(&a), Scene3d::build(&b));
+        let rest =
+            |s: &Scene3d| s.meshes.iter().filter(|m| crate::probe::part_of(m) != "floor").map(|m| (m.material.clone(), keys(m))).collect::<Vec<_>>();
+        assert_eq!(rest(&sa), rest(&sb));
+        assert!(
+            sa.meshes
+                .iter()
+                .filter(|m| m.material.starts_with("wall") || m.material.starts_with("ceiling"))
+                .all(|m| !m.material.contains("drywall") && !m.material.contains("plaster"))
+        );
+        assert_ne!(floor_materials(&sa), floor_materials(&sb));
     }
 
     #[test]
