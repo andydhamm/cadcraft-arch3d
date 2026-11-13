@@ -949,6 +949,10 @@ mod tests {
         d.arch.levels.push(Level { name: "upper".to_string(), ceiling_height: 2.4, structure: 0.3, ..Default::default() });
         d.touch_arch();
 
+        // Resolve level indices by name (don't assume 0 and 1)
+        let ground_level = s.doc().unwrap().arch.levels.iter().position(|l| l.name == "ground").unwrap() as u32;
+        let upper_level = s.doc().unwrap().arch.levels.iter().position(|l| l.name == "upper").unwrap() as u32;
+
         // Walls on both levels
         s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]], "closed": true, "thickness": 0.2, "exterior": true, "level": "ground"})).unwrap();
         s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]], "closed": true, "thickness": 0.2, "exterior": true, "level": "upper"})).unwrap();
@@ -961,9 +965,9 @@ mod tests {
         {
             let d = s.doc_mut().unwrap();
             for roof in d.arch.roofs.iter_mut() {
-                if roof.level == 0 {
+                if roof.level == ground_level {
                     roof.covering = Some(Finish::Shingles);
-                } else {
+                } else if roof.level == upper_level {
                     roof.covering = Some(Finish::Wood);
                 }
             }
@@ -974,8 +978,8 @@ mod tests {
         assert_eq!(rebuilt, 2);
 
         let d = s.doc().unwrap();
-        let ground = d.arch.roofs.iter().find(|r| r.level == 0).unwrap();
-        let upper = d.arch.roofs.iter().find(|r| r.level == 1).unwrap();
+        let ground = d.arch.roofs.iter().find(|r| r.level == ground_level).unwrap();
+        let upper = d.arch.roofs.iter().find(|r| r.level == upper_level).unwrap();
         assert_eq!(ground.covering, Some(Finish::Shingles));
         assert_eq!(upper.covering, Some(Finish::Wood));
         assert!(!ground.planes.is_empty());
