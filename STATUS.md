@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-13 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 30 of 35 segments merged · 10 of 20 acceptance checks**
 
@@ -28,19 +28,19 @@ Updated 2026-11-13 04:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 46.8 h so far · expected done Nov 13 07:27–Nov 13 22:35 UTC |
+| 18 | Interior finish, kitchen and bath | building | 10 / 20 | 47.0 h so far · expected done Nov 13 07:42–Nov 13 22:50 UTC |
 | 19 | Light, sky and cameras | building | 2 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 1 / 13 | — |
 
 ## Phase 18 segments
 
-30 merged, 3 queued, 1 merging, 1 gate
+30 merged, 3 queued, 1 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18-crown-wrap` | Crown wraps soffits and trays and follows the finished ceiling (vaults, stacks); a soffit can opt out of room moldings | merging | mai-flash |
-| `p18-countertop-shapes` | Countertop shapes: edges bulge into arcs (a sagitta, with a radius grip), take an edge profile, and an end turns down to the floor as a waterfall of the same material and thickness | gate | mai-flash-esc |
+| `p18-countertop-shapes` | Countertop shapes: edges bulge into arcs (a sagitta, with a radius grip), take an edge profile, and an end turns down to the floor as a waterfall of the same material and thickness | working | mai-flash-esc |
 
 ## Recent merges
 
@@ -63,10 +63,10 @@ Updated 2026-11-13 04:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1226 |
-| bonsai-b | bonsai2-27b | idle | 1179 |
+| bonsai-a | bonsai2-27b | gate | 1227 |
+| bonsai-b | bonsai2-27b | agent | 1179 |
 | bonsai-ws2-a | bonsai2-27b | gate | 1302 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1249 |
+| bonsai-ws2-b | bonsai2-27b | merging | 1250 |
 | claude-sonnet-a | sonnet | idle | 146 |
 | claude-sonnet-b | sonnet | idle | 153 |
 | claude-sonnet-c | sonnet | idle | 89 |
@@ -75,6 +75,6 @@ Updated 2026-11-13 04:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 104 |
 | mai-flash-b | mai-code-1.1-flash | idle | 49 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 114 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 115 |
 | tturbo-mac | tturbo-ultraheretic | agent | 827 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 445 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 446 |
