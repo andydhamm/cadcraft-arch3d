@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from curate import Refused, convert  # noqa: E402
+from curate import HDRI_FILE, HDRI_README, Refused, convert, curate  # noqa: E402
 from sh3d import read_sh3f  # noqa: E402
 from test_sh3d import PROPS, Sh3dTests, make_sh3f  # noqa: E402
 
@@ -83,6 +83,23 @@ class CurateTests(unittest.TestCase):
     def test_an_entry_licence_that_disagrees_is_refused(self):
         with self.assertRaisesRegex(Refused, 'Free Art'):
             self.convert(licence='CC-BY-3.0', props=CUBE + 'license#1=Free Art License\n')
+
+    def test_keeps_the_hdri_item(self):
+        out = os.path.join(self.dir.name, 'out')
+        os.makedirs(os.path.join(out, 'hdri'))
+        for f in (HDRI_FILE, HDRI_README):
+            with open(os.path.join(out, f), 'wb') as fh:
+                fh.write(b'#?RADIANCE\n')
+        for name, text in (('sources.json', '{}'), ('picks.json', '[]'), ('ATTRIBUTION.md', '# x\n')):
+            with open(os.path.join(self.dir.name, name), 'w') as fh:
+                fh.write(text)
+        md = os.path.join(self.dir.name, 'ATTRIBUTION.md')
+        items = curate(self.dir.name, os.path.join(self.dir.name, 'picks.json'), out, md)
+        self.assertIn('polyhaven:kloofendal-puresky', [i['id'] for i in items])
+        self.assertTrue(os.path.isfile(os.path.join(out, HDRI_FILE)))
+        text = open(md).read()
+        self.assertIn(f'`{out}/{HDRI_FILE}`', text)
+        self.assertIn(f'`{out}/{HDRI_README}`', text)
 
 
 if __name__ == '__main__':

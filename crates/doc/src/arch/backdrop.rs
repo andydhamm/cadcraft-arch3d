@@ -1,15 +1,17 @@
 //! The backdrop behind the 3D view.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 /// A decoded Radiance RGBE image pixel buffer.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ImageRgbe {
     /// Width in pixels.
     pub width: u32,
     /// Height in pixels.
     pub height: u32,
-    /// Raw RGBE scanline data: `[r, g, b, e]` per pixel.
+    /// Raw RGBE scanline data: `[r, g, b, e]` per pixel (a lower-case hex string in JSON).
+    #[serde(with = "rgbe_hex")]
     pub rgbe: Vec<u8>,
 }
 
@@ -51,43 +53,43 @@ impl ImageRgbe {
     }
 }
 
-impl Serialize for ImageRgbe {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let hex = self.rgbe.iter().map(|b| format!("{b:02x}")).collect::<String>();
+/// Serde helper: the RGBE bytes as a lower-case hex string. Bad hex or an odd length reads as no bytes, which
+/// [`ImageRgbe::is_valid`] refuses.
+mod rgbe_hex {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+        const DIGITS: &[u8; 16] = b"0123456789abcdef";
+        let mut hex = String::with_capacity(bytes.len().saturating_mul(2));
+        for b in bytes {
+            hex.push(char::from(DIGITS[usize::from(b >> 4)]));
+            hex.push(char::from(DIGITS[usize::from(b & 15)]));
+        }
         serializer.serialize_str(&hex)
     }
-}
 
-impl<'de> Deserialize<'de> for ImageRgbe {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn nibble(c: u8) -> Option<u8> {
+        match c {
+            b'0'..=b'9' => Some(c - b'0'),
+            b'a'..=b'f' => Some(c - b'a' + 10),
+            b'A'..=b'F' => Some(c - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
         let hex = String::deserialize(deserializer)?;
         if hex.len() % 2 != 0 {
-            return Err(serde::de::Error::custom("bad RGBE hex length"));
+            return Ok(Vec::new());
         }
         let mut bytes = Vec::with_capacity(hex.len() / 2);
-        let mut chars = hex.as_bytes().chunks_exact(2);
-        for chunk in &mut chars {
-            let hi = match chunk[0] {
-                b'0'..=b'9' => (chunk[0] - b'0') as u8,
-                b'a'..=b'f' => (chunk[0] - b'a' + 10) as u8,
-                b'A'..=b'F' => (chunk[0] - b'A' + 10) as u8,
-                _ => return Err(serde::de::Error::custom("bad RGBE hex")),
-            };
-            let lo = match chunk[1] {
-                b'0'..=b'9' => (chunk[1] - b'0') as u8,
-                b'a'..=b'f' => (chunk[1] - b'a' + 10) as u8,
-                b'A'..=b'F' => (chunk[1] - b'A' + 10) as u8,
-                _ => return Err(serde::de::Error::custom("bad RGBE hex")),
-            };
-            bytes.push((hi << 4) | lo);
+        for pair in hex.as_bytes().chunks_exact(2) {
+            match (pair.first().copied().and_then(nibble), pair.get(1).copied().and_then(nibble)) {
+                (Some(hi), Some(lo)) => bytes.push((hi << 4) | lo),
+                _ => return Ok(Vec::new()),
+            }
         }
-        Ok(ImageRgbe { width: 1, height: 1, rgbe: bytes })
+        Ok(bytes)
     }
 }
 
