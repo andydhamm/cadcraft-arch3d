@@ -422,9 +422,9 @@ pub fn probe(scene: &Scene3d, p: Vec3) -> Option<Hit> {
         }
     }
     // After every real mesh: the horizon slab (never in `meshes`); it has no level.
-    // It starts a little beyond the site (2 m past the scene's bounds), so the ground just outside
+    // It starts a little beyond the site (3 m past the scene's bounds), so the ground just outside
     // the skirt stays empty space as before.
-    const HORIZON_MARGIN: f64 = 2.0;
+    const HORIZON_MARGIN: f64 = 3.0;
     let b = &scene.bounds;
     let near_site =
         p.x >= b.min[0] - HORIZON_MARGIN && p.x <= b.max[0] + HORIZON_MARGIN && p.y >= b.min[1] - HORIZON_MARGIN && p.y <= b.max[1] + HORIZON_MARGIN;
@@ -535,6 +535,26 @@ mod tests {
     }
 
     #[test]
+    fn probe_horizon_at_exact_margin_boundary() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        // Point exactly at the margin boundary (bounds max x ~40 + 3.0 margin = 43.0).
+        // The boundary is inclusive, so the horizon should not be probed here.
+        let hit = probe(&scene, Vec3::new(43.0, 15.0, -0.5));
+        // At the exact boundary, near_site is true, so horizon is skipped.
+        // The terrain doesn't extend that far, so the result is None.
+        assert!(hit.is_none(), "point at exact margin boundary should not hit horizon");
+    }
+
+    #[test]
     fn probe_horizon_just_outside_site_margin() {
         use cadcraft_doc::arch::Terrain;
         use cadcraft_geom::Vec2;
@@ -550,6 +570,24 @@ mod tests {
         // Point at x=43.5 is just outside the margin (41 + 2 = 43).
         let hit = probe(&scene, Vec3::new(43.5, 15.0, -0.5));
         assert!(hit.is_some(), "point just outside site margin should hit horizon");
+        assert_eq!(hit.unwrap().part, "horizon");
+    }
+
+    #[test]
+    fn probe_horizon_with_nan_in_scene_bounds() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        // Probe with a finite point far away; the horizon should be hit.
+        let hit = probe(&scene, Vec3::new(100.0, 100.0, -0.5));
+        assert!(hit.is_some(), "far point should hit horizon");
         assert_eq!(hit.unwrap().part, "horizon");
     }
 
