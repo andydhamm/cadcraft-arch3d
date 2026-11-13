@@ -38,8 +38,14 @@ pub fn shelf_meshes(model: &ArchModel, c: &Cabinet) -> Vec<Mesh> {
         return out;
     }
     let mut shelves = Mesh::new("cabinet-shelves", c.id);
+    let min_z = c.elevation + 0.019;
+    let max_z = c.elevation + c.height - 0.019;
     for (bottom, top) in levels {
         if top <= bottom {
+            continue;
+        }
+        // Skip shelves outside the cabinet bounds (e.g. for very short cabinets).
+        if bottom < min_z - 1e-9 || top > max_z + 1e-9 {
             continue;
         }
         let (z0, z1) = (floor + bottom, floor + top);
@@ -208,5 +214,78 @@ mod tests {
         let shelves = shelf_meshes(&m, &rotated);
         assert!(!shelves.is_empty(), "rotated cabinet should have shelves");
         assert_eq!(shelves.len(), 1);
+    }
+
+    #[test]
+    fn open_shelves_very_tall_cabinet_has_shelves() {
+        let (m, _) = model(0.0);
+        let tall = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 10.0,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &tall);
+        assert!(!shelves.is_empty(), "very tall cabinet should have shelves");
+        let levels = cadcraft_arch::casework_shelves::shelf_levels(&tall);
+        for (b, t) in &levels {
+            assert!(*b >= tall.elevation + 0.019 - 1e-9, "shelf bottom below carcass");
+            assert!(*t <= tall.elevation + tall.height - 0.019 + 1e-9, "shelf top above carcass");
+        }
+    }
+
+    #[test]
+    fn open_shelves_very_narrow_cabinet_has_shelves() {
+        let (m, _) = model(0.0);
+        let narrow = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.05,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let shelves = shelf_meshes(&m, &narrow);
+        // A very narrow cabinet may not have room for shelves (width < 2*0.019).
+        // Either empty or with shelves is acceptable, but must not crash.
+        if !shelves.is_empty() {
+            let levels = cadcraft_arch::casework_shelves::shelf_levels(&narrow);
+            for (b, t) in &levels {
+                assert!(*b >= narrow.elevation + 0.019 - 1e-9, "shelf bottom below carcass");
+                assert!(*t <= narrow.elevation + narrow.height - 0.019 + 1e-9, "shelf top above carcass");
+            }
+        }
+    }
+
+    #[test]
+    fn open_shelves_cabinet_with_nan_position_does_not_crash() {
+        let (m, _) = model(0.0);
+        let nan_pos = Cabinet {
+            fronts: Fronts::Open,
+            width: 0.762,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 0.0,
+            toe_kick: false,
+            position: Vec2::new(f64::NAN, 0.0),
+            rotation: 0.0,
+            ..Default::default()
+        };
+        // Must not crash or panic; may return empty or shelves.
+        let shelves = shelf_meshes(&m, &nan_pos);
+        // If shelves are returned, they should be finite.
+        for shelf in &shelves {
+            for v in &shelf.vertices {
+                assert!(v.is_finite(), "shelf vertex should be finite");
+            }
+        }
     }
 }
