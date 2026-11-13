@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 15:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 16:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 36 of 42 segments merged · 13 of 20 acceptance checks**
 
-9,799 workspace tests passing at the last merge · 1080 segments merged in all · 0 of 15 seats working
+9,843 workspace tests passing at the last merge · 1086 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,19 +28,19 @@ Updated 2026-11-13 15:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 13 / 20 | 58.3 h so far · expected done Nov 13 22:57–Nov 14 22:23 UTC |
-| 19 | Light, sky and cameras | building | 5 / 17 | — |
+| 18 | Interior finish, kitchen and bath | building | 13 / 20 | 58.5 h so far · expected done Nov 14 01:36–Nov 15 08:52 UTC |
+| 19 | Light, sky and cameras | building | 6 / 17 | — |
 | 20 | Plan views and dimensions | building | 9 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 6 / 13 | — |
 
 ## Phase 18 segments
 
-36 merged, 4 working, 2 queued
+36 merged, 3 working, 2 queued, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18g-crown-soffit-tray` | Room crown really wraps soffits (with opt-out) and runs round trays | working | darwin-ws3 |
-| `p18g-countertop-nose` | Countertop edge profiles round the slab's edge instead of overlaying a full square slab | working | claude-sonnet-c |
+| `p18g-countertop-nose` | Countertop edge profiles round the slab's edge instead of overlaying a full square slab | merging | claude-sonnet-c |
 | `p18g-fill-labels-shelves` | cabinet.fill replies with cabinet labels; open shelves are meshed where arch.inspect reports them | working | claude-sonnet-b |
 | `p18g-room-moldings-refusals` | room.moldings honours `profile`, the 8-molding limit, and refuses before touching the drawing | working | mai-flash |
 
@@ -48,35 +48,35 @@ Updated 2026-11-13 15:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 15:56 | `harden-p15-cmd-room-bed` | merged | 9,843 pass | tturbo-mac |
+| Nov 13 15:56 | `harden-p19-cameras-3` | merged | 9,843 pass | tturbo-mac |
+| Nov 13 15:56 | `harden-p19-hdri-2` | merged | 9,843 pass | tturbo-mac |
+| Nov 13 15:56 | `harden-p8-detect-tune-to-targets` | merged | 9,843 pass | tturbo-mac |
+| Nov 13 15:56 | `harden-p11-cmd-render-path` | merged | 9,843 pass | tturbo-mac2 |
+| Nov 13 15:56 | `harden-p12-ifc-stairs` | merged | 9,843 pass | tturbo-mac2 |
 | Nov 13 15:22 | `upstream-sync-ddfa833bc` | merged | 9,799 pass | claude-sonnet-a |
 | Nov 13 14:46 | `p19-demo` | merged | 9,789 pass | mai-flash-b |
 | Nov 13 14:46 | `p18-rebuild` | merged | 9,789 pass | mai-flash-esc |
 | Nov 13 14:46 | `p18-exports` | merged | 9,789 pass | mai-flash-esc |
 | Nov 13 14:46 | `p18-demo` | merged | 9,789 pass | mai-flash |
 | Nov 13 14:46 | `p19-pane` | merged | 9,789 pass | mai-flash-b |
-| Nov 13 14:46 | `harden-p13-finish-regeneration` | merged | 9,789 pass | tturbo-mac |
-| Nov 13 13:25 | `harden-p15-arch-spanning-walls` | merged | 9,765 pass | tturbo-mac |
-| Nov 13 13:25 | `p21-ui-callout-open` | merged | 9,765 pass | claude-sonnet-d |
-| Nov 13 13:25 | `harden-p20-view-export` | merged | 9,765 pass | tturbo-mac |
-| Nov 13 13:25 | `harden-p20-reference` | merged | 9,765 pass | tturbo-mac2 |
-| Nov 13 13:25 | `harden-p16-soffit-meshes` | merged | 9,765 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1245 |
+| bonsai-a | bonsai2-27b | agent | 1246 |
 | bonsai-b | bonsai2-27b | gate | 1196 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1316 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1275 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1317 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1277 |
 | claude-sonnet-a | sonnet | gate | 150 |
 | claude-sonnet-b | sonnet | agent | 153 |
-| claude-sonnet-c | sonnet | agent | 90 |
+| claude-sonnet-c | sonnet | idle | 91 |
 | claude-sonnet-d | sonnet | idle | 82 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1113 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1115 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 109 |
 | mai-flash-b | mai-code-1.1-flash | idle | 53 |
-| mai-flash-esc | mai-code-1.1-flash | down | 121 |
-| tturbo-mac | tturbo-ultraheretic | agent | 856 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 121 |
+| tturbo-mac | tturbo-ultraheretic | agent | 857 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 484 |
