@@ -126,7 +126,7 @@ mod tests {
         let lines = [line(ArchKind::Opening, ArchId(0))];
         let t = tag_labels(&m, &ArchView::default(), &south(), &lines);
         assert_eq!(t.len(), 1);
-        assert_eq!(t[0].layer, LAYER_ELEV_TAG.into());
+        assert_eq!(t[0].layer, LAYER_ELEV_TAG.to_string());
         assert_eq!(t[0].height, TAG_HEIGHT);
         assert_eq!(t[0].height, 0.15);
     }
