@@ -150,32 +150,33 @@
   },
   {
     "cmd": "planview",
-    "params": { "name": "Level 1 Floor Plan", "template": "Floor Plan", "level": 0 }
+    "params": { "name": "Level 1 Floor Plan", "from": "Floor Plan", "level": 0, "open": false }
   },
   {
     "cmd": "planview",
     "params": {
       "name": "Level 2 Floor Plan",
-      "template": "Floor Plan",
+      "from": "Floor Plan",
       "level": 1,
-      "reference": { "level": 0, "color": "#b4b4b4" }
+      "reference": { "level": 0, "color": "#b4b4b4" },
+      "open": false
     }
   },
   {
     "cmd": "planview",
-    "params": { "name": "Level 1 Electrical", "template": "Electrical", "level": 0 }
+    "params": { "name": "Level 1 Electrical", "from": "Electrical", "level": 0, "open": false }
   },
   {
     "cmd": "planview",
-    "params": { "name": "Level 2 Electrical", "template": "Electrical", "level": 1 }
+    "params": { "name": "Level 2 Electrical", "from": "Electrical", "level": 1, "open": false }
   },
   {
     "cmd": "planview",
-    "params": { "name": "Level 1 Reflected Ceiling", "template": "Reflected Ceiling", "level": 0 }
+    "params": { "name": "Level 1 Reflected Ceiling", "from": "Reflected Ceiling", "level": 0, "open": false }
   },
   {
     "cmd": "planview",
-    "params": { "name": "Level 2 Reflected Ceiling", "template": "Reflected Ceiling", "level": 1 }
+    "params": { "name": "Level 2 Reflected Ceiling", "from": "Reflected Ceiling", "level": 1, "open": false }
   },
   {
     "cmd": "planview.open",
