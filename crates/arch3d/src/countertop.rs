@@ -32,7 +32,7 @@ fn profile_section(profile: EdgeProfile, thickness: f64) -> Vec<[f64; 2]> {
             vec![[0.0, 0.0], [r, 0.0], [r, t - r], [0.0, t]]
         }
         EdgeProfile::Bullnose => {
-            let r = t / 2.0;
+            let r = t / 2.0 + 0.001;
             let mut pts = vec![[0.0, 0.0]];
             let steps = 12usize;
             for i in 1..=steps {
@@ -96,16 +96,11 @@ pub fn countertop_meshes(ct: &Countertop, outline: Option<&CounterOutline>, leve
             continue;
         }
         let outward = edge_normal(a, b, ccw);
-        let inward = -outward;
-        let profile_r = match edge.profile {
-            EdgeProfile::Eased => 0.003,
-            EdgeProfile::Bevel => 0.01,
-            EdgeProfile::Bullnose => ct.thickness / 2.0,
-            EdgeProfile::Square => 0.0,
-        };
-        let path = vec![a + inward * profile_r, b + inward * profile_r];
+        let path = vec![a + outward * 0.001, b + outward * 0.001];
         let z = [level + ct.top - ct.thickness, level + ct.top - ct.thickness];
         let prof = profile_section(edge.profile, ct.thickness);
+        // Keep the profile slightly proud of the edge line so the curve sits just off the slab face
+        // and avoids a zero-width seam with the slab outline.
         let side = if ccw { 1.0 } else { -1.0 };
         if let Some(m) = crate::sweep::sweep(&prof, &path, &z, false, side, "countertop", ct.id) {
             if !m.indices.is_empty() {
@@ -152,6 +147,7 @@ mod tests {
         m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ..Default::default() });
         let mut ct = Countertop {
             polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
+            edges: vec![CounterEdge::default(); 4],
             top: 0.914,
             thickness: 0.038,
             ..Default::default()
@@ -160,10 +156,6 @@ mod tests {
         let id = m.push_countertop(ct.clone());
         let outline = custom_outline(&m, &ct).unwrap();
         let meshes = countertop_meshes(&ct, Some(&outline), 0.0);
-        println!("id={} object={} meshes={}", id.0, ct.id.0, meshes.len());
-        for (i, mesh) in meshes.iter().enumerate() {
-            println!("mesh {} material={} object={} tris={} bounds={:?}", i, mesh.material, mesh.object.0, mesh.indices.len() / 3, mesh.bounds());
-        }
         assert!(!meshes.is_empty());
     }
 

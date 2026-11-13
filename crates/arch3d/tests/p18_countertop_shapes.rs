@@ -65,7 +65,11 @@ fn bullnose_edge_probes() {
     for pos in mesh.positions.iter().take(12) {
         println!("  {:?}", *pos);
     }
-    for p in [Vec3::new(0.5, 0.02, 0.912), Vec3::new(0.5, 0.02, 0.895), Vec3::new(0.5, 0.2, 0.912)] {
+    for z in [0.876, 0.88, 0.885, 0.89, 0.895, 0.9, 0.905, 0.91, 0.912, 0.914] {
+        let p = Vec3::new(0.5, 0.02, z);
+        println!("probe {:?} => {}", p, probe_mesh(mesh, p));
+    }
+    for p in [Vec3::new(0.5, 0.2, 0.912)] {
         println!("probe {:?} => {}", p, probe_mesh(mesh, p));
     }
     assert!(!probe_mesh(mesh, Vec3::new(0.5, 0.02, 0.912)));
