@@ -1838,7 +1838,7 @@ mod tests {
     fn frame_view_sets_clip_box_and_forward() {
         let mut look = cadcraft_doc::arch::Look::default();
         look.sun.on = false;
-        look.clip = Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [10.0, 10.0, 10.0] });
+        look.clip = Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [10.0, 10.0, 10.0], ..Default::default() });
         look.near_clip = Some(0.1);
         let lighting = Lighting { sun: None, look, ..Lighting::default() };
         let cam = camera();
@@ -1862,7 +1862,7 @@ mod tests {
     fn frame_view_rejects_nan_clip_box() {
         let mut look = cadcraft_doc::arch::Look::default();
         look.sun.on = false;
-        look.clip = Some(cadcraft_doc::arch::ClipBox { min: [0.0, f64::NAN, 0.0], max: [10.0, 10.0, 10.0] });
+        look.clip = Some(cadcraft_doc::arch::ClipBox { min: [0.0, f64::NAN, 0.0], max: [10.0, 10.0, 10.0], ..Default::default() });
         let lighting = Lighting { sun: None, look, ..Lighting::default() };
         let mut f = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
         let mut aux = vec![];
