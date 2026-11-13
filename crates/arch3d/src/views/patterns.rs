@@ -1,11 +1,13 @@
 //! Material pattern lines over visible elevation faces.
 
+use std::collections::BTreeMap;
+
 use crate::hlr::{OrthoView, Seg3, visible_segments};
 use crate::probe;
 use crate::{Mesh, Scene3d};
 use cadcraft_arch::paint::effective_material;
 use cadcraft_doc::ArchModel;
-use cadcraft_doc::arch::{Finish, MAX_VIEW_LINES, Surface, ViewPatternLine};
+use cadcraft_doc::arch::{ArchId, ArchKind, Finish, MAX_VIEW_LINES, Surface, ViewPatternLine};
 
 /// A single course/joint pattern for a finish.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -118,12 +120,12 @@ fn segment_on_axis(points: &[[f64; 3]; 3], axis: [f64; 3], value: f64) -> Option
     Some((hits[0], hits[hits.len() - 1]))
 }
 
-fn add_pattern_segments(mesh: &Mesh, model: &ArchModel, dir: [f64; 3], out: &mut Vec<Seg3>, kind: cadcraft_doc::arch::ArchKind) {
-    let Some((pattern, material)) = mesh_pattern(model, mesh) else {
-        return;
+fn add_pattern_segments(mesh: &Mesh, model: &ArchModel, dir: [f64; 3], out: &mut Vec<Seg3>, kind: cadcraft_doc::arch::ArchKind) -> usize {
+    let Some((pattern, _material)) = mesh_pattern(model, mesh) else {
+        return 0;
     };
-    let _ = material;
     let mut indices = mesh.indices.chunks_exact(3);
+    let mut pushed = 0;
     while let Some(tri) = indices.next() {
         let a = mesh.positions[tri[0] as usize];
         let b = mesh.positions[tri[1] as usize];
@@ -167,6 +169,7 @@ fn add_pattern_segments(mesh: &Mesh, model: &ArchModel, dir: [f64; 3], out: &mut
                 if (sub(a, b).iter().map(|x| x * x).sum::<f64>()).sqrt() > 1e-6 {
                     out.push(Seg3 { a, b, kind, object: mesh.object, ..Default::default() });
                     count += 1;
+                    pushed += 1;
                 }
             }
         }
@@ -192,38 +195,43 @@ fn add_pattern_segments(mesh: &Mesh, model: &ArchModel, dir: [f64; 3], out: &mut
                         if (sub(a, b).iter().map(|x| x * x).sum::<f64>()).sqrt() > 1e-6 {
                             out.push(Seg3 { a, b, kind, object: mesh.object, ..Default::default() });
                             last += 1;
+                            pushed += 1;
                         }
                     }
                 }
             }
         }
     }
+    pushed
 }
 
 /// Pattern lines for the visible faces of `sc` in `ov`.
 pub(crate) fn pattern_lines(model: &ArchModel, sc: &Scene3d, ov: &OrthoView) -> Vec<ViewPatternLine> {
     let dir = ov.dir();
     let mut segs = Vec::new();
+    let mut materials: BTreeMap<(ArchKind, ArchId), String> = BTreeMap::new();
     for mesh in &sc.meshes {
-        if let Some((pattern, _material)) = mesh_pattern(model, mesh) {
-            let _ = pattern;
-            add_pattern_segments(mesh, model, dir, &mut segs, probe::arch_kind(mesh));
+        if let Some((_, material)) = mesh_pattern(model, mesh) {
+            let kind = probe::arch_kind(mesh);
+            let pushed = add_pattern_segments(mesh, model, dir, &mut segs, kind);
+            if pushed > 0 {
+                materials.entry((kind, mesh.object)).or_insert(material);
+            }
         }
     }
     let view_lines = visible_segments(sc, ov, &segs);
     let mut out = Vec::new();
     for line in view_lines {
-        out.push(ViewPatternLine {
-            a: [line.a[0], line.a[1]],
-            b: [line.b[0], line.b[1]],
-            kind: line.kind,
-            object: line.object,
-            material: match mesh_pattern(model, sc.meshes.iter().find(|m| m.object == line.object).unwrap_or(&Mesh::new("", line.object))) {
-                Some((_, material)) => material,
-                None => "finish:default".to_string(),
-            },
-            ..Default::default()
-        });
+        if let Some(material) = materials.get(&(line.kind, line.object)) {
+            out.push(ViewPatternLine {
+                a: [line.a[0], line.a[1]],
+                b: [line.b[0], line.b[1]],
+                kind: line.kind,
+                object: line.object,
+                material: material.clone(),
+                ..Default::default()
+            });
+        }
     }
     if out.len() > MAX_VIEW_LINES {
         out.truncate(MAX_VIEW_LINES);
