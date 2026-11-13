@@ -32,6 +32,8 @@ struct StripPlan {
     level: u32,
     height: f64,
     facing: StripFacing,
+    /// The tray this strip runs along (the `tray` form).
+    tray: Option<ArchId>,
 }
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -381,7 +383,7 @@ fn run_lightfixture(session: &mut Session, params: &Value) -> Result<Value> {
 fn is_strip_request(params: &Value) -> bool {
     let typ = str_param(params, "type").unwrap_or("");
     let strip_type = find_type(typ).is_some_and(|t| t.kind == LightKind::Strip);
-    strip_type || ["path", "under"].iter().any(|k| params.get(*k).is_some_and(|v| !v.is_null()))
+    strip_type || ["path", "under", "tray"].iter().any(|k| params.get(*k).is_some_and(|v| !v.is_null()))
 }
 
 fn parse_facing(cmd: &str, value: &Value) -> Result<StripFacing> {
@@ -538,6 +540,7 @@ fn plan_under(doc: &cadcraft_doc::Drawing, value: &Value) -> Result<StripPlan> {
         level: level.unwrap_or(0),
         height: elevation.unwrap_or(0.0) - STRIP_UNDER_HEIGHT_MARGIN,
         facing: StripFacing::Down,
+        tray: None,
     })
 }
 
@@ -573,7 +576,23 @@ fn plan_room(doc: &cadcraft_doc::Drawing, params: &Value) -> Result<StripPlan> {
         Some(h) => h,
         None => ceiling_over(doc, room.level, path_midpoint(&ring, true)).map_or(2.4 - STRIP_ROOM_DROP, |c| c - STRIP_ROOM_DROP),
     };
-    Ok(StripPlan { points: ring, closed: true, level: room.level, height, facing: StripFacing::Out })
+    Ok(StripPlan { points: ring, closed: true, level: room.level, height, facing: StripFacing::Out, tray: None })
+}
+
+/// Resolve `tray` + `inset`: the tray's outline inset (default 0.05 m), counter-clockwise and
+/// closed, facing out (the recess's sides), on the recess's bottom edge unless `height` is given.
+fn plan_tray(doc: &cadcraft_doc::Drawing, params: &Value) -> Result<StripPlan> {
+    let cmd = "lightfixture";
+    let raw = params.get("tray").unwrap_or(&Value::Null);
+    let label = raw.as_str().ok_or_else(|| bad(cmd, format!("`tray` must be a tray id; got {raw}")))?;
+    let inset = finite_param(cmd, params, "inset")?.unwrap_or(0.05);
+    if !(0.0..=1.0).contains(&inset) {
+        return Err(bad(cmd, format!("`inset` must be 0 to 1 m; got {inset}")));
+    }
+    let height = finite_param(cmd, params, "height")?;
+    let (level, points, default_height) = cadcraft_arch::light::tray_strip_path(&doc.arch, label, inset).map_err(|e| bad(cmd, e))?;
+    let id = label.trim().strip_prefix("tr").and_then(|n| n.parse::<u32>().ok()).map(ArchId);
+    Ok(StripPlan { points, closed: true, level, height: height.unwrap_or(default_height), facing: StripFacing::Out, tray: id })
 }
 
 /// Resolve `path`: the points as given; the height defaults to the ceiling over the path's midpoint.
@@ -593,7 +612,7 @@ fn plan_path(doc: &cadcraft_doc::Drawing, params: &Value, value: &Value) -> Resu
         None | Some(Value::Null) => StripFacing::Down,
         Some(v) => parse_facing(cmd, v)?,
     };
-    Ok(StripPlan { points, closed, level, height, facing })
+    Ok(StripPlan { points, closed, level, height, facing, tray: None })
 }
 
 /// `lightfixture` with `type: "LED strip"`: ONE match over the exclusive forms (`path`, `under`,
@@ -603,9 +622,9 @@ fn run_strip(session: &mut Session, params: &Value) -> Result<Value> {
     let doc = session.doc()?;
     let doc = &*doc;
     let given = |k: &str| params.get(k).is_some_and(|v| !v.is_null());
-    let forms: Vec<&str> = ["path", "under", "room"].into_iter().filter(|k| given(k)).collect();
+    let forms: Vec<&str> = ["path", "under", "room", "tray"].into_iter().filter(|k| given(k)).collect();
     if let Some(k) = ["at", "rows", "cols"].into_iter().find(|k| given(k)) {
-        return Err(bad(cmd, format!("an LED strip takes `path`, `under` or `room`, not `{k}`")));
+        return Err(bad(cmd, format!("an LED strip takes `path`, `under`, `room` or `tray`, not `{k}`")));
     }
     if str_param(params, "type").is_some_and(|t| find_type(t).is_some_and(|t| t.kind != LightKind::Strip)) {
         return Err(bad(cmd, "`path` and `under` belong to type \"LED strip\""));
@@ -614,11 +633,12 @@ fn run_strip(session: &mut Session, params: &Value) -> Result<Value> {
         ["path"] => plan_path(doc, params, params.get("path").unwrap_or(&Value::Null))?,
         ["under"] => plan_under(doc, params.get("under").unwrap_or(&Value::Null))?,
         ["room"] => plan_room(doc, params)?,
-        [] => return Err(bad(cmd, "an LED strip needs exactly one of `path`, `under` or `room`")),
-        many => return Err(bad(cmd, format!("an LED strip takes exactly one of `path`, `under` or `room`; got {}", many.join(" and ")))),
+        ["tray"] => plan_tray(doc, params)?,
+        [] => return Err(bad(cmd, "an LED strip needs exactly one of `path`, `under`, `room` or `tray`")),
+        many => return Err(bad(cmd, format!("an LED strip takes exactly one of `path`, `under`, `room` or `tray`; got {}", many.join(" and ")))),
     };
-    if forms != ["room"] && given("inset") {
-        return Err(bad(cmd, "`inset` belongs to the `room` form"));
+    if forms != ["room"] && forms != ["tray"] && given("inset") {
+        return Err(bad(cmd, "`inset` belongs to the `room` and `tray` forms"));
     }
     if forms == ["under"] {
         // Under cabinets the height, level and facing are fixed by the run.
@@ -626,7 +646,7 @@ fn run_strip(session: &mut Session, params: &Value) -> Result<Value> {
             return Err(bad(cmd, format!("`{k}` is not taken with `under`: the cabinets set it")));
         }
     }
-    if forms == ["room"] {
+    if forms == ["room"] || forms == ["tray"] {
         if let Some(v) = params.get("facing").filter(|v| !v.is_null()) {
             plan.facing = parse_facing(cmd, v)?;
         }
@@ -641,6 +661,7 @@ fn run_strip(session: &mut Session, params: &Value) -> Result<Value> {
     fixture.closed = plan.closed;
     fixture.height = Some(plan.height);
     fixture.facing = plan.facing;
+    fixture.tray = plan.tray;
     if let Some(v) = finite_param(cmd, params, "lumensPerMetre")? {
         fixture.lumens_per_metre = v;
     }
@@ -1390,5 +1411,38 @@ mod tests {
         assert!(with_profile.ies.is_some());
         error_text(&mut session, "lightfixture.edit", &json!({"id": "lf0", "ies": no_tilt}));
         assert_eq!(session.doc().unwrap().arch.lights[0], with_profile);
+    }
+
+    #[test]
+    fn strip_round_a_tray_and_refusals() {
+        let mut session = Session::new();
+        {
+            let doc = session.doc_mut().unwrap();
+            doc.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+            doc.arch.push_room(Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 5.0), Vec2::new(0.0, 5.0)],
+                ..Room::default()
+            });
+            doc.arch.push_tray(cadcraft_doc::arch::Tray { room: ArchId(0), inset: 0.6, depth: 0.3, ..Default::default() });
+        }
+        session.execute("lightfixture", &json!({"type": "LED strip", "tray": "tr0"})).unwrap();
+        let f = session.doc().unwrap().arch.lights[0].clone();
+        assert_eq!((f.kind, f.closed, f.facing, f.tray), (LightKind::Strip, true, StripFacing::Out, Some(ArchId(0))));
+        assert!((strip_length(&f) - 2.0 * (4.7 + 3.7)).abs() < 1e-6, "{}", strip_length(&f));
+        session.execute("lightfixture", &json!({"type": "LED strip", "tray": "tr0", "inset": 0.3})).unwrap();
+        assert!((strip_length(&session.doc().unwrap().arch.lights[1]) - 2.0 * (4.2 + 3.2)).abs() < 1e-6);
+        let before = session.doc().unwrap().arch.clone();
+        for p in [
+            json!({"type": "LED strip", "tray": "tr9"}),
+            json!({"type": "LED strip", "tray": "tr0", "inset": 5.0}),
+            json!({"type": "LED strip", "tray": "tr0", "inset": -0.1}),
+            json!({"type": "LED strip", "tray": "tr0", "room": "r0", "inset": 0.5}),
+            json!({"type": "LED strip", "tray": "tr0", "path": [[0, 0], [1, 0]]}),
+        ] {
+            error_text(&mut session, "lightfixture", &p);
+        }
+        assert_eq!(session.doc().unwrap().arch, before, "a refused strip changes nothing");
     }
 }
