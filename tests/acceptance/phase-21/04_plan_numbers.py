@@ -17,7 +17,8 @@ PLANS = [cmd('arch.inspect', {"plan": "Floor Plan"}), cmd('arch.inspect', {"plan
          cmd('planview', {"name": "No Numbers", "from": "Floor Plan", "labels": {"numbers": False}, "open": False}),
          cmd('arch.inspect', {"plan": "No Numbers"})]
 rr = sh_run_ok(SET + [INSPECT21] + PLANS, "plan schedule labels")
-insp = inspected(rr)
+# The plan replies are arch.inspect replies too (they carry walls and levels): the object lists are in the first one.
+insp = inspected(rr, 0)
 handles = {o.get('id'): o.get('handle') for o in objects_named(insp, 'openings', 'openings')}
 handles.update({c.get('id'): c.get('handle') for c in objects_named(insp, 'cabinets', 'cabinets')})
 floor = sh_plan_labels(sh_plan(rr, 0), 'scheduleNumber')
