@@ -50,8 +50,9 @@ fn run_view_electrical(s: &mut Session, params: &Value) -> Result<Value, EngineE
     let opened = open_plan_view(s, name).map_err(|e| bad("view.electrical", e.to_string()))?;
     {
         let d = s.doc_mut()?;
+        let is_e_layer = |name: &str| name.starts_with("E-") && (name.len() == 2 || !name.as_bytes()[2].is_ascii_whitespace());
         for l in d.layers.iter_mut() {
-            if l.name.starts_with("E-") {
+            if is_e_layer(&l.name) {
                 l.on = true;
                 l.transparency = 0;
             } else {
@@ -405,6 +406,54 @@ mod tests {
         assert!(shown.contains(&"E-"));
         assert!(dimmed.contains(&"A-WALL-β"));
         assert!(dimmed.contains(&"E"));
+    }
+
+    #[test]
+    fn electrical_view_tab_after_e_dash() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-\tPOWER"));
+            d.layers.push(Layer::new("E-POWR"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        let shown: Vec<&str> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        let dimmed: Vec<&str> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(dimmed.contains(&"E-\tPOWER"));
+        assert!(shown.contains(&"E-POWR"));
+    }
+
+    #[test]
+    fn electrical_view_multiple_spaces_after_e_dash() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-  POWER"));
+            d.layers.push(Layer::new("E-POWR"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        let shown: Vec<&str> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        let dimmed: Vec<&str> = result["dimmed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(dimmed.contains(&"E-  POWER"));
+        assert!(shown.contains(&"E-POWR"));
+    }
+
+    #[test]
+    fn electrical_view_only_e_layers() {
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            d.layers.clear();
+            d.layers.push(Layer::new("E-POWR"));
+            d.layers.push(Layer::new("E-LITE"));
+        }
+        let result = s.execute("view.electrical", &json!({})).unwrap();
+        assert_eq!(result["dimmed"].as_array().unwrap().len(), 0);
+        let shown: Vec<&str> = result["shown"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(shown.contains(&"E-POWR"));
+        assert!(shown.contains(&"E-LITE"));
     }
 
     #[test]
