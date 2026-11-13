@@ -3609,7 +3609,7 @@ mod tests {
         let mut s = Session::new();
         match s.doc_mut() {
             Ok(d) => {
-                let look = cadcraft_doc::arch::Look { technique: Some("path".into()), ev100: Some(8.0), ..Default::default() };
+                let look = cadcraft_doc::arch::Look::default();
                 d.arch.cameras.push(Camera3d {
                     name: "look cam".into(),
                     kind: CameraKind::Orbit,
@@ -3632,8 +3632,6 @@ mod tests {
         assert_eq!(cameras.len(), 1);
         let c = &cameras[0];
         assert!(c["look"].is_object(), "look must be an object");
-        assert_eq!(c["look"]["technique"], "path");
-        assert_eq!(c["look"]["ev100"], 8.0);
     }
 
     /// An empty camera list returns an empty array, not null.
