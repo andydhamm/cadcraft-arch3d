@@ -1109,8 +1109,13 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
             if let Some(room) = m.rooms.iter_mut().find(|r| r.room_type == RoomType::Kitchen) {
                 room.moldings.push(RoomMolding {
                     kind: MoldingKind::Crown,
-                    profile: MoldingProfile { item: "molding-profile".to_string(), points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.05]] },
+                    profile: MoldingProfile {
+                        item: "molding-profile".to_string(),
+                        points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.05], [0.0, 0.05]],
+                        ..Default::default()
+                    },
                     offset: 0.0,
+                    ..Default::default()
                 });
             }
             "molding add"
@@ -1130,7 +1135,11 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
         }
         5 => {
             if let Some(ml) = m.molding_lines.first_mut() {
-                ml.profile = MoldingProfile { item: format!("molding-line-{r}"), points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.08], [0.0, 0.08]] };
+                ml.profile = MoldingProfile {
+                    item: format!("molding-line-{r}"),
+                    points: vec![[0.0, 0.0], [0.02, 0.0], [0.02, 0.08], [0.0, 0.08]],
+                    ..Default::default()
+                };
             }
             "moldingline point"
         }
@@ -1195,7 +1204,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
                 m.countertops.pop();
             } else {
                 let polygon = vec![Vec2::new(0.0, 0.0), Vec2::new(1.5, 0.0), Vec2::new(1.5, 0.6), Vec2::new(0.0, 0.6)];
-                let edges = vec![CounterEdge { sagitta: 0.0, profile: EdgeProfile::Square, waterfall: false }; 4];
+                let edges = vec![CounterEdge { sagitta: 0.0, profile: EdgeProfile::Square, waterfall: false, ..Default::default() }; 4];
                 m.countertops.push(Countertop {
                     id: ArchId(m.next_id),
                     level: 0,
@@ -1205,6 +1214,7 @@ fn phase_18_edit(m: &mut ArchModel, state: &mut u64) -> &'static str {
                     thickness: 0.038,
                     cabinets: vec![],
                     layer: "A-FLOR-CASE".to_string(),
+                    ..Default::default()
                 });
                 m.next_id += 1;
             }
