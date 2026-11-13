@@ -214,4 +214,21 @@ mod tests {
         assert_eq!(wall_on_side(&m, &room, "west").map(|f| f.wall), Some(ArchId(3)));
         assert!(wall_on_side(&m, &room, "up").is_none());
     }
+
+    #[test]
+    fn bounding_faces_zero_area_room() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, ..Default::default() });
+        // Collinear points: zero area.
+        let room = Room { polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(2.0, 0.0)], ..Default::default() };
+        assert!(bounding_faces(&m, &room).is_empty());
+    }
+
+    #[test]
+    fn face_of_wall_not_bounding_room() {
+        let (m, room) = house();
+        // Add a wall far away that does not bound the room.
+        let id = m.push_wall(Wall { start: Vec2::new(10.0, 0.0), end: Vec2::new(10.0, 4.0), thickness: 0.1, height: 2.4, ..Default::default() });
+        assert!(face_of(&m, &room, id).is_none());
+    }
 }
