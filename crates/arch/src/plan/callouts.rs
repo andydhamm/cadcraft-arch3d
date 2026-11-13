@@ -140,7 +140,7 @@ fn elevation_marker_center(model: &ArchModel, view: &ArchView, level: Option<u32
     // Filter walls by level: walls with no level are on all levels
     let walls: Vec<_> = match level {
         None => model.walls.iter().collect(),
-        Some(lvl) => model.walls.iter().filter(|w| w.level == Some(lvl)).collect(),
+        Some(lvl) => model.walls.iter().filter(|w| w.base_level == Some(lvl)).collect(),
     };
 
     if walls.is_empty() {
@@ -543,7 +543,7 @@ mod tests {
             end: Vec2::new(10.0, 0.0),
             thickness: 0.2,
             height: 2.4,
-            level: Some(1),
+            base_level: Some(1),
             ..Default::default()
         });
         let view2 = make_view(0, ViewKind::Elevation, Vec2::Y, Some(1), None, None);
