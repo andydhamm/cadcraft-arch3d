@@ -105,4 +105,20 @@ mod tests {
         assert!(text.contains("'molding-ml0'"), "{text}");
         assert!(text.contains(".MOLDING."), "{text}");
     }
+
+    #[test]
+    fn ifc_moldings_skip_rooms_without_moldings() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, ..Level::default() });
+        model.push_room(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 2.0)],
+            ..Room::default()
+        });
+        // Scene has no molding meshes
+        let scene = Scene3d::default();
+        let text = write_model(&model, &scene, &IfcOptions::default());
+        assert!(!text.contains("IFCCOVERING("), "room without moldings should not produce coverings: {text}");
+    }
 }

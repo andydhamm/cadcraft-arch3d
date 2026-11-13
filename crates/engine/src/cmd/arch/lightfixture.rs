@@ -591,7 +591,7 @@ fn plan_tray(doc: &cadcraft_doc::Drawing, params: &Value) -> Result<StripPlan> {
     }
     let height = finite_param(cmd, params, "height")?;
     let (level, points, default_height) = cadcraft_arch::light::tray_strip_path(&doc.arch, label, inset).map_err(|e| bad(cmd, e))?;
-    let id = label.trim().strip_prefix("tr").and_then(|n| n.parse::<u32>().ok()).map(ArchId);
+    let id = label.trim().strip_prefix("tr").or_else(|| label.trim().strip_prefix("TR")).and_then(|n| n.parse::<u32>().ok()).map(ArchId);
     Ok(StripPlan { points, closed: true, level, height: height.unwrap_or(default_height), facing: StripFacing::Out, tray: id })
 }
 
@@ -1444,5 +1444,66 @@ mod tests {
             error_text(&mut session, "lightfixture", &p);
         }
         assert_eq!(session.doc().unwrap().arch, before, "a refused strip changes nothing");
+    }
+
+    #[test]
+    fn strip_tray_inset_zero_and_boundaries() {
+        let mut session = Session::new();
+        {
+            let doc = session.doc_mut().unwrap();
+            doc.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+            doc.arch.push_room(Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 5.0), Vec2::new(0.0, 5.0)],
+                ..Room::default()
+            });
+            doc.arch.push_tray(cadcraft_doc::arch::Tray { room: ArchId(0), inset: 0.6, depth: 0.3, ..Default::default() });
+        }
+
+        // Inset 0: strip runs on the tray outline itself
+        session.execute("lightfixture", &json!({"type": "LED strip", "tray": "tr0", "inset": 0.0})).unwrap();
+        let f = session.doc().unwrap().arch.lights[0].clone();
+        // Outline is 0.6 inset from room: 0.6..5.4 x, 0.6..4.4 y -> perimeter 2*(4.8+3.8) = 17.2
+        assert!((strip_length(&f) - 2.0 * (4.8 + 3.8)).abs() < 1e-6, "inset 0 length: {}", strip_length(&f));
+
+        // Inset exactly 1.0 m is accepted (the boundary)
+        session.execute("lightfixture", &json!({"type": "LED strip", "tray": "tr0", "inset": 1.0})).unwrap();
+        let f = session.doc().unwrap().arch.lights[1].clone();
+        // 0.6 + 1.0 = 1.6 inset from room: 1.6..4.4 x, 1.6..3.4 y -> perimeter 2*(2.8+1.8) = 9.2
+        assert!((strip_length(&f) - 2.0 * (2.8 + 1.8)).abs() < 1e-6, "inset 1.0 length: {}", strip_length(&f));
+
+        // Inset > 1.0 is refused
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "tray": "tr0", "inset": 1.01}));
+        assert!(msg.contains("inset") && msg.contains("1 m"), "{msg}");
+
+        // NaN inset is refused
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "tray": "tr0", "inset": "nan"}));
+        assert!(msg.contains("inset"), "{msg}");
+
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 2, "refusals placed nothing");
+    }
+
+    #[test]
+    fn strip_tray_uppercase_label_sets_tray_field() {
+        let mut session = Session::new();
+        {
+            let doc = session.doc_mut().unwrap();
+            doc.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+            doc.arch.push_room(Room {
+                id: ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 5.0), Vec2::new(0.0, 5.0)],
+                ..Room::default()
+            });
+            doc.arch.push_tray(cadcraft_doc::arch::Tray { room: ArchId(0), inset: 0.6, depth: 0.3, ..Default::default() });
+        }
+
+        // Uppercase "TR0" should work and set the tray field
+        session.execute("lightfixture", &json!({"type": "LED strip", "tray": "TR0"})).unwrap();
+        let f = session.doc().unwrap().arch.lights[0].clone();
+        assert_eq!(f.tray, Some(ArchId(0)), "uppercase label must set the tray field");
+        assert_eq!(f.kind, LightKind::Strip);
+        assert!(f.closed);
     }
 }

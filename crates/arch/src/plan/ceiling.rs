@@ -746,4 +746,75 @@ mod tests {
         ceiling_plan(&m, Some(0), &mut out);
         assert!(out.lines.is_empty());
     }
+
+    #[test]
+    fn ceiling_item_on_another_level_is_not_drawn() {
+        let item = Furnishing { level: 0, placement: Placement::Ceiling, at: [8.0, 7.6], size: [2.0, 0.6, 0.2], ..Furnishing::default() };
+        let mut m = level_model(1);
+        m.push_furnishing(item);
+        assert!(lines_of(&m, Some(1), PlanLineKind::CeilingItem).is_empty());
+    }
+
+    #[test]
+    fn ceiling_item_draws_without_rooms() {
+        let item = Furnishing { level: 0, placement: Placement::Ceiling, at: [8.0, 7.6], size: [2.0, 0.6, 0.2], ..Furnishing::default() };
+        let mut m = level_model(0);
+        m.push_furnishing(item);
+        assert_eq!(lines_of(&m, Some(0), PlanLineKind::CeilingItem).len(), 4);
+    }
+
+    #[test]
+    fn multiple_soffits_each_drawn_once() {
+        let mut m = level_model(3);
+        let id0 = m.push_soffit(Soffit { level: 0, polygon: rect(7.0, 7.3, 9.0, 7.9), ..Soffit::default() });
+        let id1 = m.push_soffit(Soffit { level: 0, polygon: rect(1.0, 1.0, 3.0, 2.0), ..Soffit::default() });
+        let lines = lines_of(&m, Some(0), PlanLineKind::Soffit);
+        assert_eq!(lines.len(), 8);
+        let count0 = lines.iter().filter(|l| l.handle == soffit_handle(id0)).count();
+        let count1 = lines.iter().filter(|l| l.handle == soffit_handle(id1)).count();
+        assert_eq!(count0, 4);
+        assert_eq!(count1, 4);
+    }
+
+    #[test]
+    fn degenerate_soffit_draws_nothing() {
+        let mut m = level_model(1);
+        let two_points = vec![Vec2::new(1.0, 1.0), Vec2::new(2.0, 2.0)];
+        m.push_soffit(Soffit { level: 0, polygon: two_points, ..Soffit::default() });
+        let nan_point = vec![Vec2::new(f64::NAN, 1.0), Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)];
+        m.push_soffit(Soffit { level: 0, polygon: nan_point, ..Soffit::default() });
+        let coincident = vec![Vec2::new(1.0, 1.0), Vec2::new(1.0, 1.0), Vec2::new(2.0, 2.0)];
+        m.push_soffit(Soffit { level: 0, polygon: coincident, ..Soffit::default() });
+        assert!(lines_of(&m, Some(0), PlanLineKind::Soffit).is_empty());
+    }
+
+    #[test]
+    fn hostile_ceiling_item_never_panics() {
+        let item = Furnishing { level: 0, placement: Placement::Ceiling, at: [f64::NAN, 7.6], size: [2.0, 0.6, 0.2], ..Furnishing::default() };
+        let mut m = level_model(1);
+        m.push_furnishing(item);
+        let item2 = Furnishing { level: 0, placement: Placement::Ceiling, at: [8.0, 7.6], size: [f64::INFINITY, 0.6, 0.2], ..Furnishing::default() };
+        m.push_furnishing(item2);
+        let lines = lines_of(&m, Some(0), PlanLineKind::CeilingItem);
+        assert!(lines.iter().all(|l| l.a.is_finite() && l.b.is_finite()));
+    }
+
+    #[test]
+    fn floor_furnishing_not_drawn_on_ceiling_plan() {
+        let floor_item = Furnishing { level: 0, placement: Placement::Floor, at: [8.0, 7.6], size: [2.0, 0.6, 0.2], ..Furnishing::default() };
+        let wall_item = Furnishing { level: 0, placement: Placement::Wall, at: [8.0, 7.6], size: [2.0, 0.6, 0.2], ..Furnishing::default() };
+        let mut m = level_model(1);
+        m.push_furnishing(floor_item);
+        m.push_furnishing(wall_item);
+        assert!(lines_of(&m, Some(0), PlanLineKind::CeilingItem).is_empty());
+    }
+
+    #[test]
+    fn empty_model_draws_nothing() {
+        let m = level_model(0);
+        let mut out = PlanAnnotation::default();
+        ceiling_plan(&m, Some(0), &mut out);
+        assert!(out.lines.is_empty());
+        assert!(out.labels.is_empty());
+    }
 }
