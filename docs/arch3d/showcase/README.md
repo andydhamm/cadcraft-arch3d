@@ -2,6 +2,16 @@
 
 A split-entry bi-level house built from a single JSON command script.
 
+## Phase 19 — light, sky and cameras
+
+The dusk/noon/overview demo uses a calibrated site, sky and HDRI backdrops, saved cameras, named sun angles and a cutaway floor overview:
+
+- [Phase 19 demo](./phase-19-demo.json)
+- dusk: twilight sky with lit windows and strip lights, a `sunangle` in the -3° to 0° range and a saved `dusk` camera
+- noon: a noon sun plus the `polyhaven:kloofendal-puresky` HDRI, path-traced under the sky
+- overview: Level 0 cutaway view with the saved `overview` camera and its own look
+
+
 ## The house
 
 - **Lower** — a basement level at elevation **-1.2 m** (below finished grade).
