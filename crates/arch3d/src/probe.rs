@@ -467,6 +467,14 @@ mod tests {
     }
 
     #[test]
+    fn cabinet_meshes_are_cabinet_kind() {
+        use cadcraft_doc::arch::ArchKind;
+        for mat in ["cabinet-box", "cabinet-front", "paint:cabinet/cb0/carcass", "paint:cabinet/cb0/front"] {
+            assert_eq!(arch_kind(&named(mat, 0)), ArchKind::Cabinet, "{mat}");
+        }
+    }
+
+    #[test]
     fn part_of_maps_every_phase17_material() {
         let want = [
             ("stair-tread", "tread"),

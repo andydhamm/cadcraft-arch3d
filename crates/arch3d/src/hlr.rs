@@ -534,6 +534,18 @@ mod tests {
     use super::*;
     use crate::Mesh;
 
+    #[test]
+    fn merge_collinear_keeps_objects_apart() {
+        let l = |a: f64, b: f64, k: ArchKind, o: u32| Line2::new([a, 0.0], [b, 0.0], k, ArchId(o));
+        let two = merge_collinear(vec![l(0.0, 1.0, ArchKind::Cabinet, 0), l(1.0, 2.0, ArchKind::Wall, 1)]);
+        assert_eq!(two.len(), 2);
+        assert!(two.iter().any(|x| x.kind == ArchKind::Cabinet && x.object == ArchId(0)));
+        assert!(two.iter().any(|x| x.kind == ArchKind::Wall && x.object == ArchId(1)));
+        let one = merge_collinear(vec![l(0.0, 1.0, ArchKind::Cabinet, 0), l(1.0, 2.0, ArchKind::Cabinet, 0)]);
+        assert_eq!(one.len(), 1);
+        assert!((one[0].length() - 2.0).abs() < 1e-9);
+    }
+
     /// A scene with one quad in the plane y = 0 spanning x 0..2, z 0..2.
     fn quad_scene() -> Scene3d {
         let mut m = Mesh::new("m", ArchId(0));
