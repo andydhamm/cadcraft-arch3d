@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 21:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 41 of 42 segments merged · 19 of 20 acceptance checks**
 
-10,014 workspace tests passing at the last merge · 1115 segments merged in all · 0 of 15 seats working
+10,048 workspace tests passing at the last merge · 1121 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,7 +28,7 @@ Updated 2026-11-13 21:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 64.0 h so far · expected done Nov 13 22:27–Nov 14 15:15 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 64.3 h so far · expected done Nov 13 22:42–Nov 14 15:30 UTC |
 | 19 | Light, sky and cameras | building | 7 / 17 | — |
 | 20 | Plan views and dimensions | building | 12 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 9 / 13 | — |
@@ -45,35 +45,35 @@ Updated 2026-11-13 21:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 21:43 | `p19f-demo-script` | refused | 0 pass | mai-flash-b |
+| Nov 13 21:43 | `harden-p21-plot-sheets` | merged | 10,048 pass | tturbo-mac |
+| Nov 13 21:43 | `harden-p19-ptg-frame-lighting` | merged | 10,048 pass | tturbo-mac2 |
+| Nov 13 21:43 | `harden-p21-plan-numbers` | merged | 10,048 pass | tturbo-mac2 |
+| Nov 13 21:43 | `harden-p21-sheet-camera` | merged | 10,048 pass | tturbo-mac2 |
+| Nov 13 21:43 | `p19f-cutaway-interactive` | merged | 10,048 pass | claude-sonnet-b |
+| Nov 13 21:43 | `p19f-sky-render-time` | merged | 10,048 pass | claude-sonnet-a |
 | Nov 13 21:04 | `harden-p18-crown-wrap` | refused | 0 pass | tturbo-mac2 |
 | Nov 13 21:04 | `harden-p14-io-library-files` | merged | 10,014 pass | tturbo-mac2 |
 | Nov 13 21:04 | `harden-p19f-hdr-resolution-line` | merged | 10,014 pass | tturbo-mac2 |
 | Nov 13 21:04 | `harden-p18g-room-moldings-refusals` | merged | 10,014 pass | tturbo-mac2 |
 | Nov 13 21:04 | `harden-p15-cmd-export-view` | merged | 10,014 pass | tturbo-mac2 |
-| Nov 13 21:04 | `harden-p15-arch3d-light-brightness` | merged | 10,014 pass | tturbo-mac2 |
-| Nov 13 21:04 | `harden-p15-cmd-electrical-view` | merged | 10,014 pass | tturbo-mac2 |
-| Nov 13 20:25 | `harden-p18-rebuild` | merged | 9,973 pass | tturbo-mac2 |
-| Nov 13 20:25 | `harden-p18-exports` | merged | 9,973 pass | tturbo-mac |
-| Nov 13 20:25 | `harden-p21-interior-elevation` | merged | 9,973 pass | tturbo-mac2 |
-| Nov 13 20:25 | `harden-p19-strip-tray` | merged | 9,973 pass | tturbo-mac |
-| Nov 13 20:25 | `harden-p20f-rcp-soffits-once` | merged | 9,973 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1261 |
+| bonsai-a | bonsai2-27b | agent | 1261 |
 | bonsai-b | bonsai2-27b | idle | 1213 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1344 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1288 |
 | claude-sonnet-a | sonnet | idle | 154 |
-| claude-sonnet-b | sonnet | idle | 155 |
+| claude-sonnet-b | sonnet | gate | 155 |
 | claude-sonnet-c | sonnet | idle | 92 |
 | claude-sonnet-d | sonnet | idle | 82 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1140 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 115 |
-| mai-flash-b | mai-code-1.1-flash | agent | 58 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 122 |
-| tturbo-mac | tturbo-ultraheretic | gate | 864 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 497 |
+| mai-flash-b | mai-code-1.1-flash | idle | 59 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 122 |
+| tturbo-mac | tturbo-ultraheretic | agent | 865 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 498 |
