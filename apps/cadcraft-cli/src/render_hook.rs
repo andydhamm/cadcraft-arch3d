@@ -27,7 +27,7 @@ use serde_json::{Value, json};
 /// The most sample points a request reports.
 const MAX_SAMPLES: usize = 64;
 /// How near (m) the pick ray's first hit must be to a sample point for it to count as visible.
-const VISIBLE_TOLERANCE: f64 = 0.02;
+const VISIBLE_TOLERANCE: f64 = 0.05;
 
 /// The renderer and the scene it last built.
 struct State {

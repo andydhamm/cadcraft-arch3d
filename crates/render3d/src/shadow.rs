@@ -488,7 +488,7 @@ pub fn ground_mesh(bounds: &Bounds3) -> Mesh {
     let grow = 2.0 * side;
     let (x0, x1) = (bounds.min[0].min(bounds.max[0]) - grow, bounds.min[0].max(bounds.max[0]) + grow);
     let (y0, y1) = (bounds.min[1].min(bounds.max[1]) - grow, bounds.min[1].max(bounds.max[1]) + grow);
-    let z = bounds.min[2] as f32;
+    let z = (bounds.min[2] - 0.001) as f32;
     for (x, y) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
         let (x, y) = (x as f32, y as f32);
         m.positions.push([x, y, z]);
