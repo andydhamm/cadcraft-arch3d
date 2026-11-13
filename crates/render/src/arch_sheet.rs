@@ -139,4 +139,109 @@ mod tests {
         e.common.xdata = link_tags(LINK_SHEET_VIEW, "S1", 1).into_iter().collect();
         assert!(plan_view_drawing(&d, &e).is_none());
     }
+
+    #[test]
+    fn plan_viewport_source_level_overrides_view_level() {
+        let mut d = Drawing::new_metric();
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ..cadcraft_doc::arch::Level::default() });
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 1, elevation: 3.0, ..cadcraft_doc::arch::Level::default() });
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 2, elevation: 6.0, ..cadcraft_doc::arch::Level::default() });
+        d.arch.plan_views = vec![PlanView { name: "Demo".into(), kind: PlanKind::Floor, level: Some(1), ..PlanView::default() }];
+        d.arch.sheets.push(Sheet {
+            name: "S1".into(),
+            views: vec![SheetView { number: 1, source: SheetSource::Plan { view: "Demo".into(), level: Some(2) }, ..SheetView::default() }],
+            ..Sheet::default()
+        });
+        let mut e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
+        e.common.xdata = link_tags(LINK_SHEET_VIEW, "S1", 1).into_iter().collect();
+        let local = plan_view_drawing(&d, &e).expect("plan sheet viewport");
+        assert_eq!(local.arch.plan_level, Some(2));
+    }
+
+    #[test]
+    fn viewport_without_link_returns_none() {
+        let d = Drawing::new_metric();
+        let e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
+        assert!(plan_view_drawing(&d, &e).is_none());
+    }
+
+    #[test]
+    fn viewport_with_wrong_link_role_returns_none() {
+        let d = Drawing::new_metric();
+        let mut e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
+        e.common.xdata = link_tags(0, "S1", 1).into_iter().collect();
+        assert!(plan_view_drawing(&d, &e).is_none());
+    }
+
+    #[test]
+    fn out_of_bounds_level_leaves_plan_level_unchanged() {
+        let mut d = Drawing::new_metric();
+        d.arch.plan_level = Some(0);
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ..cadcraft_doc::arch::Level::default() });
+        d.arch.plan_views = vec![PlanView { name: "Demo".into(), kind: PlanKind::Floor, level: Some(99), ..PlanView::default() }];
+        d.arch.sheets.push(Sheet {
+            name: "S1".into(),
+            views: vec![SheetView { number: 1, source: SheetSource::Plan { view: "Demo".into(), level: None }, ..SheetView::default() }],
+            ..Sheet::default()
+        });
+        let mut e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
+        e.common.xdata = link_tags(LINK_SHEET_VIEW, "S1", 1).into_iter().collect();
+        let local = plan_view_drawing(&d, &e).expect("plan sheet viewport");
+        assert_eq!(local.arch.plan_level, Some(0));
+    }
+
+    #[test]
+    fn multiple_layer_rules_all_applied() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-WALL");
+        d.ensure_layer("A-ROOM");
+        d.ensure_layer("A-DOOR");
+        d.arch.plan_views = vec![PlanView {
+            name: "Demo".into(),
+            kind: PlanKind::Floor,
+            layers: LayerState {
+                name: "Demo".into(),
+                layers: Vec::new(),
+                rules: vec![
+                    cadcraft_doc::LayerRule { pattern: "A-WALL".into(), on: Some(false), transparency: None },
+                    cadcraft_doc::LayerRule { pattern: "A-DOOR".into(), on: Some(false), transparency: None },
+                ],
+            },
+            ..PlanView::default()
+        }];
+        d.arch.sheets.push(Sheet {
+            name: "S1".into(),
+            views: vec![SheetView { number: 1, source: SheetSource::Plan { view: "Demo".into(), level: None }, ..SheetView::default() }],
+            ..Sheet::default()
+        });
+        let mut e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
+        e.common.xdata = link_tags(LINK_SHEET_VIEW, "S1", 1).into_iter().collect();
+        let local = plan_view_drawing(&d, &e).expect("plan sheet viewport");
+        assert!(local.layer("A-WALL").is_some_and(|layer| !layer.on));
+        assert!(local.layer("A-DOOR").is_some_and(|layer| !layer.on));
+        assert!(local.layer("A-ROOM").is_some_and(|layer| layer.on));
+    }
+
+    #[test]
+    fn missing_sheet_returns_none() {
+        let mut d = Drawing::new_metric();
+        d.arch.plan_views = vec![PlanView { name: "Demo".into(), kind: PlanKind::Floor, ..PlanView::default() }];
+        let mut e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
+        e.common.xdata = link_tags(LINK_SHEET_VIEW, "MissingSheet", 1).into_iter().collect();
+        assert!(plan_view_drawing(&d, &e).is_none());
+    }
+
+    #[test]
+    fn missing_view_number_returns_none() {
+        let mut d = Drawing::new_metric();
+        d.arch.plan_views = vec![PlanView { name: "Demo".into(), kind: PlanKind::Floor, ..PlanView::default() }];
+        d.arch.sheets.push(Sheet {
+            name: "S1".into(),
+            views: vec![SheetView { number: 1, source: SheetSource::Plan { view: "Demo".into(), level: None }, ..SheetView::default() }],
+            ..Sheet::default()
+        });
+        let mut e = Entity::new(Handle(1), EntityKind::Viewport(Viewport::default()));
+        e.common.xdata = link_tags(LINK_SHEET_VIEW, "S1", 99).into_iter().collect();
+        assert!(plan_view_drawing(&d, &e).is_none());
+    }
 }
