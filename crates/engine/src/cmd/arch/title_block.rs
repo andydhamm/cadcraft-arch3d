@@ -416,4 +416,102 @@ mod tests {
         assert!(matches!(entity.kind, EntityKind::Insert(_)));
         assert!(read_link(&entity.common.xdata).is_some());
     }
+
+    #[test]
+    fn no_sheets_is_harmless() {
+        let mut s = Session::new();
+        // No sheets added at all
+        refresh_title_blocks(&mut s).unwrap();
+        // Master block should still be created
+        assert!(s.doc().unwrap().block(TITLE_BLOCK).is_some());
+    }
+
+    #[test]
+    fn empty_fields_expand_to_empty() {
+        let mut s = Session::new();
+        let mut d = s.doc_mut().unwrap();
+        d.arch.sheet_set = SheetSet { project: "".to_string(), date: "".to_string(), ..SheetSet::default() };
+        let sheet = cadcraft_doc::arch::sheet::Sheet {
+            name: "Plans".to_string(),
+            number: "".to_string(),
+            title: "".to_string(),
+            views: vec![SheetView {
+                number: 1,
+                source: SheetSource::Plan { view: "Floor Plan".to_string(), level: None },
+                scale: 50.0,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        d.arch.sheets.push(sheet);
+        d.layouts.iter_mut().find(|l| l.name == "Layout1").unwrap().name = "Plans".to_string();
+        drop(d);
+        refresh_title_blocks(&mut s).unwrap();
+        let layout = s.doc().unwrap().layout("Plans").unwrap();
+        let ins =
+            layout.entities.iter().find(|e| read_link(&e.common.xdata).is_some_and(|(role, key, _)| role == LINK_TITLE && key == "Plans")).unwrap();
+        let EntityKind::Insert(i) = &ins.kind else { panic!("not insert") };
+        assert_eq!(i.attribs.iter().find(|a| a.tag.eq_ignore_ascii_case("SHEETNO")).map(|a| a.text.value.as_str()), Some(""));
+        assert_eq!(i.attribs.iter().find(|a| a.tag.eq_ignore_ascii_case("SHEETTITLE")).map(|a| a.text.value.as_str()), Some(""));
+        assert_eq!(i.attribs.iter().find(|a| a.tag.eq_ignore_ascii_case("PROJECT")).map(|a| a.text.value.as_str()), Some(""));
+        assert_eq!(i.attribs.iter().find(|a| a.tag.eq_ignore_ascii_case("DATE")).map(|a| a.text.value.as_str()), Some(""));
+        assert_eq!(i.attribs.iter().find(|a| a.tag.eq_ignore_ascii_case("SCALE")).map(|a| a.text.value.as_str()), Some("1:50"));
+    }
+
+    #[test]
+    fn fractional_scale_formats() {
+        let mut s = Session::new();
+        let mut d = s.doc_mut().unwrap();
+        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
+        let sheet = cadcraft_doc::arch::sheet::Sheet {
+            name: "Plans".to_string(),
+            number: "A-101".to_string(),
+            title: "Floor Plan".to_string(),
+            views: vec![SheetView {
+                number: 1,
+                source: SheetSource::Plan { view: "Floor Plan".to_string(), level: None },
+                scale: 25.4,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        d.arch.sheets.push(sheet);
+        d.layouts.iter_mut().find(|l| l.name == "Layout1").unwrap().name = "Plans".to_string();
+        drop(d);
+        refresh_title_blocks(&mut s).unwrap();
+        let layout = s.doc().unwrap().layout("Plans").unwrap();
+        let ins =
+            layout.entities.iter().find(|e| read_link(&e.common.xdata).is_some_and(|(role, key, _)| role == LINK_TITLE && key == "Plans")).unwrap();
+        let EntityKind::Insert(i) = &ins.kind else { panic!("not insert") };
+        assert_eq!(i.attribs.iter().find(|a| a.tag.eq_ignore_ascii_case("SCALE")).map(|a| a.text.value.as_str()), Some("1:25.4"));
+    }
+
+    #[test]
+    fn repeated_refresh_does_not_duplicate() {
+        let mut s = Session::new();
+        let mut d = s.doc_mut().unwrap();
+        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
+        d.arch.sheets.push(make_sheet("Plans", "A-101", "Floor Plan"));
+        d.layouts.iter_mut().find(|l| l.name == "Layout1").unwrap().name = "Plans".to_string();
+        drop(d);
+        refresh_title_blocks(&mut s).unwrap();
+        refresh_title_blocks(&mut s).unwrap();
+        refresh_title_blocks(&mut s).unwrap();
+        let layout = s.doc().unwrap().layout("Plans").unwrap();
+        let count =
+            layout.entities.iter().filter(|e| read_link(&e.common.xdata).is_some_and(|(role, key, _)| role == LINK_TITLE && key == "Plans")).count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn layout_missing_is_harmless() {
+        let mut s = Session::new();
+        let mut d = s.doc_mut().unwrap();
+        d.arch.sheet_set = SheetSet { project: "House".to_string(), date: "2026-11-09".to_string(), ..SheetSet::default() };
+        // Sheet named "Plans" but no layout with that name exists
+        d.arch.sheets.push(make_sheet("Plans", "A-101", "Floor Plan"));
+        drop(d);
+        // Should not error even though layout "Plans" doesn't exist
+        refresh_title_blocks(&mut s).unwrap();
+    }
 }
