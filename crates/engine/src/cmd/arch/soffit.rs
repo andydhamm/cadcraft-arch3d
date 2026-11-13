@@ -146,6 +146,7 @@ fn reply(model: &ArchModel, s: &Soffit) -> Value {
         "polygon": ring_json(model, s),
         "bottom": soffit_bottom(model, s),
         "top": ip.and_then(|p| finished_ceiling_at(model, s.level, p)),
+        "moldings": !s.no_moldings,
         "room": ip.and_then(|p| room_at_point(model, s.level, p)).map(|r| room_label(r.id)),
     })
 }
@@ -162,6 +163,9 @@ fn run_soffit(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(cmd, "exactly one of `rect`, `polygon` or `over` is required"));
     }
     let mut cand = Soffit { id: ArchId(model.next_soffit_id), level, layer: CEILING_LAYER.to_string(), ..Default::default() };
+    if let Some(v) = p.get("moldings").filter(|v| !v.is_null()) {
+        cand.no_moldings = v.as_bool().map(|b| !b).ok_or_else(|| bad(cmd, "`moldings` must be a boolean"))?;
+    }
     if let Some(v) = p.get("rect").filter(|v| !v.is_null()) {
         cand.polygon = parse_rect(cmd, &model, level, v)?;
     } else if let Some(v) = p.get("polygon").filter(|v| !v.is_null()) {
@@ -206,6 +210,9 @@ fn run_soffit_edit(s: &mut Session, p: &Value) -> Result<Value> {
         cand.polygon = parse_rect(cmd, &model, cand.level, v)?;
     } else if let Some(v) = p.get("polygon").filter(|v| !v.is_null()) {
         cand.polygon = parse_polygon(cmd, v)?;
+    }
+    if let Some(v) = p.get("moldings").filter(|v| !v.is_null()) {
+        cand.no_moldings = v.as_bool().map(|b| !b).ok_or_else(|| bad(cmd, "`moldings` must be a boolean"))?;
     }
     if let Some(v) = p.get("over").filter(|v| !v.is_null()) {
         cand.over = parse_over(cmd, v)?;
@@ -272,6 +279,7 @@ fn soffit_row(model: &ArchModel, s: &Soffit) -> Value {
         "top": top,
         "depth": s.depth,
         "over": s.over.iter().map(|c| cabinet_label(*c)).collect::<Vec<_>>(),
+        "moldings": !s.no_moldings,
         "material": s.material,
         "room": room,
         "layer": s.layer,

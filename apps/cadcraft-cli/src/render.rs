@@ -89,6 +89,26 @@ pub(crate) fn parse_adapter(s: &str) -> Option<AdapterChoice> {
     AdapterChoice::parse(s)
 }
 
+/// Whether `t` is a valid time: `solar-noon` or `HH:MM` with 0 ≤ HH ≤ 23 and 0 ≤ MM ≤ 59.
+fn valid_time(t: &str) -> bool {
+    if t == "solar-noon" {
+        return true;
+    }
+    let parts: Vec<&str> = t.split(':').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    let h: u32 = match parts[0].parse() {
+        Ok(h) => h,
+        Err(_) => return false,
+    };
+    let m: u32 = match parts[1].parse() {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    h < 24 && m < 60
+}
+
 /// Parse `date=YYYY-MM-DD,time=solar-noon|HH:MM[,lat=DEG]` into `(lat, date, time)`. `date`
 /// and `time` are always required; `lat` is optional (render falls back to the site latitude
 /// when it is missing). When `lat` is given the sun must be computable for the triple; unknown
@@ -105,6 +125,9 @@ pub(crate) fn parse_sun(s: &str) -> Option<(Option<f64>, String, String)> {
         }
     }
     let (date, time) = (date?, time?);
+    if !valid_time(&time) {
+        return None;
+    }
     if let Some(lat) = lat {
         cadcraft_arch::sun::sun_position(lat, &date, &time)?;
     }
@@ -1024,5 +1047,103 @@ mod tests {
         assert!(["hit", "miss", "unsupported"].iter().any(|c| line.ends_with(&format!("cache={c}"))), "cache outcome: {line}");
         assert!(stderr.contains("LIGHTS ") && stderr.contains("SHADOWMAPS built="), "{stderr}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_camera_full_duplicate_fields_second_wins() {
+        let Ok(Camera::Full(c)) = parse_camera("full,eye=1,2,3,eye=4,5,6,target=7,8,9,fov=45,fov=55", base()) else {
+            panic!("duplicate fields");
+        };
+        assert_eq!((c.eye, c.target, c.fov_deg), (Vec3::new(4.0, 5.0, 6.0), Vec3::new(7.0, 8.0, 9.0), 55.0));
+    }
+
+    #[test]
+    fn parse_camera_full_eye_height_not_finite_rejected() {
+        assert!(parse_camera("full,eye=1,2,eyeHeight=NaN,target=4,5,1", base()).is_err(), "eyeHeight NaN");
+        assert!(parse_camera("full,eye=1,2,eyeHeight=inf,target=4,5,1", base()).is_err(), "eyeHeight inf");
+    }
+
+    #[test]
+    fn parse_camera_full_fov_not_finite_rejected() {
+        assert!(parse_camera("full,eye=1,2,3,target=4,5,6,fov=NaN", base()).is_err(), "fov NaN");
+        assert!(parse_camera("full,eye=1,2,3,target=4,5,6,fov=inf", base()).is_err(), "fov inf");
+    }
+
+    #[test]
+    fn parse_camera_full_eye_z_not_finite_rejected() {
+        assert!(parse_camera("full,eye=1,2,NaN,target=4,5,6", base()).is_err(), "eye z NaN");
+        assert!(parse_camera("full,eye=1,2,inf,target=4,5,6", base()).is_err(), "eye z inf");
+    }
+
+    #[test]
+    fn parse_camera_full_eye_height_without_eye_rejected() {
+        assert!(parse_camera("full,eyeHeight=1.6,target=4,5,1", base()).is_err(), "eyeHeight without eye");
+    }
+
+    #[test]
+    fn parse_camera_full_target_without_eye_rejected() {
+        assert!(parse_camera("full,target=4,5,6", base()).is_err(), "target without eye");
+    }
+
+    #[test]
+    fn parse_camera_full_fov_without_eye_or_target_rejected() {
+        assert!(parse_camera("full,fov=50", base()).is_err(), "fov without eye or target");
+    }
+
+    #[test]
+    fn parse_sun_time_out_of_range_rejected() {
+        assert_eq!(parse_sun("lat=51,date=2026-06-21,time=24:00"), None, "time=24:00");
+        assert_eq!(parse_sun("lat=51,date=2026-06-21,time=12:60"), None, "time=12:60");
+        assert_eq!(parse_sun("lat=51,date=2026-06-21,time=25:00"), None, "time=25:00");
+    }
+
+    #[test]
+    fn parse_sun_date_out_of_range_rejected() {
+        assert_eq!(parse_sun("lat=51,date=2026-02-30,time=12:00"), None, "date=2026-02-30");
+        assert_eq!(parse_sun("lat=51,date=2026-04-31,time=12:00"), None, "date=2026-04-31");
+        assert_eq!(parse_sun("lat=51,date=2026-00-15,time=12:00"), None, "date=2026-00-15");
+    }
+
+    #[test]
+    fn parse_camera_orbit_azimuth_360_accepted() {
+        let o = orbit_of("orbit,azimuth=360");
+        assert_eq!(o.azimuth, 360.0);
+    }
+
+    #[test]
+    fn parse_camera_orbit_elevation_zero_accepted() {
+        let o = orbit_of("orbit,elevation=0");
+        assert_eq!(o.elevation, 0.0);
+    }
+
+    #[test]
+    fn parse_camera_orbit_distance_very_small_accepted() {
+        let o = orbit_of("orbit,distance=0.001");
+        assert_eq!(o.distance, 0.001);
+    }
+
+    #[test]
+    fn parse_camera_orbit_fov_very_small_accepted() {
+        let o = orbit_of("orbit,fov=0.1");
+        assert_eq!(o.fov_deg, 0.1);
+    }
+
+    #[test]
+    fn format_projected_nan_prints_nan() {
+        let s = format_projected([f32::NAN, 1.0, 2.0, 3.0]);
+        assert!(s.contains("NaN"), "NaN should print as NaN: {s}");
+    }
+
+    #[test]
+    fn parse_size_missing_width_or_height_rejected() {
+        assert!(parse_size("1x").is_err(), "missing height");
+        assert!(parse_size("x1").is_err(), "missing width");
+        assert!(parse_size("1 x").is_err(), "missing height with space");
+        assert!(parse_size(" x1").is_err(), "missing width with space");
+    }
+
+    #[test]
+    fn parse_size_two_x_rejected() {
+        assert!(parse_size("1x2x3").is_err(), "two x's");
     }
 }

@@ -35,6 +35,8 @@ pub mod countertop_edit;
 pub mod deck;
 pub mod detect;
 pub mod dimension;
+pub mod drive;
+pub use drive::{translate_object, translate_wall};
 pub mod electrical;
 pub mod flight_cut;
 pub mod foundation;

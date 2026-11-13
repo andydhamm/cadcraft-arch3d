@@ -839,4 +839,86 @@ mod tests {
         let lift = lift_in(room, &m.trays, Vec2::new(0.0, 0.0));
         assert_eq!(lift, 0.0, "point outside all trays should have 0 lift");
     }
+
+    #[test]
+    fn top_ring_insets_by_pitch() {
+        let m = house(Some(6.0));
+        let room = &m.rooms[1];
+        let tray = Tray { room: room.id, level: room.level, inset: 0.6, depth: 0.3, sides: TraySides::Pitched(45.0), ..Default::default() };
+        let top = top_ring_in(room, &[], &tray).unwrap();
+        // At 45 degrees, the top ring is inset by depth/tan(45) = 0.3 from the outline.
+        // The outline is inset 0.6 from the room, so the top is inset 0.9 from the room.
+        let want = vec![Vec2::new(1.0, 3.95), Vec2::new(5.05, 3.95), Vec2::new(5.05, 7.0), Vec2::new(1.0, 7.0)];
+        assert_eq!(top.len(), want.len());
+        for (a, b) in top.iter().zip(want.iter()) {
+            assert!((a.x - b.x).abs() <= 1e-6, "{a:?} vs {b:?}");
+            assert!((a.y - b.y).abs() <= 1e-6, "{a:?} vs {b:?}");
+        }
+    }
+
+    #[test]
+    fn lift_in_overlapping_trays_sums() {
+        let mut m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        // Two trays that overlap in the center of the room (siblings, not nested).
+        let _t1 = m.push_tray(Tray { room: room_id, level: room_level, inset: 0.6, depth: 0.2, ..Default::default() });
+        let _t2 = m.push_tray(Tray { room: room_id, level: room_level, inset: 1.0, depth: 0.1, ..Default::default() });
+        let room = &m.rooms[1];
+        // At the center, both trays apply.
+        let center_lift = lift_in(room, &m.trays, Vec2::new(3.025, 5.475));
+        assert!((center_lift - 0.3).abs() < 1e-6, "center should have both lifts: {center_lift}");
+        // Between the two insets, only the first applies.
+        let between_lift = lift_in(room, &m.trays, Vec2::new(0.8, 5.475));
+        assert!((between_lift - 0.2).abs() < 1e-6, "between should have only first lift: {between_lift}");
+        // Outside both, no lift.
+        let outside_lift = lift_in(room, &m.trays, Vec2::new(0.4, 5.0));
+        assert!((outside_lift - 0.0).abs() < 1e-6, "outside should have no lift: {outside_lift}");
+    }
+
+    #[test]
+    fn base_ring_uses_explicit_polygon() {
+        let m = house(Some(6.0));
+        let room = &m.rooms[1];
+        let poly = vec![Vec2::new(1.0, 4.0), Vec2::new(4.0, 4.0), Vec2::new(4.0, 6.0), Vec2::new(1.0, 6.0)];
+        let tray = Tray { room: room.id, level: room.level, polygon: poly.clone(), ..Default::default() };
+        let base = base_ring_in(room, &[], &tray).unwrap();
+        assert_eq!(base.len(), 4);
+        for (a, b) in base.iter().zip(poly.iter()) {
+            assert!((a.x - b.x).abs() <= 1e-9, "{a:?} vs {b:?}");
+            assert!((a.y - b.y).abs() <= 1e-9, "{a:?} vs {b:?}");
+        }
+    }
+
+    #[test]
+    fn validate_refuses_depth_out_of_range() {
+        let m = house(Some(6.0));
+        let room_id = m.rooms[1].id;
+        let room_level = m.rooms[1].level;
+        // Depth too small.
+        let shallow = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.005, ..Default::default() };
+        let err = validate(&m, &shallow).unwrap_err();
+        assert!(err.contains("depth or inset"), "depth 0.005 should be refused: {err}");
+        // Depth too large.
+        let deep = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 2.5, ..Default::default() };
+        let err = validate(&m, &deep).unwrap_err();
+        assert!(err.contains("depth or inset"), "depth 2.5 should be refused: {err}");
+        // Minimum depth accepted (roof check passes for small depth).
+        let min_depth = Tray { id: ArchId(1), room: room_id, level: room_level, inset: 0.6, depth: 0.01, ..Default::default() };
+        assert!(validate(&m, &min_depth).is_ok(), "depth 0.01 should be accepted");
+    }
+
+    #[test]
+    fn ring_is_convex_degenerate() {
+        // Empty ring.
+        assert!(!ring_is_convex(&[]));
+        // One point.
+        assert!(!ring_is_convex(&[Vec2::new(0.0, 0.0)]));
+        // Two points.
+        assert!(!ring_is_convex(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)]));
+        // Three collinear points (degenerate triangle).
+        assert!(!ring_is_convex(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(2.0, 0.0)]));
+        // Valid triangle.
+        assert!(ring_is_convex(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)]));
+    }
 }

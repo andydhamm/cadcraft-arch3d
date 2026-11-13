@@ -83,6 +83,9 @@ pub struct Soffit {
     pub depth: Option<f64>,
     /// The wall cabinets the soffit fills over (from their tops to the ceiling).
     pub over: Vec<ArchId>,
+    /// Whether the room's crown and chair runs are allowed to wrap around this soffit.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_moldings: bool,
     /// The material key of the box's faces, if not the default.
     pub material: Option<String>,
     pub layer: String,
@@ -97,6 +100,7 @@ impl Default for Soffit {
             bottom: None,
             depth: None,
             over: Vec::new(),
+            no_moldings: false,
             material: None,
             layer: CEILING_LAYER.to_string(),
         }
@@ -146,6 +150,7 @@ mod tests {
         assert!(t.polygon.is_empty() && t.parent.is_none());
         let s = Soffit::default();
         assert_eq!(s.layer, "A-CLNG");
+        assert!(!s.no_moldings);
         assert!(s.bottom.is_none() && s.depth.is_none() && s.over.is_empty() && s.material.is_none());
     }
 

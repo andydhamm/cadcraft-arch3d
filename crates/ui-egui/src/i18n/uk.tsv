@@ -82,7 +82,6 @@
 	Delete Plan View	Видалити вид плану
 	List Plan Views	Список видів плану
 	Auto Exterior Dimensions	Автоматичні зовнішні розміри
-	Drive Dimension	Привести розмір
 	Room Names	Імена кімнат
 	Room Areas	Площі кімнат
 	Room Dimensions	Розміри кімнат
@@ -1676,3 +1675,4 @@
 	Update Camera	Оновити камеру
 	Plan View Tabs	Вкладки видів плану
 	Duplicate	Дублювати
+	Drive Dimension	Керувальний розмір
