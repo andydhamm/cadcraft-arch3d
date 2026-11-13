@@ -351,6 +351,43 @@ mod tests {
         assert_eq!(s1, s2);
     }
 
+    /// A vertical quad at `y`, x 0..4, z 0..2.4, wound so its normal is (0,-1,0).
+    fn facing_quad(material: &str, object: ArchId, y: f32) -> Mesh {
+        Mesh {
+            positions: vec![[0.0, y, 0.0], [4.0, y, 0.0], [4.0, y, 2.4], [0.0, y, 2.4]],
+            normals: vec![[0.0, -1.0, 0.0]; 4],
+            uvs: vec![[0.0, 0.0]; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            ..Mesh::new(material, object)
+        }
+    }
+
+    fn lines_for(first_plain: bool) -> Vec<ViewPatternLine> {
+        let model = ArchModel::default();
+        let plain = facing_quad("wall", ArchId(1), 0.3);
+        let brick = facing_quad("wall-brick", ArchId(1), 0.0);
+        let meshes = if first_plain { vec![plain, brick] } else { vec![brick, plain] };
+        let sc = Scene3d { meshes, ..Default::default() };
+        let ov = OrthoView::new([0.0, 1.0, 0.0], [0.0, 0.0, 1.0]).expect("view");
+        pattern_lines(&model, &sc, &ov)
+    }
+
+    #[test]
+    fn pattern_lines_name_the_patterned_mesh() {
+        let lines = lines_for(true);
+        assert!(!lines.is_empty());
+        assert!(lines.iter().all(|l| l.material == "finish:brick"), "{:?}", lines.iter().map(|l| &l.material).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn pattern_lines_never_fall_back_to_default() {
+        for first_plain in [true, false] {
+            let lines = lines_for(first_plain);
+            assert!(!lines.is_empty());
+            assert!(lines.iter().all(|l| l.material != "finish:default"));
+        }
+    }
+
     #[test]
     fn segment_on_axis_finds_chord() {
         // Triangle in the xy-plane: (0,0,0), (2,0,0), (0,2,0).
