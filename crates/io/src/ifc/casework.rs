@@ -429,4 +429,23 @@ mod tests {
         // The cabinet should be contained in the first storey
         assert!(text.contains("IFCFURNITURE"), "Expected cabinet furniture");
     }
+
+    #[test]
+    fn ifc_casework_skips_cabinets_without_meshes() {
+        let mut model = ArchModel::default();
+        model.levels = vec![Level::default()];
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            position: cadcraft_geom::Vec2::new(0.0, 0.0),
+            width: 0.6,
+            depth: 0.6,
+            height: 0.9,
+            ..Cabinet::default()
+        });
+        // Scene has no meshes for this cabinet
+        let scene = Scene3d::default();
+        let text = crate::ifc::write_model(&model, &scene, &IfcOptions { timestamp: 1_793_556_000, file_name: "t.ifc".into() });
+        assert!(!text.contains("IFCFURNITURE("), "cabinet without meshes should not be exported: {text}");
+    }
 }

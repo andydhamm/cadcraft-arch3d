@@ -2895,4 +2895,20 @@ mod tests {
         assert!(!shares_a_node("window-grille"));
         assert!(!shares_a_node("door-casing-left"));
     }
+
+    #[test]
+    fn glb_node_names_ignore_rooms_without_moldings() {
+        let mut scene = scene_with(0);
+        // A wall mesh only - no moldings
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall".into();
+            m.object = ArchId(1);
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["wall-w1"]);
+        // No molding names should appear
+        assert!(!names.iter().any(|n| n.starts_with("molding-")));
+    }
 }
