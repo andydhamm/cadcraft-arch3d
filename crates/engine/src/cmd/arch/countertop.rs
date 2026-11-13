@@ -7,9 +7,9 @@
 //! counter.
 
 use cadcraft_arch::countertop::{self, CounterKey};
-use cadcraft_arch::countertop_edit::{detach, move_edge, validate};
+use cadcraft_arch::countertop_edit::{detach, move_edge, sagitta_for_radius, set_profile, set_sagitta, set_waterfall, validate};
 use cadcraft_doc::arch::{
-    ArchId, ArchModel, COUNTER_LAYER, CabinetKind, Countertop, MAX_COUNTER_VERTICES, MAX_COUNTERTOPS, cabinet_label, countertop_handle,
+    ArchId, ArchModel, COUNTER_LAYER, CabinetKind, Countertop, EdgeProfile, MAX_COUNTER_VERTICES, MAX_COUNTERTOPS, cabinet_label, countertop_handle,
     countertop_label, handle_json,
 };
 use cadcraft_geom::Vec2;
@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             .params("{run: \"cb3\" (any cabinet of the automatic counter)}"),
         CommandSpec::new("countertop.edit", "Edit Countertop", run_edit)
             .menu(&["Architecture", "Edit Countertop"])
-            .params("{id: \"ct0\", edge?: i, move?: m | vertex?: i, to?: [x,y], top?: m, thickness?: m}"),
+            .params("{id: \"ct0\", edge?: i, move?: m | sagitta?: s | radius?: R | profile?: \"square\"|\"eased\"|\"bevel\"|\"bullnose\" | waterfall?: bool | vertex?: i, to?: [x,y], top?: m, thickness?: m}"),
         CommandSpec::new("countertop.delete", "Delete Countertop", run_delete).menu(&["Architecture", "Delete Countertop"]).params("{id: \"ct0\"}"),
     ]
 }
@@ -174,18 +174,27 @@ fn run_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let mut ct = model.countertop(id).ok_or_else(|| bad(cmd, format!("unknown countertop `{}`", countertop_label(id))))?.clone();
     let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
     let mut edited = false;
-    if given("edge") || given("move") {
-        if !(given("edge") && given("move")) || given("vertex") || given("to") {
-            return Err(bad(cmd, "`edge` and `move` go together, and not with `vertex`/`to`"));
+    let mut change_count = 0usize;
+    if given("move") {
+        if !(given("edge") && given("move"))
+            || given("vertex")
+            || given("to")
+            || given("sagitta")
+            || given("radius")
+            || given("profile")
+            || given("waterfall")
+        {
+            return Err(bad(cmd, "`edge` and `move` go together, and not with vertex or shape edits"));
         }
         let edge =
             p.get("edge").and_then(Value::as_u64).and_then(|e| usize::try_from(e).ok()).ok_or_else(|| bad(cmd, "`edge` must be an edge index"))?;
         let d = metres(cmd, p, "move")?.ok_or_else(|| bad(cmd, "`move` must be a finite number of metres"))?;
         ct = move_edge(&ct, edge, d).map_err(|e| bad(cmd, e))?;
         edited = true;
+        change_count += 1;
     } else if given("vertex") || given("to") {
-        if !(given("vertex") && given("to")) {
-            return Err(bad(cmd, "`vertex` and `to` go together"));
+        if !(given("vertex") && given("to")) || given("sagitta") || given("radius") || given("profile") || given("waterfall") {
+            return Err(bad(cmd, "`vertex` and `to` go together, and not with shape edits"));
         }
         let i = p
             .get("vertex")
@@ -196,17 +205,69 @@ fn run_edit(s: &mut Session, p: &Value) -> Result<Value> {
         let slot = ct.polygon.get_mut(i).ok_or_else(|| bad(cmd, format!("vertex {i} does not exist")))?;
         *slot = to;
         edited = true;
+        change_count += 1;
+    } else if given("edge") && (given("sagitta") || given("radius") || given("profile") || given("waterfall")) {
+        let edge =
+            p.get("edge").and_then(Value::as_u64).and_then(|e| usize::try_from(e).ok()).ok_or_else(|| bad(cmd, "`edge` must be an edge index"))?;
+        let mut forms = 0usize;
+        if given("sagitta") {
+            forms += 1;
+        }
+        if given("radius") {
+            forms += 1;
+        }
+        if given("profile") {
+            forms += 1;
+        }
+        if given("waterfall") {
+            forms += 1;
+        }
+        if forms != 1 {
+            return Err(bad(cmd, "choose at most one of `sagitta`, `radius`, `profile`, `waterfall` per edit"));
+        }
+        if given("sagitta") {
+            let s =
+                p.get("sagitta").and_then(Value::as_f64).filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, "`sagitta` must be a finite number"))?;
+            ct = set_sagitta(&ct, edge, s).map_err(|e| bad(cmd, e))?;
+            edited = true;
+            change_count += 1;
+        }
+        if given("radius") {
+            let r = p.get("radius").and_then(Value::as_f64).filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, "`radius` must be a finite number"))?;
+            let inward = p.get("inward").and_then(Value::as_bool).unwrap_or(false);
+            let s = sagitta_for_radius(ct.polygon[edge].dist(ct.polygon[(edge + 1) % ct.polygon.len()]), r, inward).map_err(|e| bad(cmd, e))?;
+            ct = set_sagitta(&ct, edge, s).map_err(|e| bad(cmd, e))?;
+            edited = true;
+            change_count += 1;
+        }
+        if given("profile") {
+            let raw = p.get("profile").and_then(Value::as_str).ok_or_else(|| bad(cmd, "`profile` must be a string"))?;
+            let pr = EdgeProfile::parse(raw).ok_or_else(|| bad(cmd, format!("unknown profile `{raw}`")))?;
+            ct = set_profile(&ct, edge, pr).map_err(|e| bad(cmd, e))?;
+            edited = true;
+            change_count += 1;
+        }
+        if given("waterfall") {
+            let on = p.get("waterfall").and_then(Value::as_bool).ok_or_else(|| bad(cmd, "`waterfall` must be a bool"))?;
+            ct = set_waterfall(&ct, edge, on).map_err(|e| bad(cmd, e))?;
+            edited = true;
+            change_count += 1;
+        }
+    } else if given("profile") || given("waterfall") || given("sagitta") || given("radius") {
+        return Err(bad(cmd, "shape edits require an `edge` index"));
     }
     if let Some(t) = metres(cmd, p, "top")? {
         ct.top = t;
         edited = true;
+        change_count += 1;
     }
     if let Some(t) = metres(cmd, p, "thickness")? {
         ct.thickness = t;
         edited = true;
+        change_count += 1;
     }
-    if !edited {
-        return Err(bad(cmd, "nothing to edit: give `edge` + `move`, `vertex` + `to`, `top` or `thickness`"));
+    if !edited || change_count == 0 {
+        return Err(bad(cmd, "nothing to edit: give `edge` + `move`, `vertex` + `to`, `top`, `thickness`, or a shape edit"));
     }
     validate(&ct).map_err(|e| bad(cmd, e))?;
 
@@ -341,6 +402,39 @@ mod tests {
         }
         assert_eq!(*s.doc().unwrap(), before, "nothing changed");
         assert_eq!(undo_len(&s), n, "no undo step");
+    }
+
+    #[test]
+    fn edit_sagitta_radius_profile_waterfall_single_undo_steps() {
+        let mut s = island();
+        let before = undo_len(&s);
+        let r = s.execute("countertop.detach", &json!({"run": "cb1"})).unwrap();
+        assert_eq!(r["countertop"], "ct0");
+        let r = s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "sagitta": 0.15})).unwrap();
+        assert!(r["area"].as_f64().is_some());
+        let r = s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "radius": 2.125, "inward": false})).unwrap();
+        assert!(r["area"].as_f64().is_some());
+        let r = s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "profile": "bullnose"})).unwrap();
+        let r = s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "waterfall": true})).unwrap();
+        assert_eq!(undo_len(&s), before + 5);
+    }
+
+    #[test]
+    fn shape_refusals_leave_nothing() {
+        let mut s = island();
+        let before = s.doc().unwrap().clone();
+        let invalid = [
+            ("countertop.edit", json!({"id": "ct0", "edge": 0, "sagitta": 1e9})),
+            ("countertop.edit", json!({"id": "ct0", "edge": 0, "radius": 0.01})),
+            ("countertop.edit", json!({"id": "ct0", "edge": 0, "profile": "ogee"})),
+            ("countertop.edit", json!({"id": "ct0", "edge": 0, "move": 0.1, "sagitta": 0.1})),
+            ("countertop.edit", json!({"id": "ct0", "edge": 0, "waterfall": true, "sagitta": 0.1})),
+        ];
+        for (cmd, p) in invalid {
+            assert!(s.execute(cmd, &p).is_err(), "{cmd} {p:?}");
+        }
+        assert_eq!(*s.doc().unwrap(), before);
+        assert_eq!(undo_len(&s), 0);
     }
 
     #[test]

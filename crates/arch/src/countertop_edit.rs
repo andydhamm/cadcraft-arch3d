@@ -3,7 +3,7 @@
 
 use crate::countertop::{self, CounterKey, segment_area};
 use cadcraft_doc::ArchModel;
-use cadcraft_doc::arch::{ArchId, COUNTER_LAYER, CounterEdge, Countertop, MAX_COUNTER_VERTICES, cabinet_label};
+use cadcraft_doc::arch::{ArchId, COUNTER_LAYER, CounterEdge, Countertop, EdgeProfile, MAX_COUNTER_VERTICES, cabinet_label};
 use cadcraft_geom::Vec2;
 
 /// Most degrees one sampled arc segment spans.
@@ -118,6 +118,71 @@ fn direction(a: Vec2, b: Vec2) -> Option<Vec2> {
     let d = b - a;
     let l = d.len();
     (l.is_finite() && l > 1e-12).then(|| d * (1.0 / l))
+}
+
+/// Set the bulge (sagitta) of edge `edge` on `ct`.
+pub fn set_sagitta(ct: &Countertop, edge: usize, s: f64) -> Result<Countertop, String> {
+    let n = ct.polygon.len();
+    if n < 3 {
+        return Err("a countertop needs at least 3 vertices".to_string());
+    }
+    if edge >= n {
+        return Err(format!("edge {edge} does not exist (the countertop has {n})"));
+    }
+    if !s.is_finite() {
+        return Err("the sagitta must be finite".to_string());
+    }
+    let chord = ct.polygon[edge].dist(ct.polygon[(edge + 1) % n]);
+    if s.abs() > chord / 2.0 {
+        return Err(format!("edge {edge}: the sagitta must be at most half the edge length"));
+    }
+    if ct.edge(edge).waterfall && s != 0.0 {
+        return Err(format!("edge {edge}: a waterfall edge cannot be set to an arc"));
+    }
+    let mut out = ct.clone();
+    out.edges.resize(n, CounterEdge::default());
+    out.edges[edge].sagitta = s;
+    validate(&out)?;
+    Ok(out)
+}
+
+/// The sagitta for a circular arc of radius `r` on a chord of length `chord`.
+pub fn sagitta_for_radius(chord: f64, r: f64, inward: bool) -> Result<f64, String> {
+    if !chord.is_finite() || !r.is_finite() || chord <= 0.0 || r < chord / 2.0 {
+        return Err("the radius must be at least half the chord length".to_string());
+    }
+    let h = r - (r * r - chord * chord / 4.0).sqrt();
+    let s = if inward { -h } else { h };
+    Ok(s)
+}
+
+/// Set the edge profile of `edge` on `ct`.
+pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result<Countertop, String> {
+    let n = ct.polygon.len();
+    if edge >= n {
+        return Err(format!("edge {edge} does not exist (the countertop has {n})"));
+    }
+    let mut out = ct.clone();
+    out.edges.resize(n, CounterEdge::default());
+    out.edges[edge].profile = profile;
+    validate(&out)?;
+    Ok(out)
+}
+
+/// Set whether `edge` has a waterfall panel.
+pub fn set_waterfall(ct: &Countertop, edge: usize, on: bool) -> Result<Countertop, String> {
+    let n = ct.polygon.len();
+    if edge >= n {
+        return Err(format!("edge {edge} does not exist (the countertop has {n})"));
+    }
+    if ct.edge(edge).sagitta != 0.0 && on {
+        return Err(format!("edge {edge}: a waterfall is only allowed on straight edges"));
+    }
+    let mut out = ct.clone();
+    out.edges.resize(n, CounterEdge::default());
+    out.edges[edge].waterfall = on;
+    validate(&out)?;
+    Ok(out)
 }
 
 /// Move edge `edge` outward by `d` metres (negative moves it inward). Its two vertices slide
@@ -321,6 +386,57 @@ mod tests {
         let ct = rect(1.0, 0.5);
         assert_eq!(sampled_ring(&ct.polygon, &[0.0; 4]), ct.polygon);
         assert_eq!(sampled_ring(&ct.polygon, &[]), ct.polygon);
+    }
+
+    #[test]
+    fn set_sagitta_area_adds_the_segment() {
+        let ct = rect(1.8, 0.625);
+        let before = crate::countertop::outline_area(&crate::countertop::custom_outline(&ArchModel::default(), &ct).unwrap());
+        let out = set_sagitta(&ct, 0, 0.2).unwrap();
+        let after = crate::countertop::outline_area(&crate::countertop::custom_outline(&ArchModel::default(), &out).unwrap());
+        assert!((after - (before + segment_area(1.8, 0.2))).abs() < 1e-9);
+    }
+
+    #[test]
+    fn radius_sets_the_minor_arc_sagitta() {
+        let s = sagitta_for_radius(1.8, 2.125, false).unwrap();
+        assert!((s - 0.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn radius_below_half_chord_refused() {
+        assert!(sagitta_for_radius(1.8, 0.8, false).is_err());
+    }
+
+    #[test]
+    fn inward_sagitta_subtracts() {
+        let ct = rect(1.8, 0.625);
+        let out = set_sagitta(&ct, 0, -0.1).unwrap();
+        let before = crate::countertop::outline_area(&crate::countertop::custom_outline(&ArchModel::default(), &ct).unwrap_or_default());
+        let after = crate::countertop::outline_area(&crate::countertop::custom_outline(&ArchModel::default(), &out).unwrap_or_default());
+        assert!((after - (before - segment_area(1.8, 0.1))).abs() < 1e-9);
+    }
+
+    #[test]
+    fn waterfall_on_an_arc_refused_and_arc_on_a_waterfall_refused() {
+        let mut ct = rect(1.8, 0.625);
+        ct.edges.resize(ct.polygon.len(), CounterEdge::default());
+        ct.edges[1].waterfall = true;
+        assert!(set_waterfall(&ct, 1, true).is_ok());
+        assert!(set_sagitta(&ct, 1, 0.1).is_err());
+        let mut arc = rect(1.8, 0.625);
+        arc.edges.resize(arc.polygon.len(), CounterEdge::default());
+        arc.edges[1].sagitta = 0.1;
+        assert!(set_waterfall(&arc, 1, true).is_err());
+    }
+
+    #[test]
+    fn profile_keys() {
+        assert_eq!(EdgeProfile::parse("square"), Some(EdgeProfile::Square));
+        assert_eq!(EdgeProfile::parse("eased"), Some(EdgeProfile::Eased));
+        assert_eq!(EdgeProfile::parse("bevel"), Some(EdgeProfile::Bevel));
+        assert_eq!(EdgeProfile::parse("bullnose"), Some(EdgeProfile::Bullnose));
+        assert_eq!(EdgeProfile::Bullnose.key(), "bullnose");
     }
 
     #[test]

@@ -218,6 +218,53 @@ fn grip_modes() {
 }
 
 #[test]
+fn countertop_grips_are_vertices_then_edge_midpoints() {
+    let mut s = Session::new();
+    let r = s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.038})).unwrap();
+    let handle = Handle::parse_hex(r["handle"].as_str().unwrap()).unwrap();
+    let grips = s.grips_of(handle).unwrap();
+    assert_eq!(grips.len(), 8);
+    assert!(grips[0].near(Vec2::new(0.0, 0.0), 1e-9));
+    assert!(grips[4].near(Vec2::new(1.0, 0.0), 1e-9));
+}
+
+#[test]
+fn dragging_a_straight_edge_midpoint_moves_the_edge() {
+    let mut s = Session::new();
+    let r = s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.038})).unwrap();
+    let handle = Handle::parse_hex(r["handle"].as_str().unwrap()).unwrap();
+    let mid = s.grips_of(handle).unwrap()[4];
+    s.grip_edit(handle, 4, mid + v(0.0, 0.5), GripMode::Stretch).unwrap();
+    let ct = s.doc().unwrap().arch.countertop(cadcraft_doc::ArchId(0)).unwrap();
+    assert!((ct.polygon[0].y - 0.5).abs() < 1e-6 || (ct.polygon[1].y - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn dragging_an_arc_midpoint_sets_its_sagitta() {
+    let mut s = Session::new();
+    let r = s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.038})).unwrap();
+    let handle = Handle::parse_hex(r["handle"].as_str().unwrap()).unwrap();
+    s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "sagitta": 0.2})).unwrap();
+    let mid = s.grips_of(handle).unwrap()[4];
+    s.grip_edit(handle, 4, mid + v(0.0, 0.3), GripMode::Stretch).unwrap();
+    let ct = s.doc().unwrap().arch.countertop(cadcraft_doc::ArchId(0)).unwrap();
+    assert!(ct.edge(0).sagitta.abs() > 0.0);
+}
+
+#[test]
+fn hostile_grip_indices_and_points_refused() {
+    let mut s = Session::new();
+    let r = s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.038})).unwrap();
+    let handle = Handle::parse_hex(r["handle"].as_str().unwrap()).unwrap();
+    for i in [usize::MAX, 99] {
+        assert!(s.grip_edit(handle, i, v(0.0, 0.0), GripMode::Stretch).is_err());
+    }
+    for p in [v(f64::NAN, 0.0), v(f64::INFINITY, 1.0)] {
+        assert!(s.grip_edit(handle, 0, p, GripMode::Stretch).is_err());
+    }
+}
+
+#[test]
 fn grips_on_locked_layers_and_hostile_values() {
     let mut s = Session::new();
     let l = h(&s.execute("line", &json!({"points": [[0, 0], [2, 0]]})).unwrap());
