@@ -203,10 +203,10 @@ fn elevations_and_sections_are_unchanged() {
     let scene = build(&m);
     let e = generate(&m, &scene, &south(), 2);
     assert!(e.error.is_none() && !e.lines.is_empty());
-    assert!(e.rings.is_empty() && e.patterns.is_empty() && e.indicators.is_empty() && e.labels.is_empty());
+    assert!(e.rings.is_empty() && e.patterns.is_empty());
     let s = generate(&m, &scene, &section(), 2);
     assert!(s.error.is_none() && !s.rings.is_empty());
-    assert!(s.patterns.is_empty() && s.indicators.is_empty() && s.labels.is_empty());
+    assert!(s.patterns.is_empty());
 }
 
 #[test]

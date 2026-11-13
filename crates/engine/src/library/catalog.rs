@@ -13,7 +13,7 @@ use cadcraft_doc::arch::{CabinetKind, Finish, FixtureKind, FrontStyle, LightMoun
 use serde_json::Value;
 
 /// The door styles the `door` command accepts (`crates/engine/src/cmd/arch/opening.rs`).
-pub const DOOR_STYLES: [&str; 4] = ["hinged", "sliding", "pocket", "bifold"];
+pub const DOOR_STYLES: [&str; 5] = ["hinged", "sliding", "pocket", "bifold", "shower"];
 
 /// The window styles the `window` command accepts (`crates/engine/src/cmd/arch/opening.rs`).
 pub const WINDOW_STYLES: [&str; 10] = ["single-hung", "double-hung", "slider", "casement", "picture", "bay", "box", "bow", "awning", "fixed"];
@@ -165,7 +165,7 @@ pub fn builtin_items() -> Vec<ItemRecord> {
             &["door", style],
         );
         r.style = Some(style.to_string());
-        r.size = Some([0.9, 0.2, 2.1]);
+        r.size = Some(if style == "shower" { [0.7, 0.01, 1.9] } else { [0.9, 0.2, 2.1] });
         v.push(r);
     }
     for style in WINDOW_STYLES {
@@ -252,6 +252,24 @@ pub fn builtin_items() -> Vec<ItemRecord> {
         );
         r.size = Some([f.width, f.depth, f.height]);
         r.elevation = positive(f.elevation);
+        v.push(r);
+    }
+    for (id, name, size, words) in [
+        ("appliance:microwave-drawer", "Microwave drawer", [0.762, 0.6, 0.381], ["appliance", "face", "microwave drawer"]),
+        ("appliance:wall-oven", "Wall oven", [0.762, 0.6, 0.737], ["appliance", "face", "oven"]),
+        ("appliance:warming-drawer", "Warming drawer", [0.762, 0.6, 0.254], ["appliance", "face", "warming drawer"]),
+    ] {
+        let mut r = builtin(
+            id.to_string(),
+            name.to_string(),
+            Category::AppliancesAndPlumbing,
+            "Built-in appliances",
+            ItemKind::FaceAppliance,
+            "appliance",
+            &words,
+        );
+        r.placement = Some("in-cabinet".to_string());
+        r.size = Some(size);
         v.push(r);
     }
     for part in ["door", "drawer"] {
@@ -463,6 +481,8 @@ pub fn entry_record(v: &Value, catalog: &str) -> Result<ItemRecord, String> {
         ("png" | "jpg" | "jpeg", Some(Category::Materials)) => ItemKind::Material,
         ("png" | "jpg" | "jpeg", Some(Category::Backdrops)) => ItemKind::Backdrop,
         ("png" | "jpg" | "jpeg", _) => return Err("an image item belongs in Materials or Backdrops".into()),
+        ("hdr", Some(Category::Backdrops)) => ItemKind::Backdrop,
+        ("hdr", _) => return Err("an HDR item belongs in Backdrops".into()),
         (ext, _) => return Err(format!("unsupported file type `.{}`", ext.chars().take(16).collect::<String>())),
     };
     if r.folder.is_empty() {
@@ -678,6 +698,9 @@ mod native {
                             return Err(format!("more than {} triangles", cadcraft_doc::arch::MAX_SYMBOL_TRIANGLES));
                         }
                     }
+                    ItemKind::Backdrop if r.file.as_deref().is_some_and(|f| f.to_ascii_lowercase().ends_with(".hdr")) => {
+                        cadcraft_arch::hdr::read_hdr(&data).map_err(|e| format!("`{}` is not a valid HDR image: {e}", r.id))?;
+                    }
                     _ => {
                         (io.read_image)(&data, 1024)?;
                     }
@@ -862,12 +885,23 @@ mod tests {
             assert_eq!(r.category, "Doors and windows");
             let door = r.id.starts_with("door:");
             assert_eq!(r.kind, if door { ItemKind::Door } else { ItemKind::Window });
-            assert_eq!(r.size, Some(if door { [0.9, 0.2, 2.1] } else { [1.2, 0.2, 1.2] }), "{}", r.id);
+            let want = if r.id == "door:shower" {
+                [0.7, 0.01, 1.9]
+            } else if door {
+                [0.9, 0.2, 2.1]
+            } else {
+                [1.2, 0.2, 1.2]
+            };
+            assert_eq!(r.size, Some(want), "{}", r.id);
         }
         for (cmd, styles) in [("door", DOOR_STYLES.as_slice()), ("window", WINDOW_STYLES.as_slice())] {
             for style in styles {
                 let mut s = Session::new();
-                s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall");
+                let mut wall = json!({"points": [[0.0, 0.0], [10.0, 0.0]]});
+                if *style == "shower" {
+                    wall["type"] = json!("glass");
+                }
+                s.execute("wall", &wall).expect("wall");
                 let r = s.execute(cmd, &json!({"wall": "w0", "offset": 5.0, "style": style}));
                 assert!(r.is_ok(), "{cmd} refuses the built-in style {style}: {r:?}");
             }
@@ -962,6 +996,12 @@ mod tests {
             let style = r.style.as_deref().unwrap_or_default();
             assert!(FrontStyle::parse(style).is_some() && r.id.ends_with(style), "{}", r.id);
         }
+
+        assert_eq!(ids(items, "appliance:"), ["appliance:microwave-drawer", "appliance:wall-oven", "appliance:warming-drawer"]);
+        assert!(items.iter().filter(|r| r.id.starts_with("appliance:")).all(|r| r.category == "Appliances and plumbing fixtures"
+            && r.kind == ItemKind::FaceAppliance
+            && r.folder == "Built-in appliances"
+            && r.placement.as_deref() == Some("in-cabinet")));
 
         // Backdrops.
         assert_eq!(ids(items, "backdrop:"), ["backdrop:colour", "backdrop:gradient"]);

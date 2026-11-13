@@ -560,3 +560,68 @@ fn the_sun_sample_carries_the_frame_sun() {
     let both = GpuFrame { flags: FRAME_SUN | FRAME_SKY, ..on };
     assert_eq!(&run(&gpu, &scene, both, &probes)[0][..3], &rgb[..3]);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Strips
+// ---------------------------------------------------------------------------------------------
+
+/// A strip light of `lm_per_m` lumens per metre along `a`..`b` at height `z`, emitting down, in
+/// the pieces `cadcraft_arch::light::strip_samples` makes (at most 0.15 m).
+fn strip_light(a: [f64; 2], b: [f64; 2], z: f64, lm_per_m: f64, colour: [f64; 3]) -> SceneLight {
+    use cadcraft_arch3d::light::StripSample;
+    let len = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+    let pieces = ((len / 0.15).ceil() as usize).max(1);
+    let samples: Vec<StripSample> = (0..pieces)
+        .map(|k| {
+            let t = (k as f64 + 0.5) / pieces as f64;
+            StripSample {
+                position: Vec3::new(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z),
+                normal: down(),
+                intensity: lm_per_m * len / pieces as f64 / std::f64::consts::PI,
+                ..Default::default()
+            }
+        })
+        .collect();
+    SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, z),
+        direction: down(),
+        color: colour,
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn pt_strip_irradiance_matches_line_integral() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    // Check 05's strip: 2 m of 500 lm/m at 2.4 m, in 3000 K white; 49.72 lx under its centre.
+    let colour = [1.0, 0.76, 0.43];
+    let strip = strip_light([1.0, 2.0], [3.0, 2.0], 2.4, 500.0, colour);
+    let scene = scene_of(&[strip.clone()]);
+    assert_eq!(scene.lights.len(), 1, "one light per straight segment");
+    let l = scene.lights[0];
+    assert_eq!(l.kind, super::scene_gpu::LIGHT_STRIP);
+    assert!((l.length - 2.0).abs() < 1e-5 && (l.axis[0] - 1.0).abs() < 1e-6 && l.direction[2] == -1.0, "{l:?}");
+    let want = 500.0 / std::f64::consts::PI * (1.0 / (2.4f64 * 2.4 + 1.0) + (1.0f64 / 2.4).atan() / 2.4);
+    assert!((want - 49.72).abs() < 0.01, "{want}");
+    let cases = [(Vec3::new(2.0, 2.0, 0.0), up()), (Vec3::new(2.0, 3.8, 0.0), up())];
+    let probes: Vec<GpuProbe> = cases.iter().map(|&(p, n)| sample_probe(0, p, n, 4096)).collect();
+    let out = run(&gpu, &scene, GpuFrame::default(), &probes);
+    assert!((lux(out[0]) - want).abs() < want * 0.02, "{} lx, want {want}", lux(out[0]));
+    // The second point against the CPU mirror of the raster sum.
+    let runs = crate::lights::strip_runs(&strip);
+    let segs: Vec<_> = runs.iter().map(|r| crate::lights::strip_seg(r, 1.0)).collect();
+    let cpu = crate::lights::strip_irradiance_cpu(&segs, [2.0, 3.8, 0.0], [0.0, 0.0, 1.0]);
+    let want2 = cpu * 1.0;
+    // The CPU sum carries the candela per metre of the strip (500 / pi), with the same geometry.
+    assert!((lux(out[1]) - want2).abs() < want2 * 0.03, "{} lx, want {want2}", lux(out[1]));
+    // Nothing on a surface above the strip (behind its emitting side) or facing away.
+    let dark = run(
+        &gpu,
+        &scene,
+        GpuFrame::default(),
+        &[sample_probe(0, Vec3::new(2.0, 2.0, 2.8), down(), 64), sample_probe(0, Vec3::new(2.0, 2.0, 0.0), down(), 64)],
+    );
+    assert!(lux(dark[0]) < 1e-6 && lux(dark[1]) < 1e-6, "{dark:?}");
+}

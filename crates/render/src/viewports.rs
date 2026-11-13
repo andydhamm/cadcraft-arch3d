@@ -19,6 +19,8 @@ pub(crate) fn viewport(b: &mut Builder, d: &Drawing, e: &Entity, vp: &cadcraft_d
     if !viewport_shown(d, e, vp) {
         return;
     }
+    let local = crate::arch_sheet::plan_view_drawing(d, e);
+    let d = local.as_ref().unwrap_or(d);
     let poly = viewport_clip(d, e.handle, vp);
     // Border (on the viewport's layer; layer off hides only the border).
     if poly.is_none() {
@@ -66,6 +68,8 @@ pub fn viewport_content(d: &Drawing, space: &Space, handle: Handle, area: Bounds
     if !viewport_shown(d, e, vp) || area.is_empty() || !(area.min.is_finite() && area.max.is_finite()) {
         return DisplayList::default();
     }
+    let local = crate::arch_sheet::plan_view_drawing(d, &e);
+    let d = local.as_ref().unwrap_or(d);
     let opts = &with_point_view(d, space, opts);
     let styler = style_table(d, space, opts, false).map(|t| plotstyle::Styler::new(d, t));
     let mut b =

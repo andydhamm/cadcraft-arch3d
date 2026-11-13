@@ -80,6 +80,8 @@ pub enum ItemKind {
     Fixture,
     FrontStyle,
     Group,
+    /// A built-in cabinet-face appliance item.
+    FaceAppliance,
     /// A molding profile (`profile` holds the closed outline).
     Molding,
 }

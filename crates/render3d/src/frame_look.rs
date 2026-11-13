@@ -232,15 +232,18 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     f.tone_map = tone_code(look.tone_map);
     f.lambert = lighting.lambert.filter(|a| a.is_finite());
     let intensity = if look.sun.intensity.is_finite() { look.sun.intensity.max(0.0) as f32 } else { 0.0 };
-    let sun = lighting.sun.is_some();
-    f.sun_lux = if sun { intensity } else { 0.0 };
+    // The moon as the directional light is not the sun: `sun` is true only for a real sun.
+    let sun = lighting.sun.is_some() && lighting.moon.is_none();
+    let directional = lighting.directional_lux();
+    f.sun_lux = directional;
     // An environment lights through its SH: the stand-in ambient is off, the meter adds the SH.
     let has_env = lighting.environment.as_ref().is_some_and(|e| e.is_valid());
-    f.ambient_lux = match (sun, look.sky.on) {
+    f.ambient_lux = match (sun, look.sky.on, lighting.moon.is_some()) {
         _ if has_env => 0.0,
-        (true, true) => 0.25 * intensity,
-        (true, false) => 0.0,
-        (false, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
+        (true, true, _) => 0.25 * intensity,
+        (true, false, _) => 0.0,
+        (false, true, true) => 0.25 * directional,
+        (false, _, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
     };
     // A bare-number exposure of the request arrives as a `Lighting::exposure` off the default.
     let legacy = (lighting.exposure.to_bits() != crate::lights::DEFAULT_EXPOSURE.to_bits() && lighting.exposure.is_finite())
@@ -297,8 +300,25 @@ pub fn fill_exposure(p: &mut PbrUniform, f: &FrameLook) {
     }
 }
 
-/// The draw's normal map layer and strength [p19-normal-maps-render]. A stub.
-pub fn fill_normal_map(_p: &mut PbrUniform, _f: &FrameLook, _scene: &Scene3d, _material: &str) {}
+/// The draw's normal map layer and strength. A material (a [`crate::types::MaterialDef`] with a
+/// `normal_texture`, or a finish with relief) whose map has a layer of the normal array
+/// ([`crate::textures::normal_layer_for`]) writes `normal_layer` = layer + 1 and `normal_strength`
+/// = its `normal_scale`; anything else writes 0 for both. The unlit legacy look (no tone map, the
+/// frame's default look) and the keep-as-is styles (hidden-line, technical) draw flat, so
+/// pre-phase-19 pictures do not change.
+pub fn fill_normal_map(p: &mut PbrUniform, f: &FrameLook, scene: &Scene3d, material: &str) {
+    let keep = f.tone_map == 0 || p.style == STYLE_HIDDEN_LINE || p.style == STYLE_TECHNICAL;
+    match crate::textures::normal_layer_for(scene, material).filter(|(_, s)| !keep && s.is_finite()) {
+        Some((layer, strength)) => {
+            p.normal_layer = layer + 1;
+            p.normal_strength = strength;
+        }
+        None => {
+            p.normal_layer = 0;
+            p.normal_strength = 0.0;
+        }
+    }
+}
 
 /// The clip box and `PBR_FLAG_CLIP` into the draw; a frame without a clip leaves the block as it is.
 pub fn fill_clip(p: &mut PbrUniform, f: &FrameLook) {
@@ -514,6 +534,44 @@ mod tests {
         let fixed = Lighting { exposure: 0.25, ..Lighting::default() };
         let f = frame_look(&scene, &camera, (64, 48), &fixed, false, &mut meter);
         assert_eq!((f.exposure, f.exposure_mode), (0.25, "fixed"));
+    }
+
+    #[test]
+    fn fill_normal_map_layer_and_strength() {
+        use crate::types::MaterialDef;
+        let physical = FrameLook { tone_map: 1, ..Default::default() };
+        let mut scene = Scene3d::default();
+        let mut image = cadcraft_doc::arch::ImageRgba::default();
+        image.width = 2;
+        image.height = 2;
+        image.rgba = crate::textures::FLAT_NORMAL.repeat(4);
+        scene.textures.insert("sym:x:normal".to_string(), image);
+        scene
+            .materials
+            .insert("own".to_string(), MaterialDef { normal_texture: Some("sym:x:normal".to_string()), normal_scale: 0.5, ..Default::default() });
+        scene.materials.insert("none".to_string(), MaterialDef::default());
+        scene.materials.insert("missing".to_string(), MaterialDef { normal_texture: Some("gone:normal".to_string()), ..Default::default() });
+        let base = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_SHADED, [0.0; 3]);
+        let filled = |look: &FrameLook, material: &str| {
+            let mut p = base;
+            fill_draw(&mut p, look, &scene, material);
+            (p.normal_layer, p.normal_strength)
+        };
+        // A def's own map: its layer after the finishes' + 1, its scale.
+        assert_eq!(filled(&physical, "own"), (crate::textures::LAYERS + 1, 0.5));
+        // A finish with relief: its own layer (siding 1, shingles 2, brick 3, wood 4) + 1, strength 1.
+        assert_eq!(filled(&physical, "wall-brick"), (4, 1.0));
+        assert_eq!(filled(&physical, "roof-shingles"), (3, 1.0));
+        assert_eq!(filled(&physical, "deck"), (5, 1.0));
+        // No map, a missing map, a plain material and the ground: zero.
+        for m in ["none", "missing", "wall", "ground", "wall-paint"] {
+            assert_eq!(filled(&physical, m), (0, 0.0), "{m}");
+        }
+        // The legacy look and the keep-as-is styles never take one.
+        assert_eq!(filled(&FrameLook::default(), "wall-brick"), (0, 0.0));
+        let mut technical = PbrUniform::new(&Light::DEFAULT, 0.0, &Draw::default(), crate::pipeline::STYLE_TECHNICAL, [0.0; 3]);
+        fill_draw(&mut technical, &physical, &scene, "wall-brick");
+        assert_eq!(technical.normal_layer, 0);
     }
 
     #[test]

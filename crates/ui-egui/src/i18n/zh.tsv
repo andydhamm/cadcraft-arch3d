@@ -1500,6 +1500,9 @@ menu	View	视图
 	Automatic	自动
 	Build 3D	生成三维
 	Camera	相机
+	Orbit Camera	旋转相机
+	Reset Camera	重置相机
+	Update Camera	更新相机
 	Contours	等高线
 	Cut and Fill	挖填方
 	Deck	平台
@@ -1517,8 +1520,14 @@ menu	View	视图
 	Light Fixture	灯具
 	Light Fixture Types	灯具类型
 	Cabinet	橱柜
+	Cabinet Face	橱柜立面
+	Fill Cabinet Run	填充橱柜排
+	Architecture>Fill Cabinet Run	建筑>填充橱柜排
 	Edit Cabinet	编辑橱柜
 	Delete Cabinet	删除橱柜
+	Backsplash	挡水墙面
+	Edit Backsplash	编辑挡水墙面
+	Delete Backsplash	删除挡水墙面
 	Fixture	设备
 	Edit Fixture	编辑设备
 	Delete Fixture	删除设备
@@ -1547,6 +1556,8 @@ menu	View	视图
 	Delete Furnishing	删除家具
 	Center Furnishing	家具居中
 	Room Detect	房间检测
+	Room Label	房间标签
+	Architecture>Room Label	建筑>房间标签
 	Section	剖面
 	Site Location	场地位置
 	Backdrop	背景
@@ -1608,9 +1619,28 @@ menu	View	视图
 	Architecture>Edit Deck	建筑>编辑平台
 	Room Moldings	房间装饰线
 	Architecture>Room Moldings	建筑>房间装饰线
+	Molding Line	装饰线
+	Edit Molding Line	编辑装饰线
+	Delete Molding Line	删除装饰线
+	Architecture>Molding Line	建筑>装饰线
+	Architecture>Edit Molding Line	建筑>编辑装饰线
+	Architecture>Delete Molding Line	建筑>删除装饰线
 	Sheet	图纸
 	Edit Sheet	编辑图纸
 	Delete Sheet	删除图纸
 	List Sheets	图纸列表
 	Open Sheet	打开图纸
 	Sheet Set	图纸集
+	Niche	壁龛
+	Architecture>Niche	建筑>壁龛
+	Schedule	明细表
+	Edit Schedule	编辑明细表
+	Delete Schedule	删除明细表
+	Auto Exterior Dimensions	自动外部标注
+	Countertop	台面
+	Detach Countertop	分离台面
+	Edit Countertop	编辑台面
+	Delete Countertop	删除台面
+	View Note	视图注释
+	View Dimension	视图标注
+	Delete View Note	删除视图注释

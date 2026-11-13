@@ -161,6 +161,8 @@ fn surface_of(mesh: &Mesh) -> Option<Surface> {
         Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Carcass })
     } else if m == "cabinet-front" {
         Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Front })
+    } else if m == "backsplash" {
+        Some(Surface::Backsplash(id))
     } else if m == "counter" {
         Some(Surface::Cabinet { cabinet: id, part: CabinetPart::Counter })
     } else if m.starts_with("pull:") {

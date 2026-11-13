@@ -145,8 +145,8 @@ fn pixel(finish: Finish, x: usize, y: usize) -> [i32; 3] {
 }
 
 /// The tile (metres per repeat) for `finish` along u and v.
-fn finish_tile(f: Finish) -> [f64; 2] {
-    match f {
+pub fn tile_size(finish: Finish) -> [f64; 2] {
+    match finish {
         Finish::Siding => [1.2, 1.2],
         Finish::Shingles => [1.0, 1.0],
         Finish::Brick => [0.84, 0.6],
@@ -166,7 +166,7 @@ pub fn texture(finish: Finish) -> Texture {
             rgba.extend_from_slice(&[clamp8(p[0]), clamp8(p[1]), clamp8(p[2]), 255]);
         }
     }
-    let tile = finish_tile(finish);
+    let tile = tile_size(finish);
     Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile }
 }
 
@@ -293,7 +293,7 @@ pub fn normal_map(finish: Finish) -> Texture {
             rgba.push(255);
         }
     }
-    Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile: finish_tile(finish) }
+    Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile: tile_size(finish) }
 }
 
 /// The flat (non-normal) normal map: all pixels (128, 128, 255) = `(0, 0, 1)`.

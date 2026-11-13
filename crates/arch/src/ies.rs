@@ -655,4 +655,138 @@ mod tests {
         assert_eq!(scaled(&p, f64::INFINITY), p);
         assert_eq!(scaled(&p, f64::NAN), p);
     }
+
+    #[test]
+    fn candela_at_exact_angles_returns_stored_values() {
+        let p = parse(DOWNLIGHT, "d.ies").unwrap();
+        assert_eq!(candela_at(&p, 0.0, 0.0), 1000.0);
+        assert_eq!(candela_at(&p, 22.5, 0.0), 900.0);
+        assert_eq!(candela_at(&p, 45.0, 0.0), 600.0);
+        assert_eq!(candela_at(&p, 67.5, 0.0), 200.0);
+        assert_eq!(candela_at(&p, 90.0, 0.0), 0.0);
+
+        let multi = profile(&[0.0, 90.0, 180.0], &[[10.0, 20.0, 30.0], [40.0, 50.0, 60.0], [70.0, 80.0, 90.0]]);
+        assert_eq!(candela_at(&multi, 0.0, 0.0), 10.0);
+        assert_eq!(candela_at(&multi, 0.0, 90.0), 40.0);
+        assert_eq!(candela_at(&multi, 0.0, 180.0), 70.0);
+        assert_eq!(candela_at(&multi, 45.0, 0.0), 20.0);
+        assert_eq!(candela_at(&multi, 45.0, 90.0), 50.0);
+        assert_eq!(candela_at(&multi, 45.0, 180.0), 80.0);
+        assert_eq!(candela_at(&multi, 90.0, 0.0), 30.0);
+        assert_eq!(candela_at(&multi, 90.0, 90.0), 60.0);
+        assert_eq!(candela_at(&multi, 90.0, 180.0), 90.0);
+    }
+
+    #[test]
+    fn full_circle_wraparound_at_boundaries() {
+        let full = profile(&[0.0, 120.0, 240.0], &[[0.0, 0.0, 0.0], [120.0, 120.0, 120.0], [240.0, 240.0, 240.0]]);
+        assert_eq!(candela_at(&full, 0.0, 0.0), 0.0);
+        assert_eq!(candela_at(&full, 0.0, 120.0), 120.0);
+        assert_eq!(candela_at(&full, 0.0, 240.0), 240.0);
+        assert_eq!(candela_at(&full, 0.0, 360.0), 0.0);
+        assert_eq!(candela_at(&full, 0.0, 300.0), 120.0);
+        assert_eq!(candela_at(&full, 0.0, 60.0), 60.0);
+        assert_eq!(candela_at(&full, 0.0, -120.0), 240.0);
+        assert_eq!(candela_at(&full, 0.0, -240.0), 120.0);
+    }
+
+    #[test]
+    fn horizontal_symmetry_at_exact_boundaries() {
+        let quadrant = profile(&[0.0, 90.0], &[[100.0, 100.0, 100.0], [300.0, 300.0, 300.0]]);
+        assert_eq!(candela_at(&quadrant, 0.0, 0.0), 100.0);
+        assert_eq!(candela_at(&quadrant, 0.0, 90.0), 300.0);
+        assert_eq!(candela_at(&quadrant, 0.0, 180.0), 100.0);
+        assert_eq!(candela_at(&quadrant, 0.0, 270.0), 300.0);
+        assert_eq!(candela_at(&quadrant, 0.0, 360.0), 100.0);
+
+        let bilateral = profile(&[0.0, 180.0], &[[100.0, 100.0, 100.0], [200.0, 200.0, 200.0]]);
+        assert_eq!(candela_at(&bilateral, 0.0, 0.0), 100.0);
+        assert_eq!(candela_at(&bilateral, 0.0, 180.0), 200.0);
+        assert_eq!(candela_at(&bilateral, 0.0, 360.0), 100.0);
+
+        let plane = profile(&[90.0, 180.0, 270.0], &[[10.0, 10.0, 10.0], [20.0, 20.0, 20.0], [30.0, 30.0, 30.0]]);
+        assert_eq!(candela_at(&plane, 0.0, 90.0), 10.0);
+        assert_eq!(candela_at(&plane, 0.0, 180.0), 20.0);
+        assert_eq!(candela_at(&plane, 0.0, 270.0), 30.0);
+        assert_eq!(candela_at(&plane, 0.0, 0.0), 20.0);
+        assert_eq!(candela_at(&plane, 0.0, 360.0), 20.0);
+    }
+
+    #[test]
+    fn peak_candela_ignores_non_finite() {
+        let p = IesProfile {
+            name: "test".into(),
+            vertical: vec![0.0, 90.0],
+            horizontal: vec![0.0],
+            candela: vec![100.0, f64::NAN, 50.0, f64::INFINITY, 75.0],
+            lumens: 1000.0,
+            ..Default::default()
+        };
+        assert_eq!(peak_candela(&p), 100.0);
+
+        let all_nan = IesProfile {
+            name: "test".into(),
+            vertical: vec![0.0],
+            horizontal: vec![0.0],
+            candela: vec![f64::NAN],
+            lumens: 1000.0,
+            ..Default::default()
+        };
+        assert_eq!(peak_candela(&all_nan), 0.0);
+    }
+
+    #[test]
+    fn parse_rejects_non_finite_angles_and_candela() {
+        let nan_v = DOWNLIGHT.replace("0 22.5 45 67.5 90", "0 nan 45 67.5 90");
+        let err = refusal(&nan_v);
+        assert_eq!(err.line, 7);
+        assert!(err.message.contains("not a number"), "{}", err.message);
+
+        let inf_h = DOWNLIGHT.replace("\n0\n", "\ninf\n");
+        let err = refusal(&inf_h);
+        assert_eq!(err.line, 8);
+        assert!(err.message.contains("not a number"), "{}", err.message);
+
+        let nan_c = DOWNLIGHT.replace("1000 900 600 200 0", "1000 nan 600 200 0");
+        let err = refusal(&nan_c);
+        assert_eq!(err.line, 9);
+        assert!(err.message.contains("not a number"), "{}", err.message);
+    }
+
+    #[test]
+    fn scaled_edge_cases() {
+        let p = parse(DOWNLIGHT, "d.ies").unwrap();
+
+        assert_eq!(scaled(&p, 1000.0), p);
+
+        let zero = scaled(&p, 0.0);
+        assert_eq!(zero.lumens, 0.0);
+        assert_eq!(zero.candela, vec![0.0; 5]);
+
+        let big = scaled(&p, 1e12);
+        assert_eq!(big.lumens, 1e12);
+        assert_eq!(big.candela[0], 1000.0 * 1e12 / 1000.0);
+
+        let small = scaled(&p, 1e-12);
+        assert_eq!(small.lumens, 1e-12);
+        assert_eq!(small.candela[0], 1000.0 * 1e-12 / 1000.0);
+    }
+
+    #[test]
+    fn candela_at_single_angle_profile() {
+        let single = IesProfile {
+            name: "test".into(),
+            vertical: vec![45.0],
+            horizontal: vec![0.0],
+            candela: vec![100.0],
+            lumens: 1000.0,
+            ..Default::default()
+        };
+        assert_eq!(candela_at(&single, 45.0, 0.0), 100.0);
+        assert_eq!(candela_at(&single, 46.0, 0.0), 0.0);
+        assert_eq!(candela_at(&single, 44.0, 0.0), 0.0);
+        assert_eq!(candela_at(&single, 45.0, 90.0), 100.0);
+        assert_eq!(candela_at(&single, 45.0, 180.0), 100.0);
+        assert_eq!(candela_at(&single, 45.0, 359.0), 100.0);
+    }
 }

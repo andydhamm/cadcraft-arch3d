@@ -4,7 +4,7 @@
 //! `build_gpu_scene`. The AOV test dispatches by hand because `run_entry` does not read them back.
 
 use super::device::ComputeGpu;
-use super::scene_gpu::{FRAME_FURNACE, GpuFrame, GpuProbe, GpuScene, build_gpu_scene, material_for};
+use super::scene_gpu::{FRAME_FURNACE, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, build_gpu_scene, material_for};
 use super::shaders::{PtPipelines, kernel_source};
 use super::tracer::{run_entry, upload_scene};
 use super::{Furnace, luminance};
@@ -527,4 +527,56 @@ fn env_mis_matches_bsdf_only() {
     let plain = plane_mean(&gpu, &scene, &bsdf_only, 1024);
     assert!(mis > 0.5 && plain > 0.5, "mis {mis}, bsdf only {plain}");
     assert!((mis - plain).abs() <= 0.02 * plain, "mis {mis}, bsdf only {plain}");
+}
+
+/// A 20 x 10 m wall on the plane y = 0 facing -y, UVs in metres (u along x, v up).
+fn uv_wall(material: &str) -> Mesh {
+    let mut m = Mesh::new(material, ArchId(1));
+    for (p, uv) in
+        [([0.0, 0.0, 0.0], [0.0, 0.0]), ([20.0, 0.0, 0.0], [20.0, 0.0]), ([20.0, 0.0, 10.0], [20.0, 10.0]), ([0.0, 0.0, 10.0], [0.0, 10.0])]
+    {
+        m.positions.push(p);
+        m.normals.push([0.0, -1.0, 0.0]);
+        m.uvs.push(uv);
+    }
+    m.indices.extend([0, 1, 2, 0, 2, 3]);
+    m
+}
+
+/// Mean red radiance and every pixel of the wall seen face-on under a sun toward `dir`
+/// (no bounces, 16 samples).
+fn wall_pixels(gpu: &ComputeGpu, material: &str, dir: [f32; 3]) -> (f64, Vec<f64>) {
+    let scene = Scene3d { meshes: vec![uv_wall(material)], ..Default::default() };
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let n = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+    let mut frame = camera_frame([10.0, -2.0, 5.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+    frame.flags |= FRAME_SUN;
+    frame.sun_dir = [dir[0] / n, dir[1] / n, dir[2] / n, 0.0];
+    frame.sun_rgb = [1.0; 4];
+    frame.spp_this_pass = 16;
+    frame.bounces = 0;
+    frame.seed = 0;
+    if gpu_scene.tex != [0; 4] {
+        frame.tex = gpu_scene.tex;
+        frame.flags |= super::scene_gpu::FRAME_NORMAL_MAPS;
+    }
+    let px: Vec<f64> = trace(gpu, &gpu_scene, &frame).iter().map(|a| f64::from(a[0]) / 16.0).collect();
+    (px.iter().sum::<f64>() / px.len().max(1) as f64, px)
+}
+
+#[test]
+fn pt_normal_map_differs_under_mirrored_suns() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let (east, west) = ([0.6, -0.5, 0.4], [-0.6, -0.5, 0.4]);
+    let (ma, a) = wall_pixels(&gpu, "wall-brick", east);
+    let (mb, b) = wall_pixels(&gpu, "wall-brick", west);
+    let diff = a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f64>() / a.len().max(1) as f64;
+    assert!(ma > 0.0 && mb > 0.0, "the wall is lit: {ma} {mb}");
+    assert!(diff >= 0.01 * ma, "brick relief: mean |A - B| {diff} against mean {ma}");
+    assert!((ma - mb).abs() <= 0.03 * ma, "means {ma} {mb}");
+    // Without a normal map the mirrored suns read the same.
+    let (pa, a) = wall_pixels(&gpu, "wall", east);
+    let (pb, b) = wall_pixels(&gpu, "wall", west);
+    let flat = a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f64>() / a.len().max(1) as f64;
+    assert!(flat * 3.0 <= diff, "plain wall differs by {flat} (means {pa} {pb}), the brick by {diff}");
 }

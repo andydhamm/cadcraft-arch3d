@@ -76,6 +76,23 @@ struct Payload {
 
 /// JSON chunks (≤ 250 characters) for the architectural XRECORD.
 ///
+/// Whether a saved camera is safe to keep: finite pose, a valid look, and a `saved` copy that is
+/// itself valid and has no `saved` of its own (so nesting is bounded to one level).
+fn camera_ok(c: &cadcraft_doc::arch::Camera3d, top: bool) -> bool {
+    c.target.is_none_or(|t| t.iter().all(|v| v.is_finite()))
+        && c.azimuth_deg.is_none_or(f64::is_finite)
+        && c.elevation_deg.is_none_or(f64::is_finite)
+        && c.distance.is_none_or(f64::is_finite)
+        && c.eye.is_none_or(|e| e.iter().all(|v| v.is_finite()))
+        && c.eye_height.is_none_or(f64::is_finite)
+        && c.fov_deg.is_none_or(f64::is_finite)
+        && c.look.as_ref().is_none_or(|l| l.validate().is_ok())
+        && match &c.saved {
+            None => true,
+            Some(s) => top && s.saved.is_none() && camera_ok(s, false),
+        }
+}
+
 /// Returns `None` when the model has no walls, openings, rooms, roofs, stairs, railings or cameras
 /// (nothing to write); otherwise the escaped, chunked payload, exactly like
 /// [`dxf_ext::constraint_chunks`](crate::dxf_ext).
@@ -170,15 +187,7 @@ pub(crate) fn parse_arch(text: &str) -> Option<ArchModel> {
     }
 
     // Validate and filter cameras
-    model.cameras.retain(|c| {
-        c.target.map_or(true, |t| t.iter().all(|v| v.is_finite()))
-            && c.azimuth_deg.map_or(true, |v| v.is_finite())
-            && c.elevation_deg.map_or(true, |v| v.is_finite())
-            && c.distance.map_or(true, |v| v.is_finite())
-            && c.eye.map_or(true, |e| e.iter().all(|v| v.is_finite()))
-            && c.eye_height.map_or(true, |v| v.is_finite())
-            && c.fov_deg.map_or(true, |v| v.is_finite())
-    });
+    model.cameras.retain(|c| camera_ok(c, true));
     if model.cameras.len() > cadcraft_doc::arch::MAX_CAMERAS {
         model.cameras.truncate(cadcraft_doc::arch::MAX_CAMERAS);
     }
@@ -580,6 +589,34 @@ mod tests {
     fn parse_arch_rejects_oversize_payload() {
         let big = "a".repeat(MAX_ARCH_PAYLOAD + 1);
         assert!(parse_arch(&big).is_none());
+    }
+
+    #[test]
+    fn hdr_images_at_the_caps_round_trip() {
+        // Four full-size images (4 x 1024 x 512 x 4 = 8 MiB of RGBE) is the most a drawing keeps; each is referenced by
+        // the model backdrop, the model look or a camera look. The ~3.6 MB per MB hex string must not push the payload
+        // over the limit and cost the drawing its arch model.
+        use cadcraft_doc::arch::{Backdrop, Camera3d, ImageRgbe, Look, MAX_HDR_BYTES, MAX_HDR_IMAGES};
+        let hdri = |name: &str| Backdrop::Hdri { image: name.into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 };
+        let mut d = Drawing::new_metric();
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        d.arch.backdrop = Some(hdri("a"));
+        d.arch.look.backdrop = Some(hdri("b"));
+        for name in ["c", "d"] {
+            let look = Look { backdrop: Some(hdri(name)), ..Default::default() };
+            d.arch.cameras.push(Camera3d { name: format!("cam-{name}"), look: Some(look), ..Default::default() });
+        }
+        let mut total = 0;
+        for (i, name) in ["a", "b", "c", "d"].iter().enumerate() {
+            let rgbe: Vec<u8> = (0..1024 * 512 * 4).map(|k| ((k * 7 + i * 31) % 251) as u8).collect();
+            total += rgbe.len();
+            d.arch.hdr_images.insert((*name).to_string(), ImageRgbe { width: 1024, height: 512, rgbe, ..Default::default() });
+        }
+        assert_eq!((d.arch.hdr_images.len(), total), (MAX_HDR_IMAGES, MAX_HDR_BYTES));
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        assert_eq!(back.arch.walls.len(), 1, "the arch model is lost when the HDR payload is too big");
+        assert_eq!(back.arch.hdr_images, d.arch.hdr_images);
+        assert_eq!(back.arch.backdrop, d.arch.backdrop);
     }
 
     #[test]
@@ -1355,6 +1392,32 @@ mod tests {
         assert_eq!(back.arch.molding_lines, d.arch.molding_lines);
         assert_eq!(back.arch.countertops, d.arch.countertops);
         assert_eq!((back.arch.next_molding_line_id, back.arch.next_countertop_id), (1, 1));
+    }
+
+    #[test]
+    fn camera_look_and_saved_round_trip() {
+        use cadcraft_doc::arch::{Camera3d, CameraKind};
+        let saved = Camera3d { name: "dusk".into(), kind: CameraKind::Overview, level: Some(1), lower_levels: Some(false), ..Default::default() };
+        let mut d = Drawing::new_metric();
+        d.arch.cameras.push(Camera3d {
+            name: "dusk".into(),
+            kind: CameraKind::Overview,
+            level: Some(1),
+            lower_levels: Some(false),
+            light_set: Some("Evening".into()),
+            saved: Some(Box::new(saved)),
+            ..Default::default()
+        });
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        let got = &back.arch.cameras[0];
+        assert_eq!(got.kind, CameraKind::Overview);
+        assert_eq!((got.level, got.lower_levels), (Some(1), Some(false)));
+        assert_eq!(got.light_set.as_deref(), Some("Evening"));
+        assert!(got.saved.as_ref().is_some_and(|s| s.level == Some(1) && s.saved.is_none()));
+        // A non-finite saved copy is refused.
+        let mut bad = Camera3d { name: "x".into(), ..Default::default() };
+        bad.saved = Some(Box::new(Camera3d { distance: Some(f64::NAN), ..Default::default() }));
+        assert!(!camera_ok(&bad, true));
     }
 
     #[test]
