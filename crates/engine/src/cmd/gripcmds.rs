@@ -88,6 +88,28 @@ fn stretch(s: &mut Session, cmd: &str, p: &Value) -> Result<Value> {
                     }),
                 )
             }
+            ArchTarget::Countertop(id) => {
+                let d = s.doc()?;
+                let ct = d.arch.countertop(id).ok_or_else(|| bad(cmd, "no such countertop"))?;
+                if i >= ct.polygon.len() * 2 {
+                    return Err(bad(cmd, "countertop grip index out of range"));
+                }
+                if i < ct.polygon.len() {
+                    return s.execute("countertop.edit", &json!({"id": format!("ct{}", id.0), "vertex": i, "to": [to.x, to.y]}));
+                }
+                let edge = i - ct.polygon.len();
+                let a = ct.polygon[edge];
+                let b = ct.polygon[(edge + 1) % ct.polygon.len()];
+                let dir = (b - a).normalized();
+                let outward = Vec2::new(dir.y, -dir.x);
+                let mid = (a + b) * 0.5;
+                let move_amt = (to - mid).dot(outward);
+                if ct.edge(edge).sagitta.abs() > 1e-12 {
+                    let sag = (to - ((a + b) * 0.5)).dot(outward);
+                    return s.execute("countertop.edit", &json!({"id": format!("ct{}", id.0), "edge": edge, "sagitta": sag}));
+                }
+                s.execute("countertop.edit", &json!({"id": format!("ct{}", id.0), "edge": edge, "move": move_amt}))
+            }
             ArchTarget::Room(_) | ArchTarget::View(_) | ArchTarget::Electrical(_) | ArchTarget::Connection(_) => Ok(Value::Null),
         };
     }
