@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-13 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 37 of 42 segments merged · 16 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-13 17:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 16 / 20 | 60.3 h so far · expected done Nov 14 00:36–Nov 15 03:49 UTC |
+| 18 | Interior finish, kitchen and bath | building | 16 / 20 | 60.5 h so far · expected done Nov 14 00:51–Nov 15 04:04 UTC |
 | 19 | Light, sky and cameras | building | 6 / 17 | — |
 | 20 | Plan views and dimensions | building | 9 / 13 | — |
 | 21 | Schedules, elevations and sheets | building | 6 / 13 | — |
@@ -47,6 +47,7 @@ Updated 2026-11-13 17:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 17:57 | `p21-demo` | refused | 9,880 pass, 1 fail | darwin-ws3 |
 | Nov 13 16:41 | `harden-p18-countertop-shapes` | refused | 0 pass | tturbo-mac |
 | Nov 13 16:41 | `harden-p21-title-block` | merged | 9,881 pass | tturbo-mac2 |
 | Nov 13 16:41 | `harden-p21-elevation-marks` | merged | 9,881 pass | tturbo-mac2 |
@@ -58,24 +59,23 @@ Updated 2026-11-13 17:45 UTC. This page and the card in the README are regenerat
 | Nov 13 15:56 | `harden-p19-cameras-3` | merged | 9,843 pass | tturbo-mac |
 | Nov 13 15:56 | `harden-p19-hdri-2` | merged | 9,843 pass | tturbo-mac |
 | Nov 13 15:56 | `harden-p8-detect-tune-to-targets` | merged | 9,843 pass | tturbo-mac |
-| Nov 13 15:56 | `harden-p11-cmd-render-path` | merged | 9,843 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1254 |
-| bonsai-b | bonsai2-27b | agent | 1200 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1330 |
+| bonsai-b | bonsai2-27b | gate | 1200 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1331 |
 | bonsai-ws2-b | bonsai2-27b | merging | 1285 |
 | claude-sonnet-a | sonnet | down | 153 |
-| claude-sonnet-b | sonnet | down | 154 |
-| claude-sonnet-c | sonnet | down | 91 |
-| claude-sonnet-d | sonnet | down | 82 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1125 |
+| claude-sonnet-b | sonnet | idle | 154 |
+| claude-sonnet-c | sonnet | idle | 91 |
+| claude-sonnet-d | sonnet | idle | 82 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1129 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 111 |
-| mai-flash-b | mai-code-1.1-flash | gate | 53 |
+| mai-flash | mai-code-1.1-flash | agent | 112 |
+| mai-flash-b | mai-code-1.1-flash | idle | 55 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 121 |
 | tturbo-mac | tturbo-ultraheretic | gate | 859 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 489 |
