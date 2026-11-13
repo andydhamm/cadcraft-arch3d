@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-13 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-13 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 31 of 35 segments merged · 11 of 20 acceptance checks**
 
-9,529 workspace tests passing at the last merge · 1041 segments merged in all · 0 of 15 seats working
+9,569 workspace tests passing at the last merge · 1047 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,10 +28,10 @@ Updated 2026-11-13 08:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 11 / 20 | 50.5 h so far · expected done Nov 13 11:29–Nov 14 07:38 UTC |
-| 19 | Light, sky and cameras | building | 3 / 17 | — |
+| 18 | Interior finish, kitchen and bath | building | 11 / 20 | 50.8 h so far · expected done Nov 13 11:44–Nov 14 07:53 UTC |
+| 19 | Light, sky and cameras | building | 4 / 17 | — |
 | 20 | Plan views and dimensions | building | 7 / 13 | — |
-| 21 | Schedules, elevations and sheets | building | 2 / 13 | — |
+| 21 | Schedules, elevations and sheets | building | 3 / 13 | — |
 
 ## Phase 18 segments
 
@@ -48,35 +48,35 @@ Updated 2026-11-13 08:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 13 08:06 | `p21-sheet-camera` | merged | 9,569 pass | mai-flash-esc |
+| Nov 13 08:06 | `p19-strip-render` | merged | 9,569 pass | mai-flash |
+| Nov 13 08:06 | `p19-normal-maps-render` | merged | 9,569 pass | claude-sonnet-a |
+| Nov 13 08:06 | `p21-schedule-tables` | merged | 9,569 pass | claude-sonnet-d |
+| Nov 13 08:06 | `p21-plan-numbers` | merged | 9,569 pass | mai-flash-esc |
+| Nov 13 08:06 | `harden-p10-r3d-finalize` | merged | 9,569 pass | tturbo-mac2 |
 | Nov 13 06:16 | `p19-hdri-3` | merged | 9,529 pass | claude-sonnet-b |
 | Nov 13 06:16 | `p21-title-block` | merged | 9,529 pass | mai-flash |
 | Nov 13 06:16 | `p21-elevation-marks` | merged | 9,529 pass | claude-sonnet-a |
 | Nov 13 06:16 | `p19-strip-tray` | merged | 9,529 pass | claude-sonnet-b |
 | Nov 13 06:16 | `p21-patterns` | merged | 9,529 pass | mai-flash-esc |
 | Nov 13 06:16 | `p18-countertop-shapes` | merged | 9,529 pass | mai-flash-esc |
-| Nov 13 05:42 | `p21-view-notes` | merged | 9,475 pass, 1 fail | claude-sonnet-d |
-| Nov 13 05:42 | `p21-interior-elevation` | merged | 9,475 pass, 1 fail | claude-sonnet-a |
-| Nov 13 05:42 | `p21-interior-dims` | merged | 9,475 pass, 1 fail | mai-flash |
-| Nov 13 05:42 | `p21-plan-viewports` | merged | 9,475 pass, 1 fail | mai-flash-b |
-| Nov 13 05:42 | `p21-view-render` | merged | 9,475 pass, 1 fail | mai-flash |
-| Nov 13 05:42 | `harden-p11-arch-ies` | merged | 9,475 pass, 1 fail | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1235 |
-| bonsai-b | bonsai2-27b | gate | 1187 |
+| bonsai-b | bonsai2-27b | merging | 1188 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1304 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1251 |
 | claude-sonnet-a | sonnet | idle | 146 |
 | claude-sonnet-b | sonnet | idle | 153 |
 | claude-sonnet-c | sonnet | idle | 89 |
 | claude-sonnet-d | sonnet | idle | 82 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1103 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1103 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 108 |
 | mai-flash-b | mai-code-1.1-flash | idle | 51 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 120 |
-| tturbo-mac | tturbo-ultraheretic | gate | 836 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 459 |
+| tturbo-mac | tturbo-ultraheretic | agent | 837 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 460 |
