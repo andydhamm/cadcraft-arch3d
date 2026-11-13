@@ -382,7 +382,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     if regions.len() != 1 {
                         continue;
                     }
-                    regions[0].clone()
+                    regions[0].outer.clone()
                 } else {
                     tray.polygon.clone()
                 };
@@ -396,7 +396,7 @@ pub fn room_runs(model: &ArchModel, room: &Room) -> Vec<MoldingRun> {
                     if regions.len() != 1 {
                         continue;
                     }
-                    regions[0].clone()
+                    regions[0].outer.clone()
                 } else {
                     outline
                 };
