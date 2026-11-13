@@ -364,7 +364,7 @@ mod tests {
     fn hdr_bytes() -> Vec<u8> {
         let width = 4u32;
         let height = 2u32;
-        let mut out = format!("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n-Y {height} +X {width}\n\n").into_bytes();
+        let mut out = format!("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {height} +X {width}\n").into_bytes();
         let pixel = [0x80, 0x80, 0x80, 0x80];
         out.extend(std::iter::repeat(pixel).take((width * height) as usize).flatten());
         out

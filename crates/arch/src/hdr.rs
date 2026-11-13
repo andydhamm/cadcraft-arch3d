@@ -49,34 +49,6 @@ fn parse_resolution_line(line: &str) -> Result<(u32, u32), String> {
     Ok((width, height))
 }
 
-fn parse_header(header: &str) -> Result<(u32, u32), String> {
-    let mut width = None;
-    let mut height = None;
-    let tokens: Vec<_> = header.split_whitespace().collect();
-    let mut i = 0usize;
-    while i + 1 < tokens.len() {
-        match tokens[i] {
-            "-Y" => {
-                let v = tokens[i + 1].parse::<u32>().map_err(|_| "invalid HDR height".to_string())?;
-                height = Some(v);
-            }
-            "+X" => {
-                let v = tokens[i + 1].parse::<u32>().map_err(|_| "invalid HDR width".to_string())?;
-                width = Some(v);
-            }
-            "+Y" | "-X" => return Err("bad HDR header orientation".to_string()),
-            _ => {}
-        }
-        i += 1;
-    }
-    let width = width.ok_or_else(|| "HDR header is missing +X width".to_string())?;
-    let height = height.ok_or_else(|| "HDR header is missing -Y height".to_string())?;
-    if !(1..=MAX_RADIANCE_DIM).contains(&width) || !(1..=MAX_RADIANCE_DIM).contains(&height) {
-        return Err(format!("HDR dimensions {width}x{height} are out of range"));
-    }
-    Ok((width, height))
-}
-
 fn read_resolution_line_after_blank(bytes: &[u8]) -> Result<(usize, (u32, u32)), String> {
     let pos = bytes.iter().position(|&b| b == b'\n').ok_or_else(|| "HDR header is missing the resolution line".to_string())?;
     let line = &bytes[..pos];
@@ -181,13 +153,8 @@ pub fn read_hdr(bytes: &[u8]) -> Result<ImageRgbe, String> {
         return Err("FORMAT=32-bit_rle_rgbe required".to_string());
     }
 
-    let (payload_start, (width, height)) = match read_resolution_line_after_blank(&bytes[header_end..]) {
-        Ok((consumed, dims)) => (header_end + consumed, dims),
-        Err(_) => {
-            let legacy = parse_header(header)?;
-            (header_end, legacy)
-        }
-    };
+    let (payload_start, (width, height)) =
+        read_resolution_line_after_blank(&bytes[header_end..]).map(|(consumed, dims)| (header_end + consumed, dims))?;
     let payload = &bytes[payload_start..];
     let expected = width as usize * height as usize * 4;
     let rgbe = if payload.len() == expected {
@@ -308,6 +275,17 @@ mod tests {
     }
 
     #[test]
+    fn flat_and_rle_scanlines() {
+        let flat = make_hdr(1, 1, 55);
+        let flat_img = read_hdr(&flat).unwrap();
+        let rle = make_rle_hdr(1, 1, 55, 128);
+        let rle_img = read_hdr(&rle).unwrap();
+        assert_eq!(flat_img.width, rle_img.width);
+        assert_eq!(flat_img.height, rle_img.height);
+        assert_eq!(flat_img.rgbe, rle_img.rgbe);
+    }
+
+    #[test]
     fn resolution_line_follows_the_blank_line() {
         let mut hdr = Vec::from(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n".as_slice());
         hdr.extend_from_slice(b"-Y 2 +X 3\n");
@@ -353,6 +331,24 @@ mod tests {
         assert!(read_hdr(&huge).is_err());
         let missing_nums = b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y +X 2\n".to_vec();
         assert!(read_hdr(&missing_nums).is_err());
+    }
+
+    #[test]
+    fn refuses_truncated_overrun_trailing_bad_header_orientation_huge() {
+        let mut bad = Vec::from(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n".as_slice());
+        bad.extend_from_slice(b"-Y 2 +X 2\n");
+        let mut short = bad.clone();
+        short.extend_from_slice(&[2, 2, 0, 2, 1, 1, 1]);
+        assert!(read_hdr(&short).is_err());
+        let mut overrun = bad.clone();
+        overrun.extend_from_slice(&[2, 2, 0, 2, 1, 1, 1, 128, 2, 2, 0, 2, 1, 1, 1, 128, 2, 2, 0, 2, 1, 1, 1, 128, 2, 2, 0, 2, 1, 1, 1, 128]);
+        assert!(read_hdr(&overrun).is_err());
+        let trailing = b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 1 +X 1\n\x00\x00\x00\x00\x00".to_vec();
+        assert!(read_hdr(&trailing).is_err());
+        let bad_orient = b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n+Y 2 -X 2\n".to_vec();
+        assert!(read_hdr(&bad_orient).is_err());
+        let huge = b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 9000 +X 9000\n".to_vec();
+        assert!(read_hdr(&huge).is_err());
     }
 
     #[test]
