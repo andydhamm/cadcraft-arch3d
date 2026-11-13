@@ -426,7 +426,7 @@ mod tests {
         assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
         let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "seed": 0})).unwrap_err();
         assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
-        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "seed": 4294967295})).unwrap_err();
+        let err = s.execute("illuminance", &json!({"point": [1.0, 1.0, 0.0], "method": "path", "seed": 4294967295u32})).unwrap_err();
         assert!(err.to_string().contains("path-traced illuminance needs the 3D renderer"), "error={err}");
     }
 

@@ -1003,7 +1003,7 @@ mod tests {
         assert_eq!(p.bounces, 32);
         let p = parse_path_params(&json!({"seed": 0})).unwrap();
         assert_eq!(p.seed, 0);
-        let p = parse_path_params(&json!({"seed": 4294967295})).unwrap();
+        let p = parse_path_params(&json!({"seed": 4294967295u32})).unwrap();
         assert_eq!(p.seed, 4294967295);
     }
 
