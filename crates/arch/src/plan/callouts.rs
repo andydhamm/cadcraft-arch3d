@@ -206,8 +206,9 @@ fn section_marker_centers(_model: &ArchModel, view: &ArchView) -> Option<(Vec2, 
 
 fn interior_marker_center(_model: &ArchModel, view: &ArchView, level: Option<u32>) -> Option<Vec2> {
     // "view.room_point, only when level is None or equals view.level"
+    // A view with no level restriction (view.level == None) shows on all levels.
     if let Some(lvl) = level {
-        if view.level != Some(lvl) {
+        if view.level.is_some() && view.level != Some(lvl) {
             return None;
         }
     }
