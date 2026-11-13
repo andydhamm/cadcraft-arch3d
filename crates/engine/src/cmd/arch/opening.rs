@@ -1565,3 +1565,12 @@ mod tests {
         assert!((o.offset - 7.5).abs() < 1e-6, "world position kept: {}", o.offset);
     }
 }
+
+pub(crate) fn valid_styles(kind: OpeningKind) -> &'static [&'static str] {
+    match kind {
+        OpeningKind::Door => DOOR_STYLES.as_slice(),
+        OpeningKind::Window | OpeningKind::CasedOpening => WINDOW_STYLES.as_slice(),
+        OpeningKind::GarageDoor => GARAGE_STYLES.as_slice(),
+        _ => &[],
+    }
+}
