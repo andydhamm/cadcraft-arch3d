@@ -140,7 +140,7 @@ fn elevation_marker_center(model: &ArchModel, view: &ArchView, level: Option<u32
     // Filter walls by level: walls with no level are on all levels
     let walls: Vec<_> = match level {
         None => model.walls.iter().collect(),
-        Some(lvl) => model.walls.iter().filter(|w| w.base_level == Some(lvl)).collect(),
+        Some(lvl) => model.walls.iter().filter(|w| w.base_level == lvl).collect(),
     };
 
     if walls.is_empty() {
@@ -543,7 +543,7 @@ mod tests {
             end: Vec2::new(10.0, 0.0),
             thickness: 0.2,
             height: 2.4,
-            base_level: Some(1),
+            base_level: 1,
             ..Default::default()
         });
         let view2 = make_view(0, ViewKind::Elevation, Vec2::Y, Some(1), None, None);
@@ -608,6 +608,96 @@ mod tests {
         // On level 1: not found (view is on level 0)
         let not_found = callout_at(&model, Some(1), room_point, 0.1);
         assert_eq!(not_found, None);
+    }
+
+    #[test]
+    fn elevation_marker_ignores_walls_on_other_levels() {
+        let mut model = ArchModel::default();
+        // Wall on level 0
+        model.walls.push(Wall {
+            id: ArchId::wall(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 0,
+            ..Default::default()
+        });
+        // Wall on level 1, far away
+        model.walls.push(Wall {
+            id: ArchId::wall(1),
+            start: Vec2::new(100.0, 100.0),
+            end: Vec2::new(110.0, 100.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 1,
+            ..Default::default()
+        });
+
+        let view = make_view(0, ViewKind::Elevation, Vec2::Y, Some(0), None, None);
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        // Level 0: only the level-0 wall is used, marker near y=0
+        let mut out = PlanAnnotation::default();
+        callouts(&model, Some(0), &mut out);
+        assert_eq!(out.labels.len(), 1);
+        let label = &out.labels[0];
+        assert!(label.at.y < 0.0, "marker should be south of level-0 wall");
+        assert!(label.at.y > -50.0, "marker should not be near level-1 wall");
+
+        // Level 1: only the level-1 wall is used, marker near y=100
+        let mut out2 = PlanAnnotation::default();
+        callouts(&model, Some(1), &mut out2);
+        assert_eq!(out2.labels.len(), 1);
+        let label2 = &out2.labels[0];
+        assert!(label2.at.y < 100.0);
+        assert!(label2.at.y > 50.0);
+    }
+
+    #[test]
+    fn section_marker_independent_of_walls() {
+        // No walls at all: section markers still appear at cut ends
+        let mut model = ArchModel::default();
+        let cut = [[-1.0, 5.0], [11.0, 5.0]];
+        let view = make_view(0, ViewKind::Section, Vec2::Y, None, None, Some(cut));
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        let mut out = PlanAnnotation::default();
+        callouts(&model, None, &mut out);
+        assert_eq!(out.labels.len(), 2);
+        let xs: Vec<f64> = out.labels.iter().map(|l| l.at.x).collect();
+        assert!(xs.iter().any(|x| (x - (-1.6)).abs() < 1e-6), "left marker missing");
+        assert!(xs.iter().any(|x| (x - 11.6).abs() < 1e-6), "right marker missing");
+    }
+
+    #[test]
+    fn interior_view_no_level_shows_on_all_levels() {
+        let mut model = setup_model();
+        let room_point = Vec2::new(5.0, 5.0);
+        // Interior view with no level restriction
+        let view = make_view(0, ViewKind::Interior, Vec2::Y, None, Some(room_point), None);
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        // Shows on level 0
+        let mut out = PlanAnnotation::default();
+        callouts(&model, Some(0), &mut out);
+        assert_eq!(out.labels.len(), 1);
+
+        // Shows on level 1
+        let mut out2 = PlanAnnotation::default();
+        callouts(&model, Some(1), &mut out2);
+        assert_eq!(out2.labels.len(), 1);
+
+        // Shows with no level filter
+        let mut out3 = PlanAnnotation::default();
+        callouts(&model, None, &mut out3);
+        assert_eq!(out3.labels.len(), 1);
     }
 
     #[test]
