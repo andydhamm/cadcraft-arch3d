@@ -255,23 +255,32 @@ mod tests {
     #[test]
     fn look_uses_a_date_time_angle() {
         let mut s = Session::new();
-        let mut d = s.doc_mut().unwrap();
-        d.arch.site = Some(SiteLocation { latitude: 51.05, ..SiteLocation::default() });
-        d.touch_arch();
-        let _ = s.execute("sunangle", &json!({"name": "noon", "date": "2026-06-21", "time": "solar-noon"})).expect("sunangle add");
-        d.arch.look.sun.angle = Some("noon".to_string());
-        d.touch_arch();
-        let angle = &d.arch.sun_angles[0];
-        let site = d.arch.site.as_ref();
-        let (az, el, dir) = resolved_sun(angle, site).expect("resolved_sun");
-        assert!((az - 180.0).abs() < 0.1, "sunAzimuth {} not near 180", az);
-        assert!((el - 62.39).abs() < 0.1, "sunElevation {} not near 62.39", el);
-        assert!((dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2] - 1.0).abs() < 1e-6, "dir not unit");
-        assert!(dir[2] > 0.0, "dir z positive");
+        // Set the site first so the mutable borrow ends before the first `s.execute`.
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.site = Some(SiteLocation { latitude: 51.05, ..SiteLocation::default() });
+            d.touch_arch();
+        }
+        s.execute("sunangle", &json!({"name": "noon", "date": "2026-06-21", "time": "solar-noon"})).expect("sunangle add");
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.look.sun.angle = Some("noon".to_string());
+            d.touch_arch();
+        }
+        {
+            let model = &s.doc().unwrap().arch;
+            let angle = &model.sun_angles[0];
+            let site = model.site.as_ref();
+            let (az, el, dir) = resolved_sun(angle, site).expect("resolved_sun");
+            assert!((az - 180.0).abs() < 0.1, "sunAzimuth {} not near 180", az);
+            assert!((el - 62.39).abs() < 0.1, "sunElevation {} not near 62.39", el);
+            assert!((dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2] - 1.0).abs() < 1e-6, "dir not unit");
+            assert!(dir[2] > 0.0, "dir z positive");
+        }
         // Deleting the angle used by the look is refused.
         let del = s.execute("sunangle", &json!({"delete": "noon"}));
         assert!(del.is_err(), "deleting an angle used by the look should be refused");
-        assert_eq!(d.arch.sun_angles.len(), 1, "angle still present after refused delete");
+        assert_eq!(s.doc().unwrap().arch.sun_angles.len(), 1, "angle still present after refused delete",);
     }
 
     #[test]
