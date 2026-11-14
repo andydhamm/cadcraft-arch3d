@@ -3025,4 +3025,129 @@ mod tests {
         // No molding names should appear
         assert!(!names.iter().any(|n| n.starts_with("molding-")));
     }
+
+    #[test]
+    fn all_four_finishes_export_normal_maps() {
+        let mut scene = scene_with(0);
+        for (material, id) in [("wall-brick", 1), ("wall-siding", 2), ("roof-shingles", 3), ("floor-wood", 4)] {
+            scene.meshes.push({
+                let mut m = wall_mesh();
+                m.material = material.to_string();
+                m.object = ArchId(id);
+                m
+            });
+        }
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let images = json["images"].as_array().unwrap();
+        let names: Vec<&str> = images.iter().map(|i| i["name"].as_str().unwrap()).collect();
+        // Images are added in Finish::ALL order: Siding, Shingles, Brick, Wood, ...
+        assert_eq!(names, ["siding", "siding-normal", "shingles", "shingles-normal", "brick", "brick-normal", "wood", "wood-normal"]);
+        let mats = json["materials"].as_array().unwrap();
+        for mat in mats {
+            let name = mat["name"].as_str().unwrap();
+            assert!(mat.get("normalTexture").is_some(), "{name} should have normalTexture");
+        }
+    }
+
+    #[test]
+    fn finish_normal_texture_index_points_to_correct_image() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-brick".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mat = &json["materials"][0];
+        let norm_idx = mat["normalTexture"]["index"].as_u64().unwrap() as usize;
+        let images = json["images"].as_array().unwrap();
+        assert_eq!(images[norm_idx]["name"], "brick-normal");
+        let base_idx = mat["pbrMetallicRoughness"]["baseColorTexture"]["index"].as_u64().unwrap() as usize;
+        assert_eq!(images[base_idx]["name"], "brick");
+    }
+
+    #[test]
+    fn normal_maps_are_byte_identical_across_exports() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-brick".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-siding".to_string();
+            m.object = ArchId(2);
+            m
+        });
+        let a = write(&scene);
+        let b = write(&scene);
+        assert_eq!(a, b);
+        let json_a = glb_json_chunk(&a);
+        let json_b = glb_json_chunk(&b);
+        let mats_a = json_a["materials"].as_array().unwrap();
+        let mats_b = json_b["materials"].as_array().unwrap();
+        for (ma, mb) in mats_a.iter().zip(mats_b.iter()) {
+            if ma.get("normalTexture").is_some() {
+                assert_eq!(ma["normalTexture"]["index"], mb["normalTexture"]["index"]);
+            }
+        }
+    }
+
+    #[test]
+    fn normal_map_image_is_valid_png() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-brick".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let json_len = le32(&bytes, 12) as usize;
+        let bin = 20 + json_len + 8;
+        let images = json["images"].as_array().unwrap();
+        let norm_img = images.iter().find(|i| i["name"] == "brick-normal").unwrap();
+        let bv = &json["bufferViews"][norm_img["bufferView"].as_u64().unwrap() as usize];
+        let off = bv["byteOffset"].as_u64().unwrap() as usize;
+        assert_eq!(&bytes[bin + off..bin + off + 8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+    }
+
+    #[test]
+    fn multiple_finishes_normal_indices_are_distinct() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-brick".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-siding".to_string();
+            m.object = ArchId(2);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "roof-shingles".to_string();
+            m.object = ArchId(3);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mats = json["materials"].as_array().unwrap();
+        let indices: Vec<u64> = mats.iter().filter_map(|m| m.get("normalTexture").map(|n| n["index"].as_u64().unwrap())).collect();
+        assert_eq!(indices.len(), 3);
+        // Images are added in Finish::ALL order: Siding(0,1), Shingles(2,3), Brick(4,5).
+        // Materials are in mesh order: wall-brick, wall-siding, roof-shingles.
+        assert_eq!(indices[0], 5); // brick-normal
+        assert_eq!(indices[1], 1); // siding-normal
+        assert_eq!(indices[2], 3); // shingles-normal
+    }
 }

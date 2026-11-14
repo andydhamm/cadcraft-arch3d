@@ -6,15 +6,19 @@
 # cabinet's door swing, and automatic dimensions for the cabinet run (0.6) and the overall height (2.4); "side": "east"
 # picks the same wall.
 # The look (1, 0) makes u = -y (u = p . (ly, -lx)).
+# The cabinet has two doors, so the gap between them is a front line well inside the rectangle (a single door's edges
+# sit 3 mm inside the box sides, which the first version of this check, with its 10 mm margin, could never see).
 # A stub fails: an ordinary elevation (it draws the north-east room's cabinet and the outer walls), a missing
-# cabinet outline, no swing or no dimensions.
-# needs: p21-observables-1, p21-observables-2, p21-observables-3, p21-view-plumbing, p21-interior-elevation, p21-interior-dims, p21-elevation-marks
+# cabinet outline, a bare box with no fronts, no swing or no dimensions.
+# needs: p21-observables-1, p21-observables-2, p21-observables-3, p21-view-plumbing, p21-interior-elevation, p21-interior-dims, p21-elevation-marks, p21f-interior-cabinet-front
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p21lib.inc')).read())
 
 R = house_rooms()
 NW = R['NW']
-SET = HOUSE + [SH_CAB, cmd('cabinet', {"kind": "base", "wall": "w1", "offset": 5.5})]   # cb1 in the north-east room
+# cb0: a two-door base cabinet against w5 on its north-west face (x = 5.95), along y 5.2..5.8.
+CAB2 = cmd('cabinet', {"kind": "base", "wall": "w5", "offset": 2.5, "fronts": "doors", "doors": 2})
+SET = HOUSE + [CAB2, cmd('cabinet', {"kind": "base", "wall": "w1", "offset": 5.5})]   # cb1 in the north-east room
 rr = sh_run_ok(SET + [cmd('elevation', {"room": NW, "wall": "w5"}), cmd('elevation', {"room": NW, "side": "east"}),
                       INSPECT21], "the interior elevations")
 insp = inspected(rr)
@@ -31,6 +35,8 @@ lines = sh_items(v, 'lines')
 if len(lines) < 8:
     fail(f"the interior elevation has hardly any lines: {len(lines)}")
 cab_rows = {c.get('id'): c for c in objects_named(insp, 'cabinets', 'cabinets')}
+if 'cb0' not in cab_rows:
+    fail(f"arch.inspect lists no cabinet cb0: {sorted(cab_rows)}")
 top = num(cab_rows['cb0'].get('counterTop'), 'cb0 counterTop')
 for l in lines:
     for k in ('a', 'b'):
@@ -57,9 +63,16 @@ for u in (u0, u1):
         fail(f"cb0's front rectangle has its side at y = {-u:.3f} from the floor to the counter top {top}")
 if not sh_covers(cab, (u0, top), (u1, top)):
     fail(f"cb0's front rectangle has its top edge at z = {top}")
-inner = [l for l in cab if all(u0 + 0.01 < sh_pt(l.get(k), 'p')[0] < u1 - 0.01 for k in ('a', 'b'))]
+# The gap between the two doors is at the middle of the front (y = 5.5, u = -5.5): a vertical front line there.
+mid = (u0 + u1) / 2
+inner = []
+for l in cab:
+    (ua, za), (ub, zb) = sh_pt(l.get('a'), 'p'), sh_pt(l.get('b'), 'p')
+    if abs(ua - mid) <= 0.01 and abs(ub - mid) <= 0.01 and abs(za - zb) >= 0.3:
+        inner.append(l)
 if not inner:
-    fail("cb0 shows its door and drawer fronts inside the rectangle")
+    fail(f"cb0 shows its two door fronts inside the rectangle (a vertical line at the door gap, y = {-mid:.3f}, at "
+         f"least 0.3 long): {[(l.get('a'), l.get('b')) for l in cab][:12]}")
 swing = sh_items(v, 'indicators', 'cb0')
 if len(swing) < 2:
     fail(f"cb0's door swing (at least two indicator lines): {swing}")
@@ -74,5 +87,5 @@ if not any(d.get('kind') == 'width' and abs(num(d.get('value'), 'dim') - 0.6) <=
 if not any(d.get('kind') == 'height' and abs(num(d.get('value'), 'dim') - 2.4) <= SH_TOL for d in dims):
     fail(f"the overall floor-to-ceiling height dimension 2.4: {[(d.get('kind'), d.get('value')) for d in dims]}")
 print(f"ok: interior elevation of {NW} on w5 (east): {len(lines)} lines all within y 3.05..7.9 and z 0..2.4; cb0's "
-      f"front 0.6 x {top}; {len(swing)} swing lines; dims 0.6 and 2.4")
+      f"front 0.6 x {top} with its door gap; {len(swing)} swing lines; dims 0.6 and 2.4")
 print("PASS 05")

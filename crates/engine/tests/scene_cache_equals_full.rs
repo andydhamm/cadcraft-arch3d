@@ -872,6 +872,173 @@ fn phase_16_edits_through_commands_keep_the_cache_exact() {
     }
 }
 
+#[test]
+fn phase_16_degenerate_tray_keeps_the_cache_exact() {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let setup: Vec<(&str, Value)> = vec![
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("wall", json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("wall", json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("roomdetect", json!({})),
+    ];
+    for (cmd, params) in &setup {
+        s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    let mut m = s.doc().expect("a drawing").arch.clone();
+    // Find the NW room (top-left)
+    let nw_room = m
+        .rooms
+        .iter()
+        .find(|r| {
+            let cx = r.polygon.iter().map(|p| p.x).sum::<f64>() / r.polygon.len() as f64;
+            let cy = r.polygon.iter().map(|p| p.y).sum::<f64>() / r.polygon.len() as f64;
+            cx < 5.0 && cy > 4.0
+        })
+        .expect("NW room")
+        .id;
+    // Add a tray with zero depth (degenerate)
+    m.push_tray(cadcraft_doc::arch::Tray { room: nw_room, level: 0, inset: 0.6, depth: 0.0, ..Default::default() });
+    let (mut cache, _) = SceneCache::new(&m);
+    // Toggle depth between 0.0 and 0.3
+    for k in 0..10 {
+        let _before = signature(cache.scene());
+        let tray = &mut m.trays[0];
+        tray.depth = if k % 2 == 0 { 0.3 } else { 0.0 };
+        let stats = cache.update(&m);
+        let rebuilt = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&rebuilt), "tray depth toggle {k}");
+        assert!(stats.incremental && stats.rebuilt <= 1, "tray depth toggle {k}: rebuilt {}", stats.rebuilt);
+    }
+    // Toggle inset between 0.0 and 10.0 (huge, larger than the room)
+    for k in 0..10 {
+        let _before = signature(cache.scene());
+        let tray = &mut m.trays[0];
+        tray.inset = if k % 2 == 0 { 10.0 } else { 0.0 };
+        let stats = cache.update(&m);
+        let rebuilt = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&rebuilt), "tray inset toggle {k}");
+        assert!(stats.incremental && stats.rebuilt <= 1, "tray inset toggle {k}: rebuilt {}", stats.rebuilt);
+    }
+}
+
+#[test]
+fn phase_16_soffit_outside_rooms_rebuilds_only_itself() {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let setup: Vec<(&str, Value)> = vec![
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("wall", json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("wall", json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("roomdetect", json!({})),
+    ];
+    for (cmd, params) in &setup {
+        s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    let mut m = s.doc().expect("a drawing").arch.clone();
+    // Add a soffit far from any room (at 20, 20)
+    m.push_soffit(cadcraft_doc::arch::Soffit {
+        level: 0,
+        polygon: vec![
+            cadcraft_geom::Vec2::new(20.0, 20.0),
+            cadcraft_geom::Vec2::new(22.0, 20.0),
+            cadcraft_geom::Vec2::new(22.0, 21.0),
+            cadcraft_geom::Vec2::new(20.0, 21.0),
+        ],
+        bottom: Some(2.1),
+        ..Default::default()
+    });
+    let (mut cache, _) = SceneCache::new(&m);
+    // Edit the soffit's bottom
+    for k in 0..10 {
+        let _before = signature(cache.scene());
+        let soffit = &mut m.soffits[0];
+        soffit.bottom = Some(if k % 2 == 0 { 2.0 } else { 2.1 });
+        let stats = cache.update(&m);
+        let rebuilt = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&rebuilt), "soffit bottom toggle {k}");
+        // A soffit outside any room rebuilds only itself
+        assert!(stats.incremental && stats.rebuilt <= 1, "soffit bottom toggle {k}: rebuilt {}", stats.rebuilt);
+    }
+}
+
+#[test]
+fn phase_16_foundation_on_empty_level_rebuilds_only_itself() {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let setup: Vec<(&str, Value)> = vec![
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("roomdetect", json!({})),
+        ("level", json!({"above": 0})),
+    ];
+    for (cmd, params) in &setup {
+        s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    let mut m = s.doc().expect("a drawing").arch.clone();
+    // Add a foundation on level 1 (which has no rooms)
+    m.push_foundation(cadcraft_doc::arch::Foundation { level: 1, kind: FoundationKind::Stem, footing_depth: 1.2, ..Default::default() });
+    let (mut cache, _) = SceneCache::new(&m);
+    // Flip kind between stem and slab
+    for k in 0..10 {
+        let _before = signature(cache.scene());
+        let foundation = &mut m.foundations[0];
+        foundation.kind = if k % 2 == 0 { FoundationKind::Slab } else { FoundationKind::Stem };
+        let stats = cache.update(&m);
+        let rebuilt = Scene3d::build(&m);
+        assert_eq!(signature(cache.scene()), signature(&rebuilt), "foundation kind toggle {k}");
+        // A foundation on an empty level rebuilds only itself (no rooms to rebuild)
+        assert!(stats.incremental && stats.rebuilt <= 1, "foundation kind toggle {k}: rebuilt {}", stats.rebuilt);
+    }
+}
+
+#[test]
+fn phase_16_many_nested_trays_rebuild_correctly() {
+    let mut s = Session::empty();
+    s.new_drawing(false);
+    let setup: Vec<(&str, Value)> = vec![
+        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
+        ("wall", json!({"points": [[0, 3], [10, 3]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("wall", json!({"points": [[6, 3], [6, 8]], "thickness": 0.1, "height": 2.4, "type": "interior"})),
+        ("roomdetect", json!({})),
+    ];
+    for (cmd, params) in &setup {
+        s.execute(cmd, params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
+    }
+    let mut m = s.doc().expect("a drawing").arch.clone();
+    // Find the NW room
+    let nw_room = m
+        .rooms
+        .iter()
+        .find(|r| {
+            let cx = r.polygon.iter().map(|p| p.x).sum::<f64>() / r.polygon.len() as f64;
+            let cy = r.polygon.iter().map(|p| p.y).sum::<f64>() / r.polygon.len() as f64;
+            cx < 5.0 && cy > 4.0
+        })
+        .expect("NW room")
+        .id;
+    // Add 5 nested trays
+    let mut parent: Option<ArchId> = None;
+    for i in 0..5 {
+        let tray_id =
+            m.push_tray(cadcraft_doc::arch::Tray { room: nw_room, level: 0, parent, inset: 0.6, depth: 0.1 + i as f64 * 0.05, ..Default::default() });
+        parent = Some(tray_id);
+    }
+    let (mut cache, _) = SceneCache::new(&m);
+    // Edit each tray's depth
+    for i in 0..5 {
+        for k in 0..4 {
+            let _before = signature(cache.scene());
+            let tray = &mut m.trays[i];
+            tray.depth = if k % 2 == 0 { tray.depth + 0.05 } else { tray.depth - 0.05 };
+            let stats = cache.update(&m);
+            let rebuilt = Scene3d::build(&m);
+            assert_eq!(signature(cache.scene()), signature(&rebuilt), "tray {i} depth edit {k}");
+            // Each tray edit should rebuild only that tray (and possibly its parent/children)
+            assert!(stats.incremental && stats.rebuilt <= 3, "tray {i} depth edit {k}: rebuilt {}", stats.rebuilt);
+        }
+    }
+}
+
 /// The phase-17 scene: the phase-1 house with Level 2, a 0.1 m wall under a 0.9 m stair, the north
 /// deck with its railing, a drawn railing and a window with a 2 x 2 grille, all through a Session.
 fn phase_17_session() -> Session {
