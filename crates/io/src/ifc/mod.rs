@@ -541,6 +541,110 @@ mod tests {
     }
 
     #[test]
+    fn a_wall_on_an_upper_level_goes_to_that_level_storey() {
+        let mut model = ArchModel::default();
+        model.levels = vec![
+            Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() },
+            Level { index: 1, name: "Upper".into(), elevation: 3.0, ..Level::default() },
+        ];
+        model.push_wall(cadcraft_doc::arch::Wall {
+            start: cadcraft_geom::Vec2::new(0.0, 0.0),
+            end: cadcraft_geom::Vec2::new(3.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 1,
+            top_level: Some(1),
+            ..cadcraft_doc::arch::Wall::default()
+        });
+        let text = export(&model);
+        let inst = instances(&text);
+        let wall = inst.iter().find(|(_, (e, _))| e == "IFCWALL").map(|(n, _)| *n);
+        let upper_storey =
+            inst.iter().find(|(_, (e, p))| e == "IFCBUILDINGSTOREY" && p.starts_with(&format!("'{}'", global_id("storey/1")))).map(|(n, _)| *n);
+        let (Some(wall), Some(upper)) = (wall, upper_storey) else {
+            return assert!(false, "missing wall or upper storey");
+        };
+        let containment = inst.values().find(|(e, _)| e == "IFCRELCONTAINEDINSPATIALSTRUCTURE").map(|(_, p)| refs_in(p));
+        let Some(c) = containment else { return assert!(false, "no containment") };
+        assert!(c.contains(&wall) && c.contains(&upper), "the wall is contained in the upper storey");
+    }
+
+    #[test]
+    fn a_zero_length_wall_produces_no_ifcwall() {
+        let mut model = ArchModel::default();
+        model.push_wall(cadcraft_doc::arch::Wall {
+            start: cadcraft_geom::Vec2::new(1.0, 1.0),
+            end: cadcraft_geom::Vec2::new(1.0, 1.0),
+            thickness: 0.2,
+            height: 2.4,
+            ..cadcraft_doc::arch::Wall::default()
+        });
+        let text = export(&model);
+        assert_eq!(text.matches("=IFCWALL(").count(), 0, "a zero-length wall has no mesh and no IFC entity");
+    }
+
+    #[test]
+    fn a_basement_level_sorts_before_ground() {
+        let mut model = ArchModel::default();
+        model.levels = vec![
+            Level { index: 1, name: "Ground".into(), elevation: 0.0, ..Level::default() },
+            Level { index: 0, name: "Basement".into(), elevation: -2.5, ..Level::default() },
+        ];
+        let text = export(&model);
+        let inst = instances(&text);
+        let storeys: Vec<&String> = inst.values().filter(|(n, _)| n == "IFCBUILDINGSTOREY").map(|(_, p)| p).collect();
+        assert_eq!(storeys.len(), 2);
+        assert!(storeys[0].contains(",'Basement',$,$,") && storeys[0].ends_with(",.ELEMENT.,-2.5"), "basement first: {}", storeys[0]);
+        assert!(storeys[1].contains(",'Ground',$,$,") && storeys[1].ends_with(",.ELEMENT.,0."), "ground second: {}", storeys[1]);
+    }
+
+    #[test]
+    fn a_wall_spanning_from_an_upper_level() {
+        let mut model = ArchModel::default();
+        model.levels = vec![
+            Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() },
+            Level { index: 1, name: "Mid".into(), elevation: 3.0, ..Level::default() },
+            Level { index: 2, name: "Top".into(), elevation: 6.0, ..Level::default() },
+        ];
+        model.push_wall(cadcraft_doc::arch::Wall {
+            start: cadcraft_geom::Vec2::new(0.0, 0.0),
+            end: cadcraft_geom::Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 1,
+            top_level: Some(2),
+            ..cadcraft_doc::arch::Wall::default()
+        });
+        let text = export(&model);
+        assert_eq!(text.matches("=IFCWALL(").count(), 1, "one spanning wall");
+        let inst = instances(&text);
+        let wall = inst.iter().find(|(_, (e, _))| e == "IFCWALL").map(|(n, _)| *n);
+        let mid_storey =
+            inst.iter().find(|(_, (e, p))| e == "IFCBUILDINGSTOREY" && p.starts_with(&format!("'{}'", global_id("storey/1")))).map(|(n, _)| *n);
+        let (Some(wall), Some(mid)) = (wall, mid_storey) else {
+            return assert!(false, "missing wall or mid storey");
+        };
+        let containment = inst.values().find(|(e, _)| e == "IFCRELCONTAINEDINSPATIALSTRUCTURE").map(|(_, p)| refs_in(p));
+        let Some(c) = containment else { return assert!(false, "no containment") };
+        assert!(c.contains(&wall) && c.contains(&mid), "the wall is contained in its base level's storey (mid)");
+    }
+
+    #[test]
+    fn a_level_with_nan_elevation_sorts_last() {
+        let mut model = ArchModel::default();
+        model.levels = vec![
+            Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() },
+            Level { index: 1, name: "Float".into(), elevation: f64::NAN, ..Level::default() },
+        ];
+        let text = export(&model);
+        let inst = instances(&text);
+        let storeys: Vec<&String> = inst.values().filter(|(n, _)| n == "IFCBUILDINGSTOREY").map(|(_, p)| p).collect();
+        assert_eq!(storeys.len(), 2);
+        assert!(storeys[0].contains(",'Ground',$,$,"), "ground first: {}", storeys[0]);
+        assert!(storeys[1].contains(",'Float',$,$,"), "nan level last: {}", storeys[1]);
+    }
+
+    #[test]
     fn every_new_product_has_a_body() {
         use cadcraft_doc::arch::{ArchId, ArchModel, Backsplash, Cabinet, CabinetKind, CounterRef, Countertop, Level, Wall};
         use cadcraft_geom::Vec2;

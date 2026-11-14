@@ -234,12 +234,15 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
     crate::output::write_atomic(out, png).map_err(|e| e.to_string()).map(|_| ())
 }
 
-/// The last environment built and the key it was built for.
-type EnvCache = Option<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>)>;
-static ENV_CACHE: Mutex<EnvCache> = Mutex::new(None);
+/// How many environments to keep in the process-wide cache.
+const ENV_CACHE_CAP: usize = 4;
+type EnvCache = Vec<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>)>;
+static ENV_CACHE: Mutex<EnvCache> = Mutex::new(Vec::new());
 
 /// The environment for the drawing and look, rebuilt only when the look's sky fields, its
 /// backdrop, the sun direction or the arch revision change (an HDRI decode is not cheap).
+/// The last up to `ENV_CACHE_CAP` environments are kept in an LRU order, so alternating looks
+/// reuse their built environment instead of re-decoding the HDRI.
 fn environment_cached(
     model: &cadcraft_engine::doc::arch::ArchModel,
     revision: u64,
@@ -253,16 +256,19 @@ fn environment_cached(
     sun_dir.map(|d| d.map(f64::to_bits)).hash(&mut h);
     revision.hash(&mut h);
     let key = h.finish();
-    if let Ok(guard) = ENV_CACHE.lock() {
-        if let Some((k, env)) = guard.as_ref() {
-            if *k == key {
-                return env.clone();
-            }
+    if let Ok(mut guard) = ENV_CACHE.lock() {
+        if let Some(idx) = guard.iter().position(|(k, _)| *k == key) {
+            let (_, env) = guard.remove(idx);
+            guard.push((key, env.clone()));
+            return env;
         }
     }
     let env = cadcraft_render3d::environment_for(model, look, sun_dir);
     if let Ok(mut guard) = ENV_CACHE.lock() {
-        *guard = Some((key, env.clone()));
+        if guard.len() == ENV_CACHE_CAP {
+            guard.remove(0);
+        }
+        guard.push((key, env.clone()));
     }
     env
 }
@@ -1302,5 +1308,73 @@ mod tests {
             return eprintln!("SKIP: no compute device");
         }
         assert_eq!(v["shadowedLights"], 3, "path tracer must honour the light set: {v}");
+    }
+
+    #[test]
+    fn environment_cache_keeps_alternating_looks() {
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let model = cadcraft_engine::doc::arch::ArchModel::default();
+        let mut look = Look::default();
+        let sun_a = Some([0.0, -0.6, 0.8]);
+        let sun_b = Some([0.6, 0.0, 0.8]);
+
+        // First A with the default look. When the default look is light-only (no sky),
+        // turn the sky on so the Preetham sky builds and the cached value is a real Arc.
+        let mut a1 = environment_cached(&model, 9_000_001, &look, sun_a);
+        if a1.is_none() {
+            look.sky.on = true;
+            a1 = environment_cached(&model, 9_000_001, &look, sun_a);
+        }
+
+        // B (a different sun direction = a different key), then A again. When the sky
+        // builds, the second A must be served from the cache (the entry survived B) and B
+        // must be a distinct Arc. When the sky does not build for these inputs, every
+        // result is None (the cache stores (key, None) entries, which stay within the
+        // LRU bound covered by environment_cache_is_bounded).
+        let b1 = environment_cached(&model, 9_000_001, &look, sun_b);
+        let a2 = environment_cached(&model, 9_000_001, &look, sun_a);
+
+        // A, B, A share the look, so either all three build or none of them do.
+        let all_three = a1.is_some() && b1.is_some() && a2.is_some();
+        if all_three {
+            // Move the Arcs (owned) and compare the allocations they point to: the
+            // cached A survived B (first and third share the allocation), and B used a
+            // different key (a distinct allocation).
+            let a1p = a1.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+            let b1p = b1.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+            let a2p = a2.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+            assert!(a1p == a2p, "the cached A must be returned after B");
+            assert!(a1p != b1p, "A and B use different keys");
+        } else {
+            assert!(
+                !a1.is_some() && !b1.is_some() && !a2.is_some(),
+                "mixed Some/None outcomes are impossible for the same look: {a1:?} {b1:?} {a2:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn environment_cache_is_bounded() {
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let model = cadcraft_engine::doc::arch::ArchModel::default();
+        let look = Look::default();
+
+        for i in 0..(ENV_CACHE_CAP + 3) {
+            let sun = Some([f64::from(i as f64) * 0.1 - 0.6, 0.0, 0.8]);
+            let _ = environment_cached(&model, 9_000_001, &look, sun);
+        }
+
+        let count = if let Ok(g) = ENV_CACHE.lock() {
+            g.len()
+        } else {
+            return;
+        };
+        assert!(count <= ENV_CACHE_CAP, "cache must hold at most {ENV_CACHE_CAP} entries, got {count}");
     }
 }
