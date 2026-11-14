@@ -28,6 +28,7 @@ pub mod env;
 pub mod rt;
 pub mod scene_gpu;
 pub mod shaders;
+pub mod spec_albedo;
 pub mod tracer;
 
 #[cfg(test)]
