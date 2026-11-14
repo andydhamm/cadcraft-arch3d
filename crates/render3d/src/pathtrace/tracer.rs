@@ -1614,7 +1614,7 @@ mod tests {
     fn furnace_frame_carries_the_tone_code() {
         // The furnace branch of `new` calls frame_look; mirror its frame setup without a device.
         let opts = PathOptions {
-            furnace: Some(super::super::Furnace { albedo: 0.5, emission: 1.0 }),
+            furnace: Some(super::super::Furnace { albedo: 0.5, ..Default::default() }),
             tone_map: crate::exposure::TONE_NONE,
             ..Default::default()
         };
