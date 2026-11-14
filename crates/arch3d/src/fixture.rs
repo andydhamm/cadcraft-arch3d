@@ -80,8 +80,12 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
     let lens = if f.on { "light-lens-lit" } else { "light-lens" };
     let hw = 0.012 / 2.0;
     // The housing bottom, referenced once so the proud lens below it is expressed
-    // exactly as `h_bottom - 0.001`.
+    // exactly as `h_bottom - 0.001`. The lens z is computed in f32 (the stored
+    // representation) so its bottom is exactly 1 mm below the housing's bottom
+    // face as rendered, not 1 mm below the f64 value.
     let h_bottom = zp - 0.006;
+    let h_bottom_f32 = h_bottom as f32;
+    let lens_bottom_f32 = h_bottom_f32 - 0.001f32;
     let mut parts: Vec<Option<Mesh>> = Vec::new();
     let mut segments: Vec<(Vec2, Vec2)> = f.path.windows(2).map(|w| (w[0], w[1])).collect();
     if f.closed && f.path.len() > 2 {
@@ -119,7 +123,9 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
             Vec2::new(lb.x - lpx, lb.y - lpy),
             Vec2::new(la.x - lpx, la.y - lpy),
         ];
-        parts.push(prism(lens, f, &l_ring, h_bottom - 0.001, h_bottom));
+        // Lens is a 1 mm slab below the housing bottom: z from `lens_bottom_f32` to
+        // `h_bottom_f32`, both in f32 so no coplanar face and no rounding gap.
+        parts.push(prism(lens, f, &l_ring, lens_bottom_f32 as f64, h_bottom_f32 as f64));
     }
     parts
 }
