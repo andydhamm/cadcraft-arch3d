@@ -573,4 +573,75 @@ mod tests {
         let cs = circuits(&m);
         assert!(cs.is_empty());
     }
+
+    #[test]
+    fn bulged_polyline_with_nan_coordinates() {
+        let a = Vec2::new(f64::NAN, 0.0);
+        let b = Vec2::new(1.0, 0.0);
+        let pts = bulged_polyline(a, b, 0.5);
+        // Should not panic; returns 17 points. Endpoints are exact, middle points have NaN x.
+        assert_eq!(pts.len(), 17);
+        assert!(pts[0].x.is_nan());
+        assert!(pts[8].x.is_nan());
+        assert!((pts[16].x - 1.0).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn bulged_polyline_with_very_small_bulge() {
+        let a = Vec2::new(0.0, 0.0);
+        let b = Vec2::new(1.0, 0.0);
+        let pts = bulged_polyline(a, b, 1e-13);
+        assert_eq!(pts.len(), 2);
+        assert_eq!(pts[0], a);
+        assert_eq!(pts[1], b);
+    }
+
+    #[test]
+    fn check_connection_with_boundary_bulge() {
+        let (m, sw) = fixture();
+        assert!(check_connection(&m, sw, &[ArchId(0)], -1.0).is_ok());
+        assert!(check_connection(&m, sw, &[ArchId(0)], 1.0).is_ok());
+        assert!(check_connection(&m, sw, &[ArchId(0)], -1.1).is_err());
+        assert!(check_connection(&m, sw, &[ArchId(0)], 1.1).is_err());
+    }
+
+    #[test]
+    fn connection_arcs_with_coincident_switch_and_light() {
+        let (mut m, sw) = fixture();
+        // Move light 0 to the same position as the switch plate.
+        m.lights[0].position = Vec2::new(1.0, 0.1);
+        let c = Connection { from: sw, to: vec![ArchId(0)], bulge: 0.5, ..Default::default() };
+        let arcs = connection_arcs(&m, &c);
+        assert_eq!(arcs.len(), 1);
+        assert_eq!(arcs[0].len(), 2); // coincident -> degenerate
+    }
+
+    #[test]
+    fn device_plan_and_light_plan_with_missing_objects() {
+        let (m, _sw) = fixture();
+        assert!(device_plan(&m, ArchId(999)).is_none());
+        assert!(light_plan(&m, ArchId(999)).is_none());
+    }
+
+    #[test]
+    fn circuits_with_non_switch_connection() {
+        let (mut m, _sw) = fixture();
+        let outlet = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::Duplex,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 0.3,
+            ..Default::default()
+        });
+        m.push_connection(Connection { from: outlet, to: vec![ArchId(0)], ..Default::default() });
+        let cs = circuits(&m);
+        assert!(cs.is_empty());
+    }
+
+    #[test]
+    fn check_connection_with_missing_switch() {
+        let (m, _sw) = fixture();
+        assert!(check_connection(&m, ArchId(999), &[ArchId(0)], 0.0).is_err());
+    }
 }
