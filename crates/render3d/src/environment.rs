@@ -97,8 +97,8 @@ impl Environment {
         if out.iter().all(|v| v.is_finite()) { out } else { [0.0; 3] }
     }
 
-    /// A stable fingerprint of the map parameters (never the pixels), so `PartialEq` is cheap
-    /// and the pane can compare `Lighting` every frame.
+    /// A stable fingerprint of the map content and its parameters, so `PartialEq` is cheap
+    /// and the pane can compare `Lighting` every frame. Recompute it after any field mutation.
     pub fn compute_key(&self) -> u64 {
         let mut h: u64 = 0x811c9dc5;
         let mut push = |x: u64| h = (h ^ x).wrapping_mul(0x01000193);
@@ -115,6 +115,14 @@ impl Environment {
             }
         }
         h
+    }
+
+    /// Refreshes the cached fingerprint after mutating the environment map or its transform.
+    /// Call this whenever you change `rgb`, `intensity`, `rotation_deg`, `horizon_deg`, or the
+    /// visibility/daylight flags.
+    pub fn rekey(&mut self) -> u64 {
+        self.key = self.compute_key();
+        self.key
     }
 }
 

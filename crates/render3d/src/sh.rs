@@ -64,7 +64,9 @@ pub fn project(env: &Environment) -> [[f32; 3]; 9] {
         return [[0.0f32; 3]; 9];
     }
 
-    let key = env.key;
+    // The caller may have mutated the environment without updating `key`; hash the content so the
+    // cache tracks the actual map instead of a stale fingerprint.
+    let key = env.compute_key();
 
     // Check cache
     if let Ok(guard) = SH_CACHE.lock() {

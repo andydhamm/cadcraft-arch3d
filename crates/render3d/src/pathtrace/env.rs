@@ -61,7 +61,10 @@ pub fn env_table(e: &Environment) -> EnvTable {
     if !e.is_valid() {
         return EnvTable::default();
     }
-    let key = e.key;
+
+    // The caller may mutate `rgb`, `rotation_deg`, or `intensity` without refreshing the stored
+    // fingerprint. Hash the current content so the table cache stays keyed by what it represents.
+    let key = e.compute_key();
 
     // Check cache
     if let Ok(guard) = ENV_TABLE_CACHE.lock() {
