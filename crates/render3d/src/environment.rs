@@ -388,4 +388,26 @@ mod tests {
         sky_environment(&model, &look, Some([0.2, 0.3, 0.5]));
         assert!(hit.elapsed() < std::time::Duration::from_millis(500), "cache hit took {:?}", hit.elapsed());
     }
+
+    #[test]
+    fn night_sky_render_terminates_quickly() {
+        // Ensure that a night sky (sun below horizon) with stars doesn't hang or take excessively long.
+        // This is a sanity check for the sky bake and environment creation.
+        let model = ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sky.stars = true;
+        look.backdrop = Some(cadcraft_doc::arch::Backdrop::Sky);
+
+        // Sun below horizon (night)
+        let sun = [0.0, 0.0, -0.5];
+
+        let start = std::time::Instant::now();
+        let env = sky_environment(&model, &look, Some(sun));
+        let duration = start.elapsed();
+
+        assert!(env.is_some(), "Night sky environment should be created");
+        // Night sky bake should be similar in cost to day sky bake (same number of texels)
+        assert!(duration < std::time::Duration::from_secs(5), "Night sky bake took {duration:?}");
+    }
 }

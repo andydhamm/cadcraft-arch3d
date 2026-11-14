@@ -7,6 +7,7 @@
 //! lux on a surface with normal `n`. Axes are drawing space (x right, y up, z up).
 
 use crate::environment::Environment;
+use std::sync::Mutex;
 
 /// Most texels of the grid the projection samples: 256 x 128.
 const MAX_W: u32 = 256;
@@ -14,6 +15,20 @@ const MAX_H: u32 = 128;
 /// Fewest: a tiny map is sampled bilinearly on a grid this fine so the quadrature stays good.
 const MIN_W: u32 = 64;
 const MIN_H: u32 = 32;
+
+/// Cache for `project`, keyed by `Environment::key`.
+static SH_CACHE: Mutex<Vec<(u64, [[f32; 3]; 9])>> = Mutex::new(Vec::new());
+const SH_CACHE_LEN: usize = 8;
+
+/// Count of SH projections performed (for tests).
+thread_local! {
+    static SH_PROJECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many SH projections this thread has performed (not served from the cache).
+pub fn sh_projection_count() -> usize {
+    SH_PROJECTIONS.with(|c| c.get())
+}
 
 /// The nine real SH basis values in direction `d` (unit), in the order
 /// `00, 1-1, 10, 11, 2-2, 2-1, 20, 21, 22`.
@@ -42,11 +57,40 @@ const BAND: [f32; 9] = {
 /// Project `env` (through [`Environment::radiance`], so rotation, horizon and intensity count)
 /// onto nine SH coefficients of radiance. Texel solid angle is `(2 pi / w)(pi / h) sin(theta)`,
 /// renormalised so the weights sum to `4 pi` and a uniform map is exact. An invalid map gives zeros.
+///
+/// The result is cached by `Environment::key`.
 pub fn project(env: &Environment) -> [[f32; 3]; 9] {
-    let mut out = [[0.0f32; 3]; 9];
     if !env.is_valid() {
-        return out;
+        return [[0.0f32; 3]; 9];
     }
+
+    let key = env.key;
+
+    // Check cache
+    if let Ok(guard) = SH_CACHE.lock() {
+        if let Some((_, sh)) = guard.iter().find(|(k, _)| *k == key) {
+            return *sh;
+        }
+    }
+
+    // Project
+    SH_PROJECTIONS.with(|c| c.set(c.get() + 1));
+    let sh = project_uncached(env);
+
+    // Store in cache
+    if let Ok(mut guard) = SH_CACHE.lock() {
+        if guard.len() >= SH_CACHE_LEN {
+            guard.remove(0);
+        }
+        guard.push((key, sh));
+    }
+
+    sh
+}
+
+/// The uncached projection of an environment onto SH coefficients.
+fn project_uncached(env: &Environment) -> [[f32; 3]; 9] {
+    let mut out = [[0.0f32; 3]; 9];
     let gw = env.width.clamp(MIN_W, MAX_W);
     let gh = env.height.clamp(MIN_H, MAX_H);
     let pi = std::f64::consts::PI;
@@ -163,5 +207,26 @@ mod tests {
         assert!((doubled - 2.0 * irradiance(&before, [1.0, 0.0, 0.0])[0]).abs() < 1e-3 * doubled.abs().max(1.0));
         assert_eq!(project(&Environment::default()), [[0.0; 3]; 9]);
         assert_eq!(irradiance(&before, [f32::NAN, 0.0, 1.0]), [0.0; 3]);
+    }
+
+    #[test]
+    fn second_sky_render_of_an_angle_rebuilds_nothing() {
+        // Verify that SH projection is cached.
+        let mut e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        e.key = 9999; // Specific key
+
+        let before = sh_projection_count();
+
+        let _sh1 = project(&e);
+        assert_eq!(sh_projection_count(), before + 1, "First projection must run");
+
+        let _sh2 = project(&e);
+        assert_eq!(sh_projection_count(), before + 1, "Second projection must hit cache");
+
+        // Different key
+        let mut e2 = e.clone();
+        e2.key = 8888;
+        let _sh3 = project(&e2);
+        assert_eq!(sh_projection_count(), before + 2, "Different key must project");
     }
 }
