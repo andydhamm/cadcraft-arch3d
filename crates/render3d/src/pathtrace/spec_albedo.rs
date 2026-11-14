@@ -193,7 +193,7 @@ pub fn spec_albedo_wgsl() -> String {
     let n = SPEC_E_N;
     let k = SPEC_E_N * SPEC_E_N;
     format!(
-        "const BSDF_E_N: u32 = {n}u;\nconst BSDF_E_K: u32 = {k}u;\nvar<private> bsdf_e_a: array<f32, {k}> = array<f32, {k}>({a_vals});\nvar<private> bsdf_e_b: array<f32, {k}> = array<f32, {k}>({b_vals});\n"
+        "const BSDF_E_N: u32 = {n}u;\nconst BSDF_E_K: u32 = {k}u;\nconst bsdf_e_a: array<f32, {k}> = array<f32, {k}>({a_vals});\nconst bsdf_e_b: array<f32, {k}> = array<f32, {k}>({b_vals});\n"
     )
 }
 

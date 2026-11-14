@@ -17,7 +17,8 @@ pub const RQ_TRAVERSE_WGSL: &str = include_str!("../shaders/pt/traverse_rq.wgsl"
 
 /// The kernel module's source.
 pub fn kernel_source() -> String {
-    [COMMON_WGSL, TRAVERSE_WGSL, BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
+    let spec = super::spec_albedo::spec_albedo_wgsl();
+    [COMMON_WGSL, TRAVERSE_WGSL, spec.as_str(), BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
 }
 
 /// The ray-query kernel module's source: same modules as [`kernel_source`] but the ray-query
@@ -26,9 +27,10 @@ pub fn kernel_source() -> String {
 /// WGSL directives (`enable wgpu_ray_query;`) must open a module, before every declaration, so the
 /// traversal's directive lines move to the top and the rest of it keeps its place after common.wgsl.
 pub fn rq_kernel_source() -> String {
+    let spec = super::spec_albedo::spec_albedo_wgsl();
     let (directives, traversal): (Vec<&str>, Vec<&str>) = RQ_TRAVERSE_WGSL.lines().partition(|l| l.trim_start().starts_with("enable "));
     let traversal = traversal.join("\n");
-    [directives.join("\n").as_str(), COMMON_WGSL, traversal.as_str(), BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
+    [directives.join("\n").as_str(), COMMON_WGSL, traversal.as_str(), spec.as_str(), BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
 }
 
 /// Every compute pipeline and the layouts their bind groups follow.
