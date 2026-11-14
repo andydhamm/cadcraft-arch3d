@@ -144,6 +144,16 @@ impl ViewFilter {
         h
     }
 
+    /// Whether `mesh` is hidden by the cutaway filter.
+    ///
+    /// A mesh is hidden only if its `ObjectKind` (derived from its material/part) and its `ArchId`
+    /// are present in the `hidden` set. This prevents hiding a room's floor/ceiling (kind `Room`)
+    /// when a wall with the same `ArchId` is hidden.
+    fn hides(&self, mesh: &Mesh) -> bool {
+        let kind = crate::incremental::object_kind_of(mesh);
+        if let Some((label, _)) = PART_OF.iter().find(|(_, k)| *k == kind) { self.hidden.contains(&(*label, mesh.object)) } else { false }
+    }
+
     /// Drop the meshes (and furnishing/electrical boxes) of hidden objects and, for an overview,
     /// of the levels it leaves out; keep `scene.horizon`, the site and everything else.
     pub fn apply(&self, scene: &Scene3d) -> Scene3d {
@@ -161,10 +171,9 @@ impl ViewFilter {
         if self.hidden.is_empty() {
             return s;
         }
-        let hidden: BTreeSet<ArchId> = self.hidden.iter().map(|(_, id)| *id).collect();
-        s.meshes.retain(|m| !hidden.contains(&m.object));
-        s.furnishing_boxes.retain(|b| !hidden.contains(&b.id));
-        s.electrical_boxes.retain(|b| !hidden.contains(&b.id));
+        s.meshes.retain(|m| !self.hides(m));
+        s.furnishing_boxes.retain(|b| !self.hidden.contains(&("furnishing", b.id)));
+        s.electrical_boxes.retain(|b| !self.hidden.contains(&("electrical", b.id)));
         s
     }
 
@@ -467,5 +476,71 @@ mod tests {
         assert_eq!(ids(&base.clone().with_overview(&model, 1, false)), vec![4, 5], "level 1 alone");
         assert_ne!(base.clone().with_overview(&model, 1, true).key(), base.clone().with_overview(&model, 1, false).key());
         assert_eq!(base.key(), 0);
+    }
+
+    #[test]
+    fn hidden_wall_keeps_the_room_with_the_same_id() {
+        use crate::mesh::Mesh;
+
+        let mut wall0 = Mesh::new("wall", ArchId(0));
+        wall0.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        wall0.indices = vec![0, 1, 2];
+
+        let mut ceiling0 = Mesh::new("ceiling", ArchId(0));
+        ceiling0.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        ceiling0.indices = vec![0, 1, 2];
+
+        let mut floor0 = Mesh::new("floor", ArchId(0));
+        floor0.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        floor0.indices = vec![0, 1, 2];
+
+        let mut wall1 = Mesh::new("wall", ArchId(1));
+        wall1.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        wall1.indices = vec![0, 1, 2];
+
+        let scene = Scene3d { meshes: vec![wall0, ceiling0, floor0, wall1], ..Scene3d::default() };
+
+        let mut hidden = Hidden::default();
+        hidden.insert(("wall", ArchId(0)));
+
+        let filter = ViewFilter { hidden, ..ViewFilter::default() };
+
+        let filtered = filter.apply(&scene);
+
+        assert_eq!(filtered.meshes.len(), 3);
+        assert!(!filtered.meshes.iter().any(|m| m.material == "wall" && m.object == ArchId(0)));
+        assert!(filtered.meshes.iter().any(|m| m.material == "ceiling" && m.object == ArchId(0)));
+        assert!(filtered.meshes.iter().any(|m| m.material == "floor" && m.object == ArchId(0)));
+        assert!(filtered.meshes.iter().any(|m| m.material == "wall" && m.object == ArchId(1)));
+    }
+
+    #[test]
+    fn hidden_opening_keeps_the_wall_with_the_same_id() {
+        use crate::incremental::ObjectKind;
+        use crate::incremental::object_kind_of;
+        use crate::mesh::Mesh;
+
+        let mut wall2 = Mesh::new("wall", ArchId(2));
+        wall2.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        wall2.indices = vec![0, 1, 2];
+
+        let mut opening2 = Mesh::new("frame", ArchId(2));
+        opening2.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        opening2.indices = vec![0, 1, 2];
+
+        assert_eq!(object_kind_of(&opening2), ObjectKind::Opening);
+
+        let scene = Scene3d { meshes: vec![wall2, opening2], ..Scene3d::default() };
+
+        let mut hidden = Hidden::default();
+        hidden.insert(("opening", ArchId(2)));
+
+        let filter = ViewFilter { hidden, ..ViewFilter::default() };
+
+        let filtered = filter.apply(&scene);
+
+        assert_eq!(filtered.meshes.len(), 1);
+        assert_eq!(filtered.meshes[0].material, "wall");
+        assert_eq!(filtered.meshes[0].object, ArchId(2));
     }
 }
