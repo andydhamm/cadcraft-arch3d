@@ -462,6 +462,23 @@ mod tests {
     }
 
     #[test]
+    fn obj_furnishing_non_finite_values_become_zero() {
+        let mut s = Scene3d::default();
+        s.meshes = vec![Mesh {
+            positions: vec![[f32::NAN, f32::INFINITY, f32::NEG_INFINITY], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            material: "test".into(),
+            object: ArchId(0),
+            level_elevation: 0.0,
+            ..Mesh::default()
+        }];
+        let obj = write_obj(&s, "x.mtl");
+        assert!(obj.contains("v 0 0 0"), "non-finite values become 0: {obj}");
+    }
+
+    #[test]
     fn obj_groups_interleaved_stair_parts() {
         let scene = Scene3d {
             meshes: vec![mesh("stair-tread", 0, true), mesh("stair-tread", 1, true), mesh("stair-riser", 0, true), mesh("stair-riser", 1, true)],

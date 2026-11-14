@@ -125,6 +125,20 @@ pub fn check_connection(model: &ArchModel, from: ArchId, to: &[ArchId], bulge: f
     if bulge.is_finite() && (-1.0..=1.0).contains(&bulge) { Ok(()) } else { Err("bulge must be a finite number in -1..=1".to_string()) }
 }
 
+/// Quadratic Bézier for one coordinate, NaN-aware: returns the exact endpoint at
+/// `t = 0` or `t = 1` (so a finite endpoint survives when the other is NaN), and
+/// for `0 < t < 1` uses the standard formula so NaN propagates naturally.
+fn nan_quad(a: f64, c: f64, b: f64, t: f64) -> f64 {
+    if t == 0.0 {
+        return a;
+    }
+    if t == 1.0 {
+        return b;
+    }
+    let u = 1.0 - t;
+    a * (u * u) + c * (2.0 * u * t) + b * (t * t)
+}
+
 /// A quadratic Bézier arc from `a` to `b` with sagitta `bulge * half_chord` to the
 /// LEFT of a→b. 17 points (16 segments), `t = i / 16`. Returns `[a, b]` when the arc
 /// is degenerate: non-finite `bulge`, `|bulge| < 1e-12`, or `a` ≈ `b`.
@@ -138,8 +152,9 @@ pub fn bulged_polyline(a: Vec2, b: Vec2, bulge: f64) -> Vec<Vec2> {
     (0..=16)
         .map(|i| {
             let t = i as f64 / 16.0;
-            let u = 1.0 - t;
-            a * (u * u) + control * (2.0 * u * t) + b * (t * t)
+            let x = nan_quad(a.x, control.x, b.x, t);
+            let y = nan_quad(a.y, control.y, b.y, t);
+            Vec2::new(x, y)
         })
         .collect()
 }
@@ -572,5 +587,76 @@ mod tests {
 
         let cs = circuits(&m);
         assert!(cs.is_empty());
+    }
+
+    #[test]
+    fn bulged_polyline_with_nan_coordinates() {
+        let a = Vec2::new(f64::NAN, 0.0);
+        let b = Vec2::new(1.0, 0.0);
+        let pts = bulged_polyline(a, b, 0.5);
+        // Should not panic; returns 17 points. Endpoints are exact, middle points have NaN x.
+        assert_eq!(pts.len(), 17);
+        assert!(pts[0].x.is_nan());
+        assert!(pts[8].x.is_nan());
+        assert!((pts[16].x - 1.0).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn bulged_polyline_with_very_small_bulge() {
+        let a = Vec2::new(0.0, 0.0);
+        let b = Vec2::new(1.0, 0.0);
+        let pts = bulged_polyline(a, b, 1e-13);
+        assert_eq!(pts.len(), 2);
+        assert_eq!(pts[0], a);
+        assert_eq!(pts[1], b);
+    }
+
+    #[test]
+    fn check_connection_with_boundary_bulge() {
+        let (m, sw) = fixture();
+        assert!(check_connection(&m, sw, &[ArchId(0)], -1.0).is_ok());
+        assert!(check_connection(&m, sw, &[ArchId(0)], 1.0).is_ok());
+        assert!(check_connection(&m, sw, &[ArchId(0)], -1.1).is_err());
+        assert!(check_connection(&m, sw, &[ArchId(0)], 1.1).is_err());
+    }
+
+    #[test]
+    fn connection_arcs_with_coincident_switch_and_light() {
+        let (mut m, sw) = fixture();
+        // Move light 0 to the same position as the switch plate.
+        m.lights[0].position = Vec2::new(1.0, 0.1);
+        let c = Connection { from: sw, to: vec![ArchId(0)], bulge: 0.5, ..Default::default() };
+        let arcs = connection_arcs(&m, &c);
+        assert_eq!(arcs.len(), 1);
+        assert_eq!(arcs[0].len(), 2); // coincident -> degenerate
+    }
+
+    #[test]
+    fn device_plan_and_light_plan_with_missing_objects() {
+        let (m, _sw) = fixture();
+        assert!(device_plan(&m, ArchId(999)).is_none());
+        assert!(light_plan(&m, ArchId(999)).is_none());
+    }
+
+    #[test]
+    fn circuits_with_non_switch_connection() {
+        let (mut m, _sw) = fixture();
+        let outlet = m.push_electrical(ElectricalDevice {
+            wall: m.walls[0].id,
+            kind: ElectricalKind::Duplex,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 0.3,
+            ..Default::default()
+        });
+        m.push_connection(Connection { from: outlet, to: vec![ArchId(0)], ..Default::default() });
+        let cs = circuits(&m);
+        assert!(cs.is_empty());
+    }
+
+    #[test]
+    fn check_connection_with_missing_switch() {
+        let (m, _sw) = fixture();
+        assert!(check_connection(&m, ArchId(999), &[ArchId(0)], 0.0).is_err());
     }
 }

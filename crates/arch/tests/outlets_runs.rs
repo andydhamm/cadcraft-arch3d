@@ -63,3 +63,49 @@ fn unknown_room_and_hostile_walls() {
     m.push_wall(Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(1.0, 1.0), thickness: f64::NAN, ..Default::default() });
     let _ = usable_runs(&m, room_id(&m));
 }
+
+#[test]
+fn a_zero_length_wall_is_skipped() {
+    let mut m = room64();
+    m.push_wall(Wall { start: Vec2::new(3.0, 2.0), end: Vec2::new(3.0, 2.0), thickness: 0.2, ..Default::default() });
+    let runs = usable_runs(&m, room_id(&m));
+    for r in &runs {
+        assert!(r.length > 0.0);
+    }
+}
+
+#[test]
+fn two_doors_create_multiple_runs() {
+    let mut m = room64();
+    add(&mut m, ArchId(0), 1.5, 0.9, OpeningKind::Door, 0.0);
+    add(&mut m, ArchId(0), 4.5, 0.9, OpeningKind::Door, 0.0);
+    let runs = usable_runs(&m, room_id(&m));
+    let bottom_runs: Vec<_> = runs.iter().filter(|r| r.wall_spans.iter().any(|s| s.0 == ArchId(0))).collect();
+    assert!(bottom_runs.len() >= 3, "two doors should create at least 3 runs: {}", bottom_runs.len());
+}
+
+#[test]
+fn a_door_at_the_wall_edge() {
+    let mut m = room64();
+    add(&mut m, ArchId(0), 0.0, 0.9, OpeningKind::Door, 0.0);
+    let runs = usable_runs(&m, room_id(&m));
+    for r in &runs {
+        assert!(r.length > 0.0);
+    }
+}
+
+#[test]
+fn a_door_larger_than_the_wall() {
+    let mut m = room64();
+    add(&mut m, ArchId(0), 3.0, 10.0, OpeningKind::Door, 0.0);
+    let runs = usable_runs(&m, room_id(&m));
+    let has_wall0 = runs.iter().any(|r| r.wall_spans.iter().any(|s| s.0 == ArchId(0)));
+    assert!(!has_wall0, "oversized door should eliminate all usable wall on wall 0");
+}
+
+#[test]
+fn a_room_with_no_openings_has_one_run() {
+    let m = room64();
+    let runs = usable_runs(&m, room_id(&m));
+    assert_eq!(runs.len(), 1, "a closed room with no openings should have one continuous run");
+}

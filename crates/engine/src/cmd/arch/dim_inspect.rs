@@ -111,6 +111,101 @@ pub(crate) fn inspect_dimensions(d: &Drawing, p: &Value, out: &mut JsonMap<Strin
     out.insert("dimensions".to_string(), Value::Array(rows));
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Session;
+    use serde_json::json;
+
+    fn exec(s: &mut Session, id: &str, params: &Value) -> Value {
+        let r = s.execute(id, params);
+        assert!(r.is_ok(), "command `{id}` failed: {r:?}");
+        match r {
+            Ok(v) => v,
+            Err(_) => json!(null),
+        }
+    }
+
+    #[test]
+    fn inspect_dimensions_empty_list() {
+        let mut s = Session::new();
+        let v = exec(&mut s, "arch.inspect", &json!({ "dimensions": true }));
+        let dims = v["dimensions"].as_array().expect("dimensions array missing");
+        assert_eq!(dims.len(), 0, "expected empty dimensions array");
+    }
+
+    #[test]
+    fn inspect_dimensions_zero_length() {
+        let mut s = Session::new();
+        exec(&mut s, "dimlinear", &json!({ "p1": [1.0, 1.0], "p2": [1.0, 1.0], "at": [2.0, 2.0] }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "dimensions": true }));
+        let dims = v["dimensions"].as_array().expect("dimensions array missing");
+        assert_eq!(dims.len(), 1);
+        let m = dims[0]["measurement"].as_f64().expect("measurement must be a number");
+        assert!((m - 0.0).abs() < 1e-9, "zero-length dimension should measure 0.0, got {m}");
+    }
+
+    #[test]
+    fn inspect_dimensions_multiple_in_order() {
+        let mut s = Session::new();
+        exec(&mut s, "dimlinear", &json!({ "p1": [0.0, 0.0], "p2": [1.0, 0.0], "at": [0.5, 1.0] }));
+        exec(&mut s, "dimlinear", &json!({ "p1": [0.0, 0.0], "p2": [2.0, 0.0], "at": [1.0, 2.0] }));
+        exec(&mut s, "dimlinear", &json!({ "p1": [0.0, 0.0], "p2": [3.0, 0.0], "at": [1.5, 3.0] }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "dimensions": true }));
+        let dims = v["dimensions"].as_array().expect("dimensions array missing");
+        assert_eq!(dims.len(), 3);
+        let m0 = dims[0]["measurement"].as_f64().expect("m0");
+        let m1 = dims[1]["measurement"].as_f64().expect("m1");
+        let m2 = dims[2]["measurement"].as_f64().expect("m2");
+        assert!((m0 - 1.0).abs() < 1e-9, "first dimension should measure 1.0, got {m0}");
+        assert!((m1 - 2.0).abs() < 1e-9, "second dimension should measure 2.0, got {m1}");
+        assert!((m2 - 3.0).abs() < 1e-9, "third dimension should measure 3.0, got {m2}");
+    }
+
+    #[test]
+    fn inspect_dimensions_read_only() {
+        let mut s = Session::new();
+        exec(&mut s, "dimlinear", &json!({ "p1": [0.0, 0.0], "p2": [1.0, 0.0], "at": [0.5, 1.0] }));
+        let before = s.doc().map(|d| d.arch_revision).unwrap_or(0);
+        exec(&mut s, "arch.inspect", &json!({ "dimensions": true }));
+        let after = s.doc().map(|d| d.arch_revision).unwrap_or(0);
+        assert_eq!(before, after, "arch.inspect must not bump arch_revision");
+    }
+
+    #[test]
+    fn inspect_auto_dims_empty() {
+        let mut s = Session::new();
+        let v = exec(&mut s, "arch.inspect", &json!({ "autoDims": true }));
+        let rows = v["autoDims"].as_array().expect("autoDims array missing");
+        assert_eq!(rows.len(), 0, "expected empty autoDims array");
+    }
+
+    #[test]
+    fn inspect_dimensions_huge_coords() {
+        let mut s = Session::new();
+        exec(&mut s, "dimlinear", &json!({ "p1": [1e9, 0.0], "p2": [2e9, 0.0], "at": [1.5e9, 1.0] }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "dimensions": true }));
+        let dims = v["dimensions"].as_array().expect("dimensions array missing");
+        assert_eq!(dims.len(), 1);
+        let m = dims[0]["measurement"].as_f64().expect("measurement");
+        assert!((m - 1e9).abs() < 1e-3, "measurement should be 1e9, got {m}");
+        assert_eq!(dims[0]["p1"][0], 1e9);
+        assert_eq!(dims[0]["p2"][0], 2e9);
+    }
+
+    #[test]
+    fn inspect_dimensions_collinear_points() {
+        let mut s = Session::new();
+        // p1, p2, and at all on the same horizontal line
+        exec(&mut s, "dimlinear", &json!({ "p1": [0.0, 0.0], "p2": [4.0, 0.0], "at": [2.0, 0.0] }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "dimensions": true }));
+        let dims = v["dimensions"].as_array().expect("dimensions array missing");
+        assert_eq!(dims.len(), 1);
+        let m = dims[0]["measurement"].as_f64().expect("measurement");
+        assert!((m - 4.0).abs() < 1e-9, "collinear dimension should measure 4.0, got {m}");
+    }
+}
+
 pub(crate) fn inspect_auto_dims(d: &Drawing, p: &Value, out: &mut JsonMap<String, Value>) {
     let mut rows = Vec::new();
     for rec in &d.arch.auto_dims {

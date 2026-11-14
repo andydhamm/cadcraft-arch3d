@@ -441,4 +441,158 @@ mod tests {
         // Night sky bake should be similar in cost to day sky bake (same number of texels)
         assert!(duration < std::time::Duration::from_secs(5), "Night sky bake took {duration:?}");
     }
+
+    #[test]
+    fn bake_sky_is_deterministic() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let a = bake_sky([0.3, 0.2, 0.7], 3.5, true, true);
+        let b = bake_sky([0.3, 0.2, 0.7], 3.5, true, true);
+        assert_eq!(a.rgb, b.rgb, "same inputs must produce identical texels");
+        assert_eq!(a.key, b.key, "same inputs must produce identical keys");
+        assert_eq!(a.width, b.width);
+        assert_eq!(a.height, b.height);
+    }
+
+    #[test]
+    fn environment_radiance_normalizes_non_unit_direction() {
+        let e = Environment::uniform([1.0, 2.0, 3.0], 8, 4);
+        let r1 = e.radiance([0.0, 0.0, 1.0]);
+        let r2 = e.radiance([0.0, 0.0, 5.0]);
+        let r3 = e.radiance([0.0, 0.0, 0.001]);
+        assert_eq!(r1, r2, "non-unit direction must be normalized");
+        assert_eq!(r1, r3, "tiny direction must be normalized");
+        // Zero direction gives zero radiance
+        assert_eq!(e.radiance([0.0, 0.0, 0.0]), [0.0; 3]);
+    }
+
+    #[test]
+    fn sky_cache_evicts_oldest_entries() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        let model = ArchModel::default();
+        let look = sky_look(3.0, false);
+        let before = sky_bake_count();
+
+        // Create 25 different sun positions (more than the cache size of 24)
+        for i in 0..25 {
+            let sun = Some([i as f64 * 0.01, 0.2, 0.7]);
+            sky_environment(&model, &look, sun).unwrap();
+        }
+        assert_eq!(sky_bake_count(), before + 25, "all 25 must have baked");
+
+        // The first sun was evicted; requesting it again must re-bake
+        let first_sun = Some([0.0, 0.2, 0.7]);
+        sky_environment(&model, &look, first_sun).unwrap();
+        assert_eq!(sky_bake_count(), before + 26, "evicted entry must re-bake");
+    }
+
+    #[test]
+    fn environment_is_valid_rejects_bad_maps() {
+        // Zero width
+        let mut e = Environment::default();
+        e.width = 0;
+        e.height = 4;
+        e.rgb = vec![];
+        assert!(!e.is_valid(), "zero width must be invalid");
+
+        // Zero height
+        e = Environment::default();
+        e.width = 4;
+        e.height = 0;
+        e.rgb = vec![];
+        assert!(!e.is_valid(), "zero height must be invalid");
+
+        // Wrong pixel count (too few)
+        e = Environment::default();
+        e.width = 4;
+        e.height = 4;
+        e.rgb = vec![[1.0, 1.0, 1.0]; 15];
+        assert!(!e.is_valid(), "wrong pixel count must be invalid");
+
+        // Wrong pixel count (too many)
+        e.rgb = vec![[1.0, 1.0, 1.0]; 17];
+        assert!(!e.is_valid(), "too many pixels must be invalid");
+
+        // Negative radiance
+        e = Environment::default();
+        e.width = 2;
+        e.height = 2;
+        e.rgb = vec![[1.0, -1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]];
+        assert!(!e.is_valid(), "negative radiance must be invalid");
+
+        // NaN radiance
+        e = Environment::default();
+        e.width = 2;
+        e.height = 2;
+        e.rgb = vec![[f32::NAN, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]];
+        assert!(!e.is_valid(), "NaN radiance must be invalid");
+
+        // Infinity radiance
+        e = Environment::default();
+        e.width = 2;
+        e.height = 2;
+        e.rgb = vec![[f32::INFINITY, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]];
+        assert!(!e.is_valid(), "infinite radiance must be invalid");
+
+        // Negative intensity
+        e = Environment::uniform([1.0; 3], 2, 2);
+        e.intensity = -1.0;
+        assert!(!e.is_valid(), "negative intensity must be invalid");
+
+        // NaN rotation
+        e = Environment::uniform([1.0; 3], 2, 2);
+        e.rotation_deg = f32::NAN;
+        assert!(!e.is_valid(), "NaN rotation must be invalid");
+    }
+
+    #[test]
+    fn bake_sky_night_has_stars_when_requested() {
+        let sun = [0.0, 0.0, -0.5]; // Night
+        let no_stars = bake_sky(sun, 3.0, false, true);
+        let with_stars = bake_sky(sun, 3.0, true, true);
+
+        // Count texels with any brightness above the night sky floor
+        let count_bright = |env: &Environment| -> usize { env.rgb.iter().filter(|c| c[0] > 0.005 || c[1] > 0.005 || c[2] > 0.005).count() };
+
+        let bright_no_stars = count_bright(&no_stars);
+        let bright_with_stars = count_bright(&with_stars);
+        assert!(bright_with_stars > bright_no_stars, "stars must add bright texels: no_stars={bright_no_stars} with_stars={bright_with_stars}");
+    }
+
+    #[test]
+    fn environment_key_changes_with_content() {
+        let mut e = Environment::uniform([1.0, 2.0, 3.0], 4, 4);
+        let k1 = e.key;
+
+        // Change one texel
+        e.rgb[5] = [4.0, 5.0, 6.0];
+        let k2 = e.compute_key();
+        assert_ne!(k1, k2, "changing a texel must change the key");
+
+        // Change intensity
+        e.intensity = 2.0;
+        let k3 = e.compute_key();
+        assert_ne!(k2, k3, "changing intensity must change the key");
+
+        // Change rotation
+        e.rotation_deg = 45.0;
+        let k4 = e.compute_key();
+        assert_ne!(k3, k4, "changing rotation must change the key");
+    }
+
+    #[test]
+    fn sky_environment_same_sun_returns_identical_key() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        let model = ArchModel::default();
+        let look = sky_look(4.0, false);
+        let sun = Some([0.1, -0.3, 0.5]);
+
+        let a = sky_environment(&model, &look, sun).unwrap();
+        let b = sky_environment(&model, &look, sun).unwrap();
+        assert_eq!(a.key, b.key, "cached and fresh must have same key");
+        assert_eq!(a.rgb.len(), b.rgb.len());
+    }
 }
