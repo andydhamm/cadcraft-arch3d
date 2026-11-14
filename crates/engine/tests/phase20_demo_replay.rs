@@ -575,7 +575,7 @@ fn phase20_demo_script_is_valid_json_array() {
     for (i, step) in arr.iter().enumerate() {
         assert!(step.is_object(), "step {} is not an object", i);
         let cmd = step.get("cmd").and_then(|v| v.as_str());
-        assert!(cmd.is_some() && !cmd.is_empty(), "step {} has no cmd", i);
+        assert!(cmd.is_some() && !cmd.unwrap().is_empty(), "step {} has no cmd", i);
     }
 }
 
@@ -589,7 +589,7 @@ fn phase20_showcase_script_is_valid_json_array() {
     for (i, step) in arr.iter().enumerate() {
         assert!(step.is_object(), "step {} is not an object", i);
         let cmd = step.get("cmd").and_then(|v| v.as_str());
-        assert!(cmd.is_some() && !cmd.is_empty(), "step {} has no cmd", i);
+        assert!(cmd.is_some() && !cmd.unwrap().is_empty(), "step {} has no cmd", i);
     }
 }
 
