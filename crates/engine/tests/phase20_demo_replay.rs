@@ -602,6 +602,55 @@ fn phase20_demo_script_step_params_are_objects() {
 }
 
 #[test]
+fn phase20_demo_bedroom_ceiling_stack_has_three_layers() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let rooms = rooms_of(&reply);
+    let bedroom = find_row(&rooms, "name", "Bedroom");
+    let stack = bedroom.get("ceilingStack").and_then(|v| v.as_array()).unwrap_or_else(|| panic!("Bedroom has no ceilingStack"));
+    assert_eq!(stack.len(), 3, "Bedroom ceilingStack has {} layers, expected 3", stack.len());
+    let thicknesses: Vec<f64> = stack.iter().filter_map(|l| l.get("thickness").and_then(|v| v.as_f64())).collect();
+    assert_eq!(thicknesses.len(), 3, "expected 3 thickness values");
+    assert!((thicknesses[0] - 0.0127).abs() <= 0.0001, "first layer thickness is {}, expected 0.0127", thicknesses[0]);
+    assert!((thicknesses[1] - 0.2).abs() <= 0.0001, "second layer thickness is {}, expected 0.2", thicknesses[1]);
+    assert!((thicknesses[2] - 0.016).abs() <= 0.0001, "third layer thickness is {}, expected 0.016", thicknesses[2]);
+}
+
+#[test]
+fn phase20_demo_level_2_floor_plan_has_reference_lines() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let plan = plan_of_view(&mut session, "Level 2 Floor Plan");
+    let lines = plan.get("lines").and_then(|v| v.as_array()).unwrap_or_default();
+    let has_reference =
+        lines.iter().any(|l| strd(l, "color", "").eq_ignore_ascii_case("#b4b4b4") || strd(l, "kind", "").eq_ignore_ascii_case("reference"));
+    assert!(has_reference, "Level 2 Floor Plan has no reference lines (expected #b4b4b4 or kind=reference)");
+}
+
+#[test]
+fn phase20_demo_wall_thicknesses_are_correct() {
+    let steps = steps_of(&demo_script_path());
+    let wall_steps: Vec<&ScriptStep> = steps.iter().filter(|s| s.cmd == "wall").collect();
+    assert!(wall_steps.len() >= 4, "expected at least 4 wall steps, found {}", wall_steps.len());
+
+    let exterior = wall_steps[0].params.get("thickness").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+    assert!((exterior - 0.2).abs() <= 0.001, "exterior wall thickness is {}, expected 0.2", exterior);
+
+    let interior1 = wall_steps[1].params.get("thickness").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+    assert!((interior1 - 0.1).abs() <= 0.001, "interior wall thickness is {}, expected 0.1", interior1);
+
+    let interior2 = wall_steps[2].params.get("thickness").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+    assert!((interior2 - 0.1).abs() <= 0.001, "interior wall thickness is {}, expected 0.1", interior2);
+}
+
+#[test]
 fn phase20_demo_tray_is_in_a_level_2_room() {
     install_io();
     let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
