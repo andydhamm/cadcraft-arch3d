@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-14 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 15:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 42 of 44 segments merged · 19 of 20 acceptance checks**
 
@@ -28,18 +28,18 @@ Updated 2026-11-14 14:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 81.3 h so far · expected done Nov 15 00:21–Dec 01 02:12 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 81.5 h so far · expected done Nov 15 00:36–Dec 01 02:27 UTC |
 | 19 | Light, sky and cameras | building | 11 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
 ## Phase 18 segments
 
-42 merged, 1 replaced, 1 abandoned, 1 working, 1 queued
+42 merged, 1 replaced, 1 abandoned, 1 escalate, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p18h-showcase-kitchen` | Showcase house: append the phase-18 kitchen casework, repaint new surfaces, keep outlets valid | working | mai-flash-esc |
+| `p18h-showcase-kitchen` | Showcase house: append the phase-18 kitchen casework, repaint new surfaces, keep outlets valid | escalate |  |
 
 ## Recent merges
 
@@ -64,16 +64,16 @@ Updated 2026-11-14 14:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1300 |
 | bonsai-b | bonsai2-27b | idle | 1241 |
-| bonsai-ws2-a | bonsai2-27b | idle | 1369 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1369 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1336 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | idle | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1189 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1190 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 120 |
 | mai-flash-b | mai-code-1.1-flash | idle | 73 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 137 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 138 |
 | tturbo-mac | tturbo-ultraheretic | agent | 890 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 557 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 558 |
