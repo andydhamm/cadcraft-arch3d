@@ -229,9 +229,6 @@ mod tests {
 
     #[test]
     fn no_renderer_is_a_clear_error() {
-        if render_hooks().is_some() {
-            return;
-        }
         let mut s = Session::new();
         s.new_drawing(true);
         let d = s.doc_mut().unwrap();
@@ -248,6 +245,9 @@ mod tests {
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
+        if render_hooks().is_some() {
+            return;
+        }
         let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
         assert!(err.contains("desktop app or cadcraft-cli's renderer"), "{err}");
     }
