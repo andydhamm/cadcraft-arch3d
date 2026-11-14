@@ -133,13 +133,13 @@ impl ViewFilter {
             h = combine(h, id.0 as u64);
         }
         if let Some(c) = &self.clip {
-            let vals = [c.min.x as i64, c.min.y as i64, c.min.z as i64, c.max.x as i64, c.max.y as i64, c.max.z as i64];
+            let vals = [c.min.x, c.min.y, c.min.z, c.max.x, c.max.y, c.max.z];
             for &v in &vals {
-                h = combine(h, (v.wrapping_mul(-1)) as u64);
+                h = combine(h, v.to_bits());
             }
         }
         if let Some(n) = self.near {
-            h = combine(h, (n as i64) as u64);
+            h = combine(h, n.to_bits());
         }
         h
     }
@@ -285,7 +285,12 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
         (true, false) => outer_is_a = false,
         (false, true) => outer_is_a = true,
         (false, false) => {
-            outer_is_a = side_a.dist(*outer_centroid) >= side_b.dist(*outer_centroid);
+            let dist_a = side_a.dist(*outer_centroid);
+            let dist_b = side_b.dist(*outer_centroid);
+            if (dist_a - dist_b).abs() < 1e-9 {
+                return true;
+            }
+            outer_is_a = dist_a >= dist_b;
         }
     }
 
@@ -512,6 +517,109 @@ mod tests {
         assert!(filtered.meshes.iter().any(|m| m.material == "ceiling" && m.object == ArchId(0)));
         assert!(filtered.meshes.iter().any(|m| m.material == "floor" && m.object == ArchId(0)));
         assert!(filtered.meshes.iter().any(|m| m.material == "wall" && m.object == ArchId(1)));
+    }
+
+    #[test]
+    fn key_near_precision() {
+        let base = ViewFilter::default();
+        let f1 = ViewFilter { near: Some(1.1), ..base.clone() };
+        let f2 = ViewFilter { near: Some(1.9), ..base.clone() };
+        assert_ne!(f1.key(), f2.key(), "different near values must produce different keys");
+    }
+
+    #[test]
+    fn key_clip_precision() {
+        let base = ViewFilter::default();
+        let f1 = ViewFilter { clip: Some(ClipBox { min: Vec3::new(0.0, 0.0, 0.0), max: Vec3::new(1.1, 1.0, 1.0) }), ..base.clone() };
+        let f2 = ViewFilter { clip: Some(ClipBox { min: Vec3::new(0.0, 0.0, 0.0), max: Vec3::new(1.9, 1.0, 1.0) }), ..base.clone() };
+        assert_ne!(f1.key(), f2.key(), "different clip values must produce different keys");
+    }
+
+    #[test]
+    fn cutaway_spanning_wall_hidden_at_both_levels() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: Some(1),
+            ..Wall::default()
+        };
+        let room = room([[0.1, 0.1], [3.9, 0.1], [3.9, 3.9], [0.1, 3.9]]);
+        let model = ArchModel {
+            walls: vec![wall],
+            rooms: vec![room],
+            levels: vec![
+                cadcraft_doc::arch::Level { index: 0, name: "Ground".into(), elevation: 0.0, ..cadcraft_doc::arch::Level::default() },
+                cadcraft_doc::arch::Level { index: 1, name: "Upper".into(), elevation: 3.0, ..cadcraft_doc::arch::Level::default() },
+            ],
+            ..ArchModel::default()
+        };
+        let hidden0 = cutaway_hidden(&model, Vec3::new(2.0, -5.0, 1.0), 0);
+        let hidden1 = cutaway_hidden(&model, Vec3::new(2.0, -5.0, 4.0), 1);
+        assert!(hidden0.contains(&("wall", ArchId(1))), "wall should be hidden at level 0");
+        assert!(hidden1.contains(&("wall", ArchId(1))), "wall should be hidden at level 1");
+    }
+
+    #[test]
+    fn cutaway_zero_thickness_wall() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.0,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let model = ArchModel { walls: vec![wall], ..ArchModel::default() };
+        let hidden = cutaway_hidden(&model, Vec3::new(2.0, -5.0, 1.0), 0);
+        assert!(hidden.contains(&("wall", ArchId(1))), "zero-thickness wall should be hidden when facing");
+    }
+
+    #[test]
+    fn apply_levels_exact_elevation_kept() {
+        use crate::mesh::Mesh;
+        use cadcraft_doc::arch::Level;
+        let model = ArchModel {
+            levels: vec![
+                Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() },
+                Level { index: 1, name: "Upper".into(), elevation: 3.0, ..Level::default() },
+            ],
+            ..ArchModel::default()
+        };
+        let mesh = |material: &str, id: u32, e: f64| {
+            let mut m = Mesh::new(material, ArchId(id));
+            m.level_elevation = e;
+            m
+        };
+        let scene = Scene3d { meshes: vec![mesh("floor", 1, 0.0), mesh("wall", 2, 0.0)], ..Scene3d::default() };
+        let f0 = ViewFilter::default().with_overview(&model, 0, true);
+        let filtered0 = f0.apply(&scene);
+        assert_eq!(filtered0.meshes.len(), 2, "level 0 overview should keep meshes at elevation 0");
+
+        let f1 = ViewFilter::default().with_overview(&model, 1, false);
+        let filtered1 = f1.apply(&scene);
+        assert_eq!(filtered1.meshes.len(), 0, "level 1 overview without lower levels should drop elevation 0 meshes");
+    }
+
+    #[test]
+    fn accepts_clip_boundary() {
+        let f = ViewFilter {
+            hidden: Hidden::default(),
+            clip: Some(ClipBox { min: Vec3::new(-1.0, -1.0, -1.0), max: Vec3::new(1.0, 1.0, 1.0) }),
+            near: None,
+            eye: Vec3::new(0.0, 0.0, 0.0),
+            forward: Vec3::new(0.0, 0.0, 1.0),
+            levels: None,
+        };
+        assert!(f.accepts(Vec3::new(1.0, 0.0, 0.0)), "point on max-x boundary should be accepted");
+        assert!(f.accepts(Vec3::new(-1.0, 0.0, 0.0)), "point on min-x boundary should be accepted");
+        assert!(f.accepts(Vec3::new(0.0, 1.0, 0.0)), "point on max-y boundary should be accepted");
+        assert!(f.accepts(Vec3::new(0.0, 0.0, 1.0)), "point on max-z boundary should be accepted");
+        assert!(!f.accepts(Vec3::new(1.0001, 0.0, 0.0)), "point just outside max-x should be rejected");
+        assert!(!f.accepts(Vec3::new(-1.0001, 0.0, 0.0)), "point just outside min-x should be rejected");
     }
 
     #[test]

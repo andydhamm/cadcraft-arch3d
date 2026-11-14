@@ -747,3 +747,95 @@ fn down_strip_gives_nothing_above_itself() {
     let out = run(&gpu, &gpu_scene, GpuFrame::default(), &[sample_probe(0, Vec3::new(2.0, 2.0, 2.8), down(), 128)]);
     assert!(lux(out[0]) < 1e-6, "{} lx above a down strip", lux(out[0]));
 }
+
+#[test]
+fn strip_with_empty_path_produces_no_lights() {
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.0, 0.0, 2.0),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(Vec::new())),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    assert_eq!(scene.lights.len(), 0, "a strip with no samples produces no GPU lights");
+}
+
+#[test]
+fn strip_gpu_light_position_is_offset_along_normal() {
+    use cadcraft_arch3d::light::StripSample;
+    let samples = vec![
+        StripSample { position: Vec3::new(0.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(1.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+    ];
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.5, 0.0, 2.0),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    assert_eq!(scene.lights.len(), 1, "one run for two samples");
+    let l = &scene.lights[0];
+    // The position is offset 7 mm along the emitting normal (down), so z = 2.0 - 0.007.
+    assert!((l.position[2] - (2.0 - 0.007)).abs() < 1e-6, "z offset wrong: {}", l.position[2]);
+    // strip_runs extends the run by half the average spacing (0.5) on each end, so the run starts at x = -0.5.
+    assert!((l.position[0] - (-0.5)).abs() < 1e-6, "x should be at the run start (-0.5): {}", l.position[0]);
+}
+
+#[test]
+fn strip_with_zero_length_segment_is_skipped() {
+    use cadcraft_arch3d::light::StripSample;
+    let samples = vec![
+        StripSample { position: Vec3::new(0.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(0.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+    ];
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.0, 0.0, 2.0),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    assert_eq!(scene.lights.len(), 0, "a zero-length strip segment produces no GPU light");
+}
+
+#[test]
+fn strip_with_nan_sample_position_is_skipped() {
+    use cadcraft_arch3d::light::StripSample;
+    let samples = vec![
+        StripSample { position: Vec3::new(0.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(f64::NAN, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(1.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+    ];
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.5, 0.0, 2.0),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    for l in &scene.lights {
+        assert!(l.position.iter().all(|v| v.is_finite()), "NaN leaked into packed strip light: {:?}", l.position);
+    }
+}
+
+#[test]
+fn strip_close_to_surface_still_lights_it() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    // A strip only 10 cm above the floor: the 30 mm shadow limit must not eat the whole ray.
+    let strip = strip_light([1.0, 2.0], [3.0, 2.0], 0.1, 500.0, [1.0; 3]);
+    let scene = scene_of(&[strip]);
+    let probe = sample_probe(0, Vec3::new(2.0, 2.0, 0.0), up(), 1024);
+    let out = run(&gpu, &scene, GpuFrame::default(), &[probe]);
+    // The distance is 0.1 m, the shadow limit is 0.03 m, so the ray travels 0.07 m.
+    // It should still light the floor strongly.
+    assert!(lux(out[0]) > 100.0, "close strip should light strongly: {} lx", lux(out[0]));
+}

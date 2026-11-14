@@ -110,7 +110,7 @@ pub fn strip_runs(light: &SceneLight) -> Vec<StripRun> {
             let d = next.position - prev.position;
             let same =
                 (next.normal - first.normal).len() < 1e-6 && (next.intensity - first.intensity).abs() <= 1e-9 * first.intensity.abs().max(1e-30);
-            let joins = if count == 1 { d.len() <= STRIP_PIECE + 1e-9 && d.len() > 1e-9 } else { (d - step).len() < 1e-7 };
+            let joins = if count == 1 { d.len().is_finite() } else { (d - step).len() < 1e-7 };
             if !(same && joins) {
                 break;
             }

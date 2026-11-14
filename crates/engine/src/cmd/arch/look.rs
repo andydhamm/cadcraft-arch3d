@@ -52,6 +52,17 @@ fn compass_dir(model: &ArchModel, azimuth: f64, elevation: f64) -> Option<[f64; 
     Some(true_to_drawing(model.site.as_ref(), d))
 }
 
+/// Parse a render-time sun direction in the form `"azimuth,elevation"`.
+fn compass_angle(model: &ArchModel, s: &str) -> Option<[f64; 3]> {
+    let mut parts = s.split(',').map(str::trim);
+    let Some(azimuth) = parts.next().and_then(|p| p.parse::<f64>().ok()) else { return None };
+    let Some(elevation) = parts.next().and_then(|p| p.parse::<f64>().ok()) else { return None };
+    if parts.next().is_some() {
+        return None;
+    }
+    compass_dir(model, azimuth, elevation)
+}
+
 /// Toward-sun direction (drawing space) for a date and time at the drawing's site.
 fn clock_dir(model: &ArchModel, date: &str, time: &str) -> Option<[f64; 3]> {
     let site = model.site.as_ref()?;
@@ -75,7 +86,7 @@ pub fn effective_sun_dir(model: &ArchModel, look: &Look, explicit: Option<[f64; 
         return explicit;
     }
     let name = look.sun.angle.as_ref()?;
-    model.sun_angles.iter().find(|a| &a.name == name).and_then(|a| sun_angle_dir(model, a))
+    model.sun_angles.iter().find(|a| &a.name == name).and_then(|a| sun_angle_dir(model, a)).or_else(|| compass_angle(model, name))
 }
 
 /// The look a view uses: the camera's own, else the global one with the drawing's backdrop (and a
@@ -187,18 +198,24 @@ fn parse_sun(cmd: &str, model: &ArchModel, v: &Value, render: bool, look: &mut L
                     None
                 }
                 Some(Value::String(name)) => {
-                    if !model.sun_angles.iter().any(|a| &a.name == name) {
+                    let dir = model
+                        .sun_angles
+                        .iter()
+                        .find(|a| &a.name == name)
+                        .and_then(|a| sun_angle_dir(model, a))
+                        .or_else(|| compass_angle(model, name));
+                    if dir.is_none() {
                         return Err(bad(cmd, format!("no sun angle named `{name}`")));
                     }
                     look.sun.angle = Some(name.clone());
-                    Some(name)
+                    Some(dir)
                 }
                 Some(x) => return Err(parse_err(cmd, "sun.angle", x, "a sun angle name or null")),
             };
             let clock = o.contains_key("date") || o.contains_key("time");
             let compass = o.contains_key("azimuth") || o.contains_key("elevation");
             if !clock && !compass {
-                return Ok(None);
+                return Ok(if render { angle.flatten() } else { None });
             }
             if !render {
                 return Err(bad(

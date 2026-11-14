@@ -376,3 +376,115 @@ fn phase19_demo_renders_stay_small() {
     assert_eq!(look("overview")["technique"], "standard", "the overview camera must not inherit the path technique");
     assert_ne!(look("overview")["backdrop"]["kind"], "hdri", "the overview camera must not inherit the HDRI backdrop");
 }
+
+#[test]
+fn phase19_demo_has_expected_object_counts() {
+    let mut session = replay_demo();
+    let inspect = session
+        .execute(
+            "arch.inspect",
+            &json!({
+                "walls": true, "openings": true, "rooms": true,
+                "lights": true, "cabinets": true, "trays": true,
+                "cameras": true, "sunAngles": true
+            }),
+        )
+        .expect("arch.inspect should return model data");
+
+    let walls = inspect["walls"].as_array().expect("walls list");
+    let openings = inspect["openings"].as_array().expect("openings list");
+    let rooms = inspect["rooms"].as_array().expect("rooms list");
+    let lights = inspect["lights"].as_array().expect("lights list");
+    let cabinets = inspect["cabinets"].as_array().expect("cabinets list");
+    let trays = inspect["trays"].as_array().expect("trays list");
+    let cameras = inspect["cameras"].as_array().expect("cameras list");
+    let sun_angles = inspect["sunAngles"].as_array().expect("sunAngles list");
+
+    assert_eq!(walls.len(), 5, "expected 5 walls: {walls:?}");
+    assert_eq!(openings.len(), 5, "expected 5 openings (1 door + 4 windows): {openings:?}");
+    assert_eq!(rooms.len(), 2, "expected 2 rooms: {rooms:?}");
+    assert_eq!(lights.len(), 6, "expected 6 light fixtures: {lights:?}");
+    assert_eq!(cabinets.len(), 4, "expected 4 cabinets: {cabinets:?}");
+    assert_eq!(trays.len(), 1, "expected 1 tray: {trays:?}");
+    assert_eq!(cameras.len(), 3, "expected 3 cameras: {cameras:?}");
+    assert_eq!(sun_angles.len(), 2, "expected 2 sun angles: {sun_angles:?}");
+}
+
+#[test]
+fn phase19_demo_light_sets_cover_all_fixtures() {
+    let steps = load_demo_steps();
+    let mut fixture_ids = Vec::new();
+    let mut light_sets = std::collections::BTreeMap::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "lightfixture" {
+            fixture_ids.push(format!("lf{}", fixture_ids.len()));
+        }
+        if cmd == "lightset" {
+            if let Some(name) = step.get("params").and_then(|p| p.get("name")).and_then(Value::as_str) {
+                let lights = step["params"]["lights"].as_object().cloned().unwrap_or_default();
+                light_sets.insert(name.to_string(), lights);
+            }
+        }
+    }
+
+    assert_eq!(fixture_ids.len(), 6, "expected 6 light fixtures");
+    assert_eq!(light_sets.len(), 2, "expected 2 light sets");
+
+    for (name, lights) in &light_sets {
+        for fixture in &fixture_ids {
+            assert!(lights.contains_key(fixture), "light set {name} missing fixture {fixture}: {lights:?}");
+        }
+    }
+}
+
+#[test]
+fn phase19_demo_script_has_39_steps() {
+    let steps = load_demo_steps();
+    assert_eq!(steps.len(), 39, "demo script should have exactly 39 steps");
+}
+
+#[test]
+fn phase19_demo_terrain_contains_house() {
+    let steps = load_demo_steps();
+    let mut terrain_boundary = None;
+    let mut wall_points = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "terrain" {
+            terrain_boundary = step.get("params").and_then(|p| p.get("boundary")).and_then(Value::as_array);
+        }
+        if cmd == "wall" {
+            if let Some(points) = step.get("params").and_then(|p| p.get("points")).and_then(Value::as_array) {
+                for pt in points {
+                    if let (Some(x), Some(y)) = (pt[0].as_f64(), pt[1].as_f64()) {
+                        wall_points.push((x, y));
+                    }
+                }
+            }
+        }
+    }
+
+    let boundary = terrain_boundary.expect("demo should have a terrain boundary");
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for pt in boundary {
+        let x = pt[0].as_f64().unwrap();
+        let y = pt[1].as_f64().unwrap();
+        min_x = min_x.min(x);
+        min_y = min_y.min(y);
+        max_x = max_x.max(x);
+        max_y = max_y.max(y);
+    }
+
+    for (x, y) in &wall_points {
+        assert!(
+            *x >= min_x && *x <= max_x && *y >= min_y && *y <= max_y,
+            "wall point ({x}, {y}) is outside terrain boundary [{min_x}, {min_y}] to [{max_x}, {max_y}]"
+        );
+    }
+}
