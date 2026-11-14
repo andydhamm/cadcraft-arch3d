@@ -87,7 +87,12 @@ fn phase19_demo_wall_references_are_valid() {
     for step in &steps {
         let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
         if cmd == "wall" {
-            walls_created.push(format!("w{}", walls_created.len()));
+            // A wall command with N points creates N-1 wall segments (closed or open).
+            let points = step.get("params").and_then(|p| p.get("points")).and_then(Value::as_array);
+            let n = points.map(|pts| pts.len() - 1).unwrap_or(1);
+            for _ in 0..n {
+                walls_created.push(format!("w{}", walls_created.len()));
+            }
         }
         if cmd == "window" || cmd == "door" {
             if let Some(wall) = step.get("params").and_then(|p| p.get("wall")).and_then(Value::as_str) {
@@ -234,6 +239,56 @@ fn phase19_demo_camera_references_are_valid() {
             }
         }
     }
+}
+
+#[test]
+fn phase19_demo_steps_have_cmd_and_params() {
+    let steps = load_demo_steps();
+    assert!(!steps.is_empty(), "demo script should not be empty");
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = step.get("cmd").and_then(Value::as_str);
+        assert!(cmd.is_some(), "step {i} missing string cmd: {step:?}");
+        let params = step.get("params");
+        assert!(params.is_some(), "step {i} missing params: {step:?}");
+        assert!(params.unwrap().is_object(), "step {i} params should be an object: {step:?}");
+    }
+}
+
+#[test]
+fn phase19_demo_roof_before_tray() {
+    let steps = load_demo_steps();
+    let mut roof_idx = None;
+    let mut tray_idx = None;
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "roofauto" && roof_idx.is_none() {
+            roof_idx = Some(i);
+        }
+        if cmd == "tray" && tray_idx.is_none() {
+            tray_idx = Some(i);
+        }
+    }
+    assert!(roof_idx.is_some(), "demo should have a roofauto command");
+    assert!(tray_idx.is_some(), "demo should have a tray command");
+    assert!(roof_idx.unwrap() < tray_idx.unwrap(), "roofauto (step {}) must come before tray (step {})", roof_idx.unwrap(), tray_idx.unwrap());
+}
+
+#[test]
+fn phase19_demo_camera_names_are_unique() {
+    let steps = load_demo_steps();
+    let mut names = Vec::new();
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "camera" {
+            if let Some(save) = step.get("params").and_then(|p| p.get("save")).and_then(Value::as_str) {
+                assert!(!names.contains(&save.to_string()), "duplicate camera name {save}");
+                names.push(save.to_string());
+            }
+        }
+    }
+    assert!(names.contains(&"dusk".to_string()), "dusk camera missing");
+    assert!(names.contains(&"noon-hdri".to_string()), "noon-hdri camera missing");
+    assert!(names.contains(&"overview".to_string()), "overview camera missing");
 }
 
 #[test]
