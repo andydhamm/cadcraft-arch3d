@@ -32,6 +32,8 @@ pub const MAT_GLASS: u32 = 1;
 pub const MAT_EMIT_CAMERA_ONLY: u32 = 2;
 /// A fixture housing: never in a shadow ray's way (as in the raster maps and the CPU illuminance).
 pub const MAT_NO_SHADOW: u32 = 4;
+/// The triangle is single-sided (front-facing only; the normal points outward).
+pub const TRI_SINGLE_SIDED: u32 = 8;
 
 /// `GpuLight::kind`.
 pub const LIGHT_POINT: u32 = 0;
@@ -308,7 +310,10 @@ pub fn build_gpu_scene(scene: &Scene3d, ground: bool, furnace: Option<Furnace>) 
     }
     if let Some(h) = &scene.horizon {
         // The horizon plane has the site's ground material; it is after the ground quad.
-        materials.push(material_for_scene(scene, &h.material));
+        // It is single-sided: a ray from below misses it.
+        let mut m = material_for_scene(scene, &h.material);
+        m.flags |= TRI_SINGLE_SIDED;
+        materials.push(m);
     }
     if let Some(f) = furnace {
         materials.iter_mut().for_each(|m| *m = furnace_material(f));
@@ -796,8 +801,13 @@ fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-/// Möller–Trumbore, both sides: the distance along `origin + t·dir` to `tri`, if it hits.
+/// Möller–Trumbore: the distance along `origin + t·dir` to `tri`, if it hits.
+/// For single-sided triangles ([`TRI_SINGLE_SIDED`]), only the front face (the side the
+/// normal points toward) is hit.
 fn tri_distance(tri: &GpuTri, origin: [f32; 3], dir: [f32; 3]) -> Option<f32> {
+    if tri.flags & TRI_SINGLE_SIDED != 0 && dot(dir, tri.n) > 0.0 {
+        return None;
+    }
     let p = cross(dir, tri.e2);
     let det = dot(tri.e1, p);
     if !(det.abs() > 1e-12) {
@@ -1500,6 +1510,45 @@ mod tests {
     }
 
     #[test]
+    fn gpu_scene_horizon_is_single_sided() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, None);
+        // The horizon material should have the single-sided flag.
+        let horizon_mat_idx = scene.meshes.len();
+        let m = &gpu.materials[horizon_mat_idx];
+        assert!(m.flags & TRI_SINGLE_SIDED != 0, "horizon material should be single-sided");
+        // Ray from above hits.
+        let hit = gpu.trace_cpu([0.0, 0.0, 10.0], [0.0, 0.0, -1.0], 100.0);
+        assert!(hit.is_some(), "ray from above should hit horizon");
+        // Ray from below misses (single-sided).
+        let miss = gpu.trace_cpu([0.0, 0.0, -10.0], [0.0, 0.0, 1.0], 100.0);
+        assert!(miss.is_none(), "ray from below should miss single-sided horizon");
+        // Ray parallel to the horizon misses.
+        let parallel = gpu.trace_cpu([0.0, 0.0, 10.0], [1.0, 0.0, 0.0], 100.0);
+        assert!(parallel.is_none(), "parallel ray should miss horizon");
+    }
+
+    #[test]
+    fn gpu_scene_horizon_material_flags() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, None);
+        // The horizon material is the last one (no meshes, no ground).
+        let m = &gpu.materials[0];
+        assert!(m.flags & TRI_SINGLE_SIDED != 0, "horizon should be single-sided");
+        // Other material flags are preserved.
+        let terrain_mat = material_for_scene(&scene, "terrain");
+        assert_eq!(m.albedo, terrain_mat.albedo, "horizon should use terrain material");
+    }
+
+    #[test]
     fn gpu_scene_includes_horizon() {
         let mut scene = random_prisms(&mut Rng(5), 3);
         let mut horizon = Mesh::new("terrain", ArchId(0));
@@ -1509,14 +1558,51 @@ mod tests {
         scene.horizon = Some(horizon);
         let with = build_gpu_scene(&scene, true, None);
         assert_eq!(with.tris.len(), without.tris.len() + 2);
-        // After the meshes and the ground quad, with the terrain material.
+        // After the meshes and the ground quad, with the terrain material (single-sided).
         assert_eq!(with.materials.len(), without.materials.len() + 1);
-        assert_eq!(with.materials[4], material_for("terrain"));
+        let mut expected = material_for("terrain");
+        expected.flags |= TRI_SINGLE_SIDED;
+        assert_eq!(with.materials[4], expected);
         assert_eq!(with.tris.iter().filter(|t| t.material == 4).count(), 2);
         // Without the ground quad the horizon takes the next material index.
         let bare = build_gpu_scene(&scene, false, None);
         assert_eq!(bare.tris.iter().filter(|t| t.material == 3).count(), 2);
-        assert_eq!(bare.materials[3], material_for("terrain"));
+        let mut expected_bare = material_for("terrain");
+        expected_bare.flags |= TRI_SINGLE_SIDED;
+        assert_eq!(bare.materials[3], expected_bare);
+    }
+
+    #[test]
+    fn gpu_scene_horizon_traces_correctly() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, None);
+        // Ray from above should hit the horizon
+        let hit = gpu.trace_cpu([500.0, 500.0, 10.0], [0.0, 0.0, -1.0], 100.0);
+        assert!(hit.is_some(), "ray should hit horizon");
+        assert!((hit.unwrap().t - 10.5).abs() < 1e-4, "hit distance should be 10.5");
+        // Ray from below should miss
+        let miss = gpu.trace_cpu([500.0, 500.0, -1.0], [0.0, 0.0, 1.0], 100.0);
+        assert!(miss.is_none(), "ray from below should miss horizon");
+    }
+
+    #[test]
+    fn gpu_scene_horizon_with_furnace() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, emission: 1.0, ..Default::default() }));
+        // In furnace mode, the horizon material should be the furnace material
+        assert_eq!(gpu.tris.len(), 2);
+        for m in &gpu.materials {
+            assert_eq!(m.albedo, [0.5; 3], "furnace albedo");
+            assert_eq!(m.emission, [1.0; 3], "furnace emission");
+        }
     }
 
     #[test]
