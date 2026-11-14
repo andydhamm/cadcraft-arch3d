@@ -497,7 +497,7 @@ mod tests {
         let mut img = ImageRgba::default();
         img.width = 4;
         img.height = 4;
-        img.rgba = vec![255, 0, 0, 255; 16];
+        img.rgba = std::iter::repeat([255u8, 0, 0, 255]).take(16).flatten().collect();
         model.images.insert("oak".to_string(), img);
         paint(&mut model, "wall/w0/right", Some(MaterialRef::Item("oak".to_string())), None);
         let scene = Scene3d::build(&model);
