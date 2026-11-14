@@ -259,9 +259,9 @@ mod tests {
     fn edit_sill_only_keeps_rough_dimensions() {
         let mut s = with_window();
         let before = s.doc().unwrap().arch.opening(ArchId(0)).unwrap().clone();
-        let _ = s.execute("opening.edit", &json!({"id": "o0", "sill": 1.5})).unwrap();
+        let _ = s.execute("opening.edit", &json!({"id": "o0", "sill": 1.4})).unwrap();
         let after = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
-        assert!((after.sill - 1.5).abs() < 1e-9);
+        assert!((after.sill - 1.4).abs() < 1e-9);
         assert!((after.rough_width - before.rough_width).abs() < 1e-9, "rough_width should be unchanged");
         assert!((after.rough_height - before.rough_height).abs() < 1e-9, "rough_height should be unchanged");
     }
