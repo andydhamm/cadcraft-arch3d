@@ -860,10 +860,10 @@ mod tests {
             }
         }
         // The final render must have completed without failing.
-        let Some(FinalStatus::Done { .. }) = r.status.clone() else {
+        if !matches!(r.status, FinalStatus::Done { .. }) {
             eprintln!("SKIP: render did not finish: {:?}", r.status);
             return;
-        };
+        }
         // Verify that frame_look::env_sh returns non-None for a uniform environment.
         assert!(crate::frame_look::env_sh(&env).is_some(), "env_sh must return coefficients for a valid env");
         // The ambient in the final frame must be 0 under an environment.
