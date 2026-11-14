@@ -125,25 +125,18 @@ pub fn check_connection(model: &ArchModel, from: ArchId, to: &[ArchId], bulge: f
     if bulge.is_finite() && (-1.0..=1.0).contains(&bulge) { Ok(()) } else { Err("bulge must be a finite number in -1..=1".to_string()) }
 }
 
-/// Quadratic Bézier for one coordinate, NaN-aware: skips NaN terms so a finite
-/// endpoint survives at `t = 0` or `t = 1` even when the other endpoint is NaN.
+/// Quadratic Bézier for one coordinate, NaN-aware: returns the exact endpoint at
+/// `t = 0` or `t = 1` (so a finite endpoint survives when the other is NaN), and
+/// for `0 < t < 1` uses the standard formula so NaN propagates naturally.
 fn nan_quad(a: f64, c: f64, b: f64, t: f64) -> f64 {
+    if t == 0.0 {
+        return a;
+    }
+    if t == 1.0 {
+        return b;
+    }
     let u = 1.0 - t;
-    let mut sum = 0.0;
-    let mut any = false;
-    if a.is_finite() {
-        sum += a * (u * u);
-        any = true;
-    }
-    if c.is_finite() {
-        sum += c * (2.0 * u * t);
-        any = true;
-    }
-    if b.is_finite() {
-        sum += b * (t * t);
-        any = true;
-    }
-    if any { sum } else { f64::NAN }
+    a * (u * u) + c * (2.0 * u * t) + b * (t * t)
 }
 
 /// A quadratic Bézier arc from `a` to `b` with sagitta `bulge * half_chord` to the
