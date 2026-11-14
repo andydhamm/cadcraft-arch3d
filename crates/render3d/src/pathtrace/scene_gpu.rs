@@ -1701,7 +1701,7 @@ mod tests {
         };
         let bytes = bytemuck::bytes_of(&frame);
         let back = bytemuck::from_bytes::<GpuFrame>(bytes);
-        assert_eq!(back, frame, "GpuFrame did not round-trip through bytes");
+        assert_eq!(*back, frame, "GpuFrame did not round-trip through bytes");
         // The byte size must be exactly 368 (the spec's size).
         assert_eq!(bytes.len(), 368);
     }
