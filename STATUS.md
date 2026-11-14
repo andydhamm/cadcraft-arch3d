@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-14 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 41 of 43 segments merged · 19 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 05:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 72.3 h so far · expected done Nov 14 10:07–Nov 16 12:24 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 72.5 h so far · expected done Nov 14 10:22–Nov 16 12:39 UTC |
 | 19 | Light, sky and cameras | building | 10 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 10 / 13 | — |
@@ -64,17 +64,17 @@ Updated 2026-11-14 05:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1282 |
-| bonsai-b | bonsai2-27b | gate | 1224 |
+| bonsai-b | bonsai2-27b | idle | 1225 |
 | bonsai-ws2-a | bonsai2-27b | gate | 1361 |
-| bonsai-ws2-b | bonsai2-27b | idle | 1313 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1313 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | gate | 91 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1159 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1159 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 119 |
 | mai-flash-b | mai-code-1.1-flash | idle | 67 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 127 |
-| tturbo-mac | tturbo-ultraheretic | agent | 871 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 526 |
+| tturbo-mac | tturbo-ultraheretic | agent | 872 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 527 |
