@@ -97,8 +97,8 @@ impl Environment {
         if out.iter().all(|v| v.is_finite()) { out } else { [0.0; 3] }
     }
 
-    /// A stable fingerprint of the map parameters (never the pixels), so `PartialEq` is cheap
-    /// and the pane can compare `Lighting` every frame.
+    /// A stable fingerprint of the map content and its parameters, so `PartialEq` is cheap
+    /// and the pane can compare `Lighting` every frame. Recompute it after any field mutation.
     pub fn compute_key(&self) -> u64 {
         let mut h: u64 = 0x811c9dc5;
         let mut push = |x: u64| h = (h ^ x).wrapping_mul(0x01000193);
@@ -115,6 +115,14 @@ impl Environment {
             }
         }
         h
+    }
+
+    /// Refreshes the cached fingerprint after mutating the environment map or its transform.
+    /// Call this whenever you change `rgb`, `intensity`, `rotation_deg`, `horizon_deg`, or the
+    /// visibility/daylight flags.
+    pub fn rekey(&mut self) -> u64 {
+        self.key = self.compute_key();
+        self.key
     }
 }
 
@@ -149,7 +157,7 @@ thread_local! {
 /// Baked skies kept for the process, oldest first: (sun bits, turbidity bits, stars, visible, map).
 type SkyCacheEntry = ([u64; 3], u64, bool, bool, Environment);
 static SKY_CACHE: std::sync::Mutex<Vec<SkyCacheEntry>> = std::sync::Mutex::new(Vec::new());
-const SKY_CACHE_LEN: usize = 6;
+const SKY_CACHE_LEN: usize = 24;
 
 /// How many sky maps this thread has baked (not served from the cache).
 pub fn sky_bake_count() -> usize {
@@ -238,6 +246,14 @@ impl std::cmp::PartialEq for Environment {
 mod tests {
     use super::*;
 
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset_sky_cache_for_test() {
+        let mut cache = SKY_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        cache.clear();
+        SKY_BAKES.with(|c| c.set(0));
+    }
+
     #[test]
     fn hdri_environment_intensity_rotation_horizon() {
         use cadcraft_doc::arch::ImageRgbe;
@@ -312,6 +328,9 @@ mod tests {
 
     #[test]
     fn sky_visible_only_with_sky_backdrop() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
         let mut look = Look::default();
         look.sky.on = true;
         let model = ArchModel::default();
@@ -335,6 +354,9 @@ mod tests {
 
     #[test]
     fn sky_environment_is_cached_per_sun_and_look() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
         let model = ArchModel::default();
         let sun = Some([0.3, 0.2, 0.9]);
         let look = sky_look(4.25, false);
@@ -359,6 +381,9 @@ mod tests {
 
     #[test]
     fn cached_sky_equals_a_fresh_bake() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
         let model = ArchModel::default();
         let sun = [0.1, -0.6, 0.2];
         let look = sky_look(5.5, true);
@@ -374,6 +399,9 @@ mod tests {
 
     #[test]
     fn sky_bake_stays_under_its_time_budget() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
         let start = std::time::Instant::now();
         let env = bake_sky([0.2, 0.3, 0.5], 3.0, true, true);
         let first = start.elapsed();
@@ -387,5 +415,30 @@ mod tests {
         let hit = std::time::Instant::now();
         sky_environment(&model, &look, Some([0.2, 0.3, 0.5]));
         assert!(hit.elapsed() < std::time::Duration::from_millis(500), "cache hit took {:?}", hit.elapsed());
+    }
+
+    #[test]
+    fn night_sky_render_terminates_quickly() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        // Ensure that a night sky (sun below horizon) with stars doesn't hang or take excessively long.
+        // This is a sanity check for the sky bake and environment creation.
+        let model = ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sky.stars = true;
+        look.backdrop = Some(cadcraft_doc::arch::Backdrop::Sky);
+
+        // Sun below horizon (night)
+        let sun = [0.0, 0.0, -0.5];
+
+        let start = std::time::Instant::now();
+        let env = sky_environment(&model, &look, Some(sun));
+        let duration = start.elapsed();
+
+        assert!(env.is_some(), "Night sky environment should be created");
+        // Night sky bake should be similar in cost to day sky bake (same number of texels)
+        assert!(duration < std::time::Duration::from_secs(5), "Night sky bake took {duration:?}");
     }
 }
