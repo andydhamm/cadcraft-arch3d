@@ -1171,10 +1171,10 @@ mod tests {
         let camera = full([2.0, -8.0, 1.2], [2.0, 2.0, 1.2]);
         let mut look = Look::default();
         look.sky.on = false;
-        // Lower exposure to avoid saturation on llvmpipe: a sunlit face at EV100 8 saturates to
-        // white, so the shaded inner face reads the same. EV100 5 keeps the sunlit face bright
+        // Lower exposure to avoid saturation on llvmpipe: a sunlit face at EV100 5 saturates to
+        // white, so the shaded inner face reads the same. EV100 3 keeps the sunlit face bright
         // but leaves the shaded face darker.
-        look.exposure = ExposureSetting::Manual { ev100: 5.0 };
+        look.exposure = ExposureSetting::Manual { ev100: 3.0 };
         look.tone_map = cadcraft_engine::doc::arch::ToneMap::None;
         look.sun.on = true;
         // Sun from the south (azimuth 180) at elevation 60 degrees.
