@@ -342,3 +342,47 @@ fn seg_seg_intersection_t(a: Vec2, b: Vec2, c: Vec2, d: Vec2) -> Option<f64> {
     let u = (ac.x * ab.y - ac.y * ab.x) / denom;
     if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 { Some(t * ab.len()) } else { None }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{Level, RoomType};
+
+    #[test]
+    fn chain_single_segment() {
+        let segments = vec![(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0))];
+        let chains = chain(&segments);
+        assert_eq!(chains.len(), 1);
+        assert_eq!(chains[0].0.len(), 2);
+        assert!(!chains[0].1);
+    }
+
+    #[test]
+    fn clip_outside_segment_entirely_inside_ring() {
+        let a = Vec2::new(4.0, 0.0);
+        let b = Vec2::new(6.0, 0.0);
+        let ring = vec![Vec2::new(2.0, -1.0), Vec2::new(8.0, -1.0), Vec2::new(8.0, 1.0), Vec2::new(2.0, 1.0)];
+        let intervals = clip_outside(a, b, &[ring]);
+        assert!(intervals.is_empty());
+    }
+
+    #[test]
+    fn room_soffits_filters_outside_room() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "L1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+
+        let room_poly = vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 2.0), Vec2::new(0.0, 2.0)];
+        let room = Room { polygon: room_poly, room_type: RoomType::Living, level: 0, ..Room::default() };
+
+        // Soffit outside the room
+        let s = Soffit {
+            level: 0,
+            polygon: vec![Vec2::new(5.0, 5.0), Vec2::new(6.0, 5.0), Vec2::new(6.0, 6.0), Vec2::new(5.0, 6.0)],
+            ..Soffit::default()
+        };
+        model.soffits.push(s);
+
+        let soffits = room_soffits(&model, &room);
+        assert!(soffits.is_empty());
+    }
+}
