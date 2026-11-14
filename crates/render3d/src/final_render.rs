@@ -304,19 +304,13 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
             Some(s) => job.target.build_shadow(&job.scene, job.key, &s, job.ground),
             None => None,
         };
-        let has_env = job.lighting.environment.as_deref().map(|e| e.is_valid()).unwrap_or(false);
+        let sh = job.lighting.environment.as_deref()
+            .filter(|e| e.is_valid())
+            .and_then(crate::frame_look::env_sh);
         let params = crate::lit::LitParams {
-            sh: if has_env {
-                crate::frame_look::env_sh(job.lighting.environment.as_deref()).unwrap_or_default()
-            } else {
-                crate::lit::LitParams::default().sh
-            },
+            sh,
             sun_on: sun.is_some(),
-            ambient: if has_env {
-                0.0
-            } else {
-                sun.map_or(crate::lights::NIGHT_AMBIENT, |l| l.ambient)
-            },
+            ambient: sun.map_or(crate::lights::NIGHT_AMBIENT, |l| l.ambient),
             exposure: job.lighting.exposure,
             tonemap: true,
             pcf_radius: 2,
@@ -984,7 +978,8 @@ mod tests {
                 }
             }
             if let (Some(a), Some(b)) = (interactive, finalize) {
-                assert!((a[0] - b[0]).abs() < 0.01, "{tone:?}: interactive {a:?} finalize {b:?}");
+                let diff = (a[0] - b[0]).abs();
+                assert!(diff < 0.01, "interactive {a:?} finalize {b:?} diff {diff}");
             }
         }
     }
