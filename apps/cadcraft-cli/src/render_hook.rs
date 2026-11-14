@@ -1198,12 +1198,10 @@ mod tests {
         let sum: u32 = rgb.iter().map(|&c| u32::from(c)).sum();
         assert!(plain_sum >= sum + 30, "the sunlit outer face ({plain_sum}) must be brighter than the shaded inner face ({sum}): {v}");
 
-        let has_ceiling = STATE
-            .lock()
-            .ok()
-            .and_then(|g| g.as_ref().and_then(|s| s.filtered.as_ref()))
-            .is_some_and(|(_, f)| f.meshes.iter().any(|m| cadcraft_arch3d::probe::part_of(m) == "ceiling"));
-        assert!(has_ceiling, "the filtered scene keeps the ceiling mesh (hiding a wall must not hide the room)");
+        let has_ceiling = STATE.lock().ok().and_then(|g| {
+            g.as_ref().and_then(|s| s.filtered.as_ref()).map(|(_, f)| f.meshes.iter().any(|m| cadcraft_arch3d::probe::part_of(m) == "ceiling"))
+        });
+        assert!(has_ceiling.unwrap_or(false), "the filtered scene keeps the ceiling mesh (hiding a wall must not hide the room)");
     }
 
     #[test]
