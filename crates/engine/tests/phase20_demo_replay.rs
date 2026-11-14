@@ -108,21 +108,17 @@ fn boold(v: &Value, key: &str, default: bool) -> bool {
 }
 
 /// The `level` field of a row, rendered as a stable string for comparison (number or name).
-/// Checks `level` first (used by plan views and auto-dim rows), then `levelIndex`, then `floor` (used by rooms and trays).
+/// Checks several field names used by different inspect row types: `level` (plan views, auto-dim
+/// rows), `levelIndex`, `floor`, `index` (rooms and trays from arch.inspect), `levelName`, `levelId`.
 fn level_str(v: &Value) -> String {
-    match v.get("level") {
-        Some(Value::String(s)) => s.clone(),
-        Some(Value::Number(n)) => n.to_string(),
-        _ => match v.get("levelIndex") {
-            Some(Value::String(s)) => s.clone(),
-            Some(Value::Number(n)) => n.to_string(),
-            _ => match v.get("floor") {
-                Some(Value::String(s)) => s.clone(),
-                Some(Value::Number(n)) => n.to_string(),
-                _ => String::new(),
-            },
-        },
+    for key in ["level", "levelIndex", "floor", "index", "levelName", "levelId"] {
+        match v.get(key) {
+            Some(Value::String(s)) => return s.clone(),
+            Some(Value::Number(n)) => return n.to_string(),
+            _ => {}
+        }
     }
+    String::new()
 }
 
 /// Run `arch.inspect` with the given parameter map and return the reply.
