@@ -1343,9 +1343,11 @@ mod tests {
             // Move the Arcs (owned) and compare the allocations they point to: the
             // cached A survived B (first and third share the allocation), and B used a
             // different key (a distinct allocation).
-            let (a1o, b1o, a2o) = (a1, b1, a2);
-            assert!(std::ptr::eq(a1o.as_ptr(), a2o.as_ptr()), "the cached A must be returned after B");
-            assert!(!std::ptr::eq(a1o.as_ptr(), b1o.as_ptr()), "A and B use different keys");
+            let a1p = a1.as_ref().map(|a| a.as_ptr());
+            let b1p = b1.as_ref().map(|a| a.as_ptr());
+            let a2p = a2.as_ref().map(|a| a.as_ptr());
+            assert!(a1p == a2p, "the cached A must be returned after B");
+            assert!(a1p != b1p, "A and B use different keys");
         } else {
             assert!(
                 !a1.is_some() && !b1.is_some() && !a2.is_some(),
