@@ -1338,11 +1338,12 @@ mod tests {
         let a2 = environment_cached(&model, 9_000_001, &look, sun_a);
 
         // A, B, A share the look, so either all three build or none of them do.
-        if a1.is_some() && b1.is_some() && a2.is_some() {
-            // Compare real Arcs: the cached A survived B; B used a different key.
-            let (e1, e2, e3) = (a1, b1, a2);
-            assert!(std::ptr::eq(&*e1, &*e3), "the cached A must be returned after B");
-            assert!(!std::ptr::eq(&*e1, &*e2), "A and B use different keys");
+        if let (Some(e1), Some(e2), Some(e3)) = (a1.as_ref(), b1.as_ref(), a2.as_ref()) {
+            // Compare the allocations the Arcs point to: the cached A survived B
+            // (first and third share the allocation), and B used a different key
+            // (a distinct allocation).
+            assert!(std::ptr_eq(e1.as_ptr(), e3.as_ptr()), "the cached A must be returned after B",);
+            assert!(!std::ptr_eq(e1.as_ptr(), e2.as_ptr()), "A and B use different keys",);
         } else {
             assert!(
                 !a1.is_some() && !b1.is_some() && !a2.is_some(),
