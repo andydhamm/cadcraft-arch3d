@@ -236,7 +236,7 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
 
 /// How many environments to keep in the process-wide cache.
 const ENV_CACHE_CAP: usize = 4;
-type EnvCache = Vec<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>>);
+type EnvCache = Vec<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>)>;
 static ENV_CACHE: Mutex<EnvCache> = Mutex::new(Vec::new());
 
 /// The environment for the drawing and look, rebuilt only when the look's sky fields, its
