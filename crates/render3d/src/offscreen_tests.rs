@@ -851,6 +851,20 @@ fn interactive_shadow_map_is_built_without_ground() {
     assert_eq!(r.shadow_maps_built(), built, "the same frame again reuses the sun map");
 }
 
+/// The opened-room regression (phase-19 check 15a): with the front wall removed the sunlit outer
+/// face of the south wall is gone, so the back wall under the ceiling reads darker. The ceiling
+/// must survive the cutaway (hiding a wall by id must not hide the room with the same number), or
+/// the back wall would be fully sunlit.
+#[test]
+fn interactive_ceiling_shades_the_back_wall_of_an_opened_room() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let lighting = shadow_sun([0.0, -0.5, 0.866]);
+    let camera = south_camera();
+    let Some(front) = lit_sum_at(&mut r, 1, &shell(true, true), &camera, &lighting, (100, 75)) else { return };
+    let Some(back) = lit_sum_at(&mut r, 2, &shell(true, false), &camera, &lighting, (100, 75)) else { return };
+    assert!(front >= back + 30, "the sunlit front wall ({front}) must be brighter than the back wall under the ceiling ({back})");
+}
+
 #[test]
 fn clipped_geometry_casts_no_interactive_shadow() {
     use cadcraft_doc::arch::ClipBox;

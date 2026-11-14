@@ -1175,8 +1175,8 @@ mod tests {
         look.tone_map = cadcraft_engine::doc::arch::ToneMap::None;
         look.sun.on = true;
         // Sun from the south (azimuth 180) at elevation 60 degrees.
-        // The SunLook angle is [azimuth, elevation] in degrees.
-        look.sun.angle = [180.0, 60.0];
+        // The SunLook angle is an Option<String> in "azimuth,elevation" format.
+        look.sun.angle = Some("180,60".to_string());
 
         let go = |cutaway: bool| {
             let mut req = request(&d, Some(camera.clone()), None, false);
