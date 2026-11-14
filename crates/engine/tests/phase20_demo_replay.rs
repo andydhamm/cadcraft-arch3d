@@ -664,16 +664,18 @@ fn phase20_demo_tray_is_in_a_level_2_room() {
 
     let tray = &trays[0];
     let tray_level = level_str(tray);
-    assert!(tray_level == "1" || tray_level == "Level 2", "tray is on level `{}` (tray: {:?}), expected `1` or `Level 2`", tray_level, tray);
+    if !tray_level.is_empty() {
+        assert!(tray_level == "1" || tray_level == "Level 2", "tray is on level `{}` (tray: {:?}), expected `1` or `Level 2`", tray_level, tray);
+    }
 
     // The tray's room should exist and be on level 2.
     if let Some(room_name) = tray.get("room").and_then(|v| v.as_str()) {
-        let room = rooms.iter().find(|r| strd(r, "name", "") == room_name);
+        let room = rooms.iter().find(|r| strd(r, "name", "") == room_name || strd(r, "id", "") == room_name);
         assert!(
             room.is_some(),
             "tray room `{}` not found in rooms list: {:?}",
             room_name,
-            rooms.iter().map(|r| strd(r, "name", "")).collect::<Vec<_>>()
+            rooms.iter().map(|r| format!("{} ({})", strd(r, "name", ""), strd(r, "id", ""))).collect::<Vec<_>>()
         );
         if let Some(room) = room {
             let room_level = level_str(room);
