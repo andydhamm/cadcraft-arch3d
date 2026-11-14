@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-14 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 44 of 48 segments merged · 19 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 21:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 87.8 h so far · expected done Nov 15 07:55–Nov 18 16:29 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 88.0 h so far · expected done Nov 15 11:12–Nov 21 13:09 UTC |
 | 19 | Light, sky and cameras | building | 12 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
@@ -45,6 +45,7 @@ Updated 2026-11-14 21:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 14 21:23 | `p19k-pt-resolve-hable` | refused | 10,333 pass | mai-flash-esc |
 | Nov 14 20:08 | `p18h-fix-glass-pony-inspect-test` | merged | 10,331 pass | bonsai-b |
 | Nov 14 20:08 | `p18h-fix-outlet-gaps-null-spacing` | merged | 10,331 pass | mai-flash-b |
 | Nov 14 19:34 | `harden-p20-ui-plan-tabs` | merged | 10,330 pass | tturbo-mac |
@@ -56,14 +57,13 @@ Updated 2026-11-14 21:15 UTC. This page and the card in the README are regenerat
 | Nov 14 16:55 | `harden-p19j-demo-overview-standard-look` | merged | 10,298 pass | tturbo-mac |
 | Nov 14 16:55 | `p19h-pt-diffuse-grazing` | merged | 10,298 pass | mai-flash |
 | Nov 14 16:24 | `harden-p19h-cutaway-hide-by-kind` | merged | 10,291 pass | tturbo-mac |
-| Nov 14 16:24 | `p19h-seeing-in-interactive-pass` | merged | 10,291 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1309 |
-| bonsai-b | bonsai2-27b | idle | 1252 |
+| bonsai-a | bonsai2-27b | agent | 1311 |
+| bonsai-b | bonsai2-27b | gate | 1252 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1387 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1356 |
 | claude-sonnet-a | sonnet | idle | 157 |
@@ -74,6 +74,6 @@ Updated 2026-11-14 21:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 148 |
-| tturbo-mac | tturbo-ultraheretic | agent | 908 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 148 |
+| tturbo-mac | tturbo-ultraheretic | agent | 909 |
 | tturbo-mac2 | tturbo-ultraheretic | agent | 586 |
