@@ -839,3 +839,131 @@ fn strip_close_to_surface_still_lights_it() {
     // It should still light the floor strongly.
     assert!(lux(out[0]) > 100.0, "close strip should light strongly: {} lx", lux(out[0]));
 }
+
+#[test]
+fn strip_with_single_sample_produces_one_light() {
+    use cadcraft_arch3d::light::StripSample;
+    let samples = vec![StripSample { position: Vec3::new(0.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() }];
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.0, 0.0, 2.0),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    // A single sample produces one run (extended by half the average spacing on each end).
+    assert_eq!(scene.lights.len(), 1, "a single-sample strip produces one GPU light");
+    let l = &scene.lights[0];
+    assert!(l.length > 0.0, "the run should have a positive length");
+    assert!(l.position.iter().all(|v| v.is_finite()), "position should be finite: {:?}", l.position);
+}
+
+#[test]
+fn bent_strip_produces_two_gpu_lights() {
+    use cadcraft_arch3d::light::StripSample;
+    // An L-shaped strip: three samples along x, then three along y.
+    let samples: Vec<StripSample> = (0..6)
+        .map(|k| StripSample {
+            position: if k < 3 { Vec3::new(k as f64 * 0.5, 0.0, 2.0) } else { Vec3::new(1.0, (k - 2) as f64 * 0.5, 2.0) },
+            normal: down(),
+            intensity: 1.0,
+            ..Default::default()
+        })
+        .collect();
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.5, 0.5, 2.0),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    // Two straight runs should produce two GPU lights.
+    assert_eq!(scene.lights.len(), 2, "a bent strip produces two GPU lights");
+    for l in &scene.lights {
+        assert!(l.length > 0.0, "each run should have a positive length");
+        assert!(l.position.iter().all(|v| v.is_finite()), "position should be finite: {:?}", l.position);
+    }
+}
+
+#[test]
+fn out_facing_strip_position_offset_is_horizontal() {
+    use cadcraft_arch3d::light::StripSample;
+    let samples = vec![
+        StripSample { position: Vec3::new(0.0, 0.0, 2.0), normal: Vec3::new(0.0, 1.0, 0.0), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(1.0, 0.0, 2.0), normal: Vec3::new(0.0, 1.0, 0.0), intensity: 1.0, ..Default::default() },
+    ];
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.5, 0.0, 2.0),
+        direction: Vec3::new(0.0, 1.0, 0.0),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    assert_eq!(scene.lights.len(), 1);
+    let l = &scene.lights[0];
+    // The offset is along the normal (y-axis), so y should be 0.007.
+    assert!((l.position[1] - 0.007).abs() < 1e-6, "y offset wrong: {}", l.position[1]);
+    // The z position should be unchanged (2.0).
+    assert!((l.position[2] - 2.0).abs() < 1e-6, "z should be unchanged: {}", l.position[2]);
+    // The direction should be the normal (out-facing).
+    assert_eq!(l.direction, [0.0, 1.0, 0.0]);
+}
+
+#[test]
+fn strip_with_infinite_sample_position_is_skipped() {
+    use cadcraft_arch3d::light::StripSample;
+    let samples = vec![
+        StripSample { position: Vec3::new(0.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(f64::INFINITY, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(1.0, 0.0, 2.0), normal: down(), intensity: 1.0, ..Default::default() },
+    ];
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.5, 0.0, 2.0),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    for l in &scene.lights {
+        assert!(l.position.iter().all(|v| v.is_finite()), "infinity leaked into packed strip light: {:?}", l.position);
+        assert!(l.axis.iter().all(|v| v.is_finite()), "infinity leaked into axis: {:?}", l.axis);
+        assert!(l.length.is_finite(), "length should be finite: {}", l.length);
+    }
+}
+
+#[test]
+fn strip_sample_clears_housing_by_at_least_one_mm() {
+    use cadcraft_arch3d::light::StripSample;
+    // A down-facing strip at z=2.4 with a 6mm deep housing (z from 2.394 to 2.4).
+    // The sampled point should be at least 1mm below the housing bottom (z <= 2.393).
+    let samples = vec![
+        StripSample { position: Vec3::new(0.0, 0.0, 2.4), normal: down(), intensity: 1.0, ..Default::default() },
+        StripSample { position: Vec3::new(1.0, 0.0, 2.4), normal: down(), intensity: 1.0, ..Default::default() },
+    ];
+    let strip = SceneLight {
+        kind: LightKind::Strip,
+        position: Vec3::new(0.5, 0.0, 2.4),
+        direction: down(),
+        color: [1.0; 3],
+        strip: Some(Arc::new(samples)),
+        ..Default::default()
+    };
+    let scene = scene_of(&[strip]);
+    assert_eq!(scene.lights.len(), 1);
+    let l = &scene.lights[0];
+    // The position is offset 7mm down, and the WGSL adds another 2mm, so the sampled
+    // point is 9mm below the centerline. The housing bottom is 6mm below, so there's
+    // 3mm clearance.
+    assert!((l.position[2] - (2.4 - 0.007)).abs() < 1e-6, "position z wrong: {}", l.position[2]);
+    // The sampled point (position + direction * 0.002) should be at z <= 2.393.
+    let sampled_z = l.position[2] + l.direction[2] * 0.002;
+    assert!(sampled_z <= 2.4 - 0.006 - 0.001, "sampled point z={} should be at least 1mm below housing bottom 2.394", sampled_z);
+}
