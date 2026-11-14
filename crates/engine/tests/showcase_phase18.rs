@@ -87,7 +87,7 @@ fn house() -> &'static (usize, usize, Value) {
         let reply = session.execute("arch.inspect", &params).unwrap();
         (steps.len(), replayed, reply)
     });
-    *result
+    result
 }
 
 /// Text of `v.get(key)`; scalars render as-is, everything else (and a missing
@@ -114,10 +114,20 @@ fn point(v: &Value) -> String {
 /// `(minx,miny)-(maxx,maxy)` of the `polygon` array in `v`; `(-,-)-(-,-)`
 /// when it cannot be read.
 fn ring_bbox(v: &Value) -> String {
-    let pts =
-        v.get("polygon").and_then(|a| a.as_array()).map(|a| a.iter().filter_map(|p| p.as_array()).collect::<Vec<&[Value]>>()).unwrap_or_default();
-    let xs: Vec<f64> = pts.iter().flat_map(|p| p.get(0).and_then(|n| n.as_f64())).collect();
-    let ys: Vec<f64> = pts.iter().flat_map(|p| p.get(1).and_then(|n| n.as_f64())).collect();
+    let mut xs: Vec<f64> = Vec::new();
+    let mut ys: Vec<f64> = Vec::new();
+    if let Some(arr) = v.get("polygon").and_then(|a| a.as_array()) {
+        for p in arr {
+            if let Some(pair) = p.as_array() {
+                if let Some(x) = pair.get(0).and_then(|n| n.as_f64()) {
+                    xs.push(x);
+                }
+                if let Some(y) = pair.get(1).and_then(|n| n.as_f64()) {
+                    ys.push(y);
+                }
+            }
+        }
+    }
     if xs.is_empty() || ys.is_empty() {
         return "(-,-)-(-,-)".to_string();
     }
@@ -185,7 +195,7 @@ fn has_waterfall(v: &Value) -> bool {
 fn room_type(line: &str) -> Option<String> {
     let after_room = line.strip_prefix("room ")?;
     let level_pos = after_room.find(" level=")?;
-    &after_room[..level_pos].split_whitespace().last().map(|t| t.to_string())
+    after_room[..level_pos].split_whitespace().last().map(|t| t.to_string())
 }
 
 /// Build the digest: one line per object, using only `.get()` so a missing key
