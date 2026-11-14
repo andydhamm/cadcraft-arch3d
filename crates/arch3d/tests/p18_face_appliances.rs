@@ -120,7 +120,7 @@ fn stacked_appliances_both_probeable() {
     let cabinet_id = model.cabinets[0].id;
     let s = Scene3d::build(&model);
     assert!(s.probe(Vec3::new(0.0, 0.603, 1.6)).is_some(), "oven should be probeable");
-    assert!(s.probe(Vec3::new(0.0, 0.603, 0.8)).is_some(), "microwave should be probeable");
+    assert!(s.probe(Vec3::new(0.0, 0.603, 1.1)).is_some(), "microwave should be probeable");
     let meshes: Vec<_> = s.meshes.iter().filter(|m| m.material == "cabinet-appliance" && m.object == cabinet_id).collect();
     assert_eq!(meshes.len(), 1, "one appliance mesh containing both boxes");
 }
