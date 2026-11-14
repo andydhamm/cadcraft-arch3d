@@ -450,7 +450,7 @@ mod tests {
         off.lit_pipelines = LitPipelines::new(&device, &off.gpu);
         let params = LitParams { sun_on: false, ..Default::default() };
         let (mut frame, _atlas) = {
-            let pipelines = off.lit_pipelines.as_ref()?;
+            let Some(pipelines) = off.lit_pipelines.as_ref() else { return };
             let lights = [SceneLight {
                 kind: LightKind::Point,
                 position: Vec3::new(2.0, 2.0, 2.4),
