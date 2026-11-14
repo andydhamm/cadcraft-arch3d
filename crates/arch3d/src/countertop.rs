@@ -239,4 +239,100 @@ mod tests {
         assert_eq!(meshes.len(), 1);
         assert_eq!(meshes[0].object, id);
     }
+
+    #[test]
+    fn waterfall_edge_has_no_nose() {
+        let mut m = ArchModel::default();
+        let mut ct = Countertop {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
+            edges: vec![CounterEdge::default(); 4],
+            top: 0.914,
+            thickness: 0.038,
+            ..Default::default()
+        };
+        ct.edges[0].profile = EdgeProfile::Bullnose;
+        ct.edges[0].waterfall = true;
+        let id = m.push_countertop(ct.clone());
+        let outline = custom_outline(&m, &ct).unwrap();
+        let meshes = countertop_meshes(&ct, Some(&outline), 0.0);
+        // Waterfall edge keeps the full corner (no nose inset)
+        assert!(hit(&meshes, 1.0, 0.002, 0.912));
+    }
+
+    #[test]
+    fn arc_edge_has_no_nose() {
+        let mut m = ArchModel::default();
+        let mut ct = Countertop {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
+            edges: vec![CounterEdge::default(); 4],
+            top: 0.914,
+            thickness: 0.038,
+            ..Default::default()
+        };
+        ct.edges[0].profile = EdgeProfile::Bullnose;
+        ct.edges[0].sagitta = 0.05;
+        let id = m.push_countertop(ct.clone());
+        let outline = custom_outline(&m, &ct).unwrap();
+        let meshes = countertop_meshes(&ct, Some(&outline), 0.0);
+        // Arc edge keeps the full corner (no nose inset)
+        assert!(hit(&meshes, 1.0, 0.002, 0.912));
+    }
+
+    #[test]
+    fn eased_profile_rounds_corner() {
+        let ms = bull_counter(false, EdgeProfile::Eased);
+        // Eased removes a small amount (c = 0.003) from the top-front corner
+        assert!(!hit(&ms, 1.0, 0.001, 0.913));
+        // But keeps the body
+        assert!(hit(&ms, 1.0, 0.005, 0.912));
+        assert!(hit(&ms, 1.0, 0.5, 0.9));
+    }
+
+    #[test]
+    fn bevel_profile_rounds_corner() {
+        let ms = bull_counter(false, EdgeProfile::Bevel);
+        // Bevel removes a larger amount (c = 0.01) from the top-front corner
+        assert!(!hit(&ms, 1.0, 0.005, 0.913));
+        // But keeps the body
+        assert!(hit(&ms, 1.0, 0.015, 0.912));
+        assert!(hit(&ms, 1.0, 0.5, 0.9));
+    }
+
+    #[test]
+    fn zero_thickness_does_not_panic() {
+        let mut m = ArchModel::default();
+        let id = m.push_countertop(Countertop {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
+            edges: vec![CounterEdge::default(); 4],
+            top: 0.914,
+            thickness: 0.0,
+            ..Default::default()
+        });
+        let ct = m.countertop(id).cloned().unwrap_or_default();
+        let outline = custom_outline(&m, &ct);
+        // Must not panic; may produce zero or more meshes
+        let _meshes = countertop_meshes(&ct, outline.as_ref(), 0.0);
+    }
+
+    #[test]
+    fn coincident_vertices_do_not_panic() {
+        let mut m = ArchModel::default();
+        let id = m.push_countertop(Countertop {
+            polygon: vec![
+                Vec2::new(0.0, 0.0),
+                Vec2::new(0.0, 0.0), // duplicate
+                Vec2::new(2.0, 0.0),
+                Vec2::new(2.0, 1.0),
+                Vec2::new(0.0, 1.0),
+            ],
+            edges: vec![CounterEdge::default(); 5],
+            top: 0.914,
+            thickness: 0.038,
+            ..Default::default()
+        });
+        let ct = m.countertop(id).cloned().unwrap_or_default();
+        let outline = custom_outline(&m, &ct);
+        // Must not panic on degenerate polygon
+        let _meshes = countertop_meshes(&ct, outline.as_ref(), 0.0);
+    }
 }
