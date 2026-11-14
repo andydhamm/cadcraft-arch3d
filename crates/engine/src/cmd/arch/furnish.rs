@@ -1208,6 +1208,86 @@ mod tests {
     }
 
     #[test]
+    fn face_appliance_ignores_cabinets_on_other_levels() {
+        let mut s = session();
+        let base = cadcraft_doc::arch::Cabinet {
+            id: cadcraft_doc::ArchId(1),
+            kind: cadcraft_doc::arch::CabinetKind::Base,
+            position: Vec2::new(2.5, 1.0),
+            width: 0.762,
+            depth: 0.6,
+            height: 0.876,
+            elevation: 0.0,
+            fronts: cadcraft_doc::arch::Fronts::Doors,
+            doors: 1,
+            level: 0,
+            ..Default::default()
+        };
+        let wall = cadcraft_doc::arch::Cabinet {
+            id: cadcraft_doc::ArchId(2),
+            kind: cadcraft_doc::arch::CabinetKind::Wall,
+            position: Vec2::new(2.5, 1.0),
+            width: 0.762,
+            depth: 0.3,
+            height: 0.7,
+            elevation: 1.4,
+            fronts: cadcraft_doc::arch::Fronts::Doors,
+            doors: 1,
+            level: 1,
+            ..Default::default()
+        };
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.push_level(cadcraft_doc::arch::Level { index: 1, elevation: 2.7, ..Default::default() });
+            d.arch.cabinets.push(base);
+            d.arch.cabinets.push(wall);
+        }
+        let r = run(&mut s, PLACE, json!({ "item": "appliance:microwave-drawer", "at": [2.5, 1.0], "level": 0 }));
+        assert_eq!(r["via"], "cabinet.face");
+        let r = run(&mut s, PLACE, json!({ "item": "appliance:warming-drawer", "at": [2.5, 1.0], "level": 1 }));
+        assert_eq!(r["via"], "cabinet.face");
+    }
+
+    #[test]
+    fn face_appliance_nearest_cabinet_wins() {
+        let mut s = session();
+        let c1 = cadcraft_doc::arch::Cabinet {
+            id: cadcraft_doc::ArchId(1),
+            kind: cadcraft_doc::arch::CabinetKind::Tall,
+            position: Vec2::new(1.0, 1.0),
+            width: 0.762,
+            depth: 0.6,
+            height: 2.034,
+            elevation: 0.0,
+            fronts: cadcraft_doc::arch::Fronts::Doors,
+            doors: 2,
+            ..Default::default()
+        };
+        let c2 = cadcraft_doc::arch::Cabinet {
+            id: cadcraft_doc::ArchId(2),
+            kind: cadcraft_doc::arch::CabinetKind::Tall,
+            position: Vec2::new(5.0, 1.0),
+            width: 0.762,
+            depth: 0.6,
+            height: 2.034,
+            elevation: 0.0,
+            fronts: cadcraft_doc::arch::Fronts::Doors,
+            doors: 2,
+            ..Default::default()
+        };
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.cabinets.push(c1);
+            d.arch.cabinets.push(c2);
+        }
+        let r = run(&mut s, PLACE, json!({ "item": "appliance:wall-oven", "at": [1.0, 1.2] }));
+        assert_eq!(r["via"], "cabinet.face");
+        let m = model(&s);
+        let cb1 = m.cabinets.iter().find(|c| c.id == cadcraft_doc::ArchId(1)).unwrap();
+        assert!(cb1.face.as_ref().is_some_and(|f| f.rows.iter().any(|r| r.kind == cadcraft_doc::arch::FaceKind::Appliance)));
+    }
+
+    #[test]
     fn place_interactively_asks_for_the_item_then_the_point() {
         let mut s = session();
         assert!(s.start(PLACE).is_ok());
