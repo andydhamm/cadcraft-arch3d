@@ -367,3 +367,86 @@ fn phase18_demo_saves_two_cameras() {
     assert!(camera_saves.iter().any(|name| *name == "Kitchen"), "Kitchen camera is missing: {camera_saves:?}");
     assert!(camera_saves.iter().any(|name| *name == "Bath"), "Bath camera is missing: {camera_saves:?}");
 }
+
+#[test]
+fn phase18_demo_wall_count() {
+    install_io();
+    let script = load_demo();
+    let mut session = replay(&script);
+    let inspect = session.execute("arch.inspect", &json!({ "walls": true })).expect("inspect should succeed");
+    let walls = as_array(&inspect, "walls");
+    assert_eq!(walls.len(), 11, "demo should have exactly 11 walls");
+}
+
+#[test]
+fn phase18_demo_all_cabinet_refs_exist() {
+    install_io();
+    let script = load_demo();
+    let mut session = replay(&script);
+    let inspect = session.execute("arch.inspect", &json!({ "cabinets": true })).expect("inspect should succeed");
+    let cabinets = as_array(&inspect, "cabinets");
+    let ids: Vec<String> = cabinets.iter().filter_map(|c| c.get("id").and_then(Value::as_str)).map(|s| s.to_string()).collect();
+    // All cabinet ids referenced in the script must exist
+    let referenced = ["cb0", "cb3", "cb6", "cb8", "cb9", "cb15", "cb17", "cb19", "cb22"];
+    for ref_id in referenced {
+        assert!(ids.contains(&ref_id.to_string()), "referenced cabinet {} should exist", ref_id);
+    }
+}
+
+#[test]
+fn phase18_demo_exterior_dimensions() {
+    install_io();
+    let script = load_demo();
+    let mut session = replay(&script);
+    let inspect = session.execute("arch.inspect", &json!({ "walls": true })).expect("inspect should succeed");
+    let walls = as_array(&inspect, "walls");
+    // First 4 walls are exterior
+    let exterior: Vec<_> = walls.iter().take(4).collect();
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for w in exterior {
+        let start = w.get("start").and_then(Value::as_array).unwrap();
+        let end = w.get("end").and_then(Value::as_array).unwrap();
+        let x0 = start[0].as_f64().unwrap();
+        let y0 = start[1].as_f64().unwrap();
+        let x1 = end[0].as_f64().unwrap();
+        let y1 = end[1].as_f64().unwrap();
+        min_x = min_x.min(x0).min(x1);
+        max_x = max_x.max(x0).max(x1);
+        min_y = min_y.min(y0).min(y1);
+        max_y = max_y.max(y0).max(y1);
+    }
+    assert!((max_x - min_x - 12.0).abs() < 0.01, "exterior width should be 12m, got {}", max_x - min_x);
+    assert!((max_y - min_y - 8.0).abs() < 0.01, "exterior height should be 8m, got {}", max_y - min_y);
+}
+
+#[test]
+fn phase18_demo_all_openings_reference_valid_walls() {
+    install_io();
+    let script = load_demo();
+    let mut session = replay(&script);
+    let walls = as_array(&session.execute("arch.inspect", &json!({ "walls": true })).expect("inspect walls"), "walls");
+    let wall_ids: Vec<String> = walls.iter().filter_map(|w| w.get("id").and_then(Value::as_str)).map(|s| s.to_string()).collect();
+    let openings = as_array(&session.execute("arch.inspect", &json!({ "openings": true })).expect("inspect openings"), "openings");
+    for opening in openings {
+        if let Some(wall) = opening.get("wall").and_then(Value::as_str) {
+            assert!(wall_ids.contains(&wall.to_string()), "opening references unknown wall {}", wall);
+        }
+    }
+}
+
+#[test]
+fn phase18_demo_room_count_and_types() {
+    install_io();
+    let script = load_demo();
+    let mut session = replay(&script);
+    let inspect = session.execute("arch.inspect", &json!({ "rooms": true })).expect("inspect should succeed");
+    let rooms = as_array(&inspect, "rooms");
+    assert_eq!(rooms.len(), 4, "demo should have exactly 4 rooms");
+    let types: Vec<&str> = rooms.iter().filter_map(|r| r.get("type").and_then(Value::as_str)).collect();
+    assert!(types.contains(&"kitchen"), "should have a kitchen");
+    assert!(types.contains(&"living"), "should have a living room");
+    assert_eq!(types.iter().filter(|t| **t == "bath").count(), 2, "should have 2 baths");
+}

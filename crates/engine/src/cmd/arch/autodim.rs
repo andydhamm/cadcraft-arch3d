@@ -874,4 +874,30 @@ mod tests {
         assert_eq!(s.doc().unwrap().arch.auto_dims, before);
         assert_eq!(s.state().unwrap().undo.len(), undo);
     }
+
+    #[test]
+    fn dimauto_only_overall_kind() {
+        let mut s = house();
+        let r = s.execute("dimauto", &json!({"rows": ["overall"]})).unwrap();
+        let rows = r["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 4);
+        for row in rows {
+            assert_eq!(row["row"].as_str().unwrap(), "overall");
+        }
+        assert!(row(&s, 0, "north", AutoRowKind::Walls).is_none());
+        assert!(row(&s, 0, "north", AutoRowKind::Openings).is_none());
+        assert!(row(&s, 0, "east", AutoRowKind::Walls).is_none());
+    }
+
+    #[test]
+    fn multiple_windows_one_side() {
+        let mut s = house();
+        s.execute("window", &json!({"wall": "w2", "offset": 2.0, "width": 1.0, "height": 1.2, "sill": 0.9})).unwrap();
+        s.execute("window", &json!({"wall": "w2", "offset": 6.0, "width": 1.0, "height": 1.2, "sill": 0.9})).unwrap();
+        s.execute("dimauto", &json!({})).unwrap();
+        let vals = values(&s, 0, "north", AutoRowKind::Openings);
+        // w2: (10,8)-(0,8); offset 2 -> x=8, offset 6 -> x=4; w5 splits at x=6
+        // points at x = -0.1, 4, 6, 8, 10.1
+        assert!(close(&vals, &[4.1, 2.0, 2.0, 2.1]), "{vals:?}");
+    }
 }
