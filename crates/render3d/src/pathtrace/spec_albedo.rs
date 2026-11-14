@@ -360,6 +360,73 @@ mod tests {
     }
 
     #[test]
+    fn spec_albedo_energy_conservation() {
+        // E = f0*a + (1-f0)*b must be in [0, 1] for any f0 in [0, 1], since a and b are each in [0, 1].
+        let f0s = [0.0_f64, 0.04, 0.5, 0.52, 1.0];
+        let roughs = [0.0_f64, 0.1, 0.5, 0.95, 1.0];
+        let novs = [1e-3_f64, 0.024, 0.096, 0.5, 1.0];
+        for f0 in f0s {
+            for roughness in roughs {
+                for nov in novs {
+                    let (a, b) = spec_albedo_terms(roughness, nov);
+                    let e = f0 * a + (1.0 - f0) * b;
+                    assert!(e >= 0.0 && e <= 1.0, "E out of range: f0={f0} rough={roughness} nov={nov} E={e}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_monotonic_in_nov() {
+        // For a fixed roughness, E should be non-decreasing as nov decreases (grazing angles reflect more).
+        let roughs = [0.1_f64, 0.5, 0.95, 1.0];
+        for roughness in roughs {
+            let mut prev_e: f64 = 0.0;
+            let novs: Vec<f64> = (0..=100).map(|i| 1.0 - (i as f64) * 0.009).collect();
+            for &nov in &novs {
+                let (a, b) = spec_albedo_terms(roughness, nov);
+                let e = 0.04 * a + 0.96 * b;
+                assert!(e >= prev_e - 1e-6, "E decreased as nov decreased: rough={roughness} nov={nov} E={e} prev={prev_e}");
+                prev_e = e;
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_table_exact_at_nodes() {
+        // At exact node coordinates, bilinear lookup returns the table value exactly.
+        let table = spec_albedo_table();
+        let h = 1.0 / (SPEC_E_N - 1) as f64;
+        for ri in 0..SPEC_E_N {
+            for ci in 0..SPEC_E_N {
+                let roughness = (ri as f64 * h) as f32;
+                let nov = (ci as f64 * h) as f32;
+                let (la, lb) = spec_albedo_lookup(table, roughness, nov);
+                let idx = table_cell_index(ri, ci);
+                let ta = read_table(&table.a, idx);
+                let tb = read_table(&table.b, idx);
+                assert!((la - ta).abs() < 1e-6, "lookup a != table a at ({ri},{ci}): {la} vs {ta}");
+                assert!((lb - tb).abs() < 1e-6, "lookup b != table b at ({ri},{ci}): {lb} vs {tb}");
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_wgsl_values_in_range() {
+        // All values in the WGSL output should be in [0, 1].
+        let wgsl = spec_albedo_wgsl();
+        let values: Vec<f32> = wgsl
+            .split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
+            .filter(|tok| !tok.is_empty() && tok.contains('.'))
+            .filter_map(|tok| tok.parse::<f32>().ok())
+            .collect();
+        assert_eq!(values.len(), 2 * SPEC_E_N * SPEC_E_N, "expected {} values, got {}", 2 * SPEC_E_N * SPEC_E_N, values.len());
+        for v in values {
+            assert!(v >= 0.0 && v <= 1.0, "WGSL value out of range: {v}");
+        }
+    }
+
+    #[test]
     fn spec_albedo_lookup_at_table_corners() {
         let table = spec_albedo_table();
 
