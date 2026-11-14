@@ -467,4 +467,78 @@ mod tests {
         assert_eq!(def.base_color, [1.0, 0.0, 0.0, 1.0]);
         assert_eq!(def.tile, [1.0, 1.0]);
     }
+
+    #[test]
+    fn a_paint_with_no_material_and_no_tint_still_renames() {
+        let mut model = ring(None);
+        let key = "wall/w0/right";
+        model.paints.insert(key.to_string(), Paint::default());
+        let scene = Scene3d::build(&model);
+        assert!(scene.meshes.iter().any(|m| m.material == format!("paint:{key}")));
+        let def = scene.materials.get(&format!("paint:{key}")).expect("def");
+        assert_eq!(def.base_color, default_colour("wall"));
+        assert!(def.texture.is_none());
+        assert!(def.tint.is_none());
+    }
+
+    #[test]
+    fn an_item_paint_with_missing_image_uses_grey() {
+        let mut model = ring(None);
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Item("nonexistent".to_string())), None);
+        let scene = Scene3d::build(&model);
+        let def = scene.materials.get("paint:wall/w0/right").expect("def");
+        assert_eq!(def.base_color, [0.5, 0.5, 0.5, 1.0]);
+        assert!(def.texture.is_none());
+    }
+
+    #[test]
+    fn an_item_paint_with_image_uses_the_image() {
+        let mut model = ring(None);
+        let mut img = ImageRgba::default();
+        img.width = 4;
+        img.height = 4;
+        img.rgba = std::iter::repeat([255u8, 0, 0, 255]).take(16).flatten().collect();
+        model.images.insert("oak".to_string(), img);
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Item("oak".to_string())), None);
+        let scene = Scene3d::build(&model);
+        let def = scene.materials.get("paint:wall/w0/right").expect("def");
+        assert_eq!(def.texture.as_deref(), Some("item:oak"));
+        assert!(scene.textures.contains_key("item:oak"));
+        let c = srgb_to_linear([255, 0, 0]);
+        assert_eq!(def.base_color, [c[0], c[1], c[2], 1.0]);
+    }
+
+    #[test]
+    fn a_zero_length_wall_paints_without_crashing() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(0.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            ..Default::default()
+        });
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Colour([200, 50, 50])), None);
+        let scene = Scene3d::build(&model);
+        // Should not crash; the wall has no geometry so no paint mesh is produced
+        assert!(scene.meshes.iter().all(|m| m.object != ArchId(0) || m.material != "paint:wall/w0/right"));
+    }
+
+    #[test]
+    fn a_wall_with_nan_coordinates_does_not_crash() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(0),
+            start: Vec2::new(f64::NAN, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            ..Default::default()
+        });
+        paint(&mut model, "wall/w0/right", Some(MaterialRef::Colour([200, 50, 50])), None);
+        let scene = Scene3d::build(&model);
+        // Should not crash
+        assert!(scene.meshes.iter().all(|m| m.object != ArchId(0) || m.material != "paint:wall/w0/right"));
+    }
 }
