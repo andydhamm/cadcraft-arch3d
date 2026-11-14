@@ -503,7 +503,7 @@ mod tests {
     #[test]
     fn copy_name_with_existing_copies() {
         let mut app = app_with(&[]);
-        app.run("planview", json!({ "name": "Floor Plan" })).unwrap();
+        // "Floor Plan" exists as a template view; create copies of it.
         app.run("planview", json!({ "name": "Floor Plan copy" })).unwrap();
         app.run("planview", json!({ "name": "Floor Plan copy 2" })).unwrap();
         assert_eq!(copy_name(&app, "Floor Plan"), "Floor Plan copy 3");
