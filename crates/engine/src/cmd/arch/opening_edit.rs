@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn edit_sill_only_keeps_rough_dimensions() {
         let mut s = with_window();
-        let before = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        let before = s.doc().unwrap().arch.opening(ArchId(0)).unwrap().clone();
         let _ = s.execute("opening.edit", &json!({"id": "o0", "sill": 1.5})).unwrap();
         let after = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
         assert!((after.sill - 1.5).abs() < 1e-9);
@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn edit_style_only_keeps_rough_dimensions() {
         let mut s = with_window();
-        let before = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        let before = s.doc().unwrap().arch.opening(ArchId(0)).unwrap().clone();
         let _ = s.execute("opening.edit", &json!({"id": "o0", "style": "casement"})).unwrap();
         let after = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
         assert_eq!(after.style, "casement");
