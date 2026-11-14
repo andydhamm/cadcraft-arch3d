@@ -414,7 +414,8 @@ fn meets_the_brief(reply: &Value) {
     // ---- Surfaces ----
     if let Some(surf) = reply.get("surfaces").and_then(|v| v.as_array()) {
         for r in surf.iter() {
-            assert!(!strd(r, "material", "").starts_with("default:"), "surface material is default: {}", strd(r, "material", ""));
+            let material = strd(r, "material", "");
+            assert!(!material.starts_with("default:"), "surface `{}` still has the default material `{}`", strd(r, "surface", ""), material,);
         }
     }
 
@@ -457,10 +458,10 @@ fn meets_the_brief(reply: &Value) {
     if let Some(gaps) = reply.get("outletGaps").and_then(|v| v.as_array()) {
         for g in gaps.iter() {
             let max_gap = num(g, "maxGap");
-            assert!(max_gap <= 1.8 + 1.0e-6, "outlet gap maxGap {} exceeds 1.8", max_gap);
+            assert!(max_gap <= 1.8 + 1.0e-6, "outlet gap in `{}` maxGap {} exceeds 1.8", field_text(g, "room"), max_gap,);
             if let Some(counter) = g.get("counter").filter(|c| !c.is_null()) {
                 let spacing = num(counter, "maxSpacing");
-                assert!(spacing <= 1.2 + 1.0e-6, "outlet gap counter maxSpacing {} exceeds 1.2", spacing);
+                assert!(spacing <= 1.2 + 1.0e-6, "outlet gap in `{}` counter maxSpacing {} exceeds 1.2", field_text(g, "room"), spacing,);
             }
         }
     }
@@ -818,7 +819,6 @@ fn the_showcase_meets_the_brief() {
         "site": true,
     });
     let reply = session.execute("arch.inspect", &params).unwrap();
-    println!("{}", serde_json::to_string_pretty(&reply).unwrap());
     meets_the_brief(&reply);
 }
 
