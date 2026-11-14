@@ -344,8 +344,8 @@ mod tests {
         Some(t)
     }
 
-    /// Nearest triangle hit from all meshes; returns `(mesh_index, t)`.
-    fn nearest_tri_hit(origin: (f64, f64, f64), dir: (f64, f64, f64), meshes: &[Mesh]) -> Option<usize> {
+    /// Nearest triangle hit from all meshes; returns `(mesh_index, distance)`.
+    fn nearest_tri_hit(origin: (f64, f64, f64), dir: (f64, f64, f64), meshes: &[Mesh]) -> Option<(usize, f64)> {
         let mut best: Option<(usize, f64)> = None;
         for (mi, mesh) in meshes.iter().enumerate() {
             let n = mesh.indices.len() / 3;
@@ -353,9 +353,9 @@ mod tests {
                 let i0 = mesh.indices[ti * 3] as usize;
                 let i1 = mesh.indices[ti * 3 + 1] as usize;
                 let i2 = mesh.indices[ti * 3 + 2] as usize;
-                let a = (mesh.positions[i0].x, mesh.positions[i0].y, mesh.positions[i0].z);
-                let b = (mesh.positions[i1].x, mesh.positions[i1].y, mesh.positions[i1].z);
-                let c = (mesh.positions[i2].x, mesh.positions[i2].y, mesh.positions[i2].z);
+                let a = (mesh.positions[i0][0] as f64, mesh.positions[i0][1] as f64, mesh.positions[i0][2] as f64);
+                let b = (mesh.positions[i1][0] as f64, mesh.positions[i1][1] as f64, mesh.positions[i1][2] as f64);
+                let c = (mesh.positions[i2][0] as f64, mesh.positions[i2][1] as f64, mesh.positions[i2][2] as f64);
                 if let Some(t) = ray_tri_hit(origin, dir, a, b, c) {
                     if best.map_or(true, |(_, bt)| t < bt) {
                         best = Some((mi, t));
@@ -363,7 +363,7 @@ mod tests {
                 }
             }
         }
-        best.map(|(mi, _)| mi)
+        best
     }
 
     #[test]
@@ -412,28 +412,28 @@ mod tests {
         for x in [1.2, 2.0, 2.8] {
             let origin = (x, 2.0, 1.0);
             // The lens must be the nearest hit.
-            let mi = nearest_tri_hit(origin, dir, &meshes).unwrap_or_else(|| panic!("no hit from ({x}, 2.0, 1.0)"));
+            let (mi, t_lens) = nearest_tri_hit(origin, dir, &meshes).unwrap_or_else(|| panic!("no hit from ({x}, 2.0, 1.0)"));
             assert_eq!(meshes[mi].material, "light-lens-lit", "nearest hit is {}, expected light-lens-lit (x={})", meshes[mi].material, x);
-            // No other fixture mesh is within 1e-6 of the lens hit distance.
+            // No other fixture mesh's closest hit is within 1e-6 of the lens hit distance.
             for (oi, mesh) in meshes.iter().enumerate() {
                 if oi == mi {
                     continue;
                 }
                 let n = mesh.indices.len() / 3;
+                let mut closest: Option<f64> = None;
                 for ti in 0..n {
                     let i0 = mesh.indices[ti * 3] as usize;
                     let i1 = mesh.indices[ti * 3 + 1] as usize;
                     let i2 = mesh.indices[ti * 3 + 2] as usize;
-                    let a = (mesh.positions[i0].x, mesh.positions[i0].y, mesh.positions[i0].z);
-                    let b = (mesh.positions[i1].x, mesh.positions[i1].y, mesh.positions[i1].z);
-                    let c = (mesh.positions[i2].x, mesh.positions[i2].y, mesh.positions[i2].z);
+                    let a = (mesh.positions[i0][0] as f64, mesh.positions[i0][1] as f64, mesh.positions[i0][2] as f64);
+                    let b = (mesh.positions[i1][0] as f64, mesh.positions[i1][1] as f64, mesh.positions[i1][2] as f64);
+                    let c = (mesh.positions[i2][0] as f64, mesh.positions[i2][1] as f64, mesh.positions[i2][2] as f64);
                     if let Some(ot) = ray_tri_hit(origin, dir, a, b, c) {
-                        let (mt, bt) = nearest_tri_hit(origin, dir, &meshes)
-                            .map(|_| (meshes[mi].bounds().max[2] - origin.2, 0.0))
-                            .map_or((0.0, 0.0), |(_, bt)| (bt, ot));
-                        let lens_t = bt;
-                        assert!((ot - lens_t).abs() >= 1e-6, "other mesh {} hit within 1e-6 of lens: lens_t={lens_t} other_t={ot}", oi);
+                        closest = closest.min(Some(ot));
                     }
+                }
+                if let Some(ot) = closest {
+                    assert!((ot - t_lens).abs() >= 1e-6, "other mesh {} hit within 1e-6 of lens: lens_t={t_lens} other_t={ot}", oi);
                 }
             }
         }
