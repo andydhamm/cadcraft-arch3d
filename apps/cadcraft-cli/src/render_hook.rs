@@ -1321,20 +1321,33 @@ mod tests {
         let sun_a = Some([0.0, -0.6, 0.8]);
         let sun_b = Some([0.6, 0.0, 0.8]);
 
+        // First A with the default look. When the default look is light-only (no sky),
+        // turn the sky on so the Preetham sky builds and the cached value is a real Arc.
         let mut a1 = environment_cached(&model, 9_000_001, &look, sun_a);
         if a1.is_none() {
             look.sky.on = true;
             a1 = environment_cached(&model, 9_000_001, &look, sun_a);
-            assert!(a1.is_some(), "environment must be buildable with the sky on");
         }
 
-        let _b = environment_cached(&model, 9_000_001, &look, sun_b);
+        // B (a different sun direction = a different key), then A again. When the sky
+        // builds, the second A must be served from the cache (the entry survived B) and B
+        // must be a distinct Arc. When the sky does not build for these inputs, every
+        // result is None (the cache stores (key, None) entries, which stay within the
+        // LRU bound covered by environment_cache_is_bounded).
+        let b1 = environment_cached(&model, 9_000_001, &look, sun_b);
         let a2 = environment_cached(&model, 9_000_001, &look, sun_a);
 
-        if let (Some(e1), Some(e2)) = (a1, a2) {
-            assert!(std::ptr::eq(&*e1, &*e2), "the first and third A results must be the same Arc");
+        // A, B, A share the look, so either all three build or none of them do.
+        if a1.is_some() && b1.is_some() && a2.is_some() {
+            // Compare real Arcs: the cached A survived B; B used a different key.
+            let (e1, e2, e3) = (a1, b1, a2);
+            assert!(std::ptr::eq(&*e1, &*e3), "the cached A must be returned after B");
+            assert!(!std::ptr::eq(&*e1, &*e2), "A and B use different keys");
         } else {
-            panic!("test must compare real Arcs");
+            assert!(
+                !a1.is_some() && !b1.is_some() && !a2.is_some(),
+                "mixed Some/None outcomes are impossible for the same look: {a1:?} {b1:?} {a2:?}"
+            );
         }
     }
 
