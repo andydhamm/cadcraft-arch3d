@@ -429,7 +429,7 @@ mod tests {
                     let b = (mesh.positions[i1][0] as f64, mesh.positions[i1][1] as f64, mesh.positions[i1][2] as f64);
                     let c = (mesh.positions[i2][0] as f64, mesh.positions[i2][1] as f64, mesh.positions[i2][2] as f64);
                     if let Some(ot) = ray_tri_hit(origin, dir, a, b, c) {
-                        closest = closest.min(Some(ot));
+                        closest = closest.map_or(Some(ot), |c| Some(c.min(ot)));
                     }
                 }
                 if let Some(ot) = closest {
