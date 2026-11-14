@@ -598,6 +598,68 @@ mod tests {
         assert_eq!(scene_lights(&m).len(), 4);
     }
 
+    #[test]
+    fn brightness_zero_gives_zero_intensity() {
+        let mut m = room();
+        m.lights[0].brightness = 0.0;
+        let lights = scene_lights(&m);
+        assert_eq!(lights.len(), 4);
+        assert_eq!(lights[0].intensity, 0.0);
+        assert!(lights[1].intensity > 0.0);
+    }
+
+    #[test]
+    fn brightness_negative_clamps_to_zero() {
+        let mut m = room();
+        m.lights[0].brightness = -0.5;
+        let lights = scene_lights(&m);
+        assert_eq!(lights[0].intensity, 0.0);
+    }
+
+    #[test]
+    fn brightness_infinity_clamps_to_zero() {
+        let mut m = room();
+        m.lights[0].brightness = f64::INFINITY;
+        let lights = scene_lights(&m);
+        assert_eq!(lights[0].intensity, 0.0);
+        m.lights[0].brightness = f64::NEG_INFINITY;
+        let lights2 = scene_lights(&m);
+        assert_eq!(lights2[0].intensity, 0.0);
+    }
+
+    #[test]
+    fn override_brightness_zero() {
+        let m = room();
+        let mut o = BTreeMap::new();
+        o.insert("lf0".to_string(), LightState { brightness: 0.0, ..Default::default() });
+        let lights = scene_lights_with(&m, &o);
+        assert_eq!(lights.len(), 4);
+        assert_eq!(lights[0].intensity, 0.0);
+    }
+
+    #[test]
+    fn override_for_unknown_light_ignored() {
+        let m = room();
+        let mut o = BTreeMap::new();
+        o.insert("lf99".to_string(), LightState { brightness: 0.5, ..Default::default() });
+        let lights = scene_lights_with(&m, &o);
+        assert_eq!(lights, scene_lights(&m));
+    }
+
+    #[test]
+    fn multiple_overrides_applied_independently() {
+        let m = room();
+        let base = scene_lights(&m);
+        let mut o = BTreeMap::new();
+        o.insert("lf0".to_string(), LightState { brightness: 0.5, ..Default::default() });
+        o.insert("lf1".to_string(), LightState { brightness: 0.25, ..Default::default() });
+        let lights = scene_lights_with(&m, &o);
+        assert!((lights[0].intensity - base[0].intensity * 0.5).abs() < 1e-9);
+        assert!((lights[1].intensity - base[1].intensity * 0.25).abs() < 1e-9);
+        assert!((lights[2].intensity - base[2].intensity).abs() < 1e-9);
+        assert!((lights[3].intensity - base[3].intensity).abs() < 1e-9);
+    }
+
     fn up() -> Vec3 {
         Vec3::new(0.0, 0.0, 1.0)
     }
@@ -989,5 +1051,22 @@ mod tests {
         assert!(shadowed.lux < clear.lux, "shadowed {} < clear {}", shadowed.lux, clear.lux);
         // But not zero (some cells still visible)
         assert!(shadowed.lux > 0.0, "some cells must be visible: {}", shadowed.lux);
+    }
+
+    #[test]
+    fn moon_illuminance_is_directed_light() {
+        let mut m = ArchModel::default();
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.2, 0.0), 0.2);
+        w.height = 3.0;
+        m.push_wall(w);
+        let scene = crate::build(&m);
+        let up = Vec3::new(0.0, 0.0, 1.0);
+        let moon_dir = Vec3::new(0.0, 0.0, 1.0);
+        let moon_lux = 0.25;
+        let open = Vec3::new(5.0, 5.0, 0.0);
+        let e = sun_illuminance(&scene, open, up, moon_dir, moon_lux, true);
+        assert!((e - 0.25).abs() < 0.001, "moon illuminance should be 0.25 lux, got {}", e);
+        let e2 = sun_illuminance(&scene, open, up, Vec3::new(0.0, 0.0, -1.0), moon_lux, true);
+        assert_eq!(e2, 0.0, "moon below horizon should give 0 lux");
     }
 }

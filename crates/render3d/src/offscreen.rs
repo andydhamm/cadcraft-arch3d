@@ -300,10 +300,16 @@ impl Offscreen {
         if self.meshes.as_ref().is_none_or(|(k, _)| *k != (scene_key, ground)) {
             // The texture array follows the scene's texture keys; the draws' layers index into it.
             self.gpu.prepare_textures(&self.device, &self.queue, scene);
-            let uploaded = if ground {
-                let mut with_ground = scene.clone();
-                with_ground.meshes.push(crate::shadow::ground_mesh(&scene.bounds));
-                upload(&self.device, &with_ground)
+            // The ground quad, then the horizon plane (never in `scene.meshes`), are extra draws.
+            let uploaded = if ground || scene.horizon.is_some() {
+                let mut extended = scene.clone();
+                if ground {
+                    extended.meshes.push(crate::shadow::ground_mesh(&scene.bounds));
+                }
+                if let Some(h) = &scene.horizon {
+                    extended.meshes.push(h.clone());
+                }
+                upload(&self.device, &extended)
             } else {
                 upload(&self.device, scene)
             };
@@ -449,8 +455,13 @@ impl Offscreen {
                         None => PbrUniform::new(&l, 1.0, &draw, opts.style.code(), eye),
                     }
                 };
-                // Draws past the scene's meshes are the ground quad.
-                let material = filtered_meshes.get(i).map_or("ground", |mesh| mesh.material.as_str());
+                // Draws past the scene's meshes are the ground quad, then the horizon plane.
+                let extra = i.saturating_sub(filtered_meshes.len());
+                let material = match filtered_meshes.get(i) {
+                    Some(mesh) => mesh.material.as_str(),
+                    None if extra == usize::from(opts.ground) && scene.horizon.is_some() => "terrain",
+                    None => "ground",
+                };
                 crate::frame_look::fill_draw(&mut p, &self.last_look, scene, material);
                 let at = i * self.stride as usize;
                 pbr_bytes[at..at + PBR_SIZE as usize].copy_from_slice(bytemuck::bytes_of(&p));
@@ -536,6 +547,14 @@ impl Offscreen {
         pass.set_vertex_buffer(0, meshes.vertex_buffer.slice(..));
         pass.set_index_buffer(meshes.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         let shadow = if lit.is_some() { None } else { opts.shadow.zip(self.shadowed.as_ref()) };
+        // The horizon plane only matters when the horizon line can be in view: a camera looking down
+        // past half its field of view shows nothing but the site, so the plane is skipped there.
+        let horizon_in_view = {
+            let f = crate::camera::forward(camera);
+            let pitch = f.z.clamp(-1.0, 1.0).asin().to_degrees();
+            pitch + camera.fov_deg() * 0.5 > -1.0
+        };
+        let horizon_skip = if scene.horizon.is_some() && !horizon_in_view { Some(filtered_meshes.len() + usize::from(opts.ground)) } else { None };
         let draw_indices: Vec<usize> = if style_is_glass_house {
             let mut draw_index_by_scene_mesh = Vec::new();
             let mut draw_index = 0usize;
@@ -550,6 +569,11 @@ impl Offscreen {
             let mut order = Vec::new();
             if let Some(ground_draw) = ground_draw {
                 order.push(ground_draw);
+            }
+            // The horizon plane is opaque too, drawn after the ground quad.
+            let horizon_at = draw_index + usize::from(opts.ground);
+            if scene.horizon.is_some() && horizon_in_view && meshes.draws.len() > horizon_at {
+                order.push(horizon_at);
             }
             let mut translucent = Vec::new();
             for (draw_index, mesh) in draw_index_by_scene_mesh {
@@ -567,7 +591,7 @@ impl Offscreen {
             order.extend(translucent.into_iter().map(|(draw_index, _)| draw_index));
             order
         } else {
-            (0..meshes.draws.len()).collect()
+            (0..meshes.draws.len()).filter(|i| Some(*i) != horizon_skip).collect()
         };
         let draw_pipeline = |is_ground: bool| match (lit, shadow, is_ground) {
             (Some((_, lp)), _, false) => &lp.glass,
@@ -587,10 +611,11 @@ impl Offscreen {
                 }
             }
             let ground_draw = if opts.ground && meshes.draws.len() > scene_draw_count { Some(scene_draw_count) } else { None };
+            let horizon_draw = if scene.horizon.is_some() { Some(scene_draw_count + usize::from(opts.ground)) } else { None };
             let mut opaque = Vec::new();
             let mut translucent = Vec::new();
             for &i in &draw_indices {
-                if ground_draw == Some(i) {
+                if ground_draw == Some(i) || horizon_draw == Some(i) {
                     opaque.push(i);
                 } else {
                     translucent.push(i);
@@ -627,7 +652,7 @@ impl Offscreen {
                 } else if let Some((map, _)) = shadow {
                     pass.set_bind_group(2, &map.bind_group, &[]);
                 }
-                for (i, d) in meshes.draws.iter().enumerate().filter(|(_, d)| d.is_blended() == blended) {
+                for (i, d) in meshes.draws.iter().enumerate().filter(|(i, d)| d.is_blended() == blended && Some(*i) != horizon_skip) {
                     let offset = [(i as u64 * self.stride) as u32];
                     pass.set_bind_group(0, &slots.bind_group, &offset);
                     pass.set_bind_group(1, &slots.pbr_bind_group, &offset);
@@ -1134,6 +1159,34 @@ mod offscreen_behavior_tests {
         );
         let rgba = off.read_rgba().expect("readback");
         assert!(!rgba.is_empty(), "coincident walls should render");
+    }
+
+    #[test]
+    fn horizon_fills_below_the_horizon_line() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let size = (80u32, 60u32);
+        let mut scene = Scene3d::default();
+        let mut plane = crate::types::Mesh::new("terrain", cadcraft_doc::arch::ArchId(0));
+        let h = 9500.0f32;
+        plane.positions = vec![[-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0]];
+        plane.normals = vec![[0.0, 0.0, 1.0]; 4];
+        plane.uvs = vec![[0.0, 0.0]; 4];
+        plane.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(plane);
+        let camera = Camera::Orbit(crate::camera::Orbit::at_origin(0.0, 10.0, 5.0, 45.0));
+        let bg = |p: &[u8]| p[..3].iter().zip([39u8, 44, 52]).all(|(a, b)| a.abs_diff(b) <= 2);
+        // Opaque in the shaded and the glass-house style alike.
+        for style in [Style::Shaded, Style::GlassHouse] {
+            let mut off = Offscreen::with_device(device.clone(), queue.clone(), size);
+            off.render_with(&scene, 1, &camera, &Light::DEFAULT, &RenderOptions { style, ground: false, ..Default::default() });
+            let rgba = off.read_rgba().expect("readback");
+            let px = |row: usize| &rgba[(row * size.0 as usize + 40) * 4..][..4];
+            assert!(!bg(px(58)), "{style:?}: the bottom row is ground");
+            assert!(bg(px(1)), "{style:?}: the top row is sky");
+        }
     }
 
     #[test]

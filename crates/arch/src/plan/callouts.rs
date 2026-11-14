@@ -33,10 +33,12 @@ pub fn callouts(model: &ArchModel, level: Option<u32>, out: &mut PlanAnnotation)
                 }
 
                 if let Some(view) = model.views.iter().find(|v| v.id == id) {
-                    // Filter by level if requested
-                    if let Some(lvl) = level {
-                        if view.level != Some(lvl) {
-                            continue;
+                    // Only interior views are level-filtered; a view with no level shows on all levels
+                    if view.kind == ViewKind::Interior {
+                        if let Some(lvl) = level {
+                            if view.level.is_some() && view.level != Some(lvl) {
+                                continue;
+                            }
                         }
                     }
 
@@ -86,9 +88,11 @@ pub fn callout_at(model: &ArchModel, level: Option<u32>, p: Vec2, tol: f64) -> O
                 }
 
                 if let Some(view) = model.views.iter().find(|v| v.id == id) {
-                    if let Some(lvl) = level {
-                        if view.level != Some(lvl) {
-                            continue;
+                    if view.kind == ViewKind::Interior {
+                        if let Some(lvl) = level {
+                            if view.level.is_some() && view.level != Some(lvl) {
+                                continue;
+                            }
                         }
                     }
 
@@ -137,19 +141,39 @@ fn marker_centers(model: &ArchModel, view: &ArchView, level: Option<u32>) -> Vec
 }
 
 fn elevation_marker_center(model: &ArchModel, view: &ArchView, level: Option<u32>) -> Option<Vec2> {
-    let bounds = model.bounds();
-    let center = bounds.center();
+    // Filter walls by level: walls with no level are on all levels
+    let walls: Vec<_> = match level {
+        None => model.walls.iter().collect(),
+        Some(lvl) => model.walls.iter().filter(|w| w.base_level == lvl).collect(),
+    };
 
+    if walls.is_empty() {
+        return None;
+    }
+
+    // Compute bounds of the filtered walls
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    for wall in walls {
+        min_x = min_x.min(wall.start.x);
+        min_y = min_y.min(wall.start.y);
+        max_x = max_x.max(wall.start.x);
+        max_y = max_y.max(wall.start.y);
+        min_x = min_x.min(wall.end.x);
+        min_y = min_y.min(wall.end.y);
+        max_x = max_x.max(wall.end.x);
+        max_y = max_y.max(wall.end.y);
+    }
+
+    let center = Vec2::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0);
     let look = Vec2::new(view.look[0], view.look[1]);
+
+    let corners = [Vec2::new(min_x, min_y), Vec2::new(max_x, min_y), Vec2::new(max_x, max_y), Vec2::new(min_x, max_y)];
+
     let mut max_proj = 0.0;
-
-    let corners = [
-        Vec2::new(bounds.min.x, bounds.min.y),
-        Vec2::new(bounds.max.x, bounds.min.y),
-        Vec2::new(bounds.max.x, bounds.max.y),
-        Vec2::new(bounds.min.x, bounds.max.y),
-    ];
-
     for corner in corners {
         let proj = (corner - center).dot(look);
         if proj > max_proj {
@@ -182,8 +206,9 @@ fn section_marker_centers(_model: &ArchModel, view: &ArchView) -> Option<(Vec2, 
 
 fn interior_marker_center(_model: &ArchModel, view: &ArchView, level: Option<u32>) -> Option<Vec2> {
     // "view.room_point, only when level is None or equals view.level"
+    // A view with no level restriction (view.level == None) shows on all levels.
     if let Some(lvl) = level {
-        if view.level != Some(lvl) {
+        if view.level.is_some() && view.level != Some(lvl) {
             return None;
         }
     }
@@ -479,5 +504,228 @@ mod tests {
 
         assert_eq!(out.labels.len(), 1);
         assert_eq!(out.labels[0].text, "1/A-101");
+    }
+
+    #[test]
+    fn elevation_no_walls_no_marker() {
+        // Empty model (no walls) -> no elevation marker
+        let model = ArchModel::default();
+        let view = make_view(0, ViewKind::Elevation, Vec2::Y, None, None, None);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+
+        let mut model_with_view = model.clone();
+        model_with_view.views.push(view);
+        model_with_view.sheets.push(sheet);
+
+        let mut out = PlanAnnotation::default();
+        callouts(&model_with_view, None, &mut out);
+        assert!(out.labels.is_empty());
+        assert!(out.lines.is_empty());
+    }
+
+    #[test]
+    fn elevation_marker_uses_walls_on_level() {
+        let mut model = setup_model();
+        // All walls in setup_model have no level (None), so they're on all levels.
+        // Create a view on level 0 and check that the marker is produced.
+        let view = make_view(0, ViewKind::Elevation, Vec2::Y, Some(0), None, None);
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        // Level 0: walls exist -> marker produced
+        let mut out = PlanAnnotation::default();
+        callouts(&model, Some(0), &mut out);
+        assert_eq!(out.labels.len(), 1);
+
+        // Now add a wall on level 1 only and query level 1
+        let mut model2 = setup_model();
+        // Clear the level-None walls and add a wall on level 1
+        model2.walls.clear();
+        model2.walls.push(Wall {
+            id: ArchId::wall(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 1,
+            ..Default::default()
+        });
+        let view2 = make_view(0, ViewKind::Elevation, Vec2::Y, Some(1), None, None);
+        model2.views.push(view2);
+        model2.sheets.push(make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]));
+
+        // Level 0: no walls on level 0 -> no marker
+        let mut out2 = PlanAnnotation::default();
+        callouts(&model2, Some(0), &mut out2);
+        assert!(out2.labels.is_empty());
+
+        // Level 1: wall exists -> marker produced
+        let mut out3 = PlanAnnotation::default();
+        callouts(&model2, Some(1), &mut out3);
+        assert_eq!(out3.labels.len(), 1);
+    }
+
+    #[test]
+    fn section_zero_length_cut_no_marker() {
+        let mut model = setup_model();
+        // Zero-length cut: both endpoints the same
+        let cut = [[5.0, 5.0], [5.0, 5.0]];
+        let view = make_view(0, ViewKind::Section, Vec2::Y, None, None, Some(cut));
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        let mut out = PlanAnnotation::default();
+        callouts(&model, None, &mut out);
+        assert!(out.labels.is_empty());
+        assert!(out.lines.is_empty());
+    }
+
+    #[test]
+    fn interior_no_room_point_no_marker() {
+        let mut model = setup_model();
+        // Interior view with no room_point
+        let view = make_view(0, ViewKind::Interior, Vec2::Y, None, None, None);
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        let mut out = PlanAnnotation::default();
+        callouts(&model, None, &mut out);
+        assert!(out.labels.is_empty());
+        assert!(out.lines.is_empty());
+    }
+
+    #[test]
+    fn callout_at_level_filtering() {
+        let mut model = setup_model();
+        let room_point = Vec2::new(5.0, 5.0);
+        let view = make_view(0, ViewKind::Interior, Vec2::Y, Some(0), Some(room_point), None);
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        // On level 0: found
+        let found = callout_at(&model, Some(0), room_point, 0.1);
+        assert_eq!(found, Some(ArchId(0)));
+
+        // On level 1: not found (view is on level 0)
+        let not_found = callout_at(&model, Some(1), room_point, 0.1);
+        assert_eq!(not_found, None);
+    }
+
+    #[test]
+    fn elevation_marker_ignores_walls_on_other_levels() {
+        let mut model = ArchModel::default();
+        // Wall on level 0
+        model.walls.push(Wall {
+            id: ArchId::wall(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 0,
+            ..Default::default()
+        });
+        // Wall on level 1, far away
+        model.walls.push(Wall {
+            id: ArchId::wall(1),
+            start: Vec2::new(100.0, 100.0),
+            end: Vec2::new(110.0, 100.0),
+            thickness: 0.2,
+            height: 2.4,
+            base_level: 1,
+            ..Default::default()
+        });
+
+        let view = make_view(0, ViewKind::Elevation, Vec2::Y, Some(0), None, None);
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        // Level 0: only the level-0 wall is used, marker near y=0
+        let mut out = PlanAnnotation::default();
+        callouts(&model, Some(0), &mut out);
+        assert_eq!(out.labels.len(), 1);
+        let label = &out.labels[0];
+        assert!(label.at.y < 0.0, "marker should be south of level-0 wall");
+        assert!(label.at.y > -50.0, "marker should not be near level-1 wall");
+
+        // Level 1: only the level-1 wall is used, marker near y=100
+        let mut out2 = PlanAnnotation::default();
+        callouts(&model, Some(1), &mut out2);
+        assert_eq!(out2.labels.len(), 1);
+        let label2 = &out2.labels[0];
+        assert!(label2.at.y < 100.0);
+        assert!(label2.at.y > 50.0);
+    }
+
+    #[test]
+    fn section_marker_independent_of_walls() {
+        // No walls at all: section markers still appear at cut ends
+        let mut model = ArchModel::default();
+        let cut = [[-1.0, 5.0], [11.0, 5.0]];
+        let view = make_view(0, ViewKind::Section, Vec2::Y, None, None, Some(cut));
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        let mut out = PlanAnnotation::default();
+        callouts(&model, None, &mut out);
+        assert_eq!(out.labels.len(), 2);
+        let xs: Vec<f64> = out.labels.iter().map(|l| l.at.x).collect();
+        assert!(xs.iter().any(|x| (x - (-1.6)).abs() < 1e-6), "left marker missing");
+        assert!(xs.iter().any(|x| (x - 11.6).abs() < 1e-6), "right marker missing");
+    }
+
+    #[test]
+    fn interior_view_no_level_shows_on_all_levels() {
+        let mut model = setup_model();
+        let room_point = Vec2::new(5.0, 5.0);
+        // Interior view with no level restriction
+        let view = make_view(0, ViewKind::Interior, Vec2::Y, None, Some(room_point), None);
+        model.views.push(view);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0)]);
+        model.sheets.push(sheet);
+
+        // Shows on level 0
+        let mut out = PlanAnnotation::default();
+        callouts(&model, Some(0), &mut out);
+        assert_eq!(out.labels.len(), 1);
+
+        // Shows on level 1
+        let mut out2 = PlanAnnotation::default();
+        callouts(&model, Some(1), &mut out2);
+        assert_eq!(out2.labels.len(), 1);
+
+        // Shows with no level filter
+        let mut out3 = PlanAnnotation::default();
+        callouts(&model, None, &mut out3);
+        assert_eq!(out3.labels.len(), 1);
+    }
+
+    #[test]
+    fn callout_at_nearest_of_two() {
+        let mut model = setup_model();
+        // Two interior views at different points
+        let p1 = Vec2::new(2.0, 2.0);
+        let p2 = Vec2::new(8.0, 8.0);
+        let view1 = make_view(0, ViewKind::Interior, Vec2::Y, None, Some(p1), None);
+        let view2 = make_view(1, ViewKind::Interior, Vec2::Y, None, Some(p2), None);
+        model.views.push(view1);
+        model.views.push(view2);
+        let sheet = make_sheet("S1", "A-101", vec![make_sheet_view("1", 0), make_sheet_view("2", 1)]);
+        model.sheets.push(sheet);
+
+        // Point closer to p1
+        let near_p1 = Vec2::new(2.5, 2.5);
+        let found = callout_at(&model, None, near_p1, 2.0);
+        assert_eq!(found, Some(ArchId(0)));
+
+        // Point closer to p2
+        let near_p2 = Vec2::new(7.5, 7.5);
+        let found2 = callout_at(&model, None, near_p2, 2.0);
+        assert_eq!(found2, Some(ArchId(1)));
     }
 }

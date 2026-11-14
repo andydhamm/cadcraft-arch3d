@@ -306,6 +306,10 @@ pub fn build_gpu_scene(scene: &Scene3d, ground: bool, furnace: Option<Furnace>) 
     if ground {
         materials.push(material_for_scene(scene, "ground"));
     }
+    if let Some(h) = &scene.horizon {
+        // The horizon plane has the site's ground material; it is after the ground quad.
+        materials.push(material_for_scene(scene, &h.material));
+    }
     if let Some(f) = furnace {
         materials.iter_mut().for_each(|m| *m = furnace_material(f));
     }
@@ -471,6 +475,14 @@ fn collect_triangles(
             return None;
         }
     }
+    if let Some(h) = &scene.horizon {
+        let at = scene.meshes.len() + usize::from(ground);
+        let material = u32::try_from(at).ok()?;
+        let flags = materials.get(at).map_or(0, |m| m.flags);
+        if !push_mesh(&mut tris, h, material, flags, None) {
+            return None;
+        }
+    }
     Some(tris)
 }
 
@@ -556,8 +568,12 @@ fn strip_gpu_lights(l: &SceneLight) -> Vec<GpuLight> {
             if !length.is_finite() || length <= 0.0 {
                 return None;
             }
+            let normal = r.normal;
+            let clear = if normal.len() > 1e-6 { normal * (1.0 / normal.len()) * 0.007 } else { normal };
+            // The 6 mm deep strip housing leaves a 6 mm half-width; moving the sampled line 7 mm
+            // clear of the centreline keeps the 2 mm shader offset outside the housing.
             Some(GpuLight {
-                position: f(r.start),
+                position: f(r.start + clear),
                 kind: LIGHT_STRIP,
                 direction: f(r.normal),
                 rgb: colour.map(|c| (r.cd_per_metre * f64::from(c)) as f32),
@@ -1481,6 +1497,26 @@ mod tests {
         // A furnace is diffuse: no maps either.
         let furnace = build_gpu_scene(&scene, false, Some(Furnace { albedo: 0.5, ..Default::default() }));
         assert!(furnace.ies.is_empty() && furnace.tex == [0; 4]);
+    }
+
+    #[test]
+    fn gpu_scene_includes_horizon() {
+        let mut scene = random_prisms(&mut Rng(5), 3);
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        let without = build_gpu_scene(&scene, true, None);
+        scene.horizon = Some(horizon);
+        let with = build_gpu_scene(&scene, true, None);
+        assert_eq!(with.tris.len(), without.tris.len() + 2);
+        // After the meshes and the ground quad, with the terrain material.
+        assert_eq!(with.materials.len(), without.materials.len() + 1);
+        assert_eq!(with.materials[4], material_for("terrain"));
+        assert_eq!(with.tris.iter().filter(|t| t.material == 4).count(), 2);
+        // Without the ground quad the horizon takes the next material index.
+        let bare = build_gpu_scene(&scene, false, None);
+        assert_eq!(bare.tris.iter().filter(|t| t.material == 3).count(), 2);
+        assert_eq!(bare.materials[3], material_for("terrain"));
     }
 
     #[test]

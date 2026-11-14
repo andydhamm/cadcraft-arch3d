@@ -990,4 +990,58 @@ mod tests {
         let r = build_request(&d, &json!({"technique": "clay", "style": "shaded"})).unwrap();
         assert_eq!(r.style, "shaded");
     }
+
+    #[test]
+    fn parse_path_params_boundary_values() {
+        let p = parse_path_params(&json!({"spp": 1})).unwrap();
+        assert_eq!(p.spp, 1);
+        let p = parse_path_params(&json!({"spp": 65536})).unwrap();
+        assert_eq!(p.spp, 65536);
+        let p = parse_path_params(&json!({"bounces": 0})).unwrap();
+        assert_eq!(p.bounces, 0);
+        let p = parse_path_params(&json!({"bounces": 32})).unwrap();
+        assert_eq!(p.bounces, 32);
+        let p = parse_path_params(&json!({"seed": 0})).unwrap();
+        assert_eq!(p.seed, 0);
+        let p = parse_path_params(&json!({"seed": 4294967295u32})).unwrap();
+        assert_eq!(p.seed, 4294967295);
+    }
+
+    #[test]
+    fn parse_path_params_snapshots_edge_cases() {
+        let err = parse_path_params(&json!({"snapshots": [1, 1]})).unwrap_err().to_string();
+        assert!(err.contains("strictly ascending"), "{err}");
+        let err = parse_path_params(&json!({"snapshots": [0]})).unwrap_err().to_string();
+        assert!(err.contains("1..="), "{err}");
+        let p = parse_path_params(&json!({"spp": 100, "snapshots": [100]})).unwrap();
+        assert_eq!(p.snapshots, vec![100]);
+        let p = parse_path_params(&json!({"spp": 100, "snapshots": [1, 2, 3, 4, 5, 6, 7, 8]})).unwrap();
+        assert_eq!(p.snapshots.len(), 8);
+        let err = parse_path_params(&json!({"snapshots": [1.5]})).unwrap_err().to_string();
+        assert!(err.contains("whole number"), "{err}");
+    }
+
+    #[test]
+    fn parse_path_params_furnace_boundaries() {
+        let err = parse_path_params(&json!({"furnace": {"albedo": 0.0, "emission": 1.0}})).unwrap_err().to_string();
+        assert!(err.contains("albedo"), "{err}");
+        let err = parse_path_params(&json!({"furnace": {"albedo": 1.0, "emission": 1.0}})).unwrap_err().to_string();
+        assert!(err.contains("albedo"), "{err}");
+        let err = parse_path_params(&json!({"furnace": {"albedo": 0.5, "emission": 0.0}})).unwrap_err().to_string();
+        assert!(err.contains("emission"), "{err}");
+        let p = parse_path_params(&json!({"furnace": {"albedo": 0.5, "emission": 1000.0}})).unwrap();
+        assert_eq!(p.furnace, Some((0.5, 1000.0)));
+        let err = parse_path_params(&json!({"furnace": {"albedo": null, "emission": 1.0}})).unwrap_err().to_string();
+        assert!(err.contains("albedo"), "{err}");
+    }
+
+    #[test]
+    fn parse_path_params_float_whole_numbers() {
+        let err = parse_path_params(&json!({"spp": 256.5})).unwrap_err().to_string();
+        assert!(err.contains("spp"), "{err}");
+        let err = parse_path_params(&json!({"bounces": 4.5})).unwrap_err().to_string();
+        assert!(err.contains("bounces"), "{err}");
+        let err = parse_path_params(&json!({"seed": 0.5})).unwrap_err().to_string();
+        assert!(err.contains("seed"), "{err}");
+    }
 }

@@ -14,7 +14,9 @@ use super::tracer::{run_entry, upload_scene};
 use super::{SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX, luminance};
 use crate::types::Scene3d;
 use cadcraft_arch3d::light::{LightKind, SceneLight, light_axis};
-use cadcraft_geom::Vec3;
+use cadcraft_doc::ArchId;
+use cadcraft_doc::arch::{ArchModel, FixtureShape, Level, LightFixture, LightMount, Room, StripFacing};
+use cadcraft_geom::{Vec2, Vec3};
 use std::sync::Arc;
 
 const ENTRY: &str = "lights_test_main";
@@ -624,4 +626,59 @@ fn pt_strip_irradiance_matches_line_integral() {
         &[sample_probe(0, Vec3::new(2.0, 2.0, 2.8), down(), 64), sample_probe(0, Vec3::new(2.0, 2.0, 0.0), down(), 64)],
     );
     assert!(lux(dark[0]) < 1e-6 && lux(dark[1]) < 1e-6, "{dark:?}");
+}
+
+fn strip_model(facing: StripFacing, path: Vec<Vec2>) -> ArchModel {
+    let level = Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() };
+    let room = Room {
+        level: 0,
+        polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+        ceiling_height: Some(2.4),
+        ..Default::default()
+    };
+    let mut fixture = LightFixture::new(ArchId(1), "LED strip", Vec2::new(2.0, 2.0));
+    fixture.shape = FixtureShape::Strip;
+    fixture.kind = LightKind::Strip;
+    fixture.mount = LightMount::Ceiling;
+    fixture.level = 0;
+    fixture.path = path;
+    fixture.facing = facing;
+    fixture.lumens_per_metre = 500.0;
+    fixture.on = true;
+    fixture.kelvin = 3000.0;
+    ArchModel { levels: vec![level], rooms: vec![room], lights: vec![fixture], ..Default::default() }
+}
+
+#[test]
+fn strip_with_its_housing_lights_the_floor_under_it() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = cadcraft_arch3d::build(&strip_model(StripFacing::Down, vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)]));
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let out = run(&gpu, &gpu_scene, GpuFrame::default(), &[sample_probe(0, Vec3::new(2.0, 2.0, 0.0), up(), 1024)]);
+    let want = 49.72;
+    assert!((lux(out[0]) - want).abs() < want * 0.02, "{} lx, want {want}", lux(out[0]));
+}
+
+#[test]
+fn out_facing_strip_with_housing_lights_the_wall_it_faces() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let model = strip_model(StripFacing::Out, vec![Vec2::new(0.0, 2.0), Vec2::new(4.0, 2.0)]);
+    let scene = cadcraft_arch3d::build(&model);
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let want = {
+        let segs: Vec<_> = crate::lights::strip_runs(&scene.lights[0]).iter().map(|r| crate::lights::strip_seg(r, 1.0)).collect();
+        crate::lights::strip_irradiance_cpu(&segs, [2.0, 0.2, 1.0], [0.0, 1.0, 0.0])
+    };
+    let out = run(&gpu, &gpu_scene, GpuFrame::default(), &[sample_probe(0, Vec3::new(2.0, 0.2, 1.0), Vec3::new(0.0, 1.0, 0.0), 1024)]);
+    assert!(want > 0.0, "expected wall-side illumination from the out-facing strip");
+    assert!((lux(out[0]) - want).abs() <= want * 0.02, "{} lx, want {want}", lux(out[0]));
+}
+
+#[test]
+fn down_strip_gives_nothing_above_itself() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = cadcraft_arch3d::build(&strip_model(StripFacing::Down, vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)]));
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let out = run(&gpu, &gpu_scene, GpuFrame::default(), &[sample_probe(0, Vec3::new(2.0, 2.0, 2.8), down(), 128)]);
+    assert!(lux(out[0]) < 1e-6, "{} lx above a down strip", lux(out[0]));
 }

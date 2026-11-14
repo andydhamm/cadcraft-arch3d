@@ -4,9 +4,9 @@
 # 0.6 base cabinets on the kitchen's south wall (x 0.6..2.4, counter top 0.914) and one 0.6 wall cabinet over the first
 # (x 0.6..1.2, bottom 1.372): `backsplash {run: cb0, material: material-marble}` covers the wall face y = 0 over
 # x 0.6..2.4, 10 mm thick, from 0.914 up to 1.372 under the wall cabinet and to 1.364 elsewhere; probes find it inside
-# the 10 mm and not 15 mm out; a cabinet with `backsplash: false` drops its stretch; `top: ceiling` raises every top to
-# 2.4; `backsplash {wall: w0, height: 0.3}` covers the same face with tops 1.372 / 1.214; `backsplash {}` and a wall
-# cabinet's run are refused.
+# the 10 mm and not 15 mm out; a cabinet with `backsplash: false` drops its stretch (from every backsplash, so it is
+# switched on again before the wall one is made); `top: ceiling` raises every top to 2.4; `backsplash {wall: w0,
+# height: 0.3}` covers the same face with tops 1.372 / 1.214; `backsplash {}` and a wall cabinet's run are refused.
 # A stub fails: no backsplash rows, no segments, one top everywhere, no probe hits.
 # needs: p18-observables-1, p18-observables-2, p18-observables-3, p18-scene-plumbing-1, p18-scene-plumbing-2, p18-scene-plumbing-3, p18-scene-plumbing-4, p18-backsplash
 import os
@@ -56,6 +56,7 @@ print(f"ok: {B0} tops 1.372 under the wall cabinet, 1.364 elsewhere, 10 mm thick
 
 rr = run_ok(KITCHEN + [BASES, WALLC, BS, cmd('cabinet.edit', {"id": "cb2", "backsplash": False}), INSPECT18, probe_cmd([[2.1, 0.005, 1.1]]),
                        cmd('backsplash.edit', {"id": B0, "top": "ceiling"}), INSPECT18, probe_cmd([[1.5, 0.005, 2.3]]),
+                       cmd('cabinet.edit', {"id": "cb2", "backsplash": True}),
                        cmd('backsplash', {"wall": "w0", "height": 0.3}), INSPECT18], "per-cabinet off, to the ceiling, by wall")
 row = by_id(backsplashes_of(inspected(rr, 0)), B0, 'backsplashes')
 if max(q for s in row['segments'] for q in (s['from'][0], s['to'][0])) > 1.8 + 1e-6:
@@ -69,6 +70,8 @@ if row.get('toCeiling') is not True:
 for s in row['segments']:
     near(s.get('top'), 2.4, 1e-6, "a segment top at the ceiling")
 hit(probed(rr, [[1.5, 0.005, 2.3]], nth=1, what="ceiling")[0], 'backsplash', B0, "the backsplash at z 2.3 once it reaches the ceiling")
+if by_id(cabinets_of(inspected(rr, 2)), 'cb2', 'cabinets').get('backsplash') is not True:
+    fail("cb2's row reports backsplash true once it is switched on again")
 rows = backsplashes_of(inspected(rr, 2))
 b1 = [r for r in rows if r.get('id') != B0]
 if len(b1) != 1 or b1[0].get('wall') != 'w0':

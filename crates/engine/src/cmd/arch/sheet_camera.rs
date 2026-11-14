@@ -127,7 +127,9 @@ pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView)
         "width": render_width_mm,
         "name": image_name,
     });
-    let image = crate::cmd::image::run_imageattach(s, &value)?;
+    let attach_result = crate::cmd::image::run_imageattach(s, &value);
+    s.state_mut()?.space = previous_space;
+    let image = attach_result?;
     let handle = image
         .get("handle")
         .and_then(Value::as_str)
@@ -136,7 +138,6 @@ pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView)
     s.doc_mut()?.modify_entity(handle, |e| {
         set_link(&mut e.common.xdata, LINK_SHEET_IMAGE, sheet_name, view.number);
     })?;
-    s.state_mut()?.space = previous_space;
 
     let mut doc = s.doc_mut()?;
     if let Some(sheet) = doc.arch.sheet_mut(sheet_name) {
@@ -273,5 +274,122 @@ mod tests {
         place_camera_image(&mut s, "Cover", &view).unwrap();
         let sheet = s.doc().unwrap().arch.sheet("Cover").unwrap();
         assert_eq!(sheet.views[0].size, [200.0, 100.0]);
+    }
+
+    #[test]
+    fn nan_width_is_refused() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("Cover", 3));
+        d.arch.sheets.push(Sheet { name: "Cover".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
+        d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "front".into(), width: f64::NAN, pixels: [200, 100] },
+            scale: 0.0,
+            at: [0.0, 0.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
+        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        assert!(err.contains("finite"), "{err}");
+    }
+
+    #[test]
+    fn zero_width_is_refused() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("Cover", 3));
+        d.arch.sheets.push(Sheet { name: "Cover".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
+        d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "front".into(), width: 0.0, pixels: [200, 100] },
+            scale: 0.0,
+            at: [0.0, 0.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
+        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        assert!(err.contains("greater than zero"), "{err}");
+    }
+
+    #[test]
+    fn pixels_out_of_range_are_refused() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("Cover", 3));
+        d.arch.sheets.push(Sheet { name: "Cover".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
+        d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [15, 100] },
+            scale: 0.0,
+            at: [0.0, 0.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
+        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        assert!(err.contains("between 16 and 4096"), "{err}");
+    }
+
+    #[test]
+    fn image_name_sanitizes_special_chars() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("Cover Sheet!", 3));
+        d.arch.sheets.push(Sheet { name: "Cover Sheet!".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
+        d.arch.sheet_mut("Cover Sheet!").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [200, 100] },
+            scale: 0.0,
+            at: [0.0, 0.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("Cover Sheet!").unwrap().views[0].clone();
+        let image = place_camera_image(&mut s, "Cover Sheet!", &view).unwrap().unwrap();
+        assert_eq!(image, "sheet-CoverSheet-1.png");
+    }
+
+    #[test]
+    fn tall_aspect_ratio_height_is_correct() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("Cover", 3));
+        d.arch.sheets.push(Sheet { name: "Cover".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
+        d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [100, 200] },
+            scale: 0.0,
+            at: [0.0, 0.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
+        place_camera_image(&mut s, "Cover", &view).unwrap();
+        let sheet = s.doc().unwrap().arch.sheet("Cover").unwrap();
+        // width 0.2m = 200mm, pixels 100x200, so height = 200 * (200/100) = 400mm
+        assert_eq!(sheet.views[0].size, [200.0, 400.0]);
     }
 }

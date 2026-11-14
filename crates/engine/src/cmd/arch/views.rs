@@ -583,4 +583,19 @@ mod tests {
         assert!(v.room.is_some_and(|id| arch.room(id).is_some()));
         assert!(v.generated.as_ref().is_some_and(|g| g.error.is_none() && !g.lines.is_empty()));
     }
+
+    #[test]
+    fn elevation_with_level() {
+        let (mut s, west, _) = two_rooms();
+        // Both rooms are on level 0
+        let r = run(&mut s, "elevation", json!({"room": west, "side": "east", "level": 0}));
+        assert!(r.is_ok(), "{r:?}");
+    }
+
+    #[test]
+    fn view_delete_nonexistent() {
+        let (mut s, _, _) = two_rooms();
+        let r = run(&mut s, "view.delete", json!({"view": "v99"}));
+        assert!(r.is_err(), "{r:?}");
+    }
 }

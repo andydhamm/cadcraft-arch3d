@@ -19,42 +19,35 @@ fn edge_normal(a: Vec2, b: Vec2, ccw: bool) -> Vec2 {
     if ccw { n } else { -n }
 }
 
-fn profile_section(profile: EdgeProfile, thickness: f64) -> Vec<[f64; 2]> {
-    let t = thickness;
+/// The nose profile of an edge (x out, y up, counter-clockwise, from (0,0)); empty for square.
+fn nose_profile(profile: EdgeProfile, t: f64) -> Vec<[f64; 2]> {
     match profile {
-        EdgeProfile::Square => vec![[0.0, 0.0], [0.0, t]],
-        EdgeProfile::Eased => {
-            let r = 0.003;
-            vec![[0.0, 0.0], [r, 0.0], [r, t - r], [0.0, t]]
-        }
-        EdgeProfile::Bevel => {
-            let r = 0.01;
-            vec![[0.0, 0.0], [r, 0.0], [r, t - r], [0.0, t]]
+        EdgeProfile::Square => Vec::new(),
+        EdgeProfile::Eased | EdgeProfile::Bevel => {
+            let c = if profile == EdgeProfile::Eased { 0.003 } else { 0.01 };
+            vec![[0.0, 0.0], [c, 0.0], [c, t - c], [0.0, t]]
         }
         EdgeProfile::Bullnose => {
             let r = t / 2.0;
-            let mut pts = vec![[0.0, 0.0]];
             let steps = 12usize;
-            for i in 1..=steps {
-                let a = -std::f64::consts::PI / 2.0 + std::f64::consts::PI * (i as f64) / (steps as f64);
-                let x = r * a.cos();
-                let y = r * (1.0 + a.sin());
-                let p = [x, y];
-                if pts.last().is_none_or(|last| (last[0] - p[0]).abs() > 1e-12 || (last[1] - p[1]).abs() > 1e-12) {
-                    pts.push(p);
-                }
+            let mut pts = vec![[0.0, 0.0]];
+            for i in 1..steps {
+                let a = -std::f64::consts::FRAC_PI_2 + std::f64::consts::PI * (i as f64) / (steps as f64);
+                pts.push([r * a.cos(), r * (1.0 + a.sin())]);
             }
-            let mut twice = 0.0;
-            for i in 0..pts.len() {
-                let a = pts[i];
-                let b = pts[(i + 1) % pts.len()];
-                twice += a[0] * b[1] - b[0] * a[1];
-            }
-            if twice < 0.0 {
-                pts.reverse();
-            }
+            pts.push([0.0, t]);
             pts
         }
+    }
+}
+
+/// How far the slab edge is pulled in so the nose reaches the original edge line.
+fn nose_depth(profile: EdgeProfile, t: f64) -> f64 {
+    match profile {
+        EdgeProfile::Square => 0.0,
+        EdgeProfile::Eased => 0.003,
+        EdgeProfile::Bevel => 0.01,
+        EdgeProfile::Bullnose => t / 2.0,
     }
 }
 
@@ -82,40 +75,46 @@ pub fn countertop_meshes(ct: &Countertop, outline: Option<&CounterOutline>, leve
     let ccw = o.ring.len() >= 3 && cadcraft_arch::join::polygon_area(&o.ring) >= 0.0;
     let mut meshes = Vec::new();
 
-    let mut profile_meshes = Vec::new();
-    for i in 0..ct.polygon.len() {
-        let edge = ct.edge(i);
-        if edge.profile == EdgeProfile::Square || edge.sagitta != 0.0 || edge.waterfall {
+    // Ring edge k (counter-clockwise) is polygon edge `src(k)`; see `custom_outline`.
+    let n = o.ring.len();
+    let cw = cadcraft_arch::join::polygon_area(&ct.polygon) < 0.0;
+    let src = |k: usize| if cw { (2 * n).saturating_sub(2 + k) % n.max(1) } else { k };
+    let arc = |k: usize| o.sagittas.get(k).is_some_and(|s| *s != 0.0);
+    let mut depths: Vec<f64> = (0..n)
+        .map(|k| {
+            let e = ct.edge(src(k));
+            if e.profile == EdgeProfile::Square || arc(k) || e.waterfall || arc((k + n - 1) % n) || arc((k + 1) % n) {
+                0.0
+            } else {
+                nose_depth(e.profile, o.thickness)
+            }
+        })
+        .collect();
+    let slab_ring = match cadcraft_arch::poly::offset_polygon(&o.ring, &depths, false) {
+        Some(r) if r.len() == n => r,
+        _ => {
+            depths.iter_mut().for_each(|d| *d = 0.0);
+            o.ring.clone()
+        }
+    };
+    let z0 = level + o.top - o.thickness;
+    for k in 0..n {
+        if depths.get(k).copied().unwrap_or(0.0) <= 0.0 {
             continue;
         }
-        let a = ct.polygon[i];
-        let b = ct.polygon[(i + 1) % ct.polygon.len()];
-        let dir = b - a;
-        let len = dir.len();
-        if !(len.is_finite() && len > 1e-12) {
-            continue;
-        }
-        let outward = edge_normal(a, b, ccw);
-        let inward = -outward;
-        let profile_proud = if edge.profile == EdgeProfile::Bullnose { 0.002 } else { 0.001 };
-        let path = vec![a + inward * profile_proud, b + inward * profile_proud];
-        let z = [level + ct.top - ct.thickness, level + ct.top - ct.thickness];
-        let prof = profile_section(edge.profile, ct.thickness);
-        // Keep the profile slightly proud of the edge line so the curve sits just off the slab face
-        // and avoids a zero-width seam with the slab outline.
-        let side = if ccw { 1.0 } else { -1.0 };
-        if let Some(m) = crate::sweep::sweep(&prof, &path, &z, false, side, "countertop", ct.id) {
+        let (Some(&a), Some(&b)) = (slab_ring.get(k), slab_ring.get((k + 1) % n)) else { continue };
+        let prof = nose_profile(ct.edge(src(k)).profile, o.thickness);
+        if let Some(mut m) = crate::sweep::sweep(&prof, &[a, b], &[z0, z0], false, -1.0, "countertop", ct.id) {
+            m.level_elevation = level;
             if !m.indices.is_empty() {
-                profile_meshes.push(m);
+                meshes.push(m);
             }
         }
     }
-    meshes.extend(profile_meshes);
 
-    let sagittas: Vec<f64> = (0..ct.polygon.len()).map(|i| ct.edge(i).sagitta).collect();
     let mut slab = Mesh::new("countertop", ct.id);
     slab.level_elevation = level;
-    slab.push_prism_with_holes(&sampled_ring(&o.ring, &sagittas), &o.holes, level + o.top - o.thickness, level + o.top);
+    slab.push_prism_with_holes(&sampled_ring(&slab_ring, &o.sagittas), &o.holes, z0, level + o.top);
     if !slab.indices.is_empty() {
         meshes.push(slab);
     }
@@ -160,6 +159,65 @@ mod tests {
         let outline = custom_outline(&m, &ct).unwrap();
         let meshes = countertop_meshes(&ct, Some(&outline), 0.0);
         assert!(!meshes.is_empty());
+    }
+
+    fn bull_counter(cw: bool, profile: EdgeProfile) -> Vec<Mesh> {
+        let mut m = ArchModel::default();
+        let mut poly = vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)];
+        let mut ct = Countertop { top: 0.914, thickness: 0.038, edges: vec![CounterEdge::default(); 4], ..Default::default() };
+        if cw {
+            poly.reverse();
+            ct.edges[2].profile = profile;
+        } else {
+            ct.edges[0].profile = profile;
+        }
+        ct.polygon = poly;
+        let id = m.push_countertop(ct);
+        let ct = m.countertop(id).cloned().unwrap_or_default();
+        let o = custom_outline(&m, &ct);
+        countertop_meshes(&ct, o.as_ref(), 0.0)
+    }
+
+    fn hit(ms: &[Mesh], x: f64, y: f64, z: f64) -> bool {
+        ms.iter().any(|m| crate::probe::probe_mesh(m, cadcraft_geom::Vec3::new(x, y, z)))
+    }
+
+    #[test]
+    fn bullnose_rounds_the_top_front_corner() {
+        let ms = bull_counter(false, EdgeProfile::Bullnose);
+        assert!(!hit(&ms, 1.0, 0.002, 0.912));
+        assert!(hit(&ms, 1.0, 0.5, 0.9));
+        assert!(hit(&ms, 1.0, 0.03, 0.912));
+    }
+
+    #[test]
+    fn bullnose_nose_reaches_the_edge_line_at_mid_thickness() {
+        let ms = bull_counter(false, EdgeProfile::Bullnose);
+        assert!(hit(&ms, 1.0, 0.002, 0.895));
+        assert!(!hit(&ms, 1.0, -0.001, 0.895));
+    }
+
+    #[test]
+    fn square_edge_keeps_the_full_corner() {
+        let ms = bull_counter(false, EdgeProfile::Square);
+        assert!(hit(&ms, 1.0, 0.002, 0.912));
+    }
+
+    #[test]
+    fn clockwise_polygon_profiles_the_same_edge() {
+        let ms = bull_counter(true, EdgeProfile::Bullnose);
+        assert!(!hit(&ms, 1.0, 0.002, 0.912));
+        assert!(hit(&ms, 1.0, 0.002, 0.895));
+        assert!(hit(&ms, 1.0, 0.03, 0.912));
+    }
+
+    #[test]
+    fn profiled_counter_meshes_are_manifold() {
+        for p in [EdgeProfile::Bullnose, EdgeProfile::Eased, EdgeProfile::Bevel] {
+            for m in bull_counter(false, p) {
+                assert!(m.is_manifold());
+            }
+        }
     }
 
     #[test]

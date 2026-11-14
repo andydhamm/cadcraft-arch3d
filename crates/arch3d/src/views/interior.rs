@@ -122,7 +122,16 @@ pub(crate) fn restrict(model: &ArchModel, scene: &Scene3d, view: &ArchView) -> R
         Clip { n: [0.0, 0.0, -1.0], c: -z1 },
     ];
 
-    let level_ok = |m: &Mesh| (m.level_elevation - z0).abs() <= PLANE_TOL;
+    // A mesh without a recorded level (cabinet carcass and fronts) belongs to the room when it stands between the
+    // floor and the ceiling.
+    let level_ok = |m: &Mesh| {
+        if m.level_elevation.is_finite() {
+            (m.level_elevation - z0).abs() <= PLANE_TOL
+        } else {
+            let lo = m.bounds().min[2];
+            lo.is_finite() && lo >= z0 - PLANE_TOL && lo < z1
+        }
+    };
     let input: usize = scene.meshes.iter().filter(|m| level_ok(m)).map(Mesh::triangle_count).sum();
     let cap = input.saturating_mul(TRIANGLE_FACTOR);
     let mut total = 0usize;
@@ -291,7 +300,7 @@ mod tests {
             meshes: vec![
                 quad_x(5.95, 0.5, 3.0, 0.0, 2.0, 1, 0.0),
                 quad_x(5.95, 0.5, 3.0, 0.0, 2.0, 2, 2.7),
-                quad_x(5.95, 0.5, 3.0, 0.0, 2.0, 3, f64::NAN),
+                quad_x(5.95, 0.5, 3.0, 3.0, 5.0, 3, f64::NAN),
             ],
             ..Default::default()
         };
@@ -325,5 +334,120 @@ mod tests {
         assert_eq!(e, "the room of R East is gone");
         let g = super::super::generate(&m, &Scene3d::default(), &v, 2);
         assert_eq!(g.error.as_deref(), Some("the room of R East is gone"));
+    }
+
+    #[test]
+    fn restrict_non_convex_room() {
+        let (mut m, v) = room_model();
+        // Make the room L-shaped (non-convex) by cutting a corner.
+        let mut room = m.room(v.room.unwrap()).cloned().unwrap();
+        room.polygon =
+            vec![Vec2::new(0.0, 0.05), Vec2::new(6.0, 0.05), Vec2::new(6.0, 2.0), Vec2::new(4.0, 2.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+        m.rooms.clear();
+        m.push_room(room);
+        let scene = Scene3d { meshes: vec![quad_x(5.95, -10.0, 10.0, -1.0, 5.0, 1, 0.0)], ..Default::default() };
+        let out = restrict(&m, &scene, &v).unwrap();
+        // The clipped result should only contain geometry within the L-shaped room's extent.
+        let (lo, hi) = bounds(&out);
+        assert!(hi[1] <= 4.0 + 1e-5, "y max {hi:?} exceeds room");
+        assert!(lo[1] >= 0.05 - 1e-5, "y min {lo:?} below room");
+    }
+
+    #[test]
+    fn restrict_nan_coordinates() {
+        let (mut m, v) = room_model();
+        // Add a wall with NaN coordinates.
+        m.push_wall(cadcraft_doc::Wall {
+            start: Vec2::new(f64::NAN, 0.0),
+            end: Vec2::new(1.0, 0.0),
+            thickness: 0.1,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d { meshes: vec![quad_x(5.95, 0.5, 3.0, 0.0, 2.0, 1, 0.0)], ..Default::default() };
+        // Should not panic; may succeed or return an error.
+        let _ = restrict(&m, &scene, &v);
+    }
+
+    #[test]
+    fn interior_view_keeps_the_cabinet_box_and_front() {
+        use cadcraft_doc::arch::{ArchKind, Cabinet, CabinetKind, Fronts};
+        let (mut m, v) = room_model();
+        // A base cabinet on the east wall (inner face x = 5.95): x 5.35..5.95, y 1.7..2.3, counter top 0.914.
+        m.push_cabinet(Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(5.95, 2.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            fronts: Fronts::Doors,
+            doors: 2,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.0,
+            ..Default::default()
+        });
+        let scene = crate::build(&m);
+        let g = super::super::generate(&m, &scene, &v, 1);
+        assert!(g.error.is_none(), "{:?}", g.error);
+        let cab: Vec<_> = g.lines.iter().filter(|l| l.kind == ArchKind::Cabinet && l.object == ArchId(0)).collect();
+        assert!(!cab.is_empty());
+        let (mut u0, mut v0, mut u1, mut v1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for l in &cab {
+            for p in [l.a, l.b] {
+                u0 = u0.min(p[0]);
+                u1 = u1.max(p[0]);
+                v0 = v0.min(p[1]);
+                v1 = v1.max(p[1]);
+            }
+        }
+        let top = 0.914;
+        // u = -y for a look along +x.
+        let ok = |a: f64, b: f64| (a - b).abs() < 1e-3;
+        assert!(ok(u0, -2.3) && ok(u1, -1.7) && ok(v0, 0.0) && ok(v1, top), "{u0} {v0} {u1} {v1}");
+        let covered = |fixed_u: Option<f64>, fixed_v: Option<f64>, lo: f64, hi: f64| {
+            let mut spans: Vec<(f64, f64)> = cab
+                .iter()
+                .filter_map(|l| match (fixed_u, fixed_v) {
+                    (Some(u), _) if ok(l.a[0], u) && ok(l.b[0], u) => Some((l.a[1].min(l.b[1]), l.a[1].max(l.b[1]))),
+                    (_, Some(w)) if ok(l.a[1], w) && ok(l.b[1], w) => Some((l.a[0].min(l.b[0]), l.a[0].max(l.b[0]))),
+                    _ => None,
+                })
+                .collect();
+            spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let mut t = lo;
+            for (s0, s1) in spans {
+                if s0 <= t + 1e-3 {
+                    t = t.max(s1);
+                }
+            }
+            t >= hi - 1e-3
+        };
+        assert!(covered(Some(-2.3), None, 0.0, top), "left side");
+        assert!(covered(Some(-1.7), None, 0.0, top), "right side");
+        assert!(covered(None, Some(top), -2.3, -1.7), "top edge");
+        let inner = cab.iter().any(|l| {
+            [l.a, l.b].iter().all(|p| p[0] > -2.3 + 1e-3 && p[0] < -1.7 - 1e-3 || (p[1] > 1e-3 && p[1] < top - 1e-3))
+                && [l.a, l.b].iter().any(|p| p[0] > -2.3 + 1e-3 && p[0] < -1.7 - 1e-3 && p[1] > 1e-3 && p[1] < top - 1e-3)
+        });
+        assert!(inner, "an inner front line");
+    }
+
+    #[test]
+    fn restrict_empty_scene() {
+        let (m, v) = room_model();
+        let scene = Scene3d::default();
+        let out = restrict(&m, &scene, &v).unwrap();
+        assert!(out.meshes.is_empty());
+    }
+
+    #[test]
+    fn resolve_room_no_room_point() {
+        let (m, v) = room_model();
+        // A view with no room_point
+        let v2 = ArchView { room_point: None, ..v.clone() };
+        // Should still resolve to the room by id
+        assert_eq!(resolve_room(&m, &v2), v.room);
     }
 }

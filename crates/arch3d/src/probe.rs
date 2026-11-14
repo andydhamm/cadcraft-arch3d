@@ -421,6 +421,19 @@ pub fn probe(scene: &Scene3d, p: Vec3) -> Option<Hit> {
             return Some(Hit { id: mesh_label(mesh), part: part_of(mesh).to_string(), level: mesh_level(mesh) });
         }
     }
+    // After every real mesh: the horizon slab (never in `meshes`); it has no level.
+    // It starts a little beyond the site (2 m past the scene's bounds), so the ground just outside
+    // the skirt stays empty space as before.
+    const HORIZON_MARGIN: f64 = 2.0;
+    let b = &scene.bounds;
+    let near_site =
+        p.x >= b.min[0] - HORIZON_MARGIN && p.x <= b.max[0] + HORIZON_MARGIN && p.y >= b.min[1] - HORIZON_MARGIN && p.y <= b.max[1] + HORIZON_MARGIN;
+    if let Some(h) = &scene.horizon
+        && !near_site
+        && probe_mesh(h, p)
+    {
+        return Some(Hit { id: "horizon".to_string(), part: "horizon".to_string(), level: f64::NAN });
+    }
     None
 }
 
@@ -428,8 +441,37 @@ pub fn probe(scene: &Scene3d, p: Vec3) -> Option<Hit> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn probe_reports_horizon() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::Vec2;
+        let t = Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            pad: false,
+            ..Default::default()
+        };
+        let model = cadcraft_doc::arch::ArchModel { terrain: Some(t), ..Default::default() };
+        let scene = Scene3d::build(&model);
+        assert!(scene.horizon.is_some());
+        let far = probe(&scene, Vec3::new(500.0, 500.0, -0.5)).expect("horizon hit");
+        assert_eq!((far.id.as_str(), far.part.as_str()), ("horizon", "horizon"));
+        assert!(far.level.is_nan());
+        assert!(probe(&scene, Vec3::new(500.0, 500.0, 0.5)).is_none());
+        let own = probe(&scene, Vec3::new(20.0, 15.0, -0.5)).expect("terrain hit");
+        assert_eq!(own.part, "terrain");
+    }
+
     fn named(material: &str, id: u32) -> Mesh {
         Mesh::new(material, ArchId(id))
+    }
+
+    #[test]
+    fn cabinet_meshes_are_cabinet_kind() {
+        use cadcraft_doc::arch::ArchKind;
+        for mat in ["cabinet-box", "cabinet-front", "paint:cabinet/cb0/carcass", "paint:cabinet/cb0/front"] {
+            assert_eq!(arch_kind(&named(mat, 0)), ArchKind::Cabinet, "{mat}");
+        }
     }
 
     #[test]

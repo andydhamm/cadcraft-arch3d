@@ -119,7 +119,7 @@ fn pick_lights(r: ptr<function, Rng>) -> Pick {
 // lights and the sun.
 fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> {
     var sum = vec3<f32>(0.0);
-    let o = p + n * PT_EPS;
+    let o = pt_offset(p, n);
     let pick = pick_lights(r);
     for (var k = 0u; k < pick.count; k = k + 1u) {
         let u = vec2<f32>(rand(r), rand(r));
@@ -288,8 +288,10 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
             mode = AREA_MIS;
             prev_pdf = s.pdf;
         }
-        // Step off the surface on the side the new direction leaves to.
-        o = p + select(1.0, -1.0, dot(s.dir, tri.n) < 0.0) * tri.n * PT_EPS;
+        // Step off the surface on the side the new direction leaves to, with an epsilon that scales
+        // with the hit point's size so far-away horizon meshes do not self-shadow themselves.
+        let off = select(tri.n, -tri.n, dot(s.dir, tri.n) < 0.0);
+        o = pt_offset(p, off);
         d = s.dir;
         if (depth >= frame.bounces) {
             let q = min(max(throughput.x, max(throughput.y, throughput.z)), 0.95);
@@ -347,7 +349,7 @@ fn irradiance_main(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     let probe = probes[id.x];
     let n = normalize(probe.normal);
-    let o = probe.point + n * PT_EPS;
+    let o = pt_offset(probe.point, n);
     var sum = vec3<f32>(0.0);
     for (var k = 0u; k < frame.spp_this_pass; k = k + 1u) {
         var r = rng_new(id.x, frame.sample_base + k, frame.seed);

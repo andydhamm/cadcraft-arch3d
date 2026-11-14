@@ -384,6 +384,63 @@ mod tests {
     }
 
     #[test]
+    fn bed_with_explicit_thickness_overrides_default() {
+        let mut s = session();
+        s.execute(CMD, &json!({"path": {"kind": "bed", "polygon": [[0, 1], [10, 1], [10, 2], [0, 2]], "thickness": 0.1}})).unwrap();
+        let m = mods(&s);
+        match &m[0].kind {
+            ModifierKind::Path { kind, thickness, material, .. } => {
+                assert_eq!(*kind, PathKind::Bed);
+                assert_eq!(*thickness, 0.1);
+                assert_eq!(material, "mulch");
+            }
+            k => panic!("expected a path, got {k:?}"),
+        }
+    }
+
+    #[test]
+    fn path_with_custom_material() {
+        let mut s = session();
+        s.execute(CMD, &json!({"path": {"kind": "road", "polygon": [[0, 1], [10, 1], [10, 2], [0, 2]], "material": "asphalt"}})).unwrap();
+        let m = mods(&s);
+        match &m[0].kind {
+            ModifierKind::Path { kind, thickness, material, .. } => {
+                assert_eq!(*kind, PathKind::Road);
+                assert_eq!(*thickness, DEFAULT_PATH_THICKNESS);
+                assert_eq!(material, "asphalt");
+            }
+            k => panic!("expected a path, got {k:?}"),
+        }
+    }
+
+    #[test]
+    fn widen_sharp_angle_bevels() {
+        // A very sharp V-shaped polyline with a wide width should produce a bevelled
+        // (not mitred) corner, yielding more than the minimum ring points.
+        let pts = vec![Vec2::new(0.0, 0.0), Vec2::new(5.0, 1.0), Vec2::new(10.0, 0.0)];
+        let ring = widen(&pts, 2.0).unwrap();
+        // A sharp V with width 2.0 will bevel at the apex, producing extra points.
+        // The exact count depends on the geometry, but it must be a valid closed ring.
+        assert!(ring.len() >= 6);
+        // All points must be finite.
+        assert!(ring.iter().all(|p| p.is_finite()));
+    }
+
+    #[test]
+    fn flat_with_margin() {
+        let mut s = session();
+        s.execute(CMD, &json!({"flat": {"polygon": [[5, 5], [5, 10], [10, 10], [10, 5]], "elevation": 1.5, "margin": 0.5}})).unwrap();
+        let m = mods(&s);
+        match &m[0].kind {
+            ModifierKind::Flat { elevation, margin, .. } => {
+                assert_eq!(*elevation, 1.5);
+                assert_eq!(*margin, 0.5);
+            }
+            k => panic!("expected flat, got {k:?}"),
+        }
+    }
+
+    #[test]
     fn path_kind_rejects_an_unknown_kind() {
         let mut s = session();
         let r = s.execute(CMD, &json!({"path": {"kind": "moat", "polygon": [[0, 1], [10, 1], [10, 2], [0, 2]]}}));

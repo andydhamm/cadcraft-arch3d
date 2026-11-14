@@ -822,6 +822,44 @@ mod tests {
         assert!(e.contains("Nope"), "{e}");
     }
 
+    #[test]
+    fn export_plan_view_with_non_string_is_refused() {
+        let mut s = plan_view_session();
+        assert!(s.execute("export", &json!({"format": "svg", "planView": 3})).is_err());
+        assert!(s.execute("export", &json!({"format": "svg", "planView": true})).is_err());
+        assert!(s.execute("export", &json!({"format": "svg", "planView": []})).is_err());
+    }
+
+    #[test]
+    fn export_plan_view_null_is_treated_as_absent() {
+        let ours = our_hooks();
+        let mut s = plan_view_session();
+        if !ours {
+            return;
+        }
+        let r = s.execute("export", &json!({"format": "svg", "planView": null})).unwrap();
+        assert!(r["data"].is_string());
+    }
+
+    #[test]
+    fn export_plan_view_empty_string_is_refused() {
+        let mut s = plan_view_session();
+        let e = s.execute("export", &json!({"format": "svg", "planView": ""})).unwrap_err().to_string();
+        assert!(e.contains("no plan view"), "{e}");
+    }
+
+    #[test]
+    fn export_plan_view_restores_session_on_export_error() {
+        let ours = our_hooks();
+        let mut s = plan_view_session();
+        if !ours {
+            return;
+        }
+        let doc = s.state().unwrap().doc.clone();
+        assert!(s.execute("export", &json!({"format": "xyz", "planView": "Electrical"})).is_err());
+        assert!(Arc::ptr_eq(&doc, &s.state().unwrap().doc), "the session's drawing is put back");
+    }
+
     fn view_session() -> Session {
         use cadcraft_doc::arch::{ArchId, ArchView, ViewGeometry, ViewLine, ViewRing};
         let mut s = session();
@@ -868,6 +906,87 @@ mod tests {
         let e = s.execute("export", &json!({ "format": "png", "view": "v9" })).unwrap_err().to_string();
         assert!(e.contains("v9"), "{e}");
         assert!(s.execute("export", &json!({ "format": "png", "view": "" })).is_err());
+    }
+
+    #[test]
+    fn export_of_a_view_with_no_geometry_is_refused() {
+        let ours = our_hooks();
+        let mut s = view_session();
+        if !ours {
+            return;
+        }
+        // Clear all generated geometry
+        let d = s.doc_mut().unwrap();
+        if let Some(v) = d.arch.views.first_mut() {
+            if let Some(g) = v.generated.as_mut() {
+                g.lines.clear();
+                g.rings.clear();
+                g.dims.clear();
+            }
+        }
+        let e = s.execute("export", &json!({ "format": "svg", "view": "v0" })).unwrap_err().to_string();
+        assert!(e.contains("no geometry"), "{e}");
+    }
+
+    #[test]
+    fn export_of_a_view_with_non_finite_points_drops_them() {
+        let ours = our_hooks();
+        let mut s = view_session();
+        if !ours {
+            return;
+        }
+        // Add a line with NaN and Infinity coordinates
+        let d = s.doc_mut().unwrap();
+        if let Some(v) = d.arch.views.first_mut() {
+            if let Some(g) = v.generated.as_mut() {
+                g.lines.push(cadcraft_doc::arch::ViewLine { a: [f64::NAN, 0.0], b: [1.0, f64::INFINITY], ..Default::default() });
+            }
+        }
+        // Should still export successfully, just without the non-finite line
+        let r = s.execute("export", &json!({ "format": "svg", "view": "v0" })).unwrap();
+        assert!(r["data"].is_string());
+    }
+
+    #[test]
+    fn export_of_a_view_with_dimensions_includes_them() {
+        let ours = our_hooks();
+        let mut s = view_session();
+        if !ours {
+            return;
+        }
+        // Add a width dimension
+        let d = s.doc_mut().unwrap();
+        if let Some(v) = d.arch.views.first_mut() {
+            if let Some(g) = v.generated.as_mut() {
+                g.dims.push(cadcraft_doc::arch::ViewDim {
+                    kind: cadcraft_doc::arch::DimKind::Width,
+                    a: [0.0, 0.0],
+                    b: [4.0, 0.0],
+                    at: [2.0, -1.0],
+                    ..Default::default()
+                });
+            }
+        }
+        let r = s.execute("export", &json!({ "format": "svg", "view": "v0" })).unwrap();
+        // 2 lines + 1 ring + 3 dim segments + 2 margin marks = 8 entities
+        let data = base64_decode(r["data"].as_str().unwrap()).unwrap();
+        assert_eq!(data, b"export.svg:8");
+    }
+
+    #[test]
+    fn export_of_a_level_with_duplicate_names_picks_first() {
+        let ours = our_hooks();
+        let mut s = session();
+        if !ours {
+            return;
+        }
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 0, name: "Main".into(), ..Default::default() });
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 1, name: "Main".into(), elevation: 3.0, ..Default::default() });
+        // Exporting by name should pick the first level with that name
+        let r = s.execute("export", &json!({ "format": "svg", "level": "Main" })).unwrap();
+        assert_eq!(r["format"], "svg");
+        assert!(r["data"].is_string());
     }
 
     #[test]

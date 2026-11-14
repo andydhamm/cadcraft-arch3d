@@ -49,6 +49,7 @@ pub use cadcraft_doc as doc;
 pub use cadcraft_fonts as fonts;
 pub use cadcraft_geom as geom;
 pub use cadcraft_render as render;
+pub use cmd::arch::look::{effective_look, effective_sun_dir};
 /// The app's 3D renderer behind `render` and `sunstudy` (phase 10): the CLI and the desktop app install it.
 pub use cmd::arch::render::{
     FinalMode, IlluminanceRequest, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, render_hooks, set_render_hooks,
@@ -57,6 +58,28 @@ pub use cmd::arch::render::{
 pub use cmd::hatch::{HatchPicks, PatternChoice, PickMode, pattern_choices};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use prompt::{Accept, DisplayOnly, Drag, Input, Interactive, Picker, Prompt, Step};
+
+/// The draw look used for the active view: the active camera's own look or the global one plus
+/// the camera's overview state when the active camera is an overview.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ViewLook {
+    pub look: cadcraft_doc::arch::Look,
+    pub sun_dir: Option<[f64; 3]>,
+    pub overview: Option<(u32, bool)>,
+}
+
+/// The active view look in the current drawing: the saved camera's look wins, else the global one.
+pub fn view_look(doc: &Drawing) -> ViewLook {
+    let arch = &doc.arch;
+    let camera = arch.active_camera.as_deref().and_then(|name| arch.camera_by_name(name));
+    let look = effective_look(arch, camera);
+    let sun_dir = effective_sun_dir(arch, &look, None);
+    let overview = camera.filter(|c| c.kind == cadcraft_doc::arch::CameraKind::Overview).map(|c| {
+        let level = c.level.unwrap_or_else(|| arch.plan_level.unwrap_or(0));
+        (level, c.lower_levels.unwrap_or(true))
+    });
+    ViewLook { look, sun_dir, overview }
+}
 
 mod doc_state;
 mod error;

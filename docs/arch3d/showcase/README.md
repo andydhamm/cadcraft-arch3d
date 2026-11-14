@@ -2,11 +2,22 @@
 
 A split-entry bi-level house built from a single JSON command script.
 
+## Phase 19 — light, sky and cameras
+
+The dusk/noon/overview demo uses a calibrated site, sky and HDRI backdrops, saved cameras, named sun angles and a cutaway floor overview:
+
+- [Phase 19 demo](./phase-19-demo.json)
+- dusk: twilight sky with lit windows and strip lights, a `sunangle` in the -3° to 0° range and a saved `dusk` camera
+- noon: a noon sun plus the `polyhaven:kloofendal-puresky` HDRI, path-traced under the sky
+- overview: Level 0 cutaway view with the saved `overview` camera and its own look
+
+
 ## The house
 
 - **Lower** — a basement level at elevation **-1.2 m** (below finished grade).
 - **Entry** — a landing level at elevation **0.15 m** holding the front door (wall `w0`, offset 4.5, y = 0) and a small utility room.
 - **Main** — the above-grade level at elevation **1.5 m**, with **at least 371.6 m²** of above-grade room area.
+- **Phase 18 finish** — the showcase kitchen gains a corner base run, a detached island counter with a seating overhang and waterfall edge, crown on the wall cabinets, a backsplash, a tall wall-oven cabinet, fillers and open shelves; both baths add frameless glass shower doors, a split pony wall and a niche; room moldings run on the finished rooms.
 
 The site is a sloping lot that rises about **1.5 m** from the front (y = -5) to the back (y = 35), so the Main level stays above grade all round while the Lower level sits below it. A driveway, two sidewalks and two mulch planting beds are draped on the terrain, and ten plants (four trees, six shrubs) sit outside the house footprint.
 
@@ -81,4 +92,10 @@ cadcraft-cli run --metric --commands docs/arch3d/showcase/bilevel.json --cmd 'ar
 
 ```sh
 CADCRAFT_RENDER_ADAPTER=fallback python3 tools/showcase/render_all.py --out docs/arch3d/showcase/renders
+```
+
+`docs/arch3d/showcase/phase-21-showcase.json` adds the full drawing set on top of the two files above (schedules, interior elevations and the sheet set); replay it after them and plot the whole set as one PDF:
+
+```sh
+cadcraft-cli run --metric --commands docs/arch3d/showcase/bilevel.json --commands docs/arch3d/showcase/phase-20-showcase.json --commands docs/arch3d/showcase/phase-21-showcase.json --cmd 'plot {"sheets": "all", "path": "showcase-set.pdf"}'
 ```

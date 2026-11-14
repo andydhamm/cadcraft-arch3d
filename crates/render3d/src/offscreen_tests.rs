@@ -755,3 +755,83 @@ fn flat_normal_layer_changes_nothing() {
     assert!(mean > 5.0, "the wall is lit: {mean}");
     assert!(diff < 1.0, "a flat normal map changes the picture by {diff} levels");
 }
+
+// ---- the interactive cutaway view ---------------------------------------------------------------
+
+/// A shadowing sun from `dir` (toward the sun), no sky, a manual 15 EV100.
+fn shadow_sun(dir: [f32; 3]) -> Lighting {
+    Lighting { sun_shadow: true, ..sun_from(dir) }
+}
+
+/// The pixel at `at` of the interactive lit frame of `s` (key `key`) from `camera`, as r+g+b.
+fn lit_sum_at(r: &mut Offscreen, key: u64, s: &Scene3d, camera: &Camera, lighting: &Lighting, at: (u32, u32)) -> Option<u32> {
+    let eye = camera.eye();
+    let frame = r.lit_frame(s, key, [eye.x, eye.y, eye.z], lighting, false)?;
+    let light = lighting.sun.unwrap_or(Light::DEFAULT);
+    r.render_with(s, key, camera, &light, &RenderOptions { lit: Some(&frame), ground: false, ..Default::default() });
+    let (w, _) = r.size();
+    let img = r.read_rgba().ok()?;
+    let p = px(&img, w, at.0, at.1);
+    Some(u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]))
+}
+
+/// A room shell: back wall, side walls, a floor, optionally a thin ceiling and a south wall.
+fn shell(with_ceiling: bool, with_front: bool) -> Scene3d {
+    let mut m = vec![
+        cuboid("wall", [-0.1, 4.9, 0.0], [6.1, 5.0, 2.4]),
+        cuboid("wall", [-0.1, 0.0, 0.0], [0.0, 5.0, 2.4]),
+        cuboid("wall", [6.0, 0.0, 0.0], [6.1, 5.0, 2.4]),
+        cuboid("floor", [0.0, 0.0, -0.1], [6.0, 5.0, 0.0]),
+    ];
+    if with_ceiling {
+        m.push(cuboid("wall", [-0.1, 0.0, 2.4], [6.1, 5.0, 2.42]));
+    }
+    if with_front {
+        m.push(cuboid("wall", [-0.1, -0.1, 0.0], [6.1, 0.0, 2.4]));
+    }
+    scene(m)
+}
+
+fn south_camera() -> Camera {
+    Camera::Full(crate::camera::FullCamera::new(Vec3::new(3.0, -8.0, 1.5), Vec3::new(3.0, 0.0, 1.5), 40.0))
+}
+
+#[test]
+fn filtered_scene_after_unfiltered_draws_the_room_inside() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let lighting = shadow_sun([0.0, -0.5, 0.866]);
+    let camera = south_camera();
+    let full = shell(true, true);
+    let cut = shell(true, false);
+    let Some(before) = lit_sum_at(&mut r, 1, &full, &camera, &lighting, (100, 75)) else { return };
+    let Some(after) = lit_sum_at(&mut r, 2, &cut, &camera, &lighting, (100, 75)) else { return };
+    // The same filtered scene from a fresh renderer is the reference.
+    let Some(mut fresh) = renderer((200, 150)) else { return };
+    let Some(want) = lit_sum_at(&mut fresh, 2, &cut, &camera, &lighting, (100, 75)) else { return };
+    assert_eq!(after, want, "the filtered scene after the unfiltered one reads as it does on its own");
+    assert!(before >= after + 30, "the sunlit front wall ({before}) must differ from the room wall behind it ({after})");
+}
+
+#[test]
+fn interior_wall_under_a_ceiling_is_shadowed_in_the_interactive_view() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let lighting = shadow_sun([0.0, -0.5, 0.866]);
+    let camera = south_camera();
+    let Some(open) = lit_sum_at(&mut r, 1, &shell(false, false), &camera, &lighting, (100, 75)) else { return };
+    let Some(roofed) = lit_sum_at(&mut r, 2, &shell(true, false), &camera, &lighting, (100, 75)) else { return };
+    assert!(open >= roofed + 30, "the back wall under the ceiling ({roofed}) must be darker than without it ({open})");
+}
+
+#[test]
+fn clipped_geometry_casts_no_interactive_shadow() {
+    use cadcraft_doc::arch::ClipBox;
+    let Some(mut r) = renderer((64, 48)) else { return };
+    let mut lighting = shadow_sun([0.0, -0.5, 0.866]);
+    let camera = Camera::Full(crate::camera::FullCamera::new(Vec3::new(3.0, 2.5, 8.0), Vec3::new(3.0, 2.5, 0.0), 40.0));
+    let floor_only = scene(vec![cuboid("floor", [0.0, 0.0, -0.1], [6.0, 5.0, 0.0])]);
+    let roofed = shell(true, false);
+    let Some(lit) = lit_sum_at(&mut r, 1, &floor_only, &camera, &lighting, (32, 24)) else { return };
+    lighting.look.clip = Some(ClipBox { min: [-100.0; 3], max: [100.0, 100.0, 2.0], ..Default::default() });
+    let Some(clipped) = lit_sum_at(&mut r, 2, &roofed, &camera, &lighting, (32, 24)) else { return };
+    assert!(clipped + 8 >= lit && lit + 8 >= clipped, "the floor under a clipped-away ceiling reads {clipped}, like the bare floor {lit}");
+}

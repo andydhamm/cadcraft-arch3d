@@ -471,7 +471,7 @@ pub fn room_at(model: &ArchModel, level: u32, p: Vec2) -> Option<ArchId> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::{ArchId, JoinKind, Wall};
+    use cadcraft_doc::{ArchId, JoinKind, Level, Wall};
     use cadcraft_geom::Vec2;
 
     fn square(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
@@ -871,5 +871,34 @@ mod tests {
         let rooms = detect_rooms_at_level(&m, 0);
         assert_eq!(rooms.len(), 1, "small room above minimum area should be detected");
         assert!(rooms[0].interior_area > MIN_ROOM_AREA);
+    }
+
+    #[test]
+    fn spanning_wall_with_landing_bounds_all_three_levels() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
+        m.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Level::default() });
+        m.levels.push(Level { index: 2, elevation: 5.4, ceiling_height: 2.4, ..Level::default() });
+        // A wall spanning from level 0 to level 2
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2);
+        w.base_level = 0;
+        w.top_level = Some(2);
+        w.height = 5.4;
+        m.push_wall(w);
+        // Other walls to close the rooms on each level
+        for level in 0..3u32 {
+            let pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)];
+            for i in 1..4 {
+                let (a, b) = (pts[i], pts[(i + 1) % 4]);
+                let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+                w.base_level = level;
+                w.height = 2.4;
+                m.push_wall(w);
+            }
+        }
+        for level in 0..3 {
+            let rooms = detect_rooms_at_level(&m, level);
+            assert_eq!(rooms.len(), 1, "level {level} should have one room");
+        }
     }
 }
