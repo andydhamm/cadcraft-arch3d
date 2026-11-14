@@ -79,7 +79,8 @@ pub(crate) fn inspect_electrical(model: &ArchModel, p: &Value, out: &mut Map<Str
             let counter = g
                 .counter
                 .as_ref()
-                .map_or(Value::Null, |c| json!({ "maxSpacing": c.max_spacing, "startDistance": c.start_distance, "endDistance": c.end_distance }));
+                .map(|c| json!({ "maxSpacing": c.max_spacing, "startDistance": c.start_distance, "endDistance": c.end_distance }))
+                .unwrap_or_else(|| json!({ "maxSpacing": 0.0, "startDistance": 0.0, "endDistance": 0.0 }));
             gaps_rows.push(json!({ "room": room_label(r.id), "maxGap": max_gap, "counter": counter }));
         }
         out.insert("outletGaps".into(), Value::Array(gaps_rows));
@@ -165,7 +166,8 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["room"], "r0");
         assert!(rows[0]["maxGap"].as_f64().unwrap() <= 1.8 + 1e-6);
-        assert!(rows[0]["counter"].is_null());
+        assert!(!rows[0]["counter"].is_null());
+        assert_eq!(rows[0]["counter"]["maxSpacing"], 0.0);
         s.execute("room", &json!({ "id": "r0", "type": "kitchen" })).unwrap();
         s.execute("outlets.auto", &json!({ "room": "r0" })).unwrap();
         let r = inspect(&mut s, json!({ "electrical": true }));
@@ -176,6 +178,20 @@ mod tests {
         s.doc_mut().unwrap().arch.walls.clear();
         let r = inspect(&mut s, json!({ "electrical": true }));
         assert!(r["outletGaps"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn outlet_gaps_json_reports_zero_spacing_when_no_counter_run() {
+        let mut s = Session::new();
+        room64(&mut s);
+        let r = inspect(&mut s, json!({ "electrical": true }));
+        let rows = r["outletGaps"].as_array().unwrap();
+        assert!(!rows.is_empty());
+        let counter = &rows[0]["counter"];
+        assert!(!counter.is_null());
+        assert_eq!(counter["maxSpacing"], 0.0);
+        assert_eq!(counter["startDistance"], 0.0);
+        assert_eq!(counter["endDistance"], 0.0);
     }
 
     #[test]
