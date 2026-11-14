@@ -676,6 +676,17 @@ mod tests {
     }
 
     #[test]
+    fn arch_kind_of_painted_counter() {
+        use cadcraft_doc::arch::ArchKind;
+        // A painted counter surface should be tagged as Countertop.
+        let m = Mesh::new("paint:countertop/ct0", ArchId(0));
+        assert_eq!(arch_kind(&m), ArchKind::Countertop);
+        // A painted cabinet front should be tagged as Cabinet.
+        let m2 = Mesh::new("paint:cabinet/cb0/front", ArchId(0));
+        assert_eq!(arch_kind(&m2), ArchKind::Cabinet);
+    }
+
+    #[test]
     fn part_of_counter_materials() {
         let id = ArchId(7);
         for material in ["counter", "counter-top", "counter-edge"] {

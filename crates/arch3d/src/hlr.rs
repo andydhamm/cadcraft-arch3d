@@ -578,6 +578,18 @@ mod tests {
     }
 
     #[test]
+    fn merge_collinear_different_kinds_do_not_merge() {
+        // Two collinear touching lines of different kinds must not merge.
+        let a = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Cabinet, ArchId(0));
+        let b = Line2::new([1.0, 0.0], [2.0, 0.0], ArchKind::Wall, ArchId(1));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 2, "different kinds must not merge");
+        let kinds: Vec<ArchKind> = out.iter().map(|l| l.kind).collect();
+        assert!(kinds.contains(&ArchKind::Cabinet));
+        assert!(kinds.contains(&ArchKind::Wall));
+    }
+
+    #[test]
     fn merge_collinear_nan_and_zero_length() {
         // NaN coordinates are dropped.
         let nan = Line2::new([f64::NAN, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));

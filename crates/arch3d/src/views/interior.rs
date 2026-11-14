@@ -391,7 +391,8 @@ mod tests {
         let scene = crate::build(&m);
         let g = super::super::generate(&m, &scene, &v, 1);
         assert!(g.error.is_none(), "{:?}", g.error);
-        let cab: Vec<_> = g.lines.iter().filter(|l| l.kind == ArchKind::Cabinet && l.object == ArchId(0)).collect();
+        let cab: Vec<_> =
+            g.lines.iter().filter(|l| (l.kind == ArchKind::Cabinet || l.kind == ArchKind::Countertop) && l.object == ArchId(0)).collect();
         assert!(!cab.is_empty());
         let (mut u0, mut v0, mut u1, mut v1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
         for l in &cab {
@@ -453,6 +454,73 @@ mod tests {
         let out = restrict(&m, &scene, &v).unwrap();
         // The cabinet should survive because it stands between floor and ceiling.
         assert_eq!(out.meshes.len(), 1);
+    }
+
+    #[test]
+    fn interior_view_cabinet_without_counter() {
+        use cadcraft_doc::arch::{ArchKind, Cabinet, CabinetKind, Fronts};
+        let (mut m, v) = room_model();
+        // A base cabinet with no counter: the cabinet-tagged lines should only reach the box top (0.876).
+        m.push_cabinet(Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(5.95, 2.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            fronts: Fronts::Doors,
+            doors: 2,
+            counter: false,
+            ..Default::default()
+        });
+        let scene = crate::build(&m);
+        let g = super::super::generate(&m, &scene, &v, 1);
+        assert!(g.error.is_none(), "{:?}", g.error);
+        let cab: Vec<_> =
+            g.lines.iter().filter(|l| (l.kind == ArchKind::Cabinet || l.kind == ArchKind::Countertop) && l.object == ArchId(0)).collect();
+        assert!(!cab.is_empty());
+        let (mut v0, mut v1) = (f64::MAX, f64::MIN);
+        for l in &cab {
+            for p in [l.a, l.b] {
+                v0 = v0.min(p[1]);
+                v1 = v1.max(p[1]);
+            }
+        }
+        // Without a counter, the top should be the box top (0.876), not 0.914.
+        let ok = |a: f64, b: f64| (a - b).abs() < 1e-3;
+        assert!(ok(v0, 0.0) && ok(v1, 0.876), "v0={v0} v1={v1}");
+    }
+
+    #[test]
+    fn interior_view_cabinet_front_lines_inside_rectangle() {
+        use cadcraft_doc::arch::{ArchKind, Cabinet, CabinetKind, Fronts};
+        let (mut m, v) = room_model();
+        m.push_cabinet(Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(5.95, 2.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            fronts: Fronts::Doors,
+            doors: 2,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.0,
+            ..Default::default()
+        });
+        let scene = crate::build(&m);
+        let g = super::super::generate(&m, &scene, &v, 1);
+        assert!(g.error.is_none(), "{:?}", g.error);
+        let cab: Vec<_> =
+            g.lines.iter().filter(|l| (l.kind == ArchKind::Cabinet || l.kind == ArchKind::Countertop) && l.object == ArchId(0)).collect();
+        // There must be at least one line strictly inside the front rectangle (the door edge).
+        let top = 0.914;
+        let inner = cab.iter().any(|l| {
+            let strictly_inside = |p: [f64; 2]| p[0] > -2.3 + 1e-3 && p[0] < -1.7 - 1e-3 && p[1] > 1e-3 && p[1] < top - 1e-3;
+            [l.a, l.b].iter().any(strictly_inside)
+        });
+        assert!(inner, "expected an inner front line (door edge)");
     }
 
     #[test]
