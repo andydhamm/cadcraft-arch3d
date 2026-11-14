@@ -915,10 +915,10 @@ mod tests {
         let Ok(img) = crate::offscreen::png_rgba(&png) else { return };
         let at = ((SIZE.1 / 2 * SIZE.0 + SIZE.0 / 2) * 4) as usize;
         let finalize = img.get(at..at + 3).map(|p| [srgb_to_linear(p[0]), srgb_to_linear(p[1]), srgb_to_linear(p[2])]);
-        // Both should read 0.5 (Lambert 0.5 under uniform radiance 1 → L = 0.5/π × π = 0.5 nits,
-        // which at EV100 -1 (scale 1/(1.2×2^-1)) → 0.5×(1.2×2) = 1.2, but with tone_map None that's
-        // just the linear value).
-        let want = 0.5;
+        // Lambert 0.5 under a uniform environment of radiance 1.0 gives L = 0.5/pi * pi = 0.5
+        // nits; EV100 -1 scales by 1/(1.2 * 2^-1) ~ 1.6667, so the linear pixels read
+        // 0.8333. Tone map None keeps them linear, and the sRGB round trip returns the same.
+        let want = 0.8333;
         if let (Some(a), Some(b)) = (interactive, finalize) {
             for (name, val) in [("interactive", a), ("finalize", b)] {
                 for (c, ch) in val.iter().enumerate() {
