@@ -274,6 +274,16 @@ pub fn view_look(f: &mut FrameLook, lighting: &Lighting) {
     f.near = lighting.look.near_clip.filter(|n| n.is_finite() && *n > 0.0 && *n <= 1000.0).map(|n| n as f32);
 }
 
+/// The environment's radiance SH (nine convolved coefficients) for a valid environment; `None`
+/// when there is no environment or it is invalid. Shared by the interactive frame and the raster
+/// Finalize so their environment illumination is identical.
+pub fn env_sh(env: &crate::environment::Environment) -> Option<[[f32; 3]; 9]> {
+    if !env.is_valid() {
+        return None;
+    }
+    Some(crate::sh::convolve(&crate::sh::project(env)))
+}
+
 /// Copy the frame's look into one draw's block; `material` is the draw's mesh material name (the
 /// ground quad's is `"ground"`).
 pub fn fill_draw(p: &mut PbrUniform, f: &FrameLook, scene: &Scene3d, material: &str) {

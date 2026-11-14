@@ -29,6 +29,22 @@ fn arc_edge_probes() {
 }
 
 #[test]
+fn arc_edge_with_negative_sagitta_probes() {
+    let mut m = ArchModel::default();
+    m.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+    let mut ct = rect();
+    ct.edges = vec![CounterEdge { sagitta: -0.15, ..Default::default() }; 4];
+    let id = m.push_countertop(ct);
+    let scene = cadcraft_arch3d::Scene3d::build(&m);
+    let mesh = scene.meshes.iter().find(|mesh| mesh.object == id && mesh.material == "countertop").unwrap();
+    // Inward arc: the bulge goes inside the rectangle, so the counter is smaller.
+    // The bottom edge bulges up to y=0.15 at the midpoint, so y=0.12 is outside.
+    assert!(probe_mesh(mesh, Vec3::new(1.0, 0.5, 0.895)));
+    assert!(!probe_mesh(mesh, Vec3::new(1.0, 0.12, 0.895)));
+    assert!(!probe_mesh(mesh, Vec3::new(1.0, -0.3, 0.895)));
+}
+
+#[test]
 fn waterfall_panel_probes() {
     let mut m = ArchModel::default();
     m.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });

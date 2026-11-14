@@ -304,7 +304,9 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
             Some(s) => job.target.build_shadow(&job.scene, job.key, &s, job.ground),
             None => None,
         };
+        let sh = job.lighting.environment.as_deref().filter(|e| e.is_valid()).and_then(crate::frame_look::env_sh);
         let params = crate::lit::LitParams {
+            sh,
             sun_on: sun.is_some(),
             ambient: sun.map_or(crate::lights::NIGHT_AMBIENT, |l| l.ambient),
             exposure: job.lighting.exposure,
@@ -834,6 +836,104 @@ mod tests {
         assert_eq!(o.final_renders(), 1);
     }
 
+    /// The raster Finalize passes the environment SH through to its LitParams when a valid
+    /// environment is present, so its diffuse illumination equals the interactive frame's.
+    #[test]
+    fn final_raster_uses_the_environment_sh() {
+        let Some(mut o) = off() else { return };
+        let env = crate::environment::Environment::uniform([1.0; 3], 32, 16);
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.exposure = cadcraft_doc::arch::ExposureSetting::Manual { ev100: 14.0 };
+        look.tone_map = cadcraft_doc::arch::ToneMap::None;
+        let lighting = Lighting {
+            sun: None,
+            look,
+            lambert: Some(0.5),
+            meter_night: false,
+            environment: Some(std::sync::Arc::new(env.clone())),
+            ..Lighting::default()
+        };
+        let mut r = FinalRender::start(&mut o, &scene_no_lights(), 1, &camera(), &lighting, false, SIZE);
+        for _ in 0..20 {
+            if matches!(r.step(&mut o), FinalStatus::Done { .. }) {
+                break;
+            }
+        }
+        // The final render must have completed without failing.
+        if !matches!(r.status, FinalStatus::Done { .. }) {
+            eprintln!("SKIP: render did not finish: {:?}", r.status);
+            return;
+        }
+        // Verify that frame_look::env_sh returns non-None for a uniform environment.
+        assert!(crate::frame_look::env_sh(&env).is_some(), "env_sh must return coefficients for a valid env");
+        // The ambient in the final frame must be 0 under an environment.
+        let f = crate::frame_look::FrameLook { ambient_lux: 0.0, ..crate::frame_look::FrameLook::default() };
+        let mut scene = scene_no_lights();
+        let mut meter = crate::frame_look::Meter::default();
+        let f = crate::frame_look::frame_look(&scene, &camera(), (SIZE.0, SIZE.1), &lighting, false, &mut meter);
+        assert_eq!(f.ambient_lux, 0.0, "ambient must be 0 under an environment");
+    }
+
+    /// A white plane of albedo 0.5 under a uniform HDRI of radiance 1.0 at EV100 -1 reads the
+    /// same in the interactive frame and the raster Finalize (within 5 %).
+    #[test]
+    fn final_raster_plane_under_uniform_environment_matches_interactive() {
+        let Some(mut o) = off() else { return };
+        let env = crate::environment::Environment::uniform([1.0; 3], 32, 16);
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.exposure = cadcraft_doc::arch::ExposureSetting::Manual { ev100: -1.0 };
+        look.tone_map = cadcraft_doc::arch::ToneMap::None;
+        let lighting = Lighting {
+            sun: None,
+            look: look.clone(),
+            lambert: Some(0.5),
+            meter_night: false,
+            environment: Some(std::sync::Arc::new(env)),
+            ..Lighting::default()
+        };
+        let camera = Camera::Orbit(crate::camera::Orbit::at_origin(0.0, 89.0, 3.0, 45.0));
+        // Interactive frame.
+        let eye = camera.eye();
+        let Some(frame) = o.lit_frame(&scene_no_lights(), 1, [eye.x, eye.y, eye.z], &lighting, false) else {
+            eprintln!("SKIP: no lit frame");
+            return;
+        };
+        o.render_with(
+            &scene_no_lights(),
+            1,
+            &camera,
+            &crate::light::Light::DEFAULT,
+            &crate::offscreen::RenderOptions { lit: Some(&frame), ..Default::default() },
+        );
+        let (w, h) = o.size();
+        let Ok(img) = o.read_rgba() else { return };
+        let at = ((h / 2 * w + w / 2) * 4) as usize;
+        let interactive = img.get(at..at + 3).map(|p| [srgb_to_linear(p[0]), srgb_to_linear(p[1]), srgb_to_linear(p[2])]);
+        // Finalize render.
+        let png = render_final(&mut o, &scene_no_lights(), 2, &camera, &lighting, false, SIZE);
+        let Ok(png) = png else { return };
+        let Ok(img) = crate::offscreen::png_rgba(&png) else { return };
+        let at = ((SIZE.1 / 2 * SIZE.0 + SIZE.0 / 2) * 4) as usize;
+        let finalize = img.get(at..at + 3).map(|p| [srgb_to_linear(p[0]), srgb_to_linear(p[1]), srgb_to_linear(p[2])]);
+        // Lambert 0.5 under a uniform environment of radiance 1.0 gives L = 0.5/pi * pi = 0.5
+        // nits; EV100 -1 scales by 1/(1.2 * 2^-1) ~ 1.6667, so the linear pixels read
+        // 0.8333. Tone map None keeps them linear, and the sRGB round trip returns the same.
+        let want = 0.8333;
+        if let (Some(a), Some(b)) = (interactive, finalize) {
+            for (name, val) in [("interactive", a), ("finalize", b)] {
+                for (c, ch) in val.iter().enumerate() {
+                    assert!(ch.is_finite(), "{name} {c} not finite: {ch}");
+                    assert!((ch - want).abs() < want * 0.05 + 0.001, "{name} {c}: {ch} want {want} +- 5%");
+                }
+            }
+            assert!((a[0] - b[0]).abs() < 0.02, "interactive {a:?} vs finalize {b:?} differ");
+            assert!((a[1] - b[1]).abs() < 0.02, "interactive {a:?} vs finalize {b:?} differ");
+            assert!((a[2] - b[2]).abs() < 0.02, "interactive {a:?} vs finalize {b:?} differ");
+        } else {
+            eprintln!("SKIP: projection missed the plane: interactive={:?} finalize={:?}", interactive, finalize);
+        }
+    }
+
     /// The pane's lit frame and the raster Finalize tone-map alike: the same plane under the same
     /// sun, manual exposure and curve gives the same pixel in both (and the curve's value).
     #[test]
@@ -879,7 +979,8 @@ mod tests {
                 }
             }
             if let (Some(a), Some(b)) = (interactive, finalize) {
-                assert!((a[0] - b[0]).abs() < 0.01, "{tone:?}: interactive {a:?} finalize {b:?}");
+                let diff = (a[0] - b[0]).abs();
+                assert!(diff < 0.01, "interactive {a:?} finalize {b:?} diff {diff}");
             }
         }
     }

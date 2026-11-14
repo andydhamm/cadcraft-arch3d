@@ -789,6 +789,7 @@ mod tests;
 mod arch_grips_tests {
     use super::*;
     use crate::Session;
+    use cadcraft_doc::arch::countertop_handle;
     use cadcraft_doc::{ArchId, Handle, arch_handle, opening_handle, room_handle};
     use cadcraft_geom::Vec2;
     use serde_json::json;
@@ -1132,6 +1133,68 @@ mod arch_grips_tests {
         );
         assert!(result.is_ok());
         assert!(result.unwrap().is_null());
+    }
+
+    #[test]
+    fn countertop_grips_are_vertices_then_edge_midpoints() {
+        let mut s = Session::new();
+        s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.04})).unwrap();
+        let h = countertop_handle(ArchId(0));
+        let grips = s.grips_of(h).unwrap();
+        // 4 vertices + 4 edge midpoints = 8 grips
+        assert_eq!(grips.len(), 8);
+        // First 4 are vertices
+        assert_eq!(grips[0], Vec2::new(0.0, 0.0));
+        assert_eq!(grips[1], Vec2::new(2.0, 0.0));
+        assert_eq!(grips[2], Vec2::new(2.0, 1.0));
+        assert_eq!(grips[3], Vec2::new(0.0, 1.0));
+        // Next 4 are edge midpoints
+        assert_eq!(grips[4], Vec2::new(1.0, 0.0));
+        assert_eq!(grips[5], Vec2::new(2.0, 0.5));
+        assert_eq!(grips[6], Vec2::new(1.0, 1.0));
+        assert_eq!(grips[7], Vec2::new(0.0, 0.5));
+    }
+
+    #[test]
+    fn dragging_a_straight_edge_midpoint_moves_the_edge() {
+        let mut s = Session::new();
+        s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.04})).unwrap();
+        let h = countertop_handle(ArchId(0));
+        // Drag edge 0 midpoint (grip 4) outward (down)
+        s.grip_edit(h, 4, Vec2::new(1.0, -0.2), GripMode::Stretch).unwrap();
+        let d = s.doc().unwrap();
+        let ct = d.arch.countertop(ArchId(0)).unwrap();
+        // Edge 0 moved down by 0.2
+        assert!((ct.polygon[0].y - (-0.2)).abs() < 1e-9);
+        assert!((ct.polygon[1].y - (-0.2)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn dragging_an_arc_midpoint_sets_its_sagitta() {
+        let mut s = Session::new();
+        s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.04})).unwrap();
+        // First set edge 0 to an arc
+        s.execute("countertop.edit", &json!({"id": "ct0", "edge": 0, "sagitta": 0.1})).unwrap();
+        let h = countertop_handle(ArchId(0));
+        // Drag the arc midpoint (grip 4) to change sagitta
+        s.grip_edit(h, 4, Vec2::new(1.0, -0.2), GripMode::Stretch).unwrap();
+        let d = s.doc().unwrap();
+        let ct = d.arch.countertop(ArchId(0)).unwrap();
+        // Sagitta should now be 0.2
+        assert!((ct.edge(0).sagitta - 0.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn hostile_grip_indices_and_points_refused() {
+        let mut s = Session::new();
+        s.execute("countertop", &json!({"polygon": [[0, 0], [2, 0], [2, 1], [0, 1]], "elevation": 0.9, "thickness": 0.04})).unwrap();
+        let h = countertop_handle(ArchId(0));
+        // Index out of range
+        assert!(s.grip_edit(h, 100, Vec2::new(1.0, 0.0), GripMode::Stretch).is_err());
+        // Non-finite point
+        assert!(s.grip_edit(h, 0, Vec2::new(f64::NAN, 0.0), GripMode::Stretch).is_err());
+        // Non-stretch mode refused
+        assert!(s.grip_edit(h, 0, Vec2::new(1.0, 0.0), GripMode::Move).is_err());
     }
 
     #[test]

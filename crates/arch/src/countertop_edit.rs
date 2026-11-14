@@ -173,7 +173,8 @@ pub fn sagitta_for_radius(chord: f64, r: f64, inward: bool) -> Result<f64, Strin
     Ok(s)
 }
 
-/// Set the edge profile of `edge` on `ct`.
+/// Set the edge profile of `edge` on `ct`. A profiled edge must be straight: if the edge has a
+/// sagitta, it is cleared. A waterfall edge must stay square.
 pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result<Countertop, String> {
     let n = ct.polygon.len();
     if edge >= n {
@@ -184,9 +185,8 @@ pub fn set_profile(ct: &Countertop, edge: usize, profile: EdgeProfile) -> Result
     }
     let mut out = ct.clone();
     out.edges.resize(n, CounterEdge::default());
-    out.edges[edge].sagitta = 0.0;
     out.edges[edge].profile = profile;
-    out.edges[edge].waterfall = false;
+    out.edges[edge].sagitta = 0.0;
     validate(&out)?;
     Ok(out)
 }
@@ -272,7 +272,7 @@ pub fn sampled_ring(ring: &[Vec2], sagittas: &[f64]) -> Vec<Vec2> {
         let dir = (q - p) * (1.0 / chord);
         let normal = Vec2::new(dir.y, -dir.x);
         let mid = p.mid(q);
-        let centre = mid + normal * (s - s.signum() * r);
+        let centre = mid - normal * s.signum() * (r - m);
         let half = (chord / 2.0).atan2(r - m);
         let total = 2.0 * half;
         let segs = ((total.to_degrees() / MAX_SEGMENT_DEG).ceil() as usize).clamp(MIN_ARC_SEGMENTS, MAX_ARC_SEGMENTS);
@@ -464,6 +464,28 @@ mod tests {
         assert_eq!(EdgeProfile::parse("bevel"), Some(EdgeProfile::Bevel));
         assert_eq!(EdgeProfile::parse("bullnose"), Some(EdgeProfile::Bullnose));
         assert_eq!(EdgeProfile::Bullnose.key(), "bullnose");
+    }
+
+    #[test]
+    fn set_sagitta_zero_is_a_no_op() {
+        let ct = rect(1.8, 0.625);
+        let out = set_sagitta(&ct, 0, 0.0).unwrap();
+        assert_eq!(out.edge(0).sagitta, 0.0);
+    }
+
+    #[test]
+    fn sagitta_for_radius_exact_half_chord() {
+        let s = sagitta_for_radius(1.0, 0.5, false).unwrap();
+        assert!((s - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn set_profile_on_arc_edge_refused() {
+        let ct = rect(1.8, 0.625);
+        let arc = set_sagitta(&ct, 0, 0.1).unwrap();
+        let out = set_profile(&arc, 0, EdgeProfile::Bullnose).unwrap();
+        assert_eq!(out.edge(0).sagitta, 0.0, "the sagitta is cleared");
+        assert_eq!(out.edge(0).profile, EdgeProfile::Bullnose);
     }
 
     #[test]

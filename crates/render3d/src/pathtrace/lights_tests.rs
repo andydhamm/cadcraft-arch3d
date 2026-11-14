@@ -12,7 +12,7 @@ use super::device::ComputeGpu;
 use super::scene_gpu::{FRAME_FURNACE, FRAME_SKY, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, build_gpu_scene};
 use super::tracer::{run_entry, upload_scene};
 use super::{SKY_HORIZON_NITS, SKY_ZENITH_NITS, SUN_LUX, luminance};
-use crate::types::Scene3d;
+use crate::types::{Mesh, Scene3d};
 use cadcraft_arch3d::light::{LightKind, SceneLight, light_axis};
 use cadcraft_doc::ArchId;
 use cadcraft_doc::arch::{ArchModel, FixtureShape, Level, LightFixture, LightMount, Room, StripFacing};
@@ -53,11 +53,11 @@ fn query_probe(mode: f32, dir: Vec3) -> GpuProbe {
     GpuProbe { point: [0.0; 3], _a: mode, normal: f32s(dir), _b: 0.0, ..Default::default() }
 }
 
-/// Run `lights_test_main` over `probes` with `frame` (the probe and light counts are filled in).
-fn run(gpu: &ComputeGpu, scene: &GpuScene, frame: GpuFrame, probes: &[GpuProbe]) -> Vec<[f32; 4]> {
+/// Run a WGSL entry point over `probes` with `frame` (the probe and light counts are filled in).
+fn run_entry_point(gpu: &ComputeGpu, scene: &GpuScene, entry: &str, frame: GpuFrame, probes: &[GpuProbe]) -> Vec<[f32; 4]> {
     let buffers = upload_scene(gpu, scene);
     let frame = GpuFrame { probe_count: probes.len() as u32, light_count: scene.lights.len() as u32, seed: 11, ..frame };
-    match run_entry(gpu, &buffers, ENTRY, &frame, probes) {
+    match run_entry(gpu, &buffers, entry, &frame, probes) {
         Ok(out) => {
             assert_eq!(out.len(), probes.len());
             out
@@ -69,8 +69,24 @@ fn run(gpu: &ComputeGpu, scene: &GpuScene, frame: GpuFrame, probes: &[GpuProbe])
     }
 }
 
+/// Run `lights_test_main` over `probes` with `frame` (the probe and light counts are filled in).
+fn run(gpu: &ComputeGpu, scene: &GpuScene, frame: GpuFrame, probes: &[GpuProbe]) -> Vec<[f32; 4]> {
+    run_entry_point(gpu, scene, ENTRY, frame, probes)
+}
+
+/// Run `irradiance_main` over `probes` with `spp` samples per probe, returning the sum after the
+/// frame's sample count is added by the shader.
+fn run_irradiance(gpu: &ComputeGpu, scene: &GpuScene, spp: u32, probes: &[GpuProbe]) -> Vec<[f32; 4]> {
+    run_entry_point(gpu, scene, "irradiance_main", GpuFrame { bounces: 0, spp_this_pass: spp, ..Default::default() }, probes)
+}
+
 fn lux(o: [f32; 4]) -> f64 {
     f64::from(luminance([o[0], o[1], o[2]]))
+}
+
+fn lux_irradiance(o: [f32; 4], spp: u32) -> f64 {
+    let avg = [o[0] / spp as f32, o[1] / spp as f32, o[2] / spp as f32];
+    f64::from(luminance(avg))
 }
 
 fn down() -> Vec3 {
@@ -83,6 +99,22 @@ fn up() -> Vec3 {
 
 fn scene_of(lights: &[SceneLight]) -> GpuScene {
     build_gpu_scene(&Scene3d { lights: lights.to_vec(), ..Default::default() }, false, None)
+}
+
+fn prism(material: &str, object: u32, min: [f32; 3], max: [f32; 3]) -> Mesh {
+    let mut m = Mesh::new(material, ArchId(object));
+    for k in 0..8 {
+        m.positions.push([
+            if k & 1 == 0 { min[0] } else { max[0] },
+            if k & 2 == 0 { min[1] } else { max[1] },
+            if k & 4 == 0 { min[2] } else { max[2] },
+        ]);
+    }
+    let quads: [[u32; 4]; 6] = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+    for q in quads {
+        m.indices.extend([q[0], q[1], q[2], q[0], q[2], q[3]]);
+    }
+    m
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -654,9 +686,42 @@ fn strip_with_its_housing_lights_the_floor_under_it() {
     let Some(gpu) = gpu_or_skip() else { return };
     let scene = cadcraft_arch3d::build(&strip_model(StripFacing::Down, vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)]));
     let gpu_scene = build_gpu_scene(&scene, false, None);
-    let out = run(&gpu, &gpu_scene, GpuFrame::default(), &[sample_probe(0, Vec3::new(2.0, 2.0, 0.0), up(), 1024)]);
+    let probe = sample_probe(0, Vec3::new(2.0, 2.0, 0.0), up(), 1024);
+    let out = run_irradiance(&gpu, &gpu_scene, 1024, &[probe]);
     let want = 49.72;
-    assert!((lux(out[0]) - want).abs() < want * 0.02, "{} lx, want {want}", lux(out[0]));
+    assert!((lux_irradiance(out[0], 1024) - want).abs() < want * 0.02, "{} lx, want {want}", lux_irradiance(out[0], 1024));
+}
+
+#[test]
+fn strip_at_the_ceiling_lights_the_floor_49_72_lux() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = cadcraft_arch3d::build(&strip_model(StripFacing::Down, vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)]));
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let probe = sample_probe(0, Vec3::new(2.0, 2.0, 0.0), up(), 1024);
+    let out = run_irradiance(&gpu, &gpu_scene, 1024, &[probe]);
+    let want = 49.72;
+    assert!((lux_irradiance(out[0], 1024) - want).abs() < want * 0.02, "{} lx, want {want}", lux_irradiance(out[0], 1024));
+}
+
+#[test]
+fn strip_shadow_ray_ignores_its_own_housing_but_not_a_column() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let strip = strip_light([1.0, 2.0], [3.0, 2.0], 2.4, 500.0, [1.0, 0.76, 0.43]);
+    let floor = prism("floor", 100, [-0.2, -0.2, -0.2], [4.2, 4.2, 0.0]);
+    let housing = prism("light-housing", 101, [0.9, 1.9, 2.35], [3.1, 2.1, 2.45]);
+    let column = prism("wall", 102, [0.8, 1.8, 0.0], [3.2, 2.2, 1.2]);
+    let base = Scene3d { meshes: vec![floor.clone(), housing.clone()], lights: vec![strip.clone()], ..Default::default() };
+    let probe = sample_probe(0, Vec3::new(2.0, 2.0, 0.0), up(), 4096);
+    let clean = build_gpu_scene(&base, false, None);
+    let out = run_irradiance(&gpu, &clean, 4096, &[probe]);
+    assert!(lux_irradiance(out[0], 4096) > 45.0, "housing should not occlude the strip itself: {} lx", lux_irradiance(out[0], 4096));
+
+    let hit = cadcraft_arch3d::pick::Bvh::build(&base).ray(Vec3::new(2.0, 2.0, 0.0), Vec3::new(0.0, 0.0, 1.0), 2.7);
+    eprintln!("strip shadow ray from floor to sample hits: {hit:?}");
+
+    let blocked = build_gpu_scene(&Scene3d { meshes: vec![floor, housing, column], lights: vec![strip], ..Default::default() }, false, None);
+    let out = run_irradiance(&gpu, &blocked, 4096, &[probe]);
+    assert!(lux_irradiance(out[0], 4096) < 1.0, "a real column must still shadow the strip: {} lx", lux_irradiance(out[0], 4096));
 }
 
 #[test]

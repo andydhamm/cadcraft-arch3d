@@ -112,9 +112,10 @@ pub fn countertop_meshes(ct: &Countertop, outline: Option<&CounterOutline>, leve
         }
     }
 
+    let sagittas: Vec<f64> = (0..ct.polygon.len()).map(|i| ct.edge(i).sagitta).collect();
     let mut slab = Mesh::new("countertop", ct.id);
     slab.level_elevation = level;
-    slab.push_prism_with_holes(&sampled_ring(&slab_ring, &o.sagittas), &o.holes, z0, level + o.top);
+    slab.push_prism_with_holes(&sampled_ring(&slab_ring, &sagittas), &o.holes, z0, level + o.top);
     if !slab.indices.is_empty() {
         meshes.push(slab);
     }
