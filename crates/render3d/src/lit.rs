@@ -85,7 +85,8 @@ pub fn frame_uniform(sun: Option<&ShadowMap>, params: &LitParams, atlas_size: u3
         words.extend_from_slice(&col);
     }
     let finite = |v: f32, d: f32| if v.is_finite() { v } else { d };
-    words.extend_from_slice(&[sun.map(|m| m.bias).unwrap_or(0.0), if sun.is_some() { 1.0 } else { 0.0 }, if params.sun_on { 1.0 } else { 0.0 }, 0.0]);
+    let bias = finite(sun.map(|m| m.bias).unwrap_or(0.0), 0.0);
+    words.extend_from_slice(&[bias, if sun.is_some() { 1.0 } else { 0.0 }, if params.sun_on { 1.0 } else { 0.0 }, 0.0]);
     words.extend_from_slice(&[
         finite(params.exposure, crate::lights::DEFAULT_EXPOSURE).max(0.0),
         if params.tonemap { 1.0 } else { 0.0 },
@@ -152,8 +153,12 @@ impl LitFrame {
                 wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(atlas) },
             ],
         });
-        let (sun_intensity, ambient) =
-            if params.sun_on { (params.sun_intensity, params.ambient) } else { (0.0, crate::lights::NIGHT_AMBIENT.min(params.ambient)) };
+        let finite = |v: f32, d: f32| if v.is_finite() { v } else { d };
+        let (sun_intensity, ambient) = if params.sun_on {
+            (finite(params.sun_intensity, 1.0), finite(params.ambient, 0.25))
+        } else {
+            (0.0, crate::lights::NIGHT_AMBIENT.min(finite(params.ambient, 0.25)))
+        };
         LitFrame { bind_group, sun_intensity, ambient, lights: counts.0, shadowed: counts.1, lighting: Default::default() }
     }
 }
@@ -414,6 +419,82 @@ mod tests {
                 assert!(mapped.iter().all(|&c| c < 255), "ACES must keep the highlight below white: {mapped:?}");
             }
             _ => assert!(false, "the light centre must project into both renders"),
+        }
+    }
+
+    #[test]
+    fn frame_uniform_handles_nan_and_infinity() {
+        let params = LitParams { exposure: f32::NAN, ambient: f32::INFINITY, sun_intensity: f32::NAN, ambient_lux: f32::NAN, ..Default::default() };
+        let bytes = frame_uniform(None, &params, 64);
+        let word = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        assert_eq!(word(80), crate::lights::DEFAULT_EXPOSURE, "NaN exposure must fall back to the default");
+        assert_eq!(word(96), 0.0, "NaN ambient lux must fall back to zero");
+    }
+
+    #[test]
+    fn lit_frame_night_ambient_is_finite() {
+        let Some((device, queue)) = skip_without_device() else { return };
+        let params = LitParams { sun_on: false, ambient: f32::NAN, ..Default::default() };
+        let gpu = GpuPipeline::new(&device, &queue, 1);
+        let pipelines = LitPipelines::new(&device, &gpu).unwrap();
+        let (frame, _atlas) = test_frame(&device, &pipelines.layout, &params);
+        assert!(frame.ambient.is_finite(), "night ambient must be finite even with NaN input: {}", frame.ambient);
+    }
+
+    #[test]
+    fn point_light_illuminates_uniformly() {
+        let Some((device, queue)) = skip_without_device() else { return };
+        let scene = floor_scene();
+        let camera = top_camera();
+        let mut off = Offscreen::with_device(device.clone(), queue, SIZE);
+        off.lit_pipelines = LitPipelines::new(&device, &off.gpu);
+        let params = LitParams { sun_on: false, ..Default::default() };
+        let (mut frame, _atlas) = {
+            let Some(pipelines) = off.lit_pipelines.as_ref() else { return };
+            let lights = [SceneLight {
+                kind: LightKind::Point,
+                position: Vec3::new(2.0, 2.0, 2.4),
+                direction: Vec3::ZERO,
+                intensity: 950.4,
+                color: [1.0; 3],
+                cos_inner: 0.0,
+                cos_outer: -2.0,
+                ..Default::default()
+            }];
+            let packed = crate::lights::pack_lights(&lights, &[], &[]);
+            let atlas = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("render3d lit test atlas"),
+                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: DEPTH_FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            let atlas_view = atlas.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("render3d lit test atlas view"),
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            });
+            let frame_bytes = frame_uniform(None, &params, 1);
+            let frame = LitFrame::new(&device, &pipelines.layout, &frame_bytes, None, &packed, &atlas_view, &params, (1, 0));
+            (frame, atlas)
+        };
+        frame.lighting =
+            crate::lit_frame::Lighting { sun: None, exposure: params.exposure, look: cadcraft_doc::arch::Look::default(), ..Default::default() };
+        let opts = RenderOptions { lit: Some(&frame), ..Default::default() };
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &opts);
+        let rgba = off.read_rgba().unwrap();
+        let p1 = pixel(&rgba, &camera, [2.0, 1.0, 0.0]);
+        let p2 = pixel(&rgba, &camera, [1.0, 2.0, 0.0]);
+        match (p1, p2) {
+            (Some(a), Some(b)) => {
+                let ba = brightness(a) as i32;
+                let bb = brightness(b) as i32;
+                assert!((ba - bb).abs() < 20, "point light must illuminate symmetrically: {ba} vs {bb}");
+            }
+            _ => assert!(false, "both test points must project"),
         }
     }
 
