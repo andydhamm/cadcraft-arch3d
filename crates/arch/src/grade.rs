@@ -323,4 +323,77 @@ mod tests {
         let result = grade_class(&m, &m.levels[0]);
         assert!(matches!(result, GradeClass::AboveGrade | GradeClass::Basement));
     }
+
+    #[test]
+    fn grade_class_key_round_trip() {
+        assert_eq!(GradeClass::AboveGrade.key(), "aboveGrade");
+        assert_eq!(GradeClass::Basement.key(), "basement");
+        assert_eq!(GradeClass::from_key("aboveGrade"), Some(GradeClass::AboveGrade));
+        assert_eq!(GradeClass::from_key("basement"), Some(GradeClass::Basement));
+        assert_eq!(GradeClass::from_key("unknown"), None);
+        assert_eq!(GradeClass::from_key(""), None);
+    }
+
+    #[test]
+    fn grade_class_default_is_above_grade() {
+        assert_eq!(GradeClass::default(), GradeClass::AboveGrade);
+    }
+
+    #[test]
+    fn zero_length_exterior_wall_is_classified() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, kind: LevelKind::Floor, ..Default::default() });
+        let mut w = Wall::new(v(5.0, 5.0), v(5.0, 5.0), 0.2);
+        w.exterior = true;
+        m.push_wall(w);
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
+    }
+
+    #[test]
+    fn non_exterior_walls_are_ignored() {
+        let mut m = house(0.0, LevelKind::Floor);
+        for w in m.walls.iter_mut() {
+            w.exterior = false;
+        }
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
+    }
+
+    #[test]
+    fn wall_with_nan_coordinates_is_skipped() {
+        let mut m = house(0.0, LevelKind::Floor);
+        let mut w = Wall::new(Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 0.0), 0.2);
+        w.exterior = true;
+        m.push_wall(w);
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
+    }
+
+    #[test]
+    fn nan_terrain_falls_back_to_zero() {
+        let mut m = house(0.0, LevelKind::Floor);
+        let mut t = cadcraft_doc::arch::Terrain::default();
+        t.boundary = vec![v(-50.0, -50.0), v(50.0, -50.0), v(50.0, 50.0), v(-50.0, 50.0)];
+        t.pad = false;
+        t.points = vec![
+            Vec3::new(-50.0, -50.0, f64::NAN),
+            Vec3::new(-50.0, 50.0, f64::NAN),
+            Vec3::new(50.0, -50.0, f64::NAN),
+            Vec3::new(50.0, 50.0, f64::NAN),
+        ];
+        m.terrain = Some(t);
+        assert_eq!(finished_grade(&m, v(3.0, 3.0)), 0.0);
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
+    }
+
+    #[test]
+    fn level_with_walls_but_no_rooms_uses_wall_sampling() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, kind: LevelKind::Floor, ..Default::default() });
+        let c = [v(0.0, 0.0), v(10.0, 0.0), v(10.0, 8.0), v(0.0, 8.0)];
+        for i in 0..4 {
+            let mut w = Wall::new(c[i], c[(i + 1) % 4], 0.2);
+            w.exterior = true;
+            m.push_wall(w);
+        }
+        assert_eq!(grade_class(&m, &m.levels[0]), GradeClass::AboveGrade);
+    }
 }
