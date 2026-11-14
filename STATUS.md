@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-14 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 12:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 42 of 45 segments merged · 19 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 42 of 44 segments merged · 19 of 20 acceptance checks**
 
 10,240 workspace tests passing at the last merge · 1154 segments merged in all · 0 of 15 seats working
 
@@ -28,18 +28,17 @@ Updated 2026-11-14 12:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 78.5 h so far · expected done Nov 15 02:24–Dec 02 05:27 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 78.8 h so far · expected done Nov 14 21:51–Nov 30 23:42 UTC |
 | 19 | Light, sky and cameras | building | 10 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
 ## Phase 18 segments
 
-42 merged, 1 replaced, 1 escalate, 1 working, 1 queued
+42 merged, 1 replaced, 1 abandoned, 1 working, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-fbb083803` | merge upstream upstream/main up to fbb083803 (4 commits) | escalate |  |
 | `p18h-showcase-kitchen` | Showcase house: append the phase-18 kitchen casework, repaint new surfaces, keep outlets valid | working | mai-flash-esc |
 
 ## Recent merges
@@ -76,5 +75,5 @@ Updated 2026-11-14 12:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 120 |
 | mai-flash-b | mai-code-1.1-flash | idle | 73 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 135 |
-| tturbo-mac | tturbo-ultraheretic | agent | 884 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 546 |
+| tturbo-mac | tturbo-ultraheretic | agent | 885 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 547 |
