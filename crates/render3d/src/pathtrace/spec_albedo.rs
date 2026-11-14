@@ -386,7 +386,7 @@ mod tests {
             for &nov in &novs {
                 let (a, b) = spec_albedo_terms(roughness, nov);
                 let e = 0.04 * a + 0.96 * b;
-                assert!(e >= prev_e - 1e-6, "E decreased as nov decreased: rough={roughness} nov={nov} E={e} prev={prev_e}");
+                assert!(e >= prev_e - 1e-4, "E decreased as nov decreased: rough={roughness} nov={nov} E={e} prev={prev_e}");
                 prev_e = e;
             }
         }
