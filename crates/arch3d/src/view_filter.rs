@@ -483,19 +483,19 @@ mod tests {
         use crate::mesh::Mesh;
 
         let mut wall0 = Mesh::new("wall", ArchId(0));
-        wall0.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        wall0.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         wall0.indices = vec![0, 1, 2];
 
         let mut ceiling0 = Mesh::new("ceiling", ArchId(0));
-        ceiling0.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        ceiling0.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         ceiling0.indices = vec![0, 1, 2];
 
         let mut floor0 = Mesh::new("floor", ArchId(0));
-        floor0.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        floor0.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         floor0.indices = vec![0, 1, 2];
 
         let mut wall1 = Mesh::new("wall", ArchId(1));
-        wall1.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        wall1.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         wall1.indices = vec![0, 1, 2];
 
         let scene = Scene3d { meshes: vec![wall0, ceiling0, floor0, wall1], ..Scene3d::default() };
@@ -521,11 +521,11 @@ mod tests {
         use crate::mesh::Mesh;
 
         let mut wall2 = Mesh::new("wall", ArchId(2));
-        wall2.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        wall2.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         wall2.indices = vec![0, 1, 2];
 
         let mut opening2 = Mesh::new("frame", ArchId(2));
-        opening2.positions = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        opening2.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         opening2.indices = vec![0, 1, 2];
 
         assert_eq!(object_kind_of(&opening2), ObjectKind::Opening);
