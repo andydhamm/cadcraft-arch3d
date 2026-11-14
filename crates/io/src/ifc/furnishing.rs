@@ -384,6 +384,27 @@ mod tests {
     }
 
     #[test]
+    fn ifc_furnishing_empty_symbol_type_uses_unnamed_type() {
+        let m = model(&[("item", "Furniture", "")]);
+        let text = export(&m);
+        let inst = instances(&text);
+        let (_, entity, p) = element(&inst, "furnishing-f0");
+        assert_eq!(entity, "IFCFURNITURE");
+        assert_eq!(p[4], "'FURNISHING'", "empty symbol_type uses UNNAMED_TYPE");
+        assert_eq!(p[8], ".USERDEFINED.");
+    }
+
+    #[test]
+    fn ifc_furnishing_empty_name_has_null_description() {
+        let mut m = model(&[SOFA]);
+        m.furnishings[0].name = "".into();
+        let text = export(&m);
+        let inst = instances(&text);
+        let (_, _, p) = element(&inst, "furnishing-f0");
+        assert_eq!(p[3], "$", "empty name gives null Description");
+    }
+
+    #[test]
     fn ifc_furnishing_without_a_mesh_is_still_one_element() {
         let mut m = model(&[SOFA, TOILET]);
         m.furnishings[1].at = [f64::NAN, 0.0];

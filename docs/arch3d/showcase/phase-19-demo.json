@@ -34,6 +34,8 @@
   {"cmd": "backdrop", "params": {"kind": "hdri", "item": "polyhaven:kloofendal-puresky", "rotation": 25, "intensity": 1.0, "horizon": 6}},
   {"cmd": "look", "params": {"sun": {"angle": "noon"}, "lightSet": "Day", "technique": "path", "exposure": "auto", "sky": {"on": true}}},
   {"cmd": "camera", "params": {"save": "noon-hdri", "kind": "full", "eye": [5.0, -18.0, 2.2], "target": [5.0, 8.0, 1.5], "fov": 55, "technique": "path", "exposure": "auto", "sun": {"angle": "noon"}, "sky": {"on": true}, "lightSet": "Day"}},
-  {"cmd": "camera", "params": {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true, "lightSet": "Day", "exposure": "auto"}},
+  {"cmd": "backdrop", "params": {"kind": "sky"}},
+  {"cmd": "look", "params": {"sun": {"angle": "noon"}, "lightSet": "Day", "technique": "standard", "exposure": "auto", "sky": {"on": true}}},
+  {"cmd": "camera", "params": {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true, "technique": "standard", "sun": {"angle": "noon"}, "sky": {"on": true}, "exposure": "auto", "lightSet": "Day"}},
   {"cmd": "camera", "params": {"use": "dusk"}}
 ]

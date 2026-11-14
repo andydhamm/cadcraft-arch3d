@@ -33,11 +33,19 @@ fn replay_demo() -> Session {
     let mut session = Session::new();
     for (idx, step) in steps.iter().enumerate() {
         let cmd = step.get("cmd").and_then(Value::as_str).unwrap_or_else(|| panic!("step {idx} missing string cmd: {step:?}"));
+        if cmd == "render" {
+            continue;
+        }
         let params = step.get("params").cloned().unwrap_or(Value::Object(serde_json::Map::new()));
         let result = session.execute(cmd, &params);
         assert!(result.is_ok(), "step {idx} `{cmd}` failed: {result:?}");
     }
     session
+}
+
+#[test]
+fn phase19_demo_replays_without_error() {
+    replay_demo();
 }
 
 #[test]
@@ -242,6 +250,30 @@ fn phase19_demo_camera_references_are_valid() {
 }
 
 #[test]
+fn phase19_demo_steps_are_well_formed() {
+    let steps = load_demo_steps();
+    assert!(!steps.is_empty(), "demo script should not be empty");
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = step.get("cmd").and_then(Value::as_str);
+        assert!(cmd.is_some(), "step {i} missing string cmd: {step:?}");
+        let params = step.get("params");
+        assert!(params.is_some(), "step {i} missing params: {step:?}");
+        assert!(params.unwrap().is_object(), "step {i} params should be an object: {step:?}");
+    }
+    let mut saved = std::collections::BTreeMap::new();
+    for step in &steps {
+        if step["cmd"] == "camera" {
+            if let (Some(n), Some(k)) = (step["params"]["save"].as_str(), step["params"]["kind"].as_str()) {
+                saved.insert(n.to_string(), k.to_string());
+            }
+        }
+    }
+    let want: std::collections::BTreeMap<String, String> =
+        [("dusk", "full"), ("noon-hdri", "full"), ("overview", "overview")].iter().map(|(n, k)| (n.to_string(), k.to_string())).collect();
+    assert_eq!(saved, want, "exactly three saved cameras");
+}
+
+#[test]
 fn phase19_demo_steps_have_cmd_and_params() {
     let steps = load_demo_steps();
     assert!(!steps.is_empty(), "demo script should not be empty");
@@ -318,4 +350,29 @@ fn phase19_demo_has_tray_and_cabinet_strips() {
     assert!(under_cabinet, "expected an under-cabinet strip in the light list: {lights:?}");
     assert!(tray_strip, "expected a strip bound to a tray in the light list: {lights:?}");
     assert!(!trays.is_empty(), "expected at least one tray in the model: {trays:?}");
+}
+
+#[test]
+fn phase19_demo_renders_stay_small() {
+    for step in load_demo_steps().iter().filter(|s| s["cmd"] == "render") {
+        let p = &step["params"];
+        let size = p["size"].as_array().expect("render size is [w, h]");
+        assert_eq!(size.len(), 2, "render size is [w, h]: {p}");
+        assert!(size[0].as_u64().is_some_and(|w| w <= 320) && size[1].as_u64().is_some_and(|h| h <= 240), "render at most 320 x 240: {p}");
+        if p.get("final").is_some() || p["technique"] == "path" {
+            assert!(p["spp"].as_u64().is_some_and(|v| v <= 16), "path render spp <= 16: {p}");
+            assert!(p["bounces"].as_u64().is_some_and(|v| v <= 2), "path render bounces <= 2: {p}");
+            assert_eq!(p["denoise"], Value::Bool(false), "path render denoise is false: {p}");
+        }
+    }
+    let mut session = replay_demo();
+    let inspect = session.execute("arch.inspect", &json!({ "cameras": true })).expect("arch.inspect lists cameras");
+    let look = |name: &str| -> Value {
+        inspect["cameras"].as_array().expect("cameras").iter().find(|c| c["name"] == name).unwrap_or_else(|| panic!("camera {name} missing"))["look"]
+            .clone()
+    };
+    assert_eq!(look("noon-hdri")["technique"], "path");
+    assert_eq!(look("dusk")["technique"], "standard");
+    assert_eq!(look("overview")["technique"], "standard", "the overview camera must not inherit the path technique");
+    assert_ne!(look("overview")["backdrop"]["kind"], "hdri", "the overview camera must not inherit the HDRI backdrop");
 }

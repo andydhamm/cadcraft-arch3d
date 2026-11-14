@@ -40,12 +40,14 @@ pub fn zenith_luminance(theta_s: f64, t: f64) -> f64 {
 }
 
 /// How much of the day sky remains at a sun elevation in degrees: 1 at or above the horizon,
-/// 10^(elev/1.5) below it (1e-4 at -6), 0 under -6 and for non-finite input.
+/// 10^(elev/1.5) below it (1e-4 at -6), 0 under -6 and for NaN input. +inf gives 1.0, -inf gives 0.0.
 pub fn twilight_factor(elev_deg: f64) -> f64 {
-    if !elev_deg.is_finite() || elev_deg < -6.0 {
+    if elev_deg.is_nan() {
         0.0
     } else if elev_deg >= 0.0 {
         1.0
+    } else if elev_deg < -6.0 {
+        0.0
     } else {
         10f64.powf(elev_deg / 1.5)
     }
@@ -422,5 +424,53 @@ mod tests {
         }
         let density = count as f64 / n as f64;
         assert!(density > 0.005 && density < 0.02, "star density should be about 1%, got {}", density);
+    }
+
+    #[test]
+    fn sky_model_radiance_matches_sky_radiance() {
+        let sun = [0.3, 0.2, 0.7];
+        let view = [0.1, -0.4, 0.5];
+        let turbidity = 4.5;
+        let single = sky_radiance(view, sun, turbidity);
+        let model = SkyModel::new(sun, turbidity);
+        let via_model = model.radiance(view);
+        for i in 0..3 {
+            assert!((single[i] - via_model[i]).abs() < 1e-12, "SkyModel must match sky_radiance: {} vs {}", single[i], via_model[i]);
+        }
+    }
+
+    #[test]
+    fn horizontal_illuminance_cache_returns_correct_values() {
+        // Two different suns must give different illuminances;
+        // the one-entry cache must not return the wrong value.
+        let sun1 = [0.0, 0.0, 1.0]; // Zenith
+        let sun2 = [0.7071, 0.0, 0.7071]; // 45 degrees
+        let e1 = horizontal_illuminance(sun1, 1.0, 3.0);
+        let e2 = horizontal_illuminance(sun2, 1.0, 3.0);
+        assert_ne!(e1, e2, "different suns must give different illuminances");
+        // Sun at zenith should give more illuminance than sun at 45 degrees
+        assert!(e1 > e2, "zenith sun ({e1}) must be brighter than 45-degree sun ({e2})");
+        // Re-querying the first sun after the second must still return the correct value
+        let e1_again = horizontal_illuminance(sun1, 1.0, 3.0);
+        assert_eq!(e1, e1_again, "re-querying must return the same value");
+    }
+
+    #[test]
+    fn twilight_factor_at_exact_boundaries() {
+        assert_eq!(twilight_factor(0.0), 1.0, "at horizon must be 1.0");
+        assert!((twilight_factor(-6.0) - 1e-4).abs() < 1e-15, "at -6 degrees must be 1e-4");
+        assert_eq!(twilight_factor(-6.0001), 0.0, "just below -6 must be 0.0");
+        assert_eq!(twilight_factor(f64::INFINITY), 1.0, "infinite elevation must be 1.0");
+        assert_eq!(twilight_factor(f64::NEG_INFINITY), 0.0, "negative infinite elevation must be 0.0");
+    }
+
+    #[test]
+    fn zenith_luminance_is_non_negative_for_all_inputs() {
+        for theta in [0.0, 0.5, 1.0, 1.5, std::f64::consts::FRAC_PI_2] {
+            for t in [1.7, 3.0, 5.0, 10.0] {
+                let y = zenith_luminance(theta, t);
+                assert!(y >= 0.0 && y.is_finite(), "theta={theta} t={t}: {y}");
+            }
+        }
     }
 }
