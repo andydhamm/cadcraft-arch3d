@@ -79,6 +79,9 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
     }
     let lens = if f.on { "light-lens-lit" } else { "light-lens" };
     let hw = 0.012 / 2.0;
+    // The housing bottom, referenced once so the proud lens below it is expressed
+    // exactly as `h_bottom - 0.001`.
+    let h_bottom = zp - 0.006;
     let mut parts: Vec<Option<Mesh>> = Vec::new();
     let mut segments: Vec<(Vec2, Vec2)> = f.path.windows(2).map(|w| (w[0], w[1])).collect();
     if f.closed && f.path.len() > 2 {
@@ -101,7 +104,7 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
         let px = -uy * hw;
         let py = ux * hw;
         let ring = vec![Vec2::new(a.x + px, a.y + py), Vec2::new(b.x + px, b.y + py), Vec2::new(b.x - px, b.y - py), Vec2::new(a.x - px, a.y - py)];
-        parts.push(prism("light-strip", f, &ring, zp - 0.006, zp));
+        parts.push(prism("light-strip", f, &ring, h_bottom, zp));
         // The lens is proud of the housing: a 1 mm slab below the housing bottom, 1 mm
         // narrower on each side, with its ends pulled in 1 mm along the segment.  A segment
         // shorter than 4 mm keeps its full length so the lens never shrinks to nothing.
@@ -116,7 +119,7 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
             Vec2::new(lb.x - lpx, lb.y - lpy),
             Vec2::new(la.x - lpx, la.y - lpy),
         ];
-        parts.push(prism(lens, f, &l_ring, zp - 0.007, zp - 0.006));
+        parts.push(prism(lens, f, &l_ring, h_bottom - 0.001, h_bottom));
     }
     parts
 }
@@ -396,6 +399,57 @@ mod tests {
             assert!(lb.min[1] > hb.min[1], "lens min y {:.15e} not strictly inside housing min y {:.15e}", lb.min[1], hb.min[1]);
             assert!(lb.max[1] < hb.max[1], "lens max y {:.15e} not strictly inside housing max y {:.15e}", lb.max[1], hb.max[1]);
         }
+
+        // Off strip: same geometry with material `light-lens`.
+        m.lights[0].on = false;
+        let meshes = fixture_meshes(&m);
+        let housings: Vec<Mesh> = meshes.iter().filter(|x| x.material == "light-strip").cloned().collect();
+        for lens in meshes.iter().filter(|x| x.material == "light-lens") {
+            let lb = lens.bounds();
+            let hb = housings[0].bounds();
+            assert!(lb.max[2] <= hb.min[2] + 1e-9, "lens max z {:.15e} > housing min z {:.15e}", lb.max[2], hb.min[2]);
+            assert!(
+                (lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-9,
+                "lens min z {:.15e} != housing min z - 0.001 {:.15e}",
+                lb.min[2],
+                hb.min[2] - 0.001
+            );
+            assert!(lb.min[0] > hb.min[0], "lens min x {:.15e} not strictly inside housing min x {:.15e}", lb.min[0], hb.min[0]);
+            assert!(lb.max[0] < hb.max[0], "lens max x {:.15e} not strictly inside housing max x {:.15e}", lb.max[0], hb.max[0]);
+            assert!(lb.min[1] > hb.min[1], "lens min y {:.15e} not strictly inside housing min y {:.15e}", lb.min[1], hb.min[1]);
+            assert!(lb.max[1] < hb.max[1], "lens max y {:.15e} not strictly inside housing max y {:.15e}", lb.max[1], hb.max[1]);
+        }
+    }
+
+    /// Cast a straight-up ray from below and assert the nearest fixture surface is the lit lens.
+    fn assert_lens_is_nearest_above(origin: (f64, f64, f64), meshes: &[Mesh]) {
+        let dir = (0.0, 0.0, 1.0);
+        let Some((mi, t_lens)) = nearest_tri_hit(origin, dir, meshes) else {
+            assert!((origin.1 - 2.0).abs() < 1e-9, "no fixture surface above ({0}, {1}, {2})", origin.0, origin.1, origin.2);
+            return;
+        };
+        assert_eq!(meshes[mi].material, "light-lens-lit", "nearest hit is {}, expected light-lens-lit (x={})", meshes[mi].material, origin.0);
+        for (oi, mesh) in meshes.iter().enumerate() {
+            if oi == mi {
+                continue;
+            }
+            let n = mesh.indices.len() / 3;
+            let mut closest: Option<f64> = None;
+            for ti in 0..n {
+                let i0 = mesh.indices[ti * 3] as usize;
+                let i1 = mesh.indices[ti * 3 + 1] as usize;
+                let i2 = mesh.indices[ti * 3 + 2] as usize;
+                let a = (mesh.positions[i0][0] as f64, mesh.positions[i0][1] as f64, mesh.positions[i0][2] as f64);
+                let b = (mesh.positions[i1][0] as f64, mesh.positions[i1][1] as f64, mesh.positions[i1][2] as f64);
+                let c = (mesh.positions[i2][0] as f64, mesh.positions[i2][1] as f64, mesh.positions[i2][2] as f64);
+                if let Some(ot) = ray_tri_hit(origin, dir, a, b, c) {
+                    closest = closest.map_or(Some(ot), |c| Some(c.min(ot)));
+                }
+            }
+            if let Some(ot) = closest {
+                assert!((ot - t_lens).abs() >= 1e-6, "other mesh {} hit within 1e-6 of lens: lens_t={t_lens} other_t={ot}", oi);
+            }
+        }
     }
 
     #[test]
@@ -408,34 +462,8 @@ mod tests {
         f.height = Some(2.4);
         m.lights.push(f);
         let meshes = fixture_meshes(&m);
-        let dir = (0.0, 0.0, 1.0);
         for x in [1.2, 2.0, 2.8] {
-            let origin = (x, 2.0, 1.0);
-            // The lens must be the nearest hit.
-            let (mi, t_lens) = nearest_tri_hit(origin, dir, &meshes).unwrap_or_else(|| panic!("no hit from ({x}, 2.0, 1.0)"));
-            assert_eq!(meshes[mi].material, "light-lens-lit", "nearest hit is {}, expected light-lens-lit (x={})", meshes[mi].material, x);
-            // No other fixture mesh's closest hit is within 1e-6 of the lens hit distance.
-            for (oi, mesh) in meshes.iter().enumerate() {
-                if oi == mi {
-                    continue;
-                }
-                let n = mesh.indices.len() / 3;
-                let mut closest: Option<f64> = None;
-                for ti in 0..n {
-                    let i0 = mesh.indices[ti * 3] as usize;
-                    let i1 = mesh.indices[ti * 3 + 1] as usize;
-                    let i2 = mesh.indices[ti * 3 + 2] as usize;
-                    let a = (mesh.positions[i0][0] as f64, mesh.positions[i0][1] as f64, mesh.positions[i0][2] as f64);
-                    let b = (mesh.positions[i1][0] as f64, mesh.positions[i1][1] as f64, mesh.positions[i1][2] as f64);
-                    let c = (mesh.positions[i2][0] as f64, mesh.positions[i2][1] as f64, mesh.positions[i2][2] as f64);
-                    if let Some(ot) = ray_tri_hit(origin, dir, a, b, c) {
-                        closest = closest.map_or(Some(ot), |c| Some(c.min(ot)));
-                    }
-                }
-                if let Some(ot) = closest {
-                    assert!((ot - t_lens).abs() >= 1e-6, "other mesh {} hit within 1e-6 of lens: lens_t={t_lens} other_t={ot}", oi);
-                }
-            }
+            assert_lens_is_nearest_above((x, 2.0, 1.0), &meshes);
         }
     }
 
