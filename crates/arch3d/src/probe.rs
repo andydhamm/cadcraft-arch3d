@@ -353,7 +353,7 @@ pub fn arch_kind(mesh: &Mesh) -> cadcraft_doc::arch::ArchKind {
         ArchKind::Room
     } else if m.starts_with("molding-line") {
         ArchKind::MoldingLine
-    } else if m == "countertop" || m.starts_with("countertop-") {
+    } else if m == "countertop" || m.starts_with("countertop-") || m == "counter" || m.starts_with("counter-") {
         ArchKind::Countertop
     } else if m == "backsplash" {
         ArchKind::Backsplash
