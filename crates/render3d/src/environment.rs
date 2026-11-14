@@ -97,8 +97,8 @@ impl Environment {
         if out.iter().all(|v| v.is_finite()) { out } else { [0.0; 3] }
     }
 
-    /// A stable fingerprint of the map parameters (never the pixels), so `PartialEq` is cheap
-    /// and the pane can compare `Lighting` every frame.
+    /// A stable fingerprint of the map content and its parameters, so `PartialEq` is cheap
+    /// and the pane can compare `Lighting` every frame. Recompute it after any field mutation.
     pub fn compute_key(&self) -> u64 {
         let mut h: u64 = 0x811c9dc5;
         let mut push = |x: u64| h = (h ^ x).wrapping_mul(0x01000193);
@@ -115,6 +115,14 @@ impl Environment {
             }
         }
         h
+    }
+
+    /// Refreshes the cached fingerprint after mutating the environment map or its transform.
+    /// Call this whenever you change `rgb`, `intensity`, `rotation_deg`, `horizon_deg`, or the
+    /// visibility/daylight flags.
+    pub fn rekey(&mut self) -> u64 {
+        self.key = self.compute_key();
+        self.key
     }
 }
 
@@ -142,52 +150,75 @@ pub fn hdri_environment(model: &ArchModel, look: &Look) -> Option<Environment> {
     Some(e)
 }
 
-/// [p19-sky] The sky environment for the given sun.
+/// Bakes done since the process started (for tests that check the cache).
+thread_local! {
+    static SKY_BAKES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+/// Baked skies kept for the process, oldest first: (sun bits, turbidity bits, stars, visible, map).
+type SkyCacheEntry = ([u64; 3], u64, bool, bool, Environment);
+static SKY_CACHE: std::sync::Mutex<Vec<SkyCacheEntry>> = std::sync::Mutex::new(Vec::new());
+const SKY_CACHE_LEN: usize = 24;
+
+/// How many sky maps this thread has baked (not served from the cache).
+pub fn sky_bake_count() -> usize {
+    SKY_BAKES.with(|c| c.get())
+}
+
+/// [p19-sky] The sky environment for the given sun. The 512 x 256 bake is cached per
+/// (sun direction, turbidity, stars, visible) for the process: a render that changed none of
+/// them reuses the map instead of re-evaluating 131 072 texels.
 pub fn sky_environment(model: &ArchModel, look: &Look, sun_dir: Option<[f64; 3]>) -> Option<Environment> {
     if !look.sky.on {
         return None;
     }
-    if !matches!(look.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky))
-        && !matches!(model.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky))
-    {
+    let visible = matches!(look.backdrop.as_ref(), Some(Backdrop::Sky)) || matches!(model.backdrop.as_ref(), Some(Backdrop::Sky));
+    if !visible {
         return None;
     }
     let sun = sun_dir.unwrap_or_else(|| crate::light::Light::DEFAULT.dir.map(f64::from));
-    let visible = matches!(look.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky))
-        || matches!(model.backdrop.as_ref(), Some(cadcraft_doc::arch::Backdrop::Sky));
-    let daylight = cadcraft_arch3d::sky::sky_radiance([0.0, 0.0, 1.0], sun, look.sky.turbidity)[0].is_finite();
-    let mut env =
-        Environment { width: 512, height: 256, rgb: vec![[0.0f32; 3]; 512 * 256], intensity: 1.0, visible, daylight: daylight, ..Default::default() };
-    let w = env.width as f64;
-    let h = env.height as f64;
+    let key = ([sun[0].to_bits(), sun[1].to_bits(), sun[2].to_bits()], look.sky.turbidity.to_bits(), look.sky.stars, visible);
+    let mut cache = SKY_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(hit) = cache.iter().find(|e| (e.0, e.1, e.2, e.3) == key) {
+        return Some(hit.4.clone());
+    }
+    let env = bake_sky(sun, look.sky.turbidity, look.sky.stars, visible);
+    if cache.len() >= SKY_CACHE_LEN {
+        cache.remove(0);
+    }
+    cache.push((key.0, key.1, key.2, key.3, env.clone()));
+    Some(env)
+}
+
+/// Evaluate the sky for every texel (the uncached bake).
+pub fn bake_sky(sun: [f64; 3], turbidity: f64, stars: bool, visible: bool) -> Environment {
+    SKY_BAKES.with(|c| c.set(c.get() + 1));
+    let sky = cadcraft_arch3d::sky::SkyModel::new(sun, turbidity);
     let sun_elev = sun[2].clamp(-1.0, 1.0).asin().to_degrees();
-    for y in 0..env.height {
-        for x in 0..env.width {
-            let u = (x as f64 + 0.5) / w;
-            let v = (y as f64 + 0.5) / h;
-            let az = (u - 0.5) * std::f64::consts::TAU;
-            let el = (0.5 - v) * std::f64::consts::PI;
-            let r = el.cos();
-            let dir = [r * az.cos(), r * az.sin(), el.sin()];
-            let mut rgb = cadcraft_arch3d::sky::sky_radiance(dir, sun, look.sky.turbidity);
-            if look.sky.stars {
+    let (width, height) = (512u32, 256u32);
+    let mut env =
+        Environment { width, height, rgb: Vec::with_capacity(512 * 256), intensity: 1.0, visible, daylight: sun_elev > -6.0, ..Default::default() };
+    let (w, h) = (width as f64, height as f64);
+    let cols: Vec<(f64, f64)> = (0..width).map(|x| ((((x as f64 + 0.5) / w) - 0.5) * std::f64::consts::TAU).sin_cos()).collect();
+    for y in 0..height {
+        let el = (0.5 - (y as f64 + 0.5) / h) * std::f64::consts::PI;
+        let (se, r) = el.sin_cos();
+        for &(sa, ca) in &cols {
+            let dir = [r * ca, r * sa, se];
+            let mut rgb = sky.radiance(dir);
+            if stars {
                 let star = cadcraft_arch3d::sky::star_radiance(dir, sun);
                 if star.is_finite() {
-                    rgb[0] += star as f64;
-                    rgb[1] += star as f64;
-                    rgb[2] += star as f64;
+                    rgb = rgb.map(|c| c + star as f64);
                 }
             }
             if !rgb.iter().all(|c| c.is_finite()) {
                 rgb = [0.0; 3];
             }
-            let i = (y as usize) * (env.width as usize) + (x as usize);
-            env.rgb[i] = [rgb[0] as f32, rgb[1] as f32, rgb[2] as f32];
+            env.rgb.push([rgb[0] as f32, rgb[1] as f32, rgb[2] as f32]);
         }
     }
-    env.daylight = sun_elev > -6.0;
     env.key = env.compute_key();
-    Some(env)
+    env
 }
 
 /// The one environment for the drawing and look: an HDRI (if the look names one),
@@ -214,6 +245,14 @@ impl std::cmp::PartialEq for Environment {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset_sky_cache_for_test() {
+        let mut cache = SKY_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        cache.clear();
+        SKY_BAKES.with(|c| c.set(0));
+    }
 
     #[test]
     fn hdri_environment_intensity_rotation_horizon() {
@@ -289,6 +328,9 @@ mod tests {
 
     #[test]
     fn sky_visible_only_with_sky_backdrop() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
         let mut look = Look::default();
         look.sky.on = true;
         let model = ArchModel::default();
@@ -299,5 +341,104 @@ mod tests {
         let mut no_sky_look = look.clone();
         no_sky_look.backdrop = Some(cadcraft_doc::arch::Backdrop::Hdri { image: "sky".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
         assert!(sky_environment(&model, &no_sky_look, None).is_none());
+    }
+
+    fn sky_look(turbidity: f64, stars: bool) -> Look {
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sky.turbidity = turbidity;
+        look.sky.stars = stars;
+        look.backdrop = Some(Backdrop::Sky);
+        look
+    }
+
+    #[test]
+    fn sky_environment_is_cached_per_sun_and_look() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        let model = ArchModel::default();
+        let sun = Some([0.3, 0.2, 0.9]);
+        let look = sky_look(4.25, false);
+        let before = sky_bake_count();
+        let a = sky_environment(&model, &look, sun).unwrap();
+        assert_eq!(sky_bake_count(), before + 1);
+        let b = sky_environment(&model, &look, sun).unwrap();
+        assert_eq!(sky_bake_count(), before + 1, "same sun and look must not re-bake");
+        assert_eq!(a.key, b.key);
+        // A different sun, turbidity or stars flag is a different map.
+        sky_environment(&model, &look, Some([0.3, 0.2, -0.5])).unwrap();
+        assert_eq!(sky_bake_count(), before + 2);
+        sky_environment(&model, &sky_look(4.5, false), sun).unwrap();
+        assert_eq!(sky_bake_count(), before + 3);
+        sky_environment(&model, &sky_look(4.25, true), sun).unwrap();
+        assert_eq!(sky_bake_count(), before + 4);
+        // Alternating between two suns stays cached.
+        sky_environment(&model, &look, sun).unwrap();
+        sky_environment(&model, &look, Some([0.3, 0.2, -0.5])).unwrap();
+        assert_eq!(sky_bake_count(), before + 4);
+    }
+
+    #[test]
+    fn cached_sky_equals_a_fresh_bake() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        let model = ArchModel::default();
+        let sun = [0.1, -0.6, 0.2];
+        let look = sky_look(5.5, true);
+        let first = sky_environment(&model, &look, Some(sun)).unwrap();
+        let cached = sky_environment(&model, &look, Some(sun)).unwrap();
+        let fresh = bake_sky(sun, 5.5, true, true);
+        assert_eq!(cached.rgb, fresh.rgb);
+        assert_eq!(first.rgb, fresh.rgb);
+        assert_eq!(cached.key, fresh.key);
+        assert_eq!(cached.daylight, fresh.daylight);
+        assert!(cached.is_valid());
+    }
+
+    #[test]
+    fn sky_bake_stays_under_its_time_budget() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        let start = std::time::Instant::now();
+        let env = bake_sky([0.2, 0.3, 0.5], 3.0, true, true);
+        let first = start.elapsed();
+        assert!(env.is_valid());
+        // Generous: a debug build bakes 131 072 texels in well under a second.
+        assert!(first < std::time::Duration::from_secs(5), "bake took {first:?}");
+        // A cache hit is much cheaper than a bake.
+        let model = ArchModel::default();
+        let look = sky_look(3.0, true);
+        sky_environment(&model, &look, Some([0.2, 0.3, 0.5]));
+        let hit = std::time::Instant::now();
+        sky_environment(&model, &look, Some([0.2, 0.3, 0.5]));
+        assert!(hit.elapsed() < std::time::Duration::from_millis(500), "cache hit took {:?}", hit.elapsed());
+    }
+
+    #[test]
+    fn night_sky_render_terminates_quickly() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        // Ensure that a night sky (sun below horizon) with stars doesn't hang or take excessively long.
+        // This is a sanity check for the sky bake and environment creation.
+        let model = ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sky.stars = true;
+        look.backdrop = Some(cadcraft_doc::arch::Backdrop::Sky);
+
+        // Sun below horizon (night)
+        let sun = [0.0, 0.0, -0.5];
+
+        let start = std::time::Instant::now();
+        let env = sky_environment(&model, &look, Some(sun));
+        let duration = start.elapsed();
+
+        assert!(env.is_some(), "Night sky environment should be created");
+        // Night sky bake should be similar in cost to day sky bake (same number of texels)
+        assert!(duration < std::time::Duration::from_secs(5), "Night sky bake took {duration:?}");
     }
 }

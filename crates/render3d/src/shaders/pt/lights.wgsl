@@ -46,9 +46,11 @@ fn light_sample(i: u32, p: vec3<f32>, u: vec2<f32>) -> LightSample {
     }
     let l = lights[i];
     if (l.kind == LIGHT_STRIP) {
-        // A strip segment: a point uniformly along it (u.x), on the emitting side 2 mm below the
-        // housing face; li = rgb (cd per metre) x length x max(0, n_e.-dir) / d^2, pdf 1, delta (the
-        // lens is camera-only emissive, so no MIS).
+        // A strip segment: a point uniformly along it (u.x), on the emitting side 2 mm past the
+        // centreline; the packed strip position is already nudged 7 mm clear of the 6 mm-deep
+        // housing, so the sample stays outside the fixture's own shadow box while the lens stays
+        // visible to camera rays. li = rgb (cd per metre) x length x max(0, n_e.-dir) / d^2,
+        // pdf 1, delta (the lens is camera-only emissive, so no MIS).
         let q = l.position + l.axis * (u.x * l.length) + l.direction * 0.002;
         let to_q = q - p;
         let d2 = dot(to_q, to_q);

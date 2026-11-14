@@ -171,6 +171,20 @@ mod tests {
     }
 
     #[test]
+    fn soffit_with_nan_point_serializes() {
+        let mut s = Soffit::default();
+        s.polygon.push(Vec2::new(f64::NAN, 0.0));
+        let value = serde_json::to_value(&s).unwrap();
+        let polygon = value["polygon"].as_array().unwrap();
+        assert_eq!(polygon.len(), 1);
+        let point = &polygon[0];
+        // serde_json represents f64::NAN as null
+        let x = point.as_object().and_then(|o| o.get("x")).or_else(|| point.as_array().and_then(|a| a.first()));
+        assert!(x.is_some());
+        assert!(x.as_ref().unwrap().is_null());
+    }
+
+    #[test]
     fn tray_and_soffit_handles_and_labels() {
         let id = ArchId(9);
         assert!(is_tray_handle(tray_handle(id)) && !is_soffit_handle(tray_handle(id)));

@@ -92,12 +92,15 @@ r = nth_render(rows, -1, "render under the look's sun angle")
 nd, sd = by['noon'].get('dir'), r.get('sunDir')
 if not (isinstance(nd, list) and isinstance(sd, list) and len(sd) == 3 and all(abs(num(a, 'dir') - num(b, 'dir')) <= 1e-9 for a, b in zip(sd, nd))):
     fail(f"a render without `sun` uses the look's sun angle `noon`: sunDir {sd}, angle dir {nd}")
+# Every sunangle reply carries sunAngles (the definition, the list and the accepted delete; the refused delete has
+# none), so the replies are: [noon] (defined), [noon] (listed after the refusal), [] (deleted), [] (listed).
 rc, rr, so, se = run([SITE, cmd('sunangle', dict({"name": "noon"}, **NOON)), cmd('look', {"sun": {"angle": "noon"}}),
                       cmd('sunangle', {"delete": "noon"}), cmd('sunangle', {"list": True}),
                       cmd('look', {"sun": {"angle": None}}), cmd('sunangle', {"delete": "noon"}),
                       cmd('sunangle', {"list": True})], expect_ok=False)
 lists = [r['sunAngles'] for r in rr if isinstance(r, dict) and isinstance(r.get('sunAngles'), list)]
-if not errors(se) or len(lists) < 2 or [a.get('name') for a in lists[-2]] != ['noon'] or lists[-1] != []:
-    fail(f"deleting a sun angle the look uses is refused; after look {{sun: {{angle: null}}}} it is deleted: "
-         f"{errors(se)}, {lists}")
+names = [[a.get('name') for a in l if isinstance(a, dict)] for l in lists]
+if not errors(se) or len(names) < 3 or names[1] != ['noon'] or names[-1] != []:
+    fail(f"deleting a sun angle the look uses is refused (it is still listed); after look {{sun: {{angle: null}}}} it is "
+         f"deleted: {errors(se)}, {names}")
 print("PASS 02")

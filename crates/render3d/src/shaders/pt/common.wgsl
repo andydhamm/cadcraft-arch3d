@@ -5,6 +5,25 @@ const PT_PI: f32 = 3.14159265358979323846;
 const PT_INF: f32 = 3.0e38;
 const PT_EPS: f32 = 1.0e-4;
 
+fn pt_eps(p: vec3<f32>) -> f32 {
+    let m = max(max(abs(p.x), abs(p.y)), abs(p.z));
+    return PT_EPS * max(1.0, m);
+}
+
+fn pt_offset(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    if (dot(n, n) <= 0.0) {
+        return p;
+    }
+    return p + normalize(n) * pt_eps(p);
+}
+
+fn pt_step(p: vec3<f32>, d: vec3<f32>) -> vec3<f32> {
+    if (dot(d, d) <= 0.0) {
+        return p;
+    }
+    return p + normalize(d) * pt_eps(p);
+}
+
 const MAT_GLASS: u32 = 1u;
 const MAT_EMIT_CAMERA_ONLY: u32 = 2u;
 const MAT_NO_SHADOW: u32 = 4u;

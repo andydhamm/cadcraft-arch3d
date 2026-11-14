@@ -8,6 +8,7 @@
 //! radiance, the sampling and the pdf all read that texel.
 
 use crate::environment::Environment;
+use std::sync::Mutex;
 
 /// Largest table the path tracer bakes.
 pub const MAX_TABLE_W: u32 = 1024;
@@ -33,16 +34,62 @@ pub struct EnvTable {
     pub total: f32,
 }
 
+/// Cache for `env_table`, keyed by `Environment::key`.
+/// Stores (key, table) pairs. Bounded to avoid memory bloat.
+static ENV_TABLE_CACHE: Mutex<Vec<(u64, EnvTable)>> = Mutex::new(Vec::new());
+const ENV_TABLE_CACHE_LEN: usize = 32;
+
+/// Count of table bakes performed (for tests).
+thread_local! {
+    static ENV_TABLE_BAKES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many env tables this thread has baked (not served from the cache).
+pub fn env_table_bake_count() -> usize {
+    ENV_TABLE_BAKES.with(|c| c.get())
+}
+
 fn luminance(c: [f32; 3]) -> f32 {
     0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 }
 
 /// Bake `e` (rotation, horizon and intensity applied) into a sampling table of at most
 /// 1024 x 512 texels. An invalid environment gives an empty table (`total` 0).
+///
+/// The result is cached by `Environment::key`. A cache hit returns a clone of the stored table.
 pub fn env_table(e: &Environment) -> EnvTable {
     if !e.is_valid() {
         return EnvTable::default();
     }
+
+    // The caller may mutate `rgb`, `rotation_deg`, or `intensity` without refreshing the stored
+    // fingerprint. Hash the current content so the table cache stays keyed by what it represents.
+    let key = e.compute_key();
+
+    // Check cache
+    if let Ok(guard) = ENV_TABLE_CACHE.lock() {
+        if let Some((_, table)) = guard.iter().find(|(k, _)| *k == key) {
+            return table.clone();
+        }
+    }
+
+    // Bake
+    ENV_TABLE_BAKES.with(|c| c.set(c.get() + 1));
+    let table = bake_env_table(e);
+
+    // Store in cache
+    if let Ok(mut guard) = ENV_TABLE_CACHE.lock() {
+        if guard.len() >= ENV_TABLE_CACHE_LEN {
+            guard.remove(0);
+        }
+        guard.push((key, table.clone()));
+    }
+
+    table
+}
+
+/// The uncached bake of an environment table.
+fn bake_env_table(e: &Environment) -> EnvTable {
     let w = e.width.min(MAX_TABLE_W) as usize;
     let h = e.height.min(MAX_TABLE_H) as usize;
     let pi = std::f32::consts::PI;
@@ -208,6 +255,14 @@ pub fn uv_of_dir(d: [f32; 3]) -> (f32, f32) {
 mod tests {
     use super::*;
 
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset_env_table_cache_for_test() {
+        let mut cache = ENV_TABLE_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        cache.clear();
+        ENV_TABLE_BAKES.with(|c| c.set(0));
+    }
+
     /// A tiny deterministic generator in [0, 1).
     fn rng(state: &mut u64) -> f32 {
         *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -216,6 +271,9 @@ mod tests {
 
     #[test]
     fn pdf_integrates_to_one_and_finds_bright_texel() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
         // A gradient map: the pdf over the sphere integrates to 1.
         let (w, h) = (32usize, 16usize);
         let mut e = Environment::uniform([1.0; 3], w as u32, h as u32);
@@ -254,5 +312,34 @@ mod tests {
             }
         }
         assert!(hit * 10 >= n * 9, "{hit} of {n} samples in the bright texel");
+    }
+
+    #[test]
+    fn sky_bake_and_tables_are_built_once_per_sun_angle() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        // Cache by the actual map content, not by the caller's stale `key` field.
+        let mut e = Environment::uniform([0.731, 0.419, 0.277], 17, 9);
+        e.key = 12345; // stale mirror of an older key; the content still matches the first call.
+
+        let before = env_table_bake_count();
+
+        let _t1 = env_table(&e);
+        assert_eq!(env_table_bake_count(), before + 1, "First call must bake");
+
+        let _t2 = env_table(&e);
+        assert_eq!(env_table_bake_count(), before + 1, "Second call with the same content must hit cache");
+
+        // A different map is a different table even if the old key field says otherwise.
+        let mut e2 = e.clone();
+        e2.rgb[0] = [2.0, 2.0, 2.0];
+        e2.key = 67890;
+
+        let _t3 = env_table(&e2);
+        assert_eq!(env_table_bake_count(), before + 2, "Different content must bake");
+
+        let _t4 = env_table(&e);
+        assert_eq!(env_table_bake_count(), before + 2, "Original content must hit cache again");
     }
 }

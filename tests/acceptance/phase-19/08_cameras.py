@@ -30,8 +30,13 @@ def shot(camera, **k):
     return o, render_cmd(o, camera, SIZE, **k)
 
 
+def is_inspect(r):
+    """An arch.inspect {cameras: true} reply (the `camera` commands also reply a `cameras` list, with `active`)."""
+    return isinstance(r, dict) and isinstance(r.get('cameras'), list) and 'activeCamera' in r
+
+
 def cams(rows):
-    rs = [r for r in rows if isinstance(r, dict) and isinstance(r.get('cameras'), list) and 'activeCamera' in r]
+    rs = [r for r in rows if is_inspect(r)]
     if not rs:
         fail(f"arch.inspect {{cameras: true}} lists the cameras and the active one: {json.dumps(rows)[-400:]}")
     return {c.get('name'): c for c in rs[-1]['cameras'] if isinstance(c, dict)}
@@ -73,7 +78,7 @@ if digest(orb) == A:
     fail("(c) camera.orbit {azimuth 30} changes what `dusk` shows")
 if digest(rst) != A:
     fail("(c) camera.reset returns `dusk` to its saved state: the saved image again")
-mods = [cams(rows[:i + 1]) for i, r in enumerate(rows) if isinstance(r, dict) and isinstance(r.get('cameras'), list)]
+mods = [cams(rows[:i + 1]) for i, r in enumerate(rows) if is_inspect(r)]
 if len(mods) != 2 or mods[0].get('dusk', {}).get('modified') is not True or mods[1].get('dusk', {}).get('modified') is not False:
     fail(f"(c) arch.inspect cameras: dusk modified true after the orbit, false after the reset: "
          f"{[m.get('dusk', {}).get('modified') for m in mods]}")

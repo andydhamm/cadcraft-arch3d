@@ -250,6 +250,52 @@ ceiling-hung items, and their underside values are available in `arch.inspect` a
 The basement level is still below the main floor, so its exterior walls convert to `Concrete 0.2` and keep their
 footings under the floor structure.
 
+## Light, sky and cameras
+
+The renderer keeps a drawing-wide look and a per-camera override, so each saved camera can hold its own
+exposure, tone map, sun angle, habitat, backdrop, light set and cutaway state. Exposure is controlled with
+`EV100` (`render` and `camera` keys both accept `"auto"` or `{"ev100": n}`), and tone mapping stays in the
+look as `aces`, `hable` or `none`.
+
+`sunangle` stores a named sun direction in the drawing. A new angle can be added from a date and time at the
+site (`{"name": "dusk", "date": "2026-06-21", "time": "19:30"}`) or directly from a compass azimuth and
+altitude (`{"name": "noon", "azimuth": 180, "elevation": 62}`); the renderer resolves it to a sun vector in
+site-drawing coordinates. The look can reference it with `"sun": {"angle": "dusk"}` while a one-off render can
+also override it with `{"sun": {"azimuth": 300, "elevation": -3}}`.
+
+`backdrop` selects the sky or HDRI that fills the background behind the model, and its intensity and rotation
+are part of the environment. `{"kind": "sky"}` gives a procedural twilight sky; `{"kind": "hdri", "item":
+"polyhaven:kloofendal-puresky", "rotation": 25, "horizon": 5}` uses the sample HDRI. `lightset` stores named
+lighting groups so a camera can say `"lightSet": "Evening"` while the same drawing keeps `"Day"` as its all-off
+reference; a render can also take a temporary `lightSet` without changing the model. For interior scenes, the
+same pattern applies to lineal strips: `lightfixture {"type": "LED strip", "under": [...]}` is a cabinet strip,
+`lightfixture {"type": "LED strip", "room": "r0", "inset": 0.5}` wraps a room perimeter, and
+`lightfixture {"type": "LED strip", "tray": "tr0"}` follows a recessed ceiling tray.
+
+`camera` saves a view with its own pose and own look. A `full` camera stores `eye`, `target` and `fov`; an
+`overview` camera stores `level`, `lowerLevels` and `cutaway` settings; `camera.reset` goes back to the saved
+state, `camera.orbit` rotates or scales the live orbit camera, and `camera.update` applies new pose or look keys
+without leaving the saved version behind. `pick3d` uses the same camera parameters and a near clip or cutaway
+accepts the filter values from the final draw.
+
+```json
+[
+  {"cmd": "site", "params": {"latitude": 51.05, "longitude": -114.07, "trueNorth": 0}},
+  {"cmd": "sunangle", "params": {"name": "dusk", "azimuth": 300, "elevation": -3}},
+  {"cmd": "sunangle", "params": {"name": "noon", "date": "2026-06-21", "time": "solar-noon"}},
+  {"cmd": "backdrop", "params": {"kind": "sky"}},
+  {"cmd": "look", "params": {"exposure": {"ev100": 4}, "sun": {"angle": "dusk"}, "lightSet": "Evening"}},
+  {"cmd": "camera", "params": {"save": "dusk", "kind": "full", "eye": [5, -18, 1.7], "target": [5, 6, 1.35], "fov": 58}},
+  {"cmd": "backdrop", "params": {"kind": "hdri", "item": "polyhaven:kloofendal-puresky", "rotation": 25, "intensity": 1.0, "horizon": 6}},
+  {"cmd": "camera", "params": {"save": "noon-hdri", "kind": "full", "eye": [5, -18, 2.2], "target": [5, 8, 1.5], "fov": 55, "technique": "path", "sun": {"angle": "noon"}}},
+  {"cmd": "camera", "params": {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true}}
+]
+```
+
+The saved views are the same camera object the render and pick commands use, so a single drawing can keep a dusk
+sky view, a noon HDRI path-trace and a cutaway floor overview side by side. The `docs/arch3d/showcase/phase-19-demo.json`
+script in the showcase folder replays the whole set and saves the three named cameras as a single record.
+
 ## Lighting and final renders
 
 The lighting model is built from the same room model as the 3D view: fixtures sit on the ceiling, wall or floor,
@@ -690,6 +736,52 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --save split-level.dxf
 ```
 
+## Interior finish
+
+A room's `type` sets its default finish layers: kitchens, baths, utility rooms and entries use tile or stone floors,
+bedrooms and living areas use carpet or wood, and each wall and ceiling takes the room's finish template unless a paint
+material overrides it. A room can also carry base and crown moldings from `room.moldings` without changing the underlying
+finish assignment.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'room {"id":"r0","type":"kitchen"}' \
+  --cmd 'room.moldings {"room":"r0","moldings":[{"kind":"base"},{"kind":"crown"}]}' \
+  --cmd 'arch.inspect {"rooms":true,"moldings":true}'
+```
+
+For a trim-only run, pass the profile or size on each molding entry:
+
+```json
+{"room":"r0","moldings":[{"kind":"base","profile":"molding:base"},{"kind":"crown","profile":"molding:crown","size":[0.07,0.12]}]}
+```
+
+## Kitchen and bath
+
+Cabinet runs become kitchen objects: base and wall cabinets, a corner cabinet with a shared countertop, fillers against the
+wall, and a backsplash on the wall behind the run. Bath rooms get shower enclosures, glass pony walls and niches as wall
+openings, while the room's finishes and moldings keep the room visually complete.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'room {"id":"r0","type":"kitchen"}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":1.0,"width":0.6,"depth":0.6,"counter":true}' \
+  --cmd 'cabinet {"kind":"base","wall":"w0","offset":2.2,"width":0.8,"depth":0.6,"counter":true}' \
+  --cmd 'cabinet {"kind":"wall","wall":"w0","offset":1.0,"width":0.8,"crown":"molding:crown"}' \
+  --cmd 'fixture {"kind":"sink","at":[2.0,1.5]}' \
+  --cmd 'fixture {"kind":"range","at":[4.3,1.5]}' \
+  --cmd 'room.moldings {"room":"r0","moldings":[{"kind":"base"},{"kind":"crown"}]}' \
+  --cmd 'arch.inspect {"cabinets":true,"fixtures":true,"rooms":true,"moldings":true}'
+```
+
+```json
+{"kind": "base", "wall": "w0", "offset": 1.2, "width": 0.6, "depth": 0.6, "counter": true}
+```
+
 ## The showcase house
 
 The showcase house is a saved command script: `docs/arch3d/showcase/bilevel.json` is a JSON array of
@@ -712,6 +804,88 @@ python3 tools/showcase/render_all.py --out target/showcase
 
 `--size WxH` and `--spp N` set the 3D renders' size and samples; `tools/showcase/README.md` lists every file it
 writes.
+
+## Schedules and labels
+
+A schedule is a live TABLE in the drawing, linked to a `Schedule` record by id (`sc0`, `sc1`, …). The four kinds are
+`door`, `window`, `cabinet` and `room`. `schedule {"kind": "door", "at": [x, y]}` places one on `A-ANNO-SCHD`; its
+rows are recomputed after every command that changes the model, so a resized door moves into its group at once.
+Identical items share one number: doors (and garage doors and cased openings) group by kind, style, width and height;
+windows by style, width, height and sill; cabinets by kind, width, depth, height, fronts, doors and drawers; rooms by
+their floor, wall and ceiling finishes. Numbers are `D01`, `W01`, `C01`, … in order of each group's lowest id, derived
+on every read, never stored. `opening.edit {"id", "width"?, "height"?, "sill"?, "style"?}` resizes an opening and
+re-validates it against the placement limits.
+
+The numbers also draw in the plan: a plan view whose `labels.numbers` is on (Working, Floor Plan, Kitchen & Bath)
+puts each door, window and cabinet number beside it on `A-DOOR-IDEN`, `A-GLAZ-IDEN` and `A-FLOR-CASE-IDEN`, and every
+elevation tags its openings and cabinets on `A-ELEV-IDEN`.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'door {"wall":"w0","offset":1.5,"width":0.9,"height":2.1,"style":"hinged"}' \
+  --cmd 'window {"wall":"w2","offset":3.0,"width":1.2,"height":1.2,"sill":0.9,"style":"slider"}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'schedule {"kind":"door","at":[0,-8]}' \
+  --cmd 'schedule {"kind":"window","at":[8,-8]}' \
+  --cmd 'schedule {"kind":"room","at":[16,-8]}' \
+  --cmd 'arch.inspect {"schedules":true}' \
+  --save schedules.dxf
+```
+
+## Interior elevations and view notes
+
+`elevation {"room": "Kitchen", "level": "Main", "side": "west", "insert": [x, y]}` makes an interior elevation: it
+looks at one wall of one room and restricts the scene to that room box. The side names the wall it faces (`north`,
+`east`, `south`, `west`); `wall` names a wall id instead. Interior elevations draw the cabinet door swings on
+`A-ELEV-SWNG`, the schedule numbers on `A-ELEV-IDEN`, and material patterns (courses and joints from the surface's
+texture) on `A-ELEV-PATT`; each cabinet run and the floor-to-ceiling height are dimensioned automatically. None of
+this grows the view's extent or its overall dimensions.
+
+A view note is text, a marker or a dimension attached to the view, not the model: `view.note {"view":"v6","text":
+"backsplash to ceiling","at":[u,v]}` adds one, `view.dim {"view":"v6","from":[u,v],"to":[u,v]}` adds a dimension,
+and `view.note.delete {"view":"v6","id":"n0"}` removes one. Notes live in view coordinates (u across, v up) and
+survive every regeneration; a note attached to an object corner follows it, and detaches to its last position if the
+object goes. Notes change no 3D and bump no revision.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'cabinet {"kind":"base","wall":"w3","offset":1.0,"width":1.5}' \
+  --cmd 'elevation {"room":"r0","level":0,"side":"north","insert":[0,-12]}' \
+  --cmd 'view.note {"view":"v0","text":"base run","at":[1.0,0.9]}' \
+  --cmd 'arch.inspect {"views":true}' \
+  --save interior.dxf
+```
+
+## Sheets
+
+A sheet is a paper-space layout with a locked viewport per view at the view's scale (one model metre is 1000/scale
+paper mm), a master title block and callout markers. `sheetset {"project", "date"}` sets the project name and date
+used by the title-block macros. `sheet {"name", "number", "title", ...}` makes a sheet: `"camera": name` puts a 3D
+render on it (the cover), `"planView": name` puts a phase-20 plan view on it (drawn from a copy of the drawing with
+that view applied, so one sheet can show Lower and another Main whatever the session shows), and `"views": [...]`
+places elevations, sections and interior elevations. `sheet.edit` changes a sheet, `sheet.delete` removes one, and
+`sheetset` renumbers them.
+
+The master title block is the block `ARCH-TITLE-BLOCK`, made once and never overwritten; its attribute defaults are
+macros (`%sheet_number%`, `%sheet_title%`, `%project%`, `%date%`, `%scale%`) and each sheet's INSERT holds the
+expansions. Every placed elevation, section and interior elevation gets a callout in the plan (`<view number>/<sheet
+number>` on `A-ANNO-SYMB`); `sheet.open {"view": name}` and a double-click on a callout open the sheet. `plot
+{"sheets": "all", "path": "set.pdf"}` (or a list of sheet names) writes one PDF, a page per sheet in sheet order.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'door {"wall":"w0","offset":3.0,"width":0.9,"height":2.1,"style":"hinged"}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'elevation {"side":"south","insert":[0,-20]}' \
+  --cmd 'sheetset {"project":"Demo","date":"2026-11-09"}' \
+  --cmd 'sheet {"name":"Elevations","number":"A-301","title":"Elevations","views":["v0"],"scale":100}' \
+  --cmd 'plot {"sheets":"all","path":"set.pdf"}' \
+  --save sheets.dxf
+```
 
 ## Out of scope
 

@@ -573,8 +573,12 @@ fn strip_gpu_lights(l: &SceneLight) -> Vec<GpuLight> {
             if !length.is_finite() || length <= 0.0 {
                 return None;
             }
+            let normal = r.normal;
+            let clear = if normal.len() > 1e-6 { normal * (1.0 / normal.len()) * 0.007 } else { normal };
+            // The 6 mm deep strip housing leaves a 6 mm half-width; moving the sampled line 7 mm
+            // clear of the centreline keeps the 2 mm shader offset outside the housing.
             Some(GpuLight {
-                position: f(r.start),
+                position: f(r.start + clear),
                 kind: LIGHT_STRIP,
                 direction: f(r.normal),
                 rgb: colour.map(|c| (r.cd_per_metre * f64::from(c)) as f32),

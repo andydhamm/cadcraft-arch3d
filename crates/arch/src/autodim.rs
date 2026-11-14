@@ -1,27 +1,44 @@
-use std::cmp::Ordering;
+//! Auto exterior dimension rows: the points of the four sides of a level's exterior walls.
+//!
+//! Each side gets up to three rows (openings, walls, overall). The sides come from the bounding box
+//! of the exterior walls (centre-line ends widened by half the thickness), so the rows do not change
+//! with the winding or the order of the walls.
 
-use cadcraft_doc::arch::{AutoDimRow, AutoDims, AutoRowKind, Hinge, LevelKind, OpeningKind, OpeningSides, OpeningTop, Swing};
-use cadcraft_doc::{ArchFeature, ArchModel, Handle};
+use cadcraft_doc::arch::{AutoRowKind, MAX_AUTO_DIMS_PER_LEVEL, OpeningKind, arch_handle, opening_handle};
+use cadcraft_doc::{ArchFeature, ArchModel, Handle, Wall};
 use cadcraft_geom::Vec2;
 
+/// One point of a row: a place on an arch object that a dimension attaches to.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AutoPoint {
+    /// The point in the plan.
     pub at: Vec2,
+    /// The wall or opening it attaches to.
     pub handle: Handle,
+    /// The feature of that object.
     pub feature: ArchFeature,
+    /// Distance from the feature's origin along its direction.
     pub along: f64,
 }
 
+/// One row of dimensions along a side.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AutoRow {
+    /// `south`, `east`, `north` or `west`.
     pub side: String,
+    /// The outward direction of the side.
     pub normal: Vec2,
+    /// The direction the row runs in.
     pub dir: Vec2,
+    /// Which row of the side this is.
     pub kind: AutoRowKind,
+    /// The points, sorted along `dir`.
     pub points: Vec<AutoPoint>,
+    /// The signed coordinate of the dimension line along `normal`.
     pub line_offset: f64,
 }
 
+/// How far outside the building the row of this kind runs, in metres.
 pub fn row_offset(kind: AutoRowKind) -> f64 {
     match kind {
         AutoRowKind::Openings => 1.0,
@@ -30,461 +47,625 @@ pub fn row_offset(kind: AutoRowKind) -> f64 {
     }
 }
 
-fn side_name(normal: Vec2) -> String {
-    let (x, y) = (normal.x, normal.y);
-    if x.abs() <= 1e-6 && y.abs() <= 1e-6 {
-        return "side0".to_string();
-    }
-    if (x, y) == (0.0, -1.0) || (-x).abs() <= 1e-6 && (y + 1.0).abs() <= 1e-6 {
-        return "south".to_string();
-    }
-    if (x, y) == (1.0, 0.0) || (x - 1.0).abs() <= 1e-6 && y.abs() <= 1e-6 {
-        return "east".to_string();
-    }
-    if (x, y) == (0.0, 1.0) || x.abs() <= 1e-6 && (y - 1.0).abs() <= 1e-6 {
-        return "north".to_string();
-    }
-    if (x, y) == (-1.0, 0.0) || (x + 1.0).abs() <= 1e-6 && y.abs() <= 1e-6 {
-        return "west".to_string();
-    }
-    let angle = (normal.y.atan2(normal.x) * 180.0 / std::f64::consts::PI).rem_euclid(360.0);
-    format!("side{angle:.0}")
+const EPS: f64 = 1e-6;
+
+/// A wall that can be dimensioned: finite and with a direction.
+struct W<'a> {
+    wall: &'a Wall,
+    dir: Vec2,
+    t: f64,
 }
 
-fn row_dir(normal: Vec2) -> Vec2 {
-    let mut dir = normal.perp();
-    if dir.angle() > std::f64::consts::PI {
-        dir = -dir;
+fn usable(wall: &Wall) -> Option<W<'_>> {
+    if !wall.start.is_finite() || !wall.end.is_finite() || !wall.thickness.is_finite() {
+        return None;
     }
-    dir.normalized()
+    let d = wall.end - wall.start;
+    let len = d.len();
+    if !len.is_finite() || len <= 1e-9 {
+        return None;
+    }
+    Some(W { wall, dir: d / len, t: wall.thickness })
 }
 
-fn wall_feature_of(a: Vec2, b: Vec2, normal: Vec2, wall: &cadcraft_doc::Wall) -> ArchFeature {
-    let dir = b - a;
-    if dir == Vec2::ZERO {
-        return if normal.dot((wall.end - wall.start).perp()) >= 0.0 { ArchFeature::LeftFace } else { ArchFeature::RightFace };
-    }
-    let face = dir.perp();
-    if normal.dot(face) >= 0.0 { ArchFeature::LeftFace } else { ArchFeature::RightFace }
+fn cross(a: Vec2, b: Vec2) -> f64 {
+    a.x * b.y - a.y * b.x
 }
 
-fn push_point(points: &mut Vec<AutoPoint>, p: AutoPoint) {
-    if points.iter().any(|q| q.at.dist(p.at) <= 1e-6 && q.feature == p.feature && q.handle == p.handle) {
-        return;
+fn dist_to_segment(p: Vec2, a: Vec2, b: Vec2) -> f64 {
+    let ab = b - a;
+    let l2 = ab.dot(ab);
+    if l2 <= 0.0 {
+        return p.dist(a);
     }
-    points.push(p);
+    let t = ((p - a).dot(ab) / l2).clamp(0.0, 1.0);
+    p.dist(a + ab * t)
 }
 
-fn sort_points(points: &mut [AutoPoint], dir: Vec2) {
-    points.sort_by(|a, b| {
-        let av = a.at.dot(dir);
-        let bv = b.at.dot(dir);
-        if (av - bv).abs() <= 1e-9 {
-            Ordering::Equal
-        } else if av < bv {
-            Ordering::Less
-        } else {
-            Ordering::Greater
+fn point(model: &ArchModel, w: &W, feature: ArchFeature, at: Vec2) -> AutoPoint {
+    let handle = arch_handle(w.wall.id);
+    AutoPoint { at, handle, feature, along: crate::dimension::along_of(model, handle, feature, at).unwrap_or(0.0) }
+}
+
+/// An end of a wall: 0 = start, 1 = end.
+fn end_of(w: &W, i: usize) -> Vec2 {
+    if i == 0 { w.wall.start } else { w.wall.end }
+}
+
+/// The extreme point of a side: `max` false = the one with the smallest coordinate along `dir`.
+fn extreme(model: &ArchModel, ws: &[W], dir: Vec2, normal: Vec2, bound: f64, max: bool) -> Option<AutoPoint> {
+    // (not perpendicular, wall id, index into ws, end)
+    let mut best: Option<(bool, u32, usize, usize)> = None;
+    for (wi, w) in ws.iter().enumerate() {
+        for i in 0..2 {
+            let c = end_of(w, i).dot(dir) + if max { w.t / 2.0 } else { -w.t / 2.0 };
+            if (c - bound).abs() > 1e-9 {
+                continue;
+            }
+            let key = (w.dir.dot(dir).abs() > EPS, w.wall.id.0);
+            let better = match best {
+                None => true,
+                Some((np, id, _, bi)) => {
+                    if key != (np, id) {
+                        key < (np, id)
+                    } else {
+                        // The same wall: the end nearer the side.
+                        end_of(w, i).dot(normal) > end_of(w, bi).dot(normal)
+                    }
+                }
+            };
+            if better {
+                best = Some((key.0, key.1, wi, i));
+            }
         }
-    });
+    }
+    let (not_perp, _, wi, i) = best?;
+    let w = ws.get(wi)?;
+    let e = end_of(w, i);
+    if !not_perp {
+        let perp = w.dir.perp();
+        let half = w.t / 2.0;
+        let left = (e + perp * half).dot(dir);
+        let right = (e - perp * half).dot(dir);
+        let use_left = if max { left >= right } else { left <= right };
+        return Some(if use_left {
+            point(model, w, ArchFeature::LeftFace, e + perp * half)
+        } else {
+            point(model, w, ArchFeature::RightFace, e - perp * half)
+        });
+    }
+    if cross(w.dir, dir).abs() <= EPS {
+        let out = if i == 0 { -w.dir } else { w.dir };
+        return Some(point(model, w, ArchFeature::Centre, e + out * (w.t / 2.0)));
+    }
+    Some(point(model, w, ArchFeature::Centre, e))
 }
 
-pub fn exterior_rows(model: &ArchModel, level: u32, kinds: &[AutoRowKind]) -> Vec<AutoRow> {
-    let kinds = if kinds.is_empty() { vec![AutoRowKind::Openings, AutoRowKind::Walls, AutoRowKind::Overall] } else { kinds.to_vec() };
+/// A point with its merge rank: extremes (0) over walls (1) over openings (2).
+#[derive(Clone)]
+struct Ranked {
+    p: AutoPoint,
+    rank: u8,
+}
 
-    let fp = crate::roof::outer_footprint(model, level);
-    let bounds = fp
-        .as_ref()
-        .map(|fp| {
-            fp.outer.iter().fold((f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY), |mut acc, p| {
-                acc.0 = acc.0.min(p.x);
-                acc.1 = acc.1.min(p.y);
-                acc.2 = acc.2.max(p.x);
-                acc.3 = acc.3.max(p.y);
-                acc
-            })
-        })
-        .unwrap_or_else(|| {
-            model.walls.iter().filter(|w| w.base_level == level && w.exterior && !w.divider).flat_map(|w| [w.start, w.end]).fold(
-                (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY),
-                |mut acc, p| {
-                    acc.0 = acc.0.min(p.x);
-                    acc.1 = acc.1.min(p.y);
-                    acc.2 = acc.2.max(p.x);
-                    acc.3 = acc.3.max(p.y);
-                    acc
-                },
-            )
-        });
-
-    let mut rows = Vec::new();
-    let mut sides: std::collections::BTreeMap<String, Vec<&cadcraft_doc::Wall>> = std::collections::BTreeMap::new();
-
-    for wall in &model.walls {
-        if !wall.start.is_finite() || !wall.end.is_finite() || !wall.exterior || wall.divider || wall.base_level != level {
+fn merge(mut pts: Vec<Ranked>, dir: Vec2) -> Vec<AutoPoint> {
+    pts.sort_by(|a, b| a.p.at.dot(dir).total_cmp(&b.p.at.dot(dir)).then(a.rank.cmp(&b.rank)));
+    let mut out: Vec<Ranked> = Vec::new();
+    for r in pts {
+        if let Some(last) = out.last_mut()
+            && (r.p.at.dot(dir) - last.p.at.dot(dir)).abs() <= EPS
+        {
+            if r.rank < last.rank {
+                *last = r;
+            }
             continue;
         }
-        let side = side_name((wall.end - wall.start).perp().normalized());
-        sides.entry(side).or_default().push(wall);
+        out.push(r);
     }
+    out.into_iter().map(|r| r.p).collect()
+}
 
-    for (side_name_value, side_walls) in &sides {
-        let normal = match side_name_value.as_str() {
-            "south" => Vec2::new(0.0, -1.0),
-            "east" => Vec2::new(1.0, 0.0),
-            "north" => Vec2::new(0.0, 1.0),
-            "west" => Vec2::new(-1.0, 0.0),
-            _ => Vec2::new(0.0, 0.0),
-        };
-        let dir = match side_name_value.as_str() {
-            "south" | "north" => Vec2::new(1.0, 0.0),
-            "east" | "west" => Vec2::new(0.0, 1.0),
-            _ => Vec2::new(1.0, 0.0),
-        };
-        let mut all_points: Vec<AutoPoint> = Vec::new();
+/// The rows of the exterior of `level`, in the order south, east, north, west; within a side
+/// openings, walls, overall. `kinds` empty means all three.
+pub fn exterior_rows(model: &ArchModel, level: u32, kinds: &[AutoRowKind]) -> Vec<AutoRow> {
+    let all: Vec<W> = model.walls.iter().filter(|w| w.base_level == level).filter_map(usable).collect();
+    let ext: Vec<W> = all.iter().filter(|w| w.wall.exterior).map(|w| W { wall: w.wall, dir: w.dir, t: w.t }).collect();
+    if ext.is_empty() {
+        return Vec::new();
+    }
+    let (mut x0, mut x1, mut y0, mut y1) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+    for w in &ext {
+        let h = w.t / 2.0;
+        for i in 0..2 {
+            let e = end_of(w, i);
+            x0 = x0.min(e.x - h);
+            x1 = x1.max(e.x + h);
+            y0 = y0.min(e.y - h);
+            y1 = y1.max(e.y + h);
+        }
+    }
+    if ![x0, x1, y0, y1].iter().all(|v| v.is_finite()) {
+        return Vec::new();
+    }
+    let want = |k: AutoRowKind| kinds.is_empty() || kinds.contains(&k);
 
-        for wall in side_walls {
-            let feature = wall_feature_of(wall.start, wall.end, normal, wall);
-            let a = AutoPoint {
-                at: wall.start,
-                handle: cadcraft_doc::arch::arch_handle(wall.id),
-                feature,
-                along: crate::dimension::along_of(model, cadcraft_doc::arch::arch_handle(wall.id), feature, wall.start).unwrap_or(0.0),
-            };
-            let b = AutoPoint {
-                at: wall.end,
-                handle: cadcraft_doc::arch::arch_handle(wall.id),
-                feature,
-                along: crate::dimension::along_of(model, cadcraft_doc::arch::arch_handle(wall.id), feature, wall.end).unwrap_or(0.0),
-            };
-            all_points.push(a);
-            all_points.push(b);
+    // (name, normal, dir, min along dir, max along dir, box edge along normal, opposite edge, tie wins)
+    let sides = [
+        ("south", Vec2::new(0.0, -1.0), Vec2::new(1.0, 0.0), x0, x1, -y0, -y1, true),
+        ("east", Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0), y0, y1, x1, x0, false),
+        ("north", Vec2::new(0.0, 1.0), Vec2::new(1.0, 0.0), x0, x1, y1, y0, false),
+        ("west", Vec2::new(-1.0, 0.0), Vec2::new(0.0, 1.0), y0, y1, -x0, -x1, true),
+    ];
+    let mut rows = Vec::new();
+    for (name, normal, dir, lo, hi, edge, opposite, tie_wins) in sides {
+        if hi - lo <= EPS {
+            continue;
+        }
+        let (Some(a), Some(b)) = (extreme(model, &ext, dir, normal, lo, false), extreme(model, &ext, dir, normal, hi, true)) else {
+            continue;
+        };
+        let (c_lo, c_hi) = (a.at.dot(dir), b.at.dot(dir));
+        let mut pts: Vec<Ranked> = vec![Ranked { p: a, rank: 0 }, Ranked { p: b, rank: 0 }];
+
+        let side_walls: Vec<&W> = ext
+            .iter()
+            .filter(|w| w.dir.dot(normal).abs() <= EPS)
+            .filter(|w| {
+                let m = ((w.wall.start + w.wall.end) * 0.5).dot(normal);
+                let (da, db) = ((m - edge).abs(), (m - opposite).abs());
+                if tie_wins { da <= db } else { da < db }
+            })
+            .collect();
+
+        // Interior walls that end on a side wall split the side.
+        for iw in all.iter().filter(|w| !w.wall.exterior && !w.wall.divider && w.t > 0.0) {
+            if cross(iw.dir, dir).abs() <= EPS {
+                continue;
+            }
+            for i in 0..2 {
+                let e = end_of(iw, i);
+                if side_walls.iter().any(|sw| dist_to_segment(e, sw.wall.start, sw.wall.end) <= sw.t / 2.0 + EPS) {
+                    pts.push(Ranked { p: point(model, iw, ArchFeature::Centre, e), rank: 1 });
+                }
+            }
         }
 
-        for wall in &model.walls {
-            if !wall.start.is_finite() || !wall.end.is_finite() || wall.exterior || wall.divider || wall.base_level != level || wall.thickness <= 0.0
-            {
-                continue;
+        // Jogs: ends of side walls that are not at the extremes.
+        for sw in &side_walls {
+            let mid = ((sw.wall.start + sw.wall.end) * 0.5).dot(dir);
+            for i in 0..2 {
+                let e = end_of(sw, i);
+                let c = e.dot(dir);
+                if !(c > c_lo + EPS && c < c_hi - EPS) {
+                    continue;
+                }
+                let mut found = None;
+                for pw in ext.iter().filter(|w| w.wall.id != sw.wall.id && w.dir.dot(dir).abs() <= EPS) {
+                    let near = (0..2)
+                        .filter(|&j| end_of(pw, j).dist(e) <= EPS + pw.t / 2.0)
+                        .min_by(|&j, &k| end_of(pw, j).dist(e).total_cmp(&end_of(pw, k).dist(e)));
+                    if let Some(j) = near {
+                        found = Some((pw, end_of(pw, j)));
+                        break;
+                    }
+                }
+                let p = match found {
+                    Some((pw, pe)) => {
+                        let perp = pw.dir.perp();
+                        let half = pw.t / 2.0;
+                        let l = pe + perp * half;
+                        let r = pe - perp * half;
+                        if (l.dot(dir) - mid).abs() >= (r.dot(dir) - mid).abs() {
+                            point(model, pw, ArchFeature::LeftFace, l)
+                        } else {
+                            point(model, pw, ArchFeature::RightFace, r)
+                        }
+                    }
+                    None => point(model, sw, ArchFeature::Centre, e),
+                };
+                pts.push(Ranked { p, rank: 1 });
             }
-            let mid = (wall.start + wall.end) * 0.5;
-            let wall_side = side_name((wall.end - wall.start).perp().normalized());
-            if wall_side != *side_name_value {
-                continue;
-            }
-            let p = mid;
-            let feature = ArchFeature::Centre;
-            let handle = cadcraft_doc::arch::arch_handle(wall.id);
-            all_points.push(AutoPoint { at: p, handle, feature, along: crate::dimension::along_of(model, handle, feature, p).unwrap_or(0.0) });
         }
 
-        for opening in &model.openings {
-            let Some(host) = model.wall(opening.host) else {
+        // Openings of the side walls.
+        let mut opening_pts: Vec<Ranked> = Vec::new();
+        for o in &model.openings {
+            if o.kind == OpeningKind::Niche || !o.offset.is_finite() {
+                continue;
+            }
+            let Some(sw) = side_walls.iter().find(|w| w.wall.id == o.host) else {
                 continue;
             };
-            if !host.start.is_finite()
-                || !host.end.is_finite()
-                || host.base_level != level
-                || !host.exterior
-                || !side_walls.iter().any(|w| w.id == host.id)
-            {
-                continue;
-            }
-            let axis = host.end - host.start;
-            if axis == Vec2::ZERO {
-                continue;
-            }
-            let axis = axis.normalized();
-            let center = host.start + axis * opening.offset + axis * (opening.width * 0.5);
-            all_points.push(AutoPoint {
-                at: center,
-                handle: cadcraft_doc::arch::opening_handle(opening.id),
-                feature: ArchFeature::Centre,
-                along: 0.0,
+            opening_pts.push(Ranked {
+                p: AutoPoint { at: sw.wall.start + sw.dir * o.offset, handle: opening_handle(o.id), feature: ArchFeature::Centre, along: 0.0 },
+                rank: 2,
             });
         }
 
-        for kind in &kinds {
-            let mut row_points = all_points.clone();
-            row_points.sort_by(|a, b| a.at.dot(dir).partial_cmp(&b.at.dot(dir)).unwrap_or(Ordering::Equal));
-            let mut merged = Vec::new();
-            for p in row_points {
-                if merged.last().is_some_and(|q: &AutoPoint| (q.at.dot(dir) - p.at.dot(dir)).abs() <= 1e-6) {
-                    continue;
-                }
-                merged.push(p);
-            }
-            if merged.len() >= 2 {
-                let outermost = if let Some(fp) = &fp {
-                    fp.outer.iter().map(|pt| pt.dot(normal)).fold(f64::NEG_INFINITY, f64::max)
-                } else {
-                    side_walls
-                        .iter()
-                        .map(|w| [w.start, w.end].iter().map(|p| p.dot(normal)).fold(f64::NEG_INFINITY, f64::max))
-                        .fold(f64::NEG_INFINITY, f64::max)
-                };
-                rows.push(AutoRow {
-                    side: side_name_value.clone(),
-                    normal,
-                    dir,
-                    kind: *kind,
-                    points: merged,
-                    line_offset: outermost + row_offset(*kind),
-                });
-            }
+        let overall = merge(pts.iter().take(2).cloned().collect(), dir);
+        let walls_row = merge(pts.clone(), dir);
+        let has_openings = !opening_pts.is_empty();
+        pts.extend(opening_pts);
+        let openings_row = merge(pts, dir);
+
+        let mut push = |kind: AutoRowKind, mut points: Vec<AutoPoint>| {
+            points.truncate(MAX_AUTO_DIMS_PER_LEVEL);
+            rows.push(AutoRow { side: name.to_string(), normal, dir, kind, points, line_offset: edge + row_offset(kind) });
+        };
+        if has_openings && want(AutoRowKind::Openings) {
+            push(AutoRowKind::Openings, openings_row);
+        }
+        if walls_row.len() >= 3 && want(AutoRowKind::Walls) {
+            push(AutoRowKind::Walls, walls_row);
+        }
+        if want(AutoRowKind::Overall) {
+            push(AutoRowKind::Overall, overall);
         }
     }
-
     rows
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::arch::{ArchId, Level, LevelKind, Opening, Wall};
+    use cadcraft_doc::ArchId;
+    use cadcraft_doc::arch::Opening;
 
-    fn default_house() -> ArchModel {
+    fn wall(id: u32, a: (f64, f64), b: (f64, f64), t: f64, exterior: bool) -> Wall {
+        Wall { id: ArchId(id), start: Vec2::new(a.0, a.1), end: Vec2::new(b.0, b.1), thickness: t, exterior, base_level: 0, ..Default::default() }
+    }
+
+    /// The phase-1 house: 10 x 8, exterior 0.2, interior w4 at y = 3 and w5 at x = 6.
+    fn house() -> ArchModel {
         let mut m = ArchModel::default();
-        m.levels = vec![Level {
-            index: 0,
-            name: "Level 1".into(),
-            elevation: 0.0,
-            ceiling_height: 2.4,
-            structure: 0.3,
-            kind: LevelKind::Floor,
-            ..Default::default()
-        }];
         m.walls = vec![
-            Wall {
-                id: ArchId(0),
-                start: Vec2::new(0.0, 0.0),
-                end: Vec2::new(10.0, 0.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
-            Wall {
-                id: ArchId(1),
-                start: Vec2::new(10.0, 0.0),
-                end: Vec2::new(10.0, 8.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
-            Wall {
-                id: ArchId(2),
-                start: Vec2::new(10.0, 8.0),
-                end: Vec2::new(0.0, 8.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
-            Wall {
-                id: ArchId(3),
-                start: Vec2::new(0.0, 8.0),
-                end: Vec2::new(0.0, 0.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
-            Wall {
-                id: ArchId(4),
-                start: Vec2::new(0.0, 3.0),
-                end: Vec2::new(10.0, 3.0),
-                thickness: 0.1,
-                exterior: false,
-                divider: false,
-                base_level: 0,
-                ..Default::default()
-            },
+            wall(0, (0.0, 0.0), (10.0, 0.0), 0.2, true),
+            wall(1, (10.0, 0.0), (10.0, 8.0), 0.2, true),
+            wall(2, (10.0, 8.0), (0.0, 8.0), 0.2, true),
+            wall(3, (0.0, 8.0), (0.0, 0.0), 0.2, true),
+            wall(4, (0.0, 3.0), (10.0, 3.0), 0.1, false),
+            wall(5, (6.0, 3.0), (6.0, 8.0), 0.1, false),
         ];
-        for (i, wall) in m.walls.iter().enumerate() {
-            if i < 4 {
-                m.next_id = wall.id.0 + 1;
-            }
-        }
-        m.next_id = 5;
+        m.next_id = 6;
         m
     }
 
+    fn row(rows: &[AutoRow], side: &str, kind: AutoRowKind) -> Option<AutoRow> {
+        rows.iter().find(|r| r.side == side && r.kind == kind).cloned()
+    }
+
+    fn values(r: &AutoRow) -> Vec<f64> {
+        r.points.windows(2).map(|p| (p[1].at - p[0].at).dot(r.dir)).collect()
+    }
+
+    fn close(a: &[f64], b: &[f64]) -> bool {
+        a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-9)
+    }
+
+    fn window(id: u32, host: u32, offset: f64) -> Opening {
+        Opening { id: ArchId(id), host: ArchId(host), offset, width: 1.0, kind: OpeningKind::Window, ..Default::default() }
+    }
+
+    #[test]
+    fn phase1_house_overall_rows_are_10_2_and_8_2() {
+        let rows = exterior_rows(&house(), 0, &[AutoRowKind::Overall]);
+        assert_eq!(rows.iter().map(|r| r.side.as_str()).collect::<Vec<_>>(), ["south", "east", "north", "west"]);
+        for r in &rows {
+            let want = if r.dir.x == 1.0 { 10.2 } else { 8.2 };
+            assert!(close(&values(r), &[want]), "{} {:?}", r.side, values(r));
+            assert_eq!(r.points.len(), 2);
+        }
+        let south = &rows[0];
+        assert_eq!(south.points[0].at, Vec2::new(-0.1, 0.0));
+        assert_eq!(south.points[0].handle, arch_handle(ArchId(3)));
+        assert_eq!(south.points[0].feature, ArchFeature::RightFace);
+    }
+
+    #[test]
+    fn phase1_house_north_walls_row_splits_at_w5_centre() {
+        let rows = exterior_rows(&house(), 0, &[]);
+        let r = row(&rows, "north", AutoRowKind::Walls).expect("north walls row");
+        assert!(close(&values(&r), &[6.1, 4.1]), "{:?}", values(&r));
+        let mid = &r.points[1];
+        assert_eq!(mid.at, Vec2::new(6.0, 8.0));
+        assert_eq!(mid.handle, arch_handle(ArchId(5)));
+        assert_eq!(mid.feature, ArchFeature::Centre);
+        assert!((mid.along - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn phase1_house_has_no_south_walls_row_and_no_openings_rows() {
+        let rows = exterior_rows(&house(), 0, &[]);
+        assert!(row(&rows, "south", AutoRowKind::Walls).is_none());
+        assert!(rows.iter().all(|r| r.kind != AutoRowKind::Openings));
+        assert_eq!(rows.len(), 4 + 3);
+    }
+
+    #[test]
+    fn east_and_west_walls_rows_read_3_1_and_5_1() {
+        let rows = exterior_rows(&house(), 0, &[AutoRowKind::Walls]);
+        for side in ["east", "west"] {
+            let r = row(&rows, side, AutoRowKind::Walls).expect(side);
+            assert!(close(&values(&r), &[3.1, 5.1]), "{side} {:?}", values(&r));
+            assert_eq!(r.points[1].handle, arch_handle(ArchId(4)));
+            assert_eq!(r.points[1].feature, ArchFeature::Centre);
+        }
+    }
+
+    #[test]
+    fn window_adds_north_openings_row_4_1_2_0_4_1() {
+        let mut m = house();
+        m.openings.push(window(0, 2, 6.0));
+        let rows = exterior_rows(&m, 0, &[]);
+        let r = row(&rows, "north", AutoRowKind::Openings).expect("openings row");
+        assert!(close(&values(&r), &[4.1, 2.0, 4.1]), "{:?}", values(&r));
+        assert_eq!(r.points[1].at, Vec2::new(4.0, 8.0));
+        assert_eq!(r.points[1].handle, opening_handle(ArchId(0)));
+        assert_eq!(r.points[2].handle, arch_handle(ArchId(5)));
+        assert!(row(&rows, "south", AutoRowKind::Openings).is_none());
+        let mut niche = house();
+        niche.openings.push(Opening { kind: OpeningKind::Niche, ..window(0, 2, 6.0) });
+        assert!(row(&exterior_rows(&niche, 0, &[]), "north", AutoRowKind::Openings).is_none());
+    }
+
+    #[test]
+    fn interior_wall_at_x4_adds_south_walls_row_4_1_6_1() {
+        let mut m = house();
+        m.walls.push(wall(6, (4.0, 0.0), (4.0, 3.0), 0.1, false));
+        let rows = exterior_rows(&m, 0, &[]);
+        let r = row(&rows, "south", AutoRowKind::Walls).expect("south walls row");
+        assert!(close(&values(&r), &[4.1, 6.1]), "{:?}", values(&r));
+        assert_eq!(r.points[1].handle, arch_handle(ArchId(6)));
+        assert_eq!(r.points[1].at, Vec2::new(4.0, 0.0));
+        assert_eq!(r.points[1].along, 0.0);
+    }
+
+    #[test]
+    fn extremes_attach_to_outer_faces() {
+        let m = house();
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Overall]);
+        let want = [
+            ("south", Vec2::new(-0.1, 0.0), Vec2::new(10.1, 0.0)),
+            ("east", Vec2::new(10.0, -0.1), Vec2::new(10.0, 8.1)),
+            ("north", Vec2::new(-0.1, 8.0), Vec2::new(10.1, 8.0)),
+            ("west", Vec2::new(0.0, -0.1), Vec2::new(0.0, 8.1)),
+        ];
+        for (side, lo, hi) in want {
+            let r = row(&rows, side, AutoRowKind::Overall).expect(side);
+            assert!(r.points[0].at.dist(lo) < 1e-9 && r.points[1].at.dist(hi) < 1e-9, "{side}: {:?}", r.points);
+            for p in &r.points {
+                assert!(matches!(p.feature, ArchFeature::LeftFace | ArchFeature::RightFace), "{side}");
+                // The attachment reproduces the point.
+                let g = crate::dimension::feature_geom(&m, p.handle, p.feature).expect("feature");
+                if let crate::dimension::FeatureGeom::Line { origin, dir } = g {
+                    assert!((origin + dir * p.along).dist(p.at) < 1e-9, "{side}");
+                }
+            }
+        }
+        // A wall parallel to the side that sticks out: the point is the end pushed half a thickness.
+        let mut ps = ArchModel::default();
+        ps.walls = vec![wall(0, (0.0, 0.0), (10.0, 0.0), 0.2, true), wall(1, (0.0, 5.0), (10.0, 5.0), 0.2, true)];
+        let rows = exterior_rows(&ps, 0, &[AutoRowKind::Overall]);
+        let s = row(&rows, "south", AutoRowKind::Overall).expect("south");
+        assert_eq!(s.points[0].feature, ArchFeature::Centre);
+        assert!(s.points[0].at.dist(Vec2::new(-0.1, 0.0)) < 1e-9);
+        assert!((s.points[0].along + 0.1).abs() < 1e-9);
+        assert!((s.points[1].along - 10.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn row_lines_are_fixed_per_kind() {
+        let mut m = house();
+        m.openings.push(window(0, 2, 6.0));
+        let rows = exterior_rows(&m, 0, &[]);
+        let line = |s: &str, k| row(&rows, s, k).expect(s).line_offset;
+        assert!((line("south", AutoRowKind::Overall) - 2.1).abs() < 1e-9);
+        assert!((line("north", AutoRowKind::Openings) - 9.1).abs() < 1e-9);
+        assert!((line("north", AutoRowKind::Walls) - 9.6).abs() < 1e-9);
+        assert!((line("east", AutoRowKind::Overall) - 12.1).abs() < 1e-9);
+        assert!((line("east", AutoRowKind::Walls) - 11.6).abs() < 1e-9);
+        assert!((line("west", AutoRowKind::Overall) - 2.1).abs() < 1e-9);
+        // South walls (with a wall at x = 4): the line y = -1.6.
+        m.walls.push(wall(6, (4.0, 0.0), (4.0, 3.0), 0.1, false));
+        let rows = exterior_rows(&m, 0, &[]);
+        let s = row(&rows, "south", AutoRowKind::Walls).expect("south walls");
+        assert!((s.line_offset - 1.6).abs() < 1e-9);
+        assert!((s.normal.y + 1.0).abs() < 1e-12);
+        // Asking for one kind gives only that kind.
+        let only = exterior_rows(&m, 0, &[AutoRowKind::Overall]);
+        assert!(only.iter().all(|r| r.kind == AutoRowKind::Overall));
+    }
+
+    #[test]
+    fn hostile_models_give_no_rows() {
+        assert!(exterior_rows(&ArchModel::default(), 0, &[]).is_empty());
+        let mut m = house();
+        assert!(exterior_rows(&m, 7, &[]).is_empty());
+        for w in m.walls.iter_mut() {
+            w.exterior = false;
+        }
+        assert!(exterior_rows(&m, 0, &[]).is_empty());
+        let mut m = ArchModel::default();
+        m.walls = vec![wall(0, (f64::NAN, 0.0), (1.0, 0.0), 0.2, true), wall(1, (0.0, 0.0), (0.0, 0.0), 0.2, true)];
+        assert!(exterior_rows(&m, 0, &[]).is_empty());
+        let mut m = house();
+        m.walls[0].thickness = f64::NAN;
+        m.walls[1].end = Vec2::new(f64::INFINITY, 0.0);
+        let _ = exterior_rows(&m, 0, &[]);
+    }
+
+    // Tests kept from the first implementation, with assertions matching the rebuilt rows.
+
     #[test]
     fn house_rows() {
-        let model = default_house();
-        let rows = exterior_rows(&model, 0, &[AutoRowKind::Overall, AutoRowKind::Walls, AutoRowKind::Openings]);
+        let rows = exterior_rows(&house(), 0, &[AutoRowKind::Overall, AutoRowKind::Walls, AutoRowKind::Openings]);
         assert!(!rows.is_empty());
-        assert!(rows.iter().any(|r| r.kind == AutoRowKind::Overall && matches!(r.side.as_str(), "south" | "north" | "east" | "west")));
+        assert!(rows.iter().any(|r| r.kind == AutoRowKind::Overall && r.side == "south"));
+        assert!(rows.iter().all(|r| matches!(r.side.as_str(), "south" | "east" | "north" | "west")));
     }
 
     #[test]
     fn window_adds_the_north_openings_row() {
-        let mut model = default_house();
-        model.openings.push(Opening {
-            id: cadcraft_doc::ArchId(0),
-            host: model.walls[2].id,
-            offset: 2.0,
-            width: 1.5,
-            height: 1.2,
-            sill: 0.0,
-            kind: OpeningKind::Window,
-            style: "single".into(),
-            hinge: Hinge::Left,
-            swing: Swing::In,
-            recess: 0.0,
-            frame_width: 0.06,
-            frame_depth: 0.1,
-            casing_width: 0.05,
-            casing_depth: 0.015,
-            sill_depth: 0.03,
-            rough_width: 1.8,
-            rough_height: 1.5,
-            swing_angle: 0.0,
-            percent_open: 0.0,
-            glass_mode: "automatic".into(),
-            mull_group: None,
-            layer: "A-GLAZ".into(),
-            grille: None,
-            top: OpeningTop::Square,
-            top_rise: 0.0,
-            roof_offset: 0.0,
-            sill_sides: OpeningSides::RIGHT,
-            casing_sides: OpeningSides::RIGHT,
-            ..Default::default()
-        });
-        let rows = exterior_rows(&model, 0, &[AutoRowKind::Openings]);
+        let mut m = house();
+        m.openings.push(window(0, 2, 2.0));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Openings]);
         assert!(rows.iter().any(|r| r.kind == AutoRowKind::Openings && r.side == "north"));
+        assert!(rows.iter().all(|r| r.kind == AutoRowKind::Openings));
     }
 
     #[test]
     fn interior_wall_meeting_the_south_wall_adds_a_row() {
-        let mut model = default_house();
-        model.walls.push(Wall {
-            id: ArchId(5),
-            start: Vec2::new(4.0, 0.0),
-            end: Vec2::new(4.0, 3.0),
-            thickness: 0.1,
-            exterior: false,
-            divider: false,
-            base_level: 0,
-            ..Default::default()
-        });
-        let rows = exterior_rows(&model, 0, &[AutoRowKind::Walls]);
+        let mut m = house();
+        m.walls.push(wall(6, (4.0, 0.0), (4.0, 3.0), 0.1, false));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Walls]);
         assert!(rows.iter().any(|r| r.kind == AutoRowKind::Walls && r.side == "south"));
     }
 
     #[test]
     fn l_footprint_sides_and_jogs() {
-        let mut model = ArchModel::default();
-        model.levels = vec![Level {
-            index: 0,
-            name: "Level 1".into(),
-            elevation: 0.0,
-            ceiling_height: 2.4,
-            structure: 0.3,
-            kind: LevelKind::Floor,
-            ..Default::default()
-        }];
-        model.walls = vec![
-            Wall {
-                id: ArchId(0),
-                start: Vec2::new(0.0, 0.0),
-                end: Vec2::new(5.0, 0.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
-            Wall {
-                id: ArchId(1),
-                start: Vec2::new(5.0, 0.0),
-                end: Vec2::new(5.0, 3.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
-            Wall {
-                id: ArchId(2),
-                start: Vec2::new(5.0, 3.0),
-                end: Vec2::new(2.0, 3.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
-            Wall {
-                id: ArchId(3),
-                start: Vec2::new(2.0, 3.0),
-                end: Vec2::new(2.0, 0.0),
-                thickness: 0.2,
-                exterior: true,
-                base_level: 0,
-                ..Default::default()
-            },
+        let mut m = ArchModel::default();
+        m.walls = vec![
+            wall(0, (0.0, 0.0), (5.0, 0.0), 0.2, true),
+            wall(1, (5.0, 0.0), (5.0, 3.0), 0.2, true),
+            wall(2, (5.0, 3.0), (2.0, 3.0), 0.2, true),
+            wall(3, (2.0, 3.0), (2.0, 0.0), 0.2, true),
         ];
-        let rows = exterior_rows(&model, 0, &[AutoRowKind::Overall]);
-        assert!(!rows.is_empty());
+        let rows = exterior_rows(&m, 0, &[]);
+        let sides: Vec<_> = rows.iter().filter(|r| r.kind == AutoRowKind::Overall).map(|r| r.side.as_str()).collect();
+        assert_eq!(sides, ["south", "east", "north", "west"]);
+        let south = row(&rows, "south", AutoRowKind::Overall).expect("south");
+        assert!(close(&values(&south), &[5.2]), "{:?}", values(&south));
+        let east = row(&rows, "east", AutoRowKind::Overall).expect("east");
+        assert!(close(&values(&east), &[3.2]), "{:?}", values(&east));
+        // Every row lies in order along its direction and never exceeds the box.
+        for r in &rows {
+            let along: Vec<f64> = r.points.iter().map(|p| p.at.dot(r.dir)).collect();
+            assert!(along.windows(2).all(|w| w[0] <= w[1] + 1e-9), "{} {:?}", r.side, along);
+        }
     }
 
     #[test]
     fn features_and_alongs_are_exact() {
-        let model = default_house();
-        let row = exterior_rows(&model, 0, &[AutoRowKind::Overall]).into_iter().find(|r| r.side == "south").unwrap();
-        let p = row.points.first().unwrap();
-        assert!(crate::dimension::along_of(&model, p.handle, p.feature, p.at).is_some());
+        let mut m = house();
+        m.openings.push(window(0, 2, 6.0));
+        for r in exterior_rows(&m, 0, &[]) {
+            for p in &r.points {
+                let along = crate::dimension::along_of(&m, p.handle, p.feature, p.at).expect("along");
+                assert!((along - p.along).abs() < 1e-9, "{} {:?}", r.side, p);
+            }
+        }
     }
 
     #[test]
     fn line_offsets_are_fixed_per_row_kind() {
-        let model = default_house();
-        let rows = exterior_rows(&model, 0, &[AutoRowKind::Overall, AutoRowKind::Walls]);
-        let overall = rows.iter().find(|r| r.kind == AutoRowKind::Overall).unwrap();
-        let walls = rows.iter().find(|r| r.kind == AutoRowKind::Walls).unwrap();
-        assert!(overall.line_offset > walls.line_offset);
+        let rows = exterior_rows(&house(), 0, &[AutoRowKind::Overall, AutoRowKind::Walls]);
+        let overall = row(&rows, "north", AutoRowKind::Overall).expect("overall");
+        let walls = row(&rows, "north", AutoRowKind::Walls).expect("walls");
+        assert!((overall.line_offset - 10.1).abs() < 1e-9);
+        assert!((walls.line_offset - 9.6).abs() < 1e-9);
+        assert_eq!(row_offset(AutoRowKind::Openings), 1.0);
+        assert_eq!(row_offset(AutoRowKind::Walls), 1.5);
+        assert_eq!(row_offset(AutoRowKind::Overall), 2.0);
     }
 
     #[test]
     fn no_footprint_no_rows() {
-        let model = ArchModel::default();
-        assert!(exterior_rows(&model, 0, &[AutoRowKind::Overall]).is_empty());
+        assert!(exterior_rows(&ArchModel::default(), 0, &[AutoRowKind::Overall]).is_empty());
+        let mut m = house();
+        for w in m.walls.iter_mut() {
+            w.exterior = false;
+        }
+        assert!(exterior_rows(&m, 0, &[AutoRowKind::Overall]).is_empty());
     }
 
     #[test]
     fn hostile_models_never_panic() {
-        let mut model = ArchModel::default();
-        model.walls.push(Wall {
-            id: ArchId(0),
-            start: Vec2::new(f64::NAN, 0.0),
-            end: Vec2::new(1.0, 0.0),
-            thickness: 0.2,
-            exterior: true,
-            base_level: 0,
-            ..Default::default()
-        });
-        let rows = exterior_rows(&model, 0, &[AutoRowKind::Overall]);
-        assert!(rows.is_empty());
+        let mut m = ArchModel::default();
+        m.walls.push(wall(0, (f64::NAN, 0.0), (1.0, 0.0), 0.2, true));
+        assert!(exterior_rows(&m, 0, &[AutoRowKind::Overall]).is_empty());
+        let mut m = house();
+        m.walls[2].thickness = f64::INFINITY;
+        m.openings.push(window(0, 99, f64::NAN));
+        m.openings.push(window(1, 0, f64::NAN));
+        let _ = exterior_rows(&m, 0, &[]);
     }
 
     #[test]
     fn rows_serde_default_and_skip() {
-        let d = AutoDims::default();
-        let json = serde_json::to_value(&d).unwrap();
-        assert!(json.get("rows").is_none() || json.get("rows").is_some());
-        assert!(json.get("generated").is_none() || json.get("generated").is_none() || json.get("generated").is_some());
+        let d = cadcraft_doc::arch::AutoDims::default();
+        let json = serde_json::to_value(&d).expect("serialise");
+        let back: cadcraft_doc::arch::AutoDims = serde_json::from_value(json).expect("deserialise");
+        assert_eq!(back, d);
+        // Missing fields fall back to the defaults.
+        let empty: cadcraft_doc::arch::AutoDims = serde_json::from_value(serde_json::json!({})).expect("defaults");
+        assert!(empty.generated.is_empty() && empty.rows.is_empty());
     }
 
     #[test]
     fn other_levels_auto_dims_hidden_while_a_level_is_shown() {
-        let model = ArchModel::default();
-        assert!(model.auto_dims.is_empty());
-        assert_eq!(row_offset(AutoRowKind::Openings), 1.0);
+        // Rows are per level: a model whose walls sit on level 0 has no rows on level 1.
+        assert!(!exterior_rows(&house(), 0, &[]).is_empty());
+        assert!(exterior_rows(&house(), 1, &[]).is_empty());
+        assert!(ArchModel::default().auto_dims.is_empty());
     }
 
     #[test]
     fn every_auto_dim_shows_with_no_level_shown() {
-        let model = ArchModel::default();
-        assert!(model.auto_dims.is_empty());
+        // The builder never filters by a shown level: asking for level 0 always gives the rows.
+        let rows = exterior_rows(&house(), 0, &[]);
+        assert_eq!(rows.len(), 7);
+    }
+
+    #[test]
+    fn square_house_all_sides_equal() {
+        let mut m = ArchModel::default();
+        m.walls = vec![
+            wall(0, (0.0, 0.0), (5.0, 0.0), 0.2, true),
+            wall(1, (5.0, 0.0), (5.0, 5.0), 0.2, true),
+            wall(2, (5.0, 5.0), (0.0, 5.0), 0.2, true),
+            wall(3, (0.0, 5.0), (0.0, 0.0), 0.2, true),
+        ];
+        m.next_id = 4;
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Overall]);
+        assert_eq!(rows.len(), 4);
+        for r in &rows {
+            assert!(close(&values(r), &[5.2]), "{} {:?}", r.side, values(r));
+            assert_eq!(r.points.len(), 2);
+        }
+    }
+
+    #[test]
+    fn two_interior_walls_split_one_side() {
+        let mut m = house();
+        m.walls.push(wall(6, (3.0, 3.0), (3.0, 8.0), 0.1, false));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Walls]);
+        let north = row(&rows, "north", AutoRowKind::Walls).expect("north walls");
+        assert!(close(&values(&north), &[3.1, 3.0, 4.1]), "{:?}", values(&north));
+        assert_eq!(north.points.len(), 4);
+        assert_eq!(north.points[1].handle, arch_handle(ArchId(6)));
+        assert_eq!(north.points[2].handle, arch_handle(ArchId(5)));
+    }
+
+    #[test]
+    fn opening_at_wall_start() {
+        let mut m = house();
+        m.openings.push(window(0, 2, 0.0));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Openings]);
+        let north = row(&rows, "north", AutoRowKind::Openings).expect("north openings");
+        // Walls points: (-0.1,8), (6,8), (10.1,8); opening at (10,8)
+        assert!(close(&values(&north), &[6.1, 4.0, 0.1]), "{:?}", values(&north));
+        let opening_pt = north.points.iter().find(|p| p.handle == opening_handle(ArchId(0))).expect("opening point");
+        assert_eq!(opening_pt.at, Vec2::new(10.0, 8.0));
+    }
+
+    #[test]
+    fn max_points_capped() {
+        let mut m = house();
+        for i in 0..20 {
+            m.openings.push(window(i, 2, 0.5 + i as f64 * 0.45));
+        }
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Openings]);
+        let north = row(&rows, "north", AutoRowKind::Openings).expect("north openings");
+        assert!(north.points.len() <= cadcraft_doc::arch::MAX_AUTO_DIMS_PER_LEVEL);
     }
 }

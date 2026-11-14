@@ -1148,4 +1148,11 @@ mod tests {
         assert_eq!(sanitised_name("..hidden").as_deref(), Ok("hidden"));
         assert!(sanitised_name("...").is_err());
     }
+
+    #[test]
+    fn hdr_entry_in_wrong_category_refused() {
+        let entry = serde_json::json!({"id":"x:hdr-wrong","name":"HDR Wrong","category":"Materials","folder":"Images","symbolType":"backdrop","file":"hdr/sample.hdr","source":"test","licence":"CC0-1.0","author":"CADCraft","attribution":"test"});
+        let err = entry_record(&entry, "sample").unwrap_err();
+        assert!(err.contains("HDR") && err.contains("Backdrops"), "{err}");
+    }
 }

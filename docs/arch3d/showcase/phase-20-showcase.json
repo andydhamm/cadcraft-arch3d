@@ -1,0 +1,10 @@
+[
+  {"cmd":"planview","params":{"name":"Lower Floor Plan","from":"Floor Plan","level":"Lower","open":false}},
+  {"cmd":"planview","params":{"name":"Main Floor Plan","from":"Floor Plan","level":"Main","open":false}},
+  {"cmd":"planview","params":{"name":"Lower Electrical","from":"Electrical","level":"Lower","open":false}},
+  {"cmd":"planview","params":{"name":"Main Electrical","from":"Electrical","level":"Main","open":false}},
+  {"cmd":"planview","params":{"name":"Lower Reflected Ceiling","from":"Reflected Ceiling","level":"Lower","open":false}},
+  {"cmd":"planview","params":{"name":"Main Reflected Ceiling","from":"Reflected Ceiling","level":"Main","open":false}},
+  {"cmd":"dimauto","params":{"level":"Lower"}},
+  {"cmd":"dimauto","params":{"level":"Main"}}
+]

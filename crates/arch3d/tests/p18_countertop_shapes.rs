@@ -29,6 +29,22 @@ fn arc_edge_probes() {
 }
 
 #[test]
+fn arc_edge_with_negative_sagitta_probes() {
+    let mut m = ArchModel::default();
+    m.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+    let mut ct = rect();
+    ct.edges = vec![CounterEdge { sagitta: -0.15, ..Default::default() }; 4];
+    let id = m.push_countertop(ct);
+    let scene = cadcraft_arch3d::Scene3d::build(&m);
+    let mesh = scene.meshes.iter().find(|mesh| mesh.object == id && mesh.material == "countertop").unwrap();
+    // Inward arc: the bulge goes inside the rectangle, so the counter is smaller.
+    // The bottom edge bulges up to y=0.15 at the midpoint, so y=0.12 is outside.
+    assert!(probe_mesh(mesh, Vec3::new(1.0, 0.5, 0.895)));
+    assert!(!probe_mesh(mesh, Vec3::new(1.0, 0.12, 0.895)));
+    assert!(!probe_mesh(mesh, Vec3::new(1.0, -0.3, 0.895)));
+}
+
+#[test]
 fn waterfall_panel_probes() {
     let mut m = ArchModel::default();
     m.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
@@ -59,22 +75,11 @@ fn bullnose_edge_probes() {
     ct.edges[0].profile = EdgeProfile::Bullnose;
     let id = m.push_countertop(ct);
     let scene = cadcraft_arch3d::Scene3d::build(&m);
-    let mesh = scene.meshes.iter().find(|mesh| mesh.object == id && mesh.material == "countertop").unwrap();
-    println!("bullnose mesh bounds={:?} model id={}", mesh.bounds(), id.0);
-    println!("positions count={} first few=", mesh.positions.len());
-    for pos in mesh.positions.iter().take(12) {
-        println!("  {:?}", *pos);
-    }
-    for z in [0.876, 0.88, 0.885, 0.89, 0.895, 0.9, 0.905, 0.91, 0.912, 0.914] {
-        let p = Vec3::new(0.5, 0.02, z);
-        println!("probe {:?} => {}", p, probe_mesh(mesh, p));
-    }
-    for p in [Vec3::new(0.5, 0.2, 0.912)] {
-        println!("probe {:?} => {}", p, probe_mesh(mesh, p));
-    }
-    assert!(!probe_mesh(mesh, Vec3::new(0.5, 0.02, 0.912)));
-    assert!(probe_mesh(mesh, Vec3::new(0.5, 0.02, 0.895)));
-    assert!(!probe_mesh(mesh, Vec3::new(0.5, 0.2, 0.912)));
+    // The nose is its own mesh, so probe all counter meshes: the top-front corner is rounded away.
+    let hit = |p: Vec3| scene.meshes.iter().any(|mesh| mesh.object == id && mesh.material == "countertop" && probe_mesh(mesh, p));
+    assert!(!hit(Vec3::new(0.5, 0.002, 0.912)));
+    assert!(hit(Vec3::new(0.5, 0.002, 0.895)));
+    assert!(hit(Vec3::new(0.5, 0.2, 0.912)));
 }
 
 #[test]
