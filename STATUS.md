@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-14 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 42 of 44 segments merged · 19 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 16:30 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 83.0 h so far · expected done Nov 15 02:06–Dec 01 03:57 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 83.3 h so far · expected done Nov 15 02:21–Dec 01 04:12 UTC |
 | 19 | Light, sky and cameras | building | 11 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
@@ -75,5 +75,5 @@ Updated 2026-11-14 16:30 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 121 |
 | mai-flash-b | mai-code-1.1-flash | idle | 73 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 141 |
-| tturbo-mac | tturbo-ultraheretic | gate | 895 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 566 |
+| tturbo-mac | tturbo-ultraheretic | agent | 896 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 567 |
