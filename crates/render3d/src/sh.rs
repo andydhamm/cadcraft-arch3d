@@ -159,6 +159,14 @@ pub fn irradiance(sh: &[[f32; 3]; 9], n: [f32; 3]) -> [f32; 3] {
 mod tests {
     use super::*;
 
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset_sh_cache_for_test() {
+        let mut cache = SH_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        cache.clear();
+        SH_PROJECTIONS.with(|c| c.set(0));
+    }
+
     fn dirs() -> Vec<[f32; 3]> {
         let mut v = vec![[0.0, 0.0, 1.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]];
         let r = 0.5f32.sqrt();
@@ -168,6 +176,9 @@ mod tests {
 
     #[test]
     fn uniform_upper_hemisphere_and_rotation() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
         let pi = std::f32::consts::PI;
         // A uniform L gives pi L for every normal.
         let uniform = Environment::uniform([2.0, 1.0, 0.5], 32, 16);
@@ -213,9 +224,12 @@ mod tests {
 
     #[test]
     fn second_sky_render_of_an_angle_rebuilds_nothing() {
-        // Verify that SH projection is cached.
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
+        // Cache by the actual environment content, not by the caller's stale key field.
         let mut e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
-        e.key = 9999; // Specific key
+        e.key = 9999; // stale mirror of an older key
 
         let before = sh_projection_count();
 
@@ -223,12 +237,13 @@ mod tests {
         assert_eq!(sh_projection_count(), before + 1, "First projection must run");
 
         let _sh2 = project(&e);
-        assert_eq!(sh_projection_count(), before + 1, "Second projection must hit cache");
+        assert_eq!(sh_projection_count(), before + 1, "Second projection with the same content must hit cache");
 
-        // Different key
+        // A different map is different work even if the old key field says otherwise.
         let mut e2 = e.clone();
+        e2.rgb[0] = [2.0, 2.0, 2.0];
         e2.key = 8888;
         let _sh3 = project(&e2);
-        assert_eq!(sh_projection_count(), before + 2, "Different key must project");
+        assert_eq!(sh_projection_count(), before + 2, "Different content must project");
     }
 }

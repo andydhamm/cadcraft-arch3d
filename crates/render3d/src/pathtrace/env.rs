@@ -255,6 +255,14 @@ pub fn uv_of_dir(d: [f32; 3]) -> (f32, f32) {
 mod tests {
     use super::*;
 
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset_env_table_cache_for_test() {
+        let mut cache = ENV_TABLE_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        cache.clear();
+        ENV_TABLE_BAKES.with(|c| c.set(0));
+    }
+
     /// A tiny deterministic generator in [0, 1).
     fn rng(state: &mut u64) -> f32 {
         *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -263,6 +271,9 @@ mod tests {
 
     #[test]
     fn pdf_integrates_to_one_and_finds_bright_texel() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
         // A gradient map: the pdf over the sphere integrates to 1.
         let (w, h) = (32usize, 16usize);
         let mut e = Environment::uniform([1.0; 3], w as u32, h as u32);
@@ -305,30 +316,30 @@ mod tests {
 
     #[test]
     fn sky_bake_and_tables_are_built_once_per_sun_angle() {
-        // This test verifies that the environment table is cached.
-        // We create a valid environment with a specific key.
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        // Cache by the actual map content, not by the caller's stale `key` field.
         let mut e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
-        e.key = 12345; // Force a specific key for testing
+        e.key = 12345; // stale mirror of an older key; the content still matches the first call.
 
         let before = env_table_bake_count();
 
-        // First call should bake
         let _t1 = env_table(&e);
         assert_eq!(env_table_bake_count(), before + 1, "First call must bake");
 
-        // Second call with same key should hit cache
         let _t2 = env_table(&e);
-        assert_eq!(env_table_bake_count(), before + 1, "Second call must hit cache");
+        assert_eq!(env_table_bake_count(), before + 1, "Second call with the same content must hit cache");
 
-        // Change key (simulating different sun/look)
+        // A different map is a different table even if the old key field says otherwise.
         let mut e2 = e.clone();
+        e2.rgb[0] = [2.0, 2.0, 2.0];
         e2.key = 67890;
 
         let _t3 = env_table(&e2);
-        assert_eq!(env_table_bake_count(), before + 2, "Different key must bake");
+        assert_eq!(env_table_bake_count(), before + 2, "Different content must bake");
 
-        // Back to original key
         let _t4 = env_table(&e);
-        assert_eq!(env_table_bake_count(), before + 2, "Original key must hit cache again");
+        assert_eq!(env_table_bake_count(), before + 2, "Original content must hit cache again");
     }
 }
