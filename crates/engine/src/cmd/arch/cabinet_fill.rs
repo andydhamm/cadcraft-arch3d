@@ -228,15 +228,15 @@ mod tests {
     }
 
     #[test]
-    fn cabinet_fill_three_cabinets_two_gaps() {
+    fn cabinet_fill_three_cabinets_one_filled_gap() {
         let mut s = room();
         s.execute("cabinet", &json!({ "kind": "base", "wall": "w0", "offset": 0.35, "widths": [0.6, 0.6, 0.6] })).unwrap();
         let r = s.execute("cabinet.fill", &json!({ "run": "cb1" })).unwrap();
         let fillers = r["fillers"].as_array().unwrap();
-        assert_eq!(fillers.len(), 2, "two gaps should produce two fillers");
+        assert_eq!(fillers.len(), 1, "start gap should produce one filler");
         let gaps = r["gaps"].as_array().unwrap();
         let filled_gaps = gaps.iter().filter(|g| g["filled"] == true).count();
-        assert_eq!(filled_gaps, 2, "two gaps should be filled");
+        assert_eq!(filled_gaps, 1, "one gap should be filled");
     }
 
     #[test]
@@ -245,7 +245,7 @@ mod tests {
         s.execute("cabinet", &json!({ "kind": "base", "wall": "w0", "offset": 0.35, "widths": [0.6, 0.6, 0.6] })).unwrap();
         let r = s.execute("cabinet.fill", &json!({ "run": "cb2" })).unwrap();
         let fillers = r["fillers"].as_array().unwrap();
-        assert_eq!(fillers.len(), 2, "middle cabinet should identify the same run");
+        assert_eq!(fillers.len(), 1, "middle cabinet should identify the same run");
     }
 
     #[test]
