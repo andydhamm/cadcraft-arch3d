@@ -230,4 +230,67 @@ mod tests {
         assert_eq!(w0.get("glass").and_then(Value::as_bool), Some(false));
         assert_eq!(w0["split"]["upper"], "Glass");
     }
+
+    #[test]
+    fn glass_pony_wall_before_2x4_does_not_break_inspect() {
+        let mut s = new_session_with_level();
+        // Glass pony wall first (the phase-18 showcase scenario)
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Glass"})).unwrap();
+        // Then a 2x4 wall
+        s.execute("wall", &json!({"points": [[0.0, 1.0], [2.0, 1.0]], "thickness": 0.2, "wall_type": "2x4"})).unwrap();
+        // Split the 2x4 wall (w1)
+        s.execute("wall.split", &json!({"id": "w1", "height": 1.0, "upper": "Glass"})).unwrap();
+        let v = s.execute("arch.inspect", &json!({"walls": true})).unwrap();
+        let walls = v["walls"].as_array().unwrap();
+        // Glass pony wall: glass=true, no split
+        let w0 = walls.iter().find(|w| w.get("id").and_then(Value::as_str) == Some("w0")).expect("w0 row");
+        assert_eq!(w0.get("glass").and_then(Value::as_bool), Some(true));
+        assert_eq!(w0.get("split"), Some(&Value::Null));
+        // 2x4 wall: glass=false, has split
+        let w1 = walls.iter().find(|w| w.get("id").and_then(Value::as_str) == Some("w1")).expect("w1 row");
+        assert_eq!(w1.get("glass").and_then(Value::as_bool), Some(false));
+        assert_eq!(w1["split"]["upper"], "Glass");
+    }
+
+    #[test]
+    fn inspect_multiple_walls_mixed_states() {
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Glass"})).unwrap();
+        s.execute("wall", &json!({"points": [[0.0, 1.0], [2.0, 1.0]], "type": "Interior"})).unwrap();
+        s.execute("wall", &json!({"points": [[0.0, 2.0], [2.0, 2.0]], "type": "Exterior"})).unwrap();
+        // Split only the interior wall
+        s.execute("wall.split", &json!({"id": "w1", "height": 1.0, "upper": "Glass"})).unwrap();
+        let v = s.execute("arch.inspect", &json!({"walls": true})).unwrap();
+        let walls = v["walls"].as_array().unwrap();
+        assert_eq!(walls.len(), 3);
+        let w0 = walls.iter().find(|w| w.get("id").and_then(Value::as_str) == Some("w0")).expect("w0");
+        let w1 = walls.iter().find(|w| w.get("id").and_then(Value::as_str) == Some("w1")).expect("w1");
+        let w2 = walls.iter().find(|w| w.get("id").and_then(Value::as_str) == Some("w2")).expect("w2");
+        assert_eq!(w0.get("glass").and_then(Value::as_bool), Some(true));
+        assert_eq!(w0.get("split"), Some(&Value::Null));
+        assert_eq!(w1.get("glass").and_then(Value::as_bool), Some(false));
+        assert_eq!(w1["split"]["upper"], "Glass");
+        assert_eq!(w2.get("glass").and_then(Value::as_bool), Some(false));
+        assert_eq!(w2.get("split"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn split_upper_thickness_appears_in_inspect() {
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Interior"})).unwrap();
+        s.execute("wall.split", &json!({"id": "w0", "height": 1.0, "upper": "Glass", "upperThickness": 0.015})).unwrap();
+        let v = s.execute("arch.inspect", &json!({"walls": true})).unwrap();
+        let walls = v["walls"].as_array().unwrap();
+        let w0 = walls.iter().find(|w| w.get("id").and_then(Value::as_str) == Some("w0")).expect("w0 row");
+        assert_eq!(w0["split"]["upperThickness"], 0.015);
+        assert_eq!(w0["split"]["height"], 1.0);
+    }
+
+    #[test]
+    fn inspect_empty_model_returns_empty_walls() {
+        let mut s = new_session_with_level();
+        let v = s.execute("arch.inspect", &json!({"walls": true})).unwrap();
+        let walls = v["walls"].as_array().unwrap();
+        assert!(walls.is_empty());
+    }
 }
