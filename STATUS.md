@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-14 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 44 of 48 segments merged · 19 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 20:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 87.3 h so far · expected done Nov 15 07:25–Nov 18 15:59 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 87.5 h so far · expected done Nov 15 07:40–Nov 18 16:14 UTC |
 | 19 | Light, sky and cameras | building | 12 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
@@ -62,8 +62,8 @@ Updated 2026-11-14 20:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1308 |
-| bonsai-b | bonsai2-27b | agent | 1250 |
+| bonsai-a | bonsai2-27b | idle | 1309 |
+| bonsai-b | bonsai2-27b | idle | 1252 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1387 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1356 |
 | claude-sonnet-a | sonnet | idle | 157 |
@@ -75,5 +75,5 @@ Updated 2026-11-14 20:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 146 |
-| tturbo-mac | tturbo-ultraheretic | agent | 907 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 583 |
+| tturbo-mac | tturbo-ultraheretic | gate | 907 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 584 |
