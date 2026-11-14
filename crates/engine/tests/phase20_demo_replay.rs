@@ -390,3 +390,62 @@ fn phase20_showcase_overall_rows_match_exterior_bounds() {
         }
     }
 }
+
+#[test]
+fn phase20_demo_level_1_has_three_rooms() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let rooms = rooms_of(&reply);
+    let level_1_rooms: Vec<&Value> = rooms.iter().filter(|r| level_str(r) == "0").collect();
+    // Level 1: exterior ring with interior walls at y=3 (full width) and x=6 (y=3 to y=8)
+    // creates 3 rooms: bottom strip, top-left, top-right.
+    assert_eq!(level_1_rooms.len(), 3, "expected 3 rooms on level 1, found {}", level_1_rooms.len());
+}
+
+#[test]
+fn phase20_demo_level_2_has_two_rooms() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let rooms = rooms_of(&reply);
+    let level_2_rooms: Vec<&Value> = rooms.iter().filter(|r| level_str(r) == "1").collect();
+    // Level 2: exterior ring with one interior wall at x=5 (full height) creates 2 rooms.
+    assert_eq!(level_2_rooms.len(), 2, "expected 2 rooms on level 2, found {}", level_2_rooms.len());
+}
+
+#[test]
+fn phase20_demo_tray_has_correct_inset_and_depth() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"trays": true}));
+    let trays = trays_of(&reply);
+    assert_eq!(trays.len(), 1, "expected exactly one tray, found {}", trays.len());
+    let tray = &trays[0];
+    let inset = num(tray, "inset");
+    let depth = num(tray, "depth");
+    assert!((inset - 0.6).abs() <= 0.001, "tray inset is {}, expected 0.6", inset);
+    assert!((depth - 0.3).abs() <= 0.001, "tray depth is {}, expected 0.3", depth);
+}
+
+#[test]
+fn phase20_demo_bedroom_is_on_level_1() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let rooms = rooms_of(&reply);
+    let bedroom = find_row(&rooms, "name", "Bedroom");
+    assert_eq!(level_str(bedroom), "0", "Bedroom is on level `{}`, expected `0`", level_str(bedroom));
+}
