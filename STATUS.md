@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-14 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 09:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 41 of 45 segments merged · 19 of 20 acceptance checks**
+**Phase 18 of 21: Interior finish, kitchen and bath — 42 of 45 segments merged · 19 of 20 acceptance checks**
 
-10,212 workspace tests passing at the last merge · 1148 segments merged in all · 0 of 15 seats working
+10,214 workspace tests passing at the last merge · 1149 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,24 +28,25 @@ Updated 2026-11-14 09:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 75.8 h so far · expected done Nov 14 10:18–Nov 16 23:47 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 76.0 h so far · expected done Nov 14 23:54–Dec 02 02:57 UTC |
 | 19 | Light, sky and cameras | building | 10 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
-| 21 | Schedules, elevations and sheets | building | 10 / 13 | — |
+| 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
 ## Phase 18 segments
 
-41 merged, 2 queued, 1 replaced, 1 escalate, 1 merging
+42 merged, 1 replaced, 1 escalate, 1 working, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-fbb083803` | merge upstream upstream/main up to fbb083803 (4 commits) | escalate |  |
-| `p18h-showcase-digest` | Showcase tests: show the failing assertion, share one replay, print a compact digest of the house | merging | mai-flash |
+| `p18h-showcase-kitchen` | Showcase house: append the phase-18 kitchen casework, repaint new surfaces, keep outlets valid | working | bonsai-ws2-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 14 09:22 | `p18h-showcase-digest` | merged | 10,214 pass, 1 fail | bonsai-ws2-b |
 | Nov 14 08:53 | `harden-p19g-glb-normal-texture` | merged | 10,212 pass, 1 fail | tturbo-mac |
 | Nov 14 08:53 | `harden-p16-rebuild` | merged | 10,212 pass, 1 fail | tturbo-mac2 |
 | Nov 14 08:12 | `harden-p18g-countertop-nose` | merged | 10,204 pass | tturbo-mac2 |
@@ -57,24 +58,23 @@ Updated 2026-11-14 09:15 UTC. This page and the card in the README are regenerat
 | Nov 14 03:22 | `p19g-glb-normal-texture` | merged | 10,157 pass | bonsai-ws2-a |
 | Nov 14 03:22 | `p19g-sky-check-time` | merged | 10,157 pass | claude-sonnet-a |
 | Nov 14 03:22 | `p19g-pt-strip-reaches-floor` | merged | 10,157 pass | mai-flash |
-| Nov 14 03:22 | `p19g-pt-tone-look` | merged | 10,157 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1292 |
-| bonsai-b | bonsai2-27b | merging | 1228 |
+| bonsai-b | bonsai2-27b | agent | 1228 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1364 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1318 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1318 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | idle | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1167 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1167 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 120 |
-| mai-flash-b | mai-code-1.1-flash | gate | 72 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 131 |
-| tturbo-mac | tturbo-ultraheretic | gate | 878 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 535 |
+| mai-flash-b | mai-code-1.1-flash | gate | 73 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 133 |
+| tturbo-mac | tturbo-ultraheretic | agent | 879 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 535 |
