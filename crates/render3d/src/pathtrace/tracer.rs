@@ -110,6 +110,11 @@ impl PathTracer {
         }
 
         let mut gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+        if opts.furnace.is_none() {
+            if let Some(a) = lambert_albedo(lighting, opts) {
+                super::scene_gpu::apply_lambert(&mut gpu_scene, a);
+            }
+        }
         if gpu_scene.tris.len() > MAX_GPU_TRIANGLES {
             return Err(format!("scene has {} triangles, more than MAX_GPU_TRIANGLES {MAX_GPU_TRIANGLES}", gpu_scene.tris.len()));
         }
@@ -171,6 +176,8 @@ impl PathTracer {
         if let Some(f) = opts.furnace {
             frame.flags |= FRAME_FURNACE;
             frame.furnace = [f.albedo, f.emission, f.emission / (1.0 - f.albedo), 0.0];
+            // The furnace keeps its own lighting but honours the tone curve (toneMap none reads linear).
+            frame_look(&mut frame, lighting, opts);
         } else {
             frame_lighting(&mut frame, &mut gpu_scene.ies, lighting, Some(camera), opts);
         }
@@ -717,9 +724,23 @@ fn frame_view(frame: &mut GpuFrame, lighting: &Lighting, camera: Option<&Camera>
     }
 }
 
-/// Look (stub): will set the tone code and the Lambert flag in `frame.look` from `lighting` and `opts`.
-/// Does nothing yet (`look[0]` stays 1, ACES).
-fn frame_look(_frame: &mut GpuFrame, _lighting: &Lighting, _opts: &PathOptions) {}
+/// Look: sets the resolve's tone code (`look[0]` = `opts.tone_map`, one of `exposure::TONE_*`) and,
+/// when a finite Lambert albedo is given (`opts.lambert`, else `lighting.lambert`), `FRAME_LAMBERT`.
+/// The material override itself is CPU-side (`scene_gpu::apply_lambert`, called by `new` and `irradiance`).
+fn frame_look(frame: &mut GpuFrame, lighting: &Lighting, opts: &PathOptions) {
+    frame.look[0] = match opts.tone_map {
+        crate::exposure::TONE_ACES | crate::exposure::TONE_HABLE | crate::exposure::TONE_NONE => opts.tone_map,
+        _ => crate::exposure::TONE_ACES,
+    };
+    if lambert_albedo(lighting, opts).is_some() {
+        frame.flags |= super::scene_gpu::FRAME_LAMBERT;
+    }
+}
+
+/// The finite Lambert albedo in force: the path options' first, then the lighting's.
+fn lambert_albedo(lighting: &Lighting, opts: &PathOptions) -> Option<f32> {
+    opts.lambert.or(lighting.lambert).filter(|a| a.is_finite())
+}
 
 fn invert_mat4(m: &[[f32; 4]; 4]) -> [[f32; 4]; 4] {
     // Standard 4x4 matrix inversion via cofactors.
@@ -782,6 +803,11 @@ pub fn irradiance(
     }
 
     let mut gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+    if opts.furnace.is_none() {
+        if let Some(a) = lambert_albedo(lighting, opts) {
+            super::scene_gpu::apply_lambert(&mut gpu_scene, a);
+        }
+    }
     // As before, irradiance applies the sun whenever `lighting` has one, furnace or not.
     let mut lit = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
     frame_lighting(&mut lit, &mut gpu_scene.ies, lighting, None, opts);
@@ -1097,6 +1123,7 @@ fn run_entry_on(
 
 #[cfg(test)]
 mod tests {
+    use super::super::scene_gpu::FRAME_LAMBERT;
     use super::super::*;
     use super::*;
     use crate::camera::{Camera, Orbit};
@@ -1567,6 +1594,54 @@ mod tests {
     }
 
     #[test]
+    fn frame_look_sets_the_tone_code_from_options() {
+        use crate::exposure::{TONE_ACES, TONE_HABLE, TONE_NONE};
+        for code in [TONE_ACES, TONE_HABLE, TONE_NONE] {
+            let opts = PathOptions { tone_map: code, ..Default::default() };
+            let mut f = GpuFrame { look: [0, 0, 0, 0], ..Default::default() };
+            frame_look(&mut f, &Lighting::default(), &opts);
+            assert_eq!(f.look[0], code);
+            assert_eq!(f.flags & FRAME_LAMBERT, 0, "no albedo, no Lambert flag");
+        }
+        // An unknown code falls back to ACES.
+        let opts = PathOptions { tone_map: 99, ..Default::default() };
+        let mut f = GpuFrame::default();
+        frame_look(&mut f, &Lighting::default(), &opts);
+        assert_eq!(f.look[0], TONE_ACES);
+    }
+
+    #[test]
+    fn furnace_frame_carries_the_tone_code() {
+        // The furnace branch of `new` calls frame_look; mirror its frame setup without a device.
+        let opts = PathOptions {
+            furnace: Some(super::super::Furnace { albedo: 0.5, emission: 1.0 }),
+            tone_map: crate::exposure::TONE_NONE,
+            ..Default::default()
+        };
+        let mut f = GpuFrame { look: [1, 0, 0, 0], flags: FRAME_FURNACE, ..Default::default() };
+        frame_look(&mut f, &Lighting::default(), &opts);
+        assert_eq!(f.look[0], crate::exposure::TONE_NONE);
+        assert_ne!(f.flags & FRAME_FURNACE, 0);
+        assert_eq!(f.flags & !FRAME_FURNACE, 0, "the furnace frame gains no sun or sky");
+    }
+
+    #[test]
+    fn frame_look_sets_lambert_when_albedo_given() {
+        let opts = PathOptions { lambert: Some(0.5), ..Default::default() };
+        let mut f = GpuFrame::default();
+        frame_look(&mut f, &Lighting::default(), &opts);
+        assert_ne!(f.flags & FRAME_LAMBERT, 0);
+        let lit = Lighting { lambert: Some(0.4), ..Lighting::default() };
+        let mut g = GpuFrame::default();
+        frame_look(&mut g, &lit, &PathOptions::default());
+        assert_ne!(g.flags & FRAME_LAMBERT, 0);
+        let nan = PathOptions { lambert: Some(f32::NAN), ..Default::default() };
+        let mut h = GpuFrame::default();
+        frame_look(&mut h, &Lighting::default(), &nan);
+        assert_eq!(h.flags & FRAME_LAMBERT, 0);
+    }
+
+    #[test]
     fn frame_lighting_matches_old_setup() {
         let opts = PathOptions::default();
         let base = GpuFrame { flags: FRAME_GROUND, look: [1, 0, 0, 0], ..Default::default() };
@@ -1760,10 +1835,17 @@ mod tests {
     }
 
     fn env_still(gpu: &ComputeGpu, scene: &Scene3d, lighting: &Lighting) -> Vec<u8> {
-        // EV100 0 is a scale of 1/1.2; the tone code 3 is no curve (frame_look is p19-exposure's).
-        let opts = PathOptions { spp: 4, seed: 7, denoise: false, exposure: Exposure::Fixed(1.0 / 1.2), ..Default::default() };
+        // EV100 0 is a scale of 1/1.2; the tone code 3 is no curve.
+        let opts = PathOptions {
+            spp: 4,
+            seed: 7,
+            denoise: false,
+            exposure: Exposure::Fixed(1.0 / 1.2),
+            tone_map: crate::exposure::TONE_NONE,
+            ..Default::default()
+        };
         let mut t = PathTracer::new(gpu, scene, &looking_up(), lighting, false, (16, 12), &opts, None).unwrap();
-        t.frame.look[0] = 3;
+        assert_eq!(t.frame.look[0], 3);
         loop {
             match t.step(gpu) {
                 PathStatus::Running { .. } => {}
