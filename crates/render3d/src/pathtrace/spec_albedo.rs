@@ -76,10 +76,10 @@ pub fn spec_albedo_terms(roughness: f64, nov: f64) -> (f64, f64) {
     let v = [((1.0 - nov * nov).max(0.0)).sqrt(), 0.0, nov];
     let mut a = 0.0;
     let mut b = 0.0;
-    let inv_n = 1.0 / 32.0;
-    for i in 0..32 {
+    let inv_n = 1.0 / 64.0;
+    for i in 0..64 {
         let u1 = (i as f64 + 0.5) * inv_n;
-        for j in 0..32 {
+        for j in 0..64 {
             let u2 = (j as f64 + 0.5) * inv_n;
             let h = ggx_sample_vndf(v, alpha, u1, u2);
             let voh = (v[0] * h[0] + v[1] * h[1] + v[2] * h[2]).max(0.0);
@@ -97,7 +97,7 @@ pub fn spec_albedo_terms(roughness: f64, nov: f64) -> (f64, f64) {
             b += w * (1.0 - voh).powi(5);
         }
     }
-    (a / 1024.0, b / 1024.0)
+    (a / 4096.0, b / 4096.0)
 }
 
 /// A conservative table of the GGX lobe's directional-albedo coefficients.
