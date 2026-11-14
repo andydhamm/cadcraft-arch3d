@@ -1153,8 +1153,8 @@ mod tests {
         d.arch.rooms.push(Room {
             id: cadcraft_engine::doc::ArchId(0),
             name: "Room".into(),
-            ring: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
-            r#type: RoomType::Living,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            room_type: RoomType::Living,
             level: 0,
             ..Default::default()
         });
@@ -1174,8 +1174,9 @@ mod tests {
         look.exposure = ExposureSetting::Manual { ev100: 15.0 };
         look.tone_map = cadcraft_engine::doc::arch::ToneMap::None;
         look.sun.on = true;
-        look.sun.azimuth = 180.0;
-        look.sun.elevation = 60.0;
+        // Sun from the south (azimuth 180) at elevation 60 degrees.
+        // The SunLook angle is [azimuth, elevation] in degrees.
+        look.sun.angle = [180.0, 60.0];
 
         let go = |cutaway: bool| {
             let mut req = request(&d, Some(camera.clone()), None, false);
