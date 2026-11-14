@@ -1979,4 +1979,66 @@ mod tests {
         assert_eq!(f1, f2, "two calls must give identical frames");
         assert_eq!(aux1, aux2, "two calls must give identical aux");
     }
+
+    #[test]
+    fn lambert_albedo_opts_take_precedence_over_lighting() {
+        let lighting = Lighting { lambert: Some(0.4), ..Lighting::default() };
+        let opts = PathOptions { lambert: Some(0.6), ..Default::default() };
+        assert_eq!(lambert_albedo(&lighting, &opts), Some(0.6), "opts wins over lighting");
+        let opts2 = PathOptions::default();
+        assert_eq!(lambert_albedo(&lighting, &opts2), Some(0.4), "lighting used when opts is None");
+        assert_eq!(lambert_albedo(&Lighting::default(), &PathOptions::default()), None, "neither set: None");
+        let inf = PathOptions { lambert: Some(f32::INFINITY), ..Default::default() };
+        assert_eq!(lambert_albedo(&Lighting::default(), &inf), None, "infinity is not finite");
+    }
+
+    #[test]
+    fn frame_environment_returns_early_in_furnace() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        let lighting = Lighting { sun: None, look, ..Lighting::default() };
+        let mut f = GpuFrame { flags: FRAME_FURNACE, look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux = vec![1.0f32, 2.0];
+        frame_environment(&mut f, &mut aux, &lighting);
+        assert_eq!(f.flags, FRAME_FURNACE, "furnace: no FRAME_ENV added");
+        assert_eq!(aux, [1.0, 2.0], "furnace: aux untouched");
+    }
+
+    #[test]
+    fn frame_environment_clears_sky_flag() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        let mut e = crate::environment::Environment::uniform([1.0; 3], 16, 8);
+        e.visible = true;
+        let lighting = Lighting { sun: None, look, environment: Some(std::sync::Arc::new(e)), ..Lighting::default() };
+        let mut f = GpuFrame { flags: FRAME_SKY, look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux = vec![];
+        frame_environment(&mut f, &mut aux, &lighting);
+        assert_ne!(f.flags & FRAME_ENV, 0, "FRAME_ENV must be set");
+        assert_eq!(f.flags & FRAME_SKY, 0, "FRAME_SKY must be cleared");
+        assert!(!aux.is_empty(), "env table must be appended to aux");
+    }
+
+    #[test]
+    fn frame_sun_not_set_when_moon_present() {
+        let look = cadcraft_doc::arch::Look::default();
+        let lighting = Lighting { moon: Some(([0.0, 0.0, 1.0], 1000.0)), look, ..Lighting::default() };
+        let mut f = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
+        frame_sun(&mut f, &lighting);
+        assert_eq!(f.flags & FRAME_SUN, 0, "moon present: no FRAME_SUN");
+        assert_ne!(f.flags & FRAME_SKY, 0, "sky still on when moon is present");
+    }
+
+    #[test]
+    fn frame_view_rejects_nan_near_clip() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        look.near_clip = Some(f64::NAN);
+        let lighting = Lighting { sun: None, look, ..Lighting::default() };
+        let cam = camera();
+        let mut f = GpuFrame { look: [1, 0, 0, 0], ..Default::default() };
+        let mut aux = vec![];
+        frame_lighting(&mut f, &mut aux, &lighting, Some(&cam), &PathOptions::default());
+        assert_eq!(f.view, [0.0; 4], "NaN near clip: view must stay zero");
+    }
 }
