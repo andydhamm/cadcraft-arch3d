@@ -351,8 +351,10 @@ fn horizon_material_index_with_and_without_ground() {
     let without = build_gpu_scene(&scene, false, None);
     let with_ground = build_gpu_scene(&scene, true, None);
     assert_eq!(with_ground.materials.len(), without.materials.len() + 1);
-    assert_eq!(with_ground.materials[with_ground.materials.len() - 1], material_for("terrain"));
-    assert_eq!(without.materials[1], material_for("terrain"));
+    let mut horizon_mat = material_for("terrain");
+    horizon_mat.flags |= super::scene_gpu::TRI_SINGLE_SIDED;
+    assert_eq!(with_ground.materials[with_ground.materials.len() - 1], horizon_mat);
+    assert_eq!(without.materials[1], horizon_mat);
 }
 
 #[test]
