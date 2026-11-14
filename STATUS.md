@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-14 21:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 22:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 44 of 49 segments merged · 19 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 21:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 88.3 h so far · expected done Nov 15 14:54–Nov 21 23:55 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 88.5 h so far · expected done Nov 15 15:08–Nov 22 00:09 UTC |
 | 19 | Light, sky and cameras | building | 12 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
@@ -63,7 +63,7 @@ Updated 2026-11-14 21:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1311 |
+| bonsai-a | bonsai2-27b | idle | 1312 |
 | bonsai-b | bonsai2-27b | agent | 1253 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1387 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1356 |
@@ -76,5 +76,5 @@ Updated 2026-11-14 21:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 149 |
-| tturbo-mac | tturbo-ultraheretic | agent | 909 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 587 |
+| tturbo-mac | tturbo-ultraheretic | agent | 910 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 588 |
