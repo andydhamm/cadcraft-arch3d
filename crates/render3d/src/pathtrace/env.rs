@@ -37,7 +37,7 @@ pub struct EnvTable {
 /// Cache for `env_table`, keyed by `Environment::key`.
 /// Stores (key, table) pairs. Bounded to avoid memory bloat.
 static ENV_TABLE_CACHE: Mutex<Vec<(u64, EnvTable)>> = Mutex::new(Vec::new());
-const ENV_TABLE_CACHE_LEN: usize = 8;
+const ENV_TABLE_CACHE_LEN: usize = 32;
 
 /// Count of table bakes performed (for tests).
 thread_local! {
@@ -320,7 +320,7 @@ mod tests {
         reset_env_table_cache_for_test();
 
         // Cache by the actual map content, not by the caller's stale `key` field.
-        let mut e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        let mut e = Environment::uniform([0.731, 0.419, 0.277], 17, 9);
         e.key = 12345; // stale mirror of an older key; the content still matches the first call.
 
         let before = env_table_bake_count();

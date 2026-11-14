@@ -157,7 +157,7 @@ thread_local! {
 /// Baked skies kept for the process, oldest first: (sun bits, turbidity bits, stars, visible, map).
 type SkyCacheEntry = ([u64; 3], u64, bool, bool, Environment);
 static SKY_CACHE: std::sync::Mutex<Vec<SkyCacheEntry>> = std::sync::Mutex::new(Vec::new());
-const SKY_CACHE_LEN: usize = 6;
+const SKY_CACHE_LEN: usize = 24;
 
 /// How many sky maps this thread has baked (not served from the cache).
 pub fn sky_bake_count() -> usize {

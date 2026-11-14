@@ -18,7 +18,7 @@ const MIN_H: u32 = 32;
 
 /// Cache for `project`, keyed by `Environment::key`.
 static SH_CACHE: Mutex<Vec<(u64, [[f32; 3]; 9])>> = Mutex::new(Vec::new());
-const SH_CACHE_LEN: usize = 8;
+const SH_CACHE_LEN: usize = 32;
 
 /// Count of SH projections performed (for tests).
 thread_local! {
@@ -228,7 +228,7 @@ mod tests {
         reset_sh_cache_for_test();
 
         // Cache by the actual environment content, not by the caller's stale key field.
-        let mut e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        let mut e = Environment::uniform([0.731, 0.419, 0.277], 17, 9);
         e.key = 9999; // stale mirror of an older key
 
         let before = sh_projection_count();
