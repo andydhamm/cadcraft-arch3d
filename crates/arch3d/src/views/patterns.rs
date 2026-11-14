@@ -401,4 +401,64 @@ mod tests {
         // A plane that misses the triangle returns None.
         assert!(segment_on_axis(&points, [1.0, 0.0, 0.0], 5.0).is_none());
     }
+
+    #[test]
+    fn empty_scene_produces_no_pattern_lines() {
+        let model = ArchModel::default();
+        let sc = Scene3d { meshes: vec![], ..Default::default() };
+        let ov = OrthoView::new([0.0, 1.0, 0.0], [0.0, 0.0, 1.0]).expect("view");
+        let lines = pattern_lines(&model, &sc, &ov);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn degenerate_triangle_does_not_crash() {
+        // All three vertices at the same point: zero-area triangle.
+        let model = ArchModel::default();
+        let mesh = Mesh {
+            positions: vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            normals: vec![[0.0, -1.0, 0.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            ..Mesh::new("wall-brick", ArchId(1))
+        };
+        let sc = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let ov = OrthoView::new([0.0, 1.0, 0.0], [0.0, 0.0, 1.0]).expect("view");
+        let lines = pattern_lines(&model, &sc, &ov);
+        // Must not panic; a zero-area triangle produces no visible segments.
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn huge_coordinates_do_not_overflow() {
+        // A brick wall far from the origin (1 km away).
+        let model = ArchModel::default();
+        let ox = 1e6_f32;
+        let oz = 1e6_f32;
+        let mesh = Mesh {
+            positions: vec![[ox, 0.0, oz], [ox + 4.0, 0.0, oz], [ox + 4.0, 0.0, oz + 2.4], [ox, 0.0, oz + 2.4]],
+            normals: vec![[0.0, -1.0, 0.0]; 4],
+            uvs: vec![[0.0, 0.0]; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            ..Mesh::new("wall-brick", ArchId(1))
+        };
+        let sc = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let ov = OrthoView::new([0.0, 1.0, 0.0], [0.0, 0.0, 1.0]).expect("view");
+        let lines = pattern_lines(&model, &sc, &ov);
+        // Must not panic or overflow; a 4m x 2.4m wall at 0.075m courses
+        // gives roughly 32 horizontal lines plus vertical joints.
+        assert!(lines.len() > 0);
+        assert!(lines.len() < 500);
+    }
+
+    #[test]
+    fn mesh_without_pattern_produces_no_lines() {
+        // A plain "wall" mesh has no pattern, so no lines should be generated.
+        let model = ArchModel::default();
+        let mesh = facing_quad("wall", ArchId(1), 0.0);
+        let sc = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let ov = OrthoView::new([0.0, 1.0, 0.0], [0.0, 0.0, 1.0]).expect("view");
+        let lines = pattern_lines(&model, &sc, &ov);
+        assert!(lines.is_empty());
+    }
 }
