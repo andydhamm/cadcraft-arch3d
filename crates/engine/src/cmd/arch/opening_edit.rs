@@ -201,4 +201,106 @@ mod tests {
         assert!(matches!(err, EngineError::BadParams { .. }));
         assert_eq!(s2.doc().unwrap().arch.openings[0].style, "hinged");
     }
+
+    #[test]
+    fn edit_unknown_opening_id_is_refused() {
+        let mut s = with_window();
+        let err = s.execute("opening.edit", &json!({"id": "o99", "width": 1.5})).unwrap_err();
+        assert!(matches!(err, EngineError::BadParams { .. }));
+        assert_eq!(s.doc().unwrap().arch.openings.len(), 1);
+    }
+
+    #[test]
+    fn edit_bad_id_format_is_refused() {
+        let mut s = with_window();
+        for id in ["x0", "o", "o1a", "0", "o-1", ""] {
+            let err = s.execute("opening.edit", &json!({"id": id, "width": 1.5})).unwrap_err();
+            assert!(matches!(err, EngineError::BadParams { .. }), "id `{id}` should be refused");
+        }
+        assert_eq!(s.doc().unwrap().arch.openings.len(), 1);
+    }
+
+    #[test]
+    fn edit_multiple_keys_at_once() {
+        let mut s = with_window();
+        let r = s.execute("opening.edit", &json!({"id": "o0", "width": 1.5, "height": 1.0, "sill": 1.2, "style": "casement"})).unwrap();
+        assert_eq!(r["width"], json!(1.5));
+        assert_eq!(r["height"], json!(1.0));
+        assert_eq!(r["sill"], json!(1.2));
+        assert_eq!(r["style"], json!("casement"));
+        let opening = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        assert!((opening.width - 1.5).abs() < 1e-9);
+        assert!((opening.height - 1.0).abs() < 1e-9);
+        assert!((opening.sill - 1.2).abs() < 1e-9);
+        assert_eq!(opening.style, "casement");
+        assert!((opening.rough_width - 1.62).abs() < 1e-9);
+        assert!((opening.rough_height - 1.12).abs() < 1e-9);
+    }
+
+    #[test]
+    fn edit_null_values_treated_as_not_provided() {
+        let mut s = with_window();
+        let err = s.execute("opening.edit", &json!({"id": "o0", "width": null})).unwrap_err();
+        assert!(matches!(err, EngineError::BadParams { .. }));
+        let opening = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        assert!((opening.width - 1.2).abs() < 1e-9, "width should be unchanged");
+    }
+
+    #[test]
+    fn edit_non_numeric_width_is_refused() {
+        let mut s = with_window();
+        let err = s.execute("opening.edit", &json!({"id": "o0", "width": "abc"})).unwrap_err();
+        assert!(matches!(err, EngineError::BadParams { .. }));
+        let opening = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        assert!((opening.width - 1.2).abs() < 1e-9, "width should be unchanged");
+    }
+
+    #[test]
+    fn edit_sill_only_keeps_rough_dimensions() {
+        let mut s = with_window();
+        let before = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        let _ = s.execute("opening.edit", &json!({"id": "o0", "sill": 1.5})).unwrap();
+        let after = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        assert!((after.sill - 1.5).abs() < 1e-9);
+        assert!((after.rough_width - before.rough_width).abs() < 1e-9, "rough_width should be unchanged");
+        assert!((after.rough_height - before.rough_height).abs() < 1e-9, "rough_height should be unchanged");
+    }
+
+    #[test]
+    fn edit_style_only_keeps_rough_dimensions() {
+        let mut s = with_window();
+        let before = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        let _ = s.execute("opening.edit", &json!({"id": "o0", "style": "casement"})).unwrap();
+        let after = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        assert_eq!(after.style, "casement");
+        assert!((after.rough_width - before.rough_width).abs() < 1e-9, "rough_width should be unchanged");
+        assert!((after.rough_height - before.rough_height).abs() < 1e-9, "rough_height should be unchanged");
+    }
+
+    #[test]
+    fn edit_zero_width_is_refused() {
+        let mut s = with_window();
+        let err = s.execute("opening.edit", &json!({"id": "o0", "width": 0.0})).unwrap_err();
+        assert!(matches!(err, EngineError::BadParams { .. }));
+        let opening = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        assert!((opening.width - 1.2).abs() < 1e-9, "width should be unchanged");
+    }
+
+    #[test]
+    fn edit_negative_sill_is_refused() {
+        let mut s = with_window();
+        let err = s.execute("opening.edit", &json!({"id": "o0", "sill": -0.1})).unwrap_err();
+        assert!(matches!(err, EngineError::BadParams { .. }));
+        let opening = s.doc().unwrap().arch.opening(ArchId(0)).unwrap();
+        assert!((opening.sill - 0.9).abs() < 1e-9, "sill should be unchanged");
+    }
+
+    #[test]
+    fn edit_reply_includes_revision() {
+        let mut s = with_window();
+        let r = s.execute("opening.edit", &json!({"id": "o0", "width": 1.5})).unwrap();
+        let rev = r["revision"].as_u64().expect("revision should be a number");
+        let d = s.doc().unwrap();
+        assert_eq!(rev, d.arch_revision, "revision in response should match doc revision");
+    }
 }
