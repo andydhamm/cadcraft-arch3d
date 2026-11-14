@@ -1450,4 +1450,34 @@ mod tests {
         };
         assert!(count <= ENV_CACHE_CAP, "cache must hold at most {ENV_CACHE_CAP} entries, got {count}");
     }
+
+    #[test]
+    fn hidden_set_key_differs_from_full_filter_key() {
+        use cadcraft_engine::doc::arch::ClipBox;
+        let full = ViewFilter { hidden: vec![1, 2, 3], clip: Some(ClipBox::default()), near: Some(5.0), ..Default::default() };
+        let only_hidden = hidden_set_key(&full);
+        let full_key = full.key();
+        assert_ne!(only_hidden, full_key);
+    }
+
+    #[test]
+    fn filtered_scene_key_is_distinct_from_revision() {
+        let key = filtered_scene_key(42, 123);
+        assert_ne!(key, 42);
+        assert_ne!(key, 123);
+        // High bit is set to distinguish filtered keys from plain revisions.
+        assert!(key >> 63 == 1);
+        // Deterministic.
+        assert_eq!(filtered_scene_key(42, 123), key);
+    }
+
+    #[test]
+    fn distance_edge_cases() {
+        let a = Vec3::new(0.0, 0.0, 0.0);
+        let b = Vec3::new(3.0, 4.0, 0.0);
+        assert!((distance(a, b) - 5.0).abs() < 1e-9);
+        assert_eq!(distance(a, a), 0.0);
+        let nan = Vec3::new(f64::NAN, 0.0, 0.0);
+        assert!(distance(a, nan).is_nan());
+    }
 }

@@ -445,4 +445,26 @@ mod tests {
         assert!((lux - 0.25).abs() < 1e-6);
         assert!((moon_dir[2] - el.to_radians().sin()).abs() < 1e-6);
     }
+
+    #[test]
+    fn lights_hash_is_deterministic() {
+        let l1 = four();
+        let l2 = four();
+        assert_eq!(lights_hash(&scene(l1)), lights_hash(&scene(l2)));
+    }
+
+    #[test]
+    fn lights_hash_changes_when_lights_change() {
+        let l1 = four();
+        let mut l2 = four();
+        l2[0].position = Vec3::new(99.0, 99.0, 3.0);
+        assert_ne!(lights_hash(&scene(l1)), lights_hash(&scene(l2)));
+    }
+
+    #[test]
+    fn lights_hash_empty_scene() {
+        let s = scene(vec![]);
+        let h = lights_hash(&s);
+        assert_eq!(h, lights_hash(&s));
+    }
 }
