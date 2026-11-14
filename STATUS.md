@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-14 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 42 of 44 segments merged · 19 of 20 acceptance checks**
 
-10,291 workspace tests passing at the last merge · 1167 segments merged in all · 0 of 15 seats working
+10,298 workspace tests passing at the last merge · 1169 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,8 +28,8 @@ Updated 2026-11-14 16:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 83.3 h so far · expected done Nov 15 02:21–Dec 01 04:12 UTC |
-| 19 | Light, sky and cameras | building | 11 / 17 | — |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 83.5 h so far · expected done Nov 15 02:36–Dec 01 04:27 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
@@ -45,6 +45,8 @@ Updated 2026-11-14 16:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 14 16:55 | `harden-p19j-demo-overview-standard-look` | merged | 10,298 pass | tturbo-mac |
+| Nov 14 16:55 | `p19h-pt-diffuse-grazing` | merged | 10,298 pass | mai-flash |
 | Nov 14 16:24 | `harden-p19h-cutaway-hide-by-kind` | merged | 10,291 pass | tturbo-mac |
 | Nov 14 16:24 | `p19h-seeing-in-interactive-pass` | merged | 10,291 pass | mai-flash-esc |
 | Nov 14 15:47 | `p19h-pt-spec-albedo-table` | merged | 10,282 pass | mai-flash-esc |
@@ -55,8 +57,6 @@ Updated 2026-11-14 16:45 UTC. This page and the card in the README are regenerat
 | Nov 14 14:01 | `p19j-demo-overview-standard-look` | merged | 10,269 pass | bonsai-a |
 | Nov 14 14:01 | `p19h-cutaway-hide-by-kind` | merged | 10,269 pass | darwin-ws3 |
 | Nov 14 13:25 | `harden-p21f-interior-cabinet-front` | refused | 10,259 pass | tturbo-mac |
-| Nov 14 12:51 | `harden-p15-arch-outlet-runs` | merged | 10,252 pass | tturbo-mac2 |
-| Nov 14 12:51 | `harden-p16-demo` | merged | 10,252 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
@@ -75,5 +75,5 @@ Updated 2026-11-14 16:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 121 |
 | mai-flash-b | mai-code-1.1-flash | idle | 73 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 141 |
-| tturbo-mac | tturbo-ultraheretic | agent | 896 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 567 |
+| tturbo-mac | tturbo-ultraheretic | agent | 897 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 568 |
