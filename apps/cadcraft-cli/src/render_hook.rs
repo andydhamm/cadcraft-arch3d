@@ -256,7 +256,7 @@ fn environment_cached(
     sun_dir.map(|d| d.map(f64::to_bits)).hash(&mut h);
     revision.hash(&mut h);
     let key = h.finish();
-    if let Ok(guard) = ENV_CACHE.lock() {
+    if let Ok(mut guard) = ENV_CACHE.lock() {
         if let Some(idx) = guard.iter().position(|(k, _)| *k == key) {
             let (_, env) = guard.remove(idx);
             guard.push((key, env.clone()));
