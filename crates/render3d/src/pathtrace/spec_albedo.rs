@@ -305,4 +305,88 @@ mod tests {
         let count = count_float_literals(&s1);
         assert_eq!(count, 2 * SPEC_E_N * SPEC_E_N, "unexpected literal count: {count}");
     }
+
+    #[test]
+    fn spec_albedo_clamps_hostile_input() {
+        // Out of range values are clamped to [0, 1].
+        let (a_hi, b_hi) = spec_albedo_terms(1.5, 0.5);
+        let (a_one, b_one) = spec_albedo_terms(1.0, 0.5);
+        assert_eq!(a_hi, a_one, "roughness > 1 clamped");
+        assert_eq!(b_hi, b_one, "roughness > 1 clamped");
+
+        let (a_lo, b_lo) = spec_albedo_terms(-0.2, 0.5);
+        let (a_zero, b_zero) = spec_albedo_terms(0.0, 0.5);
+        assert_eq!(a_lo, a_zero, "roughness < 0 clamped");
+        assert_eq!(b_lo, b_zero, "roughness < 0 clamped");
+
+        // Non-finite values are treated as 0.0 (clamp_f64), never panic.
+        for (r, n) in
+            [(f64::NAN, 0.5), (f64::INFINITY, 0.5), (f64::NEG_INFINITY, 0.5), (0.5, f64::NAN), (0.5, f64::INFINITY), (0.5, f64::NEG_INFINITY)]
+        {
+            let (a, b) = spec_albedo_terms(r, n);
+            assert!(a.is_finite() && b.is_finite(), "terms({r}, {n}) not finite");
+            assert!(a >= 0.0 && a <= 1.0, "a out of range for ({r}, {n})");
+            assert!(b >= 0.0 && b <= 1.0, "b out of range for ({r}, {n})");
+        }
+    }
+
+    #[test]
+    fn spec_albedo_boundary_values() {
+        // Roughness exactly 0 (perfectly smooth, alpha = ALPHA_MIN).
+        let (a0, b0) = spec_albedo_terms(0.0, 0.5);
+        assert!(a0.is_finite() && b0.is_finite());
+        assert!(a0 >= 0.0 && a0 <= 1.0);
+        assert!(b0 >= 0.0 && b0 <= 1.0);
+
+        // Roughness exactly 1 (maximally rough).
+        let (a1, b1) = spec_albedo_terms(1.0, 0.5);
+        assert!(a1.is_finite() && b1.is_finite());
+        assert!(a1 >= 0.0 && a1 <= 1.0);
+        assert!(b1 >= 0.0 && b1 <= 1.0);
+
+        // View angle 0 (straight on, nov = 1).
+        let (a2, b2) = spec_albedo_terms(0.5, 1.0);
+        assert!(a2.is_finite() && b2.is_finite());
+
+        // View angle at the minimum (grazing, nov = NOV_MIN).
+        let (a3, b3) = spec_albedo_terms(0.5, NOV_MIN);
+        assert!(a3.is_finite() && b3.is_finite());
+
+        // A: the lobe reflectance at normal incidence (nov = 1) should be close to 1 for smooth,
+        // lower for rough.
+        let (a_smooth, _) = spec_albedo_terms(0.05, 1.0);
+        let (a_rough, _) = spec_albedo_terms(0.95, 1.0);
+        assert!(a_smooth > a_rough, "smooth lobe reflects more at normal incidence");
+    }
+
+    #[test]
+    fn spec_albedo_lookup_at_table_corners() {
+        let table = spec_albedo_table();
+
+        // All four corners of the bilinear grid.
+        let (a00, b00) = spec_albedo_lookup(table, 0.0, 0.0);
+        let (a10, b10) = spec_albedo_lookup(table, 1.0, 0.0);
+        let (a01, b01) = spec_albedo_lookup(table, 0.0, 1.0);
+        let (a11, b11) = spec_albedo_lookup(table, 1.0, 1.0);
+        for (a, b, label) in [(a00, b00, "0,0"), (a10, b10, "1,0"), (a01, b01, "0,1"), (a11, b11, "1,1")] {
+            assert!(a.is_finite() && b.is_finite(), "corner {label} not finite");
+            assert!(a >= 0.0 && a <= 1.0, "a out of range at corner {label}");
+            assert!(b >= 0.0 && b <= 1.0, "b out of range at corner {label}");
+        }
+
+        // Out of range clamps to the nearest edge.
+        let (a_neg, b_neg) = spec_albedo_lookup(table, -0.5, -0.5);
+        assert_eq!(a_neg, a00, "negative roughness clamps to 0");
+        assert_eq!(b_neg, b00, "negative nov clamps to 0");
+
+        let (a_big, b_big) = spec_albedo_lookup(table, 1.5, 1.5);
+        assert_eq!(a_big, a11, "roughness > 1 clamps to 1");
+        assert_eq!(b_big, b11, "nov > 1 clamps to 1");
+
+        // Interior point: bilinear interpolation should be between the corners.
+        let (a_mid, b_mid) = spec_albedo_lookup(table, 0.5, 0.5);
+        assert!(a_mid.is_finite() && b_mid.is_finite());
+        assert!(a_mid >= a00.min(a10.min(a01.min(a11))) - 1e-6);
+        assert!(a_mid <= a00.max(a10.max(a01.max(a11))) + 1e-6);
+    }
 }
