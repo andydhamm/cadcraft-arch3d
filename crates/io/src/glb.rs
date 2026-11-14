@@ -2942,6 +2942,83 @@ mod tests {
     }
 
     #[test]
+    fn multiple_strip_fixtures_get_distinct_nodes() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-strip".to_string();
+            m.object = ArchId(0);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-strip".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert_eq!(mesh_names, vec!["light-lf0", "light-lf1"]);
+        let node_names: Vec<String> = json["nodes"].as_array().unwrap().iter().skip(1).filter_map(|n| n["name"].as_str()).map(String::from).collect();
+        assert_eq!(node_names, vec!["light-lf0", "light-lf1"]);
+    }
+
+    #[test]
+    fn strip_segments_share_one_node() {
+        let mut scene = Scene3d::default();
+        for _ in 0..3 {
+            scene.meshes.push({
+                let mut m = wall_mesh();
+                m.material = "light-strip".to_string();
+                m.object = ArchId(2);
+                m
+            });
+        }
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert_eq!(mesh_names, vec!["light-lf2"]);
+        let mesh = &json["meshes"].as_array().unwrap()[0];
+        assert_eq!(mesh["primitives"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn strip_mixed_with_trim_and_lens_fixtures() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-strip".to_string();
+            m.object = ArchId(0);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-lens".to_string();
+            m.object = ArchId(0);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-trim".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "light-lens".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert_eq!(mesh_names, vec!["light-lf0", "light-lf0-lens", "light-lf1", "light-lf1-lens"]);
+        let node_names: Vec<String> = json["nodes"].as_array().unwrap().iter().skip(1).filter_map(|n| n["name"].as_str()).map(String::from).collect();
+        assert_eq!(node_names, vec!["light-lf0", "light-lf0-lens", "light-lf1", "light-lf1-lens"]);
+    }
+
+    #[test]
     fn finish_wall_material_exports_normal_texture() {
         let mut scene = scene_with(0);
         scene.meshes.push({
