@@ -517,7 +517,7 @@ mod tests {
         // There must be at least one line strictly inside the front rectangle (the door edge).
         let top = 0.914;
         let inner = cab.iter().any(|l| {
-            let strictly_inside = |p: [f64; 2]| p[0] > -2.3 + 1e-3 && p[0] < -1.7 - 1e-3 && p[1] > 1e-3 && p[1] < top - 1e-3;
+            let strictly_inside = |p: &[f64; 2]| p[0] > -2.3 + 1e-3 && p[0] < -1.7 - 1e-3 && p[1] > 1e-3 && p[1] < top - 1e-3;
             [l.a, l.b].iter().any(strictly_inside)
         });
         assert!(inner, "expected an inner front line (door edge)");
