@@ -1238,7 +1238,7 @@ mod tests {
         };
         {
             let d = s.doc_mut().unwrap();
-            d.arch.push_level(cadcraft_doc::arch::Level { index: 1, elevation: 2.7, ..Default::default() });
+            d.arch.levels.push(cadcraft_doc::arch::Level { index: 1, elevation: 2.7, ..Default::default() });
             d.arch.cabinets.push(base);
             d.arch.cabinets.push(wall);
         }
