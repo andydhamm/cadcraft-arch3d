@@ -304,9 +304,7 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
             Some(s) => job.target.build_shadow(&job.scene, job.key, &s, job.ground),
             None => None,
         };
-        let sh = job.lighting.environment.as_deref()
-            .filter(|e| e.is_valid())
-            .and_then(crate::frame_look::env_sh);
+        let sh = job.lighting.environment.as_deref().filter(|e| e.is_valid()).and_then(crate::frame_look::env_sh);
         let params = crate::lit::LitParams {
             sh,
             sun_on: sun.is_some(),
@@ -869,10 +867,7 @@ mod tests {
         // Verify that frame_look::env_sh returns non-None for a uniform environment.
         assert!(crate::frame_look::env_sh(&env).is_some(), "env_sh must return coefficients for a valid env");
         // The ambient in the final frame must be 0 under an environment.
-        let f = crate::frame_look::FrameLook {
-            ambient_lux: 0.0,
-            ..crate::frame_look::FrameLook::default()
-        };
+        let f = crate::frame_look::FrameLook { ambient_lux: 0.0, ..crate::frame_look::FrameLook::default() };
         let mut scene = scene_no_lights();
         let mut meter = crate::frame_look::Meter::default();
         let f = crate::frame_look::frame_look(&scene, &camera(), (SIZE.0, SIZE.1), &lighting, false, &mut meter);
@@ -903,7 +898,13 @@ mod tests {
             eprintln!("SKIP: no lit frame");
             return;
         };
-        o.render_with(&scene_no_lights(), 1, &camera, &crate::light::Light::DEFAULT, &crate::offscreen::RenderOptions { lit: Some(&frame), ..Default::default() });
+        o.render_with(
+            &scene_no_lights(),
+            1,
+            &camera,
+            &crate::light::Light::DEFAULT,
+            &crate::offscreen::RenderOptions { lit: Some(&frame), ..Default::default() },
+        );
         let (w, h) = o.size();
         let Ok(img) = o.read_rgba() else { return };
         let at = ((h / 2 * w + w / 2) * 4) as usize;
@@ -929,7 +930,7 @@ mod tests {
             assert!((a[1] - b[1]).abs() < 0.02, "interactive {a:?} vs finalize {b:?} differ");
             assert!((a[2] - b[2]).abs() < 0.02, "interactive {a:?} vs finalize {b:?} differ");
         } else {
-            eprintln!("SKIP: projection missed the plane: interactive={:?}", interactive, finalize={:?}", finalize);
+            eprintln!("SKIP: projection missed the plane: interactive={:?} finalize={:?}", interactive, finalize);
         }
     }
 
