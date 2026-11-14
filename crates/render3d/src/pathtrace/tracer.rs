@@ -1123,7 +1123,7 @@ fn run_entry_on(
 
 #[cfg(test)]
 mod tests {
-    use super::super::scene_gpu::FRAME_LAMBERT;
+    use super::super::scene_gpu::{FRAME_ENV, FRAME_LAMBERT};
     use super::super::*;
     use super::*;
     use crate::camera::{Camera, Orbit};
