@@ -782,7 +782,8 @@ fn strip_gpu_light_position_is_offset_along_normal() {
     let l = &scene.lights[0];
     // The position is offset 7 mm along the emitting normal (down), so z = 2.0 - 0.007.
     assert!((l.position[2] - (2.0 - 0.007)).abs() < 1e-6, "z offset wrong: {}", l.position[2]);
-    assert!((l.position[0] - 0.0).abs() < 1e-6, "x should be at the start: {}", l.position[0]);
+    // strip_runs extends the run by half the average spacing (0.5) on each end, so the run starts at x = -0.5.
+    assert!((l.position[0] - (-0.5)).abs() < 1e-6, "x should be at the run start (-0.5): {}", l.position[0]);
 }
 
 #[test]
