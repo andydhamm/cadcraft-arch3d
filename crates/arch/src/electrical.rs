@@ -296,4 +296,91 @@ mod tests {
         let b = device_symbol(&model, &d);
         assert_eq!(a, b);
     }
+
+    #[test]
+    fn a_right_side_device_faces_the_other_way() {
+        let mut model = ArchModel::default();
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice { wall: w, side: WallSide::Right, offset: 1.5, height: 0.3, ..Default::default() };
+        let p = place_device(&model, &d).unwrap();
+        assert!((p.at.x - 1.5).abs() < 1e-9);
+        assert!((p.at.y + 0.1).abs() < 1e-9);
+        assert!((p.normal.x - 0.0).abs() < 1e-9 && (p.normal.y + 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_device_on_an_angled_wall_follows_the_wall() {
+        let mut model = ArchModel::default();
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(3.0, 4.0));
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 2.5, height: 0.3, ..Default::default() };
+        let p = place_device(&model, &d).unwrap();
+        // Wall direction is (0.6, 0.8), perp is (-0.8, 0.6)
+        let expected_at = Vec2::new(0.0, 0.0) + Vec2::new(0.6, 0.8) * 2.5 + Vec2::new(-0.8, 0.6) * 0.1;
+        assert!((p.at.x - expected_at.x).abs() < 1e-9);
+        assert!((p.at.y - expected_at.y).abs() < 1e-9);
+        assert!((p.along.x - 0.6).abs() < 1e-9 && (p.along.y - 0.8).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_counter_outlet_with_no_counter_is_refused() {
+        let mut model = ArchModel::default();
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, counter: true, ..Default::default() };
+        let r = place_device(&model, &d);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn a_plate_above_the_wall_top_is_refused() {
+        let mut model = ArchModel::default();
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 2.5, ..Default::default() };
+        let r = place_device(&model, &d);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn an_opening_not_reaching_the_floor_is_allowed() {
+        let mut model = ArchModel::default();
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        model.openings.push(Opening { host: w, offset: 1.5, width: 1.0, height: 1.0, sill: 0.9, kind: OpeningKind::Window, ..Default::default() });
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 0.3, ..Default::default() };
+        let r = place_device(&model, &d);
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn device_room_returns_none_when_no_room_exists() {
+        let mut model = ArchModel::default();
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, ..Default::default() };
+        assert!(device_room(&model, &d).is_none());
+    }
+
+    #[test]
+    fn device_symbols_have_the_correct_number_of_polylines() {
+        let mut model = ArchModel::default();
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+
+        let base = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, ..Default::default() };
+        assert_eq!(device_symbol(&model, &base).len(), 4, "base (duplex by default): circle + line + 2 parallel lines");
+
+        let duplex = ElectricalDevice { kind: ElectricalKind::Duplex, ..base };
+        assert_eq!(device_symbol(&model, &duplex).len(), 4, "duplex: + 2 parallel lines");
+
+        let gfci = ElectricalDevice { kind: ElectricalKind::Gfci, ..base };
+        assert_eq!(device_symbol(&model, &gfci).len(), 5, "gfci: + 2 lines + square");
+
+        let outlet240 = ElectricalDevice { kind: ElectricalKind::Outlet240, ..base };
+        assert_eq!(device_symbol(&model, &outlet240).len(), 3, "240v: + triangle");
+
+        let single = ElectricalDevice { kind: ElectricalKind::SinglePole, ..base };
+        assert_eq!(device_symbol(&model, &single).len(), 3, "single pole: + S shape");
+
+        let three = ElectricalDevice { kind: ElectricalKind::ThreeWay, ..base };
+        assert_eq!(device_symbol(&model, &three).len(), 5, "three way: + S + 3 tick");
+
+        let dimmer = ElectricalDevice { kind: ElectricalKind::Dimmer, ..base };
+        assert_eq!(device_symbol(&model, &dimmer).len(), 4, "dimmer: + S + arrow");
+    }
 }

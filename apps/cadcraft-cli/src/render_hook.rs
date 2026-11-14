@@ -219,6 +219,14 @@ fn shadow_casting_lights(scene: &Scene3d) -> usize {
     scene.lights.iter().filter(|l| l.kind != cadcraft_arch3d::light::LightKind::Strip).count()
 }
 
+/// The moon direction used to light the scene. An HDRI backdrop (from the look, falling back to the
+/// model) replaces the analytic sky, so its moon is withheld; otherwise the analytic sky's moon direction
+/// is used.
+fn moon_dir_for(model: &cadcraft_engine::doc::arch::ArchModel, look: &Look) -> Option<[f64; 3]> {
+    let eff = look.backdrop.as_ref().or(model.backdrop.as_ref());
+    if matches!(eff, Some(cadcraft_engine::doc::arch::Backdrop::Hdri { .. })) { None } else { cadcraft_arch3d::sky::moon_dir(model, &look.sky.moon) }
+}
+
 /// `<out without .png>-spp<n>.png`.
 fn snapshot_path(out: &std::path::Path, spp: u32) -> std::path::PathBuf {
     let stem = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -316,7 +324,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         cadcraft_arch3d::set_backdrop(&req.drawing.arch, f, look.backdrop.as_ref());
         (&*f, filtered_scene_key(revision, hidden_key))
     };
-    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let moon_dir = moon_dir_for(&req.drawing.arch, &look);
     let mut lighting = lighting_for(&look, sun_dir, req.budget).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, revision, &look, sun_dir);
     // The calibration albedo, the metered night (all but the legacy `sun: false`) and a bare-number
@@ -499,7 +507,7 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
     let (look, sun_dir) = req.resolved_sun();
-    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let moon_dir = moon_dir_for(&req.drawing.arch, &look);
     let mut lighting = lighting_for(&look, sun_dir, 8).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, req.drawing.arch_revision, &look, sun_dir);
     let opts = path_options(&req.path, &look, None);
@@ -1473,6 +1481,49 @@ mod tests {
         assert!(key >> 63 == 1);
         // Deterministic.
         assert_eq!(filtered_scene_key(42, 123), key);
+    }
+
+    #[test]
+    fn an_hdri_backdrop_withholds_the_moon() {
+        use cadcraft_engine::doc::arch::{ArchModel, Backdrop};
+
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Hdri { image: "any.hdr".to_string(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+
+        assert_eq!(moon_dir_for(&model, &look), None);
+        let lighting = lighting_for(&look, None, 8).with_moon(moon_dir_for(&model, &look));
+        assert!(lighting.moon.is_none());
+        assert_eq!(lighting.sun, None);
+
+        let mut model2 = ArchModel::default();
+        model2.backdrop = Some(Backdrop::Sky);
+        let mut look2 = look.clone();
+        look2.backdrop = Some(Backdrop::Hdri { image: "any.hdr".to_string(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+
+        assert_eq!(moon_dir_for(&model2, &look2), None);
+        let lighting2 = lighting_for(&look2, None, 8).with_moon(moon_dir_for(&model2, &look2));
+        assert!(lighting2.moon.is_none());
+        assert_eq!(lighting2.sun, None);
+    }
+
+    #[test]
+    fn a_sky_backdrop_night_keeps_the_moon() {
+        use cadcraft_engine::doc::arch::{ArchModel, Backdrop};
+
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Sky);
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+
+        let moon = moon_dir_for(&model, &look);
+        assert!(moon.is_some(), "sky backdrop should keep the moon");
+        let lighting = lighting_for(&look, None, 8).with_moon(moon);
+        assert!(lighting.moon.is_some(), "moon should be used as the directional light when the sun is off");
+        assert_eq!(lighting.moon.map(|(_, lux)| lux), Some(0.25), "moon lux should be 0.25");
     }
 
     #[test]
