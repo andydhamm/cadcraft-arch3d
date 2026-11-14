@@ -49,6 +49,11 @@ fn phase19_demo_replays_without_error() {
 }
 
 #[test]
+fn phase19_demo_replays_without_an_error() {
+    replay_demo();
+}
+
+#[test]
 fn phase19_demo_saves_three_cameras_with_their_own_looks() {
     let mut session = replay_demo();
     let inspect = session.execute("arch.inspect", &json!({ "cameras": true, "sunAngles": true })).expect("arch.inspect should list cameras");
@@ -266,6 +271,19 @@ fn phase19_demo_steps_are_well_formed() {
     let want: std::collections::BTreeMap<String, String> =
         [("dusk", "full"), ("noon-hdri", "full"), ("overview", "overview")].iter().map(|(n, k)| (n.to_string(), k.to_string())).collect();
     assert_eq!(saved, want, "exactly three saved cameras");
+}
+
+#[test]
+fn phase19_demo_steps_have_cmd_and_params() {
+    let steps = load_demo_steps();
+    assert!(!steps.is_empty(), "demo script should not be empty");
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = step.get("cmd").and_then(Value::as_str);
+        assert!(cmd.is_some(), "step {i} missing string cmd: {step:?}");
+        let params = step.get("params");
+        assert!(params.is_some(), "step {i} missing params: {step:?}");
+        assert!(params.unwrap().is_object(), "step {i} params should be an object: {step:?}");
+    }
 }
 
 #[test]
