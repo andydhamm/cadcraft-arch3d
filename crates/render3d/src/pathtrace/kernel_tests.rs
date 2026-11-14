@@ -4,8 +4,9 @@
 //! `build_gpu_scene`. The AOV test dispatches by hand because `run_entry` does not read them back.
 
 use super::device::ComputeGpu;
-use super::scene_gpu::{FRAME_FURNACE, FRAME_SUN, GpuFrame, GpuProbe, GpuScene, build_gpu_scene, material_for};
+use super::scene_gpu::{FRAME_FURNACE, FRAME_SUN, GpuFrame, GpuMaterial, GpuProbe, GpuScene, build_gpu_scene, material_for};
 use super::shaders::{PtPipelines, kernel_source};
+use super::spec_albedo::{spec_albedo_lookup, spec_albedo_table};
 use super::tracer::{run_entry, upload_scene};
 use super::{Furnace, luminance};
 use crate::types::{ArchId, Mesh, Scene3d};
@@ -19,6 +20,39 @@ fn gpu_or_skip() -> Option<ComputeGpu> {
         eprintln!("SKIP: no compute device");
     }
     gpu
+}
+
+fn opaque(albedo: [f32; 3], metallic: f32, roughness: f32, ior: f32) -> GpuMaterial {
+    GpuMaterial { albedo, metallic, roughness, ior, ..Default::default() }
+}
+
+fn toward(deg: f64) -> [f32; 3] {
+    let r = deg.to_radians();
+    [r.sin() as f32, 0.0, r.cos() as f32]
+}
+
+fn probe(material: usize, wo: [f32; 3], samples: u32) -> GpuProbe {
+    GpuProbe { point: wo, _a: material as f32, normal: [0.0, 0.0, 1.0], _b: samples as f32, ..Default::default() }
+}
+
+fn run_bsdf(entry: &str, materials: Vec<GpuMaterial>, probes: &[GpuProbe]) -> Option<Vec<[f32; 4]>> {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("SKIP: no compute device");
+        return None;
+    };
+    let scene = GpuScene { materials, ..Default::default() };
+    let buffers = upload_scene(&gpu, &scene);
+    let frame = GpuFrame { probe_count: probes.len() as u32, seed: 11, ..Default::default() };
+    match run_entry(&gpu, &buffers, entry, &frame, probes) {
+        Ok(out) => {
+            assert_eq!(out.len(), probes.len());
+            Some(out)
+        }
+        Err(e) => {
+            assert!(false, "{entry}: {e}");
+            None
+        }
+    }
 }
 
 fn prism(material: &str, object: u32, min: [f32; 3], max: [f32; 3]) -> Mesh {
@@ -285,6 +319,102 @@ fn a_seed_fixes_every_sample() {
             assert!((whole[k][c] - sum).abs() <= 1e-3 * (1.0 + sum.abs()), "pixel {k}: {whole:?}");
         }
     }
+}
+
+#[test]
+fn bsdf_spec_albedo_matches_the_cpu_table() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let material = opaque([1.0, 1.0, 1.0], 0.0, 0.95, 1.5);
+    let table = spec_albedo_table();
+    let probes: Vec<GpuProbe> = [60.0, 84.5, 88.6].iter().map(|deg| probe(0, toward(*deg), 4096)).collect();
+    let Some(out) = run_bsdf("bsdf_test_main", vec![material], &probes) else {
+        return;
+    };
+    for (idx, deg) in [60.0_f64, 84.5, 88.6].iter().enumerate() {
+        let nov = (*deg).to_radians().cos() as f32;
+        let (a, b) = spec_albedo_lookup(&table, 0.95, nov);
+        let e = 0.04 * a as f64 + 0.96 * b as f64;
+        let mean = ((out[idx][0] as f64 + out[idx][1] as f64 + out[idx][2] as f64) / 3.0);
+        assert!(mean >= 1.0 - e - 0.03, "{} deg: mean {} below 1-E-0.03 ({})", deg, mean, 1.0 - e);
+        assert!(mean <= 1.001, "{} deg: mean {} exceeds 1.001", deg, mean);
+        if *deg >= 88.6 {
+            assert!(mean >= 0.75, "{} deg: mean {} dropped below 0.75", deg, mean);
+        }
+    }
+}
+
+#[test]
+fn path_horizon_plane_matches_flat_terrain_radiance() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = Scene3d::default();
+    scene.meshes.push(prism("terrain", 1, [0.0, 0.0, -0.1], [40.0, 30.0, 0.0]));
+    let mut horizon = Mesh::new("terrain", ArchId(2));
+    horizon.positions = vec![[-9500.0, -9500.0, 0.0], [9500.0, -9500.0, 0.0], [9500.0, 9500.0, 0.0], [-9500.0, 9500.0, 0.0]];
+    horizon.indices = vec![0, 1, 2, 0, 2, 3];
+    scene.horizon = Some(horizon);
+    let scene = build_gpu_scene(&scene, false, None);
+    let eye = [20.0f32, 5.0, 1.6];
+    let normalize = |v: [f32; 3]| {
+        let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        if len > 0.0 { [v[0] / len, v[1] / len, v[2] / len] } else { [0.0, 0.0, 1.0] }
+    };
+    let trace_mean = |target: [f32; 3]| {
+        let dir = normalize([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]);
+        let right = normalize([dir[1], -dir[0], 0.0]);
+        let up = normalize([dir[1] * right[2] - dir[2] * right[1], dir[2] * right[0] - dir[0] * right[2], dir[0] * right[1] - dir[1] * right[0]]);
+        let frame = GpuFrame {
+            flags: FRAME_SUN,
+            sun_dir: [0.3, -0.4, 0.86, 0.0],
+            sun_rgb: [1.0e6, 1.0e6, 1.0e6, 0.0],
+            bounces: 0,
+            spp_this_pass: 64,
+            seed: 23,
+            ..camera_frame(eye, dir, right, up)
+        };
+        let out = trace(&gpu, &scene, &frame);
+        let mut sum = [0.0f64; 3];
+        for px in &out {
+            sum[0] += f64::from(px[0]) / 64.0;
+            sum[1] += f64::from(px[1]) / 64.0;
+            sum[2] += f64::from(px[2]) / 64.0;
+        }
+        [sum[0] / out.len() as f64, sum[1] / out.len() as f64, sum[2] / out.len() as f64]
+    };
+    let near = trace_mean([36.0, 5.0, 0.0]);
+    let far = trace_mean([86.0, 5.0, 0.0]);
+    for c in 0..3 {
+        assert!(near[c] > 0.0 && far[c] > 0.0, "radiance channel {c} is non-positive: near={near:?} far={far:?}");
+        assert!((near[c] - far[c]).abs() <= 0.2 * near[c].max(far[c]), "channel {c}: near={} far={}", near[c], far[c]);
+    }
+}
+
+#[test]
+fn path_horizon_plane_shadow_ray_starts_above_the_plane() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = Scene3d::default();
+    scene.meshes.push(prism("terrain", 1, [0.0, 0.0, -0.1], [40.0, 30.0, 0.0]));
+    let mut horizon = Mesh::new("terrain", ArchId(2));
+    horizon.positions = vec![[-9500.0, -9500.0, 1.0], [9500.0, -9500.0, 1.0], [9500.0, 9500.0, 1.0], [-9500.0, 9500.0, 1.0]];
+    horizon.indices = vec![0, 1, 2, 0, 2, 3];
+    scene.horizon = Some(horizon);
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let eye = [20.0f32, 5.0, 1.6];
+    let target = [86.0f32, 5.0, 1.0];
+    let dir = [target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]];
+    let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+    let dir = [dir[0] / len, dir[1] / len, dir[2] / len];
+    let hit = gpu_scene.trace_cpu(eye, dir, 1e30).unwrap();
+    let hit_p = [eye[0] + dir[0] * hit.t, eye[1] + dir[1] * hit.t, eye[2] + dir[2] * hit.t];
+    let n = gpu_scene.tris[hit.tri as usize].n;
+    let scale = 1e-4 * (1.0f32).max(hit_p.iter().map(|v| v.abs()).fold(0.0, f32::max));
+    let offset = [hit_p[0] + n[0] * scale, hit_p[1] + n[1] * scale, hit_p[2] + n[2] * scale];
+    let sun_dir = [0.3f32, -0.4, 0.86];
+    let sun_len = (sun_dir[0] * sun_dir[0] + sun_dir[1] * sun_dir[1] + sun_dir[2] * sun_dir[2]).sqrt();
+    let sun_dir = [sun_dir[0] / sun_len, sun_dir[1] / sun_len, sun_dir[2] / sun_len];
+    let probes = vec![GpuProbe { point: offset, normal: sun_dir, _a: 1.0e6, ..Default::default() }];
+    let frame = GpuFrame { probe_count: 1, ..Default::default() };
+    let out = check(run_entry(&gpu, &upload_scene(&gpu, &gpu_scene), "visibility_test_main", &frame, &probes));
+    assert!(out[0][0..3].iter().all(|v| (v - 1.0).abs() < 1e-5), "shadow ray starts below the plane: {:?}", out[0]);
 }
 
 #[test]

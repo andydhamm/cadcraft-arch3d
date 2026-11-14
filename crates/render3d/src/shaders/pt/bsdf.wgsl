@@ -27,7 +27,9 @@ const BSDF_DIELECTRIC_F0: f32 = 0.04;
 
 // The lobes of an opaque material seen from a direction with cosine nov to the normal.
 struct BsdfLobes {
-    // Lambert reflectance (already times the (1 - F) the specular lobe leaves).
+    // Lambert reflectance after subtracting the directional albedo the rough GGX lobe keeps for
+    // the current view angle; it still includes the full (1 - E) from the specular lobe's actual
+    // albedo rather than the Schlick normal reflectance at grazing angles.
     diffuse: vec3<f32>,
     f0: vec3<f32>,
     // Schlick Fresnel at the normal (the mirror's reflectance).
@@ -49,6 +51,38 @@ fn bsdf_schlick(f0: vec3<f32>, c: f32) -> vec3<f32> {
     return f0 + (vec3<f32>(1.0) - f0) * (k2 * k2 * k1);
 }
 
+fn bsdf_spec_albedo(f0: vec3<f32>, roughness: f32, nov: f32) -> vec3<f32> {
+    let rough = clamp(roughness, 0.0, 1.0);
+    let nov_clamped = clamp(nov, 0.0, 1.0);
+    let x = nov_clamped * f32(BSDF_E_N - 1u);
+    let y = rough * f32(BSDF_E_N - 1u);
+    let x0 = min(u32(floor(x)), BSDF_E_N - 2u);
+    let y0 = min(u32(floor(y)), BSDF_E_N - 2u);
+    let x1 = min(x0 + 1u, BSDF_E_N - 1u);
+    let y1 = min(y0 + 1u, BSDF_E_N - 1u);
+    let tx = x - f32(x0);
+    let ty = y - f32(y0);
+    var a0: array<f32, 4> = array<f32, 4>(
+        bsdf_e_a[y0 * BSDF_E_N + x0],
+        bsdf_e_a[y0 * BSDF_E_N + x1],
+        bsdf_e_a[y1 * BSDF_E_N + x0],
+        bsdf_e_a[y1 * BSDF_E_N + x1],
+    );
+    var b0: array<f32, 4> = array<f32, 4>(
+        bsdf_e_b[y0 * BSDF_E_N + x0],
+        bsdf_e_b[y0 * BSDF_E_N + x1],
+        bsdf_e_b[y1 * BSDF_E_N + x0],
+        bsdf_e_b[y1 * BSDF_E_N + x1],
+    );
+    let a_top = a0[0] + (a0[1] - a0[0]) * tx;
+    let a_bot = a0[2] + (a0[3] - a0[2]) * tx;
+    let b_top = b0[0] + (b0[1] - b0[0]) * tx;
+    let b_bot = b0[2] + (b0[3] - b0[2]) * tx;
+    let a = a_top + (a_bot - a_top) * ty;
+    let b = b_top + (b_bot - b_top) * ty;
+    return f0 * a + (vec3<f32>(1.0) - f0) * b;
+}
+
 fn bsdf_lobes(m: Material, nov: f32) -> BsdfLobes {
     let metal = clamp(m.metallic, 0.0, 1.0);
     let rough = clamp(m.roughness, 0.0, 1.0);
@@ -62,12 +96,18 @@ fn bsdf_lobes(m: Material, nov: f32) -> BsdfLobes {
     l.f0 = mix(vec3<f32>(f0_dielectric), m.albedo, metal);
     // No specular lobe, no Fresnel (Schlick with F0 = 0 would still reflect at grazing angles).
     l.fresnel = select(vec3<f32>(0.0), bsdf_schlick(l.f0, nov), has_spec);
-    l.diffuse = m.albedo * (1.0 - metal) * (vec3<f32>(1.0) - l.fresnel);
     l.alpha = max(rough * rough, BSDF_MIN_ALPHA);
     l.mirror = select(0u, 1u, rough < BSDF_MIRROR_ROUGHNESS);
     l.p_spec = 0.0;
-    if (has_spec) {
-        l.p_spec = mix(clamp(bsdf_luma(l.fresnel), 0.1, 0.9), 1.0, metal);
+    if (has_spec && l.mirror == 0u) {
+        let e = bsdf_spec_albedo(l.f0, rough, nov);
+        l.diffuse = m.albedo * (1.0 - metal) * (vec3<f32>(1.0) - e);
+        l.p_spec = mix(clamp(bsdf_luma(e), 0.1, 0.9), 1.0, metal);
+    } else {
+        l.diffuse = m.albedo * (1.0 - metal) * (vec3<f32>(1.0) - l.fresnel);
+        if (has_spec) {
+            l.p_spec = mix(clamp(bsdf_luma(l.fresnel), 0.1, 0.9), 1.0, metal);
+        }
     }
     return l;
 }
