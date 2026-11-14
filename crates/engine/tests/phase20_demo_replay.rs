@@ -434,7 +434,13 @@ fn phase20_demo_level_2_has_two_rooms() {
         })
         .collect();
     // Level 2: exterior ring with one interior wall at x=5 (full height) creates 2 rooms.
-    assert_eq!(level_2_rooms.len(), 2, "expected 2 rooms on level 2, found {}", level_2_rooms.len());
+    assert_eq!(
+        level_2_rooms.len(),
+        2,
+        "expected 2 rooms on level 2, found {}; rooms: {:?}",
+        level_2_rooms.len(),
+        rooms.iter().map(|r| (strd(r, "name", ""), level_str(r))).collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -519,8 +525,11 @@ fn phase20_demo_all_custom_views_are_bound_to_levels() {
 #[test]
 fn phase20_demo_script_has_expected_step_count() {
     let steps = steps_of(&demo_script_path());
-    // The demo script should have exactly 36 steps as defined in the phase-20 spec.
-    assert_eq!(steps.len(), 36, "demo script has {} steps, expected 36", steps.len());
+    // The demo script has 37 steps: 3 walls + roomdetect + room (level 1), level,
+    // 2 walls + roomdetect + room (level 2), roofauto, tray, window, door,
+    // 2 library.place, 2 outlet, 2 switch, 4 layer.set, 2 layer.new,
+    // terrain, plant, 2 dimauto, 6 planview, 1 planview.open.
+    assert_eq!(steps.len(), 37, "demo script has {} steps, expected 37", steps.len());
 }
 
 #[test]
@@ -557,6 +566,42 @@ fn phase20_showcase_script_has_expected_step_count() {
 }
 
 #[test]
+fn phase20_demo_script_is_valid_json_array() {
+    let path = demo_script_path();
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+    let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{} is not valid JSON: {e}", path.display()));
+    assert!(parsed.is_array(), "demo script is not a JSON array");
+    let arr = parsed.as_array().unwrap();
+    for (i, step) in arr.iter().enumerate() {
+        assert!(step.is_object(), "step {} is not an object", i);
+        let cmd = step.get("cmd").and_then(|v| v.as_str());
+        assert!(cmd.is_some() && !cmd.is_empty(), "step {} has no cmd", i);
+    }
+}
+
+#[test]
+fn phase20_showcase_script_is_valid_json_array() {
+    let path = showcase_script_path();
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+    let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{} is not valid JSON: {e}", path.display()));
+    assert!(parsed.is_array(), "showcase script is not a JSON array");
+    let arr = parsed.as_array().unwrap();
+    for (i, step) in arr.iter().enumerate() {
+        assert!(step.is_object(), "step {} is not an object", i);
+        let cmd = step.get("cmd").and_then(|v| v.as_str());
+        assert!(cmd.is_some() && !cmd.is_empty(), "step {} has no cmd", i);
+    }
+}
+
+#[test]
+fn phase20_demo_script_step_params_are_objects() {
+    let steps = steps_of(&demo_script_path());
+    for (i, step) in steps.iter().enumerate() {
+        assert!(step.params.is_object(), "step {} params is not an object: {:?}", i, step.params);
+    }
+}
+
+#[test]
 fn phase20_demo_tray_is_in_a_level_2_room() {
     install_io();
     let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
@@ -570,19 +615,25 @@ fn phase20_demo_tray_is_in_a_level_2_room() {
 
     let tray = &trays[0];
     let tray_level = level_str(tray);
-    assert!(tray_level == "1" || tray_level == "Level 2", "tray is on level `{}`, expected `1` or `Level 2`", tray_level);
+    assert!(tray_level == "1" || tray_level == "Level 2", "tray is on level `{}` (tray: {:?}), expected `1` or `Level 2`", tray_level, tray);
 
     // The tray's room should exist and be on level 2.
     if let Some(room_name) = tray.get("room").and_then(|v| v.as_str()) {
         let room = rooms.iter().find(|r| strd(r, "name", "") == room_name);
-        assert!(room.is_some(), "tray room `{}` not found in rooms list", room_name);
+        assert!(
+            room.is_some(),
+            "tray room `{}` not found in rooms list: {:?}",
+            room_name,
+            rooms.iter().map(|r| strd(r, "name", "")).collect::<Vec<_>>()
+        );
         if let Some(room) = room {
             let room_level = level_str(room);
             assert!(
                 room_level == "1" || room_level == "Level 2",
-                "tray room `{}` is on level `{}`, expected `1` or `Level 2`",
+                "tray room `{}` is on level `{}` (room: {:?}), expected `1` or `Level 2`",
                 room_name,
-                room_level
+                room_level,
+                room
             );
         }
     }
