@@ -219,8 +219,13 @@ pub fn scene_lights_with(model: &ArchModel, overrides: &BTreeMap<String, LightSt
 }
 
 /// The unit direction of `rotation_deg` (counter-clockwise from +X in plan) made perpendicular to
-/// the unit `aim`; when the two are parallel, +X (or +Y) made perpendicular instead.
+/// `aim`; when the two are parallel, +X (or +Y) made perpendicular instead. `aim` need not be unit.
 pub fn light_axis(aim: Vec3, rotation_deg: f64) -> Vec3 {
+    let al = aim.len();
+    if !al.is_finite() || al < 1e-12 {
+        return Vec3::new(1.0, 0.0, 0.0);
+    }
+    let aim = aim * (1.0 / al);
     let r = rotation_deg.to_radians();
     for guess in [Vec3::new(r.cos(), r.sin(), 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)] {
         let v = guess - aim * guess.dot(aim);
@@ -1110,7 +1115,7 @@ mod tests {
         assert!((axis2 - Vec3::new(0.0, 1.0, 0.0)).len() < 1e-9, "axis2: {:?}", axis2);
         assert!((axis2.dot(Vec3::new(1.0, 0.0, 0.0))).abs() < 1e-9, "not perpendicular");
         // Aim at 45° down, rotation 90: axis should be unit and perpendicular
-        let aim = Vec3::new(0.0, -0.7071, -0.7071);
+        let aim = Vec3::new(0.0, -1.0, -1.0).normalized();
         let axis3 = light_axis(aim, 90.0);
         assert!((axis3.len() - 1.0).abs() < 1e-9, "not unit: {}", axis3.len());
         assert!((axis3.dot(aim)).abs() < 1e-9, "not perpendicular");
