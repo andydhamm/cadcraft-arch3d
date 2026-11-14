@@ -108,12 +108,17 @@ fn boold(v: &Value, key: &str, default: bool) -> bool {
 }
 
 /// The `level` field of a row, rendered as a stable string for comparison (number or name).
+/// Checks several field names used by different inspect row types: `level` (plan views, auto-dim
+/// rows), `levelIndex`, `floor`, `index` (rooms and trays from arch.inspect), `levelName`, `levelId`.
 fn level_str(v: &Value) -> String {
-    match v.get("level") {
-        Some(Value::String(s)) => s.clone(),
-        Some(Value::Number(n)) => n.to_string(),
-        _ => String::new(),
+    for key in ["level", "levelIndex", "floor", "index", "levelName", "levelId", "level_id", "level_index", "floorIndex", "floor_index"] {
+        match v.get(key) {
+            Some(Value::String(s)) => return s.clone(),
+            Some(Value::Number(n)) => return n.to_string(),
+            _ => {}
+        }
     }
+    String::new()
 }
 
 /// Run `arch.inspect` with the given parameter map and return the reply.
@@ -387,6 +392,300 @@ fn phase20_showcase_overall_rows_match_exterior_bounds() {
                 row.get("values").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_f64()).collect()).unwrap_or_default();
             assert_eq!(values.len(), 1, "overall row for level `{}` side `{}` should have 1 value, has {}", name, side, values.len());
             assert!((values[0] - want).abs() <= 0.1, "level `{}` side `{}` overall row is {:?}, expected {:.1}", name, side, values, want);
+        }
+    }
+}
+
+#[test]
+fn phase20_demo_level_1_has_three_rooms() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true, "levels": true}));
+    let rooms = rooms_of(&reply);
+    let level_1_rooms: Vec<&Value> = rooms
+        .iter()
+        .filter(|r| {
+            let level = level_str(r);
+            level == "0" || level == "Level 1"
+        })
+        .collect();
+    // Level 1: exterior ring with interior walls at y=3 (full width) and x=6 (y=3 to y=8)
+    // creates 3 rooms: bottom strip, top-left, top-right.
+    assert_eq!(level_1_rooms.len(), 3, "expected 3 rooms on level 1, found {}", level_1_rooms.len());
+}
+
+#[test]
+fn phase20_demo_level_2_has_two_rooms() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true, "levels": true}));
+    let rooms = rooms_of(&reply);
+    let level_2_rooms: Vec<&Value> = rooms
+        .iter()
+        .filter(|r| {
+            let level = level_str(r);
+            level == "1" || level == "Level 2"
+        })
+        .collect();
+    // Level 2: exterior ring with one interior wall at x=5 (full height) creates 2 rooms.
+    assert_eq!(
+        level_2_rooms.len(),
+        2,
+        "expected 2 rooms on level 2, found {}; rooms: {:?}",
+        level_2_rooms.len(),
+        rooms.iter().map(|r| (strd(r, "name", ""), level_str(r))).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn phase20_demo_tray_has_correct_inset_and_depth() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"trays": true}));
+    let trays = trays_of(&reply);
+    assert_eq!(trays.len(), 1, "expected exactly one tray, found {}", trays.len());
+    let tray = &trays[0];
+    let inset = num(tray, "inset");
+    let depth = num(tray, "depth");
+    assert!((inset - 0.6).abs() <= 0.001, "tray inset is {}, expected 0.6", inset);
+    assert!((depth - 0.3).abs() <= 0.001, "tray depth is {}, expected 0.3", depth);
+}
+
+#[test]
+fn phase20_demo_bedroom_is_on_level_1() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true, "levels": true}));
+    let rooms = rooms_of(&reply);
+    let bedroom = find_row(&rooms, "name", "Bedroom");
+    let level = level_str(bedroom);
+    assert!(level == "0" || level == "Level 1", "Bedroom is on level `{}`, expected `0` or `Level 1`", level);
+}
+
+#[test]
+fn phase20_demo_level_1_and_2_floor_plans_differ() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let l1 = plan_of_view(&mut session, "Level 1 Floor Plan");
+    let l2 = plan_of_view(&mut session, "Level 2 Floor Plan");
+
+    let l1_lines = l1.get("lines").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let l2_lines = l2.get("lines").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let l1_labels = l1.get("labels").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let l2_labels = l2.get("labels").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+
+    assert!(
+        l1_lines != l2_lines || l1_labels != l2_labels,
+        "Level 1 and Level 2 floor plans are identical (lines: {} vs {}, labels: {} vs {})",
+        l1_lines,
+        l2_lines,
+        l1_labels,
+        l2_labels
+    );
+}
+
+#[test]
+fn phase20_demo_all_custom_views_are_bound_to_levels() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"planViews": true}));
+    let views = plan_views_of(&reply);
+
+    // Template views are not level-bound; all custom views must be.
+    // This includes both the default templates and the Roof Plan / Site templates.
+    let templates = ["Working", "Floor Plan", "Electrical", "Reflected Ceiling", "Kitchen & Bath", "Roof Plan", "Site"];
+    for view in &views {
+        let name = plan_view_name(view);
+        if templates.contains(&name.as_str()) {
+            continue;
+        }
+        let level = level_str(view);
+        assert!(!level.is_empty(), "custom plan view `{}` has no level binding", name);
+    }
+}
+
+#[test]
+fn phase20_demo_script_has_expected_step_count() {
+    let steps = steps_of(&demo_script_path());
+    // The demo script has 37 steps: 3 walls + roomdetect + room (level 1), level,
+    // 2 walls + roomdetect + room (level 2), roofauto, tray, window, door,
+    // 2 library.place, 2 outlet, 2 switch, 4 layer.set, 2 layer.new,
+    // terrain, plant, 2 dimauto, 6 planview, 1 planview.open.
+    assert_eq!(steps.len(), 37, "demo script has {} steps, expected 37", steps.len());
+}
+
+#[test]
+fn phase20_demo_script_uses_expected_commands() {
+    let steps = steps_of(&demo_script_path());
+    let cmds: Vec<&str> = steps.iter().map(|s| s.cmd.as_str()).collect();
+
+    // Verify the script uses all the expected command types.
+    assert!(cmds.contains(&"wall"), "demo script missing `wall` command");
+    assert!(cmds.contains(&"roomdetect"), "demo script missing `roomdetect` command");
+    assert!(cmds.contains(&"room"), "demo script missing `room` command");
+    assert!(cmds.contains(&"level"), "demo script missing `level` command");
+    assert!(cmds.contains(&"roofauto"), "demo script missing `roofauto` command");
+    assert!(cmds.contains(&"tray"), "demo script missing `tray` command");
+    assert!(cmds.contains(&"window"), "demo script missing `window` command");
+    assert!(cmds.contains(&"door"), "demo script missing `door` command");
+    assert!(cmds.contains(&"library.place"), "demo script missing `library.place` command");
+    assert!(cmds.contains(&"outlet"), "demo script missing `outlet` command");
+    assert!(cmds.contains(&"switch"), "demo script missing `switch` command");
+    assert!(cmds.contains(&"layer.set"), "demo script missing `layer.set` command");
+    assert!(cmds.contains(&"layer.new"), "demo script missing `layer.new` command");
+    assert!(cmds.contains(&"terrain"), "demo script missing `terrain` command");
+    assert!(cmds.contains(&"plant"), "demo script missing `plant` command");
+    assert!(cmds.contains(&"dimauto"), "demo script missing `dimauto` command");
+    assert!(cmds.contains(&"planview"), "demo script missing `planview` command");
+    assert!(cmds.contains(&"planview.open"), "demo script missing `planview.open` command");
+}
+
+#[test]
+fn phase20_showcase_script_has_expected_step_count() {
+    let steps = steps_of(&showcase_script_path());
+    // The showcase script should have exactly 8 steps: 6 planviews + 2 dimauto.
+    assert_eq!(steps.len(), 8, "showcase script has {} steps, expected 8", steps.len());
+}
+
+#[test]
+fn phase20_demo_script_is_valid_json_array() {
+    let path = demo_script_path();
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+    let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{} is not valid JSON: {e}", path.display()));
+    assert!(parsed.is_array(), "demo script is not a JSON array");
+    let arr = parsed.as_array().unwrap();
+    for (i, step) in arr.iter().enumerate() {
+        assert!(step.is_object(), "step {} is not an object", i);
+        let cmd = step.get("cmd").and_then(|v| v.as_str());
+        assert!(cmd.is_some() && !cmd.unwrap().is_empty(), "step {} has no cmd", i);
+    }
+}
+
+#[test]
+fn phase20_showcase_script_is_valid_json_array() {
+    let path = showcase_script_path();
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+    let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{} is not valid JSON: {e}", path.display()));
+    assert!(parsed.is_array(), "showcase script is not a JSON array");
+    let arr = parsed.as_array().unwrap();
+    for (i, step) in arr.iter().enumerate() {
+        assert!(step.is_object(), "step {} is not an object", i);
+        let cmd = step.get("cmd").and_then(|v| v.as_str());
+        assert!(cmd.is_some() && !cmd.unwrap().is_empty(), "step {} has no cmd", i);
+    }
+}
+
+#[test]
+fn phase20_demo_script_step_params_are_objects() {
+    let steps = steps_of(&demo_script_path());
+    for (i, step) in steps.iter().enumerate() {
+        assert!(step.params.is_object(), "step {} params is not an object: {:?}", i, step.params);
+    }
+}
+
+#[test]
+fn phase20_demo_bedroom_ceiling_stack_has_three_layers() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let rooms = rooms_of(&reply);
+    let bedroom = find_row(&rooms, "name", "Bedroom");
+    let stack = bedroom.get("ceilingStack").and_then(|v| v.as_array()).unwrap_or_else(|| panic!("Bedroom has no ceilingStack"));
+    assert_eq!(stack.len(), 3, "Bedroom ceilingStack has {} layers, expected 3", stack.len());
+    let thicknesses: Vec<f64> = stack.iter().filter_map(|l| l.get("thickness").and_then(|v| v.as_f64())).collect();
+    assert_eq!(thicknesses.len(), 3, "expected 3 thickness values");
+    assert!((thicknesses[0] - 0.0127).abs() <= 0.0001, "first layer thickness is {}, expected 0.0127", thicknesses[0]);
+    assert!((thicknesses[1] - 0.2).abs() <= 0.0001, "second layer thickness is {}, expected 0.2", thicknesses[1]);
+    assert!((thicknesses[2] - 0.016).abs() <= 0.0001, "third layer thickness is {}, expected 0.016", thicknesses[2]);
+}
+
+#[test]
+fn phase20_demo_level_2_floor_plan_has_reference_lines() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let plan = plan_of_view(&mut session, "Level 2 Floor Plan");
+    let lines: Vec<Value> = plan.get("lines").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let has_reference =
+        lines.iter().any(|l| strd(l, "color", "").eq_ignore_ascii_case("#b4b4b4") || strd(l, "kind", "").eq_ignore_ascii_case("reference"));
+    assert!(has_reference, "Level 2 Floor Plan has no reference lines (expected #b4b4b4 or kind=reference)");
+}
+
+#[test]
+fn phase20_demo_wall_thicknesses_are_correct() {
+    let steps = steps_of(&demo_script_path());
+    let wall_steps: Vec<&ScriptStep> = steps.iter().filter(|s| s.cmd == "wall").collect();
+    assert!(wall_steps.len() >= 4, "expected at least 4 wall steps, found {}", wall_steps.len());
+
+    let exterior = wall_steps[0].params.get("thickness").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+    assert!((exterior - 0.2).abs() <= 0.001, "exterior wall thickness is {}, expected 0.2", exterior);
+
+    let interior1 = wall_steps[1].params.get("thickness").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+    assert!((interior1 - 0.1).abs() <= 0.001, "interior wall thickness is {}, expected 0.1", interior1);
+
+    let interior2 = wall_steps[2].params.get("thickness").and_then(|v| v.as_f64()).unwrap_or(f64::NAN);
+    assert!((interior2 - 0.1).abs() <= 0.001, "interior wall thickness is {}, expected 0.1", interior2);
+}
+
+#[test]
+fn phase20_demo_tray_is_in_a_level_2_room() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"trays": true, "rooms": true, "levels": true}));
+    let trays = trays_of(&reply);
+    let rooms = rooms_of(&reply);
+    assert_eq!(trays.len(), 1, "expected exactly one tray, found {}", trays.len());
+
+    let tray = &trays[0];
+    let tray_level = level_str(tray);
+    if !tray_level.is_empty() {
+        assert!(tray_level == "1" || tray_level == "Level 2", "tray is on level `{}` (tray: {:?}), expected `1` or `Level 2`", tray_level, tray);
+    }
+
+    // The tray's room should exist and be on level 2.
+    if let Some(room_name) = tray.get("room").and_then(|v| v.as_str()) {
+        let room = rooms.iter().find(|r| strd(r, "name", "") == room_name || strd(r, "id", "") == room_name);
+        assert!(
+            room.is_some(),
+            "tray room `{}` not found in rooms list: {:?}",
+            room_name,
+            rooms.iter().map(|r| format!("{} ({})", strd(r, "name", ""), strd(r, "id", ""))).collect::<Vec<_>>()
+        );
+        if let Some(room) = room {
+            let room_level = level_str(room);
+            assert!(
+                room_level == "1" || room_level == "Level 2",
+                "tray room `{}` is on level `{}` (room: {:?}), expected `1` or `Level 2`",
+                room_name,
+                room_level,
+                room
+            );
         }
     }
 }
