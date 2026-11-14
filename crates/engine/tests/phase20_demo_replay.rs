@@ -628,7 +628,7 @@ fn phase20_demo_level_2_floor_plan_has_reference_lines() {
     replay(&script, &mut session);
 
     let plan = plan_of_view(&mut session, "Level 2 Floor Plan");
-    let lines = plan.get("lines").and_then(|v| v.as_array()).unwrap_or_default();
+    let lines: Vec<Value> = plan.get("lines").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     let has_reference =
         lines.iter().any(|l| strd(l, "color", "").eq_ignore_ascii_case("#b4b4b4") || strd(l, "kind", "").eq_ignore_ascii_case("reference"));
     assert!(has_reference, "Level 2 Floor Plan has no reference lines (expected #b4b4b4 or kind=reference)");
