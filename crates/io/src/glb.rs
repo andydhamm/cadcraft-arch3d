@@ -2968,6 +2968,7 @@ mod tests {
             let mut m = wall_mesh();
             m.material = "wall-brick".to_string();
             m.object = ArchId(1);
+            m
         });
         let bytes = write(&scene);
         let json = glb_json_chunk(&bytes);
