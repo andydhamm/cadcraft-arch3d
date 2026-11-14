@@ -76,10 +76,10 @@ pub fn spec_albedo_terms(roughness: f64, nov: f64) -> (f64, f64) {
     let v = [((1.0 - nov * nov).max(0.0)).sqrt(), 0.0, nov];
     let mut a = 0.0;
     let mut b = 0.0;
-    let inv_n = 1.0 / 32.0;
-    for i in 0..32 {
+    let inv_n = 1.0 / 64.0;
+    for i in 0..64 {
         let u1 = (i as f64 + 0.5) * inv_n;
-        for j in 0..32 {
+        for j in 0..64 {
             let u2 = (j as f64 + 0.5) * inv_n;
             let h = ggx_sample_vndf(v, alpha, u1, u2);
             let voh = (v[0] * h[0] + v[1] * h[1] + v[2] * h[2]).max(0.0);
@@ -97,7 +97,7 @@ pub fn spec_albedo_terms(roughness: f64, nov: f64) -> (f64, f64) {
             b += w * (1.0 - voh).powi(5);
         }
     }
-    (a / 1024.0, b / 1024.0)
+    (a / 4096.0, b / 4096.0)
 }
 
 /// A conservative table of the GGX lobe's directional-albedo coefficients.
@@ -357,6 +357,73 @@ mod tests {
         let (a_smooth, _) = spec_albedo_terms(0.05, 1.0);
         let (a_rough, _) = spec_albedo_terms(0.95, 1.0);
         assert!(a_smooth > a_rough, "smooth lobe reflects more at normal incidence");
+    }
+
+    #[test]
+    fn spec_albedo_energy_conservation() {
+        // E = f0*a + (1-f0)*b must be in [0, 1] for any f0 in [0, 1], since a and b are each in [0, 1].
+        let f0s = [0.0_f64, 0.04, 0.5, 0.52, 1.0];
+        let roughs = [0.0_f64, 0.1, 0.5, 0.95, 1.0];
+        let novs = [1e-3_f64, 0.024, 0.096, 0.5, 1.0];
+        for f0 in f0s {
+            for roughness in roughs {
+                for nov in novs {
+                    let (a, b) = spec_albedo_terms(roughness, nov);
+                    let e = f0 * a + (1.0 - f0) * b;
+                    assert!(e >= 0.0 && e <= 1.0, "E out of range: f0={f0} rough={roughness} nov={nov} E={e}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_monotonic_in_nov() {
+        // For a fixed roughness, E should be non-decreasing as nov decreases (grazing angles reflect more).
+        let roughs = [0.1_f64, 0.5, 0.95, 1.0];
+        for roughness in roughs {
+            let mut prev_e: f64 = 0.0;
+            let novs: Vec<f64> = (0..=100).map(|i| 1.0 - (i as f64) * 0.009).collect();
+            for &nov in &novs {
+                let (a, b) = spec_albedo_terms(roughness, nov);
+                let e = 0.04 * a + 0.96 * b;
+                assert!(e >= prev_e - 1e-4, "E decreased as nov decreased: rough={roughness} nov={nov} E={e} prev={prev_e}");
+                prev_e = e;
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_table_exact_at_nodes() {
+        // At exact node coordinates, bilinear lookup returns the table value exactly.
+        let table = spec_albedo_table();
+        let h = 1.0 / (SPEC_E_N - 1) as f64;
+        for ri in 0..SPEC_E_N {
+            for ci in 0..SPEC_E_N {
+                let roughness = (ri as f64 * h) as f32;
+                let nov = (ci as f64 * h) as f32;
+                let (la, lb) = spec_albedo_lookup(table, roughness, nov);
+                let idx = table_cell_index(ri, ci);
+                let ta = read_table(&table.a, idx);
+                let tb = read_table(&table.b, idx);
+                assert!((la - ta).abs() < 1e-6, "lookup a != table a at ({ri},{ci}): {la} vs {ta}");
+                assert!((lb - tb).abs() < 1e-6, "lookup b != table b at ({ri},{ci}): {lb} vs {tb}");
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_wgsl_values_in_range() {
+        // All values in the WGSL output should be in [0, 1].
+        let wgsl = spec_albedo_wgsl();
+        let values: Vec<f32> = wgsl
+            .split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
+            .filter(|tok| !tok.is_empty() && tok.contains('.'))
+            .filter_map(|tok| tok.parse::<f32>().ok())
+            .collect();
+        assert_eq!(values.len(), 2 * SPEC_E_N * SPEC_E_N, "expected {} values, got {}", 2 * SPEC_E_N * SPEC_E_N, values.len());
+        for v in values {
+            assert!(v >= 0.0 && v <= 1.0, "WGSL value out of range: {v}");
+        }
     }
 
     #[test]
