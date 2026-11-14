@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-14 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 41 of 45 segments merged · 19 of 20 acceptance checks**
 
-10,204 workspace tests passing at the last merge · 1146 segments merged in all · 0 of 15 seats working
+10,212 workspace tests passing at the last merge · 1148 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 08:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 75.3 h so far · expected done Nov 14 09:48–Nov 16 23:16 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 75.5 h so far · expected done Nov 14 10:03–Nov 16 23:31 UTC |
 | 19 | Light, sky and cameras | building | 10 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 10 / 13 | — |
@@ -46,6 +46,8 @@ Updated 2026-11-14 08:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 14 08:53 | `harden-p19g-glb-normal-texture` | merged | 10,212 pass, 1 fail | tturbo-mac |
+| Nov 14 08:53 | `harden-p16-rebuild` | merged | 10,212 pass, 1 fail | tturbo-mac2 |
 | Nov 14 08:12 | `harden-p18g-countertop-nose` | merged | 10,204 pass | tturbo-mac2 |
 | Nov 14 07:30 | `harden-p20f-demo-scripts` | merged | 10,198 pass | tturbo-mac2 |
 | Nov 14 06:27 | `p19g-pt-horizon-colour` | refused | 10,183 pass, 1 fail | darwin-ws3 |
@@ -56,14 +58,12 @@ Updated 2026-11-14 08:45 UTC. This page and the card in the README are regenerat
 | Nov 14 03:22 | `p19g-sky-check-time` | merged | 10,157 pass | claude-sonnet-a |
 | Nov 14 03:22 | `p19g-pt-strip-reaches-floor` | merged | 10,157 pass | mai-flash |
 | Nov 14 03:22 | `p19g-pt-tone-look` | merged | 10,157 pass | claude-sonnet-c |
-| Nov 14 03:22 | `harden-p18-countertop-shapes` | merged | 10,157 pass | tturbo-mac |
-| Nov 14 02:47 | `harden-p19-horizon-2` | refused | 10,156 pass, 1 fail | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1289 |
+| bonsai-a | bonsai2-27b | idle | 1292 |
 | bonsai-b | bonsai2-27b | merging | 1228 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1364 |
 | bonsai-ws2-b | bonsai2-27b | merging | 1318 |
@@ -71,10 +71,10 @@ Updated 2026-11-14 08:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | idle | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1166 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1166 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 120 |
-| mai-flash-b | mai-code-1.1-flash | gate | 71 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 130 |
+| mai-flash-b | mai-code-1.1-flash | agent | 71 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 131 |
 | tturbo-mac | tturbo-ultraheretic | agent | 878 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 534 |
