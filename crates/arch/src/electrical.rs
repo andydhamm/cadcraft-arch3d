@@ -363,7 +363,7 @@ mod tests {
         let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
 
         let base = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, ..Default::default() };
-        assert_eq!(device_symbol(&model, &base).len(), 2, "base: circle + line");
+        assert_eq!(device_symbol(&model, &base).len(), 4, "base (duplex by default): circle + line + 2 parallel lines");
 
         let duplex = ElectricalDevice { kind: ElectricalKind::Duplex, ..base };
         assert_eq!(device_symbol(&model, &duplex).len(), 4, "duplex: + 2 parallel lines");
