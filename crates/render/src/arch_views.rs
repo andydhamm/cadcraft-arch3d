@@ -271,4 +271,252 @@ mod tests {
         let list = build_arch(&d, &Options::default(), false);
         assert!(!list.prims.iter().any(|p| p.handle == view_handle(id)));
     }
+
+    #[test]
+    fn nan_pattern_endpoints_are_skipped() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "NanPat".into(),
+            insert: [0.0, 0.0],
+            scale: 50.0,
+            generated: Some(ViewGeometry {
+                extent: [0.0, 0.0, 1.0, 1.0],
+                patterns: vec![
+                    ViewPatternLine { a: [f64::NAN, 0.0], b: [1.0, 0.0], ..Default::default() },
+                    ViewPatternLine { a: [0.0, 0.0], b: [f64::NAN, 0.0], ..Default::default() },
+                    ViewPatternLine { a: [0.0, 0.0], b: [1.0, 0.0], ..Default::default() },
+                ],
+                ..Default::default()
+            }),
+            ..ArchView::default()
+        };
+        let id = d.arch.push_view(view).expect("valid view");
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(id);
+        // Only the finite pattern line draws (2 vertices)
+        let pattern_prims: Vec<_> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline).collect();
+        assert_eq!(pattern_prims.len(), 1, "only the finite pattern line should draw");
+    }
+
+    #[test]
+    fn zero_length_dimension_is_skipped() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "ZeroDim".into(),
+            insert: [0.0, 0.0],
+            scale: 50.0,
+            notes: vec![ViewNote {
+                id: 1,
+                kind: NoteKind::Dimension,
+                text: "d".into(),
+                at: [1.0, 1.0],
+                b: Some([1.0, 1.0]),
+                height: 0.2,
+                layer: "A-ANNO-DIMS".into(),
+                ..Default::default()
+            }],
+            ..ArchView::default()
+        };
+        let id = d.arch.push_view(view).expect("valid view");
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(id);
+        assert!(!list.prims.iter().any(|p| p.handle == h), "zero-length dimension should draw nothing");
+    }
+
+    #[test]
+    fn dimension_without_b_is_skipped() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "NoBDim".into(),
+            insert: [0.0, 0.0],
+            scale: 50.0,
+            notes: vec![ViewNote {
+                id: 1,
+                kind: NoteKind::Dimension,
+                text: "d".into(),
+                at: [1.0, 1.0],
+                b: None,
+                height: 0.2,
+                layer: "A-ANNO-DIMS".into(),
+                ..Default::default()
+            }],
+            ..ArchView::default()
+        };
+        let id = d.arch.push_view(view).expect("valid view");
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(id);
+        assert!(!list.prims.iter().any(|p| p.handle == h), "dimension without b should draw nothing");
+    }
+
+    #[test]
+    fn marker_with_zero_height_is_skipped() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "ZeroMarker".into(),
+            insert: [0.0, 0.0],
+            scale: 50.0,
+            notes: vec![ViewNote {
+                id: 1,
+                kind: NoteKind::Marker,
+                text: "M".into(),
+                at: [1.0, 1.0],
+                height: 0.0,
+                layer: "A-ELEV-IDEN".into(),
+                ..Default::default()
+            }],
+            ..ArchView::default()
+        };
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(ArchId(id));
+        assert!(!list.prims.iter().any(|p| p.handle == h), "zero-height marker should draw nothing");
+    }
+
+    #[test]
+    fn marker_with_nan_height_is_skipped() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "NanMarker".into(),
+            insert: [0.0, 0.0],
+            scale: 50.0,
+            notes: vec![ViewNote {
+                id: 1,
+                kind: NoteKind::Marker,
+                text: "M".into(),
+                at: [1.0, 1.0],
+                height: f64::NAN,
+                layer: "A-ELEV-IDEN".into(),
+                ..Default::default()
+            }],
+            ..ArchView::default()
+        };
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(ArchId(id));
+        assert!(!list.prims.iter().any(|p| p.handle == h), "NaN-height marker should draw nothing");
+    }
+
+    #[test]
+    fn notes_draw_without_generated_geometry() {
+        let mut d = new_drawing();
+        let note = ViewNote { id: 1, text: "N".into(), at: [2.0, 3.0], height: 0.2, layer: "A-ELEV-IDEN".into(), ..Default::default() };
+        let view = ArchView { name: "NoGen".into(), insert: [10.0, 20.0], scale: 50.0, notes: vec![note], ..ArchView::default() };
+        let id = d.arch.push_view(view).expect("valid view");
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(id);
+        let prims: Vec<_> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline).collect();
+        assert!(!prims.is_empty(), "notes should draw even without generated geometry");
+        // Note at [2,3] placed at insert [10,20] = [12,23]
+        assert!(prims.iter().any(|p| polyline_pts(&list, p).iter().any(|pt| (pt.x - 12.0).abs() < 1.0 && (pt.y - 23.0).abs() < 1.0)));
+    }
+
+    #[test]
+    fn dimension_with_zero_offset_defaults_to_half() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "ZeroOff".into(),
+            insert: [0.0, 0.0],
+            scale: 50.0,
+            notes: vec![ViewNote {
+                id: 1,
+                kind: NoteKind::Dimension,
+                text: "d".into(),
+                at: [0.0, 0.0],
+                b: Some([2.0, 0.0]),
+                height: 0.2,
+                offset: [0.0, 0.0],
+                layer: "A-ANNO-DIMS".into(),
+                ..Default::default()
+            }],
+            ..ArchView::default()
+        };
+        let id = d.arch.push_view(view).expect("valid view");
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(id);
+        // Should draw (offset defaults to 0.5)
+        assert!(list.prims.iter().any(|p| p.handle == h && p.kind == Kind::Polyline), "dimension with zero offset should draw with default 0.5");
+    }
+
+    #[test]
+    fn dimension_with_nan_scale_uses_default_k() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "NanScale".into(),
+            insert: [0.0, 0.0],
+            scale: f64::NAN,
+            notes: vec![ViewNote {
+                id: 1,
+                kind: NoteKind::Dimension,
+                text: "d".into(),
+                at: [0.0, 0.0],
+                b: Some([2.0, 0.0]),
+                height: 0.2,
+                layer: "A-ANNO-DIMS".into(),
+                ..Default::default()
+            }],
+            ..ArchView::default()
+        };
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(ArchId(id));
+        // Should draw with default k=0.05
+        assert!(list.prims.iter().any(|p| p.handle == h && p.kind == Kind::Polyline), "dimension with NaN scale should draw with default k");
+    }
+
+    #[test]
+    fn huge_coordinates_do_not_overflow() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "Huge".into(),
+            insert: [1e12, 1e12],
+            scale: 50.0,
+            generated: Some(ViewGeometry {
+                extent: [0.0, 0.0, 1.0, 1.0],
+                patterns: vec![ViewPatternLine { a: [0.0, 0.0], b: [1.0, 0.0], ..Default::default() }],
+                ..Default::default()
+            }),
+            ..ArchView::default()
+        };
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(ArchId(id));
+        let prims: Vec<_> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline).collect();
+        assert!(!prims.is_empty(), "huge coordinates should draw");
+        for p in &prims {
+            for pt in polyline_pts(&list, p) {
+                assert!(pt.x.is_finite() && pt.y.is_finite(), "vertices must be finite");
+            }
+        }
+    }
+
+    #[test]
+    fn empty_marker_text_draws_only_circle() {
+        let mut d = new_drawing();
+        let view = ArchView {
+            name: "EmptyText".into(),
+            insert: [0.0, 0.0],
+            scale: 50.0,
+            notes: vec![ViewNote {
+                id: 1,
+                kind: NoteKind::Marker,
+                text: "".into(),
+                at: [1.0, 1.0],
+                height: 0.3,
+                layer: "A-ELEV-IDEN".into(),
+                ..Default::default()
+            }],
+            ..ArchView::default()
+        };
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
+        let list = build_arch(&d, &Options::default(), false);
+        let h = view_handle(ArchId(id));
+        // 24 segments for the circle, no text
+        let prims: Vec<_> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline).collect();
+        assert_eq!(prims.len(), 24, "marker with empty text should draw 24 circle segments");
+    }
 }
