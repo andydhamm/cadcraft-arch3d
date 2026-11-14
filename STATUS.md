@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-14 12:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 12:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 42 of 44 segments merged · 19 of 20 acceptance checks**
 
-10,240 workspace tests passing at the last merge · 1154 segments merged in all · 0 of 15 seats working
+10,247 workspace tests passing at the last merge · 1156 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 12:15 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 78.8 h so far · expected done Nov 14 21:51–Nov 30 23:42 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 79.0 h so far · expected done Nov 14 22:06–Nov 30 23:57 UTC |
 | 19 | Light, sky and cameras | building | 10 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
@@ -45,6 +45,8 @@ Updated 2026-11-14 12:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 14 12:18 | `harden-p19f-glb-strip-node-normals` | merged | 10,247 pass | tturbo-mac |
+| Nov 14 12:18 | `harden-p19-ptg-frame-layout` | merged | 10,247 pass | tturbo-mac2 |
 | Nov 14 11:43 | `harden-p19f-sky-render-time` | merged | 10,240 pass | tturbo-mac |
 | Nov 14 11:43 | `harden-p15-arch-connection-arcs` | merged | 10,240 pass | tturbo-mac2 |
 | Nov 14 11:09 | `harden-p21f-interior-cabinet-front` | refused | 10,229 pass | tturbo-mac |
@@ -55,8 +57,6 @@ Updated 2026-11-14 12:15 UTC. This page and the card in the README are regenerat
 | Nov 14 08:53 | `harden-p19g-glb-normal-texture` | merged | 10,212 pass, 1 fail | tturbo-mac |
 | Nov 14 08:53 | `harden-p16-rebuild` | merged | 10,212 pass, 1 fail | tturbo-mac2 |
 | Nov 14 08:12 | `harden-p18g-countertop-nose` | merged | 10,204 pass | tturbo-mac2 |
-| Nov 14 07:30 | `harden-p20f-demo-scripts` | merged | 10,198 pass | tturbo-mac2 |
-| Nov 14 06:27 | `p19g-pt-horizon-colour` | refused | 10,183 pass, 1 fail | darwin-ws3 |
 
 ## Seats active in the last hour
 
@@ -74,6 +74,6 @@ Updated 2026-11-14 12:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 120 |
 | mai-flash-b | mai-code-1.1-flash | idle | 73 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 135 |
-| tturbo-mac | tturbo-ultraheretic | agent | 885 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 547 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 136 |
+| tturbo-mac | tturbo-ultraheretic | gate | 885 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 548 |
