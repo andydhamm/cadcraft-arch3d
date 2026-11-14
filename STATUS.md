@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-14 15:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 15:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 42 of 44 segments merged · 19 of 20 acceptance checks**
 
-10,272 workspace tests passing at the last merge · 1163 segments merged in all · 0 of 15 seats working
+10,277 workspace tests passing at the last merge · 1164 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 15:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 81.5 h so far · expected done Nov 15 00:36–Dec 01 02:27 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 81.8 h so far · expected done Nov 15 00:51–Dec 01 02:42 UTC |
 | 19 | Light, sky and cameras | building | 11 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
@@ -45,6 +45,7 @@ Updated 2026-11-14 15:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 14 15:12 | `harden-p19g-pt-strip-reaches-floor` | merged | 10,277 pass | tturbo-mac |
 | Nov 14 14:37 | `harden-p14-io-obj-ifc-furnishing` | merged | 10,272 pass | tturbo-mac2 |
 | Nov 14 14:01 | `harden-p14-arch3d-paint` | merged | 10,269 pass | tturbo-mac2 |
 | Nov 14 14:01 | `harden-p20f-dim-inspect` | merged | 10,269 pass | tturbo-mac |
@@ -56,7 +57,6 @@ Updated 2026-11-14 15:00 UTC. This page and the card in the README are regenerat
 | Nov 14 12:18 | `harden-p19f-glb-strip-node-normals` | merged | 10,247 pass | tturbo-mac |
 | Nov 14 12:18 | `harden-p19-ptg-frame-layout` | merged | 10,247 pass | tturbo-mac2 |
 | Nov 14 11:43 | `harden-p19f-sky-render-time` | merged | 10,240 pass | tturbo-mac |
-| Nov 14 11:43 | `harden-p15-arch-connection-arcs` | merged | 10,240 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
@@ -64,16 +64,16 @@ Updated 2026-11-14 15:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1300 |
 | bonsai-b | bonsai2-27b | idle | 1241 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1369 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1371 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1336 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | idle | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1190 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1191 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 120 |
 | mai-flash-b | mai-code-1.1-flash | idle | 73 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 138 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 139 |
 | tturbo-mac | tturbo-ultraheretic | agent | 890 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 558 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 560 |
