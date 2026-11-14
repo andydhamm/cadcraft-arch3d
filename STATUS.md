@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-14 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-14 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 41 of 43 segments merged · 19 of 20 acceptance checks**
 
-10,157 workspace tests passing at the last merge · 1142 segments merged in all · 0 of 15 seats working
+10,163 workspace tests passing at the last merge · 1143 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,7 +28,7 @@ Updated 2026-11-14 04:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 70.5 h so far · expected done Nov 14 07:42–Nov 15 21:20 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 70.8 h so far · expected done Nov 14 07:56–Nov 15 21:35 UTC |
 | 19 | Light, sky and cameras | building | 10 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 10 / 13 | — |
@@ -46,6 +46,7 @@ Updated 2026-11-14 04:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 14 04:04 | `harden-p18g-crown-soffit-tray` | merged | 10,163 pass | tturbo-mac2 |
 | Nov 14 03:22 | `p19g-final-raster-env` | merged | 10,157 pass | bonsai-a |
 | Nov 14 03:22 | `p19g-glb-normal-texture` | merged | 10,157 pass | bonsai-ws2-a |
 | Nov 14 03:22 | `p19g-sky-check-time` | merged | 10,157 pass | claude-sonnet-a |
@@ -57,24 +58,23 @@ Updated 2026-11-14 04:00 UTC. This page and the card in the README are regenerat
 | Nov 14 02:05 | `harden-p18g-fill-labels-shelves` | merged | 10,138 pass | tturbo-mac2 |
 | Nov 14 02:05 | `harden-p19f-demo-script` | merged | 10,138 pass | tturbo-mac2 |
 | Nov 14 01:18 | `p21f-showcase-planviews` | merged | 10,103 pass | darwin-ws3 |
-| Nov 13 23:58 | `harden-p20f-auto-dim-rows` | merged | 10,101 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1274 |
-| bonsai-b | bonsai2-27b | agent | 1221 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1353 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1304 |
+| bonsai-a | bonsai2-27b | gate | 1277 |
+| bonsai-b | bonsai2-27b | agent | 1222 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1354 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1307 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
-| claude-sonnet-d | sonnet | gate | 87 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1153 |
+| claude-sonnet-d | sonnet | gate | 88 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1154 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 119 |
 | mai-flash-b | mai-code-1.1-flash | agent | 66 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 125 |
 | tturbo-mac | tturbo-ultraheretic | agent | 869 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 521 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 522 |
