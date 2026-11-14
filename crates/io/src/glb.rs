@@ -3041,7 +3041,8 @@ mod tests {
         let json = glb_json_chunk(&bytes);
         let images = json["images"].as_array().unwrap();
         let names: Vec<&str> = images.iter().map(|i| i["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["shingles", "shingles-normal", "brick", "brick-normal", "wood", "wood-normal", "siding", "siding-normal"]);
+        // Images are added in Finish::ALL order: Siding, Shingles, Brick, Wood, ...
+        assert_eq!(names, ["siding", "siding-normal", "shingles", "shingles-normal", "brick", "brick-normal", "wood", "wood-normal"]);
         let mats = json["materials"].as_array().unwrap();
         for mat in mats {
             let name = mat["name"].as_str().unwrap();
@@ -3143,8 +3144,10 @@ mod tests {
         let mats = json["materials"].as_array().unwrap();
         let indices: Vec<u64> = mats.iter().filter_map(|m| m.get("normalTexture").map(|n| n["index"].as_u64().unwrap())).collect();
         assert_eq!(indices.len(), 3);
-        assert_eq!(indices[0], 1); // brick-normal
-        assert_eq!(indices[1], 3); // siding-normal
-        assert_eq!(indices[2], 5); // shingles-normal
+        // Images are added in Finish::ALL order: Siding(0,1), Shingles(2,3), Brick(4,5).
+        // Materials are in mesh order: wall-brick, wall-siding, roof-shingles.
+        assert_eq!(indices[0], 5); // brick-normal
+        assert_eq!(indices[1], 1); // siding-normal
+        assert_eq!(indices[2], 3); // shingles-normal
     }
 }
