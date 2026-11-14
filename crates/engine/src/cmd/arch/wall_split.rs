@@ -225,8 +225,9 @@ mod tests {
         s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Glass"})).unwrap();
         s.execute("wall.split", &json!({"id": "w0", "height": 1.0, "lower": "Interior", "upper": "Glass"})).unwrap();
         let v = s.execute("arch.inspect", &json!({"walls": true})).unwrap();
-        let wall = &v["walls"][0];
-        assert_eq!(wall["glass"], false);
-        assert_eq!(wall["split"]["upper"], "Glass");
+        let walls = v["walls"].as_array().unwrap();
+        let w0 = walls.iter().find(|w| w.get("id").and_then(Value::as_str) == Some("w0")).expect("w0 row");
+        assert_eq!(w0.get("glass").and_then(Value::as_bool), Some(false));
+        assert_eq!(w0["split"]["upper"], "Glass");
     }
 }
