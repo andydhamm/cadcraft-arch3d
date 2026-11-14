@@ -152,6 +152,9 @@ fn run_face(session: &mut Session, params: &Value) -> Result<Value> {
     let doc = session.doc()?;
     let idx = doc.arch.cabinets.iter().position(|c| c.id == id).ok_or_else(|| bad(CMD, format!("unknown cabinet `{raw}`")))?;
     let mut cab = doc.arch.cabinets.get(idx).cloned().ok_or_else(|| bad(CMD, format!("unknown cabinet `{raw}`")))?;
+    if cab.counter_thickness == 0.0 {
+        cab.counter_thickness = 0.038;
+    }
     let start = cab.face.clone().unwrap_or_else(|| default_face(&cab));
     let face = if params.get("appliance").is_some() {
         let i = index(params, &start)?;
