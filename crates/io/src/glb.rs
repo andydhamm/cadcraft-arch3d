@@ -470,7 +470,7 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
                         "roughnessFactor": finish_roughness(f),
                     });
                     if let Some(norm_idx) = png_index.get(&format!("finish:{}:normal", f.name())) {
-                        mat["pbrMetallicRoughness"]["normalTexture"] = json!({ "index": *norm_idx });
+                        mat["normalTexture"] = json!({ "index": *norm_idx });
                     }
                 }
             }
@@ -2953,13 +2953,27 @@ mod tests {
         let bytes = write(&scene);
         let json = glb_json_chunk(&bytes);
         let mat = &json["materials"][0];
-        let pbr = &mat["pbrMetallicRoughness"];
-        assert!(pbr.get("normalTexture").is_some(), "wall-brick should have normalTexture");
-        let norm = &pbr["normalTexture"];
+        assert!(mat.get("normalTexture").is_some(), "wall-brick should have normalTexture");
+        let norm = &mat["normalTexture"];
         let idx = norm["index"].as_u64().unwrap() as usize;
         let images = json["images"].as_array().unwrap();
         assert!(idx < images.len(), "normalTexture index out of range");
         assert_eq!(images[idx]["name"], "brick-normal");
+    }
+
+    #[test]
+    fn finish_material_normal_texture_is_top_level() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "wall-brick".to_string();
+            m.object = ArchId(1);
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mat = &json["materials"][0];
+        assert!(mat.get("normalTexture").is_some(), "normalTexture must be at the material's top level");
+        assert!(mat["pbrMetallicRoughness"].get("normalTexture").is_none(), "normalTexture must not appear inside pbrMetallicRoughness");
     }
 
     #[test]
