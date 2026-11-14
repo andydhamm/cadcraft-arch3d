@@ -191,4 +191,77 @@ mod tests {
         assert_eq!(s.doc().unwrap().arch.cabinets.len(), count);
         assert_eq!(s.doc().unwrap().arch_revision, rev);
     }
+
+    #[test]
+    fn cabinet_fill_unknown_cabinet_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": "cb999" }));
+        assert!(r.is_err(), "unknown cabinet should error");
+    }
+
+    #[test]
+    fn cabinet_fill_missing_run_param_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({}));
+        assert!(r.is_err(), "missing run param should error");
+    }
+
+    #[test]
+    fn cabinet_fill_non_string_run_param_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": 42 }));
+        assert!(r.is_err(), "non-string run param should error");
+    }
+
+    #[test]
+    fn cabinet_fill_empty_run_string_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": "" }));
+        assert!(r.is_err(), "empty run string should error");
+    }
+
+    #[test]
+    fn cabinet_fill_whitespace_run_string_errors() {
+        let mut s = room();
+        let r = s.execute("cabinet.fill", &json!({ "run": "   " }));
+        assert!(r.is_err(), "whitespace-only run string should error");
+    }
+
+    #[test]
+    fn cabinet_fill_three_cabinets_one_filled_gap() {
+        let mut s = room();
+        s.execute("cabinet", &json!({ "kind": "base", "wall": "w0", "offset": 0.35, "widths": [0.6, 0.6, 0.6] })).unwrap();
+        let r = s.execute("cabinet.fill", &json!({ "run": "cb1" })).unwrap();
+        let fillers = r["fillers"].as_array().unwrap();
+        assert_eq!(fillers.len(), 1, "start gap should produce one filler");
+        let gaps = r["gaps"].as_array().unwrap();
+        let filled_gaps = gaps.iter().filter(|g| g["filled"] == true).count();
+        assert_eq!(filled_gaps, 1, "one gap should be filled");
+    }
+
+    #[test]
+    fn cabinet_fill_middle_cabinet_identifies_run() {
+        let mut s = room();
+        s.execute("cabinet", &json!({ "kind": "base", "wall": "w0", "offset": 0.35, "widths": [0.6, 0.6, 0.6] })).unwrap();
+        let r = s.execute("cabinet.fill", &json!({ "run": "cb2" })).unwrap();
+        let fillers = r["fillers"].as_array().unwrap();
+        assert_eq!(fillers.len(), 1, "middle cabinet should identify the same run");
+    }
+
+    #[test]
+    fn cabinet_fill_uppercase_cb_prefix() {
+        let mut s = room();
+        s.execute("cabinet", &json!({ "kind": "base", "wall": "w0", "offset": 0.35, "widths": [0.6, 0.6] })).unwrap();
+        let r = s.execute("cabinet.fill", &json!({ "run": "CB1" })).unwrap();
+        let fillers = r["fillers"].as_array().unwrap();
+        assert_eq!(fillers.len(), 1, "uppercase CB prefix should work");
+    }
+
+    #[test]
+    fn cabinet_fill_run_with_extra_fields_ignored() {
+        let mut s = room();
+        s.execute("cabinet", &json!({ "kind": "base", "wall": "w0", "offset": 0.35, "widths": [0.6, 0.6] })).unwrap();
+        let r = s.execute("cabinet.fill", &json!({ "run": "cb1", "extra": "ignored", "count": 5 })).unwrap();
+        assert_eq!(r["fillers"], json!(["cb2"]));
+    }
 }
