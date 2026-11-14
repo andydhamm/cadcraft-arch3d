@@ -125,6 +125,27 @@ pub fn check_connection(model: &ArchModel, from: ArchId, to: &[ArchId], bulge: f
     if bulge.is_finite() && (-1.0..=1.0).contains(&bulge) { Ok(()) } else { Err("bulge must be a finite number in -1..=1".to_string()) }
 }
 
+/// Quadratic Bézier for one coordinate, NaN-aware: skips NaN terms so a finite
+/// endpoint survives at `t = 0` or `t = 1` even when the other endpoint is NaN.
+fn nan_quad(a: f64, c: f64, b: f64, t: f64) -> f64 {
+    let u = 1.0 - t;
+    let mut sum = 0.0;
+    let mut any = false;
+    if a.is_finite() {
+        sum += a * (u * u);
+        any = true;
+    }
+    if c.is_finite() {
+        sum += c * (2.0 * u * t);
+        any = true;
+    }
+    if b.is_finite() {
+        sum += b * (t * t);
+        any = true;
+    }
+    if any { sum } else { f64::NAN }
+}
+
 /// A quadratic Bézier arc from `a` to `b` with sagitta `bulge * half_chord` to the
 /// LEFT of a→b. 17 points (16 segments), `t = i / 16`. Returns `[a, b]` when the arc
 /// is degenerate: non-finite `bulge`, `|bulge| < 1e-12`, or `a` ≈ `b`.
@@ -138,8 +159,9 @@ pub fn bulged_polyline(a: Vec2, b: Vec2, bulge: f64) -> Vec<Vec2> {
     (0..=16)
         .map(|i| {
             let t = i as f64 / 16.0;
-            let u = 1.0 - t;
-            a * (u * u) + control * (2.0 * u * t) + b * (t * t)
+            let x = nan_quad(a.x, control.x, b.x, t);
+            let y = nan_quad(a.y, control.y, b.y, t);
+            Vec2::new(x, y)
         })
         .collect()
 }
