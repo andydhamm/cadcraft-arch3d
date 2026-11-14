@@ -822,6 +822,35 @@ fn interior_wall_under_a_ceiling_is_shadowed_in_the_interactive_view() {
     assert!(open >= roofed + 30, "the back wall under the ceiling ({roofed}) must be darker than without it ({open})");
 }
 
+/// The opened-room regression (phase-19 check 15a): with the front wall removed the sunlit outer
+/// face of the south wall is gone, so the back wall under the ceiling reads darker. The ceiling
+/// must survive the cutaway (hiding a wall by id must not hide the room with the same number), or
+/// the back wall would be fully sunlit.
+#[test]
+fn interactive_ceiling_shades_the_back_wall_of_an_opened_room() {
+    let Some(mut r) = renderer((200, 150)) else { return };
+    let lighting = shadow_sun([0.0, -0.5, 0.866]);
+    let camera = south_camera();
+    let Some(front) = lit_sum_at(&mut r, 1, &shell(true, true), &camera, &lighting, (100, 75)) else { return };
+    let Some(back) = lit_sum_at(&mut r, 2, &shell(true, false), &camera, &lighting, (100, 75)) else { return };
+    assert!(front >= back + 30, "the sunlit front wall ({front}) must be brighter than the back wall under the ceiling ({back})");
+}
+
+/// The sun shadow map is built for an interactive frame without a ground plane, and is cached: a
+/// second frame with the same scene, eye, lighting and ground flag builds no new map.
+#[test]
+fn interactive_shadow_map_is_built_without_ground() {
+    let Some(mut r) = renderer((64, 64)) else { return };
+    let lighting = shadow_sun([0.0, -0.5, 0.866]);
+    let eye = [3.0, 2.5, 8.0];
+    let before = r.shadow_maps_built();
+    assert!(r.lit_frame(&shell(true, false), 7, eye, &lighting, false).is_some());
+    let built = r.shadow_maps_built();
+    assert!(built >= before + 1, "a sun-shadow frame builds at least one map: {before} -> {built}");
+    assert!(r.lit_frame(&shell(true, false), 7, eye, &lighting, false).is_some());
+    assert_eq!(r.shadow_maps_built(), built, "the same frame again reuses the sun map");
+}
+
 #[test]
 fn clipped_geometry_casts_no_interactive_shadow() {
     use cadcraft_doc::arch::ClipBox;
