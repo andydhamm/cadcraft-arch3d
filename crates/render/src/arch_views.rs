@@ -366,9 +366,10 @@ mod tests {
             }],
             ..ArchView::default()
         };
-        let id = d.arch.push_view(view).expect("valid view");
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
         let list = build_arch(&d, &Options::default(), false);
-        let h = view_handle(id);
+        let h = view_handle(ArchId(id));
         assert!(!list.prims.iter().any(|p| p.handle == h), "zero-height marker should draw nothing");
     }
 
@@ -390,9 +391,10 @@ mod tests {
             }],
             ..ArchView::default()
         };
-        let id = d.arch.push_view(view).expect("valid view");
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
         let list = build_arch(&d, &Options::default(), false);
-        let h = view_handle(id);
+        let h = view_handle(ArchId(id));
         assert!(!list.prims.iter().any(|p| p.handle == h), "NaN-height marker should draw nothing");
     }
 
@@ -456,9 +458,10 @@ mod tests {
             }],
             ..ArchView::default()
         };
-        let id = d.arch.push_view(view).expect("valid view");
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
         let list = build_arch(&d, &Options::default(), false);
-        let h = view_handle(id);
+        let h = view_handle(ArchId(id));
         // Should draw with default k=0.05
         assert!(list.prims.iter().any(|p| p.handle == h && p.kind == Kind::Polyline), "dimension with NaN scale should draw with default k");
     }
@@ -477,9 +480,10 @@ mod tests {
             }),
             ..ArchView::default()
         };
-        let id = d.arch.push_view(view).expect("valid view");
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
         let list = build_arch(&d, &Options::default(), false);
-        let h = view_handle(id);
+        let h = view_handle(ArchId(id));
         let prims: Vec<_> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline).collect();
         assert!(!prims.is_empty(), "huge coordinates should draw");
         for p in &prims {
@@ -507,9 +511,10 @@ mod tests {
             }],
             ..ArchView::default()
         };
-        let id = d.arch.push_view(view).expect("valid view");
+        let id = d.arch.views.len() as u32;
+        d.arch.views.push(view);
         let list = build_arch(&d, &Options::default(), false);
-        let h = view_handle(id);
+        let h = view_handle(ArchId(id));
         // 24 segments for the circle, no text
         let prims: Vec<_> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline).collect();
         assert_eq!(prims.len(), 24, "marker with empty text should draw 24 circle segments");
