@@ -576,4 +576,19 @@ mod tests {
         let Some(ov) = OrthoView::elevation([0.0, 1.0]) else { return };
         assert!(visible_segments(&quad_scene(), &ov, &[seg(0.5)]).is_empty());
     }
+
+    #[test]
+    fn merge_collinear_nan_and_zero_length() {
+        // NaN coordinates are dropped.
+        let nan = Line2::new([f64::NAN, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));
+        assert!(merge_collinear(vec![nan]).is_empty());
+        // Zero-length lines are dropped.
+        let zero = Line2::new([0.0, 0.0], [0.0, 0.0], ArchKind::Wall, ArchId(0));
+        assert!(merge_collinear(vec![zero]).is_empty());
+        // Collinear but non-touching lines stay separate.
+        let a = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));
+        let b = Line2::new([2.0, 0.0], [3.0, 0.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 2);
+    }
 }

@@ -676,6 +676,16 @@ mod tests {
     }
 
     #[test]
+    fn part_of_counter_materials() {
+        let id = ArchId(7);
+        for material in ["counter", "counter-top", "counter-edge"] {
+            assert_eq!(part_of(&Mesh::new(material, id)), "counter", "{material}");
+        }
+        // A counter is not a cabinet.
+        assert_ne!(arch_kind(&Mesh::new("counter", id)), cadcraft_doc::arch::ArchKind::Cabinet);
+    }
+
+    #[test]
     fn mesh_label_of_phase18_meshes() {
         use cadcraft_doc::arch::{backsplash_label, countertop_label, molding_line_label, room_label, wall_label};
         assert_eq!(mesh_label(&named("glass-wall", 2)), wall_label(ArchId(2)));
