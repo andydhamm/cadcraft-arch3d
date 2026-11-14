@@ -1606,6 +1606,126 @@ mod tests {
     }
 
     #[test]
+    fn gpu_frame_default_is_all_zeros() {
+        // The spec says: "Default (derived) is all zeros = today's behaviour."
+        let frame = GpuFrame::default();
+        let bytes = bytemuck::bytes_of(&frame);
+        for (i, &b) in bytes.iter().enumerate() {
+            assert_eq!(b, 0, "byte {i} of default GpuFrame is not zero");
+        }
+        // Specific fields that matter for "today's behaviour" (no env, no moon, no clip, etc.)
+        assert_eq!(frame.flags, 0);
+        assert_eq!(frame.env, [0u32; 4]);
+        assert_eq!(frame.env_aux, [0u32; 4]);
+        assert_eq!(frame.env_params, [0.0f32; 4]);
+        assert_eq!(frame.moon_dir, [0.0f32; 4]);
+        assert_eq!(frame.moon_rgb, [0.0f32; 4]);
+        assert_eq!(frame.clip_min, [0.0f32; 4]);
+        assert_eq!(frame.clip_max, [0.0f32; 4]);
+        assert_eq!(frame.view, [0.0f32; 4]);
+        assert_eq!(frame.tex, [0u32; 4]);
+        assert_eq!(frame.look, [0u32; 4]);
+    }
+
+    #[test]
+    fn frame_flags_are_distinct_and_combinable() {
+        // All ten frame flags must be distinct single bits.
+        let flags = [
+            FRAME_SUN,
+            FRAME_SKY,
+            FRAME_FURNACE,
+            FRAME_GROUND,
+            FRAME_ENV,
+            FRAME_MOON,
+            FRAME_CLIP,
+            FRAME_SUN_NO_SHADOW,
+            FRAME_NORMAL_MAPS,
+            FRAME_LAMBERT,
+        ];
+        for (i, &a) in flags.iter().enumerate() {
+            // Each flag is a single bit.
+            assert!(a != 0 && (a & (a - 1)) == 0, "flag {a} is not a single bit");
+            for (j, &b) in flags.iter().enumerate() {
+                if i != j {
+                    assert_eq!(a & b, 0, "flags {a} and {b} overlap");
+                }
+            }
+        }
+        // Flags can be combined and tested individually.
+        let combined = FRAME_SUN | FRAME_ENV | FRAME_CLIP | FRAME_LAMBERT;
+        assert_ne!(combined & FRAME_SUN, 0);
+        assert_ne!(combined & FRAME_ENV, 0);
+        assert_ne!(combined & FRAME_CLIP, 0);
+        assert_ne!(combined & FRAME_LAMBERT, 0);
+        assert_eq!(combined & FRAME_SKY, 0);
+        assert_eq!(combined & FRAME_MOON, 0);
+        // Setting and clearing works.
+        let mut f = FRAME_SUN | FRAME_SKY;
+        f |= FRAME_ENV;
+        assert_ne!(f & FRAME_ENV, 0);
+        f &= !FRAME_SUN;
+        assert_eq!(f & FRAME_SUN, 0);
+        assert_ne!(f & FRAME_SKY, 0);
+    }
+
+    #[test]
+    fn gpu_frame_round_trips_through_bytes() {
+        // GpuFrame is #[repr(C)] and Pod: it must round-trip through bytes exactly.
+        let frame = GpuFrame {
+            inv_view_proj: [[1.0, 0.0, 0.0, 0.0], [0.0, 2.0, 0.0, 0.0], [0.0, 0.0, 3.0, 0.0], [0.0, 0.0, 0.0, 4.0]],
+            eye: [10.0, 20.0, 30.0, 1.0],
+            size: [1920, 1080],
+            sample_base: 42,
+            seed: 0xDEADBEEF,
+            bounces: 8,
+            light_count: 5,
+            flags: FRAME_SUN | FRAME_ENV,
+            spp_this_pass: 16,
+            sun_dir: [0.0, 0.0, -1.0, 0.0],
+            sun_rgb: [1.0, 0.9, 0.8, 0.0],
+            sky_zenith: [0.2, 0.4, 0.8, 0.0],
+            sky_horizon: [0.6, 0.6, 0.6, 0.0],
+            furnace: [0.5, 0.0, 0.0, 0.0],
+            probe_count: 3,
+            env: [100, 256, 256, 3],
+            env_aux: [50, 200, 0, 0],
+            env_params: [1000.0, 0.0, 0.0, 0.0],
+            moon_dir: [0.0, 0.0, 1.0, 0.0],
+            moon_rgb: [0.1, 0.1, 0.15, 0.0],
+            clip_min: [-10.0, -10.0, -10.0, 0.0],
+            clip_max: [10.0, 10.0, 10.0, 0.0],
+            view: [0.0, 0.0, -1.0, 0.5],
+            tex: [400, 256, 2, 0],
+            look: [1, 0, 0, 0],
+            ..Default::default()
+        };
+        let bytes = bytemuck::bytes_of(&frame);
+        let back = bytemuck::from_bytes::<GpuFrame>(bytes);
+        assert_eq!(*back, frame, "GpuFrame did not round-trip through bytes");
+        // The byte size must be exactly 368 (the spec's size).
+        assert_eq!(bytes.len(), 368);
+    }
+
+    #[test]
+    fn wgsl_hook_functions_check_clip_flag() {
+        // The WGSL hook stubs must check the FRAME_CLIP flag before doing anything.
+        let wgsl = include_str!("../shaders/pt/common.wgsl");
+        // hit_clipped returns false when FRAME_CLIP is not set.
+        let hit_clipped = wgsl.find("fn hit_clipped(p: vec3<f32>) -> bool").expect("hit_clipped not found");
+        let after = &wgsl[hit_clipped..];
+        let body_end = after.find("}").expect("hit_clipped body not found");
+        let body = &after[..body_end];
+        assert!(body.contains("FRAME_CLIP"), "hit_clipped does not check FRAME_CLIP");
+        assert!(body.contains("return false"), "hit_clipped does not return false when not clipped");
+        // camera_t_min uses the view vector (forward and near clip).
+        let cam_t_min = wgsl.find("fn camera_t_min(d: vec3<f32>) -> f32").expect("camera_t_min not found");
+        let after = &wgsl[cam_t_min..];
+        let body_end = after.find("}").expect("camera_t_min body not found");
+        let body = &after[..body_end];
+        assert!(body.contains("frame.view"), "camera_t_min does not use frame.view");
+    }
+
+    #[test]
     fn ground_adds_two_triangles() {
         let scene = random_prisms(&mut Rng(5), 3);
         let without = build_gpu_scene(&scene, false, None);
