@@ -115,6 +115,11 @@ fn pick_lights(r: ptr<function, Rng>) -> Pick {
     return p;
 }
 
+fn light_shadow_limit(light: Light, s: LightSample) -> f32 {
+    let d = select(s.dist - PT_EPS, s.dist - 0.03, light.kind == LIGHT_STRIP);
+    return max(d, 0.0);
+}
+
 // The radiance a vertex p (normal n, viewer direction wo) reflects toward wo of the light from the
 // lights and the sun.
 fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> {
@@ -131,7 +136,8 @@ fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<f
         if (!(light_luminance(f) > 0.0)) {
             continue;
         }
-        let v = visibility(o, s.dir, s.dist - PT_EPS);
+        let light = lights[pick.first + k];
+        let v = visibility(o, s.dir, light_shadow_limit(light, s));
         if (!(light_luminance(v) > 0.0)) {
             continue;
         }
@@ -361,7 +367,8 @@ fn irradiance_main(@builtin(global_invocation_id) id: vec3<u32>) {
             if (!(light_luminance(s.li) > 0.0) || !(s.pdf > 0.0) || !(cos_n > 0.0)) {
                 continue;
             }
-            let v = visibility(o, s.dir, s.dist - PT_EPS);
+            let light = lights[pick.first + j];
+            let v = visibility(o, s.dir, light_shadow_limit(light, s));
             e = e + s.li * v * (cos_n * pick.weight / s.pdf);
         }
         let sun = sun_sample();
