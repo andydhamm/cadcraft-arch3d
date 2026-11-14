@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "cadcraft-arch"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "cadcraft-doc",
  "cadcraft-geom",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "cadcraft-arch3d"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "cadcraft-arch",
  "cadcraft-color",
@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "cadcraft-gpu-optin"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "wgpu",
 ]
@@ -824,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "cadcraft-render3d"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "bytemuck",
  "cadcraft-arch3d",
