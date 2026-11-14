@@ -215,7 +215,7 @@ fn parse_sun(cmd: &str, model: &ArchModel, v: &Value, render: bool, look: &mut L
             let clock = o.contains_key("date") || o.contains_key("time");
             let compass = o.contains_key("azimuth") || o.contains_key("elevation");
             if !clock && !compass {
-                return Ok(angle.flatten());
+                return Ok(if render { angle.flatten() } else { None });
             }
             if !render {
                 return Err(bad(
