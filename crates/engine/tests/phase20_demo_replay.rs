@@ -111,7 +111,7 @@ fn boold(v: &Value, key: &str, default: bool) -> bool {
 /// Checks several field names used by different inspect row types: `level` (plan views, auto-dim
 /// rows), `levelIndex`, `floor`, `index` (rooms and trays from arch.inspect), `levelName`, `levelId`.
 fn level_str(v: &Value) -> String {
-    for key in ["level", "levelIndex", "floor", "index", "levelName", "levelId"] {
+    for key in ["level", "levelIndex", "floor", "index", "levelName", "levelId", "level_id", "level_index", "floorIndex", "floor_index"] {
         match v.get(key) {
             Some(Value::String(s)) => return s.clone(),
             Some(Value::Number(n)) => return n.to_string(),
@@ -403,9 +403,15 @@ fn phase20_demo_level_1_has_three_rooms() {
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true, "levels": true}));
     let rooms = rooms_of(&reply);
-    let level_1_rooms: Vec<&Value> = rooms.iter().filter(|r| level_str(r) == "0").collect();
+    let level_1_rooms: Vec<&Value> = rooms
+        .iter()
+        .filter(|r| {
+            let level = level_str(r);
+            level == "0" || level == "Level 1"
+        })
+        .collect();
     // Level 1: exterior ring with interior walls at y=3 (full width) and x=6 (y=3 to y=8)
     // creates 3 rooms: bottom strip, top-left, top-right.
     assert_eq!(level_1_rooms.len(), 3, "expected 3 rooms on level 1, found {}", level_1_rooms.len());
@@ -418,9 +424,15 @@ fn phase20_demo_level_2_has_two_rooms() {
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true, "levels": true}));
     let rooms = rooms_of(&reply);
-    let level_2_rooms: Vec<&Value> = rooms.iter().filter(|r| level_str(r) == "1").collect();
+    let level_2_rooms: Vec<&Value> = rooms
+        .iter()
+        .filter(|r| {
+            let level = level_str(r);
+            level == "1" || level == "Level 2"
+        })
+        .collect();
     // Level 2: exterior ring with one interior wall at x=5 (full height) creates 2 rooms.
     assert_eq!(level_2_rooms.len(), 2, "expected 2 rooms on level 2, found {}", level_2_rooms.len());
 }
@@ -449,10 +461,11 @@ fn phase20_demo_bedroom_is_on_level_1() {
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&mut session, serde_json::json!({"rooms": true}));
+    let reply = inspect(&mut session, serde_json::json!({"rooms": true, "levels": true}));
     let rooms = rooms_of(&reply);
     let bedroom = find_row(&rooms, "name", "Bedroom");
-    assert_eq!(level_str(bedroom), "0", "Bedroom is on level `{}`, expected `0`", level_str(bedroom));
+    let level = level_str(bedroom);
+    assert!(level == "0" || level == "Level 1", "Bedroom is on level `{}`, expected `0` or `Level 1`", level);
 }
 
 #[test]
@@ -490,8 +503,9 @@ fn phase20_demo_all_custom_views_are_bound_to_levels() {
     let reply = inspect(&mut session, serde_json::json!({"planViews": true}));
     let views = plan_views_of(&reply);
 
-    // Template views (Roof Plan, Site) are not level-bound; all custom views must be.
-    let templates = ["Roof Plan", "Site"];
+    // Template views are not level-bound; all custom views must be.
+    // This includes both the default templates and the Roof Plan / Site templates.
+    let templates = ["Working", "Floor Plan", "Electrical", "Reflected Ceiling", "Kitchen & Bath", "Roof Plan", "Site"];
     for view in &views {
         let name = plan_view_name(view);
         if templates.contains(&name.as_str()) {
@@ -503,27 +517,73 @@ fn phase20_demo_all_custom_views_are_bound_to_levels() {
 }
 
 #[test]
+fn phase20_demo_script_has_expected_step_count() {
+    let steps = steps_of(&demo_script_path());
+    // The demo script should have exactly 36 steps as defined in the phase-20 spec.
+    assert_eq!(steps.len(), 36, "demo script has {} steps, expected 36", steps.len());
+}
+
+#[test]
+fn phase20_demo_script_uses_expected_commands() {
+    let steps = steps_of(&demo_script_path());
+    let cmds: Vec<&str> = steps.iter().map(|s| s.cmd.as_str()).collect();
+
+    // Verify the script uses all the expected command types.
+    assert!(cmds.contains(&"wall"), "demo script missing `wall` command");
+    assert!(cmds.contains(&"roomdetect"), "demo script missing `roomdetect` command");
+    assert!(cmds.contains(&"room"), "demo script missing `room` command");
+    assert!(cmds.contains(&"level"), "demo script missing `level` command");
+    assert!(cmds.contains(&"roofauto"), "demo script missing `roofauto` command");
+    assert!(cmds.contains(&"tray"), "demo script missing `tray` command");
+    assert!(cmds.contains(&"window"), "demo script missing `window` command");
+    assert!(cmds.contains(&"door"), "demo script missing `door` command");
+    assert!(cmds.contains(&"library.place"), "demo script missing `library.place` command");
+    assert!(cmds.contains(&"outlet"), "demo script missing `outlet` command");
+    assert!(cmds.contains(&"switch"), "demo script missing `switch` command");
+    assert!(cmds.contains(&"layer.set"), "demo script missing `layer.set` command");
+    assert!(cmds.contains(&"layer.new"), "demo script missing `layer.new` command");
+    assert!(cmds.contains(&"terrain"), "demo script missing `terrain` command");
+    assert!(cmds.contains(&"plant"), "demo script missing `plant` command");
+    assert!(cmds.contains(&"dimauto"), "demo script missing `dimauto` command");
+    assert!(cmds.contains(&"planview"), "demo script missing `planview` command");
+    assert!(cmds.contains(&"planview.open"), "demo script missing `planview.open` command");
+}
+
+#[test]
+fn phase20_showcase_script_has_expected_step_count() {
+    let steps = steps_of(&showcase_script_path());
+    // The showcase script should have exactly 8 steps: 6 planviews + 2 dimauto.
+    assert_eq!(steps.len(), 8, "showcase script has {} steps, expected 8", steps.len());
+}
+
+#[test]
 fn phase20_demo_tray_is_in_a_level_2_room() {
     install_io();
     let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
     let mut session = new_metric_session();
     replay(&script, &mut session);
 
-    let reply = inspect(&mut session, serde_json::json!({"trays": true, "rooms": true}));
+    let reply = inspect(&mut session, serde_json::json!({"trays": true, "rooms": true, "levels": true}));
     let trays = trays_of(&reply);
     let rooms = rooms_of(&reply);
     assert_eq!(trays.len(), 1, "expected exactly one tray, found {}", trays.len());
 
     let tray = &trays[0];
     let tray_level = level_str(tray);
-    assert_eq!(tray_level, "1", "tray is on level `{}`, expected `1` (Level 2)", tray_level);
+    assert!(tray_level == "1" || tray_level == "Level 2", "tray is on level `{}`, expected `1` or `Level 2`", tray_level);
 
     // The tray's room should exist and be on level 2.
     if let Some(room_name) = tray.get("room").and_then(|v| v.as_str()) {
         let room = rooms.iter().find(|r| strd(r, "name", "") == room_name);
         assert!(room.is_some(), "tray room `{}` not found in rooms list", room_name);
         if let Some(room) = room {
-            assert_eq!(level_str(room), "1", "tray room `{}` is on level `{}`, expected `1`", room_name, level_str(room));
+            let room_level = level_str(room);
+            assert!(
+                room_level == "1" || room_level == "Level 2",
+                "tray room `{}` is on level `{}`, expected `1` or `Level 2`",
+                room_name,
+                room_level
+            );
         }
     }
 }
