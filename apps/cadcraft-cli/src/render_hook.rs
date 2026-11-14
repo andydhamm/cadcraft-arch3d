@@ -1453,8 +1453,12 @@ mod tests {
 
     #[test]
     fn hidden_set_key_differs_from_full_filter_key() {
-        use cadcraft_engine::doc::arch::ClipBox;
-        let full = ViewFilter { hidden: vec![1, 2, 3], clip: Some(ClipBox::default()), near: Some(5.0), ..Default::default() };
+        let mut full = ViewFilter::default();
+        full.hidden.insert(("wall", ArchId(1)));
+        full.hidden.insert(("wall", ArchId(2)));
+        full.hidden.insert(("wall", ArchId(3)));
+        full.clip = Some(cadcraft_arch3d::view_filter::ClipBox::default());
+        full.near = Some(5.0);
         let only_hidden = hidden_set_key(&full);
         let full_key = full.key();
         assert_ne!(only_hidden, full_key);
