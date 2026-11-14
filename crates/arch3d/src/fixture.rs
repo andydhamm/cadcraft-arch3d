@@ -79,10 +79,9 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
     }
     let lens = if f.on { "light-lens-lit" } else { "light-lens" };
     let hw = 0.012 / 2.0;
-    // The housing bottom, referenced once so the proud lens below it is expressed
-    // exactly as `h_bottom - 0.001`. The lens z is computed in f32 (the stored
-    // representation) so its bottom is exactly 1 mm below the housing's bottom
-    // face as rendered, not 1 mm below the f64 value.
+    // The housing bottom and lens bottom are kept one millimetre apart in world space, while
+    // the underlying mesh stores z in f32. The resulting lens sits proud of the housing and is
+    // never coplanar with it in the ray/triangle tests.
     let h_bottom = zp - 0.006;
     let h_bottom_f32 = h_bottom as f32;
     let lens_bottom_f32 = h_bottom_f32 - 0.001f32;
@@ -108,7 +107,7 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
         let px = -uy * hw;
         let py = ux * hw;
         let ring = vec![Vec2::new(a.x + px, a.y + py), Vec2::new(b.x + px, b.y + py), Vec2::new(b.x - px, b.y - py), Vec2::new(a.x - px, a.y - py)];
-        parts.push(prism("light-strip", f, &ring, h_bottom, zp));
+        parts.push(prism("light-strip", f, &ring, h_bottom_f32 as f64, zp));
         // The lens is proud of the housing: a 1 mm slab below the housing bottom, 1 mm
         // narrower on each side, with its ends pulled in 1 mm along the segment.  A segment
         // shorter than 4 mm keeps its full length so the lens never shrinks to nothing.
@@ -391,10 +390,10 @@ mod tests {
             let lb = lens.bounds();
             let hb = housings[0].bounds();
             // Lens max z is flush with housing min z.
-            assert!(lb.max[2] <= hb.min[2] + 1e-9, "lens max z {:.15e} > housing min z {:.15e}", lb.max[2], hb.min[2]);
-            // Lens min z is exactly 1 mm below housing min z.
+            assert!(lb.max[2] <= hb.min[2] + 1e-6, "lens max z {:.15e} > housing min z {:.15e}", lb.max[2], hb.min[2]);
+            // The lens sits 1 mm below the housing face, within the mesh's f32 precision.
             assert!(
-                (lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-9,
+                (lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-6,
                 "lens min z {:.15e} != housing min z - 0.001 {:.15e}",
                 lb.min[2],
                 hb.min[2] - 0.001
@@ -413,9 +412,9 @@ mod tests {
         for lens in meshes.iter().filter(|x| x.material == "light-lens") {
             let lb = lens.bounds();
             let hb = housings[0].bounds();
-            assert!(lb.max[2] <= hb.min[2] + 1e-9, "lens max z {:.15e} > housing min z {:.15e}", lb.max[2], hb.min[2]);
+            assert!(lb.max[2] <= hb.min[2] + 1e-6, "lens max z {:.15e} > housing min z {:.15e}", lb.max[2], hb.min[2]);
             assert!(
-                (lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-9,
+                (lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-6,
                 "lens min z {:.15e} != housing min z - 0.001 {:.15e}",
                 lb.min[2],
                 hb.min[2] - 0.001
