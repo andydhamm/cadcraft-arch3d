@@ -1320,4 +1320,102 @@ mod tests {
         assert!((intervals[1].0 - 8.0).abs() < 1e-6);
         assert!((intervals[1].1 - 10.0).abs() < 1e-6);
     }
+
+    #[test]
+    fn multiple_trays_produce_multiple_runs() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        let room_poly = vec![Vec2::new(0.05, 0.05), Vec2::new(4.05, 0.05), Vec2::new(4.05, 3.05), Vec2::new(0.05, 3.05)];
+        let room = Room {
+            polygon: room_poly,
+            room_type: RoomType::Living,
+            level: 0,
+            ceiling_height: Some(2.4),
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.0,
+                ..Default::default()
+            }],
+            ..Room::default()
+        };
+        model.push_room(room.clone());
+
+        let _w0 = model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.1, 0.0), thickness: 0.1, ..Wall::default() });
+        let _w1 = model.push_wall(Wall { start: Vec2::new(4.1, 0.0), end: Vec2::new(4.1, 3.1), thickness: 0.1, ..Wall::default() });
+        let _w2 = model.push_wall(Wall { start: Vec2::new(4.1, 3.1), end: Vec2::new(0.0, 3.1), thickness: 0.1, ..Wall::default() });
+        let _w3 = model.push_wall(Wall { start: Vec2::new(0.0, 3.1), end: Vec2::new(0.0, 0.0), thickness: 0.1, ..Wall::default() });
+
+        // Two trays with different insets
+        let t1 = Tray { room: room.id, level: 0, inset: 0.6, depth: 0.2, sides: TraySides::Vertical, ..Tray::default() };
+        let t2 = Tray { room: room.id, level: 0, inset: 1.2, depth: 0.1, sides: TraySides::Vertical, ..Tray::default() };
+        model.trays.push(t1);
+        model.trays.push(t2);
+
+        let runs = room_runs(&model, &room);
+        let crown_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Crown).collect();
+        // Wall run + 2 tray runs = 3
+        assert_eq!(crown_runs.len(), 3);
+    }
+
+    #[test]
+    fn zero_length_wall_produces_no_runs() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        let room_poly = vec![Vec2::new(0.1, 0.1), Vec2::new(4.1, 0.1), Vec2::new(4.1, 3.1), Vec2::new(0.1, 3.1)];
+        let room = Room {
+            polygon: room_poly,
+            room_type: RoomType::Living,
+            level: 0,
+            ceiling_height: Some(2.4),
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Base,
+                profile: crate::molding_profile::default_profile(MoldingKind::Base),
+                offset: 0.0,
+                ..Default::default()
+            }],
+            ..Room::default()
+        };
+        model.push_room(room.clone());
+
+        // Only a zero-length wall
+        let _w = model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), thickness: 0.2, ..Wall::default() });
+
+        let runs = room_runs(&model, &room);
+        assert!(runs.is_empty());
+    }
+
+    #[test]
+    fn tray_with_zero_depth_still_produces_run() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        let room_poly = vec![Vec2::new(0.05, 0.05), Vec2::new(4.05, 0.05), Vec2::new(4.05, 3.05), Vec2::new(0.05, 3.05)];
+        let room = Room {
+            polygon: room_poly,
+            room_type: RoomType::Living,
+            level: 0,
+            ceiling_height: Some(2.4),
+            moldings: vec![RoomMolding {
+                kind: MoldingKind::Crown,
+                profile: crate::molding_profile::default_profile(MoldingKind::Crown),
+                offset: 0.0,
+                ..Default::default()
+            }],
+            ..Room::default()
+        };
+        model.push_room(room.clone());
+
+        let _w0 = model.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.1, 0.0), thickness: 0.1, ..Wall::default() });
+        let _w1 = model.push_wall(Wall { start: Vec2::new(4.1, 0.0), end: Vec2::new(4.1, 3.1), thickness: 0.1, ..Wall::default() });
+        let _w2 = model.push_wall(Wall { start: Vec2::new(4.1, 3.1), end: Vec2::new(0.0, 3.1), thickness: 0.1, ..Wall::default() });
+        let _w3 = model.push_wall(Wall { start: Vec2::new(0.0, 3.1), end: Vec2::new(0.0, 0.0), thickness: 0.1, ..Wall::default() });
+
+        let tray = Tray { room: room.id, level: 0, inset: 0.6, depth: 0.0, sides: TraySides::Vertical, ..Tray::default() };
+        model.trays.push(tray);
+
+        let runs = room_runs(&model, &room);
+        let crown_runs: Vec<_> = runs.iter().filter(|r| r.kind == MoldingKind::Crown).collect();
+        // Wall run + tray run
+        assert_eq!(crown_runs.len(), 2);
+    }
 }
