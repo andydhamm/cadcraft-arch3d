@@ -5,6 +5,11 @@ use std::sync::Once;
 use cadcraft_engine::{Session, library::LibraryIo};
 use serde_json::{Value, json};
 
+fn load_demo_steps() -> Vec<Value> {
+    let script = fs::read_to_string(demo_path()).expect("phase-19 demo script should exist");
+    serde_json::from_str(&script).expect("phase-19 demo script is valid JSON")
+}
+
 fn install_library_io() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
@@ -22,8 +27,7 @@ fn demo_path() -> PathBuf {
 }
 
 fn replay_demo() -> Session {
-    let script = fs::read_to_string(demo_path()).expect("phase-19 demo script should exist");
-    let steps: Vec<Value> = serde_json::from_str(&script).expect("phase-19 demo script is valid JSON");
+    let steps = load_demo_steps();
 
     install_library_io();
     let mut session = Session::new();
@@ -73,6 +77,163 @@ fn phase19_demo_saves_three_cameras_with_their_own_looks() {
     let overview_look = overview.get("look").and_then(Value::as_object).expect("overview look missing");
     assert_eq!(overview["kind"], "overview");
     assert_eq!(overview_look["cutaway"], true);
+}
+
+#[test]
+fn phase19_demo_wall_references_are_valid() {
+    let steps = load_demo_steps();
+    let mut walls_created = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "wall" {
+            walls_created.push(format!("w{}", walls_created.len()));
+        }
+        if cmd == "window" || cmd == "door" {
+            if let Some(wall) = step.get("params").and_then(|p| p.get("wall")).and_then(Value::as_str) {
+                assert!(
+                    walls_created.contains(&wall.to_string()),
+                    "window/door references wall {wall} but only {walls_created:?} exist at that point"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn phase19_demo_room_references_are_valid() {
+    let steps = load_demo_steps();
+    let mut rooms_created = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "room" {
+            if let Some(id) = step.get("params").and_then(|p| p.get("id")).and_then(Value::as_str) {
+                rooms_created.push(id.to_string());
+            }
+        }
+        if cmd == "lightfixture" {
+            if let Some(room) = step.get("params").and_then(|p| p.get("room")).and_then(Value::as_str) {
+                assert!(
+                    rooms_created.contains(&room.to_string()),
+                    "lightfixture references room {room} but only {rooms_created:?} exist at that point"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn phase19_demo_cabinet_references_are_valid() {
+    let steps = load_demo_steps();
+    let mut cabinets_created = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "cabinet" {
+            cabinets_created.push(format!("cb{}", cabinets_created.len()));
+        }
+        if cmd == "lightfixture" {
+            if let Some(under) = step.get("params").and_then(|p| p.get("under")).and_then(Value::as_array) {
+                for cab in under {
+                    if let Some(cab_str) = cab.as_str() {
+                        assert!(
+                            cabinets_created.contains(&cab_str.to_string()),
+                            "lightfixture under references cabinet {cab_str} but only {cabinets_created:?} exist at that point"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn phase19_demo_tray_reference_is_valid() {
+    let steps = load_demo_steps();
+    let mut trays_created = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "tray" {
+            trays_created.push(format!("tr{}", trays_created.len()));
+        }
+        if cmd == "lightfixture" {
+            if let Some(tray) = step.get("params").and_then(|p| p.get("tray")).and_then(Value::as_str) {
+                assert!(
+                    trays_created.contains(&tray.to_string()),
+                    "lightfixture references tray {tray} but only {trays_created:?} exist at that point"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn phase19_demo_light_set_references_are_valid() {
+    let steps = load_demo_steps();
+    let mut light_sets_created = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "lightset" {
+            if let Some(name) = step.get("params").and_then(|p| p.get("name")).and_then(Value::as_str) {
+                light_sets_created.push(name.to_string());
+            }
+        }
+        if cmd == "look" || cmd == "camera" {
+            if let Some(light_set) = step.get("params").and_then(|p| p.get("lightSet")).and_then(Value::as_str) {
+                assert!(
+                    light_sets_created.contains(&light_set.to_string()),
+                    "{cmd} references lightSet {light_set} but only {light_sets_created:?} exist at that point"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn phase19_demo_sun_angle_references_are_valid() {
+    let steps = load_demo_steps();
+    let mut sun_angles_created = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "sunangle" {
+            if let Some(name) = step.get("params").and_then(|p| p.get("name")).and_then(Value::as_str) {
+                sun_angles_created.push(name.to_string());
+            }
+        }
+        if cmd == "look" || cmd == "camera" {
+            if let Some(angle) = step.get("params").and_then(|p| p.get("sun")).and_then(|s| s.get("angle")).and_then(Value::as_str) {
+                assert!(
+                    sun_angles_created.contains(&angle.to_string()),
+                    "{cmd} references sun angle {angle} but only {sun_angles_created:?} exist at that point"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn phase19_demo_camera_references_are_valid() {
+    let steps = load_demo_steps();
+    let mut cameras_created = Vec::new();
+
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(Value::as_str).unwrap();
+        if cmd == "camera" {
+            if let Some(save) = step.get("params").and_then(|p| p.get("save")).and_then(Value::as_str) {
+                cameras_created.push(save.to_string());
+            }
+            if let Some(use_cam) = step.get("params").and_then(|p| p.get("use")).and_then(Value::as_str) {
+                assert!(
+                    cameras_created.contains(&use_cam.to_string()),
+                    "camera use references {use_cam} but only {cameras_created:?} exist at that point"
+                );
+            }
+        }
+    }
 }
 
 #[test]
