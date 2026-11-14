@@ -972,4 +972,23 @@ mod tests {
         let z = clip[2] / clip[3];
         assert!(z >= 0.0 && z <= 1.0, "center z should be in [0,1], got {}", z);
     }
+
+    #[test]
+    fn fit_with_tiny_bounds() {
+        let b = Bounds3::new([0.0, 0.0, 0.0], [0.001, 0.001, 0.001]);
+        let (m, range) = fit([0.0, -0.5, 0.8], &b).expect("fit should succeed for tiny bounds");
+        assert!(m.iter().flatten().all(|v| v.is_finite()));
+        assert!(range > 0.0);
+    }
+
+    #[test]
+    fn bounds_usable_edge_cases() {
+        assert!(bounds_usable(&Bounds3::new([0.0; 3], [1.0; 3])));
+        assert!(!bounds_usable(&Bounds3::new([f64::NAN; 3], [1.0; 3])));
+        assert!(!bounds_usable(&Bounds3::new([0.0; 3], [f64::NAN; 3])));
+        assert!(!bounds_usable(&Bounds3::new([1.0; 3], [0.0; 3])));
+        // Zero extent in two axes but positive in one is usable.
+        assert!(bounds_usable(&Bounds3::new([0.0, 0.0, 0.0], [0.0, 0.0, 1.0])));
+        assert!(bounds_usable(&Bounds3::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0])));
+    }
 }

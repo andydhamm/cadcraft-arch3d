@@ -1450,4 +1450,38 @@ mod tests {
         };
         assert!(count <= ENV_CACHE_CAP, "cache must hold at most {ENV_CACHE_CAP} entries, got {count}");
     }
+
+    #[test]
+    fn hidden_set_key_differs_from_full_filter_key() {
+        let mut full = ViewFilter::default();
+        full.hidden.insert(("wall", ArchId(1)));
+        full.hidden.insert(("wall", ArchId(2)));
+        full.hidden.insert(("wall", ArchId(3)));
+        full.clip = Some(cadcraft_arch3d::view_filter::ClipBox::default());
+        full.near = Some(5.0);
+        let only_hidden = hidden_set_key(&full);
+        let full_key = full.key();
+        assert_ne!(only_hidden, full_key);
+    }
+
+    #[test]
+    fn filtered_scene_key_is_distinct_from_revision() {
+        let key = filtered_scene_key(42, 123);
+        assert_ne!(key, 42);
+        assert_ne!(key, 123);
+        // High bit is set to distinguish filtered keys from plain revisions.
+        assert!(key >> 63 == 1);
+        // Deterministic.
+        assert_eq!(filtered_scene_key(42, 123), key);
+    }
+
+    #[test]
+    fn distance_edge_cases() {
+        let a = Vec3::new(0.0, 0.0, 0.0);
+        let b = Vec3::new(3.0, 4.0, 0.0);
+        assert!((distance(a, b) - 5.0).abs() < 1e-9);
+        assert_eq!(distance(a, a), 0.0);
+        let nan = Vec3::new(f64::NAN, 0.0, 0.0);
+        assert!(distance(a, nan).is_nan());
+    }
 }
