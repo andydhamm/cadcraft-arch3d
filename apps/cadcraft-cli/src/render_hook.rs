@@ -219,6 +219,14 @@ fn shadow_casting_lights(scene: &Scene3d) -> usize {
     scene.lights.iter().filter(|l| l.kind != cadcraft_arch3d::light::LightKind::Strip).count()
 }
 
+/// The moon direction used to light the scene. An HDRI backdrop (from the look, falling back to
+/// the model) replaces the analytic sky, so its moon is withheld; otherwise the analytic sky's
+/// moon direction is used.
+fn moon_dir_for(model: &cadcraft_engine::doc::arch::ArchModel, look: &Look) -> Option<[f64; 3]> {
+    let eff = look.backdrop.as_ref().or(model.backdrop.as_ref());
+    if matches!(eff, Some(&cadcraft_engine::doc::arch::Backdrop::Hdri { .. })) { None } else { cadcraft_arch3d::sky::moon_dir(model, &look.sky.moon) }
+}
+
 /// `<out without .png>-spp<n>.png`.
 fn snapshot_path(out: &std::path::Path, spp: u32) -> std::path::PathBuf {
     let stem = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -316,7 +324,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         cadcraft_arch3d::set_backdrop(&req.drawing.arch, f, look.backdrop.as_ref());
         (&*f, filtered_scene_key(revision, hidden_key))
     };
-    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let moon_dir = moon_dir_for(&req.drawing.arch, &look);
     let mut lighting = lighting_for(&look, sun_dir, req.budget).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, revision, &look, sun_dir);
     // The calibration albedo, the metered night (all but the legacy `sun: false`) and a bare-number
@@ -499,7 +507,7 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
     };
     let scene = &state.scene.as_ref().ok_or("renderer unavailable")?.2;
     let (look, sun_dir) = req.resolved_sun();
-    let moon_dir = cadcraft_arch3d::sky::moon_dir(&req.drawing.arch, &look.sky.moon);
+    let moon_dir = moon_dir_for(&req.drawing.arch, &look);
     let mut lighting = lighting_for(&look, sun_dir, 8).with_moon(moon_dir);
     lighting.environment = environment_cached(&req.drawing.arch, req.drawing.arch_revision, &look, sun_dir);
     let opts = path_options(&req.path, &look, None);
@@ -1449,5 +1457,47 @@ mod tests {
             return;
         };
         assert!(count <= ENV_CACHE_CAP, "cache must hold at most {ENV_CACHE_CAP} entries, got {count}");
+    }
+
+    #[test]
+    fn an_hdri_backdrop_withholds_the_moon() {
+        use cadraft_engine::doc::arch::ArchModel;
+        use cadraft_engine::doc::arch::Backdrop;
+
+        // Case 1: Hdri on the model backdrop, sky on, default moon.
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Hdri { image: "any.hdr".into(), ..Default::default() });
+        let mut look = Look::default();
+        look.sky.on = true;
+        assert_eq!(moon_dir_for(&model, &look), None, "HDRI backdrop should withhold the moon");
+        let lighting = cadraft_render3d::look::lighting_for(&look, None, 8).with_moon(moon_dir_for(&model, &look));
+        assert_eq!(lighting.moon, None, "lighting.moon must be None under HDRI");
+        assert_eq!(lighting.sun, None, "lighting.sun must be None when sun is off");
+
+        // Case 2: Hdri on the look backdrop, Sky on the model backdrop.
+        let mut model2 = ArchModel::default();
+        model2.backdrop = Some(Backdrop::Sky { ..Default::default() });
+        let mut look2 = look.clone();
+        look2.backdrop = Some(Backdrop::Hdri { image: "any.hdr".into(), ..Default::default() });
+        assert_eq!(moon_dir_for(&model2, &look2), None, "look HDRI must also withhold the moon");
+        let lighting2 = cadraft_render3d::look::lighting_for(&look2, None, 8).with_moon(moon_dir_for(&model2, &look2));
+        assert_eq!(lighting2.moon, None);
+        assert_eq!(lighting2.sun, None);
+    }
+
+    #[test]
+    fn a_sky_backdrop_night_keeps_the_moon() {
+        use cadraft_engine::doc::arch::ArchModel;
+        use cadraft_engine::doc::arch::Backdrop;
+
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Sky { ..Default::default() });
+        let mut look = Look::default();
+        look.sky.on = true;
+        let md = moon_dir_for(&model, &look);
+        assert!(md.is_some(), "Sky backdrop should keep the moon");
+        let lighting = cadraft_render3d::look::lighting_for(&look, None, 8).with_moon(md);
+        assert_eq!(lighting.sun, None, "sun must be None when off");
+        assert_eq!(lighting.moon.map(|l| l.lux), Some(0.25), "moon lux should be 0.25");
     }
 }
