@@ -1171,7 +1171,8 @@ mod tests {
         let camera = full([2.0, -8.0, 1.2], [2.0, 2.0, 1.2]);
         let mut look = Look::default();
         look.sky.on = false;
-        look.exposure = ExposureSetting::Manual { ev100: 12.0 };
+        // Lower exposure to avoid saturation on llvmpipe
+        look.exposure = ExposureSetting::Manual { ev100: 10.0 };
         look.tone_map = cadcraft_engine::doc::arch::ToneMap::None;
         look.sun.on = true;
         // Sun from the south (azimuth 180) at elevation 60 degrees.
