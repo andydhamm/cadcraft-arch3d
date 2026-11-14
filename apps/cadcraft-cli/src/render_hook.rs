@@ -285,6 +285,10 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     }
     let State { off, scene, filtered, cache: pcache, cache_saved, path_traces, .. } = state;
     let (look, sun_dir) = req.resolved_sun();
+    // A request may set `look.sun.angle` without an explicit `sun_dir`; the render hook must resolve
+    // the named angle to the actual toward-sun direction or the interactive view falls back to the
+    // default daylight and no shadows are built.
+    let sun_dir = sun_dir.or_else(|| cadcraft_engine::effective_sun_dir(&req.drawing.arch, &look, None));
     let (base_light_key, base) = scene.as_mut().map(|(_, k, s)| (k.clone(), s)).ok_or("renderer unavailable")?;
     // The effective look's backdrop replaces the cached scene's (no rebuild).
     cadcraft_arch3d::set_backdrop(&req.drawing.arch, base, look.backdrop.as_ref());
@@ -1139,7 +1143,8 @@ mod tests {
     /// filtered scene keeps its ceiling mesh (hiding a wall by id must not hide the room).
     #[test]
     fn cutaway_keeps_the_ceiling_and_shades_the_back_wall() {
-        use cadcraft_engine::doc::arch::{Level, Room, RoomType};
+        use cadcraft_arch::room::detect_rooms;
+        use cadcraft_engine::doc::arch::Level;
         let _g = reset();
         let mut d = Drawing::new_metric();
         let c = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
@@ -1149,15 +1154,8 @@ mod tests {
             w.height = 2.4;
             d.arch.push_wall(w);
         }
-        d.arch.levels.push(Level { name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
-        d.arch.rooms.push(Room {
-            id: cadcraft_engine::doc::ArchId(0),
-            name: "Room".into(),
-            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
-            room_type: RoomType::Living,
-            level: 0,
-            ..Default::default()
-        });
+        d.arch.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        d.arch.rooms = detect_rooms(&d.arch);
         d.touch_arch();
 
         let full = |eye: [f64; 3], target: [f64; 3]| {
