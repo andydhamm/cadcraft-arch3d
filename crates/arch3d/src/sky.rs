@@ -40,12 +40,14 @@ pub fn zenith_luminance(theta_s: f64, t: f64) -> f64 {
 }
 
 /// How much of the day sky remains at a sun elevation in degrees: 1 at or above the horizon,
-/// 10^(elev/1.5) below it (1e-4 at -6), 0 under -6 and for non-finite input.
+/// 10^(elev/1.5) below it (1e-4 at -6), 0 under -6 and for NaN input. +inf gives 1.0, -inf gives 0.0.
 pub fn twilight_factor(elev_deg: f64) -> f64 {
-    if !elev_deg.is_finite() || elev_deg < -6.0 {
+    if elev_deg.is_nan() {
         0.0
     } else if elev_deg >= 0.0 {
         1.0
+    } else if elev_deg < -6.0 {
+        0.0
     } else {
         10f64.powf(elev_deg / 1.5)
     }
