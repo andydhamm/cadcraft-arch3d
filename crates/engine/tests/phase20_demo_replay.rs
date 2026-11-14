@@ -108,11 +108,16 @@ fn boold(v: &Value, key: &str, default: bool) -> bool {
 }
 
 /// The `level` field of a row, rendered as a stable string for comparison (number or name).
+/// Checks `level` first (used by plan views and auto-dim rows), then `levelIndex` (used by rooms).
 fn level_str(v: &Value) -> String {
     match v.get("level") {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Number(n)) => n.to_string(),
-        _ => String::new(),
+        _ => match v.get("levelIndex") {
+            Some(Value::String(s)) => s.clone(),
+            Some(Value::Number(n)) => n.to_string(),
+            _ => String::new(),
+        },
     }
 }
 
@@ -448,4 +453,77 @@ fn phase20_demo_bedroom_is_on_level_1() {
     let rooms = rooms_of(&reply);
     let bedroom = find_row(&rooms, "name", "Bedroom");
     assert_eq!(level_str(bedroom), "0", "Bedroom is on level `{}`, expected `0`", level_str(bedroom));
+}
+
+#[test]
+fn phase20_demo_level_1_and_2_floor_plans_differ() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let l1 = plan_of_view(&mut session, "Level 1 Floor Plan");
+    let l2 = plan_of_view(&mut session, "Level 2 Floor Plan");
+
+    let l1_lines = l1.get("lines").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let l2_lines = l2.get("lines").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let l1_labels = l1.get("labels").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let l2_labels = l2.get("labels").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+
+    assert!(
+        l1_lines != l2_lines || l1_labels != l2_labels,
+        "Level 1 and Level 2 floor plans are identical (lines: {} vs {}, labels: {} vs {})",
+        l1_lines,
+        l2_lines,
+        l1_labels,
+        l2_labels
+    );
+}
+
+#[test]
+fn phase20_demo_all_custom_views_are_bound_to_levels() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"planViews": true}));
+    let views = plan_views_of(&reply);
+
+    // Template views (Roof Plan, Site) are not level-bound; all custom views must be.
+    let templates = ["Roof Plan", "Site"];
+    for view in &views {
+        let name = plan_view_name(view);
+        if templates.contains(&name.as_str()) {
+            continue;
+        }
+        let level = level_str(view);
+        assert!(!level.is_empty(), "custom plan view `{}` has no level binding", name);
+    }
+}
+
+#[test]
+fn phase20_demo_tray_is_in_a_level_2_room() {
+    install_io();
+    let script = fs::read_to_string(&demo_script_path()).unwrap_or_else(|e| panic!("cannot read demo script: {e}"));
+    let mut session = new_metric_session();
+    replay(&script, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"trays": true, "rooms": true}));
+    let trays = trays_of(&reply);
+    let rooms = rooms_of(&reply);
+    assert_eq!(trays.len(), 1, "expected exactly one tray, found {}", trays.len());
+
+    let tray = &trays[0];
+    let tray_level = level_str(tray);
+    assert_eq!(tray_level, "1", "tray is on level `{}`, expected `1` (Level 2)", tray_level);
+
+    // The tray's room should exist and be on level 2.
+    if let Some(room_name) = tray.get("room").and_then(|v| v.as_str()) {
+        let room = rooms.iter().find(|r| strd(r, "name", "") == room_name);
+        assert!(room.is_some(), "tray room `{}` not found in rooms list", room_name);
+        if let Some(room) = room {
+            assert_eq!(level_str(room), "1", "tray room `{}` is on level `{}`, expected `1`", room_name, level_str(room));
+        }
+    }
 }
