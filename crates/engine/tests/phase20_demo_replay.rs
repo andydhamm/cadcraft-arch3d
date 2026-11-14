@@ -108,7 +108,7 @@ fn boold(v: &Value, key: &str, default: bool) -> bool {
 }
 
 /// The `level` field of a row, rendered as a stable string for comparison (number or name).
-/// Checks `level` first (used by plan views and auto-dim rows), then `levelIndex` (used by rooms).
+/// Checks `level` first (used by plan views and auto-dim rows), then `levelIndex`, then `floor` (used by rooms and trays).
 fn level_str(v: &Value) -> String {
     match v.get("level") {
         Some(Value::String(s)) => s.clone(),
@@ -116,7 +116,11 @@ fn level_str(v: &Value) -> String {
         _ => match v.get("levelIndex") {
             Some(Value::String(s)) => s.clone(),
             Some(Value::Number(n)) => n.to_string(),
-            _ => String::new(),
+            _ => match v.get("floor") {
+                Some(Value::String(s)) => s.clone(),
+                Some(Value::Number(n)) => n.to_string(),
+                _ => String::new(),
+            },
         },
     }
 }
