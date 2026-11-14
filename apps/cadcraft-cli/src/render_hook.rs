@@ -285,6 +285,10 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     }
     let State { off, scene, filtered, cache: pcache, cache_saved, path_traces, .. } = state;
     let (look, sun_dir) = req.resolved_sun();
+    // A request may set `look.sun.angle` without an explicit `sun_dir`; the render hook must resolve
+    // the named angle to the actual toward-sun direction or the interactive view falls back to the
+    // default daylight and no shadows are built.
+    let sun_dir = sun_dir.or_else(|| cadcraft_engine::effective_sun_dir(&req.drawing.arch, &look, None));
     let (base_light_key, base) = scene.as_mut().map(|(_, k, s)| (k.clone(), s)).ok_or("renderer unavailable")?;
     // The effective look's backdrop replaces the cached scene's (no rebuild).
     cadcraft_arch3d::set_backdrop(&req.drawing.arch, base, look.backdrop.as_ref());
@@ -1130,6 +1134,75 @@ mod tests {
         let Some(v) = go(full([2.0, 12.0, 1.5], [2.0, 2.0, 1.5]), cut, vec![[2.0, 4.2, 1.0]]) else { return };
         assert!(v["filter"]["hidden"].as_u64().unwrap_or(0) >= 1, "{v}");
         assert!(filtered_key() != key, "a new hidden set builds a new filtered scene");
+    }
+
+    /// The opened-room regression (phase-19 check 15a) through the session renderer: a room with a
+    /// detected ceiling, seen from the south with the cutaway on. Without the cutaway the camera
+    /// sees the sunlit outer face of the south wall and the north wall's inner face is hidden; with
+    /// it the north wall's inner face is visible and reads darker (the ceiling shades it). The
+    /// filtered scene keeps its ceiling mesh (hiding a wall by id must not hide the room).
+    #[test]
+    fn cutaway_keeps_the_ceiling_and_shades_the_back_wall() {
+        use cadcraft_arch::room::detect_rooms;
+        use cadcraft_engine::doc::arch::Level;
+        let _g = reset();
+        let mut d = Drawing::new_metric();
+        let c = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (c[k], c[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            d.arch.push_wall(w);
+        }
+        d.arch.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        d.arch.rooms = detect_rooms(&d.arch);
+        d.touch_arch();
+
+        let full = |eye: [f64; 3], target: [f64; 3]| {
+            Camera::Full(cadcraft_render3d::camera::FullCamera::new(
+                Vec3::new(eye[0], eye[1], eye[2]),
+                Vec3::new(target[0], target[1], target[2]),
+                70.0,
+            ))
+        };
+        let north = [2.0, 4.0, 1.2];
+        let camera = full([2.0, -8.0, 1.2], [2.0, 2.0, 1.2]);
+        let mut look = Look::default();
+        look.sky.on = false;
+        // Lower exposure to avoid saturation on llvmpipe: a sunlit face at EV100 5 saturates to
+        // white, so the shaded inner face reads the same. EV100 1 keeps the sunlit face bright
+        // but leaves the shaded face darker.
+        look.exposure = ExposureSetting::Manual { ev100: 1.0 };
+        look.tone_map = cadcraft_engine::doc::arch::ToneMap::None;
+        look.sun.on = true;
+        // Sun from the south (azimuth 180) at elevation 60 degrees.
+        // The SunLook angle is an Option<String> in "azimuth,elevation" format.
+        look.sun.angle = Some("180,60".to_string());
+
+        let go = |cutaway: bool| {
+            let mut req = request(&d, Some(camera.clone()), None, false);
+            req.ground = false;
+            req.look = Look { cutaway, ..look.clone() };
+            req.samples = vec![north];
+            render(&req)
+        };
+        let Some(plain) = go(false) else { return };
+        assert_eq!(plain["samples"][0]["visible"], false, "the north wall is hidden behind the south wall: {plain}");
+        let plain_rgb: Vec<u8> =
+            plain["samples"][0]["rgb"].as_array().map(|a| a.iter().filter_map(|v| v.as_u64().map(|x| x as u8)).collect()).unwrap_or_default();
+        let plain_sum: u32 = plain_rgb.iter().map(|&c| u32::from(c)).sum();
+
+        let Some(v) = go(true) else { return };
+        assert_eq!(v["samples"][0]["visible"], true, "the cutaway opens the room to the north wall: {v}");
+        let rgb: Vec<u8> =
+            v["samples"][0]["rgb"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64().map(|c| c as u8)).collect()).unwrap_or_default();
+        let sum: u32 = rgb.iter().map(|&c| u32::from(c)).sum();
+        assert!(plain_sum >= sum + 30, "the sunlit outer face ({plain_sum}) must be brighter than the shaded inner face ({sum}): {v}");
+
+        let has_ceiling = STATE.lock().ok().and_then(|g| {
+            g.as_ref().and_then(|s| s.filtered.as_ref()).map(|(_, f)| f.meshes.iter().any(|m| cadcraft_arch3d::probe::part_of(m) == "ceiling"))
+        });
+        assert!(has_ceiling.unwrap_or(false), "the filtered scene keeps the ceiling mesh (hiding a wall must not hide the room)");
     }
 
     #[test]
