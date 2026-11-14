@@ -195,15 +195,18 @@ impl Offscreen {
         self.shadows_built += atlas.maps_built().saturating_sub(before);
         self.lit_state.slots = slots.len();
 
-        // The environment's diffuse light: nine convolved SH coefficients, projected once per key.
-        let sh = match lighting.environment.as_deref().filter(|e| e.is_valid()) {
-            Some(env) => {
+        // The environment's diffuse light: nine convolved SH coefficients, cached per key.
+        let sh = match lighting.environment.as_deref() {
+            Some(env) if env.is_valid() => {
                 if self.lit_state.sh.as_ref().is_none_or(|(k, _)| *k != env.key) {
-                    self.lit_state.sh = Some((env.key, crate::sh::convolve(&crate::sh::project(env))));
+                    match crate::frame_look::env_sh(env) {
+                        Some(c) => self.lit_state.sh = Some((env.key, c)),
+                        None => self.lit_state.sh = None,
+                    }
                 }
                 self.lit_state.sh.map(|(_, c)| c)
             }
-            None => {
+            _ => {
                 self.lit_state.sh = None;
                 None
             }
