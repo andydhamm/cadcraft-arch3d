@@ -2207,4 +2207,54 @@ mod tests {
             "horizon {horizon_mean:.1} vs terrain {terrain_mean:.1}: the horizon plane must be lit like the near terrain"
         );
     }
+
+    /// Creating a PathTracer must populate the gpu's shared pipelines slot, so subsequent
+    /// PathTracers or irradiance() calls on the same gpu reuse the compiled pipelines.
+    #[test]
+    fn path_tracer_populates_the_shared_slot() {
+        let Some(gpu) = compute() else { return };
+        let slot_before = gpu.pipelines.lock().unwrap().is_some();
+        let _t = PathTracer::new(&gpu, &scene(), &camera(), &Lighting::default(), false, (8, 8), &PathOptions::default(), None).unwrap();
+        let slot_after = gpu.pipelines.lock().unwrap().is_some();
+        if !slot_before {
+            assert!(slot_after, "creating a PathTracer must populate the shared pipelines slot");
+        }
+    }
+
+    /// irradiance() and PathTracer must share the same compiled pipelines on the same gpu:
+    /// whichever runs first builds them, the other reuses them.
+    #[test]
+    fn irradiance_and_tracer_share_pipelines() {
+        let Some(gpu) = compute() else { return };
+        // Call irradiance first to build the pipelines.
+        let probes = vec![[[0.0, 0.0, 0.0], [0.0, 0.0, 1.0]]];
+        irradiance(&gpu, &scene(), &Lighting::default(), false, &probes, &PathOptions { spp: 1, ..Default::default() }).unwrap();
+        let after_irr = gpu.pipelines.lock().unwrap().as_ref().map(|p| std::sync::Arc::as_ptr(p));
+        assert!(after_irr.is_some(), "irradiance must populate the shared pipelines slot");
+
+        // Now create a PathTracer and verify it uses the same pipelines.
+        let _t = PathTracer::new(&gpu, &scene(), &camera(), &Lighting::default(), false, (8, 8), &PathOptions::default(), None).unwrap();
+        let after_tracer = gpu.pipelines.lock().unwrap().as_ref().map(|p| std::sync::Arc::as_ptr(p));
+        assert_eq!(after_irr, after_tracer, "irradiance and PathTracer must share the same pipelines");
+    }
+
+    /// Separate ComputeGpu instances (even wrapping the same wgpu device) must have
+    /// independent pipeline caches: building on one must not populate the other.
+    #[test]
+    fn separate_compute_gpu_instances_have_independent_pipeline_slots() {
+        let Some(gpu) = compute() else { return };
+        let own1 =
+            ComputeGpu::new(gpu.device.clone(), gpu.queue.clone(), gpu.info.clone(), gpu.ray_query, gpu.pipeline_cache, gpu.adapter_key.clone());
+        let own2 =
+            ComputeGpu::new(gpu.device.clone(), gpu.queue.clone(), gpu.info.clone(), gpu.ray_query, gpu.pipeline_cache, gpu.adapter_key.clone());
+
+        // Build pipelines for own1 only.
+        let p1 = super::super::shaders::PtPipelines::shared(&own1, None).unwrap();
+        assert!(own1.pipelines.lock().unwrap().is_some(), "own1 must have pipelines after shared()");
+        assert!(own2.pipelines.lock().unwrap().is_none(), "own2 must not have pipelines yet");
+
+        // Now build for own2; they must be different Arc instances.
+        let p2 = super::super::shaders::PtPipelines::shared(&own2, None).unwrap();
+        assert!(!std::sync::Arc::ptr_eq(&p1, &p2), "separate ComputeGpu instances must have independent pipeline caches");
+    }
 }
