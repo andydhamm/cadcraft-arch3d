@@ -11,7 +11,7 @@ use super::scene_gpu::{
     build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
-use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, NIGHT_EXPOSURE, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
+use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
 use super::{PathOptions, PathStats, PathStatus};
 use crate::camera::Camera;
 use crate::lit_frame::Lighting;
@@ -30,7 +30,11 @@ pub struct PathTracer {
     cancelled: bool,
     opts: PathOptions,
     frame: GpuFrame,
+    daylight: bool,
+    meter_night: bool,
+    env_visible: bool,
     exposure: f32,
+    exposure_fallback: f32,
     buffers: super::tracer::SceneBuffers,
     accum: wgpu::Buffer,
     aov: wgpu::Buffer,
@@ -51,6 +55,52 @@ impl PathTracer {
         let m = super::luminance([px[0] / n, px[1] / n, px[2] / n]);
         let variance = sum_sq / n - m * m;
         if !variance.is_finite() || variance <= 0.0 { 0.0 } else { variance / n }
+    }
+
+    pub(super) fn metered_scale(lum: &[f32], hit: &[bool], daylight: bool, meter_night: bool, env_visible: bool, fallback: f32) -> f32 {
+        if !daylight && !meter_night {
+            return fallback;
+        }
+        let len = lum.len().min(hit.len());
+        if len == 0 {
+            return crate::exposure::auto_scale(None, daylight, meter_night);
+        }
+
+        let mut log_sum = 0.0f64;
+        let mut count = 0usize;
+        for i in 0..len {
+            if !hit[i] {
+                continue;
+            }
+            let l = lum.get(i).copied().unwrap_or(0.0);
+            let lum = if !l.is_finite() || l < 0.0 { 0.0 } else { l.max(0.0) };
+            log_sum += if daylight { (1e-4 + lum as f64).ln() } else { (lum.max(1e-6) as f64).ln() };
+            count += 1;
+        }
+        if count > 0 {
+            let lavg = (log_sum / count as f64).exp() as f32;
+            return if daylight {
+                crate::exposure::auto_scale(Some(lavg), true, meter_night)
+            } else {
+                crate::exposure::auto_scale(Some(lavg), false, true)
+            };
+        }
+        if daylight && env_visible {
+            let mut log_sum = 0.0f64;
+            let mut count = 0usize;
+            for &l in lum.iter().take(len) {
+                if !l.is_finite() || l <= 0.0 {
+                    continue;
+                }
+                log_sum += (l as f64).ln();
+                count += 1;
+            }
+            if count > 0 {
+                let lavg = (log_sum / count as f64).exp() as f32;
+                return (0.18 / lavg).clamp(super::DAY_EXPOSURE, crate::exposure::NIGHT_AUTO_MAX);
+            }
+        }
+        crate::exposure::auto_scale(None, daylight, meter_night)
     }
 
     /// Start a still of `scene` from `camera` at `size` pixels, lit by `lighting` (its sun, or
@@ -152,10 +202,12 @@ impl PathTracer {
         let vp = crate::camera::view_proj(camera, f64::from(w) / f64::from(h));
         let inv_vp = invert_mat4(&vp);
 
+        let daylight = crate::exposure::daylight(lighting);
+        let meter_night = lighting.meter_night;
         let exposure = match opts.exposure {
             Exposure::Fixed(x) => x,
             Exposure::Auto if opts.furnace.is_some() => 1.0,
-            Exposure::Auto if lighting.sun.is_some() && lighting.moon.is_none() => DAY_EXPOSURE,
+            Exposure::Auto if daylight => DAY_EXPOSURE,
             Exposure::Auto => lighting.exposure,
         };
 
@@ -185,6 +237,9 @@ impl PathTracer {
             frame.tex = gpu_scene.tex;
             frame.flags |= super::scene_gpu::FRAME_NORMAL_MAPS;
         }
+        let env_visible = lighting.environment.as_ref().is_some_and(|e| e.visible && e.is_valid())
+            && frame.flags & super::scene_gpu::FRAME_ENV != 0
+            && frame.env[3] & 2 != 0;
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
 
         Ok(PathTracer {
@@ -194,7 +249,11 @@ impl PathTracer {
             cancelled: false,
             opts: opts.clone(),
             frame,
+            daylight,
+            meter_night,
+            env_visible,
             exposure,
+            exposure_fallback: lighting.exposure,
             buffers,
             accum,
             aov,
@@ -326,6 +385,15 @@ impl PathTracer {
         self.status.clone()
     }
 
+    fn auto_exposure(&self, gpu: &ComputeGpu) -> f32 {
+        match self.opts.exposure {
+            Exposure::Fixed(x) => x,
+            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_FURNACE != 0 => 1.0,
+            Exposure::Auto if self.daylight || self.meter_night => self.compute_auto_exposure(gpu),
+            Exposure::Auto => self.exposure_fallback,
+        }
+    }
+
     fn compute_auto_exposure(&self, gpu: &ComputeGpu) -> f32 {
         let pixels = (self.size.0 * self.size.1) as usize;
         if pixels == 0 {
@@ -364,21 +432,17 @@ impl PathTracer {
         } else {
             accum[..pixels].iter().map(|p| [mean_of(p)[0], mean_of(p)[1], mean_of(p)[2], 0.0]).collect()
         };
-        let mut log_sum = 0.0f64;
-        let mut count = 0usize;
-        for (i, px) in radiance.iter().enumerate() {
-            if aov[2 * i][3] <= 0.5 {
-                continue;
-            }
-            let lum = super::luminance([px[0], px[1], px[2]]).max(0.0);
-            log_sum += (1e-4 + lum as f64).ln();
-            count += 1;
-        }
-        if count == 0 {
-            return DAY_EXPOSURE;
-        }
-        let lavg = (log_sum / count as f64).exp() as f32;
-        (0.18 / lavg).clamp(DAY_EXPOSURE, NIGHT_EXPOSURE)
+
+        let lum: Vec<f32> = radiance
+            .iter()
+            .take(pixels)
+            .map(|px| {
+                let lum = super::luminance([px[0], px[1], px[2]]);
+                if !lum.is_finite() || lum < 0.0 { 0.0 } else { lum }
+            })
+            .collect();
+        let hit: Vec<bool> = (0..pixels).map(|i| aov.get(2 * i).is_some_and(|p| p[3] > 0.5)).collect();
+        Self::metered_scale(&lum, &hit, self.daylight, self.meter_night, self.env_visible, self.exposure_fallback)
     }
 
     fn finish(&mut self, gpu: &ComputeGpu) -> PathStatus {
@@ -459,12 +523,7 @@ impl PathTracer {
         gpu.queue.submit([enc.finish()]);
 
         self.stats.denoised = self.opts.denoise;
-        self.exposure = match self.opts.exposure {
-            Exposure::Fixed(x) => x,
-            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_FURNACE != 0 => 1.0,
-            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_SUN != 0 => self.compute_auto_exposure(gpu),
-            Exposure::Auto => self.exposure,
-        };
+        self.exposure = self.auto_exposure(gpu);
         self.stats.exposure = self.exposure;
 
         // Resolve.
@@ -517,12 +576,7 @@ impl PathTracer {
             exposure: f32,
             tonemap: u32,
         }
-        let exposure = match self.opts.exposure {
-            Exposure::Fixed(x) => x,
-            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_FURNACE != 0 => 1.0,
-            Exposure::Auto if self.frame.flags & super::scene_gpu::FRAME_SUN != 0 => self.compute_auto_exposure(gpu),
-            Exposure::Auto => self.exposure,
-        };
+        let exposure = self.auto_exposure(gpu);
         let params = ResolveParams { size: [w, h], exposure, tonemap: self.frame.look[0] };
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -1176,6 +1230,42 @@ mod tests {
         );
         assert!(PathTracer::variance_of_mean([2.0, 2.0, 2.0, 4.0], 1.0).abs() <= 1e-6, "constant pixel is variance 0");
         assert!(PathTracer::variance_of_mean([0.0, 0.0, 0.0, 0.0], 1.0).is_finite(), "w = 0 is treated as one sample");
+    }
+
+    #[test]
+    fn metered_scale_keeps_the_legacy_night() {
+        let lum = vec![0.0, 1.0, 100.0, 1e-3];
+        let hit = vec![true, false, true, false];
+        assert_eq!(PathTracer::metered_scale(&lum, &hit, false, false, true, 0.01), 0.01);
+        assert_eq!(PathTracer::metered_scale(&[], &[], false, false, true, 0.01), 0.01);
+    }
+
+    #[test]
+    fn metered_scale_meters_a_moonlit_ground() {
+        let lum = vec![0.1 / std::f32::consts::PI * 0.25; 64];
+        let hit = vec![true; 64];
+        let got = PathTracer::metered_scale(&lum, &hit, false, true, false, 0.01);
+        assert!((got - 22.6195).abs() < 0.005 * 22.6195, "moonlit ground exposure {got}");
+    }
+
+    #[test]
+    fn metered_scale_stops_an_unlit_night_at_ev_minus_6() {
+        let lum = vec![0.0; 64];
+        let hit = vec![true; 64];
+        assert_eq!(PathTracer::metered_scale(&lum, &hit, false, true, false, 0.01), crate::exposure::NIGHT_AUTO_MAX);
+    }
+
+    #[test]
+    fn metered_scale_meters_a_backdrop_only_frame() {
+        let lum = vec![2.0; 64];
+        let hit = vec![false; 64];
+        let env = PathTracer::metered_scale(&lum, &hit, true, true, true, 0.01);
+        assert!((env - 0.09).abs() < 1e-6, "backdrop env exposure {env}");
+        assert_eq!(PathTracer::metered_scale(&lum, &hit, true, true, false, 0.01), crate::pathtrace::DAY_EXPOSURE);
+        let hit = vec![true; 64];
+        let lum = vec![1591.5; 64];
+        let got = PathTracer::metered_scale(&lum, &hit, true, true, false, 0.01);
+        assert!((got - 1.131e-4).abs() < 1e-6, "daylit hits exposure {got}");
     }
 
     #[test]
@@ -2025,6 +2115,64 @@ mod tests {
         let rgba = env_still(&gpu, &scene, &env_lighting(false));
         let wrong = (0..16 * 12).filter(|i| rgba[i * 4..i * 4 + 4] != [32, 64, 96, 255]).count();
         assert_eq!(wrong, 0, "misses that are not the backdrop, e.g. {:?}", &rgba[0..4]);
+    }
+
+    #[test]
+    fn a_moonlit_night_path_still_is_metered() {
+        let Some(gpu) = compute() else { return };
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        look.sky.on = false;
+        look.tone_map = cadcraft_doc::arch::ToneMap::None;
+        let mut scene = Scene3d::default();
+        let mut m = Mesh::new("ground", ArchId(1));
+        let r = [Vec2::new(-5.0, -5.0), Vec2::new(5.0, -5.0), Vec2::new(5.0, 5.0), Vec2::new(-5.0, 5.0)];
+        m.push_prism(&r, -0.1, 0.0);
+        scene.bounds = m.bounds();
+        scene.meshes = vec![m];
+        let lighting =
+            Lighting { sun: None, moon: Some(([0.0, 0.0, 1.0], 0.25)), lambert: Some(0.1), meter_night: true, look, ..Lighting::default() };
+        let camera = Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 0.0, 0.0), 90.0));
+        let opts =
+            PathOptions { spp: 16, bounces: 0, denoise: false, exposure: Exposure::Auto, tone_map: crate::exposure::TONE_NONE, ..Default::default() };
+        let mut tracer = PathTracer::new(&gpu, &scene, &camera, &lighting, false, (10, 10), &opts, None).unwrap();
+        let mut rgba = Vec::new();
+        loop {
+            match tracer.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba: out, .. } => {
+                    rgba = out;
+                    break;
+                }
+                s => panic!("{s:?}"),
+            }
+        }
+        let stats = tracer.stats();
+        assert!((stats.exposure - 22.62).abs() / 22.62 < 0.03, "stats.exposure {}", stats.exposure);
+        let center = (5 * 10 + 5) * 4;
+        let srgb = rgba[center] as f32 / 255.0;
+        let linear = if srgb <= 0.04045 { srgb / 12.92 } else { ((srgb + 0.055) / 1.055).powf(2.4) };
+        assert!((linear - 0.18).abs() / 0.18 < 0.03, "centre linear {linear}");
+
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.on = false;
+        look.sky.on = false;
+        look.tone_map = cadcraft_doc::arch::ToneMap::None;
+        let lighting =
+            Lighting { sun: None, moon: Some(([0.0, 0.0, 1.0], 0.25)), lambert: Some(0.1), meter_night: false, look, ..Lighting::default() };
+        let mut tracer = PathTracer::new(&gpu, &scene, &camera, &lighting, false, (10, 10), &opts, None).unwrap();
+        loop {
+            match tracer.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba: out, .. } => {
+                    assert!((tracer.stats().exposure - 0.01).abs() < 1e-6, "legacy night exposure {}", tracer.stats().exposure);
+                    assert!(tracer.stats().exposure < 1.0, "legacy night should stay at 0.01");
+                    let _ = out;
+                    break;
+                }
+                s => panic!("{s:?}"),
+            }
+        }
     }
 
     /// A visible environment under a Sky backdrop stays in the image: radiance 1 x 1/1.2 = 0.8333, sRGB 235.
