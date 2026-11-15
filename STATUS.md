@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-15 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 18 of 21: Interior finish, kitchen and bath — 44 of 45 segments merged · 19 of 20 acceptance checks**
+**Phase 19 of 21: Light, sky and cameras — 63 of 64 segments merged · 12 of 17 acceptance checks**
 
 10,499 workspace tests passing at the last merge · 1200 segments merged in all · 0 of 15 seats working
 
@@ -28,18 +28,18 @@ Updated 2026-11-15 06:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 96.5 h so far · expected done Nov 15 09:26–Nov 20 14:09 UTC |
-| 19 | Light, sky and cameras | building | 12 / 17 | — |
+| 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
+| 19 | Light, sky and cameras | building | 12 / 17 | 91.7 h so far · expected done Nov 15 08:55–Nov 16 10:40 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
-## Phase 18 segments
+## Phase 19 segments
 
-44 merged, 6 abandoned, 3 replaced, 1 escalate
+63 merged, 5 replaced, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | escalate |  |
+| `p19k-sky-render-time` | Sky renders: find and remove what makes a render under the 512 x 256 sky environment take minutes | working | mai-flash-esc |
 
 ## Recent merges
 
@@ -62,18 +62,18 @@ Updated 2026-11-15 06:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1318 |
+| bonsai-a | bonsai2-27b | gate | 1318 |
 | bonsai-b | bonsai2-27b | idle | 1260 |
 | bonsai-ws2-a | bonsai2-27b | gate | 1394 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1364 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1365 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | idle | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1229 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1229 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 161 |
-| tturbo-mac | tturbo-ultraheretic | gate | 928 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 607 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 161 |
+| tturbo-mac | tturbo-ultraheretic | agent | 929 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 607 |
