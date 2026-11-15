@@ -381,13 +381,13 @@ fn metres(what: &str, v: f64, zero_ok: bool) -> Result<(), String> {
 }
 
 /// Whether `file` is a plain relative path inside its catalog's folder: `/`-separated names, none
-/// empty, `.` or `..`, no drive or backslash, no control characters.
+/// empty, `.` or `..` or starting with `.`, no drive or backslash, no control characters.
 pub fn safe_relative(file: &str) -> bool {
     !file.is_empty()
         && file.chars().count() <= MAX_SHORT
         && !file.contains('\\')
         && !file.contains(':')
-        && file.split('/').all(|c| !c.is_empty() && c != "." && c != ".." && !c.chars().any(char::is_control))
+        && file.split('/').all(|c| !c.is_empty() && !c.starts_with('.') && !c.chars().any(char::is_control))
 }
 
 /// The lower-case extension of a file name.
@@ -1154,5 +1154,58 @@ mod tests {
         let entry = serde_json::json!({"id":"x:hdr-wrong","name":"HDR Wrong","category":"Materials","folder":"Images","symbolType":"backdrop","file":"hdr/sample.hdr","source":"test","licence":"CC0-1.0","author":"CADCraft","attribution":"test"});
         let err = entry_record(&entry, "sample").unwrap_err();
         assert!(err.contains("HDR") && err.contains("Backdrops"), "{err}");
+    }
+
+    #[test]
+    fn shower_style_is_door_only() {
+        assert!(DOOR_STYLES.contains(&"shower"), "shower must be a door style");
+        assert!(!WINDOW_STYLES.contains(&"shower"), "shower must not be a window style");
+        let items = builtin_items();
+        assert!(items.iter().any(|r| r.id == "door:shower"), "builtin items must include door:shower");
+        assert!(!items.iter().any(|r| r.id == "window:shower"), "builtin items must not include window:shower");
+    }
+
+    #[test]
+    fn shower_door_has_thin_frameless_size() {
+        let items = builtin_items();
+        let shower = items.iter().find(|r| r.id == "door:shower").expect("door:shower item");
+        assert_eq!(shower.size, Some([0.7, 0.01, 1.9]), "shower door must be 0.7 x 0.01 x 1.9");
+        let hinged = items.iter().find(|r| r.id == "door:hinged").expect("door:hinged item");
+        assert_eq!(hinged.size, Some([0.9, 0.2, 2.1]), "other doors must be 0.9 x 0.2 x 2.1");
+    }
+
+    #[test]
+    fn positive_returns_none_for_non_positive_and_non_finite() {
+        assert_eq!(positive(1.0), Some(1.0));
+        assert_eq!(positive(0.0), None);
+        assert_eq!(positive(-0.5), None);
+        assert_eq!(positive(f64::NAN), None);
+        assert_eq!(positive(f64::INFINITY), None);
+        assert_eq!(positive(f64::NEG_INFINITY), None);
+    }
+
+    #[test]
+    fn safe_relative_rejects_hostile_paths() {
+        assert!(safe_relative("a.glb"));
+        assert!(safe_relative("sub/a.glb"));
+        assert!(!safe_relative(""));
+        assert!(!safe_relative("/etc/passwd"));
+        assert!(!safe_relative("C:/a.glb"));
+        assert!(!safe_relative("a\\b.glb"));
+        assert!(!safe_relative("../a.glb"));
+        assert!(!safe_relative("./a.glb"));
+        assert!(!safe_relative("a/b/.glb"));
+        assert!(!safe_relative("a/b/../c.glb"));
+        let long = "a".repeat(257);
+        assert!(!safe_relative(&long));
+    }
+
+    #[test]
+    fn capitalised_handles_edge_cases() {
+        assert_eq!(capitalised(""), "");
+        assert_eq!(capitalised("door"), "Door");
+        assert_eq!(capitalised("Door"), "Door");
+        assert_eq!(capitalised("sliding"), "Sliding");
+        assert_eq!(capitalised("a"), "A");
     }
 }

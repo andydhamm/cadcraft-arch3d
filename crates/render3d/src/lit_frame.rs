@@ -467,4 +467,38 @@ mod tests {
         let h = lights_hash(&s);
         assert_eq!(h, lights_hash(&s));
     }
+
+    /// Changing the environment between frames recomputes the SH (different keys).
+    #[test]
+    fn lit_frame_sh_recomputed_when_environment_changes() {
+        let Some(mut o) = off() else { return };
+        let s = scene(four());
+        let env1 = crate::environment::Environment::uniform([1.0, 0.0, 0.0], 32, 16);
+        let env2 = crate::environment::Environment::uniform([0.0, 1.0, 0.0], 32, 16);
+        assert_ne!(env1.key, env2.key, "different environments must have different keys");
+        let l1 = Lighting { environment: Some(std::sync::Arc::new(env1)), ..Lighting::default() };
+        let l2 = Lighting { environment: Some(std::sync::Arc::new(env2)), ..Lighting::default() };
+        assert!(o.lit_frame(&s, 1, orbit(0.0), &l1, false).is_some());
+        assert!(o.lit_frame(&s, 1, orbit(0.0), &l2, false).is_some());
+    }
+
+    /// A NaN exposure does not panic and produces a valid frame.
+    #[test]
+    fn lit_frame_with_nan_exposure() {
+        let Some(mut o) = off() else { return };
+        let s = scene(four());
+        let l = Lighting { exposure: f32::NAN, ..Lighting::default() };
+        assert!(o.lit_frame(&s, 1, orbit(0.0), &l, false).is_some());
+    }
+
+    /// Different scene keys are cached independently.
+    #[test]
+    fn lit_frame_different_scene_keys() {
+        let Some(mut o) = off() else { return };
+        let s1 = scene(four());
+        let s2 = scene(vec![spot(99, 0.0, 0.0)]);
+        assert!(o.lit_frame(&s1, 1, orbit(0.0), &Lighting::default(), false).is_some());
+        assert!(o.lit_frame(&s2, 2, orbit(0.0), &Lighting::default(), false).is_some());
+        assert!(o.lit_frame(&s1, 1, orbit(0.0), &Lighting::default(), false).is_some());
+    }
 }

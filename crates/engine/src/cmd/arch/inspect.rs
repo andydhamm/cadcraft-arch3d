@@ -451,7 +451,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             obj.insert("fov".to_string(), json!(c.fov_deg));
             obj.insert("level".to_string(), json!(c.level));
             obj.insert("lowerLevels".to_string(), json!(c.lower_levels));
-            obj.insert("look".to_string(), json!(c.look));
+            obj.insert("look".to_string(), c.look.as_ref().map_or(Value::Null, super::look::describe_look));
             obj.insert("saved".to_string(), json!(c.saved.as_ref().map(|s| describe_camera(s))));
             // A camera with no saved copy has nothing to match its live pose against.
             let modified = match &c.saved {
@@ -690,7 +690,7 @@ fn describe_camera(c: &Camera3d) -> Value {
     obj.insert("fov".to_string(), json!(c.fov_deg));
     obj.insert("level".to_string(), json!(c.level));
     obj.insert("lowerLevels".to_string(), json!(c.lower_levels));
-    obj.insert("look".to_string(), json!(c.look));
+    obj.insert("look".to_string(), c.look.as_ref().map_or(Value::Null, super::look::describe_look));
     Value::Object(obj)
 }
 

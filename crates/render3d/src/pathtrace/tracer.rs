@@ -1126,6 +1126,7 @@ mod tests {
     use super::super::scene_gpu::{FRAME_ENV, FRAME_LAMBERT};
     use super::super::*;
     use super::*;
+    use crate::backdrop::CLEAR_RGB;
     use crate::camera::{Camera, Orbit};
     use crate::lit_frame::Lighting;
     use crate::types::{ArchId, Mesh, Scene3d};
@@ -1539,6 +1540,60 @@ mod tests {
                 PathStatus::Failed(e) => panic!("failed: {e}"),
             }
         }
+    }
+
+    #[test]
+    fn path_traced_backdrop_missing_image_shows_clear() {
+        let Some(gpu) = compute() else { return };
+        let backdrop = Backdrop::Image { item: "missing".into(), projection: Projection::Flat, horizon: 0.0 };
+        let m = floor();
+        let scene = Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), backdrop: Some(backdrop), ..Default::default() };
+        let opts = PathOptions { spp: 4, seed: 42, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &scene, &camera(), &Lighting::default(), false, (16, 12), &opts, None).unwrap();
+        let rgba = loop {
+            match t.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+        // A missing image backdrop shows the clear colour on miss pixels.
+        let n = rgba.len() / 4;
+        let mut found_clear = false;
+        for i in 0..n {
+            let p = &rgba[i * 4..i * 4 + 4];
+            if p.iter().take(3).zip(CLEAR_RGB).all(|(a, b)| a.abs_diff(b) <= 1) {
+                found_clear = true;
+                break;
+            }
+        }
+        assert!(found_clear, "missing image backdrop must show clear colour on miss pixels");
+    }
+
+    #[test]
+    fn path_traced_backdrop_composite_is_deterministic() {
+        let Some(gpu) = compute() else { return };
+        let backdrop = Backdrop::Colour { colour: [200, 100, 50] };
+        let m = floor();
+        let scene = Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), backdrop: Some(backdrop), ..Default::default() };
+        let opts = PathOptions { spp: 4, seed: 99, denoise: false, ..Default::default() };
+        let mut t1 = PathTracer::new(&gpu, &scene, &camera(), &Lighting::default(), false, (16, 12), &opts, None).unwrap();
+        let rgba1 = loop {
+            match t1.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+        let mut t2 = PathTracer::new(&gpu, &scene, &camera(), &Lighting::default(), false, (16, 12), &opts, None).unwrap();
+        let rgba2 = loop {
+            match t2.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+        assert_eq!(rgba1, rgba2, "same seed must give identical backdrop composite");
     }
 
     #[test]

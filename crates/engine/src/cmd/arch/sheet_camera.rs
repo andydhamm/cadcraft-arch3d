@@ -374,6 +374,86 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn camera_image_at_specific_position() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("Cover", 3));
+        d.arch.sheets.push(Sheet { name: "Cover".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
+        d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [200, 100] },
+            scale: 0.0,
+            at: [100.0, 200.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
+        place_camera_image(&mut s, "Cover", "Cover", &view).unwrap();
+        let paper = s.doc().unwrap().space(&Space::Paper("Cover".into())).unwrap();
+        let img = paper.iter().find(|e| matches!(e.kind, cadcraft_doc::EntityKind::Image(_))).unwrap();
+        if let cadcraft_doc::EntityKind::Image(i) = &img.kind {
+            let unit = super::super::sheets::paper_unit(s.doc().unwrap());
+            let w = i.u.x.hypot(i.u.y) * i.size.x * unit;
+            let h = i.v.x.hypot(i.v.y) * i.size.y * unit;
+            let cx = (i.insert.x + w / 2.0 / unit) * unit;
+            let cy = (i.insert.y + h / 2.0 / unit) * unit;
+            assert!((cx - 100.0).abs() < 1e-6, "centre x {cx}");
+            assert!((cy - 200.0).abs() < 1e-6, "centre y {cy}");
+        }
+    }
+
+    #[test]
+    fn empty_camera_name_is_refused() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("Cover", 3));
+        d.arch.sheets.push(Sheet { name: "Cover".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "  ".into(), width: 200.0, pixels: [200, 100] },
+            scale: 0.0,
+            at: [0.0, 0.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
+        let err = place_camera_image(&mut s, "Cover", "Cover", &view).unwrap_err().to_string();
+        assert!(err.contains("camera") && err.contains("empty"), "{err}");
+    }
+
+    #[test]
+    fn layout_differs_from_sheet_name() {
+        ensure_renderer();
+        let mut s = Session::new();
+        s.new_drawing(true);
+        let d = s.doc_mut().unwrap();
+        d.arch.sheets.clear();
+        d.layouts.push(cadcraft_doc::Layout::new("MyLayout", 3));
+        d.arch.sheets.push(Sheet { name: "MySheet".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
+        d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
+        d.arch.sheet_mut("MySheet").unwrap().views.push(SheetView {
+            number: 1,
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [200, 100] },
+            scale: 0.0,
+            at: [0.0, 0.0],
+            size: [0.0, 0.0],
+            ..Default::default()
+        });
+        let view = s.doc().unwrap().arch.sheet("MySheet").unwrap().views[0].clone();
+        let image = place_camera_image(&mut s, "MyLayout", "MySheet", &view).unwrap().unwrap();
+        assert_eq!(image, "sheet-MySheet-1.png");
+        let layout = s.doc().unwrap().space(&Space::Paper("MyLayout".into())).unwrap();
+        assert!(layout.iter().any(|e| matches!(e.kind, cadcraft_doc::EntityKind::Image(_))));
+    }
+
+    #[test]
     fn tall_aspect_ratio_height_is_correct() {
         ensure_renderer();
         let mut s = Session::new();

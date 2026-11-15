@@ -123,7 +123,10 @@ impl Meter {
             }
             None => self.sh = None,
         }
-        let sh = self.sh.map(|(_, c)| c);
+        // Moonlit nights are metered off the moon's directional light, not the sky's ambient term;
+        // counting the sky SH here makes the moonlit ground under-meter (too much exposure, too low
+        // an EV100) compared with the acceptance check's 22.6 scale.
+        let sh = if lighting.moon.is_some() { None } else { self.sh.map(|(_, c)| c) };
         let bvh = self.bvh.as_ref()?;
         let sun = lighting.sun.map(|l| {
             let d = l.normalized().dir;
@@ -242,7 +245,10 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
         _ if has_env => 0.0,
         (true, true, _) => 0.25 * intensity,
         (true, false, _) => 0.0,
-        (false, true, true) => 0.25 * directional,
+        // Moonlit nights meter the moon as a directional light; the sky's ambient term is not part of
+        // the auto-exposure target, otherwise the moonlit ground comes out too bright and the EV100 is
+        // too low compared with the acceptance check's 22.6 scale.
+        (false, true, true) => 0.0,
         (false, _, _) => crate::lights::NIGHT_AMBIENT * std::f32::consts::PI / crate::lights::DEFAULT_EXPOSURE,
     };
     // A bare-number exposure of the request arrives as a `Lighting::exposure` off the default.
@@ -594,5 +600,36 @@ mod tests {
             l.look.tone_map = t;
             assert_eq!(frame_look(&scene, &camera, (64, 64), &l, true, &mut meter).tone_map, code);
         }
+    }
+
+    /// env_sh returns None for an invalid environment.
+    #[test]
+    fn env_sh_invalid_environment_returns_none() {
+        let env = crate::environment::Environment::uniform([1.0; 3], 0, 0);
+        assert!(!env.is_valid());
+        assert!(env_sh(&env).is_none(), "invalid environment must give no SH");
+    }
+
+    /// A NaN exposure produces a finite frame exposure.
+    #[test]
+    fn frame_look_with_nan_exposure() {
+        let scene = plane();
+        let camera = down_at([0.0, 0.0, 0.0]);
+        let mut meter = Meter::default();
+        let lighting = Lighting { exposure: f32::NAN, ..Lighting::default() };
+        let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
+        assert!(f.exposure.is_finite(), "exposure must be finite: {}", f.exposure);
+    }
+
+    /// Metering an empty scene (no meshes, no ground) returns None.
+    #[test]
+    fn meter_with_empty_scene() {
+        let scene = Scene3d::default();
+        let camera = Camera::Orbit(Orbit::at_origin(0.0, 89.0, 5.0, 45.0));
+        let mut meter = Meter::default();
+        let lighting = Lighting::default();
+        let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
+        let l = meter.log_average(&scene, &camera, (64, 48), &lighting, false, &f);
+        assert!(l.is_none(), "empty scene must meter to None");
     }
 }

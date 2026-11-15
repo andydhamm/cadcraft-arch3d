@@ -242,8 +242,10 @@ fn write_png(out: &std::path::Path, png: &[u8]) -> Result<(), String> {
     crate::output::write_atomic(out, png).map_err(|e| e.to_string()).map(|_| ())
 }
 
-/// How many environments to keep in the process-wide cache.
-const ENV_CACHE_CAP: usize = 4;
+/// How many environments to keep in the process-wide cache. The sky check 03 alternates the
+/// five sun angles with stars on/off (up to 10 distinct keys); 16 lets it stay in cache instead
+/// of thrashing, and the maps are shared `Arc`s so the extra slots are cheap.
+const ENV_CACHE_CAP: usize = 16;
 type EnvCache = Vec<(u64, Option<std::sync::Arc<cadcraft_render3d::Environment>>)>;
 static ENV_CACHE: Mutex<EnvCache> = Mutex::new(Vec::new());
 

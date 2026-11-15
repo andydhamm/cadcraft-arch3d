@@ -717,3 +717,100 @@ fn showcase_finished_floors_show_a_finish() {
         assert!(material.starts_with("finish:"), "{} ({}) shows `{}`, not a finish\n{}", key, text_of(room, "type"), material, digest(reply));
     }
 }
+
+/// ring_holds: basic inside/outside classification.
+#[test]
+fn ring_holds_basic_cases() {
+    let square: [(f64, f64); 4] = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+    assert!(ring_holds(&square, 0.5, 0.5), "point inside square");
+    assert!(!ring_holds(&square, 2.0, 2.0), "point outside square");
+    assert!(!ring_holds(&square, -1.0, 0.5), "point outside square left");
+}
+
+/// ring_holds: degenerate and collinear polygons hold nothing.
+#[test]
+fn ring_holds_degenerate_and_collinear() {
+    let degenerate: [(f64, f64); 3] = [(0.0, 0.0), (0.0, 0.0), (0.0, 0.0)];
+    assert!(!ring_holds(&degenerate, 0.5, 0.5), "degenerate polygon holds nothing");
+    let collinear: [(f64, f64); 3] = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)];
+    assert!(!ring_holds(&collinear, 1.0, 0.5), "collinear points hold nothing");
+}
+
+/// inspect_rows: missing keys, null values, non-arrays, and empty arrays all return empty.
+#[test]
+fn inspect_rows_handles_missing_and_empty() {
+    assert!(inspect_rows(&serde_json::json!({}), "rooms").is_empty(), "missing key returns empty");
+    assert!(inspect_rows(&serde_json::json!({"rooms": null}), "rooms").is_empty(), "null value returns empty");
+    assert!(inspect_rows(&serde_json::json!({"rooms": "not an array"}), "rooms").is_empty(), "non-array returns empty");
+    assert!(inspect_rows(&serde_json::json!({"rooms": []}), "rooms").is_empty(), "empty array returns empty");
+    assert_eq!(inspect_rows(&serde_json::json!({"rooms": [{"id": "r1"}, {"id": "r2"}]}), "rooms").len(), 2, "returns items");
+}
+
+/// text_of: non-string and missing values return "".
+#[test]
+fn text_of_handles_various_types() {
+    assert_eq!(text_of(&serde_json::json!({"name": "test"}), "name"), "test");
+    assert_eq!(text_of(&serde_json::json!({"name": 42}), "name"), "");
+    assert_eq!(text_of(&serde_json::json!({"name": true}), "name"), "");
+    assert_eq!(text_of(&serde_json::json!({"name": null}), "name"), "");
+    assert_eq!(text_of(&serde_json::json!({"name": [1, 2]}), "name"), "");
+    assert_eq!(text_of(&serde_json::json!({}), "name"), "");
+}
+
+/// names_id: array of strings, empty array, missing key, null, and non-string elements.
+#[test]
+fn names_id_handles_various_cases() {
+    assert!(names_id(&serde_json::json!({"ids": ["a", "b", "c"]}), "ids", "b"));
+    assert!(!names_id(&serde_json::json!({"ids": ["a", "b", "c"]}), "ids", "d"));
+    assert!(!names_id(&serde_json::json!({"ids": []}), "ids", "a"));
+    assert!(!names_id(&serde_json::json!({}), "ids", "a"));
+    assert!(!names_id(&serde_json::json!({"ids": null}), "ids", "a"));
+    assert!(!names_id(&serde_json::json!({"ids": [1, 2, 3]}), "ids", "2"));
+}
+
+/// field: strings, numbers, booleans, and non-scalar values.
+#[test]
+fn field_handles_various_value_types() {
+    assert_eq!(field(&serde_json::json!({"x": "hello"}), "x"), "hello");
+    assert_eq!(field(&serde_json::json!({"x": 42}), "x"), "42");
+    assert_eq!(field(&serde_json::json!({"x": 3.14}), "x"), "3.14");
+    assert_eq!(field(&serde_json::json!({"x": true}), "x"), "true");
+    assert_eq!(field(&serde_json::json!({"x": false}), "x"), "false");
+    assert_eq!(field(&serde_json::json!({"x": null}), "x"), "-");
+    assert_eq!(field(&serde_json::json!({"x": [1, 2]}), "x"), "-");
+    assert_eq!(field(&serde_json::json!({"x": {"y": 1}}), "x"), "-");
+    assert_eq!(field(&serde_json::json!({}), "x"), "-");
+}
+
+/// rooms_typed: case-insensitive type matching.
+#[test]
+fn rooms_typed_case_insensitive() {
+    let reply = serde_json::json!({
+        "rooms": [
+            {"id": "r1", "type": "kitchen"},
+            {"id": "r2", "type": "Kitchen"},
+            {"id": "r3", "type": "KITCHEN"},
+            {"id": "r4", "type": "living"}
+        ]
+    });
+    let kitchens = rooms_typed(&reply, &["kitchen"]);
+    assert_eq!(kitchens.len(), 3, "case-insensitive match");
+}
+
+/// digest: all empty arrays produce an empty digest.
+#[test]
+fn digest_with_zero_length_arrays() {
+    let reply = serde_json::json!({
+        "rooms": [],
+        "walls": [],
+        "cabinets": [],
+        "fixtures": [],
+        "openings": [],
+        "countertops": [],
+        "backsplashes": [],
+        "surfaces": [],
+        "outletGaps": [],
+        "moldings": []
+    });
+    assert_eq!(digest(&reply), "", "all empty arrays produce empty digest");
+}
