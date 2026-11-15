@@ -1834,6 +1834,33 @@ mod tests {
         Lighting { sun: None, look, environment: Some(std::sync::Arc::new(e)), ..Lighting::default() }
     }
 
+    /// A flat 1x1x1 box lit by a white furnace (radiance 2.0), so every centre pixel converges to 2.0.
+    fn furnace_scene() -> Scene3d {
+        let mut m = Mesh::new("furnace", ArchId(1));
+        m.push_prism(&[Vec2::new(-0.5, -0.5), Vec2::new(0.5, -0.5), Vec2::new(0.5, 0.5), Vec2::new(-0.5, 0.5)], -0.5, 0.5);
+        Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), ..Default::default() }
+    }
+
+    /// The sRGB8 byte of a linear [0,1] value (matches `resolve.wgsl` `srgb`).
+    fn srgb8(v: f32) -> u8 {
+        let c = v.clamp(0.0, 1.0);
+        if c <= 0.0031308 { (c * 12.92 * 255.0 + 0.5) as u8 } else { (1.055 * c.powf(1.0 / 2.4) - 0.055) * 255.0 as u8 + 0.5 as u8 }
+    }
+
+    /// Run a furnace still to completion and return its centre pixel.
+    fn furnace_still(gpu: &ComputeGpu, opts: &PathOptions) -> (u8, u8, u8) {
+        let mut t = PathTracer::new(gpu, &furnace_scene(), &looking_up(), &Lighting::default(), false, (16, 12), opts, None).unwrap();
+        let rgba = loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+        let i = ((12 / 2) * 16 + 16 / 2) as usize * 4;
+        (rgba[i] as u8, rgba[i + 1] as u8, rgba[i + 2] as u8)
+    }
+
     fn env_still(gpu: &ComputeGpu, scene: &Scene3d, lighting: &Lighting) -> Vec<u8> {
         // EV100 0 is a scale of 1/1.2; the tone code 3 is no curve.
         let opts = PathOptions {
