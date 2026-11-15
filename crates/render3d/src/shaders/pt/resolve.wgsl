@@ -21,7 +21,13 @@ fn resolve_hable_curve(x: f32) -> f32 {
 // Hable tone map: clamp(f(2*x)/f(11.2), 0, 1) per channel, with x clamped to >= 0 first.
 fn resolve_hable(rgb: vec3<f32>) -> vec3<f32> {
     let x = max(rgb, vec3<f32>(0.0));
-    return clamp(resolve_hable_curve(2.0 * x) / resolve_hable_curve(11.2), vec3<f32>(0.0), vec3<f32>(1.0));
+    let f = vec3<f32>(
+        resolve_hable_curve(2.0 * x.x),
+        resolve_hable_curve(2.0 * x.y),
+        resolve_hable_curve(2.0 * x.z),
+    );
+    let g = resolve_hable_curve(11.2);
+    return clamp(f / g, vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
 @compute @workgroup_size(8, 8)
