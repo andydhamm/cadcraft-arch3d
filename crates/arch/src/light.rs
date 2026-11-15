@@ -1124,6 +1124,83 @@ mod tests {
         assert!((p2.z - 2.4).abs() < 1e-9, "z: {}", p2.z);
     }
 
+    #[test]
+    fn grid_positions_single_cell_returns_center() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)];
+        let pts = grid_positions(&ring, 1, 1);
+        assert_eq!(pts.len(), 1);
+        assert_eq!(pts[0], Vec2::new(2.0, 2.0));
+    }
+
+    #[test]
+    fn grid_positions_collinear_ring_is_empty() {
+        // Three collinear points: bounding box has zero height
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(4.0, 0.0)];
+        assert!(grid_positions(&ring, 1, 1).is_empty());
+    }
+
+    #[test]
+    fn grid_positions_closed_ring_with_duplicate_point() {
+        // Ring with explicit closing point (first == last)
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0), Vec2::new(0.0, 0.0)];
+        let pts = grid_positions(&ring, 2, 2);
+        assert_eq!(pts.len(), 4);
+        assert_eq!(pts[0], Vec2::new(1.0, 1.0));
+    }
+
+    #[test]
+    fn validate_point_light_non_finite_cone_falloff() {
+        let t = find_type("Pendant").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.cone = f64::NAN;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("cone"), "{err}");
+        f.cone = 60.0;
+        f.falloff = f64::INFINITY;
+        let err = validate_fixture(&f).unwrap_err();
+        assert!(err.contains("falloff"), "{err}");
+    }
+
+    #[test]
+    fn kelvin_to_rgb_boundaries_and_non_finite() {
+        // 1000 K (minimum): red-dominant, no blue
+        let rgb = kelvin_to_rgb(1000.0);
+        assert!((rgb[0] - 1.0).abs() < 1e-9, "r at 1000K: {}", rgb[0]);
+        assert!((rgb[2] - 0.0).abs() < 1e-9, "b at 1000K: {}", rgb[2]);
+        // 12000 K (maximum): blue-dominant
+        let rgb = kelvin_to_rgb(12000.0);
+        assert!((rgb[2] - 1.0).abs() < 1e-9, "b at 12000K: {}", rgb[2]);
+        // Non-finite -> 6500 K (white)
+        for k in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let rgb = kelvin_to_rgb(k);
+            assert!(rgb[0] > 0.97 && rgb[1] > 0.97 && rgb[2] > 0.97, "non-finite {} should give white, got {:?}", k, rgb);
+        }
+    }
+
+    #[test]
+    fn aim_direction_non_finite_angles() {
+        let t = find_type("Recessed pot light").unwrap();
+        let mut f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        f.rotation = f64::NAN;
+        let d = aim_direction(&f);
+        assert!((d.x).abs() < 1e-12 && (d.y).abs() < 1e-12 && (d.z + 1.0).abs() < 1e-12);
+        f.rotation = 0.0;
+        f.tilt = f64::INFINITY;
+        let d = aim_direction(&f);
+        assert!((d.x).abs() < 1e-12 && (d.y).abs() < 1e-12 && (d.z + 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn light_point_with_no_levels() {
+        let model = ArchModel::default();
+        let t = find_type("Recessed pot light").unwrap();
+        let f = fixture_from_type(ArchId(0), &t, Vec2::new(1.0, 1.0));
+        let p = light_point(&model, &f).unwrap();
+        // No levels: elevation 0, ceiling 2.4, recessed can sits at the ceiling
+        assert!((p.z - 2.4).abs() < 1e-9, "z: {}", p.z);
+        assert_eq!((p.x, p.y), (1.0, 1.0));
+    }
+
     fn tray_model() -> ArchModel {
         let mut model = ArchModel::default();
         model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Level::default() });
