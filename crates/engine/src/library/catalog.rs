@@ -381,13 +381,13 @@ fn metres(what: &str, v: f64, zero_ok: bool) -> Result<(), String> {
 }
 
 /// Whether `file` is a plain relative path inside its catalog's folder: `/`-separated names, none
-/// empty, `.` or `..`, no drive or backslash, no control characters.
+/// empty, `.` or `..` or starting with `.`, no drive or backslash, no control characters.
 pub fn safe_relative(file: &str) -> bool {
     !file.is_empty()
         && file.chars().count() <= MAX_SHORT
         && !file.contains('\\')
         && !file.contains(':')
-        && file.split('/').all(|c| !c.is_empty() && c != "." && c != ".." && !c.chars().any(char::is_control))
+        && file.split('/').all(|c| !c.is_empty() && !c.starts_with('.') && !c.chars().any(char::is_control))
 }
 
 /// The lower-case extension of a file name.
