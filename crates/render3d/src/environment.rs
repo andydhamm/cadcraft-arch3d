@@ -742,7 +742,11 @@ mod tests {
     fn environment_for_prefers_hdri_over_sky() {
         use cadcraft_doc::arch::ImageRgbe;
         let mut model = ArchModel::default();
-        let image = ImageRgbe { width: 4, height: 2, rgbe: vec![128, 0, 0, 129; 8], ..Default::default() };
+        let mut rgbe = Vec::new();
+        for _ in 0..8 {
+            rgbe.extend_from_slice(&[128, 0, 0, 129]);
+        }
+        let image = ImageRgbe { width: 4, height: 2, rgbe, ..Default::default() };
         model.hdr_images.insert("sky".into(), image);
         model.backdrop = Some(Backdrop::Hdri { image: "sky".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
 
