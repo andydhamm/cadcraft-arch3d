@@ -1334,6 +1334,31 @@ mod tests {
     }
 
     #[test]
+    fn sheet_camera_with_custom_pixels() {
+        let mut s = house();
+        save_front(&mut s);
+        let r = run(&mut s, "sheet", json!({"name": "Pix", "camera": "Front", "width": 400, "pixels": [800, 400]}));
+        let v = &r["views"][0];
+        assert_eq!(v["source"]["kind"], "camera", "{r}");
+        assert!((v["size"][0].as_f64().unwrap() - 400.0).abs() < 1e-9, "{r}");
+        assert!((v["size"][1].as_f64().unwrap() - 200.0).abs() < 1e-9, "{r}");
+        let imgs = images(&s, "Pix");
+        assert_eq!(imgs.len(), 1);
+        let unit = paper_unit(s.doc().unwrap());
+        let (_, w) = imgs[0];
+        assert!((w * unit - 400.0).abs() < 1e-6, "{w}");
+    }
+
+    #[test]
+    fn sheet_camera_unknown_camera_refused() {
+        let mut s = house();
+        let e = refused(&mut s, "sheet", json!({"name": "BadCam", "camera": "Missing"}));
+        assert!(e.contains("camera") || e.contains("Missing"), "{e}");
+        assert!(s.doc().unwrap().layout("BadCam").is_none());
+        assert!(s.doc().unwrap().arch.sheet("BadCam").is_none());
+    }
+
+    #[test]
     fn a_sheet_is_one_undo_step() {
         let mut s = house();
         let undo = s.state().unwrap().undo.len();
