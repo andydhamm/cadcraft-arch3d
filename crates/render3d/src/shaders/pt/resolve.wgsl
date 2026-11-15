@@ -1,5 +1,6 @@
-// Path tracer: accumulation -> RGBA8 (complete). Average, exposure, the raster view's ACES tone
-// map (lit.wgsl), sRGB encode, alpha 255; packed little-endian RGBA in one u32 per pixel.
+// Path tracer: accumulation -> RGBA8 (complete). Average, exposure, the raster view's tone map
+// (ACES or Hable, lit.wgsl), sRGB encode, alpha 255; packed little-endian RGBA in one u32 per
+// pixel.
 
 struct ResolveParams { size: vec2<u32>, exposure: f32, tonemap: u32 };
 
@@ -12,6 +13,23 @@ fn srgb(v: f32) -> f32 {
     return select(1.055 * pow(c, 1.0 / 2.4) - 0.055, c * 12.92, c <= 0.0031308);
 }
 
+// Hable curve, per channel: f(x) = (x*(0.15*x+0.05)+0.004)/(x*(0.15*x+0.5)+0.06) - 0.02/0.3.
+fn resolve_hable_curve(x: f32) -> f32 {
+    return (x * (0.15 * x + 0.05) + 0.004) / (x * (0.15 * x + 0.5) + 0.06) - 0.02 / 0.3;
+}
+
+// Hable tone map: clamp(f(2*x)/f(11.2), 0, 1) per channel, with x clamped to >= 0 first.
+fn resolve_hable(rgb: vec3<f32>) -> vec3<f32> {
+    let x = max(rgb, vec3<f32>(0.0));
+    let f = vec3<f32>(
+        resolve_hable_curve(2.0 * x.x),
+        resolve_hable_curve(2.0 * x.y),
+        resolve_hable_curve(2.0 * x.z),
+    );
+    let g = resolve_hable_curve(11.2);
+    return clamp(f / g, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
 @compute @workgroup_size(8, 8)
 fn resolve_main(@builtin(global_invocation_id) id: vec3<u32>) {
     if (id.x >= rp.size.x || id.y >= rp.size.y) {
@@ -21,9 +39,11 @@ fn resolve_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let a = radiance[i];
     var rgb = a.rgb / max(a.w, 1.0) * rp.exposure;
     rgb = select(vec3<f32>(0.0), rgb, rgb == rgb);
-    // `tonemap` is the frame's tone code: 1 = ACES, anything else no curve (p19-exposure adds 2 Hable, 3 none).
+    // `tonemap` is the frame's tone code: 1 = ACES, 2 = Hable, 3 = none (p19-exposure).
     if (rp.tonemap == 1u) {
         rgb = clamp(rgb * (2.51 * rgb + vec3<f32>(0.03)) / (rgb * (2.43 * rgb + vec3<f32>(0.59)) + vec3<f32>(0.14)), vec3<f32>(0.0), vec3<f32>(1.0));
+    } else if (rp.tonemap == 2u) {
+        rgb = resolve_hable(rgb);
     }
     let r = u32(srgb(rgb.x) * 255.0 + 0.5);
     let g = u32(srgb(rgb.y) * 255.0 + 0.5);
