@@ -559,4 +559,108 @@ mod tests {
         assert!((g[0].back_mid.x - 0.45).abs() < 1e-9 && g[0].back_mid.y.abs() < 1e-9);
         assert!((g[0].centre.y - 0.3).abs() < 1e-9);
     }
+
+    #[test]
+    fn fronts_are_empty_for_nan_width() {
+        let mut c = cab(0, 0.0, Fronts::Doors);
+        c.width = f64::NAN;
+        let m = model(vec![c.clone()]);
+        assert!(fronts(&m, &c).is_empty());
+    }
+
+    #[test]
+    fn fronts_are_empty_for_zero_width() {
+        let mut c = cab(0, 0.0, Fronts::Doors);
+        c.width = 0.0;
+        let m = model(vec![c.clone()]);
+        assert!(fronts(&m, &c).is_empty());
+    }
+
+    #[test]
+    fn fronts_are_empty_for_zero_height() {
+        let mut c = cab(0, 0.0, Fronts::Doors);
+        c.height = 0.0;
+        let m = model(vec![c.clone()]);
+        assert!(fronts(&m, &c).is_empty());
+    }
+
+    #[test]
+    fn fronts_work_with_large_coordinates() {
+        let mut c = cab(0, 1e15, Fronts::Doors);
+        c.width = 1e15;
+        let m = model(vec![c.clone()]);
+        let f = fronts(&m, &c);
+        assert_eq!(f.len(), 1);
+        assert!(f[0].rect[0].is_finite());
+        assert!(f[0].rect[2].is_finite());
+    }
+
+    #[test]
+    fn counter_runs_are_deterministic() {
+        let c0 = cab(0, 0.0, Fronts::Doors);
+        let c1 = cab(1, 0.6, Fronts::Doors);
+        let c2 = cab(2, 1.2, Fronts::Doors);
+        let m1 = model(vec![c0.clone(), c1.clone(), c2.clone()]);
+        let m2 = model(vec![c2.clone(), c0.clone(), c1.clone()]);
+        let m3 = model(vec![c1.clone(), c2.clone(), c0.clone()]);
+        let r1 = counter_runs(&m1);
+        let r2 = counter_runs(&m2);
+        let r3 = counter_runs(&m3);
+        assert_eq!(r1, r2);
+        assert_eq!(r2, r3);
+    }
+
+    #[test]
+    fn gaps_are_deterministic() {
+        let c0 = cab(0, 0.0, Fronts::Doors);
+        let c1 = cab(1, 0.9, Fronts::Doors);
+        let c2 = cab(2, 2.7, Fronts::Doors);
+        let m1 = model(vec![c0.clone(), c1.clone(), c2.clone()]);
+        let m2 = model(vec![c2.clone(), c0.clone(), c1.clone()]);
+        let m3 = model(vec![c1.clone(), c2.clone(), c0.clone()]);
+        let g1 = gaps(&m1);
+        let g2 = gaps(&m2);
+        let g3 = gaps(&m3);
+        assert_eq!(g1, g2);
+        assert_eq!(g2, g3);
+    }
+
+    #[test]
+    fn counter_runs_do_not_join_different_thicknesses() {
+        let mut c0 = cab(0, 0.0, Fronts::Doors);
+        let mut c1 = cab(1, 0.6, Fronts::Doors);
+        c1.counter_thickness = 0.05;
+        let m = model(vec![c0, c1]);
+        let runs = counter_runs(&m);
+        assert_eq!(runs.len(), 2);
+    }
+
+    #[test]
+    fn counter_runs_do_not_join_different_levels() {
+        let mut c0 = cab(0, 0.0, Fronts::Doors);
+        let mut c1 = cab(1, 0.6, Fronts::Doors);
+        c1.level = 1;
+        let m = model(vec![c0, c1]);
+        let runs = counter_runs(&m);
+        assert_eq!(runs.len(), 2);
+    }
+
+    #[test]
+    fn counter_runs_do_not_join_different_rotations() {
+        let mut c0 = cab(0, 0.0, Fronts::Doors);
+        let mut c1 = cab(1, 0.6, Fronts::Doors);
+        c1.rotation = 90.0;
+        let m = model(vec![c0, c1]);
+        let runs = counter_runs(&m);
+        assert_eq!(runs.len(), 2);
+    }
+
+    #[test]
+    fn gaps_at_exact_bounds() {
+        let m = model(vec![cab(0, 0.0, Fronts::Doors), cab(1, 0.9, Fronts::Doors), cab(2, 2.7, Fronts::Doors)]);
+        let g = gaps(&m);
+        assert_eq!(g.len(), 2);
+        assert!((g[0].width - 0.3).abs() < 1e-9);
+        assert!((g[1].width - 1.2).abs() < 1e-9);
+    }
 }
