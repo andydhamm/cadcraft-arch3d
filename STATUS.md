@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 19 of 21: Light, sky and cameras — 74 of 77 segments merged · 15 of 17 acceptance checks**
+**Phase 19 of 21: Light, sky and cameras — 75 of 77 segments merged · 16 of 17 acceptance checks**
 
-10,682 workspace tests passing at the last merge · 1230 segments merged in all · 0 of 15 seats working
+10,684 workspace tests passing at the last merge · 1231 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,24 +29,24 @@ Updated 2026-11-15 23:30 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 15 / 17 | 109.0 h so far · expected done Nov 16 02:07–Nov 16 03:35 UTC |
+| 19 | Light, sky and cameras | building | 16 / 17 | 109.2 h so far · expected done Nov 16 01:21–Nov 16 02:15 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
 
 ## Phase 19 segments
 
-74 merged, 9 replaced, 2 gate, 1 merging
+75 merged, 9 replaced, 2 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p19r-hdri-icon` | An HDR backdrop's display picture and library icon are exposed for the typical pixel and tone-mapped, not flat | gate | bonsai-a |
-| `p19r-overview-cutaway` | An overview camera's cutaway is computed for its own level; the phase-19 demo builds on level 0 and its overview centres on a floor | merging | claude-sonnet-b |
 | `upstream-sync-0e3f62f50` | merge upstream upstream/main up to 0e3f62f50 (19 commits) | gate | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 23:44 | `p19r-overview-cutaway` | merged | 10,684 pass | claude-sonnet-b |
 | Nov 15 23:11 | `harden-p19q-raster-meter-backdrop-only` | merged | 10,682 pass | tturbo-mac2 |
 | Nov 15 22:31 | `upstream-sync-7064a685a` | merged | 10,675 pass | mai-flash-esc |
 | Nov 15 22:12 | `p19q-strip-mesh-under-ceiling` | merged | 10,614 pass | darwin-ws3 |
@@ -58,7 +58,6 @@ Updated 2026-11-15 23:30 UTC. This page and the card in the README are regenerat
 | Nov 15 20:16 | `harden-p18-shower-niche-4` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p19-hdri-3` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p19g-final-raster-env` | merged | 10,595 pass | tturbo-mac |
-| Nov 15 20:16 | `harden-p21g-sheet-camera-new-sheet` | merged | 10,595 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -66,7 +65,7 @@ Updated 2026-11-15 23:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1355 |
 | bonsai-b | bonsai2-27b | merging | 1279 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1453 |
+| bonsai-ws2-a | bonsai2-27b | gate | 1454 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1384 |
 | claude-sonnet-a | sonnet | idle | 159 |
 | claude-sonnet-b | sonnet | idle | 161 |
@@ -78,4 +77,4 @@ Updated 2026-11-15 23:30 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
 | tturbo-mac | tturbo-ultraheretic | gate | 968 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 651 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 652 |
