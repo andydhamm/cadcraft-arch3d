@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 12:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 19 of 21: Light, sky and cameras — 63 of 66 segments merged · 12 of 17 acceptance checks**
+**Phase 19 of 21: Light, sky and cameras — 64 of 66 segments merged · 12 of 17 acceptance checks**
 
-10,526 workspace tests passing at the last merge · 1204 segments merged in all · 0 of 15 seats working
+10,534 workspace tests passing at the last merge · 1206 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,23 +29,25 @@ Updated 2026-11-15 12:00 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 97.5 h so far · expected done Nov 16 02:24–Nov 23 22:03 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 97.7 h so far · expected done Nov 15 19:06–Nov 18 00:28 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
 ## Phase 19 segments
 
-63 merged, 6 replaced, 1 gate, 1 merging, 1 queued
+64 merged, 6 replaced, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | gate | claude-sonnet-a |
-| `p19m-env-radiance-linear` | Environment::radiance stops re-validating the whole map per call (the O(texels^2) cost under the 512 x 256 sky); the sky cache shares its map by Arc | merging | claude-sonnet-d |
+| `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | working | bonsai-ws2-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 12:07 | `p21g-sheet-camera-new-sheet` | merged | 10,534 pass | claude-sonnet-b |
+| Nov 15 12:07 | `p19m-env-radiance-linear` | merged | 10,534 pass | claude-sonnet-d |
 | Nov 15 11:42 | `p21g-callouts-without-view` | merged | 10,526 pass, 1 fail | claude-sonnet-c |
 | Nov 15 07:56 | `harden-p19f-pt-horizon-lit` | merged | 10,525 pass | tturbo-mac |
 | Nov 15 07:07 | `harden-p21f-interior-cabinet-front` | merged | 10,521 pass | tturbo-mac |
@@ -56,25 +58,23 @@ Updated 2026-11-15 12:00 UTC. This page and the card in the README are regenerat
 | Nov 15 05:06 | `harden-p21f-interior-cabinet-front` | refused | 10,474 pass | tturbo-mac |
 | Nov 15 04:25 | `p19k-pt-resolve-hable` | merged | 10,466 pass | bonsai-a |
 | Nov 15 03:48 | `harden-p10-r3d-light-pack` | merged | 10,464 pass | tturbo-mac2 |
-| Nov 15 03:04 | `harden-p19-cameras-4` | merged | 10,455 pass | tturbo-mac |
-| Nov 15 03:04 | `harden-p10-cmd-render` | merged | 10,455 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 1326 |
+| bonsai-a | bonsai2-27b | agent | 1326 |
 | bonsai-b | bonsai2-27b | gate | 1262 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1405 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1405 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1366 |
 | claude-sonnet-a | sonnet | gate | 157 |
 | claude-sonnet-b | sonnet | idle | 157 |
 | claude-sonnet-c | sonnet | idle | 95 |
 | claude-sonnet-d | sonnet | idle | 93 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1240 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1240 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 163 |
-| tturbo-mac | tturbo-ultraheretic | agent | 943 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 622 |
+| tturbo-mac | tturbo-ultraheretic | gate | 943 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 623 |
