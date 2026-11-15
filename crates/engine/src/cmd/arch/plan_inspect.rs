@@ -304,10 +304,14 @@ mod tests {
 
     #[test]
     fn plan_inspect_callout_survives_with_active_view() {
-        use cadcraft_doc::arch::{ArchView, Sheet, SheetSource, SheetView, ViewKind};
+        use cadcraft_doc::arch::{ArchView, Sheet, SheetSource, SheetView, ViewKind, Wall};
         let mut s = session();
         {
             let m = &mut s.doc_mut().unwrap().arch;
+            let ring = [(0.0, 0.0, 10.0, 0.0), (10.0, 0.0, 10.0, 8.0), (10.0, 8.0, 0.0, 8.0), (0.0, 8.0, 0.0, 0.0)];
+            for (x0, y0, x1, y1) in ring {
+                m.push_wall(Wall { start: Vec2::new(x0, y0), end: Vec2::new(x1, y1), thickness: 0.2, height: 2.4, ..Wall::default() });
+            }
             let id = m.push_view(ArchView { name: "v0".into(), kind: ViewKind::Elevation, look: [0.0, 1.0], ..Default::default() }).unwrap();
             m.sheets.push(Sheet {
                 name: "Elevations".into(),
@@ -322,6 +326,47 @@ mod tests {
         let callouts: Vec<_> = labels.iter().filter(|l| l["kind"] == "callout").collect();
         assert_eq!(callouts.len(), 1, "{labels:?}");
         assert_eq!(callouts[0]["text"], "1/A-201");
+    }
+
+    #[test]
+    fn plan_inspect_no_callouts_without_views() {
+        let mut s = session();
+        let r = s.execute("arch.inspect", &json!({"plan": true})).unwrap();
+        let labels = r["plan"]["labels"].as_array().unwrap();
+        let callouts: Vec<_> = labels.iter().filter(|l| l["kind"] == "callout").collect();
+        assert!(callouts.is_empty(), "{callouts:?}");
+    }
+
+    #[test]
+    fn plan_inspect_multiple_callouts_with_active_view() {
+        use cadcraft_doc::arch::{ArchView, Sheet, SheetSource, SheetView, ViewKind, Wall};
+        let mut s = session();
+        {
+            let m = &mut s.doc_mut().unwrap().arch;
+            let ring = [(0.0, 0.0, 10.0, 0.0), (10.0, 0.0, 10.0, 8.0), (10.0, 8.0, 0.0, 8.0), (0.0, 8.0, 0.0, 0.0)];
+            for (x0, y0, x1, y1) in ring {
+                m.push_wall(Wall { start: Vec2::new(x0, y0), end: Vec2::new(x1, y1), thickness: 0.2, height: 2.4, ..Wall::default() });
+            }
+            let id0 = m.push_view(ArchView { name: "v0".into(), kind: ViewKind::Elevation, look: [0.0, 1.0], ..Default::default() }).unwrap();
+            let id1 = m.push_view(ArchView { name: "v1".into(), kind: ViewKind::Elevation, look: [1.0, 0.0], ..Default::default() }).unwrap();
+            m.sheets.push(Sheet {
+                name: "Elevations".into(),
+                number: "A-201".into(),
+                views: vec![
+                    SheetView { number: 1, source: SheetSource::View { id: id0 }, ..Default::default() },
+                    SheetView { number: 2, source: SheetSource::View { id: id1 }, ..Default::default() },
+                ],
+                ..Default::default()
+            });
+            m.active_plan_view = Some("Floor Plan".into());
+        }
+        let r = s.execute("arch.inspect", &json!({"plan": true})).unwrap();
+        let labels = r["plan"]["labels"].as_array().unwrap();
+        let callouts: Vec<_> = labels.iter().filter(|l| l["kind"] == "callout").collect();
+        assert_eq!(callouts.len(), 2, "{callouts:?}");
+        let texts: Vec<String> = callouts.iter().filter_map(|l| l["text"].as_str().map(str::to_string)).collect();
+        assert!(texts.contains(&"1/A-201".to_string()), "{texts:?}");
+        assert!(texts.contains(&"2/A-201".to_string()), "{texts:?}");
     }
 
     #[test]

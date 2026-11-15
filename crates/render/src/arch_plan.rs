@@ -388,6 +388,35 @@ mod tests {
     }
 
     #[test]
+    fn plan_annotation_multiple_callouts() {
+        use cadcraft_doc::arch::{ArchView, Sheet, SheetSource, SheetView, ViewKind, Wall};
+        let mut d = Drawing::new_metric();
+        d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }];
+        let ring = [(0.0, 0.0, 10.0, 0.0), (10.0, 0.0, 10.0, 8.0), (10.0, 8.0, 0.0, 8.0), (0.0, 8.0, 0.0, 0.0)];
+        for (x0, y0, x1, y1) in ring {
+            d.arch.push_wall(Wall { start: Vec2::new(x0, y0), end: Vec2::new(x1, y1), thickness: 0.2, height: 2.4, ..Wall::default() });
+        }
+        let id0 = d.arch.push_view(ArchView { name: "v0".into(), kind: ViewKind::Elevation, look: [0.0, 1.0], ..Default::default() }).unwrap();
+        let id1 = d.arch.push_view(ArchView { name: "v1".into(), kind: ViewKind::Elevation, look: [1.0, 0.0], ..Default::default() }).unwrap();
+        d.arch.sheets.push(Sheet {
+            name: "Elevations".into(),
+            number: "A-201".into(),
+            views: vec![
+                SheetView { number: 1, source: SheetSource::View { id: id0 }, ..Default::default() },
+                SheetView { number: 2, source: SheetSource::View { id: id1 }, ..Default::default() },
+            ],
+            ..Default::default()
+        });
+        d.touch_arch();
+        let ann = plan_annotation(&d);
+        let callouts: Vec<_> = ann.labels.iter().filter(|l| l.kind == PlanLabelKind::Callout).collect();
+        assert_eq!(callouts.len(), 2);
+        let texts: Vec<&str> = callouts.iter().map(|l| l.text.as_str()).collect();
+        assert!(texts.contains(&"1/A-201"), "{texts:?}");
+        assert!(texts.contains(&"2/A-201"), "{texts:?}");
+    }
+
+    #[test]
     fn plan_annotation_callout_handle_matches_view() {
         use cadcraft_doc::arch::{ArchView, Sheet, SheetSource, SheetView, ViewKind};
         let mut d = Drawing::new_metric();
