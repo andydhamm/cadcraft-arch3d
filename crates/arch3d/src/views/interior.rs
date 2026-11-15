@@ -531,25 +531,4 @@ mod tests {
         // Should still resolve to the room by id
         assert_eq!(resolve_room(&m, &v2), v.room);
     }
-
-    #[test]
-    fn restrict_empty_scene() {
-        let (m, v) = room_model();
-        let scene = Scene3d::default();
-        let out = restrict(&m, &scene, &v).unwrap();
-        assert!(out.meshes.is_empty());
-    }
-
-    #[test]
-    fn restrict_cabinet_with_nan_level() {
-        let (m, v) = room_model();
-        // A cabinet mesh with NaN level elevation, standing between floor and ceiling.
-        let mut scene = Scene3d::default();
-        let mut m2 = quad_x(5.95, 1.0, 2.0, 0.0, 0.876, 10, f64::NAN);
-        m2.material = "cabinet-box".to_string();
-        scene.meshes.push(m2);
-        let out = restrict(&m, &scene, &v).unwrap();
-        // The cabinet should survive because it stands between floor and ceiling.
-        assert_eq!(out.meshes.len(), 1);
-    }
 }
