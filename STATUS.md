@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 19 of 21: Light, sky and cameras — 68 of 74 segments merged · 12 of 17 acceptance checks**
+**Phase 19 of 21: Light, sky and cameras — 69 of 74 segments merged · 13 of 17 acceptance checks**
 
-10,595 workspace tests passing at the last merge · 1223 segments merged in all · 0 of 15 seats working
+10,600 workspace tests passing at the last merge · 1224 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,26 +29,26 @@ Updated 2026-11-15 21:00 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 106.5 h so far · expected done Nov 16 08:04–Nov 16 15:43 UTC |
+| 19 | Light, sky and cameras | building | 13 / 17 | 106.7 h so far · expected done Nov 16 05:15–Nov 16 09:45 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
 
 ## Phase 19 segments
 
-68 merged, 6 replaced, 4 gate, 1 merging, 1 queued
+69 merged, 6 replaced, 2 working, 1 gate, 1 merging, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | gate | mai-flash-esc |
-| `p19q-final-raster-frame-look` | Raster Finalize reports the frame look of the still it drew, not the last interactive frame's | gate | claude-sonnet-d |
-| `p19q-pt-auto-exposure-night-backdrop` | Path tracer auto exposure: meter nights like the raster, and meter the visible environment when the frame shows only the backdrop | merging | mai-flash |
-| `p19q-raster-meter-backdrop-only` | Raster auto exposure meters the visible environment when the frame shows only the backdrop | gate | bonsai-ws2-a |
-| `p19q-strip-mesh-under-ceiling` | A strip light at ceiling height is built on the ceiling's underside, so its lens is seen from below | gate | bonsai-a |
+| `p19q-final-raster-frame-look` | Raster Finalize reports the frame look of the still it drew, not the last interactive frame's | merging | claude-sonnet-d |
+| `p19q-raster-meter-backdrop-only` | Raster auto exposure meters the visible environment when the frame shows only the backdrop | working | bonsai-ws2-a |
+| `p19q-strip-mesh-under-ceiling` | A strip light at ceiling height is built on the ceiling's underside, so its lens is seen from below | working | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 21:15 | `p19q-pt-auto-exposure-night-backdrop` | merged | 10,600 pass | mai-flash |
 | Nov 15 20:16 | `harden-p18-room-finishes-1` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p18-shower-niche-4` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p19-hdri-3` | merged | 10,595 pass | tturbo-mac |
@@ -60,24 +60,23 @@ Updated 2026-11-15 21:00 UTC. This page and the card in the README are regenerat
 | Nov 15 19:06 | `harden-p21g-showcase-drawing-set` | merged | 10,545 pass | tturbo-mac2 |
 | Nov 15 19:06 | `harden-p18-room-finishes-3` | merged | 10,545 pass | tturbo-mac |
 | Nov 15 19:06 | `harden-p21g-callouts-without-view` | merged | 10,545 pass | tturbo-mac2 |
-| Nov 15 19:06 | `p18i-showcase-phase18` | merged | 10,545 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1349 |
+| bonsai-a | bonsai2-27b | agent | 1350 |
 | bonsai-b | bonsai2-27b | idle | 1274 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1435 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1437 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1379 |
 | claude-sonnet-a | sonnet | idle | 159 |
 | claude-sonnet-b | sonnet | idle | 159 |
 | claude-sonnet-c | sonnet | idle | 97 |
-| claude-sonnet-d | sonnet | gate | 93 |
+| claude-sonnet-d | sonnet | idle | 94 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1263 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 126 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 171 |
-| tturbo-mac | tturbo-ultraheretic | gate | 964 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 645 |
+| tturbo-mac | tturbo-ultraheretic | agent | 965 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 645 |
