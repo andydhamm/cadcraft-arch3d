@@ -2460,7 +2460,7 @@ mod tests {
     fn overview_camera_with_nan_fields_ignores_them() {
         use cadcraft_doc::arch::{Camera3d, CameraKind};
         let mut arch = house();
-        arch.set_camera(Camera3d {
+        arch.cameras.push(Camera3d {
             name: "ov".into(),
             kind: CameraKind::Overview,
             azimuth_deg: Some(f64::NAN),
@@ -2468,8 +2468,7 @@ mod tests {
             distance: Some(f64::NAN),
             target: Some([f64::NAN, f64::NAN, f64::NAN]),
             ..Camera3d::default()
-        })
-        .expect("camera");
+        });
         arch.active_camera = Some("ov".into());
         let mut pane = Pane3d::new();
         assert!(pane.sync(1, Some(&arch)));
