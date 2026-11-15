@@ -142,4 +142,21 @@ mod tests {
         assert_eq!(unpainted_finish(&m, &Surface::WallSide { wall: ArchId(999), side: Side::Left }), None);
         assert_eq!(unpainted_finish(&m, &Surface::RoomFloor(r)), Some(Finish::Tile));
     }
+
+    #[test]
+    fn wall_finish_that_does_not_fit_walls_falls_back_to_template() {
+        let (mut m, w, r) = boxed(RoomType::Bedroom);
+        // Shingles is a roof-only finish; it does not fit walls.
+        m.walls[0].finish = Some(Finish::Shingles);
+        let left = Surface::WallSide { wall: w, side: Side::Left };
+        // The room-facing side should use the template (Drywall), not the roof-only finish.
+        assert_eq!(unpainted_finish(&m, &left), Some(Finish::Drywall));
+        // The exterior side has no room and the wall's finish doesn't fit walls, so None.
+        let right = Surface::WallSide { wall: w, side: Side::Right };
+        assert_eq!(unpainted_finish(&m, &right), None);
+        // A wall finish that fits walls wins on the right side.
+        m.walls[0].finish = Some(Finish::Brick);
+        assert_eq!(unpainted_finish(&m, &right), Some(Finish::Brick));
+        let _ = r;
+    }
 }

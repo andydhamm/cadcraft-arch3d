@@ -635,4 +635,27 @@ mod tests {
             assert_eq!(t.tile, [1.0, 1.0]);
         }
     }
+
+    #[test]
+    fn tile_sizes_for_all_finishes() {
+        assert_eq!(tile_size(Finish::Siding), [1.2, 1.2]);
+        assert_eq!(tile_size(Finish::Shingles), [1.0, 1.0]);
+        assert_eq!(tile_size(Finish::Brick), [0.84, 0.6]);
+        assert_eq!(tile_size(Finish::Wood), [1.2, 0.84]);
+        assert_eq!(tile_size(Finish::Concrete), [2.0, 2.0]);
+        assert_eq!(tile_size(Finish::Tile), [0.6, 0.6]);
+        assert_eq!(tile_size(Finish::Carpet), [1.0, 1.0]);
+        assert_eq!(tile_size(Finish::Drywall), [1.0, 1.0]);
+        assert_eq!(tile_size(Finish::Plaster), [1.0, 1.0]);
+    }
+
+    #[test]
+    fn flat_finishes_have_flat_normals() {
+        for f in [Finish::Concrete, Finish::Tile, Finish::Carpet, Finish::Drywall, Finish::Plaster] {
+            let t = normal_map(f);
+            for p in t.rgba.chunks_exact(4) {
+                assert_eq!(p, &[128, 128, 255, 255], "{f:?} pixel {p:?}");
+            }
+        }
+    }
 }
