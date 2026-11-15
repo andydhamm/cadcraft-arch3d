@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 13:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 13:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 65 of 67 segments merged · 12 of 17 acceptance checks**
 
@@ -29,18 +29,18 @@ Updated 2026-11-15 13:15 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 98.7 h so far · expected done Nov 15 18:35–Nov 16 23:39 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 98.9 h so far · expected done Nov 15 18:50–Nov 16 23:54 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
 ## Phase 19 segments
 
-65 merged, 6 replaced, 2 gate
+65 merged, 6 replaced, 1 gate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | gate | claude-sonnet-a |
-| `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | gate | mai-flash-esc |
+| `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | working | mai-flash-esc |
 
 ## Recent merges
 
@@ -66,15 +66,15 @@ Updated 2026-11-15 13:15 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | agent | 1330 |
 | bonsai-b | bonsai2-27b | gate | 1262 |
 | bonsai-ws2-a | bonsai2-27b | gate | 1415 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1366 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1367 |
 | claude-sonnet-a | sonnet | gate | 158 |
 | claude-sonnet-b | sonnet | idle | 157 |
 | claude-sonnet-c | sonnet | idle | 95 |
 | claude-sonnet-d | sonnet | idle | 93 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1244 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1245 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 125 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 164 |
-| tturbo-mac | tturbo-ultraheretic | agent | 945 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 165 |
+| tturbo-mac | tturbo-ultraheretic | agent | 946 |
 | tturbo-mac2 | tturbo-ultraheretic | agent | 626 |
