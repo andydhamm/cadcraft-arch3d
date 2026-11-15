@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 68 of 69 segments merged · 12 of 17 acceptance checks**
 
-10,546 workspace tests passing at the last merge · 1217 segments merged in all · 0 of 15 seats working
+10,595 workspace tests passing at the last merge · 1223 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,34 +29,34 @@ Updated 2026-11-15 20:15 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 105.7 h so far · expected done Nov 15 22:05–Nov 16 10:46 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 106.0 h so far · expected done Nov 15 22:21–Nov 16 11:02 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
 
 ## Phase 19 segments
 
-68 merged, 6 replaced, 1 gate
+68 merged, 6 replaced, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | gate | mai-flash-esc |
+| `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | working | mai-flash-esc |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 20:16 | `harden-p18-room-finishes-1` | merged | 10,595 pass | tturbo-mac |
+| Nov 15 20:16 | `harden-p18-shower-niche-4` | merged | 10,595 pass | tturbo-mac |
+| Nov 15 20:16 | `harden-p19-hdri-3` | merged | 10,595 pass | tturbo-mac |
+| Nov 15 20:16 | `harden-p19g-final-raster-env` | merged | 10,595 pass | tturbo-mac |
+| Nov 15 20:16 | `harden-p21g-sheet-camera-new-sheet` | merged | 10,595 pass | tturbo-mac |
+| Nov 15 20:16 | `harden-p18i-showcase-phase18` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 19:52 | `p19m-sky-cli-time` | merged | 10,546 pass | claude-sonnet-c |
 | Nov 15 19:06 | `harden-p6-r3d-limits` | merged | 10,545 pass | tturbo-mac2 |
 | Nov 15 19:06 | `harden-p21g-showcase-drawing-set` | merged | 10,545 pass | tturbo-mac2 |
 | Nov 15 19:06 | `harden-p18-room-finishes-3` | merged | 10,545 pass | tturbo-mac |
 | Nov 15 19:06 | `harden-p21g-callouts-without-view` | merged | 10,545 pass | tturbo-mac2 |
 | Nov 15 19:06 | `p18i-showcase-phase18` | merged | 10,545 pass | claude-sonnet-b |
-| Nov 15 19:06 | `p21h-showcase-kitchen-cabinets` | merged | 10,545 pass | mai-flash-esc |
-| Nov 15 18:38 | `p19m-sky-cli-time` | refused | 10,513 pass | mai-flash-esc |
-| Nov 15 17:15 | `upstream-sync-67514021a` | merged | 10,512 pass | claude-sonnet-a |
-| Nov 15 16:24 | `harden-p19n-pt-pipelines-once` | merged | 10,540 pass | tturbo-mac |
-| Nov 15 16:24 | `p21g-showcase-drawing-set` | merged | 10,540 pass | claude-sonnet-c |
-| Nov 15 15:17 | `p19m-sky-cli-time` | refused | 10,536 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
@@ -70,10 +70,10 @@ Updated 2026-11-15 20:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 159 |
 | claude-sonnet-c | sonnet | idle | 97 |
 | claude-sonnet-d | sonnet | idle | 93 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1263 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1263 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 125 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 170 |
-| tturbo-mac | tturbo-ultraheretic | agent | 961 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 643 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 171 |
+| tturbo-mac | tturbo-ultraheretic | agent | 962 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 644 |
