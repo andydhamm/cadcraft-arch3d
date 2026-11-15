@@ -1744,6 +1744,12 @@ mod tests {
         Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, 0.0, 1.5), Vec3::new(0.0, 0.001, 30.0), 40.0))
     }
 
+    /// From the centre of the 1×1×1 furnace box, looking at a wall (40° field of view): every ray
+    /// hits an emissive interior face, so the steady-state radiance is the furnace's.
+    fn looking_inside() -> Camera {
+        Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), 40.0))
+    }
+
     /// From 1.2 m above the floor, looking level along +y (40° field of view): the floor below the middle, the sky
     /// above it.
     fn looking_level() -> Camera {
@@ -1849,7 +1855,7 @@ mod tests {
 
     /// Run a furnace still to completion and return its centre pixel.
     fn furnace_still(gpu: &ComputeGpu, opts: &PathOptions) -> (u8, u8, u8) {
-        let mut t = PathTracer::new(gpu, &furnace_scene(), &looking_up(), &Lighting::default(), false, (16, 12), opts, None).unwrap();
+        let mut t = PathTracer::new(gpu, &furnace_scene(), &looking_inside(), &Lighting::default(), false, (16, 12), opts, None).unwrap();
         let rgba = loop {
             match t.step(gpu) {
                 PathStatus::Running { .. } => {}
@@ -1866,7 +1872,15 @@ mod tests {
         let Some(gpu) = compute() else { return };
         for e in [0.1f32, 0.25f32, 0.5f32] {
             for code in [crate::exposure::TONE_HABLE, crate::exposure::TONE_NONE, crate::exposure::TONE_ACES] {
-                let opts = PathOptions { exposure: Exposure::Fixed(e), tone_map: code, ..Default::default() };
+                let opts = PathOptions {
+                    // Closed box: steady-state radiance = emission / (1 - albedo) = 1.0 / 0.5 = 2.0.
+                    furnace: Some(super::super::Furnace { emission: 1.0, albedo: 0.5, ..Default::default() }),
+                    exposure: Exposure::Fixed(e),
+                    tone_map: code,
+                    spp: 64,
+                    bounces: 8,
+                    ..Default::default()
+                };
                 let (r, g, b) = furnace_still(&gpu, &opts);
                 let want = srgb8(crate::exposure::tone_map(2.0 * e, code));
                 assert!((r as i32 - want as i32).abs() <= 2, "e={e} tone={code} r={r} want={want}");
