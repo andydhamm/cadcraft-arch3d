@@ -25,12 +25,15 @@ pub struct ComputeGpu {
     /// `<vendor>-<device>-<driver>-<driver info>-app<version>` (a new build may bring a new wgpu),
     /// lowercase, `[a-z0-9.-]` only.
     pub adapter_key: String,
+    /// The path tracer's pipelines, built on first use and shared by every clone of this device
+    /// (`PtPipelines::shared`), so a second still in one process compiles nothing.
+    pub(crate) pipelines: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<super::shaders::PtPipelines>>>>,
 }
 
 impl ComputeGpu {
     /// Builds a compute device description from the concrete adapter state.
     pub fn new(device: wgpu::Device, queue: wgpu::Queue, info: DeviceInfo, ray_query: bool, pipeline_cache: bool, adapter_key: String) -> Self {
-        Self { device, queue, info, ray_query, pipeline_cache, adapter_key }
+        Self { device, queue, info, ray_query, pipeline_cache, adapter_key, pipelines: Default::default() }
     }
 }
 

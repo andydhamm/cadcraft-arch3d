@@ -35,7 +35,7 @@ pub struct PathTracer {
     accum: wgpu::Buffer,
     aov: wgpu::Buffer,
     probes_buf: wgpu::Buffer,
-    pipelines: PtPipelines,
+    pipelines: std::sync::Arc<PtPipelines>,
     rq_build: Option<RqBuild>,
     rq_pipelines: Option<RqPtPipelines>,
     spp_done: u32,
@@ -119,7 +119,7 @@ impl PathTracer {
             return Err(format!("scene has {} triangles, more than MAX_GPU_TRIANGLES {MAX_GPU_TRIANGLES}", gpu_scene.tris.len()));
         }
 
-        let pipelines = PtPipelines::new(gpu, cache)?;
+        let pipelines = PtPipelines::shared(gpu, cache)?;
         let rq_build = if opts.rt && gpu.ray_query { RqBuild::build(gpu, &gpu_scene) } else { None };
         // A ray-query kernel that does not build renders the compute path, and says why (rt_error): until
         // 2026-11-03 `.ok()` dropped the error and the kernel had never compiled on any adapter.
@@ -816,7 +816,7 @@ pub fn irradiance(
         lit.flags |= super::scene_gpu::FRAME_NORMAL_MAPS;
     }
     let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
-    let pipelines = PtPipelines::new(gpu, None)?;
+    let pipelines = PtPipelines::shared(gpu, None)?;
 
     let gpu_probes: Vec<GpuProbe> = probes
         .iter()

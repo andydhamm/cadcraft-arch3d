@@ -80,7 +80,7 @@ fn render_target(_sheet_name: &str, _number: &str) -> Result<PathBuf> {
     Err(bad("sheet-camera", "3D images on sheets need the desktop app or cadcraft-cli's renderer"))
 }
 
-pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView) -> Result<Option<String>> {
+pub(crate) fn place_camera_image(s: &mut Session, layout: &str, sheet: &str, view: &SheetView) -> Result<Option<String>> {
     let SheetSource::Camera { name, width, pixels } = &view.source else {
         return Ok(None);
     };
@@ -102,9 +102,11 @@ pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView)
     if sheet_name.is_empty() {
         return Err(bad("sheet-camera", "`sheet` is empty"));
     }
-    if doc.arch.sheet(sheet_name).is_none() {
-        return Err(bad("sheet-camera", format!("no sheet named `{sheet_name}`")));
+    // The layout exists before the sheet record does (`make_sheet` stores the record afterwards).
+    if doc.layout(layout).is_none() {
+        return Err(bad("sheet-camera", format!("no layout named `{layout}`")));
     }
+    let unit = super::sheets::paper_unit(doc);
 
     let out = render_target(sheet_name, &view.number.to_string())?;
 
@@ -113,18 +115,20 @@ pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView)
     let bytes = std::fs::read(&out).map_err(|e| bad("sheet-camera", format!("render failed to write `{}`: {e}", out.display())))?;
     let _ = std::fs::remove_file(&out);
 
-    let render_width_mm = width * 1000.0;
+    let render_width_mm = *width;
     let render_height_mm = render_width_mm * (f64::from(h) / f64::from(w));
     let image_name = format!("sheet-{}-{}.png", sanitize_sheet_image_name(sheet_name), view.number);
-    let lower_left = [view.at[0] - render_width_mm / 2.0, view.at[1] - render_height_mm / 2.0];
+    // `view.at` is the centre in paper mm; the layout works in drawing units of `unit` mm.
+    let lower_left = [(view.at[0] - render_width_mm / 2.0) / unit, (view.at[1] - render_height_mm / 2.0) / unit];
 
     let previous_space = s.state()?.space.clone();
-    s.state_mut()?.space = cadcraft_doc::Space::Paper(sheet_name.to_string());
+    s.state_mut()?.space = cadcraft_doc::Space::Paper(layout.to_string());
     let value = json!({
-        "path": out.to_string_lossy().to_string(),
+        // The image's path is its name: the pixels travel in `data`, the temporary file is gone.
+        "path": image_name,
         "data": base64_encode(&bytes),
         "at": [lower_left[0], lower_left[1]],
-        "width": render_width_mm,
+        "width": render_width_mm / unit,
         "name": image_name,
     });
     let attach_result = crate::cmd::image::run_imageattach(s, &value);
@@ -139,6 +143,7 @@ pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView)
         set_link(&mut e.common.xdata, LINK_SHEET_IMAGE, sheet_name, view.number);
     })?;
 
+    // No record yet while the sheet is being made: `make_sheet` stores the records `apply_views` returns.
     let mut doc = s.doc_mut()?;
     if let Some(sheet) = doc.arch.sheet_mut(sheet_name) {
         if let Some(view) = sheet.views.iter_mut().find(|v| v.number == view.number) {
@@ -150,7 +155,7 @@ pub(crate) fn place_camera_image(s: &mut Session, sheet: &str, view: &SheetView)
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::cmd::file::set_image_decoder;
     use cadcraft_doc::Space;
@@ -168,7 +173,7 @@ mod tests {
         crate::RenderStats::default()
     }
 
-    fn ensure_renderer() {
+    pub(crate) fn ensure_renderer() {
         if render_hooks().is_none() {
             crate::set_render_hooks(crate::RenderHooks::new(fake_render, fake_stats));
         }
@@ -188,14 +193,14 @@ mod tests {
         d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
         d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
             number: 1,
-            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [200, 100] },
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [200, 100] },
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
-        let image = place_camera_image(&mut s, "Cover", &view).unwrap().unwrap();
+        let image = place_camera_image(&mut s, "Cover", "Cover", &view).unwrap().unwrap();
         assert_eq!(image, "sheet-Cover-1.png");
         let sheet = s.doc().unwrap().arch.sheet("Cover").unwrap();
         assert_eq!(sheet.views[0].size, [200.0, 100.0]);
@@ -216,14 +221,14 @@ mod tests {
         d.arch.sheets.push(Sheet { name: "Cover".into(), number: "1".into(), title: String::new(), ..Sheet::default() });
         d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
             number: 1,
-            source: SheetSource::Camera { name: "missing".into(), width: 0.2, pixels: [200, 100] },
+            source: SheetSource::Camera { name: "missing".into(), width: 200.0, pixels: [200, 100] },
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
-        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        let err = place_camera_image(&mut s, "Cover", "Cover", &view).unwrap_err().to_string();
         assert!(err.contains("no camera named"), "{err}");
     }
 
@@ -238,7 +243,7 @@ mod tests {
         d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
         d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
             number: 1,
-            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [200, 100] },
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [200, 100] },
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
@@ -248,7 +253,7 @@ mod tests {
         if render_hooks().is_some() {
             return;
         }
-        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        let err = place_camera_image(&mut s, "Cover", "Cover", &view).unwrap_err().to_string();
         assert!(err.contains("desktop app or cadcraft-cli's renderer"), "{err}");
     }
 
@@ -264,14 +269,14 @@ mod tests {
         d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
         d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
             number: 1,
-            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [200, 100] },
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [200, 100] },
             scale: 0.0,
             at: [10.0, 20.0],
             size: [0.0, 0.0],
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
-        place_camera_image(&mut s, "Cover", &view).unwrap();
+        place_camera_image(&mut s, "Cover", "Cover", &view).unwrap();
         let sheet = s.doc().unwrap().arch.sheet("Cover").unwrap();
         assert_eq!(sheet.views[0].size, [200.0, 100.0]);
     }
@@ -295,7 +300,7 @@ mod tests {
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
-        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        let err = place_camera_image(&mut s, "Cover", "Cover", &view).unwrap_err().to_string();
         assert!(err.contains("finite"), "{err}");
     }
 
@@ -318,7 +323,7 @@ mod tests {
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
-        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        let err = place_camera_image(&mut s, "Cover", "Cover", &view).unwrap_err().to_string();
         assert!(err.contains("greater than zero"), "{err}");
     }
 
@@ -334,14 +339,14 @@ mod tests {
         d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
         d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
             number: 1,
-            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [15, 100] },
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [15, 100] },
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
-        let err = place_camera_image(&mut s, "Cover", &view).unwrap_err().to_string();
+        let err = place_camera_image(&mut s, "Cover", "Cover", &view).unwrap_err().to_string();
         assert!(err.contains("between 16 and 4096"), "{err}");
     }
 
@@ -357,14 +362,14 @@ mod tests {
         d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
         d.arch.sheet_mut("Cover Sheet!").unwrap().views.push(SheetView {
             number: 1,
-            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [200, 100] },
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [200, 100] },
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover Sheet!").unwrap().views[0].clone();
-        let image = place_camera_image(&mut s, "Cover Sheet!", &view).unwrap().unwrap();
+        let image = place_camera_image(&mut s, "Cover Sheet!", "Cover Sheet!", &view).unwrap().unwrap();
         assert_eq!(image, "sheet-CoverSheet-1.png");
     }
 
@@ -380,16 +385,16 @@ mod tests {
         d.arch.set_camera(Camera3d { name: "front".into(), ..Camera3d::default() }).unwrap();
         d.arch.sheet_mut("Cover").unwrap().views.push(SheetView {
             number: 1,
-            source: SheetSource::Camera { name: "front".into(), width: 0.2, pixels: [100, 200] },
+            source: SheetSource::Camera { name: "front".into(), width: 200.0, pixels: [100, 200] },
             scale: 0.0,
             at: [0.0, 0.0],
             size: [0.0, 0.0],
             ..Default::default()
         });
         let view = s.doc().unwrap().arch.sheet("Cover").unwrap().views[0].clone();
-        place_camera_image(&mut s, "Cover", &view).unwrap();
+        place_camera_image(&mut s, "Cover", "Cover", &view).unwrap();
         let sheet = s.doc().unwrap().arch.sheet("Cover").unwrap();
-        // width 0.2m = 200mm, pixels 100x200, so height = 200 * (200/100) = 400mm
+        // width 200mm, pixels 100x200, so height = 200 * (200/100) = 400mm
         assert_eq!(sheet.views[0].size, [200.0, 400.0]);
     }
 }

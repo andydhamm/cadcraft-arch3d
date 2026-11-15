@@ -2,7 +2,7 @@
 //! the open tabs and the active view; `{"plan": true | "<name>"}` reports what the plan draws
 //! (or would draw with that view open) as annotation lines and labels. Read-only.
 
-use cadcraft_arch::plan::{PlanAnnotation, active_view, annotate, opened_level};
+use cadcraft_arch::plan::{PlanAnnotation, PlanLabelKind, active_view, annotate, opened_level};
 use cadcraft_doc::arch::{ArchModel, PlanKind, PlanView, handle_json};
 use serde_json::{Map as JsonMap, Value, json};
 
@@ -96,8 +96,11 @@ pub(crate) fn inspect_plan(m: &ArchModel, p: &Value, out: &mut JsonMap<String, V
     };
     let a = if view.is_none() {
         let mut a = annotate(m, None, level);
-        a.labels.clear();
+        // Callouts are not view-dependent; every other label is replaced by the room labels.
+        a.labels.retain(|l| l.kind == PlanLabelKind::Callout);
+        let callouts = std::mem::take(&mut a.labels);
         cadcraft_arch::plan::labels::room_labels(m, level, cadcraft_doc::arch::RoomLabelShow::default(), &mut a);
+        a.labels.extend(callouts);
         a
     } else {
         annotate(m, view, level)
@@ -225,6 +228,40 @@ mod tests {
         let after = (s.doc().unwrap().arch_revision, s.doc().unwrap().arch.active_plan_view.clone(), s.doc().unwrap().arch.plan_level);
         assert_eq!(before, after);
         assert!(s.doc().unwrap().arch.open_plan_views.is_empty());
+    }
+
+    #[test]
+    fn plan_inspect_keeps_callouts_with_no_view_open() {
+        use cadcraft_doc::arch::{ArchView, Opening, Sheet, SheetSource, SheetView, ViewKind, Wall};
+        let mut s = Session::new();
+        {
+            let m = &mut s.doc_mut().unwrap().arch;
+            m.levels = vec![Level { index: 0, name: "L0".into(), ..Level::default() }];
+            let ring = [(0.0, 0.0, 10.0, 0.0), (10.0, 0.0, 10.0, 8.0), (10.0, 8.0, 0.0, 8.0), (0.0, 8.0, 0.0, 0.0)];
+            let mut first = None;
+            for (x0, y0, x1, y1) in ring {
+                let id = m.push_wall(Wall { start: Vec2::new(x0, y0), end: Vec2::new(x1, y1), thickness: 0.2, height: 2.4, ..Wall::default() });
+                first = first.or(Some(id));
+            }
+            if let Some(host) = first {
+                m.push_opening(Opening { host, offset: 3.0, width: 1.0, ..Opening::default() });
+            }
+            let id = m.push_view(ArchView { name: "v0".into(), kind: ViewKind::Elevation, look: [0.0, 1.0], ..Default::default() }).unwrap();
+            m.sheets.push(Sheet {
+                name: "Elevations".into(),
+                number: "A-201".into(),
+                views: vec![SheetView { number: 1, source: SheetSource::View { id }, ..Default::default() }],
+                ..Default::default()
+            });
+            assert!(m.active_plan_view.is_none());
+        }
+        let r = s.execute("arch.inspect", &json!({"plan": true})).unwrap();
+        let labels = r["plan"]["labels"].as_array().unwrap();
+        let callouts: Vec<_> = labels.iter().filter(|l| l["kind"] == "callout").collect();
+        assert_eq!(callouts.len(), 1, "{labels:?}");
+        assert_eq!(callouts[0]["text"], "1/A-201");
+        assert_eq!(callouts[0]["layer"], "A-ANNO-SYMB");
+        assert!(labels.iter().all(|l| l["kind"] != "scheduleNumber"), "{labels:?}");
     }
 
     #[test]

@@ -104,7 +104,8 @@ fn project_uncached(env: &Environment) -> [[f32; 3]; 9] {
         for i in 0..gw {
             let az = ((f64::from(i) + 0.5) / f64::from(gw) - 0.5) * 2.0 * pi;
             let d = [(el.cos() * az.cos()) as f32, (el.cos() * az.sin()) as f32, el.sin() as f32];
-            let l = env.radiance(d);
+            // Private; reached only through `project`, which checked `env.is_valid()` once.
+            let l = env.radiance_unchecked(d);
             let y = basis(d);
             total += weight;
             for (a, yk) in acc.iter_mut().zip(y) {
