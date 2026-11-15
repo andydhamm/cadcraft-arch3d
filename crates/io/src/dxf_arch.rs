@@ -1395,6 +1395,97 @@ mod tests {
     }
 
     #[test]
+    fn camera_look_saved_level_lower_levels_round_trip() {
+        use cadcraft_doc::arch::Camera3d;
+        let mut d = Drawing::new_metric();
+        d.arch.cameras.push(Camera3d {
+            name: "ov".into(),
+            kind: cadcraft_doc::arch::CameraKind::Overview,
+            level: Some(1),
+            lower_levels: Some(false),
+            ..Default::default()
+        });
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        let got = &back.arch.cameras[0];
+        assert_eq!(got.name, "ov");
+        assert_eq!(got.kind, cadcraft_doc::arch::CameraKind::Overview);
+        assert_eq!(got.level, Some(1), "level lost on round trip");
+        assert_eq!(got.lower_levels, Some(false), "lower_levels lost on round trip");
+    }
+
+    #[test]
+    fn camera_with_saved_but_no_look_round_trips() {
+        use cadcraft_doc::arch::Camera3d;
+        let saved = Camera3d { name: "s".into(), distance: Some(15.0), ..Default::default() };
+        let mut d = Drawing::new_metric();
+        d.arch.cameras.push(Camera3d { name: "c".into(), distance: Some(20.0), saved: Some(Box::new(saved)), ..Default::default() });
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        let got = &back.arch.cameras[0];
+        assert_eq!(got.name, "c");
+        assert_eq!(got.distance, Some(20.0));
+        assert!(got.saved.is_some(), "saved camera lost on round trip");
+        assert_eq!(got.saved.as_ref().unwrap().distance, Some(15.0));
+        assert!(got.saved.as_ref().unwrap().saved.is_none(), "nested saved camera");
+    }
+
+    #[test]
+    fn camera_with_look_but_no_saved_round_trips() {
+        use cadcraft_doc::arch::{Camera3d, Look};
+        let mut d = Drawing::new_metric();
+        d.arch.cameras.push(Camera3d {
+            name: "c".into(),
+            look: Some(Look { exposure: cadcraft_doc::arch::ExposureSetting::Manual { ev100: 7.0 }, ..Default::default() }),
+            ..Default::default()
+        });
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        let got = &back.arch.cameras[0];
+        assert_eq!(got.name, "c");
+        assert!(got.look.is_some(), "look lost on round trip");
+        assert_eq!(got.look.as_ref().unwrap().exposure, cadcraft_doc::arch::ExposureSetting::Manual { ev100: 7.0 });
+        assert!(got.saved.is_none());
+    }
+
+    #[test]
+    fn camera_saved_with_different_look_round_trips() {
+        use cadcraft_doc::arch::{Camera3d, Look};
+        let saved = Camera3d {
+            name: "s".into(),
+            look: Some(Look { exposure: cadcraft_doc::arch::ExposureSetting::Manual { ev100: 3.0 }, ..Default::default() }),
+            ..Default::default()
+        };
+        let mut d = Drawing::new_metric();
+        d.arch.cameras.push(Camera3d {
+            name: "c".into(),
+            look: Some(Look { exposure: cadcraft_doc::arch::ExposureSetting::Manual { ev100: 9.0 }, ..Default::default() }),
+            saved: Some(Box::new(saved)),
+            ..Default::default()
+        });
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        let got = &back.arch.cameras[0];
+        assert_eq!(got.look.as_ref().unwrap().exposure, cadcraft_doc::arch::ExposureSetting::Manual { ev100: 9.0 });
+        assert_eq!(got.saved.as_ref().unwrap().look.as_ref().unwrap().exposure, cadcraft_doc::arch::ExposureSetting::Manual { ev100: 3.0 });
+    }
+
+    #[test]
+    fn multiple_cameras_with_looks_round_trip() {
+        use cadcraft_doc::arch::{Camera3d, Look};
+        let mut d = Drawing::new_metric();
+        for (i, ev) in [4.0, 6.0, 8.0].iter().enumerate() {
+            d.arch.cameras.push(Camera3d {
+                name: format!("cam{}", i),
+                look: Some(Look { exposure: cadcraft_doc::arch::ExposureSetting::Manual { ev100: *ev }, ..Default::default() }),
+                ..Default::default()
+            });
+        }
+        let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        assert_eq!(back.arch.cameras.len(), 3, "camera count changed on round trip");
+        for (i, ev) in [4.0, 6.0, 8.0].iter().enumerate() {
+            assert_eq!(back.arch.cameras[i].name, format!("cam{}", i));
+            assert_eq!(back.arch.cameras[i].look.as_ref().unwrap().exposure, cadcraft_doc::arch::ExposureSetting::Manual { ev100: *ev });
+        }
+    }
+
+    #[test]
     fn camera_look_and_saved_round_trip() {
         use cadcraft_doc::arch::{Camera3d, CameraKind};
         let saved = Camera3d { name: "dusk".into(), kind: CameraKind::Overview, level: Some(1), lower_levels: Some(false), ..Default::default() };

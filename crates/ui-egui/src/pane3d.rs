@@ -2440,6 +2440,106 @@ mod tests {
     }
 
     #[test]
+    fn overview_camera_with_missing_fields_loads_defaults() {
+        use cadcraft_doc::arch::{Camera3d, CameraKind};
+        let mut arch = house();
+        arch.set_camera(Camera3d { name: "ov".into(), kind: CameraKind::Overview, ..Camera3d::default() }).expect("camera");
+        arch.active_camera = Some("ov".into());
+        let mut pane = Pane3d::new();
+        assert!(pane.sync(1, Some(&arch)));
+        match pane.camera() {
+            cadcraft_render3d::Camera::Orbit(o) => {
+                assert!(o.azimuth.is_finite() && o.elevation.is_finite() && o.distance.is_finite());
+                assert!(o.distance >= cadcraft_render3d::camera::MIN_DISTANCE);
+            }
+            _ => panic!("an overview camera loads as an orbit"),
+        }
+    }
+
+    #[test]
+    fn overview_camera_with_nan_fields_ignores_them() {
+        use cadcraft_doc::arch::{Camera3d, CameraKind};
+        let mut arch = house();
+        arch.set_camera(Camera3d {
+            name: "ov".into(),
+            kind: CameraKind::Overview,
+            azimuth_deg: Some(f64::NAN),
+            elevation_deg: Some(f64::NAN),
+            distance: Some(f64::NAN),
+            target: Some([f64::NAN, f64::NAN, f64::NAN]),
+            ..Camera3d::default()
+        })
+        .expect("camera");
+        arch.active_camera = Some("ov".into());
+        let mut pane = Pane3d::new();
+        assert!(pane.sync(1, Some(&arch)));
+        match pane.camera() {
+            cadcraft_render3d::Camera::Orbit(o) => {
+                assert!(o.azimuth.is_finite(), "NaN azimuth should be ignored");
+                assert!(o.elevation.is_finite(), "NaN elevation should be ignored");
+                assert!(o.distance.is_finite(), "NaN distance should be ignored");
+                assert!(o.target.is_finite(), "NaN target should be ignored");
+            }
+            _ => panic!("an overview camera loads as an orbit"),
+        }
+    }
+
+    #[test]
+    fn switching_between_overview_and_full_cameras() {
+        use cadcraft_doc::arch::{Camera3d, CameraKind};
+        let mut arch = house();
+        arch.set_camera(Camera3d {
+            name: "ov".into(),
+            kind: CameraKind::Overview,
+            azimuth_deg: Some(30.0),
+            elevation_deg: Some(50.0),
+            distance: Some(20.0),
+            ..Camera3d::default()
+        })
+        .expect("camera");
+        arch.set_camera(Camera3d {
+            name: "full".into(),
+            kind: CameraKind::Full,
+            eye: Some([5.0, -3.0]),
+            eye_height: Some(1.7),
+            target: Some([5.0, 4.0, 1.7]),
+            ..Camera3d::default()
+        })
+        .expect("camera");
+        arch.active_camera = Some("ov".into());
+        let mut pane = Pane3d::new();
+        assert!(pane.sync(1, Some(&arch)));
+        assert!(matches!(pane.camera(), cadcraft_render3d::Camera::Orbit(_)), "overview loads as orbit");
+        arch.active_camera = Some("full".into());
+        assert!(pane.sync(2, Some(&arch)));
+        assert!(matches!(pane.camera(), cadcraft_render3d::Camera::Full(_)), "full loads as full");
+        arch.active_camera = Some("ov".into());
+        assert!(pane.sync(3, Some(&arch)));
+        assert!(matches!(pane.camera(), cadcraft_render3d::Camera::Orbit(_)), "back to overview as orbit");
+    }
+
+    #[test]
+    fn loading_same_camera_twice_is_noop() {
+        use cadcraft_doc::arch::{Camera3d, CameraKind};
+        let mut arch = house();
+        let cam = Camera3d {
+            name: "ov".into(),
+            kind: CameraKind::Overview,
+            azimuth_deg: Some(30.0),
+            elevation_deg: Some(50.0),
+            distance: Some(20.0),
+            ..Camera3d::default()
+        };
+        arch.set_camera(cam.clone()).expect("camera");
+        arch.active_camera = Some("ov".into());
+        let mut pane = Pane3d::new();
+        assert!(pane.sync(1, Some(&arch)));
+        let first = pane.camera();
+        assert!(!pane.load_active_camera(&arch), "unchanged camera should not reload");
+        assert!(matches!(pane.camera(), cadcraft_render3d::Camera::Orbit(_)));
+    }
+
+    #[test]
     fn overview_camera_loads_like_orbit() {
         use cadcraft_doc::arch::{Camera3d, CameraKind};
         let mut arch = house();
