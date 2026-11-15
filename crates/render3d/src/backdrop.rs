@@ -737,4 +737,76 @@ mod tests {
         assert!((inv[0][0] - 0.5).abs() < 1e-6 && (inv[1][1] - 0.25).abs() < 1e-6);
         assert!((inv[3][0] + 0.5).abs() < 1e-6);
     }
+
+    #[test]
+    fn backdrop_rgb_zero_size() {
+        let c = Backdrop::Colour { colour: [10, 20, 30] };
+        // w=0 or h=0 should not panic (w.max(1), h.max(1) guard the division).
+        let rgb = backdrop_rgb(&c, &none(), 0, 0, 0, 0, [0.0, 0.0, 1.0]);
+        assert_eq!(rgb, [10, 20, 30]);
+    }
+
+    #[test]
+    fn sample_at_exact_boundaries() {
+        // 4x1 image: red values 0, 85, 170, 255.
+        let img = ImageRgba { width: 4, height: 1, rgba: vec![0, 0, 0, 255, 85, 0, 0, 255, 170, 0, 0, 255, 255, 0, 0, 255], ..Default::default() };
+        // u=0.0: clamps to first texel.
+        let at_zero = sample(&img, 0.0, 0.5, false);
+        assert!((at_zero[0] - 0.0).abs() < 1.0, "{:?}", at_zero);
+        // u=1.0: clamps to last texel.
+        let at_one = sample(&img, 1.0, 0.5, false);
+        assert!((at_one[0] - 255.0).abs() < 1.0, "{:?}", at_one);
+        // u=0.5: midpoint between texels 1 and 2.
+        let at_half = sample(&img, 0.5, 0.5, false);
+        assert!((at_half[0] - 127.5).abs() < 1.0, "{:?}", at_half);
+    }
+
+    #[test]
+    fn fit_no_op_when_already_small() {
+        let img = ImageRgba { width: 10, height: 10, rgba: vec![128u8; 400], ..Default::default() };
+        let fitted = fit(&img, 100);
+        assert_eq!(fitted.width, 10);
+        assert_eq!(fitted.height, 10);
+        assert_eq!(fitted.rgba.len(), 400);
+    }
+
+    #[test]
+    fn invert_identity_matrix() {
+        let identity = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]];
+        let inv = invert(&identity);
+        for r in 0..4 {
+            for c in 0..4 {
+                let expected = if r == c { 1.0 } else { 0.0 };
+                assert!((inv[r][c] - expected).abs() < 1e-6, "inv[{}][{}] = {}", r, c, inv[r][c]);
+            }
+        }
+    }
+
+    #[test]
+    fn invert_singular_matrix_gives_identity() {
+        let zero = [[0.0; 4]; 4];
+        let inv = invert(&zero);
+        assert!((inv[0][0] - 1.0).abs() < 1e-6);
+        assert!((inv[1][1] - 1.0).abs() < 1e-6);
+        assert!((inv[2][2] - 1.0).abs() < 1e-6);
+        assert!((inv[3][3] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn composite_misses_empty() {
+        let mut px = vec![9u8; 4];
+        let b = Backdrop::Colour { colour: [1, 2, 3] };
+        // w=0: no-op, buffer unchanged.
+        composite_misses(&mut px, 0, 1, &[], &b, &none(), &|_, _| [0.0, 0.0, 1.0]);
+        assert_eq!(px, vec![9u8; 4]);
+    }
+
+    #[test]
+    fn image_textures_none_and_colour_backdrop() {
+        let img = ImageRgba { width: 1, height: 1, rgba: vec![1, 2, 3, 255], ..Default::default() };
+        let textures = BTreeMap::from([("item:x".to_string(), img)]);
+        assert!(image_textures(None, &textures).is_empty());
+        let colour = Backdrop::Colour { colour: [0, 0, 0] };
+        assert!(image_textures(Some(&colour), &textures).is_empty());
+    }
 }

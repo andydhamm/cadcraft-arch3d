@@ -677,4 +677,92 @@ mod tests {
         assert_eq!(a.key, b.key, "cached and fresh must have same key");
         assert_eq!(a.rgb.len(), b.rgb.len());
     }
+
+    #[test]
+    fn radiance_at_poles_and_seam() {
+        // 4x2 map: red at u<0.5, blue at u>=0.5; top row bright, bottom row dim.
+        let mut e = Environment::uniform([0.0; 3], 4, 2);
+        e.rgb[0] = [1.0, 0.0, 0.0];
+        e.rgb[1] = [1.0, 0.0, 0.0];
+        e.rgb[2] = [0.0, 0.0, 1.0];
+        e.rgb[3] = [0.0, 0.0, 1.0];
+        e.rgb[4] = [0.5, 0.0, 0.0];
+        e.rgb[5] = [0.5, 0.0, 0.0];
+        e.rgb[6] = [0.0, 0.0, 0.5];
+        e.rgb[7] = [0.0, 0.0, 0.5];
+
+        // Zenith: v=0 (top row), u=0.5 (seam between red and blue).
+        let zenith = e.radiance([0.0, 0.0, 1.0]);
+        assert!(zenith[0] > 0.0 && zenith[2] > 0.0, "zenith should mix red and blue: {:?}", zenith);
+
+        // Nadir: v=1 (bottom row), u=0.5 (seam).
+        let nadir = e.radiance([0.0, 0.0, -1.0]);
+        assert!(nadir[0] > 0.0 && nadir[2] > 0.0, "nadir should mix red and blue: {:?}", nadir);
+        // Nadir is dimmer (bottom row).
+        assert!(nadir[0] < zenith[0], "nadir should be dimmer than zenith");
+
+        // -y direction: u=0.25 (left half, red).
+        let minus_y = e.radiance([0.0, -1.0, 0.0]);
+        assert!(minus_y[0] > minus_y[2], "-y should be redder: {:?}", minus_y);
+
+        // +y direction: u=0.75 (right half, blue).
+        let plus_y = e.radiance([0.0, 1.0, 0.0]);
+        assert!(plus_y[2] > plus_y[0], "+y should be bluer: {:?}", plus_y);
+    }
+
+    #[test]
+    fn environment_single_texel() {
+        let e = Environment::uniform([2.0, 3.0, 4.0], 1, 1);
+        // Any direction should give the same radiance.
+        let r1 = e.radiance([1.0, 0.0, 0.0]);
+        let r2 = e.radiance([0.0, 1.0, 0.0]);
+        let r3 = e.radiance([0.0, 0.0, 1.0]);
+        let r4 = e.radiance([0.0, 0.0, -1.0]);
+        for r in [r1, r2, r3, r4] {
+            assert!((r[0] - 2.0).abs() < 1e-3, "r={:?}", r);
+            assert!((r[1] - 3.0).abs() < 1e-3, "g={:?}", r);
+            assert!((r[2] - 4.0).abs() < 1e-3, "b={:?}", r);
+        }
+    }
+
+    #[test]
+    fn rekey_updates_key_field() {
+        let mut e = Environment::uniform([1.0, 2.0, 3.0], 4, 4);
+        let old_key = e.key;
+        e.rgb[0] = [5.0, 5.0, 5.0];
+        let new_key = e.rekey();
+        assert_ne!(old_key, new_key, "rekey must produce a different key after mutation");
+        assert_eq!(e.key, new_key, "rekey must update the key field");
+        // Rekey again without changes should give the same key.
+        let same_key = e.rekey();
+        assert_eq!(new_key, same_key, "rekey without changes must give same key");
+    }
+
+    #[test]
+    fn environment_for_prefers_hdri_over_sky() {
+        use cadcraft_doc::arch::ImageRgbe;
+        let mut model = ArchModel::default();
+        let image = ImageRgbe { width: 4, height: 2, rgbe: vec![128, 0, 0, 129; 8], ..Default::default() };
+        model.hdr_images.insert("sky".into(), image);
+        model.backdrop = Some(Backdrop::Hdri { image: "sky".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.backdrop = Some(Backdrop::Sky);
+
+        // environment_for should prefer the HDRI over the sky.
+        let env = environment_for(&model, &look, None);
+        assert!(env.is_some(), "environment_for should return the HDRI");
+        let env = env.unwrap();
+        assert_eq!(env.width, 4);
+        assert_eq!(env.height, 2);
+
+        // Without the HDRI backdrop, it should fall back to the sky.
+        model.backdrop = None;
+        let env2 = environment_for(&model, &look, None);
+        assert!(env2.is_some());
+        let env2 = env2.unwrap();
+        assert_eq!(env2.width, 512);
+        assert_eq!(env2.height, 256);
+    }
 }
