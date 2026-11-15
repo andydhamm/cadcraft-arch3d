@@ -1,3 +1,9 @@
+use serde_json::Value;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::time::Instant;
+
 /// The built `cadcraft-cli` binary. Under `cargo test` the integration test executable
 /// lives in `<root>/target/<profile>/deps/<hash>`; the CLI binary sits at
 /// `<root>/target/<profile>/cadcraft-cli`.
@@ -66,11 +72,11 @@ fn render_cmd_json(tmp: &str, tag: &str, mode: &str, camera: &str, angle: &str, 
 }
 
 /// The 8 sky looks of check 03 (tag, camera, sun angle, EV100, star flag).
-fn looks(eye: [f64; 3]) -> [(&'static str, &'static str, &'static str, i64, Option<bool>)] {
+fn looks(eye: [f64; 3]) -> Vec<(&'static str, &'static str, &'static str, i64, Option<bool>)> {
     let up = level_cam(eye, 90.0, 70.0, 30.0);
     let west = level_cam(eye, 180.0, 4.0, 60.0);
     let zen = level_cam(eye, 90.0, 89.0, 60.0);
-    [
+    vec![
         ("noon", &up, "noon", 15, None),
         ("low", &west, "low", 15, None),
         ("m10", &up, "m10", 15, None),
@@ -113,7 +119,7 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
         let mut a = vec!["run".to_string(), "--metric".to_string()];
         for c in &setup_cmds() {
             a.push("--cmd".to_string());
-            a.push(c);
+            a.push(c.to_string());
         }
         a.push("--cmd".to_string());
         a.push(first);
@@ -130,12 +136,12 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     let mut args = vec!["run".to_string(), "--metric".to_string()];
     for c in &setup_cmds() {
         args.push("--cmd".to_string());
-        args.push(c);
+        args.push(c.to_string());
     }
     for (tag, cam, angle, ev, stars) in &looks {
         for mode in &modes {
             args.push("--cmd".to_string());
-            args.push(render_cmd_json(&tmp, tag, mode, cam, angle, *ev, *stars));
+            args.push(render_cmd_json(&tmp, tag, *mode, cam, angle, ev, stars));
         }
     }
 
