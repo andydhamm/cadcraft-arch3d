@@ -223,25 +223,60 @@ pub fn fit(img: &ImageRgbe, max_w: u32, max_h: u32) -> ImageRgbe {
     ImageRgbe { width: target_w, height: target_h, rgbe: out, ..Default::default() }
 }
 
-/// Create a thumbnail from an HDR image, with a bounded, mostly non-uniform display mapping.
+/// The ACES display OETF: maps linear HDR luminance to a bounded, filmic
+/// display-linear value in [0, 1].
+fn aces_oetf(t: f64) -> f64 {
+    let t = t.max(0.0);
+    if t == 0.0 {
+        0.0
+    } else {
+        let y = 1.0005 * t.powf(1.0 / 2.0285) - 0.018081;
+        (y * 2.0).clamp(0.0, 1.0)
+    }
+}
+
+/// The sRGB gamma (OETF) used for the sRGB-encoded display image.
+fn srgb_encode(t: f64) -> f64 {
+    let t = t.max(0.0).min(1.0);
+    if t < 0.0031308 { 12.92 * t } else { 1.055 * t.powf(1.0 / 2.4) - 0.055 }
+}
+
+/// Create a thumbnail from an HDR image. The log-average luminance of the non-black
+/// pixels is exposed to middle grey, an ACES tone curve is applied, and the result
+/// is sRGB-encoded, so the whole image reads as a picture rather than a single
+/// flat colour when a bright sun dominates one pixel.
 pub fn display_image(img: &ImageRgbe, max_side: u32) -> ImageRgba {
     let max_side = max_side.max(1);
     let scaled = fit(img, max_side, max_side);
     let mut rgba = Vec::with_capacity((scaled.width as usize) * (scaled.height as usize) * 4);
-    let mut max_lum = 1e-6_f64;
+
+    // Log-average (geometric) luminance over the non-black pixels. This is the
+    // scene luminance that should appear as middle grey in the display image.
+    let mut log_sum = 0.0_f64;
+    let mut non_black = 0usize;
     for px in scaled.rgbe.chunks_exact(4) {
         let linear = decode_rgbe([px[0], px[1], px[2], px[3]]);
         let lum = (0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]).max(0.0);
-        if lum > max_lum {
-            max_lum = lum;
+        if lum > 1e-12 {
+            log_sum += lum.ln();
+            non_black += 1;
         }
     }
-    let exposed = 0.18 / max_lum.max(1e-6);
+    let exposure = if non_black == 0 {
+        1.0
+    } else {
+        let mean = (log_sum / non_black as f64).exp().max(1e-30);
+        (0.5 / mean).clamp(1e-12, 1e6)
+    };
+
     for px in scaled.rgbe.chunks_exact(4) {
         let linear = decode_rgbe([px[0], px[1], px[2], px[3]]);
-        let mapped = [(linear[0] * exposed).clamp(0.0, 1.0), (linear[1] * exposed).clamp(0.0, 1.0), (linear[2] * exposed).clamp(0.0, 1.0)];
-        let srgb = mapped.map(|v| (v.powf(1.0 / 2.2) * 255.0).round().clamp(0.0, 255.0) as u8);
-        rgba.extend_from_slice(&[srgb[0], srgb[1], srgb[2], 255]);
+        let mut out = [0u8; 3];
+        for c in 0..3 {
+            let t = (linear[c] * exposure).max(0.0);
+            out[c] = (srgb_encode(aces_oetf(t)) * 255.0).round().clamp(0.0, 255.0) as u8;
+        }
+        rgba.extend_from_slice(&[out[0], out[1], out[2], 255]);
     }
     ImageRgba { width: scaled.width, height: scaled.height, rgba, ..Default::default() }
 }
@@ -463,6 +498,46 @@ mod tests {
         assert!(thumb.rgba.iter().all(|&v| v <= 255));
         let rgb = thumb.rgba.chunks_exact(4).map(|px| [px[0], px[1], px[2]]).collect::<Vec<_>>();
         assert!(rgb.iter().any(|px| px[0] != rgb[0][0] || px[1] != rgb[0][1] || px[2] != rgb[0][2]));
+    }
+
+    #[test]
+    fn display_image_of_a_sky_with_a_sun_is_not_flat() {
+        let width = 32;
+        let height = 16;
+        let mut rgbe = Vec::new();
+        for y in 0..height {
+            let t = y as f64 / height as f64;
+            for x in 0..width {
+                let lum = if x == width / 2 && y == height / 2 { 30.0 } else { (0.3 + t * 1.5) * 1.5 };
+                rgbe.extend_from_slice(&encode_linear_to_rgbe([lum * 0.4, lum * 0.5, lum * 0.8]));
+            }
+        }
+        let img = ImageRgbe { width, height, rgbe, ..Default::default() };
+        let thumb = display_image(&img, 64);
+        let pixels: Vec<[u8; 3]> = thumb.rgba.chunks_exact(4).map(|px| [px[0], px[1], px[2]]).collect();
+        let colors: std::collections::HashSet<_> = pixels.iter().clone().collect();
+        assert!(colors.len() > 30, "sky with sun has only {} distinct colours", colors.len());
+    }
+
+    #[test]
+    fn display_image_of_the_sample_hdri_is_a_picture() {
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/library/sample/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr");
+        let bytes = std::fs::read(path).expect("sample HDR should exist");
+        let img = read_hdr(&bytes).expect("sample HDR should decode");
+        let thumb = display_image(&img, 256);
+        let pixels: Vec<[u8; 3]> = thumb.rgba.chunks_exact(4).map(|px| [px[0], px[1], px[2]]).collect();
+        let colors: std::collections::HashSet<_> = pixels.iter().clone().collect();
+        assert!(colors.len() > 30, "sample HDRI has only {} distinct colours", colors.len());
+    }
+
+    #[test]
+    fn rgbe_encode_keeps_seven_bits_of_the_largest_channel() {
+        for base in [0.3, 0.5, 1.0, 1.6, 3.0, 6.0, 13.0] {
+            let enc = encode_linear_to_rgbe([base, base * 0.6, base * 0.25]);
+            let largest = [enc[0], enc[1], enc[2]].iter().copied().max().unwrap();
+            assert!(largest >= 128 && largest <= 255, "largest channel {largest} for base {base} out of band");
+        }
     }
 
     #[test]
