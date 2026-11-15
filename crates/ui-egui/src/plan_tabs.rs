@@ -417,4 +417,107 @@ mod tests {
         let h = harness(app);
         assert_eq!(h.query_all_by_role(Role::Tab).count(), 0);
     }
+
+    #[test]
+    fn closing_the_active_view_updates_active() {
+        let mut app = app_with(&["Alpha", "Beta"]);
+        assert_eq!(active(&app).as_deref(), Some("Beta"), "last opened is active");
+        choose_id(&mut app, "planview:close:Beta");
+        assert_eq!(active(&app).as_deref(), Some("Alpha"), "previous view becomes active");
+        choose_id(&mut app, "planview:close:Alpha");
+        assert_eq!(active(&app), None, "no active view when all are closed");
+    }
+
+    #[test]
+    fn opening_an_already_open_view_sets_it_active() {
+        let mut app = app_with(&["Alpha", "Beta"]);
+        assert_eq!(active(&app).as_deref(), Some("Beta"));
+        choose_id(&mut app, "planview:open:Alpha");
+        assert_eq!(active(&app).as_deref(), Some("Alpha"));
+        // Opening it again is a no-op
+        choose_id(&mut app, "planview:open:Alpha");
+        assert_eq!(active(&app).as_deref(), Some("Alpha"));
+        assert_eq!(open_views(&app), vec!["Alpha", "Beta"], "no duplicate in open list");
+    }
+
+    #[test]
+    fn duplicate_creates_a_new_view() {
+        let mut app = app_with(&["Alpha"]);
+        let before = app.session.doc().unwrap().arch.plan_views.len();
+        choose_id(&mut app, "planview:duplicate:Alpha");
+        let d = app.session.doc().unwrap();
+        assert!(d.arch.plan_view("Alpha copy").is_some());
+        assert_eq!(d.arch.plan_views.len(), before + 1);
+    }
+
+    #[test]
+    fn reference_menu_shows_all_levels_when_view_has_no_level() {
+        let mut app = app_with(&["Alpha"]);
+        // Don't set a level for the view
+        let groups = plan_tab_entries(&app, "Alpha");
+        let sub = groups.iter().flatten().find_map(|e| match e {
+            Entry::Sub { label, children } if label == "Reference Level" => Some(children),
+            _ => None,
+        });
+        let children = labels(&[sub.unwrap().clone()]);
+        // All levels shown (plus None), since the view has no own level to exclude
+        assert!(children.iter().any(|l| l.contains("None")));
+        assert!(children.iter().any(|l| l.contains("Ground")));
+        assert!(children.iter().any(|l| l.contains("Upper")));
+    }
+
+    #[test]
+    fn label_toggle_on_missing_view_does_nothing() {
+        let mut app = app_with(&["Alpha"]);
+        let before = app.session.doc().unwrap().arch.plan_view("Alpha").unwrap().labels;
+        choose_id(&mut app, "planview:label.area:Nonexistent");
+        let after = app.session.doc().unwrap().arch.plan_view("Alpha").unwrap().labels;
+        assert_eq!(before.name, after.name);
+        assert_eq!(before.area, after.area);
+        assert_eq!(before.dimensions, after.dimensions);
+        assert_eq!(before.ceiling, after.ceiling);
+    }
+
+    #[test]
+    fn rename_trims_whitespace() {
+        let mut app = app_with(&["Alpha"]);
+        choose_id(&mut app, "planview:rename:Alpha");
+        if let Some(slot) = app.ui.plan_rename.as_mut() {
+            slot.1 = "  Main  ".into();
+        }
+        commit_rename(&mut app);
+        assert!(app.session.doc().unwrap().arch.plan_view("Main").is_some());
+        assert!(app.session.doc().unwrap().arch.plan_view("Alpha").is_none());
+    }
+
+    #[test]
+    fn new_view_name_skips_taken_names() {
+        let mut app = app_with(&[]);
+        app.run("planview", json!({ "name": "View 1" })).unwrap();
+        app.run("planview", json!({ "name": "View 3" })).unwrap();
+        assert_eq!(new_view_name(&app), "View 2");
+        app.run("planview", json!({ "name": "View 2" })).unwrap();
+        assert_eq!(new_view_name(&app), "View 4");
+    }
+
+    #[test]
+    fn copy_name_with_existing_copies() {
+        let mut app = app_with(&[]);
+        // "Floor Plan" exists as a template view; create copies of it.
+        app.run("planview", json!({ "name": "Floor Plan copy" })).unwrap();
+        app.run("planview", json!({ "name": "Floor Plan copy 2" })).unwrap();
+        assert_eq!(copy_name(&app, "Floor Plan"), "Floor Plan copy 3");
+    }
+
+    #[test]
+    fn view_names_are_case_insensitive_for_taken_check() {
+        let mut app = app_with(&[]);
+        app.run("planview", json!({ "name": "Alpha" })).unwrap();
+        assert!(taken(&app, "alpha"));
+        assert!(taken(&app, "ALPHA"));
+        assert!(!taken(&app, "Beta"));
+        // new_view_name and copy_name use taken(), so they respect case-insensitivity
+        assert_eq!(new_view_name(&app), "View 1");
+        assert_eq!(copy_name(&app, "alpha"), "alpha copy");
+    }
 }

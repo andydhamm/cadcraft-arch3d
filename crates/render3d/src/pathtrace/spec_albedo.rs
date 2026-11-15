@@ -76,10 +76,10 @@ pub fn spec_albedo_terms(roughness: f64, nov: f64) -> (f64, f64) {
     let v = [((1.0 - nov * nov).max(0.0)).sqrt(), 0.0, nov];
     let mut a = 0.0;
     let mut b = 0.0;
-    let inv_n = 1.0 / 32.0;
-    for i in 0..32 {
+    let inv_n = 1.0 / 64.0;
+    for i in 0..64 {
         let u1 = (i as f64 + 0.5) * inv_n;
-        for j in 0..32 {
+        for j in 0..64 {
             let u2 = (j as f64 + 0.5) * inv_n;
             let h = ggx_sample_vndf(v, alpha, u1, u2);
             let voh = (v[0] * h[0] + v[1] * h[1] + v[2] * h[2]).max(0.0);
@@ -97,7 +97,7 @@ pub fn spec_albedo_terms(roughness: f64, nov: f64) -> (f64, f64) {
             b += w * (1.0 - voh).powi(5);
         }
     }
-    (a / 1024.0, b / 1024.0)
+    (a / 4096.0, b / 4096.0)
 }
 
 /// A conservative table of the GGX lobe's directional-albedo coefficients.
@@ -304,5 +304,156 @@ mod tests {
         assert!(s1.contains("bsdf_e_b"));
         let count = count_float_literals(&s1);
         assert_eq!(count, 2 * SPEC_E_N * SPEC_E_N, "unexpected literal count: {count}");
+    }
+
+    #[test]
+    fn spec_albedo_clamps_hostile_input() {
+        // Out of range values are clamped to [0, 1].
+        let (a_hi, b_hi) = spec_albedo_terms(1.5, 0.5);
+        let (a_one, b_one) = spec_albedo_terms(1.0, 0.5);
+        assert_eq!(a_hi, a_one, "roughness > 1 clamped");
+        assert_eq!(b_hi, b_one, "roughness > 1 clamped");
+
+        let (a_lo, b_lo) = spec_albedo_terms(-0.2, 0.5);
+        let (a_zero, b_zero) = spec_albedo_terms(0.0, 0.5);
+        assert_eq!(a_lo, a_zero, "roughness < 0 clamped");
+        assert_eq!(b_lo, b_zero, "roughness < 0 clamped");
+
+        // Non-finite values are treated as 0.0 (clamp_f64), never panic.
+        for (r, n) in
+            [(f64::NAN, 0.5), (f64::INFINITY, 0.5), (f64::NEG_INFINITY, 0.5), (0.5, f64::NAN), (0.5, f64::INFINITY), (0.5, f64::NEG_INFINITY)]
+        {
+            let (a, b) = spec_albedo_terms(r, n);
+            assert!(a.is_finite() && b.is_finite(), "terms({r}, {n}) not finite");
+            assert!(a >= 0.0 && a <= 1.0, "a out of range for ({r}, {n})");
+            assert!(b >= 0.0 && b <= 1.0, "b out of range for ({r}, {n})");
+        }
+    }
+
+    #[test]
+    fn spec_albedo_boundary_values() {
+        // Roughness exactly 0 (perfectly smooth, alpha = ALPHA_MIN).
+        let (a0, b0) = spec_albedo_terms(0.0, 0.5);
+        assert!(a0.is_finite() && b0.is_finite());
+        assert!(a0 >= 0.0 && a0 <= 1.0);
+        assert!(b0 >= 0.0 && b0 <= 1.0);
+
+        // Roughness exactly 1 (maximally rough).
+        let (a1, b1) = spec_albedo_terms(1.0, 0.5);
+        assert!(a1.is_finite() && b1.is_finite());
+        assert!(a1 >= 0.0 && a1 <= 1.0);
+        assert!(b1 >= 0.0 && b1 <= 1.0);
+
+        // View angle 0 (straight on, nov = 1).
+        let (a2, b2) = spec_albedo_terms(0.5, 1.0);
+        assert!(a2.is_finite() && b2.is_finite());
+
+        // View angle at the minimum (grazing, nov = NOV_MIN).
+        let (a3, b3) = spec_albedo_terms(0.5, NOV_MIN);
+        assert!(a3.is_finite() && b3.is_finite());
+
+        // A: the lobe reflectance at normal incidence (nov = 1) should be close to 1 for smooth,
+        // lower for rough.
+        let (a_smooth, _) = spec_albedo_terms(0.05, 1.0);
+        let (a_rough, _) = spec_albedo_terms(0.95, 1.0);
+        assert!(a_smooth > a_rough, "smooth lobe reflects more at normal incidence");
+    }
+
+    #[test]
+    fn spec_albedo_energy_conservation() {
+        // E = f0*a + (1-f0)*b must be in [0, 1] for any f0 in [0, 1], since a and b are each in [0, 1].
+        let f0s = [0.0_f64, 0.04, 0.5, 0.52, 1.0];
+        let roughs = [0.0_f64, 0.1, 0.5, 0.95, 1.0];
+        let novs = [1e-3_f64, 0.024, 0.096, 0.5, 1.0];
+        for f0 in f0s {
+            for roughness in roughs {
+                for nov in novs {
+                    let (a, b) = spec_albedo_terms(roughness, nov);
+                    let e = f0 * a + (1.0 - f0) * b;
+                    assert!(e >= 0.0 && e <= 1.0, "E out of range: f0={f0} rough={roughness} nov={nov} E={e}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_monotonic_in_nov() {
+        // For a fixed roughness, E should be non-decreasing as nov decreases (grazing angles reflect more).
+        let roughs = [0.1_f64, 0.5, 0.95, 1.0];
+        for roughness in roughs {
+            let mut prev_e: f64 = 0.0;
+            let novs: Vec<f64> = (0..=100).map(|i| 1.0 - (i as f64) * 0.009).collect();
+            for &nov in &novs {
+                let (a, b) = spec_albedo_terms(roughness, nov);
+                let e = 0.04 * a + 0.96 * b;
+                assert!(e >= prev_e - 1e-4, "E decreased as nov decreased: rough={roughness} nov={nov} E={e} prev={prev_e}");
+                prev_e = e;
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_table_exact_at_nodes() {
+        // At exact node coordinates, bilinear lookup returns the table value exactly.
+        let table = spec_albedo_table();
+        let h = 1.0 / (SPEC_E_N - 1) as f64;
+        for ri in 0..SPEC_E_N {
+            for ci in 0..SPEC_E_N {
+                let roughness = (ri as f64 * h) as f32;
+                let nov = (ci as f64 * h) as f32;
+                let (la, lb) = spec_albedo_lookup(table, roughness, nov);
+                let idx = table_cell_index(ri, ci);
+                let ta = read_table(&table.a, idx);
+                let tb = read_table(&table.b, idx);
+                assert!((la - ta).abs() < 1e-6, "lookup a != table a at ({ri},{ci}): {la} vs {ta}");
+                assert!((lb - tb).abs() < 1e-6, "lookup b != table b at ({ri},{ci}): {lb} vs {tb}");
+            }
+        }
+    }
+
+    #[test]
+    fn spec_albedo_wgsl_values_in_range() {
+        // All values in the WGSL output should be in [0, 1].
+        let wgsl = spec_albedo_wgsl();
+        let values: Vec<f32> = wgsl
+            .split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
+            .filter(|tok| !tok.is_empty() && tok.contains('.'))
+            .filter_map(|tok| tok.parse::<f32>().ok())
+            .collect();
+        assert_eq!(values.len(), 2 * SPEC_E_N * SPEC_E_N, "expected {} values, got {}", 2 * SPEC_E_N * SPEC_E_N, values.len());
+        for v in values {
+            assert!(v >= 0.0 && v <= 1.0, "WGSL value out of range: {v}");
+        }
+    }
+
+    #[test]
+    fn spec_albedo_lookup_at_table_corners() {
+        let table = spec_albedo_table();
+
+        // All four corners of the bilinear grid.
+        let (a00, b00) = spec_albedo_lookup(table, 0.0, 0.0);
+        let (a10, b10) = spec_albedo_lookup(table, 1.0, 0.0);
+        let (a01, b01) = spec_albedo_lookup(table, 0.0, 1.0);
+        let (a11, b11) = spec_albedo_lookup(table, 1.0, 1.0);
+        for (a, b, label) in [(a00, b00, "0,0"), (a10, b10, "1,0"), (a01, b01, "0,1"), (a11, b11, "1,1")] {
+            assert!(a.is_finite() && b.is_finite(), "corner {label} not finite");
+            assert!(a >= 0.0 && a <= 1.0, "a out of range at corner {label}");
+            assert!(b >= 0.0 && b <= 1.0, "b out of range at corner {label}");
+        }
+
+        // Out of range clamps to the nearest edge.
+        let (a_neg, b_neg) = spec_albedo_lookup(table, -0.5, -0.5);
+        assert_eq!(a_neg, a00, "negative roughness clamps to 0");
+        assert_eq!(b_neg, b00, "negative nov clamps to 0");
+
+        let (a_big, b_big) = spec_albedo_lookup(table, 1.5, 1.5);
+        assert_eq!(a_big, a11, "roughness > 1 clamps to 1");
+        assert_eq!(b_big, b11, "nov > 1 clamps to 1");
+
+        // Interior point: bilinear interpolation should be between the corners.
+        let (a_mid, b_mid) = spec_albedo_lookup(table, 0.5, 0.5);
+        assert!(a_mid.is_finite() && b_mid.is_finite());
+        assert!(a_mid >= a00.min(a10.min(a01.min(a11))) - 1e-6);
+        assert!(a_mid <= a00.max(a10.max(a01.max(a11))) + 1e-6);
     }
 }

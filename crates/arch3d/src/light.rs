@@ -219,8 +219,13 @@ pub fn scene_lights_with(model: &ArchModel, overrides: &BTreeMap<String, LightSt
 }
 
 /// The unit direction of `rotation_deg` (counter-clockwise from +X in plan) made perpendicular to
-/// the unit `aim`; when the two are parallel, +X (or +Y) made perpendicular instead.
+/// `aim`; when the two are parallel, +X (or +Y) made perpendicular instead. `aim` need not be unit.
 pub fn light_axis(aim: Vec3, rotation_deg: f64) -> Vec3 {
+    let al = aim.len();
+    if !al.is_finite() || al < 1e-12 {
+        return Vec3::new(1.0, 0.0, 0.0);
+    }
+    let aim = aim * (1.0 / al);
     let r = rotation_deg.to_radians();
     for guess in [Vec3::new(r.cos(), r.sin(), 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)] {
         let v = guess - aim * guess.dot(aim);
@@ -1068,5 +1073,120 @@ mod tests {
         assert!((e - 0.25).abs() < 0.001, "moon illuminance should be 0.25 lux, got {}", e);
         let e2 = sun_illuminance(&scene, open, up, Vec3::new(0.0, 0.0, -1.0), moon_lux, true);
         assert_eq!(e2, 0.0, "moon below horizon should give 0 lux");
+    }
+
+    #[test]
+    fn intensity_toward_smoothstep_midpoint() {
+        // Spot light with 0° cone, 90° falloff: full intensity at center, smoothstep to 0 at 90°
+        let light = SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::ZERO,
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 1.0,
+            cos_outer: 0.0,
+            size: [0.0; 2],
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ies: None,
+            ..Default::default()
+        };
+        // At 0° (straight down): full intensity
+        assert!((light.intensity_toward(Vec3::new(0.0, 0.0, -1.0)) - 1000.0).abs() < 1e-9);
+        // At 90° (to the side): 0 intensity
+        assert_eq!(light.intensity_toward(Vec3::new(1.0, 0.0, 0.0)), 0.0);
+        // At 45°: between 0 and 1000
+        let at_45 = light.intensity_toward(Vec3::new(0.7071, 0.0, -0.7071));
+        assert!(at_45 > 0.0 && at_45 < 1000.0, "at 45°: {}", at_45);
+        // Monotonic: 30° > 60°
+        let at_30 = light.intensity_toward(Vec3::new(0.5, 0.0, -0.8660));
+        let at_60 = light.intensity_toward(Vec3::new(0.8660, 0.0, -0.5));
+        assert!(at_30 > at_60, "30° ({}) should be > 60° ({})", at_30, at_60);
+    }
+
+    #[test]
+    fn light_axis_perpendicular_to_aim() {
+        // Aim straight down, rotation 0: axis should be (1, 0, 0)
+        let axis = light_axis(Vec3::new(0.0, 0.0, -1.0), 0.0);
+        assert!((axis - Vec3::new(1.0, 0.0, 0.0)).len() < 1e-9, "axis: {:?}", axis);
+        assert!((axis.dot(Vec3::new(0.0, 0.0, -1.0))).abs() < 1e-9, "not perpendicular");
+        // Aim along +X, rotation 0: axis should be (0, 1, 0)
+        let axis2 = light_axis(Vec3::new(1.0, 0.0, 0.0), 0.0);
+        assert!((axis2 - Vec3::new(0.0, 1.0, 0.0)).len() < 1e-9, "axis2: {:?}", axis2);
+        assert!((axis2.dot(Vec3::new(1.0, 0.0, 0.0))).abs() < 1e-9, "not perpendicular");
+        // Aim at 45° down, rotation 90: axis should be unit and perpendicular
+        let aim = Vec3::new(0.0, -1.0, -1.0).normalized();
+        let axis3 = light_axis(aim, 90.0);
+        assert!((axis3.len() - 1.0).abs() < 1e-9, "not unit: {}", axis3.len());
+        assert!((axis3.dot(aim)).abs() < 1e-9, "not perpendicular");
+    }
+
+    #[test]
+    fn direct_illuminance_zero_at_light_position() {
+        let light = SceneLight {
+            kind: LightKind::Point,
+            position: Vec3::new(0.0, 0.0, 2.4),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: -1.0,
+            cos_outer: -1.0,
+            size: [0.0; 2],
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ies: None,
+            ..Default::default()
+        };
+        // Point at the light's position: d2 = 0, so illuminance = 0
+        assert_eq!(direct_illuminance(&light, Vec3::new(0.0, 0.0, 2.4), up()), 0.0);
+        // Point very close: should be large but finite
+        let close = direct_illuminance(&light, Vec3::new(0.0, 0.0, 2.399), up());
+        assert!(close > 0.0 && close.is_finite(), "close: {}", close);
+    }
+
+    #[test]
+    fn scene_lights_includes_zero_lumen_fixture() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(cadcraft_doc::arch::Room { id: ArchId(10), level: 0, polygon: ring, ..Default::default() });
+        let mut f = LightFixture::new(ArchId(0), "Recessed pot light", Vec2::new(2.0, 2.0));
+        f.lumens = 0.0;
+        m.lights.push(f);
+        m.next_light_id = 1;
+        let lights = scene_lights(&m);
+        assert_eq!(lights.len(), 1, "zero-lumen fixture should still be included");
+        assert_eq!(lights[0].intensity, 0.0, "intensity should be 0");
+    }
+
+    #[test]
+    fn illuminance_empty_scene() {
+        let scene = Scene3d::default();
+        let r = illuminance(&scene, Vec3::new(0.0, 0.0, 0.0), up());
+        assert_eq!(r.lux, 0.0, "empty scene should give 0 lux");
+        assert!(r.per_light.is_empty(), "per_light should be empty");
+    }
+
+    #[test]
+    fn intensity_toward_cone_edge_is_inside() {
+        // Spot light with 60° cone (30° half-angle), no falloff
+        let light = SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::ZERO,
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 1000.0,
+            color: [1.0, 1.0, 1.0],
+            cos_inner: 30f64.to_radians().cos(),
+            cos_outer: 30f64.to_radians().cos(),
+            size: [0.0; 2],
+            axis: Vec3::new(1.0, 0.0, 0.0),
+            ies: None,
+            ..Default::default()
+        };
+        // Exactly at 30° from the direction: should be full intensity (on the edge)
+        let at_edge = Vec3::new(30f64.to_radians().sin(), 0.0, -30f64.to_radians().cos());
+        assert!((light.intensity_toward(at_edge) - 1000.0).abs() < 1e-9, "at edge: {}", light.intensity_toward(at_edge));
+        // Just outside 30°: should be 0
+        let just_outside = Vec3::new(31f64.to_radians().sin(), 0.0, -31f64.to_radians().cos());
+        assert_eq!(light.intensity_toward(just_outside), 0.0, "just outside should be 0");
     }
 }

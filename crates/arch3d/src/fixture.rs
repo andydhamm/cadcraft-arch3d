@@ -70,13 +70,21 @@ pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
 
 /// One strip light's housing: a 12 mm wide by 6 mm high box (`light-strip`) along each segment of
 /// the path at the light height, plus a 1 mm lens (`light-lens-lit` when on, `light-lens` when
-/// off) on the bottom face. Empty when the path has fewer than two points.
+/// off) proud below the housing — 1 mm narrower on each side (10 mm wide) with its ends pulled in
+/// 1 mm along each segment (segments under 4 mm keep the full length), spanning `light` height
+/// minus 7 mm to minus 6 mm. Empty when the path has fewer than two points.
 fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
     if f.path.len() < 2 {
         return Vec::new();
     }
     let lens = if f.on { "light-lens-lit" } else { "light-lens" };
     let hw = 0.012 / 2.0;
+    // The housing bottom and lens bottom are kept one millimetre apart in world space, while
+    // the underlying mesh stores z in f32. The resulting lens sits proud of the housing and is
+    // never coplanar with it in the ray/triangle tests.
+    let h_bottom = zp - 0.006;
+    let h_bottom_f32 = h_bottom as f32;
+    let lens_bottom_f32 = h_bottom_f32 - 0.001f32;
     let mut parts: Vec<Option<Mesh>> = Vec::new();
     let mut segments: Vec<(Vec2, Vec2)> = f.path.windows(2).map(|w| (w[0], w[1])).collect();
     if f.closed && f.path.len() > 2 {
@@ -99,8 +107,24 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
         let px = -uy * hw;
         let py = ux * hw;
         let ring = vec![Vec2::new(a.x + px, a.y + py), Vec2::new(b.x + px, b.y + py), Vec2::new(b.x - px, b.y - py), Vec2::new(a.x - px, a.y - py)];
-        parts.push(prism("light-strip", f, &ring, zp - 0.006, zp));
-        parts.push(prism(lens, f, &ring, zp - 0.006, zp - 0.005));
+        parts.push(prism("light-strip", f, &ring, h_bottom_f32 as f64, zp));
+        // The lens is proud of the housing: a 1 mm slab below the housing bottom, 1 mm
+        // narrower on each side, with its ends pulled in 1 mm along the segment.  A segment
+        // shorter than 4 mm keeps its full length so the lens never shrinks to nothing.
+        let l_hw = 0.005;
+        let lpx = -uy * l_hw;
+        let lpy = ux * l_hw;
+        let pull = 0.001;
+        let (la, lb) = if len >= 0.004 { (Vec2::new(a.x + ux * pull, a.y + uy * pull), Vec2::new(b.x - ux * pull, b.y - uy * pull)) } else { (a, b) };
+        let l_ring = vec![
+            Vec2::new(la.x + lpx, la.y + lpy),
+            Vec2::new(lb.x + lpx, lb.y + lpy),
+            Vec2::new(lb.x - lpx, lb.y - lpy),
+            Vec2::new(la.x - lpx, la.y - lpy),
+        ];
+        // Lens is a 1 mm slab below the housing bottom: z from `lens_bottom_f32` to
+        // `h_bottom_f32`, both in f32 so no coplanar face and no rounding gap.
+        parts.push(prism(lens, f, &l_ring, lens_bottom_f32 as f64, h_bottom_f32 as f64));
     }
     parts
 }
@@ -285,6 +309,286 @@ mod tests {
         let meshes = fixture_meshes(&m);
         assert_eq!(meshes.iter().filter(|x| x.material == "light-strip").count(), 3);
         assert_eq!(meshes.iter().filter(|x| x.material == "light-lens").count(), 3);
+        // Off-lens geometry mirrors the on case: proud below the 6 mm housing.
+        for lens in meshes.iter().filter(|x| x.material == "light-lens") {
+            let b = lens.bounds();
+            assert!((b.max[2] - 2.394).abs() < 1e-6, "lens max z = {:?}", b.max[2]);
+            assert!((b.min[2] - 2.393).abs() < 1e-6, "lens min z = {:?}", b.min[2]);
+        }
+    }
+
+    /// Möller–Trumbore: distance along `dir` from `origin` to the triangle, or `None`.
+    fn ray_tri_hit(origin: (f64, f64, f64), dir: (f64, f64, f64), a: (f64, f64, f64), b: (f64, f64, f64), c: (f64, f64, f64)) -> Option<f64> {
+        let (ox, oy, oz) = origin;
+        let (dx, dy, dz) = dir;
+        let (ax, ay, az) = a;
+        let (bx, by, bz) = b;
+        let (cx, cy, cz) = c;
+        // Edge vectors of the triangle.
+        let (exx, exy, exz) = (bx - ax, by - ay, bz - az);
+        let (eyx, eyy, eyz) = (cx - ax, cy - ay, cz - az);
+        // p = cross(dir, edge_y).
+        let (px, py, pz) = (dy * eyz - dz * eyy, dz * eyx - dx * eyz, dx * eyy - dy * exx);
+        let denom = exx * py + exy * pz + exz * px;
+        if denom.abs() < 1e-30 {
+            return None; // parallel to the triangle plane
+        }
+        let inv_denom = 1.0 / denom;
+        let (tx, ty, tz) = (ox - ax, oy - ay, oz - az);
+        let t = inv_denom * (tx * py + ty * pz + tz * px);
+        if t <= 0.0 || !t.is_finite() {
+            return None;
+        }
+        // q = cross(tx_vec, edge_y).
+        let (qx, qy, qz) = (tx * eyz - tz * eyy, tz * eyx - tx * eyz, tx * eyy - ty * exx);
+        let u = inv_denom * (qx * exx + qy * exy + qz * exz);
+        if u < 0.0 || u > 1.0 || !u.is_finite() {
+            return None;
+        }
+        let v = inv_denom * (dx * qx + dy * qy + dz * qz);
+        if v < 0.0 || u + v > 1.0 || !v.is_finite() {
+            return None;
+        }
+        Some(t)
+    }
+
+    /// Nearest triangle hit from all meshes; returns `(mesh_index, distance)`.
+    fn nearest_tri_hit(origin: (f64, f64, f64), dir: (f64, f64, f64), meshes: &[Mesh]) -> Option<(usize, f64)> {
+        let mut best: Option<(usize, f64)> = None;
+        for (mi, mesh) in meshes.iter().enumerate() {
+            let n = mesh.indices.len() / 3;
+            for ti in 0..n {
+                let i0 = mesh.indices[ti * 3] as usize;
+                let i1 = mesh.indices[ti * 3 + 1] as usize;
+                let i2 = mesh.indices[ti * 3 + 2] as usize;
+                let a = (mesh.positions[i0][0] as f64, mesh.positions[i0][1] as f64, mesh.positions[i0][2] as f64);
+                let b = (mesh.positions[i1][0] as f64, mesh.positions[i1][1] as f64, mesh.positions[i1][2] as f64);
+                let c = (mesh.positions[i2][0] as f64, mesh.positions[i2][1] as f64, mesh.positions[i2][2] as f64);
+                if let Some(t) = ray_tri_hit(origin, dir, a, b, c) {
+                    if best.map_or(true, |(_, bt)| t < bt) {
+                        best = Some((mi, t));
+                    }
+                }
+            }
+        }
+        best
+    }
+
+    #[test]
+    fn strip_lens_is_proud_of_the_housing() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housings: Vec<Mesh> = meshes.iter().filter(|x| x.material == "light-strip").cloned().collect();
+        assert!(!housings.is_empty(), "no housing mesh");
+        for lens in meshes.iter().filter(|x| x.material == "light-lens-lit") {
+            let lb = lens.bounds();
+            let hb = housings[0].bounds();
+            // Lens max z is flush with housing min z.
+            assert!(lb.max[2] <= hb.min[2] + 1e-6, "lens max z {:.15e} > housing min z {:.15e}", lb.max[2], hb.min[2]);
+            // The lens sits 1 mm below the housing face, within the mesh's f32 precision.
+            assert!(
+                (lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-6,
+                "lens min z {:.15e} != housing min z - 0.001 {:.15e}",
+                lb.min[2],
+                hb.min[2] - 0.001
+            );
+            // Lens x/y bounds strictly inside the housing.
+            assert!(lb.min[0] > hb.min[0], "lens min x {:.15e} not strictly inside housing min x {:.15e}", lb.min[0], hb.min[0]);
+            assert!(lb.max[0] < hb.max[0], "lens max x {:.15e} not strictly inside housing max x {:.15e}", lb.max[0], hb.max[0]);
+            assert!(lb.min[1] > hb.min[1], "lens min y {:.15e} not strictly inside housing min y {:.15e}", lb.min[1], hb.min[1]);
+            assert!(lb.max[1] < hb.max[1], "lens max y {:.15e} not strictly inside housing max y {:.15e}", lb.max[1], hb.max[1]);
+        }
+
+        // Off strip: same geometry with material `light-lens`.
+        m.lights[0].on = false;
+        let meshes = fixture_meshes(&m);
+        let housings: Vec<Mesh> = meshes.iter().filter(|x| x.material == "light-strip").cloned().collect();
+        for lens in meshes.iter().filter(|x| x.material == "light-lens") {
+            let lb = lens.bounds();
+            let hb = housings[0].bounds();
+            assert!(lb.max[2] <= hb.min[2] + 1e-6, "lens max z {:.15e} > housing min z {:.15e}", lb.max[2], hb.min[2]);
+            assert!(
+                (lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-6,
+                "lens min z {:.15e} != housing min z - 0.001 {:.15e}",
+                lb.min[2],
+                hb.min[2] - 0.001
+            );
+            assert!(lb.min[0] > hb.min[0], "lens min x {:.15e} not strictly inside housing min x {:.15e}", lb.min[0], hb.min[0]);
+            assert!(lb.max[0] < hb.max[0], "lens max x {:.15e} not strictly inside housing max x {:.15e}", lb.max[0], hb.max[0]);
+            assert!(lb.min[1] > hb.min[1], "lens min y {:.15e} not strictly inside housing min y {:.15e}", lb.min[1], hb.min[1]);
+            assert!(lb.max[1] < hb.max[1], "lens max y {:.15e} not strictly inside housing max y {:.15e}", lb.max[1], hb.max[1]);
+        }
+    }
+
+    /// Cast a straight-up ray from below and assert the nearest fixture surface is the lit lens.
+    fn assert_lens_is_nearest_above(origin: (f64, f64, f64), meshes: &[Mesh]) {
+        let dir = (0.0, 0.0, 1.0);
+        let Some((mi, t_lens)) = nearest_tri_hit(origin, dir, meshes) else {
+            assert!((origin.1 - 2.0).abs() < 1e-9, "no fixture surface above ({0}, {1}, {2})", origin.0, origin.1, origin.2);
+            return;
+        };
+        assert_eq!(meshes[mi].material, "light-lens-lit", "nearest hit is {}, expected light-lens-lit (x={})", meshes[mi].material, origin.0);
+        for (oi, mesh) in meshes.iter().enumerate() {
+            if oi == mi {
+                continue;
+            }
+            let n = mesh.indices.len() / 3;
+            let mut closest: Option<f64> = None;
+            for ti in 0..n {
+                let i0 = mesh.indices[ti * 3] as usize;
+                let i1 = mesh.indices[ti * 3 + 1] as usize;
+                let i2 = mesh.indices[ti * 3 + 2] as usize;
+                let a = (mesh.positions[i0][0] as f64, mesh.positions[i0][1] as f64, mesh.positions[i0][2] as f64);
+                let b = (mesh.positions[i1][0] as f64, mesh.positions[i1][1] as f64, mesh.positions[i1][2] as f64);
+                let c = (mesh.positions[i2][0] as f64, mesh.positions[i2][1] as f64, mesh.positions[i2][2] as f64);
+                if let Some(ot) = ray_tri_hit(origin, dir, a, b, c) {
+                    closest = closest.map_or(Some(ot), |c| Some(c.min(ot)));
+                }
+            }
+            if let Some(ot) = closest {
+                assert!((ot - t_lens).abs() >= 1e-6, "other mesh {} hit within 1e-6 of lens: lens_t={t_lens} other_t={ot}", oi);
+            }
+        }
+    }
+
+    #[test]
+    fn strip_lens_is_the_first_surface_seen_from_below() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        for x in [1.2, 2.0, 2.8] {
+            assert_lens_is_nearest_above((x, 2.0, 1.0), &meshes);
+        }
+    }
+
+    #[test]
+    fn strip_short_segment_lens_keeps_full_length() {
+        // A segment shorter than 4 mm keeps its full length so the lens never shrinks to nothing.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        // 2 mm segment: shorter than the 4 mm threshold
+        f.path = vec![Vec2::new(2.0, 2.0), Vec2::new(2.002, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        // The lens spans the full segment length (no pull-in for short segments).
+        let housing_len = hb.max[0] - hb.min[0];
+        let lens_len = lb.max[0] - lb.min[0];
+        assert!((housing_len - 0.002).abs() < 1e-6, "housing length {housing_len}");
+        assert!((lens_len - 0.002).abs() < 1e-6, "lens length {lens_len} should equal housing length for short segments");
+    }
+
+    #[test]
+    fn strip_long_segment_lens_ends_pulled_in() {
+        // A segment of 4 mm or more has its lens ends pulled in 1 mm along the segment.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        // Housing spans the full 2 m segment; lens is 2 mm shorter (1 mm pulled in at each end).
+        let housing_len = hb.max[0] - hb.min[0];
+        let lens_len = lb.max[0] - lb.min[0];
+        assert!((housing_len - 2.0).abs() < 1e-6, "housing length {housing_len}");
+        assert!((lens_len - 1.998).abs() < 1e-6, "lens length {lens_len} should be 2 mm shorter");
+        // The lens is centered on the segment.
+        let housing_center = (hb.min[0] + hb.max[0]) / 2.0;
+        let lens_center = (lb.min[0] + lb.max[0]) / 2.0;
+        assert!((housing_center - lens_center).abs() < 1e-6, "lens not centered");
+    }
+
+    #[test]
+    fn strip_path_with_one_point_produces_no_meshes() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(2.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        assert!(meshes.is_empty(), "a single-point path should produce no meshes");
+    }
+
+    #[test]
+    fn strip_nan_path_point_is_skipped() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        // One segment has a NaN endpoint; only the (1,2)-(3,2) segment should be built.
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0), Vec2::new(f64::NAN, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing: Vec<_> = meshes.iter().filter(|x| x.material == "light-strip").collect();
+        assert_eq!(housing.len(), 1, "only the finite segment should be built");
+    }
+
+    #[test]
+    fn strip_vertical_segment_lens_is_proud() {
+        // The proud-lens invariant holds for vertical segments too.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(2.0, 1.0), Vec2::new(2.0, 3.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        assert!(lb.max[2] <= hb.min[2] + 1e-6, "lens max z above housing min z");
+        assert!((lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-6, "lens min z not 1 mm below housing");
+        assert!(lb.min[1] > hb.min[1] && lb.max[1] < hb.max[1], "lens y bounds not strictly inside housing");
+        assert!(lb.min[0] > hb.min[0] && lb.max[0] < hb.max[0], "lens x bounds not strictly inside housing");
+    }
+
+    #[test]
+    fn strip_lens_is_two_mm_narrower_than_housing() {
+        // The lens is 1 mm narrower on each side: 10 mm wide vs the housing's 12 mm.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        let housing_width = hb.max[1] - hb.min[1];
+        let lens_width = lb.max[1] - lb.min[1];
+        assert!((housing_width - 0.012).abs() < 1e-6, "housing width {housing_width}");
+        assert!((lens_width - 0.010).abs() < 1e-6, "lens width {lens_width} should be 10 mm");
     }
 
     fn model_with(names: &[&str]) -> ArchModel {

@@ -1,8 +1,9 @@
 # Strip lights rendered: in the raster views a strip counts as one light against the budget (sampled as points 0.15 m
 # apart, never a shadow map); in the path tracer it is an emissive strip. The 2 m, 500 lm/m strip of check 05 in the
 # dark 4 x 4 room: path-traced illuminance under its centre is the brief's 49.72 lx +- 2 %; it lights the floor under it
-# in both renderers, and its lens reads near white from below.
-# needs: p19-exposure-1, p19-exposure-2, p19-exposure-3, p19-strip-model-1, p19-strip-model-2, p19-strip-render
+# in both renderers, and its lens reads near white from below (a 12 mm lens seen from 1.4 m is one to two pixels wide,
+# so that view is exposed at EV100 2: a half-covered pixel still saturates, and the ceiling beside it stays dark).
+# needs: p19-exposure-1, p19-exposure-2, p19-exposure-3, p19-strip-model-1, p19-strip-model-2, p19-strip-render, p19k-strip-lens-proud
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p19lib.inc')).read())
 
@@ -20,13 +21,17 @@ CAM = down_cam(2, 2.9, 2.2, 70)
 LOOK = {"sun": False, "exposure": {"ev100": 4}, "toneMap": "none", "samples": [[2, 2, 0], [2, 3.8, 0]]}
 PT = {"final": "path", "spp": 16, "bounces": 1, "seed": 0}
 UPCAM = {"kind": "full", "eye": [2, 2, 1.0], "target": [2, 2.001, 3.0], "fov": 30}
+UPLOOK = {"sun": False, "exposure": {"ev100": 2}, "toneMap": "none"}
 o = lambda n: os.path.join(tmp, n)
 rows, rs = rendered(ROOM + [STRIP, render_cmd(o('on.png'), CAM, (120, 90), **LOOK),
                             render_cmd(o('on-path.png'), CAM, (120, 90), **LOOK, **PT),
-                            render_cmd(o('up.png'), UPCAM, (120, 90), sun=False, exposure={"ev100": 4}, toneMap="none", **PT),
+                            render_cmd(o('up.png'), UPCAM, (120, 90), **UPLOOK, **PT),
                             OFF, render_cmd(o('off.png'), CAM, (120, 90), **LOOK),
-                            render_cmd(o('off-path.png'), CAM, (120, 90), **LOOK, **PT)], "strip renders")
-on, onp, up, off, offp = rs
+                            render_cmd(o('off-path.png'), CAM, (120, 90), **LOOK, **PT),
+                            render_cmd(o('up-off.png'), UPCAM, (120, 90), **UPLOOK, **PT)], "strip renders")
+if len(rs) != 6:
+    fail(f"six render replies: {len(rs)}")
+on, onp, up, off, offp, upoff = rs
 for a, b, what in ((on, off, "raster"), (onp, offp, "path")):
     s_on, s_far, s_off = rgb_sum(a['samples'][0], what), rgb_sum(a['samples'][1], what), rgb_sum(b['samples'][0], what)
     print(f"{what}: floor under the strip {s_on:.0f} on, {s_off:.0f} off; 1.8 m away {s_far:.0f} (r+g+b)")
@@ -38,8 +43,14 @@ if on.get('drawnLights') != 1 or on.get('shadowedLights') != 0:
          f"shadowedLights {on.get('shadowedLights')}")
 w, h, p = img(o('up.png'))
 white = sum(1 for c in p if sum(c) >= 700)
-if white < 10:
-    fail(f"(c) from below, the strip's lens reads near white in the path tracer (>= 10 pixels with r+g+b >= 700): {white}")
+_, _, p_off = img(o('up-off.png'))
+white_off = sum(1 for c in p_off if sum(c) >= 700)
+print(f"from below: {white} near-white pixels with the strip on, {white_off} with it off (of {w * h})")
+if white < 10 or white > w * h // 4:
+    fail(f"(c) from below, the strip's lens reads near white in the path tracer (>= 10 pixels with r+g+b >= 700, and "
+         f"not the whole view): {white} of {w * h}")
+if white_off != 0:
+    fail(f"(c) with the strip off, no pixel from below is near white: {white_off}")
 rows, rs = rendered(ROOM + [cmd('lightfixture', {"type": "LED strip", "path": [[0.5, 0.5], [3.5, 0.5], [3.5, 1.5]],
                                                  "height": 2.4, "lumensPerMetre": 500}),
                             render_cmd(o('l.png'), CAM, (60, 45), sun=False)], "an L-shaped strip")
