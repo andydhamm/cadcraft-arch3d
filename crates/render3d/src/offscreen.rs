@@ -1027,9 +1027,9 @@ mod offscreen_behavior_tests {
             eprintln!("SKIP: no GPU adapter available");
             return;
         };
+        let expected_downlevel = device.limits() == wgpu::Limits::downlevel_webgl2_defaults();
         let off = Offscreen::with_device(device, queue, (100, 100));
         let info = off.device_info();
-        let expected_downlevel = device.limits() == wgpu::Limits::downlevel_webgl2_defaults();
         assert_eq!(info.downlevel, expected_downlevel, "downlevel flag must match actual device limits");
         assert_eq!(info.name, "unknown", "with_device has no adapter info");
     }
