@@ -1022,6 +1022,42 @@ mod offscreen_behavior_tests {
     }
 
     #[test]
+    fn offscreen_with_device_reports_downlevel_flag() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let off = Offscreen::with_device(device, queue, (100, 100));
+        let info = off.device_info();
+        let expected_downlevel = device.limits() == wgpu::Limits::downlevel_webgl2_defaults();
+        assert_eq!(info.downlevel, expected_downlevel, "downlevel flag must match actual device limits");
+        assert_eq!(info.name, "unknown", "with_device has no adapter info");
+    }
+
+    #[test]
+    fn offscreen_create_with_fallback_reports_cpu_adapter() {
+        let Ok(off) = Offscreen::create_with(AdapterChoice::Fallback, (64, 64)) else {
+            eprintln!("SKIP: no fallback adapter available");
+            return;
+        };
+        let info = off.device_info();
+        assert_eq!(info.adapter_type, "Cpu", "fallback adapter must be CPU: {}", info.line());
+    }
+
+    #[test]
+    fn offscreen_device_info_line_is_non_empty() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let off = Offscreen::with_device(device, queue, (100, 100));
+        let line = off.device_info().line();
+        assert!(line.starts_with("DEVICE name="), "line must start with DEVICE name=, got: {line}");
+        assert!(line.contains(" backend="), "line must contain backend, got: {line}");
+        assert!(line.contains(" type="), "line must contain type, got: {line}");
+    }
+
+    #[test]
     fn offscreen_resize_increases_generation() {
         with_offscreen((100, 100), |off| {
             let gen_before = off.generation();
