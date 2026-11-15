@@ -188,16 +188,11 @@ impl Meter {
     /// [`Environment::radiance`](crate::environment::Environment::radiance)) read through the
     /// `luminance` helper; only finite, positive luminances enter the log-mean. `None` when
     /// no ray yields a positive finite luminance or the environment is not valid.
-    pub fn backdrop_average(
-        &self,
-        camera: &Camera,
-        size: (u32, u32),
-        env: &crate::environment::Environment,
-    ) -> Option<f32> {
+    pub fn backdrop_average(&self, camera: &Camera, size: (u32, u32), env: &crate::environment::Environment) -> Option<f32> {
         if !env.is_valid() {
             return None;
         }
-        let mut (sum, count) = (0.0f64, 0usize);
+        let (mut sum, mut count) = (0.0f64, 0usize);
         for j in 0..METER_ROWS {
             for i in 0..METER_COLUMNS {
                 let px = (i as f32 + 0.5) / METER_COLUMNS as f32 * size.0 as f32;
@@ -291,8 +286,11 @@ pub fn exposure_look(f: &mut FrameLook, scene: &Scene3d, camera: &Camera, size: 
     // Meter the geometry once, exactly when an automatic exposure would meter today (no
     // legacy number, daylight or night metering); the stored result feeds both the regular
     // auto scale and the backdrop fallback, so no ray is cast twice.
-    let geometry = (legacy.is_none() && is_auto && (daylight(lighting) || lighting.meter_night))
-        .then(|| meter.log_average(scene, camera, size, lighting, ground, f));
+    let geometry = if legacy.is_none() && is_auto && (daylight(lighting) || lighting.meter_night) {
+        meter.log_average(scene, camera, size, lighting, ground, f)
+    } else {
+        None
+    };
     let (scale, mode) = {
         // A backdrop-only frame (no geometry in view) meters the visible environment instead
         // of falling to the day exposure: auto, no legacy number, daylight, a visible and
@@ -407,7 +405,8 @@ mod tests {
     use crate::types::{ArchId, Mesh};
 
     use cadcraft_doc::arch::{ExposureSetting, ToneMap};
-    use cadcraft_geom::Vec2;
+    use cadraft_geom::Vec2;
+    use std::sync::Arc;
 
     #[test]
     fn default_frame_look_changes_no_draw() {
@@ -715,7 +714,8 @@ mod tests {
         let lighting = Lighting { environment: Some(Arc::new(env)), ..Lighting::default() };
         let mut meter = Meter::default();
         let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
-        assert!((f.exposure - 0.09).abs() < 1e-5, "auto exposure of a 2-nit backdrop: {f.exposure:?}");
+        let got = f.exposure;
+        assert!((got - 0.09).abs() < 1e-5, "auto exposure of a 2-nit backdrop: {got:?}");
         assert_eq!(f.exposure_mode, "auto");
     }
 
@@ -727,7 +727,8 @@ mod tests {
         let lighting = Lighting { environment: Some(Arc::new(env)), ..Lighting::default() };
         let mut meter = Meter::default();
         let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
-        assert_eq!(f.exposure, crate::pathtrace::DAY_EXPOSURE, "light-only env must keep the day exposure: {f.exposure}");
+        let got = f.exposure;
+        assert_eq!(got, crate::pathtrace::DAY_EXPOSURE, "light-only env must keep the day exposure: {got}");
     }
 
     #[test]
@@ -739,17 +740,14 @@ mod tests {
         let lighting = Lighting { sun: None, meter_night: true, environment: Some(Arc::new(env)), ..Lighting::default() };
         let mut meter = Meter::default();
         let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
-        assert_eq!(f.exposure, crate::pathtrace::NIGHT_EXPOSURE, "night backdrop must keep the night exposure: {f.exposure}");
+        let got = f.exposure;
+        assert_eq!(got, crate::pathtrace::NIGHT_EXPOSURE, "night backdrop must keep the night exposure: {got}");
     }
 
     #[test]
     fn geometry_in_view_keeps_the_geometry_metering() {
         let mut cube = Mesh::new("wall", ArchId(2));
-        cube.push_prism(
-            &[Vec2::new(10.0, 10.0), Vec2::new(11.0, 10.0), Vec2::new(11.0, 11.0), Vec2::new(10.0, 11.0)],
-            0.0,
-            1.0,
-        );
+        cube.push_prism(&[Vec2::new(10.0, 10.0), Vec2::new(11.0, 10.0), Vec2::new(11.0, 11.0), Vec2::new(10.0, 11.0)], 0.0, 1.0);
         let scene = Scene3d { bounds: cube.bounds(), meshes: vec![cube], ..Default::default() };
         let camera = down_at([12.0, 12.0, 0.0]);
         let base = overhead(Some(0.5));
@@ -759,7 +757,8 @@ mod tests {
         let mut meter = Meter::default();
         let without = frame_look(&scene, &camera, (64, 48), &base, true, &mut meter);
         let with = frame_look(&scene, &camera, (64, 48), &env_lighting, true, &mut meter);
-        assert!((without.exposure - with.exposure).abs() < 0.01 * without.exposure.abs(), "geometry hit must dominate: {without.exposure} vs {with.exposure}");
+        let (w, w2) = (without.exposure, with.exposure);
+        assert!((w - w2).abs() < 0.01 * w.abs(), "geometry hit must dominate: {w} vs {w2}");
         assert_eq!((without.exposure_mode, with.exposure_mode), ("auto", "auto"));
     }
 }
