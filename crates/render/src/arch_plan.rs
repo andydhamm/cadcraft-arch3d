@@ -1,7 +1,7 @@
 //! Draws the plan annotation pipeline (`cadcraft_arch::plan::annotate`): lines (dashed, colour
 //! overrides, reference lines beneath the walls) and stroke-text labels.
 
-use cadcraft_arch::plan::{PlanAnnotation, PlanLineKind, active_view, annotate};
+use cadcraft_arch::plan::{PlanAnnotation, PlanLabelKind, PlanLineKind, active_view, annotate};
 use cadcraft_color::{Color, Rgb};
 use cadcraft_doc::Drawing;
 use cadcraft_fonts::{TextFont, TextParams, place};
@@ -27,7 +27,10 @@ pub(crate) fn plan_annotation(d: &Drawing) -> PlanAnnotation {
         let legacy = cadcraft_doc::arch::RoomLabelShow { name: true, area: false, dimensions: false, ceiling: false, ..Default::default() };
         let mut room_only = PlanAnnotation::default();
         cadcraft_arch::plan::labels::room_labels(&d.arch, d.arch.plan_level, legacy, &mut room_only);
+        // Callouts are not view-dependent; they survive alongside the room labels.
+        let callouts: Vec<_> = ann.labels.iter().filter(|l| l.kind == PlanLabelKind::Callout).cloned().collect();
         ann.labels = room_only.labels;
+        ann.labels.extend(callouts);
     }
     ann
 }
@@ -344,6 +347,32 @@ mod tests {
         let l = lines_list(&d, false, &ann, false);
         assert_eq!(l.prims.len(), 3);
         assert!(l.verts.iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn plan_annotation_keeps_callouts_with_no_view_open() {
+        use cadcraft_doc::arch::{ArchView, Sheet, SheetSource, SheetView, ViewKind};
+        let mut d = Drawing::new_metric();
+        d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }];
+        d.arch.push_room(Room { polygon: sq(0.0, 0.0), name: "Down".into(), level: 0, ..Room::default() });
+        let ring = [(0.0, 0.0, 10.0, 0.0), (10.0, 0.0, 10.0, 8.0), (10.0, 8.0, 0.0, 8.0), (0.0, 8.0, 0.0, 0.0)];
+        for (x0, y0, x1, y1) in ring {
+            d.arch.push_wall(Wall { start: Vec2::new(x0, y0), end: Vec2::new(x1, y1), thickness: 0.2, height: 2.4, ..Wall::default() });
+        }
+        let id = d.arch.push_view(ArchView { name: "v0".into(), kind: ViewKind::Elevation, look: [0.0, 1.0], ..Default::default() }).unwrap();
+        d.arch.sheets.push(Sheet {
+            name: "Elevations".into(),
+            number: "A-201".into(),
+            views: vec![SheetView { number: 1, source: SheetSource::View { id }, ..Default::default() }],
+            ..Default::default()
+        });
+        d.touch_arch();
+        assert!(d.arch.active_plan_view.is_none());
+        let ann = plan_annotation(&d);
+        let callouts: Vec<_> = ann.labels.iter().filter(|l| l.kind == PlanLabelKind::Callout).collect();
+        assert_eq!(callouts.len(), 1);
+        assert_eq!(callouts[0].text, "1/A-201");
+        assert!(ann.labels.iter().any(|l| l.kind == PlanLabelKind::RoomName && l.text == "Down"));
     }
 
     #[test]
