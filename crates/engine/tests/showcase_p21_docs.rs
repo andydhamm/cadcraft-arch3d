@@ -214,7 +214,7 @@ fn readme_mentions_phase_21_and_plot() {
 /// The Kitchen's interior elevation must draw at least one cabinet line.
 #[test]
 fn phase21_showcase_kitchen_interior_elevation_draws_cabinets() {
-    let session = replay_showcase();
+    let mut session = replay_showcase();
 
     let inspect = session.execute("arch.inspect", &json!({"views": true, "rooms": true})).unwrap_or_else(|e| panic!("arch.inspect failed: {e}"));
 
@@ -225,7 +225,7 @@ fn phase21_showcase_kitchen_interior_elevation_draws_cabinets() {
     let views = inspect["views"].as_array().expect("views should be an array");
     let view = views
         .iter()
-        .find(|v| v.get("kind").and_then(|k| k.as_str()) == Some("interior") && v.get("room") == kitchen_id)
+        .find(|v| v.get("kind").and_then(|k| k.as_str()) == Some("interior") && v.get("room") == Some(kitchen_id))
         .unwrap_or_else(|| panic!("no interior view for Kitchen (id={kitchen_id})"));
 
     let view_name = view.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
