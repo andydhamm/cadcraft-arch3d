@@ -218,7 +218,7 @@ fn priority_intensity(l: &SceneLight) -> f64 {
 
 /// Indices of `lights` ordered by how much they matter from `eye`: intensity (cd) divided by
 /// max(squared distance from `eye` to the light, 1 m²), largest first; ties by lower index.
-/// Non-finite scores sort last.
+/// NaN scores sort last (in index order); +inf scores sort first.
 pub fn shadow_priority(lights: &[SceneLight], eye: [f64; 3]) -> Vec<usize> {
     let mut scored: Vec<(usize, f64)> = (0..lights.len())
         .map(|i| {
@@ -227,20 +227,20 @@ pub fn shadow_priority(lights: &[SceneLight], eye: [f64; 3]) -> Vec<usize> {
             let dy = l.position.y - eye[1];
             let dz = l.position.z - eye[2];
             let dsq = dx * dx + dy * dy + dz * dz;
-            let finite = dx.is_finite() && dy.is_finite() && dz.is_finite() && dsq.is_finite() && l.intensity.is_finite();
-            let score = if finite { priority_intensity(l) / dsq.max(1.0) } else { f64::NAN };
+            let nan = dx.is_nan() || dy.is_nan() || dz.is_nan() || l.intensity.is_nan();
+            let score = if nan { f64::NAN } else { priority_intensity(l) / dsq.max(1.0) };
             (i, score)
         })
         .collect();
     scored.sort_by(|a, b| {
-        let af = a.1.is_finite();
-        let bf = b.1.is_finite();
-        if af != bf {
-            af.then(|| Ordering::Less).unwrap_or(Ordering::Greater)
-        } else if af {
-            b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal).then_with(|| a.0.cmp(&b.0))
-        } else {
+        let an = a.1.is_nan();
+        let bn = b.1.is_nan();
+        if an != bn {
+            if an { Ordering::Greater } else { Ordering::Less }
+        } else if an {
             a.0.cmp(&b.0)
+        } else {
+            b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal).then_with(|| a.0.cmp(&b.0))
         }
     });
     scored.into_iter().map(|(i, _)| i).collect()
