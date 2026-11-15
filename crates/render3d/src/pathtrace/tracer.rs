@@ -2148,4 +2148,63 @@ mod tests {
         frame_lighting(&mut f, &mut aux, &lighting, Some(&cam), &PathOptions::default());
         assert_eq!(f.view, [0.0; 4], "NaN near clip: view must stay zero");
     }
+
+    #[test]
+    fn horizon_plane_is_lit_like_near_terrain() {
+        let Some(gpu) = compute() else { return };
+
+        // Small terrain quad at z = 0, 4x4 m, centred at the origin.
+        let mut terrain = Mesh::new("terrain", ArchId(1));
+        terrain.positions = vec![[-2.0, -2.0, 0.0], [2.0, -2.0, 0.0], [2.0, 2.0, 0.0], [-2.0, 2.0, 0.0]];
+        terrain.indices = vec![0, 1, 2, 0, 2, 3];
+
+        // Horizon mesh, kilometres across, at z = 0.
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, 0.0], [9500.0, -9500.0, 0.0], [9500.0, 9500.0, 0.0], [-9500.0, 9500.0, 0.0]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+
+        let scene = Scene3d { bounds: terrain.bounds(), meshes: vec![terrain], horizon: Some(horizon), lights: Vec::new(), ..Default::default() };
+
+        // Camera looking level, seeing both the near terrain and the far horizon.
+        let camera =
+            Camera::Full(crate::camera::FullCamera::new(cadcraft_geom::Vec3::new(0.0, -5.0, 1.6), cadcraft_geom::Vec3::new(0.0, 1000.0, 1.6), 60.0));
+
+        let opts = PathOptions { spp: 4, seed: 0, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &scene, &camera, &Lighting::default(), false, (32, 24), &opts, None).unwrap();
+        let rgba = loop {
+            match t.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+
+        let w = 32;
+        // The horizon line is near the middle of the image; the near terrain is below it.
+        let mut horizon_sum = 0.0f32;
+        let mut horizon_count = 0;
+        let mut terrain_sum = 0.0f32;
+        let mut terrain_count = 0;
+
+        for x in 4..w - 4 {
+            // Horizon: middle row.
+            let i_h = (12 * w + x) as usize * 4;
+            horizon_sum += (rgba[i_h] as f32 + rgba[i_h + 1] as f32 + rgba[i_h + 2] as f32) / 3.0;
+            horizon_count += 1;
+
+            // Near terrain: below the middle.
+            let i_t = (18 * w + x) as usize * 4;
+            terrain_sum += (rgba[i_t] as f32 + rgba[i_t + 1] as f32 + rgba[i_t + 2] as f32) / 3.0;
+            terrain_count += 1;
+        }
+
+        let horizon_mean = horizon_sum / horizon_count as f32;
+        let terrain_mean = terrain_sum / terrain_count as f32;
+
+        // The horizon plane must be lit like the near terrain: within 12 per channel.
+        assert!(
+            (horizon_mean - terrain_mean).abs() < 12.0,
+            "horizon {horizon_mean:.1} vs terrain {terrain_mean:.1}: the horizon plane must be lit like the near terrain"
+        );
+    }
 }
