@@ -226,6 +226,16 @@ mod tests {
     }
 
     #[test]
+    fn resolve_source_has_aces_constants() {
+        let src = RESOLVE_WGSL.to_string();
+        assert!(src.contains("2.51"), "ACES constant 2.51 missing");
+        assert!(src.contains("0.03"), "ACES constant 0.03 missing");
+        assert!(src.contains("2.43"), "ACES constant 2.43 missing");
+        assert!(src.contains("0.59"), "ACES constant 0.59 missing");
+        assert!(src.contains("0.14"), "ACES constant 0.14 missing");
+    }
+
+    #[test]
     fn pt_hooks_are_stubs_with_todays_behaviour() {
         let src = kernel_source();
         let rq_src = rq_kernel_source();
