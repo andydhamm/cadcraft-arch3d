@@ -286,7 +286,7 @@ pub fn normal_map(finish: Finish) -> Texture {
             let dy = (h[yp * N + x] - h[ym * N + x]) * 2.0;
             let z = 1.0;
             let len = (dx * dx + dy * dy + z * z).sqrt();
-            let pack = |c: f32| ((c / len * 0.5 + 0.5) * 255.0).clamp(0.0, 255.0) as u8;
+            let pack = |c: f32| ((c / len * 0.5 + 0.5) * 255.0).clamp(0.0, 255.0).round() as u8;
             rgba.push(pack(dx));
             rgba.push(pack(dy));
             rgba.push(pack(z));
