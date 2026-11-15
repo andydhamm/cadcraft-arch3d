@@ -1126,6 +1126,7 @@ mod tests {
     use super::super::scene_gpu::{FRAME_ENV, FRAME_LAMBERT};
     use super::super::*;
     use super::*;
+    use crate::backdrop::CLEAR_RGB;
     use crate::camera::{Camera, Orbit};
     use crate::lit_frame::Lighting;
     use crate::types::{ArchId, Mesh, Scene3d};
