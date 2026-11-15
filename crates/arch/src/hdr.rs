@@ -508,7 +508,8 @@ mod tests {
         for y in 0..height {
             let t = y as f64 / height as f64;
             for x in 0..width {
-                let lum = if x == width / 2 && y == height / 2 { 30.0 } else { (0.3 + t * 1.5) * 1.5 };
+                let x_t = x as f64 / (width - 1) as f64;
+                let lum = if x == width / 2 && y == height / 2 { 30.0 } else { (0.3 + t * 1.5) * 1.5 * (0.8 + 0.4 * x_t) };
                 rgbe.extend_from_slice(&encode_linear_to_rgbe([lum * 0.4, lum * 0.5, lum * 0.8]));
             }
         }
