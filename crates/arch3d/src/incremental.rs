@@ -1748,7 +1748,7 @@ mod tests {
         // Edit ceiling height and strip height
         let mut next = model.clone();
         if let Some(r) = next.rooms.iter_mut().find(|r| r.id == ArchId(1)) {
-            r.ceiling_height = 2.6;
+            r.ceiling_height = Some(2.6);
         }
         if let Some(l) = next.lights.iter_mut().find(|l| l.id == ArchId(1)) {
             l.height = Some(2.6);

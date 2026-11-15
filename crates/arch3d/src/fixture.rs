@@ -1180,13 +1180,13 @@ mod tests {
         let origin = Vec3::new(2.0, 2.0, 1.0);
         let dir = Vec3::new(0.0, 0.0, 1.0);
 
-        let hit = bvh.ray(origin, dir);
+        let hit = bvh.ray(origin, dir, 100.0);
         assert!(hit.is_some(), "no hit");
         let hit = hit.unwrap();
         assert_eq!(hit.part, "light", "first hit part {}", hit.part);
 
         // Verify it's the lens mesh
-        let mesh = scene.meshes.iter().find(|m| m.object == hit.id && m.material == "light-lens-lit");
+        let mesh = scene.meshes.iter().find(|m| m.object == hit.object && m.material == "light-lens-lit");
         assert!(mesh.is_some(), "hit mesh is not light-lens-lit");
     }
 }
