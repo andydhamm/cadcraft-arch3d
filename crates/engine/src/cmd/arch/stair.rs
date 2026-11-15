@@ -538,6 +538,7 @@ impl Interactive for StairM {
             deferred: false,
             raw: false,
             picks_one: false,
+            takes_block: false,
         }
     }
 
