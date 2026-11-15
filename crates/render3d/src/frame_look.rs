@@ -761,4 +761,61 @@ mod tests {
         assert!((w - w2).abs() < 0.01 * w.abs(), "geometry hit must dominate: {w} vs {w2}");
         assert_eq!((without.exposure_mode, with.exposure_mode), ("auto", "auto"));
     }
+
+    /// backdrop_average returns None for an invalid environment (zero width or height).
+    #[test]
+    fn backdrop_average_returns_none_for_invalid_environment() {
+        let meter = Meter::default();
+        let camera = Camera::Orbit(Orbit::at_origin(0.0, 0.0, 5.0, 45.0));
+        let env = crate::environment::Environment::uniform([1.0; 3], 0, 0);
+        assert!(!env.is_valid(), "environment with zero size must be invalid");
+        assert!(meter.backdrop_average(&camera, (64, 48), &env).is_none(), "invalid environment must give None");
+    }
+
+    /// backdrop_average returns None when the environment has zero luminance in all directions.
+    #[test]
+    fn backdrop_average_returns_none_for_zero_luminance_environment() {
+        let meter = Meter::default();
+        let camera = Camera::Orbit(Orbit::at_origin(0.0, 0.0, 5.0, 45.0));
+        let env = crate::environment::Environment::uniform([0.0; 3], 32, 16);
+        assert!(env.is_valid(), "zero-value environment must still be valid");
+        assert!(meter.backdrop_average(&camera, (64, 48), &env).is_none(), "zero luminance must give None");
+    }
+
+    /// backdrop_average does not ray-trace against geometry: the result is the same
+    /// whether the scene is empty or full of meshes.
+    #[test]
+    fn backdrop_average_is_independent_of_scene_geometry() {
+        let meter = Meter::default();
+        let camera = Camera::Orbit(Orbit::at_origin(0.0, 0.0, 5.0, 45.0));
+        let env = uniform_env(2.0);
+
+        let avg_empty = meter.backdrop_average(&camera, (64, 48), &env);
+
+        let mut cube = Mesh::new("wall", ArchId(2));
+        cube.push_prism(&[Vec2::new(10.0, 10.0), Vec2::new(11.0, 10.0), Vec2::new(11.0, 11.0), Vec2::new(10.0, 11.0)], 0.0, 1.0);
+        let _cube_scene = Scene3d { bounds: cube.bounds(), meshes: vec![cube], ..Default::default() };
+        let avg_cube = meter.backdrop_average(&camera, (64, 48), &env);
+
+        assert_eq!(avg_empty, avg_cube, "backdrop_average must not depend on scene geometry");
+        assert!(avg_empty.is_some(), "expected some average");
+    }
+
+    /// For a uniform environment, looking up and looking down give the same average
+    /// (the environment is isotropic).
+    #[test]
+    fn backdrop_average_is_isotropic_for_uniform_environment() {
+        let meter = Meter::default();
+        let env = uniform_env(2.0);
+
+        let up = up_at([0.0, 0.0, 0.0]);
+        let down = down_at([0.0, 0.0, 0.0]);
+
+        let avg_up = meter.backdrop_average(&up, (64, 48), &env);
+        let avg_down = meter.backdrop_average(&down, (64, 48), &env);
+
+        assert!(avg_up.is_some(), "looking up must yield an average");
+        assert!(avg_down.is_some(), "looking down must yield an average");
+        assert!((avg_up.unwrap() - avg_down.unwrap()).abs() < 1e-6, "uniform env should be isotropic");
+    }
 }
