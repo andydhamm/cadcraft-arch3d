@@ -941,12 +941,12 @@ mod tests {
         assert_eq!(parse_path_params(&json!({"exposure": {"ev100": 3}})).unwrap().exposure, None);
         let d = Drawing::new_metric();
         let r = build_request(&d, &json!({"exposure": {"ev100": 3}})).unwrap();
-        assert_eq!(describe_look(&r.look)["exposure"], json!({"mode": "manual", "ev100": 3.0}));
+        assert_eq!(describe_look(&r.look)["exposure"], json!({"ev100": 3.0}));
         assert!(build_request(&d, &json!({"exposure": {"ev100": 99}})).is_err());
         // A bare number keeps its phase-12 meaning: the look stays automatic.
         let r = build_request(&d, &json!({"exposure": 0.5})).unwrap();
         assert_eq!(r.path.exposure, Some(0.5));
-        assert_eq!(describe_look(&r.look)["exposure"], json!({"mode": "auto"}));
+        assert_eq!(describe_look(&r.look)["exposure"], json!("auto"));
         let err = build_request(&d, &json!({"exposure": 0.0})).unwrap_err().to_string();
         assert!(err.contains("`exposure` must be \"auto\" or a positive number"), "{err}");
     }
