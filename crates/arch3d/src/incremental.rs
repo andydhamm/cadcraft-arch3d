@@ -490,6 +490,8 @@ struct SiteIn {
 struct FixtureIn {
     light: LightFixture,
     point: Option<Vec3>,
+    /// Phase 19: the Z height for a strip light's housing (None for other shapes or if unchanged).
+    strip_z: Option<f64>,
 }
 
 /// The fields of a cabinet that another cabinet's meshes read: counter runs and their corner
@@ -838,9 +840,16 @@ impl Sections {
         };
         let site = parts(pt, vec![(ArchId(0), site_in)], |_| painted(model, site::site_meshes(model).meshes));
 
-        let fixture_items =
-            model.lights.iter().map(|f| (f.id, FixtureIn { light: f.clone(), point: cadcraft_arch::light::light_point(model, f) })).collect();
-        let fixtures = parts(px, fixture_items, |i| painted(model, fixture::fixture_housing(&i.light, i.point)));
+        let fixture_items = model
+            .lights
+            .iter()
+            .map(|f| {
+                let p = cadcraft_arch::light::light_point(model, f);
+                let sz = p.map(|p| crate::fixture::strip_mesh_z(model, f, p.z));
+                (f.id, FixtureIn { light: f.clone(), point: p, strip_z: sz })
+            })
+            .collect();
+        let fixtures = parts(px, fixture_items, |i| painted(model, fixture::fixture_housing_at(&i.light, i.point, i.strip_z)));
 
         let casework = casework_levels(model);
         let cabinet_items = model
@@ -1715,5 +1724,37 @@ mod tests {
         assert_eq!(sections.foundations.len(), 1);
         m.foundations[0].kind = FoundationKind::Stem;
         assert!(Sections::make(&m, None).rooms.iter().all(|p| !p.input.slab));
+    }
+
+    #[test]
+    fn scene_cache_matches_full_for_a_ceiling_strip() {
+        use cadcraft_doc::arch::Level;
+        use cadcraft_geom::Vec2;
+
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        model.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        model.lights.push(f);
+
+        let (mut cache, _) = SceneCache::new(&model);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&model).digest());
+
+        // Edit ceiling height and strip height
+        let mut next = model.clone();
+        if let Some(r) = next.rooms.iter_mut().find(|r| r.id == ArchId(1)) {
+            r.ceiling_height = 2.6;
+        }
+        if let Some(l) = next.lights.iter_mut().find(|l| l.id == ArchId(1)) {
+            l.height = Some(2.6);
+        }
+
+        cache.update(&next);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest());
     }
 }

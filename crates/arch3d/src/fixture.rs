@@ -65,7 +65,15 @@ fn finish(m: Mesh) -> Option<Mesh> {
 /// and `light-…` materials (`light-trim`, `light-shade`, `light-cord`, and `light-lens-lit` for a
 /// fixture that is on or `light-lens` for one that is off).
 pub fn fixture_meshes(model: &ArchModel) -> Vec<Mesh> {
-    model.lights.iter().flat_map(|f| fixture_housing(f, light_point(model, f))).collect()
+    model
+        .lights
+        .iter()
+        .flat_map(|f| {
+            let p = light_point(model, f);
+            let sz = p.map(|p| strip_mesh_z(model, f, p.z));
+            fixture_housing_at(f, p, sz)
+        })
+        .collect()
 }
 
 /// One strip light's housing: a 12 mm wide by 6 mm high box (`light-strip`) along each segment of
@@ -129,9 +137,48 @@ fn strip_housing(f: &LightFixture, zp: f64) -> Vec<Option<Mesh>> {
     parts
 }
 
+/// The Z height a strip light's housing should be built at.
+///
+/// If the strip's light point lies within a room's ceiling solid (between `top - 0.02` and `top`),
+/// the housing is moved down to hang from the ceiling's underside (`top - 0.02`). Otherwise, it
+/// returns `zp` unchanged.
+pub fn strip_mesh_z(model: &ArchModel, f: &LightFixture, zp: f64) -> f64 {
+    if f.shape != FixtureShape::Strip || f.path.len() < 2 {
+        return zp;
+    }
+    let (a, b) = (f.path[0], f.path[1]);
+    if !a.is_finite() || !b.is_finite() {
+        return zp;
+    }
+    let c = Vec2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+
+    for room in model.rooms.iter().filter(|r| r.level == f.level) {
+        if room.polygon.len() < 3 {
+            continue;
+        }
+        if !point_in_polygon(&room.polygon, c) {
+            continue;
+        }
+        if room.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, c)) {
+            continue;
+        }
+        if let Some(top) = cadcraft_arch::ceiling::finished_ceiling_in(model, room, c) {
+            if top - 0.02 - 1e-9 <= zp && zp <= top + 1e-9 {
+                return top - 0.02;
+            }
+        }
+    }
+    zp
+}
+
 /// One fixture's housing with its light at `point` ([`light_point`]); none without a point. The
 /// incremental rebuild reuses it while the fixture and its point are unchanged.
 pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> Vec<Mesh> {
+    fixture_housing_at(f, point, None)
+}
+
+/// One fixture's housing, with an optional Z override for strip lights.
+pub fn fixture_housing_at(f: &LightFixture, point: Option<cadcraft_geom::Vec3>, strip_z: Option<f64>) -> Vec<Mesh> {
     let Some(p) = point else { return Vec::new() };
     let d = housing_diameter(f);
     if !p.is_finite() || !d.is_finite() || d <= 0.0 {
@@ -179,7 +226,7 @@ pub fn fixture_housing(f: &LightFixture, point: Option<cadcraft_geom::Vec3>) -> 
             let diffuser = prism(lens, f, &inner, zp - 0.004, zp - 0.002);
             vec![finish(frame_m), diffuser]
         }
-        FixtureShape::Strip => strip_housing(f, zp),
+        FixtureShape::Strip => strip_housing(f, strip_z.filter(|z| z.is_finite()).unwrap_or(zp)),
     };
     parts.into_iter().flatten().collect()
 }
@@ -1032,5 +1079,114 @@ mod tests {
         m.lights.push(f);
         let meshes = fixture_meshes(&m);
         assert!(meshes.is_empty());
+    }
+
+    #[test]
+    fn a_strip_at_ceiling_height_hangs_under_the_ceiling_solid() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+
+        // Housing should be 2.374..2.380 (top - 0.02 - 0.006 .. top - 0.02)
+        assert!((hb.min[2] - 2.374).abs() < 1e-5, "housing min z {}", hb.min[2]);
+        assert!((hb.max[2] - 2.380).abs() < 1e-5, "housing max z {}", hb.max[2]);
+
+        // Lens should be 2.373..2.374 (housing min - 0.001 .. housing min)
+        assert!((lb.min[2] - 2.373).abs() < 1e-5, "lens min z {}", lb.min[2]);
+        assert!((lb.max[2] - 2.374).abs() < 1e-5, "lens max z {}", lb.max[2]);
+
+        // Lens max z <= ceiling solid min z (2.38)
+        assert!(lb.max[2] <= 2.38 + 1e-5);
+    }
+
+    #[test]
+    fn a_strip_below_the_ceiling_keeps_its_height() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.0);
+        m.lights.push(f);
+
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+
+        // Housing should be 1.994..2.000
+        assert!((hb.min[2] - 1.994).abs() < 1e-5, "housing min z {}", hb.min[2]);
+        assert!((hb.max[2] - 2.000).abs() < 1e-5, "housing max z {}", hb.max[2]);
+
+        // Lens should be 1.993..1.994
+        assert!((lb.min[2] - 1.993).abs() < 1e-5, "lens min z {}", lb.min[2]);
+        assert!((lb.max[2] - 1.994).abs() < 1e-5, "lens max z {}", lb.max[2]);
+
+        // Test with no room
+        let mut m2 = ArchModel::default();
+        m2.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let mut f2 = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f2.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f2.height = Some(2.4);
+        m2.lights.push(f2);
+
+        let meshes2 = fixture_meshes(&m2);
+        let housing2 = meshes2.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let hb2 = housing2.bounds();
+
+        // Housing should be 2.394..2.400 (zp - 0.006 .. zp)
+        assert!((hb2.min[2] - 2.394).abs() < 1e-5, "housing min z {}", hb2.min[2]);
+        assert!((hb2.max[2] - 2.400).abs() < 1e-5, "housing max z {}", hb2.max[2]);
+    }
+
+    #[test]
+    fn a_ray_from_below_sees_the_strip_lens() {
+        use crate::pick::Bvh;
+        use cadcraft_geom::Vec3;
+
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+
+        let scene = crate::build(&m);
+        let bvh = Bvh::build(&scene);
+
+        let origin = Vec3::new(2.0, 2.0, 1.0);
+        let dir = Vec3::new(0.0, 0.0, 1.0);
+
+        let hit = bvh.ray(origin, dir);
+        assert!(hit.is_some(), "no hit");
+        let hit = hit.unwrap();
+        assert_eq!(hit.part, "light", "first hit part {}", hit.part);
+
+        // Verify it's the lens mesh
+        let mesh = scene.meshes.iter().find(|m| m.object == hit.id && m.material == "light-lens-lit");
+        assert!(mesh.is_some(), "hit mesh is not light-lens-lit");
     }
 }
