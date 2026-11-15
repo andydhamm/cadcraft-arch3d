@@ -856,9 +856,10 @@ mod tests {
 
         let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
         let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let id_num = schedule_id[2..].parse::<u32>().unwrap();
 
         let doc = s.doc().unwrap();
-        let schedule = doc.arch.schedules.iter().find(|s| s.id.to_string() == schedule_id[2..]).unwrap();
+        let schedule = doc.arch.schedules.iter().find(|s| s.id.0 == id_num).unwrap();
         assert_eq!(schedule.at[0], 0.0);
         assert_eq!(schedule.at[1], 0.0);
     }
