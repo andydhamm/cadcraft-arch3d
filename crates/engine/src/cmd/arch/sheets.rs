@@ -174,7 +174,7 @@ fn paper_dims(cmd: &str, size: &str, landscape: bool) -> Result<(String, f64, f6
 }
 
 /// Millimetres per paper unit of the drawing.
-fn paper_unit(d: &Drawing) -> f64 {
+pub(super) fn paper_unit(d: &Drawing) -> f64 {
     let u = cadcraft_render::paper::paper_unit_mm(d);
     if u.is_finite() && u > 0.0 { u } else { 1.0 }
 }
@@ -537,7 +537,7 @@ fn apply_views(s: &mut Session, layout: &str, sheet: &str, placed: &[Placed]) ->
     for p in placed {
         let sv = p.record();
         if matches!(p.nv.source, SheetSource::Camera { .. }) {
-            super::sheet_camera::place_camera_image(s, sheet, &sv)?;
+            super::sheet_camera::place_camera_image(s, layout, sheet, &sv)?;
         } else {
             let rect = Bounds2::new(p.rect.min * (1.0 / unit), p.rect.max * (1.0 / unit));
             let h = crate::cmd::layout::add_scaled_viewport(s, layout, rect, p.centre, p.k_mm / unit)?;
@@ -965,6 +965,85 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    fn save_front(s: &mut Session) {
+        super::super::sheet_camera::tests::ensure_renderer();
+        run(s, "camera", json!({"save": "Front", "kind": "full", "eye": [5, -8, 1.6], "target": [5, 0, 1.0], "fov": 60}));
+    }
+
+    /// The images of a layout: (lower-left, width) in drawing units.
+    fn images(s: &Session, layout: &str) -> Vec<(Vec2, f64)> {
+        let l = s.doc().unwrap().layout(layout).unwrap();
+        l.entities
+            .iter()
+            .filter_map(|e| match &e.kind {
+                EntityKind::Image(i) => Some((Vec2::new(i.insert.x, i.insert.y), i.u.x.hypot(i.u.y) * i.size.x)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn sheet_with_a_camera_makes_the_cover_image() {
+        let mut s = house();
+        save_front(&mut s);
+        let r = run(&mut s, "sheet", json!({"name": "Cover", "number": "A-000", "camera": "Front", "width": 520}));
+        let v = &r["views"][0];
+        assert_eq!(v["source"]["kind"], "camera", "{r}");
+        assert_eq!(v["image"], "sheet-Cover-1.png", "{r}");
+        assert!((v["size"][0].as_f64().unwrap() - 520.0).abs() < 1e-9, "{r}");
+        let unit = paper_unit(s.doc().unwrap());
+        let imgs = images(&s, "Cover");
+        assert_eq!(imgs.len(), 1);
+        let (ll, w) = imgs[0];
+        assert!((w * unit - 520.0).abs() < 1e-6, "{w}");
+        let cx = (ll.x + w / 2.0) * unit;
+        assert!((cx - v["at"][0].as_f64().unwrap()).abs() < 1e-6, "{cx} {r}");
+        let h = v["size"][1].as_f64().unwrap();
+        let cy = ll.y * unit + h / 2.0;
+        assert!((cy - v["at"][1].as_f64().unwrap()).abs() < 1e-6, "{cy} {r}");
+        let ins = run(&mut s, "arch.inspect", json!({"sheets": true}));
+        let row = ins["sheets"].as_array().unwrap().iter().find(|x| x["name"] == "Cover").unwrap();
+        assert_eq!(row["views"][0]["image"], "sheet-Cover-1.png", "{ins}");
+    }
+
+    #[test]
+    fn sheet_views_list_with_a_camera_entry() {
+        let mut s = house();
+        save_front(&mut s);
+        elevation(&mut s);
+        let r = run(
+            &mut s,
+            "sheet",
+            json!({"name": "Mix", "views": [{"camera": "Front", "width": 300, "at": [300, 400]}, {"view": "Floor Plan", "scale": 100}]}),
+        );
+        let views = r["views"].as_array().unwrap();
+        assert_eq!(views.len(), 2, "{r}");
+        assert!(views[0]["image"].is_string(), "{r}");
+        assert!(views[1]["viewport"].is_string(), "{r}");
+        assert_eq!(images(&s, "Mix").len(), 1);
+        assert_eq!(viewports(&s, "Mix").len(), 1);
+    }
+
+    #[test]
+    fn sheet_with_an_unknown_camera_leaves_nothing() {
+        let mut s = house();
+        save_front(&mut s);
+        let e = refused(&mut s, "sheet", json!({"name": "Bad", "camera": "Nope"}));
+        assert!(e.contains("Nope") || e.contains("camera"), "{e}");
+        assert!(s.doc().unwrap().layout("Bad").is_none());
+        assert!(s.doc().unwrap().arch.sheet("Bad").is_none());
+    }
+
+    #[test]
+    fn sheet_edit_add_camera_still_works() {
+        let mut s = house();
+        save_front(&mut s);
+        run(&mut s, "sheet", json!({"name": "Cover", "camera": "Front"}));
+        assert_eq!(images(&s, "Cover").len(), 1);
+        run(&mut s, "sheet.edit", json!({"name": "Cover", "add": [{"camera": "Front", "width": 200, "at": [200, 200]}]}));
+        assert_eq!(images(&s, "Cover").len(), 2);
     }
 
     #[test]
