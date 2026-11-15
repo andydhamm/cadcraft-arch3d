@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 17:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 19 of 21: Light, sky and cameras — 65 of 68 segments merged · 12 of 17 acceptance checks**
+**Phase 19 of 21: Light, sky and cameras — 66 of 68 segments merged · 12 of 17 acceptance checks**
 
-10,540 workspace tests passing at the last merge · 1209 segments merged in all · 0 of 15 seats working
+10,512 workspace tests passing at the last merge · 1210 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,17 +29,16 @@ Updated 2026-11-15 17:15 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 102.7 h so far · expected done Nov 16 03:32–Nov 18 15:58 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 103.0 h so far · expected done Nov 15 22:50–Nov 17 03:54 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
 ## Phase 19 segments
 
-65 merged, 6 replaced, 3 merging
+66 merged, 6 replaced, 2 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | merging | claude-sonnet-a |
 | `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | merging | mai-flash-esc |
 | `p18i-showcase-phase18` | The phase-18 demo gains a door-less glass panel; the showcase house gains the phase-18 kitchen and bath features | merging | claude-sonnet-b |
 
@@ -47,6 +46,7 @@ Updated 2026-11-15 17:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 17:15 | `upstream-sync-67514021a` | merged | 10,512 pass | claude-sonnet-a |
 | Nov 15 16:24 | `harden-p19n-pt-pipelines-once` | merged | 10,540 pass | tturbo-mac |
 | Nov 15 16:24 | `p21g-showcase-drawing-set` | merged | 10,540 pass | claude-sonnet-c |
 | Nov 15 15:17 | `p19m-sky-cli-time` | refused | 10,536 pass | mai-flash-esc |
@@ -58,7 +58,6 @@ Updated 2026-11-15 17:15 UTC. This page and the card in the README are regenerat
 | Nov 15 07:07 | `harden-p21f-interior-cabinet-front` | merged | 10,521 pass | tturbo-mac |
 | Nov 15 06:26 | `harden-p19k-pt-resolve-hable` | merged | 10,504 pass | tturbo-mac |
 | Nov 15 05:48 | `harden-p21-view-notes` | merged | 10,499 pass | tturbo-mac |
-| Nov 15 05:48 | `harden-p18h-showcase-digest` | merged | 10,499 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
@@ -72,7 +71,7 @@ Updated 2026-11-15 17:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 159 |
 | claude-sonnet-c | sonnet | idle | 96 |
 | claude-sonnet-d | sonnet | idle | 93 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1255 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1255 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 125 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
