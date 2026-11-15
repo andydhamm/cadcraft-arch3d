@@ -34,6 +34,7 @@ pub fn rq_kernel_source() -> String {
 }
 
 /// Every compute pipeline and the layouts their bind groups follow.
+#[derive(Debug)]
 pub struct PtPipelines {
     /// Group 0 of the kernel: frame (uniform), nodes, tris, materials, lights, ies (read-only
     /// storage), accum, aov (read-write), probes (read-only) — bindings 0..=8.
@@ -91,6 +92,22 @@ const READ: wgpu::BufferBindingType = wgpu::BufferBindingType::Storage { read_on
 const WRITE: wgpu::BufferBindingType = wgpu::BufferBindingType::Storage { read_only: false };
 
 impl PtPipelines {
+    /// The pipelines of `gpu`: built on the first call and kept with the device (and its clones),
+    /// so they are compiled once per device per process. A build that fails is not kept.
+    ///
+    /// Operator 2026-11-15: every still used to call [`PtPipelines::new`], which compiles the kernel
+    /// three times (trace, irradiance, traverse test) plus resolve and denoise; on the software
+    /// adapter that was 40 to 48 s per path-traced still whatever its size, pipeline cache or not.
+    pub fn shared(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>) -> Result<std::sync::Arc<PtPipelines>, String> {
+        let mut slot = gpu.pipelines.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(built) = slot.as_ref() {
+            return Ok(built.clone());
+        }
+        let built = std::sync::Arc::new(PtPipelines::new(gpu, cache)?);
+        *slot = Some(built.clone());
+        Ok(built)
+    }
+
     /// Build every pipeline on `gpu` (with `cache` when given). `Err` carries the first validation
     /// error (WGSL that does not compile, a layout mismatch).
     pub fn new(gpu: &ComputeGpu, cache: Option<&wgpu::PipelineCache>) -> Result<PtPipelines, String> {
@@ -189,6 +206,22 @@ mod tests {
         if let Err(e) = PtPipelines::new(&gpu, None) {
             assert!(false, "the path tracer's WGSL must compile: {e}");
         }
+    }
+
+    #[test]
+    fn shared_pipelines_are_built_once_per_device() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        // A device of its own, so other tests' use of the shared one does not decide the outcome.
+        let own = ComputeGpu::new(gpu.device.clone(), gpu.queue.clone(), gpu.info.clone(), gpu.ray_query, gpu.pipeline_cache, gpu.adapter_key.clone());
+        assert!(own.pipelines.lock().unwrap().is_none(), "nothing is built before the first use");
+        let first = PtPipelines::shared(&own, None).expect("the pipelines build");
+        let again = PtPipelines::shared(&own, None).expect("the pipelines build");
+        let cloned = PtPipelines::shared(&own.clone(), None).expect("the pipelines build");
+        assert!(std::sync::Arc::ptr_eq(&first, &again), "a second call reuses the first build");
+        assert!(std::sync::Arc::ptr_eq(&first, &cloned), "a clone of the device shares the build");
     }
 
     fn assert_pt_hooks_are_stubbed(source: &str) {
