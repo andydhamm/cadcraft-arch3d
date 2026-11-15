@@ -536,3 +536,184 @@ fn digest_ignores_unknown_keys() {
     assert_eq!(lines.len(), 1, "should have exactly one line: {}", d);
     assert!(lines[0].starts_with("room r1"), "unexpected line: {}", lines[0]);
 }
+
+/// The rows of an `arch.inspect` array (empty when the key is missing).
+fn inspect_rows<'a>(reply: &'a Value, key: &str) -> Vec<&'a Value> {
+    reply.get(key).and_then(|a| a.as_array()).map(|a| a.iter().collect()).unwrap_or_default()
+}
+
+/// The string under `key`, or "".
+fn text_of<'a>(v: &'a Value, key: &str) -> &'a str {
+    v.get(key).and_then(|x| x.as_str()).unwrap_or("")
+}
+
+/// Whether `list` (an array of ids under `key`) names `id`.
+fn names_id(v: &Value, key: &str, id: &str) -> bool {
+    v.get(key).and_then(|a| a.as_array()).is_some_and(|a| a.iter().any(|x| x.as_str() == Some(id)))
+}
+
+/// Whether the ring holds the point (even-odd rule).
+fn ring_holds(ring: &[(f64, f64)], x: f64, y: f64) -> bool {
+    let mut inside = false;
+    for k in 0..ring.len() {
+        let (x1, y1) = ring[k];
+        let (x2, y2) = ring[(k + 1) % ring.len()];
+        if (y1 > y) != (y2 > y) && x < x1 + (y - y1) * (x2 - x1) / (y2 - y1) {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// Room types the brief calls finished.
+const FINISHED_TYPES: [&str; 10] = ["living", "bedroom", "kitchen", "bath", "closet", "utility", "dining", "family", "entry", "laundry"];
+
+/// The rooms whose type is one of `types`.
+fn rooms_typed<'a>(reply: &'a Value, types: &[&str]) -> Vec<&'a Value> {
+    inspect_rows(reply, "rooms").into_iter().filter(|r| types.iter().any(|t| text_of(r, "type").eq_ignore_ascii_case(t))).collect()
+}
+
+/// The kitchen carries the phase-18 casework: a detached counter with a waterfall, a backsplash,
+/// exactly one corner cabinet under one automatic counter with its partner, two fillers, a crowned
+/// wall cabinet, an open cabinet with shelves and a tall cabinet with an appliance in its face.
+#[test]
+fn showcase_kitchen_has_the_phase18_casework() {
+    let (_total, _replayed, reply) = house();
+    let cabs = inspect_rows(reply, "cabinets");
+    let counters = inspect_rows(reply, "countertops");
+    let kitchens: Vec<&str> = rooms_typed(reply, &["kitchen"]).iter().map(|r| text_of(r, "id")).collect();
+    assert_eq!(kitchens.len(), 1, "one kitchen\n{}", digest(reply));
+
+    let waterfall =
+        |c: &Value| c.get("edges").and_then(|e| e.as_array()).is_some_and(|e| e.iter().any(|x| x.get("waterfall") == Some(&Value::Bool(true))));
+    let custom: Vec<&&Value> = counters.iter().filter(|c| c.get("auto") == Some(&Value::Bool(false)) && waterfall(c)).collect();
+    assert!(!custom.is_empty(), "no custom (detached) countertop with a waterfall edge\n{}", digest(reply));
+    let main = inspect_rows(reply, "levels").into_iter().find(|l| text_of(l, "name") == "Main").and_then(|l| l.get("index")).and_then(|i| i.as_u64());
+    assert!(main.is_some(), "no level named Main\n{}", digest(reply));
+    assert!(
+        custom.iter().any(|c| c.get("level").and_then(|l| l.as_u64()) == main || text_of(c, "level") == "Main"),
+        "the waterfall countertop is on Main\n{}",
+        digest(reply)
+    );
+
+    let splashes = inspect_rows(reply, "backsplashes");
+    assert!(
+        splashes.iter().any(|b| b.get("segments").and_then(|s| s.as_array()).is_some_and(|s| !s.is_empty())),
+        "no backsplash with segments\n{}",
+        digest(reply)
+    );
+
+    let corners: Vec<&&Value> = cabs.iter().filter(|c| c.get("corner").is_some_and(|k| k.is_object())).collect();
+    assert_eq!(
+        corners.len(),
+        1,
+        "exactly one corner cabinet, found {:?}\n{}",
+        corners.iter().map(|c| text_of(c, "id")).collect::<Vec<_>>(),
+        digest(reply)
+    );
+    let corner = corners[0];
+    let partner = corner.get("corner").map(|k| text_of(k, "partner")).unwrap_or("");
+    assert!(!partner.is_empty(), "the corner cabinet names its partner\n{}", digest(reply));
+    assert!(
+        counters
+            .iter()
+            .any(|c| c.get("auto") == Some(&Value::Bool(true)) && names_id(c, "cabinets", text_of(corner, "id")) && names_id(c, "cabinets", partner)),
+        "no automatic counter holds the corner cabinet {} and its partner {}\n{}",
+        text_of(corner, "id"),
+        partner,
+        digest(reply)
+    );
+    // The corner cabinet stands in the kitchen: its footprint's centre (half its depth out of its back) is inside the room.
+    let kitchen = rooms_typed(reply, &["kitchen"])[0];
+    let ring: Vec<(f64, f64)> = kitchen
+        .get("polygon")
+        .and_then(|p| p.as_array())
+        .map(|p| p.iter().filter_map(|q| Some((q.get(0)?.as_f64()?, q.get(1)?.as_f64()?))).collect())
+        .unwrap_or_default();
+    let at = corner.get("at").and_then(|a| Some((a.get(0)?.as_f64()?, a.get(1)?.as_f64()?)));
+    let turn = corner.get("rotation").and_then(|r| r.as_f64()).unwrap_or(0.0).to_radians();
+    let half = corner.get("depth").and_then(|d| d.as_f64()).unwrap_or(0.0) / 2.0;
+    let centre = at.map(|(x, y)| (x - turn.sin() * half, y + turn.cos() * half));
+    assert!(
+        centre.is_some_and(|(x, y)| ring_holds(&ring, x, y)),
+        "the corner cabinet {} (centre {:?}) stands in the kitchen {}\n{}",
+        text_of(corner, "id"),
+        centre,
+        kitchens[0],
+        digest(reply)
+    );
+
+    let fillers = cabs.iter().filter(|c| c.get("filler") == Some(&Value::Bool(true))).count();
+    assert!(fillers >= 2, "at least two fillers, found {}\n{}", fillers, digest(reply));
+    assert!(
+        cabs.iter().any(|c| text_of(c, "kind") == "wall" && c.get("crown").is_some_and(|k| k.is_object())),
+        "no wall cabinet with a crown\n{}",
+        digest(reply)
+    );
+    assert!(
+        cabs.iter().any(|c| c.get("shelves").and_then(|s| s.as_array()).is_some_and(|s| !s.is_empty())),
+        "no open cabinet with shelves\n{}",
+        digest(reply)
+    );
+    let appliance_row = |c: &Value| {
+        c.get("face").and_then(|f| f.get("rows")).and_then(|r| r.as_array()).is_some_and(|r| r.iter().any(|x| text_of(x, "kind") == "appliance"))
+    };
+    assert!(cabs.iter().any(|c| text_of(c, "kind") == "tall" && appliance_row(c)), "no tall cabinet with an appliance face row\n{}", digest(reply));
+}
+
+/// The baths carry two shower doors in glass walls, a pony wall (split at 1.07 with a glass upper)
+/// and a niche, each inside a bath-typed room's walls.
+#[test]
+fn showcase_baths_have_showers_a_pony_wall_and_a_niche() {
+    let (_total, _replayed, reply) = house();
+    let walls = inspect_rows(reply, "walls");
+    let openings = inspect_rows(reply, "openings");
+    let wall = |id: &str| walls.iter().find(|w| text_of(w, "id") == id).copied();
+    let showers: Vec<&&Value> = openings
+        .iter()
+        .filter(|o| text_of(o, "style") == "shower" && wall(text_of(o, "host")).is_some_and(|w| w.get("glass") == Some(&Value::Bool(true))))
+        .collect();
+    assert!(showers.len() >= 2, "at least two shower doors hosted by glass walls, found {}\n{}", showers.len(), digest(reply));
+    let pony: Vec<&&Value> =
+        walls.iter().filter(|w| w.get("split").is_some_and(|s| s.is_object() && text_of(s, "upper").eq_ignore_ascii_case("glass"))).collect();
+    assert!(!pony.is_empty(), "no split wall with a glass upper (a pony wall)\n{}", digest(reply));
+    assert!(
+        pony.iter().any(|w| w.get("split").and_then(|s| s.get("height")).and_then(|h| h.as_f64()).is_some_and(|h| (h - 1.07).abs() < 1e-9)),
+        "the pony wall is split at 1.07\n{}",
+        digest(reply)
+    );
+    assert!(openings.iter().any(|o| text_of(o, "kind") == "niche"), "no niche\n{}", digest(reply));
+    assert_eq!(rooms_typed(reply, &["bath"]).len(), 2, "two baths\n{}", digest(reply));
+}
+
+/// Every kitchen- or bath-typed room has a base and a crown molding of positive length.
+#[test]
+fn showcase_kitchen_and_baths_have_base_and_crown() {
+    let (_total, _replayed, reply) = house();
+    let moldings = inspect_rows(reply, "moldings");
+    let rooms = rooms_typed(reply, &["kitchen", "bath"]);
+    assert!(rooms.len() >= 3, "a kitchen and two baths, found {}\n{}", rooms.len(), digest(reply));
+    for room in rooms {
+        let id = text_of(room, "id");
+        for kind in ["base", "crown"] {
+            let ok = moldings
+                .iter()
+                .any(|m| text_of(m, "room") == id && text_of(m, "kind") == kind && m.get("length").and_then(|l| l.as_f64()).is_some_and(|l| l > 0.0));
+            assert!(ok, "room {} ({}) has no {} molding with a positive length\n{}", id, text_of(room, "type"), kind, digest(reply));
+        }
+    }
+}
+
+/// Every finished room's floor shows a finish (its type's or a painted one).
+#[test]
+fn showcase_finished_floors_show_a_finish() {
+    let (_total, _replayed, reply) = house();
+    let surfaces = inspect_rows(reply, "surfaces");
+    let rooms = rooms_typed(reply, &FINISHED_TYPES);
+    assert!(rooms.len() >= 4, "at least four finished rooms, found {}\n{}", rooms.len(), digest(reply));
+    for room in rooms {
+        let key = format!("room/{}/floor", text_of(room, "id"));
+        let material = surfaces.iter().find(|s| text_of(s, "surface") == key).map(|s| text_of(s, "material")).unwrap_or("");
+        assert!(material.starts_with("finish:"), "{} ({}) shows `{}`, not a finish\n{}", key, text_of(room, "type"), material, digest(reply));
+    }
+}
