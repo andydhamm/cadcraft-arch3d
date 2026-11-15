@@ -371,3 +371,157 @@ fn print_showcase_digest() {
     let (_total, _replayed, reply) = house();
     println!("{}", digest(&reply));
 }
+
+#[test]
+fn digest_handles_empty_reply() {
+    let reply = serde_json::json!({});
+    let d = digest(&reply);
+    assert_eq!(d, "");
+}
+
+#[test]
+fn digest_handles_missing_fields() {
+    let reply = serde_json::json!({
+        "rooms": [{"id": "r1"}],
+        "walls": [{"id": "w1"}],
+        "cabinets": [{"id": "c1"}],
+        "fixtures": [{"id": "f1"}],
+        "openings": [{"id": "o1"}],
+        "countertops": [{"id": "ct1"}],
+        "backsplashes": [{"id": "bs1"}],
+        "surfaces": [{"surface": "room/r1/floor"}],
+        "outletGaps": [{"room": "r1", "maxGap": 2.0}],
+        "moldings": [{"room": "r1"}]
+    });
+    let d = digest(&reply);
+    let lines: Vec<&str> = d.lines().collect();
+    assert!(lines.iter().any(|l| l.starts_with("room r1 - - level=- bbox=(-,-)-(-,-)")), "missing room line: {}", d);
+    assert!(lines.iter().any(|l| l.starts_with("wall w1 - -> - t=- level=- glass=- split=-")), "missing wall line: {}", d);
+    assert!(
+        lines.iter().any(|l| l.starts_with("cab c1 - at=- w=- wall=- room=- corner=- filler=- crown=- shelves=- face=-")),
+        "missing cab line: {}",
+        d
+    );
+    assert!(lines.iter().any(|l| l.starts_with("fixture f1 - at=- room=-")), "missing fixture line: {}", d);
+    assert!(lines.iter().any(|l| l.starts_with("opening o1 - style=- host=-")), "missing opening line: {}", d);
+    assert!(lines.iter().any(|l| l.starts_with("countertop ct1 auto=- cabinets=- waterfall=false")), "missing countertop line: {}", d);
+    assert!(lines.iter().any(|l| l.starts_with("backsplash bs1 segments=0")), "missing backsplash line: {}", d);
+    assert!(lines.iter().any(|l| l.starts_with("FLOOR room/r1/floor -")), "missing floor line: {}", d);
+    assert!(lines.iter().any(|l| l.starts_with("GAP r1 maxGap=2 counter=-")), "missing gap line: {}", d);
+}
+
+#[test]
+fn digest_handles_nan_coordinates() {
+    let nan = serde_json::json!(f64::NAN);
+    let reply = serde_json::json!({
+        "rooms": [{
+            "id": "r1",
+            "name": "Test",
+            "type": "bedroom",
+            "level": "1",
+            "polygon": [[nan, nan]]
+        }]
+    });
+    let d = digest(&reply);
+    let lines: Vec<&str> = d.lines().collect();
+    let room_line = lines.iter().find(|l| l.starts_with("room r1")).expect("missing room line: {}", d);
+    assert!(room_line.contains("NaN"), "bbox should contain NaN: {}", room_line);
+}
+
+#[test]
+fn room_type_parses_various_formats() {
+    assert_eq!(room_type("room r1 Kitchen kitchen level=1 bbox=(0,0)-(10,10)"), Some("kitchen".to_string()));
+    assert_eq!(room_type("room r1 - bath level=1 bbox=(0,0)-(10,10)"), Some("bath".to_string()));
+    assert_eq!(room_type("room - Living Room living level=1 bbox=(0,0)-(10,10)"), Some("living".to_string()));
+    assert_eq!(room_type("room r1 - - level=1 bbox=(0,0)-(10,10)"), Some("-".to_string()));
+    assert_eq!(room_type("wall w1 - -> - t=- level=- glass=- split=-"), None);
+    assert_eq!(room_type("room r1"), None);
+}
+
+#[test]
+fn has_waterfall_detects_all_cases() {
+    assert!(!has_waterfall(&serde_json::json!({})));
+    assert!(has_waterfall(&serde_json::json!({"waterfall": true})));
+    assert!(!has_waterfall(&serde_json::json!({"waterfall": false})));
+    assert!(has_waterfall(&serde_json::json!({"edges": [{"waterfall": true}, {"waterfall": false}]})));
+    assert!(!has_waterfall(&serde_json::json!({"edges": [{"waterfall": false}, {"waterfall": false}]})));
+    assert!(has_waterfall(&serde_json::json!({"waterfall": true, "edges": [{"waterfall": false}]})));
+    assert!(!has_waterfall(&serde_json::json!({"waterfall": "true"})));
+}
+
+#[test]
+fn digest_line_length_bounded() {
+    let long_id = "r".repeat(40);
+    let long_name = "N".repeat(40);
+    let long_type = "t".repeat(40);
+    let long_level = "l".repeat(40);
+    let reply = serde_json::json!({
+        "rooms": [{
+            "id": long_id,
+            "name": long_name,
+            "type": long_type,
+            "level": long_level,
+            "polygon": [[0.0, 0.0], [10.0, 10.0]]
+        }]
+    });
+    let d = digest(&reply);
+    for line in d.lines() {
+        assert!(line.len() <= 240, "line too long ({} chars): {}", line.len(), line);
+    }
+}
+
+#[test]
+fn coord_handles_various_inputs() {
+    assert_eq!(coord(&serde_json::json!(42)), "42");
+    assert_eq!(coord(&serde_json::json!(true)), "true");
+    assert_eq!(coord(&serde_json::json!("hello")), "hello");
+    assert_eq!(coord(&serde_json::json!([1.0, 2.0])), "(1,2)");
+    assert_eq!(coord(&serde_json::json!([[1.0, 2.0], [3.0, 4.0]])), "(1,2)-(3,4)");
+    assert_eq!(coord(&serde_json::json!(null)), "-");
+    assert_eq!(coord(&serde_json::json!({})), "-");
+    assert_eq!(coord(&serde_json::json!([])), "-");
+    assert_eq!(coord(&serde_json::json!([1, 2, 3])), "-");
+}
+
+#[test]
+fn point_handles_various_inputs() {
+    assert_eq!(point(&serde_json::json!([1.0, 2.0])), "(1,2)");
+    assert_eq!(point(&serde_json::json!(null)), "-");
+    assert_eq!(point(&serde_json::json!("not a point")), "-");
+    assert_eq!(point(&serde_json::json!([1.0])), "-");
+    assert_eq!(point(&serde_json::json!([1.0, "y"])), "-");
+}
+
+#[test]
+fn moldings_filtered_to_kitchen_bath() {
+    let reply = serde_json::json!({
+        "rooms": [
+            {"id": "k1", "type": "kitchen"},
+            {"id": "b1", "type": "bath"},
+            {"id": "lr", "type": "living"}
+        ],
+        "moldings": [
+            {"room": "k1", "kind": "base", "length": 5.0},
+            {"room": "b1", "kind": "base", "length": 3.0},
+            {"room": "lr", "kind": "base", "length": 10.0}
+        ]
+    });
+    let d = digest(&reply);
+    let lines: Vec<&str> = d.lines().collect();
+    assert!(lines.iter().any(|l| l.starts_with("molding k1 base len=5")), "missing kitchen molding: {}", d);
+    assert!(lines.iter().any(|l| l.starts_with("molding b1 base len=3")), "missing bath molding: {}", d);
+    assert!(!lines.iter().any(|l| l.starts_with("molding lr")), "living room molding should be filtered: {}", d);
+}
+
+#[test]
+fn digest_ignores_unknown_keys() {
+    let reply = serde_json::json!({
+        "rooms": [{"id": "r1", "name": "Test", "type": "bedroom", "level": "1", "polygon": [[0.0, 0.0], [10.0, 10.0]]}],
+        "unknown_key": "value",
+        "another_unknown": [1, 2, 3]
+    });
+    let d = digest(&reply);
+    let lines: Vec<&str> = d.lines().collect();
+    assert_eq!(lines.len(), 1, "should have exactly one line: {}", d);
+    assert!(lines[0].starts_with("room r1"), "unexpected line: {}", lines[0]);
+}
