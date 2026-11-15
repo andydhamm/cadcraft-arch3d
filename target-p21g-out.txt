@@ -1,0 +1,1478 @@
+warning: unused import: `offset_polygon`
+  --> crates/arch/src/area.rs:21:31
+   |
+21 | use crate::poly::{ensure_ccw, offset_polygon, region_area, region_perimeter, ring_area, ring_perimeter};
+   |                               ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `RoomType`
+  --> crates/arch/src/area.rs:22:30
+   |
+22 | use crate::{ArchModel, Room, RoomType};
+   |                              ^^^^^^^^
+
+warning: unused imports: `FaceLayout` and `FaceRow`
+ --> crates/arch/src/casework.rs:6:44
+  |
+6 |     Cabinet, CabinetKind, DOOR_PAIR_WIDTH, FaceLayout, FaceRow, Fixture, FixtureKind, Fronts, MAX_ACROSS, MAX_FACE_ROWS, MAX_FILLER_W...
+  |                                            ^^^^^^^^^^  ^^^^^^^
+
+warning: unused import: `CabinetKind`
+ --> crates/arch/src/casework_fill.rs:4:43
+  |
+4 | use cadcraft_doc::arch::{ArchId, Cabinet, CabinetKind, CornerPref, Fronts, MAX_FILLER_WIDTH};
+  |                                           ^^^^^^^^^^^
+
+warning: unused import: `crate::wall`
+ --> crates/arch/src/ceiling/soffit.rs:6:5
+  |
+6 | use crate::wall;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `LevelKind`
+ --> crates/arch/src/ceiling/soffit.rs:7:58
+  |
+7 | use cadcraft_doc::arch::{ArchId, ArchModel, CabinetKind, LevelKind, MAX_SOFFITS, Soffit};
+  |                                                          ^^^^^^^^^
+
+warning: unused imports: `ElectricalKind` and `LightFixture`
+  --> crates/arch/src/connections.rs:18:38
+   |
+18 | use cadcraft_doc::arch::{Connection, ElectricalKind, LightFixture};
+   |                                      ^^^^^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `Wall`
+  --> crates/arch/src/connections.rs:19:39
+   |
+19 | use cadcraft_doc::{ArchId, ArchModel, Wall};
+   |                                       ^^^^
+
+warning: unused imports: `Evidence` and `MAX_THICKNESS`
+ --> crates/arch/src/detect/junctions.rs:3:13
+  |
+3 | use super::{Evidence, MAX_THICKNESS, MIN_THICKNESS, WallRun};
+  |             ^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Handle`
+  --> crates/arch/src/detect/openings.rs:12:31
+   |
+12 | use cadcraft_doc::{ArchModel, Handle, Wall};
+   |                               ^^^^^^
+
+warning: unnecessary parentheses around assigned value
+   --> crates/arch/src/dimension.rs:350:24
+    |
+350 |         let edge_dir = (b - a);
+    |                        ^     ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+350 -         let edge_dir = (b - a);
+350 +         let edge_dir = b - a;
+    |
+
+warning: unused imports: `Cabinet`, `Fixture`, `Furnishing`, `Opening`, and `Wall`
+ --> crates/arch/src/drive.rs:4:45
+  |
+4 | use cadcraft_doc::arch::{ArchId, ArchModel, Cabinet, Fixture, Furnishing, Opening, Wall};
+  |                                             ^^^^^^^  ^^^^^^^  ^^^^^^^^^^  ^^^^^^^  ^^^^
+
+warning: unused imports: `Level` and `Room`
+  --> crates/arch/src/light.rs:10:63
+   |
+10 | use cadcraft_doc::arch::{ArchModel, FixtureShape, IesProfile, Level, LightFixture, LightKind, LightMount, Room};
+   |                                                               ^^^^^                                       ^^^^
+
+warning: unused import: `Soffit`
+ --> crates/arch/src/molding_wrap.rs:3:43
+  |
+3 | use cadcraft_doc::arch::{ArchModel, Room, Soffit, Tray, TraySides};
+  |                                           ^^^^^^
+
+warning: unused import: `Wall`
+ --> crates/arch/src/opening.rs:9:32
+  |
+9 | use super::{ArchId, ArchModel, Wall};
+  |                                ^^^^
+
+warning: unused import: `OpeningSides`
+ --> crates/arch/src/opening_trim.rs:3:59
+  |
+3 | use cadcraft_doc::arch::{ArchModel, Opening, OpeningKind, OpeningSides, Side};
+  |                                                           ^^^^^^^^^^^^
+
+warning: unused imports: `Furnishing` and `RoomType`
+ --> crates/arch/src/plan/ceiling.rs:6:16
+  |
+6 |     ArchModel, Furnishing, Placement, RoofEdgeKind, Room, RoomType, Soffit, Tray, TraySides, furnishing_handle, room_handle, soffit_h...
+  |                ^^^^^^^^^^                                 ^^^^^^^^
+
+warning: unused import: `ArchKind`
+ --> crates/arch/src/plan/callouts.rs:8:34
+  |
+8 | use cadcraft_doc::arch::{ArchId, ArchKind, ArchModel, ArchView, ViewKind};
+  |                                  ^^^^^^^^
+
+warning: unused imports: `ArchId`, `Cabinet`, `Opening`, and `Wall`
+  --> crates/arch/src/plan/tags.rs:9:5
+   |
+ 9 |     ArchId,
+   |     ^^^^^^
+10 |     arch::{ArchKind, ArchModel, Cabinet, Opening, OpeningKind, RoomLabelShow, Wall, cabinet_handle, opening_handle},
+   |                                 ^^^^^^^  ^^^^^^^                              ^^^^
+
+warning: unused import: `ArchId`
+ --> crates/arch/src/railing.rs:8:13
+  |
+8 | use crate::{ArchId, ArchModel};
+  |             ^^^^^^
+
+warning: unused import: `Wall`
+  --> crates/arch/src/room.rs:19:55
+   |
+19 | use cadcraft_doc::{ArchId, ArchModel, Room, RoomType, Wall};
+   |                                                       ^^^^
+
+warning: unused imports: `Finish`, `Level`, `MaterialRef`, `Paint`, `Side`, and `Wall`
+  --> crates/arch/src/schedule.rs:9:56
+   |
+ 9 |     ArchId, ArchKind, ArchModel, Cabinet, CabinetKind, Finish, Fronts, Level, MaterialRef, Opening, OpeningKind, Paint, Room, Schedu...
+   |                                                        ^^^^^^          ^^^^^  ^^^^^^^^^^^                        ^^^^^
+10 |     Side, Surface, Swing, Wall,
+   |     ^^^^                  ^^^^
+
+warning: unused variable: `start`
+  --> crates/arch/src/casework_fill.rs:47:14
+   |
+47 |     let Some(start) = model.cabinets.iter().find(|c| c.id == id) else { return Vec::new() };
+   |              ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `end`
+   --> crates/arch/src/casework_fill.rs:116:15
+    |
+116 |     for (idx, end) in ["start", "end"].iter().enumerate() {
+    |               ^^^ help: if this is intentional, prefix it with an underscore: `_end`
+
+warning: unused variable: `r0`
+   --> crates/arch/src/ceiling/soffit.rs:330:9
+    |
+330 |     let r0 = r[0];
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_r0`
+
+warning: unused variable: `r1`
+   --> crates/arch/src/ceiling/soffit.rs:331:9
+    |
+331 |     let r1 = r[1];
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_r1`
+
+warning: unused variable: `r2`
+   --> crates/arch/src/ceiling/soffit.rs:332:9
+    |
+332 |     let r2 = r[2];
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_r2`
+
+warning: unused variable: `r3`
+   --> crates/arch/src/ceiling/soffit.rs:333:9
+    |
+333 |     let r3 = r[3];
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_r3`
+
+warning: unused variable: `sum`
+   --> crates/arch/src/detect/walls.rs:191:21
+    |
+191 |                 let sum = total(&common);
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_sum`
+
+warning: unused variable: `wall_idx`
+   --> crates/arch/src/join.rs:744:9
+    |
+744 |     let wall_idx = match wall_idx {
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wall_idx`
+
+warning: unused variable: `category`
+   --> crates/arch/src/library/record.rs:122:19
+    |
+122 | pub fn folder_for(category: &str, symbol_type: &str) -> &'static str {
+    |                   ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_category`
+
+warning: unused variable: `min_w`
+   --> crates/arch/src/opening.rs:223:9
+    |
+223 |     let min_w = min_width(o.kind, &o.style);
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_min_w`
+
+warning: unused variable: `wall`
+  --> crates/arch/src/opening_trim.rs:26:9
+   |
+26 |     let wall = model.wall(o.host)?;
+   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_wall`
+
+warning: unused variable: `room`
+   --> crates/arch/src/plan/ceiling.rs:131:40
+    |
+131 | fn tray_height_text(model: &ArchModel, room: &Room, tray: &Tray, base: f64) -> Option<String> {
+    |                                        ^^^^ help: if this is intentional, prefix it with an underscore: `_room`
+
+warning: unreachable pattern
+  --> crates/arch/src/plan/callouts.rs:66:25
+   |
+66 |                         _ => {}
+   |                         ^ no value can reach this
+   |
+note: multiple earlier patterns match some of the same values
+  --> crates/arch/src/plan/callouts.rs:66:25
+   |
+50 |                         ViewKind::Elevation => {
+   |                         ------------------- matches some of the same values
+...
+55 |                         ViewKind::Section => {
+   |                         ----------------- matches some of the same values
+...
+61 |                         ViewKind::Interior => {
+   |                         ------------------ matches some of the same values
+...
+66 |                         _ => {}
+   |                         ^ collectively making this unreachable
+   = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable pattern
+   --> crates/arch/src/plan/callouts.rs:139:9
+    |
+139 |         _ => vec![],
+    |         ^ no value can reach this
+    |
+note: multiple earlier patterns match some of the same values
+   --> crates/arch/src/plan/callouts.rs:139:9
+    |
+118 |         ViewKind::Elevation => {
+    |         ------------------- matches some of the same values
+...
+125 |         ViewKind::Section => {
+    |         ----------------- matches some of the same values
+...
+132 |         ViewKind::Interior => {
+    |         ------------------ matches some of the same values
+...
+139 |         _ => vec![],
+    |         ^ collectively making this unreachable
+
+warning: unused variable: `level`
+   --> crates/arch/src/roof.rs:582:39
+    |
+582 | pub fn wall_slopes(model: &ArchModel, level: u32, fp: &Footprint, roof: &Roof) -> Vec<f64> {
+    |                                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_level`
+
+warning: unreachable pattern
+  --> crates/arch/src/schedule.rs:44:9
+   |
+44 |         _ => "base",
+   |         ^ no value can reach this
+   |
+note: multiple earlier patterns match some of the same values
+  --> crates/arch/src/schedule.rs:44:9
+   |
+41 |         CabinetKind::Base => "base",
+   |         ----------------- matches some of the same values
+42 |         CabinetKind::Wall => "wall",
+   |         ----------------- matches some of the same values
+43 |         CabinetKind::Tall => "tall",
+   |         ----------------- matches some of the same values
+44 |         _ => "base",
+   |         ^ collectively making this unreachable
+
+warning: unreachable pattern
+  --> crates/arch/src/schedule.rs:54:9
+   |
+54 |         _ => "doors",
+   |         ^ no value can reach this
+   |
+note: multiple earlier patterns match some of the same values
+  --> crates/arch/src/schedule.rs:54:9
+   |
+50 |         Fronts::Doors => "doors",
+   |         ------------- matches some of the same values
+51 |         Fronts::Drawers => "drawers",
+   |         --------------- matches some of the same values
+52 |         Fronts::DrawerOverDoor => "drawerOverDoor",
+   |         ---------------------- matches some of the same values
+53 |         Fronts::Open => "open",
+   |         ------------ matches some of the same values
+54 |         _ => "doors",
+   |         ^ collectively making this unreachable
+
+warning: unreachable pattern
+  --> crates/arch/src/schedule.rs:62:9
+   |
+62 |         _ => "in",
+   |         ^ no value can reach this
+   |
+note: multiple earlier patterns match some of the same values
+  --> crates/arch/src/schedule.rs:62:9
+   |
+60 |         Swing::In => "in",
+   |         --------- matches some of the same values
+61 |         Swing::Out => "out",
+   |         ---------- matches some of the same values
+62 |         _ => "in",
+   |         ^ collectively making this unreachable
+
+warning: unused variable: `rest`
+   --> crates/arch/src/schedule.rs:381:17
+    |
+381 |     if let Some(rest) = key.strip_prefix("default:") {
+    |                 ^^^^ help: if this is intentional, prefix it with an underscore: `_rest`
+
+warning: variable does not need to be mutable
+   --> crates/arch/src/sun.rs:145:9
+    |
+145 |     let mut az_rad = y.atan2(x) + std::f64::consts::PI;
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `poly`
+  --> crates/arch/src/wall.rs:76:14
+   |
+76 |     let Some(poly) = wall_polygon(w) else {
+   |              ^^^^ help: if this is intentional, prefix it with an underscore: `_poly`
+
+warning: constant `EPS` is never used
+ --> crates/arch/src/casework_shelves.rs:6:7
+  |
+6 | const EPS: f64 = 1e-6;
+  |       ^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `ANGLE_T_T` is never used
+  --> crates/arch/src/detect/junctions.rs:10:7
+   |
+10 | const ANGLE_T_T: f64 = 10.0 * std::f64::consts::PI / 360.0;
+   |       ^^^^^^^^^
+
+warning: function `within_end_bounds` is never used
+  --> crates/arch/src/detect/junctions.rs:48:4
+   |
+48 | fn within_end_bounds(p: Vec2, run: &WallRun, tol: f64) -> bool {
+   |    ^^^^^^^^^^^^^^^^^
+
+warning: function `move_end` is never used
+  --> crates/arch/src/detect/junctions.rs:72:4
+   |
+72 | fn move_end(r: &mut WallRun, field: &str, new_pos: Vec2) {
+   |    ^^^^^^^^
+
+warning: function `ends_near` is never used
+  --> crates/arch/src/detect/junctions.rs:91:4
+   |
+91 | fn ends_near(a: &WallRun, b: &WallRun, tol: f64) -> bool {
+   |    ^^^^^^^^^
+
+warning: function `wall_vec` is never used
+   --> crates/arch/src/dimension.rs:244:4
+    |
+244 | fn wall_vec(w: &Wall, idx: usize) -> Option<Vec<Vec2>> {
+    |    ^^^^^^^^
+
+warning: function `prefix` is never used
+   --> crates/arch/src/ies.rs:342:4
+    |
+342 | fn prefix(s: &str, n: usize) -> &str {
+    |    ^^^^^^
+
+warning: constant `TRAY_SIDE` is never used
+ --> crates/arch/src/molding_wrap.rs:7:7
+  |
+7 | const TRAY_SIDE: f64 = 0.02;
+  |       ^^^^^^^^^
+
+warning: function `tray_paths` is never used
+   --> crates/arch/src/molding_wrap.rs:184:15
+    |
+184 | pub(crate) fn tray_paths(model: &ArchModel, room: &Room) -> Vec<(Vec<Vec2>, f64)> {
+    |               ^^^^^^^^^^
+
+warning: `cadcraft-arch` (lib) generated 52 warnings (run `cargo fix --lib -p cadcraft-arch` to apply 38 suggestions)
+warning: unnecessary parentheses around assigned value
+   --> crates/arch3d/src/camera.rs:292:16
+    |
+292 |     let half = (camera.fov_deg() * std::f64::consts::PI / 360.0);
+    |                ^                                               ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+292 -     let half = (camera.fov_deg() * std::f64::consts::PI / 360.0);
+292 +     let half = camera.fov_deg() * std::f64::consts::PI / 360.0;
+    |
+
+warning: unnecessary parentheses around assigned value
+   --> crates/arch3d/src/camera.rs:316:25
+    |
+316 |             out[c][r] = (sum as f32);
+    |                         ^          ^
+    |
+help: remove these parentheses
+    |
+316 -             out[c][r] = (sum as f32);
+316 +             out[c][r] = sum as f32;
+    |
+
+warning: unused import: `CounterEdge`
+ --> crates/arch3d/src/countertop.rs:5:26
+  |
+5 | use cadcraft_doc::arch::{CounterEdge, Countertop, EdgeProfile};
+  |                          ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `cadcraft_arch::foundation::FoundationWall`
+  --> crates/arch3d/src/foundation/slab.rs:18:5
+   |
+18 | use cadcraft_arch::foundation::FoundationWall;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cadcraft_arch::molding_profile::builtin_profile`
+ --> crates/arch3d/src/molding/line.rs:3:5
+  |
+3 | use cadcraft_arch::molding_profile::builtin_profile;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `GLASS_WALL_HEIGHT` and `GLASS_WALL_TYPE`
+ --> crates/arch3d/src/wall_glass.rs:8:43
+  |
+8 | use cadcraft_doc::arch::{GLASS_THICKNESS, GLASS_WALL_HEIGHT, GLASS_WALL_TYPE, Opening, Wall};
+  |                                           ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused import: `cadcraft_doc::ArchId`
+ --> crates/arch3d/src/floors.rs:7:5
+  |
+7 | use cadcraft_doc::ArchId;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cadcraft_geom::Vec2`
+ --> crates/arch3d/src/floors.rs:9:5
+  |
+9 | use cadcraft_geom::Vec2;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `railing` and `stairs`
+  --> crates/arch3d/src/incremental.rs:39:129
+   |
+39 | ...ework, fill_materials, find_roof_clip, fixture, floors, furnishing, level_for, light, mesh_is_finite, openings, railing,
+   |                                                                                                                    ^^^^^^^
+40 | ...h, site, stairs, wall_span, walls, well_holes_for,
+   |             ^^^^^^
+
+warning: unused import: `Grille`
+ --> crates/arch3d/src/openings.rs:9:26
+  |
+9 | use cadcraft_doc::arch::{Grille, MAX_GRILLE_LITES, Opening, OpeningKind, OpeningSides, OpeningTop};
+  |                          ^^^^^^
+
+warning: unused import: `cadcraft_doc::ArchId`
+  --> crates/arch3d/src/probe.rs:11:5
+   |
+11 | use cadcraft_doc::ArchId;
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Vec3`
+ --> crates/arch3d/src/railing.rs:4:27
+  |
+4 | use cadcraft_geom::{Vec2, Vec3};
+  |                           ^^^^
+
+warning: unnecessary parentheses around block return value
+   --> crates/arch3d/src/view_filter.rs:333:9
+    |
+333 |         ((p - (a + ab * t)).len())
+    |         ^                        ^
+    |
+help: remove these parentheses
+    |
+333 -         ((p - (a + ab * t)).len())
+333 +         (p - (a + ab * t)).len()
+    |
+
+warning: unused import: `WallProfile`
+  --> crates/arch3d/src/lib.rs:70:30
+   |
+70 | use crate::walls::{RoofClip, WallProfile, elevation_profile, extrude_profile_slab, extrude_wall_profile, roof_top_polyline};
+   |                              ^^^^^^^^^^^
+
+warning: unused variable: `deg`
+   --> crates/arch3d/src/ceiling/tray.rs:192:32
+    |
+192 |             TraySides::Pitched(deg) => {
+    |                                ^^^ help: if this is intentional, prefix it with an underscore: `_deg`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `n_left`
+   --> crates/arch3d/src/roof.rs:275:9
+    |
+275 |     let n_left = [-dir.x as f32, -dir.y as f32, 0.0];
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_n_left`
+
+warning: unused variable: `n_right`
+   --> crates/arch3d/src/roof.rs:276:9
+    |
+276 |     let n_right = [dir.x as f32, dir.y as f32, 0.0];
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_n_right`
+
+warning: unused variable: `n_up`
+   --> crates/arch3d/src/roof.rs:277:9
+    |
+277 |     let n_up = [0.0, 0.0, 1.0];
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_n_up`
+
+warning: unused variable: `n_down`
+   --> crates/arch3d/src/roof.rs:278:9
+    |
+278 |     let n_down = [0.0, 0.0, -1.0];
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_n_down`
+
+warning: unused variable: `ring`
+  --> crates/arch3d/src/soffit.rs:63:15
+   |
+63 |     let (Some(ring), Some(bottom)) = (i.ring.as_ref(), i.bottom) else {
+   |               ^^^^ help: if this is intentional, prefix it with an underscore: `_ring`
+
+warning: variable does not need to be mutable
+  --> crates/arch3d/src/solid.rs:91:9
+   |
+91 |     let mut tri = |mesh: &mut Mesh, i: [u32; 3]| {
+   |         ----^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `salt`
+   --> crates/arch3d/src/texture.rs:174:17
+    |
+174 | fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
+    |                 ^^^^ help: if this is intentional, prefix it with an underscore: `_salt`
+
+warning: unused variable: `salt`
+   --> crates/arch3d/src/texture.rs:213:19
+    |
+213 | fn shingle_height(salt: u64, x: usize, y: usize) -> f32 {
+    |                   ^^^^ help: if this is intentional, prefix it with an underscore: `_salt`
+
+warning: unused variable: `shape`
+   --> crates/arch3d/src/walls.rs:211:5
+    |
+211 |     shape: &WallShape,
+    |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_shape`
+
+warning: unused variable: `normal`
+   --> crates/arch3d/src/walls.rs:242:13
+    |
+242 |         let normal = Vec2::new(-dir.y, dir.x); // Left normal
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_normal`
+
+warning: variable does not need to be mutable
+   --> crates/arch3d/src/walls.rs:722:13
+    |
+722 |         let mut input = output;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `square_ring` is never used
+   --> crates/arch3d/src/mesh.rs:816:4
+    |
+816 | fn square_ring() -> Vec<Vec2> {
+    |    ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `concave_ring` is never used
+   --> crates/arch3d/src/mesh.rs:821:4
+    |
+821 | fn concave_ring() -> Vec<Vec2> {
+    |    ^^^^^^^^^^^^
+
+warning: constant `MAX_POSTS` is never used
+  --> crates/arch3d/src/railing_parts.rs:20:7
+   |
+20 | const MAX_POSTS: usize = 10_000;
+   |       ^^^^^^^^^
+
+warning: constant `MAX_BALUSTERS` is never used
+  --> crates/arch3d/src/railing_parts.rs:22:7
+   |
+22 | const MAX_BALUSTERS: usize = 100_000;
+   |       ^^^^^^^^^^^^^
+
+warning: function `crossings_upward` is never used
+   --> crates/arch3d/src/ray.rs:137:15
+    |
+137 | pub(crate) fn crossings_upward(o: Vec3, tris: &[[Vec3; 3]]) -> usize {
+    |               ^^^^^^^^^^^^^^^^
+
+warning: function `box_tris` is never used
+   --> crates/arch3d/src/ray.rs:168:15
+    |
+168 | pub(crate) fn box_tris(min: Vec3, max: Vec3) -> Vec<[Vec3; 3]> {
+    |               ^^^^^^^^
+
+warning: variable `N` should have a snake case name
+   --> crates/arch3d/src/light.rs:263:13
+    |
+263 |         let N = 16;
+    |             ^ help: convert the identifier to snake case: `n`
+    |
+    = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: variable `L` should have a snake case name
+   --> crates/arch3d/src/light.rs:264:13
+    |
+264 |         let L = light.intensity / (w * l);
+    |             ^ help: convert the identifier to snake case: `l`
+
+warning: variable `N` should have a snake case name
+   --> crates/arch3d/src/light.rs:361:21
+    |
+361 |                 let N = 16;
+    |                     ^ help: convert the identifier to snake case: `n`
+
+warning: variable `L` should have a snake case name
+   --> crates/arch3d/src/light.rs:362:21
+    |
+362 |                 let L = light.intensity / (w * l);
+    |                     ^ help: convert the identifier to snake case: `l`
+
+warning: `cadcraft-arch3d` (lib) generated 36 warnings (run `cargo fix --lib -p cadcraft-arch3d` to apply 26 suggestions)
+warning: unused import: `Rgb`
+ --> crates/render/src/arch.rs:3:29
+  |
+3 | use cadcraft_color::{Color, Rgb};
+  |                             ^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `cadcraft_doc::arch::roof_handle`
+  --> crates/render/src/arch.rs:10:9
+   |
+10 | pub use cadcraft_doc::arch::roof_handle;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `is_arch_handle` and `room_handle`
+  --> crates/render/src/arch.rs:12:24
+   |
+12 | pub use cadcraft_doc::{is_arch_handle, opening_handle, room_handle};
+   |                        ^^^^^^^^^^^^^^                  ^^^^^^^^^^^
+
+warning: unused imports: `LAYER_ELEV_PATTERN`, `LAYER_ELEV_SWING`, `ViewNote`, and `view_handle`
+ --> crates/render/src/arch_views.rs:3:26
+  |
+3 | use cadcraft_doc::arch::{LAYER_ELEV_PATTERN, LAYER_ELEV_SWING, NoteKind, ViewNote, view_handle};
+  |                          ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^            ^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused variable: `hidden_handles`
+   --> crates/render/src/pipeline.rs:105:9
+    |
+105 |     let hidden_handles: HashSet<Handle> = match d.arch.plan_level {
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_hidden_handles`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cadcraft-render` (lib) generated 5 warnings (run `cargo fix --lib -p cadcraft-render` to apply 5 suggestions)
+warning: unused import: `ArchId`
+ --> crates/io/src/ifc/casework.rs:6:26
+  |
+6 | use cadcraft_doc::arch::{ArchId, CabinetKind};
+  |                          ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `StepHeader`
+ --> crates/io/src/ifc/site.rs:8:22
+  |
+8 | use crate::step::{P, StepHeader};
+  |                      ^^^^^^^^^^
+
+warning: unused import: `Scene3d`
+ --> crates/io/src/ifc/site.rs:9:29
+  |
+9 | use cadcraft_arch3d::{Mesh, Scene3d};
+  |                             ^^^^^^^
+
+warning: unused imports: `ArchId` and `SiteLocation`
+  --> crates/io/src/ifc/site.rs:10:26
+   |
+10 | use cadcraft_doc::arch::{ArchId, ArchModel, SiteLocation};
+   |                          ^^^^^^             ^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates/io/src/dxf_arch.rs:407:17
+    |
+407 |             let mut line_tags = line(a, b);
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MIN_WALL_THICKNESS`
+ --> crates/engine/src/cmd/arch/mod.rs:4:58
+  |
+4 | pub use cadcraft_doc::arch::{MAX_WALLS, MIN_WALL_LENGTH, MIN_WALL_THICKNESS};
+  |                                                          ^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `size_param`
+ --> crates/engine/src/cmd/arch/cabinet_opts/molding.rs:4:23
+  |
+4 | use crate::cmd::{bad, size_param};
+  |                       ^^^^^^^^^^
+
+warning: unused imports: `Cabinet` and `Fixture`
+  --> crates/engine/src/cmd/arch/casework.rs:12:24
+   |
+12 |     ArchId, ArchModel, Cabinet, CabinetKind, Fixture, FixtureKind, FrontStyle, Fronts, MAX_CABINETS, MAX_FIXTURES, SymbolMesh, cabin...
+   |                        ^^^^^^^               ^^^^^^^
+
+warning: unused import: `targets`
+ --> crates/engine/src/cmd/arch/dimdrive.rs:6:36
+  |
+6 | use crate::cmd::{CommandSpec, bad, targets};
+  |                                    ^^^^^^^
+
+warning: unused imports: `ArchModel` and `Handle`
+  --> crates/engine/src/cmd/arch/electrical.rs:10:20
+   |
+10 | use cadcraft_doc::{ArchModel, Handle};
+   |                    ^^^^^^^^^  ^^^^^^
+
+warning: unused import: `ArchId`
+ --> crates/engine/src/cmd/arch/illuminance.rs:3:26
+  |
+3 | use cadcraft_doc::arch::{ArchId, light_label};
+  |                          ^^^^^^
+
+warning: unused imports: `Railing`, `RoofEdge`, `RoofPlane`, `Roof`, and `Stair`
+  --> crates/engine/src/cmd/arch/inspect.rs:15:88
+   |
+15 |     ArchKind, ArchModel, Camera3d, CameraKind, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEd...
+   |                                                                                        ^^^^^^^                ^^^^  ^^^^^^^^
+16 |     RoofPlane, RoomType, Stair, StairShape, arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_ha...
+   |     ^^^^^^^^^            ^^^^^
+
+warning: unused imports: `Drawing` and `Handle`
+  --> crates/engine/src/cmd/arch/inspect.rs:19:28
+   |
+19 | use cadcraft_doc::{ArchId, Drawing, Handle};
+   |                            ^^^^^^^  ^^^^^^
+
+warning: unused import: `f64_or`
+ --> crates/engine/src/cmd/arch/level.rs:2:45
+  |
+2 | use crate::cmd::{CommandSpec, Session, bad, f64_or};
+  |                                             ^^^^^^
+
+warning: unused import: `std::path::Path`
+ --> crates/engine/src/cmd/arch/library_user.rs:3:5
+  |
+3 | use std::path::Path;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused imports: `Cabinet`, `Fixture`, and `Furnishing`
+ --> crates/engine/src/cmd/arch/library_user.rs:6:34
+  |
+6 | use cadcraft_doc::arch::{ArchId, Cabinet, Fixture, Furnishing};
+  |                                  ^^^^^^^  ^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `save_group_item`
+  --> crates/engine/src/cmd/arch/library_user.rs:11:110
+   |
+11 |     StoredObjects, UserItemFile, empty_trash, list_trash, move_to_trash, read_user_file, restore_from_trash, save_group_item, unique...
+   |                                                                                                              ^^^^^^^^^^^^^^^
+
+warning: unused imports: `FixtureShape`, `MAX_LUMENS_PER_METRE`, and `MAX_STRIP_LENGTH`
+  --> crates/engine/src/cmd/arch/lightfixture.rs:9:26
+   |
+ 9 |     ArchId, CabinetKind, FixtureShape, IesProfile, LightFixture, LightKind, LightMount, MAX_AREA_SIDE, MAX_FIXTURE_GRID, MAX_IES_BYTES,
+   |                          ^^^^^^^^^^^^
+10 |     MAX_LIGHT_FIXTURES, MAX_LUMENS_PER_METRE, MAX_STRIP_LENGTH, MAX_STRIP_POINTS, MIN_AREA_SIDE, StripFacing, handle_json, light_han...
+   |                         ^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::str::FromStr`
+  --> crates/engine/src/cmd/arch/opening.rs:12:5
+   |
+12 | use std::str::FromStr;
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `validate_placement`
+  --> crates/engine/src/cmd/arch/opening.rs:19:62
+   |
+19 | use cadcraft_arch::opening::{place_opening, project_to_wall, validate_placement};
+   |                                                              ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `arch_handle`
+  --> crates/engine/src/cmd/arch/opening.rs:22:118
+   |
+22 |     ArchModel, Grille, Hinge, MAX_GRILLE_LITES, MAX_OPENINGS, Opening, OpeningKind, OpeningSides, OpeningTop, Swing, arch_handle, ha...
+   |                                                                                                                      ^^^^^^^^^^^
+
+warning: unused import: `Handle`
+  --> crates/engine/src/cmd/arch/opening.rs:25:38
+   |
+25 | use cadcraft_doc::{ARCH_HANDLE_BASE, Handle, is_arch_handle};
+   |                                      ^^^^^^
+
+warning: unused import: `Room`
+  --> crates/engine/src/cmd/arch/outlets_auto.rs:11:34
+   |
+11 | use cadcraft_doc::arch::{ArchId, Room, RoomType, electrical_label, room_label};
+   |                                  ^^^^
+
+warning: unused import: `EngineError`
+  --> crates/engine/src/cmd/arch/planview.rs:16:13
+   |
+16 | use crate::{EngineError, Result, Session, View};
+   |             ^^^^^^^^^^^
+
+warning: unused import: `Wall`
+ --> crates/engine/src/cmd/arch/roofplane.rs:4:85
+  |
+4 | use cadcraft_doc::arch::{ArchModel, Level, Roof, RoofEdge, RoofEdgeKind, RoofPlane, Wall};
+  |                                                                                     ^^^^
+
+warning: unused imports: `f64_or` and `points_param`
+ --> crates/engine/src/cmd/arch/roofplane.rs:9:31
+  |
+9 | use crate::cmd::{Result, bad, f64_or, points_param};
+  |                               ^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `EngineError`
+  --> crates/engine/src/cmd/arch/room.rs:54:13
+   |
+54 | use crate::{EngineError, Result, Session};
+   |             ^^^^^^^^^^^
+
+warning: unused import: `EngineError`
+ --> crates/engine/src/cmd/arch/roomdetect.rs:6:13
+  |
+6 | use crate::{EngineError, Result};
+  |             ^^^^^^^^^^^
+
+warning: unused import: `cadcraft_doc::arch::ArchView`
+ --> crates/engine/src/cmd/arch/sheet.rs:6:5
+  |
+6 | use cadcraft_doc::arch::ArchView;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cadcraft_doc::arch::sheet::Sheet`
+ --> crates/engine/src/cmd/arch/sheet_camera.rs:9:5
+  |
+9 | use cadcraft_doc::arch::sheet::Sheet;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `read_link`
+  --> crates/engine/src/cmd/arch/sheet_camera.rs:10:90
+   |
+10 | use cadcraft_doc::arch::{Camera3d, CameraKind, LINK_SHEET_IMAGE, SheetSource, SheetView, read_link, set_link};
+   |                                                                                          ^^^^^^^^^
+
+warning: unused import: `str_param`
+  --> crates/engine/src/cmd/arch/soffit.rs:15:36
+   |
+15 | use crate::cmd::{CommandSpec, bad, str_param};
+   |                                    ^^^^^^^^^
+
+warning: unused imports: `Camera3d`, `Look`, and `SunLook`
+ --> crates/engine/src/cmd/arch/sunangle.rs:9:37
+  |
+9 | use cadcraft_doc::arch::{ArchModel, Camera3d, Look, SunAngle, SunLook};
+  |                                     ^^^^^^^^  ^^^^            ^^^^^^^
+
+warning: unused import: `DEFAULT_PATH_THICKNESS`
+ --> crates/engine/src/cmd/arch/terrain_modify.rs:5:26
+  |
+5 | use cadcraft_doc::arch::{DEFAULT_PATH_THICKNESS, MAX_RING_POINTS, MAX_TERRAIN_MODIFIERS, ModifierKind, PathKind, TerrainModifier};
+  |                          ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `point_value`
+  --> crates/engine/src/cmd/arch/terrain_query.rs:12:36
+   |
+12 | use crate::cmd::{CommandSpec, bad, point_value};
+   |                                    ^^^^^^^^^^^
+
+warning: unused import: `Handle`
+  --> crates/engine/src/cmd/arch/wall.rs:23:20
+   |
+23 | use cadcraft_doc::{Handle, Layer, arch::MIN_WALL_THICKNESS};
+   |                    ^^^^^^
+
+warning: unused import: `EngineError`
+  --> crates/engine/src/cmd/arch/wall.rs:29:13
+   |
+29 | use crate::{EngineError, Result, Session};
+   |             ^^^^^^^^^^^
+
+warning: unused import: `Opening`
+ --> crates/engine/src/grips.rs:9:57
+  |
+9 |     CONNECTION_HANDLE_OFFSET, ELECTRICAL_HANDLE_OFFSET, Opening, is_connection_handle, is_countertop_handle, is_electrical_handle,
+  |                                                         ^^^^^^^
+
+warning: unused import: `cadcraft_doc::arch::Opening`
+ --> crates/engine/src/snap/arch.rs:6:5
+  |
+6 | use cadcraft_doc::arch::Opening;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/cabinet_face.rs:182:9
+    |
+182 |     let mut d = session.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/cabinet_fill.rs:50:9
+   |
+50 |     let mut doc = s.doc_mut()?;
+   |         ----^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/casework.rs:344:9
+    |
+344 |     let mut d = session.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/casework.rs:430:9
+    |
+430 |     let mut d = session.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/casework.rs:446:9
+    |
+446 |     let mut d = session.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/casework.rs:474:9
+    |
+474 |     let mut d = session.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/casework.rs:508:9
+    |
+508 |     let mut d = session.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/casework.rs:521:9
+    |
+521 |     let mut d = session.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/connections.rs:58:9
+   |
+58 |     let mut doc_mut = session.doc_mut()?;
+   |         ----^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/connections.rs:70:9
+   |
+70 |     let mut doc = session.doc_mut()?;
+   |         ----^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/connections.rs:100:9
+    |
+100 |     let mut doc = session.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/connections.rs:115:9
+    |
+115 |     let mut doc = session.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `l`
+   --> crates/engine/src/cmd/arch/deck.rs:176:21
+    |
+176 |     if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == ref_val.trim()) {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_l`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `p`
+   --> crates/engine/src/cmd/arch/dim_inspect.rs:209:46
+    |
+209 | pub(crate) fn inspect_auto_dims(d: &Drawing, p: &Value, out: &mut JsonMap<String, Value>) {
+    |                                              ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `doc`
+  --> crates/engine/src/cmd/arch/dimdrive.rs:40:9
+   |
+40 |     let doc = s.doc()?;
+   |         ^^^ help: if this is intentional, prefix it with an underscore: `_doc`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/dimdrive.rs:106:9
+    |
+106 |     let mut live = s.doc_mut()?;
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/electrical.rs:242:9
+    |
+242 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/electrical.rs:285:9
+    |
+285 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `size`
+   --> crates/engine/src/cmd/arch/furnish.rs:299:9
+    |
+299 |     let size = item.size.ok_or_else(|| bad(PLACE, format!("`{}` has no size", item.id)))?;
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_size`
+
+warning: unused variable: `r`
+   --> crates/engine/src/cmd/arch/furnish.rs:334:13
+    |
+334 |     for (i, r) in face.rows.iter().enumerate() {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_r`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/level.rs:189:13
+    |
+189 |         let mut doc = s.doc_mut()?;
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/level.rs:228:13
+    |
+228 |         let mut doc = s.doc_mut()?;
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/level.rs:269:13
+    |
+269 |         let mut doc = s.doc_mut()?;
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/level.rs:318:9
+    |
+318 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/level.rs:389:9
+    |
+389 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/library_user.rs:296:9
+    |
+296 |     let mut objects = store_group_objects(s, &names, insertion)?;
+    |         ----^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/lightfixture.rs:330:13
+    |
+330 |         let mut doc_mut = session.doc_mut()?;
+    |             ----^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/lightfixture.rs:372:9
+    |
+372 |     let mut doc_mut = session.doc_mut()?;
+    |         ----^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/lightfixture.rs:680:9
+    |
+680 |     let mut doc_mut = session.doc_mut()?;
+    |         ----^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/lightfixture.rs:737:9
+    |
+737 |     let mut doc = session.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/lightfixture.rs:763:9
+    |
+763 |     let mut doc = session.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/lightset.rs:71:13
+   |
+71 |         let mut doc = s.doc_mut()?;
+   |             ----^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/lightset.rs:84:9
+   |
+84 |     let mut doc = s.doc_mut()?;
+   |         ----^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/opening_edit.rs:38:9
+   |
+38 |     let mut edited = {
+   |         ----^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/opening_edit.rs:95:9
+   |
+95 |     let mut d = s.doc_mut()?;
+   |         ----^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/outlets_auto.rs:54:13
+   |
+54 |         let mut doc = s.doc_mut()?;
+   |             ----^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: unused variable: `l`
+  --> crates/engine/src/cmd/arch/railing.rs:63:21
+   |
+63 |     if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == ref_val.trim()) {
+   |                     ^ help: if this is intentional, prefix it with an underscore: `_l`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/roofauto.rs:125:9
+    |
+125 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: value assigned to `rebuilt` is never read
+   --> crates/engine/src/cmd/arch/roofauto.rs:129:23
+    |
+129 |     let mut rebuilt = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+143 |         rebuilt = true;
+    |         -------------- `rebuilt` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/roofplane.rs:177:9
+    |
+177 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/roofplane.rs:246:9
+    |
+246 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `l`
+   --> crates/engine/src/cmd/arch/room.rs:116:21
+    |
+116 |     if let Some((i, l)) = arch.levels.iter().enumerate().find(|(_, l)| l.name == s) {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_l`
+
+warning: variable does not need to be mutable
+ --> crates/engine/src/cmd/arch/room_finish_inspect.rs:9:13
+  |
+9 |         let mut obj = row.as_object_mut().unwrap();
+  |             ----^^^
+  |             |
+  |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/room_moldings.rs:130:9
+    |
+130 |     let mut d = s.doc_mut()?;
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `level`
+   --> crates/engine/src/cmd/arch/roomdetect.rs:241:26
+    |
+241 | ...   let Some((_, level, pt)) = old_label_points.iter().find(|(old_id, old_level, _)| *old_id == tray.room && *old_level == tray.l...
+    |                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_level`
+
+warning: unused variable: `d`
+   --> crates/engine/src/cmd/arch/schedule.rs:309:16
+    |
+309 | fn build_table(d: &Drawing, schedule: &Schedule, rows: &[cadcraft_arch::schedule::ScheduleRow], at: Vec2) -> Result<Table> {
+    |                ^ help: if this is intentional, prefix it with an underscore: `_d`
+
+warning: unused variable: `row_count`
+   --> crates/engine/src/cmd/arch/schedule.rs:312:9
+    |
+312 |     let row_count = 1 + rows.len(); // Header + data rows
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_row_count`
+
+warning: unused variable: `full_paper_name`
+   --> crates/engine/src/cmd/arch/sheet.rs:166:9
+    |
+166 |     let full_paper_name = ps.name.to_string();
+    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_full_paper_name`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/sheet_camera.rs:51:9
+   |
+51 |     let mut look = effective_look(&doc.arch, Some(saved));
+   |         ----^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/sheet_camera.rs:147:9
+    |
+147 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `e`
+   --> crates/engine/src/cmd/arch/stretch.rs:115:21
+    |
+115 |                 Err(e) => {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: variable does not need to be mutable
+  --> crates/engine/src/cmd/arch/sunangle.rs:68:9
+   |
+68 |     let mut d = s.doc_mut()?;
+   |         ----^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/sunangle.rs:116:13
+    |
+116 |         let mut d = s.doc_mut()?;
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/tray.rs:281:9
+    |
+281 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/tray.rs:341:9
+    |
+341 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/cmd/arch/tray.rs:359:9
+    |
+359 |     let mut doc = s.doc_mut()?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `normal`
+   --> crates/engine/src/grips.rs:762:33
+    |
+762 | ...                   let normal = Vec2::new(dir.y, -dir.x);
+    |                           ^^^^^^ help: if this is intentional, prefix it with an underscore: `_normal`
+
+warning: variable does not need to be mutable
+   --> crates/engine/src/library/user.rs:371:9
+    |
+371 |     let mut doc = s.doc_mut().map_err(|e| EngineError::Other(e.to_string()))?;
+    |         ----^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: function `hdr_item_from_library` is never used
+   --> crates/engine/src/cmd/arch/backdrop.rs:109:4
+    |
+109 | fn hdr_item_from_library(s: &mut Session, item: &str) -> Result<(String, cadcraft_doc::arch::ImageRgbe), EngineError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `build_device` is never used
+   --> crates/engine/src/cmd/arch/electrical.rs:122:4
+    |
+122 | fn build_device(
+    |    ^^^^^^^^^^^^
+
+warning: function `reply_device` is never used
+   --> crates/engine/src/cmd/arch/electrical.rs:143:4
+    |
+143 | fn reply_device(cmd: &str, doc: &cadcraft_doc::Drawing, device: &ElectricalDevice, place: &cadcraft_arch::electrical::DevicePlace) ...
+    |    ^^^^^^^^^^^^
+
+warning: function `read_disk_cache` is never used
+   --> crates/engine/src/cmd/arch/library_icon.rs:112:4
+    |
+112 | fn read_disk_cache(dir: &PathBuf, hash: &str) -> Option<Vec<u8>> {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `grid_like` is never used
+   --> crates/engine/src/cmd/arch/lightfixture.rs:291:4
+    |
+291 | fn grid_like(doc: &cadcraft_doc::Drawing, room_id: ArchId, rows: u32, cols: u32, params: &Value) -> Result<Vec<LightFixture>> {
+    |    ^^^^^^^^^
+
+warning: field `kind` is never read
+  --> crates/engine/src/cmd/arch/opening.rs:55:5
+   |
+53 | pub struct OpeningM {
+   |            -------- field in this struct
+54 |     id: &'static str,
+55 |     kind: OpeningKind,
+   |     ^^^^
+
+warning: function `parse_sun` is never used
+   --> crates/engine/src/cmd/arch/render.rs:474:8
+    |
+474 | pub fn parse_sun(v: Option<&Value>, doc: &Drawing) -> Result<SunChoice, EngineError> {
+    |        ^^^^^^^^^
+
+warning: field `k` is never read
+   --> crates/engine/src/cmd/arch/sheet.rs:106:9
+    |
+103 |     struct ViewportInfo {
+    |            ------------ field in this struct
+...
+106 |         k: f64,
+    |         ^
+
+warning: function `tray_depth` is never used
+   --> crates/engine/src/cmd/arch/tray.rs:132:4
+    |
+132 | fn tray_depth(model: &ArchModel, tray_id: ArchId) -> usize {
+    |    ^^^^^^^^^^
+
+warning: function `rel_offset` is never used
+   --> crates/engine/src/library/user.rs:250:4
+    |
+250 | fn rel_offset(a: [f64; 2], b: [f64; 2], rotation: f64) -> [f64; 2] {
+    |    ^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> crates/engine/src/cmd/arch/cabinet_face.rs:181:5
+    |
+181 |     drop(doc);
+    |     ^^^^^---^
+    |          |
+    |          argument has type `&Drawing`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+181 -     drop(doc);
+181 +     let _ = doc;
+    |
+
+warning: `cadcraft-io` (lib) generated 5 warnings (run `cargo fix --lib -p cadcraft-io` to apply 5 suggestions)
+warning: `cadcraft-engine` (lib) generated 103 warnings (run `cargo fix --lib -p cadcraft-engine` to apply 91 suggestions)
+   Compiling cadcraft-engine v0.20.1 (/usr/local/cx-swarm/wt/p21g-showcase-drawing-set/crates/engine)
+    Finished `test` profile [optimized] target(s) in 1.15s
+     Running tests/showcase_p21_docs.rs (/usr/local/cx-swarm/targets-checks/p21g-showcase-drawing-set/debug/deps/showcase_p21_docs-c53853a929473a6d)
+
+running 5 tests
+test readme_mentions_phase_21_and_plot ... ok
+test phase21_showcase_sheet_steps_all_name_their_views ... ok
+test phase_21_showcase_json_exists_and_is_array ... ok
+test user_guide_has_p21_sections ... ok
+test phase21_showcase_replays_into_a_full_sheet_set has been running for over 60 seconds
+test phase21_showcase_replays_into_a_full_sheet_set ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 102.32s
+
