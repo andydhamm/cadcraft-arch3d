@@ -644,7 +644,7 @@ mod tests {
         assert!(!cab0.is_empty(), "cb0 should have lines");
         assert!(!cab1.is_empty(), "cb1 should have lines");
         // They should not overlap in u (horizontal) extent.
-        let u_range = |lines: &[&super::super::Line2]| {
+        let u_range = |lines: &[&cadcraft_doc::arch::ViewLine]| {
             let mut u0 = f64::MAX;
             let mut u1 = f64::MIN;
             for l in lines {
