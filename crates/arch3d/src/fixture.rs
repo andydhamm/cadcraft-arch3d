@@ -472,6 +472,125 @@ mod tests {
         }
     }
 
+    #[test]
+    fn strip_short_segment_lens_keeps_full_length() {
+        // A segment shorter than 4 mm keeps its full length so the lens never shrinks to nothing.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        // 2 mm segment: shorter than the 4 mm threshold
+        f.path = vec![Vec2::new(2.0, 2.0), Vec2::new(2.002, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        // The lens spans the full segment length (no pull-in for short segments).
+        let housing_len = hb.max[0] - hb.min[0];
+        let lens_len = lb.max[0] - lb.min[0];
+        assert!((housing_len - 0.002).abs() < 1e-6, "housing length {housing_len}");
+        assert!((lens_len - 0.002).abs() < 1e-6, "lens length {lens_len} should equal housing length for short segments");
+    }
+
+    #[test]
+    fn strip_long_segment_lens_ends_pulled_in() {
+        // A segment of 4 mm or more has its lens ends pulled in 1 mm along the segment.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        // Housing spans the full 2 m segment; lens is 2 mm shorter (1 mm pulled in at each end).
+        let housing_len = hb.max[0] - hb.min[0];
+        let lens_len = lb.max[0] - lb.min[0];
+        assert!((housing_len - 2.0).abs() < 1e-6, "housing length {housing_len}");
+        assert!((lens_len - 1.998).abs() < 1e-6, "lens length {lens_len} should be 2 mm shorter");
+        // The lens is centered on the segment.
+        let housing_center = (hb.min[0] + hb.max[0]) / 2.0;
+        let lens_center = (lb.min[0] + lb.max[0]) / 2.0;
+        assert!((housing_center - lens_center).abs() < 1e-6, "lens not centered");
+    }
+
+    #[test]
+    fn strip_path_with_one_point_produces_no_meshes() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(2.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        assert!(meshes.is_empty(), "a single-point path should produce no meshes");
+    }
+
+    #[test]
+    fn strip_nan_path_point_is_skipped() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        // One segment has a NaN endpoint; only the (1,2)-(3,2) segment should be built.
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0), Vec2::new(f64::NAN, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing: Vec<_> = meshes.iter().filter(|x| x.material == "light-strip").collect();
+        assert_eq!(housing.len(), 1, "only the finite segment should be built");
+    }
+
+    #[test]
+    fn strip_vertical_segment_lens_is_proud() {
+        // The proud-lens invariant holds for vertical segments too.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(2.0, 1.0), Vec2::new(2.0, 3.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        assert!(lb.max[2] <= hb.min[2] + 1e-6, "lens max z above housing min z");
+        assert!((lb.min[2] - (hb.min[2] - 0.001)).abs() < 1e-6, "lens min z not 1 mm below housing");
+        assert!(lb.min[1] > hb.min[1] && lb.max[1] < hb.max[1], "lens y bounds not strictly inside housing");
+        assert!(lb.min[0] > hb.min[0] && lb.max[0] < hb.max[0], "lens x bounds not strictly inside housing");
+    }
+
+    #[test]
+    fn strip_lens_is_two_mm_narrower_than_housing() {
+        // The lens is 1 mm narrower on each side: 10 mm wide vs the housing's 12 mm.
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+        f.height = Some(2.4);
+        m.lights.push(f);
+        let meshes = fixture_meshes(&m);
+        let housing = meshes.iter().find(|x| x.material == "light-strip").expect("a housing");
+        let lens = meshes.iter().find(|x| x.material == "light-lens-lit").expect("a lens");
+        let hb = housing.bounds();
+        let lb = lens.bounds();
+        let housing_width = hb.max[1] - hb.min[1];
+        let lens_width = lb.max[1] - lb.min[1];
+        assert!((housing_width - 0.012).abs() < 1e-6, "housing width {housing_width}");
+        assert!((lens_width - 0.010).abs() < 1e-6, "lens width {lens_width} should be 10 mm");
+    }
+
     fn model_with(names: &[&str]) -> ArchModel {
         let mut m = ArchModel::default();
         for (i, n) in names.iter().enumerate() {
