@@ -65,6 +65,9 @@ pub struct LevelFilter {
 pub struct ViewFilter {
     /// The floor overview's level limit (None: every level).
     pub levels: Option<LevelFilter>,
+    /// Whether the look asks for the cutaway (the hidden set may still be empty: seen from
+    /// inside, or the viewed level has no walls).
+    pub cutaway: bool,
     /// Objects removed by the cutaway.
     pub hidden: Hidden,
     /// Inclusive six-plane clip box (None: no clipping).
@@ -83,7 +86,7 @@ pub fn from_look(look: &Look, model: &ArchModel, camera: &Camera) -> ViewFilter 
     let forward = crate::camera::forward(camera);
     let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
     let clip = look.clip.as_ref().map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
-    ViewFilter { hidden, clip, near: look.near_clip, eye, forward, levels: None }
+    ViewFilter { cutaway: look.cutaway, hidden, clip, near: look.near_clip, eye, forward, levels: None }
 }
 
 /// The viewed level: the model's `plan_level` (the level walls are drawn at) or 0.
@@ -98,15 +101,16 @@ impl ViewFilter {
         let forward = crate::camera::forward(camera);
         let hidden = if look.cutaway { cutaway_hidden(model, eye, level(model)) } else { Hidden::default() };
         let clip = look.clip.as_ref().map(|c| ClipBox { min: Vec3::new(c.min[0], c.min[1], c.min[2]), max: Vec3::new(c.max[0], c.max[1], c.max[2]) });
-        Self { hidden, clip, near: look.near_clip, eye, forward, levels: None }
+        Self { cutaway: look.cutaway, hidden, clip, near: look.near_clip, eye, forward, levels: None }
     }
 
     /// The floor overview of `level`: higher levels, every ceiling and every roof leave the
     /// scene, and with `lower_levels` false the lower levels too. A cutaway (hidden set) is
-    /// recomputed for the overview level.
+    /// recomputed for the overview level, whatever it hid on the plan's level: an empty set there
+    /// (no walls on that level) says nothing about the overview's.
     pub fn with_overview(mut self, model: &ArchModel, level: u32, lower_levels: bool) -> Self {
         let elevation = model.levels.iter().rev().find(|l| l.index == level).map_or(0.0, |l| l.elevation);
-        if !self.hidden.is_empty() {
+        if self.cutaway || !self.hidden.is_empty() {
             self.hidden = cutaway_hidden(model, self.eye, level);
         }
         self.levels = Some(LevelFilter { elevation, lower_levels });
@@ -442,6 +446,7 @@ mod tests {
             eye: Vec3::new(0.0, 0.0, 0.0),
             forward: Vec3::new(0.0, 0.0, 1.0),
             levels: None,
+            cutaway: false,
         };
         assert!(f.accepts(Vec3::new(0.0, 0.0, 2.0)));
         assert!(!f.accepts(Vec3::new(0.0, 0.0, 0.5)));
@@ -481,6 +486,32 @@ mod tests {
         assert_eq!(ids(&base.clone().with_overview(&model, 1, false)), vec![4, 5], "level 1 alone");
         assert_ne!(base.clone().with_overview(&model, 1, true).key(), base.clone().with_overview(&model, 1, false).key());
         assert_eq!(base.key(), 0);
+    }
+
+    /// 11-15: an overview of a level other than the plan's got no cutaway when the plan's level had
+    /// nothing to hide (the phase-19 demo: every wall on level 1, the plan on the empty level 0).
+    #[test]
+    fn overview_cutaway_is_computed_for_its_own_level() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 1,
+            top_level: None,
+            ..Wall::default()
+        };
+        let room = Room { level: 1, ..room([[0.1, 0.1], [3.9, 0.1], [3.9, 3.9], [0.1, 3.9]]) };
+        let model = ArchModel { walls: vec![wall.clone()], rooms: vec![room], ..ArchModel::default() };
+        let camera = Camera::Full(crate::camera::FullCamera::new(Vec3::new(2.0, -5.0, 6.0), Vec3::new(2.0, 2.0, 0.0), 45.0));
+        let cut = Look { cutaway: true, ..Look::default() };
+        let base = ViewFilter::from_look(&cut, &model, &camera);
+        assert!(base.cutaway && base.hidden.is_empty(), "the plan's level 0 has no walls: {:?}", base.hidden);
+        let over = base.with_overview(&model, 1, false);
+        assert!(over.hidden.contains(&("wall", wall.id)), "level 1's camera-facing wall is hidden: {:?}", over.hidden);
+        // Without the cutaway an overview hides nothing.
+        let plain = ViewFilter::from_look(&Look::default(), &model, &camera).with_overview(&model, 1, false);
+        assert!(!plain.cutaway && plain.hidden.is_empty());
     }
 
     #[test]
@@ -613,6 +644,7 @@ mod tests {
             eye: Vec3::new(0.0, 0.0, 0.0),
             forward: Vec3::new(0.0, 0.0, 1.0),
             levels: None,
+            cutaway: false,
         };
         assert!(f.accepts(Vec3::new(1.0, 0.0, 0.0)), "point on max-x boundary should be accepted");
         assert!(f.accepts(Vec3::new(-1.0, 0.0, 0.0)), "point on min-x boundary should be accepted");
