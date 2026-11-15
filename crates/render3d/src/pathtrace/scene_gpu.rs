@@ -1816,4 +1816,84 @@ mod tests {
         // The seam diagonal is still a hit (the two triangles share it).
         assert!(only.trace_cpu([3.0, 3.0, 2.0], [0.0, 0.0, -1.0], 10.0).is_some_and(|h| (h.t - 2.0).abs() < 1e-5));
     }
+
+    #[test]
+    fn horizon_material_index_with_and_without_ground() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(prism("wall", 1, [0.0; 3], [1.0; 3]));
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+
+        // Without ground: horizon material index = meshes.len() = 1
+        let without = build_gpu_scene(&scene, false, None);
+        assert_eq!(without.materials.len(), 2, "wall + horizon");
+        let horizon_tris_without: Vec<&GpuTri> = without.tris.iter().filter(|t| t.material == 1).collect();
+        assert_eq!(horizon_tris_without.len(), 2, "horizon has two triangles");
+        assert!(horizon_tris_without.iter().all(|t| t.flags & TRI_SINGLE_SIDED != 0), "horizon is single-sided");
+        assert_eq!(without.materials[1].albedo, material_for("terrain").albedo, "horizon uses terrain material");
+
+        // With ground: horizon material index = meshes.len() + 1 = 2
+        let with = build_gpu_scene(&scene, true, None);
+        assert_eq!(with.materials.len(), 3, "wall + ground + horizon");
+        let horizon_tris_with: Vec<&GpuTri> = with.tris.iter().filter(|t| t.material == 2).collect();
+        assert_eq!(horizon_tris_with.len(), 2, "horizon has two triangles");
+        assert!(horizon_tris_with.iter().all(|t| t.flags & TRI_SINGLE_SIDED != 0), "horizon is single-sided");
+        assert_eq!(with.materials[2].albedo, material_for("terrain").albedo, "horizon uses terrain material");
+    }
+
+    #[test]
+    fn far_hit_shadow_rays_do_not_self_intersect() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[-9500.0, -9500.0, -0.5], [9500.0, -9500.0, -0.5], [9500.0, 9500.0, -0.5], [-9500.0, 9500.0, -0.5]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, None);
+
+        // Trace to a near point
+        let hit_near = gpu.trace_cpu([0.0, 0.0, 10.0], [0.0, 0.0, -1.0], 100.0);
+        assert!(hit_near.is_some(), "near ray should hit");
+        assert!((hit_near.unwrap().t - 10.5).abs() < 1e-4, "near hit distance");
+
+        // Trace to a far point (500 m from origin)
+        let hit_far = gpu.trace_cpu([500.0, 500.0, 500.0], [0.0, 0.0, -1.0], 1000.0);
+        assert!(hit_far.is_some(), "far ray should hit");
+        assert!((hit_far.unwrap().t - 500.5).abs() < 1e-3, "far hit distance");
+
+        // Trace to a very far point (5000 m from origin)
+        let hit_very_far = gpu.trace_cpu([5000.0, 5000.0, 5000.0], [0.0, 0.0, -1.0], 10000.0);
+        assert!(hit_very_far.is_some(), "very far ray should hit");
+        assert!((hit_very_far.unwrap().t - 5000.5).abs() < 1e-2, "very far hit distance");
+
+        // Shadow ray from a far hit point should not self-intersect.
+        // The hit point is (500, 500, -0.5); offset along the normal by a distance-scaled epsilon.
+        let p = [500.0f32, 500.0f32, -0.5f32];
+        let p_max = p.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
+        let eps = 1e-4 * p_max.max(1.0);
+        let shadow_origin = [p[0], p[1], p[2] + eps];
+        let shadow_hit = gpu.trace_cpu(shadow_origin, [0.0, 0.0, 1.0], 1000.0);
+        assert!(shadow_hit.is_none(), "shadow ray from far point should not self-intersect");
+
+        // And from a very far point
+        let p2 = [5000.0f32, 5000.0f32, -0.5f32];
+        let p2_max = p2.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
+        let eps2 = 1e-4 * p2_max.max(1.0);
+        let shadow_origin2 = [p2[0], p2[1], p2[2] + eps2];
+        let shadow_hit2 = gpu.trace_cpu(shadow_origin2, [0.0, 0.0, 1.0], 10000.0);
+        assert!(shadow_hit2.is_none(), "shadow ray from very far point should not self-intersect");
+    }
+
+    #[test]
+    fn horizon_with_nan_positions_is_skipped() {
+        let mut scene = Scene3d::default();
+        let mut horizon = Mesh::new("terrain", ArchId(0));
+        horizon.positions = vec![[f32::NAN, 0.0, 0.0], [0.0, f32::NAN, 0.0], [0.0, 0.0, f32::NAN], [0.0, 0.0, 0.0]];
+        horizon.indices = vec![0, 1, 2, 0, 2, 3];
+        scene.horizon = Some(horizon);
+        let gpu = build_gpu_scene(&scene, false, None);
+        // Every triangle has at least one NaN vertex, so no triangles are pushed.
+        assert_eq!(gpu.tris.len(), 0, "all-NaN horizon positions produce no triangles");
+    }
 }
