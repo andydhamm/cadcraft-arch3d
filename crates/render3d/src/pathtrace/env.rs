@@ -100,7 +100,8 @@ fn bake_env_table(e: &Environment) -> EnvTable {
         let (sin_t, cos_t) = theta.sin_cos();
         for col in 0..w {
             let az = ((col as f32 + 0.5) / w as f32 - 0.5) * 2.0 * pi;
-            let c = e.radiance([sin_t * az.cos(), sin_t * az.sin(), cos_t]);
+            // Private; reached only through `env_table`, which checked `e.is_valid()` once.
+            let c = e.radiance_unchecked([sin_t * az.cos(), sin_t * az.sin(), cos_t]);
             radiance.extend_from_slice(&c);
             if let Some(slot) = weight.get_mut(row * w + col) {
                 *slot = f64::from(luminance(c) * sin_t);

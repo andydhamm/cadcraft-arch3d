@@ -50,25 +50,39 @@ impl Environment {
 
     /// Legal size, correct pixel count, finite non-negative radiance everywhere.
     pub fn is_valid(&self) -> bool {
+        let ok = |v: &f32| v.is_finite() && *v >= 0.0;
+        self.header_ok() && self.rgb.iter().all(|c| c.iter().all(ok))
+    }
+
+    /// The O(1) part of [`is_valid`](Self::is_valid): legal size, pixel count matching it, and
+    /// finite parameters. It never looks at the texels.
+    pub fn header_ok(&self) -> bool {
         let valid_w = (1..=4096).contains(&self.width);
         let valid_h = (1..=2048).contains(&self.height);
         let len_ok = self.rgb.len() == self.width as usize * self.height as usize;
-        if !(valid_w && valid_h && len_ok) {
-            return false;
-        }
-        let ok = |v: &f32| v.is_finite() && *v >= 0.0;
-        self.intensity.is_finite()
+        valid_w
+            && valid_h
+            && len_ok
+            && self.intensity.is_finite()
             && self.intensity >= 0.0
             && self.rotation_deg.is_finite()
             && self.horizon_deg.is_finite()
-            && self.rgb.iter().all(|c| c.iter().all(ok))
     }
 
     /// Radiance in direction `d` (undo the rotation, shift the elevation by `-horizon_deg`,
     /// bilinear with `u` wrapping and `v` clamping, scale by `intensity`). Zero when the map is
     /// invalid or `d` is not finite.
     pub fn radiance(&self, d: [f32; 3]) -> [f32; 3] {
-        if !self.is_valid() || !d.iter().all(|v| v.is_finite()) {
+        if !self.is_valid() {
+            return [0.0; 3];
+        }
+        self.radiance_unchecked(d)
+    }
+
+    /// [`radiance`](Self::radiance) for a caller that has checked `is_valid()` once: it never
+    /// scans the texels (only the O(1) header), so a bake loop over every texel stays linear.
+    pub fn radiance_unchecked(&self, d: [f32; 3]) -> [f32; 3] {
+        if !self.header_ok() || !d.iter().all(|v| v.is_finite()) {
             return [0.0; 3];
         }
         let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
@@ -155,7 +169,7 @@ thread_local! {
     static SKY_BAKES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 /// Baked skies kept for the process, oldest first: (sun bits, turbidity bits, stars, visible, map).
-type SkyCacheEntry = ([u64; 3], u64, bool, bool, Environment);
+type SkyCacheEntry = ([u64; 3], u64, bool, bool, Arc<Environment>);
 static SKY_CACHE: std::sync::Mutex<Vec<SkyCacheEntry>> = std::sync::Mutex::new(Vec::new());
 const SKY_CACHE_LEN: usize = 24;
 
@@ -167,7 +181,7 @@ pub fn sky_bake_count() -> usize {
 /// [p19-sky] The sky environment for the given sun. The 512 x 256 bake is cached per
 /// (sun direction, turbidity, stars, visible) for the process: a render that changed none of
 /// them reuses the map instead of re-evaluating 131 072 texels.
-pub fn sky_environment(model: &ArchModel, look: &Look, sun_dir: Option<[f64; 3]>) -> Option<Environment> {
+pub fn sky_environment(model: &ArchModel, look: &Look, sun_dir: Option<[f64; 3]>) -> Option<Arc<Environment>> {
     if !look.sky.on {
         return None;
     }
@@ -179,13 +193,14 @@ pub fn sky_environment(model: &ArchModel, look: &Look, sun_dir: Option<[f64; 3]>
     let key = ([sun[0].to_bits(), sun[1].to_bits(), sun[2].to_bits()], look.sky.turbidity.to_bits(), look.sky.stars, visible);
     let mut cache = SKY_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(hit) = cache.iter().find(|e| (e.0, e.1, e.2, e.3) == key) {
-        return Some(hit.4.clone());
+        return Some(Arc::clone(&hit.4));
     }
     let env = bake_sky(sun, look.sky.turbidity, look.sky.stars, visible);
     if cache.len() >= SKY_CACHE_LEN {
         cache.remove(0);
     }
-    cache.push((key.0, key.1, key.2, key.3, env.clone()));
+    let env = Arc::new(env);
+    cache.push((key.0, key.1, key.2, key.3, Arc::clone(&env)));
     Some(env)
 }
 
@@ -224,8 +239,10 @@ pub fn bake_sky(sun: [f64; 3], turbidity: f64, stars: bool, visible: bool) -> En
 /// The one environment for the drawing and look: an HDRI (if the look names one),
 /// else the sky (if the look asks for it), else nothing.
 pub fn environment_for(model: &ArchModel, look: &Look, sun_dir: Option<[f64; 3]>) -> Option<Arc<Environment>> {
-    let env = hdri_environment(model, look).or_else(|| sky_environment(model, look, sun_dir));
-    env.filter(|e| e.is_valid()).map(Arc::new)
+    if let Some(e) = hdri_environment(model, look) {
+        return e.is_valid().then(|| Arc::new(e));
+    }
+    sky_environment(model, look, sun_dir).filter(|e| e.is_valid())
 }
 
 // Compare the map's parameters and fingerprint, never its pixels.
@@ -579,6 +596,71 @@ mod tests {
         e.rotation_deg = 45.0;
         let k4 = e.compute_key();
         assert_ne!(k3, k4, "changing rotation must change the key");
+    }
+
+    #[test]
+    fn sky_environment_is_shared_not_cloned() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sky_cache_for_test();
+
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Sky);
+        let look = Look::default();
+        let sun = Some([0.4, 0.3, 0.8]);
+        let before = sky_bake_count();
+        let a = sky_environment(&model, &look, sun).unwrap();
+        let b = sky_environment(&model, &look, sun).unwrap();
+        let c = environment_for(&model, &look, sun).unwrap();
+        let d = environment_for(&model, &look, sun).unwrap();
+        assert!(Arc::ptr_eq(&a, &b) && Arc::ptr_eq(&a, &c) && Arc::ptr_eq(&a, &d));
+        assert_eq!(sky_bake_count(), before + 1);
+    }
+
+    #[test]
+    fn sky_512_prepares_in_linear_time() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let mut elapsed = std::time::Duration::ZERO;
+        for el_deg in [62.0f64, -20.0] {
+            let (el, az) = (el_deg.to_radians(), 1.2345f64);
+            let sun = [el.cos() * az.cos(), el.cos() * az.sin(), el.sin()];
+            let env = bake_sky(sun, 3.0, true, true);
+            let start = std::time::Instant::now();
+            let _key = env.compute_key();
+            let valid = env.is_valid();
+            let _sh = crate::sh::project(&env);
+            let table = crate::pathtrace::env::env_table(&env);
+            elapsed += start.elapsed();
+            assert!(valid);
+            assert!(table.total.is_finite() && table.total > 0.0);
+            assert!(table.is_usable());
+            for i in 0..1000usize {
+                let u = [(i as f32 + 0.5) / 1000.0, ((i * 37 % 1000) as f32 + 0.5) / 1000.0];
+                let (dir, pdf) = table.sample(u);
+                assert!(dir.iter().all(|v| v.is_finite()), "{dir:?}");
+                assert!(pdf.is_finite() && pdf >= 0.0, "{pdf}");
+            }
+        }
+        println!("sky_512_prepares_in_linear_time: {elapsed:?}");
+        assert!(elapsed < std::time::Duration::from_secs(3), "took {elapsed:?}");
+    }
+
+    #[test]
+    fn radiance_unchecked_equals_radiance_on_a_valid_map() {
+        let mut e = Environment::uniform([0.0; 3], 8, 4);
+        for (i, c) in e.rgb.iter_mut().enumerate() {
+            *c = [i as f32 * 0.3, (i * 7 % 5) as f32, 1.0 + (i % 3) as f32];
+        }
+        e.rotation_deg = 30.0;
+        e.horizon_deg = 5.0;
+        assert!(e.is_valid());
+        for i in 0..50 {
+            let t = i as f32;
+            let d = [(t * 0.7).sin(), (t * 1.3).cos(), (t * 0.37).sin() * 1.5 - 0.2];
+            let (a, b) = (e.radiance(d), e.radiance_unchecked(d));
+            assert!(a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()), "{d:?}: {a:?} vs {b:?}");
+        }
+        e.rgb[5] = [f32::NAN, 0.0, 0.0];
+        assert_eq!(e.radiance([0.0, 1.0, 0.2]), [0.0; 3]);
     }
 
     #[test]
