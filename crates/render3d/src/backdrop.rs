@@ -454,7 +454,8 @@ impl BackdropPass {
                 let el = (0.5 - (j as f32 + 0.5) / h as f32) * pi;
                 for i in 0..w {
                     let az = ((i as f32 + 0.5) / w as f32 - 0.5) * 2.0 * pi;
-                    let c = env.radiance([el.cos() * az.cos(), el.cos() * az.sin(), el.sin()]);
+                    // `prepare_environment` checked `env.is_valid()` once above.
+                    let c = env.radiance_unchecked([el.cos() * az.cos(), el.cos() * az.sin(), el.sin()]);
                     texels.extend_from_slice(&[c[0], c[1], c[2], 1.0]);
                 }
             }
