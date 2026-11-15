@@ -211,7 +211,7 @@ fn run_dim(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => finite(CMD, "offset", v)?,
     };
     let text = match present(p, "text") {
-        None => format!("{value:.3}").trim_end_matches('0').trim_end_matches('.').to_string(),
+        None | Some(Value::String(s)) if s.is_empty() => format!("{value:.3}").trim_end_matches('0').trim_end_matches('.').to_string(),
         Some(v) => v.as_str().ok_or_else(|| bad(CMD, "`text` must be a string"))?.to_string(),
     };
     let note = ViewNote { kind: NoteKind::Dimension, text, at: a, b: Some(b), attach, attach_b, offset: [0.0, offset], ..ViewNote::default() };
