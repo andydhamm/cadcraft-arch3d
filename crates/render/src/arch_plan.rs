@@ -408,7 +408,7 @@ mod tests {
         let ann = plan_annotation(&d);
         let callouts: Vec<_> = ann.labels.iter().filter(|l| l.kind == PlanLabelKind::Callout).collect();
         assert_eq!(callouts.len(), 1);
-        assert_eq!(callouts[0].handle, view_id);
+        assert_eq!(callouts[0].handle, cadcraft_doc::view_handle(view_id));
     }
 
     #[test]
