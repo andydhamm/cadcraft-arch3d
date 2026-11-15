@@ -376,6 +376,42 @@ mod tests {
     }
 
     #[test]
+    fn plan_annotation_no_callouts_without_views() {
+        let mut d = Drawing::new_metric();
+        d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }];
+        d.arch.push_room(Room { polygon: sq(0.0, 0.0), name: "Down".into(), level: 0, ..Room::default() });
+        d.touch_arch();
+        assert!(d.arch.active_plan_view.is_none());
+        let ann = plan_annotation(&d);
+        let callouts: Vec<_> = ann.labels.iter().filter(|l| l.kind == PlanLabelKind::Callout).collect();
+        assert!(callouts.is_empty(), "{:?}", callouts);
+    }
+
+    #[test]
+    fn plan_annotation_callout_handle_matches_view() {
+        use cadcraft_doc::arch::{ArchView, Sheet, SheetSource, SheetView, ViewKind};
+        let mut d = Drawing::new_metric();
+        d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }];
+        let ring = [(0.0, 0.0, 10.0, 0.0), (10.0, 0.0, 10.0, 8.0), (10.0, 8.0, 0.0, 8.0), (0.0, 8.0, 0.0, 0.0)];
+        for (x0, y0, x1, y1) in ring {
+            d.arch.push_wall(Wall { start: Vec2::new(x0, y0), end: Vec2::new(x1, y1), thickness: 0.2, height: 2.4, ..Wall::default() });
+        }
+        let view_id = d.arch.push_view(ArchView { name: "v0".into(), kind: ViewKind::Elevation, look: [0.0, 1.0], ..Default::default() }).unwrap();
+        d.arch.sheets.push(Sheet {
+            name: "Elevations".into(),
+            number: "A-201".into(),
+            views: vec![SheetView { number: 1, source: SheetSource::View { id: view_id }, ..Default::default() }],
+            ..Default::default()
+        });
+        d.touch_arch();
+        assert!(d.arch.active_plan_view.is_none());
+        let ann = plan_annotation(&d);
+        let callouts: Vec<_> = ann.labels.iter().filter(|l| l.kind == PlanLabelKind::Callout).collect();
+        assert_eq!(callouts.len(), 1);
+        assert_eq!(callouts[0].handle, view_id);
+    }
+
+    #[test]
     fn annotation_follows_plan_level_not_the_active_views_level() {
         let mut d = Drawing::new_metric();
         d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }, Level { index: 1, elevation: 3.0, ..Default::default() }];
