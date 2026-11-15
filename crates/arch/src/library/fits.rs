@@ -83,4 +83,14 @@ mod tests {
         assert!(query_for("unknown/x").is_none());
         assert!(query_for("cabinet/cb0/unknown").is_none());
     }
+
+    #[test]
+    fn query_for_empty_string_returns_none() {
+        assert!(query_for("").is_none());
+    }
+
+    #[test]
+    fn query_for_kind_only_returns_none() {
+        assert!(query_for("cabinet").is_none());
+    }
 }

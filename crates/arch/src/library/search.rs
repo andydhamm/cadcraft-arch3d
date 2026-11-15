@@ -197,4 +197,60 @@ mod tests {
         assert_eq!(res[1].0, "Sofas");
         assert_eq!(res[1].1, 1);
     }
+
+    #[test]
+    fn empty_query_matches_all_items() {
+        let items =
+            vec![make_item("1", "Chair", "Furniture", "Chairs and stools", "chair", &[]), make_item("2", "Sofa", "Furniture", "Sofas", "sofa", &[])];
+        let q = Query::default();
+        let res = search(&items, &q);
+        assert_eq!(res.len(), 2);
+    }
+
+    #[test]
+    fn text_matching_is_case_insensitive() {
+        let items = vec![make_item("1", "Red Chair", "Furniture", "Chairs and stools", "chair", &["RED"])];
+        let q = Query { text: "RED chair".into(), chips: vec![] };
+        let res = search(&items, &q);
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].id, "1");
+    }
+
+    #[test]
+    fn search_with_empty_items_returns_empty() {
+        let items: Vec<ItemRecord> = vec![];
+        let q = Query::default();
+        let res = search(&items, &q);
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn folders_with_empty_items_returns_empty() {
+        let items: Vec<&ItemRecord> = vec![];
+        let res = folders(&items);
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn search_with_nan_size_does_not_crash() {
+        let mut item = make_item("1", "Chair", "Furniture", "Chairs and stools", "chair", &[]);
+        item.size = Some([f64::NAN, 1.0, 1.0]);
+        let items = vec![item];
+        let q = Query::default();
+        let res = search(&items, &q);
+        assert_eq!(res.len(), 1);
+    }
+
+    #[test]
+    fn chip_kind_parse_all_variants() {
+        assert_eq!(ChipKind::parse("category"), Some(ChipKind::Category));
+        assert_eq!(ChipKind::parse("folder"), Some(ChipKind::Folder));
+        assert_eq!(ChipKind::parse("symbolType"), Some(ChipKind::SymbolType));
+        assert_eq!(ChipKind::parse("placement"), Some(ChipKind::Placement));
+        assert_eq!(ChipKind::parse("source"), Some(ChipKind::Source));
+        assert_eq!(ChipKind::parse("style"), Some(ChipKind::Style));
+        assert_eq!(ChipKind::parse("tag"), Some(ChipKind::Tag));
+        assert_eq!(ChipKind::parse("unknown"), None);
+        assert_eq!(ChipKind::parse("Category"), None);
+    }
 }
