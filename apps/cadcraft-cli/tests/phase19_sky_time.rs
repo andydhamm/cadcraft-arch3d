@@ -43,27 +43,22 @@ fn level_cam(eye: [f64; 3], yaw: f64, pitch: f64, fov: f64) -> String {
     let tx = eye[0] + 10.0 * (f64::cos(p) * f64::cos(y));
     let ty = eye[1] + 10.0 * (f64::cos(p) * f64::sin(y));
     let tz = eye[2] + 10.0 * f64::sin(p);
-    format!(
-        "{{\"kind\":\"full\",\"eye\":[{},{},{}],\"target\":[{:.8},{:.8},{:.8}],\"fov\":{}}}",
-        eye[0], eye[1], eye[2], tx, ty, tz, fov,
-    )
+    format!("{{\"kind\":\"full\",\"eye\":[{},{},{}],\"target\":[{:.8},{:.8},{:.8}],\"fov\":{}}}", eye[0], eye[1], eye[2], tx, ty, tz, fov,)
 }
 
 /// One `--cmd` for a `render` in the given look (tag), mode and sky-star setting.
-fn render_cmd_json(
-    tmp: &str, tag: &str, mode: &str, camera: &str, angle: &str, ev: i64, stars: Option<bool>,
-) -> String {
+fn render_cmd_json(tmp: &str, tag: &str, mode: &str, camera: &str, angle: &str, ev: i64, stars: Option<bool>) -> String {
     let out = format!("{tmp}/{tag}-{mode}.png");
     let mode_frag = match mode {
         "interactive" => String::new(),
-        "raster" => String::from(r#"","final":"raster"#),
-        "path" => String::from(r#"","final":"path","spp":4,"bounces":0,"seed":0,"denoise":false"#),
+        "raster" => String::from(",\"final\":\"raster\""),
+        "path" => String::from(",\"final\":\"path\",\"spp\":4,\"bounces\":0,\"seed\":0,\"denoise\":false"),
         _ => panic!("bad mode: {mode}"),
     };
     let sky_frag = match stars {
         None => String::new(),
-        Some(true) => String::from(r#","sky":{"stars":true}#),
-        Some(false) => String::from(r#","sky":{"stars":false}#),
+        Some(true) => String::from(",\"sky\":{\"stars\":true}"),
+        Some(false) => String::from(",\"sky\":{\"stars\":false}"),
     };
     format!(
         "render {{\"out\":\"{out}\",\"size\":[60,45],\"camera\":{camera},\"sun\":{{\"angle\":\"{angle}\"}},\"exposure\":{{\"ev100\":[ev]}},\"toneMap\":\"none\"{sky_frag}{mode_frag}}}"
@@ -71,9 +66,7 @@ fn render_cmd_json(
 }
 
 /// The 8 sky looks of check 03 (tag, camera, sun angle, EV100, star flag).
-fn looks(eye: [f64; 3]) -> [(
-    &'static str, &'static str, &'static str, i64, Option<bool>,
-)] {
+fn looks(eye: [f64; 3]) -> [(&'static str, &'static str, &'static str, i64, Option<bool>)] {
     let up = level_cam(eye, 90.0, 70.0, 30.0);
     let west = level_cam(eye, 180.0, 4.0, 60.0);
     let zen = level_cam(eye, 90.0, 89.0, 60.0);
@@ -105,9 +98,7 @@ fn setup_cmds() -> Vec<String> {
 }
 
 fn is_render_reply(v: &Value) -> bool {
-    v.get("ok").map_or(false, Value::is_true)
-        && v.get("samples").is_some()
-        && v.get("finalMode").is_some()
+    v.get("ok").map_or(false, Value::is_true) && v.get("samples").is_some() && v.get("finalMode").is_some()
 }
 
 /// The 24 renders of check 03 (8 sky looks x 3 modes) through the CLI in one process.
@@ -120,7 +111,10 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     let first = render_cmd_json(&tmp, "noon", "interactive", &level_cam(eye, 90.0, 70.0, 30.0), "noon", 15, None);
     let probe_args = {
         let mut a = vec!["run".to_string(), "--metric".to_string()];
-        for c in &setup_cmds() { a.push("--cmd".to_string()); a.push(c); }
+        for c in &setup_cmds() {
+            a.push("--cmd".to_string());
+            a.push(c);
+        }
         a.push("--cmd".to_string());
         a.push(first);
         a
@@ -134,7 +128,10 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     // Time the single process that makes all 24 renders.
     let (looks, modes) = (looks(eye), ["interactive", "raster", "path"]);
     let mut args = vec!["run".to_string(), "--metric".to_string()];
-    for c in &setup_cmds() { args.push("--cmd".to_string()); args.push(c); }
+    for c in &setup_cmds() {
+        args.push("--cmd".to_string());
+        args.push(c);
+    }
     for (tag, cam, angle, ev, stars) in &looks {
         for mode in &modes {
             args.push("--cmd".to_string());
@@ -147,17 +144,14 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     let elapsed = start.elapsed();
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
 
-    assert!(
-        out.status.success(),
-        "run failed (rc={}): {}",
-        out.status.code(),
-        String::from_utf8_lossy(&out.stderr)
-    );
+    assert!(out.status.success(), "run failed (rc={}): {}", out.status.code(), String::from_utf8_lossy(&out.stderr));
 
     // Count the render replies (JSON rows with ok:true + "samples" + "finalMode").
     let mut replies = 0;
     for line in stdout.lines() {
-        if line.trim().is_empty() { continue; }
+        if line.trim().is_empty() {
+            continue;
+        }
         match serde_json::from_str::<Value>(line) {
             Ok(v) if is_render_reply(&v) => replies += 1,
             _ => {}
