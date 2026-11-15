@@ -595,4 +595,35 @@ mod tests {
             assert_eq!(frame_look(&scene, &camera, (64, 64), &l, true, &mut meter).tone_map, code);
         }
     }
+
+    /// env_sh returns None for an invalid environment.
+    #[test]
+    fn env_sh_invalid_environment_returns_none() {
+        let env = crate::environment::Environment::uniform([1.0; 3], 0, 0);
+        assert!(!env.is_valid());
+        assert!(env_sh(&env).is_none(), "invalid environment must give no SH");
+    }
+
+    /// A NaN exposure produces a finite frame exposure.
+    #[test]
+    fn frame_look_with_nan_exposure() {
+        let scene = plane();
+        let camera = down_at([0.0, 0.0, 0.0]);
+        let mut meter = Meter::default();
+        let lighting = Lighting { exposure: f32::NAN, ..Lighting::default() };
+        let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
+        assert!(f.exposure.is_finite(), "exposure must be finite: {}", f.exposure);
+    }
+
+    /// Metering an empty scene (no meshes, no ground) returns None.
+    #[test]
+    fn meter_with_empty_scene() {
+        let scene = Scene3d::default();
+        let camera = Camera::Orbit(Orbit::at_origin(0.0, 89.0, 5.0, 45.0));
+        let mut meter = Meter::default();
+        let lighting = Lighting::default();
+        let f = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
+        let l = meter.log_average(&scene, &camera, (64, 48), &lighting, false, &f);
+        assert!(l.is_none(), "empty scene must meter to None");
+    }
 }
