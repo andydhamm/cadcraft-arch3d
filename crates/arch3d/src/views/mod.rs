@@ -183,7 +183,14 @@ pub fn generate(model: &ArchModel, scene: &Scene3d, view: &ArchView, revision: u
                 Ok(sc) => sc,
                 Err(e) => return failed(revision, e),
             };
-            let lines = merge_collinear(visible_lines(&sc, &ov));
+            let mut lines = merge_collinear(visible_lines(&sc, &ov));
+            // In an interior elevation, a counter's lines are part of the cabinet's front.
+            use cadcraft_doc::arch::ArchKind;
+            for l in &mut lines {
+                if l.kind == ArchKind::Countertop {
+                    l.kind = ArchKind::Cabinet;
+                }
+            }
             (sc, ov, lines, Vec::new())
         }
         ViewKind::Section => {

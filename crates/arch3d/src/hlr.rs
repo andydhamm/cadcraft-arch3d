@@ -613,4 +613,37 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert!((out[0].length() - 1.0).abs() < 1e-9);
     }
+
+    #[test]
+    fn merge_collinear_counter_and_cabinet_same_object_merge() {
+        // Two collinear touching lines of the same object but different kinds should NOT merge
+        // (they are different kinds). This tests that kind is part of the merge key.
+        let a = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Cabinet, ArchId(0));
+        let b = Line2::new([1.0, 0.0], [2.0, 0.0], ArchKind::Countertop, ArchId(0));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 2, "different kinds should not merge even with same object");
+        let kinds: Vec<ArchKind> = out.iter().map(|l| l.kind).collect();
+        assert!(kinds.contains(&ArchKind::Cabinet));
+        assert!(kinds.contains(&ArchKind::Countertop));
+    }
+
+    #[test]
+    fn merge_collinear_nan_endpoints_dropped() {
+        // A line with NaN in one endpoint should be dropped.
+        let nan_line = Line2::new([0.0, 0.0], [f64::NAN, 1.0], ArchKind::Wall, ArchId(0));
+        let good_line = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![nan_line, good_line]);
+        assert_eq!(out.len(), 1, "NaN line should be dropped");
+        assert!((out[0].b[0] - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_collinear_very_short_line_dropped() {
+        // A line shorter than MIN_RUN should be dropped.
+        let short = Line2::new([0.0, 0.0], [1e-6, 0.0], ArchKind::Wall, ArchId(0));
+        let good = Line2::new([0.0, 1.0], [1.0, 1.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![short, good]);
+        assert_eq!(out.len(), 1, "very short line should be dropped");
+        assert!((out[0].a[1] - 1.0).abs() < 1e-9);
+    }
 }

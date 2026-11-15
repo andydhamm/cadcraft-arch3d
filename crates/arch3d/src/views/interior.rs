@@ -531,4 +531,133 @@ mod tests {
         // Should still resolve to the room by id
         assert_eq!(resolve_room(&m, &v2), v.room);
     }
+
+    #[test]
+    fn interior_elevation_counter_tagged_as_cabinet() {
+        use cadcraft_doc::arch::{ArchKind, Cabinet, CabinetKind, Fronts};
+        let (mut m, v) = room_model();
+        m.push_cabinet(Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(5.95, 2.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            fronts: Fronts::Doors,
+            doors: 2,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.0,
+            ..Default::default()
+        });
+        let scene = crate::build(&m);
+        let g = super::super::generate(&m, &scene, &v, 1);
+        assert!(g.error.is_none(), "{:?}", g.error);
+        // All cabinet-tagged lines (including the counter top) should span floor to counter top.
+        let cab: Vec<_> = g.lines.iter().filter(|l| l.kind == ArchKind::Cabinet && l.object == ArchId(0)).collect();
+        assert!(!cab.is_empty());
+        let (mut v0, mut v1) = (f64::MAX, f64::MIN);
+        for l in &cab {
+            for p in [l.a, l.b] {
+                v0 = v0.min(p[1]);
+                v1 = v1.max(p[1]);
+            }
+        }
+        let ok = |a: f64, b: f64| (a - b).abs() < 1e-3;
+        assert!(ok(v0, 0.0) && ok(v1, 0.914), "cabinet lines should span 0..0.914, got {:.4}..{:.4}", v0, v1);
+        // No countertop-tagged lines should remain for this object.
+        let ct: Vec<_> = g.lines.iter().filter(|l| l.kind == ArchKind::Countertop && l.object == ArchId(0)).collect();
+        assert!(ct.is_empty(), "counter lines should be re-tagged as cabinet");
+    }
+
+    #[test]
+    fn interior_elevation_cabinet_without_counter_stays_at_box_top() {
+        use cadcraft_doc::arch::{ArchKind, Cabinet, CabinetKind, Fronts};
+        let (mut m, v) = room_model();
+        m.push_cabinet(Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(5.95, 2.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            fronts: Fronts::Doors,
+            doors: 2,
+            counter: false,
+            ..Default::default()
+        });
+        let scene = crate::build(&m);
+        let g = super::super::generate(&m, &scene, &v, 1);
+        assert!(g.error.is_none(), "{:?}", g.error);
+        let cab: Vec<_> = g.lines.iter().filter(|l| l.kind == ArchKind::Cabinet && l.object == ArchId(0)).collect();
+        assert!(!cab.is_empty());
+        let (mut v0, mut v1) = (f64::MAX, f64::MIN);
+        for l in &cab {
+            for p in [l.a, l.b] {
+                v0 = v0.min(p[1]);
+                v1 = v1.max(p[1]);
+            }
+        }
+        let ok = |a: f64, b: f64| (a - b).abs() < 1e-3;
+        assert!(ok(v0, 0.0) && ok(v1, 0.876), "cabinet lines should span 0..0.876, got {:.4}..{:.4}", v0, v1);
+    }
+
+    #[test]
+    fn interior_elevation_multiple_cabinets_keep_separate_tags() {
+        use cadcraft_doc::arch::{ArchKind, Cabinet, CabinetKind, Fronts};
+        let (mut m, v) = room_model();
+        m.push_cabinet(Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(5.95, 1.5),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            fronts: Fronts::Doors,
+            doors: 2,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.0,
+            ..Default::default()
+        });
+        m.push_cabinet(Cabinet {
+            kind: CabinetKind::Base,
+            position: Vec2::new(5.95, 3.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            fronts: Fronts::Doors,
+            doors: 2,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.0,
+            ..Default::default()
+        });
+        let scene = crate::build(&m);
+        let g = super::super::generate(&m, &scene, &v, 1);
+        assert!(g.error.is_none(), "{:?}", g.error);
+        // cb0 lines
+        let cab0: Vec<_> = g.lines.iter().filter(|l| l.kind == ArchKind::Cabinet && l.object == ArchId(0)).collect();
+        // cb1 lines
+        let cab1: Vec<_> = g.lines.iter().filter(|l| l.kind == ArchKind::Cabinet && l.object == ArchId(1)).collect();
+        assert!(!cab0.is_empty(), "cb0 should have lines");
+        assert!(!cab1.is_empty(), "cb1 should have lines");
+        // They should not overlap in u (horizontal) extent.
+        let u_range = |lines: &[&super::super::Line2]| {
+            let mut u0 = f64::MAX;
+            let mut u1 = f64::MIN;
+            for l in lines {
+                for p in [l.a, l.b] {
+                    u0 = u0.min(p[0]);
+                    u1 = u1.max(p[0]);
+                }
+            }
+            (u0, u1)
+        };
+        let (u0_0, u1_0) = u_range(&cab0);
+        let (u0_1, u1_1) = u_range(&cab1);
+        // cb0 is at y 1.2..1.8 (u -1.8..-1.2), cb1 is at y 2.7..3.3 (u -3.3..-2.7)
+        assert!(u1_0 < u0_1, "cb0 (u {:.3}..{:.3}) should be to the right of cb1 (u {:.3}..{:.3})", u0_0, u1_0, u0_1, u1_1);
+    }
 }

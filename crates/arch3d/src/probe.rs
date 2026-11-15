@@ -1641,4 +1641,40 @@ mod tests {
         assert_eq!(crate::object_key(&Mesh::new("slab", ArchId(2))).kind, crate::ObjectKind::Room);
         assert_eq!(cadcraft_doc::arch::ArchKind::from_part(part_of(&m)), cadcraft_doc::arch::ArchKind::Roof);
     }
+
+    #[test]
+    fn arch_kind_counter_materials() {
+        use cadcraft_doc::arch::ArchKind;
+        // Unpainted counter materials map to Countertop.
+        for mat in ["counter", "counter-top", "counter-edge", "countertop", "countertop-waterfall"] {
+            assert_eq!(arch_kind(&named(mat, 0)), ArchKind::Countertop, "{mat}");
+        }
+        // Painted counter surfaces map to Countertop.
+        assert_eq!(arch_kind(&named("paint:countertop/ct0", 0)), ArchKind::Countertop);
+        // Cabinet materials map to Cabinet.
+        for mat in ["cabinet-box", "cabinet-front", "cabinet-crown"] {
+            assert_eq!(arch_kind(&named(mat, 0)), ArchKind::Cabinet, "{mat}");
+        }
+    }
+
+    #[test]
+    fn part_of_counter_vs_cabinet_materials() {
+        // Counter materials map to "counter" part.
+        for mat in ["counter", "counter-top", "counter-edge"] {
+            assert_eq!(part_of(&named(mat, 0)), "counter", "{mat}");
+        }
+        // Cabinet materials map to "cabinet" part.
+        for mat in ["cabinet-box", "cabinet-front", "cabinet-crown", "cabinet-shelf"] {
+            assert_eq!(part_of(&named(mat, 0)), "cabinet", "{mat}");
+        }
+    }
+
+    #[test]
+    fn arch_kind_from_part_counter_is_countertop() {
+        use cadcraft_doc::arch::ArchKind;
+        // from_part("counter") should give Countertop.
+        assert_eq!(ArchKind::from_part("counter"), ArchKind::Countertop);
+        // from_part("cabinet") should give Cabinet.
+        assert_eq!(ArchKind::from_part("cabinet"), ArchKind::Cabinet);
+    }
 }
