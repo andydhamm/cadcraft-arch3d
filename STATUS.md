@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 12:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 64 of 67 segments merged · 12 of 17 acceptance checks**
 
@@ -29,19 +29,19 @@ Updated 2026-11-15 12:30 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 98.0 h so far · expected done Nov 15 22:47–Nov 18 11:13 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 98.2 h so far · expected done Nov 15 23:02–Nov 18 11:28 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
 ## Phase 19 segments
 
-64 merged, 6 replaced, 2 gate, 1 working
+64 merged, 6 replaced, 2 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | gate | claude-sonnet-a |
-| `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | working | bonsai-ws2-a |
-| `p19n-pt-pipelines-once` | The path tracer builds its compute pipelines once per device, not for every still | gate | mai-flash |
+| `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | gate | mai-flash-esc |
+| `p19n-pt-pipelines-once` | The path tracer builds its compute pipelines once per device, not for every still | merging | mai-flash |
 
 ## Recent merges
 
@@ -66,16 +66,16 @@ Updated 2026-11-15 12:30 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | agent | 1327 |
 | bonsai-b | bonsai2-27b | gate | 1262 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1408 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1410 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1366 |
 | claude-sonnet-a | sonnet | gate | 157 |
 | claude-sonnet-b | sonnet | idle | 157 |
 | claude-sonnet-c | sonnet | idle | 95 |
 | claude-sonnet-d | sonnet | idle | 93 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1241 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1242 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | gate | 124 |
+| mai-flash | mai-code-1.1-flash | idle | 125 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 163 |
-| tturbo-mac | tturbo-ultraheretic | agent | 944 |
+| mai-flash-esc | mai-code-1.1-flash | gate | 164 |
+| tturbo-mac | tturbo-ultraheretic | agent | 945 |
 | tturbo-mac2 | tturbo-ultraheretic | agent | 624 |
