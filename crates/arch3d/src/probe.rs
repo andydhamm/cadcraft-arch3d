@@ -1641,4 +1641,25 @@ mod tests {
         assert_eq!(crate::object_key(&Mesh::new("slab", ArchId(2))).kind, crate::ObjectKind::Room);
         assert_eq!(cadcraft_doc::arch::ArchKind::from_part(part_of(&m)), cadcraft_doc::arch::ArchKind::Roof);
     }
+
+    #[test]
+    fn part_of_empty_material_returns_wall() {
+        let mesh = box_mesh(0.0, 0.0, 0.0, 1.0, "", ArchId(1));
+        assert_eq!(part_of(&mesh), "wall", "empty material should map to wall");
+    }
+
+    #[test]
+    fn part_of_mixed_case_materials() {
+        let wall = box_mesh(0.0, 0.0, 0.0, 1.0, "Wall", ArchId(1));
+        assert_eq!(part_of(&wall), "wall");
+
+        let window_frame = box_mesh(0.0, 0.0, 0.0, 1.0, "WINDOW-FRAME", ArchId(2));
+        assert_eq!(part_of(&window_frame), "frame");
+
+        let glass = box_mesh(0.0, 0.0, 0.0, 1.0, "GLASS", ArchId(3));
+        assert_eq!(part_of(&glass), "glass");
+
+        let roof_deck = box_mesh(0.0, 0.0, 0.0, 1.0, "Roof-Deck", ArchId(4));
+        assert_eq!(part_of(&roof_deck), "roof");
+    }
 }

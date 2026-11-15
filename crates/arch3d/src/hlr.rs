@@ -603,4 +603,14 @@ mod tests {
         let out = merge_collinear(vec![a, b]);
         assert_eq!(out.len(), 2);
     }
+
+    #[test]
+    fn visible_segments_no_triangles() {
+        // With no triangles, all segments are fully visible.
+        let Some(ov) = OrthoView::elevation([0.0, 1.0]) else { return };
+        let seg = Seg3 { a: [0.0, 0.0, 0.0], b: [1.0, 0.0, 0.0], kind: ArchKind::Wall, object: ArchId(0) };
+        let out = visible_segments(&Scene3d::default(), &ov, &[seg]);
+        assert_eq!(out.len(), 1);
+        assert!((out[0].length() - 1.0).abs() < 1e-9);
+    }
 }
