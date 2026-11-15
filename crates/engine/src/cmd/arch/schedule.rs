@@ -711,4 +711,156 @@ mod tests {
         let rev_after = s.state().unwrap().revision;
         assert_eq!(rev_before, rev_after);
     }
+
+    #[test]
+    fn schedule_with_no_openings_has_no_data_rows() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
+
+        let doc = s.doc().unwrap();
+        if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
+            // Row 0 is title, Row 1 is header, no data rows
+            assert_eq!(t.cells.len(), 2);
+        }
+    }
+
+    #[test]
+    fn schedule_edit_with_unknown_id_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule.edit", &json!({"id": "sc99", "name": "New Name"}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_delete_with_unknown_id_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule.delete", &json!({"id": "sc99"}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_edit_with_no_changes_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+
+        // Edit with no changes should fail
+        let res = s.execute("schedule.edit", &json!({"id": schedule_id}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_with_nan_in_at_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door", "at": [f64::NAN, 0.0]}));
+        assert!(res.is_err());
+
+        let res = s.execute("schedule", &json!({"kind": "door", "at": [0.0, f64::NAN]}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_with_duplicate_columns_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door", "columns": ["width", "width"]}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_with_unknown_column_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door", "columns": ["nonexistent"]}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_with_empty_name_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door", "name": ""}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_with_too_long_name_fails() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+
+        let long_name = "x".repeat(257);
+        let res = s.execute("schedule", &json!({"kind": "door", "name": long_name}));
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn schedule_edit_moves_table() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
+
+        // Move the table
+        s.execute("schedule.edit", &json!({"id": schedule_id, "at": [100.0, 100.0]})).unwrap();
+
+        let doc = s.doc().unwrap();
+        if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
+            assert_eq!(t.insert.x, 100.0);
+            assert_eq!(t.insert.y, 100.0);
+        }
+    }
+
+    #[test]
+    fn schedule_edit_changes_name() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0,0],[10,0],[10,10],[0,10],[0,0]]})).unwrap();
+        s.execute("door", &json!({"wall": "w0", "offset": 5.0})).unwrap();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let table_handle = res.get("table").and_then(Value::as_str).unwrap();
+        let handle = Handle::parse_hex(table_handle).unwrap();
+
+        // Change the name
+        s.execute("schedule.edit", &json!({"id": schedule_id, "name": "My Doors"})).unwrap();
+
+        let doc = s.doc().unwrap();
+        if let cadcraft_doc::EntityKind::Table(t) = &doc.entity(handle).unwrap().kind {
+            assert_eq!(t.cells[0][0].text, "My Doors");
+        }
+    }
+
+    #[test]
+    fn schedule_with_no_walls_defaults_to_origin() {
+        let mut s = Session::new();
+
+        let res = s.execute("schedule", &json!({"kind": "door"})).unwrap();
+        let schedule_id = res.get("schedule").and_then(Value::as_str).unwrap();
+        let id_num = schedule_id[2..].parse::<u32>().unwrap();
+
+        let doc = s.doc().unwrap();
+        let schedule = doc.arch.schedules.iter().find(|s| s.id.0 == id_num).unwrap();
+        assert_eq!(schedule.at[0], 0.0);
+        assert_eq!(schedule.at[1], 0.0);
+    }
 }

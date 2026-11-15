@@ -1726,6 +1726,71 @@ mod tests {
     }
 
     #[test]
+    fn bvh_splits_at_five_triangles() {
+        // Five triangles force a split: one leaf of 4, one of 1, under an inner node.
+        let mut mesh = Mesh::new("wall", ArchId(1));
+        for i in 0..5 {
+            let x = i as f32;
+            mesh.positions.push([x, 0.0, 0.0]);
+            mesh.positions.push([x + 1.0, 0.0, 0.0]);
+            mesh.positions.push([x, 1.0, 0.0]);
+            let base = (i * 3) as u32;
+            mesh.indices.extend_from_slice(&[base, base + 1, base + 2]);
+        }
+        let scene = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let gpu = build_gpu_scene(&scene, false, None);
+        assert_eq!(gpu.tris.len(), 5);
+        assert!(gpu.nodes.len() >= 3, "expected at least 3 nodes for 5 triangles");
+        let root = &gpu.nodes[0];
+        assert_eq!(root.count, 0, "root should be an inner node");
+        let left = &gpu.nodes[1];
+        let right = &gpu.nodes[root.left_or_first as usize];
+        assert_eq!(left.count + right.count, 5);
+        assert!(left.count <= MAX_LEAF_TRIS);
+        assert!(right.count <= MAX_LEAF_TRIS);
+        check_tree(&gpu);
+    }
+
+    #[test]
+    fn trace_origin_on_triangle_is_not_a_hit() {
+        // A ray starting on a triangle (t = 0 < TRACE_EPS) must not report a hit.
+        let mut mesh = Mesh::new("wall", ArchId(1));
+        mesh.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        mesh.indices = vec![0, 1, 2];
+        let scene = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let gpu = build_gpu_scene(&scene, false, None);
+        // Ray from a point on the triangle, along its normal: t = 0, rejected by epsilon.
+        let hit = gpu.trace_cpu([0.5, 0.5, 0.0], [0.0, 0.0, 1.0], 10.0);
+        assert!(hit.is_none(), "ray from on the triangle should not hit it");
+        // A ray from just above, coming down, should hit.
+        let hit2 = gpu.trace_cpu([0.5, 0.5, 0.001], [0.0, 0.0, -1.0], 10.0);
+        assert!(hit2.is_some(), "ray from just above should hit");
+    }
+
+    #[test]
+    fn area_light_with_zero_size_has_zero_radiance() {
+        // An area light with zero width or length must not divide by zero.
+        let light = SceneLight { kind: LightKind::Area, intensity: 100.0, color: [1.0; 3], size: [0.0, 1.0], ..Default::default() };
+        let gpu = build_gpu_scene(&Scene3d { lights: vec![light], ..Default::default() }, false, None);
+        assert_eq!(gpu.lights.len(), 1);
+        assert_eq!(gpu.lights[0].rgb, [0.0; 3], "zero-area light has zero radiance");
+        // A normal area light computes radiance = intensity / area.
+        let light2 = SceneLight { kind: LightKind::Area, intensity: 100.0, color: [1.0; 3], size: [0.5, 0.5], ..Default::default() };
+        let gpu2 = build_gpu_scene(&Scene3d { lights: vec![light2], ..Default::default() }, false, None);
+        let radiance = luminance_of(gpu2.lights[0].rgb);
+        assert!((radiance - 100.0 / 0.25).abs() < 1e-3, "radiance = intensity / area: {}", radiance);
+    }
+
+    #[test]
+    fn luminance_rgb_handles_non_finite() {
+        // Non-finite colours fall back to white.
+        assert_eq!(luminance_rgb([f64::NAN, 0.0, 0.0]), [1.0; 3]);
+        assert_eq!(luminance_rgb([0.0, f64::INFINITY, 0.0]), [1.0; 3]);
+        assert_eq!(luminance_rgb([0.0, 0.0, f64::NEG_INFINITY]), [1.0; 3]);
+        assert_eq!(luminance_rgb([f64::NAN, f64::NAN, f64::NAN]), [1.0; 3]);
+    }
+
+    #[test]
     fn ground_adds_two_triangles() {
         let scene = random_prisms(&mut Rng(5), 3);
         let without = build_gpu_scene(&scene, false, None);
