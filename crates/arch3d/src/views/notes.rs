@@ -109,4 +109,57 @@ mod tests {
         assert!(r[0].detached);
         assert_eq!(r[0].at, [4.0, 5.0]);
     }
+
+    #[test]
+    fn resolve_truncates_at_max_notes() {
+        let mut notes = Vec::new();
+        for i in 0..(MAX_VIEW_NOTES + 5) {
+            notes.push(ViewNote { id: i as u32, text: format!("n{i}"), at: [0.0, 0.0], ..Default::default() });
+        }
+        let g = ViewGeometry::default();
+        let r = resolve(&notes, &g);
+        assert_eq!(r.len(), MAX_VIEW_NOTES);
+    }
+
+    #[test]
+    fn dimension_with_one_attached_end() {
+        let n = ViewNote {
+            kind: NoteKind::Dimension,
+            text: "d".into(),
+            attach: attach(Corner::BottomLeft),
+            at: [0.0, 0.0],
+            b: Some([2.0, 0.0]),
+            ..Default::default()
+        };
+        let r = resolve(&[n], &geom(1.5));
+        assert_eq!(r[0].at, [1.5, 0.0]);
+        assert_eq!(r[0].b, Some([2.0, 0.0]));
+        assert!(!r[0].detached);
+    }
+
+    #[test]
+    fn non_finite_line_coordinates_are_skipped() {
+        let line = ViewLine { a: [f64::NAN, 0.0], b: [1.0, 1.0], kind: ArchKind::Cabinet, object: ArchId(0), ..Default::default() };
+        let g = ViewGeometry { lines: vec![line], ..Default::default() };
+        let a = NoteAttach { kind: ArchKind::Cabinet, object: ArchId(0), corner: Corner::Center, ..Default::default() };
+        let r = attach_point(&g, &a);
+        assert_eq!(r, Some([1.0, 1.0]));
+    }
+
+    #[test]
+    fn both_ends_attached_one_missing() {
+        let n = ViewNote {
+            kind: NoteKind::Dimension,
+            text: "d".into(),
+            attach: attach(Corner::BottomLeft),
+            attach_b: Some(NoteAttach { kind: ArchKind::Cabinet, object: ArchId(99), corner: Corner::BottomRight, ..Default::default() }),
+            at: [0.0, 0.0],
+            b: Some([2.0, 0.0]),
+            ..Default::default()
+        };
+        let r = resolve(&[n], &geom(1.5));
+        assert_eq!(r[0].at, [1.5, 0.0]);
+        assert_eq!(r[0].b, Some([2.0, 0.0]));
+        assert!(r[0].detached);
+    }
 }
