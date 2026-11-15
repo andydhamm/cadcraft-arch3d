@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 63 of 65 segments merged · 12 of 17 acceptance checks**
 
-10,521 workspace tests passing at the last merge · 1202 segments merged in all · 0 of 15 seats working
+10,525 workspace tests passing at the last merge · 1203 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,7 +29,7 @@ Updated 2026-11-15 07:45 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 93.2 h so far · expected done Nov 15 13:05–Nov 16 18:09 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 93.4 h so far · expected done Nov 15 13:20–Nov 16 18:24 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
@@ -46,6 +46,7 @@ Updated 2026-11-15 07:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 07:56 | `harden-p19f-pt-horizon-lit` | merged | 10,525 pass | tturbo-mac |
 | Nov 15 07:07 | `harden-p21f-interior-cabinet-front` | merged | 10,521 pass | tturbo-mac |
 | Nov 15 06:26 | `harden-p19k-pt-resolve-hable` | merged | 10,504 pass | tturbo-mac |
 | Nov 15 05:48 | `harden-p21-view-notes` | merged | 10,499 pass | tturbo-mac |
@@ -57,7 +58,6 @@ Updated 2026-11-15 07:45 UTC. This page and the card in the README are regenerat
 | Nov 15 03:04 | `harden-p19-cameras-4` | merged | 10,455 pass | tturbo-mac |
 | Nov 15 03:04 | `harden-p10-cmd-render` | merged | 10,455 pass | tturbo-mac2 |
 | Nov 15 03:04 | `harden-p10-arch-light-placement` | merged | 10,455 pass | tturbo-mac2 |
-| Nov 15 02:23 | `p19k-pt-resolve-hable` | refused | 10,433 pass | mai-flash-esc |
 
 ## Seats active in the last hour
 
@@ -76,5 +76,5 @@ Updated 2026-11-15 07:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 162 |
-| tturbo-mac | tturbo-ultraheretic | agent | 932 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 611 |
+| tturbo-mac | tturbo-ultraheretic | agent | 933 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 612 |
