@@ -139,6 +139,13 @@ pub fn exposure_scale(
     }
 }
 
+/// The exposure scale of a frame that shows only a visible environment: `(0.18 / Lavg)` clamped
+/// to the full day/night auto range. A backdrop is not calibrated in nits, so the full range is
+/// allowed; a non-positive or non-finite `lavg` meters to [`DAY_EXPOSURE`].
+pub fn backdrop_scale(lavg: f32) -> f32 {
+    if lavg.is_finite() && lavg > 0.0 { (0.18 / lavg).clamp(DAY_EXPOSURE, NIGHT_AUTO_MAX) } else { DAY_EXPOSURE }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,5 +283,14 @@ mod tests {
 
         // tone_code maps the enum to the right codes.
         assert_eq!([ToneMap::Aces, ToneMap::Hable, ToneMap::None].map(tone_code), [TONE_ACES, TONE_HABLE, TONE_NONE],);
+    }
+
+    #[test]
+    fn backdrop_scale_clamps_to_the_full_range() {
+        assert_eq!(backdrop_scale(2.0), 0.09);
+        assert_eq!(backdrop_scale(1e-9), NIGHT_AUTO_MAX);
+        assert_eq!(backdrop_scale(1e9), DAY_EXPOSURE);
+        assert_eq!(backdrop_scale(f32::NAN), DAY_EXPOSURE);
+        assert_eq!(backdrop_scale(0.0), DAY_EXPOSURE);
     }
 }

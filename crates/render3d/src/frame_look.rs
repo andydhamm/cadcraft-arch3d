@@ -11,7 +11,7 @@ use cadcraft_arch3d::pick::Bvh;
 use cadcraft_geom::Vec3;
 
 use crate::camera::{Camera, ray_at};
-use crate::exposure::{daylight, exposure_scale, tone_code};
+use crate::exposure::{backdrop_scale, daylight, exposure_scale, tone_code};
 use crate::lit_frame::Lighting;
 use crate::pathtrace::luminance;
 use crate::pipeline::{PBR_FLAG_CLIP, PBR_FLAG_LAMBERT, PbrUniform, STYLE_HIDDEN_LINE, STYLE_TECHNICAL};
