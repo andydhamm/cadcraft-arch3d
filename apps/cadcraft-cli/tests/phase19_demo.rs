@@ -488,3 +488,94 @@ fn phase19_demo_terrain_contains_house() {
         );
     }
 }
+
+/// The saved `dusk` camera as `(eye, target, fov)`, read through `arch.inspect`.
+fn dusk_pose(session: &mut Session) -> ([f64; 3], [f64; 3], f64) {
+    let inspect = session.execute("arch.inspect", &json!({ "cameras": true })).expect("arch.inspect should list cameras");
+    let cameras = inspect["cameras"].as_array().expect("cameras list should exist");
+    let dusk = cameras.iter().find(|c| c["name"] == "dusk").expect("dusk camera missing");
+    let num = |v: &Value, what: &str| v.as_f64().unwrap_or_else(|| panic!("dusk {what} should be a number: {v}"));
+    // `eye` is the plan position [x, y]; its height is `eyeHeight`.
+    let eye = [num(&dusk["eye"][0], "eye x"), num(&dusk["eye"][1], "eye y"), num(&dusk["eyeHeight"], "eyeHeight")];
+    let target = [num(&dusk["target"][0], "target x"), num(&dusk["target"][1], "target y"), num(&dusk["target"][2], "target z")];
+    (eye, target, num(&dusk["fov"], "fov"))
+}
+
+#[test]
+fn phase19_demo_dusk_camera_shows_the_lit_window_large_enough() {
+    use cadcraft_arch3d::camera::{Camera, FullCamera, project_point};
+    use cadcraft_geom::Vec3;
+
+    let mut session = replay_demo();
+    let (eye, target, fov) = dusk_pose(&mut session);
+    let camera = Camera::Full(FullCamera::new(Vec3::new(eye[0], eye[1], eye[2]), Vec3::new(target[0], target[1], target[2]), fov));
+    let size = (320u32, 240u32);
+    // The south window's glass: x 6.4..7.6 on wall w0's outer face (y = -0.1), z 0.9..2.1.
+    let corners = [[6.4, -0.1, 0.9], [7.6, -0.1, 0.9], [7.6, -0.1, 2.1], [6.4, -0.1, 2.1]];
+    let pts: Vec<[f32; 2]> = corners.iter().map(|&p| project_point(&camera, size, p).expect("window corner should project")).collect();
+    for p in &pts {
+        assert!(p[0] >= 0.0 && p[0] <= 320.0 && p[1] >= 0.0 && p[1] <= 240.0, "window corner {p:?} is outside the frame");
+    }
+    let min_x = pts.iter().map(|p| p[0]).fold(f32::MAX, f32::min);
+    let max_x = pts.iter().map(|p| p[0]).fold(f32::MIN, f32::max);
+    let min_y = pts.iter().map(|p| p[1]).fold(f32::MAX, f32::min);
+    let max_y = pts.iter().map(|p| p[1]).fold(f32::MIN, f32::max);
+    let area = (max_x - min_x) * (max_y - min_y);
+    assert!(area >= 500.0, "window covers only {area} px at 320x240: {pts:?}");
+}
+
+#[test]
+fn phase19_demo_dusk_camera_is_level_and_on_the_site() {
+    let mut session = replay_demo();
+    let (eye, target, _) = dusk_pose(&mut session);
+    let steps = load_demo_steps();
+    let terrain = steps.iter().find(|s| s["cmd"] == "terrain").expect("demo has a terrain step");
+    let boundary: Vec<[f64; 2]> = terrain["params"]["boundary"]
+        .as_array()
+        .expect("terrain boundary")
+        .iter()
+        .map(|p| [p[0].as_f64().expect("boundary x"), p[1].as_f64().expect("boundary y")])
+        .collect();
+    let min_x = boundary.iter().map(|p| p[0]).fold(f64::MAX, f64::min);
+    let max_x = boundary.iter().map(|p| p[0]).fold(f64::MIN, f64::max);
+    let min_y = boundary.iter().map(|p| p[1]).fold(f64::MAX, f64::min);
+    let max_y = boundary.iter().map(|p| p[1]).fold(f64::MIN, f64::max);
+    assert!(eye[0] >= min_x && eye[0] <= max_x && eye[1] >= min_y && eye[1] <= max_y, "dusk eye {eye:?} is outside the terrain boundary");
+    let horizontal = ((target[0] - eye[0]).powi(2) + (target[1] - eye[1]).powi(2)).sqrt();
+    let pitch = (target[2] - eye[2]).atan2(horizontal).to_degrees();
+    assert!(pitch > -3.0 && pitch <= 0.0, "dusk pitch {pitch} degrees is not in (-3, 0]");
+}
+
+#[test]
+fn phase19_demo_dusk_light_set_brightens_the_house() {
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let dusk_png = tmp.path().join("dusk.png");
+    let dark_png = tmp.path().join("dark.png");
+    let render = |light_set: Option<&str>, out: &PathBuf| {
+        let mut params = json!({ "camera": "dusk", "size": [320, 240], "out": out.display().to_string() });
+        if let (Some(name), Some(map)) = (light_set, params.as_object_mut()) {
+            map.insert("lightSet".to_string(), json!(name));
+        }
+        format!("render {params}")
+    };
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_cadcraft-cli"))
+        .env("CADCRAFT_RENDER_ADAPTER", "fallback")
+        .args(["run", "--metric", "--commands"])
+        .arg(demo_path())
+        .args(["--cmd", &render(None, &dusk_png), "--cmd", &render(Some("Day"), &dark_png)])
+        .output()
+        .expect("run cadcraft-cli");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if output.status.code() == Some(3) || stderr.contains("NO_ADAPTER") {
+        eprintln!("SKIP: no render adapter");
+        return;
+    }
+    assert!(output.status.success(), "render failed (rc={:?}): {stderr}", output.status.code());
+    let read = |p: &PathBuf| cadcraft_io::image_read::read_image(&fs::read(p).expect("render output should exist"), 4096).expect("decode png");
+    let (dusk, dark) = (read(&dusk_png), read(&dark_png));
+    assert_eq!((dusk.width, dusk.height), (320, 240));
+    assert_eq!((dark.width, dark.height), (320, 240));
+    let sum = |rgba: &[u8], i: usize| -> i32 { rgba.get(i * 4..i * 4 + 3).map_or(0, |c| c.iter().map(|&v| i32::from(v)).sum()) };
+    let brighter = (0..320 * 240).filter(|&i| sum(&dusk.rgba, i) - sum(&dark.rgba, i) >= 30).count();
+    assert!(brighter >= 768, "only {brighter} pixels are 30+ brighter under Evening (need 768)");
+}

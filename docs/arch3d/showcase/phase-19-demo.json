@@ -30,7 +30,7 @@
   {"cmd": "lightset", "params": {"name": "Day", "lights": {"lf0": {"on": false}, "lf1": {"on": false}, "lf2": {"on": false}, "lf3": {"on": false}, "lf4": {"on": false}, "lf5": {"on": false}}}},
   {"cmd": "backdrop", "params": {"kind": "sky"}},
   {"cmd": "look", "params": {"sun": {"angle": "dusk"}, "lightSet": "Evening", "exposure": {"ev100": 4}, "technique": "standard", "sky": {"on": true}}},
-  {"cmd": "camera", "params": {"save": "dusk", "kind": "full", "eye": [5.0, -18.0, 1.7], "target": [5.0, 6.0, 1.35], "fov": 58, "technique": "standard", "exposure": {"ev100": 4}, "sun": {"angle": "dusk"}, "sky": {"on": true}, "lightSet": "Evening"}},
+  {"cmd": "camera", "params": {"save": "dusk", "kind": "full", "eye": [5.0, -11.0, 1.7], "target": [5.0, 6.0, 1.45], "fov": 58, "technique": "standard", "exposure": {"ev100": 4}, "sun": {"angle": "dusk"}, "sky": {"on": true}, "lightSet": "Evening"}},
   {"cmd": "backdrop", "params": {"kind": "hdri", "item": "polyhaven:kloofendal-puresky", "rotation": 25, "intensity": 1.0, "horizon": 6}},
   {"cmd": "look", "params": {"sun": {"angle": "noon"}, "lightSet": "Day", "technique": "path", "exposure": "auto", "sky": {"on": true}}},
   {"cmd": "camera", "params": {"save": "noon-hdri", "kind": "full", "eye": [5.0, -18.0, 2.2], "target": [5.0, 8.0, 1.5], "fov": 55, "technique": "path", "exposure": "auto", "sun": {"angle": "noon"}, "sky": {"on": true}, "lightSet": "Day"}},
