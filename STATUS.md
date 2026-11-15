@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 63 of 66 segments merged · 12 of 17 acceptance checks**
 
@@ -29,7 +29,7 @@ Updated 2026-11-15 11:45 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 97.2 h so far · expected done Nov 16 02:09–Nov 23 21:48 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 97.5 h so far · expected done Nov 16 02:24–Nov 23 22:03 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
@@ -64,7 +64,7 @@ Updated 2026-11-15 11:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 1326 |
-| bonsai-b | bonsai2-27b | agent | 1262 |
+| bonsai-b | bonsai2-27b | gate | 1262 |
 | bonsai-ws2-a | bonsai2-27b | merging | 1405 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1366 |
 | claude-sonnet-a | sonnet | gate | 157 |
@@ -76,5 +76,5 @@ Updated 2026-11-15 11:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 163 |
-| tturbo-mac | tturbo-ultraheretic | agent | 942 |
+| tturbo-mac | tturbo-ultraheretic | agent | 943 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 622 |
