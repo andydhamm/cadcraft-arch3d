@@ -440,6 +440,59 @@ mod tests {
     }
 
     #[test]
+    fn place_appliance_refuses_nan_and_zero_sizes() {
+        let c = Cabinet { kind: CabinetKind::Tall, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        assert!(place_appliance(&c, 0, "appliance:wall-oven", [f64::NAN, 0.6, 0.737]).is_err());
+        assert!(place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.0, 0.737]).is_err());
+        assert!(place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.6, 0.0]).is_err());
+        assert!(place_appliance(&c, 0, "appliance:wall-oven", [0.0, 0.6, 0.737]).is_err());
+        assert!(place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.6, 0.737]).is_ok());
+    }
+
+    #[test]
+    fn place_appliance_refuses_row_out_of_range() {
+        let c = Cabinet { kind: CabinetKind::Tall, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        assert!(place_appliance(&c, 5, "appliance:wall-oven", [0.762, 0.6, 0.737]).is_err());
+    }
+
+    #[test]
+    fn tall_cabinet_stacks_two_appliances() {
+        let c = Cabinet { kind: CabinetKind::Tall, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        let face1 = place_appliance(&c, 0, "appliance:wall-oven", [0.762, 0.6, 0.737]).unwrap();
+        let mut c2 = c.clone();
+        c2.face = Some(face1);
+        let face2 = place_appliance(&c2, 1, "appliance:microwave-drawer", [0.762, 0.6, 0.381]).unwrap();
+        assert_eq!(face2.rows.len(), 3);
+        assert_eq!(face2.rows[0].kind, FaceKind::Appliance);
+        assert_eq!(face2.rows[1].kind, FaceKind::Appliance);
+        assert_eq!(face2.rows[2].kind, FaceKind::Door);
+        let mut c3 = c.clone();
+        c3.face = Some(face2);
+        assert!(place_appliance(&c3, 2, "appliance:warming-drawer", [0.762, 0.6, 0.254]).is_err());
+    }
+
+    #[test]
+    fn base_cabinet_refuses_second_appliance() {
+        let c = Cabinet { kind: CabinetKind::Base, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        let face = place_appliance(&c, 0, "appliance:microwave-drawer", [0.762, 0.6, 0.381]).unwrap();
+        let mut c2 = c.clone();
+        c2.face = Some(face);
+        assert!(place_appliance(&c2, 1, "appliance:warming-drawer", [0.762, 0.6, 0.254]).is_err());
+    }
+
+    #[test]
+    fn remove_appliance_refuses_non_appliance_row() {
+        let c = Cabinet { kind: CabinetKind::Base, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        assert!(remove_appliance(&c, 0).is_err());
+    }
+
+    #[test]
+    fn remove_appliance_refuses_row_out_of_range() {
+        let c = Cabinet { kind: CabinetKind::Base, width: 0.762, height: 2.034, fronts: Fronts::Doors, doors: 2, ..Default::default() };
+        assert!(remove_appliance(&c, 5).is_err());
+    }
+
+    #[test]
     fn hostile_rows_give_no_fronts() {
         let c = base();
         let m = ArchModel::default();
