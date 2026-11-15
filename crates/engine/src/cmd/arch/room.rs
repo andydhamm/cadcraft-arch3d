@@ -1737,4 +1737,40 @@ mod tests {
         let f = &s.doc().unwrap().arch.furnishings;
         assert!((f[0].elevation + f[0].size[2] - 2.6873).abs() < 1e-9, "{}", f[0].elevation);
     }
+
+    /// Type change on a room with no floor_finish keeps it None (nothing to clear).
+    #[test]
+    fn type_change_with_no_floor_finish_keeps_none() {
+        let mut s = new_session();
+        let _ = s.execute("room", &json!({ "points": square_points() })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, None);
+        s.execute("room", &json!({ "id": "r0", "type": "kitchen" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, None);
+        assert_eq!(s.doc().unwrap().arch.rooms[0].room_type, RoomType::Kitchen);
+    }
+
+    /// A newly created room with a type has no floor_finish (the template applies).
+    #[test]
+    fn create_room_with_type_has_no_floor_finish() {
+        let mut s = new_session();
+        let _ = s.execute("room", &json!({ "points": square_points(), "type": "bath" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, None);
+        assert_eq!(s.doc().unwrap().arch.rooms[0].room_type, RoomType::Bath);
+    }
+
+    /// Multiple type changes each clear floor_finish when the type differs.
+    #[test]
+    fn repeated_type_changes_clear_floor_finish() {
+        let mut s = new_session();
+        let _ = s.execute("room", &json!({ "points": square_points() })).unwrap();
+        s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(cadcraft_doc::arch::Finish::Wood);
+        s.execute("room", &json!({ "id": "r0", "type": "kitchen" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, None);
+        s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(cadcraft_doc::arch::Finish::Tile);
+        s.execute("room", &json!({ "id": "r0", "type": "bedroom" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, None);
+        s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(cadcraft_doc::arch::Finish::Carpet);
+        s.execute("room", &json!({ "id": "r0", "type": "bedroom" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, Some(cadcraft_doc::arch::Finish::Carpet));
+    }
 }

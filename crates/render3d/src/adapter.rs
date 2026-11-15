@@ -148,6 +148,20 @@ mod tests {
     }
 
     #[test]
+    fn adapter_choice_parse_trims_whitespace() {
+        assert_eq!(AdapterChoice::parse("  auto  "), Some(AdapterChoice::Auto));
+        assert_eq!(AdapterChoice::parse("\tauto\n"), Some(AdapterChoice::Auto));
+        assert_eq!(AdapterChoice::parse(" Fallback "), Some(AdapterChoice::Fallback));
+        assert_eq!(AdapterChoice::parse("   "), None);
+        assert_eq!(AdapterChoice::parse("\n"), None);
+    }
+
+    #[test]
+    fn adapter_choice_default_is_auto() {
+        assert_eq!(AdapterChoice::default(), AdapterChoice::Auto);
+    }
+
+    #[test]
     fn adapter_turns_never_overlap() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static HOLDERS: AtomicUsize = AtomicUsize::new(0);
@@ -177,6 +191,26 @@ mod tests {
         assert_eq!(info.line(), "DEVICE name=Test GPU backend=Vulkan type=Cpu limits=downlevel_webgl2");
         info.downlevel = false;
         assert_eq!(info.line(), "DEVICE name=Test GPU backend=Vulkan type=Cpu");
+    }
+
+    #[test]
+    fn device_info_unknown_has_correct_fields() {
+        let info = DeviceInfo::unknown(true);
+        assert_eq!(info.name, "unknown");
+        assert_eq!(info.backend, "unknown");
+        assert_eq!(info.adapter_type, "unknown");
+        assert!(info.downlevel);
+        assert_eq!(info.line(), "DEVICE name=unknown backend=unknown type=unknown limits=downlevel_webgl2");
+
+        let info2 = DeviceInfo::unknown(false);
+        assert!(!info2.downlevel);
+        assert_eq!(info2.line(), "DEVICE name=unknown backend=unknown type=unknown");
+    }
+
+    #[test]
+    fn device_info_line_with_empty_strings() {
+        let info = DeviceInfo { name: String::new(), backend: String::new(), adapter_type: String::new(), downlevel: false };
+        assert_eq!(info.line(), "DEVICE name= backend= type=");
     }
 
     /// Request a device bounded in time; `None` when the machine has no suitable adapter.

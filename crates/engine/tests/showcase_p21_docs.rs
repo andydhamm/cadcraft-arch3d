@@ -66,11 +66,8 @@ fn phase21_showcase_sheet_steps_all_name_their_views() {
     assert!(sheet_count >= 10, "expected at least 10 sheets, found {}", sheet_count);
 }
 
-/// Replays the whole showcase (bilevel -> phase-20 -> phase-21) and asserts a full
-/// sheet set: no refused step, >= 10 sheets, the first with a camera image, and every
-/// required source present (plans, elevations, sections, interior elevations, schedules).
-#[test]
-fn phase21_showcase_replays_into_a_full_sheet_set() {
+/// Replays the three showcase scripts and returns the session, panicking on any refused step.
+fn replay_showcase() -> cadcraft_engine::Session {
     let root = workspace_root();
 
     // Install a fake renderer that writes a tiny PNG, so `sheet` camera views can run
@@ -120,6 +117,16 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
             session.execute(cmd, &params).unwrap_or_else(|err| panic!("step {} ({}) in {} failed: {}", i, cmd, rel, err));
         }
     }
+
+    session
+}
+
+/// Replays the whole showcase (bilevel -> phase-20 -> phase-21) and asserts a full
+/// sheet set: no refused step, >= 10 sheets, the first with a camera image, and every
+/// required source present (plans, elevations, sections, interior elevations, schedules).
+#[test]
+fn phase21_showcase_replays_into_a_full_sheet_set() {
+    let mut session = replay_showcase();
 
     let inspect = session
         .execute("arch.inspect", &json!({"sheets": true, "views": true, "schedules": true}))
@@ -193,6 +200,75 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
     assert!(has_schedule("room"), "missing room schedule");
 }
 
+/// All sheet numbers in the phase-21 showcase are unique.
+#[test]
+fn phase21_sheet_numbers_are_unique() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    let mut seen = std::collections::HashSet::new();
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(|v| v.as_str()).unwrap_or("");
+        if cmd != "sheet" {
+            continue;
+        }
+        let number = step.get("params").and_then(|p| p.get("number")).and_then(|n| n.as_str()).unwrap_or("unnamed");
+        if !seen.insert(number) {
+            panic!("duplicate sheet number: {}", number);
+        }
+    }
+}
+
+/// The final command in the phase-21 showcase is `layout.set {"name": "Model"}`.
+#[test]
+fn phase21_layout_set_is_final_command() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    let last = steps.last().expect("phase-21-showcase.json should not be empty");
+    let cmd = last.get("cmd").and_then(|v| v.as_str()).unwrap_or("");
+    assert_eq!(cmd, "layout.set", "last command should be layout.set, found {}", cmd);
+    let name = last.get("params").and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
+    assert_eq!(name, "Model", "layout.set should set name to Model, found {}", name);
+}
+
+/// Every `scale` value in the phase-21 showcase is a positive finite number.
+#[test]
+fn phase21_all_scales_are_positive_finite() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    for (i, step) in steps.iter().enumerate() {
+        let params = step.get("params").cloned().unwrap_or_default();
+        if let Some(scale) = params.get("scale").and_then(|s| s.as_f64()) {
+            assert!(scale.is_finite(), "step {} scale is not finite: {}", i, scale);
+            assert!(scale > 0.0, "step {} scale is not positive: {}", i, scale);
+        }
+    }
+}
+
+/// Every command in the phase-21 showcase has a string `cmd` and an object `params`.
+#[test]
+fn phase21_command_structure_is_valid() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = step.get("cmd").and_then(|v| v.as_str());
+        assert!(cmd.is_some(), "step {} missing string cmd", i);
+        let params = step.get("params");
+        assert!(params.map(|p| p.is_object()).unwrap_or(false), "step {} params is not an object", i);
+    }
+}
+
 #[test]
 fn readme_mentions_phase_21_and_plot() {
     let root = workspace_root();
@@ -202,6 +278,45 @@ fn readme_mentions_phase_21_and_plot() {
     assert!(content.contains("phase-21-showcase.json"), "README.md should mention phase-21-showcase.json");
     assert!(content.contains("plot"), "README.md should mention the plot command");
     assert!(content.contains("showcase-set.pdf"), "README.md should mention showcase-set.pdf");
+}
+
+/// The Kitchen's interior elevation must draw at least one cabinet line.
+#[test]
+fn phase21_showcase_kitchen_interior_elevation_draws_cabinets() {
+    let mut session = replay_showcase();
+
+    let inspect = session.execute("arch.inspect", &json!({"views": true, "rooms": true})).unwrap_or_else(|e| panic!("arch.inspect failed: {e}"));
+
+    let rooms = inspect["rooms"].as_array().expect("rooms should be an array");
+    let kitchen = rooms.iter().find(|r| r.get("name").and_then(|n| n.as_str()) == Some("Kitchen")).expect("a room named Kitchen must exist");
+    let kitchen_id = kitchen.get("id").expect("kitchen must have an id");
+
+    let views = inspect["views"].as_array().expect("views should be an array");
+    let view = views
+        .iter()
+        .find(|v| v.get("kind").and_then(|k| k.as_str()) == Some("interior") && v.get("room") == Some(kitchen_id))
+        .unwrap_or_else(|| panic!("no interior view for Kitchen (id={kitchen_id})"));
+
+    let view_name = view.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
+    let error = view.get("error").and_then(|e| e.as_str());
+    if let Some(e) = error {
+        panic!("Kitchen interior view '{}' has error: {}", view_name, e);
+    }
+
+    let lines = view.get("lines").and_then(|l| l.as_array()).cloned().unwrap_or_default();
+    let cabinet_lines: Vec<_> = lines.iter().filter(|l| l.get("kind").and_then(|k| k.as_str()) == Some("cabinet")).collect();
+    if cabinet_lines.is_empty() {
+        let kinds: Vec<String> = lines.iter().filter_map(|l| l.get("kind").and_then(|k| k.as_str())).map(|s| s.to_string()).collect();
+        let wall = view.get("wall").map(|w| w.to_string()).unwrap_or_default();
+        panic!(
+            "Kitchen interior view '{}' has no cabinet lines ({} lines total, kinds: {:?}, wall: {})\nKitchen room: {}",
+            view_name,
+            lines.len(),
+            kinds,
+            wall,
+            kitchen
+        );
+    }
 }
 
 #[test]

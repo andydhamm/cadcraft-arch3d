@@ -917,4 +917,53 @@ mod tests {
         assert!(s.current_prompt().unwrap().message.starts_with("Enter a material"));
         s.input(Input::Cancel).unwrap();
     }
+
+    /// A painter edit overrides the template finish for a room floor.
+    #[test]
+    fn paint_overrides_template_finish() {
+        let dir = TempDir::new("paint-override-template");
+        let mut s = setup(&dir);
+        // Room 0 is type Other, so template floor is wood.
+        // Pick the unpainted floor: should read the template finish.
+        let r = run(&mut s, "paint.pick", json!({"target": "room/r0/floor"}));
+        assert_eq!(r["material"], "finish:wood");
+        // Paint it with tile.
+        paint(&mut s, "tile", "room/r0/floor", "component");
+        assert_eq!(material(&s, "room/r0/floor"), Some(MaterialRef::Finish(Finish::Tile)));
+        // Pick should now read the paint, not the template.
+        let r = run(&mut s, "paint.pick", json!({"target": "room/r0/floor"}));
+        assert_eq!(r["material"], "finish:tile");
+    }
+
+    /// A floor_finish (phase-13) overrides the template floor finish.
+    #[test]
+    fn floor_finish_overrides_template_floor() {
+        let dir = TempDir::new("floor-finish-override");
+        let mut s = setup(&dir);
+        // Room 0 is type Other, template floor is wood.
+        // Set a floor_finish explicitly.
+        s.doc_mut().unwrap().arch.rooms[0].floor_finish = Some(Finish::Tile);
+        // Pick should read the floor_finish, not the template.
+        let r = run(&mut s, "paint.pick", json!({"target": "room/r0/floor"}));
+        assert_eq!(r["material"], "finish:tile");
+    }
+
+    /// Painting a room floor and undoing restores the template finish.
+    #[test]
+    fn paint_room_floor_undo_restores_template() {
+        let dir = TempDir::new("paint-floor-undo");
+        let mut s = setup(&dir);
+        // Template floor for type Other is wood.
+        let r = run(&mut s, "paint.pick", json!({"target": "room/r0/floor"}));
+        assert_eq!(r["material"], "finish:wood");
+        // Paint with carpet.
+        paint(&mut s, "carpet", "room/r0/floor", "component");
+        let r = run(&mut s, "paint.pick", json!({"target": "room/r0/floor"}));
+        assert_eq!(r["material"], "finish:carpet");
+        // Undo.
+        run(&mut s, "undo", json!({}));
+        // Back to template.
+        let r = run(&mut s, "paint.pick", json!({"target": "room/r0/floor"}));
+        assert_eq!(r["material"], "finish:wood");
+    }
 }
