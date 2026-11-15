@@ -54,7 +54,7 @@ fn level_cam(eye: [f64; 3], yaw: f64, pitch: f64, fov: f64) -> String {
 
 /// One `--cmd` for a `render` in the given look (tag), mode and sky-star setting.
 fn render_cmd_json(tmp: &Path, tag: &str, mode: &str, camera: &str, angle: &str, ev: i64, stars: Option<bool>) -> String {
-    let out = format!("{tmp}/{tag}-{mode}.png");
+    let out = tmp.join(format!("{tag}-{mode}.png")).to_string_lossy().into_owned();
     let mode_frag = match mode {
         "interactive" => String::new(),
         "raster" => String::from(",\"final\":\"raster\""),
@@ -67,7 +67,7 @@ fn render_cmd_json(tmp: &Path, tag: &str, mode: &str, camera: &str, angle: &str,
         Some(false) => String::from(",\"sky\":{\"stars\":false}"),
     };
     format!(
-        "render {{\"out\":\"{out}\",\"size\":[60,45],\"camera\":{camera},\"sun\":{{\"angle\":\"{angle}\"}},\"exposure\":{{\"ev100\":[ev]}},\"toneMap\":\"none\"{sky_frag}{mode_frag}}}"
+        "render {{\"out\":\"{out}\",\"size\":[60,45],\"camera\":{camera},\"sun\":{{\"angle\":\"{angle}\"}},\"exposure\":{{\"ev100\":{ev}}},\"toneMap\":\"none\"{sky_frag}{mode_frag}}}"
     )
 }
 
