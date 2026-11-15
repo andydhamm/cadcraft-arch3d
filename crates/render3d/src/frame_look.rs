@@ -405,7 +405,7 @@ mod tests {
     use crate::types::{ArchId, Mesh};
 
     use cadcraft_doc::arch::{ExposureSetting, ToneMap};
-    use cadraft_geom::Vec2;
+    use cadcraft_geom::Vec2;
     use std::sync::Arc;
 
     #[test]
