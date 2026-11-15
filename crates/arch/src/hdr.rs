@@ -14,7 +14,10 @@ fn encode_linear_to_rgbe(rgb: [f64; 3]) -> [u8; 4] {
     if max_v <= 0.0 {
         return [0, 0, 0, 0];
     }
-    let exp = (max_v.log2().floor() as i32 + 136).clamp(0, 255);
+    // Offset the exponent down by seven so the largest channel lands in
+    // 128..=255 (seven mantissa bits); otherwise a downsampled image keeps
+    // only one bit per channel.
+    let exp = ((max_v.log2() - 7.0).floor() as i32 + 136).clamp(0, 255);
     let scale = 2f64.powi(exp - 136);
     let mant = |v: f64| (v / scale).clamp(0.0, 255.0).round() as u8;
     [mant(rgb[0]), mant(rgb[1]), mant(rgb[2]), exp as u8]
