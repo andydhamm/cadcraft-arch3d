@@ -934,6 +934,48 @@ mod tests {
         }
     }
 
+    /// An invalid environment (zero size) is treated as no environment: the render completes
+    /// without failing and uses the stand-in ambient.
+    #[test]
+    fn final_raster_with_invalid_environment() {
+        let Some(mut o) = off() else { return };
+        let env = crate::environment::Environment::uniform([1.0; 3], 0, 0);
+        assert!(!env.is_valid(), "0x0 environment must be invalid");
+        let lighting = Lighting { sun: None, environment: Some(std::sync::Arc::new(env)), ..Lighting::default() };
+        let mut r = FinalRender::start(&mut o, &scene_no_lights(), 1, &camera(), &lighting, false, SIZE);
+        for _ in 0..20 {
+            if matches!(r.step(&mut o), FinalStatus::Done { .. } | FinalStatus::Failed(_)) {
+                break;
+            }
+        }
+        assert!(matches!(r.status, FinalStatus::Done { .. }), "invalid env must not fail: {:?}", r.status);
+    }
+
+    /// A 1x1 final render produces a valid 4-byte PNG.
+    #[test]
+    fn final_raster_1x1() {
+        let Some(mut o) = off() else { return };
+        let png = render_final(&mut o, &scene(false), 1, &camera(), &night(), false, (1, 1));
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        let Ok(png) = png else { return };
+        let len = crate::offscreen::png_rgba(&png).map(|r| r.len()).ok();
+        assert_eq!(len, Some(4), "1x1 image must have 4 bytes");
+        assert_eq!(o.final_renders(), 1);
+    }
+
+    /// Two final renders in sequence are independent and deterministic.
+    #[test]
+    fn final_raster_multiple_in_sequence() {
+        let Some(mut o) = off() else { return };
+        let s = scene(false);
+        let png1 = render_final(&mut o, &s, 1, &camera(), &night(), false, (32, 32));
+        assert!(png1.is_ok(), "{:?}", png1.as_ref().err());
+        let png2 = render_final(&mut o, &s, 1, &camera(), &night(), false, (32, 32));
+        assert!(png2.is_ok(), "{:?}", png2.as_ref().err());
+        assert_eq!(o.final_renders(), 2);
+        assert_eq!(png1.as_ref().ok(), png2.as_ref().ok(), "renders must be deterministic");
+    }
+
     /// The pane's lit frame and the raster Finalize tone-map alike: the same plane under the same
     /// sun, manual exposure and curve gives the same pixel in both (and the curve's value).
     #[test]
