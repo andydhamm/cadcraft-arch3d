@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 44 of 49 segments merged · 19 of 20 acceptance checks**
 
@@ -28,7 +28,7 @@ Updated 2026-11-15 00:00 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 90.5 h so far · expected done Nov 15 17:08–Nov 22 02:09 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 90.8 h so far · expected done Nov 15 17:23–Nov 22 02:24 UTC |
 | 19 | Light, sky and cameras | building | 12 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
@@ -71,10 +71,10 @@ Updated 2026-11-15 00:00 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | idle | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1214 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1215 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 150 |
-| tturbo-mac | tturbo-ultraheretic | gate | 913 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 591 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 151 |
+| tturbo-mac | tturbo-ultraheretic | agent | 914 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 592 |
