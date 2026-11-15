@@ -1744,6 +1744,12 @@ mod tests {
         Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, 0.0, 1.5), Vec3::new(0.0, 0.001, 30.0), 40.0))
     }
 
+    /// From the centre of the 1×1×1 furnace box, looking at a wall (40° field of view): every ray
+    /// hits an emissive interior face, so the steady-state radiance is the furnace's.
+    fn looking_inside() -> Camera {
+        Camera::Full(crate::camera::FullCamera::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), 40.0))
+    }
+
     /// From 1.2 m above the floor, looking level along +y (40° field of view): the floor below the middle, the sky
     /// above it.
     fn looking_level() -> Camera {
@@ -1832,6 +1838,107 @@ mod tests {
         e.visible = visible;
         e.intensity = 1.0;
         Lighting { sun: None, look, environment: Some(std::sync::Arc::new(e)), ..Lighting::default() }
+    }
+
+    /// A flat 1x1x1 box lit by a white furnace (radiance 2.0), so every centre pixel converges to 2.0.
+    fn furnace_scene() -> Scene3d {
+        let mut m = Mesh::new("furnace", ArchId(1));
+        m.push_prism(&[Vec2::new(-0.5, -0.5), Vec2::new(0.5, -0.5), Vec2::new(0.5, 0.5), Vec2::new(-0.5, 0.5)], -0.5, 0.5);
+        Scene3d { bounds: m.bounds(), meshes: vec![m], lights: Vec::new(), ..Default::default() }
+    }
+
+    /// The sRGB8 byte of a linear [0,1] value (matches `resolve.wgsl` `srgb`).
+    fn srgb8(v: f32) -> u8 {
+        let c = v.clamp(0.0, 1.0);
+        if c <= 0.0031308 { (c * 12.92 * 255.0 + 0.5) as u8 } else { ((1.055 * c.powf(1.0 / 2.4) - 0.055) * 255.0 + 0.5) as u8 }
+    }
+
+    #[test]
+    fn srgb8_is_correct_at_key_points() {
+        assert_eq!(srgb8(0.0), 0);
+        assert_eq!(srgb8(1.0), 255);
+        let crossover = srgb8(0.0031308);
+        assert_eq!(crossover, 10, "crossover at 0.0031308 should be 10 in 8-bit: {crossover}");
+        let mid = srgb8(0.5);
+        assert_eq!(mid, 188, "srgb8(0.5) should be 188: {mid}");
+    }
+
+    #[test]
+    fn srgb8_clamps_out_of_range() {
+        assert_eq!(srgb8(-0.5), 0, "negative values clamp to 0");
+        assert_eq!(srgb8(1.5), 255, "values above 1 clamp to 255");
+    }
+
+    #[test]
+    fn hable_curve_formula_matches_exposure_module() {
+        fn hable_curve(x: f32) -> f32 {
+            (x * (0.15 * x + 0.05) + 0.004) / (x * (0.15 * x + 0.5) + 0.06) - 0.02 / 0.3
+        }
+        fn hable(x: f32) -> f32 {
+            let x = x.max(0.0);
+            (hable_curve(2.0 * x) / hable_curve(11.2)).clamp(0.0, 1.0)
+        }
+        for v in [0.0f32, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0] {
+            let wgsl = hable(v);
+            let rust = crate::exposure::tone_map(v, crate::exposure::TONE_HABLE);
+            assert!((wgsl - rust).abs() <= 1e-6, "v={v}: wgsl={wgsl} rust={rust}");
+        }
+    }
+
+    /// Run a furnace still to completion and return its centre pixel.
+    fn furnace_still(gpu: &ComputeGpu, opts: &PathOptions) -> (u8, u8, u8) {
+        let mut t = PathTracer::new(gpu, &furnace_scene(), &looking_inside(), &Lighting::default(), false, (16, 12), opts, None).unwrap();
+        let rgba = loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+        let i = ((12 / 2) * 16 + 16 / 2) as usize * 4;
+        (rgba[i] as u8, rgba[i + 1] as u8, rgba[i + 2] as u8)
+    }
+
+    #[test]
+    fn furnace_none_is_linear_srgb() {
+        let Some(gpu) = compute() else { return };
+        let e = 0.5f32;
+        let opts = PathOptions {
+            furnace: Some(super::super::Furnace { emission: 1.0, albedo: 0.5, ..Default::default() }),
+            exposure: Exposure::Fixed(e),
+            tone_map: crate::exposure::TONE_NONE,
+            spp: 64,
+            bounces: 8,
+            ..Default::default()
+        };
+        let (r, g, b) = furnace_still(&gpu, &opts);
+        let want = srgb8(2.0 * e);
+        assert!((r as i32 - want as i32).abs() <= 2, "r={r} want={want}");
+        assert!((g as i32 - want as i32).abs() <= 2, "g={g} want={want}");
+        assert!((b as i32 - want as i32).abs() <= 2, "b={b} want={want}");
+    }
+
+    #[test]
+    fn furnace_resolves_through_the_hable_curve() {
+        let Some(gpu) = compute() else { return };
+        for e in [0.1f32, 0.25f32, 0.5f32] {
+            for code in [crate::exposure::TONE_HABLE, crate::exposure::TONE_NONE, crate::exposure::TONE_ACES] {
+                let opts = PathOptions {
+                    // Closed box: steady-state radiance = emission / (1 - albedo) = 1.0 / 0.5 = 2.0.
+                    furnace: Some(super::super::Furnace { emission: 1.0, albedo: 0.5, ..Default::default() }),
+                    exposure: Exposure::Fixed(e),
+                    tone_map: code,
+                    spp: 64,
+                    bounces: 8,
+                    ..Default::default()
+                };
+                let (r, g, b) = furnace_still(&gpu, &opts);
+                let want = srgb8(crate::exposure::tone_map(2.0 * e, code));
+                assert!((r as i32 - want as i32).abs() <= 2, "e={e} tone={code} r={r} want={want}");
+                assert!((g as i32 - want as i32).abs() <= 2, "e={e} tone={code} g={g} want={want}");
+                assert!((b as i32 - want as i32).abs() <= 2, "e={e} tone={code} b={b} want={want}");
+            }
+        }
     }
 
     fn env_still(gpu: &ComputeGpu, scene: &Scene3d, lighting: &Lighting) -> Vec<u8> {

@@ -1044,4 +1044,102 @@ mod tests {
         let err = parse_path_params(&json!({"seed": 0.5})).unwrap_err().to_string();
         assert!(err.contains("seed"), "{err}");
     }
+
+    #[test]
+    fn parse_size_refuses_non_whole_numbers() {
+        // Floats are refused (as_u64 returns None for f64 numbers)
+        let s: serde_json::Value = json!([1200.0, 800]);
+        assert!(parse_size(Some(&s)).is_err(), "float width should be refused");
+        let s: serde_json::Value = json!([1200, 800.0]);
+        assert!(parse_size(Some(&s)).is_err(), "float height should be refused");
+        // Strings are refused
+        let s: serde_json::Value = json!(["1200", 800]);
+        assert!(parse_size(Some(&s)).is_err(), "string width should be refused");
+        // null is refused
+        let s: serde_json::Value = json!([null, 800]);
+        assert!(parse_size(Some(&s)).is_err(), "null width should be refused");
+        // Negative numbers are refused
+        let s: serde_json::Value = json!([-1, 800]);
+        assert!(parse_size(Some(&s)).is_err(), "negative width should be refused");
+    }
+
+    #[test]
+    fn parse_samples_empty_array_accepted() {
+        let empty: serde_json::Value = json!([]);
+        let result = parse_samples(Some(&empty)).unwrap();
+        assert_eq!(result.len(), 0, "empty samples array should be accepted");
+    }
+
+    #[test]
+    fn parse_sun_refuses_missing_date_or_time() {
+        let doc = cadcraft_doc::Drawing::new_metric();
+        // Missing time
+        let sun: serde_json::Value = json!({"date": "2026-06-21"});
+        let err = parse_sun(Some(&sun), &doc).unwrap_err().to_string();
+        assert!(err.contains("time"), "{err}");
+        // Missing date
+        let sun: serde_json::Value = json!({"time": "12:00"});
+        let err = parse_sun(Some(&sun), &doc).unwrap_err().to_string();
+        assert!(err.contains("date"), "{err}");
+        // Empty object
+        let sun: serde_json::Value = json!({});
+        let err = parse_sun(Some(&sun), &doc).unwrap_err().to_string();
+        assert!(err.contains("date"), "{err}");
+    }
+
+    #[test]
+    fn parse_sun_refuses_non_string_date_or_time() {
+        let doc = cadcraft_doc::Drawing::new_metric();
+        // date as number
+        let sun: serde_json::Value = json!({"date": 2026, "time": "12:00"});
+        let err = parse_sun(Some(&sun), &doc).unwrap_err().to_string();
+        assert!(err.contains("date"), "{err}");
+        // time as number
+        let sun: serde_json::Value = json!({"date": "2026-06-21", "time": 12});
+        let err = parse_sun(Some(&sun), &doc).unwrap_err().to_string();
+        assert!(err.contains("time"), "{err}");
+        // date as null
+        let sun: serde_json::Value = json!({"date": null, "time": "12:00"});
+        let err = parse_sun(Some(&sun), &doc).unwrap_err().to_string();
+        assert!(err.contains("date"), "{err}");
+    }
+
+    #[test]
+    fn parse_path_params_refuses_non_object_furnace() {
+        let err = parse_path_params(&json!({"furnace": "foo"})).unwrap_err().to_string();
+        assert!(err.contains("furnace"), "{err}");
+        let err = parse_path_params(&json!({"furnace": 42})).unwrap_err().to_string();
+        assert!(err.contains("furnace"), "{err}");
+        let err = parse_path_params(&json!({"furnace": null})).unwrap_err().to_string();
+        assert!(err.contains("furnace"), "{err}");
+    }
+
+    #[test]
+    fn parse_path_params_refuses_non_array_snapshots() {
+        let err = parse_path_params(&json!({"snapshots": "foo"})).unwrap_err().to_string();
+        assert!(err.contains("snapshots"), "{err}");
+        let err = parse_path_params(&json!({"snapshots": 42})).unwrap_err().to_string();
+        assert!(err.contains("snapshots"), "{err}");
+        let err = parse_path_params(&json!({"snapshots": null})).unwrap_err().to_string();
+        assert!(err.contains("snapshots"), "{err}");
+    }
+
+    #[test]
+    fn build_request_reads_out_and_ground() {
+        let d = Drawing::new_metric();
+        let r = build_request(&d, &json!({"out": "/tmp/test.png", "ground": true})).unwrap();
+        assert_eq!(r.out.as_ref().map(|p| p.to_str().unwrap()), Some("/tmp/test.png"));
+        assert!(r.ground);
+        // Defaults when absent
+        let r = build_request(&d, &json!({})).unwrap();
+        assert!(r.out.is_none());
+        assert!(!r.ground);
+    }
+
+    #[test]
+    fn build_request_refuses_unknown_camera() {
+        let d = Drawing::new_metric();
+        let err = build_request(&d, &json!({"camera": "nonexistent"})).unwrap_err().to_string();
+        assert!(err.contains("no camera named `nonexistent`"), "{err}");
+    }
 }
