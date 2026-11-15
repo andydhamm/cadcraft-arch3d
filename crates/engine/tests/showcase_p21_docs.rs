@@ -126,7 +126,7 @@ fn replay_showcase() -> cadcraft_engine::Session {
 /// required source present (plans, elevations, sections, interior elevations, schedules).
 #[test]
 fn phase21_showcase_replays_into_a_full_sheet_set() {
-    let session = replay_showcase();
+    let mut session = replay_showcase();
 
     let inspect = session
         .execute("arch.inspect", &json!({"sheets": true, "views": true, "schedules": true}))
