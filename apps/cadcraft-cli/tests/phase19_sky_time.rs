@@ -29,7 +29,7 @@ fn run_cli(args: &[String]) -> Output {
 /// A temp directory unique to this test process and test name (no cross-test clobbering).
 fn temp_dir(test_name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cadcraft-cli-{}-{}", std::process::id(), test_name));
-    fs.create_dir_all(&dir).expect("create temp dir");
+    fs::create_dir_all(&dir).expect("create temp dir");
     dir
 }
 
@@ -72,19 +72,19 @@ fn render_cmd_json(tmp: &str, tag: &str, mode: &str, camera: &str, angle: &str, 
 }
 
 /// The 8 sky looks of check 03 (tag, camera, sun angle, EV100, star flag).
-fn looks(eye: [f64; 3]) -> Vec<(&'static str, &'static str, &'static str, i64, Option<bool>)> {
+fn looks(eye: [f64; 3]) -> Vec<(String, String, String, i64, Option<bool>)> {
     let up = level_cam(eye, 90.0, 70.0, 30.0);
     let west = level_cam(eye, 180.0, 4.0, 60.0);
     let zen = level_cam(eye, 90.0, 89.0, 60.0);
     vec![
-        ("noon", &up, "noon", 15, None),
-        ("low", &west, "low", 15, None),
-        ("m10", &up, "m10", 15, None),
-        ("w2", &west, "low", 8, None),
-        ("w3", &west, "m3", 8, None),
-        ("w10", &west, "m10", 8, None),
-        ("stars", &zen, "deep", -6, Some(true)),
-        ("nostars", &zen, "deep", -6, Some(false)),
+        (String::from("noon"), up.clone(), String::from("noon"), 15, None),
+        (String::from("low"), west.clone(), String::from("low"), 15, None),
+        (String::from("m10"), up.clone(), String::from("m10"), 15, None),
+        (String::from("w2"), west.clone(), String::from("low"), 8, None),
+        (String::from("w3"), west.clone(), String::from("m3"), 8, None),
+        (String::from("w10"), west.clone(), String::from("m10"), 8, None),
+        (String::from("stars"), zen.clone(), String::from("deep"), -6, Some(true)),
+        (String::from("nostars"), zen.clone(), String::from("deep"), -6, Some(false)),
     ]
 }
 
@@ -104,7 +104,7 @@ fn setup_cmds() -> Vec<String> {
 }
 
 fn is_render_reply(v: &Value) -> bool {
-    v.get("ok").map_or(false, Value::is_true) && v.get("samples").is_some() && v.get("finalMode").is_some()
+    v.get("ok").and_then(Value::as_bool) == Some(true) && v.get("samples").is_some() && v.get("finalMode").is_some()
 }
 
 /// The 24 renders of check 03 (8 sky looks x 3 modes) through the CLI in one process.
@@ -114,7 +114,7 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     let eye = [0.0, 0.0, 1.6];
 
     // Probe: setup + one interactive render. Skip if there is no render adapter.
-    let first = render_cmd_json(&tmp, "noon", "interactive", &level_cam(eye, 90.0, 70.0, 30.0), "noon", 15, None);
+    let first = render_cmd_json(tmp.as_str(), "noon", "interactive", &level_cam(eye, 90.0, 70.0, 30.0), "noon", 15, None);
     let probe_args = {
         let mut a = vec!["run".to_string(), "--metric".to_string()];
         for c in &setup_cmds() {
@@ -127,7 +127,7 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     };
     let probe = run_cli(&probe_args);
     if !probe.status.success() || String::from_utf8_lossy(&probe.stderr).contains("NO_ADAPTER") {
-        eprintln!("SKIP: no render adapter (rc={})", probe.status.code());
+        eprintln!("SKIP: no render adapter (rc={:?}", probe.status.code());
         return;
     }
 
@@ -141,7 +141,7 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     for (tag, cam, angle, ev, stars) in &looks {
         for mode in &modes {
             args.push("--cmd".to_string());
-            args.push(render_cmd_json(&tmp, tag, *mode, cam, angle, ev, stars));
+            args.push(render_cmd_json(tmp.as_str(), tag.as_str(), *mode, cam.as_str(), angle.as_str(), *ev, *stars));
         }
     }
 
@@ -150,7 +150,7 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     let elapsed = start.elapsed();
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
 
-    assert!(out.status.success(), "run failed (rc={}): {}", out.status.code(), String::from_utf8_lossy(&out.stderr));
+    assert!(out.status.success(), "run failed (rc={:?}): {}", out.status.code(), String::from_utf8_lossy(&out.stderr));
 
     // Count the render replies (JSON rows with ok:true + "samples" + "finalMode").
     let mut replies = 0;
@@ -173,6 +173,6 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
         }
     }
 
-    assert!(elapsed.as_secs() < 120, "24 renders too slow: {elapsed}");
+    assert!(elapsed.as_secs() < 120, "24 renders too slow: {elapsed:?}");
     println!("eight sky looks in 3 modes in {elapsed:?}");
 }
