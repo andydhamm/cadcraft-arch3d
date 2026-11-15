@@ -780,3 +780,77 @@ fn pt_normal_map_differs_under_mirrored_suns() {
     let flat = a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f64>() / a.len().max(1) as f64;
     assert!(flat * 3.0 <= diff, "plain wall differs by {flat} (means {pa} {pb}), the brick by {diff}");
 }
+
+#[test]
+fn area_light_illuminates_a_surface() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = Scene3d::default();
+    scene.meshes.push(prism("floor", 1, [-5.0, -5.0, -0.2], [5.0, 5.0, 0.0]));
+    let down = Vec3::new(0.0, 0.0, -1.0);
+    scene.lights.push(SceneLight {
+        kind: LightKind::Area,
+        position: Vec3::new(0.0, 0.0, 2.0),
+        direction: down,
+        intensity: 1000.0,
+        color: [1.0; 3],
+        cos_inner: 1.0,
+        cos_outer: 0.0,
+        axis: light_axis(down, 0.0),
+        size: [1.0, 1.0],
+        ..Default::default()
+    });
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let lux = irradiance(&gpu, &gpu_scene, 0, 256, &[up_probe(0.0, 0.0)])[0];
+    assert!(lux > 10.0, "area light should illuminate: {lux} lux");
+}
+
+#[test]
+fn more_than_sixteen_lights_still_illuminate() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = Scene3d::default();
+    scene.meshes.push(prism("floor", 1, [-10.0, -10.0, -0.2], [10.0, 10.0, 0.0]));
+    let down = Vec3::new(0.0, 0.0, -1.0);
+    for i in 0..20 {
+        let x = (i % 5) as f64 * 4.0 - 8.0;
+        let y = (i / 5) as f64 * 4.0 - 8.0;
+        scene.lights.push(SceneLight {
+            kind: LightKind::Spot,
+            position: Vec3::new(x, y, 5.0),
+            direction: down,
+            intensity: 1000.0,
+            color: [1.0; 3],
+            cos_inner: 1.0,
+            cos_outer: 0.0,
+            axis: light_axis(down, 0.0),
+            ..Default::default()
+        });
+    }
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let lux = irradiance(&gpu, &gpu_scene, 0, 1024, &[up_probe(0.0, 0.0)])[0];
+    assert!(lux > 10.0, "20 lights should illuminate: {lux} lux");
+}
+
+#[test]
+fn bounces_zero_gives_no_indirect_light() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = build_gpu_scene(&room(), false, None);
+    let probe = up_probe(2.0, 2.0);
+    let direct = irradiance(&gpu, &scene, 0, 512, &[probe])[0];
+    let indirect = irradiance(&gpu, &scene, 4, 512, &[probe])[0];
+    assert!(indirect >= direct, "indirect should be >= direct: {indirect} vs {direct}");
+}
+
+#[test]
+fn single_triangle_is_traced() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut scene = Scene3d::default();
+    let mut m = Mesh::new("floor", ArchId(1));
+    m.positions = vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [0.0, 1.0, 0.0]];
+    m.indices = vec![0, 1, 2];
+    scene.meshes.push(m);
+    let gpu_scene = build_gpu_scene(&scene, false, None);
+    let frame = GpuFrame { spp_this_pass: 4, ..camera_frame([0.0, 0.0, 2.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) };
+    let out = trace(&gpu, &gpu_scene, &frame);
+    let centre = out[3 * 8 + 3];
+    assert_eq!(centre[3], 4.0, "sample count");
+}
