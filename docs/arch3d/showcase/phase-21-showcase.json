@@ -1,5 +1,10 @@
 [
   {"cmd": "sheetset", "params": {"project": "Bilevel Showcase", "date": "2026-11-09"}},
+  {"cmd": "cabinet", "params": {"kind": "base", "at": [10.05, 9.0], "rotation": -90, "width": 1.2, "depth": 0.6, "counter": true, "level": "Main"}},
+  {"cmd": "cabinet", "params": {"kind": "base", "at": [10.05, 10.2], "rotation": -90, "width": 1.2, "depth": 0.6, "counter": true, "level": "Main"}},
+  {"cmd": "cabinet", "params": {"kind": "base", "at": [10.05, 11.4], "rotation": -90, "width": 1.2, "depth": 0.6, "counter": true, "level": "Main"}},
+  {"cmd": "cabinet", "params": {"kind": "wall", "at": [10.05, 9.0], "rotation": -90, "width": 1.2, "level": "Main"}},
+  {"cmd": "cabinet", "params": {"kind": "wall", "at": [10.05, 10.2], "rotation": -90, "width": 1.2, "level": "Main"}},
   {"cmd": "schedule", "params": {"kind": "door", "at": [0, -30]}},
   {"cmd": "schedule", "params": {"kind": "window", "at": [25, -30]}},
   {"cmd": "schedule", "params": {"kind": "cabinet", "at": [50, -30]}},
