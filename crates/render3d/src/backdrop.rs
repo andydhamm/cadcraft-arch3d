@@ -523,6 +523,40 @@ mod tests {
     }
 
     #[test]
+    fn equirect_picture_horizon_extremes() {
+        // Bright above the middle row, dark below.
+        let mut rgba = Vec::new();
+        for y in 0..64u32 {
+            for _ in 0..128u32 {
+                let v = if y < 32 { 250 } else { 10 };
+                rgba.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        let img = ImageRgba { width: 128, height: 64, rgba, ..Default::default() };
+        let t = BTreeMap::from([("item:sky".to_string(), img)]);
+        // At horizon +45, looking straight up (90 deg elevation) should be bright.
+        let b_up = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: 45.0 };
+        let up = backdrop_rgb(&b_up, &t, 0, 0, 1, 1, [0.0, 0.0, 1.0]);
+        assert!(up[0] > 200, "looking up at horizon +45 should be bright: {:?}", up);
+        // At horizon -45, looking straight down (90 deg below) should be dark.
+        let b_down = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: -45.0 };
+        let down = backdrop_rgb(&b_down, &t, 0, 0, 1, 1, [0.0, 0.0, -1.0]);
+        assert!(down[0] < 60, "looking down at horizon -45 should be dark: {:?}", down);
+    }
+
+    #[test]
+    fn backdrop_rgb_one_pixel_image() {
+        let img = ImageRgba { width: 1, height: 1, rgba: vec![100, 150, 200, 255], ..Default::default() };
+        let t = BTreeMap::from([("item:pic".to_string(), img)]);
+        let flat = Backdrop::Image { item: "pic".into(), projection: Projection::Flat, horizon: 0.0 };
+        let rgb = backdrop_rgb(&flat, &t, 0, 0, 1, 1, [0.0, 0.0, 1.0]);
+        assert_eq!(rgb, [100, 150, 200], "1x1 flat image must return its single pixel");
+        let eq = Backdrop::Image { item: "pic".into(), projection: Projection::Equirect, horizon: 0.0 };
+        let rgb2 = backdrop_rgb(&eq, &t, 0, 0, 1, 1, [1.0, 0.0, 0.0]);
+        assert_eq!(rgb2, [100, 150, 200], "1x1 equirect image must return its single pixel");
+    }
+
+    #[test]
     fn equirect_picture_horizon_offset() {
         // Bright above the middle row, dark below.
         let mut rgba = Vec::new();

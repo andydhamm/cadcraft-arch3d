@@ -140,11 +140,19 @@ impl Environment {
     }
 }
 
-/// An environment built from the effective HDRI backdrop (the look's, else the model's): its
-/// stored image, intensity, rotation and horizon; visible and daylight. `None` when the backdrop
-/// is not an HDRI or its image is missing or invalid (the sky rules then apply).
+/// An environment built from the effective HDRI backdrop (the look's if it is one, else the
+/// model's if it is one): its stored image, intensity, rotation and horizon; visible and
+/// daylight. `None` when neither backdrop is an HDRI or its image is missing or invalid (the
+/// sky rules then apply).
 pub fn hdri_environment(model: &ArchModel, look: &Look) -> Option<Environment> {
-    let Some(Backdrop::Hdri { image, intensity, rotation, horizon }) = look.backdrop.as_ref().or(model.backdrop.as_ref()) else {
+    // Prefer the look's HDRI backdrop; if the look has no backdrop or it is not an HDRI,
+    // fall back to the model's HDRI backdrop.
+    let backdrop = look
+        .backdrop
+        .as_ref()
+        .filter(|b| matches!(b, Backdrop::Hdri { .. }))
+        .or_else(|| model.backdrop.as_ref().filter(|b| matches!(b, Backdrop::Hdri { .. })));
+    let Some(Backdrop::Hdri { image, intensity, rotation, horizon }) = backdrop else {
         return None;
     };
     let img = model.hdr_images.get(image).filter(|i| i.is_valid())?;
@@ -736,6 +744,58 @@ mod tests {
         // Rekey again without changes should give the same key.
         let same_key = e.rekey();
         assert_eq!(new_key, same_key, "rekey without changes must give same key");
+    }
+
+    #[test]
+    fn hdri_environment_missing_image_returns_none() {
+        use cadcraft_doc::arch::ImageRgbe;
+        let mut model = ArchModel::default();
+        // Insert an image but reference a different one.
+        let mut rgbe = Vec::new();
+        for _ in 0..4 {
+            rgbe.extend_from_slice(&[128, 0, 0, 129]);
+        }
+        model.hdr_images.insert("other".into(), ImageRgbe { width: 2, height: 2, rgbe, ..Default::default() });
+        model.backdrop = Some(Backdrop::Hdri { image: "missing".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        let look = Look::default();
+        assert!(hdri_environment(&model, &look).is_none(), "missing image must return None");
+    }
+
+    #[test]
+    fn hdri_environment_invalid_image_returns_none() {
+        use cadcraft_doc::arch::ImageRgbe;
+        let mut model = ArchModel::default();
+        // Zero-width image is invalid.
+        let img = ImageRgbe { width: 0, height: 2, rgbe: vec![], ..Default::default() };
+        model.hdr_images.insert("sky".into(), img);
+        model.backdrop = Some(Backdrop::Hdri { image: "sky".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        let look = Look::default();
+        assert!(hdri_environment(&model, &look).is_none(), "invalid image must return None");
+    }
+
+    #[test]
+    fn hdri_environment_look_wins_over_model() {
+        use cadcraft_doc::arch::ImageRgbe;
+        let mut model = ArchModel::default();
+        // Model has one HDRI, look has another.
+        let make_img = |w: u32, h: u32| {
+            let mut rgbe = Vec::new();
+            for _ in 0..(w * h) {
+                rgbe.extend_from_slice(&[128, 0, 0, 129]);
+            }
+            ImageRgbe { width: w, height: h, rgbe, ..Default::default() }
+        };
+        model.hdr_images.insert("model-sky".into(), make_img(4, 2));
+        model.hdr_images.insert("look-sky".into(), make_img(8, 4));
+        model.backdrop = Some(Backdrop::Hdri { image: "model-sky".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        let look =
+            Look { backdrop: Some(Backdrop::Hdri { image: "look-sky".into(), intensity: 2.0, rotation: 90.0, horizon: 5.0 }), ..Default::default() };
+        let e = hdri_environment(&model, &look).expect("look's HDRI must win");
+        assert_eq!(e.width, 8, "look's image dimensions must be used");
+        assert_eq!(e.height, 4);
+        assert_eq!(e.intensity, 2.0);
+        assert_eq!(e.rotation_deg, 90.0);
+        assert_eq!(e.horizon_deg, 5.0);
     }
 
     #[test]
