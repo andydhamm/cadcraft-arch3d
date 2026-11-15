@@ -238,4 +238,45 @@ mod tests {
         let rec: ItemRecord = serde_json::from_value(json).unwrap();
         assert_eq!(rec.normal_map.as_deref(), Some("test-mat-normal.png"));
     }
+
+    #[test]
+    fn item_kind_serde_roundtrip() {
+        let kinds = vec![
+            ItemKind::Symbol,
+            ItemKind::Material,
+            ItemKind::Backdrop,
+            ItemKind::Door,
+            ItemKind::Window,
+            ItemKind::Plant,
+            ItemKind::LightFixture,
+            ItemKind::Finish,
+            ItemKind::Cabinet,
+            ItemKind::Fixture,
+            ItemKind::FrontStyle,
+            ItemKind::Group,
+            ItemKind::FaceAppliance,
+            ItemKind::Molding,
+        ];
+        for kind in kinds {
+            let json = serde_json::to_string(&kind).unwrap();
+            let parsed: ItemKind = serde_json::from_str(&json).unwrap();
+            assert_eq!(kind, parsed, "roundtrip failed for {json}");
+        }
+    }
+
+    #[test]
+    fn item_record_missing_fields_use_defaults() {
+        let json = serde_json::json!({
+            "id": "test",
+            "name": "Test Item"
+        });
+        let rec: ItemRecord = serde_json::from_value(json).unwrap();
+        assert_eq!(rec.id, "test");
+        assert_eq!(rec.name, "Test Item");
+        assert_eq!(rec.category, "");
+        assert_eq!(rec.folder, "");
+        assert_eq!(rec.kind, ItemKind::Symbol);
+        assert!(rec.keywords.is_empty());
+        assert!(!rec.read_only);
+    }
 }
