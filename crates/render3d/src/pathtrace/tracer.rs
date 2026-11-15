@@ -1860,7 +1860,7 @@ mod tests {
         let crossover = srgb8(0.0031308);
         assert_eq!(crossover, 10, "crossover at 0.0031308 should be 10 in 8-bit: {crossover}");
         let mid = srgb8(0.5);
-        assert!(mid > 120 && mid < 130, "mid-grey should be around 128: {mid}");
+        assert_eq!(mid, 188, "srgb8(0.5) should be 188: {mid}");
     }
 
     #[test]
