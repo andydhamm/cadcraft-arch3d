@@ -116,6 +116,7 @@ fn point(v: &Value) -> String {
 fn ring_bbox(v: &Value) -> String {
     let mut xs: Vec<f64> = Vec::new();
     let mut ys: Vec<f64> = Vec::new();
+    let has_polygon = v.get("polygon").and_then(|a| a.as_array()).is_some();
     if let Some(arr) = v.get("polygon").and_then(|a| a.as_array()) {
         for p in arr {
             if let Some(pair) = p.as_array() {
@@ -129,6 +130,9 @@ fn ring_bbox(v: &Value) -> String {
         }
     }
     if xs.is_empty() || ys.is_empty() {
+        if has_polygon {
+            return "(NaN,NaN)-(NaN,NaN)".to_string();
+        }
         return "(-,-)-(-,-)".to_string();
     }
     format!(
@@ -148,6 +152,13 @@ fn coord(v: &Value) -> String {
         Value::Bool(b) => b.to_string(),
         Value::String(s) => s.clone(),
         Value::Array(a) => {
+            // Check if it's a single point [x, y]
+            if a.len() == 2 {
+                if let (Some(x), Some(y)) = (a[0].as_f64(), a[1].as_f64()) {
+                    return format!("({},{})", x, y);
+                }
+            }
+            // Otherwise it's an array of points
             let mut xs = Vec::new();
             let mut ys = Vec::new();
             for e in a {
