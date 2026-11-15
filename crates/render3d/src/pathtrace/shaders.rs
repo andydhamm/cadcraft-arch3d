@@ -215,7 +215,8 @@ mod tests {
             return;
         };
         // A device of its own, so other tests' use of the shared one does not decide the outcome.
-        let own = ComputeGpu::new(gpu.device.clone(), gpu.queue.clone(), gpu.info.clone(), gpu.ray_query, gpu.pipeline_cache, gpu.adapter_key.clone());
+        let own =
+            ComputeGpu::new(gpu.device.clone(), gpu.queue.clone(), gpu.info.clone(), gpu.ray_query, gpu.pipeline_cache, gpu.adapter_key.clone());
         assert!(own.pipelines.lock().unwrap().is_none(), "nothing is built before the first use");
         let first = PtPipelines::shared(&own, None).expect("the pipelines build");
         let again = PtPipelines::shared(&own, None).expect("the pipelines build");
