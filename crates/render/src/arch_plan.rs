@@ -98,7 +98,7 @@ mod tests {
     use super::*;
     use crate::{DPrim, Kind, Options, build_arch};
     use cadcraft_arch::plan::{PlanLabel, PlanLabelKind, PlanLine};
-    use cadcraft_doc::arch::{Level, PlanView, ReferenceDisplay, Roof, RoofEdge, RoofEdgeKind, Room, roof_handle};
+    use cadcraft_doc::arch::{Level, PlanView, ReferenceDisplay, Roof, RoofEdge, RoofEdgeKind, Room, roof_handle, view_handle};
     use cadcraft_doc::{Handle, Wall, room_handle};
 
     fn line(layer: &str, a: Vec2, b: Vec2) -> PlanLine {
@@ -408,7 +408,7 @@ mod tests {
         let ann = plan_annotation(&d);
         let callouts: Vec<_> = ann.labels.iter().filter(|l| l.kind == PlanLabelKind::Callout).collect();
         assert_eq!(callouts.len(), 1);
-        assert_eq!(callouts[0].handle, cadcraft_doc::view_handle(view_id));
+        assert_eq!(callouts[0].handle, view_handle(view_id));
     }
 
     #[test]
