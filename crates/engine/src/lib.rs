@@ -23,6 +23,7 @@ pub mod grip_dims;
 pub mod grips;
 mod guard;
 pub mod keyboard;
+pub mod library;
 pub mod lisp;
 pub mod mtext_edit;
 pub mod pointmod;
@@ -49,7 +50,6 @@ pub use cadcraft_doc as doc;
 pub use cadcraft_fonts as fonts;
 pub use cadcraft_geom as geom;
 pub use cadcraft_render as render;
-pub use cmd::arch::library;
 pub use cmd::arch::look::{effective_look, effective_sun_dir};
 /// The app's 3D renderer behind `render` and `sunstudy` (phase 10): the CLI and the desktop app install it.
 pub use cmd::arch::render::{
