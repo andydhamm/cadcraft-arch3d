@@ -91,13 +91,28 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
         set_image_decoder(|b| cadcraft_io::raster::decode(b).map_err(|e| e.to_string()));
     }
 
+    // Same set-up as showcase_phase18.rs: headless file I/O and the library hooks the
+    // showcase's own library items (pulls, etc.) need.
+    cadcraft_engine::cmd::file::set_io(cadcraft_engine::cmd::file::IoHooks {
+        read: |_, _| Err("no file reads in this test".to_string()),
+        write: |_, _| Ok(b"stand-in export".to_vec()),
+        plot: None,
+    });
+    cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
+        read_glb: cadcraft_io::gltf_read::read_glb,
+        read_image: cadcraft_io::image_read::read_image,
+        encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
+        sample: cadcraft_io::library::sample_files,
+    });
+
     let mut session = cadcraft_engine::Session::new();
+    session.new_drawing(true);
 
     // Replay all three showcase scripts in order; panic (with details) on any error.
     let scripts = ["docs/arch3d/showcase/bilevel.json", "docs/arch3d/showcase/phase-20-showcase.json", "docs/arch3d/showcase/phase-21-showcase.json"];
     for rel in &scripts {
         let path = format!("{}/{}", root, rel);
-        let content = fs::read_to_string(&path).unwrap_or_else(|e| format!("read {} failed: {e}", rel));
+        let content = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {} failed: {e}", rel));
         let steps: Vec<Value> = serde_json::from_str(&content).unwrap_or_else(|e| panic!("{} is not valid JSON: {e}", rel));
         for (i, step) in steps.iter().enumerate() {
             let cmd = step["cmd"].as_str().unwrap_or("??");
@@ -122,19 +137,19 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
         .and_then(|v| v.as_array())
         .map(|views| {
             views.iter().any(|w| {
-                let source_type = w.get("source").and_then(|s| s.get("type")).and_then(|t| t.as_str());
-                source_type == Some("camera")
+                let source_kind = w.get("source").and_then(|s| s.get("kind")).and_then(|t| t.as_str());
+                source_kind == Some("camera")
             })
         })
         .unwrap_or(false);
-    assert!(has_camera, "first sheet ({}) must contain a camera source", first_name);
+    assert!(has_camera, "first sheet ({}) must contain a camera source: {}", first_name, first);
     let has_image = first
         .get("views")
         .and_then(|v| v.as_array())
         .map(|views| {
             views.iter().any(|w| {
-                let source_type = w.get("source").and_then(|s| s.get("type")).and_then(|t| t.as_str());
-                if source_type == Some("camera") {
+                let source_kind = w.get("source").and_then(|s| s.get("kind")).and_then(|t| t.as_str());
+                if source_kind == Some("camera") {
                     w.get("image").map(|i| i.as_object().is_some() || i.as_str().is_some()).unwrap_or(false)
                 } else {
                     false
@@ -144,33 +159,33 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
         .unwrap_or(false);
     assert!(has_image, "first sheet ({}) must have a non-null image", first_name);
 
-    // View sources from arch.inspect.
-    let view_items: Vec<&Value> =
-        inspect.get("views").and_then(|v| v.as_array()).map(|arr| arr.iter().map(|v| v as &Value).collect::<Vec<_>>()).unwrap_or_default();
+    // Sources (kind, name) of every view placed on a sheet.
+    let sources: Vec<(String, String)> = sheets
+        .iter()
+        .flat_map(|s| s.get("views").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+        .filter_map(|w| {
+            let src = w.get("source")?;
+            let kind = src.get("kind")?.as_str()?.to_string();
+            let name = src.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+            Some((kind, name))
+        })
+        .collect();
+    let count = |kind: &str| sources.iter().filter(|(k, _)| k == kind).count();
+    assert!(sources.iter().any(|(k, n)| k == "plan" && n == "Site"), "no `Site` plan on a sheet: {sources:?}");
+    assert!(sources.iter().any(|(k, n)| k == "plan" && n == "Roof Plan"), "no `Roof Plan` plan on a sheet: {sources:?}");
+    assert!(count("elevation") >= 4, "expected >= 4 elevation views: {sources:?}");
+    assert!(count("section") >= 2, "expected >= 2 section views: {sources:?}");
+    assert!(count("interior") >= 2, "expected >= 2 interior views: {sources:?}");
 
-    let view_names: Vec<String> = view_items.iter().filter_map(|v| v.get("name").and_then(|n| n.as_str())).map(String::from).collect();
-    let view_types: Vec<String> = view_items.iter().filter_map(|v| v.get("type").and_then(|t| t.as_str())).map(String::from).collect();
-
-    let has = |kind: &str| view_names.iter().any(|n| n.to_lowercase().contains(kind));
-    let has_type = |kind: &str| view_types.iter().any(|t| t.to_lowercase().contains(kind));
-
-    assert!(has("site"), "no `Site` view source");
-    assert!(has("roof plan"), "no `Roof Plan` view source");
-    let elev_count = view_names.iter().filter(|n| n.to_lowercase().contains("elev")).count();
-    assert!(elev_count >= 4, "expected >= 4 elevation views, found {}", elev_count);
-    let sec_count = view_names.iter().filter(|n| n.to_lowercase().contains("section")).count();
-    assert!(sec_count >= 2, "expected >= 2 section views, found {}", sec_count);
-    let interior_count = view_names.iter().filter(|n| n.to_lowercase().contains("interior")).count();
-    assert!(interior_count >= 2, "expected >= 2 interior elevation views, found {}", interior_count);
-    assert!(has_type("camera") || has("camera"), "no camera view source");
-
-    // Schedules: all four kinds present.
+    // Schedules: all four kinds are on sheets.
+    let schedules = inspect.get("schedules").and_then(|s| s.as_array()).cloned().unwrap_or_default();
     let has_schedule = |kind: &str| {
-        inspect
-            .get("schedules")
-            .and_then(|s| s.as_array())
-            .map(|arr| arr.iter().any(|r| r.get("kind").and_then(|k| k.as_str()) == Some(kind)))
-            .unwrap_or(false)
+        sources.iter().filter(|(k, _)| k == "schedule").any(|(_, n)| {
+            schedules.iter().any(|r| {
+                let named = |key: &str| r.get(key).and_then(|x| x.as_str()) == Some(n.as_str());
+                (named("id") || named("name")) && r.get("kind").and_then(|x| x.as_str()) == Some(kind)
+            })
+        })
     };
     assert!(has_schedule("door"), "missing door schedule");
     assert!(has_schedule("window"), "missing window schedule");

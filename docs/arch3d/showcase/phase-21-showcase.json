@@ -6,7 +6,7 @@
   {"cmd": "schedule", "params": {"kind": "room", "at": [75, -30]}},
   {"cmd": "elevation", "params": {"room": "Kitchen", "level": "Main", "side": "west", "insert": [0, -55]}},
   {"cmd": "elevation", "params": {"room": "Main Bath", "level": "Main", "side": "east", "insert": [25, -55]}},
-  {"cmd": "sheet", "params": {"name": "Cover", "number": "A-000", "title": "Cover", "camera": "Front", "width": 520, "views": ["v0"], "scale": 200}},
+  {"cmd": "sheet", "params": {"name": "Cover", "number": "A-000", "title": "Cover", "views": [{"camera": "Front", "width": 520}, {"view": "v0", "scale": 200}]}},
   {"cmd": "sheet", "params": {"name": "Site Plan", "number": "A-001", "title": "Site Plan", "planView": "Site", "scale": 100}},
   {"cmd": "sheet", "params": {"name": "Lower Floor Plan", "number": "A-101", "title": "Lower Floor Plan", "planView": "Lower Floor Plan", "scale": 100}},
   {"cmd": "sheet", "params": {"name": "Lower Electrical", "number": "E-101", "title": "Lower Electrical", "planView": "Lower Electrical", "scale": 100}},
