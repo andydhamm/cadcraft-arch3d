@@ -658,6 +658,7 @@ mod tests {
         let (u0_0, u1_0) = u_range(&cab0);
         let (u0_1, u1_1) = u_range(&cab1);
         // cb0 is at y 1.2..1.8 (u -1.8..-1.2), cb1 is at y 2.7..3.3 (u -3.3..-2.7)
-        assert!(u1_0 < u0_1, "cb0 (u {:.3}..{:.3}) should be to the right of cb1 (u {:.3}..{:.3})", u0_0, u1_0, u0_1, u1_1);
+        // cb0 is to the right of cb1, so cb0's left edge is to the right of cb1's right edge.
+        assert!(u0_0 > u1_1, "cb0 (u {:.3}..{:.3}) should be to the right of cb1 (u {:.3}..{:.3})", u0_0, u1_0, u0_1, u1_1);
     }
 }

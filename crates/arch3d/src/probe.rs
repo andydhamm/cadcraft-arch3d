@@ -1672,8 +1672,9 @@ mod tests {
     #[test]
     fn arch_kind_from_part_counter_is_countertop() {
         use cadcraft_doc::arch::ArchKind;
-        // from_part("counter") should give Countertop.
-        assert_eq!(ArchKind::from_part("counter"), ArchKind::Countertop);
+        // arch_kind maps "counter" materials to Countertop (via the specific branch).
+        assert_eq!(arch_kind(&named("counter", 0)), ArchKind::Countertop);
+        assert_eq!(arch_kind(&named("countertop", 0)), ArchKind::Countertop);
         // from_part("cabinet") should give Cabinet.
         assert_eq!(ArchKind::from_part("cabinet"), ArchKind::Cabinet);
     }
