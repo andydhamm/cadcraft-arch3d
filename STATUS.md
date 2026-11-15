@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 11:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 63 of 66 segments merged · 12 of 17 acceptance checks**
 
-10,525 workspace tests passing at the last merge · 1203 segments merged in all · 0 of 15 seats working
+10,526 workspace tests passing at the last merge · 1204 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,9 +29,9 @@ Updated 2026-11-15 11:30 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 97.0 h so far · expected done Nov 16 01:54–Nov 23 21:33 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 97.2 h so far · expected done Nov 16 02:09–Nov 23 21:48 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
-| 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
+| 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
 ## Phase 19 segments
 
@@ -46,6 +46,7 @@ Updated 2026-11-15 11:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 11:42 | `p21g-callouts-without-view` | merged | 10,526 pass, 1 fail | claude-sonnet-c |
 | Nov 15 07:56 | `harden-p19f-pt-horizon-lit` | merged | 10,525 pass | tturbo-mac |
 | Nov 15 07:07 | `harden-p21f-interior-cabinet-front` | merged | 10,521 pass | tturbo-mac |
 | Nov 15 06:26 | `harden-p19k-pt-resolve-hable` | merged | 10,504 pass | tturbo-mac |
@@ -57,14 +58,13 @@ Updated 2026-11-15 11:30 UTC. This page and the card in the README are regenerat
 | Nov 15 03:48 | `harden-p10-r3d-light-pack` | merged | 10,464 pass | tturbo-mac2 |
 | Nov 15 03:04 | `harden-p19-cameras-4` | merged | 10,455 pass | tturbo-mac |
 | Nov 15 03:04 | `harden-p10-cmd-render` | merged | 10,455 pass | tturbo-mac2 |
-| Nov 15 03:04 | `harden-p10-arch-light-placement` | merged | 10,455 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | merging | 1326 |
-| bonsai-b | bonsai2-27b | gate | 1261 |
+| bonsai-b | bonsai2-27b | agent | 1262 |
 | bonsai-ws2-a | bonsai2-27b | merging | 1405 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1366 |
 | claude-sonnet-a | sonnet | gate | 157 |
