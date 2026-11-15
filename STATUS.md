@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 19 of 21: Light, sky and cameras — 73 of 76 segments merged · 15 of 17 acceptance checks**
+**Phase 19 of 21: Light, sky and cameras — 74 of 76 segments merged · 15 of 17 acceptance checks**
 
-10,614 workspace tests passing at the last merge · 1228 segments merged in all · 0 of 15 seats working
+10,675 workspace tests passing at the last merge · 1229 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,24 +29,24 @@ Updated 2026-11-15 22:30 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 15 / 17 | 108.0 h so far · expected done Nov 16 01:23–Nov 16 03:00 UTC |
+| 19 | Light, sky and cameras | building | 15 / 17 | 108.2 h so far · expected done Nov 16 00:30–Nov 16 01:28 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
 
 ## Phase 19 segments
 
-73 merged, 6 replaced, 2 working, 1 merging
+74 merged, 6 replaced, 2 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | merging | mai-flash-esc |
-| `p19r-hdri-icon` | An HDR backdrop's display picture and library icon are exposed for the typical pixel and tone-mapped, not flat | working | bonsai-a |
-| `p19r-overview-cutaway` | An overview camera's cutaway is computed for its own level; the phase-19 demo builds on level 0 and its overview centres on a floor | working | claude-sonnet-b |
+| `p19r-hdri-icon` | An HDR backdrop's display picture and library icon are exposed for the typical pixel and tone-mapped, not flat | gate | bonsai-a |
+| `p19r-overview-cutaway` | An overview camera's cutaway is computed for its own level; the phase-19 demo builds on level 0 and its overview centres on a floor | gate | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 22:31 | `upstream-sync-7064a685a` | merged | 10,675 pass | mai-flash-esc |
 | Nov 15 22:12 | `p19q-strip-mesh-under-ceiling` | merged | 10,614 pass | darwin-ws3 |
 | Nov 15 21:49 | `p19q-demo-dusk-camera-closer` | merged | 10,610 pass | claude-sonnet-b |
 | Nov 15 21:49 | `p19q-raster-meter-backdrop-only` | merged | 10,610 pass | bonsai-ws2-a |
@@ -58,24 +58,23 @@ Updated 2026-11-15 22:30 UTC. This page and the card in the README are regenerat
 | Nov 15 20:16 | `harden-p19g-final-raster-env` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p21g-sheet-camera-new-sheet` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p18i-showcase-phase18` | merged | 10,595 pass | tturbo-mac |
-| Nov 15 19:52 | `p19m-sky-cli-time` | merged | 10,546 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1355 |
-| bonsai-b | bonsai2-27b | agent | 1276 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1444 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1381 |
+| bonsai-a | bonsai2-27b | gate | 1355 |
+| bonsai-b | bonsai2-27b | agent | 1277 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1445 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1383 |
 | claude-sonnet-a | sonnet | idle | 159 |
-| claude-sonnet-b | sonnet | agent | 160 |
+| claude-sonnet-b | sonnet | gate | 160 |
 | claude-sonnet-c | sonnet | idle | 97 |
 | claude-sonnet-d | sonnet | idle | 94 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1265 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1266 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 126 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
-| tturbo-mac | tturbo-ultraheretic | gate | 967 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 648 |
+| tturbo-mac | tturbo-ultraheretic | agent | 968 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 649 |
