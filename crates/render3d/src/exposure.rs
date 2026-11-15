@@ -293,4 +293,32 @@ mod tests {
         assert_eq!(backdrop_scale(f32::NAN), DAY_EXPOSURE);
         assert_eq!(backdrop_scale(0.0), DAY_EXPOSURE);
     }
+
+    /// backdrop_scale(0.18) is exactly 1.0: middle grey meters to a unity scale.
+    #[test]
+    fn backdrop_scale_identity_at_middle_grey() {
+        assert!((backdrop_scale(0.18) - 1.0).abs() < 1e-6, "backdrop_scale(0.18) = {}", backdrop_scale(0.18));
+    }
+
+    /// backdrop_scale is monotonically non-increasing in luminance.
+    #[test]
+    fn backdrop_scale_is_monotonically_decreasing() {
+        let mut last = f32::INFINITY;
+        for i in 0..100 {
+            let l = 0.001 * (i as f32 + 1.0);
+            let s = backdrop_scale(l);
+            assert!(s <= last + 1e-6, "not monotonic at l={}: {} > {}", l, s, last);
+            last = s;
+        }
+    }
+
+    /// Round trip: for any scale s in [DAY_EXPOSURE, NIGHT_AUTO_MAX], backdrop_scale(0.18 / s) == s.
+    #[test]
+    fn backdrop_scale_round_trip_for_scales_in_range() {
+        for s in [DAY_EXPOSURE, 1e-4, 1e-3, 0.01, 0.1, 1.0, 10.0, NIGHT_AUTO_MAX] {
+            let l = 0.18 / s;
+            let got = backdrop_scale(l);
+            assert!((got - s).abs() < s * 1e-5 + 1e-8, "round trip failed for s={}: got {}", s, got);
+        }
+    }
 }
