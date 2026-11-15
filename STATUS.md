@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 02:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 18 of 21: Interior finish, kitchen and bath — 44 of 49 segments merged · 19 of 20 acceptance checks**
 
-10,384 workspace tests passing at the last merge · 1186 segments merged in all · 0 of 15 seats working
+10,431 workspace tests passing at the last merge · 1192 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -28,36 +28,36 @@ Updated 2026-11-15 01:45 UTC. This page and the card in the README are regenerat
 | 15 | Electrical, technical illustration and the showcase house | done | 14 / 14 | 115.8 h |
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
-| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 92.3 h so far · expected done Nov 15 18:53–Nov 22 03:54 UTC |
+| 18 | Interior finish, kitchen and bath | building | 19 / 20 | 92.5 h so far · expected done Nov 15 19:09–Nov 22 04:10 UTC |
 | 19 | Light, sky and cameras | building | 12 / 17 | — |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
 ## Phase 18 segments
 
-44 merged, 3 queued, 2 replaced, 1 abandoned, 1 escalate, 1 gate
+44 merged, 3 queued, 2 replaced, 2 escalate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p18h-showcase-kitchen-tests` | Add the two phase-18 kitchen-casework showcase tests (digest-driven) | escalate |  |
-| `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | gate | bonsai-ws2-b |
+| `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | escalate |  |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 01:47 | `harden-p11-r3d-gpu-scene` | merged | 10,431 pass | tturbo-mac2 |
+| Nov 15 01:47 | `harden-p11-r3d-pt-kernel` | merged | 10,431 pass | tturbo-mac2 |
+| Nov 15 01:47 | `harden-p21-schedule-tables` | merged | 10,431 pass | tturbo-mac |
+| Nov 15 01:47 | `harden-p14-arch-casework-layout` | merged | 10,431 pass | tturbo-mac2 |
+| Nov 15 01:47 | `harden-p18-face-appliances` | merged | 10,431 pass | tturbo-mac |
+| Nov 15 01:47 | `harden-p19k-strip-lens-proud` | merged | 10,431 pass | tturbo-mac2 |
 | Nov 15 01:09 | `p19k-pt-resolve-hable` | refused | 10,386 pass | mai-flash-esc |
 | Nov 15 00:32 | `harden-p21f-interior-cabinet-front` | refused | 10,391 pass | tturbo-mac |
 | Nov 14 23:53 | `p19k-pt-resolve-hable` | refused | 10,386 pass | mai-flash-esc |
 | Nov 14 23:19 | `harden-p10-r3d-lit-pipeline` | merged | 10,384 pass | tturbo-mac2 |
 | Nov 14 23:19 | `harden-p10-arch3d-scene-lights` | merged | 10,384 pass | tturbo-mac2 |
 | Nov 14 23:19 | `harden-p21-opening-edit` | merged | 10,384 pass | tturbo-mac |
-| Nov 14 23:19 | `harden-p21-view-render` | merged | 10,384 pass | tturbo-mac |
-| Nov 14 22:39 | `p19k-pt-resolve-hable` | refused | 10,357 pass | mai-flash-esc |
-| Nov 14 22:04 | `harden-p19h-pt-spec-albedo-table` | merged | 10,355 pass | tturbo-mac2 |
-| Nov 14 22:04 | `harden-p18h-fix-glass-pony-inspect-test` | merged | 10,355 pass | tturbo-mac |
-| Nov 14 22:04 | `harden-p15-arch-electrical` | merged | 10,355 pass | tturbo-mac2 |
-| Nov 14 22:04 | `harden-p19f-pt-strip-clear-of-housing` | merged | 10,355 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -66,7 +66,7 @@ Updated 2026-11-15 01:45 UTC. This page and the card in the README are regenerat
 | bonsai-a | bonsai2-27b | idle | 1312 |
 | bonsai-b | bonsai2-27b | idle | 1257 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1389 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1361 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1362 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
@@ -75,6 +75,6 @@ Updated 2026-11-15 01:45 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 153 |
-| tturbo-mac | tturbo-ultraheretic | agent | 917 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 596 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 153 |
+| tturbo-mac | tturbo-ultraheretic | agent | 918 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 597 |
