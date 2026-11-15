@@ -96,4 +96,39 @@ mod tests {
         let back3 = h.back();
         assert!(back3.is_none());
     }
+
+    #[test]
+    fn push_after_forward_drops_forward() {
+        let mut h = FilterHistory::default();
+        let q1 = Query { text: "a".into(), chips: vec![], ..Default::default() };
+        let q2 = Query { text: "b".into(), chips: vec![], ..Default::default() };
+        let q3 = Query { text: "c".into(), chips: vec![], ..Default::default() };
+
+        h.push(q1.clone());
+        h.push(q2.clone());
+        h.push(q3.clone());
+
+        h.back();
+        h.back();
+        assert_eq!(h.current(), Some(&q1));
+
+        let q4 = Query { text: "d".into(), chips: vec![], ..Default::default() };
+        h.push(q4.clone());
+        assert_eq!(h.current(), Some(&q4));
+        assert!(!h.can_forward());
+        assert!(h.can_back());
+
+        let back = h.back();
+        assert_eq!(back, Some(q1.clone()));
+        assert!(!h.can_back());
+    }
+
+    #[test]
+    fn back_forward_on_empty_history() {
+        let mut h = FilterHistory::default();
+        assert!(h.back().is_none());
+        assert!(h.forward().is_none());
+        assert!(!h.can_back());
+        assert!(!h.can_forward());
+    }
 }

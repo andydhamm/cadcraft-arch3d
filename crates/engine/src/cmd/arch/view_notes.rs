@@ -212,6 +212,7 @@ fn run_dim(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let text = match present(p, "text") {
         None => format!("{value:.3}").trim_end_matches('0').trim_end_matches('.').to_string(),
+        Some(Value::String(s)) if s.is_empty() => format!("{value:.3}").trim_end_matches('0').trim_end_matches('.').to_string(),
         Some(v) => v.as_str().ok_or_else(|| bad(CMD, "`text` must be a string"))?.to_string(),
     };
     let note = ViewNote { kind: NoteKind::Dimension, text, at: a, b: Some(b), attach, attach_b, offset: [0.0, offset], ..ViewNote::default() };
@@ -362,5 +363,67 @@ mod tests {
         assert_eq!(v.notes[1].offset, [0.0, 0.7]);
         assert_eq!(v.notes[1].attach.map(|a| a.corner), Some(Corner::BottomLeft));
         assert_eq!(v.next_note_id, 2);
+    }
+
+    #[test]
+    fn note_with_max_length_text() {
+        let mut s = session();
+        let text: String = std::iter::repeat('a').take(256).collect();
+        let r = s.execute("view.note", &json!({"view": "v0", "text": text, "at": [0, 0]})).unwrap();
+        assert_eq!(r["note"], "n0");
+    }
+
+    #[test]
+    fn note_with_max_height() {
+        let mut s = session();
+        let r = s.execute("view.note", &json!({"view": "v0", "text": "x", "at": [0, 0], "height": 10.0})).unwrap();
+        assert_eq!(r["note"], "n0");
+    }
+
+    #[test]
+    fn dim_with_negative_offset() {
+        let mut s = session();
+        let r = s.execute("view.dim", &json!({"view": "v0", "a": [0, 0], "b": [1, 0], "offset": -0.5})).unwrap();
+        assert_eq!(r["note"], "n0");
+    }
+
+    #[test]
+    fn note_with_marker_kind() {
+        let mut s = session();
+        let r = s.execute("view.note", &json!({"view": "v0", "text": "x", "at": [0, 0], "kind": "marker"})).unwrap();
+        assert_eq!(r["note"], "n0");
+    }
+
+    #[test]
+    fn note_attach_with_multiple_lines() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        let id = d.arch.push_view(ArchView { name: "E".into(), insert: [10.0, 20.0], ..ArchView::default() }).unwrap();
+        let line = |a: [f64; 2], b: [f64; 2]| ViewLine { a, b, kind: ArchKind::Cabinet, object: ArchId(0), ..Default::default() };
+        let g = ViewGeometry {
+            revision: d.arch_revision,
+            extent: [0.0, 0.0, 2.0, 2.0],
+            lines: vec![line([1.0, 0.0], [1.6, 0.0]), line([1.6, 0.0], [1.6, 0.9]), line([1.0, 0.9], [1.6, 0.9]), line([1.0, 0.0], [1.0, 0.9])],
+            ..Default::default()
+        };
+        if let Some(v) = d.arch.view_mut(id) {
+            v.generated = Some(g);
+        }
+        let r = s.execute("view.note", &json!({"view": "v0", "text": "x", "attach": {"object": "cb0", "corner": "topLeft"}})).unwrap();
+        assert_eq!(r["at"], json!([1.0, 0.9]));
+    }
+
+    #[test]
+    fn dim_vertical() {
+        let mut s = session();
+        let r = s.execute("view.dim", &json!({"view": "v0", "a": [0, 0], "b": [0, 1]})).unwrap();
+        assert_eq!(r["value"], 1.0);
+    }
+
+    #[test]
+    fn dim_with_empty_text() {
+        let mut s = session();
+        let r = s.execute("view.dim", &json!({"view": "v0", "a": [0, 0], "b": [1, 0], "text": ""})).unwrap();
+        assert_eq!(r["note"], "n0");
     }
 }
