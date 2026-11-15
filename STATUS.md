@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 18:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 18:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 66 of 69 segments merged · 12 of 17 acceptance checks**
 
@@ -29,24 +29,25 @@ Updated 2026-11-15 18:30 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 103.9 h so far · expected done Nov 16 02:30–Nov 17 10:26 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 104.2 h so far · expected done Nov 16 02:45–Nov 17 10:41 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
 ## Phase 19 segments
 
-66 merged, 6 replaced, 2 merging, 1 working
+66 merged, 6 replaced, 2 working, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | merging | mai-flash-esc |
+| `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | working | claude-sonnet-c |
 | `p18i-showcase-phase18` | The phase-18 demo gains a door-less glass panel; the showcase house gains the phase-18 kitchen and bath features | merging | claude-sonnet-b |
-| `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | working | bonsai-a |
+| `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | working | mai-flash-esc |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 18:38 | `p19m-sky-cli-time` | refused | 10,513 pass | mai-flash-esc |
 | Nov 15 17:15 | `upstream-sync-67514021a` | merged | 10,512 pass | claude-sonnet-a |
 | Nov 15 16:24 | `harden-p19n-pt-pipelines-once` | merged | 10,540 pass | tturbo-mac |
 | Nov 15 16:24 | `p21g-showcase-drawing-set` | merged | 10,540 pass | claude-sonnet-c |
@@ -58,24 +59,23 @@ Updated 2026-11-15 18:30 UTC. This page and the card in the README are regenerat
 | Nov 15 07:56 | `harden-p19f-pt-horizon-lit` | merged | 10,525 pass | tturbo-mac |
 | Nov 15 07:07 | `harden-p21f-interior-cabinet-front` | merged | 10,521 pass | tturbo-mac |
 | Nov 15 06:26 | `harden-p19k-pt-resolve-hable` | merged | 10,504 pass | tturbo-mac |
-| Nov 15 05:48 | `harden-p21-view-notes` | merged | 10,499 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1341 |
-| bonsai-b | bonsai2-27b | agent | 1269 |
-| bonsai-ws2-a | bonsai2-27b | idle | 1427 |
-| bonsai-ws2-b | bonsai2-27b | idle | 1376 |
+| bonsai-a | bonsai2-27b | gate | 1344 |
+| bonsai-b | bonsai2-27b | gate | 1271 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1427 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1376 |
 | claude-sonnet-a | sonnet | idle | 159 |
 | claude-sonnet-b | sonnet | idle | 159 |
-| claude-sonnet-c | sonnet | idle | 96 |
+| claude-sonnet-c | sonnet | agent | 96 |
 | claude-sonnet-d | sonnet | idle | 93 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1259 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1260 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 125 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 169 |
-| tturbo-mac | tturbo-ultraheretic | gate | 956 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 169 |
+| tturbo-mac | tturbo-ultraheretic | agent | 957 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 641 |
