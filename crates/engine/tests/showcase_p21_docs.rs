@@ -78,8 +78,8 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
     // crates/engine/src/cmd/arch/sheet_camera.rs.
     {
         use cadcraft_engine::cmd::file::set_image_decoder;
-        use cadcraft_engine::{RenderHooks, RenderStats, set_render_hooks};
-        let render = |req| -> std::result::Result<Value, String> {
+        use cadcraft_engine::{RenderHooks, RenderRequest, RenderStats, set_render_hooks};
+        let render = |req: &RenderRequest| -> std::result::Result<Value, String> {
             let out = req.out.as_ref().ok_or_else(|| "missing image path".to_string())?;
             let raster = cadcraft_doc::Raster::new(2, 1, vec![0, 0, 0, 255, 255, 255, 255, 255])
                 .ok_or_else(|| "failed to build a 2x1 RGBA raster".to_string())?;
@@ -87,7 +87,7 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
             std::fs::write(out, png).map_err(|e| format!("write PNG: {e}"))?;
             Ok(json!({"ok": true, "path": out.to_string_lossy()}))
         };
-        set_render_hooks(RenderHooks::new(render, RenderStats::default()));
+        set_render_hooks(RenderHooks::new(render, RenderStats::default));
         set_image_decoder(|b| cadcraft_io::raster::decode(b).map_err(|e| e.to_string()));
     }
 
@@ -98,7 +98,7 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
     for rel in &scripts {
         let path = format!("{}/{}", root, rel);
         let content = fs::read_to_string(&path).unwrap_or_else(|e| format!("read {} failed: {e}", rel));
-        let steps: Vec<Value> = serde_json::from_str(&content).unwrap_or_else(|e| format!("{} is not valid JSON: {e}", rel));
+        let steps: Vec<Value> = serde_json::from_str(&content).unwrap_or_else(|e| panic!("{} is not valid JSON: {e}", rel));
         for (i, step) in steps.iter().enumerate() {
             let cmd = step["cmd"].as_str().unwrap_or("??");
             let params = step["params"].clone();
@@ -108,7 +108,7 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
 
     let inspect = session
         .execute("arch.inspect", &json!({"sheets": true, "views": true, "schedules": true}))
-        .unwrap_or_else(|e| format!("arch.inspect failed: {e}"));
+        .unwrap_or_else(|e| panic!("arch.inspect failed: {e}"));
 
     // >= 10 sheets.
     let sheets = inspect["sheets"].as_array().expect("sheets should be an array");
@@ -145,7 +145,8 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
     assert!(has_image, "first sheet ({}) must have a non-null image", first_name);
 
     // View sources from arch.inspect.
-    let view_items: Vec<&Value> = inspect.get("views").and_then(|v| v.as_array()).map(|arr| arr.iter().map(|v| v as &Value)).collect();
+    let view_items: Vec<&Value> =
+        inspect.get("views").and_then(|v| v.as_array()).map(|arr| arr.iter().map(|v| v as &Value).collect::<Vec<_>>()).unwrap_or_default();
 
     let view_names: Vec<String> = view_items.iter().filter_map(|v| v.get("name").and_then(|n| n.as_str())).map(String::from).collect();
     let view_types: Vec<String> = view_items.iter().filter_map(|v| v.get("type").and_then(|t| t.as_str())).map(String::from).collect();
