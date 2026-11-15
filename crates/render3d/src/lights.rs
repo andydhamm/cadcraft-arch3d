@@ -294,11 +294,12 @@ pub fn select_drawn(lights: &[SceneLight], eye: [f64; 3]) -> Vec<usize> {
 /// `intensity`.
 pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, ShadowSlot)]) -> Vec<u8> {
     let mut buf = vec![0u8; LIGHTS_UNIFORM_SIZE as usize];
-    write_u32(&mut buf, 0, drawn.len().min(MAX_GPU_LIGHTS) as u32);
     // The next free entry of `strip_segs`.
     let mut next_seg = 0usize;
+    let mut count = 0usize;
     for (k, &i) in drawn.iter().take(MAX_GPU_LIGHTS).enumerate() {
         let Some(l) = lights.get(i) else { continue };
+        count += 1;
         let base = 16 + 64 * k;
         if l.kind == LightKind::Strip {
             // A marker light plus its segments; a strip that no longer fits gets no segments.
@@ -375,6 +376,7 @@ pub fn pack_lights(lights: &[SceneLight], drawn: &[usize], slots: &[(usize, Shad
             }
         }
     }
+    write_u32(&mut buf, 0, count as u32);
     buf
 }
 
@@ -819,5 +821,91 @@ mod tests {
         let e = strip_irradiance_cpu(&s, [2.05, 2.0, 0.0], [0.0, 0.0, 1.0]);
         let point = 50.0 / std::f64::consts::PI / (2.4 * 2.4);
         assert!((e - point).abs() < point * 0.05, "{e} vs {point}");
+    }
+
+    #[test]
+    fn empty_input_returns_empty() {
+        let eye = [0.0, 0.0, 0.0];
+        assert_eq!(shadow_priority(&[], eye), Vec::<usize>::new());
+        assert_eq!(select_shadowed(&[], eye, 8), Vec::<usize>::new());
+        assert_eq!(select_drawn(&[], eye), Vec::<usize>::new());
+        let buf = pack_lights(&[], &[], &[]);
+        assert_eq!(buf.len(), LIGHTS_UNIFORM_SIZE as usize);
+        assert_eq!(read_u32(&buf, 0), 0);
+    }
+
+    #[test]
+    fn shadow_priority_handles_non_finite() {
+        let eye = [0.0, 0.0, 0.0];
+        let nan_pos = light([f64::NAN, 0.0, 0.0], 1.0, LightKind::Point, 1.0);
+        let inf_intensity = light([1.0, 0.0, 0.0], f64::INFINITY, LightKind::Point, 1.0);
+        let normal = light([1.0, 0.0, 0.0], 1.0, LightKind::Point, 1.0);
+        let lights = vec![nan_pos, inf_intensity, normal];
+        // inf_intensity: score = inf/1 = inf; normal: score = 1/1 = 1; nan_pos: score = NaN.
+        // Order: inf first, then finite by score desc, then NaN last.
+        assert_eq!(shadow_priority(&lights, eye), vec![1, 2, 0]);
+    }
+
+    #[test]
+    fn shadow_priority_ties_by_lower_index() {
+        let eye = [0.0, 0.0, 0.0];
+        // Two lights at the same distance with the same intensity: tie by index.
+        let a = light([1.0, 0.0, 0.0], 1.0, LightKind::Point, 1.0);
+        let b = light([0.0, 1.0, 0.0], 1.0, LightKind::Point, 1.0);
+        assert_eq!(shadow_priority(&vec![a, b], eye), vec![0, 1]);
+    }
+
+    #[test]
+    fn select_shadowed_budget_larger_than_lights() {
+        let eye = [0.0, 0.0, 0.0];
+        let lights = row(3);
+        assert_eq!(select_shadowed(&lights, eye, 10), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn pack_lights_cube_spot_vp_is_zeros() {
+        let l = light([1.0, 2.0, 3.0], 5.0, LightKind::Point, -2.0);
+        let slot = ShadowSlot { first_layer: 0, cube: true, view_proj: [[1.0; 4]; 4], near: 0.05, far: 10.0, bias: 0.001 };
+        let buf = pack_lights(&vec![l], &[0], &[(0, slot)]);
+        // spot_vp[0] should be all zeros for a cube light (offset 16 + 64*64).
+        let vp_base = 16 + 64 * 64;
+        for i in 0..16 {
+            assert_eq!(read_f32(&buf, vp_base + 4 * i), 0.0, "spot_vp[0] entry {i} should be 0 for cube");
+        }
+    }
+
+    #[test]
+    fn pack_lights_non_finite_becomes_zero() {
+        let mut l = light([1.0, 2.0, 3.0], 5.0, LightKind::Spot, 0.5);
+        l.position = Vec3::new(f64::NAN, f64::INFINITY, -f64::INFINITY);
+        let buf = pack_lights(&vec![l], &[0], &[]);
+        assert_eq!(read_f32(&buf, 16 + 0), 0.0, "NaN position.x becomes 0");
+        assert_eq!(read_f32(&buf, 16 + 4), 0.0, "inf position.y becomes 0");
+        assert_eq!(read_f32(&buf, 16 + 8), 0.0, "-inf position.z becomes 0");
+    }
+
+    #[test]
+    fn pack_lights_caps_at_max_gpu_lights() {
+        let lights = row(70);
+        let drawn: Vec<usize> = (0..70).collect();
+        let buf = pack_lights(&lights, &drawn, &[]);
+        assert_eq!(read_u32(&buf, 0), 64, "count should be capped at 64");
+    }
+
+    #[test]
+    fn pack_lights_ignores_slots_for_non_drawn_lights() {
+        let lights = row(2);
+        let slot = ShadowSlot { first_layer: 5, cube: false, view_proj: [[0.0; 4]; 4], near: 0.05, far: 10.0, bias: 0.001 };
+        // Only light 0 is drawn, but slots has an entry for light 1.
+        let buf = pack_lights(&lights, &[0], &[(1, slot)]);
+        assert_eq!(read_f32(&buf, 16 + 48), -1.0, "light 0 should be unshadowed");
+    }
+
+    #[test]
+    fn pack_lights_count_is_number_packed() {
+        let lights = row(1);
+        // drawn has 2 entries, but only index 0 is valid.
+        let buf = pack_lights(&lights, &[0, 1], &[]);
+        assert_eq!(read_u32(&buf, 0), 1, "count should be the number of lights actually packed");
     }
 }
