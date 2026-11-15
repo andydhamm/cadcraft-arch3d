@@ -331,6 +331,8 @@ fn advance(off: &mut Offscreen, job: &mut Job, size: (u32, u32)) -> Result<Optio
             crate::offscreen::RenderOptions { lit: Some(&frame), ground: job.ground, style: crate::offscreen::Style::Shaded, ..Default::default() };
         let light = sun.unwrap_or(crate::light::Light::DEFAULT);
         job.target.render_with(&job.scene, job.key, &job.camera, &light, &opts);
+        // The still was drawn on `job.target`; report its look, not the last interactive frame's.
+        off.set_last_frame_look(job.target.last_frame_look().clone());
         job.rendered = true;
         return Ok(None);
     }
@@ -949,6 +951,45 @@ mod tests {
             }
         }
         assert!(matches!(r.status, FinalStatus::Done { .. }), "invalid env must not fail: {:?}", r.status);
+    }
+
+    fn manual(ev100: f64) -> Lighting {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.exposure = cadcraft_doc::arch::ExposureSetting::Manual { ev100 };
+        Lighting { sun: None, look, meter_night: false, ..Lighting::default() }
+    }
+
+    /// A raster Finalize on a fresh `Offscreen` reports the look of the still it drew.
+    #[test]
+    fn final_raster_reports_its_own_frame_look() {
+        let Some(mut o) = off() else { return };
+        let legacy = Lighting { sun: None, meter_night: false, ..Lighting::default() };
+        let png = render_final(&mut o, &scene_no_lights(), 1, &camera(), &legacy, false, SIZE);
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        assert_eq!(o.last_frame_look().exposure, crate::lights::DEFAULT_EXPOSURE);
+        assert_eq!(o.last_frame_look().exposure_mode, "auto");
+        let png = render_final(&mut o, &scene_no_lights(), 1, &camera(), &manual(3.0), false, SIZE);
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        assert_eq!(o.last_frame_look().exposure, crate::exposure::ev100_scale(3.0));
+        assert_eq!(o.last_frame_look().exposure_mode, "manual");
+    }
+
+    /// The Finalize look replaces whatever an earlier interactive frame left.
+    #[test]
+    fn final_raster_look_replaces_a_stale_interactive_look() {
+        let Some(mut o) = off() else { return };
+        let s = scene_no_lights();
+        let cam = camera();
+        let eye = cam.eye();
+        let Some(frame) = o.lit_frame(&s, 1, [eye.x, eye.y, eye.z], &manual(1.0), false) else {
+            eprintln!("SKIP: no lit frame");
+            return;
+        };
+        o.render_with(&s, 1, &cam, &crate::light::Light::DEFAULT, &crate::offscreen::RenderOptions { lit: Some(&frame), ..Default::default() });
+        assert_eq!(o.last_frame_look().exposure, crate::exposure::ev100_scale(1.0));
+        let png = render_final(&mut o, &s, 1, &cam, &manual(5.0), false, SIZE);
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        assert_eq!(o.last_frame_look().exposure, crate::exposure::ev100_scale(5.0));
     }
 
     /// A 1x1 final render produces a valid 4-byte PNG.

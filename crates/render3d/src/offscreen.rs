@@ -198,6 +198,11 @@ impl Offscreen {
         &self.last_look
     }
 
+    /// Record the look of a frame drawn on another target (a Finalize Render's still).
+    pub(crate) fn set_last_frame_look(&mut self, look: crate::frame_look::FrameLook) {
+        self.last_look = look;
+    }
+
     /// A renderer with its own device on the best available adapter.
     /// [`Render3dError::NoAdapter`] when there is none (headless, no GPU).
     pub async fn new(instance: &wgpu::Instance, size: (u32, u32)) -> Result<Self, Render3dError> {
