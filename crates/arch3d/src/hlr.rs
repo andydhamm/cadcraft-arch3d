@@ -576,4 +576,74 @@ mod tests {
         let Some(ov) = OrthoView::elevation([0.0, 1.0]) else { return };
         assert!(visible_segments(&quad_scene(), &ov, &[seg(0.5)]).is_empty());
     }
+
+    #[test]
+    fn merge_collinear_different_kinds_do_not_merge() {
+        // Two collinear touching lines of different kinds must not merge.
+        let a = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Cabinet, ArchId(0));
+        let b = Line2::new([1.0, 0.0], [2.0, 0.0], ArchKind::Wall, ArchId(1));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 2, "different kinds must not merge");
+        let kinds: Vec<ArchKind> = out.iter().map(|l| l.kind).collect();
+        assert!(kinds.contains(&ArchKind::Cabinet));
+        assert!(kinds.contains(&ArchKind::Wall));
+    }
+
+    #[test]
+    fn merge_collinear_nan_and_zero_length() {
+        // NaN coordinates are dropped.
+        let nan = Line2::new([f64::NAN, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));
+        assert!(merge_collinear(vec![nan]).is_empty());
+        // Zero-length lines are dropped.
+        let zero = Line2::new([0.0, 0.0], [0.0, 0.0], ArchKind::Wall, ArchId(0));
+        assert!(merge_collinear(vec![zero]).is_empty());
+        // Collinear but non-touching lines stay separate.
+        let a = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));
+        let b = Line2::new([2.0, 0.0], [3.0, 0.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn visible_segments_no_triangles() {
+        // With no triangles, all segments are fully visible.
+        let Some(ov) = OrthoView::elevation([0.0, 1.0]) else { return };
+        let seg = Seg3 { a: [0.0, 0.0, 0.0], b: [1.0, 0.0, 0.0], kind: ArchKind::Wall, object: ArchId(0) };
+        let out = visible_segments(&Scene3d::default(), &ov, &[seg]);
+        assert_eq!(out.len(), 1);
+        assert!((out[0].length() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_collinear_counter_and_cabinet_same_object_merge() {
+        // Two collinear touching lines of the same object but different kinds should NOT merge
+        // (they are different kinds). This tests that kind is part of the merge key.
+        let a = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Cabinet, ArchId(0));
+        let b = Line2::new([1.0, 0.0], [2.0, 0.0], ArchKind::Countertop, ArchId(0));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 2, "different kinds should not merge even with same object");
+        let kinds: Vec<ArchKind> = out.iter().map(|l| l.kind).collect();
+        assert!(kinds.contains(&ArchKind::Cabinet));
+        assert!(kinds.contains(&ArchKind::Countertop));
+    }
+
+    #[test]
+    fn merge_collinear_nan_endpoints_dropped() {
+        // A line with NaN in one endpoint should be dropped.
+        let nan_line = Line2::new([0.0, 0.0], [f64::NAN, 1.0], ArchKind::Wall, ArchId(0));
+        let good_line = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![nan_line, good_line]);
+        assert_eq!(out.len(), 1, "NaN line should be dropped");
+        assert!((out[0].b[0] - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_collinear_very_short_line_dropped() {
+        // A line shorter than MIN_RUN should be dropped.
+        let short = Line2::new([0.0, 0.0], [1e-6, 0.0], ArchKind::Wall, ArchId(0));
+        let good = Line2::new([0.0, 1.0], [1.0, 1.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![short, good]);
+        assert_eq!(out.len(), 1, "very short line should be dropped");
+        assert!((out[0].a[1] - 1.0).abs() < 1e-9);
+    }
 }
