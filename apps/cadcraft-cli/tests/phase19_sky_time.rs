@@ -53,7 +53,7 @@ fn level_cam(eye: [f64; 3], yaw: f64, pitch: f64, fov: f64) -> String {
 }
 
 /// One `--cmd` for a `render` in the given look (tag), mode and sky-star setting.
-fn render_cmd_json(tmp: &str, tag: &str, mode: &str, camera: &str, angle: &str, ev: i64, stars: Option<bool>) -> String {
+fn render_cmd_json(tmp: &Path, tag: &str, mode: &str, camera: &str, angle: &str, ev: i64, stars: Option<bool>) -> String {
     let out = format!("{tmp}/{tag}-{mode}.png");
     let mode_frag = match mode {
         "interactive" => String::new(),
@@ -114,7 +114,7 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     let eye = [0.0, 0.0, 1.6];
 
     // Probe: setup + one interactive render. Skip if there is no render adapter.
-    let first = render_cmd_json(tmp.as_str(), "noon", "interactive", &level_cam(eye, 90.0, 70.0, 30.0), "noon", 15, None);
+    let first = render_cmd_json(&tmp, "noon", "interactive", &level_cam(eye, 90.0, 70.0, 30.0), "noon", 15, None);
     let probe_args = {
         let mut a = vec!["run".to_string(), "--metric".to_string()];
         for c in &setup_cmds() {
@@ -141,7 +141,7 @@ fn eight_sky_looks_render_in_three_modes_quickly() {
     for (tag, cam, angle, ev, stars) in &looks {
         for mode in &modes {
             args.push("--cmd".to_string());
-            args.push(render_cmd_json(tmp.as_str(), tag.as_str(), *mode, cam.as_str(), angle.as_str(), *ev, *stars));
+            args.push(render_cmd_json(&tmp, tag.as_str(), *mode, cam.as_str(), angle.as_str(), *ev, *stars));
         }
     }
 
