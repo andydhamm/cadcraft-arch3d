@@ -724,6 +724,36 @@ fn vietnamese_takes_one_form_and_needs_a_font_with_its_letters() {
     }
 }
 
+/// The Ukrainian catalog has a translation for every phase-15 electrical label, not the
+/// English fallback.
+#[test]
+fn uk_rows_for_phase15_labels_exist() {
+    with_language("uk", || {
+        for source in [
+            "Outlet",
+            "Switch",
+            "Edit Electrical",
+            "Delete Electrical",
+            "Connection",
+            "Edit Connection",
+            "Delete Connection",
+            "Circuit Brightness",
+            "Auto Outlets",
+            "Light Set",
+            "Electrical View",
+            "Show Level",
+            "Edit Level",
+            "Electrical",
+            "Duplex Outlet",
+            "GFCI Outlet",
+            "240 V Outlet",
+            "Single-Pole Switch",
+        ] {
+            assert!(t(source) != source, "{source}");
+        }
+    });
+}
+
 #[test]
 fn polish_plural_forms() {
     for (n, expected) in [(0, 2), (1, 0), (2, 1), (4, 1), (5, 2), (12, 2), (14, 2), (21, 2), (22, 1), (24, 1), (25, 2), (101, 2), (102, 1), (112, 2)]
