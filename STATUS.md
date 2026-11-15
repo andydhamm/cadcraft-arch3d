@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 63 of 65 segments merged · 12 of 17 acceptance checks**
 
@@ -29,18 +29,18 @@ Updated 2026-11-15 06:45 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 92.2 h so far · expected done Nov 15 12:05–Nov 16 17:10 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 92.5 h so far · expected done Nov 15 12:20–Nov 16 17:25 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
 ## Phase 19 segments
 
-63 merged, 5 replaced, 1 gate, 1 escalate
+63 merged, 5 replaced, 1 escalate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p19k-sky-render-time` | Sky renders: find and remove what makes a render under the 512 x 256 sky environment take minutes | gate | mai-flash-esc |
-| `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | escalate |  |
+| `p19k-sky-render-time` | Sky renders: find and remove what makes a render under the 512 x 256 sky environment take minutes | escalate |  |
+| `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | working | mai-flash-esc |
 
 ## Recent merges
 
@@ -64,17 +64,17 @@ Updated 2026-11-15 06:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1318 |
-| bonsai-b | bonsai2-27b | idle | 1260 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1394 |
+| bonsai-b | bonsai2-27b | gate | 1260 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1395 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1365 |
 | claude-sonnet-a | sonnet | idle | 157 |
 | claude-sonnet-b | sonnet | idle | 156 |
 | claude-sonnet-c | sonnet | idle | 94 |
 | claude-sonnet-d | sonnet | idle | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1229 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1229 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 162 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 162 |
 | tturbo-mac | tturbo-ultraheretic | agent | 930 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 609 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 610 |
