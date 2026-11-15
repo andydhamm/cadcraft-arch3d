@@ -117,7 +117,7 @@ pub(crate) fn describe_look(l: &Look) -> Value {
         "technique": enum_name(serde_json::to_value(l.technique)),
         "exposure": match l.exposure {
             ExposureSetting::Auto => json!("auto"),
-            ExposureSetting::Manual { ev100 } => serde_json::to_value(ExposureSetting::Manual { ev100 }).unwrap_or(Value::Null),
+            ExposureSetting::Manual { ev100 } => json!({"ev100": ev100}),
         },
         "toneMap": enum_name(serde_json::to_value(l.tone_map)),
         "sun": {"on": l.sun.on, "intensity": l.sun.intensity, "shadows": l.sun.shadows, "angle": l.sun.angle},
@@ -454,7 +454,7 @@ mod tests {
         assert_eq!(r["look"]["sun"]["intensity"], 100000.0);
         assert!(r["look"]["backdrop"].is_null() && r["look"]["clip"].is_null());
         let r = s.execute("look", &json!({"exposure": {"ev100": 3}, "toneMap": "hable", "cutaway": true})).unwrap();
-        assert_eq!(r["look"]["exposure"], json!({"mode": "manual", "ev100": 3.0}));
+        assert_eq!(r["look"]["exposure"], json!({"ev100": 3.0}));
         assert_eq!(s.doc().unwrap().arch.look.tone_map, ToneMap::Hable);
         // Refused: nothing changes, not even the valid key beside the bad one.
         for bad_params in [
