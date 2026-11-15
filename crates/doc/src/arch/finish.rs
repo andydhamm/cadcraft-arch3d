@@ -170,4 +170,18 @@ mod tests {
         let w2 = Wall { finish: Some(Finish::Wood), ..Default::default() };
         assert!(serde_json::to_value(&w2).unwrap().get("finish").is_some());
     }
+
+    #[test]
+    fn finish_all_has_nine_distinct_entries() {
+        assert_eq!(Finish::ALL.len(), 9);
+        let names: Vec<&str> = Finish::ALL.iter().map(|f| f.name()).collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 9, "all finish names must be distinct");
+        // Every entry in ALL must parse back to itself.
+        for f in Finish::ALL {
+            assert_eq!(Finish::parse(f.name()), Some(f));
+        }
+    }
 }
