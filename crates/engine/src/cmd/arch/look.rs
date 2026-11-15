@@ -116,8 +116,8 @@ pub(crate) fn describe_look(l: &Look) -> Value {
     json!({
         "technique": enum_name(serde_json::to_value(l.technique)),
         "exposure": match l.exposure {
-            ExposureSetting::Auto => json!("auto"),
-            ExposureSetting::Manual { ev100 } => json!({"ev100": ev100}),
+            ExposureSetting::Auto => json!({"mode": "auto"}),
+            ExposureSetting::Manual { ev100 } => json!({"mode": "manual", "ev100": ev100}),
         },
         "toneMap": enum_name(serde_json::to_value(l.tone_map)),
         "sun": {"on": l.sun.on, "intensity": l.sun.intensity, "shadows": l.sun.shadows, "angle": l.sun.angle},
@@ -160,7 +160,17 @@ fn parse_exposure(cmd: &str, v: &Value, render: bool, look: &mut Look) -> Result
     match v {
         Value::String(s) if s == "auto" => look.exposure = ExposureSetting::Auto,
         Value::Object(o) => {
-            check_keys(cmd, "`exposure`", o, &["ev100"])?;
+            check_keys(cmd, "`exposure`", o, &["mode", "ev100"])?;
+            if let Some(mode) = o.get("mode") {
+                match mode.as_str() {
+                    Some("auto") => {
+                        look.exposure = ExposureSetting::Auto;
+                        return Ok(());
+                    }
+                    Some("manual") => {}
+                    _ => return Err(parse_err(cmd, "exposure.mode", mode, "\"auto\" or \"manual\"")),
+                }
+            }
             let ev = o.get("ev100").ok_or_else(|| bad(cmd, "`exposure` needs `ev100`"))?;
             look.exposure = ExposureSetting::Manual { ev100: num_of(cmd, "exposure.ev100", ev)? };
         }
@@ -450,11 +460,11 @@ mod tests {
         let mut s = Session::new();
         let r = s.execute("look", &json!({})).unwrap();
         assert_eq!(r["look"]["toneMap"], "aces");
-        assert_eq!(r["look"]["exposure"], "auto");
+        assert_eq!(r["look"]["exposure"], json!({"mode": "auto"}));
         assert_eq!(r["look"]["sun"]["intensity"], 100000.0);
         assert!(r["look"]["backdrop"].is_null() && r["look"]["clip"].is_null());
         let r = s.execute("look", &json!({"exposure": {"ev100": 3}, "toneMap": "hable", "cutaway": true})).unwrap();
-        assert_eq!(r["look"]["exposure"], json!({"ev100": 3.0}));
+        assert_eq!(r["look"]["exposure"], json!({"mode": "manual", "ev100": 3.0}));
         assert_eq!(s.doc().unwrap().arch.look.tone_map, ToneMap::Hable);
         // Refused: nothing changes, not even the valid key beside the bad one.
         for bad_params in [
