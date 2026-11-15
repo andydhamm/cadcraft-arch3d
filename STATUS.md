@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-15 22:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 19 of 21: Light, sky and cameras — 72 of 74 segments merged · 14 of 17 acceptance checks**
+**Phase 19 of 21: Light, sky and cameras — 73 of 74 segments merged · 15 of 17 acceptance checks**
 
-10,610 workspace tests passing at the last merge · 1227 segments merged in all · 0 of 15 seats working
+10,614 workspace tests passing at the last merge · 1228 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,23 +29,23 @@ Updated 2026-11-15 22:00 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 14 / 17 | 107.4 h so far · expected done Nov 16 00:08–Nov 16 01:20 UTC |
+| 19 | Light, sky and cameras | building | 15 / 17 | 107.7 h so far · expected done Nov 15 23:13–Nov 15 23:45 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
 
 ## Phase 19 segments
 
-72 merged, 6 replaced, 1 merging, 1 working
+73 merged, 6 replaced, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | merging | mai-flash-esc |
-| `p19q-strip-mesh-under-ceiling` | A strip light at ceiling height is built on the ceiling's underside, so its lens is seen from below | working | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 15 22:12 | `p19q-strip-mesh-under-ceiling` | merged | 10,614 pass | darwin-ws3 |
 | Nov 15 21:49 | `p19q-demo-dusk-camera-closer` | merged | 10,610 pass | claude-sonnet-b |
 | Nov 15 21:49 | `p19q-raster-meter-backdrop-only` | merged | 10,610 pass | bonsai-ws2-a |
 | Nov 15 21:32 | `p19q-final-raster-frame-look` | merged | 10,602 pass | claude-sonnet-d |
@@ -57,24 +57,23 @@ Updated 2026-11-15 22:00 UTC. This page and the card in the README are regenerat
 | Nov 15 20:16 | `harden-p21g-sheet-camera-new-sheet` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p18i-showcase-phase18` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 19:52 | `p19m-sky-cli-time` | merged | 10,546 pass | claude-sonnet-c |
-| Nov 15 19:06 | `harden-p6-r3d-limits` | merged | 10,545 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1352 |
+| bonsai-a | bonsai2-27b | idle | 1355 |
 | bonsai-b | bonsai2-27b | idle | 1276 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1442 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1444 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1381 |
 | claude-sonnet-a | sonnet | idle | 159 |
 | claude-sonnet-b | sonnet | idle | 160 |
 | claude-sonnet-c | sonnet | idle | 97 |
 | claude-sonnet-d | sonnet | idle | 94 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1265 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1265 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 126 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
-| tturbo-mac | tturbo-ultraheretic | gate | 966 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 647 |
+| tturbo-mac | tturbo-ultraheretic | agent | 967 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 647 |
