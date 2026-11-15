@@ -946,7 +946,7 @@ mod tests {
         // A bare number keeps its phase-12 meaning: the look stays automatic.
         let r = build_request(&d, &json!({"exposure": 0.5})).unwrap();
         assert_eq!(r.path.exposure, Some(0.5));
-        assert_eq!(describe_look(&r.look)["exposure"], "auto");
+        assert_eq!(describe_look(&r.look)["exposure"], json!("auto"));
         let err = build_request(&d, &json!({"exposure": 0.0})).unwrap_err().to_string();
         assert!(err.contains("`exposure` must be \"auto\" or a positive number"), "{err}");
     }
