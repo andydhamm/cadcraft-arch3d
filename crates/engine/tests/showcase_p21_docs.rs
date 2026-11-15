@@ -200,6 +200,75 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
     assert!(has_schedule("room"), "missing room schedule");
 }
 
+/// All sheet numbers in the phase-21 showcase are unique.
+#[test]
+fn phase21_sheet_numbers_are_unique() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    let mut seen = std::collections::HashSet::new();
+    for step in &steps {
+        let cmd = step.get("cmd").and_then(|v| v.as_str()).unwrap_or("");
+        if cmd != "sheet" {
+            continue;
+        }
+        let number = step.get("params").and_then(|p| p.get("number")).and_then(|n| n.as_str()).unwrap_or("unnamed");
+        if !seen.insert(number) {
+            panic!("duplicate sheet number: {}", number);
+        }
+    }
+}
+
+/// The final command in the phase-21 showcase is `layout.set {"name": "Model"}`.
+#[test]
+fn phase21_layout_set_is_final_command() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    let last = steps.last().expect("phase-21-showcase.json should not be empty");
+    let cmd = last.get("cmd").and_then(|v| v.as_str()).unwrap_or("");
+    assert_eq!(cmd, "layout.set", "last command should be layout.set, found {}", cmd);
+    let name = last.get("params").and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
+    assert_eq!(name, "Model", "layout.set should set name to Model, found {}", name);
+}
+
+/// Every `scale` value in the phase-21 showcase is a positive finite number.
+#[test]
+fn phase21_all_scales_are_positive_finite() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    for (i, step) in steps.iter().enumerate() {
+        let params = step.get("params").cloned().unwrap_or_default();
+        if let Some(scale) = params.get("scale").and_then(|s| s.as_f64()) {
+            assert!(scale.is_finite(), "step {} scale is not finite: {}", i, scale);
+            assert!(scale > 0.0, "step {} scale is not positive: {}", i, scale);
+        }
+    }
+}
+
+/// Every command in the phase-21 showcase has a string `cmd` and an object `params`.
+#[test]
+fn phase21_command_structure_is_valid() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = step.get("cmd").and_then(|v| v.as_str());
+        assert!(cmd.is_some(), "step {} missing string cmd", i);
+        let params = step.get("params");
+        assert!(params.map(|p| p.is_object()).unwrap_or(false), "step {} params is not an object", i);
+    }
+}
+
 #[test]
 fn readme_mentions_phase_21_and_plot() {
     let root = workspace_root();
