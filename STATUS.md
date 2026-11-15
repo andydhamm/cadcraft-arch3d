@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 63 of 66 segments merged · 12 of 17 acceptance checks**
 
@@ -29,18 +29,18 @@ Updated 2026-11-15 11:00 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 96.5 h so far · expected done Nov 16 01:24–Nov 23 21:04 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 96.7 h so far · expected done Nov 16 01:39–Nov 23 21:18 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 11 / 13 | — |
 
 ## Phase 19 segments
 
-63 merged, 6 replaced, 2 working, 1 queued
+63 merged, 6 replaced, 1 working, 1 merging, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-67514021a` | merge upstream upstream/main up to 67514021a (6 commits) | working | claude-sonnet-a |
-| `p19m-env-radiance-linear` | Environment::radiance stops re-validating the whole map per call (the O(texels^2) cost under the 512 x 256 sky); the sky cache shares its map by Arc | working | claude-sonnet-d |
+| `p19m-env-radiance-linear` | Environment::radiance stops re-validating the whole map per call (the O(texels^2) cost under the 512 x 256 sky); the sky cache shares its map by Arc | merging | claude-sonnet-d |
 
 ## Recent merges
 
@@ -65,16 +65,16 @@ Updated 2026-11-15 11:00 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1325 |
 | bonsai-b | bonsai2-27b | gate | 1261 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1403 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1366 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1404 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1366 |
 | claude-sonnet-a | sonnet | agent | 157 |
-| claude-sonnet-b | sonnet | gate | 156 |
+| claude-sonnet-b | sonnet | idle | 157 |
 | claude-sonnet-c | sonnet | idle | 95 |
-| claude-sonnet-d | sonnet | agent | 92 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1238 |
+| claude-sonnet-d | sonnet | idle | 93 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1239 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 124 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 163 |
-| tturbo-mac | tturbo-ultraheretic | gate | 941 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 622 |
+| tturbo-mac | tturbo-ultraheretic | agent | 942 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 622 |
