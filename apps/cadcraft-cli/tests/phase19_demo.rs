@@ -87,6 +87,28 @@ fn phase19_demo_saves_three_cameras_with_their_own_looks() {
     assert_eq!(overview_look["cutaway"], true);
 }
 
+/// 11-15: phase-19 check 11 got `filter.hidden` 0 through the overview camera. The script added a
+/// second level named "Level 0" (index 1) beside the drawing's own level 0 and built on it, while
+/// the camera's `level: 0` named the empty one; and the fitted view's centre pixel lay on the
+/// partition wall, not a floor.
+#[test]
+fn phase19_demo_overview_cuts_away_walls_and_centres_on_a_floor() {
+    let mut session = replay_demo();
+    let inspect = session.execute("arch.inspect", &json!({ "walls": true })).expect("arch.inspect should list levels and walls");
+    let levels = inspect["levels"].as_array().expect("levels list should exist");
+    assert_eq!(levels.len(), 1, "the demo builds on the drawing's one level: {levels:?}");
+    assert_eq!(levels[0]["name"], "Level 0");
+    let walls = inspect["walls"].as_array().expect("walls list should exist");
+    assert!(!walls.is_empty() && walls.iter().all(|w| w["level"] == 0), "every wall stands on level 0: {walls:?}");
+
+    let pick = session
+        .execute("pick3d", &json!({ "camera": "overview", "size": [320, 240], "pixel": [160, 120] }))
+        .expect("pick3d through the overview camera");
+    let hidden = pick["filter"]["hidden"].as_u64().expect("filter.hidden is a count");
+    assert!(hidden > 0, "the overview's cutaway hides camera-facing walls: {pick}");
+    assert_eq!(pick["hit"]["part"], "floor", "the overview's centre pixel shows a floor: {pick}");
+}
+
 #[test]
 fn phase19_demo_wall_references_are_valid() {
     let steps = load_demo_steps();

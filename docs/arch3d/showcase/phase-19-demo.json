@@ -1,6 +1,6 @@
 [
   {"cmd": "site", "params": {"latitude": 51.05, "longitude": -114.07, "trueNorth": 0}},
-  {"cmd": "level", "params": {"name": "Level 0", "elevation": 0.0}},
+  {"cmd": "level.edit", "params": {"level": 0, "name": "Level 0"}},
   {"cmd": "wall", "params": {"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true, "level": "Level 0"}},
   {"cmd": "wall", "params": {"points": [[0, 4], [10, 4]], "thickness": 0.1, "height": 2.4, "type": "interior", "level": "Level 0"}},
   {"cmd": "door", "params": {"wall": "w0", "offset": 4.0, "width": 0.9, "height": 2.1, "style": "hinged", "level": "Level 0"}},
@@ -36,6 +36,6 @@
   {"cmd": "camera", "params": {"save": "noon-hdri", "kind": "full", "eye": [5.0, -18.0, 2.2], "target": [5.0, 8.0, 1.5], "fov": 55, "technique": "path", "exposure": "auto", "sun": {"angle": "noon"}, "sky": {"on": true}, "lightSet": "Day"}},
   {"cmd": "backdrop", "params": {"kind": "sky"}},
   {"cmd": "look", "params": {"sun": {"angle": "noon"}, "lightSet": "Day", "technique": "standard", "exposure": "auto", "sky": {"on": true}}},
-  {"cmd": "camera", "params": {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true, "technique": "standard", "sun": {"angle": "noon"}, "sky": {"on": true}, "exposure": "auto", "lightSet": "Day"}},
+  {"cmd": "camera", "params": {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true, "target": [5.0, 2.0, 0.0], "technique": "standard", "sun": {"angle": "noon"}, "sky": {"on": true}, "exposure": "auto", "lightSet": "Day"}},
   {"cmd": "camera", "params": {"use": "dusk"}}
 ]
