@@ -477,8 +477,7 @@ fn outside(core: &Graph, u: usize, steps: usize) -> Option<Vec<Vec2>> {
     clippy::many_single_char_names,
     reason = "Exact x equality is required for the deterministic lexicographic tie-break; graph equations keep their conventional short names."
 )]
-fn islands(g: &Graph, outer: &[usize], p: Vec2) -> Option<Vec<Island>> {
-    let comp = components(g);
+fn islands_in(g: &Graph, comp: &[usize], core: &Graph, outer: &[usize], p: Vec2) -> Option<Vec<Island>> {
     let outer_comp: std::collections::HashSet<usize> = outer.iter().filter_map(|&i| comp.get(i).copied()).collect();
     let outer_pts = points(g, outer)?;
     let ob = Bounds2::from_points(outer_pts.iter().copied());
