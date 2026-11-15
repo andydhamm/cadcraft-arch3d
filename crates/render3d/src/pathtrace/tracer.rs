@@ -1844,7 +1844,7 @@ mod tests {
     /// The sRGB8 byte of a linear [0,1] value (matches `resolve.wgsl` `srgb`).
     fn srgb8(v: f32) -> u8 {
         let c = v.clamp(0.0, 1.0);
-        if c <= 0.0031308 { (c * 12.92 * 255.0 + 0.5) as u8 } else { (1.055 * c.powf(1.0 / 2.4) - 0.055) * 255.0 as u8 + 0.5 as u8 }
+        if c <= 0.0031308 { (c * 12.92 * 255.0 + 0.5) as u8 } else { ((1.055 * c.powf(1.0 / 2.4) - 0.055) * 255.0 + 0.5) as u8 }
     }
 
     /// Run a furnace still to completion and return its centre pixel.
@@ -1859,6 +1859,21 @@ mod tests {
         };
         let i = ((12 / 2) * 16 + 16 / 2) as usize * 4;
         (rgba[i] as u8, rgba[i + 1] as u8, rgba[i + 2] as u8)
+    }
+
+    #[test]
+    fn furnace_resolves_through_the_hable_curve() {
+        let Some(gpu) = compute() else { return };
+        for e in [0.1f32, 0.25f32, 0.5f32] {
+            for code in [crate::exposure::TONE_HABLE, crate::exposure::TONE_NONE, crate::exposure::TONE_ACES] {
+                let opts = PathOptions { exposure: Exposure::Fixed(e), tone_map: code, ..Default::default() };
+                let (r, g, b) = furnace_still(&gpu, &opts);
+                let want = srgb8(crate::exposure::tone_map(2.0 * e, code));
+                assert!((r as i32 - want as i32).abs() <= 2, "e={e} tone={code} r={r} want={want}");
+                assert!((g as i32 - want as i32).abs() <= 2, "e={e} tone={code} g={g} want={want}");
+                assert!((b as i32 - want as i32).abs() <= 2, "e={e} tone={code} b={b} want={want}");
+            }
+        }
     }
 
     fn env_still(gpu: &ComputeGpu, scene: &Scene3d, lighting: &Lighting) -> Vec<u8> {

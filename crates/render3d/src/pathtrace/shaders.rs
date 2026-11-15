@@ -226,14 +226,6 @@ mod tests {
     }
 
     #[test]
-    fn resolve_source_handles_all_three_tone_codes() {
-        let src = RESOLVE_WGSL.to_string();
-        assert!(src.contains("rp.tonemap == 1u"), "ACES (code 1) branch missing");
-        assert!(src.contains("rp.tonemap == 2u"), "Hable (code 2) branch missing");
-        assert!(src.contains("11.2"), "Hable constant 11.2 missing");
-    }
-
-    #[test]
     fn pt_hooks_are_stubs_with_todays_behaviour() {
         let src = kernel_source();
         let rq_src = rq_kernel_source();
