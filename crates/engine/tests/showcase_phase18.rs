@@ -424,7 +424,7 @@ fn digest_handles_nan_coordinates() {
     });
     let d = digest(&reply);
     let lines: Vec<&str> = d.lines().collect();
-    let room_line = lines.iter().find(|l| l.starts_with("room r1")).expect("missing room line: {}", d);
+    let room_line = lines.iter().find(|l| l.starts_with("room r1")).unwrap_or_else(|| panic!("missing room line: {}", d));
     assert!(room_line.contains("NaN"), "bbox should contain NaN: {}", room_line);
 }
 
