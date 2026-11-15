@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-15 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-15 18:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 66 of 69 segments merged · 12 of 17 acceptance checks**
 
@@ -29,19 +29,19 @@ Updated 2026-11-15 18:00 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | incomplete | 19 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 12 / 17 | 103.5 h so far · expected done Nov 16 02:00–Nov 17 09:56 UTC |
+| 19 | Light, sky and cameras | building | 12 / 17 | 103.7 h so far · expected done Nov 16 02:15–Nov 17 10:11 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 12 / 13 | — |
 
 ## Phase 19 segments
 
-66 merged, 6 replaced, 2 merging, 1 working
+66 merged, 6 replaced, 2 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p19m-sky-cli-time` | Sky renders through the CLI: a timing test for the 24 renders of check 03, and a report of checks 03 and 11 wall times | merging | mai-flash-esc |
 | `p18i-showcase-phase18` | The phase-18 demo gains a door-less glass panel; the showcase house gains the phase-18 kitchen and bath features | merging | claude-sonnet-b |
-| `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | working | bonsai-a |
+| `upstream-sync-7064a685a` | merge upstream upstream/main up to 7064a685a (3 commits) | gate | bonsai-a |
 
 ## Recent merges
 
@@ -64,10 +64,10 @@ Updated 2026-11-15 18:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1339 |
-| bonsai-b | bonsai2-27b | agent | 1266 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1426 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1372 |
+| bonsai-a | bonsai2-27b | gate | 1339 |
+| bonsai-b | bonsai2-27b | agent | 1267 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1427 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1373 |
 | claude-sonnet-a | sonnet | idle | 159 |
 | claude-sonnet-b | sonnet | idle | 159 |
 | claude-sonnet-c | sonnet | idle | 96 |
@@ -77,5 +77,5 @@ Updated 2026-11-15 18:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 125 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 168 |
-| tturbo-mac | tturbo-ultraheretic | agent | 955 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 639 |
+| tturbo-mac | tturbo-ultraheretic | agent | 956 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 640 |
