@@ -706,7 +706,7 @@ mod tests {
             .and_then(|a| a.first())
             .and_then(|v| v.get("lines"))
             .and_then(|l| l.as_array())
-            .unwrap_or_default();
+            .unwrap_or(&Vec::new());
         assert!(
             lines.iter().any(|l| {
                 let kind = l.get("kind").and_then(|k| k.as_str()).unwrap_or_default();
@@ -730,10 +730,10 @@ mod tests {
         let view = arch.views.first().cloned().unwrap_or_default();
         assert!(!view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
 
-        let before = s.state().and_then(|st| st.doc.as_ptr());
+        let before = s.state().map(|st| st.doc.clone()).ok();
         s.set_views_deferred(false);
-        let after = s.state().and_then(|st| st.doc.as_ptr());
-        assert_eq!(before, after, "the drawing Arc changed on a no-op");
+        let after = s.state().map(|st| st.doc.clone()).ok();
+        assert!(before.is_some_and(|b| after.is_some_and(|a| std::sync::Arc::ptr_eq(b, a))), "the drawing Arc changed on a no-op");
     }
 
     #[test]
