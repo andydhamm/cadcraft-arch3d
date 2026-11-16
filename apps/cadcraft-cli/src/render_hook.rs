@@ -1298,9 +1298,9 @@ mod tests {
         d.arch.rooms = detect_rooms(&d.arch);
         d.touch_arch();
 
-        // Camera from the north, looking south. The wall's faces point east and west, so the
-        // cutaway hides nothing.
-        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(2.0, 8.0, 1.5), Vec3::new(2.0, 2.0, 1.5), 40.0));
+        // Camera directly north of the wall, looking south. The wall's faces point east and west,
+        // so the camera sees the wall's edge, not its face, and the cutaway hides nothing.
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(0.0, 8.0, 1.5), Vec3::new(0.0, 2.0, 1.5), 40.0));
         let look = Look { cutaway: true, ..Look::default() };
 
         let mut req = request(&d, Some(camera), None, false);
@@ -1439,9 +1439,21 @@ mod tests {
 
     #[test]
     fn clipped_geometry_casts_no_interactive_shadow() {
-        use cadcraft_engine::doc::arch::ClipBox;
+        use cadcraft_arch::room::detect_rooms;
+        use cadcraft_engine::doc::arch::{ClipBox, Level};
         let _g = reset();
-        let d = room();
+        let mut d = Drawing::new_metric();
+        let c = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (c[k], c[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            d.arch.push_wall(w);
+        }
+        d.arch.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        d.arch.rooms = detect_rooms(&d.arch);
+        d.touch_arch();
+
         let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(2.0, 2.0, 5.0), Vec3::new(2.0, 2.0, 0.0), 40.0));
 
         let mut req = request(&d, Some(camera), None, false);
