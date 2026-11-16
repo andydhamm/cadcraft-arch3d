@@ -1035,10 +1035,7 @@ fn the_showcase_draws_no_wall_twice() {
             }
             let ux = (ax1 - ax0) / la;
             let uy = (ay1 - ay0) / la;
-            let off = [
-                ((bx0 - ax0) * uy - (by0 - ay0) * ux).abs(),
-                ((bx1 - ax0) * uy - (by1 - ay0) * ux).abs(),
-            ];
+            let off = [((bx0 - ax0) * uy - (by0 - ay0) * ux).abs(), ((bx1 - ax0) * uy - (by1 - ay0) * ux).abs()];
             if off.iter().copied().max_by(|a, b| a.total_cmp(b)).unwrap_or(0.0) > 0.05 {
                 continue;
             }
@@ -1091,10 +1088,8 @@ fn the_showcase_kitchen_counters_have_gfci_outlets() {
     let electrical: Vec<Value> = reply.get("electrical").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
 
     let kitchens: BTreeSet<String> = rooms.iter().filter(|r| strd(r, "type", "") == "kitchen").map(|r| strd(r, "id", "")).collect();
-    let gfci = electrical
-        .iter()
-        .filter(|e| kitchens.contains(&field_text(e, "room")) && strd(e, "kind", "").to_ascii_lowercase().contains("gfci"))
-        .count();
+    let gfci =
+        electrical.iter().filter(|e| kitchens.contains(&field_text(e, "room")) && strd(e, "kind", "").to_ascii_lowercase().contains("gfci")).count();
     assert!(gfci >= 2, "the kitchen's counters need GFCI outlets, found {}", gfci);
 }
 
@@ -1124,8 +1119,15 @@ fn the_showcase_main_walls_are_solid_around_their_windows() {
         }
         let offset = num(opening, "offset");
         let wall_len = ((wall.get("end").and_then(|v| v.as_array()).unwrap()[1] - wall.get("start").and_then(|v| v.as_array()).unwrap()[1]).powi(2)
-            + (wall.get("end").and_then(|v| v.as_array()).unwrap()[0] - wall.get("start").and_then(|v| v.as_array()).unwrap()[0]).powi(2)).sqrt();
-        assert!(offset >= -1e-6 && offset <= wall_len + 1e-6, "window on wall {} has offset {} outside its plan extent 0..{}", strd(wall, "id", ""), offset, wall_len);
+            + (wall.get("end").and_then(|v| v.as_array()).unwrap()[0] - wall.get("start").and_then(|v| v.as_array()).unwrap()[0]).powi(2))
+        .sqrt();
+        assert!(
+            offset >= -1e-6 && offset <= wall_len + 1e-6,
+            "window on wall {} has offset {} outside its plan extent 0..{}",
+            strd(wall, "id", ""),
+            offset,
+            wall_len
+        );
     }
 }
 
@@ -1171,9 +1173,9 @@ fn the_showcase_views_are_its_last_steps() {
 #[test]
 fn the_drawing_set_script_adds_no_cabinet() {
     install_io();
-    let script = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/arch3d/showcase/phase-21-showcase.json")).expect("cannot read the drawing-set script");
+    let script = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/arch3d/showcase/phase-21-showcase.json"))
+        .expect("cannot read the drawing-set script");
     let steps: Vec<ScriptStep> = serde_json::from_str(&script).unwrap_or_else(|e| panic!("cannot parse the drawing-set script: {e}"));
     let adds_cabinet = steps.iter().any(|s| s.cmd == "cabinet");
     assert!(!adds_cabinet, "the drawing-set script must not add a cabinet");
-}
 }
