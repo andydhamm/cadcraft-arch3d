@@ -1159,6 +1159,101 @@ mod tests {
     }
 
     #[test]
+    fn strip_mesh_z_with_ceiling_stack() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+        // Add a ceiling stack: 12.7 mm drywall, lowering the finished ceiling to 2.3873
+        m.rooms[0].ceiling_stack =
+            vec![cadcraft_doc::arch::CeilingLayer { material: Some("drywall".into()), thickness: 0.0127, ..Default::default() }];
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+
+        // Strip at rough ceiling height (2.4): above the finished ceiling solid (2.3673..2.3873), should not hang
+        f.height = Some(2.4);
+        let zp = strip_mesh_z(&m, &f, 2.4);
+        assert!((zp - 2.4).abs() < 1e-9, "strip at rough ceiling should not hang: {}", zp);
+
+        // Strip at finished ceiling height (2.3873): within the finished ceiling solid, should hang to 2.3673
+        f.height = Some(2.3873);
+        let zp = strip_mesh_z(&m, &f, 2.3873);
+        assert!((zp - 2.3673).abs() < 1e-9, "strip at finished ceiling should hang to underside: {}", zp);
+    }
+
+    #[test]
+    fn strip_mesh_z_outside_all_rooms() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        // Room is 4x4 at origin
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        // Strip at (6, 2), outside the room
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(6.0, 2.0));
+        f.path = vec![Vec2::new(5.0, 2.0), Vec2::new(7.0, 2.0)];
+        f.height = Some(2.4);
+
+        let zp = strip_mesh_z(&m, &f, 2.4);
+        assert!((zp - 2.4).abs() < 1e-9, "strip outside room should not hang: {}", zp);
+    }
+
+    #[test]
+    fn strip_mesh_z_in_room_hole() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        let mut room = Room { id: ArchId(1), polygon: ring, ..Default::default() };
+        // Add a hole in the center
+        room.holes.push(vec![Vec2::new(1.5, 1.5), Vec2::new(2.5, 1.5), Vec2::new(2.5, 2.5), Vec2::new(1.5, 2.5)]);
+        m.rooms.push(room);
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        // Strip at (2, 2), in the hole
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.8, 2.0), Vec2::new(2.2, 2.0)];
+        f.height = Some(2.4);
+
+        let zp = strip_mesh_z(&m, &f, 2.4);
+        assert!((zp - 2.4).abs() < 1e-9, "strip in room hole should not hang: {}", zp);
+    }
+
+    #[test]
+    fn strip_mesh_z_boundary_conditions() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        let ring = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)].map(|(x, y)| Vec2::new(x, y)).to_vec();
+        m.rooms.push(Room { id: ArchId(1), polygon: ring, ..Default::default() });
+
+        let t = cadcraft_arch::light::find_type("LED strip").unwrap_or_else(|| cadcraft_arch::light::catalogue().remove(0));
+        let mut f = cadcraft_arch::light::fixture_from_type(ArchId(1), &t, Vec2::new(2.0, 2.0));
+        f.path = vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)];
+
+        // Exactly at top of ceiling solid (zp == top)
+        f.height = Some(2.4);
+        let zp = strip_mesh_z(&m, &f, 2.4);
+        assert!((zp - 2.38).abs() < 1e-9, "at top: {}", zp);
+
+        // Exactly at bottom of ceiling solid (zp == top - 0.02)
+        f.height = Some(2.38);
+        let zp = strip_mesh_z(&m, &f, 2.38);
+        assert!((zp - 2.38).abs() < 1e-9, "at bottom: {}", zp);
+
+        // Just above the ceiling solid (outside the 1e-9 tolerance)
+        f.height = Some(2.401);
+        let zp = strip_mesh_z(&m, &f, 2.401);
+        assert!((zp - 2.401).abs() < 1e-9, "just above: {}", zp);
+
+        // Just below the ceiling solid (outside the 1e-9 tolerance)
+        f.height = Some(2.379);
+        let zp = strip_mesh_z(&m, &f, 2.379);
+        assert!((zp - 2.379).abs() < 1e-9, "just below: {}", zp);
+    }
+
+    #[test]
     fn a_ray_from_below_sees_the_strip_lens() {
         use crate::pick::Bvh;
         use cadcraft_geom::Vec3;

@@ -683,4 +683,105 @@ mod tests {
         assert_eq!(filtered.meshes[0].material, "wall");
         assert_eq!(filtered.meshes[0].object, ArchId(2));
     }
+
+    #[test]
+    fn cutaway_empty_model_returns_empty() {
+        let model = ArchModel::default();
+        let hidden = cutaway_hidden(&model, Vec3::new(0.0, 0.0, 1.0), 0);
+        assert!(hidden.is_empty(), "empty model should hide nothing");
+    }
+
+    #[test]
+    fn clipbox_min_greater_than_max_rejects_all() {
+        let box_ = ClipBox { min: Vec3::new(1.0, 1.0, 1.0), max: Vec3::new(0.0, 0.0, 0.0) };
+        assert!(!box_.contains(Vec3::new(0.5, 0.5, 0.5)), "degenerate box rejects interior");
+        assert!(!box_.contains(Vec3::new(0.0, 0.0, 0.0)), "degenerate box rejects min corner");
+        assert!(!box_.contains(Vec3::new(1.0, 1.0, 1.0)), "degenerate box rejects max corner");
+    }
+
+    #[test]
+    fn near_clip_zero_rejects_behind_eye() {
+        let f = ViewFilter {
+            hidden: Hidden::default(),
+            clip: None,
+            near: Some(0.0),
+            eye: Vec3::new(0.0, 0.0, 0.0),
+            forward: Vec3::new(0.0, 0.0, 1.0),
+            levels: None,
+            cutaway: false,
+        };
+        assert!(f.accepts(Vec3::new(0.0, 0.0, 0.0)), "point at eye with near=0 is accepted");
+        assert!(f.accepts(Vec3::new(0.0, 0.0, 1.0)), "point in front with near=0 is accepted");
+        assert!(!f.accepts(Vec3::new(0.0, 0.0, -1.0)), "point behind eye with near=0 is rejected");
+    }
+
+    #[test]
+    fn key_is_deterministic_for_identical_filters() {
+        let f1 = ViewFilter {
+            hidden: Hidden::default(),
+            clip: Some(ClipBox { min: Vec3::new(0.0, 0.0, 0.0), max: Vec3::new(1.0, 1.0, 1.0) }),
+            near: Some(0.5),
+            eye: Vec3::new(0.0, 0.0, 0.0),
+            forward: Vec3::new(0.0, 0.0, 1.0),
+            levels: None,
+            cutaway: false,
+        };
+        let f2 = f1.clone();
+        assert_eq!(f1.key(), f2.key(), "identical filters must have identical keys");
+    }
+
+    #[test]
+    fn cutaway_hides_all_facing_walls() {
+        let wall1 = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let wall2 = Wall {
+            id: ArchId(2),
+            start: Vec2::new(4.0, 0.0),
+            end: Vec2::new(4.0, 4.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let room = room([[0.1, 0.1], [3.9, 0.1], [3.9, 3.9], [0.1, 3.9]]);
+        let model = ArchModel { walls: vec![wall1.clone(), wall2.clone()], rooms: vec![room], ..ArchModel::default() };
+        let hidden1 = cutaway_hidden(&model, Vec3::new(2.0, -5.0, 1.0), 0);
+        assert!(hidden1.contains(&("wall", wall1.id)), "wall1 should be hidden from below");
+        assert!(!hidden1.contains(&("wall", wall2.id)), "wall2 should not be hidden from below");
+        let hidden2 = cutaway_hidden(&model, Vec3::new(7.0, 2.0, 1.0), 0);
+        assert!(hidden2.contains(&("wall", wall2.id)), "wall2 should be hidden from the right");
+        assert!(!hidden2.contains(&("wall", wall1.id)), "wall1 should not be hidden from the right");
+    }
+
+    #[test]
+    fn wall_perpendicular_to_view_not_hidden() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let room = room([[0.1, 0.1], [3.9, 0.1], [3.9, 3.9], [0.1, 3.9]]);
+        let model = ArchModel { walls: vec![wall.clone()], rooms: vec![room], ..ArchModel::default() };
+        let hidden = cutaway_hidden(&model, Vec3::new(2.0, 0.0, 1.0), 0);
+        assert!(!hidden.contains(&("wall", wall.id)), "wall perpendicular to view is not hidden");
+    }
+
+    #[test]
+    fn with_overview_level_not_found_uses_zero_elevation() {
+        use cadcraft_doc::arch::Level;
+        let model = ArchModel { levels: vec![Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() }], ..ArchModel::default() };
+        let f = ViewFilter::default().with_overview(&model, 99, true);
+        assert_eq!(f.levels.unwrap().elevation, 0.0, "missing level uses 0.0 elevation");
+    }
 }
