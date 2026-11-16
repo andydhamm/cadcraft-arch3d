@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-16 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 22: Light, sky and cameras — 80 of 82 segments merged · 17 of 17 acceptance checks**
 
@@ -29,18 +29,18 @@ Updated 2026-11-16 07:45 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 17 / 17 | 117.2 h so far · expected done Nov 16 09:14–Nov 16 10:03 UTC |
+| 19 | Light, sky and cameras | building | 17 / 17 | 117.5 h so far · expected done Nov 16 09:36–Nov 16 10:30 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 13 / 13 | — |
 | 22 | Phase 22 | pending | — | — |
 
 ## Phase 19 segments
 
-80 merged, 9 replaced, 1 working, 1 gate
+80 merged, 9 replaced, 2 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p19t-pane-look-controls` | Pane look controls: cutaway, clip box, near clip, exposure, tone map, sun angle, sky, camera reset and floor overview, each one command | working | mai-flash-b |
+| `p19t-pane-look-controls` | Pane look controls: cutaway, clip box, near clip, exposure, tone map, sun angle, sky, camera reset and floor overview, each one command | gate | mai-flash-b |
 | `upstream-sync-d267d6580` | merge upstream upstream/main up to d267d6580 (6 commits) | gate | claude-sonnet-d |
 
 ## Recent merges
@@ -64,10 +64,10 @@ Updated 2026-11-16 07:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1372 |
-| bonsai-b | bonsai2-27b | gate | 1289 |
+| bonsai-a | bonsai2-27b | gate | 1372 |
+| bonsai-b | bonsai2-27b | idle | 1290 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1475 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1396 |
+| bonsai-ws2-b | bonsai2-27b | gate | 1399 |
 | claude-sonnet-a | sonnet | idle | 160 |
 | claude-sonnet-b | sonnet | idle | 163 |
 | claude-sonnet-c | sonnet | gate | 100 |
@@ -75,7 +75,7 @@ Updated 2026-11-16 07:45 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1284 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 127 |
-| mai-flash-b | mai-code-1.1-flash | agent | 76 |
+| mai-flash-b | mai-code-1.1-flash | gate | 76 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
 | tturbo-mac | tturbo-ultraheretic | agent | 985 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 667 |
