@@ -970,3 +970,300 @@ fn the_showcase_house_is_replayed_once() {
     assert!(std::ptr::eq(house(), house()), "house() must be cached (same pointer) between calls");
     assert_eq!(house().0, house().1, "every step must replay (steps in file {} != steps replayed {})", house().0, house().1);
 }
+
+// ---- p21t-showcase-house: the redrawn house (rooms inside the shell, phase-16 ceilings and
+// foundation, the kitchen cabinets of the drawing set, the phase-19 look cameras) ----
+
+/// The rows of `key` in the cached `arch.inspect` reply (empty when the key is missing).
+fn house_rows(key: &str) -> Vec<Value> {
+    house().2.get(key).and_then(|v| v.as_array()).cloned().unwrap_or_default()
+}
+
+/// A `[x, y, ..]` point field of `v`.
+fn xy(v: &Value, key: &str) -> Option<(f64, f64)> {
+    let p = v.get(key)?.as_array()?;
+    Some((p.first()?.as_f64()?, p.get(1)?.as_f64()?))
+}
+
+/// The room rows of the given type.
+fn rooms_of_type(ty: &str) -> Vec<Value> {
+    house_rows("rooms").into_iter().filter(|r| strd(r, "type", "") == ty).collect()
+}
+
+/// One replay of the showcase per binary for the 3D observables: the replies of the three
+/// `build3d` calls the tests below read (wall and part probes, Main ceilings, Lower ceilings).
+fn house_3d() -> &'static (Value, Value, Value) {
+    static HOUSE3D: OnceLock<(Value, Value, Value)> = OnceLock::new();
+    HOUSE3D.get_or_init(|| {
+        install_io();
+        let script = fs::read_to_string(script_path()).unwrap_or_else(|e| panic!("cannot read the showcase script: {e}"));
+        let mut session = Session::new();
+        session.new_drawing(true);
+        replay(&script, &mut session);
+        let probes = serde_json::json!({"probe": [
+            [14.5, 0.0, 2.0], [26.0, 8.0, 2.0], [13.0, 16.0, 2.0], [0.0, 8.0, 2.0], [12.0, 0.0, 3.2],
+            [11.4, 15.75, 3.7], [14.5, 0.25, -1.62], [26.0, 8.0, -1.62], [13.0, 16.0, -1.62], [0.0, 8.0, -1.62]
+        ]});
+        let p = session.execute("build3d", &probes).unwrap_or_else(|e| panic!("build3d probe refused: {e}"));
+        let main = session
+            .execute("build3d", &serde_json::json!({"ceiling": [[22, 5], [22, 13.5], [18.5, 11.5], [12, 10]], "level": "Main"}))
+            .unwrap_or_else(|e| panic!("build3d ceiling (Main) refused: {e}"));
+        let lower = session
+            .execute("build3d", &serde_json::json!({"ceiling": [[4, 12], [15, 4]], "level": "Lower"}))
+            .unwrap_or_else(|e| panic!("build3d ceiling (Lower) refused: {e}"));
+        (p, main, lower)
+    })
+}
+
+/// The part name a probe row reports ("" for a miss).
+fn probe_part(reply: &Value, i: usize) -> String {
+    reply.get("probe").and_then(|p| p.get(i)).map(|h| strd(h, "part", "")).unwrap_or_default()
+}
+
+/// Every room but the deck stands inside the 26 x 16 m shell, and the house has the rooms the
+/// brief names, each once where it should be once.
+#[test]
+fn the_showcase_rooms_are_inside_the_shell() {
+    let rooms = house_rows("rooms");
+    assert!(!rooms.is_empty(), "no rooms");
+    for r in &rooms {
+        let ty = strd(r, "type", "");
+        if ty == "deck" || ty == "porch" {
+            continue;
+        }
+        for (x, y) in polygon_points(r.get("polygon").unwrap_or(&Value::Null)) {
+            assert!(
+                (-0.1 - 1e-6..=26.1 + 1e-6).contains(&x) && (-0.1 - 1e-6..=16.1 + 1e-6).contains(&y),
+                "room {} ({}) has the point ({x}, {y}) outside the shell -0.1..26.1 x -0.1..16.1",
+                strd(r, "id", "?"),
+                strd(r, "name", "?")
+            );
+        }
+    }
+    for name in ["Dining", "Bedroom 2", "Bedroom 3"] {
+        let n = rooms.iter().filter(|r| strd(r, "name", "") == name).count();
+        assert_eq!(n, 1, "exactly one room named {name}, found {n}");
+    }
+    for (ty, want) in [("bedroom", 3), ("dining", 1), ("kitchen", 1), ("living", 1), ("bath", 2)] {
+        assert_eq!(rooms_of_type(ty).len(), want, "rooms of type {ty}");
+    }
+}
+
+/// No two walls are collinear, overlapping by more than 0.5 m in plan and 0.01 m in height
+/// (the rule of tests/acceptance/phase-15/10_showcase_model.py).
+#[test]
+fn the_showcase_draws_no_wall_twice() {
+    let walls = house_rows("walls");
+    assert!(walls.len() >= 20, "only {} walls", walls.len());
+    for (i, a) in walls.iter().enumerate() {
+        for b in walls.iter().skip(i + 1) {
+            if num(a, "thickness") <= 0.0 || num(b, "thickness") <= 0.0 {
+                continue;
+            }
+            if num(a, "top").min(num(b, "top")) - num(a, "bottom").max(num(b, "bottom")) <= 0.01 {
+                continue;
+            }
+            let (Some((ax0, ay0)), Some((ax1, ay1)), Some((bx0, by0)), Some((bx1, by1))) = (xy(a, "start"), xy(a, "end"), xy(b, "start"), xy(b, "end"))
+            else {
+                panic!("a wall row has no start/end: {a} / {b}");
+            };
+            let la = (ax1 - ax0).hypot(ay1 - ay0);
+            if la < 1e-9 {
+                continue;
+            }
+            let (ux, uy) = ((ax1 - ax0) / la, (ay1 - ay0) / la);
+            let off = |x: f64, y: f64| ((x - ax0) * uy - (y - ay0) * ux).abs();
+            if off(bx0, by0).max(off(bx1, by1)) > 0.05 {
+                continue;
+            }
+            let t0 = (bx0 - ax0) * ux + (by0 - ay0) * uy;
+            let t1 = (bx1 - ax0) * ux + (by1 - ay0) * uy;
+            let overlap = la.min(t0.max(t1)) - 0.0f64.max(t0.min(t1));
+            assert!(overlap <= 0.5, "walls {} and {} are one wall drawn twice (overlap {overlap:.2} m)", strd(a, "id", "?"), strd(b, "id", "?"));
+        }
+    }
+}
+
+/// Every cabinet stands in a kitchen, bath, laundry or utility room; the kitchen holds at least
+/// three base cabinets with a counter, two wall cabinets and an island.
+#[test]
+fn the_showcase_cabinets_stand_in_the_kitchen() {
+    let rooms = house_rows("rooms");
+    let levels = house_rows("levels");
+    let cabs = house_rows("cabinets");
+    assert!(cabs.len() >= 10, "only {} cabinets", cabs.len());
+    let level_name = |c: &Value| -> String {
+        let idx = c.get("level").and_then(|l| l.as_i64());
+        levels.iter().find(|l| l.get("index").and_then(|i| i.as_i64()) == idx).map(|l| strd(l, "name", "")).unwrap_or_else(|| strd(c, "level", ""))
+    };
+    let room_of = |c: &Value| -> Option<&Value> {
+        let (x, y) = xy(c, "at")?;
+        let turn = num(c, "rotation").to_radians();
+        let half = num(c, "depth") / 2.0;
+        let (cx, cy) = (x - turn.sin() * half, y + turn.cos() * half);
+        let lv = level_name(c);
+        rooms.iter().find(|r| strd(r, "level", "") == lv && strd(r, "type", "") != "openBelow" && in_room(r, cx, cy))
+    };
+    let (mut base, mut wall, mut island) = (0, 0, 0);
+    for c in &cabs {
+        let room = room_of(c).unwrap_or_else(|| panic!("cabinet {} stands in no room", strd(c, "id", "?")));
+        let ty = strd(room, "type", "");
+        assert!(
+            ["kitchen", "bath", "laundry", "utility"].contains(&ty.as_str()),
+            "cabinet {} stands in {} ({ty})",
+            strd(c, "id", "?"),
+            strd(room, "name", "?")
+        );
+        if ty == "kitchen" {
+            let kind = strd(c, "kind", "");
+            if kind == "base" && boold(c, "counter", false) {
+                base += 1;
+                if c.get("wall").is_none_or(|w| w.is_null()) {
+                    island += 1;
+                }
+            }
+            if kind == "wall" {
+                wall += 1;
+            }
+        }
+    }
+    assert!(base >= 3 && wall >= 2 && island >= 1, "the kitchen holds {base} base cabinets with a counter, {wall} wall cabinets, {island} with no wall");
+}
+
+/// The counter rule runs in the kitchen (GFCI outlets), and every room meets the spacing rule.
+#[test]
+fn the_showcase_kitchen_counters_have_gfci_outlets() {
+    let kitchens = rooms_of_type("kitchen");
+    assert_eq!(kitchens.len(), 1, "one kitchen");
+    let kid = strd(&kitchens[0], "id", "");
+    let gfci = house_rows("electrical").iter().filter(|e| strd(e, "room", "") == kid && strd(e, "kind", "").to_lowercase().starts_with("gfci")).count();
+    assert!(gfci >= 2, "the kitchen {kid} has {gfci} GFCI outlet(s), need at least 2");
+    let gaps = house_rows("outletGaps");
+    assert!(!gaps.is_empty(), "arch.inspect reports no outletGaps");
+    for g in &gaps {
+        assert!(num(g, "maxGap") <= 1.8 + 1e-6, "room {} has an outlet gap of {}", strd(g, "room", "?"), num(g, "maxGap"));
+    }
+}
+
+/// The Main level's exterior walls are solid beside their windows, and a window's column is open
+/// at its glass (walls with openings on a raised level used to vanish).
+#[test]
+fn the_showcase_main_walls_are_solid_around_their_windows() {
+    let (p, _, _) = house_3d();
+    for (i, id) in ["w7", "w8", "w9", "w10"].iter().enumerate() {
+        let hit = p.get("probe").and_then(|a| a.get(i)).cloned().unwrap_or(Value::Null);
+        assert_eq!(strd(&hit, "part", ""), "wall", "probe {i} should be inside wall {id}: {hit}");
+        assert_eq!(strd(&hit, "id", ""), *id, "probe {i} should be inside wall {id}: {hit}");
+    }
+    assert_ne!(probe_part(p, 4), "wall", "(12, 0, 3.2) is in the kitchen's south window, not in a wall");
+}
+
+/// The vaulted Living room, the Dining tray, the kitchen soffit, the suspended Utility ceiling
+/// and the stem foundation with its footings.
+#[test]
+fn the_showcase_has_its_phase16_ceilings_and_foundation() {
+    let (p, main, lower) = house_3d();
+    let heights = |r: &Value| -> Vec<f64> { r.get("ceiling").and_then(|c| c.as_array()).map(|a| a.iter().map(|v| v.as_f64().unwrap_or(f64::NAN)).collect()).unwrap_or_default() };
+    let (m, l) = (heights(main), heights(lower));
+    assert_eq!(m.len(), 4, "four Main ceiling heights: {main}");
+    for (got, want) in m.iter().zip([6.25, 4.2, 3.9, 3.9]) {
+        assert!((got - want).abs() < 1e-6, "Main ceilings {m:?}, want [6.25, 4.2, 3.9, 3.9]");
+    }
+    assert_eq!(l.len(), 2, "two Lower ceiling heights: {lower}");
+    for (got, want) in l.iter().zip([0.9713, 1.2]) {
+        assert!((got - want).abs() < 1e-6, "Lower ceilings {l:?}, want [0.9713, 1.2]");
+    }
+
+    let dining = rooms_of_type("dining");
+    let trays = house_rows("trays");
+    assert_eq!(trays.len(), 1, "one tray");
+    assert_eq!(strd(&trays[0], "room", ""), strd(&dining[0], "id", "?"), "the tray is in the Dining room");
+    let soffits = house_rows("soffits");
+    assert_eq!(soffits.len(), 1, "one soffit");
+    let over: Vec<String> = soffits[0].get("over").and_then(|o| o.as_array()).map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default();
+    assert_eq!(over, ["cb6", "cb7"], "the soffit is over the kitchen's wall cabinets");
+    assert!((num(&soffits[0], "bottom") - 3.634).abs() < 1e-3, "soffit bottom {}", num(&soffits[0], "bottom"));
+    let foundations = house_rows("foundations");
+    assert_eq!(foundations.len(), 1, "one foundation");
+    assert_eq!(strd(&foundations[0], "type", ""), "stem");
+
+    assert_eq!(probe_part(p, 5), "soffit", "(11.4, 15.75, 3.7) is in the soffit");
+    for i in 6..10 {
+        assert_eq!(probe_part(p, i), "footing", "probe {i} is in a footing: {}", p.get("probe").and_then(|a| a.get(i)).unwrap_or(&Value::Null));
+    }
+}
+
+/// The dusk, noon-hdri and overview cameras with their own looks, the sun angles, the strips
+/// and the light sets.
+#[test]
+fn the_showcase_has_its_phase19_look_cameras() {
+    let reply = &house().2;
+    let cams = house_rows("cameras");
+    let names: Vec<String> = cams.iter().map(|c| strd(c, "name", "")).collect();
+    assert_eq!(names, ["Front", "Back", "Kitchen", "Living", "dusk", "noon-hdri", "overview"]);
+    let cam = |n: &str| cams.iter().find(|c| strd(c, "name", "") == n).cloned().unwrap_or(Value::Null);
+    let look = |n: &str| cam(n).get("look").cloned().unwrap_or(Value::Null);
+
+    let front = cam("Front");
+    assert_eq!(front.get("eye").and_then(|e| e.get(1)).and_then(|v| v.as_f64()), Some(-24.0), "Front stands back: {front}");
+    assert_eq!(num(&front, "eyeHeight"), 4.5);
+
+    let dusk = look("dusk");
+    assert_eq!(dusk.pointer("/sun/angle").and_then(|v| v.as_str()), Some("dusk"), "{dusk}");
+    assert_eq!(strd(&dusk, "lightSet", ""), "Evening");
+    assert_eq!(dusk.pointer("/exposure/ev100").and_then(|v| v.as_f64()), Some(4.0), "{dusk}");
+    assert_eq!(dusk.pointer("/backdrop/kind").and_then(|v| v.as_str()), Some("sky"), "{dusk}");
+    let d = cam("dusk");
+    assert_eq!(xy(&d, "eye"), Some((16.0, -12.0)), "the dusk camera frames the south windows: {d}");
+
+    let noon = look("noon-hdri");
+    assert_eq!(strd(&noon, "technique", ""), "path");
+    assert_eq!(noon.pointer("/backdrop/kind").and_then(|v| v.as_str()), Some("hdri"), "{noon}");
+    assert_eq!(noon.pointer("/backdrop/image").and_then(|v| v.as_str()), Some("polyhaven:kloofendal-puresky"), "{noon}");
+
+    let over = cam("overview");
+    assert_eq!(strd(&over, "kind", ""), "overview");
+    assert_eq!(over.pointer("/look/cutaway"), Some(&Value::Bool(true)), "{over}");
+
+    let angles = house_rows("sunAngles");
+    let dusk_angle = angles.iter().find(|a| strd(a, "name", "") == "dusk").expect("sun angle `dusk`");
+    assert!((num(dusk_angle, "sunElevation") + 3.0).abs() < 1e-9, "dusk sun elevation {}", num(dusk_angle, "sunElevation"));
+    assert!(angles.iter().any(|a| strd(a, "name", "") == "noon"), "sun angle `noon`");
+
+    let lights = house_rows("lights");
+    let strips = lights.iter().filter(|l| strd(l, "kind", "") == "strip").count();
+    assert_eq!(strips, 3, "three strip lights");
+    let sets = house_rows("lightSets");
+    for name in ["Evening", "Day"] {
+        assert!(sets.iter().any(|s| strd(s, "name", "") == name), "light set {name}");
+    }
+    let day = sets.iter().find(|s| strd(s, "name", "") == "Day").and_then(|s| s.get("lights")).and_then(|l| l.as_object()).cloned().unwrap_or_default();
+    assert_eq!(day.len(), lights.len(), "Day names every light");
+    assert!(day.values().all(|s| s.get("on") == Some(&Value::Bool(false))), "Day turns every light off");
+    assert_eq!(strd(reply, "activeCamera", ""), "Front", "Front stays the active camera");
+}
+
+/// The four elevations and two sections are the script's last six steps, so later additions go
+/// before them and pay no regeneration.
+#[test]
+fn the_showcase_views_are_its_last_steps() {
+    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
+    let steps: Vec<ScriptStep> = serde_json::from_str(&script).expect("script is not valid JSON");
+    assert!(steps.len() > 6);
+    let (head, tail) = steps.split_at(steps.len() - 6);
+    let is_view = |s: &ScriptStep| s.cmd == "elevation" || s.cmd == "section";
+    assert_eq!(tail.iter().filter(|s| s.cmd == "elevation").count(), 4, "four elevations at the end");
+    assert_eq!(tail.iter().filter(|s| s.cmd == "section").count(), 2, "two sections at the end");
+    assert!(!head.iter().any(is_view), "an elevation or section step stands before the last six");
+}
+
+/// The kitchen cabinets live in bilevel.json: the drawing-set script adds none.
+#[test]
+fn the_drawing_set_script_adds_no_cabinet() {
+    let path = script_path().with_file_name("phase-21-showcase.json");
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+    let steps: Vec<ScriptStep> = serde_json::from_str(&text).expect("phase-21-showcase.json is not a step array");
+    assert!(!steps.iter().any(|s| s.cmd.starts_with("cabinet")), "phase-21-showcase.json still adds a cabinet");
+    assert_eq!(steps.iter().filter(|s| s.cmd == "sheet").count(), 13, "13 sheet steps");
+    assert_eq!(steps.last().map(|s| s.cmd.as_str()), Some("layout.set"), "layout.set is the last step");
+}
