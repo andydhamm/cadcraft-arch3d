@@ -3688,6 +3688,68 @@ mod tests {
     }
 
     #[test]
+    fn pane_look_hdri_backdrop_clears_moon() {
+        let mut pane = site_pane();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: 51.05, true_north: 30.0, ..Default::default() });
+        model.backdrop = Some(cadcraft_doc::arch::Backdrop::Hdri { image: "test.hdr".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        pane.sync(2, Some(&model));
+        assert!(pane.moon_dir.is_none(), "HDRI backdrop clears the moon direction");
+    }
+
+    #[test]
+    fn pane_look_night_with_named_sun_angle() {
+        let (site_name, site_params) = site_cmd();
+        let (mut pane, session) = look_pane(&[
+            (site_name, site_params),
+            ("sunangle", serde_json::json!({"name": "low", "azimuth": 180, "elevation": 20})),
+            ("look", serde_json::json!({"sun": {"angle": "low"}})),
+        ]);
+        pane.night = true;
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "night turns the sun off even with a named angle");
+        assert!(l.sun_dir.is_some(), "but the sun direction is still the named angle's");
+        let doc = session.doc().expect("doc");
+        let want = cadcraft_engine::effective_sun_dir(&doc.arch, &doc.arch.look, None).expect("named angle resolves");
+        for i in 0..3 {
+            assert!((l.sun_dir.expect("dir")[i] - want[i]).abs() < 1e-9, "axis {i}");
+        }
+    }
+
+    #[test]
+    fn pane_look_camera_without_look_uses_global() {
+        let mut session = house_session();
+        session.execute("look", &serde_json::json!({"exposure": {"ev100": 5}})).expect("global look");
+        session.execute("camera", &serde_json::json!({"save": "a", "azimuth": 30})).expect("camera without look");
+        let st = session.state().expect("state");
+        let mut pane = Pane3d::new();
+        pane.sync_doc(st.uid, st.doc.arch_revision, Some(&st.doc.arch));
+        let l = pane.lighting();
+        assert_eq!(l.look.exposure, cadcraft_doc::arch::ExposureSetting::Manual { ev100: 5.0 }, "camera without look uses global look");
+    }
+
+    #[test]
+    fn pane_look_lighting_recomputes_on_night_toggle() {
+        let mut pane = site_pane();
+        let day = pane.lighting();
+        pane.night = true;
+        let night = pane.lighting();
+        assert_ne!(day, night, "lighting differs between day and night");
+        pane.night = false;
+        let day_again = pane.lighting();
+        assert_eq!(day, day_again, "toggling night back restores day lighting");
+    }
+
+    #[test]
+    fn pane_look_sun_direction_changes_with_date() {
+        let mut pane = site_pane();
+        let l1 = pane.lighting();
+        pane.sun_date = "2026-12-21".into();
+        let l2 = pane.lighting();
+        assert_ne!(l1.sun_dir, l2.sun_dir, "sun direction differs between solstices");
+    }
+
+    #[test]
     fn pane_camera_move_keeps_lighting_and_scene_key() {
         let mut pane = site_pane();
         let (lighting, key) = (pane.lighting(), pane.scene_key());
