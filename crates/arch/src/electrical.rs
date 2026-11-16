@@ -592,6 +592,105 @@ mod tests {
     }
 
     #[test]
+    fn counter_outlet_at_wall_top_boundary() {
+        // Wall height exactly equals the counter top height; z == wall top is allowed (strict > test).
+        let mut model = ArchModel::default();
+        let wall_height = 0.9 + 0.038 + 0.15;
+        let w = model.push_wall(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: wall_height,
+            ..Wall::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.5, 0.0),
+            rotation: 0.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 0.0, counter: true, ..ElectricalDevice::default() };
+        let p = place_device(&model, &d).unwrap();
+        assert!((p.z - wall_height).abs() < 1e-9, "z = {} expected {}", p.z, wall_height);
+    }
+
+    #[test]
+    fn counter_outlet_wall_too_short() {
+        // Wall shorter than the counter top height: the plate is above the wall and must be refused.
+        let mut model = ArchModel::default();
+        let w = model.push_wall(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 0.5,
+            ..Wall::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.5, 0.0),
+            rotation: 0.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 0.0, counter: true, ..ElectricalDevice::default() };
+        let r = place_device(&model, &d);
+        assert!(r.is_err(), "counter outlet on a 0.5 m wall should be refused");
+    }
+
+    #[test]
+    fn counter_outlet_on_large_elevation() {
+        // Regression: a large level elevation must not push the counter outlet below the floor.
+        let mut model = ArchModel::default();
+        model.levels[0].elevation = 100.0;
+        let w = model.push_wall(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.5, 0.0),
+            rotation: 0.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 0.0, counter: true, ..ElectricalDevice::default() };
+        let p = place_device(&model, &d).unwrap();
+        let expected = 100.0 + 0.9 + 0.038 + 0.15;
+        assert!((p.z - expected).abs() < 1e-9, "z = {} expected {}", p.z, expected);
+    }
+
+    #[test]
     fn auto_outlets_place_gfci_on_a_raised_kitchen() {
         let (model_raised, room) = build_kitchen(1.5);
         let raised = outlets::auto_outlets(&model_raised, room);
