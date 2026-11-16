@@ -209,20 +209,21 @@ fn lock_final(m: &std::sync::Mutex<FinalUi>) -> std::sync::MutexGuard<'_, FinalU
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// The lighting for `site`, `night`, `date` and `time`. `None` for the sun when the date or
-/// time does not parse (the caller keeps its last good lighting).
-fn compute_lighting(site: Option<&cadcraft_doc::arch::SiteLocation>, night: bool, date: &str, time: &str) -> Option<cadcraft_render3d::Lighting> {
-    use cadcraft_render3d::{Light, Lighting};
-    if night {
-        return Some(Lighting { sun: None, sun_shadow: false, ..Lighting::default() });
-    }
-    let Some(site) = site else { return Some(Lighting::default()) };
-    let sun = cadcraft_arch::sun::sun_position(site.latitude, date.trim(), time.trim())?;
-    let d = cadcraft_arch::site::true_to_drawing(Some(site), cadcraft_arch::sun::sun_dir(&sun));
-    let dir = [d[0] as f32, d[1] as f32, d[2] as f32];
-    let light = Light::from_sun(&cadcraft_render3d::light::Sun { dir, ..Default::default() }, Light::DEFAULT.ambient);
-    Some(Lighting { sun: Some(light), sun_shadow: true, ..Lighting::default() })
+/// The active view look of `model`: the active camera's own look, else the global one (the body
+/// of `cadcraft_engine::view_look`, which takes a whole drawing).
+fn view_of(model: &cadcraft_doc::ArchModel) -> cadcraft_engine::ViewLook {
+    let camera = model.active_camera.as_deref().and_then(|n| model.camera_by_name(n));
+    let look = cadcraft_engine::effective_look(model, camera);
+    let sun_dir = cadcraft_engine::effective_sun_dir(model, &look, None);
+    let overview = camera.filter(|c| c.kind == cadcraft_doc::arch::CameraKind::Overview).map(|c| {
+        let level = c.level.unwrap_or_else(|| model.plan_level.unwrap_or(0));
+        (level, c.lower_levels.unwrap_or(true))
+    });
+    cadcraft_engine::ViewLook { look, sun_dir, overview }
 }
+
+/// What the cached lighting was computed from.
+type LightingInputs = (Option<cadcraft_doc::arch::SiteLocation>, bool, String, String, cadcraft_engine::ViewLook, Option<[f64; 3]>, u64);
 
 /// Per-frame state for the 3D pane.
 #[derive(Debug)]
@@ -272,9 +273,21 @@ pub struct Pane3d {
     site: Option<cadcraft_doc::arch::SiteLocation>,
     /// The lighting last computed, with the inputs it was computed from.
     lighting: cadcraft_render3d::Lighting,
-    lighting_inputs: Option<(Option<cadcraft_doc::arch::SiteLocation>, bool, String, String)>,
+    lighting_inputs: Option<LightingInputs>,
     /// Whether the date and time entries parse.
     sun_valid: bool,
+    /// The active view look of the model (the camera's own look, else the global one).
+    view: cadcraft_engine::ViewLook,
+    /// The moon's direction for the view look (`None` under an HDRI backdrop or with no moon).
+    moon_dir: Option<[f64; 3]>,
+    /// The sky or HDRI environment built for `environment_for`.
+    environment: Option<Arc<cadcraft_render3d::Environment>>,
+    /// The look and sun direction `environment` was built for.
+    environment_for: Option<(cadcraft_doc::arch::Look, Option<[f64; 3]>)>,
+    /// The night switch, date and time the environment was built with (`None`: no model synced).
+    env_built: Option<(bool, String, String)>,
+    /// Counts environment rebuilds, so the lighting cache notices a new one.
+    env_gen: u64,
     /// Finalize Render state shared with the paint callback.
     finalize: Arc<std::sync::Mutex<FinalUi>>,
     /// The painter tool armed in the pane ([`PaintTool::Off`]: clicks select).
@@ -386,6 +399,12 @@ impl Pane3d {
             lighting: cadcraft_render3d::Lighting::default(),
             lighting_inputs: None,
             sun_valid: true,
+            view: cadcraft_engine::ViewLook::default(),
+            moon_dir: None,
+            environment: None,
+            environment_for: None,
+            env_built: None,
+            env_gen: 0,
             finalize: Arc::default(),
             tool: PaintTool::Off,
             scope: 0,
@@ -398,17 +417,67 @@ impl Pane3d {
         }
     }
 
-    /// The lighting for the site, night switch, date and time. Recomputed only when one of
-    /// them changed; an entry that does not parse keeps the last good sun.
+    /// The look the pane lights with (the Night switch turns its sun off) and the toward-sun
+    /// direction: the look's named angle, else the site's sun at the entered date and time.
+    /// `Err` when the date or time does not parse.
+    fn look_and_sun(&self) -> (cadcraft_doc::arch::Look, Result<Option<[f64; 3]>, ()>) {
+        let mut look = self.view.look.clone();
+        if self.night {
+            look.sun.on = false;
+        }
+        if self.view.sun_dir.is_some() {
+            return (look, Ok(self.view.sun_dir));
+        }
+        let Some(site) = self.site.as_ref() else { return (look, Ok(None)) };
+        let dir = cadcraft_arch::sun::sun_position(site.latitude, self.sun_date.trim(), self.sun_time.trim())
+            .map(|sun| cadcraft_arch::site::true_to_drawing(Some(site), cadcraft_arch::sun::sun_dir(&sun)));
+        match dir {
+            Some(d) => (look, Ok(Some([d[0], d[1], d[2]]))),
+            // Night has no sun to place, so an unreadable entry does not matter.
+            None if self.night => (look, Ok(None)),
+            None => (look, Err(())),
+        }
+    }
+
+    /// Take the view look, moon and environment from `m`.
+    fn refresh_look(&mut self, m: &cadcraft_doc::ArchModel) {
+        self.view = view_of(m);
+        let backdrop = self.view.look.backdrop.as_ref().or(m.backdrop.as_ref());
+        self.moon_dir = if matches!(backdrop, Some(cadcraft_doc::arch::Backdrop::Hdri { .. })) {
+            None
+        } else {
+            cadcraft_arch3d::sky::moon_dir(m, &self.view.look.sky.moon)
+        };
+        if let (look, Ok(sun_dir)) = self.look_and_sun() {
+            self.environment = cadcraft_render3d::environment_for(m, &look, sun_dir);
+            self.environment_for = Some((look, sun_dir));
+        }
+        self.env_built = Some((self.night, self.sun_date.clone(), self.sun_time.clone()));
+        self.env_gen = self.env_gen.wrapping_add(1);
+    }
+
+    /// The lighting for the drawing's look (the active camera's own, else the global one), the
+    /// site, night switch, date and time. Recomputed only when one of them changed; an entry that
+    /// does not parse keeps the last good sun. A pane never synced with a model lights by default.
     pub fn lighting(&mut self) -> cadcraft_render3d::Lighting {
-        let inputs = (self.site.clone(), self.night, self.sun_date.clone(), self.sun_time.clone());
+        if self.env_built.is_none() {
+            return cadcraft_render3d::Lighting::default();
+        }
+        let inputs = (self.site.clone(), self.night, self.sun_date.clone(), self.sun_time.clone(), self.view.clone(), self.moon_dir, self.env_gen);
         if self.lighting_inputs.as_ref() != Some(&inputs) {
-            match compute_lighting(self.site.as_ref(), self.night, &self.sun_date, &self.sun_time) {
-                Some(l) => {
+            match self.look_and_sun() {
+                (look, Ok(sun_dir)) => {
+                    let budget = cadcraft_render3d::Lighting::default().budget;
+                    let mut l =
+                        cadcraft_render3d::look::lighting_for(&look, sun_dir, budget).with_moon(if self.night { None } else { self.moon_dir });
+                    l.meter_night = true;
+                    if self.environment_for.as_ref() == Some(&(look, sun_dir)) {
+                        l.environment = self.environment.clone();
+                    }
                     self.lighting = l;
                     self.sun_valid = true;
                 }
-                None => self.sun_valid = false,
+                (_, Err(())) => self.sun_valid = false,
             }
             self.lighting_inputs = Some(inputs);
         }
@@ -575,6 +644,11 @@ impl Pane3d {
                 if self.site != m.site {
                     self.site = m.site.clone();
                 }
+                let built = (self.night, self.sun_date.as_str(), self.sun_time.as_str());
+                let stale = self.env_built.as_ref().is_none_or(|(n, d, t)| (*n, d.as_str(), t.as_str()) != built);
+                if self.last_revision != revision || stale {
+                    self.refresh_look(m);
+                }
                 if self.last_revision == revision {
                     return false;
                 }
@@ -605,6 +679,11 @@ impl Pane3d {
             }
             None => {
                 self.site = None;
+                self.view = cadcraft_engine::ViewLook::default();
+                self.moon_dir = None;
+                self.environment = None;
+                self.environment_for = None;
+                self.env_built = None;
                 self.scene = None;
                 self.cache = None;
                 self.last_rebuild = None;
@@ -2781,6 +2860,130 @@ mod tests {
         // No site: the default light, no sun shadow.
         let mut bare = Pane3d::new();
         assert_eq!(bare.lighting(), cadcraft_render3d::Lighting::default());
+    }
+
+    /// The house pane after running each of `cmds` and syncing.
+    fn look_pane(cmds: &[(&str, serde_json::Value)]) -> (Pane3d, Session) {
+        let (mut pane, mut session) = house_pane();
+        for (name, params) in cmds {
+            session.execute(name, params).expect("command runs");
+        }
+        resync(&mut pane, &session);
+        (pane, session)
+    }
+
+    fn resync(pane: &mut Pane3d, session: &Session) {
+        let st = session.state().expect("session state");
+        pane.sync(st.doc.arch_revision, Some(&st.doc.arch));
+    }
+
+    fn site_cmd() -> (&'static str, serde_json::Value) {
+        ("site", serde_json::json!({"latitude": 51.05, "longitude": -114.07, "trueNorth": 0}))
+    }
+
+    #[test]
+    fn pane_look_exposure_and_tone_map_reach_the_frame() {
+        use cadcraft_doc::arch::{ExposureSetting, ToneMap};
+        let (mut pane, mut session) = look_pane(&[("look", serde_json::json!({"exposure": {"ev100": 3}, "toneMap": "hable"}))]);
+        let l = pane.lighting();
+        assert_eq!(l.look.exposure, ExposureSetting::Manual { ev100: 3.0 });
+        assert_eq!(l.look.tone_map, ToneMap::Hable);
+        session.execute("look", &serde_json::json!({"exposure": "auto"})).expect("look");
+        resync(&mut pane, &session);
+        assert_eq!(pane.lighting().look.exposure, ExposureSetting::Auto);
+    }
+
+    #[test]
+    fn pane_look_named_sun_angle_wins_over_the_date_and_time() {
+        let (site_name, site_params) = site_cmd();
+        let (mut pane, session) = look_pane(&[
+            (site_name, site_params),
+            ("sunangle", serde_json::json!({"name": "low", "azimuth": 180, "elevation": 20})),
+            ("look", serde_json::json!({"sun": {"angle": "low"}})),
+        ]);
+        let st = session.state().expect("session state");
+        let want = cadcraft_engine::effective_sun_dir(&st.doc.arch, &st.doc.arch.look, None).expect("named angle resolves");
+        let l = pane.lighting();
+        let got = l.sun_dir.expect("sun direction");
+        for i in 0..3 {
+            assert!((got[i] - want[i]).abs() < 1e-9, "axis {i}");
+        }
+        assert!((got[2] - 20f64.to_radians().sin()).abs() < 1e-9);
+        assert!(l.sun_shadow);
+        for t in ["08:00", "99:99"] {
+            pane.sun_time = t.into();
+            let again = pane.lighting();
+            assert_eq!(again.sun_dir, l.sun_dir, "{t}");
+            assert_eq!(again.sun, l.sun, "{t}");
+            assert!(pane.sun_valid, "{t}");
+        }
+    }
+
+    #[test]
+    fn pane_look_sun_off_and_shadows_off() {
+        let (site_name, site_params) = site_cmd();
+        let (mut pane, mut session) = look_pane(&[(site_name, site_params), ("look", serde_json::json!({"sun": {"on": false}}))]);
+        // With the sun off the sky's moon is the directional light (`Lighting::with_moon`); with the
+        // sky off too there is none.
+        let l = pane.lighting();
+        assert!(l.moon.is_some() && !l.sun_shadow, "the moon stands in for the sun");
+        session.execute("look", &serde_json::json!({"sky": {"on": false}})).expect("look");
+        resync(&mut pane, &session);
+        assert!(pane.lighting().sun.is_none(), "no sun and no moon");
+        session.execute("look", &serde_json::json!({"sky": {"on": true}})).expect("look");
+        session.execute("look", &serde_json::json!({"sun": {"on": true, "shadows": false}})).expect("look");
+        resync(&mut pane, &session);
+        let l = pane.lighting();
+        assert!(l.sun.is_some(), "the sun is back");
+        assert!(!l.sun_shadow, "without shadows");
+    }
+
+    #[test]
+    fn pane_look_sky_environment_is_built_and_follows_the_look() {
+        let (site_name, site_params) = site_cmd();
+        let (mut pane, mut session) = look_pane(&[(site_name, site_params), ("backdrop", serde_json::json!({"kind": "sky"}))]);
+        assert!(pane.lighting().environment.is_some(), "a sky backdrop has an environment");
+        session.execute("look", &serde_json::json!({"sky": {"on": false}})).expect("look");
+        resync(&mut pane, &session);
+        let l = pane.lighting();
+        let st = session.state().expect("session state");
+        let look = cadcraft_engine::view_look(&st.doc);
+        let want = cadcraft_render3d::environment_for(&st.doc.arch, &look.look, look.sun_dir);
+        assert_eq!(l.environment, want);
+    }
+
+    #[test]
+    fn pane_look_active_camera_look_wins_and_reset_restores_it() {
+        use cadcraft_doc::arch::ExposureSetting;
+        let ev = |pane: &mut Pane3d| pane.lighting().look.exposure;
+        let (mut pane, mut session) = look_pane(&[
+            ("look", serde_json::json!({"exposure": {"ev100": 5}})),
+            ("camera", serde_json::json!({"save": "a", "azimuth": 30, "exposure": {"ev100": 2}})),
+        ]);
+        assert_eq!(ev(&mut pane), ExposureSetting::Manual { ev100: 2.0 });
+        session.execute("camera.update", &serde_json::json!({"name": "a", "exposure": {"ev100": 7}})).expect("update");
+        resync(&mut pane, &session);
+        assert_eq!(ev(&mut pane), ExposureSetting::Manual { ev100: 7.0 });
+        // `camera.update` saves, so a reset returns to the updated look, not the first one.
+        session.execute("camera.orbit", &serde_json::json!({"name": "a", "azimuth": 10})).expect("orbit");
+        session.execute("camera.reset", &serde_json::json!({"name": "a"})).expect("reset");
+        resync(&mut pane, &session);
+        assert_eq!(ev(&mut pane), ExposureSetting::Manual { ev100: 7.0 });
+    }
+
+    #[test]
+    fn pane_look_default_look_keeps_the_site_sun() {
+        let mut pane = site_pane();
+        let l = pane.lighting();
+        let sun = cadcraft_arch::sun::sun_position(51.05, "2026-06-21", "15:00").expect("a valid sun");
+        let site = cadcraft_doc::arch::SiteLocation { latitude: 51.05, true_north: 30.0, ..Default::default() };
+        let want = cadcraft_arch::site::true_to_drawing(Some(&site), cadcraft_arch::sun::sun_dir(&sun));
+        let got = l.sun_dir.expect("a sun direction");
+        for i in 0..3 {
+            assert!((got[i] - want[i]).abs() < 1e-9, "axis {i}");
+        }
+        assert_eq!(l.look, cadcraft_doc::arch::Look::default());
+        assert_eq!(Pane3d::new().lighting(), cadcraft_render3d::Lighting::default());
     }
 
     #[test]
