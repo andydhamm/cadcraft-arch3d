@@ -24,10 +24,10 @@ thiserror = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 image = { workspace = true }
+miniz_oxide = "0.9"
 craft-pdf = { workspace = true, features = ["write"] }
 
 [dev-dependencies]
-miniz_oxide = "0.9"
 tiff = "0.11"
 tiny-skia = { workspace = true }
 # Reads plotted PDFs back.
