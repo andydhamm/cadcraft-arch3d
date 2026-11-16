@@ -1751,4 +1751,107 @@ mod tests {
         let nan = Vec3::new(f64::NAN, 0.0, 0.0);
         assert!(distance(a, nan).is_nan());
     }
+
+    #[test]
+    fn snapshot_path_handles_paths_without_stem() {
+        let out = std::path::Path::new("/tmp/render.png");
+        assert_eq!(snapshot_path(out, 16), std::path::Path::new("/tmp/render-spp16.png"));
+
+        let out2 = std::path::Path::new("/tmp/nostem");
+        assert_eq!(snapshot_path(out2, 32), std::path::Path::new("/tmp/nostem-spp32.png"));
+
+        let out3 = std::path::Path::new("file.PNG");
+        assert_eq!(snapshot_path(out3, 64), std::path::Path::new("file-spp64.png"));
+    }
+
+    #[test]
+    fn filtered_scene_key_with_zero_values() {
+        let key = filtered_scene_key(0, 0);
+        assert_ne!(key, 0);
+        assert!(key >> 63 == 1);
+        assert_eq!(filtered_scene_key(0, 0), key);
+    }
+
+    #[test]
+    fn hidden_set_key_with_empty_filter() {
+        let filter = ViewFilter::default();
+        let key = hidden_set_key(&filter);
+        assert_eq!(hidden_set_key(&filter), key);
+    }
+
+    #[test]
+    fn distance_with_infinity() {
+        let a = Vec3::new(0.0, 0.0, 0.0);
+        let inf = Vec3::new(f64::INFINITY, 0.0, 0.0);
+        assert_eq!(distance(a, inf), f64::INFINITY);
+        let neg_inf = Vec3::new(f64::NEG_INFINITY, 0.0, 0.0);
+        assert_eq!(distance(a, neg_inf), f64::INFINITY);
+    }
+
+    #[test]
+    fn software_spp_with_explicit_zero() {
+        let given = PathParams { spp: 0, spp_given: true, ..PathParams::default() };
+        assert_eq!(software_spp(&given, true), 0);
+        assert_eq!(software_spp(&PathParams::default(), true), SOFTWARE_SPP);
+    }
+
+    #[test]
+    fn exposure_keys_with_zero_scale() {
+        let k = exposure_keys(0.0, "auto", 0, None);
+        let ev = k["ev100"].as_f64().unwrap_or(f64::NAN);
+        assert!(ev.is_finite() || ev == f64::INFINITY, "ev100 for scale 0 should be finite or inf: {ev}");
+    }
+
+    #[test]
+    fn shadow_casting_lights_with_no_lights() {
+        let scene = cadcraft_arch3d::build(&Drawing::new_metric().arch);
+        assert_eq!(shadow_casting_lights(&scene), 0);
+    }
+
+    #[test]
+    fn path_options_with_all_defaults() {
+        let look = Look::default();
+        let opts = path_options(&PathParams::default(), &look, None);
+        assert_eq!(opts.spp, 256);
+        assert_eq!(opts.bounces, 4);
+        assert_eq!(opts.seed, 0);
+        assert_eq!(opts.denoise, true);
+        assert_eq!(opts.rt, false);
+        assert_eq!(opts.exposure, Exposure::Auto);
+        assert!(opts.lambert.is_none());
+        assert!(opts.furnace.is_none());
+        assert!(opts.snapshots.is_empty());
+    }
+
+    #[test]
+    fn render_hook_limits_samples_to_max() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        let samples: Vec<[f64; 3]> = (0..100).map(|i| [f64::from(i % 4) * 1.0, f64::from(i / 4) * 1.0, 0.0]).collect();
+        req.samples = samples;
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), MAX_SAMPLES, "samples should be limited to MAX_SAMPLES: {v}");
+    }
+
+    #[test]
+    fn illuminance_hook_with_multiple_probes() {
+        let _g = reset();
+        let d = room();
+        let probe = vec![[[2.0, 2.0, 0.0], [0.0, 0.0, 1.0]], [[1.0, 1.0, 0.0], [0.0, 0.0, 1.0]]];
+        let req = IlluminanceRequest::new(&d, probe, SunChoice::Off, quick(8));
+        match illuminance_one(&req) {
+            Ok(v) => {
+                assert_eq!(v["probes"].as_array().map(Vec::len), Some(2), "{v}");
+                for p in v["probes"].as_array().unwrap() {
+                    assert_eq!(p["method"], "path", "{v}");
+                    assert!(p["lux"].as_f64().is_some_and(|l| l.is_finite() && l >= 0.0), "{v}");
+                }
+            }
+            Err(e) if e.starts_with("NO_ADAPTER") => eprintln!("SKIP: {e}"),
+            Err(e) if e.contains("needs compute shaders") => eprintln!("SKIP: {e}"),
+            Err(e) => panic!("illuminance failed: {e}"),
+        }
+    }
 }
