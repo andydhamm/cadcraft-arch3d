@@ -1251,7 +1251,8 @@ mod tests {
         look.sun.on = true;
         look.sun.angle = Some("180,60".to_string());
 
-        let sample = [1.0, 4.89, 1.2];
+        // The north wall's inner face is at y = 5.0 (centerline 5.1, half-thickness 0.1).
+        let sample = [1.0, 5.0, 1.2];
 
         let mut req_off = request(&d, Some(camera.clone()), None, false);
         req_off.ground = false;
@@ -1288,16 +1289,18 @@ mod tests {
         use cadcraft_engine::doc::arch::Level;
         let _g = reset();
         let mut d = Drawing::new_metric();
-        // A single wall not facing the camera (camera looks from the north, wall faces east)
-        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2);
+        // A single north-south wall: its faces point east and west. The camera looks from the
+        // north, so it sees the wall's edge, not its face. The cutaway hides nothing.
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 4.0), 0.2);
         w.height = 2.4;
         d.arch.push_wall(w);
         d.arch.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
         d.arch.rooms = detect_rooms(&d.arch);
         d.touch_arch();
 
-        // Camera from the north, looking south. The wall faces east, so the cutaway hides nothing.
-        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(2.0, 8.0, 1.5), Vec3::new(2.0, 0.0, 1.5), 40.0));
+        // Camera from the north, looking south. The wall's faces point east and west, so the
+        // cutaway hides nothing.
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(2.0, 8.0, 1.5), Vec3::new(2.0, 2.0, 1.5), 40.0));
         let look = Look { cutaway: true, ..Look::default() };
 
         let mut req = request(&d, Some(camera), None, false);
@@ -1352,6 +1355,103 @@ mod tests {
         let key2 = STATE.lock().ok().and_then(|g| g.as_ref().and_then(|s| s.filtered.as_ref().map(|(k, _)| k.clone())));
         assert!(key2.is_some(), "a filtered scene must be built");
         assert_ne!(key1, key2, "a camera move must rebuild the filtered scene");
+    }
+
+    #[test]
+    fn filtered_scene_after_unfiltered_draws_the_room_inside() {
+        use cadcraft_arch::room::detect_rooms;
+        use cadcraft_engine::doc::arch::Level;
+        let _g = reset();
+        let mut d = Drawing::new_metric();
+        let c = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (c[k], c[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            d.arch.push_wall(w);
+        }
+        d.arch.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        d.arch.rooms = detect_rooms(&d.arch);
+        d.touch_arch();
+
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(2.0, -8.0, 1.5), Vec3::new(2.0, 2.0, 1.5), 40.0));
+        let sample = [2.0, 4.0, 1.2];
+
+        // First render without cutaway: the back wall is hidden behind the front wall.
+        let mut req_off = request(&d, Some(camera.clone()), None, false);
+        req_off.ground = false;
+        req_off.look = Look { cutaway: false, ..Look::default() };
+        req_off.samples = vec![sample];
+        let Some(v_off) = render(&req_off) else { return };
+        assert_eq!(v_off["samples"][0]["visible"], false, "back wall hidden without cutaway: {v_off}");
+
+        // Then render with cutaway: the back wall is visible.
+        let mut req_on = request(&d, Some(camera.clone()), None, false);
+        req_on.ground = false;
+        req_on.look = Look { cutaway: true, ..Look::default() };
+        req_on.samples = vec![sample];
+        let Some(v_on) = render(&req_on) else { return };
+        assert_eq!(v_on["samples"][0]["visible"], true, "back wall visible with cutaway: {v_on}");
+        assert!(v_on["filter"]["hidden"].as_u64().unwrap_or(0) >= 1, "cutaway must hide at least one object: {v_on}");
+    }
+
+    #[test]
+    fn interior_wall_under_a_ceiling_is_shadowed_in_the_interactive_view() {
+        use cadcraft_arch::room::detect_rooms;
+        use cadcraft_engine::doc::arch::Level;
+        let _g = reset();
+        let mut d = Drawing::new_metric();
+        let c = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (c[k], c[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            d.arch.push_wall(w);
+        }
+        d.arch.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        d.arch.rooms = detect_rooms(&d.arch);
+        d.touch_arch();
+
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(2.0, -8.0, 1.5), Vec3::new(2.0, 2.0, 1.5), 40.0));
+        let mut look = Look::default();
+        look.cutaway = true;
+        look.sky.on = false;
+        look.exposure = ExposureSetting::Manual { ev100: 1.0 };
+        look.tone_map = cadcraft_engine::doc::arch::ToneMap::None;
+        look.sun.on = true;
+        look.sun.angle = Some("180,60".to_string());
+
+        let sample = [2.0, 4.0, 1.2];
+
+        let mut req = request(&d, Some(camera), None, false);
+        req.ground = false;
+        req.look = look;
+        req.samples = vec![sample];
+        let Some(v) = render(&req) else { return };
+
+        assert_eq!(v["samples"][0]["visible"], true, "interior wall must be visible: {v}");
+        let rgb: Vec<u8> =
+            v["samples"][0]["rgb"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64().map(|c| c as u8)).collect()).unwrap_or_default();
+        let sum: u32 = rgb.iter().map(|&c| u32::from(c)).sum();
+        // The interior wall is in the ceiling's shadow, so it should be relatively dark.
+        assert!(sum < 600, "interior wall should be in shadow (dark): {sum}");
+    }
+
+    #[test]
+    fn clipped_geometry_casts_no_interactive_shadow() {
+        use cadcraft_engine::doc::arch::ClipBox;
+        let _g = reset();
+        let d = room();
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(2.0, 2.0, 5.0), Vec3::new(2.0, 2.0, 0.0), 40.0));
+
+        let mut req = request(&d, Some(camera), None, false);
+        req.ground = false;
+        req.look = Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 1.0], ..Default::default() }), ..Look::default() };
+        req.samples = vec![[2.0, 2.0, 0.0]];
+        let Some(v) = render(&req) else { return };
+
+        assert_eq!(v["filter"]["clip"], true, "clip box must be active: {v}");
+        assert_eq!(v["samples"][0]["visible"], true, "floor must be visible below the clip: {v}");
     }
 
     #[test]
