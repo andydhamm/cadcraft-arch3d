@@ -268,51 +268,6 @@ fn wall_with_openings_near_both_corners_has_no_gaps() {
 }
 
 #[test]
-fn wall_with_window_and_niche_at_different_heights_has_no_gaps() {
-    let (mut model, north) = house();
-    let mut win = window(north);
-    win.sill = 1.5;
-    let mut ni = niche(north);
-    ni.sill = 0.5;
-    model.push_opening(win);
-    model.push_opening(ni);
-    let scene = Scene3d::build(&model);
-    // The window is now at z 1.5..2.7, the niche at z 0.5..1.4.
-    let near_high_window = |x: f64, z: f64| (20.25..=21.75).contains(&x) && (1.35..=2.85).contains(&z);
-    let near_low_niche = |x: f64, z: f64| (24.75..=25.65).contains(&x) && (0.35..=1.55).contains(&z);
-    let gaps = face_grid()
-        .into_iter()
-        .filter(|&(x, z)| !near_high_window(x, z) && !near_low_niche(x, z))
-        .filter(|&(x, z)| !first_hit_y(&scene, north, x, z, true).is_some_and(|y| (y - OUTER_Y).abs() < 1e-3))
-        .collect::<Vec<_>>();
-    assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
-}
-
-#[test]
-fn wall_with_openings_near_both_corners_has_no_gaps() {
-    let (mut model, north) = house();
-    // Window and niche near the right corner (offsets 5 and 0.8).
-    model.push_opening(window(north));
-    model.push_opening(niche(north));
-    // Window and niche near the left corner (offsets 21 and 25.2).
-    let mut win2 = window(north);
-    win2.offset = 21.0;
-    let mut ni2 = niche(north);
-    ni2.offset = 25.2;
-    model.push_opening(win2);
-    model.push_opening(ni2);
-    let scene = Scene3d::build(&model);
-    let near_left_window = |x: f64, z: f64| (4.25..=5.75).contains(&x) && (0.85..=2.35).contains(&z);
-    let near_left_niche = |x: f64, z: f64| (0.35..=1.25).contains(&x) && (0.85..=2.05).contains(&z);
-    let gaps = face_grid()
-        .into_iter()
-        .filter(|&(x, z)| !near_window(x, z) && !near_niche(x, z) && !near_left_window(x, z) && !near_left_niche(x, z))
-        .filter(|&(x, z)| !first_hit_y(&scene, north, x, z, true).is_some_and(|y| (y - OUTER_Y).abs() < 1e-3))
-        .collect::<Vec<_>>();
-    assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
-}
-
-#[test]
 fn narrow_wall_with_window_and_niche_has_no_gaps() {
     // A 6 x 4 house: the north wall is only 6 m long.
     let mut model = ArchModel::default();
