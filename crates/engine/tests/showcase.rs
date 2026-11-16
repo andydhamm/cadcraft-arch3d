@@ -976,9 +976,26 @@ fn the_showcase_house_is_replayed_once() {
 fn the_showcase_house_inspect_has_all_keys() {
     let (_, _, reply) = house();
     for key in [
-        "walls", "rooms", "levels", "openings", "cabinets", "fixtures", "furnishings",
-        "surfaces", "electrical", "lights", "lightSets", "stairs", "site", "roofs",
-        "trays", "soffits", "foundations", "cameras", "sunAngles", "views",
+        "walls",
+        "rooms",
+        "levels",
+        "openings",
+        "cabinets",
+        "fixtures",
+        "furnishings",
+        "surfaces",
+        "electrical",
+        "lights",
+        "lightSets",
+        "stairs",
+        "site",
+        "roofs",
+        "trays",
+        "soffits",
+        "foundations",
+        "cameras",
+        "sunAngles",
+        "views",
     ] {
         assert!(reply.get(key).is_some(), "house inspect reply missing `{}`", key);
     }
@@ -1033,7 +1050,7 @@ fn the_showcase_single_step_script_replays() {
     install_io();
     let mut session = Session::new();
     session.new_drawing(true);
-    let script = r#[[{"cmd": "wall", "params": {"points": [[0, 0], [3, 0]], "thickness": 0.1}}]]#;
+    let script = r#"[{"cmd": "wall", "params": {"points": [[0, 0], [3, 0]], "thickness": 0.1}}]"#;
     let replayed = replay(script, &mut session);
     assert_eq!(replayed, 1, "single-step script should replay 1 step");
 }

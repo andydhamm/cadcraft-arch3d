@@ -389,10 +389,7 @@ fn print_showcase_digest() {
 #[test]
 fn the_phase18_house_inspect_has_expected_keys() {
     let (_, _, reply) = house();
-    for key in [
-        "walls", "rooms", "levels", "openings", "cabinets", "fixtures",
-        "surfaces", "countertops", "backsplashes", "moldings", "electrical",
-    ] {
+    for key in ["walls", "rooms", "levels", "openings", "cabinets", "fixtures", "surfaces", "countertops", "backsplashes", "moldings", "electrical"] {
         assert!(reply.get(key).is_some(), "phase-18 house inspect reply missing `{}`", key);
     }
 }
