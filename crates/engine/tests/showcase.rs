@@ -4,6 +4,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use cadcraft_arch::ceiling::finished_ceiling_at;
 use cadcraft_engine::Session;
@@ -97,6 +98,7 @@ fn level_index(v: &Value, levels: &[Value]) -> i64 {
 /// Replay every step of the JSON script. Panics on the first failure, naming the
 /// step index, command id and error text. Returns the number of steps replayed.
 fn replay(script: &str, session: &mut Session) -> usize {
+    session.set_views_deferred(true);
     let steps: Vec<ScriptStep> = serde_json::from_str(script).unwrap_or_else(|e| panic!("cannot parse the showcase script: {e}"));
     let mut n = 0;
     for (i, step) in steps.iter().enumerate() {
@@ -106,7 +108,51 @@ fn replay(script: &str, session: &mut Session) -> usize {
             Err(err) => panic!("showcase script step {i} `{cmd}` failed: {err}"),
         }
     }
+    session.set_views_deferred(false);
     n
+}
+
+/// Replays the showcase script once per binary and caches the result.
+///
+/// Returns `(steps in the file, steps replayed, the full `arch.inspect` reply)`.
+/// No other test replays again: the replay is slow and a re-run can trip the
+/// gate, so every test here reads the one cached house (the `arch.inspect` reply
+/// is requested with every key this file's tests read).
+fn house() -> &'static (usize, usize, Value) {
+    static HOUSE: OnceLock<(usize, usize, Value)> = OnceLock::new();
+    let result = HOUSE.get_or_init(|| {
+        install_io();
+        let script = std::fs::read_to_string(script_path()).unwrap_or_else(|e| panic!("cannot read the showcase script: {e}"));
+        let steps: Vec<ScriptStep> = serde_json::from_str(&script).unwrap_or_else(|e| panic!("cannot parse the showcase script: {e}"));
+        let mut session = Session::new();
+        session.new_drawing(true);
+        let replayed = replay(&script, &mut session);
+        let params = serde_json::json!({
+            "walls": true,
+            "rooms": true,
+            "levels": true,
+            "openings": true,
+            "cabinets": true,
+            "fixtures": true,
+            "furnishings": true,
+            "surfaces": true,
+            "electrical": true,
+            "lights": true,
+            "lightSets": true,
+            "stairs": true,
+            "site": true,
+            "roofs": true,
+            "trays": true,
+            "soffits": true,
+            "foundations": true,
+            "cameras": true,
+            "sunAngles": true,
+            "views": true,
+        });
+        let reply = session.execute("arch.inspect", &params).unwrap();
+        (steps.len(), replayed, reply)
+    });
+    result
 }
 
 /// Assert that the replayed model satisfies the showcase brief.
@@ -486,12 +532,7 @@ fn meets_the_brief(reply: &Value) {
 
 #[test]
 fn the_showcase_rooms_lie_inside_their_levels() {
-    install_io();
-    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
-    let mut session = Session::new();
-    session.new_drawing(true);
-    replay(&script, &mut session);
-    let reply = session.execute("arch.inspect", &serde_json::json!({"walls": true, "rooms": true, "levels": true})).unwrap();
+    let (_total, _replayed, reply) = house();
     let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let walls: Vec<Value> = reply.get("walls").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
@@ -588,12 +629,7 @@ fn the_showcase_rooms_lie_inside_their_levels() {
 
 #[test]
 fn the_showcase_kitchen_holds_its_casework() {
-    install_io();
-    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
-    let mut session = Session::new();
-    session.new_drawing(true);
-    replay(&script, &mut session);
-    let reply = session.execute("arch.inspect", &serde_json::json!({"rooms": true, "levels": true, "cabinets": true, "electrical": true})).unwrap();
+    let (_total, _replayed, reply) = house();
     let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let cabs: Vec<Value> = reply.get("cabinets").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
@@ -620,12 +656,7 @@ fn the_showcase_kitchen_holds_its_casework() {
 
 #[test]
 fn the_showcase_flights_meet_the_landing() {
-    install_io();
-    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
-    let mut session = Session::new();
-    session.new_drawing(true);
-    replay(&script, &mut session);
-    let reply = session.execute("arch.inspect", &serde_json::json!({"levels": true, "rooms": true, "stairs": true})).unwrap();
+    let (_total, _replayed, reply) = house();
     let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let stairs: Vec<Value> = reply.get("stairs").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
@@ -680,12 +711,7 @@ fn the_showcase_flights_meet_the_landing() {
 
 #[test]
 fn the_showcase_has_windows_on_every_side() {
-    install_io();
-    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
-    let mut session = Session::new();
-    session.new_drawing(true);
-    replay(&script, &mut session);
-    let reply = session.execute("arch.inspect", &serde_json::json!({"walls": true, "rooms": true, "levels": true, "openings": true})).unwrap();
+    let (_total, _replayed, reply) = house();
     let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let walls: Vec<Value> = reply.get("walls").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
@@ -787,61 +813,19 @@ fn the_showcase_foyer_opens_over_the_landing() {
 
 #[test]
 fn the_showcase_script_replays() {
-    install_io();
-    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
-    let steps: Vec<ScriptStep> = serde_json::from_str(&script).expect("script is not valid JSON");
-    let total = steps.len();
-    let mut session = Session::new();
-    session.new_drawing(true);
-    let replayed = replay(&script, &mut session);
+    let (total, replayed, _reply) = house();
     assert_eq!(replayed, total, "expected {} steps, replayed {}", total, replayed);
 }
 
 #[test]
 fn the_showcase_meets_the_brief() {
-    install_io();
-    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
-    let mut session = Session::new();
-    session.new_drawing(true);
-    replay(&script, &mut session);
-    let params = serde_json::json!({
-        "walls": true,
-        "rooms": true,
-        "levels": true,
-        "cabinets": true,
-        "fixtures": true,
-        "furnishings": true,
-        "surfaces": true,
-        "electrical": true,
-        "lights": true,
-        "lightSets": true,
-        "stairs": true,
-        "site": true,
-    });
-    let reply = session.execute("arch.inspect", &params).unwrap();
+    let (_total, _replayed, reply) = house();
     meets_the_brief(&reply);
 }
 
 #[test]
 fn showcase_meets_the_brief_with_phase_18_features() {
-    install_io();
-    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
-    let mut session = Session::new();
-    session.new_drawing(true);
-    replay(&script, &mut session);
-
-    let reply = session
-        .execute(
-            "arch.inspect",
-            &serde_json::json!({
-                "rooms": true,
-                "cabinets": true,
-                "openings": true,
-                "walls": true,
-                "levels": true,
-            }),
-        )
-        .unwrap();
+    let (_total, _replayed, reply) = house();
 
     let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
     let room_types: Vec<String> = rooms.iter().map(|r| strd(r, "type", "")).collect();
@@ -955,19 +939,34 @@ fn the_showcase_has_its_phase17_details() {
 
 #[test]
 fn the_showcase_inspect_has_expected_keys() {
+    let (_total, _replayed, reply) = house();
+    for key in ["walls", "rooms", "levels", "stairs", "lights", "site"] {
+        assert!(reply.get(key).is_some(), "arch.inspect reply missing `{}`", key);
+    }
+}
+
+/// The deferral helper ends with fresh, non-stale views and with deferral switched off.
+#[test]
+fn the_showcase_replay_defers_views_and_ends_fresh() {
     install_io();
     let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
     let mut session = Session::new();
     session.new_drawing(true);
     replay(&script, &mut session);
-    let params = serde_json::json!({
-        "walls": true, "rooms": true, "levels": true, "cabinets": true,
-        "fixtures": true, "furnishings": true, "surfaces": true,
-        "electrical": true, "lights": true, "lightSets": true,
-        "stairs": true, "site": true,
-    });
-    let reply = session.execute("arch.inspect", &params).unwrap();
-    for key in ["walls", "rooms", "levels", "stairs", "lights", "site"] {
-        assert!(reply.get(key).is_some(), "arch.inspect reply missing `{}`", key);
+
+    assert!(!session.views_deferred(), "views_deferred() should be false at the end of the replay helper");
+
+    let doc = session.doc().unwrap();
+    let views = &doc.arch.views;
+    assert!(views.len() >= 6, "the replayed drawing has only {} views (need at least 6)", views.len());
+    for view in views {
+        assert!(!view.is_stale(doc.arch_revision), "view {:?} is stale against revision {}", view, doc.arch_revision);
     }
+}
+
+/// The cached house is stable (same pointer) and every step in the file replayed.
+#[test]
+fn the_showcase_house_is_replayed_once() {
+    assert_eq!(std::ptr::eq(house(), house()), "house() must be cached (same pointer) between calls");
+    assert_eq!(house().0, house().1, "every step must replay (steps in file {} != steps replayed {})", house().0, house().1);
 }
