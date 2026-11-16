@@ -84,62 +84,6 @@ pub(crate) fn defer_safe(id: &str) -> bool {
     DEFER_SAFE.contains(&id)
 }
 
-/// Command ids that build or edit the model and never read a view's generated geometry. While
-/// view regeneration is deferred, these commands skip the per-command refresh; a command that is
-/// not on this list (or `arch.inspect`, `render`, `build3d`, …) forces a catch-up refresh first.
-pub(crate) const DEFER_SAFE: &[&str] = &[
-    "backdrop",
-    "backsplash",
-    "cabinet",
-    "cabinet.edit",
-    "cabinet.face",
-    "cabinet.fill",
-    "camera",
-    "connection",
-    "countertop.detach",
-    "countertop.edit",
-    "deck",
-    "dimauto",
-    "door",
-    "fixture",
-    "foundation",
-    "level",
-    "level.edit",
-    "library.place",
-    "lightfixture",
-    "lightfixture.edit",
-    "lightset",
-    "look",
-    "niche",
-    "opening.edit",
-    "outlet",
-    "outlets.auto",
-    "paint.material",
-    "plant",
-    "railing",
-    "roofauto",
-    "room",
-    "room.label",
-    "room.moldings",
-    "roomdetect",
-    "site",
-    "stair",
-    "sunangle",
-    "switch",
-    "terrain",
-    "terrain.modify",
-    "tray",
-    "tray.edit",
-    "wall",
-    "wall.split",
-    "window",
-];
-
-/// Whether `id` is a model-building command safe to run while view regeneration is deferred.
-pub(crate) fn defer_safe(id: &str) -> bool {
-    DEFER_SAFE.contains(&id)
-}
-
 /// Command specs for the view commands.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -608,6 +552,10 @@ mod tests {
 
     fn run(s: &mut Session, cmd: &str, p: Value) -> Result<Value> {
         s.execute(cmd, &p)
+    }
+
+    fn ok(r: Result<Value>) {
+        assert!(r.is_ok(), "{r:?}");
     }
 
     /// A 10 x 8 house split by an interior wall at x = 5 into a west room and an east room.

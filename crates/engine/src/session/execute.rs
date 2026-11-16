@@ -117,23 +117,6 @@ impl Session {
         self.views_deferred
     }
 
-    /// Turn view regeneration deferral on or off. Turning it off (true -> false) regenerates any
-    /// stale elevation and section geometry once, so the next command that reads a view sees fresh
-    /// geometry; turning it on does nothing else. While deferral is on, scripts and interactive
-    /// commands that read a view's generated geometry must not run; a command that may read views
-    /// forces a catch-up refresh first.
-    pub fn set_views_deferred(&mut self, on: bool) -> () {
-        if self.views_deferred && !on {
-            cmd::arch::views::refresh_views(self);
-        }
-        self.views_deferred = on;
-    }
-
-    /// Whether elevation and section geometry regeneration is currently deferred.
-    pub fn views_deferred(&self) -> bool {
-        self.views_deferred
-    }
-
     // ---------------- undo ----------------
 
     /// Take the last step back. Inside a LISP routine, the routine's last command first; past
