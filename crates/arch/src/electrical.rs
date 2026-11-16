@@ -220,8 +220,9 @@ pub fn device_symbol(model: &ArchModel, d: &ElectricalDevice) -> Vec<Vec<Vec2>> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::arch::{ElectricalDevice, WallSide};
-    use cadcraft_doc::{ArchId, ArchModel, Opening, Wall};
+    use crate::outlets;
+    use cadcraft_doc::arch::{Cabinet, CabinetKind, ElectricalDevice, ElectricalKind, WallSide};
+    use cadcraft_doc::{ArchId, ArchModel, Opening, Room, Wall};
 
     fn wall(model: &mut ArchModel, id: u32, start: Vec2, end: Vec2) -> ArchId {
         model.push_wall(Wall { id: ArchId(id), start, end, thickness: 0.2, height: 2.4, ..Wall::default() })
@@ -382,5 +383,229 @@ mod tests {
 
         let dimmer = ElectricalDevice { kind: ElectricalKind::Dimmer, ..base };
         assert_eq!(device_symbol(&model, &dimmer).len(), 4, "dimmer: + S + arrow");
+    }
+
+    #[test]
+    fn counter_outlet_height_is_absolute_on_a_raised_level() {
+        let mut model = ArchModel::default();
+        model.levels[0].elevation = 1.5;
+        let w = model.push_wall(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.5, 0.0),
+            rotation: 0.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        model.rooms.push(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        });
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 0.0, counter: true, ..ElectricalDevice::default() };
+        let p = place_device(&model, &d).unwrap();
+        assert!((p.z - (1.5 + 0.9 + 0.038 + 0.15)).abs() < 1e-9, "z = {} expected {}", p.z, 1.5 + 0.9 + 0.038 + 0.15);
+    }
+
+    #[test]
+    fn counter_outlet_on_a_level_below_zero() {
+        let mut model = ArchModel::default();
+        model.levels[0].elevation = -1.2;
+        let w = model.push_wall(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.5, 0.0),
+            rotation: 0.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        model.rooms.push(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        });
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 0.0, counter: true, ..ElectricalDevice::default() };
+        let p = place_device(&model, &d).unwrap();
+        assert!((p.z - (-1.2 + 0.9 + 0.038 + 0.15)).abs() < 1e-9, "z = {} expected {}", p.z, -1.2 + 0.9 + 0.038 + 0.15);
+    }
+
+    #[test]
+    fn counter_outlet_at_level_zero_is_unchanged() {
+        let mut model = ArchModel::default();
+        let w = model.push_wall(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.5, 0.0),
+            rotation: 0.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        model.rooms.push(Room {
+            id: ArchId(0),
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        });
+        let d = ElectricalDevice { wall: w, side: WallSide::Left, offset: 1.5, height: 0.0, counter: true, ..ElectricalDevice::default() };
+        let p = place_device(&model, &d).unwrap();
+        assert!((p.z - (0.9 + 0.038 + 0.15)).abs() < 1e-9, "z = {} expected {}", p.z, 0.9 + 0.038 + 0.15);
+        let d2 = ElectricalDevice { wall: w, side: WallSide::Left, offset: 4.5, height: 0.0, counter: true, ..ElectricalDevice::default() };
+        assert!(place_device(&model, &d2).is_err(), "counter device without a counter in front must be refused");
+    }
+
+    fn build_kitchen(elevation: f64) -> (ArchModel, ArchId) {
+        let mut model = ArchModel::default();
+        model.levels[0].elevation = elevation;
+        let w0 = model.push_wall(Wall {
+            id: ArchId(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(6.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        let w1 = model.push_wall(Wall {
+            id: ArchId(1),
+            start: Vec2::new(6.0, 0.0),
+            end: Vec2::new(6.0, 4.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        let w2 = model.push_wall(Wall {
+            id: ArchId(2),
+            start: Vec2::new(6.0, 4.0),
+            end: Vec2::new(0.0, 4.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        let w3 = model.push_wall(Wall {
+            id: ArchId(3),
+            start: Vec2::new(0.0, 4.0),
+            end: Vec2::new(0.0, 0.0),
+            thickness: 0.2,
+            height: 2.7,
+            ..Wall::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.3, 0.0),
+            rotation: 0.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(1),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(1.9, 0.0),
+            rotation: 0.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        model.cabinets.push(Cabinet {
+            id: ArchId(2),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(2.65, 0.0),
+            rotation: 0.0,
+            width: 0.9,
+            depth: 0.6,
+            height: 0.9,
+            elevation: 0.0,
+            counter: true,
+            counter_thickness: 0.038,
+            counter_overhang: 0.025,
+            ..Cabinet::default()
+        });
+        let room_id = ArchId(0);
+        model.rooms.push(Room {
+            id: room_id,
+            level: 0,
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
+            ..Room::default()
+        });
+        (model, room_id)
+    }
+
+    #[test]
+    fn auto_outlets_place_gfci_on_a_raised_kitchen() {
+        let (model_raised, room) = build_kitchen(1.5);
+        let raised = outlets::auto_outlets(&model_raised, room);
+        let raised_gfci: Vec<_> = raised.iter().filter(|d| d.kind == ElectricalKind::Gfci && d.counter).collect();
+        assert!(raised_gfci.len() >= 2, "expected >= 2 GFCI counter outlets on raised level, got {}", raised_gfci.len());
+
+        let (model_ground, room) = build_kitchen(0.0);
+        let ground = outlets::auto_outlets(&model_ground, room);
+        let ground_gfci: Vec<_> = ground.iter().filter(|d| d.kind == ElectricalKind::Gfci && d.counter).collect();
+        assert_eq!(
+            ground_gfci.len(),
+            raised_gfci.len(),
+            "GFCI counter count at elevation 0 ({}) and 1.5 ({}) should match",
+            ground_gfci.len(),
+            raised_gfci.len()
+        );
     }
 }
