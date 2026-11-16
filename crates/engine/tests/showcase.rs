@@ -1063,7 +1063,8 @@ fn the_showcase_draws_no_wall_twice() {
             if num(a, "top").min(num(b, "top")) - num(a, "bottom").max(num(b, "bottom")) <= 0.01 {
                 continue;
             }
-            let (Some((ax0, ay0)), Some((ax1, ay1)), Some((bx0, by0)), Some((bx1, by1))) = (xy(a, "start"), xy(a, "end"), xy(b, "start"), xy(b, "end"))
+            let (Some((ax0, ay0)), Some((ax1, ay1)), Some((bx0, by0)), Some((bx1, by1))) =
+                (xy(a, "start"), xy(a, "end"), xy(b, "start"), xy(b, "end"))
             else {
                 panic!("a wall row has no start/end: {a} / {b}");
             };
@@ -1127,7 +1128,10 @@ fn the_showcase_cabinets_stand_in_the_kitchen() {
             }
         }
     }
-    assert!(base >= 3 && wall >= 2 && island >= 1, "the kitchen holds {base} base cabinets with a counter, {wall} wall cabinets, {island} with no wall");
+    assert!(
+        base >= 3 && wall >= 2 && island >= 1,
+        "the kitchen holds {base} base cabinets with a counter, {wall} wall cabinets, {island} with no wall"
+    );
 }
 
 /// The counter rule runs in the kitchen (GFCI outlets), and every room meets the spacing rule.
@@ -1136,7 +1140,8 @@ fn the_showcase_kitchen_counters_have_gfci_outlets() {
     let kitchens = rooms_of_type("kitchen");
     assert_eq!(kitchens.len(), 1, "one kitchen");
     let kid = strd(&kitchens[0], "id", "");
-    let gfci = house_rows("electrical").iter().filter(|e| strd(e, "room", "") == kid && strd(e, "kind", "").to_lowercase().starts_with("gfci")).count();
+    let gfci =
+        house_rows("electrical").iter().filter(|e| strd(e, "room", "") == kid && strd(e, "kind", "").to_lowercase().starts_with("gfci")).count();
     assert!(gfci >= 2, "the kitchen {kid} has {gfci} GFCI outlet(s), need at least 2");
     let gaps = house_rows("outletGaps");
     assert!(!gaps.is_empty(), "arch.inspect reports no outletGaps");
@@ -1163,7 +1168,9 @@ fn the_showcase_main_walls_are_solid_around_their_windows() {
 #[test]
 fn the_showcase_has_its_phase16_ceilings_and_foundation() {
     let (p, main, lower) = house_3d();
-    let heights = |r: &Value| -> Vec<f64> { r.get("ceiling").and_then(|c| c.as_array()).map(|a| a.iter().map(|v| v.as_f64().unwrap_or(f64::NAN)).collect()).unwrap_or_default() };
+    let heights = |r: &Value| -> Vec<f64> {
+        r.get("ceiling").and_then(|c| c.as_array()).map(|a| a.iter().map(|v| v.as_f64().unwrap_or(f64::NAN)).collect()).unwrap_or_default()
+    };
     let (m, l) = (heights(main), heights(lower));
     assert_eq!(m.len(), 4, "four Main ceiling heights: {main}");
     for (got, want) in m.iter().zip([6.25, 4.2, 3.9, 3.9]) {
@@ -1180,7 +1187,11 @@ fn the_showcase_has_its_phase16_ceilings_and_foundation() {
     assert_eq!(strd(&trays[0], "room", ""), strd(&dining[0], "id", "?"), "the tray is in the Dining room");
     let soffits = house_rows("soffits");
     assert_eq!(soffits.len(), 1, "one soffit");
-    let over: Vec<String> = soffits[0].get("over").and_then(|o| o.as_array()).map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default();
+    let over: Vec<String> = soffits[0]
+        .get("over")
+        .and_then(|o| o.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
     assert_eq!(over, ["cb6", "cb7"], "the soffit is over the kitchen's wall cabinets");
     assert!((num(&soffits[0], "bottom") - 3.634).abs() < 1e-3, "soffit bottom {}", num(&soffits[0], "bottom"));
     let foundations = house_rows("foundations");
@@ -1237,7 +1248,8 @@ fn the_showcase_has_its_phase19_look_cameras() {
     for name in ["Evening", "Day"] {
         assert!(sets.iter().any(|s| strd(s, "name", "") == name), "light set {name}");
     }
-    let day = sets.iter().find(|s| strd(s, "name", "") == "Day").and_then(|s| s.get("lights")).and_then(|l| l.as_object()).cloned().unwrap_or_default();
+    let day =
+        sets.iter().find(|s| strd(s, "name", "") == "Day").and_then(|s| s.get("lights")).and_then(|l| l.as_object()).cloned().unwrap_or_default();
     assert_eq!(day.len(), lights.len(), "Day names every light");
     assert!(day.values().all(|s| s.get("on") == Some(&Value::Bool(false))), "Day turns every light off");
     assert_eq!(strd(reply, "activeCamera", ""), "Front", "Front stays the active camera");

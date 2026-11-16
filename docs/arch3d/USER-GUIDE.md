@@ -788,7 +788,7 @@ The showcase house is a saved command script: `docs/arch3d/showcase/bilevel.json
 `{"cmd", "params"}` steps, each run like a `--cmd` step. It builds a split-entry bi-level: a Lower level at -1.2 m (a
 basement), an Entry landing at 0.15 m with the front door and the two half flights, a Main level at 1.5 m that stays
 above grade on a lot sloping 1.5 m from front to back, a driveway, sidewalks and planting beds draped on the terrain,
-trees and shrubs, the kitchen casework and baths, four saved cameras, the Evening light set, four elevations and two
+trees and shrubs, the kitchen casework and baths, seven saved cameras (Front, Back, Kitchen, Living, dusk, noon-hdri and overview), the Evening light set, four elevations and two
 sections. `cadcraft-cli run --metric` replays the file through its JSON steps-file flag (`cadcraft-cli run --help`
 lists it; `docs/arch3d/showcase/README.md` shows the exact command line and describes the house), and
 `crates/engine/tests/showcase.rs` replays it through the engine and asserts the brief's numbers.
