@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 21 of 22: Schedules, elevations and sheets — 42 of 43 segments merged · 13 of 13 acceptance checks**
+**Phase 21 of 22: Schedules, elevations and sheets — 43 of 43 segments merged · 13 of 13 acceptance checks**
 
-10,873 workspace tests passing at the last merge · 1269 segments merged in all · 0 of 15 seats working
+10,879 workspace tests passing at the last merge · 1270 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -31,21 +31,19 @@ Updated 2026-11-16 16:45 UTC. This page and the card in the README are regenerat
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
-| 21 | Schedules, elevations and sheets | building | 13 / 13 | 105.4 h so far · expected done Nov 16 17:33–Nov 17 03:11 UTC |
+| 21 | Schedules, elevations and sheets | building | 13 / 13 | 105.7 h so far · expected done Nov 16 17:00–Nov 17 01:29 UTC |
 | 22 | Phase 22 | pending | — | — |
 
 ## Phase 21 segments
 
-42 merged, 4 replaced, 1 gate
+43 merged, 4 replaced
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `p21t-gallery-tool-b` | tools/showcase/render_all.py regenerates the whole gallery: plan views, roof and site plans, interior elevations, the look cameras, sheet images and the drawing-set PDF; the showcase README matches the script | gate | bonsai-ws2-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 16:57 | `p21t-gallery-tool-b` | merged | 10,879 pass | bonsai-a |
 | Nov 16 16:21 | `p21t-gallery-tool` | merged | 10,873 pass | bonsai-ws2-a |
 | Nov 16 15:43 | `harden-p21t-wall-window-and-niche-b` | merged | 10,873 pass | tturbo-mac |
 | Nov 16 15:25 | `p21t-gallery-tool` | refused | 10,872 pass | claude-sonnet-b |
@@ -57,24 +55,23 @@ Updated 2026-11-16 16:45 UTC. This page and the card in the README are regenerat
 | Nov 16 12:53 | `upstream-sync-2ccf5874b` | merged | 10,849 pass | bonsai-ws2-b |
 | Nov 16 12:37 | `p21t-wall-window-and-niche-b` | merged | 10,847 pass | bonsai-a |
 | Nov 16 10:41 | `p21t-entry-landing-views-b` | merged | 10,843 pass | bonsai-ws2-b |
-| Nov 16 10:29 | `upstream-sync-ed0fbce27` | merged | 10,841 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1381 |
-| bonsai-b | bonsai2-27b | agent | 1299 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1487 |
+| bonsai-a | bonsai2-27b | idle | 1382 |
+| bonsai-b | bonsai2-27b | idle | 1300 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1488 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1414 |
 | claude-sonnet-a | sonnet | idle | 163 |
 | claude-sonnet-b | sonnet | idle | 168 |
 | claude-sonnet-c | sonnet | idle | 104 |
 | claude-sonnet-d | sonnet | idle | 99 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1290 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1290 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1005 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 687 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 687 |
