@@ -1269,6 +1269,69 @@ mod tests {
     }
 
     #[test]
+    fn metered_scale_handles_mismatched_lengths() {
+        // lum longer than hit: uses the shorter (5), no panic
+        let lum = vec![1.0f32; 10];
+        let hit = vec![true; 5];
+        let got = PathTracer::metered_scale(&lum, &hit, true, false, false, 0.01);
+        assert!(got.is_finite() && got > 0.0, "lum longer: {got}");
+
+        // hit longer than lum: uses the shorter (5), no panic
+        let lum = vec![1.0f32; 5];
+        let hit = vec![true; 10];
+        let got = PathTracer::metered_scale(&lum, &hit, true, false, false, 0.01);
+        assert!(got.is_finite() && got > 0.0, "hit longer: {got}");
+    }
+
+    #[test]
+    fn metered_scale_treats_non_finite_as_zero() {
+        let lum = vec![f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 1.0];
+        let hit = vec![true; 5];
+        let got = PathTracer::metered_scale(&lum, &hit, true, false, false, 0.01);
+        // Four pixels treated as 0.0 (non-finite or negative), one as 1.0
+        let lavg = ((4.0 * (1e-4).ln() + (1e-4 + 1.0).ln()) / 5.0).exp() as f32;
+        let want = crate::exposure::auto_scale(Some(lavg), true, false);
+        assert!((got - want).abs() < 1e-6, "non-finite treated as zero: {got} vs {want}");
+    }
+
+    #[test]
+    fn metered_scale_empty_slices() {
+        let got = PathTracer::metered_scale(&[], &[], true, false, false, 0.01);
+        assert_eq!(got, crate::pathtrace::DAY_EXPOSURE, "empty slices: {got}");
+    }
+
+    #[test]
+    fn metered_scale_mixed_hits_and_misses() {
+        let lum = vec![1.0f32, 2.0, 3.0];
+        let hit = vec![true, false, true];
+        let got = PathTracer::metered_scale(&lum, &hit, true, false, false, 0.01);
+        // Only indices 0 and 2 are hit
+        let lavg = ((1e-4 + 1.0).ln() + (1e-4 + 3.0).ln()) / 2.0;
+        let lavg = lavg.exp() as f32;
+        let want = crate::exposure::auto_scale(Some(lavg), true, false);
+        assert!((got - want).abs() < 1e-6, "mixed hits: {got} vs {want}");
+    }
+
+    #[test]
+    fn metered_scale_env_visible_no_positive_luminance() {
+        // No hit pixels, env_visible true, but all luminances are zero or non-finite
+        let lum = vec![0.0f32, f32::NAN, -1.0];
+        let hit = vec![false, false, false];
+        let got = PathTracer::metered_scale(&lum, &hit, true, false, true, 0.01);
+        // Falls through to auto_scale(None, true, false)
+        assert_eq!(got, crate::pathtrace::DAY_EXPOSURE, "no positive lum with env visible: {got}");
+    }
+
+    #[test]
+    fn metered_scale_huge_luminance() {
+        let lum = vec![1e10f32];
+        let hit = vec![true];
+        let got = PathTracer::metered_scale(&lum, &hit, true, false, false, 0.01);
+        // Should not overflow or panic
+        assert!(got.is_finite() && got > 0.0, "huge lum: {got}");
+    }
+
+    #[test]
     fn run_entry_reads_back_a_probe_per_ray() {
         let Some(gpu) = compute() else { return };
         let buffers = upload_scene(&gpu, &GpuScene::default());
