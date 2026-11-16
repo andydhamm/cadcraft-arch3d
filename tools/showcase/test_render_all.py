@@ -114,6 +114,97 @@ class RenderAll(unittest.TestCase):
             self.assertNotIn('/', f)
             self.assertLessEqual(len(f), 80)
 
+    def test_slug_edge_cases(self):
+        self.assertEqual(ra.slug(''), 'x')
+        self.assertEqual(ra.slug(None), 'none')
+        self.assertEqual(ra.slug('---'), 'x')
+        self.assertEqual(ra.slug('a-b-c'), 'a-b-c')
+        self.assertEqual(ra.slug('123'), '123')
+        self.assertEqual(ra.slug('hello world'), 'hello-world')
+        # Non-ASCII becomes a hyphen, then stripped
+        self.assertEqual(ra.slug('café'), 'caf')
+        # Huge string truncated to 80
+        self.assertEqual(len(ra.slug('a' * 200)), 80)
+        # Floats become their string form
+        self.assertEqual(ra.slug(42.0), '42-0')
+
+    def test_file_name_edge_cases(self):
+        self.assertEqual(ra.file_name('plan', '', '.png'), 'plan-x.png')
+        # Long prefix leaves little room for the name
+        prefix = 'p' * 70
+        f = ra.file_name(prefix, 'name', '.png')
+        self.assertLessEqual(len(f), 80)
+        # Name longer than allowed is truncated
+        f = ra.file_name('plan', 'a' * 200, '.png')
+        self.assertLessEqual(len(f), 80)
+        # Leading dot in name does not leak into the file name
+        f = ra.file_name('plan', '.hidden', '.png')
+        self.assertFalse(f.startswith('.'))
+        # Prefix and suffix consume most of the 80-char budget
+        prefix = 'p' * 75
+        f = ra.file_name(prefix, 'name', '.png')
+        self.assertLessEqual(len(f), 80)
+
+    def test_plan_with_empty_inputs(self):
+        rows = ra.plan([], [], [], False)
+        self.assertIsInstance(rows, list)
+        for row in rows:
+            self.assertEqual(len(row), 4)
+        names = [r[0] for r in rows]
+        self.assertEqual(len(names), len(set(names)), 'no duplicate file names')
+        # Electrical, elevation, section, camera, night, path, clay, technical, exports are always present
+        kinds = {r[1] for r in rows}
+        self.assertTrue({'electrical', 'elevation', 'section', 'camera', 'night', 'path', 'clay', 'technical', 'export'} <= kinds)
+        # No plan images with no levels
+        self.assertNotIn('plan', kinds)
+
+    def test_plan_duplicate_level_names(self):
+        levels = [{'name': 'Main', 'kind': 'floor'}, {'name': 'Main', 'kind': 'floor'}]
+        rows = ra.plan(levels, [], [], False)
+        plan_rows = [r for r in rows if r[1] == 'plan']
+        self.assertEqual(len(plan_rows), 2)
+        self.assertNotEqual(plan_rows[0][0], plan_rows[1][0])
+        self.assertEqual(plan_rows[0][0], 'plan-main.png')
+        self.assertEqual(plan_rows[1][0], 'plan-main-2.png')
+
+    def test_plan_full_with_empty_inputs(self):
+        rows = ra.plan([], [], [], True)
+        kinds = {r[1] for r in rows}
+        # Set steps are present
+        self.assertIn('replay', kinds)
+        self.assertIn('roofplan', kinds)
+        self.assertIn('siteplan', kinds)
+        self.assertIn('drawingset', kinds)
+        # Level-dependent steps are absent with no levels
+        self.assertNotIn('planview', kinds)
+        self.assertNotIn('rcp', kinds)
+        # View-dependent steps are absent with no views
+        self.assertNotIn('interior', kinds)
+        # Sheet steps are absent with no sheets
+        self.assertNotIn('sheet', kinds)
+
+    def test_manifest_empty(self):
+        m = ra.manifest([], {}, False, 'a' * 64, {}, None)
+        self.assertEqual(m['images'], [])
+        self.assertEqual(m['exports'], {})
+        self.assertFalse(m['technicalSkipped'])
+        self.assertEqual(m['scriptSha256'], 'a' * 64)
+        self.assertEqual(m['setScripts'], {})
+        self.assertIsNone(m['drawingSet'])
+        self.assertTrue(m['sheetImages'])
+        json.dumps(m)
+
+    def test_parse_args_valid_inputs(self):
+        a = ra.parse_args(['--out', 'x', '--size', '1920x1080', '--spp', '128'])
+        self.assertEqual(a.size, '1920x1080')
+        self.assertEqual(a.spp, 128)
+        a = ra.parse_args(['--out', 'x', '--size', '1x1'])
+        self.assertEqual(a.size, '1x1')
+        a = ra.parse_args(['--out', 'x', '--spp', '1'])
+        self.assertEqual(a.spp, 1)
+        a = ra.parse_args(['--out', 'x', '--full', '--no-set', '--no-exports'])
+        self.assertTrue(a.full and a.no_set and a.no_exports)
+
     def test_readme_gallery_matches_the_plan(self):
         with open(os.path.join(SHOWCASE, 'phase-21-showcase.json'), encoding='utf-8') as f:
             script = json.load(f)
