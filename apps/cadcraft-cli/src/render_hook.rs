@@ -1462,6 +1462,177 @@ mod tests {
     }
 
     #[test]
+    fn environment_cache_lru_eviction_order() {
+        use cadcraft_engine::doc::arch::Backdrop;
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let model = cadcraft_engine::doc::arch::ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.backdrop = Some(Backdrop::Sky);
+        let revision = 9_000_101;
+
+        // Fill the cache with ENV_CACHE_CAP entries.
+        let suns: Vec<Option<[f64; 3]>> = (0..ENV_CACHE_CAP).map(|i| Some([f64::from(i as f64) * 0.1 - 0.5, 0.0, 0.8])).collect();
+        let envs: Vec<Option<std::sync::Arc<cadcraft_render3d::Environment>>> =
+            suns.iter().map(|s| environment_cached(&model, revision, &look, *s)).collect();
+
+        // All should be Some (sky is on).
+        for (i, e) in envs.iter().enumerate() {
+            assert!(e.is_some(), "environment {i} should build with sky on");
+        }
+
+        // Cache should be full.
+        let size_after_fill = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_fill, ENV_CACHE_CAP, "cache should be full after filling");
+
+        // Access the first entry again (makes it most recent in LRU order).
+        let env0_again = environment_cached(&model, revision, &look, suns[0]);
+        let env0_ptr = envs[0].as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        let env0_again_ptr = env0_again.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        assert_eq!(env0_ptr, env0_again_ptr, "re-accessing first entry should be a cache hit");
+
+        // Cache size should not change on a hit.
+        let size_after_hit = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_hit, ENV_CACHE_CAP, "cache size should not change on a hit");
+
+        // Insert one more entry: the least recently used (index 1) should be evicted.
+        let new_sun = Some([0.9, 0.0, 0.8]);
+        let _env_new = environment_cached(&model, revision, &look, new_sun);
+
+        // Cache should still be at capacity (one evicted, one added).
+        let size_after_insert = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_insert, ENV_CACHE_CAP, "cache should stay at capacity after eviction");
+
+        // The first entry should still be cached (it was accessed most recently).
+        let env0_still = environment_cached(&model, revision, &look, suns[0]);
+        let env0_still_ptr = env0_still.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        assert_eq!(env0_ptr, env0_still_ptr, "first entry should survive eviction (most recently used)");
+
+        // The second entry should have been evicted; rebuilding it evicts the next LRU entry.
+        let _env1_now = environment_cached(&model, revision, &look, suns[1]);
+        let size_after_rebuild = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_rebuild, ENV_CACHE_CAP, "cache should stay at capacity after rebuilding evicted entry");
+    }
+
+    #[test]
+    fn environment_cache_stores_none_results() {
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let model = cadcraft_engine::doc::arch::ArchModel::default();
+        let look = Look::default(); // sky off by default
+        let revision = 9_000_102;
+        let sun = Some([0.0, -0.6, 0.8]);
+
+        // First call: builds (returns None because sky is off).
+        let env1 = environment_cached(&model, revision, &look, sun);
+        assert!(env1.is_none(), "sky off should produce None");
+
+        // The cache should hold one entry for this key.
+        let count1 = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(count1, 1, "cache should hold one entry after first call");
+
+        // Second call with same key: should be a cache hit (size stays the same).
+        let env2 = environment_cached(&model, revision, &look, sun);
+        assert!(env2.is_none(), "second call should also return None");
+        let count2 = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(count2, 1, "cache size should not grow on a hit");
+    }
+
+    #[test]
+    fn environment_cache_nan_sun_direction_is_stable() {
+        use cadcraft_engine::doc::arch::Backdrop;
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let model = cadcraft_engine::doc::arch::ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.backdrop = Some(Backdrop::Sky);
+        let revision = 9_000_103;
+        let nan_sun = Some([f64::NAN, 0.0, 0.8]);
+
+        // First call with NaN sun direction.
+        let env1 = environment_cached(&model, revision, &look, nan_sun);
+        assert!(env1.is_some(), "environment should build with NaN sun x");
+
+        // Second call with same NaN sun direction: should be a cache hit.
+        let env2 = environment_cached(&model, revision, &look, nan_sun);
+        let p1 = env1.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        let p2 = env2.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        assert_eq!(p1, p2, "same NaN sun direction should produce a cache hit");
+
+        // A real (non-NaN) sun direction should be a different key.
+        let real_sun = Some([0.0, 0.0, 0.8]);
+        let env3 = environment_cached(&model, revision, &look, real_sun);
+        let p3 = env3.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        assert_ne!(p1, p3, "different sun direction should produce a cache miss");
+    }
+
+    #[test]
+    fn environment_cache_different_look_fields_are_different_keys() {
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let model = cadcraft_engine::doc::arch::ArchModel::default();
+        let revision = 9_000_104;
+        let sun = Some([0.0, -0.6, 0.8]);
+
+        // Two looks that differ only in sky.on.
+        let mut look1 = Look::default();
+        look1.sky.on = true;
+        let mut look2 = Look::default();
+        look2.sky.on = false;
+
+        let _env1 = environment_cached(&model, revision, &look1, sun);
+        let _env2 = environment_cached(&model, revision, &look2, sun);
+
+        // Different sky settings should produce two distinct cache entries.
+        let count = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(count, 2, "different look fields should produce different cache keys");
+    }
+
+    #[test]
+    fn environment_cache_revision_change_invalidates() {
+        use cadcraft_engine::doc::arch::Backdrop;
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let model = cadcraft_engine::doc::arch::ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.backdrop = Some(Backdrop::Sky);
+        let sun = Some([0.0, -0.6, 0.8]);
+
+        let env1 = environment_cached(&model, 9_000_105, &look, sun);
+        let size_after_first = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_first, 1, "cache should have one entry after first call");
+
+        let env2 = environment_cached(&model, 9_000_106, &look, sun);
+        let size_after_second = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_second, 2, "different revisions should produce different cache entries");
+
+        // Both should be Some (sky is on).
+        assert!(env1.is_some(), "first environment should build");
+        assert!(env2.is_some(), "second environment should build");
+
+        // Accessing the first revision again should be a cache hit (size stays the same).
+        let env1_again = environment_cached(&model, 9_000_105, &look, sun);
+        let size_after_hit = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_hit, 2, "cache hit should not grow the cache");
+        let p1 = env1.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        let p1_again = env1_again.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        assert_eq!(p1, p1_again, "re-accessing the same revision should be a cache hit");
+    }
+
+    #[test]
     fn hidden_set_key_differs_from_full_filter_key() {
         let mut full = ViewFilter::default();
         full.hidden.insert(("wall", ArchId(1)));
