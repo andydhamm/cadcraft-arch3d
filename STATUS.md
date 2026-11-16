@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
-10,879 workspace tests passing at the last merge · 1270 segments merged in all · 0 of 15 seats working
+10,883 workspace tests passing at the last merge · 1271 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-16 20:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 17 02:14–Dec 02 03:51 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 17 02:29–Dec 02 04:06 UTC |
 
 ## Phase 22 segments
 
@@ -43,6 +43,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 20:56 | `harden-p21t-gallery-tool-b` | merged | 10,883 pass | tturbo-mac2 |
 | Nov 16 20:38 | `harden-p21t-showcase-tests-defer` | refused | 10,888 pass | tturbo-mac |
 | Nov 16 20:29 | `harden-p21t-gallery-tool-b` | refused | 10,883 pass | tturbo-mac2 |
 | Nov 16 19:59 | `harden-p21t-gallery-tool-b` | refused | 10,883 pass | tturbo-mac2 |
@@ -54,7 +55,6 @@ none yet
 | Nov 16 15:43 | `harden-p21t-wall-window-and-niche-b` | merged | 10,873 pass | tturbo-mac |
 | Nov 16 15:25 | `p21t-gallery-tool` | refused | 10,872 pass | claude-sonnet-b |
 | Nov 16 14:56 | `upstream-sync-16341b665` | merged | 10,866 pass | bonsai-a |
-| Nov 16 14:23 | `harden-p21t-user-guide` | merged | 10,866 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -74,4 +74,4 @@ none yet
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1014 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 699 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
