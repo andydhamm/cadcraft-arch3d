@@ -1176,6 +1176,9 @@ impl CadApp {
                     if pane3d::apply_pick(&mut self.pane3d, &mut self.session).is_some() {
                         ui.ctx().request_repaint();
                     }
+                    if pane3d::apply_look(&mut self.pane3d, &mut self.session) > 0 {
+                        ui.ctx().request_repaint();
+                    }
                 } else {
                     docking::show(self, ui);
                 }
