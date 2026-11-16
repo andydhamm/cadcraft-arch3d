@@ -967,6 +967,6 @@ fn the_showcase_replay_defers_views_and_ends_fresh() {
 /// The cached house is stable (same pointer) and every step in the file replayed.
 #[test]
 fn the_showcase_house_is_replayed_once() {
-    assert_eq!(std::ptr::eq(house(), house()), "house() must be cached (same pointer) between calls");
+    assert!(std::ptr::eq(house(), house()), "house() must be cached (same pointer) between calls");
     assert_eq!(house().0, house().1, "every step must replay (steps in file {} != steps replayed {})", house().0, house().1);
 }
