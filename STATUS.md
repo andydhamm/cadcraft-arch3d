@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 15:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 21 of 22: Schedules, elevations and sheets — 40 of 42 segments merged · 13 of 13 acceptance checks**
+**Phase 21 of 22: Schedules, elevations and sheets — 41 of 42 segments merged · 13 of 13 acceptance checks**
 
-10,866 workspace tests passing at the last merge · 1266 segments merged in all · 0 of 15 seats working
+10,866 workspace tests passing at the last merge · 1267 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -31,22 +31,22 @@ Updated 2026-11-16 14:45 UTC. This page and the card in the README are regenerat
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
-| 21 | Schedules, elevations and sheets | building | 13 / 13 | 103.4 h so far · expected done Nov 16 16:29–Nov 17 03:30 UTC |
+| 21 | Schedules, elevations and sheets | building | 13 / 13 | 103.7 h so far · expected done Nov 16 15:48–Nov 17 01:26 UTC |
 | 22 | Phase 22 | pending | — | — |
 
 ## Phase 21 segments
 
-40 merged, 4 replaced, 1 merging, 1 gate
+41 merged, 4 replaced, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p21t-gallery-tool` | tools/showcase/render_all.py regenerates the whole gallery: plan views, roof and site plans, interior elevations, the look cameras, sheet images and the drawing-set PDF; the showcase README matches the script | merging | claude-sonnet-b |
-| `upstream-sync-16341b665` | merge upstream upstream/main up to 16341b665 (2 commits) | gate | mai-flash-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 14:56 | `upstream-sync-16341b665` | merged | 10,866 pass | bonsai-a |
 | Nov 16 14:23 | `harden-p21t-user-guide` | merged | 10,866 pass | tturbo-mac |
 | Nov 16 13:53 | `p21t-gallery-tool` | refused | 10,868 pass | claude-sonnet-a |
 | Nov 16 13:17 | `harden-p21t-entry-landing-views-b` | merged | 10,862 pass | tturbo-mac |
@@ -58,13 +58,12 @@ Updated 2026-11-16 14:45 UTC. This page and the card in the README are regenerat
 | Nov 16 10:08 | `p21t-showcase-house-c` | merged | 10,836 pass | claude-sonnet-b |
 | Nov 16 09:54 | `p21t-showcase-house-c` | refused | 10,835 pass, 1 fail | bonsai-ws2-b |
 | Nov 16 09:33 | `p21t-showcase-house-c` | refused | 0 pass | bonsai-ws2-a |
-| Nov 16 09:33 | `p21t-showcase-house-c` | refused | 0 pass | bonsai-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 1381 |
+| bonsai-a | bonsai2-27b | idle | 1381 |
 | bonsai-b | bonsai2-27b | idle | 1296 |
 | bonsai-ws2-a | bonsai2-27b | idle | 1486 |
 | bonsai-ws2-b | bonsai2-27b | gate | 1412 |
@@ -77,5 +76,5 @@ Updated 2026-11-16 14:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | gate | 78 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1001 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 685 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1002 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 685 |
