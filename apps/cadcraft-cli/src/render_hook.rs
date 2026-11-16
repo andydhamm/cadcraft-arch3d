@@ -1463,6 +1463,7 @@ mod tests {
 
     #[test]
     fn environment_cache_lru_eviction_order() {
+        use cadcraft_engine::doc::arch::Backdrop;
         let _g = reset();
         if let Ok(mut g) = ENV_CACHE.lock() {
             g.clear();
@@ -1470,6 +1471,7 @@ mod tests {
         let model = cadcraft_engine::doc::arch::ArchModel::default();
         let mut look = Look::default();
         look.sky.on = true;
+        look.backdrop = Some(Backdrop::Sky);
         let revision = 9_000_101;
 
         // Fill the cache with ENV_CACHE_CAP entries.
@@ -1532,6 +1534,7 @@ mod tests {
 
     #[test]
     fn environment_cache_nan_sun_direction_is_stable() {
+        use cadcraft_engine::doc::arch::Backdrop;
         let _g = reset();
         if let Ok(mut g) = ENV_CACHE.lock() {
             g.clear();
@@ -1539,6 +1542,7 @@ mod tests {
         let model = cadcraft_engine::doc::arch::ArchModel::default();
         let mut look = Look::default();
         look.sky.on = true;
+        look.backdrop = Some(Backdrop::Sky);
         let revision = 9_000_103;
         let nan_sun = Some([f64::NAN, 0.0, 0.8]);
 
@@ -1585,6 +1589,7 @@ mod tests {
 
     #[test]
     fn environment_cache_revision_change_invalidates() {
+        use cadcraft_engine::doc::arch::Backdrop;
         let _g = reset();
         if let Ok(mut g) = ENV_CACHE.lock() {
             g.clear();
@@ -1592,6 +1597,7 @@ mod tests {
         let model = cadcraft_engine::doc::arch::ArchModel::default();
         let mut look = Look::default();
         look.sky.on = true;
+        look.backdrop = Some(Backdrop::Sky);
         let sun = Some([0.0, -0.6, 0.8]);
 
         let env1 = environment_cached(&model, 9_000_105, &look, sun);
