@@ -14,6 +14,7 @@ cadcraft-color = { workspace = true }
 cadcraft-doc = { workspace = true }
 craft-dxf = { workspace = true }
 craft-dwg = { workspace = true }
+craft-svg = { workspace = true }
 craft-image-codecs = { workspace = true }
 cadcraft-render = { workspace = true }
 cadcraft-arch3d = { workspace = true }
@@ -22,12 +23,10 @@ cadcraft-fonts = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
-image = { workspace = true }
-miniz_oxide = "0.9"
 craft-pdf = { workspace = true, features = ["write"] }
-quick-xml = { workspace = true }
 
 [dev-dependencies]
+miniz_oxide = "0.9"
 tiff = "0.11"
 image = { workspace = true }
 tiny-skia = { workspace = true }
