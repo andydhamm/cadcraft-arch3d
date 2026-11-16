@@ -2137,13 +2137,14 @@ mod tests {
         let d = room();
         let mut req = request(&d, None, None, false);
         req.ground = true;
-        // Camera inside the room, looking toward the north wall so its inner face is visible.
+        // Camera inside the room, looking down and toward the north wall so both the ground and
+        // the wall's inner face are in view.
         let eye = Vec3::new(2.0, 2.0, 1.5);
-        let target = Vec3::new(2.0, 4.0, 1.0);
+        let target = Vec3::new(2.0, 3.0, 0.0);
         let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
         req.camera = Some(camera);
-        // One sample on the ground directly below, one on the inner face of the north wall (y=4.0).
-        req.samples = vec![[2.0, 2.0, 0.0], [2.0, 4.0, 1.0]];
+        // One sample on the ground in front of the camera, one on the inner face of the north wall (y=4.0).
+        req.samples = vec![[2.0, 2.5, 0.0], [2.0, 4.0, 1.0]];
 
         let Some(v) = render(&req) else { return };
         let s = v["samples"].as_array().cloned().unwrap_or_default();
