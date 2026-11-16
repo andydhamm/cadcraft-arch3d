@@ -3692,7 +3692,7 @@ mod tests {
         let mut pane = site_pane();
         let mut model = cadcraft_doc::ArchModel::default();
         model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: 51.05, true_north: 30.0, ..Default::default() });
-        model.backdrop = Some(cadcraft_doc::arch::Backdrop::Hdri { item: "test.hdr".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        model.backdrop = Some(cadcraft_doc::arch::Backdrop::Hdri { image: "test.hdr".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
         pane.sync(2, Some(&model));
         assert!(pane.moon_dir.is_none(), "HDRI backdrop clears the moon direction");
     }
