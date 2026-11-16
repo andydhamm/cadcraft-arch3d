@@ -230,11 +230,11 @@ fn write_house_commands(path: &std::path::Path) {
     std::fs::write(
         path,
         r#"[
-  {"id": "wall", "params": {"points": [[0,0],[10,0],[10,8],[0,8],[0,0]], "thickness": 0.2, "exterior": true}},
-  {"id": "elevation", "params": {"side": "south", "name": "South", "insert": [0, 25], "scale": 50}},
-  {"id": "door", "params": {"wall": "w0", "offset": 3.0, "width": 0.9}},
-  {"id": "window", "params": {"wall": "w0", "offset": 6.0, "width": 1.0, "height": 1.5}},
-  {"id": "window", "params": {"wall": "w0", "offset": 8.0, "width": 1.0, "height": 1.5}}
+  {"cmd": "wall", "params": {"points": [[0,0],[10,0],[10,8],[0,8],[0,0]], "thickness": 0.2, "exterior": true}},
+  {"cmd": "elevation", "params": {"side": "south", "name": "South", "insert": [0, 25], "scale": 50}},
+  {"cmd": "door", "params": {"wall": "w0", "offset": 3.0, "width": 0.9}},
+  {"cmd": "window", "params": {"wall": "w0", "offset": 6.0, "width": 1.0, "height": 1.5}},
+  {"cmd": "window", "params": {"wall": "w0", "offset": 8.0, "width": 1.0, "height": 1.5}}
 ]
 "#,
     )
