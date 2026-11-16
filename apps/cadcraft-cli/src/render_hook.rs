@@ -2140,7 +2140,7 @@ mod tests {
         // Camera inside the room, looking toward the north wall so both the ground and
         // the wall's inner face are in view.
         let eye = Vec3::new(2.0, 2.0, 1.5);
-        let target = Vec3::new(2.0, 4.0, 1.0);
+        let target = Vec3::new(2.0, 4.0, 0.0);
         let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
         req.camera = Some(camera);
         // One sample on the ground in front of the camera, one on the inner face of the north wall (y=4.0).
