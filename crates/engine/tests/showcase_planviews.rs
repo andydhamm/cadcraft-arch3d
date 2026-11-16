@@ -12,9 +12,10 @@ fn read_json(path: &str) -> Value {
 fn phase_20_showcase_planviews_replay() {
     let mut session = Session::new();
 
-    // Create levels Lower and Main as bilevel.json does
+    // Create levels Lower, Main and Entry as bilevel.json does
     session.execute("level", &json!({"name": "Lower", "elevation": 0.0, "ceiling_height": 2.4})).expect("create Lower level");
     session.execute("level", &json!({"name": "Main", "elevation": 2.7, "ceiling_height": 2.4})).expect("create Main level");
+    session.execute("level", &json!({"name": "Entry", "elevation": 0.15, "kind": "landing"})).expect("create Entry level");
 
     let steps = read_json("docs/arch3d/showcase/phase-20-showcase.json");
     let steps_arr = steps.as_array().expect("steps should be an array");

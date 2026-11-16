@@ -25,6 +25,8 @@ fn straight_wall_shape(wall: &Wall, thickness: f64) -> Option<WallShape> {
     Some(WallShape::new(wall.id, vec![p0, p1, p2, p3], (wall.start, wall.end)))
 }
 
+/// `base` and `top` are measured from the wall's bottom, like an opening's sill; the returned
+/// opening's sill is measured from `base`, the bottom of the segment it is cut in.
 fn clipped_opening(op: &Opening, base: f64, top: f64) -> Option<Opening> {
     let inset = 2e-3;
     let start = (op.sill.max(base) + inset).min(top - inset);
@@ -34,7 +36,7 @@ fn clipped_opening(op: &Opening, base: f64, top: f64) -> Option<Opening> {
         return None;
     }
     let mut out = op.clone();
-    out.sill = start;
+    out.sill = start - base;
     out.height = end - start;
     Some(out)
 }
@@ -53,11 +55,11 @@ fn segment_openings<'a>(i: &'a WallIn, base: f64, top: f64) -> Vec<Opening> {
         .collect()
 }
 
-fn upper_mesh(i: &WallIn, base: f64, top: f64, upper: &str) -> Option<Mesh> {
+fn upper_mesh(i: &WallIn, floor: f64, base: f64, top: f64, upper: &str) -> Option<Mesh> {
     let split = i.wall.split.as_ref()?;
     let thickness = if split.upper_thickness.is_finite() && split.upper_thickness > 0.0 { split.upper_thickness } else { GLASS_THICKNESS };
     let shape = straight_wall_shape(&i.wall, thickness)?;
-    let clipped = segment_openings(i, base, top);
+    let clipped = segment_openings(i, base - floor, top - floor);
     let refs: Vec<&Opening> = clipped.iter().collect();
     let profile = crate::walls::elevation_profile(&shape, &i.wall, base, top, i.clip.as_ref(), i.roof_top.as_deref(), &refs)?;
     // Not `extrude_wall_profile`: its rectangle fast path is left as it was for ordinary walls.
@@ -87,7 +89,7 @@ pub(crate) fn wall_meshes(i: &WallIn) -> Option<Vec<Mesh>> {
     let lower_top = base + split_height;
     let mut out = Vec::new();
     let mut lower_in = i.clone();
-    lower_in.openings = segment_openings(i, base, lower_top);
+    lower_in.openings = segment_openings(i, 0.0, split_height);
     if let Some(mut lower) = wall_base_mesh_span(&lower_in, (base, lower_top)) {
         if is_glass_type(&wall.wall_type) {
             lower.material = "glass-wall".to_string();
@@ -102,7 +104,7 @@ pub(crate) fn wall_meshes(i: &WallIn) -> Option<Vec<Mesh>> {
     }
 
     let upper = if is_glass_type(&split.unwrap().upper) { "glass-wall" } else { "wall" };
-    if let Some(mesh) = upper_mesh(i, lower_top, top, upper) {
+    if let Some(mesh) = upper_mesh(i, base, lower_top, top, upper) {
         out.push(mesh);
     }
     if out.is_empty() { None } else { Some(out) }

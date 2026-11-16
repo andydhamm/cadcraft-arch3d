@@ -202,6 +202,44 @@ fn phase21_showcase_replays_into_a_full_sheet_set() {
     assert!(has_schedule("room"), "missing room schedule");
 }
 
+/// The replayed set has a sheet numbered A-121 with three Entry plan sources,
+/// 14 sheets in total, and all sheet numbers are unique.
+#[test]
+fn phase21_showcase_has_an_entry_plans_sheet() {
+    let mut session = replay_showcase();
+
+    let inspect = session.execute("arch.inspect", &json!({"sheets": true})).unwrap_or_else(|e| panic!("arch.inspect failed: {e}"));
+
+    let sheets = inspect["sheets"].as_array().expect("sheets should be an array");
+    assert_eq!(sheets.len(), 14, "expected 14 sheets, found {}", sheets.len());
+
+    // Find the Entry Plans sheet (A-121).
+    let entry_sheet =
+        sheets.iter().find(|s| s.get("number").and_then(|n| n.as_str()) == Some("A-121")).expect("no sheet numbered A-121 (Entry Plans)");
+
+    let views = entry_sheet.get("views").and_then(|v| v.as_array()).expect("A-121 must have a views array");
+    assert_eq!(views.len(), 3, "A-121 should have 3 views, found {}", views.len());
+
+    let expected_names = ["Entry Floor Plan", "Entry Electrical", "Entry Reflected Ceiling"];
+    for expected in &expected_names {
+        assert!(
+            views.iter().any(|w| {
+                let kind = w.get("source").and_then(|s| s.get("kind")).and_then(|t| t.as_str());
+                kind == Some("plan") && w.get("source").and_then(|s| s.get("name")).and_then(|n| n.as_str()) == Some(expected)
+            }),
+            "A-121 is missing plan source `{}`",
+            expected
+        );
+    }
+
+    // All sheet numbers are unique.
+    let mut seen = std::collections::HashSet::new();
+    for s in sheets {
+        let number = s.get("number").and_then(|n| n.as_str()).unwrap_or("unnamed");
+        assert!(seen.insert(number), "duplicate sheet number: {}", number);
+    }
+}
+
 /// All sheet numbers in the phase-21 showcase are unique.
 #[test]
 fn phase21_sheet_numbers_are_unique() {
