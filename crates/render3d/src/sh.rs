@@ -266,7 +266,7 @@ mod tests {
         reset_sh_cache_for_test();
 
         for i in 0..(SH_CACHE_LEN + 5) {
-            let e = Environment::uniform([f32::from(i), 1.0, 1.0], 8, 4);
+            let e = Environment::uniform([i as f32, 1.0, 1.0], 8, 4);
             let _ = project(&e);
         }
 
