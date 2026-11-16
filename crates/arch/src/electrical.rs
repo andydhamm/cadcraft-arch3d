@@ -221,7 +221,7 @@ pub fn device_symbol(model: &ArchModel, d: &ElectricalDevice) -> Vec<Vec<Vec2>> 
 mod tests {
     use super::*;
     use crate::outlets;
-    use cadcraft_doc::arch::{Cabinet, CabinetKind, ElectricalDevice, ElectricalKind, WallSide};
+    use cadcraft_doc::arch::{Cabinet, CabinetKind, ElectricalDevice, ElectricalKind, RoomType, WallSide};
     use cadcraft_doc::{ArchId, ArchModel, Opening, Room, Wall};
 
     fn wall(model: &mut ArchModel, id: u32, start: Vec2, end: Vec2) -> ArchId {
@@ -539,7 +539,7 @@ mod tests {
             id: ArchId(0),
             kind: CabinetKind::Base,
             level: 0,
-            position: Vec2::new(1.3, 0.0),
+            position: Vec2::new(1.3, 0.1),
             rotation: 0.0,
             width: 0.6,
             depth: 0.6,
@@ -554,7 +554,7 @@ mod tests {
             id: ArchId(1),
             kind: CabinetKind::Base,
             level: 0,
-            position: Vec2::new(1.9, 0.0),
+            position: Vec2::new(1.9, 0.1),
             rotation: 0.0,
             width: 0.6,
             depth: 0.6,
@@ -569,7 +569,7 @@ mod tests {
             id: ArchId(2),
             kind: CabinetKind::Base,
             level: 0,
-            position: Vec2::new(2.65, 0.0),
+            position: Vec2::new(2.65, 0.1),
             rotation: 0.0,
             width: 0.9,
             depth: 0.6,
@@ -584,6 +584,7 @@ mod tests {
         model.rooms.push(Room {
             id: room_id,
             level: 0,
+            room_type: RoomType::Kitchen,
             polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(6.0, 4.0), Vec2::new(0.0, 4.0)],
             ..Room::default()
         });
