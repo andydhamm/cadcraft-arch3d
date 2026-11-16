@@ -287,6 +287,12 @@ pub struct Pane3d {
     pub sun_time: String,
     /// The model's site, for the sun.
     site: Option<cadcraft_doc::arch::SiteLocation>,
+    /// The model's named sun angles, in display order.
+    sun_angles: Vec<String>,
+    /// The active plan level index, 0 when the model is not pinned to one.
+    plan_level: Option<u32>,
+    /// Queued look/camera edits waiting to be applied to the session.
+    pub look_cmds: Vec<(&'static str, serde_json::Value)>,
     /// The lighting last computed, with the inputs it was computed from.
     lighting: cadcraft_render3d::Lighting,
     lighting_inputs: Option<LightingInputs>,
@@ -419,6 +425,9 @@ impl Pane3d {
             sun_date: "2026-06-21".into(),
             sun_time: "15:00".into(),
             site: None,
+            sun_angles: Vec::new(),
+            plan_level: None,
+            look_cmds: Vec::new(),
             lighting: cadcraft_render3d::Lighting::default(),
             lighting_inputs: None,
             sun_valid: true,
@@ -465,6 +474,8 @@ impl Pane3d {
     /// Take the view look, moon and environment from `m`.
     fn refresh_look(&mut self, m: &cadcraft_doc::ArchModel) {
         self.view = view_of(m);
+        self.sun_angles = m.sun_angles.iter().map(|a| a.name.clone()).collect();
+        self.plan_level = m.plan_level;
         let backdrop = self.view.look.backdrop.as_ref().or(m.backdrop.as_ref());
         self.moon_dir = if matches!(backdrop, Some(cadcraft_doc::arch::Backdrop::Hdri { .. })) {
             None
@@ -878,6 +889,202 @@ impl Pane3d {
     }
 }
 
+fn look_edit(pane: &Pane3d, key: &str, value: serde_json::Value) -> (&'static str, serde_json::Value) {
+    if let Some(name) = pane.loaded_camera.as_ref().map(|cam| cam.name.clone()) {
+        ("camera.update", serde_json::json!({ "name": name, key: value }))
+    } else {
+        ("look", serde_json::json!({ key: value }))
+    }
+}
+
+pub fn apply_look(pane: &mut Pane3d, session: &mut cadcraft_engine::Session) -> usize {
+    let mut count = 0;
+    let pending = std::mem::take(&mut pane.look_cmds);
+    for (id, params) in pending {
+        match session.execute(id, &params) {
+            Ok(_) => count += 1,
+            Err(e) => {
+                pane.paint_note = e.to_string();
+                session.echo(e.to_string());
+            }
+        }
+    }
+    count
+}
+
+fn look_row(ui: &mut egui::Ui, pane: &mut Pane3d) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label(crate::i18n::t("Look"));
+
+        let mut cutaway = pane.view.look.cutaway;
+        if ui.checkbox(&mut cutaway, crate::i18n::t("Cutaway")).changed() && cutaway != pane.view.look.cutaway {
+            pane.look_cmds.push(look_edit(pane, "cutaway", serde_json::json!(cutaway)));
+        }
+
+        ui.separator();
+        ui.label(crate::i18n::t("Exposure"));
+        let auto_label = crate::i18n::t("Auto");
+        let mut auto = matches!(pane.view.look.exposure, cadcraft_doc::arch::ExposureSetting::Auto);
+        if ui.checkbox(&mut auto, auto_label).changed() {
+            let desired = !matches!(pane.view.look.exposure, cadcraft_doc::arch::ExposureSetting::Auto);
+            if auto != desired || (!auto && pane.view.look.exposure == cadcraft_doc::arch::ExposureSetting::Auto) {
+                let value = if auto {
+                    serde_json::json!("auto")
+                } else {
+                    let ev100 = match pane.view.look.exposure {
+                        cadcraft_doc::arch::ExposureSetting::Manual { ev100 } => ev100,
+                        cadcraft_doc::arch::ExposureSetting::Auto => 9.0,
+                    };
+                    serde_json::json!({ "ev100": ev100 })
+                };
+                pane.look_cmds.push(look_edit(pane, "exposure", value));
+            }
+        }
+        if !auto {
+            let mut ev100 = match pane.view.look.exposure {
+                cadcraft_doc::arch::ExposureSetting::Manual { ev100 } => ev100,
+                cadcraft_doc::arch::ExposureSetting::Auto => 9.0,
+            };
+            let label = ui.label(crate::i18n::t("EV100"));
+            let resp =
+                ui.add(egui::DragValue::new(&mut ev100).speed(0.1).range(cadcraft_doc::arch::look::MIN_EV100..=cadcraft_doc::arch::look::MAX_EV100));
+            let resp = resp.labelled_by(label.id);
+            if resp.drag_stopped() || resp.lost_focus() {
+                if !matches!(pane.view.look.exposure, cadcraft_doc::arch::ExposureSetting::Manual { ev100: v } if (v - ev100).abs() < 1e-9) {
+                    pane.look_cmds.push(look_edit(pane, "exposure", serde_json::json!({ "ev100": ev100 })));
+                }
+            }
+        }
+
+        ui.separator();
+        let mut tone = pane.view.look.tone_map;
+        let tone_label = crate::i18n::t("Tone map");
+        egui::ComboBox::from_label(tone_label)
+            .selected_text(match tone {
+                cadcraft_doc::arch::ToneMap::Aces => crate::i18n::t("ACES"),
+                cadcraft_doc::arch::ToneMap::Hable => crate::i18n::t("Hable"),
+                cadcraft_doc::arch::ToneMap::None => crate::i18n::t("None"),
+            })
+            .show_ui(ui, |ui| {
+                for (value, label) in [
+                    (cadcraft_doc::arch::ToneMap::Aces, crate::i18n::t("ACES")),
+                    (cadcraft_doc::arch::ToneMap::Hable, crate::i18n::t("Hable")),
+                    (cadcraft_doc::arch::ToneMap::None, crate::i18n::t("None")),
+                ] {
+                    if ui.selectable_value(&mut tone, value, label).clicked() && tone != pane.view.look.tone_map {
+                        let value = match tone {
+                            cadcraft_doc::arch::ToneMap::Aces => "aces",
+                            cadcraft_doc::arch::ToneMap::Hable => "hable",
+                            cadcraft_doc::arch::ToneMap::None => "none",
+                        };
+                        pane.look_cmds.push(look_edit(pane, "toneMap", serde_json::json!(value)));
+                    }
+                }
+            });
+
+        ui.separator();
+        let mut sun_choice = pane.view.look.sun.angle.clone();
+        let sun_label = crate::i18n::t("Sun angle");
+        egui::ComboBox::from_label(sun_label).selected_text(sun_choice.clone().unwrap_or_else(|| crate::i18n::t("Auto").to_string())).show_ui(
+            ui,
+            |ui| {
+                if ui.selectable_value(&mut sun_choice, None, crate::i18n::t("Auto")).clicked() && sun_choice != pane.view.look.sun.angle.clone() {
+                    pane.look_cmds.push(look_edit(pane, "sun", serde_json::json!({ "angle": null })));
+                }
+                for name in pane.sun_angles.iter().cloned() {
+                    if ui.selectable_value(&mut sun_choice, Some(name.clone()), name.clone()).clicked()
+                        && sun_choice.as_deref() != pane.view.look.sun.angle.as_deref()
+                    {
+                        pane.look_cmds.push(look_edit(pane, "sun", serde_json::json!({ "angle": name })));
+                    }
+                }
+            },
+        );
+
+        ui.separator();
+        let mut sky = pane.view.look.sky.on;
+        if ui.checkbox(&mut sky, crate::i18n::t("Sky")).changed() && sky != pane.view.look.sky.on {
+            pane.look_cmds.push(look_edit(pane, "sky", serde_json::json!({ "on": sky })));
+        }
+
+        ui.separator();
+        let mut clip_on = pane.view.look.clip.is_some();
+        if ui.checkbox(&mut clip_on, crate::i18n::t("Clip box")).changed() && clip_on != pane.view.look.clip.is_some() {
+            if clip_on {
+                let Some(bounds) = pane.base.as_ref().map(|s| s.bounds) else {
+                    return;
+                };
+                let min = [bounds.min[0], bounds.min[1], bounds.min[2]];
+                let max = [bounds.max[0], bounds.max[1], bounds.max[2]];
+                pane.look_cmds.push(look_edit(pane, "clip", serde_json::json!({ "min": min, "max": max })));
+            } else {
+                pane.look_cmds.push(look_edit(pane, "clip", serde_json::json!(null)));
+            }
+        }
+        if clip_on {
+            let mut clip = pane.view.look.clip.clone().unwrap_or_else(|| {
+                pane.base
+                    .as_ref()
+                    .map(|s| cadcraft_doc::arch::ClipBox { min: s.bounds.min, max: s.bounds.max, ..Default::default() })
+                    .unwrap_or_default()
+            });
+            let mut commit = false;
+            for axis in 0..3 {
+                let mut lo = clip.min[axis];
+                let mut hi = clip.max[axis];
+                let lo_label = ui.label(format!("min {axis}"));
+                let hi_label = ui.label(format!("max {axis}"));
+                let lo_resp = ui.add(egui::DragValue::new(&mut lo).speed(0.05)).labelled_by(lo_label.id);
+                let hi_resp = ui.add(egui::DragValue::new(&mut hi).speed(0.05)).labelled_by(hi_label.id);
+                commit |= lo_resp.drag_stopped() || lo_resp.lost_focus() || hi_resp.drag_stopped() || hi_resp.lost_focus();
+                if hi < lo + 0.05 {
+                    hi = lo + 0.05;
+                }
+                if lo > hi - 0.05 {
+                    lo = hi - 0.05;
+                }
+                clip.min[axis] = lo;
+                clip.max[axis] = hi;
+            }
+            if commit {
+                let cmd = serde_json::json!({ "min": clip.min, "max": clip.max });
+                if pane.view.look.clip.as_ref().map_or(true, |old| old.min != clip.min || old.max != clip.max) {
+                    pane.look_cmds.push(look_edit(pane, "clip", cmd));
+                }
+            }
+        }
+
+        ui.separator();
+        let mut near = pane.view.look.near_clip.unwrap_or(0.0);
+        let near_label = ui.label(crate::i18n::t("Near clip"));
+        let resp =
+            ui.add(egui::DragValue::new(&mut near).range(0.0..=cadcraft_doc::arch::look::MAX_NEAR_CLIP).speed(0.05)).labelled_by(near_label.id);
+        if resp.drag_stopped() || resp.lost_focus() {
+            let desired = if near <= 0.0 { None } else { Some(near) };
+            if pane.view.look.near_clip != desired {
+                pane.look_cmds.push(look_edit(pane, "nearClip", desired.map_or(serde_json::Value::Null, |v| serde_json::json!(v))));
+            }
+        }
+
+        ui.separator();
+        let reset = ui.add_enabled(pane.loaded_camera.is_some(), egui::Button::new(crate::i18n::t("Reset camera")));
+        if reset.clicked() {
+            if let Some(name) = pane.loaded_camera.as_ref().map(|cam| cam.name.clone()) {
+                pane.look_cmds.push(("camera.reset", serde_json::json!({ "name": name })));
+            }
+        }
+
+        let overview = ui.button(crate::i18n::t("Floor overview"));
+        if overview.clicked() {
+            let level = pane.plan_level.unwrap_or(0) as i64;
+            pane.look_cmds.push((
+                "camera",
+                serde_json::json!({ "save": "Floor overview", "kind": "overview", "level": level, "lowerLevels": true, "cutaway": true }),
+            ));
+        }
+    });
+}
+
 /// Draw the 3D pane content into `ui`.
 ///
 /// When no GPU adapter is available or no scene has been built, a text placeholder is
@@ -906,6 +1113,7 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
         }
     });
     tool_row(ui, pane);
+    look_row(ui, pane);
     let lighting = pane.lighting();
     let finalize = pane.finalize.clone();
     ui.horizontal(|ui| {
@@ -3009,6 +3217,142 @@ mod tests {
 
     fn site_cmd() -> (&'static str, serde_json::Value) {
         ("site", serde_json::json!({"latitude": 51.05, "longitude": -114.07, "trueNorth": 0}))
+    }
+
+    #[test]
+    fn look_row_cutaway_checkbox_queues_one_look_command() {
+        let mut session = house_session();
+        let mut pane = Pane3d::new();
+        let cmd = look_edit(&pane, "cutaway", serde_json::json!(true));
+        assert_eq!(cmd, ("look", serde_json::json!({"cutaway": true})));
+        pane.look_cmds.push(cmd);
+        assert_eq!(apply_look(&mut pane, &mut session), 1);
+        let look = session.doc().expect("doc").arch.look.clone();
+        assert!(look.cutaway);
+        assert!(session.undo().is_ok());
+        assert!(!session.doc().expect("doc").arch.look.cutaway);
+    }
+
+    #[test]
+    fn look_row_edits_the_active_camera_when_there_is_one() {
+        let mut session = house_session();
+        session.execute("camera", &serde_json::json!({"save": "a", "azimuth": 20})).expect("save camera");
+        let mut pane = Pane3d::new();
+        pane.loaded_camera = session.doc().expect("doc").arch.camera_by_name("a").cloned();
+        let cmd = look_edit(&pane, "cutaway", serde_json::json!(true));
+        assert_eq!(cmd, ("camera.update", serde_json::json!({"name": "a", "cutaway": true})));
+        pane.look_cmds.push(cmd);
+        assert_eq!(apply_look(&mut pane, &mut session), 1);
+        let camera = session.doc().expect("doc").arch.camera_by_name("a").expect("saved camera");
+        assert!(camera.look.as_ref().is_some_and(|l| l.cutaway));
+        assert!(!session.doc().expect("doc").arch.look.cutaway);
+    }
+
+    #[test]
+    fn look_row_exposure_and_tone_map() {
+        let mut session = Session::new();
+        let pane = Pane3d::new();
+        let auto = look_edit(&pane, "exposure", serde_json::json!("auto"));
+        let ev = look_edit(&pane, "exposure", serde_json::json!({"ev100": 6.5}));
+        let tone = look_edit(&pane, "toneMap", serde_json::json!("hable"));
+        assert_eq!(auto, ("look", serde_json::json!({"exposure": "auto"})));
+        assert_eq!(ev, ("look", serde_json::json!({"exposure": {"ev100": 6.5}})));
+        assert_eq!(tone, ("look", serde_json::json!({"toneMap": "hable"})));
+        assert!(session.execute("look", &auto.1).is_ok());
+        assert!(session.execute("look", &ev.1).is_ok());
+        assert!(session.execute("look", &tone.1).is_ok());
+    }
+
+    #[test]
+    fn look_row_sun_angle_and_sky() {
+        let mut session = house_session();
+        let st = session.state().expect("state");
+        let mut pane = Pane3d::new();
+        pane.sync_doc(st.uid, st.doc.arch_revision, Some(&st.doc.arch));
+        session.execute("sunangle", &serde_json::json!({"name": "dusk", "azimuth": 300.0, "elevation": -3.0})).expect("sun angle");
+        let st = session.state().expect("state");
+        pane.sync_doc(st.uid, st.doc.arch_revision, Some(&st.doc.arch));
+        assert_eq!(pane.sun_angles, vec!["dusk".to_string()]);
+        assert_eq!(look_edit(&pane, "sun", serde_json::json!({"angle": "dusk"})), ("look", serde_json::json!({"sun": {"angle": "dusk"}})));
+        assert_eq!(look_edit(&pane, "sun", serde_json::json!({"angle": null})), ("look", serde_json::json!({"sun": {"angle": null}})));
+        assert_eq!(look_edit(&pane, "sky", serde_json::json!({"on": false})), ("look", serde_json::json!({"sky": {"on": false}})));
+        assert!(session.execute("look", &serde_json::json!({"sun": {"angle": "dusk"}})).is_ok());
+        assert!(session.execute("look", &serde_json::json!({"sun": {"angle": null}})).is_ok());
+        assert!(session.execute("look", &serde_json::json!({"sky": {"on": false}})).is_ok());
+    }
+
+    #[test]
+    fn look_row_clip_box_and_near_clip() {
+        let (mut pane, mut session) = house_pane();
+        let clip = serde_json::json!({"min": [0.0, 0.0, 0.0], "max": pane.base.as_ref().map(|s| s.bounds.max).unwrap_or([10.0, 8.0, 2.0])});
+        let cmd = look_edit(&pane, "clip", clip.clone());
+        assert!(cmd.1["clip"]["max"][2].as_f64().is_some());
+        assert!(session.execute("look", &serde_json::json!({"nearClip": serde_json::Value::Null})).is_ok());
+        assert!(session.execute("look", &serde_json::json!({"nearClip": 1.5})).is_ok());
+        assert!(session.execute("look", &cmd.1).is_ok());
+        let mut value = serde_json::json!({"min": [0.0, 0.0, 0.0], "max": [10.0, 8.0, 2.0]});
+        value["max"][2] = serde_json::json!(2.0);
+        assert_eq!(value["max"][2], 2.0);
+    }
+
+    #[test]
+    fn look_row_reset_camera_and_floor_overview() {
+        let mut session = house_session();
+        session.execute("camera", &serde_json::json!({"save": "a", "azimuth": 20})).expect("save camera");
+        let mut pane = Pane3d::new();
+        pane.loaded_camera = session.doc().expect("doc").arch.camera_by_name("a").cloned();
+        assert_eq!(look_edit(&pane, "cutaway", serde_json::json!(true)).0, "camera.update");
+        assert!(session.execute("camera.orbit", &serde_json::json!({"name": "a", "azimuth": 40})).is_ok());
+        let reset = ("camera.reset", serde_json::json!({"name": "a"}));
+        assert_eq!(reset, ("camera.reset", serde_json::json!({"name": "a"})));
+        assert!(session.execute("camera.reset", &reset.1).is_ok());
+        let overview =
+            ("camera", serde_json::json!({"save": "Floor overview", "kind": "overview", "level": 0, "lowerLevels": true, "cutaway": true}));
+        assert_eq!(overview.1["save"], "Floor overview");
+    }
+
+    #[test]
+    fn apply_look_runs_each_queued_command_as_one_undo_step() {
+        let mut pane = Pane3d::new();
+        let mut session = house_session();
+        pane.look_cmds.push(("look", serde_json::json!({"cutaway": true})));
+        pane.look_cmds.push(("look", serde_json::json!({"toneMap": "hable"})));
+        assert_eq!(apply_look(&mut pane, &mut session), 2);
+        assert_eq!(session.doc().expect("doc").arch.look.tone_map, cadcraft_doc::arch::ToneMap::Hable);
+        assert!(session.undo().is_ok());
+        assert!(session.undo().is_ok());
+        let rejected = ("look", serde_json::json!({"toneMap": "nope"}));
+        pane.look_cmds.push(rejected);
+        let before = session.doc().expect("doc").arch.look.clone();
+        let n = apply_look(&mut pane, &mut session);
+        assert_eq!(n, 0);
+        assert_eq!(session.doc().expect("doc").arch.look, before);
+        assert!(!pane.paint_note.is_empty());
+    }
+
+    #[test]
+    fn look_row_labels_have_translations() {
+        let labels = [
+            "Look",
+            "Technique",
+            "Exposure",
+            "Auto",
+            "EV100",
+            "Tone map",
+            "Sun angle",
+            "Sky",
+            "Cutaway",
+            "Clip box",
+            "Near clip",
+            "Reset camera",
+            "Floor overview",
+            "ACES",
+            "Hable",
+        ];
+        let file = include_str!("i18n/uk.tsv");
+        for label in labels {
+            assert!(file.contains(&format!("{label}\t")), "missing locale row for {label}");
+        }
     }
 
     #[test]
