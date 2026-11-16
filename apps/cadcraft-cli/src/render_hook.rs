@@ -2141,8 +2141,8 @@ mod tests {
         let target = Vec3::new(2.0, 2.0, 0.0);
         let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
         req.camera = Some(camera);
-        // One sample on the ground, one in the air (at wall height)
-        req.samples = vec![[2.0, 2.0, 0.0], [2.0, 0.0, 1.2]];
+        // One sample on the ground, one in the air near the camera axis (visible with 70 deg FOV).
+        req.samples = vec![[2.0, 2.0, 0.0], [2.0, 1.9, 1.2]];
 
         let Some(v) = render(&req) else { return };
         let s = v["samples"].as_array().cloned().unwrap_or_default();
