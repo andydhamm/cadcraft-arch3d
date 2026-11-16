@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
-10,897 workspace tests passing at the last merge · 1273 segments merged in all · 0 of 15 seats working
+10,902 workspace tests passing at the last merge · 1274 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-16 23:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 17 04:44–Dec 02 06:21 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 17 04:59–Dec 02 06:36 UTC |
 
 ## Phase 22 segments
 
@@ -43,6 +43,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 23:18 | `harden-p19f-cli-render-reply` | merged | 10,902 pass | tturbo-mac |
 | Nov 16 21:47 | `harden-p21t-showcase-tests-defer` | merged | 10,897 pass | tturbo-mac |
 | Nov 16 21:09 | `harden-p19t-pane-look-lighting` | merged | 10,888 pass | tturbo-mac |
 | Nov 16 20:56 | `harden-p21t-gallery-tool-b` | merged | 10,883 pass | tturbo-mac2 |
@@ -54,7 +55,6 @@ none yet
 | Nov 16 19:09 | `harden-p21t-showcase-tests-defer` | refused | 10,888 pass | tturbo-mac |
 | Nov 16 16:57 | `p21t-gallery-tool-b` | merged | 10,879 pass | bonsai-a |
 | Nov 16 16:21 | `p21t-gallery-tool` | merged | 10,873 pass | bonsai-ws2-a |
-| Nov 16 15:43 | `harden-p21t-wall-window-and-niche-b` | merged | 10,873 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
