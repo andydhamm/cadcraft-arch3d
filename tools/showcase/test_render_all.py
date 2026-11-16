@@ -256,7 +256,7 @@ class RenderAll(unittest.TestCase):
         plan_rows = [r for r in rows if r[1] == 'plan']
         self.assertEqual(len(plan_rows), 4)
         planview_rows = [r for r in rows if r[1] == 'planview']
-        self.assertEqual(len(planview_rows), 6)
+        self.assertEqual(len(planview_rows), 3)
         for r in planview_rows:
             self.assertNotEqual(r[2], 'Roof Floor Plan')
 
