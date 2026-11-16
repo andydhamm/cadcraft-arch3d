@@ -224,6 +224,61 @@ mod tests {
     }
 
     #[test]
+    fn project_tiny_environment() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
+        let e = Environment::uniform([2.0, 1.0, 0.5], 1, 1);
+        let sh = project(&e);
+        // A uniform environment should give pi * radiance for every normal.
+        let pi = std::f32::consts::PI;
+        let n = [0.0, 0.0, 1.0];
+        let e_irr = irradiance(&sh, n);
+        for (got, l) in e_irr.iter().zip([2.0f32, 1.0, 0.5]) {
+            assert!((got - pi * l).abs() <= pi * l * 0.05, "{n:?}: {e_irr:?}");
+        }
+    }
+
+    #[test]
+    fn irradiance_zero_normal() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
+        let e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        let sh = project(&e);
+        let zero = irradiance(&sh, [0.0, 0.0, 0.0]);
+        // A zero normal is not a valid direction; irradiance should be finite.
+        assert!(zero.iter().all(|v| v.is_finite()), "irradiance with zero normal must be finite: {zero:?}");
+    }
+
+    #[test]
+    fn convolve_zero_coefficients() {
+        let sh = [[0.0f32; 3]; 9];
+        let out = convolve(&sh);
+        for row in &out {
+            assert_eq!(row, &[0.0, 0.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn sh_projection_cache_is_bounded() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
+        for i in 0..(SH_CACHE_LEN + 5) {
+            let e = Environment::uniform([i as f32, 1.0, 1.0], 8, 4);
+            let _ = project(&e);
+        }
+
+        let count = if let Ok(g) = SH_CACHE.lock() {
+            g.len()
+        } else {
+            return;
+        };
+        assert!(count <= SH_CACHE_LEN, "cache must hold at most {SH_CACHE_LEN} entries, got {count}");
+    }
+
+    #[test]
     fn second_sky_render_of_an_angle_rebuilds_nothing() {
         let _guard = TEST_LOCK.lock().unwrap();
         reset_sh_cache_for_test();

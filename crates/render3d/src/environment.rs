@@ -799,6 +799,39 @@ mod tests {
     }
 
     #[test]
+    fn compute_key_is_stable_for_nan_rgb() {
+        let mut e = Environment::uniform([1.0, 2.0, 3.0], 4, 4);
+        e.rgb[3] = [f32::NAN, 0.0, 0.0];
+        let k1 = e.compute_key();
+        let k2 = e.compute_key();
+        assert_eq!(k1, k2, "same NaN bits must produce the same key");
+        e.rgb[3] = [f32::NAN, 0.0, 0.0];
+        let k3 = e.compute_key();
+        assert_eq!(k1, k3, "reassigning the same NaN must not change the key");
+    }
+
+    #[test]
+    fn environment_with_zero_intensity_is_valid() {
+        let mut e = Environment::uniform([1.0, 2.0, 3.0], 4, 4);
+        e.intensity = 0.0;
+        assert!(e.is_valid(), "zero intensity must be valid");
+        let r = e.radiance([0.0, 0.0, 1.0]);
+        assert_eq!(r, [0.0, 0.0, 0.0], "zero intensity must give zero radiance");
+    }
+
+    #[test]
+    fn environment_rotation_360_equals_zero() {
+        let mut e = Environment::uniform([0.0; 3], 8, 4);
+        e.rgb[5] = [10.0, 10.0, 10.0];
+        let r0 = e.radiance([0.0, -1.0, 0.0]);
+        e.rotation_deg = 360.0;
+        let r360 = e.radiance([0.0, -1.0, 0.0]);
+        for (a, b) in r0.iter().zip(&r360) {
+            assert_eq!(a, b, "360 degree rotation must equal zero rotation");
+        }
+    }
+
+    #[test]
     fn environment_for_prefers_hdri_over_sky() {
         use cadcraft_doc::arch::ImageRgbe;
         let mut model = ArchModel::default();
