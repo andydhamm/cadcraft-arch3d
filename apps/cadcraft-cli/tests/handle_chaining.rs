@@ -324,3 +324,109 @@ fn run_script_steps_do_not_defer() {
     assert!(n > 4, "South view has no lines after script: {stdout}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `--export` triggers the view catch-up before writing, just like `--save`.
+#[test]
+fn run_export_triggers_view_catchup() {
+    let dir = std::env::temp_dir().join(format!("p21t-cli-views-export-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let cmds = dir.join("house.json");
+    write_house_commands(&cmds);
+    let out_dxf = dir.join("house-export.dxf");
+    let out = run(&["run", "--metric", "--commands", cmds.to_str().expect("commands path"), "--export", out_dxf.to_str().expect("dxf path")]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "exit {:?}\nstderr: {stderr}", out.status);
+    let out2 = run(&["run", "--metric", "--cmd", r#"arch.inspect {"views": true}"#, out_dxf.to_str().expect("dxf path")]);
+    let stdout = String::from_utf8_lossy(&out2.stdout);
+    let stderr2 = String::from_utf8_lossy(&out2.stderr);
+    assert!(out2.status.success(), "re-open exit {:?}\nstderr: {stderr2}", out2.status);
+    let exported = view_line_count(&stdout, "South");
+    let fresh_dir = std::env::temp_dir().join(format!("p21t-cli-views-fresh-export-{}", std::process::id()));
+    std::fs::create_dir_all(&fresh_dir).expect("temp dir");
+    let cmds2 = fresh_dir.join("house.json");
+    write_house_commands(&cmds2);
+    let out3 = run(&["run", "--metric", "--commands", cmds2.to_str().expect("commands path"), "--cmd", r#"arch.inspect {"views": true}"#]);
+    let stdout3 = String::from_utf8_lossy(&out3.stdout);
+    let fresh = view_line_count(&stdout3, "South");
+    assert_eq!(exported, fresh, "exported view lines {exported} != fresh {fresh}");
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&fresh_dir);
+}
+
+/// A reading command (`arch.inspect {"views": true}`) between model-building steps
+/// triggers view regeneration, so it sees the changes made so far.
+#[test]
+fn run_reading_command_between_build_steps_regenerates() {
+    let dir = std::env::temp_dir().join(format!("p21t-cli-views-read-between-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let cmds = dir.join("house.json");
+    std::fs::write(
+        &cmds,
+        r#"[
+  {"cmd": "wall", "params": {"points": [[0,0],[10,0],[10,8],[0,8],[0,0]], "thickness": 0.2, "exterior": true}},
+  {"cmd": "elevation", "params": {"side": "south", "name": "South", "insert": [0, 25], "scale": 50}},
+  {"cmd": "door", "params": {"wall": "w0", "offset": 3.0, "width": 0.9}},
+  {"cmd": "arch.inspect", "params": {"views": true}},
+  {"cmd": "window", "params": {"wall": "w0", "offset": 6.0, "width": 1.0, "height": 1.5}},
+  {"cmd": "window", "params": {"wall": "w0", "offset": 8.0, "width": 1.0, "height": 1.5}},
+  {"cmd": "arch.inspect", "params": {"views": true}}
+]
+"#,
+    )
+    .expect("write commands file");
+    let out = run(&["run", "--metric", "--commands", cmds.to_str().expect("commands path")]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "exit {:?}\nstdout: {stdout}\nstderr: {stderr}", out.status);
+    let inspect_lines: Vec<&str> = stdout.lines().filter(|l| l.trim_start().starts_with('{') && l.contains("\"views\"")).collect();
+    assert_eq!(inspect_lines.len(), 2, "two inspect results expected: {stdout}");
+    let first: serde_json::Value = serde_json::from_str(inspect_lines[0]).expect("first inspect is JSON");
+    let second: serde_json::Value = serde_json::from_str(inspect_lines[1]).expect("second inspect is JSON");
+    let first_views = first["views"].as_array().expect("views array");
+    let second_views = second["views"].as_array().expect("views array");
+    let first_south = first_views.iter().find(|v| v["name"].as_str() == Some("South")).expect("South view in first inspect");
+    let second_south = second_views.iter().find(|v| v["name"].as_str() == Some("South")).expect("South view in second inspect");
+    let first_lines = first_south["lines"].as_array().map(|a| a.len()).unwrap_or_default();
+    let second_lines = second_south["lines"].as_array().map(|a| a.len()).unwrap_or_default();
+    assert!(second_lines > first_lines, "second inspect ({second_lines}) should have more lines than first ({first_lines})");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A failing `--cmd` step does not prevent the view catch-up before `--save`.
+#[test]
+fn run_failing_command_still_catches_up_before_save() {
+    let dir = std::env::temp_dir().join(format!("p21t-cli-views-fail-save-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let cmds = dir.join("house.json");
+    write_house_commands(&cmds);
+    let out_dxf = dir.join("house-fail.dxf");
+    let out = run(&[
+        "run",
+        "--metric",
+        "--commands",
+        cmds.to_str().expect("commands path"),
+        "--cmd",
+        r#"door {"wall": "w999", "offset": 3.0, "width": 0.9}"#,
+        "--save",
+        out_dxf.to_str().expect("dxf path"),
+    ]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "run should fail due to the bad door command");
+    assert!(stderr.contains("w999"), "error should mention the missing wall: {stderr}");
+    assert!(out_dxf.exists(), "the file should be saved despite the failing command");
+    let out2 = run(&["run", "--metric", "--cmd", r#"arch.inspect {"views": true}"#, out_dxf.to_str().expect("dxf path")]);
+    let stdout = String::from_utf8_lossy(&out2.stdout);
+    let stderr2 = String::from_utf8_lossy(&out2.stderr);
+    assert!(out2.status.success(), "re-open exit {:?}\nstderr: {stderr2}", out2.status);
+    let saved = view_line_count(&stdout, "South");
+    let fresh_dir = std::env::temp_dir().join(format!("p21t-cli-views-fresh-fail-{}", std::process::id()));
+    std::fs::create_dir_all(&fresh_dir).expect("temp dir");
+    let cmds2 = fresh_dir.join("house.json");
+    write_house_commands(&cmds2);
+    let out3 = run(&["run", "--metric", "--commands", cmds2.to_str().expect("commands path"), "--cmd", r#"arch.inspect {"views": true}"#]);
+    let stdout3 = String::from_utf8_lossy(&out3.stdout);
+    let fresh = view_line_count(&stdout3, "South");
+    assert_eq!(saved, fresh, "saved view lines {saved} != fresh {fresh}");
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&fresh_dir);
+}
