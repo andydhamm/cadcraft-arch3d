@@ -99,6 +99,82 @@ fn strd(v: &Value, key: &str, default: &str) -> String {
     }
 }
 
+#[test]
+fn phase20_showcase_entry_views_are_on_landing_not_floor() {
+    install_io();
+    let house = fs::read_to_string(&house_script_path()).unwrap_or_else(|e| panic!("cannot read house script: {e}"));
+    let phase = fs::read_to_string(&showcase_script_path()).unwrap_or_else(|e| panic!("cannot read showcase script: {e}"));
+    let mut session = new_metric_session();
+    replay(&house, &mut session);
+    replay(&phase, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"planViews": true, "levels": true}));
+    let views = plan_views_of(&reply);
+    let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).map(|a| a.iter().cloned().collect()).unwrap_or_default();
+
+    let mut level_kinds: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for level in &levels {
+        let name = strd(level, "name", "");
+        let kind = strd(level, "kind", "");
+        if !name.is_empty() {
+            level_kinds.insert(name, kind);
+        }
+    }
+
+    let entry_views = ["Entry Floor Plan", "Entry Electrical", "Entry Reflected Ceiling"];
+    for name in entry_views {
+        let view = views.iter().find(|v| plan_view_name(v) == name).unwrap_or_else(|| panic!("missing view `{}`", name));
+        let view_level = level_str(view);
+        assert!(!view_level.is_empty(), "view `{}` has no level", name);
+        let kind = level_kinds.get(&view_level);
+        assert!(kind.is_some(), "view `{}` level `{}` not found in levels list", name, view_level);
+        assert_eq!(
+            kind.unwrap().as_str(),
+            "landing",
+            "view `{}` is on level `{}` with kind `{}`, expected `landing`",
+            name,
+            view_level,
+            kind.unwrap()
+        );
+    }
+}
+
+#[test]
+fn phase20_showcase_entry_views_use_correct_templates() {
+    let steps = steps_of(&showcase_script_path());
+    let expected = [("Entry Floor Plan", "Floor Plan"), ("Entry Electrical", "Electrical"), ("Entry Reflected Ceiling", "Reflected Ceiling")];
+    for (name, from) in expected {
+        let step = steps
+            .iter()
+            .find(|s| s.cmd == "planview" && strd(&s.params, "name", "") == name)
+            .unwrap_or_else(|| panic!("no planview step for `{}`", name));
+        let actual_from = strd(&step.params, "from", "");
+        assert_eq!(actual_from, from, "planview `{}` uses template `{}`, expected `{}`", name, actual_from, from);
+        let level = strd(&step.params, "level", "");
+        assert_eq!(level, "Entry", "planview `{}` is on level `{}`, expected `Entry`", name, level);
+        let open = boold(&step.params, "open", true);
+        assert!(!open, "planview `{}` should not be open by default", name);
+    }
+}
+
+#[test]
+fn phase20_showcase_entry_views_come_before_dimauto() {
+    let steps = steps_of(&showcase_script_path());
+    let mut last_entry_idx = 0;
+    for (i, s) in steps.iter().enumerate() {
+        if s.cmd == "planview" && strd(&s.params, "name", "").starts_with("Entry") {
+            last_entry_idx = i;
+        }
+    }
+    let first_dimauto_idx = steps.iter().position(|s| s.cmd == "dimauto").unwrap_or(steps.len());
+    assert!(
+        last_entry_idx < first_dimauto_idx,
+        "Entry planviews (last at {}) must come before dimauto (first at {})",
+        last_entry_idx,
+        first_dimauto_idx
+    );
+}
+
 /// A boolean field of `v`, or the default.
 fn boold(v: &Value, key: &str, default: bool) -> bool {
     match v.get(key) {
