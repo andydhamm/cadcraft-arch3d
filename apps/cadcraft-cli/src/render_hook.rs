@@ -2137,18 +2137,19 @@ mod tests {
         let d = room();
         let mut req = request(&d, None, None, false);
         req.ground = true;
-        let eye = Vec3::new(2.0, 2.0, 1.5);
-        let target = Vec3::new(2.0, 2.0, 0.0);
+        // Camera from the south, looking toward the north wall so its inner face is visible.
+        let eye = Vec3::new(2.0, -3.0, 1.5);
+        let target = Vec3::new(2.0, 2.0, 1.0);
         let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
         req.camera = Some(camera);
-        // One sample on the ground, one in the air near the camera axis (visible with 70 deg FOV).
-        req.samples = vec![[2.0, 2.0, 0.0], [2.0, 1.9, 1.2]];
+        // One sample on the ground, one on the inner face of the north wall (y=4.0).
+        req.samples = vec![[2.0, 2.0, 0.0], [2.0, 4.0, 1.0]];
 
         let Some(v) = render(&req) else { return };
         let s = v["samples"].as_array().cloned().unwrap_or_default();
         assert_eq!(s.len(), 2, "{v}");
         assert_eq!(s[0]["visible"], true, "ground sample should be visible: {v}");
-        assert_eq!(s[1]["visible"], true, "air sample on wall should be visible: {v}");
+        assert_eq!(s[1]["visible"], true, "wall sample should be visible: {v}");
     }
 
     #[test]
