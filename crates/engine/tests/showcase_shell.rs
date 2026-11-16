@@ -245,6 +245,31 @@ fn the_shell_session_survives_hostile_commands() {
     assert!(r["rooms"].as_array().is_some(), "rooms array should still be present");
 }
 
+/// Turning view deferral off without ever turning it on is a no-op that does not crash.
+#[test]
+fn the_shell_deferral_off_without_on_is_a_no_op() {
+    let mut s = showcase_session();
+    s.new_drawing(true);
+    // No set_views_deferred(true) called; turning it off should be harmless.
+    s.set_views_deferred(false);
+    // Session should still be usable.
+    let result = s.execute("wall", &json!({"points": [[0.0, 0.0], [3.0, 0.0]], "thickness": 0.1}));
+    assert!(result.is_ok(), "session should work after deferral off without on");
+}
+
+/// Calling set_views_deferred(true) twice is idempotent.
+#[test]
+fn the_shell_deferral_on_twice_is_idempotent() {
+    let mut s = showcase_session();
+    s.new_drawing(true);
+    s.set_views_deferred(true);
+    s.set_views_deferred(true);
+    // Should still be deferred.
+    assert!(s.views_deferred(), "views should still be deferred after calling set_views_deferred(true) twice");
+    s.set_views_deferred(false);
+    assert!(!s.views_deferred(), "views should not be deferred after calling set_views_deferred(false)");
+}
+
 #[test]
 fn the_shell_library_lists_sample_items() {
     let mut s = showcase_session();
