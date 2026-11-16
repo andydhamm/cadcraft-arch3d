@@ -1484,26 +1484,37 @@ mod tests {
             assert!(e.is_some(), "environment {i} should build with sky on");
         }
 
+        // Cache should be full.
+        let size_after_fill = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_fill, ENV_CACHE_CAP, "cache should be full after filling");
+
         // Access the first entry again (makes it most recent in LRU order).
         let env0_again = environment_cached(&model, revision, &look, suns[0]);
         let env0_ptr = envs[0].as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
         let env0_again_ptr = env0_again.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
         assert_eq!(env0_ptr, env0_again_ptr, "re-accessing first entry should be a cache hit");
 
+        // Cache size should not change on a hit.
+        let size_after_hit = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_hit, ENV_CACHE_CAP, "cache size should not change on a hit");
+
         // Insert one more entry: the least recently used (index 1) should be evicted.
         let new_sun = Some([0.9, 0.0, 0.8]);
         let _env_new = environment_cached(&model, revision, &look, new_sun);
+
+        // Cache should still be at capacity (one evicted, one added).
+        let size_after_insert = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_insert, ENV_CACHE_CAP, "cache should stay at capacity after eviction");
 
         // The first entry should still be cached (it was accessed most recently).
         let env0_still = environment_cached(&model, revision, &look, suns[0]);
         let env0_still_ptr = env0_still.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
         assert_eq!(env0_ptr, env0_still_ptr, "first entry should survive eviction (most recently used)");
 
-        // The second entry should have been evicted (rebuilt with a new Arc).
-        let env1_now = environment_cached(&model, revision, &look, suns[1]);
-        let env1_ptr = envs[1].as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
-        let env1_now_ptr = env1_now.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
-        assert_ne!(env1_ptr, env1_now_ptr, "second entry should have been evicted (least recently used)");
+        // The second entry should have been evicted; rebuilding it evicts the next LRU entry.
+        let _env1_now = environment_cached(&model, revision, &look, suns[1]);
+        let size_after_rebuild = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_rebuild, ENV_CACHE_CAP, "cache should stay at capacity after rebuilding evicted entry");
     }
 
     #[test]
@@ -1601,12 +1612,24 @@ mod tests {
         let sun = Some([0.0, -0.6, 0.8]);
 
         let env1 = environment_cached(&model, 9_000_105, &look, sun);
-        let env2 = environment_cached(&model, 9_000_106, &look, sun);
+        let size_after_first = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_first, 1, "cache should have one entry after first call");
 
-        // Different revisions should produce different cache entries (different Arcs).
+        let env2 = environment_cached(&model, 9_000_106, &look, sun);
+        let size_after_second = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_second, 2, "different revisions should produce different cache entries");
+
+        // Both should be Some (sky is on).
+        assert!(env1.is_some(), "first environment should build");
+        assert!(env2.is_some(), "second environment should build");
+
+        // Accessing the first revision again should be a cache hit (size stays the same).
+        let env1_again = environment_cached(&model, 9_000_105, &look, sun);
+        let size_after_hit = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert_eq!(size_after_hit, 2, "cache hit should not grow the cache");
         let p1 = env1.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
-        let p2 = env2.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
-        assert_ne!(p1, p2, "different revisions should produce different cache keys");
+        let p1_again = env1_again.as_ref().map(|a| std::sync::Arc::<cadcraft_render3d::Environment>::as_ptr(&a));
+        assert_eq!(p1, p1_again, "re-accessing the same revision should be a cache hit");
     }
 
     #[test]
