@@ -874,10 +874,8 @@ elevations and two sections. Inside the walls of the Main level are three bedroo
 Living room is vaulted, the Dining room has a tray ceiling, a soffit hangs over the kitchen wall cabinets, the Lower
 Utility room has a suspended ceiling, and a stem foundation carries the walls.
 
-Saved cameras: `Front`, `Back`, `Kitchen`, `Living`.
-
-Three more cameras, dusk, noon-hdri and overview, carry their own looks and come from
-`docs/arch3d/showcase/phase-19-demo.json`, which makes seven in all.
+Saved cameras: `Front`, `Back`, `Kitchen`, `Living`, `dusk`, `noon-hdri`, `overview`. The last three carry their own
+looks.
 
 `cadcraft-cli run --metric` replays the file through its JSON steps-file flag (`cadcraft-cli run --help`
 lists it; `docs/arch3d/showcase/README.md` shows the exact command line and describes the house), and
