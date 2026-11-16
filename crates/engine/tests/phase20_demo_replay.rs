@@ -63,6 +63,7 @@ fn new_metric_session() -> Session {
 fn replay(script: &str, session: &mut Session) -> usize {
     let steps: Vec<ScriptStep> = serde_json::from_str(script).unwrap_or_else(|e| panic!("cannot parse the script: {e}"));
     let mut n = 0;
+    session.set_views_deferred(true);
     for (i, step) in steps.iter().enumerate() {
         if step.cmd == "tray" {
             let inspect = session.execute("arch.inspect", &serde_json::json!({"rooms": true, "levels": true, "trays": true}));
@@ -73,6 +74,7 @@ fn replay(script: &str, session: &mut Session) -> usize {
             Err(err) => panic!("script step {i} `{}` was refused: {err}", step.cmd),
         }
     }
+    session.set_views_deferred(false);
     n
 }
 
@@ -354,6 +356,33 @@ fn phase20_showcase_has_three_views_per_floor_level() {
 }
 
 #[test]
+fn phase20_showcase_has_three_views_for_the_entry_landing() {
+    install_io();
+    let house = fs::read_to_string(&house_script_path()).unwrap_or_else(|e| panic!("cannot read house script: {e}"));
+    let phase = fs::read_to_string(&showcase_script_path()).unwrap_or_else(|e| panic!("cannot read showcase script: {e}"));
+    let mut session = new_metric_session();
+    replay(&house, &mut session);
+    replay(&phase, &mut session);
+
+    let reply = inspect(&mut session, serde_json::json!({"planViews": true, "levels": true}));
+    let views = plan_views_of(&reply);
+    let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).map(|a| a.iter().cloned().collect()).unwrap_or_default();
+    let landing_levels: Vec<&Value> = levels.iter().filter(|l| strd(l, "kind", "") == "landing").collect();
+    assert!(!landing_levels.is_empty(), "no `landing` levels in the showcase");
+    let landing = landing_levels[0];
+    let landing_name = strd(landing, "name", "?");
+    let landing_index = landing.get("index").and_then(|v| v.as_u64());
+
+    for name in ["Entry Floor Plan", "Entry Electrical", "Entry Reflected Ceiling"] {
+        let view = views.iter().find(|v| plan_view_name(v) == name).unwrap_or_else(|| panic!("missing view `{}`", name));
+        let view_level = level_str(view);
+        assert!(!view_level.is_empty(), "view `{}` has no level: {:?}", name, view);
+        let on_landing = view_level == landing_name || landing_index.map(|i| view_level == i.to_string()).unwrap_or(false);
+        assert!(on_landing, "view `{}` is on level `{}`, expected landing level `{}` (index {:?})", name, view_level, landing_name, landing_index);
+    }
+}
+
+#[test]
 fn phase20_showcase_overall_rows_match_exterior_bounds() {
     install_io();
     let house = fs::read_to_string(&house_script_path()).unwrap_or_else(|e| panic!("cannot read house script: {e}"));
@@ -561,8 +590,8 @@ fn phase20_demo_script_uses_expected_commands() {
 #[test]
 fn phase20_showcase_script_has_expected_step_count() {
     let steps = steps_of(&showcase_script_path());
-    // The showcase script should have exactly 8 steps: 6 planviews + 2 dimauto.
-    assert_eq!(steps.len(), 8, "showcase script has {} steps, expected 8", steps.len());
+    // The showcase script should have exactly 11 steps: 9 planviews + 2 dimauto.
+    assert_eq!(steps.len(), 11, "showcase script has {} steps, expected 11", steps.len());
 }
 
 #[test]
