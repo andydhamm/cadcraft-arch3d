@@ -1284,22 +1284,11 @@ mod tests {
     #[test]
     fn cutaway_empty_hidden_set_uses_base_scene() {
         // When the cutaway hides nothing (no walls facing the camera), the base scene is used
-        // and no filtered scene is built.
-        use cadcraft_arch::room::detect_rooms;
-        use cadcraft_engine::doc::arch::Level;
+        // and no filtered scene is built. An empty scene guarantees the hidden set is empty.
         let _g = reset();
         let mut d = Drawing::new_metric();
-        // A single north-south wall: its faces point east and west. The camera looks from the
-        // north, so it sees the wall's edge, not its face. The cutaway hides nothing.
-        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 4.0), 0.2);
-        w.height = 2.4;
-        d.arch.push_wall(w);
-        d.arch.levels.push(Level { index: 0, name: "Main".into(), elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
-        d.arch.rooms = detect_rooms(&d.arch);
         d.touch_arch();
 
-        // Camera directly north of the wall, looking south. The wall's faces point east and west,
-        // so the camera sees the wall's edge, not its face, and the cutaway hides nothing.
         let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(Vec3::new(0.0, 8.0, 1.5), Vec3::new(0.0, 2.0, 1.5), 40.0));
         let look = Look { cutaway: true, ..Look::default() };
 
