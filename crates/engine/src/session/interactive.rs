@@ -477,7 +477,9 @@ impl Session {
         #[cfg(test)]
         crate::guard::tests::panic_if_armed();
         if ok {
-            cmd::arch::views::refresh_views(self);
+            if !self.views_deferred {
+                cmd::arch::views::refresh_views(self);
+            }
             cmd::arch::schedule::refresh_schedules(self);
             cmd::arch::sheets::prune_sheets(self);
         }

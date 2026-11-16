@@ -116,6 +116,9 @@ pub struct Session {
     pub running: Option<Running>,
     /// A script is running ([`Session::script`]); a SCRIPT command inside it is refused.
     in_script: bool,
+    /// When true, elevation and section geometry is not regenerated after each model command;
+    /// it is caught up before the first command that may read a view's generated geometry.
+    views_deferred: bool,
     /// The command suspended while a transparent command (`'ZOOM`, `'PAN`…) prompts inside it;
     /// it resumes when that command ends. One level, as in AutoCAD.
     pub suspended: Option<Running>,
@@ -208,6 +211,7 @@ impl Session {
             settings: Settings::default(),
             running: None,
             in_script: false,
+            views_deferred: false,
             suspended: None,
             log: Vec::new(),
             last_command: None,
