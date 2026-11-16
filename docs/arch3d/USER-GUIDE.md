@@ -75,7 +75,50 @@ cargo run -q -p cadcraft-cli -- run --metric \
 
 ## Dimensions
 
-Dimensions and room labels are part of the plan view: room labels can show names, areas and dimensions, reference levels can be drawn, and dimension styles follow the view's annotation set. The plan can be reopened with the active view still applied, and the drawing keeps the tab state so a saved plan view is restored the same way every time.
+Dimensions in the plan are associative: a dimension can attach each end to the building instead of to a bare point,
+and it follows the model when that changes. An end attaches to a wall face, a wall centre line, an opening centre
+or an object edge (a cabinet, a fixture or a furnishing). The attachments of every dimension are listed by
+`arch.inspect {"dimensions": true}`, and the rows made by the automatic command below by
+`arch.inspect {"autoDims": true}`.
+
+`dimauto {level?, on?, rows?}` draws the exterior dimensions of a level. There are three rows on each side of the
+house: `openings` (the opening centres along the wall), `walls` (the wall centre lines, so every wall that meets
+the outside shows) and `overall` (the whole side). `rows` takes any of those names, and `on: false` removes the
+dimensions again. They are regenerated with the model: move a wall or an opening and the rows follow. A row you
+edit by hand (move its text, change its value) is marked edited and is left alone from then on.
+
+`dimdrive {dimension, value, object?}` makes a dimension drive the model. It takes the handle of a dimension and a
+new value in metres; the object it measures to moves and the far end stays where it is. `object` names the thing
+to move (`"w5"` a wall, `"o0"` an opening, `"cb0"` a cabinet, `"fx0"` a fixture, `"f0"` a furnishing). Run
+`roomdetect` afterwards to refresh the rooms, since a moved wall changes the rooms it bounds.
+
+`room.label {room, area}` chooses which area a room's label prints: `"interior"` or `"standard"`. What the label
+shows at all is a switch of the plan view: `planview.edit` takes `labels: {name, area, dimensions, ceiling,
+numbers}`, each on or off for that view.
+
+`export {"path": "plan.pdf", "planView": "Floor Plan"}` writes the plan as a saved plan view shows it, with its
+layers, labels and annotation set. The session is not changed: its tabs, the shown level and its layer states are
+the same afterwards. `level` instead picks a level by name or index.
+
+A plan view can also draw another level beneath the one it shows. That is the reference display: the `planview`
+and `planview.edit` field `reference: {level, color?, transparency?}` draws `level` in a muted colour (a `#rrggbb`
+string; `transparency` is 0 to 90) under the shown level, so an upper floor can be laid out over the one below.
+`reference: null` turns it off.
+
+The block below draws the phase-1 house, detects its rooms, dimensions it and sets a room's label. The overall
+rows read 10.2 and 8.2 (the outside of the walls) and the north row 6.1 + 4.1, the two rooms either side of the
+partition at x = 6:
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points": [[0,0],[10,0],[10,8],[0,8],[0,0]], "thickness": 0.2, "exterior": true}' \
+  --cmd 'wall {"points": [[0,3],[10,3]], "thickness": 0.1}' \
+  --cmd 'wall {"points": [[6,3],[6,8]], "thickness": 0.1}' \
+  --cmd 'roomdetect {}' \
+  --cmd 'dimauto {}' \
+  --cmd 'arch.inspect {"autoDims": true}' \
+  --cmd 'room.label {"room": "r1", "area": "standard"}'
+```
 
 ## Walkthrough
 
@@ -253,7 +296,7 @@ footings under the floor structure.
 ## Light, sky and cameras
 
 The renderer keeps a drawing-wide look and a per-camera override, so each saved camera can hold its own
-exposure, tone map, sun angle, habitat, backdrop, light set and cutaway state. Exposure is controlled with
+exposure, tone map, sun angle, backdrop, light set and cutaway state. Exposure is controlled with
 `EV100` (`render` and `camera` keys both accept `"auto"` or `{"ev100": n}`), and tone mapping stays in the
 look as `aces`, `hable` or `none`.
 
@@ -264,7 +307,7 @@ site-drawing coordinates. The look can reference it with `"sun": {"angle": "dusk
 also override it with `{"sun": {"azimuth": 300, "elevation": -3}}`.
 
 `backdrop` selects the sky or HDRI that fills the background behind the model, and its intensity and rotation
-are part of the environment. `{"kind": "sky"}` gives a procedural twilight sky; `{"kind": "hdri", "item":
+are part of the environment. `{"kind": "sky"}` gives the analytic clear sky that follows the sun (day, twilight from 0 to -6 degrees, night with a moon); `{"kind": "hdri", "item":
 "polyhaven:kloofendal-puresky", "rotation": 25, "horizon": 5}` uses the sample HDRI. `lightset` stores named
 lighting groups so a camera can say `"lightSet": "Evening"` while the same drawing keeps `"Day"` as its all-off
 reference; a render can also take a temporary `lightSet` without changing the model. For interior scenes, the
@@ -278,19 +321,29 @@ state, `camera.orbit` rotates or scales the live orbit camera, and `camera.updat
 without leaving the saved version behind. `pick3d` uses the same camera parameters and a near clip or cutaway
 accepts the filter values from the final draw.
 
-```json
-[
-  {"cmd": "site", "params": {"latitude": 51.05, "longitude": -114.07, "trueNorth": 0}},
-  {"cmd": "sunangle", "params": {"name": "dusk", "azimuth": 300, "elevation": -3}},
-  {"cmd": "sunangle", "params": {"name": "noon", "date": "2026-06-21", "time": "solar-noon"}},
-  {"cmd": "backdrop", "params": {"kind": "sky"}},
-  {"cmd": "look", "params": {"exposure": {"ev100": 4}, "sun": {"angle": "dusk"}, "lightSet": "Evening"}},
-  {"cmd": "camera", "params": {"save": "dusk", "kind": "full", "eye": [5, -18, 1.7], "target": [5, 6, 1.35], "fov": 58}},
-  {"cmd": "backdrop", "params": {"kind": "hdri", "item": "polyhaven:kloofendal-puresky", "rotation": 25, "intensity": 1.0, "horizon": 6}},
-  {"cmd": "camera", "params": {"save": "noon-hdri", "kind": "full", "eye": [5, -18, 2.2], "target": [5, 8, 1.5], "fov": 55, "technique": "path", "sun": {"angle": "noon"}}},
-  {"cmd": "camera", "params": {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true}}
-]
+The block below is self-sufficient: a house and a light first, then the `Evening` light set the look names, the
+site, the two sun angles, the sky, the look and three saved cameras. The HDRI backdrop is one line in the same
+pattern, `backdrop {"kind": "hdri", "item": "polyhaven:kloofendal-puresky", "rotation": 25, "intensity": 1.0,
+"horizon": 6}`, and needs the library's sample item, so it is not in the replayed block.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points": [[0,0],[10,0],[10,8],[0,8],[0,0]], "thickness": 0.2, "exterior": true}' \
+  --cmd 'lightfixture {"at": [5, 4]}' \
+  --cmd 'lightset {"name": "Evening", "lights": {"lf0": {"on": true}}}' \
+  --cmd 'site {"latitude": 51.05, "longitude": -114.07, "trueNorth": 0}' \
+  --cmd 'sunangle {"name": "dusk", "azimuth": 300, "elevation": -3}' \
+  --cmd 'sunangle {"name": "noon", "date": "2026-06-21", "time": "solar-noon"}' \
+  --cmd 'backdrop {"kind": "sky"}' \
+  --cmd 'look {"exposure": {"ev100": 4}, "sun": {"angle": "dusk"}, "lightSet": "Evening"}' \
+  --cmd 'camera {"save": "dusk", "kind": "full", "eye": [5, -18, 1.7], "target": [5, 6, 1.35], "fov": 58}' \
+  --cmd 'camera {"save": "noon-hdri", "kind": "full", "eye": [5, -18, 2.2], "target": [5, 8, 1.5], "fov": 55, "technique": "path", "sun": {"angle": "noon"}}' \
+  --cmd 'camera {"save": "overview", "kind": "overview", "level": 0, "lowerLevels": false, "cutaway": true}'
 ```
+
+The 3D pane uses the same look: the active camera's own, else the drawing's. Its controls are Cutaway, Clip box,
+Near clip, Exposure, Tone map, Sun angle, Sky, Reset camera and Floor overview, and each one runs a command
+above.
 
 The saved views are the same camera object the render and pick commands use, so a single drawing can keep a dusk
 sky view, a noon HDRI path-trace and a cutaway floor overview side by side. The `docs/arch3d/showcase/phase-19-demo.json`
@@ -736,6 +789,34 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --save split-level.dxf
 ```
 
+## Stairs, decks and railings
+
+A `stair` stands on its well: it runs between two levels, cuts the floor above and draws the full plan symbol, the
+treads with the UP arrow on the lower level and the DN arrow on the upper one, and the break line where the flight
+passes through the cut plane. `deck {points, height?, name?, level?, boards?, rails?}` raises a closed outline to
+`height`, boards it (`boards` is the board direction in degrees) and frames it: a ledger on the house wall, joists,
+a beam and posts, with rails on the open edges (`rails`: `auto`, `on`, `off` or one value per edge).
+`railing {path, level?, height?, style?, thickness?, postSpacing?, inset?}` runs a rail along a path in `panel` or
+`balusters` style, with posts at `postSpacing` and the whole line `inset` from the path.
+
+Windows take a grille and a shaped top: `window {.., "grille": {"across", "down", "part"?}, "top": "round"}` divides
+the glass into `across` by `down` lights (`part` limits the grille to the `top` or `bottom` part), and `top`
+gives the head its shape. The block below makes two levels, a stair between them, a deck and two windows:
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[10,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'wall {"points":[[10,0],[10,8]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'wall {"points":[[10,8],[0,8]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'wall {"points":[[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'roomdetect {"level":0}' \
+  --cmd 'level {"above":0}' \
+  --cmd 'stair {"start":[1.0,2.0],"direction":0.0,"width":1.0,"fromLevel":0,"toLevel":1}' \
+  --cmd 'deck {"points":[[2,8.1],[7,8.1],[7,11.1],[2,11.1],[2,8.1]],"height":0.9,"name":"Rear deck","level":0}' \
+  --cmd 'window {"wall":"w0","offset":2.0,"width":1.2,"height":1.2,"sill":0.9,"grille":{"across":3,"down":2}}' \
+  --cmd 'window {"wall":"w0","offset":8.5,"width":0.9,"height":1.5,"sill":0.6,"top":"round","grille":{"across":2,"down":2,"part":"top"}}'
+```
+
 ## Interior finish
 
 A room's `type` sets its default finish layers: kitchens, baths, utility rooms and entries use tile or stone floors,
@@ -788,15 +869,25 @@ The showcase house is a saved command script: `docs/arch3d/showcase/bilevel.json
 `{"cmd", "params"}` steps, each run like a `--cmd` step. It builds a split-entry bi-level: a Lower level at -1.2 m (a
 basement), an Entry landing at 0.15 m with the front door and the two half flights, a Main level at 1.5 m that stays
 above grade on a lot sloping 1.5 m from front to back, a driveway, sidewalks and planting beds draped on the terrain,
-trees and shrubs, the kitchen casework and baths, four saved cameras, the Evening light set, four elevations and two
-sections. `cadcraft-cli run --metric` replays the file through its JSON steps-file flag (`cadcraft-cli run --help`
+trees and shrubs, the kitchen casework and baths, seven saved cameras, the Evening and Day light sets, four
+elevations and two sections. Inside the walls of the Main level are three bedrooms, a dining room and a hall; the
+Living room is vaulted, the Dining room has a tray ceiling, a soffit hangs over the kitchen wall cabinets, the Lower
+Utility room has a suspended ceiling, and a stem foundation carries the walls.
+
+Saved cameras: `Front`, `Back`, `Kitchen`, `Living`.
+
+Three more cameras, dusk, noon-hdri and overview, carry their own looks and come from
+`docs/arch3d/showcase/phase-19-demo.json`, which makes seven in all.
+
+`cadcraft-cli run --metric` replays the file through its JSON steps-file flag (`cadcraft-cli run --help`
 lists it; `docs/arch3d/showcase/README.md` shows the exact command line and describes the house), and
 `crates/engine/tests/showcase.rs` replays it through the engine and asserts the brief's numbers.
 
 `tools/showcase/render_all.py` (Python 3, standard library only) replays the script once into `bilevel.dxf` and then
 renders every view style from it: a plan per level, the Electrical view of two levels, the four elevations, the two
-sections, the four cameras, a night render with the Evening light set, the path-traced final, clay and technical
-illustration, the glTF, IFC and OBJ exports, and a contact sheet with a `manifest.json`:
+sections, the saved cameras, a night render with the Evening light set, the path-traced final, clay and technical
+illustration, the glTF, IFC and OBJ exports, and a contact sheet with a `manifest.json`. It also writes the plan
+views, the look cameras, the sheet images and `drawing-set.pdf`:
 
 ```sh
 python3 tools/showcase/render_all.py --out target/showcase
