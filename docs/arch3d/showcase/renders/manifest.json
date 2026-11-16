@@ -94,10 +94,155 @@
       "file": "technical.png",
       "kind": "technical",
       "view": "default"
+    },
+    {
+      "file": "camera-dusk.png",
+      "kind": "look",
+      "view": "dusk"
+    },
+    {
+      "file": "camera-noon-hdri.png",
+      "kind": "look",
+      "view": "noon-hdri"
+    },
+    {
+      "file": "camera-overview.png",
+      "kind": "look",
+      "view": "overview"
+    },
+    {
+      "file": "planview-lower-floor.png",
+      "kind": "planview",
+      "view": "Lower Floor Plan"
+    },
+    {
+      "file": "planview-lower-rcp.png",
+      "kind": "rcp",
+      "view": "Lower Reflected Ceiling"
+    },
+    {
+      "file": "planview-main-floor.png",
+      "kind": "planview",
+      "view": "Main Floor Plan"
+    },
+    {
+      "file": "planview-main-rcp.png",
+      "kind": "rcp",
+      "view": "Main Reflected Ceiling"
+    },
+    {
+      "file": "planview-entry-floor.png",
+      "kind": "planview",
+      "view": "Entry Floor Plan"
+    },
+    {
+      "file": "planview-entry-rcp.png",
+      "kind": "rcp",
+      "view": "Entry Reflected Ceiling"
+    },
+    {
+      "file": "planview-roof.png",
+      "kind": "roofplan",
+      "view": "Roof Plan"
+    },
+    {
+      "file": "planview-site.png",
+      "kind": "siteplan",
+      "view": "Site"
+    },
+    {
+      "file": "interior-kitchen-west-interior.png",
+      "kind": "interior",
+      "view": "Kitchen West Interior"
+    },
+    {
+      "file": "interior-main-bath-east-interior.png",
+      "kind": "interior",
+      "view": "Main Bath East Interior"
+    },
+    {
+      "file": "sheet-a-000.png",
+      "kind": "sheet",
+      "view": "A-000"
+    },
+    {
+      "file": "sheet-a-001.png",
+      "kind": "sheet",
+      "view": "A-001"
+    },
+    {
+      "file": "sheet-a-101.png",
+      "kind": "sheet",
+      "view": "A-101"
+    },
+    {
+      "file": "sheet-e-101.png",
+      "kind": "sheet",
+      "view": "E-101"
+    },
+    {
+      "file": "sheet-a-102.png",
+      "kind": "sheet",
+      "view": "A-102"
+    },
+    {
+      "file": "sheet-a-111.png",
+      "kind": "sheet",
+      "view": "A-111"
+    },
+    {
+      "file": "sheet-e-111.png",
+      "kind": "sheet",
+      "view": "E-111"
+    },
+    {
+      "file": "sheet-a-112.png",
+      "kind": "sheet",
+      "view": "A-112"
+    },
+    {
+      "file": "sheet-a-121.png",
+      "kind": "sheet",
+      "view": "A-121"
+    },
+    {
+      "file": "sheet-a-201.png",
+      "kind": "sheet",
+      "view": "A-201"
+    },
+    {
+      "file": "sheet-a-301.png",
+      "kind": "sheet",
+      "view": "A-301"
+    },
+    {
+      "file": "sheet-a-302.png",
+      "kind": "sheet",
+      "view": "A-302"
+    },
+    {
+      "file": "sheet-a-401.png",
+      "kind": "sheet",
+      "view": "A-401"
+    },
+    {
+      "file": "sheet-a-501.png",
+      "kind": "sheet",
+      "view": "A-501"
     }
   ],
-  "exports": {},
+  "exports": {
+    "glb": "showcase.glb",
+    "ifc": "showcase.ifc",
+    "obj": "showcase.obj"
+  },
   "contactSheet": "contact-sheet.png",
   "technicalSkipped": false,
-  "scriptSha256": "efdfe655958fcf7d3073f8a08409d43cbc17e1dc3b813e393be9799422066353"
+  "scriptSha256": "ca2365dd77a4a603da63228c8345f789daa3e26144368a7fff010d9e165d5a80",
+  "setScripts": {
+    "phase-20-showcase.json": "16ec1544e4d45ae7ea80a22c71ed80d1fa0bf28d5f4caec2e103be6037789a79",
+    "phase-21-showcase.json": "f2b32dec3e48be2cddaebfd42bab54a6998678115358556c482644225ec8aa34"
+  },
+  "drawingSet": "drawing-set.pdf",
+  "sheetImages": true
 }
