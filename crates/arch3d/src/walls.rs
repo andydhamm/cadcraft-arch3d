@@ -308,10 +308,11 @@ pub fn elevation_profile(
         vec![Vec2::new(0.0, 0.0), Vec2::new(len, 0.0), Vec2::new(len, max_v), Vec2::new(0.0, max_v)]
     };
 
-    // A spanning wall's openings measure their sill from the wall's bottom (a door on a landing
-    // carries the landing's height as its sill), so the profile's `v` is the sill itself. Single-level
-    // walls keep their historical arithmetic so existing scenes stay byte-identical.
-    let base = if wall.top_level.is_some() { 0.0 } else { base };
+    // An opening's sill is measured from the bottom of the profile it is cut in (the floor of the
+    // wall's level, or the segment bottom for a split wall: see `wall_glass`), and `v = 0` is that
+    // bottom, so the profile's `v` is the sill itself whatever the absolute elevation `base` is.
+    // Subtracting `base` here put the hole `base` too low on every level not at elevation 0.
+    let base = 0.0;
     let notches = bottom_door_notches(openings, base, len);
     let outer = if notches.is_empty() { outer } else { outer_with_bottom_door_notches(&outer, len, &notches) };
     let door_holes: Vec<&Opening> = openings
