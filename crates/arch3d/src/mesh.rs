@@ -448,8 +448,9 @@ impl Default for Mesh {
 ///
 /// Returns `None` if no valid pair exists. A valid pair's open segment
 /// `ring[p]..hole[q]` must cross no ring edge (except the edges incident to `p`)
-/// or hole edge (except those incident to `q`), and its midpoint must lie
-/// inside `ring` (even-odd test).
+/// or hole edge (except those incident to `q`), its midpoint must lie
+/// inside `ring` (even-odd test), and it must leave `ring[p]` into the ring's
+/// interior angle at that vertex (a vertex an earlier bridge doubled has two).
 pub(crate) fn find_bridge_pair(ring: &[Vec2], hole: &[Vec2]) -> Option<(u32, u32)> {
     let m = ring.len() as u32;
     let h = hole.len() as u32;
@@ -499,12 +500,28 @@ pub(crate) fn find_bridge_pair(ring: &[Vec2], hole: &[Vec2]) -> Option<(u32, u32
             if dist > 1e-18 && !point_in_ring_even_odd(mid, ring) {
                 continue;
             }
+            // An earlier bridge leaves two ring vertices at the same position, one on each side
+            // of its seam. The bridge must leave through the corner of THIS one: from the other
+            // it would cross the seam and fold the merged ring over itself.
+            if dist > 1e-18 && !leaves_into_corner(ring[((p + m - 1) % m) as usize], pr, ring[((p + 1) % m) as usize], hq) {
+                continue;
+            }
             if dist < best.0 {
                 best = (dist, p, q);
             }
         }
     }
     if best.0.is_finite() { Some((best.1, best.2)) } else { None }
+}
+
+/// Whether the segment from `p` to `q` leaves the counter-clockwise ring's vertex `p` (between
+/// `prev` and `next`) into the ring's interior angle there, strictly: not along either edge.
+fn leaves_into_corner(prev: Vec2, p: Vec2, next: Vec2, q: Vec2) -> bool {
+    let cross = |a: Vec2, b: Vec2| a.x * b.y - a.y * b.x;
+    let (into, out, dir) = (p - prev, next - p, q - p);
+    let (left_of_in, left_of_out) = (cross(into, dir) > 0.0, cross(out, dir) > 0.0);
+    // A convex corner's interior is left of both edges; a reflex (or straight) one's is left of either.
+    if cross(into, out) > 0.0 { left_of_in && left_of_out } else { left_of_in || left_of_out }
 }
 
 /// Splice `hole` into `ring` at the bridging pair `(p, q)`:
