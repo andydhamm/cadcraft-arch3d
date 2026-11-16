@@ -286,6 +286,43 @@ class RenderAll(unittest.TestCase):
         south = [r for r in elev_rows if r[2] == 'South'][0]
         self.assertEqual(south[3][0][1]['view'], 'v0')
 
+    def test_planview_and_rcp_kinds_are_distinct(self):
+        rows = ra.plan(LEVELS, [], [], True)
+        planview_rows = [r for r in rows if r[1] == 'planview']
+        rcp_rows = [r for r in rows if r[1] == 'rcp']
+        # Three floor/landing levels, each gets one planview and one rcp
+        self.assertEqual(len(planview_rows), 3)
+        self.assertEqual(len(rcp_rows), 3)
+        # No duplicate file names between the two kinds
+        pv_files = {r[0] for r in planview_rows}
+        rcp_files = {r[0] for r in rcp_rows}
+        self.assertFalse(pv_files & rcp_files, 'planview and rcp must not share file names')
+        # Each level has exactly one of each
+        for level in ('lower', 'main', 'entry'):
+            self.assertIn(f'planview-{level}-floor.png', pv_files)
+            self.assertIn(f'planview-{level}-rcp.png', rcp_files)
+
+    def test_plan_single_level(self):
+        levels = [{'name': 'Ground', 'kind': 'floor'}]
+        rows = ra.plan(levels, [], [], True)
+        plan_rows = [r for r in rows if r[1] == 'plan']
+        self.assertEqual(len(plan_rows), 1)
+        self.assertEqual(plan_rows[0][0], 'plan-ground.png')
+        planview_rows = [r for r in rows if r[1] == 'planview']
+        rcp_rows = [r for r in rows if r[1] == 'rcp']
+        self.assertEqual(len(planview_rows), 1)
+        self.assertEqual(len(rcp_rows), 1)
+        self.assertEqual(planview_rows[0][0], 'planview-ground-floor.png')
+        self.assertEqual(rcp_rows[0][0], 'planview-ground-rcp.png')
+
+    def test_plan_no_duplicate_file_names(self):
+        rows = ra.plan(LEVELS, VIEWS, SHEETS, True)
+        names = [r[0] for r in rows]
+        self.assertEqual(len(names), len(set(names)), 'every file name in the plan is unique')
+        # Specifically check that no -2 suffix appears (would indicate a collision)
+        for n in names:
+            self.assertFalse(re.search(r'-\d+\.\w+$', n), f'unexpected dedup suffix in {n}')
+
     def test_readme_gallery_matches_the_plan(self):
         with open(os.path.join(SHOWCASE, 'phase-21-showcase.json'), encoding='utf-8') as f:
             script = json.load(f)
