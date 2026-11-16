@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 22: Light, sky and cameras — 79 of 82 segments merged · 17 of 17 acceptance checks**
 
-10,765 workspace tests passing at the last merge · 1248 segments merged in all · 0 of 15 seats working
+10,773 workspace tests passing at the last merge · 1250 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,24 +29,26 @@ Updated 2026-11-16 07:15 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 17 / 17 | 116.7 h so far · expected done Nov 16 09:39–Nov 16 11:00 UTC |
+| 19 | Light, sky and cameras | building | 17 / 17 | 117.0 h so far · expected done Nov 16 09:54–Nov 16 11:15 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 13 / 13 | — |
 | 22 | Phase 22 | pending | — | — |
 
 ## Phase 19 segments
 
-79 merged, 9 replaced, 1 working, 1 queued, 1 gate
+79 merged, 9 replaced, 1 merging, 1 queued, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p19t-pane-look-scene` | The 3D pane draws the look's scene: cutaway, floor overview, light set and camera backdrop; a camera's technique picks the pane style | working | mai-flash-b |
+| `p19t-pane-look-scene` | The 3D pane draws the look's scene: cutaway, floor overview, light set and camera backdrop; a camera's technique picks the pane style | merging | mai-flash-b |
 | `upstream-sync-d267d6580` | merge upstream upstream/main up to d267d6580 (6 commits) | gate | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 07:20 | `harden-p19q-demo-dusk-camera-closer` | merged | 10,773 pass | tturbo-mac2 |
+| Nov 16 07:20 | `harden-p19q-final-raster-frame-look` | merged | 10,773 pass | tturbo-mac |
 | Nov 16 07:05 | `harden-p19q-strip-mesh-under-ceiling` | merged | 10,765 pass | tturbo-mac |
 | Nov 16 06:47 | `harden-p19r-overview-cutaway` | merged | 10,761 pass | tturbo-mac2 |
 | Nov 16 06:29 | `harden-p21t-cli-run-defers-views` | merged | 10,753 pass | tturbo-mac |
@@ -57,25 +59,23 @@ Updated 2026-11-16 07:15 UTC. This page and the card in the README are regenerat
 | Nov 16 05:39 | `harden-p21t-replay-defers-views` | merged | 10,731 pass | tturbo-mac2 |
 | Nov 16 05:39 | `p21t-cli-run-defers-views` | merged | 10,731 pass | bonsai-ws2-a |
 | Nov 16 05:22 | `p21t-counter-outlets-level` | merged | 10,723 pass | bonsai-b |
-| Nov 16 04:44 | `harden-p19h-env-cache-multi` | merged | 10,719 pass | tturbo-mac2 |
-| Nov 16 04:44 | `p21t-replay-defers-views` | merged | 10,719 pass | bonsai-ws2-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1371 |
-| bonsai-b | bonsai2-27b | gate | 1288 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1474 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1394 |
+| bonsai-a | bonsai2-27b | agent | 1372 |
+| bonsai-b | bonsai2-27b | gate | 1289 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1475 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1396 |
 | claude-sonnet-a | sonnet | idle | 160 |
 | claude-sonnet-b | sonnet | idle | 163 |
-| claude-sonnet-c | sonnet | idle | 100 |
-| claude-sonnet-d | sonnet | gate | 96 |
+| claude-sonnet-c | sonnet | gate | 100 |
+| claude-sonnet-d | sonnet | gate | 97 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1283 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 127 |
-| mai-flash-b | mai-code-1.1-flash | agent | 75 |
+| mai-flash-b | mai-code-1.1-flash | idle | 76 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
 | tturbo-mac | tturbo-ultraheretic | agent | 983 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 667 |
