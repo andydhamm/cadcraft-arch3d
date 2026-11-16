@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-16 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
@@ -32,7 +32,7 @@ Updated 2026-11-16 20:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 17 01:44–Dec 02 03:21 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 17 01:59–Dec 02 03:36 UTC |
 
 ## Phase 22 segments
 
@@ -43,6 +43,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 20:29 | `harden-p21t-gallery-tool-b` | refused | 10,883 pass | tturbo-mac2 |
 | Nov 16 19:59 | `harden-p21t-gallery-tool-b` | refused | 10,883 pass | tturbo-mac2 |
 | Nov 16 19:50 | `harden-p19t-pane-look-lighting` | refused | 10,884 pass | tturbo-mac |
 | Nov 16 19:24 | `harden-p21t-gallery-tool-b` | refused | 10,883 pass | tturbo-mac2 |
@@ -54,7 +55,6 @@ none yet
 | Nov 16 14:56 | `upstream-sync-16341b665` | merged | 10,866 pass | bonsai-a |
 | Nov 16 14:23 | `harden-p21t-user-guide` | merged | 10,866 pass | tturbo-mac |
 | Nov 16 13:53 | `p21t-gallery-tool` | refused | 10,868 pass | claude-sonnet-a |
-| Nov 16 13:17 | `harden-p21t-entry-landing-views-b` | merged | 10,862 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -73,5 +73,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1013 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 698 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1014 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 699 |
