@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 22: Light, sky and cameras — 78 of 81 segments merged · 17 of 17 acceptance checks**
 
-10,708 workspace tests passing at the last merge · 1236 segments merged in all · 0 of 15 seats working
+10,719 workspace tests passing at the last merge · 1238 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,7 +29,7 @@ Updated 2026-11-16 04:30 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 17 / 17 | 113.9 h so far · expected done Nov 16 06:42–Nov 16 07:57 UTC |
+| 19 | Light, sky and cameras | building | 17 / 17 | 114.2 h so far · expected done Nov 16 06:58–Nov 16 08:12 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 13 / 13 | — |
 | 22 | Phase 22 | pending | — | — |
@@ -47,6 +47,8 @@ Updated 2026-11-16 04:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 04:44 | `harden-p19h-env-cache-multi` | merged | 10,719 pass | tturbo-mac2 |
+| Nov 16 04:44 | `p21t-replay-defers-views` | merged | 10,719 pass | bonsai-ws2-a |
 | Nov 16 04:09 | `p19t-pane-look-lighting` | merged | 10,708 pass | claude-sonnet-a |
 | Nov 16 03:37 | `p21t-raised-level-openings` | refused | 10,709 pass | claude-sonnet-c |
 | Nov 16 02:27 | `harden-p19r-hdri-icon` | merged | 10,702 pass | tturbo-mac2 |
@@ -57,20 +59,18 @@ Updated 2026-11-16 04:30 UTC. This page and the card in the README are regenerat
 | Nov 15 23:11 | `harden-p19q-raster-meter-backdrop-only` | merged | 10,682 pass | tturbo-mac2 |
 | Nov 15 22:31 | `upstream-sync-7064a685a` | merged | 10,675 pass | mai-flash-esc |
 | Nov 15 22:12 | `p19q-strip-mesh-under-ceiling` | merged | 10,614 pass | darwin-ws3 |
-| Nov 15 21:49 | `p19q-demo-dusk-camera-closer` | merged | 10,610 pass | claude-sonnet-b |
-| Nov 15 21:49 | `p19q-raster-meter-backdrop-only` | merged | 10,610 pass | bonsai-ws2-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1363 |
-| bonsai-b | bonsai2-27b | agent | 1283 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1463 |
-| bonsai-ws2-b | bonsai2-27b | merging | 1390 |
+| bonsai-a | bonsai2-27b | agent | 1365 |
+| bonsai-b | bonsai2-27b | agent | 1284 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1463 |
+| bonsai-ws2-b | bonsai2-27b | idle | 1390 |
 | claude-sonnet-a | sonnet | idle | 160 |
-| claude-sonnet-b | sonnet | gate | 161 |
-| claude-sonnet-c | sonnet | gate | 98 |
+| claude-sonnet-b | sonnet | idle | 162 |
+| claude-sonnet-c | sonnet | agent | 99 |
 | claude-sonnet-d | sonnet | idle | 96 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1276 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
