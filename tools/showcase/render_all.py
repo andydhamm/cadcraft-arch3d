@@ -267,9 +267,11 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64):
     for name, kind in lv_rows:
         if kind not in PLAN_LEVEL_KINDS:
             continue
-        for suffix, k, label in (('floor', 'planview', 'Floor Plan'), ('rcp', 'rcp', 'Reflected Ceiling')):
+        for suffix, k, label in (('floor', 'planview', 'Floor Plan'), ('rcp', 'planview', 'Reflected Ceiling')):
             f = file_name('planview', f'{name}-{suffix}', '.png')
             add(f, k, f'{name} {label}', [('export', {'path': f, 'planView': f'{name} {label}'})])
+        f = file_name('planview', f'{name}-rcp', '.png')
+        add(f, 'rcp', f'{name} Reflected Ceiling', [('export', {'path': f, 'planView': f'{name} Reflected Ceiling'})])
     add('planview-roof.png', 'roofplan', 'Roof Plan', [('export', {'path': 'planview-roof.png', 'planView': 'Roof Plan'})])
     add('planview-site.png', 'siteplan', 'Site', [('export', {'path': 'planview-site.png', 'planView': 'Site'})])
     for v in vws:
