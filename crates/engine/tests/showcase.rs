@@ -971,6 +971,90 @@ fn the_showcase_house_is_replayed_once() {
     assert_eq!(house().0, house().1, "every step must replay (steps in file {} != steps replayed {})", house().0, house().1);
 }
 
+/// The house inspect reply carries every key the tests in this file read.
+#[test]
+fn the_showcase_house_inspect_has_all_keys() {
+    let (_, _, reply) = house();
+    for key in [
+        "walls",
+        "rooms",
+        "levels",
+        "openings",
+        "cabinets",
+        "fixtures",
+        "furnishings",
+        "surfaces",
+        "electrical",
+        "lights",
+        "lightSets",
+        "stairs",
+        "site",
+        "roofs",
+        "trays",
+        "soffits",
+        "foundations",
+        "cameras",
+        "sunAngles",
+        "views",
+    ] {
+        assert!(reply.get(key).is_some(), "house inspect reply missing `{}`", key);
+    }
+}
+
+/// After a replay with view deferral, every view in the drawing is fresh (not stale).
+#[test]
+fn the_showcase_views_are_all_fresh_after_deferred_replay() {
+    install_io();
+    let script = fs::read_to_string(script_path()).expect("cannot read the showcase script");
+    let mut session = Session::new();
+    session.new_drawing(true);
+    replay(&script, &mut session);
+
+    let doc = session.doc().unwrap();
+    let views = &doc.arch.views;
+    let rev = doc.arch_revision;
+    for (i, view) in views.iter().enumerate() {
+        assert!(!view.is_stale(rev), "view {} is stale against revision {}", i, rev);
+    }
+}
+
+/// Calling house() multiple times returns the same data (same room and wall counts).
+#[test]
+fn the_showcase_house_data_is_consistent_across_calls() {
+    let h1 = house();
+    let h2 = house();
+    let h3 = house();
+
+    let rooms = |h: &(usize, usize, Value)| h.2.get("rooms").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let walls = |h: &(usize, usize, Value)| h.2.get("walls").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+
+    assert_eq!(rooms(h1), rooms(h2), "room count differs between house() calls");
+    assert_eq!(rooms(h2), rooms(h3), "room count differs between house() calls");
+    assert_eq!(walls(h1), walls(h2), "wall count differs between house() calls");
+    assert_eq!(walls(h2), walls(h3), "wall count differs between house() calls");
+}
+
+/// An empty showcase script (no steps) replays without error.
+#[test]
+fn the_showcase_empty_script_replays() {
+    install_io();
+    let mut session = Session::new();
+    session.new_drawing(true);
+    let replayed = replay("[]", &mut session);
+    assert_eq!(replayed, 0, "empty script should replay 0 steps");
+}
+
+/// A single-step showcase script replays without error.
+#[test]
+fn the_showcase_single_step_script_replays() {
+    install_io();
+    let mut session = Session::new();
+    session.new_drawing(true);
+    let script = r#"[{"cmd": "wall", "params": {"points": [[0, 0], [3, 0]], "thickness": 0.1}}]"#;
+    let replayed = replay(script, &mut session);
+    assert_eq!(replayed, 1, "single-step script should replay 1 step");
+}
+
 // ---- p21t-showcase-house: the redrawn house (rooms inside the shell, phase-16 ceilings and
 // foundation, the kitchen cabinets of the drawing set, the phase-19 look cameras) ----
 
