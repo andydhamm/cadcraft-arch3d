@@ -162,7 +162,7 @@ fn code_page_names() {
     assert_eq!(d(b"\xBD\xA2\x88w", "DOS852").as_deref(), Some("Żółw"));
     assert_eq!(d(b"\x91\xAB\xAE\xA9", "DOS866").as_deref(), Some("Слой"));
     assert_eq!(d("é".as_bytes(), "UTF8").as_deref(), Some("é"));
-    assert_eq!(d(b"x", "ANSI_1361"), None);
+    assert_eq!(d(b"x", "ANSI_UNKNOWN"), None);
     assert_eq!(d(b"x", "EBCDIC"), None);
     assert_eq!(d(b"x", ""), None);
 }
