@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-16 03:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 22: Light, sky and cameras — 77 of 81 segments merged · 17 of 17 acceptance checks**
 
@@ -29,18 +29,18 @@ Updated 2026-11-16 03:45 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 17 / 17 | 113.2 h so far · expected done Nov 16 06:57–Nov 16 08:45 UTC |
+| 19 | Light, sky and cameras | building | 17 / 17 | 113.5 h so far · expected done Nov 16 07:12–Nov 16 09:00 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | building | 13 / 13 | — |
 | 22 | Phase 22 | pending | — | — |
 
 ## Phase 19 segments
 
-77 merged, 9 replaced, 2 queued, 1 gate, 1 merging
+77 merged, 9 replaced, 2 merging, 2 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-2974d74bd` | merge upstream upstream/main up to 2974d74bd (1 commits) | gate | claude-sonnet-d |
+| `upstream-sync-2974d74bd` | merge upstream upstream/main up to 2974d74bd (1 commits) | merging | claude-sonnet-d |
 | `p19t-pane-look-lighting` | The 3D pane lights its frame from the drawing's look (the active camera's own look, else the global one): exposure, tone map, sun, sky/HDRI environment and moon | merging | claude-sonnet-a |
 
 ## Recent merges
@@ -64,18 +64,18 @@ Updated 2026-11-16 03:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1359 |
-| bonsai-b | bonsai2-27b | agent | 1280 |
-| bonsai-ws2-a | bonsai2-27b | gate | 1462 |
-| bonsai-ws2-b | bonsai2-27b | gate | 1389 |
+| bonsai-a | bonsai2-27b | agent | 1361 |
+| bonsai-b | bonsai2-27b | gate | 1281 |
+| bonsai-ws2-a | bonsai2-27b | merging | 1463 |
+| bonsai-ws2-b | bonsai2-27b | merging | 1390 |
 | claude-sonnet-a | sonnet | idle | 160 |
 | claude-sonnet-b | sonnet | gate | 161 |
 | claude-sonnet-c | sonnet | gate | 98 |
-| claude-sonnet-d | sonnet | gate | 95 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1271 |
+| claude-sonnet-d | sonnet | idle | 96 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1273 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 127 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
-| tturbo-mac | tturbo-ultraheretic | agent | 977 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 661 |
+| tturbo-mac | tturbo-ultraheretic | gate | 977 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 662 |
