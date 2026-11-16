@@ -186,6 +186,7 @@ pub(crate) fn run_cmds(a: &RunArgs, io: &mut Streams) -> Result {
     let before = model_views(&s);
     let mut last_handle: Option<Handle> = None;
     let mut failed: Option<CliError> = None;
+    s.set_views_deferred(true);
     for step in steps {
         // A handle belongs to the drawing that returned it: if this step makes another drawing
         // current (`new`, `open`, `document.switch`, `close`, or a script running one of them),
@@ -197,10 +198,13 @@ pub(crate) fn run_cmds(a: &RunArgs, io: &mut Streams) -> Result {
                 if let Some(earlier) = failed.take() {
                     io.errln(format_args!("error: {earlier}"));
                 }
-                s.script(&body)?;
+                s.set_views_deferred(false);
+                let script_result = s.script(&body);
+                s.set_views_deferred(true);
                 if active_drawing(&s) != drawing {
                     last_handle = None;
                 }
+                script_result?;
             }
             Ready::Cmd(CmdStep { id, params }) => {
                 // A failing --cmd is reported and the run goes on; only the last step's failure
@@ -220,6 +224,7 @@ pub(crate) fn run_cmds(a: &RunArgs, io: &mut Streams) -> Result {
             }
         }
     }
+    s.set_views_deferred(false);
     for l in &s.log {
         io.errln(format_args!("{l}"));
     }
