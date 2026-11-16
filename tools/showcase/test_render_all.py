@@ -260,6 +260,32 @@ class RenderAll(unittest.TestCase):
         for r in planview_rows:
             self.assertNotEqual(r[2], 'Roof Floor Plan')
 
+    def test_manifest_sheet_images_flag(self):
+        m = ra.manifest([], {}, False, 'a' * 64, {}, None, sheet_images=False)
+        self.assertFalse(m['sheetImages'])
+        m2 = ra.manifest([], {}, False, 'a' * 64, {}, None)
+        self.assertTrue(m2['sheetImages'])
+
+    def test_plan_camera_count_and_names(self):
+        rows = ra.plan(LEVELS, VIEWS, SHEETS, True)
+        camera_rows = [r for r in rows if r[1] == 'camera']
+        self.assertEqual(len(camera_rows), 4)
+        self.assertEqual([r[2] for r in camera_rows], ['Front', 'Back', 'Kitchen', 'Living'])
+        self.assertEqual([r[0] for r in camera_rows],
+                         ['camera-front.png', 'camera-back.png', 'camera-kitchen.png', 'camera-living.png'])
+
+    def test_plan_elevation_section_commands(self):
+        rows = ra.plan(LEVELS, VIEWS, SHEETS, True)
+        elev_rows = [r for r in rows if r[1] == 'elevation']
+        self.assertEqual(len(elev_rows), 4)
+        for r in elev_rows:
+            self.assertEqual(len(r[3]), 1)
+            name, params = r[3][0]
+            self.assertEqual(name, 'export')
+            self.assertIn('view', params)
+        south = [r for r in elev_rows if r[2] == 'South'][0]
+        self.assertEqual(south[3][0][1]['view'], 'v0')
+
     def test_readme_gallery_matches_the_plan(self):
         with open(os.path.join(SHOWCASE, 'phase-21-showcase.json'), encoding='utf-8') as f:
             script = json.load(f)
