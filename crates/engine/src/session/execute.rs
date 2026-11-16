@@ -26,6 +26,11 @@ impl Session {
 
     fn execute_guarded(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
+        // A command that may read a view's generated geometry gets a catch-up refresh while
+        // deferral is on; the refresh is not part of the command's undo step.
+        if self.views_deferred && !cmd::arch::views::defer_safe(spec.id) {
+            cmd::arch::views::refresh_views(self);
+        }
         (spec.enabled)(self).map_err(|m| EngineError::Disabled(spec.id.into(), m))?;
         if let Some(why) = cmd::blocks::bedit::refused_in_editor(self, spec.id) {
             return Err(EngineError::Disabled(spec.id.into(), why));
@@ -93,6 +98,23 @@ impl Session {
         if let Ok(st) = self.state_mut() {
             st.revision += 1;
         }
+    }
+
+    /// Turn view regeneration deferral on or off. Turning it off (true -> false) regenerates any
+    /// stale elevation and section geometry once, so the next command that reads a view sees fresh
+    /// geometry; turning it on does nothing else. While deferral is on, scripts and interactive
+    /// commands that read a view's generated geometry must not run; a command that may read views
+    /// forces a catch-up refresh first.
+    pub fn set_views_deferred(&mut self, on: bool) -> () {
+        if self.views_deferred && !on {
+            cmd::arch::views::refresh_views(self);
+        }
+        self.views_deferred = on;
+    }
+
+    /// Whether elevation and section geometry regeneration is currently deferred.
+    pub fn views_deferred(&self) -> bool {
+        self.views_deferred
     }
 
     // ---------------- undo ----------------

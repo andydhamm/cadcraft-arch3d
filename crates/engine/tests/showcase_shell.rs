@@ -42,11 +42,13 @@ fn rows_in_room(rows: &[Value], room_id: &str) -> Vec<Value> {
 fn replay(session: &mut Session) -> &mut Session {
     let script = std::fs::read_to_string(showcase_path()).expect("could not read showcase shell script");
     let steps: Vec<Value> = serde_json::from_str(&script).expect("showcase shell script is not valid JSON");
+    session.set_views_deferred(true);
     for (i, step) in steps.iter().enumerate() {
         let cmd = step["cmd"].as_str().expect("missing cmd").to_string();
         let params = step["params"].clone();
         session.execute(cmd.as_str(), &params).unwrap_or_else(|err| panic!("showcase step {} ({}={}) failed: {err}", i, &cmd, params));
     }
+    session.set_views_deferred(false);
     session
 }
 

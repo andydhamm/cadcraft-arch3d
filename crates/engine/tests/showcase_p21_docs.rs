@@ -107,6 +107,7 @@ fn replay_showcase() -> cadcraft_engine::Session {
 
     // Replay all three showcase scripts in order; panic (with details) on any error.
     let scripts = ["docs/arch3d/showcase/bilevel.json", "docs/arch3d/showcase/phase-20-showcase.json", "docs/arch3d/showcase/phase-21-showcase.json"];
+    session.set_views_deferred(true);
     for rel in &scripts {
         let path = format!("{}/{}", root, rel);
         let content = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {} failed: {e}", rel));
@@ -117,6 +118,7 @@ fn replay_showcase() -> cadcraft_engine::Session {
             session.execute(cmd, &params).unwrap_or_else(|err| panic!("step {} ({}) in {} failed: {}", i, cmd, rel, err));
         }
     }
+    session.set_views_deferred(false);
 
     session
 }

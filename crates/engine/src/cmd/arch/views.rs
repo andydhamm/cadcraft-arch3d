@@ -25,6 +25,65 @@ const MIN_LOOK: f64 = 1e-9;
 /// Largest accepted look component magnitude (the same bound as view coordinates).
 const MAX_COORD: f64 = 1e6;
 
+/// Command ids that build or edit the model and never read a view's generated geometry. While
+/// view regeneration is deferred, these commands skip the per-command refresh; a command that is
+/// not on this list (or `arch.inspect`, `render`, `build3d`, …) forces a catch-up refresh first.
+pub(crate) const DEFER_SAFE: &[&str] = &[
+    "backdrop",
+    "backsplash",
+    "cabinet",
+    "cabinet.edit",
+    "cabinet.face",
+    "cabinet.fill",
+    "camera",
+    "connection",
+    "countertop.detach",
+    "countertop.edit",
+    "deck",
+    "dimauto",
+    "door",
+    "fixture",
+    "foundation",
+    "level",
+    "level.edit",
+    "library.place",
+    "lightfixture",
+    "lightfixture.edit",
+    "lightset",
+    "look",
+    "niche",
+    "opening.edit",
+    "outlet",
+    "outlets.auto",
+    "paint.material",
+    "plant",
+    "planview",
+    "railing",
+    "roofauto",
+    "room",
+    "room.label",
+    "room.moldings",
+    "roomdetect",
+    "site",
+    "soffit",
+    "soffit.edit",
+    "stair",
+    "sunangle",
+    "switch",
+    "terrain",
+    "terrain.modify",
+    "tray",
+    "tray.edit",
+    "wall",
+    "wall.split",
+    "window",
+];
+
+/// Whether `id` is a model-building command safe to run while view regeneration is deferred.
+pub(crate) fn defer_safe(id: &str) -> bool {
+    DEFER_SAFE.contains(&id)
+}
+
 /// Command specs for the view commands.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -489,9 +548,14 @@ mod tests {
     }
 
     use crate::Session;
+    use crate::cmd::find_command;
 
     fn run(s: &mut Session, cmd: &str, p: Value) -> Result<Value> {
         s.execute(cmd, &p)
+    }
+
+    fn ok(r: Result<Value>) {
+        assert!(r.is_ok(), "{r:?}");
     }
 
     /// A 10 x 8 house split by an interior wall at x = 5 into a west room and an east room.
@@ -597,5 +661,223 @@ mod tests {
         let (mut s, _, _) = two_rooms();
         let r = run(&mut s, "view.delete", json!({"view": "v99"}));
         assert!(r.is_err(), "{r:?}");
+    }
+
+    /// Build the phase-1 house and a south elevation.
+    fn house_with_elevation() -> Session {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "elevation", json!({"side":"south","name":"South","insert":[0,25],"scale":50})));
+        s
+    }
+
+    #[test]
+    fn deferred_views_stay_stale_across_model_commands() {
+        let mut s = house_with_elevation();
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let view = arch.views.first().cloned().unwrap_or_default();
+        assert!(view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+
+        let mut s2 = house_with_elevation();
+        ok(run(&mut s2, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+        let arch2 = s2.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let view2 = arch2.views.first().cloned().unwrap_or_default();
+        assert!(!view2.is_stale(s2.doc().map(|d| d.arch_revision).unwrap_or_default()));
+    }
+
+    #[test]
+    fn deferred_views_catch_up_before_a_reading_command() {
+        let mut s = house_with_elevation();
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+        let r = run(&mut s, "arch.inspect", json!({"views": true}));
+        assert!(r.is_ok(), "{r:?}");
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let view = arch.views.first().cloned().unwrap_or_default();
+        assert!(!view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+        let empty: Vec<Value> = Vec::new();
+        let binding = r.as_ref().map_or(Value::Null, |v| v.clone());
+        let lines = binding
+            .get("views")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .and_then(|v| v.get("lines"))
+            .and_then(|l| l.as_array())
+            .unwrap_or(&empty);
+        assert!(
+            lines.iter().any(|l| {
+                let kind = l.get("kind").and_then(|k| k.as_str()).unwrap_or_default();
+                kind == "window" || kind == "opening"
+            }),
+            "no window or opening line in the view: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn turning_deferral_off_regenerates_once() {
+        let mut s = house_with_elevation();
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let view = arch.views.first().cloned().unwrap_or_default();
+        assert!(view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+
+        s.set_views_deferred(false);
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let view = arch.views.first().cloned().unwrap_or_default();
+        assert!(!view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+
+        let before = s.state().map(|st| st.doc.clone()).ok();
+        s.set_views_deferred(false);
+        let after = s.state().map(|st| st.doc.clone()).ok();
+        assert!(before.is_some_and(|b| after.is_some_and(|a| std::sync::Arc::ptr_eq(&b, &a))), "the drawing Arc changed on a no-op");
+    }
+
+    #[test]
+    fn deferred_and_immediate_replays_give_the_same_views() {
+        let commands = [
+            ("wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})),
+            ("elevation", json!({"side":"south","name":"South","insert":[0,25],"scale":50})),
+            ("elevation", json!({"side":"north","name":"North","insert":[0,40],"scale":50})),
+            ("section", json!({"from":[0,4],"to":[10,4],"look":[0,1],"name":"A","insert":[50,25],"scale":50})),
+            ("door", json!({"wall":"w0","offset":2.0,"width":0.9,"height":2.1})),
+            ("window", json!({"wall":"w0","offset":6.0,"width":1.2,"sill":0.9,"height":1.2})),
+            ("window", json!({"wall":"w1","offset":4.0,"width":1.2,"sill":0.9,"height":1.2})),
+            ("roomdetect", json!({})),
+            ("roofauto", json!({"pitchRise":6,"pitchRun":12,"overhang":0.5})),
+        ];
+        let mut s1 = Session::new();
+        s1.set_views_deferred(true);
+        for (id, p) in &commands {
+            let r = run(&mut s1, id, p.clone());
+            assert!(r.is_ok(), "{id} {r:?}");
+        }
+        s1.set_views_deferred(false);
+        let r1 = run(&mut s1, "arch.inspect", json!({"views": true}));
+        assert!(r1.is_ok(), "{r1:?}");
+
+        let mut s2 = Session::new();
+        for (id, p) in &commands {
+            let r = run(&mut s2, id, p.clone());
+            assert!(r.is_ok(), "{id} {r:?}");
+        }
+        let r2 = run(&mut s2, "arch.inspect", json!({"views": true}));
+        assert!(r2.is_ok(), "{r2:?}");
+
+        let v1 = r1.as_ref().map(|v| v.clone()).unwrap_or_default();
+        let v2 = r2.as_ref().map(|v| v.clone()).unwrap_or_default();
+        assert_eq!(v1, v2, "deferred and immediate replays differ");
+    }
+
+    #[test]
+    fn deferral_is_off_by_default_and_survives_a_refused_command() {
+        let mut s = Session::new();
+        assert!(!s.views_deferred());
+
+        s.set_views_deferred(true);
+        assert!(s.views_deferred());
+
+        let r = run(&mut s, "window", json!({"wall":"w99"}));
+        assert!(r.is_err(), "{r:?}");
+        assert!(s.views_deferred());
+    }
+
+    #[test]
+    fn defer_safe_lists_only_known_model_commands() {
+        for id in DEFER_SAFE {
+            assert!(find_command(id).is_some(), "{id} is not a known command");
+        }
+        let mut sorted = DEFER_SAFE.to_vec();
+        sorted.sort();
+        assert_eq!(DEFER_SAFE, &sorted);
+        assert!(DEFER_SAFE.windows(2).all(|w| w[0] != w[1]));
+        for id in ["elevation", "section", "sheet", "export", "plot", "arch.inspect", "view.note", "", "WALL"] {
+            assert!(!defer_safe(id), "{id} should not be defer-safe");
+        }
+    }
+
+    #[test]
+    fn deferred_multiple_views_all_stay_stale() {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "elevation", json!({"side":"south","name":"South","insert":[0,25],"scale":50})));
+        ok(run(&mut s, "elevation", json!({"side":"north","name":"North","insert":[0,40],"scale":50})));
+        ok(run(&mut s, "section", json!({"from":[0,4],"to":[10,4],"look":[0,1],"name":"A","insert":[50,25],"scale":50})));
+
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let rev = s.doc().map(|d| d.arch_revision).unwrap_or_default();
+        assert_eq!(arch.views.len(), 3);
+        for v in &arch.views {
+            assert!(v.is_stale(rev), "view {} should be stale", v.name);
+        }
+    }
+
+    #[test]
+    fn deferred_section_view_stays_stale() {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "section", json!({"from":[0,4],"to":[10,4],"look":[0,1],"name":"A","insert":[50,25],"scale":50})));
+
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let v = arch.views.first().cloned().unwrap_or_default();
+        assert_eq!(v.kind, ViewKind::Section);
+        assert!(v.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+    }
+
+    #[test]
+    fn deferred_interior_elevation_stays_stale() {
+        let (mut s, west, _) = two_rooms();
+        s.set_views_deferred(true);
+        let r = run(&mut s, "elevation", json!({"room": west, "side": "south"}));
+        assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":2.5,"width":1.0,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let v = arch.views.first().cloned().unwrap_or_default();
+        assert_eq!(v.kind, ViewKind::Interior);
+        assert!(v.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+    }
+
+    #[test]
+    fn catch_up_refresh_handles_multiple_views() {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "elevation", json!({"side":"south","name":"South","insert":[0,25],"scale":50})));
+        ok(run(&mut s, "elevation", json!({"side":"north","name":"North","insert":[0,40],"scale":50})));
+
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let rev = s.doc().map(|d| d.arch_revision).unwrap_or_default();
+        assert!(arch.views.iter().all(|v| v.is_stale(rev)));
+
+        let r = run(&mut s, "arch.inspect", json!({"views": true}));
+        assert!(r.is_ok(), "{r:?}");
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let rev = s.doc().map(|d| d.arch_revision).unwrap_or_default();
+        assert!(arch.views.iter().all(|v| !v.is_stale(rev)));
+    }
+
+    #[test]
+    fn deferral_with_no_views_is_harmless() {
+        let mut s = Session::new();
+        s.set_views_deferred(true);
+        let r = run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}));
+        assert!(r.is_ok(), "{r:?}");
+        s.set_views_deferred(false);
     }
 }

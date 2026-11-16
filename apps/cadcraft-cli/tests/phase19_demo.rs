@@ -601,3 +601,17 @@ fn phase19_demo_dusk_light_set_brightens_the_house() {
     let brighter = (0..320 * 240).filter(|&i| sum(&dusk.rgba, i) - sum(&dark.rgba, i) >= 30).count();
     assert!(brighter >= 768, "only {brighter} pixels are 30+ brighter under Evening (need 768)");
 }
+
+#[test]
+fn phase19_demo_overview_camera_is_on_level_zero_with_correct_target() {
+    let mut session = replay_demo();
+    let inspect = session.execute("arch.inspect", &json!({ "cameras": true })).expect("arch.inspect should list cameras");
+    let cameras = inspect["cameras"].as_array().expect("cameras list should exist");
+    let overview = cameras.iter().find(|c| c["name"] == "overview").expect("overview camera missing");
+    assert_eq!(overview["level"], 0, "overview camera should be on level 0");
+    let target = overview["target"].as_array().expect("overview target should be an array");
+    assert_eq!(target.len(), 3, "overview target should have 3 components");
+    assert!((target[0].as_f64().unwrap() - 5.0).abs() < 1e-9, "overview target x should be 5.0");
+    assert!((target[1].as_f64().unwrap() - 2.0).abs() < 1e-9, "overview target y should be 2.0");
+    assert!((target[2].as_f64().unwrap() - 0.0).abs() < 1e-9, "overview target z should be 0.0");
+}
