@@ -2074,6 +2074,86 @@ mod tests {
     }
 
     #[test]
+    fn exposure_keys_with_nan_manual_ev100() {
+        let k = exposure_keys(0.5, "manual", 0, Some(f64::NAN));
+        let ev = k["ev100"].as_f64().unwrap_or(f64::NAN);
+        assert!(ev.is_nan(), "NaN manual EV100 should be echoed as NaN: {k:?}");
+    }
+
+    #[test]
+    fn exposure_keys_manual_mode_without_manual_ev_falls_back_to_scale() {
+        // If mode is "manual" but no manual EV is provided, fall back to scale_ev100.
+        let scale = 0.25;
+        let k = exposure_keys(scale, "manual", 0, None);
+        let ev = k["ev100"].as_f64().unwrap_or(f64::NAN);
+        assert!((ev - scale_ev100(scale)).abs() < 1e-9, "should fall back to scale_ev100: {k:?}");
+        assert_eq!(k["exposureMode"], "manual");
+    }
+
+    #[test]
+    fn multiple_ground_samples_are_all_visible() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.ground = true;
+        let eye = Vec3::new(2.0, 2.0, 1.5);
+        let target = Vec3::new(2.0, 2.0, 0.0);
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
+        req.camera = Some(camera);
+        req.samples = vec![[1.0, 1.0, 0.0], [2.0, 2.0, 0.0], [3.0, 3.0, 0.0]];
+
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), 3, "{v}");
+        for (i, sample) in s.iter().enumerate() {
+            assert_eq!(sample["visible"], true, "ground sample {i} should be visible: {v}");
+        }
+    }
+
+    #[test]
+    fn ground_sample_with_clip_box_is_visible_below_clip() {
+        use cadcraft_engine::doc::arch::ClipBox;
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.ground = true;
+        let eye = Vec3::new(2.0, 2.0, 1.5);
+        let target = Vec3::new(2.0, 2.0, 0.0);
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
+        req.camera = Some(camera);
+        req.look = Look { clip: Some(ClipBox { min: [-10.0; 3], max: [10.0, 10.0, 0.5], ..Default::default() }), ..Look::default() };
+        req.samples = vec![[2.0, 2.0, 0.0]];
+
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), 1, "{v}");
+        // The sample is at z=0.0, below the clip max of 0.5, so it should be visible.
+        assert_eq!(s[0]["visible"], true, "ground sample below clip should be visible: {v}");
+    }
+
+    #[test]
+    fn mixed_ground_and_air_samples_with_ground_on() {
+        let _g = reset();
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        req.ground = true;
+        // Camera inside the room, looking toward the north wall so both the ground and
+        // the wall's inner face are in view.
+        let eye = Vec3::new(2.0, 2.0, 1.5);
+        let target = Vec3::new(2.0, 4.0, 0.0);
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, target, 70.0));
+        req.camera = Some(camera);
+        // One sample on the ground in front of the camera, one on the inner face of the north wall (y=4.0).
+        req.samples = vec![[2.0, 2.5, 0.0], [2.0, 4.0, 1.0]];
+
+        let Some(v) = render(&req) else { return };
+        let s = v["samples"].as_array().cloned().unwrap_or_default();
+        assert_eq!(s.len(), 2, "{v}");
+        assert_eq!(s[0]["visible"], true, "ground sample should be visible: {v}");
+        assert_eq!(s[1]["visible"], true, "wall sample should be visible: {v}");
+    }
+
+    #[test]
     fn shadow_casting_lights_with_no_lights() {
         let scene = cadcraft_arch3d::build(&Drawing::new_metric().arch);
         assert_eq!(shadow_casting_lights(&scene), 0);
