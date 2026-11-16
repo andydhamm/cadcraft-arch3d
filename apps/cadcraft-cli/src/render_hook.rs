@@ -1308,8 +1308,8 @@ mod tests {
         // No objects are hidden.
         assert_eq!(v["filter"]["hidden"].as_u64().unwrap_or(0), 0, "{v}");
         // No filtered scene is built.
-        let filtered = STATE.lock().ok().and_then(|g| g.as_ref().and_then(|s| s.filtered.as_ref()));
-        assert!(filtered.is_none(), "no filtered scene should be built when nothing is hidden");
+        let has_filtered = STATE.lock().ok().and_then(|g| g.as_ref().map(|s| s.filtered.is_some()));
+        assert!(has_filtered == Some(false), "no filtered scene should be built when nothing is hidden");
     }
 
     #[test]
