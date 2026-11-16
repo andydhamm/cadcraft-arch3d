@@ -119,22 +119,23 @@ def read_png(path):
     for y in range(h):
         o = y * (stride + 1)
         ft, cur = raw[o], bytearray(raw[o + 1:o + 1 + stride])
-        for x in range(stride):
-            a = cur[x - nch] if x >= nch else 0
-            up = prev[x]
-            c = prev[x - nch] if x >= nch else 0
-            if ft == 1:
-                cur[x] = (cur[x] + a) & 255
-            elif ft == 2:
-                cur[x] = (cur[x] + up) & 255
-            elif ft == 3:
-                cur[x] = (cur[x] + (a + up) // 2) & 255
-            elif ft == 4:
-                pa, pb, pc = abs(up - c), abs(a - c), abs(a + up - 2 * c)
-                pr = a if pa <= pb and pa <= pc else (up if pb <= pc else c)
-                cur[x] = (cur[x] + pr) & 255
-            elif ft != 0:
-                raise ValueError(f'{path}: bad PNG filter')
+        if ft == 2:
+            cur = bytearray((c + u) & 255 for c, u in zip(cur, prev))
+        elif ft in (1, 3, 4):
+            for x in range(stride):
+                a = cur[x - nch] if x >= nch else 0
+                up = prev[x]
+                if ft == 1:
+                    cur[x] = (cur[x] + a) & 255
+                elif ft == 3:
+                    cur[x] = (cur[x] + (a + up) // 2) & 255
+                else:
+                    c = prev[x - nch] if x >= nch else 0
+                    pa, pb, pc = abs(up - c), abs(a - c), abs(a + up - 2 * c)
+                    pr = a if pa <= pb and pa <= pc else (up if pb <= pc else c)
+                    cur[x] = (cur[x] + pr) & 255
+        elif ft != 0:
+            raise ValueError(f'{path}: bad PNG filter')
         rows.append(cur)
         prev = cur
     return w, h, nch, rows
@@ -167,12 +168,12 @@ def contact_sheet(out_dir, files, name='contact-sheet.png'):
     for f in files:
         w, h, nch, rows = read_png(os.path.join(out_dir, f))
         th = max(1, (h * TILE_W) // w)
+        cols_x = [min(w - 1, tx * w // TILE_W) for tx in range(TILE_W)]
         scaled = []
         for ty in range(th):
             src = to_rgb(w, nch, rows[min(h - 1, ty * h // th)])
             r = bytearray(TILE_W * 3)
-            for tx in range(TILE_W):
-                sx = min(w - 1, tx * w // TILE_W)
+            for tx, sx in enumerate(cols_x):
                 r[tx * 3:tx * 3 + 3] = src[sx * 3:sx * 3 + 3]
             scaled.append(r)
         tiles.append(scaled)
