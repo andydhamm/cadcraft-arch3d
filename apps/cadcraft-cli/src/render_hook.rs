@@ -1394,6 +1394,22 @@ mod tests {
     }
 
     #[test]
+    fn environment_cache_is_used_across_multiple_renders() {
+        let _g = reset();
+        if let Ok(mut g) = ENV_CACHE.lock() {
+            g.clear();
+        }
+        let d = room();
+        let mut req = request(&d, None, None, false);
+        for _ in 0..5 {
+            let Some(v) = render(&req) else { return };
+            assert_eq!(v["ok"], true, "{v}");
+        }
+        let count = ENV_CACHE.lock().map(|g| g.len()).unwrap_or(0);
+        assert!(count <= 1, "same look should use one cached environment, got {count}");
+    }
+
+    #[test]
     fn environment_cache_keeps_alternating_looks() {
         let _g = reset();
         if let Ok(mut g) = ENV_CACHE.lock() {

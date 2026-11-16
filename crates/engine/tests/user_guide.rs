@@ -280,6 +280,126 @@ fn user_guide_sh_blocks_execute_through_the_engine() {
     }
 }
 
+/// The text of one `## ` section of the guide, from its heading to the next one.
+fn section(heading: &str) -> &'static str {
+    let Some(start) = GUIDE.find(&format!("\n## {heading}\n")) else {
+        panic!("the user guide has no `## {heading}` section");
+    };
+    let body = &GUIDE[start + 1..];
+    let end = body[3..].find("\n## ").map_or(body.len(), |at| at + 3);
+    &body[..end]
+}
+
+/// Replays the first ```sh block of a section as the CLI does: a new metric drawing, then each `--cmd` in order.
+/// Returns the session so a test can look at the result.
+fn replay_section_block(heading: &str) -> Session {
+    install_io();
+    let text = section(heading);
+    let blocks = sh_blocks(text);
+    let Some(lines) = blocks.first() else {
+        panic!("`## {heading}` has no ```sh block");
+    };
+    let mut session = Session::new();
+    session.new_drawing(true);
+    let mut steps = 0;
+    for line in lines {
+        for command in cmd_args(line) {
+            let Some((id, json)) = command.split_once(' ') else {
+                panic!("`## {heading}`: `{command}` should have the form `<id> <json>`");
+            };
+            let params: serde_json::Value = match serde_json::from_str(json) {
+                Ok(params) => params,
+                Err(error) => panic!("`## {heading}`: `{command}` has invalid JSON: {error}"),
+            };
+            if let Err(error) = session.execute(id, &params) {
+                panic!("`## {heading}`: `{command}` was refused: {error:?}");
+            }
+            steps += 1;
+        }
+    }
+    assert!(steps >= 4, "`## {heading}`: the block should hold several steps, found {steps}");
+    session
+}
+
+#[test]
+fn user_guide_dimensions_section_names_its_commands() {
+    let text = section("Dimensions");
+    for word in ["dimauto", "dimdrive", "room.label", "planView", "arch.inspect", "reference"] {
+        assert!(text.contains(word), "the Dimensions section should mention `{word}`");
+    }
+}
+
+#[test]
+fn user_guide_dimensions_block_runs() {
+    let mut session = replay_section_block("Dimensions");
+    let result = session.execute("arch.inspect", &serde_json::json!({"autoDims": true}));
+    let Ok(result) = result else {
+        panic!("arch.inspect autoDims was refused: {result:?}");
+    };
+    let rows = result.get("autoDims").and_then(serde_json::Value::as_array);
+    assert!(rows.is_some_and(|rows| !rows.is_empty()), "dimauto should leave rows: {result}");
+}
+
+#[test]
+fn user_guide_has_a_stairs_decks_and_railings_section() {
+    let text = section("Stairs, decks and railings");
+    for word in ["stair", "deck", "railing", "grille"] {
+        assert!(text.contains(word), "the stairs section should mention `{word}`");
+    }
+    replay_section_block("Stairs, decks and railings");
+}
+
+#[test]
+fn user_guide_light_sky_cameras_block_runs() {
+    let text = section("Light, sky and cameras");
+    assert!(!text.contains("```json"), "the light section should have no unchecked ```json example");
+    let mut session = replay_section_block("Light, sky and cameras");
+    let result = session.execute("arch.inspect", &serde_json::json!({"cameras": true, "sunAngles": true}));
+    let Ok(result) = result else {
+        panic!("arch.inspect cameras was refused: {result:?}");
+    };
+    let text = result.to_string();
+    for name in ["dusk", "noon-hdri", "overview", "noon"] {
+        assert!(text.contains(&format!("\"{name}\"")), "arch.inspect should list `{name}`: {text}");
+    }
+}
+
+#[test]
+fn user_guide_has_no_stray_words() {
+    for word in ["habitat", "procedural twilight sky"] {
+        assert!(!GUIDE.contains(word), "the user guide should not contain `{word}`");
+    }
+}
+
+/// The cameras the showcase section lists are exactly the ones `bilevel.json` saves.
+#[test]
+fn user_guide_showcase_section_matches_the_script() {
+    let text = section("The showcase house");
+    let Some(line) = text.lines().find(|line| line.starts_with("Saved cameras:")) else {
+        panic!("the showcase section should have a `Saved cameras:` line");
+    };
+    let mut listed: Vec<&str> = line.split('`').skip(1).step_by(2).collect();
+    listed.sort_unstable();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/arch3d/showcase/bilevel.json");
+    let script = match fs::read_to_string(&path) {
+        Ok(script) => script,
+        Err(error) => panic!("failed to read {}: {error}", path.display()),
+    };
+    let steps: serde_json::Value = match serde_json::from_str(&script) {
+        Ok(steps) => steps,
+        Err(error) => panic!("{} is not JSON: {error}", path.display()),
+    };
+    let mut saved: Vec<&str> = steps
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|step| step.get("cmd").and_then(serde_json::Value::as_str) == Some("camera"))
+        .filter_map(|step| step.get("params")?.get("save")?.as_str())
+        .collect();
+    saved.sort_unstable();
+    assert_eq!(listed, saved, "the guide's saved cameras should be the ones bilevel.json saves");
+}
+
 /// The archdetect block in the user guide runs through the engine.
 #[test]
 fn user_guide_archdetect_block_runs() {

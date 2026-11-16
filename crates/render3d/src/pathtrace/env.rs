@@ -202,10 +202,8 @@ impl EnvTable {
         let base = row * (w + 1);
         let c = self.conditional.get(base + col + 1).copied().unwrap_or(0.0) - self.conditional.get(base + col).copied().unwrap_or(0.0);
         let pdf_uv = m * c * (w * h) as f32;
-        let sin_t = (v * pi).sin();
-        if !(sin_t > 1e-6) {
-            return 0.0;
-        }
+        // Use the texel's theta (never exactly 0 or pi) so the pdf is finite at the poles.
+        let sin_t = (((row as f32 + 0.5) / h as f32) * pi).sin();
         pdf_uv / (2.0 * pi * pi * sin_t)
     }
 
@@ -313,6 +311,93 @@ mod tests {
             }
         }
         assert!(hit * 10 >= n * 9, "{hit} of {n} samples in the bright texel");
+    }
+
+    #[test]
+    fn env_table_uniform_environment() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        let e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        let t = env_table(&e);
+        assert!(t.is_usable());
+        // In a uniform environment the pdf should be 1/(4 pi) everywhere.
+        let expected = 1.0 / (4.0 * std::f32::consts::PI);
+        for i in 0..50 {
+            let t_val = (i as f32) * 0.07;
+            let d = dir_of_uv(t_val * 0.5, t_val * 0.3);
+            let pdf = t.pdf(d);
+            assert!(pdf.is_finite() && pdf > 0.0, "{d:?}: pdf={pdf}");
+            // The pdf should be close to uniform for a uniform environment.
+            assert!((pdf - expected).abs() < 0.05, "uniform env pdf should be ~{expected}, got {pdf} at {d:?}");
+        }
+    }
+
+    #[test]
+    fn dir_of_uv_uv_of_dir_roundtrip() {
+        for i in 0..100 {
+            let u = (i as f32 + 0.5) / 100.0;
+            let v = ((i * 37 % 100) as f32 + 0.5) / 100.0;
+            let d = dir_of_uv(u, v);
+            let (u2, v2) = uv_of_dir(d);
+            assert!((u - u2).abs() < 1e-5 || (u - 1.0).abs() < 1e-5 && u2 < 1e-5, "u roundtrip failed: {u} -> {u2}");
+            assert!((v - v2).abs() < 1e-5, "v roundtrip failed: {v} -> {v2}");
+        }
+    }
+
+    #[test]
+    fn env_table_with_large_environment_is_downsampled() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        let e = Environment::uniform([1.0, 1.0, 1.0], 2048, 1024);
+        let t = env_table(&e);
+        assert!(t.width <= MAX_TABLE_W);
+        assert!(t.height <= MAX_TABLE_H);
+        assert!(t.is_usable());
+    }
+
+    #[test]
+    fn env_table_pdf_is_finite_at_poles() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        let e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        let t = env_table(&e);
+        let zenith_pdf = t.pdf([0.0, 0.0, 1.0]);
+        assert!(zenith_pdf.is_finite() && zenith_pdf > 0.0, "zenith pdf must be finite and positive: {zenith_pdf}");
+        let nadir_pdf = t.pdf([0.0, 0.0, -1.0]);
+        assert!(nadir_pdf.is_finite() && nadir_pdf > 0.0, "nadir pdf must be finite and positive: {nadir_pdf}");
+    }
+
+    #[test]
+    fn env_table_cache_is_bounded() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        for i in 0..(ENV_TABLE_CACHE_LEN + 5) {
+            let e = Environment::uniform([i as f32, 1.0, 1.0], 8, 4);
+            let _ = env_table(&e);
+        }
+
+        let count = if let Ok(g) = ENV_TABLE_CACHE.lock() {
+            g.len()
+        } else {
+            return;
+        };
+        assert!(count <= ENV_TABLE_CACHE_LEN, "cache must hold at most {ENV_TABLE_CACHE_LEN} entries, got {count}");
+    }
+
+    #[test]
+    fn env_table_pdf_with_nan_direction() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        let e = Environment::uniform([1.0, 1.0, 1.0], 8, 4);
+        let t = env_table(&e);
+        assert_eq!(t.pdf([f32::NAN, 0.0, 1.0]), 0.0, "NaN direction must give pdf 0");
+        assert_eq!(t.pdf([0.0, f32::NAN, 1.0]), 0.0, "NaN direction must give pdf 0");
+        assert_eq!(t.pdf([0.0, 0.0, f32::NAN]), 0.0, "NaN direction must give pdf 0");
     }
 
     #[test]
