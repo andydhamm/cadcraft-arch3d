@@ -245,7 +245,7 @@ fn write_house_commands(path: &std::path::Path) {
 /// run: the first JSON line of stdout that is not null, under `views`, for the view with that
 /// `name`, counting the view's `lines`.
 fn view_line_count(stdout: &str, view_name: &str) -> usize {
-    let line = stdout.lines().find(|l| l.trim_start().starts_with('{')).expect("no JSON result in stdout");
+    let line = stdout.lines().rev().find(|l| l.trim_start().starts_with('{')).expect("no JSON result in stdout");
     let r: serde_json::Value = serde_json::from_str(line).expect("inspect result is JSON");
     let views = r["views"].as_array().expect("inspect has a views array");
     let view = views.iter().find(|v| v["name"].as_str() == Some(view_name)).expect("view not found");
