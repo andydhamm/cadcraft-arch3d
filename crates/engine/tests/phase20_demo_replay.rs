@@ -117,7 +117,10 @@ fn phase20_showcase_entry_views_are_on_landing_not_floor() {
         let name = strd(level, "name", "");
         let kind = strd(level, "kind", "");
         if !name.is_empty() {
-            level_kinds.insert(name, kind);
+            level_kinds.insert(name, kind.clone());
+        }
+        if let Some(index) = level.get("index").and_then(|v| v.as_u64()) {
+            level_kinds.insert(index.to_string(), kind);
         }
     }
 
