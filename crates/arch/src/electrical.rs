@@ -102,7 +102,7 @@ pub fn place_device(model: &ArchModel, d: &ElectricalDevice) -> Result<DevicePla
     }
 
     let z = if d.counter {
-        counter_top(model, at, d.level).ok_or_else(|| "counter with no counter in front".to_string())?
+        level.elevation + counter_top(model, at, d.level).ok_or_else(|| "counter with no counter in front".to_string())?
     } else {
         level.elevation + d.height
     };
