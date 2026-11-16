@@ -5,23 +5,24 @@
 To refresh the committed gallery, the operator runs one command from the repository root (drop `CADCRAFT_RENDER_ADAPTER` from the environment, or set it to a GPU adapter, to render on the GPU):
 
 ```sh
-python3 tools/showcase/render_all.py --out docs/arch3d/showcase/renders
+python3 tools/showcase/render_all.py --full --out docs/arch3d/showcase/renders
 ```
 
 Other options:
 
 ```sh
 python3 tools/showcase/render_all.py --out DIR \
-  [--size WxH] [--spp N] [--cli-json '["cargo","run","-q","-p","cadcraft-cli","--"]'] [--no-exports] [--no-set]
+  [--size WxH] [--spp N] [--cli-json '["cargo","run","-q","-p","cadcraft-cli","--"]'] [--no-exports] [--full] [--no-set]
 ```
 
 - `--size` (default `960x720`) and `--spp` (default `64`) apply to the 3D renders, the path-traced final and the `noon-hdri` look camera.
 - `--no-exports` skips the GLB/IFC/OBJ export steps and leaves `exports` empty.
-- `--no-set` skips the drawing set: no `set.dxf`, plan views, interior elevations, sheets or PDF, and `drawingSet` is `null`. The look cameras still render from the house file.
+- `--full` renders the full gallery: the look cameras (dusk, noon-hdri, overview), every plan view, the interior elevations, the sheet images and the drawing-set PDF. A plain run renders none of these: it is the set phase-15 check 11 has always run, in about the same time.
+- `--no-set` (with `--full`) skips the drawing set after all: no `set.dxf`, plan views, interior elevations, sheets or PDF, and `drawingSet` is `null`. The look cameras still render from the house file.
 - `--cli-json` is the command that runs `cadcraft-cli` (default: the cargo command); the `CADCRAFT_CLI` environment variable (a binary path) wins when set.
 - The script sets `CADCRAFT_RENDER_ADAPTER=fallback` for every render step unless your environment already selects a renderer.
 
-It replays `bilevel.json` into `DIR/bilevel.dxf`, writes the house images from it, then (unless `--no-set`) replays `bilevel.json`, `phase-20-showcase.json` and `phase-21-showcase.json` in one run into `DIR/set.dxf` and writes the rest from that file. The step list is `plan(levels, views, sheets, with_set)`, a pure function with its own tests: `python3 -m unittest tools/showcase/test_render_all.py`.
+It replays `bilevel.json` into `DIR/bilevel.dxf`, writes the house images from it, then (with `--full`, unless `--no-set`) replays `bilevel.json`, `phase-20-showcase.json` and `phase-21-showcase.json` in one run into `DIR/set.dxf` and writes the rest from that file. The step list is `plan(levels, views, sheets, with_set)`, a pure function with its own tests: `python3 -m unittest tools/showcase/test_render_all.py`.
 
 | Files | Kind |
 |---|---|

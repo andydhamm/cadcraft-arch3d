@@ -66,7 +66,7 @@ The script saves seven cameras: Front, Back, Kitchen and Living for the plan-sty
 
 ## Render gallery
 
-`tools/showcase/render_all.py` writes every image below. The committed images are refreshed by the operator with `python3 tools/showcase/render_all.py --out docs/arch3d/showcase/renders` (the tool sets `CADCRAFT_RENDER_ADAPTER=fallback` unless the environment already chooses a renderer; the operator selects the GPU through that variable) and may be older than the script; the manifest's `scriptSha256` says which script they show.
+`tools/showcase/render_all.py` writes every image below. The committed images are refreshed by the operator with `python3 tools/showcase/render_all.py --full --out docs/arch3d/showcase/renders` (the tool sets `CADCRAFT_RENDER_ADAPTER=fallback` unless the environment already chooses a renderer; the operator selects the GPU through that variable) and may be older than the script; the manifest's `scriptSha256` says which script they show.
 
 - [Contact sheet](./renders/contact-sheet.png)
 

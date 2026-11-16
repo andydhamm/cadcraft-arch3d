@@ -251,14 +251,15 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64):
     add('technical.png', 'technical', 'default', [('render', {'out': 'technical.png', 'size': size, 'style': 'technical'})])
     for k in ('glb', 'ifc', 'obj'):
         add(f'showcase.{k}', 'export', k, [('export', {'path': f'showcase.{k}'})])
+    if not with_set:
+        return rows
+    # Everything below is the full gallery (`--full`): a plain run stays what phase-15 check 11 has always run.
     for c in LOOK_CAMERAS:
         f = file_name('camera', c, '.png')
         params = {'camera': c, 'size': size, 'out': f}
         if c == 'noon-hdri':
             params['spp'] = spp  # its technique path-traces by itself
         add(f, 'look', c, [('render', params)])
-    if not with_set:
-        return rows
     replay = ['--commands', SCRIPT]
     for sp in SET_SCRIPTS:
         replay += ['--commands', sp]
@@ -296,7 +297,8 @@ def parse_args(argv):
     ap.add_argument('--spp', type=int, default=64)
     ap.add_argument('--cli-json', default=None)
     ap.add_argument('--no-exports', action='store_true', help='skip GLB/IFC/OBJ export steps and leave exports empty')
-    ap.add_argument('--no-set', action='store_true', help='skip the drawing set: plan views, interior elevations, sheets and the PDF')
+    ap.add_argument('--full', action='store_true', help='the full gallery: also the look cameras, plan views, interior elevations, sheets and the drawing-set PDF')
+    ap.add_argument('--no-set', action='store_true', help='with --full: skip it after all (a plain run never renders it)')
     return ap.parse_args(argv)
 
 
@@ -339,14 +341,15 @@ def main(argv):
         name, params = c
         return cmd(name, {k: (p(v) if k in ('path', 'out') and isinstance(v, str) else v) for k, v in params.items()})
 
+    skip_set = a.no_set or not a.full
     try:
         script_sha256 = sha256_file(SCRIPT)
-        set_scripts = {} if a.no_set else {n: sha256_file(f) for n, f in zip(SET_SCRIPT_NAMES, SET_SCRIPTS)}
+        set_scripts = {} if skip_set else {n: sha256_file(f) for n, f in zip(SET_SCRIPT_NAMES, SET_SCRIPTS)}
         r.run('replay', [], file=False, extra=['--commands', SCRIPT, '--save', dxf])
         if not os.path.exists(dxf):
             raise Step('replay', 'bilevel.dxf was not written')
         insp = inspect_rows(r, {"levels": True, "views": True, "cameras": True})
-        if not a.no_set:
+        if not skip_set:
             # The set replays the house, then both set scripts, into set.dxf; the rest runs on it.
             rep = next((row for row in plan([], [], [], True) if row[1] == 'replay'), None)
             if rep is None:
@@ -367,7 +370,7 @@ def main(argv):
         for lv in ELECTRICAL_LEVELS:
             if lv not in {l['name'] for l in levels}:
                 raise Step(f'electrical {lv}', 'no such level')
-        for file, kind, view, commands in plan(levels, views, sheets, not a.no_set, size=(w, h), spp=a.spp):
+        for file, kind, view, commands in plan(levels, views, sheets, not skip_set, size=(w, h), spp=a.spp):
             if kind == 'replay':
                 continue
             if kind in ('elevation', 'section') and view not in names:

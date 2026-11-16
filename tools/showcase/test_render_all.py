@@ -69,10 +69,14 @@ class RenderAll(unittest.TestCase):
         banned = {'planview', 'rcp', 'roofplan', 'siteplan', 'interior', 'sheet', 'drawingset', 'replay'}
         self.assertFalse([r for r in rows if r[1] in banned])
         self.assertNotIn('drawing-set.pdf', files(rows))
-        self.assertEqual([r[0] for r in rows if r[1] == 'look'], ['camera-dusk.png', 'camera-noon-hdri.png', 'camera-overview.png'])
-        a = ra.parse_args(['--out', 'x', '--no-set'])
-        self.assertTrue(a.no_set)
-        self.assertFalse(ra.parse_args(['--out', 'x']).no_set)
+        # A plain run is what phase-15 check 11 has always run: no look cameras either (they are part of --full).
+        self.assertEqual([r[0] for r in rows if r[1] == 'look'], [])
+        full = ra.plan(LEVELS, VIEWS, SHEETS, True)
+        self.assertEqual([r[0] for r in full if r[1] == 'look'], ['camera-dusk.png', 'camera-noon-hdri.png', 'camera-overview.png'])
+        a = ra.parse_args(['--out', 'x', '--full', '--no-set'])
+        self.assertTrue(a.no_set and a.full)
+        plain = ra.parse_args(['--out', 'x'])
+        self.assertFalse(plain.no_set or plain.full)
 
     def test_manifest_kinds_and_script_hashes(self):
         images = [{'file': r[0], 'kind': r[1], 'view': r[2]} for r in ra.plan(LEVELS, VIEWS, SHEETS, True)
