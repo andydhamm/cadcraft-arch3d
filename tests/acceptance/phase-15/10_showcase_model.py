@@ -14,6 +14,8 @@
 #  - each of the four sides of the house has a window, and every bedroom, the living room and the kitchen has one;
 #  - the half flights meet the landing: the up flight starts within 0.3 m of it, the down flight ends within 0.3 m of it;
 #  - a roof exists over the main level (arch.inspect is asked for roofs): one roof there with at least two planes.
+# Revised 2026-11-16 (closing round): rooms of type deck or porch are exempt from the inside-the-exterior-walls test: the
+# Rear deck that phase 17 added stands outside the walls by nature (the test predates it). Every other clause is unchanged.
 # needs: p15-showcase-house, p15-cli-commands-file, p15-inspect, p15-cmd-outlets-auto, p15-arch-grade, p15-cmd-levels, p16-rw-showcase-script
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p15lib.inc')).read())
@@ -112,6 +114,8 @@ def box_of(l):
 
 # Rooms inside the walls, no overlaps.
 for r in rooms:
+    if r.get('type') in ('deck', 'porch'):
+        continue
     l = lvl(r)
     x0, y0, x1, y1 = box_of(l)
     out_pts = [q for q in r.get('polygon') or [] if not (x0 - 1e-6 <= q[0] <= x1 + 1e-6 and y0 - 1e-6 <= q[1] <= y1 + 1e-6)]
