@@ -316,6 +316,50 @@ mod tests {
     }
 
     #[test]
+    fn env_table_uniform_environment() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        let e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        let t = env_table(&e);
+        assert!(t.is_usable());
+        // In a uniform environment the pdf should be 1/(4 pi) everywhere.
+        let expected = 1.0 / (4.0 * std::f32::consts::PI);
+        for i in 0..50 {
+            let t_val = (i as f32) * 0.07;
+            let d = dir_of_uv(t_val * 0.5, t_val * 0.3);
+            let pdf = t.pdf(d);
+            assert!(pdf.is_finite() && pdf > 0.0, "{d:?}: pdf={pdf}");
+            // The pdf should be close to uniform for a uniform environment.
+            assert!((pdf - expected).abs() < 0.05, "uniform env pdf should be ~{expected}, got {pdf} at {d:?}");
+        }
+    }
+
+    #[test]
+    fn dir_of_uv_uv_of_dir_roundtrip() {
+        for i in 0..100 {
+            let u = (i as f32 + 0.5) / 100.0;
+            let v = ((i * 37 % 100) as f32 + 0.5) / 100.0;
+            let d = dir_of_uv(u, v);
+            let (u2, v2) = uv_of_dir(d);
+            assert!((u - u2).abs() < 1e-5 || (u - 1.0).abs() < 1e-5 && u2 < 1e-5, "u roundtrip failed: {u} -> {u2}");
+            assert!((v - v2).abs() < 1e-5, "v roundtrip failed: {v} -> {v2}");
+        }
+    }
+
+    #[test]
+    fn env_table_with_large_environment_is_downsampled() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_env_table_cache_for_test();
+
+        let e = Environment::uniform([1.0, 1.0, 1.0], 2048, 1024);
+        let t = env_table(&e);
+        assert!(t.width <= MAX_TABLE_W);
+        assert!(t.height <= MAX_TABLE_H);
+        assert!(t.is_usable());
+    }
+
+    #[test]
     fn sky_bake_and_tables_are_built_once_per_sun_angle() {
         let _guard = TEST_LOCK.lock().unwrap();
         reset_env_table_cache_for_test();
