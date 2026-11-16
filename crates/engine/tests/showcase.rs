@@ -1118,9 +1118,11 @@ fn the_showcase_main_walls_are_solid_around_their_windows() {
             continue;
         }
         let offset = num(opening, "offset");
-        let wall_len = ((wall.get("end").and_then(|v| v.as_array()).unwrap()[1] - wall.get("start").and_then(|v| v.as_array()).unwrap()[1]).powi(2)
-            + (wall.get("end").and_then(|v| v.as_array()).unwrap()[0] - wall.get("start").and_then(|v| v.as_array()).unwrap()[0]).powi(2))
-        .sqrt();
+        let end = wall.get("end").and_then(|v| v.as_array()).unwrap();
+        let start = wall.get("start").and_then(|v| v.as_array()).unwrap();
+        let dx = end[0].as_f64().unwrap_or(0.0) - start[0].as_f64().unwrap_or(0.0);
+        let dy = end[1].as_f64().unwrap_or(0.0) - start[1].as_f64().unwrap_or(0.0);
+        let wall_len = (dx * dx + dy * dy).sqrt();
         assert!(
             offset >= -1e-6 && offset <= wall_len + 1e-6,
             "window on wall {} has offset {} outside its plan extent 0..{}",
