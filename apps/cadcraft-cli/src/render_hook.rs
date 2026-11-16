@@ -1529,6 +1529,49 @@ mod tests {
     }
 
     #[test]
+    fn a_sky_backdrop_on_the_look_overrides_a_model_hdri() {
+        use cadcraft_engine::doc::arch::{ArchModel, Backdrop};
+
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Hdri { image: "any.hdr".to_string(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        let mut look = Look::default();
+        look.backdrop = Some(Backdrop::Sky);
+        look.sky.on = true;
+        look.sun.on = false;
+
+        let moon = moon_dir_for(&model, &look);
+        assert!(moon.is_some(), "a Sky backdrop on the look overrides the model's HDRI");
+    }
+
+    #[test]
+    fn no_backdrop_at_all_keeps_the_moon() {
+        use cadcraft_engine::doc::arch::ArchModel;
+
+        let model = ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+
+        let moon = moon_dir_for(&model, &look);
+        assert!(moon.is_some(), "with no backdrop the analytic sky's moon should light the scene");
+    }
+
+    #[test]
+    fn the_moon_direction_is_finite() {
+        use cadcraft_engine::doc::arch::{ArchModel, Backdrop};
+
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Sky);
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+
+        let moon = moon_dir_for(&model, &look);
+        let Some([x, y, z]) = moon else { return };
+        assert!(x.is_finite() && y.is_finite() && z.is_finite(), "moon direction must be finite: [{x}, {y}, {z}]");
+    }
+
+    #[test]
     fn distance_edge_cases() {
         let a = Vec3::new(0.0, 0.0, 0.0);
         let b = Vec3::new(3.0, 4.0, 0.0);
