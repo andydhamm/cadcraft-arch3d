@@ -1276,6 +1276,6 @@ fn the_drawing_set_script_adds_no_cabinet() {
     let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
     let steps: Vec<ScriptStep> = serde_json::from_str(&text).expect("phase-21-showcase.json is not a step array");
     assert!(!steps.iter().any(|s| s.cmd.starts_with("cabinet")), "phase-21-showcase.json still adds a cabinet");
-    assert_eq!(steps.iter().filter(|s| s.cmd == "sheet").count(), 13, "13 sheet steps");
+    assert_eq!(steps.iter().filter(|s| s.cmd == "sheet").count(), 14, "14 sheet steps");
     assert_eq!(steps.last().map(|s| s.cmd.as_str()), Some("layout.set"), "layout.set is the last step");
 }
