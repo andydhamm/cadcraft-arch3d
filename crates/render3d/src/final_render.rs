@@ -1067,4 +1067,60 @@ mod tests {
             }
         }
     }
+
+    /// A raster Finalize on a scene with no meshes still reports the correct frame look.
+    #[test]
+    fn final_raster_look_empty_scene() {
+        let Some(mut o) = off() else { return };
+        let meshes: Vec<Mesh> = vec![];
+        let bounds = cadcraft_arch3d::mesh::Bounds3::empty();
+        let s = Scene3d { meshes, bounds, lights: vec![], ..Default::default() };
+        let png = render_final(&mut o, &s, 1, &camera(), &manual(4.0), false, SIZE);
+        assert!(png.is_ok(), "{:?}", png.as_ref().err());
+        assert_eq!(o.last_frame_look().exposure, crate::exposure::ev100_scale(4.0));
+        assert_eq!(o.last_frame_look().exposure_mode, "manual");
+    }
+
+    /// Sequential raster Finalize renders each report their own look, not a previous one's.
+    #[test]
+    fn final_raster_look_sequential_renders() {
+        let Some(mut o) = off() else { return };
+        let s = scene(false);
+        for (i, ev100) in [2.0, 4.0, 6.0].iter().enumerate() {
+            let png = render_final(&mut o, &s, i as u64 + 1, &camera(), &manual(*ev100), false, SIZE);
+            assert!(png.is_ok(), "{:?}", png.as_ref().err());
+            assert_eq!(o.last_frame_look().exposure, crate::exposure::ev100_scale(*ev100), "render {i}");
+            assert_eq!(o.last_frame_look().exposure_mode, "manual", "render {i}");
+        }
+    }
+
+    /// The frame look of a raster Finalize reflects the tone map set on the look.
+    #[test]
+    fn final_raster_look_with_tone_map() {
+        use crate::exposure::tone_code;
+        let Some(mut o) = off() else { return };
+        let s = scene(false);
+        for tone in [cadcraft_doc::arch::ToneMap::Aces, cadcraft_doc::arch::ToneMap::Hable, cadcraft_doc::arch::ToneMap::None] {
+            let mut look = cadcraft_doc::arch::Look::default();
+            look.exposure = cadcraft_doc::arch::ExposureSetting::Manual { ev100: 10.0 };
+            look.tone_map = tone;
+            let lighting = Lighting { sun: None, look, meter_night: false, ..Lighting::default() };
+            let png = render_final(&mut o, &s, 1, &camera(), &lighting, false, SIZE);
+            assert!(png.is_ok(), "{:?}", png.as_ref().err());
+            assert_eq!(o.last_frame_look().tone_map, tone_code(tone), "{tone:?}");
+        }
+    }
+
+    /// A path render that falls back to raster (no compute device) reports the raster frame look.
+    #[test]
+    fn final_raster_look_after_path_fallback() {
+        let Some(mut o) = off() else { return };
+        let s = scene(false);
+        let r = render_final_with(&mut o, None, &s, 1, &camera(), &manual(7.0), false, SIZE, true, &path_opts(4), None);
+        assert!(r.is_ok(), "{:?}", r.as_ref().err());
+        let Ok((_, _, fallback)) = r else { return };
+        assert_eq!(fallback, Some("no compute shaders"));
+        assert_eq!(o.last_frame_look().exposure, crate::exposure::ev100_scale(7.0));
+        assert_eq!(o.last_frame_look().exposure_mode, "manual");
+    }
 }

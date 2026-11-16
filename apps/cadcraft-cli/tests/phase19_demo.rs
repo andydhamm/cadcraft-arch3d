@@ -603,6 +603,52 @@ fn phase19_demo_dusk_light_set_brightens_the_house() {
 }
 
 #[test]
+fn phase19_demo_dusk_camera_eye_height_is_human_scale() {
+    let mut session = replay_demo();
+    let (eye, _, _) = dusk_pose(&mut session);
+    assert!(eye[2] >= 1.5 && eye[2] <= 2.0, "dusk eye height {} m is not human scale (1.5..2.0)", eye[2]);
+}
+
+#[test]
+fn phase19_demo_dusk_camera_sees_full_south_face() {
+    use cadcraft_arch3d::camera::{Camera, FullCamera, project_point};
+    use cadcraft_geom::Vec3;
+
+    let mut session = replay_demo();
+    let (eye, target, fov) = dusk_pose(&mut session);
+    let camera = Camera::Full(FullCamera::new(Vec3::new(eye[0], eye[1], eye[2]), Vec3::new(target[0], target[1], target[2]), fov));
+    let size = (320u32, 240u32);
+    // South face: wall w0 runs (0,0) to (10,0), thickness 0.2, outer face at y = -0.1, height 2.4 m.
+    let corners = [[0.0, -0.1, 0.0], [10.0, -0.1, 0.0], [10.0, -0.1, 2.4], [0.0, -0.1, 2.4]];
+    for &p in &corners {
+        let proj = project_point(&camera, size, p).expect("south face corner should project");
+        assert!(
+            proj[0] >= 0.0 && proj[0] <= 320.0 && proj[1] >= 0.0 && proj[1] <= 240.0,
+            "south face corner {p:?} projects outside frame at {proj:?}"
+        );
+    }
+}
+
+#[test]
+fn phase19_demo_dusk_camera_fov_is_reasonable() {
+    let mut session = replay_demo();
+    let (_, _, fov) = dusk_pose(&mut session);
+    assert!(fov >= 30.0 && fov <= 90.0, "dusk fov {} is not in the reasonable range 30..90", fov);
+}
+
+#[test]
+fn phase19_demo_dusk_camera_is_last_used() {
+    let steps = load_demo_steps();
+    let mut last_use = None;
+    for (i, step) in steps.iter().enumerate() {
+        if step["cmd"] == "camera" && step["params"].get("use").is_some() {
+            last_use = Some((i, step["params"]["use"].as_str().expect("camera use name")));
+        }
+    }
+    assert_eq!(last_use, Some((steps.len() - 1, "dusk")), "the script should end by using the dusk camera");
+}
+
+#[test]
 fn phase19_demo_overview_camera_is_on_level_zero_with_correct_target() {
     let mut session = replay_demo();
     let inspect = session.execute("arch.inspect", &json!({ "cameras": true })).expect("arch.inspect should list cameras");
