@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-16 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 21 of 22: Schedules, elevations and sheets — 34 of 39 segments merged · 13 of 13 acceptance checks**
+**Phase 21 of 22: Schedules, elevations and sheets — 34 of 40 segments merged · 13 of 13 acceptance checks**
 
 10,816 workspace tests passing at the last merge · 1256 segments merged in all · 0 of 15 seats working
 
@@ -31,19 +31,19 @@ Updated 2026-11-16 09:00 UTC. This page and the card in the README are regenerat
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
-| 21 | Schedules, elevations and sheets | building | 13 / 13 | 97.7 h so far · expected done Nov 16 18:14–Nov 17 23:32 UTC |
+| 21 | Schedules, elevations and sheets | building | 13 / 13 | 97.9 h so far · expected done Nov 16 20:19–Nov 18 02:54 UTC |
 | 22 | Phase 22 | pending | — | — |
 
 ## Phase 21 segments
 
-34 merged, 2 replaced, 2 working, 1 queued, 1 merging, 1 gate
+34 merged, 3 replaced, 2 queued, 2 working, 1 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p21t-entry-landing-views` | The showcase's Entry landing gets its plan views and a sheet in the drawing set | working | mai-flash-esc |
 | `p21t-user-guide` | USER-GUIDE: dimensions that know the building, a phase-17 section, a runnable light-sky-cameras example, the showcase as it is | merging | claude-sonnet-b |
-| `p21t-wall-window-and-niche` | A wall with both a window and a niche keeps its whole face in renders and picks | working | darwin-ws3 |
+| `p21t-wall-window-and-niche` | A wall with both a window and a niche keeps its whole face in renders and picks | working | mai-flash-esc |
 | `upstream-sync-ed0fbce27` | merge upstream upstream/main up to ed0fbce27 (35 commits) | gate | claude-sonnet-c |
+| `p21t-showcase-house-c` | The showcase house is redrawn inside its walls and gains the phase-16 ceilings and foundation, the kitchen cabinets of its drawing set, and the phase-19 look cameras | working | bonsai-a |
 
 ## Recent merges
 
@@ -66,18 +66,18 @@ Updated 2026-11-16 09:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1375 |
-| bonsai-b | bonsai2-27b | agent | 1290 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1477 |
-| bonsai-ws2-b | bonsai2-27b | idle | 1404 |
+| bonsai-a | bonsai2-27b | agent | 1375 |
+| bonsai-b | bonsai2-27b | agent | 1291 |
+| bonsai-ws2-a | bonsai2-27b | agent | 1477 |
+| bonsai-ws2-b | bonsai2-27b | agent | 1404 |
 | claude-sonnet-a | sonnet | idle | 161 |
 | claude-sonnet-b | sonnet | idle | 165 |
 | claude-sonnet-c | sonnet | gate | 102 |
 | claude-sonnet-d | sonnet | idle | 98 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1285 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1287 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 127 |
 | mai-flash-b | mai-code-1.1-flash | idle | 77 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 172 |
-| tturbo-mac | tturbo-ultraheretic | agent | 988 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 669 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 173 |
+| tturbo-mac | tturbo-ultraheretic | agent | 989 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 670 |
