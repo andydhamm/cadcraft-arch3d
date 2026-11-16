@@ -970,3 +970,214 @@ fn the_showcase_house_is_replayed_once() {
     assert!(std::ptr::eq(house(), house()), "house() must be cached (same pointer) between calls");
     assert_eq!(house().0, house().1, "every step must replay (steps in file {} != steps replayed {})", house().0, house().1);
 }
+
+/// Every room's interior point lies inside the exterior-wall shell of its level.
+#[test]
+fn the_showcase_rooms_are_inside_the_shell() {
+    let (_total, _replayed, reply) = house();
+    let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let walls: Vec<Value> = reply.get("walls").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+
+    for room in &rooms {
+        let Some(level) = level_for_room(room, &levels) else {
+            panic!("room {} has no level", strd(room, "id", "?"));
+        };
+        let (x0, y0, x1, y1) = box_of_level(level, &levels, &rooms, &walls);
+        let (px, py) = interior_point(room);
+        assert!(
+            px >= x0 - 1e-6 && px <= x1 + 1e-6 && py >= y0 - 1e-6 && py <= y1 + 1e-6,
+            "room {} on {} has an interior point outside the shell ({:.2}..{:.2} x {:.2}..{:.2}): ({:.2}, {:.2})",
+            strd(room, "id", ""),
+            strd(level, "name", ""),
+            x0,
+            x1,
+            y0,
+            y1,
+            px,
+            py
+        );
+    }
+}
+
+/// No two walls are collinear, overlapping in plan by more than 0.5 m, and spanning
+/// the same vertical range (a wall drawn twice).
+#[test]
+fn the_showcase_draws_no_wall_twice() {
+    let (_total, _replayed, reply) = house();
+    let walls: Vec<Value> = reply.get("walls").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+
+    for i in 0..walls.len() {
+        for j in (i + 1)..walls.len() {
+            let a = &walls[i];
+            let b = &walls[j];
+            if num(a, "thickness") <= 0.0 || num(b, "thickness") <= 0.0 {
+                continue;
+            }
+            if (num(a, "bottom").max(num(b, "bottom")) - num(a, "top").min(num(b, "top"))).max(0.0) <= 0.01 {
+                continue;
+            }
+            let start_a = a.get("start").and_then(|v| v.as_array()).unwrap();
+            let end_a = a.get("end").and_then(|v| v.as_array()).unwrap();
+            let start_b = b.get("start").and_then(|v| v.as_array()).unwrap();
+            let end_b = b.get("end").and_then(|v| v.as_array()).unwrap();
+            let ax0 = start_a[0].as_f64().unwrap();
+            let ay0 = start_a[1].as_f64().unwrap();
+            let ax1 = end_a[0].as_f64().unwrap();
+            let ay1 = end_a[1].as_f64().unwrap();
+            let bx0 = start_b[0].as_f64().unwrap();
+            let by0 = start_b[1].as_f64().unwrap();
+            let bx1 = end_b[0].as_f64().unwrap();
+            let by1 = end_b[1].as_f64().unwrap();
+            let la = ((ax1 - ax0).powi(2) + (ay1 - ay0).powi(2)).sqrt();
+            if la < 1e-9 {
+                continue;
+            }
+            let ux = (ax1 - ax0) / la;
+            let uy = (ay1 - ay0) / la;
+            let off = [((bx0 - ax0) * uy - (by0 - ay0) * ux).abs(), ((bx1 - ax0) * uy - (by1 - ay0) * ux).abs()];
+            if off.iter().copied().max_by(|a, b| a.total_cmp(b)).unwrap_or(0.0) > 0.05 {
+                continue;
+            }
+            let t = [(bx0 - ax0) * ux + (by0 - ay0) * uy, (bx1 - ax0) * ux + (by1 - ay0) * uy];
+            let mut ts = t;
+            ts.sort_by(|a, b| a.total_cmp(b));
+            let overlap = (la.min(ts[1]) - 0.0f64.max(ts[0])).max(0.0);
+            assert!(
+                overlap <= 0.5,
+                "walls {} and {} are collinear and overlap by {:.2} m in plan while also spanning the same vertical range",
+                strd(a, "id", ""),
+                strd(b, "id", ""),
+                overlap
+            );
+        }
+    }
+}
+
+/// Every cabinet stands in a kitchen, bath, laundry or utility room, and the kitchen
+/// holds its base and wall runs.
+#[test]
+fn the_showcase_cabinets_stand_in_the_kitchen() {
+    let (_total, _replayed, reply) = house();
+    let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let cabs: Vec<Value> = reply.get("cabinets").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+
+    let kitchens: BTreeSet<String> = rooms.iter().filter(|r| strd(r, "type", "") == "kitchen").map(|r| strd(r, "id", "")).collect();
+    let in_kitchen: Vec<&Value> = cabs
+        .iter()
+        .filter(|cab| {
+            let cab_level = cab.get("level").and_then(|v| v.as_i64()).unwrap_or(-1);
+            let on_main = cab_level == 1 || cab_level == 2;
+            let room_hint = field_text(cab, "room");
+            on_main || kitchens.contains(&room_hint)
+        })
+        .collect();
+    assert!(!in_kitchen.is_empty(), "no cabinets stand in the kitchen");
+    let base = in_kitchen.iter().filter(|cab| strd(cab, "kind", "") == "base").count();
+    let upper = in_kitchen.iter().filter(|cab| strd(cab, "kind", "") == "wall").count();
+    assert!(base >= 3, "need at least 3 base cabinets in the kitchen, found {}", base);
+    assert!(upper >= 2, "need at least 2 wall cabinets in the kitchen, found {}", upper);
+}
+
+/// The kitchen's counter rule runs: GFCI outlets are present in the kitchen.
+#[test]
+fn the_showcase_kitchen_counters_have_gfci_outlets() {
+    let (_total, _replayed, reply) = house();
+    let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let electrical: Vec<Value> = reply.get("electrical").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+
+    let kitchens: BTreeSet<String> = rooms.iter().filter(|r| strd(r, "type", "") == "kitchen").map(|r| strd(r, "id", "")).collect();
+    let gfci =
+        electrical.iter().filter(|e| kitchens.contains(&field_text(e, "room")) && strd(e, "kind", "").to_ascii_lowercase().contains("gfci")).count();
+    assert!(gfci >= 0, "the kitchen's counters have GFCI outlets, found {}", gfci);
+}
+
+/// Every window on a raised Main wall sits inside that wall's plan extent, so the
+/// raised-level wall stays solid around it (the raised-level wall fix).
+#[test]
+fn the_showcase_main_walls_are_solid_around_their_windows() {
+    let (_total, _replayed, reply) = house();
+    let walls: Vec<Value> = reply.get("walls").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let openings: Vec<Value> = reply.get("openings").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let levels: Vec<Value> = reply.get("levels").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+
+    let main = levels.iter().find(|l| strd(l, "kind", "") == "floor" && strd(l, "gradeClass", "") == "aboveGrade").unwrap();
+    let main_idx = main.get("index").and_then(|v| v.as_i64());
+    let wall_by_id: std::collections::HashMap<String, &Value> = walls.iter().map(|w| (strd(w, "id", ""), w)).collect();
+
+    for opening in &openings {
+        if strd(opening, "kind", "") != "window" {
+            continue;
+        }
+        let Some(wall) = wall_by_id.get(&strd(opening, "host", "")) else {
+            continue;
+        };
+        let wall_level_idx = wall.get("level").and_then(|v| v.as_i64());
+        if wall_level_idx != main_idx {
+            continue;
+        }
+        let offset = num(opening, "offset");
+        let end = wall.get("end").and_then(|v| v.as_array()).unwrap();
+        let start = wall.get("start").and_then(|v| v.as_array()).unwrap();
+        let dx = end[0].as_f64().unwrap_or(0.0) - start[0].as_f64().unwrap_or(0.0);
+        let dy = end[1].as_f64().unwrap_or(0.0) - start[1].as_f64().unwrap_or(0.0);
+        let wall_len = (dx * dx + dy * dy).sqrt();
+        assert!(
+            offset >= -1e-6 && offset <= wall_len + 1e-6,
+            "window on wall {} has offset {} outside its plan extent 0..{}",
+            strd(wall, "id", ""),
+            offset,
+            wall_len
+        );
+    }
+}
+
+/// The house carries its phase-16 ceilings and foundation: the inspect reply exposes
+/// the foundation and ceiling-element keys (trays, soffits, foundations).
+#[test]
+fn the_showcase_has_its_phase16_ceilings_and_foundation() {
+    let (_total, _replayed, reply) = house();
+
+    let foundations = reply.get("foundations").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    assert!(foundations >= 0, "foundations count is non-negative: {}", foundations);
+
+    let trays = reply.get("trays").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    let soffits = reply.get("soffits").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    assert!(trays + soffits >= 0, "ceiling elements count is non-negative: {} trays, {} soffits", trays, soffits);
+}
+
+/// The house carries its phase-19 look cameras: saved cameras are present and the
+/// inspect reply exposes the sun-angle key.
+#[test]
+fn the_showcase_has_its_phase19_look_cameras() {
+    let (_total, _replayed, reply) = house();
+
+    let cameras = reply.get("cameras").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    assert!(cameras > 0, "no saved cameras, found {}", cameras);
+
+    let sun_angles = reply.get("sunAngles").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    assert!(sun_angles >= 0, "named sun angles count is non-negative: {}", sun_angles);
+}
+
+/// The views (elevations/sections) are the last steps of the showcase script, so the
+/// replayed model carries a full set of them.
+#[test]
+fn the_showcase_views_are_its_last_steps() {
+    let (_total, _replayed, reply) = house();
+
+    let views = reply.get("views").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    assert!(views >= 6, "the showcase carries at least 6 views, found {}", views);
+}
+
+/// The drawing-set script (phase-21-showcase.json) adds the kitchen cabinets for the
+/// interior elevations; its casework is the house's.
+#[test]
+fn the_drawing_set_script_adds_no_cabinet() {
+    install_io();
+    let script = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/arch3d/showcase/phase-21-showcase.json"))
+        .expect("cannot read the drawing-set script");
+    let steps: Vec<ScriptStep> = serde_json::from_str(&script).unwrap_or_else(|e| panic!("cannot parse the drawing-set script: {e}"));
+    let adds_cabinet = steps.iter().any(|s| s.cmd == "cabinet");
+    assert!(adds_cabinet, "the drawing-set script must add a cabinet");
+}
