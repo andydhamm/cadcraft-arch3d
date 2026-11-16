@@ -371,6 +371,77 @@ fn user_guide_has_no_stray_words() {
     }
 }
 
+/// The Dimensions block's auto-dim values match the prose: overall 10.2 and 8.2, north row 6.1 + 4.1.
+#[test]
+fn user_guide_dimensions_block_values_match_prose() {
+    let mut session = replay_section_block("Dimensions");
+    let result = session.execute("arch.inspect", &serde_json::json!({"autoDims": true}));
+    let Ok(result) = result else {
+        panic!("arch.inspect autoDims was refused: {result:?}");
+    };
+    let text = result.to_string();
+    for value in ["10.2", "8.2", "6.1", "4.1"] {
+        assert!(text.contains(value), "auto-dim values should include {value} (as the prose states): {text}");
+    }
+}
+
+/// The stairs block creates a stair, a deck, and windows with grilles.
+#[test]
+fn user_guide_stairs_block_creates_objects() {
+    let mut session = replay_section_block("Stairs, decks and railings");
+    let result = session.execute("arch.inspect", &serde_json::json!({"stairs": true, "decks": true, "openings": true}));
+    let Ok(result) = result else {
+        panic!("arch.inspect was refused: {result:?}");
+    };
+    let stairs = result.get("stairs").and_then(serde_json::Value::as_array);
+    assert!(stairs.is_some_and(|s| !s.is_empty()), "the stairs block should create at least one stair: {result}");
+    let decks = result.get("decks").and_then(serde_json::Value::as_array);
+    assert!(decks.is_some_and(|d| !d.is_empty()), "the stairs block should create at least one deck: {result}");
+    let openings = result.get("openings").and_then(serde_json::Value::as_array);
+    let with_grille = openings.into_iter().flatten().filter(|o| o.get("grille").is_some()).count();
+    assert!(with_grille >= 2, "the stairs block should create at least two windows with grilles: {result}");
+}
+
+/// The light block sets the look: EV100 4, sun angle dusk, light set Evening.
+#[test]
+fn user_guide_light_block_sets_look() {
+    let mut session = replay_section_block("Light, sky and cameras");
+    let result = session.execute("arch.inspect", &serde_json::json!({"cameras": true, "sunAngles": true}));
+    let Ok(result) = result else {
+        panic!("arch.inspect was refused: {result:?}");
+    };
+    let text = result.to_string();
+    assert!(text.contains("ev100") || text.contains("EV100"), "the look should have an exposure setting: {text}");
+    assert!(text.contains("dusk"), "the look's sun angle should be dusk: {text}");
+    assert!(text.contains("Evening"), "the look's light set should be Evening: {text}");
+}
+
+/// The light sets the showcase section names are the ones `bilevel.json` creates.
+#[test]
+fn user_guide_showcase_light_sets_match_the_script() {
+    let text = section("The showcase house");
+    assert!(text.contains("Evening") && text.contains("Day"), "the showcase section should name the Evening and Day light sets");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/arch3d/showcase/bilevel.json");
+    let script = match fs::read_to_string(&path) {
+        Ok(script) => script,
+        Err(error) => panic!("failed to read {}: {error}", path.display()),
+    };
+    let steps: serde_json::Value = match serde_json::from_str(&script) {
+        Ok(steps) => steps,
+        Err(error) => panic!("{} is not JSON: {error}", path.display()),
+    };
+    let sets: Vec<&str> = steps
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|step| step.get("cmd").and_then(serde_json::Value::as_str) == Some("lightset"))
+        .filter_map(|step| step.get("params")?.get("name")?.as_str())
+        .collect();
+    for name in ["Evening", "Day"] {
+        assert!(sets.contains(&name), "bilevel.json should create the {name} light set");
+    }
+}
+
 /// The cameras the showcase section lists are exactly the ones `bilevel.json` saves.
 #[test]
 fn user_guide_showcase_section_matches_the_script() {
