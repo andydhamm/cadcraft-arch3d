@@ -699,9 +699,8 @@ mod tests {
         let view = arch.views.first().cloned().unwrap_or_default();
         assert!(!view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
         let empty: Vec<Value> = Vec::new();
-        let lines = r
-            .as_ref()
-            .map_or(Value::Null, |v| v.clone())
+        let binding = r.as_ref().map_or(Value::Null, |v| v.clone());
+        let lines = binding
             .get("views")
             .and_then(|v| v.as_array())
             .and_then(|a| a.first())
