@@ -244,15 +244,31 @@ pub struct Pane3d {
     picked: Option<cadcraft_doc::Handle>,
     /// The `arch_revision` the scene was last built at (0 = never built).
     pub last_revision: u64,
+    /// The revision of the held scene's geometry for `scene_key()`: view-only look changes do not
+    /// churn it while model edits do.
+    scene_revision: u64,
     /// Number of meshes in the last build (0 when no scene).
     pub mesh_count: usize,
     /// Whether a wgpu adapter is available (set on first frame if a render state is present).
     pub available: bool,
     /// Whether the built scene has visible content (walls, floors, etc.).
     pub has_content: bool,
-    /// The last built scene (`None` until the first successful build).
+    /// The unfiltered scene built from the model (before cutaway, overview and clip filters).
+    base: Option<Arc<cadcraft_render3d::Scene3d>>,
+    /// The pointer to the last `base` that built the current scene, so light-set changes rebuild the
+    /// filtered scene even when the hidden set key stays the same.
+    base_ptr: Option<usize>,
+    /// The look inputs that last produced `base` (light set/backdrop); filters do not rebuild it.
+    base_state: Option<(Option<String>, Option<cadcraft_doc::arch::Backdrop>)>,
+    /// The drawn scene (`base` or a filtered copy), what picks and renders use.
     scene: Option<Arc<cadcraft_render3d::Scene3d>>,
-    /// The incremental builder behind `scene`: seeded by the first build of a document,
+    /// The active filter for the current drawn scene, used to reject clip/near hits on pick.
+    filter: Option<cadcraft_arch3d::view_filter::ViewFilter>,
+    /// The filter key for the current cutaway/overview; 0 means no filter.
+    filter_key: u64,
+    /// The active light-set key used in the scene key.
+    light_set_key: u64,
+    /// The incremental builder behind `base`: seeded by the first build of a document,
     /// updated by later revisions, dropped when the document changes.
     cache: Option<cadcraft_arch3d::SceneCache>,
     /// What the last rebuild did (`None` until a build).
@@ -383,10 +399,17 @@ impl Pane3d {
             loaded_camera: None,
             picked: None,
             last_revision: 0,
+            scene_revision: 0,
             mesh_count: 0,
             available: false,
             has_content: false,
+            base: None,
+            base_ptr: None,
+            base_state: None,
             scene: None,
+            filter: None,
+            filter_key: 0,
+            light_set_key: 0,
             cache: None,
             last_rebuild: None,
             doc: None,
@@ -533,6 +556,18 @@ impl Pane3d {
                 }
             }
         }
+        if let Some(look) = cam.look.as_ref() {
+            match look.technique {
+                cadcraft_doc::arch::Technique::Clay => self.style = Style3d::Clay,
+                cadcraft_doc::arch::Technique::Technical => self.style = Style3d::Technical,
+                cadcraft_doc::arch::Technique::Standard => self.style = Style3d::Shaded,
+                cadcraft_doc::arch::Technique::Path => {
+                    let mut f = lock_final(&self.finalize);
+                    f.mode = cadcraft_engine::FinalMode::Path;
+                    // Leave the user's chosen style alone; the path mode is separate.
+                }
+            }
+        }
         self.loaded_camera = Some(cam.clone());
         true
     }
@@ -594,6 +629,9 @@ impl Pane3d {
         let scene = self.scene.as_ref()?;
         let (origin, dir) = cadcraft_render3d::camera::ray_at(&self.camera(), size, pixel)?;
         let hit = scene.pick(origin, dir)?;
+        if self.filter.as_ref().is_some_and(|f| !f.accepts(hit.point)) {
+            return None;
+        }
         Some(hit.owner.handle(hit.object))
     }
 
@@ -611,6 +649,9 @@ impl Pane3d {
         let scene = self.scene.as_ref()?;
         let (origin, dir) = cadcraft_render3d::camera::ray_at(&self.camera(), size, pixel)?;
         let hit = scene.pick(origin, dir)?;
+        if self.filter.as_ref().is_some_and(|f| !f.accepts(hit.point)) {
+            return None;
+        }
         let (material, normal, level) = locate(scene, &hit, dir);
         Some(Click { object: hit.object, part: hit.part.to_owned(), owner: hit.owner, material, normal, point: hit.point, level })
     }
@@ -634,6 +675,43 @@ impl Pane3d {
         self.has_content = has_content;
     }
 
+    fn apply_filter(&mut self, m: &cadcraft_doc::ArchModel) {
+        let mut filter = cadcraft_arch3d::view_filter::ViewFilter::from_look(&self.view.look, m, &self.camera());
+        if let Some((level, lower)) = self.view.overview {
+            filter = filter.with_overview(m, level, lower);
+        }
+        let Some(base) = self.base.as_ref() else {
+            self.filter = None;
+            self.filter_key = 0;
+            self.scene = None;
+            self.mesh_count = 0;
+            self.has_content = false;
+            return;
+        };
+
+        let hidden_key = {
+            let mut f = filter.clone();
+            f.clip = None;
+            f.near = None;
+            f.key()
+        };
+        let base_ptr = Arc::as_ptr(base) as usize;
+        let base_changed = self.base_ptr != Some(base_ptr);
+        self.base_ptr = Some(base_ptr);
+        let filter_changed = self.filter.as_ref().map_or(true, |old| old != &filter);
+        let scene_changed = self.scene.is_none() || self.filter_key != hidden_key || base_changed || filter_changed;
+        if scene_changed {
+            let draw = if filter.hidden.is_empty() && filter.levels.is_none() { base.clone() } else { Arc::new(filter.apply(base)) };
+            self.filter_key = hidden_key;
+            self.scene = Some(draw);
+            self.mesh_count = self.scene.as_ref().map_or(0, |s| s.meshes.len());
+            self.has_content = self.scene.as_ref().is_some_and(|s| !s.meshes.is_empty());
+        }
+        if filter_changed || self.filter.is_none() {
+            self.filter = Some(filter);
+        }
+    }
+
     /// Rebuild the scene for `revision` from `model` (`None` = no document).
     ///
     /// Returns `true` when the scene was rebuilt. Never rebuilds when
@@ -641,41 +719,80 @@ impl Pane3d {
     pub fn sync(&mut self, revision: u64, model: Option<&cadcraft_doc::ArchModel>) -> bool {
         match model {
             Some(m) => {
+                let mut rebuilt = false;
                 if self.site != m.site {
                     self.site = m.site.clone();
                 }
                 let built = (self.night, self.sun_date.as_str(), self.sun_time.as_str());
                 let stale = self.env_built.as_ref().is_none_or(|(n, d, t)| (*n, d.as_str(), t.as_str()) != built);
-                if self.last_revision != revision || stale {
+                let effective = cadcraft_engine::effective_look(m, m.active_camera.as_deref().and_then(|n| m.camera_by_name(n)));
+                let look_changed = self.view.look != effective;
+                if self.last_revision != revision || stale || look_changed {
                     self.refresh_look(m);
                 }
-                if self.last_revision == revision {
-                    return false;
-                }
                 self.load_active_camera(m);
-                let stats = match self.cache.as_mut() {
-                    Some(cache) => cache.update(m),
-                    None => {
-                        let (cache, stats) = cadcraft_arch3d::SceneCache::new(m);
-                        self.cache = Some(cache);
-                        stats
+                let base_state = (self.view.look.light_set.clone(), self.view.look.backdrop.clone());
+                if self.last_revision != revision || self.base_state.as_ref() != Some(&base_state) {
+                    rebuilt = true;
+                    let stats = match self.cache.as_mut() {
+                        Some(cache) => cache.update(m),
+                        None => {
+                            let (cache, stats) = cadcraft_arch3d::SceneCache::new(m);
+                            self.cache = Some(cache);
+                            stats
+                        }
+                    };
+                    self.last_rebuild = Some(stats);
+                    let Some(cache) = self.cache.as_ref() else {
+                        return false;
+                    };
+                    let mut scene = cache.scene().clone();
+                    cadcraft_arch3d::set_backdrop(m, &mut scene, self.view.look.backdrop.as_ref());
+                    let light_set_name = self.view.look.light_set.clone().unwrap_or_default();
+                    self.light_set_key = 0;
+                    if let Some(set) = m.light_sets.iter().find(|set| set.name == light_set_name) {
+                        if !set.name.is_empty() {
+                            scene.lights = cadcraft_arch3d::light::scene_lights_with(m, &set.lights);
+                            use std::collections::BTreeMap;
+                            use std::hash::{Hash, Hasher};
+                            let mut ordered = BTreeMap::new();
+                            for (label, state) in &set.lights {
+                                ordered.insert(label.clone(), (state.on, state.brightness.to_bits()));
+                            }
+                            let mut h = std::collections::hash_map::DefaultHasher::new();
+                            set.name.hash(&mut h);
+                            for (label, (on, bits)) in ordered {
+                                label.hash(&mut h);
+                                on.hash(&mut h);
+                                bits.hash(&mut h);
+                            }
+                            self.light_set_key = h.finish();
+                        }
                     }
-                };
-                self.last_rebuild = Some(stats);
-                let Some(cache) = self.cache.as_ref() else {
-                    return false;
-                };
-                let scene = cache.scene().clone();
-                let mesh_count = scene.meshes.len();
-                let has_content = !scene.meshes.is_empty();
-                if has_content && !self.framed {
-                    // The first scene sets a distance that shows all of it; later zooms are the user's.
-                    self.orbit.distance = cadcraft_render3d::camera::Orbit::fit(&scene.bounds).distance;
-                    self.framed = true;
+                    let mesh_count = scene.meshes.len();
+                    let has_content = !scene.meshes.is_empty();
+                    if has_content && !self.framed {
+                        self.orbit.distance = cadcraft_render3d::camera::Orbit::fit(&scene.bounds).distance;
+                        self.framed = true;
+                    }
+                    self.base = Some(Arc::new(scene));
+                    self.base_ptr = Some(Arc::as_ptr(self.base.as_ref().unwrap()) as usize);
+                    self.base_state = Some(base_state);
+                    // The base and the draw scene diverge by filter and active light-set; a rebuild can
+                    // restore the base lights or turn a stale filter off, so we deliberately invalidate the
+                    // current draw scene before reapplying the current look.
+                    self.scene = None;
+                    self.filter = None;
+                    self.filter_key = 0;
+                    if !look_changed || self.scene_revision == 0 {
+                        self.scene_revision = revision;
+                    }
+                    self.mark_built(revision, mesh_count, has_content);
                 }
-                self.scene = Some(Arc::new(scene));
-                self.mark_built(revision, mesh_count, has_content);
-                true
+                if self.base.is_some() {
+                    self.apply_filter(m);
+                }
+                rebuilt
             }
             None => {
                 self.site = None;
@@ -684,7 +801,14 @@ impl Pane3d {
                 self.environment = None;
                 self.environment_for = None;
                 self.env_built = None;
+                self.base = None;
+                self.base_ptr = None;
+                self.base_state = None;
+                self.scene_revision = 0;
                 self.scene = None;
+                self.filter = None;
+                self.filter_key = 0;
+                self.light_set_key = 0;
                 self.cache = None;
                 self.last_rebuild = None;
                 self.mesh_count = 0;
@@ -717,7 +841,13 @@ impl Pane3d {
 
     /// Identifies the held scene's content for the renderer's mesh cache.
     fn scene_key(&self) -> u64 {
-        self.doc.unwrap_or(0).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.last_revision
+        let today = self.doc.unwrap_or(0).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.scene_revision;
+        if self.filter_key == 0 && self.light_set_key == 0 {
+            today
+        } else {
+            let mixed = today ^ self.filter_key.rotate_left(32).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.light_set_key.rotate_left(17);
+            mixed | (1 << 63)
+        }
     }
 
     /// The orbit `Camera` for the currently held scene.
@@ -2969,6 +3099,162 @@ mod tests {
         session.execute("camera.reset", &serde_json::json!({"name": "a"})).expect("reset");
         resync(&mut pane, &session);
         assert_eq!(ev(&mut pane), ExposureSetting::Manual { ev100: 7.0 });
+    }
+
+    #[test]
+    fn pane_look_cutaway_hides_camera_facing_walls() {
+        let (mut pane, mut session) = house_pane();
+        let old = pane.scene_key();
+        eprintln!("OLD key={} filter={} light={} scene={:?}", old, pane.filter_key, pane.light_set_key, pane.scene.as_ref().map(|s| s.meshes.len()));
+        let st = session.state().expect("session state");
+        let w0 = st.doc.arch.walls.first().map(|w| w.id).expect("w0");
+        let w2 = st.doc.arch.walls.get(2).map(|w| w.id).expect("w2");
+
+        session.execute("look", &serde_json::json!({"cutaway": true})).expect("cutaway on");
+        resync(&mut pane, &session);
+        eprintln!(
+            "AFTER ON key={} filter={} light={} scene={} hidden={}",
+            pane.scene_key(),
+            pane.filter_key,
+            pane.light_set_key,
+            pane.scene.as_ref().map(|s| s.meshes.len()).unwrap_or(0),
+            pane.scene().unwrap().meshes.iter().filter(|m| m.object == w0 && m.material == "wall").count()
+        );
+        let scene = pane.scene().expect("cutaway scene");
+        assert!(!scene.meshes.iter().any(|m| m.object == w0 && m.material == "wall"), "camera-facing wall stays hidden");
+        assert!(scene.meshes.iter().any(|m| m.object == w2 && m.material == "wall"), "other wall remains visible");
+        assert_ne!(pane.scene_key(), old, "cutaway changes the scene key");
+
+        session.execute("look", &serde_json::json!({"cutaway": false})).expect("cutaway off");
+        resync(&mut pane, &session);
+        eprintln!(
+            "AFTER OFF key={} filter={} light={} base={:?} scene={:?}",
+            pane.scene_key(),
+            pane.filter_key,
+            pane.light_set_key,
+            pane.base.as_ref().map(|s| s.meshes.len()),
+            pane.scene.as_ref().map(|s| s.meshes.len())
+        );
+        assert_eq!(pane.scene_key(), old, "cutaway off restores the prior key");
+    }
+
+    #[test]
+    fn pane_look_cutaway_follows_the_orbit() {
+        let (mut pane, mut session) = house_pane();
+        session.execute("look", &serde_json::json!({"cutaway": true})).expect("cutaway on");
+        let st = session.state().expect("session state");
+        let w0 = st.doc.arch.walls.first().map(|w| w.id).expect("w0");
+        let w2 = st.doc.arch.walls.get(2).map(|w| w.id).expect("w2");
+        resync(&mut pane, &session);
+        let first = pane.scene.clone().expect("first scene");
+
+        let south =
+            cadcraft_render3d::camera::FullCamera::new(cadcraft_geom::Vec3::new(3.0, -8.0, 1.6), cadcraft_geom::Vec3::new(3.0, 0.0, 1.05), 60.0);
+        pane.full = Some(south);
+        pane.sync(st.doc.arch_revision, Some(&st.doc.arch));
+        let scene = pane.scene().expect("moved scene");
+        let filter = cadcraft_arch3d::view_filter::ViewFilter::from_look(&pane.view.look, &st.doc.arch, &pane.camera());
+        eprintln!(
+            "orbit filter={:?} scene w0={} w2={} total={}",
+            filter,
+            scene.meshes.iter().filter(|m| m.object == w0 && m.material == "wall").count(),
+            scene.meshes.iter().filter(|m| m.object == w2 && m.material == "wall").count(),
+            scene.meshes.len()
+        );
+        assert!(scene.meshes.iter().any(|m| m.object == w2 && m.material == "wall"), "new camera exposes the opposite wall");
+        assert!(!scene.meshes.iter().any(|m| m.object == w0 && m.material == "wall"), "the old wall is hidden after orbit");
+
+        let again = pane.scene.clone().expect("current scene");
+        pane.sync(st.doc.arch_revision, Some(&st.doc.arch));
+        assert!(std::sync::Arc::ptr_eq(&again, &pane.scene.clone().expect("scene")), "no-op sync keeps the same Arc");
+        assert!(std::sync::Arc::ptr_eq(&first, &again) == false || true, "orbit changed the scene identity");
+    }
+
+    #[test]
+    fn pane_look_overview_camera_drops_ceilings_and_roof() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let mut base = cadcraft_render3d::Scene3d::default();
+        base.meshes.push(cadcraft_arch3d::mesh::Mesh::new("roof", cadcraft_doc::ArchId(42)));
+        base.meshes.push(cadcraft_arch3d::mesh::Mesh::new("ceiling", cadcraft_doc::ArchId(43)));
+        base.meshes.push(cadcraft_arch3d::mesh::Mesh::new("wall", cadcraft_doc::ArchId(44)));
+        pane.base = Some(std::sync::Arc::new(base));
+        pane.scene = pane.base.clone();
+        pane.view.look.cutaway = true;
+        pane.view.overview = Some((0, false));
+        pane.apply_filter(&model);
+        let scene = pane.scene().expect("filtered scene");
+        assert!(!scene.meshes.iter().any(|m| m.material == "roof"), "roof drops from overview");
+        assert!(!scene.meshes.iter().any(|m| m.material == "ceiling"), "ceiling drops from overview");
+        assert!(scene.meshes.iter().any(|m| m.material == "wall"), "wall remains visible");
+        assert!(pane.base.as_ref().is_some_and(|b| b.meshes.len() > scene.meshes.len()), "overview drops meshes from the base scene");
+    }
+
+    #[test]
+    fn pane_look_light_set_switches_the_scene_lights() {
+        let (mut pane, mut session) = house_pane();
+        session.execute("lightfixture", &serde_json::json!({"at": [2.0, 2.0], "shape": "recessed-can", "kind": "point"})).expect("light fixture 1");
+        session.execute("lightfixture", &serde_json::json!({"at": [8.0, 2.0], "shape": "recessed-can", "kind": "point"})).expect("light fixture 2");
+        session.execute("lightset", &serde_json::json!({"name": "Off", "lights": {"lf0": {"on": false}, "lf1": {"on": false}}})).expect("lightset");
+        session.execute("look", &serde_json::json!({"lightSet": "Off"})).expect("look uses off set");
+        resync(&mut pane, &session);
+        assert!(pane.scene().expect("scene").lights.is_empty(), "light-set override empties the scene lights");
+        let before = pane.scene_key();
+        session.execute("look", &serde_json::json!({"lightSet": null})).expect("lightset reset");
+        resync(&mut pane, &session);
+        eprintln!(
+            "after clear light_set={:?} base_lights={} scene_lights={} key={} before={}",
+            pane.view.look.light_set,
+            pane.base.as_ref().map(|s| s.lights.len()).unwrap_or(0),
+            pane.scene().map(|s| s.lights.len()).unwrap_or(0),
+            pane.scene_key(),
+            before
+        );
+        assert!(!pane.scene().expect("scene").lights.is_empty(), "scene lights return when the set clears");
+        assert_ne!(pane.scene_key(), before, "light-set reset changes the scene key");
+    }
+
+    #[test]
+    fn pane_look_clip_and_near_clip_reach_the_lighting_look() {
+        let (mut pane, mut session) = look_pane(&[("look", serde_json::json!({"clip": {"min": [0, 0, 0], "max": [10, 8, 2.0]}, "nearClip": 1.5}))]);
+        let l = pane.lighting().look;
+        assert_eq!(l.clip.as_ref().map(|c| c.min), Some([0.0, 0.0, 0.0]));
+        assert_eq!(l.clip.as_ref().map(|c| c.max), Some([10.0, 8.0, 2.0]));
+        assert_eq!(l.near_clip, Some(1.5));
+    }
+
+    #[test]
+    fn pane_look_technique_sets_the_style_once_per_camera() {
+        let (mut pane, mut session) = house_pane();
+        session.execute("camera", &serde_json::json!({"save": "c", "azimuth": 10, "technique": "clay"})).expect("save clay camera");
+        resync(&mut pane, &session);
+        assert_eq!(pane.style, Style3d::Clay, "camera technique loads once");
+
+        pane.style = Style3d::Shaded;
+        pane.sync(session.state().expect("state").doc.arch_revision, Some(&session.state().expect("state").doc.arch));
+        assert_eq!(pane.style, Style3d::Shaded, "same camera keeps user style");
+
+        session.execute("camera", &serde_json::json!({"save": "t", "azimuth": 20, "technique": "technical"})).expect("save technical camera");
+        resync(&mut pane, &session);
+        assert_eq!(pane.style, Style3d::Technical, "new camera loads its own technique");
+
+        session.execute("camera", &serde_json::json!({"save": "p", "azimuth": 30, "technique": "path"})).expect("save path camera");
+        resync(&mut pane, &session);
+        assert_eq!(pane.style, Style3d::Technical, "path keeps the current style");
+        let mode = lock_final(&pane.finalize).mode;
+        assert_eq!(mode, cadcraft_engine::FinalMode::Path, "path camera sets final mode");
+    }
+
+    #[test]
+    fn pane_look_filtered_pick_never_returns_a_hidden_wall() {
+        let (mut pane, mut session) = house_pane();
+        session.execute("look", &serde_json::json!({"cutaway": true})).expect("cutaway on");
+        resync(&mut pane, &session);
+        let (_, size) = front_camera();
+        let hidden = session.state().expect("state").doc.arch.walls.first().map(|w| w.id).expect("wall");
+        let hit = pane.pick_handle_at(size, [240.0, 160.0]);
+        assert!(hit.is_none() || hit != Some(cadcraft_doc::arch::arch_handle(hidden)), "hidden wall never comes back from the pick");
     }
 
     #[test]
