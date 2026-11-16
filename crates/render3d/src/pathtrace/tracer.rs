@@ -1289,7 +1289,7 @@ mod tests {
         let hit = vec![true; 5];
         let got = PathTracer::metered_scale(&lum, &hit, true, false, false, 0.01);
         // Four pixels treated as 0.0 (non-finite or negative), one as 1.0
-        let lavg = ((4.0 * (1e-4).ln() + (1e-4 + 1.0).ln()) / 5.0).exp() as f32;
+        let lavg = ((4.0 * (1e-4_f64).ln() + (1e-4_f64 + 1.0).ln()) / 5.0).exp() as f32;
         let want = crate::exposure::auto_scale(Some(lavg), true, false);
         assert!((got - want).abs() < 1e-6, "non-finite treated as zero: {got} vs {want}");
     }
@@ -1306,7 +1306,7 @@ mod tests {
         let hit = vec![true, false, true];
         let got = PathTracer::metered_scale(&lum, &hit, true, false, false, 0.01);
         // Only indices 0 and 2 are hit
-        let lavg = ((1e-4 + 1.0).ln() + (1e-4 + 3.0).ln()) / 2.0;
+        let lavg = ((1e-4_f64 + 1.0).ln() + (1e-4_f64 + 3.0).ln()) / 2.0;
         let lavg = lavg.exp() as f32;
         let want = crate::exposure::auto_scale(Some(lavg), true, false);
         assert!((got - want).abs() < 1e-6, "mixed hits: {got} vs {want}");
