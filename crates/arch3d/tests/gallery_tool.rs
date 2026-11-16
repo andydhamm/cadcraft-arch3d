@@ -52,6 +52,26 @@ fn test_slug_and_names_are_stable() {
 }
 
 #[test]
+fn test_plan_filters_invalid_views() {
+    run_case("test_plan_filters_invalid_views");
+}
+
+#[test]
+fn test_plan_filters_invalid_sheets() {
+    run_case("test_plan_filters_invalid_sheets");
+}
+
+#[test]
+fn test_plan_duplicate_view_names() {
+    run_case("test_plan_duplicate_view_names");
+}
+
+#[test]
+fn test_plan_mixed_level_kinds() {
+    run_case("test_plan_mixed_level_kinds");
+}
+
+#[test]
 fn test_readme_gallery_matches_the_plan() {
     run_case("test_readme_gallery_matches_the_plan");
 }

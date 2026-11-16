@@ -205,6 +205,61 @@ class RenderAll(unittest.TestCase):
         a = ra.parse_args(['--out', 'x', '--full', '--no-set', '--no-exports'])
         self.assertTrue(a.full and a.no_set and a.no_exports)
 
+    def test_plan_filters_invalid_views(self):
+        views = [
+            {'name': 'Valid', 'id': 'v1', 'kind': 'interior'},
+            {'name': 'No ID', 'kind': 'interior'},
+            {'id': 'v2', 'kind': 'interior'},
+            {'name': 123, 'id': 'v3', 'kind': 'interior'},
+            None,
+            'not a dict',
+        ]
+        rows = ra.plan([], views, [], True)
+        interior_rows = [r for r in rows if r[1] == 'interior']
+        self.assertEqual(len(interior_rows), 1)
+        self.assertEqual(interior_rows[0][2], 'Valid')
+
+    def test_plan_filters_invalid_sheets(self):
+        sheets = [
+            {'number': 'A-101', 'layout': 'Sheet A-101'},
+            {'number': 'A-102'},
+            {'layout': 'Sheet A-103'},
+            {'number': 123, 'layout': 'Sheet 123'},
+            None,
+            'not a dict',
+        ]
+        rows = ra.plan([], [], sheets, True)
+        sheet_rows = [r for r in rows if r[1] == 'sheet']
+        self.assertEqual(len(sheet_rows), 1)
+        self.assertEqual(sheet_rows[0][0], 'sheet-a-101.png')
+
+    def test_plan_duplicate_view_names(self):
+        views = [
+            {'name': 'Main', 'id': 'v1', 'kind': 'interior'},
+            {'name': 'Main', 'id': 'v2', 'kind': 'interior'},
+        ]
+        rows = ra.plan([], views, [], True)
+        interior_rows = [r for r in rows if r[1] == 'interior']
+        self.assertEqual(len(interior_rows), 2)
+        self.assertNotEqual(interior_rows[0][0], interior_rows[1][0])
+        self.assertEqual(interior_rows[0][0], 'interior-main.png')
+        self.assertEqual(interior_rows[1][0], 'interior-main-2.png')
+
+    def test_plan_mixed_level_kinds(self):
+        levels = [
+            {'name': 'Lower', 'kind': 'floor'},
+            {'name': 'Main', 'kind': 'floor'},
+            {'name': 'Entry', 'kind': 'landing'},
+            {'name': 'Roof', 'kind': 'roof'},
+        ]
+        rows = ra.plan(levels, [], [], True)
+        plan_rows = [r for r in rows if r[1] == 'plan']
+        self.assertEqual(len(plan_rows), 4)
+        planview_rows = [r for r in rows if r[1] == 'planview']
+        self.assertEqual(len(planview_rows), 6)
+        for r in planview_rows:
+            self.assertNotEqual(r[2], 'Roof Floor Plan')
+
     def test_readme_gallery_matches_the_plan(self):
         with open(os.path.join(SHOWCASE, 'phase-21-showcase.json'), encoding='utf-8') as f:
             script = json.load(f)
