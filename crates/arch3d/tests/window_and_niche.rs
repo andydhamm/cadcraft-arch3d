@@ -185,3 +185,130 @@ fn wall_with_only_a_window_is_unchanged() {
 /// Triangle counts of the single-opening walls, as built before the two-hole fix.
 const NICHE_ONLY_TRIANGLES: usize = 56;
 const WINDOW_ONLY_TRIANGLES: usize = 32;
+
+/// A door: offset 2 along the wall (x = 24), 0.9 x 2.1, sill 0.
+fn door(wall: ArchId) -> Opening {
+    Opening::new(wall, 2.0, 0.9, 2.1, OpeningKind::Door)
+}
+
+/// Whether (x, z) is in or within 0.15 m of the door's rough opening (x 23.55..24.45, z 0..2.1).
+fn near_door(x: f64, z: f64) -> bool {
+    (23.4..=24.6).contains(&x) && (0.0..=2.25).contains(&z)
+}
+
+/// Whether (x, z) is in or within 0.15 m of the niche's rough opening (x 24.9..25.5, z 1.0..1.9).
+fn near_niche(x: f64, z: f64) -> bool {
+    (24.75..=25.65).contains(&x) && (0.85..=2.05).contains(&z)
+}
+
+#[test]
+fn wall_with_three_openings_near_one_corner_has_no_gaps() {
+    let (mut model, north) = house();
+    model.push_opening(window(north));
+    model.push_opening(niche(north));
+    model.push_opening(door(north));
+    let scene = Scene3d::build(&model);
+    // Check the outer face for gaps, excluding all three openings.
+    let gaps = face_grid()
+        .into_iter()
+        .filter(|&(x, z)| !near_window(x, z) && !near_niche(x, z) && !near_door(x, z))
+        .filter(|&(x, z)| !first_hit_y(&scene, north, x, z, true).is_some_and(|y| (y - OUTER_Y).abs() < 1e-3))
+        .collect::<Vec<_>>();
+    assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
+    // Check the inner face too, excluding the niche (the window and door are through-holes).
+    for (x, z) in face_grid().into_iter().filter(|&(x, z)| !near_window(x, z) && !near_niche(x, z)) {
+        let y = first_hit_y(&scene, north, x, z, false);
+        assert!(y.is_some_and(|y| (y - INNER_Y).abs() < 1e-3), "inner face at ({x}, {z}): {y:?}");
+    }
+}
+
+#[test]
+fn wall_with_window_and_niche_at_different_heights_has_no_gaps() {
+    let (mut model, north) = house();
+    let mut win = window(north);
+    win.sill = 1.5;
+    let mut ni = niche(north);
+    ni.sill = 0.5;
+    model.push_opening(win);
+    model.push_opening(ni);
+    let scene = Scene3d::build(&model);
+    // The window is now at z 1.5..2.7, the niche at z 0.5..1.4.
+    let near_high_window = |x: f64, z: f64| (20.25..=21.75).contains(&x) && (1.35..=2.85).contains(&z);
+    let near_low_niche = |x: f64, z: f64| (24.75..=25.65).contains(&x) && (0.35..=1.55).contains(&z);
+    let gaps = face_grid()
+        .into_iter()
+        .filter(|&(x, z)| !near_high_window(x, z) && !near_low_niche(x, z))
+        .filter(|&(x, z)| !first_hit_y(&scene, north, x, z, true).is_some_and(|y| (y - OUTER_Y).abs() < 1e-3))
+        .collect::<Vec<_>>();
+    assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
+}
+
+#[test]
+fn wall_with_openings_near_both_corners_has_no_gaps() {
+    let (mut model, north) = house();
+    // Window and niche near the right corner (offsets 5 and 0.8).
+    model.push_opening(window(north));
+    model.push_opening(niche(north));
+    // Window and niche near the left corner (offsets 21 and 25.2).
+    let mut win2 = window(north);
+    win2.offset = 21.0;
+    let mut ni2 = niche(north);
+    ni2.offset = 25.2;
+    model.push_opening(win2);
+    model.push_opening(ni2);
+    let scene = Scene3d::build(&model);
+    let near_left_window = |x: f64, z: f64| (4.25..=5.75).contains(&x) && (0.85..=2.35).contains(&z);
+    let near_left_niche = |x: f64, z: f64| (0.35..=1.25).contains(&x) && (0.85..=2.05).contains(&z);
+    let gaps = face_grid()
+        .into_iter()
+        .filter(|&(x, z)| !near_window(x, z) && !near_niche(x, z) && !near_left_window(x, z) && !near_left_niche(x, z))
+        .filter(|&(x, z)| !first_hit_y(&scene, north, x, z, true).is_some_and(|y| (y - OUTER_Y).abs() < 1e-3))
+        .collect::<Vec<_>>();
+    assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
+}
+
+#[test]
+fn narrow_wall_with_window_and_niche_has_no_gaps() {
+    // A 6 x 4 house: the north wall is only 6 m long.
+    let mut model = ArchModel::default();
+    model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+    let pts = [(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0), (0.0, 0.0)];
+    let mut ids = Vec::new();
+    for pair in pts.windows(2) {
+        ids.push(model.push_wall(Wall {
+            start: Vec2::new(pair[0].0, pair[0].1),
+            end: Vec2::new(pair[1].0, pair[1].1),
+            thickness: 0.2,
+            height: 2.7,
+            exterior: true,
+            ..Default::default()
+        }));
+    }
+    let north = ids.get(2).copied().unwrap_or(ArchId(3));
+    // Window at offset 1 (x = 5), niche at offset 0.5 (x = 5.5).
+    let mut win = Opening::new(north, 1.0, 1.2, 1.2, OpeningKind::Window);
+    win.sill = 1.0;
+    let mut ni = Opening::new(north, 0.5, 0.6, 0.9, OpeningKind::Niche);
+    ni.sill = 1.0;
+    ni.depth = 0.1;
+    ni.face = Some(Side::Left);
+    model.push_opening(win);
+    model.push_opening(ni);
+    let scene = Scene3d::build(&model);
+    const OUTER_Y: f64 = 4.1;
+    const INNER_Y: f64 = 3.9;
+    let near_win = |x: f64, z: f64| (4.25..=5.75).contains(&x) && (0.85..=2.35).contains(&z);
+    let near_ni = |x: f64, z: f64| (5.05..=5.95).contains(&x) && (0.85..=2.05).contains(&z);
+    let mut grid = Vec::new();
+    for i in 0..11 {
+        for j in 0..11 {
+            grid.push((0.1 + 0.5 * f64::from(i), 0.1 + 0.25 * f64::from(j)));
+        }
+    }
+    let gaps = grid
+        .into_iter()
+        .filter(|&(x, z)| !near_win(x, z) && !near_ni(x, z))
+        .filter(|&(x, z)| !first_hit_y(&scene, north, x, z, true).is_some_and(|y| (y - OUTER_Y).abs() < 1e-3))
+        .collect::<Vec<_>>();
+    assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
+}
