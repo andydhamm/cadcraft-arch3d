@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 09:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 21 of 22: Schedules, elevations and sheets — 34 of 40 segments merged · 13 of 13 acceptance checks**
+**Phase 21 of 22: Schedules, elevations and sheets — 35 of 40 segments merged · 13 of 13 acceptance checks**
 
-10,816 workspace tests passing at the last merge · 1256 segments merged in all · 0 of 15 seats working
+10,823 workspace tests passing at the last merge · 1257 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -31,24 +31,24 @@ Updated 2026-11-16 09:15 UTC. This page and the card in the README are regenerat
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
-| 21 | Schedules, elevations and sheets | building | 13 / 13 | 97.9 h so far · expected done Nov 16 20:19–Nov 18 02:54 UTC |
+| 21 | Schedules, elevations and sheets | building | 13 / 13 | 98.2 h so far · expected done Nov 16 17:30–Nov 17 16:22 UTC |
 | 22 | Phase 22 | pending | — | — |
 
 ## Phase 21 segments
 
-34 merged, 3 replaced, 2 queued, 2 working, 1 merging, 1 gate
+35 merged, 3 replaced, 2 queued, 1 working, 1 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p21t-user-guide` | USER-GUIDE: dimensions that know the building, a phase-17 section, a runnable light-sky-cameras example, the showcase as it is | merging | claude-sonnet-b |
 | `p21t-wall-window-and-niche` | A wall with both a window and a niche keeps its whole face in renders and picks | working | mai-flash-esc |
 | `upstream-sync-ed0fbce27` | merge upstream upstream/main up to ed0fbce27 (35 commits) | gate | claude-sonnet-c |
-| `p21t-showcase-house-c` | The showcase house is redrawn inside its walls and gains the phase-16 ceilings and foundation, the kitchen cabinets of its drawing set, and the phase-19 look cameras | working | bonsai-a |
+| `p21t-showcase-house-c` | The showcase house is redrawn inside its walls and gains the phase-16 ceilings and foundation, the kitchen cabinets of its drawing set, and the phase-19 look cameras | merging | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 09:19 | `p21t-user-guide` | merged | 10,823 pass | claude-sonnet-b |
 | Nov 16 08:57 | `harden-p19g-sky-check-time` | merged | 10,816 pass, 1 fail | tturbo-mac |
 | Nov 16 08:40 | `upstream-sync-d267d6580` | merged | 10,803 pass | claude-sonnet-d |
 | Nov 16 08:25 | `p21t-showcase-house-b` | merged | 10,803 pass | bonsai-ws2-b |
@@ -60,19 +60,18 @@ Updated 2026-11-16 09:15 UTC. This page and the card in the README are regenerat
 | Nov 16 07:20 | `harden-p19q-final-raster-frame-look` | merged | 10,773 pass | tturbo-mac |
 | Nov 16 07:05 | `harden-p19q-strip-mesh-under-ceiling` | merged | 10,765 pass | tturbo-mac |
 | Nov 16 06:47 | `harden-p19r-overview-cutaway` | merged | 10,761 pass | tturbo-mac2 |
-| Nov 16 06:29 | `harden-p21t-cli-run-defers-views` | merged | 10,753 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1375 |
-| bonsai-b | bonsai2-27b | agent | 1291 |
-| bonsai-ws2-a | bonsai2-27b | agent | 1477 |
-| bonsai-ws2-b | bonsai2-27b | agent | 1404 |
+| bonsai-a | bonsai2-27b | idle | 1376 |
+| bonsai-b | bonsai2-27b | gate | 1292 |
+| bonsai-ws2-a | bonsai2-27b | merging | 1478 |
+| bonsai-ws2-b | bonsai2-27b | merging | 1405 |
 | claude-sonnet-a | sonnet | idle | 161 |
 | claude-sonnet-b | sonnet | idle | 165 |
-| claude-sonnet-c | sonnet | gate | 102 |
+| claude-sonnet-c | sonnet | gate | 103 |
 | claude-sonnet-d | sonnet | idle | 98 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1287 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
@@ -80,4 +79,4 @@ Updated 2026-11-16 09:15 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 77 |
 | mai-flash-esc | mai-code-1.1-flash | agent | 173 |
 | tturbo-mac | tturbo-ultraheretic | agent | 989 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 670 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 670 |
