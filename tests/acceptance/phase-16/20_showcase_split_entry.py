@@ -157,7 +157,12 @@ for im in man.get('images', []):
     frac, sd = foreground(f)
     # Line drawings (plans, electrical plans, elevations, sections: thin lines on white) as phase-15 check 11 takes them
     # (0.5 % at least); shaded and rendered views 5 %. A plan of the showcase covers ~3 % of its frame.
-    lo = 0.005 if im.get('kind') in ('plan', 'electrical', 'elevation', 'section') else 0.05
+    # Revised 2026-11-16 (operator): the full gallery (render_all.py --full) also commits plan views, reflected ceiling,
+    # roof and site plans, interior elevations and sheet images. They are line drawings too, and a sheet is mostly
+    # paper (measured 0.49..3.1 % of the frame), so they take 0.2 %; the look cameras stay rendered views.
+    kind = im.get('kind')
+    lo = (0.005 if kind in ('plan', 'electrical', 'elevation', 'section')
+          else 0.002 if kind in ('planview', 'rcp', 'roofplan', 'siteplan', 'interior', 'sheet') else 0.05)
     if not (lo <= frac <= 0.99) or sd <= 2:
         fail(f"{rel} renders non-blank: {frac * 100:.1f} % foreground ({lo * 100:g}..99 %), luma sd {sd:.2f} (> 2)")
     kinds.setdefault(im.get('kind'), []).append(im)
