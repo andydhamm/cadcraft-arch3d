@@ -379,3 +379,75 @@ fn user_guide_has_p21_sections() {
     assert!(interior < out_of_scope, "Interior elevations section should be before Out of scope");
     assert!(sheets < out_of_scope, "Sheets section should be before Out of scope");
 }
+
+#[test]
+fn phase21_entry_plans_sheet_has_three_views_at_scale_50() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    let entry_sheet = steps
+        .iter()
+        .find(|s| {
+            s.get("cmd").and_then(|c| c.as_str()) == Some("sheet")
+                && s.get("params").and_then(|p| p.get("number")).and_then(|n| n.as_str()) == Some("A-121")
+        })
+        .expect("no sheet A-121 in phase-21-showcase.json");
+
+    let views = entry_sheet.get("params").and_then(|p| p.get("views")).and_then(|v| v.as_array()).expect("A-121 should have a views array");
+    assert_eq!(views.len(), 3, "A-121 should have 3 views, found {}", views.len());
+
+    for (i, view) in views.iter().enumerate() {
+        let scale = view.get("scale").and_then(|s| s.as_f64()).unwrap_or(f64::NAN);
+        assert!((scale - 50.0).abs() < 1e-9, "A-121 view {} scale is {}, expected 50", i, scale);
+        assert!(view.get("view").is_some(), "A-121 view {} should have a 'view' field", i);
+    }
+}
+
+#[test]
+fn phase21_entry_plans_sheet_is_between_main_and_roof() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    let sheet_numbers: Vec<String> = steps
+        .iter()
+        .filter_map(|s| {
+            if s.get("cmd").and_then(|c| c.as_str()) == Some("sheet") {
+                s.get("params").and_then(|p| p.get("number")).and_then(|n| n.as_str()).map(|n| n.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let a112_idx = sheet_numbers.iter().position(|n| n == "A-112").expect("A-112 not found");
+    let a121_idx = sheet_numbers.iter().position(|n| n == "A-121").expect("A-121 not found");
+    let a201_idx = sheet_numbers.iter().position(|n| n == "A-201").expect("A-201 not found");
+
+    assert!(a112_idx < a121_idx, "A-121 should come after A-112");
+    assert!(a121_idx < a201_idx, "A-121 should come before A-201");
+}
+
+#[test]
+fn phase21_entry_plans_sheet_title_is_correct() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    let entry_sheet = steps
+        .iter()
+        .find(|s| {
+            s.get("cmd").and_then(|c| c.as_str()) == Some("sheet")
+                && s.get("params").and_then(|p| p.get("number")).and_then(|n| n.as_str()) == Some("A-121")
+        })
+        .expect("no sheet A-121 in phase-21-showcase.json");
+
+    let name = entry_sheet.get("params").and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
+    let title = entry_sheet.get("params").and_then(|p| p.get("title")).and_then(|t| t.as_str()).unwrap_or("");
+    assert_eq!(name, "Entry Plans", "A-121 name is `{}`, expected `Entry Plans`", name);
+    assert_eq!(title, "Entry Plans", "A-121 title is `{}`, expected `Entry Plans`", title);
+}
