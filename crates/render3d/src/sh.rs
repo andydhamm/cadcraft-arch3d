@@ -261,6 +261,24 @@ mod tests {
     }
 
     #[test]
+    fn sh_projection_cache_is_bounded() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
+        for i in 0..(SH_CACHE_LEN + 5) {
+            let e = Environment::uniform([f32::from(i), 1.0, 1.0], 8, 4);
+            let _ = project(&e);
+        }
+
+        let count = if let Ok(g) = SH_CACHE.lock() {
+            g.len()
+        } else {
+            return;
+        };
+        assert!(count <= SH_CACHE_LEN, "cache must hold at most {SH_CACHE_LEN} entries, got {count}");
+    }
+
+    #[test]
     fn second_sky_render_of_an_angle_rebuilds_nothing() {
         let _guard = TEST_LOCK.lock().unwrap();
         reset_sh_cache_for_test();
