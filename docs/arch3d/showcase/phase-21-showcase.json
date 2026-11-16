@@ -14,6 +14,7 @@
   {"cmd": "sheet", "params": {"name": "Main Floor Plan", "number": "A-111", "title": "Main Floor Plan", "planView": "Main Floor Plan", "scale": 100}},
   {"cmd": "sheet", "params": {"name": "Main Electrical", "number": "E-111", "title": "Main Electrical", "planView": "Main Electrical", "scale": 100}},
   {"cmd": "sheet", "params": {"name": "Main Reflected Ceiling", "number": "A-112", "title": "Main Reflected Ceiling", "planView": "Main Reflected Ceiling", "scale": 100}},
+  {"cmd": "sheet", "params": {"name": "Entry Plans", "number": "A-121", "title": "Entry Plans", "views": [{"view": "Entry Floor Plan", "scale": 50}, {"view": "Entry Electrical", "scale": 50}, {"view": "Entry Reflected Ceiling", "scale": 50}]}},
   {"cmd": "sheet", "params": {"name": "Roof Plan", "number": "A-201", "title": "Roof Plan", "planView": "Roof Plan", "scale": 100}},
   {"cmd": "sheet", "params": {"name": "Elevations", "number": "A-301", "title": "Elevations", "views": ["v0", "v1", "v2", "v3"], "scale": 100}},
   {"cmd": "sheet", "params": {"name": "Sections", "number": "A-302", "title": "Sections", "views": ["v4", "v5"], "scale": 100}},
