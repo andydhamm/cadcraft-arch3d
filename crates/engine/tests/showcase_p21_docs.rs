@@ -293,6 +293,21 @@ fn phase21_all_scales_are_positive_finite() {
     }
 }
 
+/// Every command in the phase-21 showcase has a non-empty string `cmd`.
+#[test]
+fn phase21_all_cmds_are_non_empty_strings() {
+    let root = workspace_root();
+    let path = format!("{}/docs/arch3d/showcase/phase-21-showcase.json", root);
+    let content = fs::read_to_string(&path).expect("phase-21-showcase.json should exist");
+    let steps: Vec<Value> = serde_json::from_str(&content).expect("phase-21-showcase.json should be valid JSON");
+
+    for (i, step) in steps.iter().enumerate() {
+        let cmd = step.get("cmd").and_then(|v| v.as_str());
+        assert!(cmd.is_some(), "step {} missing string cmd", i);
+        assert!(!cmd.unwrap().is_empty(), "step {} has empty cmd", i);
+    }
+}
+
 /// Every command in the phase-21 showcase has a string `cmd` and an object `params`.
 #[test]
 fn phase21_command_structure_is_valid() {

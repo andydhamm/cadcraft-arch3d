@@ -385,6 +385,15 @@ fn print_showcase_digest() {
     println!("{}", digest(&reply));
 }
 
+/// The phase-18 house inspect reply carries the keys the tests in this file read.
+#[test]
+fn the_phase18_house_inspect_has_expected_keys() {
+    let (_, _, reply) = house();
+    for key in ["walls", "rooms", "levels", "openings", "cabinets", "fixtures", "surfaces", "countertops", "backsplashes", "moldings", "electrical"] {
+        assert!(reply.get(key).is_some(), "phase-18 house inspect reply missing `{}`", key);
+    }
+}
+
 #[test]
 fn digest_handles_empty_reply() {
     let reply = serde_json::json!({});
