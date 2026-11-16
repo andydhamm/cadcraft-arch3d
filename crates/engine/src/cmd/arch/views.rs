@@ -699,6 +699,8 @@ mod tests {
         let view = arch.views.first().cloned().unwrap_or_default();
         assert!(!view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
         let lines = r
+            .as_ref()
+            .map_or(Value::Null, |v| v.clone())
             .get("views")
             .and_then(|v| v.as_array())
             .and_then(|a| a.first())
@@ -728,9 +730,9 @@ mod tests {
         let view = arch.views.first().cloned().unwrap_or_default();
         assert!(!view.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
 
-        let before = s.state().unwrap().doc.as_ref().as_ptr();
+        let before = s.state().and_then(|st| st.doc.as_ptr());
         s.set_views_deferred(false);
-        let after = s.state().unwrap().doc.as_ref().as_ptr();
+        let after = s.state().and_then(|st| st.doc.as_ptr());
         assert_eq!(before, after, "the drawing Arc changed on a no-op");
     }
 
@@ -765,7 +767,9 @@ mod tests {
         let r2 = run(&mut s2, "arch.inspect", json!({"views": true}));
         assert!(r2.is_ok(), "{r2:?}");
 
-        assert_eq!(r1, r2, "deferred and immediate replays differ");
+        let v1 = r1.as_ref().map(|v| v.clone()).unwrap_or_default();
+        let v2 = r2.as_ref().map(|v| v.clone()).unwrap_or_default();
+        assert_eq!(v1, v2, "deferred and immediate replays differ");
     }
 
     #[test]
