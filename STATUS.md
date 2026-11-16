@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-16 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 19:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
@@ -32,7 +32,7 @@ Updated 2026-11-16 19:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 17 00:44–Dec 02 02:21 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 17 00:59–Dec 02 02:36 UTC |
 
 ## Phase 22 segments
 
@@ -43,6 +43,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 19:24 | `harden-p21t-gallery-tool-b` | refused | 10,883 pass | tturbo-mac2 |
 | Nov 16 19:09 | `harden-p21t-showcase-tests-defer` | refused | 10,888 pass | tturbo-mac |
 | Nov 16 16:57 | `p21t-gallery-tool-b` | merged | 10,879 pass | bonsai-a |
 | Nov 16 16:21 | `p21t-gallery-tool` | merged | 10,873 pass | bonsai-ws2-a |
@@ -54,7 +55,6 @@ none yet
 | Nov 16 13:17 | `harden-p21t-entry-landing-views-b` | merged | 10,862 pass | tturbo-mac |
 | Nov 16 13:09 | `harden-p19f-cutaway-interactive` | merged | 10,856 pass | tturbo-mac |
 | Nov 16 12:53 | `upstream-sync-2ccf5874b` | merged | 10,849 pass | bonsai-ws2-b |
-| Nov 16 12:37 | `p21t-wall-window-and-niche-b` | merged | 10,847 pass | bonsai-a |
 
 ## Seats active in the last hour
 
@@ -73,5 +73,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1011 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 697 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1012 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 697 |
