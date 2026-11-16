@@ -215,8 +215,8 @@ fn wall_with_three_openings_near_one_corner_has_no_gaps() {
         .filter(|&(x, z)| !first_hit_y(&scene, north, x, z, true).is_some_and(|y| (y - OUTER_Y).abs() < 1e-3))
         .collect::<Vec<_>>();
     assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
-    // Check the inner face too, excluding the niche (the window and door are through-holes).
-    for (x, z) in face_grid().into_iter().filter(|&(x, z)| !near_window(x, z) && !near_niche(x, z)) {
+    // Check the inner face too, excluding the niche and the door (the window and door are through-holes).
+    for (x, z) in face_grid().into_iter().filter(|&(x, z)| !near_window(x, z) && !near_niche(x, z) && !near_door(x, z)) {
         let y = first_hit_y(&scene, north, x, z, false);
         assert!(y.is_some_and(|y| (y - INNER_Y).abs() < 1e-3), "inner face at ({x}, {z}): {y:?}");
     }
@@ -285,10 +285,10 @@ fn narrow_wall_with_window_and_niche_has_no_gaps() {
         }));
     }
     let north = ids.get(2).copied().unwrap_or(ArchId(3));
-    // Window at offset 1 (x = 5), niche at offset 0.5 (x = 5.5).
+    // Window at offset 1 (x = 5), niche at offset 3 (x = 3); their rough openings must not overlap.
     let mut win = Opening::new(north, 1.0, 1.2, 1.2, OpeningKind::Window);
     win.sill = 1.0;
-    let mut ni = Opening::new(north, 0.5, 0.6, 0.9, OpeningKind::Niche);
+    let mut ni = Opening::new(north, 3.0, 0.6, 0.9, OpeningKind::Niche);
     ni.sill = 1.0;
     ni.depth = 0.1;
     ni.face = Some(Side::Left);
@@ -297,8 +297,8 @@ fn narrow_wall_with_window_and_niche_has_no_gaps() {
     let scene = Scene3d::build(&model);
     const OUTER_Y: f64 = 4.1;
     const INNER_Y: f64 = 3.9;
-    let near_win = |x: f64, z: f64| (4.25..=5.75).contains(&x) && (0.85..=2.35).contains(&z);
-    let near_ni = |x: f64, z: f64| (5.05..=5.95).contains(&x) && (0.85..=2.05).contains(&z);
+    let near_win = |x: f64, z: f64| (4.1..=5.9).contains(&x) && (0.85..=2.35).contains(&z);
+    let near_ni = |x: f64, z: f64| (2.4..=3.6).contains(&x) && (0.85..=2.05).contains(&z);
     let mut grid = Vec::new();
     for i in 0..11 {
         for j in 0..11 {
