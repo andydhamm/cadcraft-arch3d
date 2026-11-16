@@ -563,4 +563,127 @@ mod tests {
         assert!(!model.hdr_images.contains_key("e"));
         assert!(model.hdr_images.len() <= cadcraft_doc::arch::MAX_HDR_IMAGES);
     }
+
+    #[test]
+    fn display_image_of_all_black_image() {
+        let img = ImageRgbe { width: 4, height: 4, rgbe: vec![0u8; 4 * 4 * 4], ..Default::default() };
+        let thumb = display_image(&img, 16);
+        assert!(thumb.width <= 16);
+        assert!(thumb.height <= 16);
+        for px in thumb.rgba.chunks_exact(4) {
+            assert!(px[0] < 10 && px[1] < 10 && px[2] < 10, "black pixel should stay dark: {:?}", px);
+        }
+    }
+
+    #[test]
+    fn fit_preserves_aspect_ratio() {
+        let img = ImageRgbe { width: 100, height: 50, rgbe: vec![0u8; 100 * 50 * 4], ..Default::default() };
+        let fit_img = fit(&img, 40, 20);
+        assert_eq!(fit_img.width, 40);
+        assert_eq!(fit_img.height, 20);
+        let fit_img2 = fit(&img, 20, 100);
+        assert_eq!(fit_img2.width, 20);
+        assert_eq!(fit_img2.height, 10);
+    }
+
+    #[test]
+    fn fit_zero_dimensions_returns_empty() {
+        let img = ImageRgbe::default();
+        let fit_img = fit(&img, 100, 100);
+        assert_eq!(fit_img.width, 0);
+        assert_eq!(fit_img.height, 0);
+        assert!(fit_img.rgbe.is_empty());
+    }
+
+    #[test]
+    fn rle_literal_run_decodes() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        data.extend_from_slice(b"-Y 1 +X 3\n");
+        data.push(2);
+        data.push(2);
+        data.push(0);
+        data.push(3);
+        data.push(3);
+        data.push(10);
+        data.push(20);
+        data.push(30);
+        data.push(3);
+        data.push(40);
+        data.push(50);
+        data.push(60);
+        data.push(3);
+        data.push(70);
+        data.push(80);
+        data.push(90);
+        data.push(3);
+        data.push(128);
+        data.push(128);
+        data.push(128);
+        let img = read_hdr(&data).unwrap();
+        assert_eq!(img.width, 3);
+        assert_eq!(img.height, 1);
+        assert_eq!(img.rgbe[0], 10);
+        assert_eq!(img.rgbe[1], 40);
+        assert_eq!(img.rgbe[2], 70);
+        assert_eq!(img.rgbe[3], 128);
+    }
+
+    #[test]
+    fn rle_mixed_literal_and_repeat() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n");
+        data.extend_from_slice(b"-Y 1 +X 4\n");
+        data.push(2);
+        data.push(2);
+        data.push(0);
+        data.push(4);
+        for _ch in 0..4 {
+            data.push(2);
+            data.push(100);
+            data.push(110);
+            data.push(130);
+            data.push(120);
+        }
+        let img = read_hdr(&data).unwrap();
+        assert_eq!(img.width, 4);
+        assert_eq!(img.rgbe[0], 100);
+        assert_eq!(img.rgbe[4], 110);
+        assert_eq!(img.rgbe[8], 120);
+        assert_eq!(img.rgbe[12], 120);
+    }
+
+    #[test]
+    fn encode_zero_gives_zero_exponent() {
+        let enc = encode_linear_to_rgbe([0.0, 0.0, 0.0]);
+        assert_eq!(enc, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn decode_zero_exponent_gives_zero() {
+        let dec = decode_rgbe([255, 255, 255, 0]);
+        assert_eq!(dec, [0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn display_image_single_pixel() {
+        let img = ImageRgbe { width: 1, height: 1, rgbe: vec![255, 255, 255, 136], ..Default::default() };
+        let thumb = display_image(&img, 16);
+        assert_eq!(thumb.width, 1);
+        assert_eq!(thumb.height, 1);
+        assert_eq!(thumb.rgba.len(), 4);
+        assert!(thumb.rgba[0] > 100);
+        assert!(thumb.rgba[1] > 100);
+        assert!(thumb.rgba[2] > 100);
+        assert_eq!(thumb.rgba[3], 255);
+    }
+
+    #[test]
+    fn fit_already_small_returns_clone() {
+        let img = ImageRgbe { width: 10, height: 5, rgbe: vec![0u8; 10 * 5 * 4], ..Default::default() };
+        let fit_img = fit(&img, 100, 100);
+        assert_eq!(fit_img.width, 10);
+        assert_eq!(fit_img.height, 5);
+        assert_eq!(fit_img.rgbe, img.rgbe);
+    }
 }
