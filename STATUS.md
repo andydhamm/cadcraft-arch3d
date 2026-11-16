@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-16 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 01:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 19 of 21: Light, sky and cameras — 76 of 77 segments merged · 17 of 17 acceptance checks**
 
@@ -29,7 +29,7 @@ Updated 2026-11-16 01:00 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 17 / 17 | 110.5 h so far · expected done Nov 16 01:52–Nov 16 02:21 UTC |
+| 19 | Light, sky and cameras | building | 17 / 17 | 110.7 h so far · expected done Nov 16 02:07–Nov 16 02:37 UTC |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
 
@@ -70,10 +70,10 @@ Updated 2026-11-16 01:00 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 161 |
 | claude-sonnet-c | sonnet | idle | 97 |
 | claude-sonnet-d | sonnet | idle | 95 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1267 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1268 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 127 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
-| tturbo-mac | tturbo-ultraheretic | gate | 971 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 655 |
+| tturbo-mac | tturbo-ultraheretic | gate | 972 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 656 |
