@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 02:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
-10,693 workspace tests passing at the last merge · 1234 segments merged in all · 0 of 15 seats working
+10,702 workspace tests passing at the last merge · 1235 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-16 02:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 111.4 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
-| 22 | Phase 22 | done | — | — |
+| 22 | Phase 22 | pending | — |  · expected done Nov 16 07:59–Nov 30 11:46 UTC |
 
 ## Phase 22 segments
 
@@ -43,6 +43,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 02:27 | `harden-p19r-hdri-icon` | merged | 10,702 pass | tturbo-mac2 |
 | Nov 16 02:05 | `harden-p19k-hdri-lights-alone` | merged | 10,693 pass | tturbo-mac2 |
 | Nov 16 01:46 | `upstream-sync-0e3f62f50` | merged | 10,690 pass | claude-sonnet-d |
 | Nov 16 00:18 | `p19r-hdri-icon` | merged | 10,687 pass | bonsai-b |
@@ -54,7 +55,6 @@ none yet
 | Nov 15 21:49 | `p19q-raster-meter-backdrop-only` | merged | 10,610 pass | bonsai-ws2-a |
 | Nov 15 21:32 | `p19q-final-raster-frame-look` | merged | 10,602 pass | claude-sonnet-d |
 | Nov 15 21:15 | `p19q-pt-auto-exposure-night-backdrop` | merged | 10,600 pass | mai-flash |
-| Nov 15 20:16 | `harden-p18-room-finishes-1` | merged | 10,595 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -74,4 +74,4 @@ none yet
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
 | tturbo-mac | tturbo-ultraheretic | agent | 975 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 658 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 659 |
