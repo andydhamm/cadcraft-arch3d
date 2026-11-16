@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-16 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 02:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 19 of 21: Light, sky and cameras — 76 of 77 segments merged · 17 of 17 acceptance checks**
+**Phase 22 of 22: Phase 22**
 
-10,687 workspace tests passing at the last merge · 1232 segments merged in all · 0 of 15 seats working
+10,690 workspace tests passing at the last merge · 1233 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -29,22 +29,21 @@ Updated 2026-11-16 01:45 UTC. This page and the card in the README are regenerat
 | 16 | Ceilings and foundations | done | 20 / 20 | 63.2 h |
 | 17 | Stairs, decks, railings and openings in detail | done | 14 / 14 | 49.6 h |
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
-| 19 | Light, sky and cameras | building | 17 / 17 | 111.2 h so far · expected done Nov 16 02:37–Nov 16 03:06 UTC |
+| 19 | Light, sky and cameras | done | 17 / 17 | 111.4 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 84.1 h |
+| 22 | Phase 22 | done | — | — |
 
-## Phase 19 segments
+## Phase 22 segments
 
-76 merged, 9 replaced, 1 merging
+none yet
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `upstream-sync-0e3f62f50` | merge upstream upstream/main up to 0e3f62f50 (19 commits) | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 16 01:46 | `upstream-sync-0e3f62f50` | merged | 10,690 pass | claude-sonnet-d |
 | Nov 16 00:18 | `p19r-hdri-icon` | merged | 10,687 pass | bonsai-b |
 | Nov 15 23:44 | `p19r-overview-cutaway` | merged | 10,684 pass | claude-sonnet-b |
 | Nov 15 23:11 | `harden-p19q-raster-meter-backdrop-only` | merged | 10,682 pass | tturbo-mac2 |
@@ -56,7 +55,6 @@ Updated 2026-11-16 01:45 UTC. This page and the card in the README are regenerat
 | Nov 15 21:15 | `p19q-pt-auto-exposure-night-backdrop` | merged | 10,600 pass | mai-flash |
 | Nov 15 20:16 | `harden-p18-room-finishes-1` | merged | 10,595 pass | tturbo-mac |
 | Nov 15 20:16 | `harden-p18-shower-niche-4` | merged | 10,595 pass | tturbo-mac |
-| Nov 15 20:16 | `harden-p19-hdri-3` | merged | 10,595 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -64,16 +62,16 @@ Updated 2026-11-16 01:45 UTC. This page and the card in the README are regenerat
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1356 |
 | bonsai-b | bonsai2-27b | idle | 1279 |
-| bonsai-ws2-a | bonsai2-27b | merging | 1456 |
+| bonsai-ws2-a | bonsai2-27b | idle | 1456 |
 | bonsai-ws2-b | bonsai2-27b | idle | 1385 |
 | claude-sonnet-a | sonnet | idle | 159 |
 | claude-sonnet-b | sonnet | idle | 161 |
 | claude-sonnet-c | sonnet | idle | 97 |
 | claude-sonnet-d | sonnet | idle | 95 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1268 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1268 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 127 |
 | mai-flash-b | mai-code-1.1-flash | idle | 74 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 172 |
-| tturbo-mac | tturbo-ultraheretic | gate | 973 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 657 |
+| tturbo-mac | tturbo-ultraheretic | gate | 974 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 658 |
