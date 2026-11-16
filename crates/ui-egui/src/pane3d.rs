@@ -244,6 +244,9 @@ pub struct Pane3d {
     picked: Option<cadcraft_doc::Handle>,
     /// The `arch_revision` the scene was last built at (0 = never built).
     pub last_revision: u64,
+    /// The revision of the held scene's geometry for `scene_key()`: view-only look changes do not
+    /// churn it while model edits do.
+    scene_revision: u64,
     /// Number of meshes in the last build (0 when no scene).
     pub mesh_count: usize,
     /// Whether a wgpu adapter is available (set on first frame if a render state is present).
@@ -252,6 +255,9 @@ pub struct Pane3d {
     pub has_content: bool,
     /// The unfiltered scene built from the model (before cutaway, overview and clip filters).
     base: Option<Arc<cadcraft_render3d::Scene3d>>,
+    /// The pointer to the last `base` that built the current scene, so light-set changes rebuild the
+    /// filtered scene even when the hidden set key stays the same.
+    base_ptr: Option<usize>,
     /// The look inputs that last produced `base` (light set/backdrop); filters do not rebuild it.
     base_state: Option<(Option<String>, Option<cadcraft_doc::arch::Backdrop>)>,
     /// The drawn scene (`base` or a filtered copy), what picks and renders use.
@@ -393,10 +399,12 @@ impl Pane3d {
             loaded_camera: None,
             picked: None,
             last_revision: 0,
+            scene_revision: 0,
             mesh_count: 0,
             available: false,
             has_content: false,
             base: None,
+            base_ptr: None,
             base_state: None,
             scene: None,
             filter: None,
@@ -672,38 +680,35 @@ impl Pane3d {
         if let Some((level, lower)) = self.view.overview {
             filter = filter.with_overview(m, level, lower);
         }
-        let base = match self.base.as_ref() {
-            Some(base) => base,
-            None => return,
+        let Some(base) = self.base.as_ref() else {
+            self.filter = None;
+            self.filter_key = 0;
+            self.scene = None;
+            self.mesh_count = 0;
+            self.has_content = false;
+            return;
         };
+
         let hidden_key = {
             let mut f = filter.clone();
             f.clip = None;
             f.near = None;
             f.key()
         };
-        let base_changed = !self.base.as_ref().is_some_and(|b| Arc::ptr_eq(b, base));
+        let base_ptr = Arc::as_ptr(base) as usize;
+        let base_changed = self.base_ptr != Some(base_ptr);
+        self.base_ptr = Some(base_ptr);
         let filter_changed = self.filter.as_ref().map_or(true, |old| old != &filter);
-        let changed = self.scene.is_none() || self.filter_key != hidden_key || base_changed;
-        if hidden_key == 0 && self.filter_key != 0 {
-            eprintln!(
-                "DEBUG apply_filter hidden_key=0 old_filter_key={} scene={:?} base_changed={} filter_changed={} filter={:?}",
-                self.filter_key,
-                self.scene.is_some(),
-                base_changed,
-                filter_changed,
-                filter
-            );
+        let scene_changed = self.scene.is_none() || self.filter_key != hidden_key || base_changed || filter_changed;
+        if scene_changed {
+            let draw = if filter.hidden.is_empty() && filter.levels.is_none() { base.clone() } else { Arc::new(filter.apply(base)) };
+            self.filter_key = hidden_key;
+            self.scene = Some(draw);
+            self.mesh_count = self.scene.as_ref().map_or(0, |s| s.meshes.len());
+            self.has_content = self.scene.as_ref().is_some_and(|s| !s.meshes.is_empty());
         }
-        if changed || filter_changed {
-            if changed {
-                let draw = if filter.hidden.is_empty() && filter.levels.is_none() { base.clone() } else { Arc::new(filter.apply(base)) };
-                self.filter_key = hidden_key;
-                self.scene = Some(draw);
-                self.mesh_count = self.scene.as_ref().map_or(0, |s| s.meshes.len());
-                self.has_content = self.scene.as_ref().is_some_and(|s| !s.meshes.is_empty());
-            }
-            self.filter = Some(filter.clone());
+        if filter_changed || self.filter.is_none() {
+            self.filter = Some(filter);
         }
     }
 
@@ -771,7 +776,17 @@ impl Pane3d {
                         self.framed = true;
                     }
                     self.base = Some(Arc::new(scene));
+                    self.base_ptr = Some(Arc::as_ptr(self.base.as_ref().unwrap()) as usize);
                     self.base_state = Some(base_state);
+                    // The base and the draw scene diverge by filter and active light-set; a rebuild can
+                    // restore the base lights or turn a stale filter off, so we deliberately invalidate the
+                    // current draw scene before reapplying the current look.
+                    self.scene = None;
+                    self.filter = None;
+                    self.filter_key = 0;
+                    if !look_changed || self.scene_revision == 0 {
+                        self.scene_revision = revision;
+                    }
                     self.mark_built(revision, mesh_count, has_content);
                 }
                 if self.base.is_some() {
@@ -787,7 +802,9 @@ impl Pane3d {
                 self.environment_for = None;
                 self.env_built = None;
                 self.base = None;
+                self.base_ptr = None;
                 self.base_state = None;
+                self.scene_revision = 0;
                 self.scene = None;
                 self.filter = None;
                 self.filter_key = 0;
@@ -824,7 +841,7 @@ impl Pane3d {
 
     /// Identifies the held scene's content for the renderer's mesh cache.
     fn scene_key(&self) -> u64 {
-        let today = self.doc.unwrap_or(0).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.last_revision;
+        let today = self.doc.unwrap_or(0).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.scene_revision;
         if self.filter_key == 0 && self.light_set_key == 0 {
             today
         } else {
@@ -3131,11 +3148,19 @@ mod tests {
         resync(&mut pane, &session);
         let first = pane.scene.clone().expect("first scene");
 
-        let north =
-            cadcraft_render3d::camera::FullCamera::new(cadcraft_geom::Vec3::new(3.0, 8.0, 1.6), cadcraft_geom::Vec3::new(3.0, 0.0, 1.05), 60.0);
-        pane.full = Some(north);
+        let south =
+            cadcraft_render3d::camera::FullCamera::new(cadcraft_geom::Vec3::new(3.0, -8.0, 1.6), cadcraft_geom::Vec3::new(3.0, 0.0, 1.05), 60.0);
+        pane.full = Some(south);
         pane.sync(st.doc.arch_revision, Some(&st.doc.arch));
         let scene = pane.scene().expect("moved scene");
+        let filter = cadcraft_arch3d::view_filter::ViewFilter::from_look(&pane.view.look, &st.doc.arch, &pane.camera());
+        eprintln!(
+            "orbit filter={:?} scene w0={} w2={} total={}",
+            filter,
+            scene.meshes.iter().filter(|m| m.object == w0 && m.material == "wall").count(),
+            scene.meshes.iter().filter(|m| m.object == w2 && m.material == "wall").count(),
+            scene.meshes.len()
+        );
         assert!(scene.meshes.iter().any(|m| m.object == w2 && m.material == "wall"), "new camera exposes the opposite wall");
         assert!(!scene.meshes.iter().any(|m| m.object == w0 && m.material == "wall"), "the old wall is hidden after orbit");
 
@@ -3178,6 +3203,14 @@ mod tests {
         let before = pane.scene_key();
         session.execute("look", &serde_json::json!({"lightSet": null})).expect("lightset reset");
         resync(&mut pane, &session);
+        eprintln!(
+            "after clear light_set={:?} base_lights={} scene_lights={} key={} before={}",
+            pane.view.look.light_set,
+            pane.base.as_ref().map(|s| s.lights.len()).unwrap_or(0),
+            pane.scene().map(|s| s.lights.len()).unwrap_or(0),
+            pane.scene_key(),
+            before
+        );
         assert!(!pane.scene().expect("scene").lights.is_empty(), "scene lights return when the set clears");
         assert_ne!(pane.scene_key(), before, "light-set reset changes the scene key");
     }
