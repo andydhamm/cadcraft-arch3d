@@ -798,4 +798,86 @@ mod tests {
             assert!(!defer_safe(id), "{id} should not be defer-safe");
         }
     }
+
+    #[test]
+    fn deferred_multiple_views_all_stay_stale() {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "elevation", json!({"side":"south","name":"South","insert":[0,25],"scale":50})));
+        ok(run(&mut s, "elevation", json!({"side":"north","name":"North","insert":[0,40],"scale":50})));
+        ok(run(&mut s, "section", json!({"from":[0,4],"to":[10,4],"look":[0,1],"name":"A","insert":[50,25],"scale":50})));
+
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let rev = s.doc().map(|d| d.arch_revision).unwrap_or_default();
+        assert_eq!(arch.views.len(), 3);
+        for v in &arch.views {
+            assert!(v.is_stale(rev), "view {} should be stale", v.name);
+        }
+    }
+
+    #[test]
+    fn deferred_section_view_stays_stale() {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "section", json!({"from":[0,4],"to":[10,4],"look":[0,1],"name":"A","insert":[50,25],"scale":50})));
+
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let v = arch.views.first().cloned().unwrap_or_default();
+        assert_eq!(v.kind, ViewKind::Section);
+        assert!(v.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+    }
+
+    #[test]
+    fn deferred_interior_elevation_stays_stale() {
+        let (mut s, west, _) = two_rooms();
+        s.set_views_deferred(true);
+        let r = run(&mut s, "elevation", json!({"room": west, "side": "south"}));
+        assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":2.5,"width":1.0,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let v = arch.views.first().cloned().unwrap_or_default();
+        assert_eq!(v.kind, ViewKind::Interior);
+        assert!(v.is_stale(s.doc().map(|d| d.arch_revision).unwrap_or_default()));
+    }
+
+    #[test]
+    fn catch_up_refresh_handles_multiple_views() {
+        let mut s = Session::new();
+        let ok = |r: Result<Value>| assert!(r.is_ok(), "{r:?}");
+        ok(run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})));
+        ok(run(&mut s, "elevation", json!({"side":"south","name":"South","insert":[0,25],"scale":50})));
+        ok(run(&mut s, "elevation", json!({"side":"north","name":"North","insert":[0,40],"scale":50})));
+
+        s.set_views_deferred(true);
+        ok(run(&mut s, "window", json!({"wall":"w0","offset":5.0,"width":1.2,"sill":0.9,"height":1.2})));
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let rev = s.doc().map(|d| d.arch_revision).unwrap_or_default();
+        assert!(arch.views.iter().all(|v| v.is_stale(rev)));
+
+        let r = run(&mut s, "arch.inspect", json!({"views": true}));
+        assert!(r.is_ok(), "{r:?}");
+
+        let arch = s.doc().map(|d| d.arch.clone()).unwrap_or_default();
+        let rev = s.doc().map(|d| d.arch_revision).unwrap_or_default();
+        assert!(arch.views.iter().all(|v| !v.is_stale(rev)));
+    }
+
+    #[test]
+    fn deferral_with_no_views_is_harmless() {
+        let mut s = Session::new();
+        s.set_views_deferred(true);
+        let r = run(&mut s, "wall", json!({"points":[[0,0],[10,0],[10,8],[0,8],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}));
+        assert!(r.is_ok(), "{r:?}");
+        s.set_views_deferred(false);
+    }
 }
