@@ -1128,6 +1128,98 @@ mod tests {
         assert!(mesh.is_manifold(), "prism with two holes must be a closed manifold");
     }
 
+    /// Two holes near the same corner (the window and niche case) must produce a manifold.
+    #[test]
+    fn prism_with_two_holes_near_same_corner_is_manifold() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(26.0, 0.0), Vec2::new(26.0, 16.0), Vec2::new(0.0, 16.0)];
+        let window_hole = vec![Vec2::new(20.4, 15.9), Vec2::new(21.6, 15.9), Vec2::new(21.6, 2.2), Vec2::new(20.4, 2.2)];
+        let niche_hole = vec![Vec2::new(24.9, 15.9), Vec2::new(25.5, 15.9), Vec2::new(25.5, 1.9), Vec2::new(24.9, 1.9)];
+        let mut mesh = Mesh::new("wall", ArchId(1));
+        mesh.push_prism_with_holes(&outer, &[window_hole, niche_hole], 0.0, 2.7);
+        assert!(mesh.is_manifold(), "wall prism with window and niche holes must be a closed manifold");
+    }
+
+    /// The outer face of a prism with two holes has no gaps: every sample point
+    /// (clear of the holes) must be covered by a triangle at the outer face's z.
+    #[test]
+    fn prism_with_two_holes_has_no_gaps_in_its_face() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(26.0, 0.0), Vec2::new(26.0, 16.0), Vec2::new(0.0, 16.0)];
+        let window_hole = vec![Vec2::new(20.4, 15.9), Vec2::new(21.6, 15.9), Vec2::new(21.6, 2.2), Vec2::new(20.4, 2.2)];
+        let niche_hole = vec![Vec2::new(24.9, 15.9), Vec2::new(25.5, 15.9), Vec2::new(25.5, 1.9), Vec2::new(24.9, 1.9)];
+        let mut mesh = Mesh::new("wall", ArchId(1));
+        mesh.push_prism_with_holes(&outer, &[window_hole, niche_hole], 0.0, 2.7);
+
+        // The outer face is at y = 16.0; sample at 0.5 m intervals in x and 0.25 m in z.
+        let outer_y = 16.0;
+        let mut gaps = Vec::new();
+        for i in 0..51 {
+            for j in 0..11 {
+                let x = 0.5 + 0.5 * f64::from(i);
+                let z = 0.1 + 0.25 * f64::from(j);
+                // Skip points inside the window hole (x 20.4..21.6, z 1.0..2.2).
+                if (20.4..=21.6).contains(&x) && (1.0..=2.2).contains(&z) {
+                    continue;
+                }
+                // Skip points inside the niche hole (x 24.9..25.5, z 1.0..1.9).
+                if (24.9..=25.5).contains(&x) && (1.0..=1.9).contains(&z) {
+                    continue;
+                }
+                // Check that a ray along the y axis through (x, z) hits the outer face.
+                let mut hit = false;
+                for tri in mesh.indices.chunks(3) {
+                    if tri.len() != 3 {
+                        continue;
+                    }
+                    let (a, b, c) = (tri[0], tri[1], tri[2]);
+                    let pa = mesh.positions[a as usize];
+                    let pb = mesh.positions[b as usize];
+                    let pc = mesh.positions[c as usize];
+                    // Barycentric coordinates of (x, z) in the triangle projected on the x-z plane.
+                    let det = (f64::from(pb[0]) - f64::from(pa[0])) * (f64::from(pc[2]) - f64::from(pa[2]))
+                        - (f64::from(pc[0]) - f64::from(pa[0])) * (f64::from(pb[2]) - f64::from(pa[2]));
+                    if det.abs() < 1e-12 {
+                        continue;
+                    }
+                    let u = ((x - f64::from(pa[0])) * (f64::from(pc[2]) - f64::from(pa[2]))
+                        - (f64::from(pc[0]) - f64::from(pa[0])) * (z - f64::from(pa[2])))
+                        / det;
+                    let v = ((f64::from(pb[0]) - f64::from(pa[0])) * (z - f64::from(pa[2]))
+                        - (x - f64::from(pa[0])) * (f64::from(pb[2]) - f64::from(pa[2])))
+                        / det;
+                    if u < -1e-9 || v < -1e-9 || u + v > 1.0 + 1e-9 {
+                        continue;
+                    }
+                    let y = f64::from(pa[1]) + u * (f64::from(pb[1]) - f64::from(pa[1])) + v * (f64::from(pc[1]) - f64::from(pa[1]));
+                    if (y - outer_y).abs() < 1e-3 {
+                        hit = true;
+                        break;
+                    }
+                }
+                if !hit {
+                    gaps.push((x, z));
+                }
+            }
+        }
+        assert!(gaps.is_empty(), "{} of the outer face's sample points are not covered, e.g. {:?}", gaps.len(), &gaps[..gaps.len().min(8)]);
+    }
+
+    /// The face of a prism with two holes is independent of the order the holes are given.
+    #[test]
+    fn prism_with_two_holes_is_order_independent() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(26.0, 0.0), Vec2::new(26.0, 16.0), Vec2::new(0.0, 16.0)];
+        let window_hole = vec![Vec2::new(20.4, 15.9), Vec2::new(21.6, 15.9), Vec2::new(21.6, 2.2), Vec2::new(20.4, 2.2)];
+        let niche_hole = vec![Vec2::new(24.9, 15.9), Vec2::new(25.5, 15.9), Vec2::new(25.5, 1.9), Vec2::new(24.9, 1.9)];
+
+        let mut mesh1 = Mesh::new("wall", ArchId(1));
+        mesh1.push_prism_with_holes(&outer, &[window_hole.clone(), niche_hole.clone()], 0.0, 2.7);
+        let mut mesh2 = Mesh::new("wall", ArchId(1));
+        mesh2.push_prism_with_holes(&outer, &[niche_hole, window_hole], 0.0, 2.7);
+
+        assert!(mesh1.is_manifold(), "window first must be manifold");
+        assert!(mesh2.is_manifold(), "niche first must be manifold");
+        assert_eq!(mesh1.triangle_count(), mesh2.triangle_count(), "hole order must not change the triangle count");
+    }
+
     #[test]
     fn mesh_new_sets_level_elevation_to_nan() {
         let m = Mesh::new("wall", ArchId(1));
