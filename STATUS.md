@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-16 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-16 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 21 of 22: Schedules, elevations and sheets — 43 of 43 segments merged · 13 of 13 acceptance checks**
+**Phase 22 of 22: Phase 22**
 
 10,879 workspace tests passing at the last merge · 1270 segments merged in all · 0 of 15 seats working
 
@@ -31,12 +31,12 @@ Updated 2026-11-16 17:00 UTC. This page and the card in the README are regenerat
 | 18 | Interior finish, kitchen and bath | done | 20 / 20 | 96.7 h |
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
-| 21 | Schedules, elevations and sheets | building | 13 / 13 | 105.7 h so far · expected done Nov 16 17:00–Nov 17 01:29 UTC |
-| 22 | Phase 22 | pending | — | — |
+| 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
+| 22 | Phase 22 | pending | — |  · expected done Nov 16 22:44–Dec 02 00:21 UTC |
 
-## Phase 21 segments
+## Phase 22 segments
 
-43 merged, 4 replaced
+none yet
 
 
 ## Recent merges
@@ -68,10 +68,10 @@ Updated 2026-11-16 17:00 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 168 |
 | claude-sonnet-c | sonnet | idle | 104 |
 | claude-sonnet-d | sonnet | idle | 99 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1290 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1290 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1005 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 687 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 688 |
