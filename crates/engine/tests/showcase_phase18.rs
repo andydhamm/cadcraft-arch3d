@@ -46,6 +46,7 @@ fn script_path() -> std::path::PathBuf {
 /// Replay every step of the JSON script, panicking (and naming the command) on
 /// the first refused step. Returns the number of steps replayed.
 fn replay(script: &str, session: &mut Session) -> usize {
+    session.set_views_deferred(true);
     let steps: Vec<ScriptStep> = serde_json::from_str(script).unwrap_or_else(|e| panic!("cannot parse the showcase script: {e}"));
     let mut n = 0;
     for (i, step) in steps.iter().enumerate() {
@@ -55,6 +56,7 @@ fn replay(script: &str, session: &mut Session) -> usize {
             Err(err) => panic!("showcase script step {i} `{cmd}` failed: {err}"),
         }
     }
+    session.set_views_deferred(false);
     n
 }
 
