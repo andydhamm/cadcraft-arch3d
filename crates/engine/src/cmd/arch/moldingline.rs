@@ -56,7 +56,13 @@ fn parse_points(cmd: &str, v: &Value) -> Result<Vec<Vec2>> {
         let pair = pt.as_array().filter(|a| a.len() == 2).ok_or_else(err)?;
         let x = pair.first().and_then(Value::as_f64).filter(|x| x.is_finite()).ok_or_else(err)?;
         let y = pair.get(1).and_then(Value::as_f64).filter(|y| y.is_finite()).ok_or_else(err)?;
-        out.push(Vec2::new(x, y));
+        let p = Vec2::new(x, y);
+        if let Some(last) = out.last() {
+            if (last.x - p.x).abs() < 1e-9 && (last.y - p.y).abs() < 1e-9 {
+                continue;
+            }
+        }
+        out.push(p);
     }
     Ok(out)
 }
