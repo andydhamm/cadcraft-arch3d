@@ -121,12 +121,15 @@ fn build_space(d: &Drawing, space: &Space, opts: &Options, plotting: bool) -> Di
         let paper = matches!(space, Space::Paper(_));
         #[cfg(not(target_arch = "wasm32"))]
         if !paper && !plotting && b.styles.is_none() && store.len() >= 2 * PARALLEL_CHUNK {
-            build_parallel(&mut b, d, store);
+            build_parallel(&mut b, d, store, &hidden_handles);
             append_arch(&mut b.list, d, opts, plotting);
             return b.list;
         }
         let mut viewports = 0usize;
         for e in store.iter() {
+            if hidden_handles.contains(&e.handle) {
+                continue;
+            }
             if paper && let EntityKind::Viewport(vp) = &e.kind {
                 if viewports < MAX_VIEWPORTS {
                     viewports += 1;
@@ -178,9 +181,9 @@ pub(crate) const PARALLEL_CHUNK: usize = 256;
 /// stopped blocking the UI) and after every edit; one core made both slow on real drawings. Plots, layouts and plot styles keep the one-thread
 /// path (they run once, and their pens and per-primitive layers are built along the way).
 #[cfg(not(target_arch = "wasm32"))]
-fn build_parallel(b: &mut Builder, d: &Drawing, store: &cadcraft_doc::EntityStore) {
+fn build_parallel(b: &mut Builder, d: &Drawing, store: &cadcraft_doc::EntityStore, hidden: &HashSet<Handle>) {
     use rayon::prelude::*;
-    let ents: Vec<&std::sync::Arc<Entity>> = store.iter().collect();
+    let ents: Vec<&std::sync::Arc<Entity>> = store.iter().filter(|e| !hidden.contains(&e.handle)).collect();
     let budget = std::sync::atomic::AtomicUsize::new(0);
     let (opts, plotting) = (b.opts, b.plotting);
     let parts: Vec<DisplayList> = ents
