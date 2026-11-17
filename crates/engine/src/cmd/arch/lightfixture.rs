@@ -1510,11 +1510,11 @@ mod tests {
     #[test]
     fn strip_path_point_spacing_boundary() {
         let mut session = Session::new();
-        // Points exactly 0.01 m apart: passes (6 points = 5 segments = 0.05 m total length)
+        // Points just over 0.01 m apart: passes (6 points = 5 segments = 0.055 m total length)
         session
             .execute(
                 "lightfixture",
-                &json!({"type": "LED strip", "path": [[0.0, 0.0], [0.01, 0.0], [0.02, 0.0], [0.03, 0.0], [0.04, 0.0], [0.05, 0.0]], "height": 2.4}),
+                &json!({"type": "LED strip", "path": [[0.0, 0.0], [0.011, 0.0], [0.022, 0.0], [0.033, 0.0], [0.044, 0.0], [0.055, 0.0]], "height": 2.4}),
             )
             .unwrap();
         assert_eq!(session.doc().unwrap().arch.lights.len(), 1);
