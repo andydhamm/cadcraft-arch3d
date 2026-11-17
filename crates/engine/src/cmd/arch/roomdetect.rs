@@ -1005,4 +1005,29 @@ mod tests {
         let val = res.unwrap();
         assert!(val["count"].as_u64().unwrap() > 0, "must detect at least one room");
     }
+
+    /// A level-filtered roomdetect must not touch label_area on other levels.
+    #[test]
+    fn roomdetect_level_filter_keeps_label_area_on_other_levels() {
+        use cadcraft_doc::arch::LabelArea;
+        let mut s = Session::new();
+        s.execute("level", &json!({ "above": 0 })).unwrap();
+        let ring = [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0], [0.0, 0.0]];
+        s.execute("wall", &json!({ "points": ring, "level": 0, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("wall", &json!({ "points": ring, "level": 1, "thickness": 0.2, "height": 2.4, "exterior": true })).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        // Set label_area to Standard on level 1 only
+        for r in s.doc_mut().unwrap().arch.rooms.iter_mut() {
+            if r.level == 1 {
+                r.label_area = LabelArea::Standard;
+            }
+        }
+        // Re-detect only level 0
+        s.execute("roomdetect", &json!({ "level": 0 })).unwrap();
+        let d = s.doc().unwrap();
+        for r in &d.arch.rooms {
+            let expected = if r.level == 1 { LabelArea::Standard } else { LabelArea::Interior };
+            assert_eq!(r.label_area, expected, "level {} room should have {:?}", r.level, expected);
+        }
+    }
 }
