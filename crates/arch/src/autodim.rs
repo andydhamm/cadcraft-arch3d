@@ -668,4 +668,67 @@ mod tests {
         let north = row(&rows, "north", AutoRowKind::Openings).expect("north openings");
         assert!(north.points.len() <= cadcraft_doc::arch::MAX_AUTO_DIMS_PER_LEVEL);
     }
+
+    #[test]
+    fn huge_coordinates() {
+        let scale = 1000.0;
+        let mut m = ArchModel::default();
+        m.walls = vec![
+            wall(0, (0.0, 0.0), (10.0 * scale, 0.0), 0.2 * scale, true),
+            wall(1, (10.0 * scale, 0.0), (10.0 * scale, 8.0 * scale), 0.2 * scale, true),
+            wall(2, (10.0 * scale, 8.0 * scale), (0.0, 8.0 * scale), 0.2 * scale, true),
+            wall(3, (0.0, 8.0 * scale), (0.0, 0.0), 0.2 * scale, true),
+        ];
+        m.next_id = 4;
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Overall]);
+        assert_eq!(rows.len(), 4);
+        for r in &rows {
+            let want = if r.dir.x == 1.0 { 10.2 * scale } else { 8.2 * scale };
+            assert!(close(&values(r), &[want]), "{} {:?}", r.side, values(r));
+        }
+    }
+
+    #[test]
+    fn interior_wall_not_touching_is_ignored() {
+        let mut m = house();
+        // Shorten w4 so neither endpoint touches an exterior wall
+        m.walls[4].start = Vec2::new(0.2, 3.0);
+        m.walls[4].end = Vec2::new(9.8, 3.0);
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Walls]);
+        // East, west and south should have no walls row (only extremes, < 3 points)
+        assert!(row(&rows, "east", AutoRowKind::Walls).is_none());
+        assert!(row(&rows, "west", AutoRowKind::Walls).is_none());
+        assert!(row(&rows, "south", AutoRowKind::Walls).is_none());
+        // North should still have its walls row from w5
+        assert!(row(&rows, "north", AutoRowKind::Walls).is_some());
+    }
+
+    #[test]
+    fn multiple_walls_on_one_side() {
+        let mut m = ArchModel::default();
+        // South side: two walls (0,0)-(5,0) and (5,0)-(10,0)
+        m.walls = vec![
+            wall(0, (0.0, 0.0), (5.0, 0.0), 0.2, true),
+            wall(1, (5.0, 0.0), (10.0, 0.0), 0.2, true),
+            wall(2, (10.0, 0.0), (10.0, 8.0), 0.2, true),
+            wall(3, (10.0, 8.0), (0.0, 8.0), 0.2, true),
+            wall(4, (0.0, 8.0), (0.0, 0.0), 0.2, true),
+        ];
+        m.next_id = 5;
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Overall]);
+        let south = row(&rows, "south", AutoRowKind::Overall).expect("south");
+        assert!(close(&values(&south), &[10.2]), "{:?}", values(&south));
+    }
+
+    #[test]
+    fn coincident_interior_wall_endpoints_merge() {
+        let mut m = house();
+        // Add another interior wall ending at the same point as w5 on the north side
+        m.walls.push(wall(6, (6.0, 4.0), (6.0, 8.0), 0.1, false));
+        let rows = exterior_rows(&m, 0, &[AutoRowKind::Walls]);
+        let north = row(&rows, "north", AutoRowKind::Walls).expect("north walls");
+        // Should still have 3 points (extremes + one merged interior point)
+        assert_eq!(north.points.len(), 3);
+        assert!(close(&values(&north), &[6.1, 4.1]), "{:?}", values(&north));
+    }
 }
