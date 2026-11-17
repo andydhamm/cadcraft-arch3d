@@ -93,4 +93,13 @@ mod tests {
         assert_eq!(undo_len(&s), depth);
         assert_eq!(s.doc().unwrap().arch.rooms, before);
     }
+
+    #[test]
+    fn room_label_accepts_case_insensitive_prefix_and_whitespace() {
+        let mut s = session();
+        s.execute("room.label", &json!({"room": " R0 ", "area": "standard"})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].label_area, LabelArea::Standard);
+        s.execute("room.label", &json!({"room": "r0", "area": "interior"})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.rooms[0].label_area, LabelArea::Interior);
+    }
 }

@@ -318,4 +318,65 @@ mod tests {
         assert!(l.iter().all(|x| x.at.x.is_finite() && x.at.y.is_finite()));
         assert!(l.iter().all(|x| x.kind != PlanLabelKind::RoomArea));
     }
+
+    #[test]
+    fn triangular_room_dimensions_use_longest_edge() {
+        // Triangle with vertices at (0,0), (6,0), (0,4). Longest edge is (0,0)-(6,0) with length 6.
+        let m = one_room(Room {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(0.0, 4.0)],
+            name: "Tri".into(),
+            interior_area: 12.0,
+            ..Room::default()
+        });
+        let l = run(&m, RoomLabelShow { name: false, area: false, dimensions: true, ceiling: false, ..Default::default() });
+        assert_eq!(l.len(), 1);
+        assert_eq!(l[0].text, "6.00 x 4.00");
+    }
+
+    #[test]
+    fn square_room_dimensions_are_deterministic() {
+        // Square with all edges length 4; the first edge is picked (deterministic).
+        let m = one_room(Room {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(0.0, 4.0)],
+            name: "Sq".into(),
+            interior_area: 16.0,
+            ..Room::default()
+        });
+        let l = run(&m, RoomLabelShow { name: false, area: false, dimensions: true, ceiling: false, ..Default::default() });
+        assert_eq!(l.len(), 1);
+        assert_eq!(l[0].text, "4.00 x 4.00");
+    }
+
+    #[test]
+    fn room_labels_filter_by_level() {
+        let mut m = ArchModel::default();
+        m.push_room(Room { polygon: quad(0.0, 0.0), name: "Ground".into(), level: 0, ..Room::default() });
+        m.push_room(Room { polygon: quad(10.0, 0.0), name: "Upper".into(), level: 1, ..Room::default() });
+        let s = RoomLabelShow { name: true, area: false, dimensions: false, ceiling: false, ..Default::default() };
+        let mut out = PlanAnnotation::default();
+        room_labels(&m, Some(0), s, &mut out);
+        assert_eq!(out.labels.len(), 1);
+        assert_eq!(out.labels[0].text, "Ground");
+        let mut out = PlanAnnotation::default();
+        room_labels(&m, Some(1), s, &mut out);
+        assert_eq!(out.labels.len(), 1);
+        assert_eq!(out.labels[0].text, "Upper");
+    }
+
+    #[test]
+    fn room_with_zero_area_shows_zero_area_label() {
+        let m = one_room(Room {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 0.0), Vec2::new(0.0, 1.0)],
+            name: "Zero".into(),
+            interior_area: 0.0,
+            ..Room::default()
+        });
+        let l = run(&m, RoomLabelShow { name: true, area: true, dimensions: true, ceiling: false, ..Default::default() });
+        let kinds: Vec<_> = l.iter().map(|x| x.kind).collect();
+        assert!(kinds.contains(&PlanLabelKind::RoomName));
+        assert!(kinds.contains(&PlanLabelKind::RoomArea));
+        assert!(kinds.contains(&PlanLabelKind::RoomDimensions));
+        let area_label = l.iter().find(|x| x.kind == PlanLabelKind::RoomArea).unwrap();
+        assert_eq!(area_label.text, "0.00 m2");
+    }
 }
