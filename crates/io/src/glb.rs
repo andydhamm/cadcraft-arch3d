@@ -3196,6 +3196,24 @@ mod tests {
     }
 
     #[test]
+    fn finish_roughness_all_nine() {
+        let expected: [(Finish, f64); 9] = [
+            (Finish::Siding, 0.6),
+            (Finish::Shingles, 0.95),
+            (Finish::Brick, 0.9),
+            (Finish::Wood, 0.5),
+            (Finish::Concrete, 0.9),
+            (Finish::Tile, 0.3),
+            (Finish::Carpet, 1.0),
+            (Finish::Drywall, 0.9),
+            (Finish::Plaster, 0.9),
+        ];
+        for (f, rough) in expected {
+            assert_eq!(finish_roughness(f), rough, "finish {} roughness", f.name());
+        }
+    }
+
+    #[test]
     fn multiple_finishes_normal_indices_are_distinct() {
         let mut scene = scene_with(0);
         scene.meshes.push({

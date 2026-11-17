@@ -821,6 +821,7 @@ mod tests {
     }
     use super::*;
     use crate::types::{ArchId, Mesh};
+    use cadcraft_doc::arch::Finish;
 
     #[test]
     fn upload_counts_vertices_from_arch3d_meshes() {
@@ -1385,6 +1386,27 @@ mod tests {
         let desc = glass_pipeline_descriptor(1);
         assert!(!desc.depth_write, "glass pipeline must not write depth");
         assert_eq!(desc.blend, Some(BlendMode::GlassHouse), "glass pipeline must blend");
+    }
+
+    #[test]
+    fn material_pbr_roughness_for_all_finishes() {
+        let expected: [(Finish, f32); 9] = [
+            (Finish::Siding, 0.6),
+            (Finish::Shingles, 0.95),
+            (Finish::Brick, 0.9),
+            (Finish::Wood, 0.5),
+            (Finish::Concrete, 0.9),
+            (Finish::Tile, 0.3),
+            (Finish::Carpet, 1.0),
+            (Finish::Drywall, 0.9),
+            (Finish::Plaster, 0.9),
+        ];
+        for (f, rough) in expected {
+            let (_, m, r, a) = material_pbr(&format!("wall-{}", f.name()));
+            assert_eq!(r, rough, "finish {} roughness", f.name());
+            assert_eq!(m, 0.0, "finish {} metallic", f.name());
+            assert_eq!(a, 1.0, "finish {} alpha", f.name());
+        }
     }
 
     #[test]
