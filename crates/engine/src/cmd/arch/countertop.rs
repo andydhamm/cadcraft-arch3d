@@ -496,4 +496,18 @@ mod tests {
         let r = rows(&mut s);
         assert!((r[0]["area"].as_f64().unwrap() - 1.665).abs() < 1e-9, "{}", r[0]["area"]);
     }
+
+    #[test]
+    fn edit_vertex_moves_one_vertex() {
+        let mut s = island();
+        let r = s.execute("countertop.detach", &json!({"run": "cb1"})).unwrap();
+        assert_eq!(r["countertop"], "ct0");
+        // Move vertex 0 to a new position
+        let r = s.execute("countertop.edit", &json!({"id": "ct0", "vertex": 0, "to": [1.5, 1.9]})).unwrap();
+        assert!(r["area"].as_f64().is_some());
+        // The area should have changed from the original
+        let original_area = 1.125; // 1.8 * 0.625
+        let new_area = r["area"].as_f64().unwrap();
+        assert!((new_area - original_area).abs() > 1e-9, "moving a vertex changes the area");
+    }
 }
