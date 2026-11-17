@@ -514,19 +514,14 @@ mod tests {
             let d = s.doc_mut().unwrap();
             d.arch.types.push(cadcraft_doc::arch::WallType {
                 name: "Custom".into(),
-                layers: vec![cadcraft_doc::arch::WallLayer {
-                    name: "custom".into(),
-                    thickness: 0.15,
-                    material: "custom".into(),
-                    reference: cadcraft_doc::arch::LayerReference::Centre,
-                }],
+                layers: vec![cadcraft_doc::arch::WallLayer { name: "custom".into(), thickness: 0.15, material: "custom".into() }],
                 ..Default::default()
             });
             d.touch_arch();
         }
         s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Custom"})).unwrap();
-        let r = s.execute("wall.split", &json!({"id": "w0", "height": 1.0, "lower": "Custom"}));
-        assert!(r.is_ok(), "split with model wall type should work");
+        let r = s.execute("wall.split", &json!({"id": "w0", "height": 1.0, "lower": "Custom"})).unwrap();
+        assert_eq!(r["wall"], "w0");
         let wall = &s.doc().unwrap().arch.walls[0];
         assert_eq!(wall.wall_type, "Custom");
     }
