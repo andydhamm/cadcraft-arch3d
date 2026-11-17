@@ -196,4 +196,25 @@ mod tests {
         assert!(text.contains("IFCPROPERTYSET('"));
         assert!(text.contains("'CADCraft_Light'"));
     }
+
+    #[test]
+    fn strip_ifc_with_zero_lumens_per_metre() {
+        use cadcraft_doc::arch::{FixtureShape, StripFacing};
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, name: "Ground".into(), ..Level::default() }];
+        m.lights = vec![LightFixture {
+            kind: LightKind::Strip,
+            shape: FixtureShape::Strip,
+            path: vec![Vec2::new(1.0, 2.0), Vec2::new(3.0, 2.0)],
+            lumens_per_metre: 0.0,
+            lumens: 0.0,
+            facing: StripFacing::Down,
+            height: Some(2.4),
+            ..LightFixture::new(ArchId(0), "LED strip", Vec2::new(2.0, 2.0))
+        }];
+        let text = write_model(&m, &Scene3d::default(), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCLIGHTFIXTURE(").count(), 1, "{text}");
+        assert!(text.contains(",'light-lf0',$,$,#"), "{text}");
+        assert!(text.contains("IFCPROPERTYSINGLEVALUE('Lumens',$,IFCLUMINOUSFLUXMEASURE(0.),$)"), "{text}");
+    }
 }

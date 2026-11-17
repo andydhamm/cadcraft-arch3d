@@ -330,4 +330,26 @@ mod tests {
         assert_eq!(lights[0]["brightness"], json!(0.0));
         assert_eq!(lights[1]["brightness"], json!(1.0));
     }
+
+    #[test]
+    fn strip_inspect_after_edit() {
+        let mut session = Session::new();
+        session
+            .execute(
+                "lightfixture",
+                &json!({"type": "LED strip", "path": [[0.0, 0.0], [2.0, 0.0]], "height": 2.4, "lumensPerMetre": 500, "facing": "down"}),
+            )
+            .unwrap();
+        let row = session.execute("arch.inspect", &json!({"lights": true})).unwrap()["lights"][0].clone();
+        assert_eq!(row["kind"], "strip");
+        assert_eq!(row["length"].as_f64(), Some(2.0));
+        assert_eq!(row["lumensPerMetre"].as_f64(), Some(500.0));
+        assert_eq!(row["facing"], "down");
+        // Edit the strip
+        session.execute("lightfixture.edit", &json!({"id": "lf0", "lumensPerMetre": 250, "facing": "out"})).unwrap();
+        let row = session.execute("arch.inspect", &json!({"lights": true})).unwrap()["lights"][0].clone();
+        assert_eq!(row["lumensPerMetre"].as_f64(), Some(250.0));
+        assert_eq!(row["facing"], "out");
+        assert_eq!(row["length"].as_f64(), Some(2.0));
+    }
 }
