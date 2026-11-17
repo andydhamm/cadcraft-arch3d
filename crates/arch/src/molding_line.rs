@@ -260,4 +260,139 @@ mod tests {
         let run = line_run(&model, &line).unwrap();
         assert!((run.z[0] - 2.7).abs() < 1e-9);
     }
+
+    #[test]
+    fn validate_refuses_nan_elevation_and_inset() {
+        let ok = MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)],
+            inset: 0.1,
+            elevation: 0.0,
+            profile: profile(),
+            ..Default::default()
+        };
+        let nan_elev = MoldingLine { elevation: f64::NAN, ..ok.clone() };
+        assert!(validate(&nan_elev).is_err());
+        let nan_inset = MoldingLine { inset: f64::NAN, ..ok.clone() };
+        assert!(validate(&nan_inset).is_err());
+        let inf_elev = MoldingLine { elevation: f64::INFINITY, ..ok.clone() };
+        assert!(validate(&inf_elev).is_err());
+    }
+
+    #[test]
+    fn validate_refuses_out_of_range_elevation_and_inset() {
+        let ok = MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)],
+            inset: 0.1,
+            elevation: 0.0,
+            profile: profile(),
+            ..Default::default()
+        };
+        let too_low = MoldingLine { elevation: -1.1, ..ok.clone() };
+        assert!(validate(&too_low).is_err());
+        let too_high = MoldingLine { elevation: 10.1, ..ok.clone() };
+        assert!(validate(&too_high).is_err());
+        let inset_big = MoldingLine { inset: 1.1, ..ok.clone() };
+        assert!(validate(&inset_big).is_err());
+        let inset_neg_big = MoldingLine { inset: -1.1, ..ok.clone() };
+        assert!(validate(&inset_neg_big).is_err());
+        // Boundary values are accepted.
+        let low_ok = MoldingLine { elevation: -1.0, ..ok.clone() };
+        assert!(validate(&low_ok).is_ok());
+        let high_ok = MoldingLine { elevation: 10.0, ..ok.clone() };
+        assert!(validate(&high_ok).is_ok());
+        let inset_max = MoldingLine { inset: 1.0, ..ok.clone() };
+        assert!(validate(&inset_max).is_ok());
+        let inset_min = MoldingLine { inset: -1.0, ..ok.clone() };
+        assert!(validate(&inset_min).is_ok());
+    }
+
+    #[test]
+    fn line_run_returns_none_for_invalid_line() {
+        let bad = MoldingLine { points: vec![Vec2::new(0.0, 0.0)], inset: 0.1, elevation: 0.0, profile: profile(), ..Default::default() };
+        assert!(line_run_at(&bad, 0.0).is_none());
+        let bad_elev = MoldingLine { elevation: 11.0, ..bad.clone() };
+        assert!(line_run_at(&bad_elev, 0.0).is_none());
+    }
+
+    #[test]
+    fn offset_path_zero_inset_is_identity() {
+        let line = MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(3.0, 0.0), Vec2::new(3.0, 2.0)],
+            inset: 0.0,
+            profile: profile(),
+            ..Default::default()
+        };
+        let run = line_run_at(&line, 0.0).unwrap();
+        assert_eq!(run.path[0], Vec2::new(0.0, 0.0));
+        assert_eq!(run.path[1], Vec2::new(3.0, 0.0));
+        assert_eq!(run.path[2], Vec2::new(3.0, 2.0));
+    }
+
+    #[test]
+    fn offset_path_negative_inset_offsets_right() {
+        let line = MoldingLine { points: vec![Vec2::new(0.0, 0.0), Vec2::new(3.0, 0.0)], inset: -0.1, profile: profile(), ..Default::default() };
+        let run = line_run_at(&line, 0.0).unwrap();
+        // Right of travel (x increasing) is -y direction.
+        assert!((run.path[0].y - (-0.1)).abs() < 1e-9);
+        assert!((run.path[1].y - (-0.1)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn line_run_at_different_level_elevations() {
+        let line = MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)],
+            elevation: 0.5,
+            inset: 0.0,
+            profile: profile(),
+            ..Default::default()
+        };
+        let run0 = line_run_at(&line, 0.0).unwrap();
+        let run1 = line_run_at(&line, 2.5).unwrap();
+        assert!((run0.z[0] - 0.5).abs() < 1e-9);
+        assert!((run1.z[0] - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn line_with_two_points_is_valid() {
+        let line = MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)],
+            inset: 0.0,
+            elevation: 0.0,
+            profile: profile(),
+            ..Default::default()
+        };
+        assert!(validate(&line).is_ok());
+        let run = line_run_at(&line, 0.0).unwrap();
+        assert_eq!(run.path.len(), 2);
+    }
+
+    #[test]
+    fn closed_line_with_three_points_is_valid() {
+        let line = MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.5, 1.0)],
+            closed: true,
+            inset: 0.0,
+            elevation: 0.0,
+            profile: profile(),
+            ..Default::default()
+        };
+        assert!(validate(&line).is_ok());
+        let run = line_run_at(&line, 0.0).unwrap();
+        assert!(run.closed);
+        assert_eq!(run.path.len(), 3);
+    }
+
+    #[test]
+    fn coincident_consecutive_points_are_dropped() {
+        let line = MoldingLine {
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)],
+            inset: 0.0,
+            elevation: 0.0,
+            profile: profile(),
+            ..Default::default()
+        };
+        assert!(validate(&line).is_ok());
+        let run = line_run_at(&line, 0.0).unwrap();
+        assert_eq!(run.path.len(), 2);
+    }
 }
