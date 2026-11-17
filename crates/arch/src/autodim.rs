@@ -691,12 +691,16 @@ mod tests {
     #[test]
     fn interior_wall_not_touching_is_ignored() {
         let mut m = house();
-        // Shorten w4 so its east endpoint is 0.2 from w1's centerline (> w1.t/2 + EPS = 0.100001)
+        // Shorten w4 so neither endpoint touches an exterior wall
+        m.walls[4].start = Vec2::new(0.2, 3.0);
         m.walls[4].end = Vec2::new(9.8, 3.0);
         let rows = exterior_rows(&m, 0, &[AutoRowKind::Walls]);
-        // East and west should have no walls row (only extremes, < 3 points)
+        // East, west and south should have no walls row (only extremes, < 3 points)
         assert!(row(&rows, "east", AutoRowKind::Walls).is_none());
         assert!(row(&rows, "west", AutoRowKind::Walls).is_none());
+        assert!(row(&rows, "south", AutoRowKind::Walls).is_none());
+        // North should still have its walls row from w5
+        assert!(row(&rows, "north", AutoRowKind::Walls).is_some());
     }
 
     #[test]
