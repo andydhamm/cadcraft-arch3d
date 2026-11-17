@@ -432,6 +432,19 @@ mod tests {
     }
 
     #[test]
+    fn frame_uniform_with_sh_and_ambient_lux() {
+        let sh = [[1.0, 2.0, 3.0]; 9];
+        let params = LitParams { ambient_lux: 40.0, sh: Some(sh), ..Default::default() };
+        let bytes = frame_uniform(None, &params, 512);
+        let word = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        assert_eq!(word(96), 40.0, "ambient_lux is written");
+        assert_eq!(word(100), 1.0, "sh valid flag is set");
+        assert_eq!(word(112), 1.0, "first SH coefficient r");
+        assert_eq!(word(116), 2.0, "first SH coefficient g");
+        assert_eq!(word(120), 3.0, "first SH coefficient b");
+    }
+
+    #[test]
     fn lit_frame_night_ambient_is_finite() {
         let Some((device, queue)) = skip_without_device() else { return };
         let params = LitParams { sun_on: false, ambient: f32::NAN, ..Default::default() };
