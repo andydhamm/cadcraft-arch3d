@@ -162,4 +162,30 @@ mod tests {
         assert_eq!(r[0].b, Some([2.0, 0.0]));
         assert!(r[0].detached);
     }
+
+    #[test]
+    fn attach_point_with_no_lines() {
+        let g = ViewGeometry::default();
+        let a = NoteAttach { kind: ArchKind::Cabinet, object: ArchId(0), corner: Corner::Center, ..Default::default() };
+        let r = attach_point(&g, &a);
+        assert!(r.is_none());
+    }
+
+    #[test]
+    fn attach_point_with_different_kind() {
+        let line = ViewLine { a: [1.0, 2.0], b: [3.0, 4.0], kind: ArchKind::Wall, object: ArchId(0), ..Default::default() };
+        let g = ViewGeometry { lines: vec![line], ..Default::default() };
+        let a = NoteAttach { kind: ArchKind::Cabinet, object: ArchId(0), corner: Corner::Center, ..Default::default() };
+        let r = attach_point(&g, &a);
+        assert!(r.is_none());
+    }
+
+    #[test]
+    fn attach_point_with_degenerate_line() {
+        let line = ViewLine { a: [1.0, 2.0], b: [1.0, 2.0], kind: ArchKind::Cabinet, object: ArchId(0), ..Default::default() };
+        let g = ViewGeometry { lines: vec![line], ..Default::default() };
+        let a = NoteAttach { kind: ArchKind::Cabinet, object: ArchId(0), corner: Corner::Center, ..Default::default() };
+        let r = attach_point(&g, &a);
+        assert_eq!(r, Some([1.0, 2.0]));
+    }
 }

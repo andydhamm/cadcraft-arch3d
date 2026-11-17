@@ -336,4 +336,36 @@ mod tests {
         assert_eq!(v.notes.len(), 1);
         assert_eq!(v.notes[0].text, "keep");
     }
+
+    #[test]
+    fn extent_of_empty() {
+        assert!(extent_of(&[], &[]).is_none());
+    }
+
+    #[test]
+    fn extent_of_lines() {
+        use cadcraft_doc::arch::ViewLine;
+        let lines =
+            vec![ViewLine { a: [1.0, 2.0], b: [3.0, 4.0], ..Default::default() }, ViewLine { a: [0.0, 0.0], b: [5.0, 1.0], ..Default::default() }];
+        assert_eq!(extent_of(&lines, &[]), Some([0.0, 0.0, 5.0, 4.0]));
+    }
+
+    #[test]
+    fn extent_of_rings() {
+        use cadcraft_doc::arch::ViewRing;
+        let rings = vec![ViewRing { points: vec![[1.0, 2.0], [3.0, 4.0]], ..Default::default() }];
+        assert_eq!(extent_of(&[], &rings), Some([1.0, 2.0, 3.0, 4.0]));
+    }
+
+    #[test]
+    fn overall_dims_off() {
+        let v = ArchView { dimensions: false, ..Default::default() };
+        assert!(overall_dims(&v, Some([0.0, 0.0, 4.0, 3.0])).is_empty());
+    }
+
+    #[test]
+    fn overall_dims_no_extent() {
+        let v = ArchView { dimensions: true, ..Default::default() };
+        assert!(overall_dims(&v, None).is_empty());
+    }
 }
