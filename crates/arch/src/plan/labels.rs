@@ -321,7 +321,9 @@ mod tests {
 
     #[test]
     fn triangular_room_dimensions_use_longest_edge() {
-        // Triangle with vertices at (0,0), (6,0), (0,4). Longest edge is (0,0)-(6,0) with length 6.
+        // Triangle with vertices at (0,0), (6,0), (0,4). Longest edge is the hypotenuse
+        // (6,0)-(0,4) with length sqrt(52) ≈ 7.21. The bounding rectangle aligned with
+        // that edge has width 7.21 and depth (6*4)/sqrt(52) ≈ 3.33.
         let m = one_room(Room {
             polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(0.0, 4.0)],
             name: "Tri".into(),
@@ -330,7 +332,7 @@ mod tests {
         });
         let l = run(&m, RoomLabelShow { name: false, area: false, dimensions: true, ceiling: false, ..Default::default() });
         assert_eq!(l.len(), 1);
-        assert_eq!(l[0].text, "6.00 x 4.00");
+        assert_eq!(l[0].text, "7.21 x 3.33");
     }
 
     #[test]
