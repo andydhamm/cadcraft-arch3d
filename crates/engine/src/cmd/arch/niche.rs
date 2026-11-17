@@ -275,4 +275,71 @@ mod tests {
         assert!(s.execute("niche", &json!({"wall": "w0", "offset": 5.0, "sill": 0.005})).is_err());
         assert!(s.execute("niche", &json!({"wall": "w0", "offset": 5.0, "sill": 0.01})).is_ok());
     }
+
+    #[test]
+    fn niche_rejects_non_finite_offset() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": "abc"}));
+        assert!(r.is_err(), "non-numeric offset should be rejected");
+    }
+
+    #[test]
+    fn niche_rejects_zero_depth() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 5.0, "depth": 0.0}));
+        assert!(r.is_err(), "zero depth should be rejected");
+    }
+
+    #[test]
+    fn niche_rejects_negative_depth() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 5.0, "depth": -0.05}));
+        assert!(r.is_err(), "negative depth should be rejected");
+    }
+
+    #[test]
+    fn niche_rejects_zero_width() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 5.0, "width": 0.0}));
+        assert!(r.is_err(), "zero width should be rejected");
+    }
+
+    #[test]
+    fn niche_rejects_zero_height() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 5.0, "height": 0.0}));
+        assert!(r.is_err(), "zero height should be rejected");
+    }
+
+    #[test]
+    fn niche_accepts_point_projection() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "point": [5.0, 0.0]}));
+        assert!(r.is_ok(), "point projection should work: {:?}", r.err());
+        let one = &r.unwrap()["openings"][0];
+        assert!((one["offset"].as_f64().unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn niche_point_off_wall_rejected() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "point": [20.0, 5.0]}));
+        assert!(r.is_err(), "point far off wall should be rejected");
+    }
+
+    #[test]
+    fn niche_depth_exceeding_wall_thickness_refused() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 5.0, "depth": 0.3}));
+        assert!(r.is_err(), "depth 0.3 > wall thickness 0.2 should be refused");
+    }
+
+    #[test]
+    fn niche_at_wall_start_and_end() {
+        let mut s = walled();
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 0.6, "width": 0.6}));
+        assert!(r.is_ok(), "niche near wall start should succeed: {:?}", r.err());
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 9.4, "width": 0.6}));
+        assert!(r.is_ok(), "niche near wall end should succeed: {:?}", r.err());
+    }
 }
