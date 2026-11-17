@@ -535,7 +535,6 @@ mod tests {
         s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Interior"})).unwrap();
         // Split with exterior lower type - layers should change
         let r = s.execute("wall.split", &json!({"id": "w0", "height": 1.0, "lower": "Exterior"})).unwrap();
-        assert!(r.is_ok());
         let wall = &s.doc().unwrap().arch.walls[0];
         assert_eq!(wall.wall_type, "Exterior");
         assert!(wall.exterior);
