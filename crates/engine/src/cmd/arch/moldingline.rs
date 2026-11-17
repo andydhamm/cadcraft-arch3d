@@ -51,7 +51,7 @@ fn parse_points(cmd: &str, v: &Value) -> Result<Vec<Vec2>> {
     if arr.len() > MAX_INPUT_POINTS {
         return Err(bad(cmd, format!("`points` holds at most {MAX_INPUT_POINTS} points")));
     }
-    let mut out = Vec::with_capacity(arr.len());
+    let mut out: Vec<Vec2> = Vec::with_capacity(arr.len());
     for pt in arr {
         let pair = pt.as_array().filter(|a| a.len() == 2).ok_or_else(err)?;
         let x = pair.first().and_then(Value::as_f64).filter(|x| x.is_finite()).ok_or_else(err)?;
