@@ -399,4 +399,76 @@ mod tests {
         assert_eq!(r["face"]["rows"][0]["kind"], "door");
         assert!(r["face"]["rows"][0]["appliance"].is_null());
     }
+
+    #[test]
+    fn face_fixed_rows_sum_less_than_face_height() {
+        let (mut s, id) = session();
+        // Face height is 0.776 (0.876 - 0.1 toe). Two fixed rows of 0.2 each plus one separator
+        // (0.003) sum to 0.403, well short of 0.776 with no shared row to absorb the remainder.
+        let r = s.execute(CMD, &json!({"id": id, "rows": [{"kind": "drawer", "height": 0.2}, {"kind": "drawer", "height": 0.2}]}));
+        assert!(r.is_err(), "fixed rows summing to less than face height with no shared row should fail");
+    }
+
+    #[test]
+    fn face_fixed_rows_sum_exactly_face_height() {
+        let (mut s, id) = session();
+        // Face height 0.776; two fixed rows of 0.3865 each plus one 0.003 separator = 0.776.
+        let r = s.execute(CMD, &json!({"id": id, "rows": [{"kind": "drawer", "height": 0.3865}, {"kind": "drawer", "height": 0.3865}]})).unwrap();
+        let rows = r["face"]["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["fixed"], true);
+        assert_eq!(rows[1]["fixed"], true);
+    }
+
+    #[test]
+    fn face_split_twice_in_sequence() {
+        let (mut s, id) = session();
+        s.execute(CMD, &json!({"id": id, "rows": [{"kind": "drawer", "height": 0.3}, {"kind": "door"}]})).unwrap();
+        s.execute(CMD, &json!({"id": id, "row": 0, "split": "down", "count": 2})).unwrap();
+        s.execute(CMD, &json!({"id": id, "row": 2, "split": "down", "count": 2})).unwrap();
+        let f = face(&mut s);
+        let rows = f["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 4);
+    }
+
+    #[test]
+    fn face_row_index_as_float_refused() {
+        let (mut s, id) = session();
+        s.execute(CMD, &json!({"id": id, "rows": [{"kind": "door"}]})).unwrap();
+        assert!(s.execute(CMD, &json!({"id": id, "row": 0.5, "split": "down", "count": 2})).is_err(), "row index must be an integer");
+    }
+
+    #[test]
+    fn face_across_as_float_refused() {
+        let (mut s, id) = session();
+        assert!(s.execute(CMD, &json!({"id": id, "rows": [{"kind": "door", "across": 2.0}]})).is_err(), "across must be an integer");
+    }
+
+    #[test]
+    fn face_count_as_float_refused() {
+        let (mut s, id) = session();
+        s.execute(CMD, &json!({"id": id, "rows": [{"kind": "door"}]})).unwrap();
+        assert!(s.execute(CMD, &json!({"id": id, "row": 0, "split": "down", "count": 2.0})).is_err(), "count must be an integer");
+    }
+
+    #[test]
+    fn face_row_height_minimum_boundary() {
+        let (mut s, id) = session();
+        // Minimum row height is 0.05 m.
+        s.execute(CMD, &json!({"id": id, "rows": [{"kind": "drawer", "height": 0.05}, {"kind": "door"}]})).unwrap();
+        // Just below 0.05 should fail.
+        assert!(
+            s.execute(CMD, &json!({"id": id, "rows": [{"kind": "drawer", "height": 0.049}, {"kind": "door"}]})).is_err(),
+            "row height below 0.05 m should fail"
+        );
+    }
+
+    #[test]
+    fn face_eight_rows_is_maximum() {
+        let (mut s, id) = session();
+        let eight: Vec<Value> = (0..8).map(|_| json!({"kind": "door"})).collect();
+        s.execute(CMD, &json!({"id": id, "rows": eight})).unwrap();
+        let nine: Vec<Value> = (0..9).map(|_| json!({"kind": "door"})).collect();
+        assert!(s.execute(CMD, &json!({"id": id, "rows": nine})).is_err(), "9 rows should fail");
+    }
 }

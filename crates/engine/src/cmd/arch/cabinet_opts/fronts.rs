@@ -74,4 +74,34 @@ mod tests {
         assert_eq!(v["cabinets"].as_array().unwrap().len(), 1);
         assert_eq!(v["cabinets"][0]["construction"], "frameless");
     }
+
+    #[test]
+    fn construction_and_mount_set_together() {
+        let mut s = Session::new();
+        let r = s.execute("cabinet", &json!({"kind": "wall", "at": [1.0, 1.0], "construction": "framed", "mount": "overlay"})).unwrap();
+        let id = r["cabinets"][0].as_str().unwrap().to_string();
+        let v = s.execute("arch.inspect", &json!({"cabinets": true})).unwrap();
+        assert_eq!(v["cabinets"][0]["construction"], "framed");
+        assert_eq!(v["cabinets"][0]["mount"], "overlay");
+        // Change both at once via edit.
+        s.execute("cabinet.edit", &json!({"id": id, "construction": "frameless", "mount": "inset"})).unwrap();
+        let v = s.execute("arch.inspect", &json!({"cabinets": true})).unwrap();
+        assert_eq!(v["cabinets"][0]["construction"], "frameless");
+        assert_eq!(v["cabinets"][0]["mount"], "inset");
+    }
+
+    #[test]
+    fn inset_mount_rejects_face_that_only_fits_overlay() {
+        let mut s = Session::new();
+        // Overlay base cabinet face height: 0.876 - 0.1 (toe) = 0.776.
+        let r = s.execute("cabinet", &json!({"kind": "base", "at": [1.0, 1.0], "mount": "overlay"})).unwrap();
+        let id = r["cabinets"][0].as_str().unwrap().to_string();
+        // One fixed row filling the full overlay face height.
+        s.execute("cabinet.face", &json!({"id": id, "rows": [{"kind": "door", "height": 0.776}]})).unwrap();
+        // Inset frameless face height: 0.776 - 2*(0.019 + 0.003) = 0.732. The 0.776 row won't fit.
+        assert!(
+            s.execute("cabinet.edit", &json!({"id": id, "mount": "inset"})).is_err(),
+            "inset mount should reject a face layout that only fits overlay"
+        );
+    }
 }
