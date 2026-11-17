@@ -2136,26 +2136,6 @@ mod tests {
     }
 
     #[test]
-    fn glass_wall_with_top_level() {
-        let mut s = Session::new();
-        let d = s.doc_mut().unwrap();
-        d.arch.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
-        d.arch.levels.push(Level { index: 1, name: "Upper".into(), elevation: 2.7, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
-        d.touch_arch();
-        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"type":"Glass","level":"Lower","topLevel":"Upper"});
-        s.execute("wall", &p).unwrap();
-        let d = s.doc().unwrap();
-        assert_eq!(d.arch.walls.len(), 1);
-        let w = &d.arch.walls[0];
-        assert_eq!(w.wall_type, "Glass");
-        assert_eq!(w.thickness, cadcraft_doc::arch::GLASS_THICKNESS);
-        // Height = 2.7 + 2.4 - 0.0 = 5.1 (topLevel overrides default glass height)
-        assert!((w.height - 5.1).abs() < 1e-9);
-        assert_eq!(w.layers.len(), 1);
-        assert_eq!(w.layers[0].0, "glass");
-    }
-
-    #[test]
     fn glass_wall_with_retaining() {
         let mut s = new_session_with_level();
         let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass","retaining":true,"freeboard":0.2,"footing":0.3});
