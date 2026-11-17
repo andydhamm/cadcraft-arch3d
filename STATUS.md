@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-17 16:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-17 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
-10,965 workspace tests passing at the last merge · 1283 segments merged in all · 0 of 15 seats working
+10,995 workspace tests passing at the last merge · 1284 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-17 16:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 17 21:59–Dec 02 23:36 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 17 22:14–Dec 02 23:51 UTC |
 
 ## Phase 22 segments
 
@@ -43,6 +43,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 17 16:42 | `harden-p18-shower-niche-3` | merged | 10,995 pass | tturbo-mac |
 | Nov 17 14:49 | `harden-p20-auto-dims-1` | merged | 10,965 pass | tturbo-mac |
 | Nov 17 13:30 | `harden-p18-molding-lines-2` | merged | 10,961 pass | tturbo-mac |
 | Nov 17 12:31 | `harden-p18-molding-lines-1` | merged | 10,955 pass | tturbo-mac |
@@ -54,7 +55,6 @@ none yet
 | Nov 17 05:44 | `harden-p20-room-labels` | merged | 10,908 pass | tturbo-mac |
 | Nov 16 23:18 | `harden-p19f-cli-render-reply` | merged | 10,902 pass | tturbo-mac |
 | Nov 16 21:47 | `harden-p21t-showcase-tests-defer` | merged | 10,897 pass | tturbo-mac |
-| Nov 16 21:09 | `harden-p19t-pane-look-lighting` | merged | 10,888 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
