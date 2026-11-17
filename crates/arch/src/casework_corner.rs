@@ -90,7 +90,7 @@ pub fn corner_info(model: &ArchModel, c: &Cabinet) -> Option<CornerInfo> {
             if !((rel.x - u_e).abs() <= ALIGN && y_near >= c.depth - ALIGN && y_near <= MAX_LEG) {
                 continue;
             }
-            if best.is_none_or(|(y, o)| y_near < y || (y_near == y && b.id < o.id)) {
+            if best.is_none_or(|(y, o)| y_near < y - 1e-9 || ((y_near - y).abs() < 1e-9 && b.id < o.id)) {
                 best = Some((y_near, b));
             }
         }
@@ -622,6 +622,116 @@ mod tests {
         let sym = corner_symbol(&m2, &m2.cabinets[ix]).unwrap();
         assert!(sym.iter().all(|r| r.len() != 25));
         assert_eq!(sym[0].len(), 6);
+    }
+
+    #[test]
+    fn tie_break_by_lowest_id() {
+        // Two partners with the same y_near but different widths and positions.
+        // The one with the lower id should win.
+        let a = base(0, 0.45, 0.0, 0.0, 0.9);
+        let b1 = base(1, 0.0, 0.9, 270.0, 0.6); // y_near = 0.9 - 0.3 = 0.6
+        let b2 = base(2, 0.0, 1.0, 270.0, 0.8); // y_near = 1.0 - 0.4 = 0.6
+        let m = model(vec![a.clone(), b1, b2]);
+        let info = corner_info(&m, &a).unwrap();
+        assert_eq!(info.partner, ArchId(1), "lower id should win the tie");
+        assert!((info.leg - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tie_break_by_lowest_id_explicit() {
+        // Explicit tie-break: two partners at exactly the same y_near, lower id wins.
+        let a = base(0, 0.45, 0.0, 0.0, 0.9);
+        // Both partners at y=0.9 with width 0.6, so y_near = 0.9 - 0.3 = 0.6 for both.
+        let b1 = base(1, 0.0, 0.9, 270.0, 0.6);
+        let b2 = base(2, 0.0, 0.9, 270.0, 0.6);
+        let m = model(vec![a.clone(), b1, b2]);
+        let info = corner_info(&m, &a).unwrap();
+        assert_eq!(info.partner, ArchId(1), "lower id should win the tie");
+        assert!((info.leg - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn nearest_partner_wins_over_id() {
+        // A closer partner (smaller y_near) wins even if it has a higher id.
+        let a = base(0, 0.45, 0.0, 0.0, 0.9);
+        let b_far = base(1, 0.0, 1.2, 270.0, 0.6); // y_near = 1.2 - 0.3 = 0.9
+        let b_near = base(2, 0.0, 0.9, 270.0, 0.6); // y_near = 0.9 - 0.3 = 0.6
+        let m = model(vec![a.clone(), b_far, b_near]);
+        let info = corner_info(&m, &a).unwrap();
+        assert_eq!(info.partner, ArchId(2), "nearer partner should win");
+        assert!((info.leg - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn offset_ring_inward() {
+        // Offset a unit square inward by 0.1 (negative distance).
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        let dist = vec![-0.1, -0.1, -0.1, -0.1];
+        let out = offset_ring(&ring, &dist);
+        assert_eq!(out.len(), 4);
+        assert!((out[0].x - 0.1).abs() < 1e-9 && (out[0].y - 0.1).abs() < 1e-9);
+        assert!((out[1].x - 0.9).abs() < 1e-9 && (out[1].y - 0.1).abs() < 1e-9);
+        assert!((out[2].x - 0.9).abs() < 1e-9 && (out[2].y - 0.9).abs() < 1e-9);
+        assert!((out[3].x - 0.1).abs() < 1e-9 && (out[3].y - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn corner_info_rejects_non_finite_rotation() {
+        // A cabinet with NaN rotation should not be detected as a corner.
+        let mut m = runs(0.6, None);
+        m.cabinets[0].rotation = f64::NAN;
+        assert!(corner_info(&m, &m.cabinets[0]).is_none());
+    }
+
+    #[test]
+    fn corner_info_rejects_zero_width() {
+        // A cabinet with zero width should not be detected as a corner.
+        let mut m = runs(0.6, None);
+        m.cabinets[0].width = 0.0;
+        assert!(corner_info(&m, &m.cabinets[0]).is_none());
+    }
+
+    #[test]
+    fn chain_of_three_runs_merges() {
+        // South run: cb0 (corner at start).
+        // West run: cb1 (partner for cb0), cb2 (corner at end).
+        // North run: cb3 (partner for cb2).
+        // All three runs should merge into one counter.
+        let mut v = vec![
+            base(0, 0.3, 0.0, 0.0, 0.6),   // South run, corner at start.
+            base(1, 0.0, 0.9, 270.0, 0.6), // West run, partner for cb0.
+            base(2, 0.0, 0.3, 270.0, 0.6), // West run, corner at end.
+            base(3, 0.9, 0.0, 0.0, 0.6),   // North run, partner for cb2.
+        ];
+        let m = model(v);
+        let outlines = auto_outlines(&m);
+        assert_eq!(outlines.len(), 1, "all three runs should merge into one counter");
+    }
+
+    #[test]
+    fn offset_ring_parallel_edges() {
+        // A rectangle with all edges offset outward by the same amount.
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        let dist = vec![0.1, 0.1, 0.1, 0.1];
+        let out = offset_ring(&ring, &dist);
+        assert_eq!(out.len(), 4);
+        assert!((out[0].x + 0.1).abs() < 1e-9 && (out[0].y + 0.1).abs() < 1e-9);
+        assert!((out[1].x - 1.1).abs() < 1e-9 && (out[1].y + 0.1).abs() < 1e-9);
+        assert!((out[2].x - 1.1).abs() < 1e-9 && (out[2].y - 1.1).abs() < 1e-9);
+        assert!((out[3].x + 0.1).abs() < 1e-9 && (out[3].y - 1.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tidy_removes_collinear_points() {
+        let ring = vec![
+            Vec2::new(0.0, 0.0),
+            Vec2::new(1.0, 0.0),
+            Vec2::new(2.0, 0.0), // Collinear with the first two.
+            Vec2::new(2.0, 1.0),
+            Vec2::new(0.0, 1.0),
+        ];
+        let out = tidy(ring);
+        assert_eq!(out.len(), 4, "collinear point should be removed");
     }
 
     #[test]
