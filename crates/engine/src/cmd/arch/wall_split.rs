@@ -397,7 +397,8 @@ mod tests {
         s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Interior", "height": 2.7})).unwrap();
         let r = s.execute("wall.split", &json!({"id": "w0", "height": 0.1}));
         assert!(r.is_ok(), "height at min boundary (0.1) should be accepted");
-        assert_eq!(r.unwrap()["split"]["height"], 0.1);
+        let res = r.unwrap();
+        assert_eq!(res["split"]["height"], 0.1);
     }
 
     #[test]
@@ -407,7 +408,8 @@ mod tests {
         // max = height - 0.1 = 2.6
         let r = s.execute("wall.split", &json!({"id": "w0", "height": 2.6}));
         assert!(r.is_ok(), "height at max boundary (2.6) should be accepted");
-        assert_eq!(r.unwrap()["split"]["height"], 2.6);
+        let res = r.unwrap();
+        assert_eq!(res["split"]["height"], 2.6);
     }
 
     #[test]
@@ -438,7 +440,8 @@ mod tests {
         // Split at 4.0 should be valid (within [0.1, 5.0])
         let r = s.execute("wall.split", &json!({"id": "w0", "height": 4.0}));
         assert!(r.is_ok(), "split at 4.0 within span should be accepted");
-        assert_eq!(r.unwrap()["split"]["height"], 4.0);
+        let res = r.unwrap();
+        assert_eq!(res["split"]["height"], 4.0);
         // Split at 5.5 should be refused (above span - 0.1 = 5.0)
         let r2 = s.execute("wall.split", &json!({"id": "w0", "height": 5.5}));
         assert!(r2.is_err(), "split at 5.5 above span should be refused");
