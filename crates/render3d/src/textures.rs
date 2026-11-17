@@ -466,6 +466,18 @@ mod tests {
         assert!(MAX_SCENE_LAYERS <= 256);
     }
 
+    #[test]
+    fn all_nine_finishes_have_distinct_layers() {
+        let layers: Vec<u32> = Finish::ALL.iter().map(|f| layer_for(&format!("wall-{}", f.name()))).collect();
+        assert_eq!(layers.len(), 9);
+        let mut seen = std::collections::BTreeSet::new();
+        for l in &layers {
+            assert!(seen.insert(*l), "duplicate layer {}", l);
+            assert!(*l >= 1 && *l <= 9, "layer {} out of range", l);
+        }
+        assert_eq!(layers, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    }
+
     use crate::camera::{Camera, Orbit};
     use crate::light::Light;
     use crate::offscreen::Offscreen;

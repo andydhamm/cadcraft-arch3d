@@ -1208,4 +1208,29 @@ mod tests {
         assert_eq!(capitalised("sliding"), "Sliding");
         assert_eq!(capitalised("a"), "A");
     }
+
+    #[test]
+    fn finish_items_have_correct_uses() {
+        let items = builtin_items();
+        let finish_items: Vec<&ItemRecord> = items.iter().filter(|r| r.id.starts_with("finish:")).collect();
+        assert_eq!(finish_items.len(), 9);
+        let expected_uses: [(Finish, &[&str]); 9] = [
+            (Finish::Siding, &["finish", "wall"]),
+            (Finish::Shingles, &["finish", "roof"]),
+            (Finish::Brick, &["finish", "wall"]),
+            (Finish::Wood, &["finish", "wall", "roof", "floor"]),
+            (Finish::Concrete, &["finish", "wall", "floor"]),
+            (Finish::Tile, &["finish", "wall", "floor"]),
+            (Finish::Carpet, &["finish", "floor"]),
+            (Finish::Drywall, &["finish", "wall", "ceiling"]),
+            (Finish::Plaster, &["finish", "ceiling"]),
+        ];
+        for (f, expected) in expected_uses {
+            let item = finish_items.iter().find(|r| r.id == format!("finish:{}", f.name())).unwrap();
+            let keywords: Vec<&str> = item.keywords.iter().map(|s| s.as_str()).collect();
+            for k in expected {
+                assert!(keywords.contains(k), "finish {} missing keyword {}", f.name(), k);
+            }
+        }
+    }
 }
