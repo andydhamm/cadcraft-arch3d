@@ -625,6 +625,62 @@ mod tests {
     }
 
     #[test]
+    fn tie_break_by_lowest_id() {
+        // Two partners with the same y_near but different widths and positions.
+        // The one with the lower id should win.
+        let a = base(0, 0.45, 0.0, 0.0, 0.9);
+        let b1 = base(1, 0.0, 0.9, 270.0, 0.6); // y_near = 0.9 - 0.3 = 0.6
+        let b2 = base(2, 0.0, 1.0, 270.0, 0.8); // y_near = 1.0 - 0.4 = 0.6
+        let m = model(vec![a.clone(), b1, b2]);
+        let info = corner_info(&m, &a).unwrap();
+        assert_eq!(info.partner, ArchId(1), "lower id should win the tie");
+        assert!((info.leg - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn chain_of_three_runs_merges() {
+        // South run: cb0 (corner at start).
+        // West run: cb1 (partner for cb0), cb2 (corner at end).
+        // North run: cb3 (partner for cb2).
+        // All three runs should merge into one counter.
+        let mut v = vec![
+            base(0, 0.45, 0.0, 0.0, 0.9),  // South run, corner at start.
+            base(1, 0.0, 0.9, 270.0, 0.6), // West run, partner for cb0.
+            base(2, 0.0, 0.3, 270.0, 0.6), // West run, corner at end.
+            base(3, 0.6, 0.9, 0.0, 0.6),   // North run, partner for cb2.
+        ];
+        let m = model(v);
+        let outlines = auto_outlines(&m);
+        assert_eq!(outlines.len(), 1, "all three runs should merge into one counter");
+    }
+
+    #[test]
+    fn offset_ring_parallel_edges() {
+        // A rectangle with all edges offset outward by the same amount.
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        let dist = vec![0.1, 0.1, 0.1, 0.1];
+        let out = offset_ring(&ring, &dist);
+        assert_eq!(out.len(), 4);
+        assert!((out[0].x - 0.1).abs() < 1e-9 && (out[0].y - 0.1).abs() < 1e-9);
+        assert!((out[1].x - 1.1).abs() < 1e-9 && (out[1].y - 0.1).abs() < 1e-9);
+        assert!((out[2].x - 1.1).abs() < 1e-9 && (out[2].y - 1.1).abs() < 1e-9);
+        assert!((out[3].x - 0.1).abs() < 1e-9 && (out[3].y - 1.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tidy_removes_collinear_points() {
+        let ring = vec![
+            Vec2::new(0.0, 0.0),
+            Vec2::new(1.0, 0.0),
+            Vec2::new(2.0, 0.0), // Collinear with the first two.
+            Vec2::new(2.0, 1.0),
+            Vec2::new(0.0, 1.0),
+        ];
+        let out = tidy(ring);
+        assert_eq!(out.len(), 4, "collinear point should be removed");
+    }
+
+    #[test]
     fn hostile_cabinets_give_no_corner() {
         let good = runs(0.6, None);
         for f in 0..6 {
