@@ -1368,4 +1368,65 @@ mod tests {
         let d = s.doc().unwrap();
         assert!(d.layout("U").is_none() && d.arch.sheets.is_empty());
     }
+
+    #[test]
+    fn sheet_edit_remove_all_views() {
+        let mut s = house();
+        elevation(&mut s);
+        let v = json!([{"view": "Floor Plan", "scale": 200, "at": [200, 300]}, {"view": "v0", "scale": 100, "at": [500, 300]}]);
+        run(&mut s, "sheet", json!({"name": "AllViews", "views": v}));
+        assert_eq!(s.doc().unwrap().arch.sheet("AllViews").unwrap().views.len(), 2);
+        let r = run(&mut s, "sheet.edit", json!({"name": "AllViews", "remove": [1, 2]}));
+        assert_eq!(r["views"].as_array().unwrap().len(), 0, "{r}");
+        assert_eq!(viewports(&s, "AllViews").len(), 0);
+        let texts = s.doc().unwrap().layout("AllViews").unwrap().entities.iter().filter(|e| matches!(e.kind, EntityKind::Text(_))).count();
+        assert_eq!(texts, 0, "all view titles should be removed");
+    }
+
+    #[test]
+    fn sheet_scale_boundaries() {
+        let mut s = house();
+        // Scale 1 (largest viewport) should fit if the building is small enough
+        let r = run(&mut s, "sheet", json!({"name": "Scale1", "views": [{"view": "Floor Plan", "scale": 1, "at": [457, 304]}]}));
+        assert!((r["views"][0]["scale"].as_f64().unwrap() - 1.0).abs() < 1e-9, "{r}");
+        // Scale 10000 (smallest viewport)
+        let r = run(&mut s, "sheet", json!({"name": "Scale10000", "views": [{"view": "Floor Plan", "scale": 10000, "at": [457, 304]}]}));
+        assert!((r["views"][0]["scale"].as_f64().unwrap() - 10000.0).abs() < 1e-9, "{r}");
+        // Scale 0 should be refused
+        let e = refused(&mut s, "sheet", json!({"name": "BadScale", "views": [{"view": "Floor Plan", "scale": 0}]}));
+        assert!(e.contains("scale"), "{e}");
+        // Scale 10001 should be refused
+        let e = refused(&mut s, "sheet", json!({"name": "BadScale2", "views": [{"view": "Floor Plan", "scale": 10001}]}));
+        assert!(e.contains("scale"), "{e}");
+    }
+
+    #[test]
+    fn sheet_open_by_schedule_is_refused() {
+        let mut s = house();
+        s.doc_mut().unwrap().arch.schedules.push(Schedule { name: "Doors".into(), columns: vec!["number".into()], ..Schedule::default() });
+        // A schedule is not a view; sheet.open {"view": ...} should refuse it
+        let e = refused(&mut s, "sheet.open", json!({"view": "Doors"}));
+        assert!(e.contains("unknown view") || e.contains("Doors"), "{e}");
+    }
+
+    #[test]
+    fn sheet_name_with_spaces() {
+        let mut s = house();
+        let r = run(&mut s, "sheet", json!({"name": "My Sheet", "views": [{"view": "Floor Plan", "scale": 200}]}));
+        assert_eq!(r["sheet"], "My Sheet", "{r}");
+        assert!(s.doc().unwrap().layout("My Sheet").is_some());
+        let r = run(&mut s, "sheet.open", json!({"name": "My Sheet"}));
+        assert_eq!(r["sheet"], "My Sheet", "{r}");
+    }
+
+    #[test]
+    fn camera_image_square_pixels() {
+        let mut s = house();
+        save_front(&mut s);
+        let r = run(&mut s, "sheet", json!({"name": "Square", "camera": "Front", "width": 300, "pixels": [400, 400]}));
+        let v = &r["views"][0];
+        assert_eq!(v["source"]["kind"], "camera", "{r}");
+        assert!((v["size"][0].as_f64().unwrap() - 300.0).abs() < 1e-9, "{r}");
+        assert!((v["size"][1].as_f64().unwrap() - 300.0).abs() < 1e-9, "{r}");
+    }
 }
