@@ -88,4 +88,86 @@ mod tests {
         let list = crate::arch::build_arch(&hidden, &crate::Options::default(), false);
         assert!(!list.prims.iter().any(|p| p.handle == molding_line_handle(ArchId(2))));
     }
+
+    #[test]
+    fn molding_line_with_nan_points_not_drawn() {
+        let mut d = Drawing::default();
+        d.arch.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+        let profile = cadcraft_arch::molding_profile::builtin_profile("molding:chair-rail").unwrap();
+        d.arch.molding_lines.push(MoldingLine {
+            id: ArchId(3),
+            level: 0,
+            points: vec![Vec2::new(f64::NAN, 0.0), Vec2::new(2.0, 0.0)],
+            elevation: 0.05,
+            inset: 0.1,
+            profile,
+            ..Default::default()
+        });
+        d.arch.plan_level = Some(0);
+        let list = crate::arch::build_arch(&d, &crate::Options::default(), false);
+        assert!(!list.prims.iter().any(|p| p.handle == molding_line_handle(ArchId(3))));
+    }
+
+    #[test]
+    fn molding_line_on_missing_level_uses_zero_elevation() {
+        let mut d = Drawing::default();
+        // No levels defined; the line's level (0) does not exist.
+        let profile = cadcraft_arch::molding_profile::builtin_profile("molding:chair-rail").unwrap();
+        d.arch.molding_lines.push(MoldingLine {
+            id: ArchId(4),
+            level: 0,
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0)],
+            elevation: 0.05,
+            inset: 0.1,
+            profile,
+            ..Default::default()
+        });
+        // No plan_level set, so all levels are shown.
+        let list = crate::arch::build_arch(&d, &crate::Options::default(), false);
+        assert!(list.prims.iter().any(|p| p.handle == molding_line_handle(ArchId(4))));
+    }
+
+    #[test]
+    fn molding_line_with_too_few_points_not_drawn() {
+        let mut d = Drawing::default();
+        d.arch.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+        let profile = cadcraft_arch::molding_profile::builtin_profile("molding:chair-rail").unwrap();
+        d.arch.molding_lines.push(MoldingLine {
+            id: ArchId(5),
+            level: 0,
+            points: vec![Vec2::new(0.0, 0.0)],
+            elevation: 0.05,
+            inset: 0.1,
+            profile,
+            ..Default::default()
+        });
+        d.arch.plan_level = Some(0);
+        let list = crate::arch::build_arch(&d, &crate::Options::default(), false);
+        assert!(!list.prims.iter().any(|p| p.handle == molding_line_handle(ArchId(5))));
+    }
+
+    #[test]
+    fn molding_line_layer_transparency_is_carried() {
+        let mut d = Drawing::default();
+        d.arch.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+        let profile = cadcraft_arch::molding_profile::builtin_profile("molding:chair-rail").unwrap();
+        d.arch.molding_lines.push(MoldingLine {
+            id: ArchId(6),
+            level: 0,
+            points: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0)],
+            elevation: 0.05,
+            inset: 0.1,
+            profile,
+            ..Default::default()
+        });
+        d.ensure_layer(MOLDING_LAYER);
+        if let Some(layer) = d.layers.iter_mut().find(|l| l.name == MOLDING_LAYER) {
+            layer.transparency = 50;
+        }
+        d.arch.plan_level = Some(0);
+        let list = crate::arch::build_arch(&d, &crate::Options::default(), false);
+        let prim = list.prims.iter().find(|p| p.handle == molding_line_handle(ArchId(6)));
+        assert!(prim.is_some());
+        assert_eq!(prim.unwrap().transparency, 50);
+    }
 }

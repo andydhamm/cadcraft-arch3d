@@ -47,4 +47,40 @@ mod tests {
         assert_eq!(meshes[0].object, line.id);
         assert!(!meshes[0].positions.is_empty());
     }
+
+    #[test]
+    fn line_meshes_invalid_returns_empty() {
+        // Too few points.
+        let bad = MoldingLine { points: vec![cadcraft_geom::Vec2::new(0.0, 0.0)], ..Default::default() };
+        assert!(line_meshes(&bad, 0.0).is_empty());
+        // NaN in a point.
+        let nan = MoldingLine { points: vec![cadcraft_geom::Vec2::new(f64::NAN, 0.0), cadcraft_geom::Vec2::new(1.0, 0.0)], ..Default::default() };
+        assert!(line_meshes(&nan, 0.0).is_empty());
+        // Out-of-range elevation.
+        let high = MoldingLine {
+            elevation: 11.0,
+            points: vec![cadcraft_geom::Vec2::new(0.0, 0.0), cadcraft_geom::Vec2::new(1.0, 0.0)],
+            ..Default::default()
+        };
+        assert!(line_meshes(&high, 0.0).is_empty());
+    }
+
+    #[test]
+    fn line_meshes_valid_has_correct_material_and_object() {
+        let profile = builtin_profile("molding:chair-rail").unwrap();
+        let line = MoldingLine {
+            id: ArchId(42),
+            points: vec![cadcraft_geom::Vec2::new(0.0, 0.0), cadcraft_geom::Vec2::new(1.0, 0.0)],
+            elevation: 0.1,
+            inset: 0.0,
+            profile,
+            ..Default::default()
+        };
+        let meshes = line_meshes(&line, 0.0);
+        assert_eq!(meshes.len(), 1);
+        assert_eq!(meshes[0].material, "molding-line");
+        assert_eq!(meshes[0].object, line.id);
+        assert!(!meshes[0].positions.is_empty());
+        assert!(!meshes[0].indices.is_empty());
+    }
 }
