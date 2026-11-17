@@ -298,11 +298,20 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
                 true
             }
         }
-        Some(t) => match t.to_ascii_lowercase().as_str() {
-            "exterior" => true,
-            "interior" | "knee" | "railing" | "retaining" | "glass" => false,
-            _ => return Err(bad("wall", format!("unknown wall type `{t}`"))),
-        },
+        Some(t) => {
+            let lower = t.to_ascii_lowercase();
+            match lower.as_str() {
+                "exterior" => true,
+                "interior" | "knee" | "railing" | "retaining" | "glass" => false,
+                _ => {
+                    if d_read.arch.wall_type(t).is_some() {
+                        false
+                    } else {
+                        return Err(bad("wall", format!("unknown wall type `{t}`")));
+                    }
+                }
+            }
+        }
     };
     if divider {
         exterior = false;
@@ -351,6 +360,7 @@ fn run_wall(s: &mut Session, p: &Value) -> Result<Value> {
     }
 
     let wall_type = type_str.clone().unwrap_or_else(|| if exterior { "exterior".to_string() } else { "interior".to_string() });
+    let wall_type = if wall_type.eq_ignore_ascii_case("glass") { "Glass".to_string() } else { wall_type };
     let wall_type_lower = wall_type.to_ascii_lowercase();
 
     // Level: from param, or the first level in the model when absent
@@ -2123,6 +2133,26 @@ mod tests {
         for w in &d.arch.walls {
             assert_eq!(w.wall_type, "Glass");
         }
+    }
+
+    #[test]
+    fn glass_wall_with_top_level() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.arch.levels.push(Level { index: 1, name: "Upper".into(), elevation: 2.7, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.touch_arch();
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"type":"Glass","level":"Lower","topLevel":"Upper"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        let w = &d.arch.walls[0];
+        assert_eq!(w.wall_type, "Glass");
+        assert_eq!(w.thickness, cadcraft_doc::arch::GLASS_THICKNESS);
+        // Height = 2.7 + 2.4 - 0.0 = 5.1 (topLevel overrides default glass height)
+        assert!((w.height - 5.1).abs() < 1e-9);
+        assert_eq!(w.layers.len(), 1);
+        assert_eq!(w.layers[0].0, "glass");
     }
 
     #[test]

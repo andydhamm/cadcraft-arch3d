@@ -76,7 +76,7 @@ fn run_wall_split(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Some(v) if v.as_f64().is_some_and(|x| x.is_finite()) => {
             let height = v.as_f64().unwrap();
-            let max_span = cadcraft_arch3d::wall_span(&doc.arch, &wall).map_or(wall.height, |(base, top)| top - base);
+            let max_span = wall.height;
             if !(height >= 0.1 && height <= max_span - 0.1) {
                 return Err(bad("wall.split", format!("`height` must be in [0.1, {}] metres", (max_span - 0.1).max(0.0))));
             }
@@ -312,8 +312,9 @@ mod tests {
         let mut s = new_session_with_level();
         s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Interior"})).unwrap();
         let before = s.doc().unwrap().arch_revision;
-        let r = s.execute("wall.split", &json!({"id": "w0", "height": f64::NAN}));
-        assert!(r.is_err(), "NaN height should be refused");
+        // JSON has no NaN; a non-numeric height is refused instead
+        let r = s.execute("wall.split", &json!({"id": "w0", "height": "nan"}));
+        assert!(r.is_err(), "non-numeric height should be refused");
         assert_eq!(s.doc().unwrap().arch_revision, before);
         assert!(s.doc().unwrap().arch.walls[0].split.is_none());
     }
@@ -323,8 +324,9 @@ mod tests {
         let mut s = new_session_with_level();
         s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Interior"})).unwrap();
         let before = s.doc().unwrap().arch_revision;
-        let r = s.execute("wall.split", &json!({"id": "w0", "height": f64::INFINITY}));
-        assert!(r.is_err(), "Infinity height should be refused");
+        // JSON has no Infinity; a non-numeric height is refused instead
+        let r = s.execute("wall.split", &json!({"id": "w0", "height": "inf"}));
+        assert!(r.is_err(), "non-numeric height should be refused");
         assert_eq!(s.doc().unwrap().arch_revision, before);
         assert!(s.doc().unwrap().arch.walls[0].split.is_none());
     }
@@ -517,7 +519,12 @@ mod tests {
             let d = s.doc_mut().unwrap();
             d.arch.types.push(cadcraft_doc::arch::WallType {
                 name: "Custom".into(),
-                layers: vec![cadcraft_doc::arch::WallLayer { name: "custom".into(), thickness: 0.15, material: "custom".into() }],
+                layers: vec![cadcraft_doc::arch::WallLayer {
+                    name: "custom".into(),
+                    thickness: 0.15,
+                    material: "custom".into(),
+                    ..Default::default()
+                }],
                 ..Default::default()
             });
             d.touch_arch();
@@ -527,6 +534,30 @@ mod tests {
         assert_eq!(r["wall"], "w0");
         let wall = &s.doc().unwrap().arch.walls[0];
         assert_eq!(wall.wall_type, "Custom");
+    }
+
+    #[test]
+    fn split_glass_lower_type() {
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Glass"})).unwrap();
+        let r = s.execute("wall.split", &json!({"id": "w0", "height": 1.0, "lower": "Glass", "upper": "Glass"})).unwrap();
+        let wall = &s.doc().unwrap().arch.walls[0];
+        assert_eq!(wall.wall_type, "Glass");
+        assert_eq!(wall.thickness, cadcraft_doc::arch::GLASS_THICKNESS);
+        assert_eq!(wall.split.as_ref().unwrap().upper, "Glass");
+        assert_eq!(wall.split.as_ref().unwrap().height, 1.0);
+    }
+
+    #[test]
+    fn split_with_explicit_lower_and_upper_thickness() {
+        let mut s = new_session_with_level();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [2.0, 0.0]], "type": "Interior"})).unwrap();
+        let r = s.execute("wall.split", &json!({"id": "w0", "height": 1.0, "lowerThickness": 0.15, "upperThickness": 0.012})).unwrap();
+        assert_eq!(r["thickness"], 0.15);
+        assert_eq!(r["split"]["upperThickness"], 0.012);
+        let wall = &s.doc().unwrap().arch.walls[0];
+        assert_eq!(wall.thickness, 0.15);
+        assert_eq!(wall.split.as_ref().unwrap().upper_thickness, 0.012);
     }
 
     #[test]
