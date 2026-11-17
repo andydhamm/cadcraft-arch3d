@@ -1994,4 +1994,147 @@ mod tests {
         // Height = 1e6 + 2.4 - 0.0
         assert!((d.arch.walls[0].height - 1_000_002.4).abs() < 1e-3);
     }
+
+    #[test]
+    fn glass_wall_with_top_level() {
+        let mut s = Session::new();
+        let d = s.doc_mut().unwrap();
+        d.arch.levels.push(Level { index: 0, name: "Lower".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.arch.levels.push(Level { index: 1, name: "Upper".into(), elevation: 2.7, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
+        d.touch_arch();
+        let p = json!({"points":[[0.0, 0.0],[10.0, 0.0]],"type":"Glass","level":"Lower","topLevel":"Upper"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        let w = &d.arch.walls[0];
+        assert_eq!(w.wall_type, "Glass");
+        assert_eq!(w.thickness, cadcraft_doc::arch::GLASS_THICKNESS);
+        // Height = 2.7 + 2.4 - 0.0 = 5.1 (topLevel overrides default glass height)
+        assert!((w.height - 5.1).abs() < 1e-9);
+        assert_eq!(w.layers.len(), 1);
+        assert_eq!(w.layers[0].0, "glass");
+    }
+
+    #[test]
+    fn glass_wall_explicit_height_overrides_default() {
+        let mut s = new_session_with_level();
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass","height":3.5});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        let w = &d.arch.walls[0];
+        assert_eq!(w.wall_type, "Glass");
+        assert_eq!(w.thickness, cadcraft_doc::arch::GLASS_THICKNESS);
+        assert!((w.height - 3.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn glass_wall_explicit_thickness_overrides_default() {
+        let mut s = new_session_with_level();
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass","thickness":0.02});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        let w = &d.arch.walls[0];
+        assert_eq!(w.wall_type, "Glass");
+        assert_eq!(w.thickness, 0.02);
+        assert_eq!(w.layers[0].1, 0.02);
+    }
+
+    #[test]
+    fn glass_wall_with_divider() {
+        let mut s = new_session_with_level();
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass","divider":true});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 1);
+        let w = &d.arch.walls[0];
+        assert_eq!(w.wall_type, "Glass");
+        assert!(w.divider);
+        assert!(!w.exterior);
+    }
+
+    #[test]
+    fn glass_wall_with_closed_flag() {
+        let mut s = new_session_with_level();
+        let p = json!({"points":[[0.0, 0.0],[4.0, 0.0],[4.0, 3.0],[0.0, 3.0]],"type":"Glass","closed":true});
+        let r = s.execute("wall", &p).unwrap();
+        let walls = r["walls"].as_array().unwrap();
+        assert_eq!(walls.len(), 4);
+        let d = s.doc().unwrap();
+        for w in &d.arch.walls {
+            assert_eq!(w.wall_type, "Glass");
+            assert_eq!(w.thickness, cadcraft_doc::arch::GLASS_THICKNESS);
+        }
+    }
+
+    #[test]
+    fn glass_wall_glass_type_added_to_model_types() {
+        let mut s = new_session_with_level();
+        // Ensure no Glass type exists initially
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.types.retain(|t| !t.name.eq_ignore_ascii_case("Glass"));
+        }
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        // Glass type should now be in model types
+        assert!(d.arch.types.iter().any(|t| t.name.eq_ignore_ascii_case("Glass")));
+    }
+
+    #[test]
+    fn glass_wall_not_added_to_types_if_already_present() {
+        let mut s = new_session_with_level();
+        // Add a Glass type manually
+        {
+            let d = s.doc_mut().unwrap();
+            d.arch.types.push(cadcraft_doc::arch::glass_wall_type());
+        }
+        let before_count = s.doc().unwrap().arch.types.len();
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass"});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        // Should not have added a duplicate
+        assert_eq!(d.arch.types.len(), before_count);
+    }
+
+    #[test]
+    fn glass_wall_with_explicit_exterior_param() {
+        let mut s = new_session_with_level();
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass","exterior":true});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        let w = &d.arch.walls[0];
+        // Glass type forces exterior=false regardless of exterior param
+        assert!(!w.exterior);
+        assert_eq!(w.wall_type, "Glass");
+    }
+
+    #[test]
+    fn glass_wall_case_insensitive_type() {
+        let mut s = new_session_with_level();
+        for type_str in ["glass", "GLASS", "Glass", "gLaSs"] {
+            let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":type_str});
+            s.execute("wall", &p).unwrap();
+        }
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 4);
+        for w in &d.arch.walls {
+            assert_eq!(w.wall_type, "Glass");
+        }
+    }
+
+    #[test]
+    fn glass_wall_with_retaining() {
+        let mut s = new_session_with_level();
+        let p = json!({"points":[[0.0, 0.0],[2.0, 0.0]],"type":"Glass","retaining":true,"freeboard":0.2,"footing":0.3});
+        s.execute("wall", &p).unwrap();
+        let d = s.doc().unwrap();
+        let w = &d.arch.walls[0];
+        assert_eq!(w.wall_type, "Glass");
+        assert!(w.retaining);
+        assert_eq!(w.freeboard, Some(0.2));
+        assert_eq!(w.footing, Some(0.3));
+    }
 }
