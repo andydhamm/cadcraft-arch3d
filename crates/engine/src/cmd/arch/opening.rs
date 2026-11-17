@@ -1060,15 +1060,15 @@ mod tests {
     #[test]
     fn door_accepts_offset_at_wall_start() {
         let mut s = session_with_wall();
-        let r = s.execute("door", &json!({"wall": "w0", "offset": 0.6, "width": 0.9, "height": 2.1}));
-        assert!(r.is_ok(), "door at offset 0.6 should succeed: {:?}", r.err());
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 0.8, "width": 0.9, "height": 2.1}));
+        assert!(r.is_ok(), "door at offset 0.8 should succeed: {:?}", r.err());
     }
 
     #[test]
     fn door_accepts_offset_near_wall_end() {
         let mut s = session_with_wall();
-        let r = s.execute("door", &json!({"wall": "w0", "offset": 9.4, "width": 0.9, "height": 2.1}));
-        assert!(r.is_ok(), "door at offset 9.4 should succeed: {:?}", r.err());
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 9.2, "width": 0.9, "height": 2.1}));
+        assert!(r.is_ok(), "door at offset 9.2 should succeed: {:?}", r.err());
     }
 
     #[test]

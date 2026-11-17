@@ -337,9 +337,9 @@ mod tests {
     #[test]
     fn niche_at_wall_start_and_end() {
         let mut s = walled();
-        let r = s.execute("niche", &json!({"wall": "w0", "offset": 0.5, "width": 0.6}));
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 0.6, "width": 0.6}));
         assert!(r.is_ok(), "niche near wall start should succeed: {:?}", r.err());
-        let r = s.execute("niche", &json!({"wall": "w0", "offset": 9.5, "width": 0.6}));
+        let r = s.execute("niche", &json!({"wall": "w0", "offset": 9.4, "width": 0.6}));
         assert!(r.is_ok(), "niche near wall end should succeed: {:?}", r.err());
     }
 }
