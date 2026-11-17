@@ -90,7 +90,7 @@ pub fn corner_info(model: &ArchModel, c: &Cabinet) -> Option<CornerInfo> {
             if !((rel.x - u_e).abs() <= ALIGN && y_near >= c.depth - ALIGN && y_near <= MAX_LEG) {
                 continue;
             }
-            if best.is_none_or(|(y, o)| y_near < y || (y_near == y && b.id < o.id)) {
+            if best.is_none_or(|(y, o)| y_near < y - 1e-9 || ((y_near - y).abs() < 1e-9 && b.id < o.id)) {
                 best = Some((y_near, b));
             }
         }
