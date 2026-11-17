@@ -1385,8 +1385,17 @@ mod tests {
 
     #[test]
     fn sheet_scale_boundaries() {
-        let mut s = house();
-        // Scale 1 (largest viewport) should fit if the building is small enough
+        // A tiny building so that scale 1:1 fits on ARCH D paper.
+        let mut s = Session::new();
+        {
+            let d = s.doc_mut().unwrap();
+            let c = [Vec2::new(0.0, 0.0), Vec2::new(0.5, 0.0), Vec2::new(0.5, 0.4), Vec2::new(0.0, 0.4)];
+            for i in 0..4 {
+                d.arch.push_wall(Wall { start: c[i], end: c[(i + 1) % 4], thickness: 0.1, height: 2.7, ..Wall::default() });
+            }
+            d.touch_arch();
+        }
+        // Scale 1 (largest viewport) should fit with a small building
         let r = run(&mut s, "sheet", json!({"name": "Scale1", "views": [{"view": "Floor Plan", "scale": 1, "at": [457, 304]}]}));
         assert!((r["views"][0]["scale"].as_f64().unwrap() - 1.0).abs() < 1e-9, "{r}");
         // Scale 10000 (smallest viewport)
