@@ -51,12 +51,18 @@ fn parse_points(cmd: &str, v: &Value) -> Result<Vec<Vec2>> {
     if arr.len() > MAX_INPUT_POINTS {
         return Err(bad(cmd, format!("`points` holds at most {MAX_INPUT_POINTS} points")));
     }
-    let mut out = Vec::with_capacity(arr.len());
+    let mut out: Vec<Vec2> = Vec::with_capacity(arr.len());
     for pt in arr {
         let pair = pt.as_array().filter(|a| a.len() == 2).ok_or_else(err)?;
         let x = pair.first().and_then(Value::as_f64).filter(|x| x.is_finite()).ok_or_else(err)?;
         let y = pair.get(1).and_then(Value::as_f64).filter(|y| y.is_finite()).ok_or_else(err)?;
-        out.push(Vec2::new(x, y));
+        let p = Vec2::new(x, y);
+        if let Some(last) = out.last() {
+            if (last.x - p.x).abs() < 1e-9 && (last.y - p.y).abs() < 1e-9 {
+                continue;
+            }
+        }
+        out.push(p);
     }
     Ok(out)
 }
@@ -300,5 +306,235 @@ mod tests {
         assert_eq!(d.arch.molding_lines[1].profile.item, "molding:base");
         let size = d.arch.molding_lines[1].profile.size();
         assert!((size[0] - 0.02).abs() < 1e-9 && (size[1] - 0.1).abs() < 1e-9, "{size:?}");
+    }
+
+    #[test]
+    fn closed_path_needs_three_points() {
+        let mut s = Session::new();
+        // Closed with 2 points should fail (spec: 3 when closed)
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "closed": true,
+                    "elevation": 1.0
+                })
+            )
+            .is_err()
+        );
+        // Closed with 3 points should pass
+        let r = s
+            .execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],
+                    "closed": true,
+                    "elevation": 1.0
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["moldingLine"], "ml0");
+    }
+
+    #[test]
+    fn elevation_and_inset_boundaries() {
+        let mut s = Session::new();
+        // Elevation -1.0 (lower bound) should pass
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": -1.0
+                })
+            )
+            .is_ok()
+        );
+        // Elevation 10.0 (upper bound) should pass
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": 10.0
+                })
+            )
+            .is_ok()
+        );
+        // Elevation -1.0001 (below bound) should fail
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": -1.0001
+                })
+            )
+            .is_err()
+        );
+        // Elevation 10.0001 (above bound) should fail
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": 10.0001
+                })
+            )
+            .is_err()
+        );
+        // Inset 1.0 (upper bound) should pass
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": 1.0,
+                    "inset": 1.0
+                })
+            )
+            .is_ok()
+        );
+        // Inset -1.0 (lower bound) should pass
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": 1.0,
+                    "inset": -1.0
+                })
+            )
+            .is_ok()
+        );
+        // Inset 1.0001 (above bound) should fail
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": 1.0,
+                    "inset": 1.0001
+                })
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn nan_and_huge_coordinates() {
+        let mut s = Session::new();
+        // NaN x coordinate should fail
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[f64::NAN, 0.0], [1.0, 0.0]],
+                    "elevation": 1.0
+                })
+            )
+            .is_err()
+        );
+        // NaN y coordinate should fail
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, f64::NAN]],
+                    "elevation": 1.0
+                })
+            )
+            .is_err()
+        );
+        // Huge coordinates at the 1e6 boundary should pass
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[1e6, 1e6], [0.0, 0.0]],
+                    "elevation": 1.0
+                })
+            )
+            .is_ok()
+        );
+        // Coordinates beyond 1e6 should fail
+        assert!(
+            s.execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1e6 + 1.0, 0.0]],
+                    "elevation": 1.0
+                })
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn consecutive_duplicates_are_dropped() {
+        let mut s = Session::new();
+        // Consecutive duplicates dropped, leaving 2 distinct points (the minimum)
+        let r = s
+            .execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [0.0, 0.0], [1.0, 0.0], [1.0, 0.0]],
+                    "elevation": 1.0
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["moldingLine"], "ml0");
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.molding_lines[0].points.len(), 2);
+    }
+
+    #[test]
+    fn level_by_name_works() {
+        let mut s = Session::new();
+        // Default level is named "Level 1"
+        let r = s
+            .execute(
+                "moldingline",
+                &json!({
+                    "points": [[0.0, 0.0], [1.0, 0.0]],
+                    "elevation": 1.0,
+                    "level": "Level 1"
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["moldingLine"], "ml0");
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.molding_lines[0].level, 0);
+    }
+
+    #[test]
+    fn edit_multiple_keys_at_once() {
+        let mut s = Session::new();
+        s.execute(
+            "moldingline",
+            &json!({
+                "points": [[0.0, 0.0], [1.0, 0.0]],
+                "elevation": 1.0
+            }),
+        )
+        .unwrap();
+        let r = s
+            .execute(
+                "moldingline.edit",
+                &json!({
+                    "id": "ml0",
+                    "elevation": 2.0,
+                    "inset": 0.05,
+                    "flip": true
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["moldingLine"], "ml0");
+        let d = s.doc().unwrap();
+        let line = &d.arch.molding_lines[0];
+        assert!((line.elevation - 2.0).abs() < 1e-9);
+        assert!((line.inset - 0.05).abs() < 1e-9);
+        assert!(line.flip);
     }
 }
