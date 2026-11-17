@@ -351,3 +351,157 @@ fn run_archdetect(s: &mut Session, p: &Value) -> Result<Value> {
     }
     Ok(reply)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn session_with_walls() -> Session {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall 1");
+        s.execute("wall", &json!({"points": [[10.0, 0.0], [10.0, 8.0]]})).expect("wall 2");
+        s.execute("wall", &json!({"points": [[10.0, 8.0], [0.0, 8.0]]})).expect("wall 3");
+        s.execute("wall", &json!({"points": [[0.0, 8.0], [0.0, 0.0]]})).expect("wall 4");
+        s
+    }
+
+    #[test]
+    fn archdetect_dry_run_returns_structure() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"dryRun": true})).expect("dry run");
+        assert!(r["units"].is_string());
+        assert!(r["scale"].is_number());
+        assert!(r["walls"].is_array());
+        assert!(r["openings"].is_array());
+        assert!(r["rooms"].is_array());
+        assert!(r["stats"]["entities"].is_number());
+        assert!(r["stats"]["primitives"].is_number());
+        assert!(r["stats"]["ms"].is_number());
+    }
+
+    #[test]
+    fn archdetect_dry_run_and_accept_conflict() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"dryRun": true, "accept": "all"}));
+        let err = r.expect_err("dryRun and accept should conflict");
+        assert!(err.to_string().contains("cannot be combined"));
+    }
+
+    #[test]
+    fn archdetect_min_confidence_validation() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"dryRun": true, "minConfidence": 1.5}));
+        let err = r.expect_err("minConfidence > 1 should fail");
+        assert!(err.to_string().contains("minConfidence"));
+
+        let r = s.execute("archdetect", &json!({"dryRun": true, "minConfidence": -0.1}));
+        let err = r.expect_err("minConfidence < 0 should fail");
+        assert!(err.to_string().contains("minConfidence"));
+
+        let r = s.execute("archdetect", &json!({"dryRun": true, "minConfidence": "high"}));
+        let err = r.expect_err("non-numeric minConfidence should fail");
+        assert!(err.to_string().contains("minConfidence"));
+    }
+
+    #[test]
+    fn archdetect_units_validation() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"dryRun": true, "units": "yards"}));
+        let err = r.expect_err("unknown units should fail");
+        assert!(err.to_string().contains("unknown units"));
+
+        let r = s.execute("archdetect", &json!({"dryRun": true, "units": 12}));
+        let err = r.expect_err("non-string units should fail");
+        assert!(err.to_string().contains("units"));
+    }
+
+    #[test]
+    fn archdetect_layers_validation() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"dryRun": true, "layers": "A-WALL"}));
+        let err = r.expect_err("non-array layers should fail");
+        assert!(err.to_string().contains("layers"));
+
+        let r = s.execute("archdetect", &json!({"dryRun": true, "layers": ["A-WALL", 123]}));
+        let err = r.expect_err("non-string layer name should fail");
+        assert!(err.to_string().contains("layers"));
+    }
+
+    #[test]
+    fn archdetect_accept_all_with_no_candidates() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"accept": "all"})).expect("accept all");
+        assert!(r["accepted"].is_object());
+        assert!(r["walls"].is_number());
+        assert!(r["openings"].is_number());
+        assert!(r["rooms"].is_number());
+    }
+
+    #[test]
+    fn archdetect_accept_unknown_id() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"accept": ["c99"]}));
+        let err = r.expect_err("unknown candidate id should fail");
+        assert!(err.to_string().contains("unknown candidate id"));
+    }
+
+    #[test]
+    fn archdetect_accept_non_array_non_string() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"accept": 42}));
+        let err = r.expect_err("accept must be string or array");
+        assert!(err.to_string().contains("accept"));
+    }
+
+    #[test]
+    fn archdetect_params_must_be_object() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!(42));
+        let err = r.expect_err("params must be object");
+        assert!(err.to_string().contains("params must be an object"));
+    }
+
+    #[test]
+    fn archdetect_dry_run_flag_validation() {
+        let mut s = session_with_walls();
+        let r = s.execute("archdetect", &json!({"dryRun": "yes"}));
+        let err = r.expect_err("dryRun must be boolean");
+        assert!(err.to_string().contains("dryRun"));
+    }
+
+    #[test]
+    fn parse_accept_all() {
+        let p = json!({"accept": "all"});
+        let a = parse_accept(&p).expect("parse");
+        assert!(matches!(a, Some(Accept::All)));
+    }
+
+    #[test]
+    fn parse_accept_ids() {
+        let p = json!({"accept": ["c0", "c1", "c2"]});
+        let a = parse_accept(&p).expect("parse");
+        match a {
+            Some(Accept::Ids(ids)) => assert_eq!(ids, vec!["c0", "c1", "c2"]),
+            _ => panic!("expected Ids"),
+        }
+    }
+
+    #[test]
+    fn parse_accept_none() {
+        let p = json!({});
+        let a = parse_accept(&p).expect("parse");
+        assert!(a.is_none());
+
+        let p = json!({"accept": null});
+        let a = parse_accept(&p).expect("parse");
+        assert!(a.is_none());
+    }
+
+    #[test]
+    fn kind_name_values() {
+        assert_eq!(kind_name(CandKind::Door), "door");
+        assert_eq!(kind_name(CandKind::Window), "window");
+        assert_eq!(kind_name(CandKind::Cased), "cased");
+    }
+}

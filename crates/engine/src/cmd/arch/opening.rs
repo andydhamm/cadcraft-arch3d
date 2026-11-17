@@ -1033,6 +1033,60 @@ mod tests {
         assert!(err.to_string().contains("offset"), "expected offset error, got: {err}");
     }
 
+    #[test]
+    fn door_rejects_infinite_width() {
+        let mut s = session_with_wall();
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 3.0, "width": 1e308, "height": 2.1}));
+        let err = r.expect_err("infinite width should be rejected");
+        assert!(!err.to_string().is_empty(), "expected an error for infinite width");
+    }
+
+    #[test]
+    fn door_rejects_negative_height() {
+        let mut s = session_with_wall();
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 3.0, "width": 0.9, "height": -1.0}));
+        let err = r.expect_err("negative height should be rejected");
+        assert!(!err.to_string().is_empty(), "expected an error for negative height");
+    }
+
+    #[test]
+    fn door_rejects_zero_height() {
+        let mut s = session_with_wall();
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 3.0, "width": 0.9, "height": 0.0}));
+        let err = r.expect_err("zero height should be rejected");
+        assert!(!err.to_string().is_empty(), "expected an error for zero height");
+    }
+
+    #[test]
+    fn door_accepts_offset_at_wall_start() {
+        let mut s = session_with_wall();
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 0.5, "width": 0.9, "height": 2.1}));
+        assert!(r.is_ok(), "door at offset 0.5 should succeed: {:?}", r.err());
+    }
+
+    #[test]
+    fn door_accepts_offset_near_wall_end() {
+        let mut s = session_with_wall();
+        let r = s.execute("door", &json!({"wall": "w0", "offset": 9.5, "width": 0.9, "height": 2.1}));
+        assert!(r.is_ok(), "door at offset 9.5 should succeed: {:?}", r.err());
+    }
+
+    #[test]
+    fn window_rejects_negative_sill() {
+        let mut s = session_with_wall();
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 3.0, "width": 1.2, "height": 1.2, "sill": -0.1}));
+        let err = r.expect_err("negative sill should be rejected");
+        assert!(!err.to_string().is_empty(), "expected an error for negative sill");
+    }
+
+    #[test]
+    fn garagedoor_rejects_negative_width() {
+        let mut s = session_with_wall();
+        let r = s.execute("garagedoor", &json!({"wall": "w0", "offset": 3.0, "width": -1.0}));
+        let err = r.expect_err("negative width should be rejected");
+        assert!(!err.to_string().is_empty(), "expected an error for negative width");
+    }
+
     /// A zero width is rejected (width must be > 0).
     #[test]
     fn door_rejects_zero_width() {
