@@ -506,4 +506,43 @@ mod tests {
         let half = sampled_ring(&ring, &[0.5, 0.0, 0.0, 0.0]);
         assert!(half.iter().any(|p| (p.y + 0.5).abs() < 1e-6), "the apex of a half circle");
     }
+
+    #[test]
+    fn move_edge_on_triangle() {
+        let ct = Countertop { polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(1.0, 2.0)], ..Default::default() };
+        let out = move_edge(&ct, 0, 0.5).unwrap_or_default();
+        assert!(validate(&out).is_ok());
+        let before_area = shoelace(&ct.polygon).abs();
+        let after_area = shoelace(&out.polygon).abs();
+        assert!(after_area > before_area, "moving an edge outward grows the triangle");
+        // Moving the same edge back should restore the original area
+        let back = move_edge(&out, 0, -0.5).unwrap_or_default();
+        let back_area = shoelace(&back.polygon).abs();
+        assert!((back_area - before_area).abs() < 1e-9, "moving back restores the area");
+    }
+
+    #[test]
+    fn validate_non_finite_sagitta() {
+        let mut ct = rect(1.0, 0.5);
+        ct.edges = vec![CounterEdge { sagitta: f64::NAN, ..Default::default() }];
+        assert!(validate(&ct).is_err(), "NaN sagitta is refused");
+        ct.edges = vec![CounterEdge { sagitta: f64::INFINITY, ..Default::default() }];
+        assert!(validate(&ct).is_err(), "infinite sagitta is refused");
+        ct.edges = vec![CounterEdge { sagitta: -f64::INFINITY, ..Default::default() }];
+        assert!(validate(&ct).is_err(), "negative infinite sagitta is refused");
+    }
+
+    #[test]
+    fn sampled_ring_all_edges_arcs() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        let s = 0.1;
+        let out = sampled_ring(&ring, &[s, s, s, s]);
+        // Each of the 4 edges is sampled, so more than 4 points
+        assert!(out.len() > 4, "all arc edges are sampled into multiple points");
+        // Each edge contributes at least MIN_ARC_SEGMENTS - 1 intermediate points
+        // (the start point is shared), so at least 4 + 4*(2-1) = 8 points
+        assert!(out.len() >= 8, "each arc edge adds at least one intermediate point");
+        // The first point of the output is the first point of the ring
+        assert!((out[0].x - 0.0).abs() < 1e-12 && (out[0].y - 0.0).abs() < 1e-12);
+    }
 }

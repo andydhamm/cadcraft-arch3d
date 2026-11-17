@@ -224,4 +224,24 @@ mod tests {
         assert!(last_cabinet.is_some());
         assert!(last_cabinet.unwrap() < first_fixture.unwrap());
     }
+
+    #[test]
+    fn dxf_proxy_countertop_with_arc_edge() {
+        use cadcraft_doc::arch::{CounterEdge, Countertop};
+        let mut d = Drawing::default();
+        let mut ct = Countertop {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)],
+            edges: vec![CounterEdge::default(); 4],
+            ..Default::default()
+        };
+        ct.edges[0].sagitta = 0.2;
+        d.arch.push_countertop(ct);
+        let p = proxy_casework_entities(&d.arch);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].1, "A-FLOR-CASE");
+        assert!(is_casework_proxy(&p[0].2));
+        // The arc edge is sampled into more than 2 points, so the ring has more than 4 vertices
+        let vertex_count = p[0].2[0].i64();
+        assert!(vertex_count > 4, "the arc edge is sampled into multiple points: {} vertices", vertex_count);
+    }
 }
