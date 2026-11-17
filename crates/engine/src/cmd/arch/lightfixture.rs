@@ -1506,4 +1506,114 @@ mod tests {
         assert_eq!(f.kind, LightKind::Strip);
         assert!(f.closed);
     }
+
+    #[test]
+    fn strip_path_point_spacing_boundary() {
+        let mut session = Session::new();
+        // Points exactly 0.01 m apart: passes
+        session.execute("lightfixture", &json!({"type": "LED strip", "path": [[0.0, 0.0], [0.01, 0.0]], "height": 2.4})).unwrap();
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1);
+        // Points closer than 0.01 m: refused
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "path": [[0.0, 0.0], [0.009, 0.0]], "height": 2.4}));
+        assert!(msg.contains("0.01"), "{msg}");
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1);
+    }
+
+    #[test]
+    fn strip_path_max_points() {
+        let mut session = Session::new();
+        // 256 points: passes
+        let points: Vec<Value> = (0..256).map(|i| json!([f64::from(i) * 0.1, 0.0])).collect();
+        session.execute("lightfixture", &json!({"type": "LED strip", "path": points, "height": 2.4})).unwrap();
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1);
+        // 257 points: refused
+        let points: Vec<Value> = (0..257).map(|i| json!([f64::from(i) * 0.1, 0.0])).collect();
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "path": points, "height": 2.4}));
+        assert!(msg.contains("256"), "{msg}");
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1);
+    }
+
+    #[test]
+    fn strip_path_nan_point() {
+        let mut session = Session::new();
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "path": [[0.0, 0.0], ["nan", 0.0]], "height": 2.4}));
+        assert!(msg.contains("path"), "{msg}");
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
+
+    #[test]
+    fn strip_lumens_per_metre_boundaries() {
+        let mut session = Session::new();
+        session
+            .execute("lightfixture", &json!({"type": "LED strip", "path": [[0.0, 0.0], [1.0, 0.0]], "height": 2.4, "lumensPerMetre": 0.0}))
+            .unwrap();
+        session
+            .execute("lightfixture", &json!({"type": "LED strip", "path": [[0.0, 1.0], [1.0, 1.0]], "height": 2.4, "lumensPerMetre": 10000.0}))
+            .unwrap();
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 2);
+        let msg = error_text(
+            &mut session,
+            "lightfixture",
+            &json!({"type": "LED strip", "path": [[0.0, 2.0], [1.0, 2.0]], "height": 2.4, "lumensPerMetre": -1.0}),
+        );
+        assert!(msg.contains("lumensPerMetre"), "{msg}");
+        let msg = error_text(
+            &mut session,
+            "lightfixture",
+            &json!({"type": "LED strip", "path": [[0.0, 3.0], [1.0, 3.0]], "height": 2.4, "lumensPerMetre": 10001.0}),
+        );
+        assert!(msg.contains("lumensPerMetre"), "{msg}");
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 2);
+    }
+
+    #[test]
+    fn strip_height_boundaries() {
+        let mut session = Session::new();
+        session.execute("lightfixture", &json!({"type": "LED strip", "path": [[0.0, 0.0], [1.0, 0.0]], "height": 0.0})).unwrap();
+        session.execute("lightfixture", &json!({"type": "LED strip", "path": [[0.0, 1.0], [1.0, 1.0]], "height": 100.0})).unwrap();
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 2);
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "path": [[0.0, 2.0], [1.0, 2.0]], "height": -0.1}));
+        assert!(msg.contains("height"), "{msg}");
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "path": [[0.0, 3.0], [1.0, 3.0]], "height": 100.1}));
+        assert!(msg.contains("height"), "{msg}");
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 2);
+    }
+
+    #[test]
+    fn strip_at_cap() {
+        let mut session = Session::new();
+        for i in 0..1023 {
+            let y = f64::from(i);
+            session.execute("lightfixture", &json!({"type": "LED strip", "path": [[0.0, y], [1.0, y]], "height": 2.4})).unwrap();
+        }
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1023);
+        session.execute("lightfixture", &json!({"type": "LED strip", "path": [[0.0, 1023.0], [1.0, 1023.0]], "height": 2.4})).unwrap();
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1024);
+        let msg = error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "path": [[0.0, 1024.0], [1.0, 1024.0]], "height": 2.4}));
+        assert!(msg.contains("1024"), "{msg}");
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 1024);
+    }
+
+    #[test]
+    fn strip_path_collinear_points() {
+        let mut session = Session::new();
+        session
+            .execute(
+                "lightfixture",
+                &json!({"type": "LED strip", "path": [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]], "height": 2.4, "lumensPerMetre": 500}),
+            )
+            .unwrap();
+        let f = session.doc().unwrap().arch.lights[0].clone();
+        assert_eq!(f.path.len(), 4);
+        assert!((f.lumens - 1500.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn strip_path_duplicate_consecutive_points() {
+        let mut session = Session::new();
+        let msg =
+            error_text(&mut session, "lightfixture", &json!({"type": "LED strip", "path": [[0.0, 0.0], [0.0, 0.0], [1.0, 0.0]], "height": 2.4}));
+        assert!(msg.contains("0.01"), "{msg}");
+        assert_eq!(session.doc().unwrap().arch.lights.len(), 0);
+    }
 }

@@ -718,4 +718,13 @@ mod tests {
         assert_eq!(lights.len(), 1);
         assert_eq!(lights[0]["intensity"], 0.0);
     }
+
+    #[test]
+    fn strip_produces_no_khr_light() {
+        let strip = scene_light(0, LightKind::Strip, Vec3::new(1.0, 1.0, 2.4), Vec3::new(0.0, 0.0, -1.0), 500.0, [1.0, 1.0, 1.0], 0.0, 0.0);
+        let scene = Scene3d { lights: vec![strip], ..Default::default() };
+        let (lights, nodes) = punctual_lights(&scene);
+        assert!(lights.is_empty(), "a strip produces no KHR light");
+        assert!(nodes.is_empty(), "a strip produces no KHR node");
+    }
 }
