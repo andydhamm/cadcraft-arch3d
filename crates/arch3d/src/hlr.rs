@@ -646,4 +646,81 @@ mod tests {
         assert_eq!(out.len(), 1, "very short line should be dropped");
         assert!((out[0].a[1] - 1.0).abs() < 1e-9);
     }
+
+    #[test]
+    fn ortho_view_new_with_parallel_vectors() {
+        assert!(OrthoView::new([1.0, 0.0, 0.0], [2.0, 0.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn ortho_view_new_with_zero_vectors() {
+        assert!(OrthoView::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]).is_none());
+        assert!(OrthoView::new([1.0, 0.0, 0.0], [0.0, 0.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn ortho_view_new_with_non_finite_vectors() {
+        assert!(OrthoView::new([f64::NAN, 0.0, 0.0], [0.0, 1.0, 0.0]).is_none());
+        assert!(OrthoView::new([0.0, 1.0, 0.0], [f64::NAN, 0.0, 0.0]).is_none());
+        assert!(OrthoView::new([f64::INFINITY, 0.0, 0.0], [0.0, 1.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn in_rings_basic() {
+        let rings = vec![vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]]];
+        assert!(in_rings([1.0, 1.0], &rings));
+        assert!(!in_rings([3.0, 1.0], &rings));
+        // On the edge counts as inside.
+        assert!(in_rings([0.0, 1.0], &rings));
+    }
+
+    #[test]
+    fn in_rings_hole() {
+        // Outer ring and inner hole.
+        let rings = vec![vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]], vec![[1.0, 1.0], [3.0, 1.0], [3.0, 3.0], [1.0, 3.0]]];
+        assert!(in_rings([0.5, 0.5], &rings)); // In the outer ring, outside the hole.
+        assert!(!in_rings([2.0, 2.0], &rings)); // In the hole.
+        assert!(in_rings([3.5, 3.5], &rings)); // In the outer ring, outside the hole.
+    }
+
+    #[test]
+    fn split_params_crossing() {
+        let mut out = Vec::new();
+        split_params([0.0, 0.0], [2.0, 0.0], [1.0, -1.0], [1.0, 1.0], &mut out);
+        assert_eq!(out.len(), 1);
+        assert!((out[0] - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn split_params_collinear_overlap() {
+        let mut out = Vec::new();
+        split_params([0.0, 0.0], [2.0, 0.0], [0.5, 0.0], [1.5, 0.0], &mut out);
+        assert_eq!(out.len(), 2);
+        out.sort_by(f64::total_cmp);
+        assert!((out[0] - 0.25).abs() < 1e-9);
+        assert!((out[1] - 0.75).abs() < 1e-9);
+    }
+
+    #[test]
+    fn split_params_no_crossing() {
+        let mut out = Vec::new();
+        split_params([0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0], &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn visible_lines_of_empty_scene() {
+        let scene = Scene3d::default();
+        let ov = OrthoView::elevation([0.0, 1.0]).unwrap();
+        let lines = visible_lines(&scene, &ov);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn visible_lines_of_a_quad() {
+        let scene = quad_scene();
+        let ov = OrthoView::elevation([0.0, 1.0]).unwrap();
+        let lines = visible_lines(&scene, &ov);
+        assert!(!lines.is_empty());
+    }
 }
