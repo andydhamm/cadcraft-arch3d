@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-17 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-17 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
@@ -32,7 +32,7 @@ Updated 2026-11-17 06:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 17 11:59–Dec 02 13:36 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 17 12:14–Dec 02 13:51 UTC |
 
 ## Phase 22 segments
 
@@ -73,5 +73,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1038 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1039 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
