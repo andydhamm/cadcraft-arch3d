@@ -106,6 +106,7 @@ fn project_uncached(env: &Environment) -> [[f32; 3]; 9] {
             let d = [(el.cos() * az.cos()) as f32, (el.cos() * az.sin()) as f32, el.sin() as f32];
             // Private; reached only through `project`, which checked `env.is_valid()` once.
             let l = env.radiance_unchecked(d);
+            let l = [if l[0].is_finite() { l[0] } else { 0.0 }, if l[1].is_finite() { l[1] } else { 0.0 }, if l[2].is_finite() { l[2] } else { 0.0 }];
             let y = basis(d);
             total += weight;
             for (a, yk) in acc.iter_mut().zip(y) {
@@ -140,12 +141,17 @@ pub fn convolve(sh: &[[f32; 3]; 9]) -> [[f32; 3]; 9] {
     out
 }
 
-/// Illuminance (lux, per channel) on a diffuse surface with unit normal `n`, from the radiance
-/// coefficients `sh` of [`project`]. A non-finite `n` gives zero.
+/// Illuminance (lux, per channel) on a diffuse surface with normal `n`, from the radiance
+/// coefficients `sh` of [`project`]. `n` is normalized; a non-finite or zero `n` gives zero.
 pub fn irradiance(sh: &[[f32; 3]; 9], n: [f32; 3]) -> [f32; 3] {
     if !n.iter().all(|v| v.is_finite()) {
         return [0.0; 3];
     }
+    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    if !(len > 0.0) {
+        return [0.0; 3];
+    }
+    let n = [n[0] / len, n[1] / len, n[2] / len];
     let y = basis(n);
     let mut e = [0.0f32; 3];
     for ((c, a), yk) in sh.iter().zip(BAND).zip(y) {
@@ -240,6 +246,25 @@ mod tests {
     }
 
     #[test]
+    fn project_with_nan_radiance() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
+        let mut e = Environment::uniform([1.0, 1.0, 1.0], 16, 8);
+        // Set some texels to NaN.
+        e.rgb[0] = [f32::NAN, 1.0, 1.0];
+        e.rgb[1] = [1.0, f32::NAN, 1.0];
+        e.rgb[2] = [1.0, 1.0, f32::NAN];
+        let sh = project(&e);
+        // NaN texels are treated as zero, so the result is finite.
+        for row in &sh {
+            for c in row {
+                assert!(c.is_finite(), "SH coefficient is not finite: {c}");
+            }
+        }
+    }
+
+    #[test]
     fn irradiance_zero_normal() {
         let _guard = TEST_LOCK.lock().unwrap();
         reset_sh_cache_for_test();
@@ -252,12 +277,44 @@ mod tests {
     }
 
     #[test]
+    fn irradiance_with_non_unit_normal() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_sh_cache_for_test();
+
+        let e = Environment::uniform([2.0, 1.0, 0.5], 32, 16);
+        let sh = project(&e);
+        // A non-unit normal should give the same result as its normalized version.
+        let unit = irradiance(&sh, [0.0, 0.0, 1.0]);
+        let non_unit = irradiance(&sh, [0.0, 0.0, 3.0]);
+        for (u, n) in unit.iter().zip(non_unit) {
+            assert!((u - n).abs() < 1e-6, "unit {u} vs non-unit {n}");
+        }
+        // A zero normal should give zero.
+        let zero = irradiance(&sh, [0.0, 0.0, 0.0]);
+        assert_eq!(zero, [0.0, 0.0, 0.0]);
+    }
+
+    #[test]
     fn convolve_zero_coefficients() {
         let sh = [[0.0f32; 3]; 9];
         let out = convolve(&sh);
         for row in &out {
             assert_eq!(row, &[0.0, 0.0, 0.0]);
         }
+    }
+
+    #[test]
+    fn convolve_with_nan_coefficients() {
+        let mut sh = [[0.0f32; 3]; 9];
+        sh[0] = [f32::NAN, 1.0, 2.0];
+        sh[1] = [3.0, f32::NAN, 4.0];
+        let out = convolve(&sh);
+        assert!(out[0][0].is_nan());
+        assert_eq!(out[0][1], 1.0 * BAND[0]);
+        assert_eq!(out[0][2], 2.0 * BAND[0]);
+        assert_eq!(out[1][0], 3.0 * BAND[1]);
+        assert!(out[1][1].is_nan());
+        assert_eq!(out[1][2], 4.0 * BAND[1]);
     }
 
     #[test]
