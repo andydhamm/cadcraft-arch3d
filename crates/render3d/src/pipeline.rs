@@ -821,6 +821,7 @@ mod tests {
     }
     use super::*;
     use crate::types::{ArchId, Mesh};
+    use cadcraft_doc::arch::Finish;
 
     #[test]
     fn upload_counts_vertices_from_arch3d_meshes() {
