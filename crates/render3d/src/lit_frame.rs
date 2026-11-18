@@ -501,4 +501,28 @@ mod tests {
         assert!(o.lit_frame(&s2, 2, orbit(0.0), &Lighting::default(), false).is_some());
         assert!(o.lit_frame(&s1, 1, orbit(0.0), &Lighting::default(), false).is_some());
     }
+
+    /// A moon exactly at the horizon (elevation 0) is not used as the directional light.
+    #[test]
+    fn moon_at_horizon_is_not_used() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        // Moon exactly at the horizon: d[2] = 0.0
+        let dir = [0.0, 1.0, 0.0];
+        let light = Lighting { look, sun: None, ..Default::default() }.with_moon(Some(dir));
+        assert!(light.moon.is_none(), "moon at horizon (elevation 0) must not be used");
+        assert_eq!(light.directional_lux(), 0.0);
+    }
+
+    /// A moon with zero lux is not used.
+    #[test]
+    fn moon_with_zero_lux_is_not_used() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        look.sky.moon.lux = 0.0;
+        let light = Lighting { look, sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
+        assert!(light.moon.is_none(), "moon with zero lux must not be used");
+    }
 }

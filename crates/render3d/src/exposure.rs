@@ -321,4 +321,49 @@ mod tests {
             assert!((got - s).abs() < s * 1e-5 + 1e-8, "round trip failed for s={}: got {}", s, got);
         }
     }
+
+    /// tone_map clamps input at 1e6 and handles the boundary exactly.
+    #[test]
+    fn tone_map_clamps_at_one_million() {
+        for code in [TONE_ACES, TONE_HABLE, TONE_NONE] {
+            let at_max = tone_map(1.0e6, code);
+            let above_max = tone_map(2.0e6, code);
+            assert_eq!(at_max, above_max, "code {code}: values above 1e6 must clamp");
+            assert!(at_max <= 1.0, "code {code}: clamped value must be <= 1.0");
+            // Just below the clamp should differ (the curve is still active)
+            let just_below = tone_map(9.999e5, code);
+            assert!(just_below <= at_max + 1e-6, "code {code}: monotonicity at clamp boundary");
+        }
+    }
+
+    /// ev100_scale handles extreme EV values without overflow or underflow.
+    #[test]
+    fn ev100_scale_extreme_values() {
+        // Very bright (high EV) -> very small scale
+        let bright = ev100_scale(100.0);
+        assert!(bright > 0.0 && bright < 1e-25, "EV100 100: {}", bright);
+        assert!(bright.is_finite(), "EV100 100 must be finite");
+
+        // Very dim (low EV) -> very large scale
+        let dim = ev100_scale(-100.0);
+        assert!(dim > 1e25 && dim.is_finite(), "EV100 -100: {}", dim);
+
+        // Round trip at extremes
+        assert!((scale_ev100(ev100_scale(100.0)) - 100.0).abs() < 1e-3, "round trip EV100 100");
+        assert!((scale_ev100(ev100_scale(-100.0)) - (-100.0)).abs() < 1e-3, "round trip EV100 -100");
+    }
+
+    /// auto_scale treats zero and non-finite luminance as no hits.
+    #[test]
+    fn auto_scale_with_zero_luminance() {
+        // Zero luminance is filtered out (treated as no hit)
+        assert_eq!(auto_scale(Some(0.0), true, false), DAY_EXPOSURE, "zero lavg in daylight -> DAY");
+        assert_eq!(auto_scale(Some(0.0), false, true), NIGHT_EXPOSURE, "zero lavg in metered night -> NIGHT");
+        // NaN is also filtered
+        assert_eq!(auto_scale(Some(f32::NAN), true, false), DAY_EXPOSURE, "NaN lavg in daylight -> DAY");
+        // Negative luminance is filtered
+        assert_eq!(auto_scale(Some(-1.0), true, false), DAY_EXPOSURE, "negative lavg in daylight -> DAY");
+        // Infinity is filtered
+        assert_eq!(auto_scale(Some(f32::INFINITY), true, false), DAY_EXPOSURE, "infinite lavg in daylight -> DAY");
+    }
 }
