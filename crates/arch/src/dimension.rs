@@ -499,8 +499,9 @@ mod tests {
             depth: 0.6,
             ..cadcraft_doc::arch::Cabinet::default()
         });
-        // Point near the top edge of the cabinet, looking for a horizontal edge.
-        let hit = find_feature(&model, Vec2::new(2.0, 2.3), Some(Vec2::new(0.0, 1.0)));
+        // Cabinet at (2.0, 2.0) with depth 0.6: back edge at y=2.0, front edge at y=2.6.
+        // Point on the front edge, looking for a horizontal edge.
+        let hit = find_feature(&model, Vec2::new(2.0, 2.6), Some(Vec2::new(0.0, 1.0)));
         assert!(hit.is_some(), "expected to find cabinet edge");
         let (handle, feature, _) = hit.unwrap();
         assert_eq!(handle, cabinet_handle(ArchId(0)));
@@ -512,11 +513,12 @@ mod tests {
         let mut model = ArchModel::default();
         let id = model.push_wall(wall(Vec2::new(1e9, 0.0), Vec2::new(1e9 + 10.0, 0.0), 0.2));
         let _ = id;
-        // Tolerance scales with coordinate magnitude: FEATURE_TOL * (1 + 1e9) ≈ 1e-3.
+        // Tolerance scales with coordinate magnitude: FEATURE_TOL * (1 + 1e9) ≈ 1000.
+        // Both faces (y=±0.1) and the centre line (y=0) are within tolerance; faces rank first.
         let hit = find_feature(&model, Vec2::new(1e9 + 5.0, 0.0), Some(Vec2::new(0.0, 1.0)));
         assert!(hit.is_some(), "expected to find wall at huge coordinates");
         let (_, feature, along) = hit.unwrap();
-        assert_eq!(feature, ArchFeature::Centre);
+        assert_eq!(feature, ArchFeature::LeftFace);
         assert!((along - 5.0).abs() < 1e-3);
     }
 
