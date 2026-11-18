@@ -1150,6 +1150,75 @@ mod tests {
     }
 
     #[test]
+    fn install_copies_and_validates_the_normal_map() {
+        use crate::library::testing;
+        testing::install_io();
+        let dir = crate::temp_dir::TempDir::new("library-install-normal");
+        let catalog = dir.join("catalog");
+        std::fs::create_dir_all(&catalog).unwrap();
+        let image = cadcraft_doc::arch::ImageRgba { width: 8, height: 8, rgba: vec![200; 8 * 8 * 4], ..Default::default() };
+        let normal = cadcraft_doc::arch::ImageRgba { width: 8, height: 8, rgba: vec![128; 8 * 8 * 4], ..Default::default() };
+        std::fs::write(catalog.join("mat.png"), cadcraft_io::png::encode_rgba8(image.width, image.height, &image.rgba).unwrap()).unwrap();
+        std::fs::write(catalog.join("mat-normal.png"), cadcraft_io::png::encode_rgba8(normal.width, normal.height, &normal.rgba).unwrap()).unwrap();
+        let entries = vec![
+            json!({"id": "x:mat", "name": "Mat", "category": "Materials", "folder": "Images", "file": "mat.png", "normalMap": "mat-normal.png", "source": "me", "licence": "CC0-1.0"}),
+        ];
+        std::fs::write(catalog.join("catalog.json"), serde_json::to_vec_pretty(&json!({"version": 1, "items": entries})).unwrap()).unwrap();
+        let mut lib = crate::library::Library::with_user_dir(Some(dir.to_path_buf()));
+        let done = lib.install(&catalog).unwrap();
+        assert_eq!(done.items, 1);
+        assert_eq!(done.skipped.len(), 0);
+        let rec = lib.item("x:mat").unwrap();
+        assert_eq!(rec.normal_map.as_deref(), Some("mat-normal.png"));
+        let bytes = lib.normal_map_bytes("x:mat").unwrap().unwrap();
+        assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G']));
+        // A missing normal map skips the item.
+        let dir2 = crate::temp_dir::TempDir::new("library-install-normal-missing");
+        let catalog2 = dir2.join("catalog");
+        std::fs::create_dir_all(&catalog2).unwrap();
+        std::fs::write(catalog2.join("mat.png"), cadcraft_io::png::encode_rgba8(image.width, image.height, &image.rgba).unwrap()).unwrap();
+        let entries2 = vec![
+            json!({"id": "x:mat2", "name": "Mat2", "category": "Materials", "folder": "Images", "file": "mat.png", "normalMap": "mat-normal.png", "source": "me", "licence": "CC0-1.0"}),
+        ];
+        std::fs::write(catalog2.join("catalog.json"), serde_json::to_vec_pretty(&json!({"version": 1, "items": entries2})).unwrap()).unwrap();
+        let mut lib2 = crate::library::Library::with_user_dir(Some(dir2.to_path_buf()));
+        let done2 = lib2.install(&catalog2).unwrap();
+        assert_eq!(done2.items, 0);
+        assert_eq!(done2.skipped.len(), 1);
+        assert!(done2.skipped[0].reason.contains("normal map"));
+    }
+
+    #[test]
+    fn entry_record_rejects_hostile_normal_map() {
+        let base = json!({"id": "a", "name": "A", "category": "Materials", "licence": "CC0-1.0", "source": "me", "file": "a.png"});
+        // Empty normal map.
+        let mut e = base.clone();
+        e["normalMap"] = json!("");
+        assert!(entry_record(&e, "x").is_err(), "empty normalMap taken");
+        // Normal map with no extension.
+        let mut e = base.clone();
+        e["normalMap"] = json!("a-normal");
+        assert!(entry_record(&e, "x").is_err(), "normalMap with no extension taken");
+        // Normal map with unsupported extension.
+        let mut e = base.clone();
+        e["normalMap"] = json!("a-normal.bmp");
+        assert!(entry_record(&e, "x").is_err(), "normalMap with .bmp taken");
+        // Normal map not a safe relative path.
+        let mut e = base.clone();
+        e["normalMap"] = json!("../a-normal.png");
+        assert!(entry_record(&e, "x").is_err(), "normalMap with .. taken");
+        // Good normal map.
+        let mut e = base.clone();
+        e["normalMap"] = json!("a-normal.png");
+        assert!(entry_record(&e, "x").is_ok());
+        // JPG normal map.
+        let mut e = base.clone();
+        e["file"] = json!("a.jpg");
+        e["normalMap"] = json!("a-normal.jpg");
+        assert!(entry_record(&e, "x").is_ok());
+    }
+
+    #[test]
     fn hdr_entry_in_wrong_category_refused() {
         let entry = serde_json::json!({"id":"x:hdr-wrong","name":"HDR Wrong","category":"Materials","folder":"Images","symbolType":"backdrop","file":"hdr/sample.hdr","source":"test","licence":"CC0-1.0","author":"CADCraft","attribution":"test"});
         let err = entry_record(&entry, "sample").unwrap_err();
