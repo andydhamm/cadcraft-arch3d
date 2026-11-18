@@ -133,7 +133,7 @@ impl SiteSurface {
                 continue;
             }
             let mut seg_total = 0.0;
-            let n = (len / 0.5).ceil().max(1.0) as usize;
+            let n = ((len / 0.5).ceil().max(1.0) as usize).min(1000);
             for i in 0..n {
                 let t = (i as f64 + 0.5) / n as f64;
                 let p = prev + seg * t;
