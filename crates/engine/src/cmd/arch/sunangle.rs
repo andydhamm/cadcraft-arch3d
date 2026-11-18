@@ -393,4 +393,108 @@ mod tests {
         assert!(ok.is_ok(), "sunangle delete after clearing usage should succeed");
         assert!(list(&mut s).is_empty());
     }
+
+    #[test]
+    fn max_sun_angles_limit_enforced() {
+        let mut s = Session::new();
+        for i in 0..16 {
+            let name = format!("A{}", i);
+            add_angle(&mut s, &name, 180.0, 45.0);
+        }
+        assert_eq!(list(&mut s).len(), 16);
+        let r = s.execute("sunangle", &json!({"name": "A16", "azimuth": 180.0, "elevation": 45.0}));
+        assert!(r.is_err(), "17th angle should be refused");
+        assert_eq!(list(&mut s).len(), 16, "list unchanged after refused add");
+    }
+
+    #[test]
+    fn replace_nonexistent_angle_adds_it() {
+        let mut s = Session::new();
+        let r = s.execute("sunangle", &json!({"name": "NEW", "azimuth": 90.0, "elevation": 30.0, "replace": true}));
+        assert!(r.is_ok(), "replace of nonexistent should add");
+        assert!(list(&mut s).contains(&"NEW".to_string()));
+    }
+
+    #[test]
+    fn mixed_date_time_and_compass_forms_refused() {
+        let mut s = Session::new();
+        let r = s.execute("sunangle", &json!({"name": "MIXED", "date": "2026-06-21", "time": "solar-noon", "azimuth": 180.0, "elevation": 45.0}));
+        assert!(r.is_err(), "mixed forms should be refused");
+    }
+
+    #[test]
+    fn invalid_date_format_refused() {
+        let mut s = Session::new();
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.site = Some(SiteLocation { latitude: 51.05, ..SiteLocation::default() });
+            d.touch_arch();
+        }
+        let r = s.execute("sunangle", &json!({"name": "BADDATE", "date": "not-a-date", "time": "solar-noon"}));
+        assert!(r.is_err(), "invalid date should be refused");
+    }
+
+    #[test]
+    fn empty_and_whitespace_names_refused() {
+        let mut s = Session::new();
+        let r = s.execute("sunangle", &json!({"name": "", "azimuth": 180.0, "elevation": 45.0}));
+        assert!(r.is_err(), "empty name should be refused");
+        let r = s.execute("sunangle", &json!({"name": "   ", "azimuth": 180.0, "elevation": 45.0}));
+        assert!(r.is_err(), "whitespace-only name should be refused");
+    }
+
+    #[test]
+    fn delete_angle_used_by_multiple_cameras_refused() {
+        let mut s = Session::new();
+        add_angle(&mut s, "SHARED", 180.0, 45.0);
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.cameras.push(Camera3d {
+                name: "Cam1".into(),
+                look: Some(Look { sun: SunLook { angle: Some("SHARED".to_string()), ..SunLook::default() }, ..Look::default() }),
+                ..Camera3d::default()
+            });
+            d.arch.cameras.push(Camera3d {
+                name: "Cam2".into(),
+                look: Some(Look { sun: SunLook { angle: Some("SHARED".to_string()), ..SunLook::default() }, ..Look::default() }),
+                ..Camera3d::default()
+            });
+            d.touch_arch();
+        }
+        let r = s.execute("sunangle", &json!({"delete": "SHARED"}));
+        assert!(r.is_err(), "delete should be refused when used by multiple cameras");
+    }
+
+    #[test]
+    fn delete_angle_with_camera_null_look_allowed() {
+        let mut s = Session::new();
+        add_angle(&mut s, "FREE", 180.0, 45.0);
+        {
+            let mut d = s.doc_mut().unwrap();
+            d.arch.cameras.push(Camera3d { name: "CamNoLook".into(), look: None, ..Camera3d::default() });
+            d.touch_arch();
+        }
+        let r = s.execute("sunangle", &json!({"delete": "FREE"}));
+        assert!(r.is_ok(), "delete should succeed when camera has null look");
+    }
+
+    #[test]
+    fn azimuth_accepts_any_finite_value() {
+        let mut s = Session::new();
+        let r = s.execute("sunangle", &json!({"name": "FULL", "azimuth": 360.0, "elevation": 45.0}));
+        assert!(r.is_ok(), "azimuth 360 should be accepted");
+        let r = s.execute("sunangle", &json!({"name": "DOUBLE", "azimuth": 720.0, "elevation": 45.0}));
+        assert!(r.is_ok(), "azimuth 720 should be accepted");
+        let r = s.execute("sunangle", &json!({"name": "NEG", "azimuth": -45.0, "elevation": 45.0}));
+        assert!(r.is_ok(), "negative azimuth should be accepted");
+    }
+
+    #[test]
+    fn elevation_just_out_of_range_refused() {
+        let mut s = Session::new();
+        let r = s.execute("sunangle", &json!({"name": "HIGH", "azimuth": 180.0, "elevation": 90.1}));
+        assert!(r.is_err(), "elevation 90.1 should be refused");
+        let r = s.execute("sunangle", &json!({"name": "LOW", "azimuth": 180.0, "elevation": -90.1}));
+        assert!(r.is_err(), "elevation -90.1 should be refused");
+    }
 }
