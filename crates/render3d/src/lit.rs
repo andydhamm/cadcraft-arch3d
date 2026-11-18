@@ -534,4 +534,24 @@ mod tests {
             _ => assert!(false, "the unlit reference renders failed"),
         }
     }
+
+    /// frame_uniform handles extreme finite values without overflow.
+    #[test]
+    fn frame_uniform_extreme_values() {
+        let params = LitParams { exposure: 1e30, ambient: 1e30, sun_intensity: 1e30, ambient_lux: 1e30, pcf_radius: 8, ..Default::default() };
+        let bytes = frame_uniform(None, &params, 16384);
+        assert_eq!(bytes.len(), 256);
+        let word = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        assert_eq!(word(80), 1e30, "extreme exposure");
+        assert_eq!(word(88), 8.0, "pcf radius");
+        assert_eq!(word(92), 16384.0, "atlas size");
+        assert_eq!(word(96), 1e30, "extreme ambient lux");
+
+        // Very small values
+        let small = LitParams { exposure: 1e-30, ambient: 1e-30, sun_intensity: 1e-30, ambient_lux: 1e-30, ..Default::default() };
+        let bytes = frame_uniform(None, &small, 1);
+        let word = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        assert_eq!(word(80), 1e-30, "tiny exposure");
+        assert_eq!(word(96), 1e-30, "tiny ambient lux");
+    }
 }

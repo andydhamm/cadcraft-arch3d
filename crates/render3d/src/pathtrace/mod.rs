@@ -300,4 +300,26 @@ mod tests {
         assert_eq!(scene.materials[1].emission, [LENS_NITS, LENS_NITS, LENS_NITS], "lens emission kept");
         assert_eq!(scene.materials[1].flags, MAT_EMIT_CAMERA_ONLY, "lens flag kept");
     }
+
+    /// Furnace with albedo 0: expected equals emission (no bounce).
+    #[test]
+    fn furnace_with_albedo_zero() {
+        let f = Furnace { albedo: 0.0, emission: 2.0 };
+        assert!((f.expected() - 2.0).abs() < 1e-6, "albedo 0: expected = emission");
+    }
+
+    /// Furnace with albedo near 1: expected is very large but finite.
+    #[test]
+    fn furnace_with_albedo_near_one() {
+        let f = Furnace { albedo: 0.99, emission: 1.0 };
+        let expected = f.expected();
+        assert!((expected - 100.0).abs() < 1e-3, "albedo 0.99: expected = 100 * emission, got {}", expected);
+        assert!(expected.is_finite(), "expected must be finite");
+
+        // Very close to 1
+        let f2 = Furnace { albedo: 0.999, emission: 1.0 };
+        let expected2 = f2.expected();
+        assert!((expected2 - 1000.0).abs() < 1.0, "albedo 0.999: expected = 1000 * emission, got {}", expected2);
+        assert!(expected2.is_finite(), "expected must be finite");
+    }
 }
