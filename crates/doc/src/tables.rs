@@ -1146,7 +1146,7 @@ mod rule_tests {
     #[test]
     fn wildcard_match_unicode_and_edge_cases() {
         // Unicode characters are folded per-char.
-        assert!(wildcard_match("А-СТІНА", "A-Стіна"));
+        assert!(wildcard_match("А-СТІНА", "А-Стіна"));
         // ASCII case folding.
         assert!(wildcard_match("A-WALL", "a-wall"));
         // Pattern with only ? matches exactly one char of any kind.

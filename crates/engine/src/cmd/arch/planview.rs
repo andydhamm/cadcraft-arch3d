@@ -605,7 +605,8 @@ mod tests {
     #[test]
     fn planview_max_views_cap() {
         let mut s = session_with_house();
-        for i in 0..MAX_PLAN_VIEWS {
+        // A fresh drawing has 7 template plan views; leave room for them.
+        for i in 0..(MAX_PLAN_VIEWS - 7) {
             s.execute("planview", &json!({ "name": format!("V{i}"), "open": false })).unwrap();
         }
         let err = s.execute("planview", &json!({ "name": "One More", "open": false })).unwrap_err();
