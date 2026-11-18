@@ -280,4 +280,44 @@ mod tests {
         assert!(!texts.contains(&"D02"), "D02 should be skipped: {:?}", texts);
         assert!(texts.contains(&"W01"), "W01 should be present: {:?}", texts);
     }
+
+    #[test]
+    fn opening_at_wall_start() {
+        let mut model = test_model();
+        model.openings[0].offset = 0.0;
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let door_label = out.labels.iter().find(|l| l.text == "D01").expect("D01 label");
+        // Wall 0: (0,0) to (10,0), dir=(1,0), right normal = (0,-1)
+        // Door at offset 0: at = (0,0) + (0,-1)*(0.1+0.35) = (0, -0.45)
+        assert!((door_label.at.x - 0.0).abs() < 1e-9, "door x: {}", door_label.at.x);
+        assert!((door_label.at.y - (-0.45)).abs() < 1e-9, "door y: {}", door_label.at.y);
+    }
+
+    #[test]
+    fn opening_at_wall_end() {
+        let mut model = test_model();
+        model.openings[0].offset = 10.0;
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let door_label = out.labels.iter().find(|l| l.text == "D01").expect("D01 label");
+        // Door at offset 10: at = (10,0) + (0,-1)*(0.45) = (10, -0.45)
+        assert!((door_label.at.x - 10.0).abs() < 1e-9, "door x: {}", door_label.at.x);
+        assert!((door_label.at.y - (-0.45)).abs() < 1e-9, "door y: {}", door_label.at.y);
+    }
+
+    #[test]
+    fn wall_with_zero_thickness() {
+        let mut model = test_model();
+        model.walls[0].thickness = 0.0;
+        let mut out = PlanAnnotation::default();
+        let show = RoomLabelShow { numbers: true, ..Default::default() };
+        schedule_labels(&model, None, show, &mut out);
+        let door_label = out.labels.iter().find(|l| l.text == "D01").expect("D01 label");
+        // With zero thickness, at = (5,0) + (0,-1)*(0.35) = (5, -0.35)
+        assert!((door_label.at.x - 5.0).abs() < 1e-9, "door x: {}", door_label.at.x);
+        assert!((door_label.at.y - (-0.35)).abs() < 1e-9, "door y: {}", door_label.at.y);
+    }
 }
