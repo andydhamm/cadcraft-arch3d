@@ -2205,4 +2205,50 @@ mod tests {
             Err(e) => panic!("illuminance failed: {e}"),
         }
     }
+
+    #[test]
+    fn ev100_scale_round_trips_with_scale_ev100() {
+        for ev in [0.0, 1.0, 2.0, 5.0, 10.0, 14.695, -6.0] {
+            let scale = ev100_scale(ev);
+            let back = scale_ev100(scale);
+            assert!((back - ev).abs() < 1e-6, "round trip failed for ev={ev}: got {back}");
+        }
+    }
+
+    #[test]
+    fn exposure_keys_with_extreme_scales() {
+        let k = exposure_keys(f32::MAX, "auto", 0, None);
+        let ev = k["ev100"].as_f64().unwrap_or(f64::NAN);
+        assert!(ev.is_finite() || ev == f64::NEG_INFINITY, "ev100 for max scale should be finite or -inf: {ev}");
+        let k = exposure_keys(f32::MIN_POSITIVE, "auto", 0, None);
+        let ev = k["ev100"].as_f64().unwrap_or(f64::NAN);
+        assert!(ev.is_finite() || ev == f64::INFINITY, "ev100 for min scale should be finite or inf: {ev}");
+    }
+
+    #[test]
+    fn path_options_with_different_tone_maps() {
+        use cadcraft_engine::doc::arch::ToneMap;
+        use cadcraft_render3d::exposure::{TONE_ACES, TONE_HABLE, TONE_NONE};
+        let mut look = Look::default();
+        look.tone_map = ToneMap::Hable;
+        let opts = path_options(&PathParams::default(), &look, None);
+        assert_eq!(opts.tone_map, TONE_HABLE);
+        look.tone_map = ToneMap::None;
+        let opts = path_options(&PathParams::default(), &look, None);
+        assert_eq!(opts.tone_map, TONE_NONE);
+        look.tone_map = ToneMap::Aces;
+        let opts = path_options(&PathParams::default(), &look, None);
+        assert_eq!(opts.tone_map, TONE_ACES);
+    }
+
+    #[test]
+    fn path_options_with_furnace_and_snapshots() {
+        let p = PathParams { furnace: Some((0.5, 100.0)), snapshots: vec![4, 16, 64], ..PathParams::default() };
+        let look = Look::default();
+        let opts = path_options(&p, &look, None);
+        let f = opts.furnace.expect("furnace should be set");
+        assert_eq!(f.albedo, 0.5);
+        assert_eq!(f.emission, 100.0);
+        assert_eq!(opts.snapshots, vec![4, 16, 64]);
+    }
 }

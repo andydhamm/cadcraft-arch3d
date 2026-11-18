@@ -1142,4 +1142,15 @@ mod tests {
         let err = build_request(&d, &json!({"camera": "nonexistent"})).unwrap_err().to_string();
         assert!(err.contains("no camera named `nonexistent`"), "{err}");
     }
+
+    #[test]
+    fn parse_albedo_boundary_and_special_values() {
+        let d = Drawing::new_metric();
+        assert_eq!(build_request(&d, &json!({"albedo": 1e-10})).unwrap().albedo, Some(1e-10));
+        assert_eq!(build_request(&d, &json!({"albedo": 0.999999})).unwrap().albedo, Some(0.999999));
+        let err = build_request(&d, &json!({"albedo": null})).unwrap_err().to_string();
+        assert!(err.contains("`albedo` must be a number"), "{err}");
+        assert!(build_request(&d, &json!({"albedo": 0.0})).is_err());
+        assert!(build_request(&d, &json!({"albedo": 1.0})).is_err());
+    }
 }
