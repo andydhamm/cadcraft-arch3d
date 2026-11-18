@@ -366,6 +366,21 @@ mod tests {
     }
 
     #[test]
+    fn room_labels_with_exactly_three_points() {
+        let mut m = ArchModel::default();
+        m.push_room(Room { polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(0.0, 3.0)], name: "Tri".into(), ..Room::default() });
+        let s = RoomLabelShow { name: true, area: false, dimensions: false, ceiling: false, ..Default::default() };
+        let mut out = PlanAnnotation::default();
+        room_labels(&m, None, s, &mut out);
+        assert_eq!(out.labels.len(), 1);
+        assert_eq!(out.labels[0].text, "Tri");
+        // Vertex average of triangle
+        let avg = Vec2::new(4.0 / 3.0, 1.0);
+        assert!((out.labels[0].at.x - avg.x).abs() < 1e-9);
+        assert!((out.labels[0].at.y - avg.y).abs() < 1e-9);
+    }
+
+    #[test]
     fn room_with_zero_area_shows_zero_area_label() {
         let m = one_room(Room {
             polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 0.0), Vec2::new(0.0, 1.0)],

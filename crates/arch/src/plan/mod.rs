@@ -310,7 +310,10 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use cadcraft_doc::arch::{Roof, RoofEdge, RoofEdgeKind, Room, RoomLabelShow, roof_handle, template_plan_views};
+    use cadcraft_doc::Wall;
+    use cadcraft_doc::arch::{
+        Level, PlanView, ReferenceDisplay, Roof, RoofEdge, RoofEdgeKind, Room, RoomLabelShow, roof_handle, template_plan_views,
+    };
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Vec2> {
         vec![Vec2::new(x0, y0), Vec2::new(x1, y0), Vec2::new(x1, y1), Vec2::new(x0, y1)]
@@ -476,6 +479,31 @@ mod tests {
     #[test]
     fn pitch_text_twelve_over_twelve() {
         assert_eq!(pitch_text(1.0).as_deref(), Some("12/12"));
+    }
+
+    #[test]
+    fn pitch_text_just_above_threshold() {
+        // slope * 12 just above 1e-9
+        let slope = 1e-9 / 12.0 + 1e-15;
+        assert!(pitch_text(slope).is_some());
+        // slope * 12 exactly at threshold
+        let slope = 1e-9 / 12.0;
+        assert!(pitch_text(slope).is_none());
+        // slope * 12 just below threshold
+        let slope = 1e-9 / 12.0 - 1e-15;
+        assert!(pitch_text(slope).is_none());
+    }
+
+    #[test]
+    fn annotate_reference_at_same_level_draws_nothing() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { index: 0, elevation: 0.0, ..Level::default() }, Level { index: 1, elevation: 3.0, ..Level::default() }];
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let mut v = PlanView::default();
+        v.reference = Some(ReferenceDisplay { level: 0, ..ReferenceDisplay::default() });
+        let a = annotate(&m, Some(&v), Some(0));
+        let ref_lines: Vec<_> = a.lines.iter().filter(|l| l.kind == PlanLineKind::Reference).collect();
+        assert!(ref_lines.is_empty());
     }
 
     #[test]
