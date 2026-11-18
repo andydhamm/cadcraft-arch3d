@@ -5251,4 +5251,13 @@ mod tests {
         assert_eq!(back, o);
         assert_eq!(Opening::new(ArchId(0), 1.0, 0.6, 0.9, OpeningKind::Niche).style, "niche");
     }
+
+    #[test]
+    fn prune_hdr_images_with_no_backdrop_clears_all() {
+        let mut m = ArchModel::default();
+        m.hdr_images.insert("a".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() });
+        m.hdr_images.insert("b".into(), ImageRgbe { width: 2, height: 1, rgbe: vec![0, 0, 0, 128, 0, 0, 0, 128], ..Default::default() });
+        m.prune_hdr_images();
+        assert!(m.hdr_images.is_empty());
+    }
 }
