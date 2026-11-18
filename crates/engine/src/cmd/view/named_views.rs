@@ -43,6 +43,15 @@ fn find<'a>(views: &'a [NamedView], name: &str) -> Option<&'a NamedView> {
     views.iter().find(|v| v.name.eq_ignore_ascii_case(name.trim()))
 }
 
+/// A point parameter that treats `null` coordinates as NaN (serde_json writes `f64::NAN` as `null`).
+fn point_or_nan(p: &Value, name: &str) -> Option<Vec2> {
+    let v = p.get(name)?;
+    let a = v.as_array()?;
+    let x = a.get(0).and_then(Value::as_f64).unwrap_or(f64::NAN);
+    let y = a.get(1).and_then(Value::as_f64).unwrap_or(f64::NAN);
+    Some(Vec2::new(x, y))
+}
+
 /// Names from `names` (a comma-separated string or an array; `*` when absent), as patterns.
 fn name_patterns(p: &Value) -> Vec<String> {
     let raw: Vec<String> = match p.get("names").or_else(|| p.get("name")) {
@@ -67,7 +76,7 @@ fn run_view(s: &mut Session, p: &Value) -> Result<Value> {
     match option.as_str() {
         "save" | "s" | "window" | "w" => {
             let name = str_param(p, "name").map(str::trim).ok_or_else(|| bad("view", "`name` is required"))?;
-            let window = match (point_param(p, "p1"), point_param(p, "p2")) {
+            let window = match (point_or_nan(p, "p1"), point_or_nan(p, "p2")) {
                 (Some(a), Some(b)) => Some(Bounds2::new(a, b)),
                 _ if option.starts_with('w') => return Err(bad("view", "`p1` and `p2` (the window) are required")),
                 _ => None,
