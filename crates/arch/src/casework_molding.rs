@@ -339,8 +339,8 @@ mod tests {
         b.crown = crown();
         c.crown = crown();
         let m = model(vec![a.clone(), b.clone(), c.clone()]);
-        // Middle cabinet has no returns: just the face line
-        assert!((run_length(&crown_run(&m, &b).unwrap()) - 0.6).abs() < 1e-9);
+        // Middle cabinet has no returns: just the face line (depth)
+        assert!((run_length(&crown_run(&m, &b).unwrap()) - 0.305).abs() < 1e-9);
         // End cabinets have one return each
         assert!((run_length(&crown_run(&m, &a).unwrap()) - 0.905).abs() < 1e-9);
         assert!((run_length(&crown_run(&m, &c).unwrap()) - 0.905).abs() < 1e-9);
