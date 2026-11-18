@@ -128,8 +128,8 @@ fn tall_cabinet_crown_probe() {
 #[test]
 fn three_cabinets_crown_lengths() {
     let mut a = wall_cabinet(0, 0.0);
-    let mut b = wall_cabinet(1, 0.9);
-    let mut c = wall_cabinet(2, 1.8);
+    let mut b = wall_cabinet(1, 0.6);
+    let mut c = wall_cabinet(2, 1.2);
     a.crown = Some(crown_molding());
     b.crown = Some(crown_molding());
     c.crown = Some(crown_molding());
