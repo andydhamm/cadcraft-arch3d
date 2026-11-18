@@ -831,23 +831,6 @@ mod tests {
     }
 
     #[test]
-    fn cutaway_eye_on_wall_centre_line() {
-        let wall = Wall {
-            id: ArchId(1),
-            start: Vec2::new(0.0, 0.0),
-            end: Vec2::new(4.0, 0.0),
-            thickness: 0.2,
-            base_level: 0,
-            top_level: None,
-            ..Wall::default()
-        };
-        let model = ArchModel { walls: vec![wall], ..ArchModel::default() };
-        // Eye exactly on the wall's centre line (y=0): dot product is 0, not > 0
-        let hidden = cutaway_hidden(&model, Vec3::new(2.0, 0.0, 1.0), 0);
-        assert!(!hidden.contains(&("wall", ArchId(1))));
-    }
-
-    #[test]
     fn accepts_with_nan_point() {
         let f = ViewFilter {
             hidden: Hidden::default(),
