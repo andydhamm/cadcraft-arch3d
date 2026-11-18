@@ -251,6 +251,7 @@ mod tests {
                 scale: f64::NAN,
                 at: [f64::INFINITY, f64::NEG_INFINITY],
                 size: [f64::NAN, 0.0],
+                ..SheetView::default()
             });
             d.arch.sheets.push(sh);
         }
@@ -276,6 +277,7 @@ mod tests {
                 scale: 0.0,
                 at: [200.0, 300.0],
                 size: [400.0, 225.0],
+                ..SheetView::default()
             });
             d.arch.sheets.push(sh);
         }
