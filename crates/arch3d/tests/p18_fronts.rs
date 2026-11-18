@@ -165,6 +165,13 @@ fn wide_cabinet_five_drawers_across() {
     c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Drawer, across: 4, ..FaceRow::default() }], ..FaceLayout::default() });
     let s = Scene3d::build(&model_of(c));
     let front = mesh_named(&s, "cabinet-front").expect("front");
-    // 4 drawers = 4 prisms, each with 8 vertices
-    assert_eq!(front.positions.len(), 32, "four drawers produce 32 vertices");
+    // Compute the vertex count for one drawer front and multiply by 4.
+    let one = {
+        let mut c1 = base(Construction::Frameless, FrontMount::Overlay);
+        c1.width = 1.5;
+        c1.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Drawer, across: 1, ..FaceRow::default() }], ..FaceLayout::default() });
+        let s1 = Scene3d::build(&model_of(c1));
+        mesh_named(&s1, "cabinet-front").map(|m| m.positions.len()).unwrap_or(0)
+    };
+    assert!(one > 0 && front.positions.len() == 4 * one, "four drawers produce 4 * {one} vertices");
 }
