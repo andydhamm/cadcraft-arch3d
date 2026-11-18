@@ -557,6 +557,98 @@ fn pt_clip_box_and_near_clip() {
     assert!(started > 0.4 && started < 0.8, "{started}");
 }
 
+#[test]
+fn pt_clip_box_clips_all_objects() {
+    use super::scene_gpu::FRAME_CLIP;
+    let Some(gpu) = gpu_or_skip() else { return };
+    // A floor at z = 0, seen from (0, 0, 2) looking down.
+    let scene = build_gpu_scene(&Scene3d { meshes: vec![prism("floor", 1, [-1.0, -1.0, -0.1], [1.0, 1.0, 0.0])], ..Default::default() }, false, None);
+    let base = GpuFrame { spp_this_pass: 1, ..camera_frame([0.0, 0.0, 2.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) };
+    // A clip box below the floor: no geometry is visible.
+    let clipped = GpuFrame { flags: FRAME_CLIP, clip_min: [-9.0, -9.0, -9.0, 0.0], clip_max: [9.0, 9.0, -0.5, 0.0], ..base };
+    let aov = run_with_aov(&gpu, &scene, &clipped);
+    // The hit distance (aov[2*i+1].w) should be 0 for a miss.
+    let hit = aov[2 * (3 * 8 + 3) + 1];
+    assert!(hit[3] < 0.5, "clip box below all geometry should miss: t={}", hit[3]);
+}
+
+#[test]
+fn pt_near_clip_larger_than_scene() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    // A floor at z = 0, seen from (0, 0, 2) looking down.
+    let scene = build_gpu_scene(&Scene3d { meshes: vec![prism("floor", 1, [-1.0, -1.0, -0.1], [1.0, 1.0, 0.0])], ..Default::default() }, false, None);
+    let base = GpuFrame { spp_this_pass: 1, ..camera_frame([0.0, 0.0, 2.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) };
+    // A near clip of 3.0 is beyond the floor (which is 2.0 away): the ray misses.
+    let near = GpuFrame { view: [0.0, 0.0, -1.0, 3.0], ..base };
+    let aov = run_with_aov(&gpu, &scene, &near);
+    let hit = aov[2 * (3 * 8 + 3) + 1];
+    assert!(hit[3] < 0.5, "near clip beyond the scene should miss: t={}", hit[3]);
+}
+
+#[test]
+fn pt_clip_box_boundary_is_inclusive() {
+    use super::scene_gpu::FRAME_CLIP;
+    let Some(gpu) = gpu_or_skip() else { return };
+    // A floor at z = 0, seen from (0, 0, 2) looking down.
+    let scene = build_gpu_scene(&Scene3d { meshes: vec![prism("floor", 1, [-1.0, -1.0, -0.1], [1.0, 1.0, 0.0])], ..Default::default() }, false, None);
+    let base = GpuFrame { spp_this_pass: 1, ..camera_frame([0.0, 0.0, 2.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]) };
+    // A clip box with max z = 0.0: the floor at z = 0 is exactly on the boundary.
+    // The spec says the clip box is inclusive, so the floor should still be hit.
+    let clipped = GpuFrame { flags: FRAME_CLIP, clip_min: [-9.0, -9.0, -9.0, 0.0], clip_max: [9.0, 9.0, 0.0, 0.0], ..base };
+    let aov = run_with_aov(&gpu, &scene, &clipped);
+    let hit = aov[2 * (3 * 8 + 3) + 1];
+    assert!(hit[3] > 1.9 && hit[3] < 2.1, "clip box boundary should be inclusive: t={}", hit[3]);
+}
+
+#[test]
+fn pt_clip_box_clips_irradiance_shadow_rays() {
+    use super::scene_gpu::FRAME_CLIP;
+    let Some(gpu) = gpu_or_skip() else { return };
+    // A floor at z = 0, a floating column at (0, 0) from z = 0.5 to z = 1.5, and a light above.
+    let scene = build_gpu_scene(
+        &Scene3d {
+            meshes: vec![prism("floor", 1, [-2.0, -2.0, -0.1], [2.0, 2.0, 0.0]), prism("column", 2, [-0.1, -0.1, 0.5], [0.1, 0.1, 1.5])],
+            lights: vec![SceneLight {
+                kind: LightKind::Spot,
+                position: Vec3::new(0.0, 0.0, 2.0),
+                direction: Vec3::new(0.0, 0.0, -1.0),
+                intensity: 1000.0,
+                color: [1.0; 3],
+                cos_inner: 1.0,
+                cos_outer: 0.0,
+                axis: light_axis(Vec3::new(0.0, 0.0, -1.0), 0.0),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        false,
+        None,
+    );
+    let probe = [up_probe(0.0, 0.0)];
+    let buffers = upload_scene(&gpu, &scene);
+    let spp = 256;
+    // Without clip: the column blocks the light, so low irradiance.
+    let frame_no_clip =
+        GpuFrame { probe_count: 1, light_count: scene.lights.len() as u32, bounces: 0, spp_this_pass: spp, seed: 5, ..Default::default() };
+    let no_clip = check(run_entry(&gpu, &buffers, "irradiance_main", &frame_no_clip, &probe));
+    let lux_no_clip = f64::from(luminance([no_clip[0][0], no_clip[0][1], no_clip[0][2]])) / f64::from(spp);
+    // With clip max z = 0.4: the column (at z = 0.5..1.5) is clipped, so high irradiance.
+    let frame_clip = GpuFrame {
+        flags: FRAME_CLIP,
+        clip_min: [-9.0, -9.0, -9.0, 0.0],
+        clip_max: [9.0, 9.0, 0.4, 0.0],
+        probe_count: 1,
+        light_count: scene.lights.len() as u32,
+        bounces: 0,
+        spp_this_pass: spp,
+        seed: 5,
+        ..Default::default()
+    };
+    let with_clip = check(run_entry(&gpu, &buffers, "irradiance_main", &frame_clip, &probe));
+    let lux_with_clip = f64::from(luminance([with_clip[0][0], with_clip[0][1], with_clip[0][2]])) / f64::from(spp);
+    assert!(lux_with_clip > lux_no_clip + 1.0, "clipping the column should increase irradiance: no clip {lux_no_clip}, with clip {lux_with_clip}");
+}
+
 /// Run `trace_main` once over `frame`'s 8 x 8 pixels and read back the AOV buffer.
 fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f32; 4]> {
     let d = &gpu.device;
