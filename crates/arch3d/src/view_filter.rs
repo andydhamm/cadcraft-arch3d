@@ -293,8 +293,9 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
             let dist_b = side_b.dist(*outer_centroid);
             if (dist_a - dist_b).abs() < 1e-9 {
                 // Both sides equidistant from the centroid (e.g. a single wall);
-                // pick side_a as outer and let the dot product decide.
-                outer_is_a = true;
+                // the side the eye is on is the outer side.
+                let to_eye = Vec2::new(eye.x - mid.x, eye.y - mid.y);
+                outer_is_a = normal.dot(to_eye) > 0.0;
             } else {
                 outer_is_a = dist_a >= dist_b;
             }
@@ -731,6 +732,47 @@ mod tests {
         };
         let f2 = f1.clone();
         assert_eq!(f1.key(), f2.key(), "identical filters must have identical keys");
+    }
+
+    #[test]
+    fn cutaway_eye_on_wall_centre_line() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let model = ArchModel { walls: vec![wall], ..ArchModel::default() };
+        // Eye exactly on the wall's centre line (y=0): dot product is 0, not > 0
+        let hidden = cutaway_hidden(&model, Vec3::new(2.0, 0.0, 1.0), 0);
+        assert!(!hidden.contains(&("wall", ArchId(1))));
+    }
+
+    #[test]
+    fn clipbox_min_greater_than_max_rejects_all() {
+        let box_ = ClipBox { min: Vec3::new(1.0, 1.0, 1.0), max: Vec3::new(0.0, 0.0, 0.0) };
+        assert!(!box_.contains(Vec3::new(0.5, 0.5, 0.5)), "degenerate box rejects interior");
+        assert!(!box_.contains(Vec3::new(0.0, 0.0, 0.0)), "degenerate box rejects min corner");
+        assert!(!box_.contains(Vec3::new(1.0, 1.0, 1.0)), "degenerate box rejects max corner");
+    }
+
+    #[test]
+    fn near_clip_zero_rejects_behind_eye() {
+        let f = ViewFilter {
+            hidden: Hidden::default(),
+            clip: None,
+            near: Some(0.0),
+            eye: Vec3::new(0.0, 0.0, 0.0),
+            forward: Vec3::new(0.0, 0.0, 1.0),
+            levels: None,
+            cutaway: false,
+        };
+        assert!(f.accepts(Vec3::new(0.0, 0.0, 0.0)), "point at eye with near=0 is accepted");
+        assert!(f.accepts(Vec3::new(0.0, 0.0, 1.0)), "point in front with near=0 is accepted");
+        assert!(!f.accepts(Vec3::new(0.0, 0.0, -1.0)), "point behind eye with near=0 is rejected");
     }
 
     #[test]
