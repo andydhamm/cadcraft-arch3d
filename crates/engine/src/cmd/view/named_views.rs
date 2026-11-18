@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// A valid view name (the characters symbol table names can't hold are refused).
 fn valid_name(n: &str) -> bool {
-    !n.is_empty() && n.chars().count() <= 255 && !n.starts_with('*') && !n.chars().any(|c| "<>/\\\":;?*|,=`".contains(c))
+    !n.is_empty() && n.chars().count() <= 255 && !n.starts_with('*') && !n.chars().any(|c| " <>/\\\":;?*|,=`".contains(c))
 }
 
 /// The layer state holding view `name`'s layer snapshot.
@@ -41,6 +41,15 @@ fn snapshot_name(name: &str) -> String {
 
 fn find<'a>(views: &'a [NamedView], name: &str) -> Option<&'a NamedView> {
     views.iter().find(|v| v.name.eq_ignore_ascii_case(name.trim()))
+}
+
+/// A point parameter that treats `null` coordinates as NaN (serde_json writes `f64::NAN` as `null`).
+fn point_or_nan(p: &Value, name: &str) -> Option<Vec2> {
+    let v = p.get(name)?;
+    let a = v.as_array()?;
+    let x = a.get(0).and_then(Value::as_f64).unwrap_or(f64::NAN);
+    let y = a.get(1).and_then(Value::as_f64).unwrap_or(f64::NAN);
+    Some(Vec2::new(x, y))
 }
 
 /// Names from `names` (a comma-separated string or an array; `*` when absent), as patterns.
@@ -67,7 +76,7 @@ fn run_view(s: &mut Session, p: &Value) -> Result<Value> {
     match option.as_str() {
         "save" | "s" | "window" | "w" => {
             let name = str_param(p, "name").map(str::trim).ok_or_else(|| bad("view", "`name` is required"))?;
-            let window = match (point_param(p, "p1"), point_param(p, "p2")) {
+            let window = match (point_or_nan(p, "p1"), point_or_nan(p, "p2")) {
                 (Some(a), Some(b)) => Some(Bounds2::new(a, b)),
                 _ if option.starts_with('w') => return Err(bad("view", "`p1` and `p2` (the window) are required")),
                 _ => None,
@@ -387,5 +396,85 @@ impl Interactive for ViewM {
             Stage::WindowSecond(a) => vec![super::super::helpers::lwpoly(super::super::helpers::rect_vertices(a, c), true)],
             _ => Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    use crate::Session;
+
+    #[test]
+    fn save_and_restore_view() {
+        let mut s = Session::new();
+        let v = s.execute("view", &json!({ "option": "save", "name": "Test" })).unwrap();
+        assert_eq!(v["name"], "Test");
+        assert!(v["message"].as_str().unwrap().contains("saved"));
+        let r = s.execute("view", &json!({ "option": "restore", "name": "Test" })).unwrap();
+        assert!(r["message"].as_str().unwrap().contains("restored"));
+    }
+
+    #[test]
+    fn save_view_with_window() {
+        let mut s = Session::new();
+        let v = s.execute("view", &json!({ "option": "window", "name": "Test", "p1": [0.0, 0.0], "p2": [100.0, 50.0] })).unwrap();
+        assert_eq!(v["center"][0], 50.0);
+        assert_eq!(v["center"][1], 25.0);
+    }
+
+    #[test]
+    fn save_view_rejects_zero_area_window() {
+        let mut s = Session::new();
+        let e = s.execute("view", &json!({ "option": "window", "name": "Test", "p1": [0.0, 0.0], "p2": [0.0, 0.0] })).unwrap_err();
+        assert!(e.to_string().contains("no area"));
+    }
+
+    #[test]
+    fn save_view_rejects_nan_window() {
+        let mut s = Session::new();
+        let e = s.execute("view", &json!({ "option": "window", "name": "Test", "p1": [0.0, 0.0], "p2": [f64::NAN, 0.0] })).unwrap_err();
+        assert!(e.to_string().contains("no area"));
+    }
+
+    #[test]
+    fn delete_view_with_wildcards() {
+        let mut s = Session::new();
+        s.execute("view", &json!({ "option": "save", "name": "Test1" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Test2" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Other" })).unwrap();
+        let v = s.execute("view", &json!({ "option": "delete", "names": "Test*" })).unwrap();
+        let deleted: Vec<String> = v["deleted"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        assert_eq!(deleted, vec!["Test1", "Test2"]);
+    }
+
+    #[test]
+    fn restore_view_with_missing_layer_state() {
+        let mut s = Session::new();
+        s.execute("view", &json!({ "option": "save", "name": "Test", "layerSnapshot": true })).unwrap();
+        let d = s.doc_mut().unwrap();
+        d.layer_states.clear();
+        let v = s.execute("view", &json!({ "option": "restore", "name": "Test" })).unwrap();
+        assert!(v["message"].as_str().unwrap().contains("missing"));
+    }
+
+    #[test]
+    fn save_view_rejects_invalid_name() {
+        let mut s = Session::new();
+        for name in ["", "A B", "A<B", "A>B", "A/B", "A:B", "A?B", "A*B", "A|B", "A,B", "A=B", "A`B"] {
+            let e = s.execute("view", &json!({ "option": "save", "name": name })).unwrap_err();
+            assert!(e.to_string().contains("not a valid view name"), "name: {name}");
+        }
+    }
+
+    #[test]
+    fn list_views_with_patterns() {
+        let mut s = Session::new();
+        s.execute("view", &json!({ "option": "save", "name": "Test1" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Test2" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Other" })).unwrap();
+        let v = s.execute("view", &json!({ "option": "list", "names": "Test*" })).unwrap();
+        assert_eq!(v["views"].as_array().unwrap().len(), 2);
     }
 }

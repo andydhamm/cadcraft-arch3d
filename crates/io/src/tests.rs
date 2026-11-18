@@ -3934,3 +3934,32 @@ fn reading_a_drawing_with_only_an_opening_reports_metres() {
     assert_eq!(back.arch.openings.len(), 1);
     assert_eq!(back.header.i64("INSUNITS", 0), 6);
 }
+
+#[test]
+fn layer_state_without_rules_serializes_as_before() {
+    let mut d = Drawing::new_imperial();
+    d.layer_states.push(LayerState { name: "Test".into(), layers: d.layers.clone(), ..Default::default() });
+    let text = write_dxf(&d);
+    // A rule-less state must not emit a "rules" key, so older readers see the same payload.
+    assert!(!text.contains("\"rules\""));
+}
+
+#[test]
+fn layer_state_with_rules_roundtrips() {
+    use cadcraft_doc::LayerRule;
+    let mut d = Drawing::new_imperial();
+    let mut state = LayerState { name: "Test".into(), layers: d.layers.clone(), ..Default::default() };
+    state.rules.push(LayerRule { pattern: "E-*".into(), on: Some(false), transparency: None });
+    state.rules.push(LayerRule { pattern: "*".into(), on: None, transparency: Some(70) });
+    d.layer_states.push(state);
+    let back = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+    assert_eq!(back.layer_states.len(), 1);
+    assert_eq!(back.layer_states[0].name, "Test");
+    assert_eq!(back.layer_states[0].rules.len(), 2);
+    assert_eq!(back.layer_states[0].rules[0].pattern, "E-*");
+    assert_eq!(back.layer_states[0].rules[0].on, Some(false));
+    assert_eq!(back.layer_states[0].rules[0].transparency, None);
+    assert_eq!(back.layer_states[0].rules[1].pattern, "*");
+    assert_eq!(back.layer_states[0].rules[1].on, None);
+    assert_eq!(back.layer_states[0].rules[1].transparency, Some(70));
+}

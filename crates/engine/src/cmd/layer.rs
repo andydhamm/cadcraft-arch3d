@@ -396,11 +396,14 @@ fn all_layers(s: &mut Session, f: fn(&mut Layer)) -> Result<Value> {
 }
 
 fn run_state_save(s: &mut Session, p: &Value) -> Result<Value> {
-    let name = str_param(p, "name").ok_or_else(|| bad("layerstate.save", "`name` is required"))?.to_string();
+    let name = str_param(p, "name").map(str::trim).ok_or_else(|| bad("layerstate.save", "`name` is required"))?;
+    if name.is_empty() {
+        return Err(bad("layerstate.save", "`name` is required"));
+    }
     let d = s.doc_mut()?;
     let layers = d.layers.clone();
     d.layer_states.retain(|st| st.name != name);
-    d.layer_states.push(cadcraft_doc::LayerState { name, layers, ..Default::default() });
+    d.layer_states.push(cadcraft_doc::LayerState { name: name.to_string(), layers, ..Default::default() });
     ok()
 }
 
@@ -586,5 +589,56 @@ mod tests {
         };
         assert_eq!(on_layer("A"), 0);
         assert_eq!(on_layer("B"), 2);
+    }
+
+    #[test]
+    fn restore_layers_skips_missing_layers() {
+        let mut d = cadcraft_doc::Drawing::new_imperial();
+        d.layers.clear();
+        d.layers.push(cadcraft_doc::Layer::new("A"));
+        let saved = vec![cadcraft_doc::Layer::new("A"), cadcraft_doc::Layer::new("B"), cadcraft_doc::Layer::new("C")];
+        super::restore_layers(&mut d, saved);
+        assert_eq!(d.layers.len(), 1);
+        assert_eq!(d.layers[0].name, "A");
+    }
+
+    #[test]
+    fn restore_layers_case_insensitive() {
+        let mut d = cadcraft_doc::Drawing::new_imperial();
+        d.layers.clear();
+        d.layers.push(cadcraft_doc::Layer::new("A-Wall"));
+        let mut saved = cadcraft_doc::Layer::new("a-wall");
+        saved.frozen = true;
+        super::restore_layers(&mut d, vec![saved]);
+        assert!(d.layers[0].frozen);
+    }
+
+    #[test]
+    fn layer_state_save_empty_name() {
+        let mut s = Session::new();
+        let e = s.execute("layerstate.save", &json!({ "name": "" })).unwrap_err();
+        assert!(e.to_string().contains("required"));
+    }
+
+    #[test]
+    fn layer_state_restore_missing() {
+        let mut s = Session::new();
+        let e = s.execute("layerstate.restore", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(e.to_string().contains("no such layer state"));
+    }
+
+    #[test]
+    fn layer_state_rename_to_same() {
+        let mut s = Session::new();
+        s.execute("layerstate.save", &json!({ "name": "Test" })).unwrap();
+        let e = s.execute("layerstate.rename", &json!({ "from": "Test", "to": "Test" })).unwrap_err();
+        assert!(e.to_string().contains("already exists"));
+    }
+
+    #[test]
+    fn layer_state_delete_missing() {
+        let mut s = Session::new();
+        let e = s.execute("layerstate.delete", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(e.to_string().contains("no such layer state"));
     }
 }
