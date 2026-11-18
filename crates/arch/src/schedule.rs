@@ -806,4 +806,37 @@ mod tests {
         let row = rows(&model, &schedule);
         assert_eq!(row[0].cells, vec!["D01".to_string(), "out".to_string()]);
     }
+
+    #[test]
+    fn doors_with_different_swings_group_together() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        model.walls.push(Wall { id: ArchId(1), base_level: 0, ..Wall::default() });
+        let o0 = opening_with_id(&mut model, 0, 1, 0.9, 2.1, 0.0, OpeningKind::Door, "hinged");
+        let o1 = opening_with_id(&mut model, 1, 1, 0.9, 2.1, 0.0, OpeningKind::Door, "hinged");
+        model.openings[0].swing = Swing::In;
+        model.openings[1].swing = Swing::Out;
+        let n = numbers(&model);
+        assert_eq!(n.get(&(ArchKind::Opening, o0)), Some(&"D01".to_string()));
+        assert_eq!(n.get(&(ArchKind::Opening, o1)), Some(&"D01".to_string()));
+        let schedule = Schedule { kind: ScheduleKind::Door, columns: vec!["number".into(), "count".into()], ..Schedule::default() };
+        let rows = rows(&model, &schedule);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].count, 2);
+    }
+
+    #[test]
+    fn door_on_missing_wall_is_skipped_in_rows() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, name: "Ground".into(), ..Level::default() });
+        // Opening references wall id 1 but no wall exists
+        let o = opening_with_id(&mut model, 0, 1, 0.9, 2.1, 0.0, OpeningKind::Door, "hinged");
+        // numbers() still numbers it
+        let n = numbers(&model);
+        assert_eq!(n.get(&(ArchKind::Opening, o)), Some(&"D01".to_string()));
+        // But rows() skips it because the host wall is missing
+        let schedule = Schedule { kind: ScheduleKind::Door, columns: vec!["number".into(), "count".into()], ..Schedule::default() };
+        let rows = rows(&model, &schedule);
+        assert!(rows.is_empty());
+    }
 }

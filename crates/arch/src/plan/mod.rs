@@ -472,4 +472,19 @@ mod tests {
             .collect();
         assert_eq!(ring_label_point(&r, &[hole.clone()]), crate::label::label_point(&r, &[hole]));
     }
+
+    #[test]
+    fn pitch_text_twelve_over_twelve() {
+        assert_eq!(pitch_text(1.0).as_deref(), Some("12/12"));
+    }
+
+    #[test]
+    fn ring_label_point_minimum_outer() {
+        // Triangle: the vertex average is the centroid
+        let tri = vec![Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), Vec2::new(0.0, 6.0)];
+        let p = ring_label_point(&tri, &[]).unwrap();
+        let expected = Vec2::new(2.0, 2.0);
+        assert!((p.x - expected.x).abs() < 1e-9);
+        assert!((p.y - expected.y).abs() < 1e-9);
+    }
 }
