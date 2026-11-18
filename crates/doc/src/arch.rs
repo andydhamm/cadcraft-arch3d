@@ -3561,6 +3561,36 @@ mod tests {
     }
 
     #[test]
+    fn is_glass_type_rejects_empty_and_whitespace() {
+        assert!(!is_glass_type(""));
+        assert!(!is_glass_type("   "));
+        assert!(!is_glass_type("glass wall"));
+        assert!(is_glass_type(" glass "));
+    }
+
+    #[test]
+    fn wall_split_serializes_and_deserializes() {
+        let wall = Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(2.0, 0.0),
+            thickness: 0.1,
+            height: 2.0,
+            wall_type: "Interior".to_string(),
+            split: Some(WallSplit { height: 1.07, upper: "Glass".to_string(), upper_thickness: 0.01 }),
+            ..Wall::default()
+        };
+        let json = serde_json::to_string(&wall).unwrap();
+        assert!(json.contains("\"split\""));
+        assert!(json.contains("\"height\":1.07"));
+        assert!(json.contains("\"upper\":\"Glass\""));
+        let back: Wall = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, wall);
+        assert!(back.split.is_some());
+        assert_eq!(back.split.as_ref().unwrap().height, 1.07);
+        assert_eq!(back.split.as_ref().unwrap().upper, "Glass");
+    }
+
+    #[test]
     fn glass_wall_type_layers() {
         let t = glass_wall_type();
         assert_eq!(t.name, GLASS_WALL_TYPE);
