@@ -292,9 +292,13 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
             let dist_a = side_a.dist(*outer_centroid);
             let dist_b = side_b.dist(*outer_centroid);
             if (dist_a - dist_b).abs() < 1e-9 {
-                return true;
+                // Both sides equidistant from the centroid (e.g. a single wall);
+                // the side the eye is on is the outer side.
+                let to_eye = Vec2::new(eye.x - mid.x, eye.y - mid.y);
+                outer_is_a = normal.dot(to_eye) > 0.0;
+            } else {
+                outer_is_a = dist_a >= dist_b;
             }
-            outer_is_a = dist_a >= dist_b;
         }
     }
 
@@ -731,6 +735,23 @@ mod tests {
     }
 
     #[test]
+    fn cutaway_eye_on_wall_centre_line() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let model = ArchModel { walls: vec![wall], ..ArchModel::default() };
+        // Eye exactly on the wall's centre line (y=0): dot product is 0, not > 0
+        let hidden = cutaway_hidden(&model, Vec3::new(2.0, 0.0, 1.0), 0);
+        assert!(!hidden.contains(&("wall", ArchId(1))));
+    }
+
+    #[test]
     fn cutaway_hides_all_facing_walls() {
         let wall1 = Wall {
             id: ArchId(1),
@@ -783,5 +804,21 @@ mod tests {
         let model = ArchModel { levels: vec![Level { index: 0, name: "Ground".into(), elevation: 0.0, ..Level::default() }], ..ArchModel::default() };
         let f = ViewFilter::default().with_overview(&model, 99, true);
         assert_eq!(f.levels.unwrap().elevation, 0.0, "missing level uses 0.0 elevation");
+    }
+
+    #[test]
+    fn accepts_with_nan_point() {
+        let f = ViewFilter {
+            hidden: Hidden::default(),
+            clip: Some(ClipBox { min: Vec3::new(-1.0, -1.0, -1.0), max: Vec3::new(1.0, 1.0, 1.0) }),
+            near: None,
+            eye: Vec3::new(0.0, 0.0, 0.0),
+            forward: Vec3::new(0.0, 0.0, 1.0),
+            levels: None,
+            cutaway: false,
+        };
+        assert!(!f.accepts(Vec3::new(f64::NAN, 0.0, 0.0)));
+        assert!(!f.accepts(Vec3::new(0.0, f64::NAN, 0.0)));
+        assert!(!f.accepts(Vec3::new(0.0, 0.0, f64::NAN)));
     }
 }

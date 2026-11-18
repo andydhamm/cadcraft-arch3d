@@ -205,7 +205,7 @@ fn run_pick3d(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
             } })
         }
     };
-    let mut out = reply.as_object().unwrap().clone();
+    let mut out = reply.as_object().cloned().unwrap_or_default();
     out.insert(
         "filter".to_string(),
         json!({
