@@ -289,4 +289,24 @@ mod tests {
         let s = SiteSurface::new(&m).unwrap();
         assert_eq!(s.breaklines(), &[[Vec2::new(5.0, 5.0), Vec2::new(15.0, 5.0)]]);
     }
+
+    #[test]
+    fn mean_edge_elevation_with_collinear_boundary_points() {
+        let boundary = vec![Vec2::new(0.0, 0.0), Vec2::new(20.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)];
+        let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 2.0), Vec3::new(40.0, 30.0, 2.0), Vec3::new(0.0, 30.0, 0.0)];
+        let terrain = Terrain { boundary, points, ..Terrain::default() };
+        let m = ArchModel { terrain: Some(terrain), ..ArchModel::default() };
+        let mean = SiteSurface::new(&m).unwrap().mean_edge_elevation();
+        assert!(mean.is_some(), "mean should be Some with collinear points");
+    }
+
+    #[test]
+    fn mean_edge_elevation_with_small_boundary() {
+        let boundary = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+        let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 1.0), Vec3::new(1.0, 1.0, 1.0), Vec3::new(0.0, 1.0, 0.0)];
+        let terrain = Terrain { boundary, points, ..Terrain::default() };
+        let m = ArchModel { terrain: Some(terrain), ..ArchModel::default() };
+        let mean = SiteSurface::new(&m).unwrap().mean_edge_elevation();
+        assert!(mean.is_some(), "mean should be Some with small boundary");
+    }
 }

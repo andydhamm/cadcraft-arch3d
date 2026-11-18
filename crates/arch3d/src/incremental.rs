@@ -1757,4 +1757,24 @@ mod tests {
         cache.update(&next);
         assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest());
     }
+
+    #[test]
+    fn digest_changes_when_horizon_changes() {
+        use cadcraft_doc::arch::Terrain;
+        use cadcraft_geom::{Vec2, Vec3};
+
+        let mut m1 = ArchModel::default();
+        m1.terrain = Some(Terrain {
+            boundary: vec![Vec2::new(0.0, 0.0), Vec2::new(40.0, 0.0), Vec2::new(40.0, 30.0), Vec2::new(0.0, 30.0)],
+            points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 30.0, 0.0), Vec3::new(0.0, 30.0, 0.0)],
+            ..Default::default()
+        });
+        let mut m2 = m1.clone();
+        if let Some(t) = m2.terrain.as_mut() {
+            t.points[0].z = 1.0;
+        }
+        let s1 = Scene3d::build(&m1);
+        let s2 = Scene3d::build(&m2);
+        assert_ne!(s1.digest(), s2.digest(), "digest should change when horizon changes");
+    }
 }

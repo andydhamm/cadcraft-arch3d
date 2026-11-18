@@ -535,4 +535,23 @@ mod tests {
         assert_eq!(out.meshes.len(), 6, "crown and trunk each");
         assert_eq!(out.plants, 3);
     }
+
+    #[test]
+    fn horizon_mesh_none_on_nan_boundary() {
+        let mut m = model_with(Vec::new());
+        if let Some(t) = m.terrain.as_mut() {
+            t.boundary[0].x = f64::NAN;
+        }
+        assert!(horizon_mesh(&m).is_none(), "horizon should be None with NaN boundary");
+    }
+
+    #[test]
+    fn horizon_mesh_with_huge_boundary() {
+        let boundary = vec![Vec2::new(0.0, 0.0), Vec2::new(1e15, 0.0), Vec2::new(1e15, 1e15), Vec2::new(0.0, 1e15)];
+        let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1e15, 0.0, 0.0), Vec3::new(1e15, 1e15, 0.0), Vec3::new(0.0, 1e15, 0.0)];
+        let terrain = Terrain { boundary, points, ..Terrain::default() };
+        let m = ArchModel { terrain: Some(terrain), ..ArchModel::default() };
+        let mesh = horizon_mesh(&m);
+        assert!(mesh.is_some(), "horizon should be Some with huge boundary");
+    }
 }
