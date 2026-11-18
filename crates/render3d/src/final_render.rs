@@ -1123,4 +1123,26 @@ mod tests {
         assert_eq!(o.last_frame_look().exposure, crate::exposure::ev100_scale(7.0));
         assert_eq!(o.last_frame_look().exposure_mode, "manual");
     }
+
+    /// downsample with scale=1 on a non-trivial image preserves all pixels exactly.
+    #[test]
+    fn downsample_scale_one_preserves_image() {
+        // 4x4 image with distinct pixels
+        let mut rgba = Vec::new();
+        for y in 0..4u8 {
+            for x in 0..4u8 {
+                rgba.push(x * 60);
+                rgba.push(y * 60);
+                rgba.push(128);
+                rgba.push(255);
+            }
+        }
+        let out = downsample(&rgba, 4, (4, 4), 1);
+        assert!(out.is_some(), "scale=1 downsample must succeed");
+        let out = out.unwrap();
+        assert_eq!(out.len(), rgba.len(), "output length must match input");
+        for (i, (&o, &r)) in out.iter().zip(rgba.iter()).enumerate() {
+            assert_eq!(o, r, "pixel {} changed with scale=1: {} vs {}", i, o, r);
+        }
+    }
 }

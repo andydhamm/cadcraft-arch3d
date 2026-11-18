@@ -818,4 +818,51 @@ mod tests {
         assert!(avg_down.is_some(), "looking down must yield an average");
         assert!((avg_up.unwrap() - avg_down.unwrap()).abs() < 1e-6, "uniform env should be isotropic");
     }
+
+    /// look_clip accepts extreme but finite values and rejects any non-finite corner.
+    #[test]
+    fn look_clip_extreme_finite_values() {
+        use cadcraft_doc::arch::ClipBox;
+        // Extreme finite values pass through
+        let big = ClipBox { min: [-1e15, -1e15, -1e15], max: [1e15, 1e15, 1e15], ..Default::default() };
+        let clip = look_clip(&cadcraft_doc::arch::Look { clip: Some(big), ..Default::default() });
+        assert!(clip.is_some(), "extreme finite clip must be accepted");
+        let [min, max] = clip.unwrap();
+        assert_eq!(min, [-1e15 as f32, -1e15 as f32, -1e15 as f32]);
+        assert_eq!(max, [1e15 as f32, 1e15 as f32, 1e15 as f32]);
+
+        // One NaN corner rejects the whole box
+        let nan_min = ClipBox { min: [f64::NAN, 0.0, 0.0], max: [1.0, 1.0, 1.0], ..Default::default() };
+        assert!(look_clip(&cadcraft_doc::arch::Look { clip: Some(nan_min), ..Default::default() }).is_none());
+
+        // One infinite corner rejects the whole box
+        let inf_max = ClipBox { min: [0.0, 0.0, 0.0], max: [1.0, f64::INFINITY, 1.0], ..Default::default() };
+        assert!(look_clip(&cadcraft_doc::arch::Look { clip: Some(inf_max), ..Default::default() }).is_none());
+    }
+
+    /// view_look accepts near_clip at the boundaries: > 0.0 and <= 1000.0.
+    #[test]
+    fn view_look_near_clip_boundaries() {
+        let mut lighting = Lighting::default();
+        // Exactly 0.0 is rejected
+        lighting.look.near_clip = Some(0.0);
+        let mut f = FrameLook::default();
+        view_look(&mut f, &lighting);
+        assert_eq!(f.near, None, "near_clip 0.0 must be rejected");
+
+        // Just above 0.0 is accepted
+        lighting.look.near_clip = Some(0.001);
+        view_look(&mut f, &lighting);
+        assert_eq!(f.near, Some(0.001), "near_clip 0.001 must be accepted");
+
+        // Exactly 1000.0 is accepted (<= boundary)
+        lighting.look.near_clip = Some(1000.0);
+        view_look(&mut f, &lighting);
+        assert_eq!(f.near, Some(1000.0), "near_clip 1000.0 must be accepted");
+
+        // Just above 1000.0 is rejected
+        lighting.look.near_clip = Some(1000.001);
+        view_look(&mut f, &lighting);
+        assert_eq!(f.near, None, "near_clip 1000.001 must be rejected");
+    }
 }
