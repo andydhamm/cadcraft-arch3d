@@ -512,4 +512,85 @@ mod tests {
         c.height = f64::NAN;
         assert!(face_fronts(&m, &c, &default_face(&c)).is_empty());
     }
+
+    #[test]
+    fn row_heights_single_shared_row_fills_face() {
+        let c = base();
+        let face = FaceLayout { rows: vec![row(FaceKind::Door, None, 0)], ..FaceLayout::default() };
+        let h = row_heights(&c, &face).unwrap();
+        assert_eq!(h.len(), 1);
+        let b = face_box(&c);
+        assert!((h[0] - (b.v1 - b.v0)).abs() < 1e-9, "single shared row fills the face");
+    }
+
+    #[test]
+    fn face_box_wall_cabinet_elevation() {
+        let c = Cabinet {
+            kind: CabinetKind::Wall,
+            width: 0.6,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 1.372,
+            fronts: Fronts::Doors,
+            doors: 1,
+            ..Default::default()
+        };
+        let b = face_box(&c);
+        // Wall cabinet has no toe kick, so v0 = elevation, v1 = elevation + height
+        assert!((b.v0 - 1.372).abs() < 1e-9, "wall cabinet face starts at elevation");
+        assert!((b.v1 - (1.372 + 0.762)).abs() < 1e-9, "wall cabinet face ends at elevation + height");
+    }
+
+    #[test]
+    fn face_fronts_no_toe_kick() {
+        let mut c = base();
+        c.toe_kick = false;
+        let m = ArchModel::default();
+        let face = default_face(&c);
+        let fronts = face_fronts(&m, &c, &face);
+        assert!(!fronts.is_empty());
+        // Without toe kick, the face starts at elevation (0.0) not 0.1
+        let b = face_box(&c);
+        assert!((b.v0 - 0.0).abs() < 1e-9, "face starts at elevation without toe kick");
+        assert!((b.v1 - 0.876).abs() < 1e-9, "face ends at height without toe kick");
+    }
+
+    #[test]
+    fn row_across_zero_for_non_door_is_one() {
+        let c = base();
+        let drawer_row = row(FaceKind::Drawer, None, 0);
+        assert_eq!(row_across(&c, &drawer_row), 1, "across=0 for drawer defaults to 1");
+        let false_row = row(FaceKind::False, None, 0);
+        assert_eq!(row_across(&c, &false_row), 1, "across=0 for false defaults to 1");
+        let opening_row = row(FaceKind::Opening, None, 0);
+        assert_eq!(row_across(&c, &opening_row), 1, "across=0 for opening defaults to 1");
+    }
+
+    #[test]
+    fn face_fronts_wide_cabinet_many_items() {
+        let mut c = base();
+        c.width = 1.5;
+        let m = ArchModel::default();
+        let face = FaceLayout { rows: vec![row(FaceKind::Drawer, None, 5)], ..FaceLayout::default() };
+        let fronts = face_fronts(&m, &c, &face);
+        assert_eq!(fronts.len(), 5, "five drawers across a 1.5m cabinet");
+        // Check that the fronts span the full width
+        let b = face_box(&c);
+        let total_width: f64 = fronts.iter().map(|f| f.rect[2] - f.rect[0]).sum();
+        let gaps = 4.0 * 0.003;
+        assert!((total_width + gaps - (b.u1 - b.u0)).abs() < 1e-6, "fronts span the face width");
+    }
+
+    #[test]
+    fn face_fronts_pull_without_symbol() {
+        let mut c = base();
+        c.pull = Some("own:bar".to_string());
+        c.pull_symbol = None;
+        let m = ArchModel::default();
+        let face = default_face(&c);
+        let fronts = face_fronts(&m, &c, &face);
+        assert!(!fronts.is_empty());
+        // Pull position should still be computed even without a symbol
+        assert!(fronts[0].pull.is_some(), "pull position computed without symbol");
+    }
 }

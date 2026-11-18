@@ -122,3 +122,49 @@ fn cache_equals_full_after_face_edits() {
         assert_eq!(cache.scene().digest(), Scene3d::build(&model).digest(), "step {step}");
     }
 }
+
+#[test]
+fn wall_cabinet_face_box_at_elevation() {
+    let c = Cabinet {
+        kind: CabinetKind::Wall,
+        position: Vec2::new(1.0, 0.0),
+        width: 0.6,
+        depth: 0.305,
+        height: 0.762,
+        elevation: 1.372,
+        fronts: Fronts::Doors,
+        doors: 1,
+        construction: Construction::Frameless,
+        mount: FrontMount::Overlay,
+        ..Default::default()
+    };
+    let s = Scene3d::build(&model_of(c));
+    let front = mesh_named(&s, "cabinet-front").expect("wall cabinet front");
+    let b = front.bounds();
+    // Wall cabinet has no toe kick, so the front spans from elevation to elevation+height
+    assert!((b.min[2] - 1.372).abs() < 1e-4, "wall cabinet front starts at elevation: {:?}", b);
+    assert!((b.max[2] - (1.372 + 0.762)).abs() < 1e-4, "wall cabinet front ends at elevation+height: {:?}", b);
+}
+
+#[test]
+fn no_toe_kick_cabinet_face_spans_full_height() {
+    let mut c = base(Construction::Frameless, FrontMount::Overlay);
+    c.toe_kick = false;
+    let s = Scene3d::build(&model_of(c));
+    let front = mesh_named(&s, "cabinet-front").expect("front");
+    let b = front.bounds();
+    // Without toe kick, the front spans from 0 to height
+    assert!((b.min[2] - 0.0).abs() < 1e-4, "front starts at 0 without toe kick: {:?}", b);
+    assert!((b.max[2] - 0.876).abs() < 1e-4, "front ends at height without toe kick: {:?}", b);
+}
+
+#[test]
+fn wide_cabinet_five_drawers_across() {
+    let mut c = base(Construction::Frameless, FrontMount::Overlay);
+    c.width = 1.5;
+    c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Drawer, across: 5, ..FaceRow::default() }], ..FaceLayout::default() });
+    let s = Scene3d::build(&model_of(c));
+    let front = mesh_named(&s, "cabinet-front").expect("front");
+    // 5 drawers = 5 prisms, each with 8 vertices
+    assert_eq!(front.positions.len(), 40, "five drawers produce 40 vertices");
+}

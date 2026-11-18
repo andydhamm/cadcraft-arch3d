@@ -551,4 +551,40 @@ mod tests {
         let (wid, _, _) = host_wall(&m, &c).unwrap();
         assert_eq!(wid, wall_id);
     }
+
+    #[test]
+    fn host_wall_diagonal_wall() {
+        let mut m = ArchModel::default();
+        // 45-degree wall from (0,0) to (4,4)
+        let w = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 4.0), 0.2));
+        let (p, rot, _) = on_wall(&m, w, 1.0, 0.6, 0.6).unwrap();
+        let c = cabinet_at(p, rot);
+        let (wid, s0, s1) = host_wall(&m, &c).unwrap();
+        assert_eq!(wid, w);
+        assert!((s0 - 0.7).abs() < 1e-9 && (s1 - 1.3).abs() < 1e-9);
+    }
+
+    #[test]
+    fn validate_cabinet_top_exactly_at_max() {
+        // elevation + height == 3.0 should be OK
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.elevation = 0.0;
+        c.height = 3.0;
+        assert!(validate_cabinet(&c).is_ok(), "top exactly at 3.0 is allowed");
+        // Just over should fail
+        c.height = 3.001;
+        assert!(validate_cabinet(&c).is_err(), "top above 3.0 is refused");
+    }
+
+    #[test]
+    fn on_wall_with_different_base_level() {
+        let mut m = ArchModel::default();
+        m.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        m.levels.push(cadcraft_doc::Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        let mut w = Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2);
+        w.base_level = 1;
+        let id = m.push_wall(w);
+        let (p, rot, level) = on_wall(&m, id, 1.0, 0.6, 0.6).unwrap();
+        assert_eq!(level, 1, "on_wall returns the wall's base level");
+    }
 }
