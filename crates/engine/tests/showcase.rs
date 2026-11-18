@@ -1363,3 +1363,84 @@ fn the_drawing_set_script_adds_no_cabinet() {
     assert_eq!(steps.iter().filter(|s| s.cmd == "sheet").count(), 14, "14 sheet steps");
     assert_eq!(steps.last().map(|s| s.cmd.as_str()), Some("layout.set"), "layout.set is the last step");
 }
+
+/// The deck room meets the same rules as every other room: a furnishing or fixture row,
+/// a light row, an E-LITE device row, outlet gaps within 1.8 m, and no default materials.
+#[test]
+fn the_showcase_deck_meets_room_rules() {
+    let reply = &house().2;
+    let rooms: Vec<Value> = reply.get("rooms").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let deck = rooms.iter().find(|r| strd(r, "type", "") == "deck").expect("no deck room");
+    let deck_id = strd(deck, "id", "");
+
+    let furns: Vec<Value> = reply.get("furnishings").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let fixs: Vec<Value> = reply.get("fixtures").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let rows: Vec<&Value> = furns.iter().chain(fixs.iter()).filter(|r| field_text(r, "room") == deck_id).collect();
+    assert!(!rows.is_empty(), "deck {} has no furnishing or fixture row", deck_id);
+
+    let lights: Vec<Value> = reply.get("lights").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    assert!(lights.iter().any(|l| field_text(l, "room") == deck_id), "deck {} has no light row", deck_id);
+
+    let devices: Vec<Value> = reply.get("electrical").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    assert!(
+        devices.iter().any(|d| field_text(d, "room") == deck_id && strd(d, "layer", "") == "E-LITE"),
+        "deck {} has no E-LITE device row",
+        deck_id
+    );
+
+    let gaps: Vec<Value> = reply.get("outletGaps").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    for g in &gaps {
+        if field_text(g, "room") == deck_id {
+            assert!(num(g, "maxGap") <= 1.8 + 1e-6, "deck {} has an outlet gap of {}", deck_id, num(g, "maxGap"));
+        }
+    }
+
+    let surfaces: Vec<Value> = reply.get("surfaces").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    for s in &surfaces {
+        if field_text(s, "room") == deck_id {
+            let material = strd(s, "material", "");
+            assert!(!material.starts_with("default:"), "deck {} surface {} has default material {}", deck_id, strd(s, "surface", ""), material);
+        }
+    }
+}
+
+/// At least three windows carry grilles (across * down > 1) and exactly one window has a round top.
+#[test]
+fn the_showcase_windows_have_grilles_and_round_top() {
+    let reply = &house().2;
+    let openings: Vec<Value> = reply.get("openings").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let windows: Vec<&Value> = openings.iter().filter(|o| strd(o, "kind", "") == "window").collect();
+
+    let grille_count = windows
+        .iter()
+        .filter(|w| {
+            let Some(grille) = w.get("grille").filter(|v| !v.is_null()) else {
+                return false;
+            };
+            let across = grille.get("across").and_then(|v| v.as_u64()).unwrap_or(0);
+            let down = grille.get("down").and_then(|v| v.as_u64()).unwrap_or(0);
+            across * down > 1
+        })
+        .count();
+    assert!(grille_count >= 3, "only {} windows have grilles with across*down > 1", grille_count);
+
+    let round_count = windows.iter().filter(|w| strd(w, "top", "") == "round").count();
+    assert_eq!(round_count, 1, "expected exactly one round-topped window, found {}", round_count);
+}
+
+/// Each stair has an automatic railing on both its left and right sides, following the stair.
+#[test]
+fn the_showcase_stairs_have_pair_railings() {
+    let reply = &house().2;
+    let stairs: Vec<Value> = reply.get("stairs").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+    let railings: Vec<Value> = reply.get("railings").and_then(|v| v.as_array()).unwrap().iter().cloned().collect();
+
+    assert_eq!(stairs.len(), 2, "expected two stairs, found {}", stairs.len());
+    for stair in &stairs {
+        let stair_id = field_text(stair, "id");
+        let left = railings.iter().find(|r| strd(r, "host", "") == "stairLeft" && boold(r, "auto", false) && field_text(r, "follows") == stair_id);
+        let right = railings.iter().find(|r| strd(r, "host", "") == "stairRight" && boold(r, "auto", false) && field_text(r, "follows") == stair_id);
+        assert!(left.is_some(), "stair {} has no auto stairLeft railing", stair_id);
+        assert!(right.is_some(), "stair {} has no auto stairRight railing", stair_id);
+    }
+}
