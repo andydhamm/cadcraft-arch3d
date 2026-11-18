@@ -106,3 +106,65 @@ fn split_edit_rebuilds_only_the_wall_and_its_openings_and_equals_full() {
     assert!(stats.rebuilt <= 2, "rebuilt too many objects: {stats:?}");
     assert_eq!(cache.scene().digest(), Scene3d::build(&edited).digest());
 }
+
+#[test]
+fn glass_wall_with_nan_split_height_does_not_crash() {
+    let mut model = ArchModel::default();
+    let wall_id = model.push_wall(Wall {
+        start: Vec2::new(0.0, 0.0),
+        end: Vec2::new(2.0, 0.0),
+        thickness: 0.1,
+        height: 2.0,
+        wall_type: "Interior".to_string(),
+        split: Some(WallSplit { height: f64::NAN, upper: "Glass".to_string(), ..Default::default() }),
+        ..Wall::default()
+    });
+    let scene = Scene3d::build(&model);
+    // Should not crash; probe at mid-height should hit something or nothing, but not panic
+    let _ = probe(&scene, 1.0, 0.0, 1.0);
+    // The wall still exists in the scene
+    let meshes: Vec<_> = scene.meshes.iter().filter(|m| m.object == wall_id).collect();
+    assert!(!meshes.is_empty());
+}
+
+#[test]
+fn split_with_zero_upper_thickness_uses_glass_thickness() {
+    let mut model = ArchModel::default();
+    let wall_id = model.push_wall(Wall {
+        start: Vec2::new(0.0, 0.0),
+        end: Vec2::new(2.0, 0.0),
+        thickness: 0.1,
+        height: 2.0,
+        wall_type: "Interior".to_string(),
+        split: Some(WallSplit { height: 1.0, upper: "Glass".to_string(), upper_thickness: 0.0, ..Default::default() }),
+        ..Wall::default()
+    });
+    let scene = Scene3d::build(&model);
+    // Upper part should be glass at GLASS_THICKNESS (0.01), so 5mm on each side
+    assert_eq!(probe(&scene, 1.0, 0.0, 1.5), Some((wall_id.to_string(), "glass".to_string())));
+    // 6mm off center should be outside the 10mm glass
+    assert_eq!(probe(&scene, 1.0, 0.006, 1.5), None);
+}
+
+#[test]
+fn openings_exactly_at_split_height() {
+    let mut model = ArchModel::default();
+    let wall_id = model.push_wall(Wall {
+        start: Vec2::new(0.0, 0.0),
+        end: Vec2::new(2.0, 0.0),
+        thickness: 0.1,
+        height: 2.0,
+        wall_type: "Interior".to_string(),
+        split: Some(WallSplit { height: 1.0, upper: "Glass".to_string(), ..Default::default() }),
+        ..Wall::default()
+    });
+    // Opening that starts exactly at the split height (sill = 1.0, height = 0.8)
+    let mut opening = Opening::new(wall_id, 0.5, 0.8, 0.8, OpeningKind::Window);
+    opening.sill = 1.0;
+    model.push_opening(opening);
+    let scene = Scene3d::build(&model);
+    // The opening should cut the upper part (glass)
+    assert_eq!(probe(&scene, 0.8, 0.02, 1.3), None);
+    // But not the lower part
+    assert_eq!(probe(&scene, 0.8, 0.02, 0.5), Some((wall_id.to_string(), "wall".to_string())));
+}
