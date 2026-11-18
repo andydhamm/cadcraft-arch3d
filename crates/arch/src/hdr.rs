@@ -686,4 +686,36 @@ mod tests {
         assert_eq!(fit_img.height, 5);
         assert_eq!(fit_img.rgbe, img.rgbe);
     }
+
+    #[test]
+    fn encode_decode_round_trip() {
+        for rgb in [[0.0, 0.0, 0.0], [0.1, 0.2, 0.3], [1.0, 1.0, 1.0], [10.0, 10.0, 10.0], [100.0, 50.0, 25.0], [0.001, 0.002, 0.003]] {
+            let enc = encode_linear_to_rgbe(rgb);
+            let dec = decode_rgbe(enc);
+            if rgb[0] == 0.0 && rgb[1] == 0.0 && rgb[2] == 0.0 {
+                assert_eq!(dec, [0.0, 0.0, 0.0]);
+            } else {
+                for i in 0..3 {
+                    let rel_error = (dec[i] - rgb[i]).abs() / rgb[i].max(1e-12);
+                    assert!(rel_error < 0.02, "round trip failed for {:?}: got {:?}, rel error {}", rgb, dec, rel_error);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fit_very_wide_image_maintains_aspect() {
+        let img = ImageRgbe { width: 1000, height: 1, rgbe: vec![0u8; 1000 * 1 * 4], ..Default::default() };
+        let fit_img = fit(&img, 100, 100);
+        assert_eq!(fit_img.width, 100);
+        assert_eq!(fit_img.height, 1);
+    }
+
+    #[test]
+    fn fit_very_tall_image_maintains_aspect() {
+        let img = ImageRgbe { width: 1, height: 1000, rgbe: vec![0u8; 1 * 1000 * 4], ..Default::default() };
+        let fit_img = fit(&img, 100, 100);
+        assert_eq!(fit_img.width, 1);
+        assert_eq!(fit_img.height, 100);
+    }
 }

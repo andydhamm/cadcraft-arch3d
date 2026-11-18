@@ -183,4 +183,34 @@ mod tests {
         assert!(serde_json::from_str::<ImageRgbe>("\"zz\"").is_err());
         assert!(serde_json::from_str::<ImageRgbe>("\"123\"").is_err());
     }
+
+    #[test]
+    fn pixel_rgb_at_boundaries() {
+        let img = ImageRgbe {
+            width: 2,
+            height: 2,
+            rgbe: vec![10, 20, 30, 136, 40, 50, 60, 136, 70, 80, 90, 136, 100, 110, 120, 136],
+            ..Default::default()
+        };
+        let p = img.pixel_rgb(0, 0);
+        assert_eq!(p, [10.0, 20.0, 30.0]);
+        let p = img.pixel_rgb(1, 1);
+        assert_eq!(p, [100.0, 110.0, 120.0]);
+        let p = img.pixel_rgb(2, 0);
+        assert_eq!(p, [0.0, 0.0, 0.0]);
+        let p = img.pixel_rgb(0, 2);
+        assert_eq!(p, [0.0, 0.0, 0.0]);
+        let p = img.pixel_rgb(3, 3);
+        assert_eq!(p, [0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn is_valid_rejects_zero_dimensions() {
+        let img = ImageRgbe { width: 0, height: 10, rgbe: vec![0u8; 40] };
+        assert!(!img.is_valid());
+        let img = ImageRgbe { width: 10, height: 0, rgbe: vec![0u8; 40] };
+        assert!(!img.is_valid());
+        let img = ImageRgbe { width: 0, height: 0, rgbe: vec![] };
+        assert!(!img.is_valid());
+    }
 }
