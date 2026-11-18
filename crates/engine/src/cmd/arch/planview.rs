@@ -366,7 +366,6 @@ fn run_new(s: &mut Session, p: &Value) -> Result<Value> {
     let mut view = base;
     view.name = name.trim().to_string();
     parse_fields(CMD, m, &mut view, d, current)?;
-    view.layers.name = view.name.clone();
     if d.arch.plan_views.iter().any(|v| same_name(&v.name, &view.name)) {
         return Err(bad(CMD, format!("`name`: plan view `{}` already exists", view.name)));
     }
@@ -624,7 +623,7 @@ mod tests {
     #[test]
     fn open_creates_the_annotation_layer_and_the_arch_layers_first() {
         let mut s = session_with_house();
-        s.execute("stair", &json!({ "start": [1, 1], "heading": 0, "width": 0.9, "rise": 2.7 })).unwrap();
+        s.execute("stair", &json!({ "start": [1, 1], "direction": 0, "width": 0.9, "rise": 2.7 })).unwrap();
         s.execute(
             "planview",
             &json!({
