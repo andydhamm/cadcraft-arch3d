@@ -389,3 +389,83 @@ impl Interactive for ViewM {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    use crate::Session;
+
+    #[test]
+    fn save_and_restore_view() {
+        let mut s = Session::new();
+        let v = s.execute("view", &json!({ "option": "save", "name": "Test" })).unwrap();
+        assert_eq!(v["name"], "Test");
+        assert!(v["message"].as_str().unwrap().contains("saved"));
+        let r = s.execute("view", &json!({ "option": "restore", "name": "Test" })).unwrap();
+        assert!(r["message"].as_str().unwrap().contains("restored"));
+    }
+
+    #[test]
+    fn save_view_with_window() {
+        let mut s = Session::new();
+        let v = s.execute("view", &json!({ "option": "window", "name": "Test", "p1": [0.0, 0.0], "p2": [100.0, 50.0] })).unwrap();
+        assert_eq!(v["center"][0], 50.0);
+        assert_eq!(v["center"][1], 25.0);
+    }
+
+    #[test]
+    fn save_view_rejects_zero_area_window() {
+        let mut s = Session::new();
+        let e = s.execute("view", &json!({ "option": "window", "name": "Test", "p1": [0.0, 0.0], "p2": [0.0, 0.0] })).unwrap_err();
+        assert!(e.to_string().contains("no area"));
+    }
+
+    #[test]
+    fn save_view_rejects_nan_window() {
+        let mut s = Session::new();
+        let e = s.execute("view", &json!({ "option": "window", "name": "Test", "p1": [0.0, 0.0], "p2": [f64::NAN, 0.0] })).unwrap_err();
+        assert!(e.to_string().contains("no area"));
+    }
+
+    #[test]
+    fn delete_view_with_wildcards() {
+        let mut s = Session::new();
+        s.execute("view", &json!({ "option": "save", "name": "Test1" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Test2" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Other" })).unwrap();
+        let v = s.execute("view", &json!({ "option": "delete", "names": "Test*" })).unwrap();
+        let deleted: Vec<String> = v["deleted"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        assert_eq!(deleted, vec!["Test1", "Test2"]);
+    }
+
+    #[test]
+    fn restore_view_with_missing_layer_state() {
+        let mut s = Session::new();
+        s.execute("view", &json!({ "option": "save", "name": "Test", "layerSnapshot": true })).unwrap();
+        let d = s.doc_mut().unwrap();
+        d.layer_states.clear();
+        let v = s.execute("view", &json!({ "option": "restore", "name": "Test" })).unwrap();
+        assert!(v["message"].as_str().unwrap().contains("missing"));
+    }
+
+    #[test]
+    fn save_view_rejects_invalid_name() {
+        let mut s = Session::new();
+        for name in ["", "A B", "A<B", "A>B", "A/B", "A:B", "A?B", "A*B", "A|B", "A,B", "A=B", "A`B"] {
+            let e = s.execute("view", &json!({ "option": "save", "name": name })).unwrap_err();
+            assert!(e.to_string().contains("not a valid view name"), "name: {name}");
+        }
+    }
+
+    #[test]
+    fn list_views_with_patterns() {
+        let mut s = Session::new();
+        s.execute("view", &json!({ "option": "save", "name": "Test1" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Test2" })).unwrap();
+        s.execute("view", &json!({ "option": "save", "name": "Other" })).unwrap();
+        let v = s.execute("view", &json!({ "option": "list", "names": "Test*" })).unwrap();
+        assert_eq!(v["views"].as_array().unwrap().len(), 2);
+    }
+}
