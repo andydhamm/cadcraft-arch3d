@@ -568,11 +568,11 @@ mod tests {
     fn validate_cabinet_top_exactly_at_max() {
         // elevation + height == 3.0 should be OK
         let mut c = cabinet_defaults(CabinetKind::Base);
-        c.elevation = 0.0;
-        c.height = 3.0;
+        c.elevation = 0.4;
+        c.height = 2.6;
         assert!(validate_cabinet(&c).is_ok(), "top exactly at 3.0 is allowed");
         // Just over should fail
-        c.height = 3.001;
+        c.height = 2.601;
         assert!(validate_cabinet(&c).is_err(), "top above 3.0 is refused");
     }
 

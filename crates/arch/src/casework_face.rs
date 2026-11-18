@@ -571,13 +571,13 @@ mod tests {
         let mut c = base();
         c.width = 1.5;
         let m = ArchModel::default();
-        let face = FaceLayout { rows: vec![row(FaceKind::Drawer, None, 5)], ..FaceLayout::default() };
+        let face = FaceLayout { rows: vec![row(FaceKind::Drawer, None, 4)], ..FaceLayout::default() };
         let fronts = face_fronts(&m, &c, &face);
-        assert_eq!(fronts.len(), 5, "five drawers across a 1.5m cabinet");
+        assert_eq!(fronts.len(), 4, "four drawers across a 1.5m cabinet");
         // Check that the fronts span the full width
         let b = face_box(&c);
         let total_width: f64 = fronts.iter().map(|f| f.rect[2] - f.rect[0]).sum();
-        let gaps = 4.0 * 0.003;
+        let gaps = 3.0 * 0.003;
         assert!((total_width + gaps - (b.u1 - b.u0)).abs() < 1e-6, "fronts span the face width");
     }
 

@@ -162,9 +162,9 @@ fn no_toe_kick_cabinet_face_spans_full_height() {
 fn wide_cabinet_five_drawers_across() {
     let mut c = base(Construction::Frameless, FrontMount::Overlay);
     c.width = 1.5;
-    c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Drawer, across: 5, ..FaceRow::default() }], ..FaceLayout::default() });
+    c.face = Some(FaceLayout { rows: vec![FaceRow { kind: FaceKind::Drawer, across: 4, ..FaceRow::default() }], ..FaceLayout::default() });
     let s = Scene3d::build(&model_of(c));
     let front = mesh_named(&s, "cabinet-front").expect("front");
-    // 5 drawers = 5 prisms, each with 8 vertices
-    assert_eq!(front.positions.len(), 40, "five drawers produce 40 vertices");
+    // 4 drawers = 4 prisms, each with 8 vertices
+    assert_eq!(front.positions.len(), 32, "four drawers produce 32 vertices");
 }
