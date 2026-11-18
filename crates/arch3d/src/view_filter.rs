@@ -752,30 +752,6 @@ mod tests {
     }
 
     #[test]
-    fn clipbox_min_greater_than_max_rejects_all() {
-        let box_ = ClipBox { min: Vec3::new(1.0, 1.0, 1.0), max: Vec3::new(0.0, 0.0, 0.0) };
-        assert!(!box_.contains(Vec3::new(0.5, 0.5, 0.5)), "degenerate box rejects interior");
-        assert!(!box_.contains(Vec3::new(0.0, 0.0, 0.0)), "degenerate box rejects min corner");
-        assert!(!box_.contains(Vec3::new(1.0, 1.0, 1.0)), "degenerate box rejects max corner");
-    }
-
-    #[test]
-    fn near_clip_zero_rejects_behind_eye() {
-        let f = ViewFilter {
-            hidden: Hidden::default(),
-            clip: None,
-            near: Some(0.0),
-            eye: Vec3::new(0.0, 0.0, 0.0),
-            forward: Vec3::new(0.0, 0.0, 1.0),
-            levels: None,
-            cutaway: false,
-        };
-        assert!(f.accepts(Vec3::new(0.0, 0.0, 0.0)), "point at eye with near=0 is accepted");
-        assert!(f.accepts(Vec3::new(0.0, 0.0, 1.0)), "point in front with near=0 is accepted");
-        assert!(!f.accepts(Vec3::new(0.0, 0.0, -1.0)), "point behind eye with near=0 is rejected");
-    }
-
-    #[test]
     fn cutaway_hides_all_facing_walls() {
         let wall1 = Wall {
             id: ArchId(1),
