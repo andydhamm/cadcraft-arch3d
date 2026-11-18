@@ -291,9 +291,6 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
         (false, false) => {
             let dist_a = side_a.dist(*outer_centroid);
             let dist_b = side_b.dist(*outer_centroid);
-            if (dist_a - dist_b).abs() < 1e-9 {
-                return true;
-            }
             outer_is_a = dist_a >= dist_b;
         }
     }
