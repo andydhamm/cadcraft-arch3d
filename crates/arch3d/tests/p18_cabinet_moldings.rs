@@ -138,9 +138,9 @@ fn three_cabinets_crown_lengths() {
     model.cabinets.push(a.clone());
     model.cabinets.push(b.clone());
     model.cabinets.push(c.clone());
-    // Middle cabinet has no returns: just the face line (depth)
+    // Middle cabinet has no returns: just the face line (width)
     let b_run = cadcraft_arch::casework_molding::crown_run(&model, &b).unwrap();
-    assert!((run_length(&b_run) - 0.305).abs() < 1e-9);
+    assert!((run_length(&b_run) - 0.6).abs() < 1e-9);
     // End cabinets have one return each
     let a_run = cadcraft_arch::casework_molding::crown_run(&model, &a).unwrap();
     assert!((run_length(&a_run) - 0.905).abs() < 1e-9);
