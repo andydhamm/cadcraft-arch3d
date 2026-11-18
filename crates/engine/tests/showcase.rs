@@ -140,6 +140,7 @@ fn house() -> &'static (usize, usize, Value) {
             "lights": true,
             "lightSets": true,
             "stairs": true,
+            "railings": true,
             "site": true,
             "roofs": true,
             "trays": true,
