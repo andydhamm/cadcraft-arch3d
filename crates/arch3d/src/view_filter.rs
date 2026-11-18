@@ -784,4 +784,37 @@ mod tests {
         let f = ViewFilter::default().with_overview(&model, 99, true);
         assert_eq!(f.levels.unwrap().elevation, 0.0, "missing level uses 0.0 elevation");
     }
+
+    #[test]
+    fn cutaway_eye_on_wall_centre_line() {
+        let wall = Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.2,
+            base_level: 0,
+            top_level: None,
+            ..Wall::default()
+        };
+        let model = ArchModel { walls: vec![wall], ..ArchModel::default() };
+        // Eye exactly on the wall's centre line (y=0): dot product is 0, not > 0
+        let hidden = cutaway_hidden(&model, Vec3::new(2.0, 0.0, 1.0), 0);
+        assert!(!hidden.contains(&("wall", ArchId(1))));
+    }
+
+    #[test]
+    fn accepts_with_nan_point() {
+        let f = ViewFilter {
+            hidden: Hidden::default(),
+            clip: Some(ClipBox { min: Vec3::new(-1.0, -1.0, -1.0), max: Vec3::new(1.0, 1.0, 1.0) }),
+            near: None,
+            eye: Vec3::new(0.0, 0.0, 0.0),
+            forward: Vec3::new(0.0, 0.0, 1.0),
+            levels: None,
+            cutaway: false,
+        };
+        assert!(!f.accepts(Vec3::new(f64::NAN, 0.0, 0.0)));
+        assert!(!f.accepts(Vec3::new(0.0, f64::NAN, 0.0)));
+        assert!(!f.accepts(Vec3::new(0.0, 0.0, f64::NAN)));
+    }
 }

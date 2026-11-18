@@ -405,4 +405,29 @@ mod tests {
         let hit = scene.pick_filtered(&bvh, Vec3::new(0.5, -1.0, 0.5), Vec3::new(0.0, 1.0, 0.0), &|h| h.distance > 1.0);
         assert!(hit.is_none());
     }
+
+    #[test]
+    fn pick_filtered_all_rejected() {
+        let mut tri = Mesh {
+            positions: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]].map(|p| [p[0], p[1], p[2]]).to_vec(),
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            uvs: vec![[0.0, 0.0]; 3],
+            indices: vec![0, 1, 2],
+            ..Mesh::new("test", ArchId(9))
+        };
+        tri.level_elevation = 0.0;
+        let scene = Scene3d { meshes: vec![tri], ..Scene3d::default() };
+        let bvh = Bvh::build(&scene);
+        let hit = scene.pick_filtered(&bvh, Vec3::new(0.5, -1.0, 0.5), Vec3::new(0.0, 1.0, 0.0), &|_| false);
+        assert!(hit.is_none());
+    }
+
+    #[test]
+    fn bvh_build_no_triangles() {
+        let mesh = Mesh::new("test", ArchId(1));
+        let scene = Scene3d { meshes: vec![mesh], ..Scene3d::default() };
+        let bvh = Bvh::build(&scene);
+        assert!(bvh.is_empty());
+        assert_eq!(bvh.triangle_count(), 0);
+    }
 }
