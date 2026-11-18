@@ -192,7 +192,8 @@ pub fn feature_geom(model: &ArchModel, h: Handle, f: ArchFeature) -> Option<Feat
                 ArchFeature::Edge(i) => {
                     let idx = usize::try_from(i).ok()?;
                     let a = *pts.get(idx)?;
-                    let b = *pts.get(idx + 1)?;
+                    let next = (idx + 1) % pts.len();
+                    let b = *pts.get(next)?;
                     let dir = (b - a).normalized();
                     if !dir.is_finite() || dir == Vec2::ZERO {
                         return None;
@@ -265,8 +266,8 @@ pub fn find_feature(model: &ArchModel, p: Vec2, dir: Option<Vec2>) -> Option<(Ha
 
     // Opening centres are the strongest matches because they are exact points.
     for o in &model.openings {
-        let host = model.wall(o.host)?;
-        let d = crate::wall::wall_dir(host)?;
+        let Some(host) = model.wall(o.host) else { continue };
+        let Some(d) = crate::wall::wall_dir(host) else { continue };
         let q = host.start + d * o.offset;
         if (q - p).len() <= tol {
             let key = (0usize, 0usize, 0usize, o.id.0, opening_handle(o.id), ArchFeature::Centre, 0.0);
@@ -344,9 +345,10 @@ fn edge_candidates(model: &ArchModel, h: Handle, p: Vec2, dir: Option<Vec2>) -> 
         return Vec::new();
     };
     let mut out = Vec::new();
-    for i in 0..pts.len().saturating_sub(1) {
+    for i in 0..pts.len() {
         let a = pts[i];
-        let b = pts[i + 1];
+        let next = (i + 1) % pts.len();
+        let b = pts[next];
         let edge_dir = (b - a);
         let len = edge_dir.len();
         if !len.is_finite() || len <= 0.0 {
@@ -472,6 +474,52 @@ mod tests {
         let label = wall_label(id);
         assert_eq!(object_label(&model, arch_handle(id)).unwrap(), label);
         assert_eq!(handle_of_label(&model, &label), Some(arch_handle(id)));
+    }
+
+    #[test]
+    fn find_feature_with_none_dir() {
+        let mut model = ArchModel::default();
+        let id = model.push_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let _ = id;
+        // With dir = None, any line within tolerance should match (no perpendicular preference).
+        let hit = find_feature(&model, Vec2::new(5.0, 0.0), None);
+        assert!(hit.is_some(), "expected to find wall centre line with dir=None");
+        let (_, feature, along) = hit.unwrap();
+        assert_eq!(feature, ArchFeature::Centre);
+        assert!((along - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn find_feature_cabinet_edge() {
+        let mut model = ArchModel::default();
+        model.cabinets.push(cadcraft_doc::arch::Cabinet {
+            id: ArchId(0),
+            position: Vec2::new(2.0, 2.0),
+            width: 1.0,
+            depth: 0.6,
+            ..cadcraft_doc::arch::Cabinet::default()
+        });
+        // Cabinet at (2.0, 2.0) with depth 0.6: back edge at y=2.0, front edge at y=2.6.
+        // Point on the front edge, looking for a horizontal edge.
+        let hit = find_feature(&model, Vec2::new(2.0, 2.6), Some(Vec2::new(0.0, 1.0)));
+        assert!(hit.is_some(), "expected to find cabinet edge");
+        let (handle, feature, _) = hit.unwrap();
+        assert_eq!(handle, cabinet_handle(ArchId(0)));
+        assert!(matches!(feature, ArchFeature::Edge(_)));
+    }
+
+    #[test]
+    fn find_feature_huge_coordinates() {
+        let mut model = ArchModel::default();
+        let id = model.push_wall(wall(Vec2::new(1e9, 0.0), Vec2::new(1e9 + 10.0, 0.0), 0.2));
+        let _ = id;
+        // Tolerance scales with coordinate magnitude: FEATURE_TOL * (1 + 1e9) ≈ 1000.
+        // Both faces (y=±0.1) and the centre line (y=0) are within tolerance; faces rank first.
+        let hit = find_feature(&model, Vec2::new(1e9 + 5.0, 0.0), Some(Vec2::new(0.0, 1.0)));
+        assert!(hit.is_some(), "expected to find wall at huge coordinates");
+        let (_, feature, along) = hit.unwrap();
+        assert_eq!(feature, ArchFeature::LeftFace);
+        assert!((along - 5.0).abs() < 1e-3);
     }
 
     #[test]
