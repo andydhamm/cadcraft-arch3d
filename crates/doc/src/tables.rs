@@ -1142,4 +1142,63 @@ mod rule_tests {
         assert_eq!((layers[1].on, layers[1].frozen, layers[1].transparency), (false, true, 70));
         assert_eq!((layers[2].on, layers[2].frozen, layers[2].transparency), (true, false, 0));
     }
+
+    #[test]
+    fn wildcard_match_unicode_and_edge_cases() {
+        // Unicode characters are folded per-char.
+        assert!(wildcard_match("А-СТІНА", "A-Стіна"));
+        // ASCII case folding.
+        assert!(wildcard_match("A-WALL", "a-wall"));
+        // Pattern with only ? matches exactly one char of any kind.
+        assert!(wildcard_match("?", "A"));
+        assert!(wildcard_match("?", "А"));
+        assert!(!wildcard_match("?", "AB"));
+        assert!(!wildcard_match("?", ""));
+        // Multiple ? in a row.
+        assert!(wildcard_match("???", "ABC"));
+        assert!(!wildcard_match("???", "AB"));
+        // Pattern exactly MAX_LAYER_PATTERN chars.
+        let pattern: String = std::iter::repeat('a').take(MAX_LAYER_PATTERN).collect();
+        let name: String = std::iter::repeat('a').take(MAX_LAYER_PATTERN).collect();
+        assert!(wildcard_match(&pattern, &name));
+        // Name exactly 255 chars matches itself.
+        let name255: String = std::iter::repeat('a').take(255).collect();
+        assert!(wildcard_match(&name255, &name255));
+        // Pattern with trailing ? that must match.
+        assert!(wildcard_match("A*", "A"));
+        assert!(wildcard_match("A*", "AB"));
+        assert!(wildcard_match("A?", "AB"));
+        assert!(!wildcard_match("A?", "A"));
+    }
+
+    #[test]
+    fn layer_state_apply_edge_cases() {
+        // Empty rules: only snapshot applies.
+        let mut layers = vec![layer("A", true, false, 0), layer("B", true, false, 0)];
+        let st = LayerState { name: "s".into(), layers: vec![layer("A", false, false, 0)], rules: vec![] };
+        let n = st.apply(&mut layers);
+        assert_eq!(n, 1);
+        assert!(!layers[0].on);
+        assert!(layers[1].on);
+
+        // Transparency capping at 90.
+        let mut layers = vec![layer("A", true, false, 0)];
+        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("*", None, Some(100))] };
+        st.apply(&mut layers);
+        assert_eq!(layers[0].transparency, 90);
+
+        // Rule with only transparency (no on): layer stays on.
+        let mut layers = vec![layer("A", true, false, 0)];
+        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("*", None, Some(50))] };
+        st.apply(&mut layers);
+        assert!(layers[0].on);
+        assert_eq!(layers[0].transparency, 50);
+
+        // No matching rule: layer unchanged.
+        let mut layers = vec![layer("X", true, false, 0)];
+        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("A-*", Some(false), None)] };
+        let n = st.apply(&mut layers);
+        assert_eq!(n, 0);
+        assert!(layers[0].on);
+    }
 }

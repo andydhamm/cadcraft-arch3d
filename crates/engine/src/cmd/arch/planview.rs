@@ -509,4 +509,138 @@ fn run_list(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{MAX_PLAN_VIEWS, template_plan_views};
+    use serde_json::json;
+
+    fn session_with_house() -> Session {
+        let mut s = Session::new();
+        s.execute("wall", &json!({ "points": [[0, 0], [10, 0]], "thickness": 0.2 })).unwrap();
+        s.execute("wall", &json!({ "points": [[10, 0], [10, 8]], "thickness": 0.2 })).unwrap();
+        s.execute("wall", &json!({ "points": [[10, 8], [0, 8]], "thickness": 0.2 })).unwrap();
+        s.execute("wall", &json!({ "points": [[0, 8], [0, 0]], "thickness": 0.2 })).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        s
+    }
+
+    #[test]
+    fn planview_list_on_fresh_drawing_shows_templates() {
+        let mut s = Session::new();
+        let v = s.execute("planview.list", &json!({})).unwrap();
+        let views = v["planViews"].as_array().unwrap();
+        assert_eq!(views.len(), 7, "fresh drawing has the seven template views");
+        assert!(v["open"].as_array().unwrap().is_empty());
+        assert!(v["active"].is_null());
+    }
+
+    #[test]
+    fn planview_duplicate_name_refused() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "My View" })).unwrap();
+        let err = s.execute("planview", &json!({ "name": "my view" })).unwrap_err();
+        assert!(err.to_string().contains("already exists"));
+    }
+
+    #[test]
+    fn planview_unknown_name_refused() {
+        let mut s = session_with_house();
+        let err = s.execute("planview.open", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(err.to_string().contains("no plan view"));
+        let err = s.execute("planview.edit", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(err.to_string().contains("no plan view"));
+        let err = s.execute("planview.delete", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(err.to_string().contains("no plan view"));
+    }
+
+    #[test]
+    fn planview_close_not_open_refused() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "V1", "open": false })).unwrap();
+        let err = s.execute("planview.close", &json!({ "name": "V1" })).unwrap_err();
+        assert!(err.to_string().contains("not open"));
+    }
+
+    #[test]
+    fn planview_close_no_active_refused() {
+        let mut s = session_with_house();
+        let err = s.execute("planview.close", &json!({})).unwrap_err();
+        assert!(err.to_string().contains("no plan view is active"));
+    }
+
+    #[test]
+    fn planview_zoom_validation() {
+        let mut s = session_with_house();
+        // Zero width refused.
+        let err = s.execute("planview", &json!({ "name": "Z1", "zoom": { "center": [0, 0], "width": 0, "height": 1 } })).unwrap_err();
+        assert!(err.to_string().contains("zoom.width"));
+        // Bad width type refused.
+        let err = s.execute("planview", &json!({ "name": "Z2", "zoom": { "center": [0, 0], "width": "bad", "height": 1 } })).unwrap_err();
+        assert!(err.to_string().contains("zoom.width"));
+        // Missing center refused.
+        let err = s.execute("planview", &json!({ "name": "Z3", "zoom": { "width": 1, "height": 1 } })).unwrap_err();
+        assert!(err.to_string().contains("zoom.center"));
+    }
+
+    #[test]
+    fn planview_edit_no_changes_is_noop() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "V1" })).unwrap();
+        let before = s.doc().unwrap().arch.plan_views[0].clone();
+        s.execute("planview.edit", &json!({ "name": "V1" })).unwrap();
+        let after = s.doc().unwrap().arch.plan_views[0].clone();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn planview_delete_last_view_clears_active() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "V1" })).unwrap();
+        s.execute("planview.delete", &json!({ "name": "V1" })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.active_plan_view.is_none());
+        assert!(d.arch.open_plan_views.is_empty());
+    }
+
+    #[test]
+    fn planview_max_views_cap() {
+        let mut s = session_with_house();
+        for i in 0..MAX_PLAN_VIEWS {
+            s.execute("planview", &json!({ "name": format!("V{i}"), "open": false })).unwrap();
+        }
+        let err = s.execute("planview", &json!({ "name": "One More", "open": false })).unwrap_err();
+        assert!(err.to_string().contains("at most"));
+    }
+
+    #[test]
+    fn planview_reference_level_validation() {
+        let mut s = session_with_house();
+        // Unknown level name refused.
+        let err = s.execute("planview", &json!({ "name": "V1", "reference": { "level": "Nope" } })).unwrap_err();
+        assert!(err.to_string().contains("reference.level"));
+        // Missing level refused.
+        let err = s.execute("planview", &json!({ "name": "V2", "reference": {} })).unwrap_err();
+        assert!(err.to_string().contains("reference.level"));
+    }
+
+    #[test]
+    fn planview_kind_validation() {
+        let mut s = session_with_house();
+        let err = s.execute("planview", &json!({ "name": "V1", "kind": "bad" })).unwrap_err();
+        assert!(err.to_string().contains("kind"));
+    }
+
+    #[test]
+    fn planview_layers_rules_validation() {
+        let mut s = session_with_house();
+        // Missing pattern refused.
+        let err = s.execute("planview", &json!({ "name": "V1", "layers": { "rules": [{}] } })).unwrap_err();
+        assert!(err.to_string().contains("pattern"));
+        // Bad on type refused.
+        let err = s.execute("planview", &json!({ "name": "V2", "layers": { "rules": [{ "pattern": "*", "on": "yes" }] } })).unwrap_err();
+        assert!(err.to_string().contains("on"));
+        // Transparency out of range refused.
+        let err = s.execute("planview", &json!({ "name": "V3", "layers": { "rules": [{ "pattern": "*", "transparency": 100 }] } })).unwrap_err();
+        assert!(err.to_string().contains("transparency"));
+    }
+}
