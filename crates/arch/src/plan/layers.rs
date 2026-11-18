@@ -156,7 +156,7 @@ mod tests {
         m.foundations.push(cadcraft_doc::arch::Foundation::default());
         m.terrain = Some(Terrain::default());
         m.plants.push(Plant::default());
-        m.lights.push(cadcraft_doc::arch::LightFixture::default());
+        m.lights.push(cadcraft_doc::arch::LightFixture::new(cadcraft_doc::ArchId(0), "test", cadcraft_geom::Vec2::ZERO));
         m.electrical.push(cadcraft_doc::arch::ElectricalDevice::default());
         m.cabinets.push(cadcraft_doc::arch::Cabinet::default());
         m.fixtures.push(cadcraft_doc::arch::Fixture::default());
