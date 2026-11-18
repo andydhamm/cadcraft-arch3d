@@ -366,7 +366,6 @@ fn run_new(s: &mut Session, p: &Value) -> Result<Value> {
     let mut view = base;
     view.name = name.trim().to_string();
     parse_fields(CMD, m, &mut view, d, current)?;
-    view.layers.name = view.name.clone();
     if d.arch.plan_views.iter().any(|v| same_name(&v.name, &view.name)) {
         return Err(bad(CMD, format!("`name`: plan view `{}` already exists", view.name)));
     }
@@ -509,4 +508,372 @@ fn run_list(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+    use cadcraft_doc::arch::{MAX_PLAN_VIEWS, template_plan_views};
+    use serde_json::json;
+
+    fn session_with_house() -> Session {
+        let mut s = Session::new();
+        s.execute("wall", &json!({ "points": [[0, 0], [10, 0]], "thickness": 0.2 })).unwrap();
+        s.execute("wall", &json!({ "points": [[10, 0], [10, 8]], "thickness": 0.2 })).unwrap();
+        s.execute("wall", &json!({ "points": [[10, 8], [0, 8]], "thickness": 0.2 })).unwrap();
+        s.execute("wall", &json!({ "points": [[0, 8], [0, 0]], "thickness": 0.2 })).unwrap();
+        s.execute("roomdetect", &json!({})).unwrap();
+        s
+    }
+
+    #[test]
+    fn create_from_working_opens_and_activates() {
+        let mut s = session_with_house();
+        let v = s.execute("planview", &json!({ "name": "My View" })).unwrap();
+        assert_eq!(v["planView"], "My View");
+        assert!(v["open"].as_array().unwrap().iter().any(|n| n == "My View"));
+        assert_eq!(v["active"], "My View");
+        let d = s.doc().unwrap();
+        assert!(d.arch.plan_view("My View").is_some());
+    }
+
+    #[test]
+    fn duplicate_copies_every_field() {
+        let mut s = session_with_house();
+        s.execute(
+            "planview",
+            &json!({
+                "name": "Original",
+                "kind": "reflectedCeiling",
+                "labels": { "name": false, "area": true }
+            }),
+        )
+        .unwrap();
+        s.execute("planview", &json!({ "name": "Copy", "from": "Original" })).unwrap();
+        let d = s.doc().unwrap();
+        let orig = d.arch.plan_view("Original").unwrap();
+        let copy = d.arch.plan_view("Copy").unwrap();
+        assert_eq!(orig.kind, copy.kind);
+        assert_eq!(orig.labels, copy.labels);
+        assert_eq!(orig.layers, copy.layers);
+        assert_eq!(orig.annotation, copy.annotation);
+        assert_eq!(orig.reference, copy.reference);
+        assert_eq!(orig.zoom, copy.zoom);
+        assert_ne!(orig.name, copy.name);
+    }
+
+    #[test]
+    fn rename_follows_tabs_and_active() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "Old Name" })).unwrap();
+        let v = s.execute("planview.edit", &json!({ "name": "Old Name", "rename": "New Name" })).unwrap();
+        assert_eq!(v["planView"], "New Name");
+        assert_eq!(v["active"], "New Name");
+        let d = s.doc().unwrap();
+        assert!(d.arch.plan_view("Old Name").is_none());
+        assert!(d.arch.plan_view("New Name").is_some());
+        assert!(d.arch.open_plan_views.iter().any(|n| n == "New Name"));
+        assert!(!d.arch.open_plan_views.iter().any(|n| n == "Old Name"));
+    }
+
+    #[test]
+    fn delete_closes_its_tab_and_activates_the_last_remaining() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "First" })).unwrap();
+        s.execute("planview", &json!({ "name": "Second" })).unwrap();
+        s.execute("planview", &json!({ "name": "Third" })).unwrap();
+        let v = s.execute("planview.delete", &json!({ "name": "Third" })).unwrap();
+        assert_eq!(v["deleted"], "Third");
+        assert!(v["open"].as_array().unwrap().iter().any(|n| n == "Second"));
+        assert_eq!(v["active"], "Second");
+        let d = s.doc().unwrap();
+        assert!(d.arch.plan_view("Third").is_none());
+    }
+
+    #[test]
+    fn open_applies_level_layers_annotation_and_zoom() {
+        let mut s = session_with_house();
+        s.execute("level", &json!({ "name": "Upper", "elevation": 2.7 })).unwrap();
+        s.execute(
+            "planview",
+            &json!({
+                "name": "Upper View",
+                "level": 1,
+                "annotation": { "layer": "A-ANNO-NOTE", "dimStyle": "Standard" }
+            }),
+        )
+        .unwrap();
+        let v = s.execute("planview.open", &json!({ "name": "Upper View" })).unwrap();
+        assert_eq!(v["planView"], "Upper View");
+        assert_eq!(v["level"], 1);
+        assert_eq!(v["clayer"], "A-ANNO-NOTE");
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.plan_level, Some(1));
+        assert_eq!(d.header.str("DIMSTYLE", ""), "Standard");
+    }
+
+    #[test]
+    fn open_keeps_the_shown_level_for_an_any_level_view() {
+        let mut s = session_with_house();
+        s.execute("level", &json!({ "name": "Upper", "elevation": 2.7 })).unwrap();
+        s.execute("planview", &json!({ "name": "Any Level", "level": "any" })).unwrap();
+        s.execute("level.show", &json!({ "level": 1 })).unwrap();
+        s.execute("planview.open", &json!({ "name": "Any Level" })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.plan_level, Some(1), "any-level view must not change the shown level");
+    }
+
+    #[test]
+    fn open_creates_the_annotation_layer_and_the_arch_layers_first() {
+        let mut s = session_with_house();
+        s.execute("stair", &json!({ "start": [1, 1], "direction": 0, "width": 0.9, "rise": 2.7 })).unwrap();
+        s.execute(
+            "planview",
+            &json!({
+                "name": "RC View",
+                "kind": "reflectedCeiling",
+                "annotation": { "layer": "A-CLNG-ANNO" }
+            }),
+        )
+        .unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.layer("A-CLNG-ANNO").is_some());
+        assert!(d.layer("A-WALL").is_some());
+        assert!(d.layer("A-ROOM").is_some());
+        assert!(d.layer("A-STAIR").is_some());
+    }
+
+    #[test]
+    fn ensure_plan_layers_creates_without_applying() {
+        let mut s = session_with_house();
+        let d = s.doc().unwrap();
+        let view = d.arch.plan_view("Floor Plan").unwrap().clone();
+        let before = d.layers.len();
+        {
+            let d = s.doc_mut().unwrap();
+            ensure_plan_layers(d, &view);
+        }
+        let d = s.doc().unwrap();
+        assert!(d.layers.len() >= before);
+        assert_eq!(d.arch.active_plan_view, None, "ensure_plan_layers must not apply the view");
+    }
+
+    #[test]
+    fn close_activates_the_last_open_tab() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "A" })).unwrap();
+        s.execute("planview", &json!({ "name": "B" })).unwrap();
+        s.execute("planview", &json!({ "name": "C" })).unwrap();
+        let v = s.execute("planview.close", &json!({ "name": "C" })).unwrap();
+        assert_eq!(v["closed"], "C");
+        assert_eq!(v["active"], "B");
+        assert!(v["open"].as_array().unwrap().iter().any(|n| n == "A"));
+        assert!(v["open"].as_array().unwrap().iter().any(|n| n == "B"));
+    }
+
+    #[test]
+    fn capture_snapshots_the_current_layers() {
+        let mut s = session_with_house();
+        s.execute("layer.set", &json!({ "name": "A-WALL", "on": false })).unwrap();
+        s.execute("planview", &json!({ "name": "Captured", "layers": { "capture": true } })).unwrap();
+        let d = s.doc().unwrap();
+        let view = d.arch.plan_view("Captured").unwrap();
+        let wall_in_snapshot = view.layers.layers.iter().find(|l| l.name == "A-WALL").unwrap();
+        assert!(!wall_in_snapshot.on, "captured snapshot must record A-WALL as off");
+    }
+
+    #[test]
+    fn edit_of_the_active_view_reapplies() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "Active View" })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.active_plan_view.as_deref(), Some("Active View"));
+        s.execute(
+            "planview.edit",
+            &json!({
+                "name": "Active View",
+                "layers": { "rules": [{ "pattern": "*", "on": false, "transparency": 50 }] }
+            }),
+        )
+        .unwrap();
+        let d = s.doc().unwrap();
+        let wall = d.layer("A-WALL").unwrap();
+        assert!(!wall.on && wall.transparency == 50, "editing the active view must reapply it");
+    }
+
+    #[test]
+    fn refusals_change_nothing_and_push_no_undo() {
+        let mut s = session_with_house();
+        let undo_before = s.state().unwrap().undo.len();
+        let err = s.execute("planview", &json!({ "name": "working" })).unwrap_err();
+        assert!(err.to_string().contains("already exists"));
+        assert_eq!(s.state().unwrap().undo.len(), undo_before, "refusal must not push an undo step");
+        assert!(!s.doc().unwrap().arch.plan_views.iter().any(|v| v.name == "working"));
+        let err = s.execute("planview.open", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(err.to_string().contains("no plan view"));
+        assert_eq!(s.state().unwrap().undo.len(), undo_before, "refusal must not push an undo step");
+    }
+
+    #[test]
+    fn each_command_is_one_undo_step_and_never_touches_arch_revision() {
+        let mut s = session_with_house();
+        let rev_before = s.doc().unwrap().arch_revision;
+        let undo_before = s.state().unwrap().undo.len();
+        s.execute("planview", &json!({ "name": "V1" })).unwrap();
+        assert_eq!(s.state().unwrap().undo.len(), undo_before + 1);
+        assert_eq!(s.doc().unwrap().arch_revision, rev_before, "planview must not bump arch_revision");
+        let undo_before = s.state().unwrap().undo.len();
+        s.execute("planview.edit", &json!({ "name": "V1", "rename": "V1b" })).unwrap();
+        assert_eq!(s.state().unwrap().undo.len(), undo_before + 1);
+        assert_eq!(s.doc().unwrap().arch_revision, rev_before);
+        let undo_before = s.state().unwrap().undo.len();
+        s.execute("planview.delete", &json!({ "name": "V1b" })).unwrap();
+        assert_eq!(s.state().unwrap().undo.len(), undo_before + 1);
+        assert_eq!(s.doc().unwrap().arch_revision, rev_before);
+    }
+
+    #[test]
+    fn apply_plan_view_is_pure_on_a_drawing() {
+        let mut s = session_with_house();
+        let d = s.doc().unwrap();
+        let view = d.arch.plan_view("Floor Plan").unwrap().clone();
+        let mut copy = d.clone();
+        let report = apply_plan_view(&mut copy, &view);
+        assert!(report.on > 0);
+        assert_eq!(copy.arch.active_plan_view.as_deref(), Some("Floor Plan"));
+        assert!(copy.arch.open_plan_views.iter().any(|n| n == "Floor Plan"));
+        assert!(s.doc().unwrap().arch.active_plan_view.is_none(), "original drawing must be untouched");
+    }
+
+    #[test]
+    fn level_show_after_open_moves_labels_with_the_walls() {
+        let mut s = session_with_house();
+        s.execute("level", &json!({ "name": "Upper", "elevation": 2.7 })).unwrap();
+        s.execute("planview", &json!({ "name": "Upper View", "level": 1 })).unwrap();
+        s.execute("planview.open", &json!({ "name": "Upper View" })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.plan_level, Some(1));
+        s.execute("level.show", &json!({ "level": 0 })).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.plan_level, Some(0));
+        assert_eq!(d.arch.active_plan_view.as_deref(), Some("Upper View"), "the view must stay active");
+    }
+
+    #[test]
+    fn planview_list_on_fresh_drawing_shows_templates() {
+        let mut s = Session::new();
+        let v = s.execute("planview.list", &json!({})).unwrap();
+        let views = v["planViews"].as_array().unwrap();
+        assert_eq!(views.len(), 7, "fresh drawing has the seven template views");
+        assert!(v["open"].as_array().unwrap().is_empty());
+        assert!(v["active"].is_null());
+    }
+
+    #[test]
+    fn planview_duplicate_name_refused() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "My View" })).unwrap();
+        let err = s.execute("planview", &json!({ "name": "my view" })).unwrap_err();
+        assert!(err.to_string().contains("already exists"));
+    }
+
+    #[test]
+    fn planview_unknown_name_refused() {
+        let mut s = session_with_house();
+        let err = s.execute("planview.open", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(err.to_string().contains("no plan view"));
+        let err = s.execute("planview.edit", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(err.to_string().contains("no plan view"));
+        let err = s.execute("planview.delete", &json!({ "name": "Nope" })).unwrap_err();
+        assert!(err.to_string().contains("no plan view"));
+    }
+
+    #[test]
+    fn planview_close_not_open_refused() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "V1", "open": false })).unwrap();
+        let err = s.execute("planview.close", &json!({ "name": "V1" })).unwrap_err();
+        assert!(err.to_string().contains("not open"));
+    }
+
+    #[test]
+    fn planview_close_no_active_refused() {
+        let mut s = session_with_house();
+        let err = s.execute("planview.close", &json!({})).unwrap_err();
+        assert!(err.to_string().contains("no plan view is active"));
+    }
+
+    #[test]
+    fn planview_zoom_validation() {
+        let mut s = session_with_house();
+        // Zero width refused.
+        let err = s.execute("planview", &json!({ "name": "Z1", "zoom": { "center": [0, 0], "width": 0, "height": 1 } })).unwrap_err();
+        assert!(err.to_string().contains("zoom.width"));
+        // Bad width type refused.
+        let err = s.execute("planview", &json!({ "name": "Z2", "zoom": { "center": [0, 0], "width": "bad", "height": 1 } })).unwrap_err();
+        assert!(err.to_string().contains("zoom.width"));
+        // Missing center refused.
+        let err = s.execute("planview", &json!({ "name": "Z3", "zoom": { "width": 1, "height": 1 } })).unwrap_err();
+        assert!(err.to_string().contains("zoom.center"));
+    }
+
+    #[test]
+    fn planview_edit_no_changes_is_noop() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "V1" })).unwrap();
+        let before = s.doc().unwrap().arch.plan_views[0].clone();
+        s.execute("planview.edit", &json!({ "name": "V1" })).unwrap();
+        let after = s.doc().unwrap().arch.plan_views[0].clone();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn planview_delete_last_view_clears_active() {
+        let mut s = session_with_house();
+        s.execute("planview", &json!({ "name": "V1" })).unwrap();
+        s.execute("planview.delete", &json!({ "name": "V1" })).unwrap();
+        let d = s.doc().unwrap();
+        assert!(d.arch.active_plan_view.is_none());
+        assert!(d.arch.open_plan_views.is_empty());
+    }
+
+    #[test]
+    fn planview_max_views_cap() {
+        let mut s = session_with_house();
+        // A fresh drawing has 7 template plan views; leave room for them.
+        for i in 0..(MAX_PLAN_VIEWS - 7) {
+            s.execute("planview", &json!({ "name": format!("V{i}"), "open": false })).unwrap();
+        }
+        let err = s.execute("planview", &json!({ "name": "One More", "open": false })).unwrap_err();
+        assert!(err.to_string().contains("at most"));
+    }
+
+    #[test]
+    fn planview_reference_level_validation() {
+        let mut s = session_with_house();
+        // Unknown level name refused.
+        let err = s.execute("planview", &json!({ "name": "V1", "reference": { "level": "Nope" } })).unwrap_err();
+        assert!(err.to_string().contains("reference.level"));
+        // Missing level refused.
+        let err = s.execute("planview", &json!({ "name": "V2", "reference": {} })).unwrap_err();
+        assert!(err.to_string().contains("reference.level"));
+    }
+
+    #[test]
+    fn planview_kind_validation() {
+        let mut s = session_with_house();
+        let err = s.execute("planview", &json!({ "name": "V1", "kind": "bad" })).unwrap_err();
+        assert!(err.to_string().contains("kind"));
+    }
+
+    #[test]
+    fn planview_layers_rules_validation() {
+        let mut s = session_with_house();
+        // Missing pattern refused.
+        let err = s.execute("planview", &json!({ "name": "V1", "layers": { "rules": [{}] } })).unwrap_err();
+        assert!(err.to_string().contains("pattern"));
+        // Bad on type refused.
+        let err = s.execute("planview", &json!({ "name": "V2", "layers": { "rules": [{ "pattern": "*", "on": "yes" }] } })).unwrap_err();
+        assert!(err.to_string().contains("on"));
+        // Transparency out of range refused.
+        let err = s.execute("planview", &json!({ "name": "V3", "layers": { "rules": [{ "pattern": "*", "transparency": 100 }] } })).unwrap_err();
+        assert!(err.to_string().contains("transparency"));
+    }
+}

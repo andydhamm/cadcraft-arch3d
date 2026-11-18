@@ -142,4 +142,54 @@ mod tests {
         let l = layers_in_use(&m, PlanKind::Floor);
         assert_eq!(l.iter().filter(|n| n.eq_ignore_ascii_case("a-wall")).count(), 1);
     }
+
+    #[test]
+    fn layers_in_use_all_object_types() {
+        let mut m = ArchModel::default();
+        m.walls.push(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        m.rooms.push(Room::default());
+        m.roofs.push(cadcraft_doc::arch::Roof::default());
+        m.stairs.push(cadcraft_doc::arch::Stair::default());
+        m.railings.push(cadcraft_doc::arch::Railing::default());
+        m.trays.push(Tray::default());
+        m.soffits.push(cadcraft_doc::arch::Soffit::default());
+        m.foundations.push(cadcraft_doc::arch::Foundation::default());
+        m.terrain = Some(Terrain::default());
+        m.plants.push(Plant::default());
+        m.lights.push(cadcraft_doc::arch::LightFixture::new(cadcraft_doc::ArchId(0), "test", cadcraft_geom::Vec2::ZERO));
+        m.electrical.push(cadcraft_doc::arch::ElectricalDevice::default());
+        m.cabinets.push(cadcraft_doc::arch::Cabinet::default());
+        m.fixtures.push(cadcraft_doc::arch::Fixture::default());
+        m.views.push(cadcraft_doc::arch::ArchView::default());
+
+        let l = layers_in_use(&m, PlanKind::Floor);
+        assert!(has(&l, "A-WALL"));
+        assert!(has(&l, "A-ROOM"));
+        assert!(has(&l, "A-ROOF"));
+        assert!(has(&l, "A-STAIR"));
+        assert!(has(&l, "A-RAIL"));
+        assert!(has(&l, "A-CLNG"));
+        assert!(has(&l, "C-TOPO-BNDY"));
+        assert!(has(&l, "C-ROAD"));
+        assert!(has(&l, "L-PLNT"));
+        assert!(has(&l, "E-LITE"));
+    }
+
+    #[test]
+    fn layers_in_use_roof_kind_no_roofs() {
+        let m = ArchModel::default();
+        let l = layers_in_use(&m, PlanKind::Roof);
+        assert!(!has(&l, "A-ROOF"));
+        assert!(!has(&l, "A-ROOF-OTLN"));
+        assert!(!has(&l, "A-ROOF-ANNO"));
+    }
+
+    #[test]
+    fn layers_in_use_reflected_ceiling_no_trays() {
+        let mut m = ArchModel::default();
+        m.rooms.push(Room::default());
+        let l = layers_in_use(&m, PlanKind::ReflectedCeiling);
+        assert!(has(&l, "A-CLNG"));
+        assert!(!has(&l, "A-CLNG-ANNO"));
+    }
 }
