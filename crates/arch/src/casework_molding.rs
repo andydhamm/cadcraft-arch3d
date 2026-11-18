@@ -290,4 +290,81 @@ mod tests {
         bad.crown = Some(CabinetMolding::default());
         assert!(crown_run(&model(vec![bad.clone()]), &bad).is_none());
     }
+
+    #[test]
+    fn tall_cabinet_crown_path() {
+        let mut c = wall_cab(0, 0.9);
+        c.kind = CabinetKind::Tall;
+        c.crown = crown();
+        let m = model(vec![c.clone()]);
+        let r = crown_run(&m, &c).unwrap();
+        assert!((run_length(&r) - 1.21).abs() < 1e-9);
+    }
+
+    #[test]
+    fn neighbour_with_gap_exposes_end() {
+        let (mut a, mut b) = (wall_cab(0, 0.9), wall_cab(1, 1.6));
+        a.crown = crown();
+        b.crown = crown();
+        let m = model(vec![a.clone(), b.clone()]);
+        // Gap of 0.1 means both ends exposed
+        assert!((run_length(&crown_run(&m, &a).unwrap()) - 1.21).abs() < 1e-9);
+        assert!((run_length(&crown_run(&m, &b).unwrap()) - 1.21).abs() < 1e-9);
+    }
+
+    #[test]
+    fn neighbour_different_rotation_exposes_end() {
+        let (mut a, mut b) = (wall_cab(0, 0.9), wall_cab(1, 1.5));
+        a.crown = crown();
+        b.crown = crown();
+        b.rotation = 90.0;
+        let m = model(vec![a.clone(), b.clone()]);
+        assert!((run_length(&crown_run(&m, &a).unwrap()) - 1.21).abs() < 1e-9);
+    }
+
+    #[test]
+    fn neighbour_different_level_exposes_end() {
+        let (mut a, mut b) = (wall_cab(0, 0.9), wall_cab(1, 1.5));
+        a.crown = crown();
+        b.crown = crown();
+        b.level = 1;
+        let m = model(vec![a.clone(), b.clone()]);
+        assert!((run_length(&crown_run(&m, &a).unwrap()) - 1.21).abs() < 1e-9);
+    }
+
+    #[test]
+    fn three_cabinets_in_row() {
+        let (mut a, mut b, mut c) = (wall_cab(0, 0.9), wall_cab(1, 1.5), wall_cab(2, 2.1));
+        a.crown = crown();
+        b.crown = crown();
+        c.crown = crown();
+        let m = model(vec![a.clone(), b.clone(), c.clone()]);
+        // Middle cabinet has no returns: just the face line (width)
+        assert!((run_length(&crown_run(&m, &b).unwrap()) - 0.6).abs() < 1e-9);
+        // End cabinets have one return each
+        assert!((run_length(&crown_run(&m, &a).unwrap()) - 0.905).abs() < 1e-9);
+        assert!((run_length(&crown_run(&m, &c).unwrap()) - 0.905).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cabinet_with_zero_height() {
+        let mut c = wall_cab(0, 0.0);
+        c.height = 0.0;
+        c.crown = crown();
+        let m = model(vec![c.clone()]);
+        let r = crown_run(&m, &c).unwrap();
+        assert!((r.z[0] - 1.372).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cabinet_with_huge_values() {
+        let mut c = wall_cab(0, 0.0);
+        c.width = 1e9;
+        c.depth = 1e9;
+        c.height = 1e9;
+        c.crown = crown();
+        let m = model(vec![c.clone()]);
+        let r = crown_run(&m, &c).unwrap();
+        assert!(r.z[0].is_finite());
+    }
 }

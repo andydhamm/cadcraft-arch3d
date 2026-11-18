@@ -3730,4 +3730,59 @@ mod tests {
         // Based on the spec, light_set mirrors look.light_set
         assert!(c["look"].is_null() || c["look"].is_object());
     }
+
+    #[test]
+    fn inspect_light_rail_rows() {
+        let mut model = ArchModel::default();
+        let c = Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Wall,
+            level: 0,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            width: 0.6,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 1.372,
+            light_rail: Some(CabinetMolding {
+                profile: MoldingProfile {
+                    item: "molding:casing".into(),
+                    points: vec![[0.0, 0.0], [0.1, 0.0], [0.1, 0.06], [0.0, 0.06]],
+                    ..Default::default()
+                },
+                size: Some([0.1, 0.06]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        model.cabinets.push(c);
+        let mut out = JsonMap::new();
+        out.insert("cabinets".to_string(), Value::Array(vec![json!({ "id": "cb0", "kind": "wall" })]));
+        cabinet_molding_inspect::inspect_cabinet_moldings(&model, &mut out);
+        let rail = out["cabinets"][0]["lightRail"].as_object().unwrap();
+        assert_eq!(rail["profile"], "molding:casing");
+    }
+
+    #[test]
+    fn inspect_molding_null_when_unset() {
+        let mut model = ArchModel::default();
+        let c = Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Wall,
+            level: 0,
+            position: Vec2::new(0.0, 0.0),
+            rotation: 0.0,
+            width: 0.6,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 1.372,
+            ..Default::default()
+        };
+        model.cabinets.push(c);
+        let mut out = JsonMap::new();
+        out.insert("cabinets".to_string(), Value::Array(vec![json!({ "id": "cb0", "kind": "wall" })]));
+        cabinet_molding_inspect::inspect_cabinet_moldings(&model, &mut out);
+        assert!(out["cabinets"][0]["crown"].is_null());
+        assert!(out["cabinets"][0]["lightRail"].is_null());
+    }
 }
