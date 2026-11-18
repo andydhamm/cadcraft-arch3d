@@ -705,7 +705,7 @@ mod tests {
         let err = s.execute("planview", &json!({ "name": "working" })).unwrap_err();
         assert!(err.to_string().contains("already exists"));
         assert_eq!(s.state().unwrap().undo.len(), undo_before, "refusal must not push an undo step");
-        assert!(s.doc().unwrap().arch.plan_view("working").is_none());
+        assert!(!s.doc().unwrap().arch.plan_views.iter().any(|v| v.name == "working"));
         let err = s.execute("planview.open", &json!({ "name": "Nope" })).unwrap_err();
         assert!(err.to_string().contains("no plan view"));
         assert_eq!(s.state().unwrap().undo.len(), undo_before, "refusal must not push an undo step");
