@@ -794,4 +794,14 @@ mod tests {
         let expected_dist = (1.1 * 0.1 / s).clamp(MIN_DISTANCE, MAX_DISTANCE);
         assert!((fit.distance - expected_dist).abs() < 1e-12);
     }
+
+    #[test]
+    fn forward_with_eye_equal_to_target() {
+        let cam = Camera::Full(FullCamera::new(Vec3::new(1.0, 2.0, 3.0), Vec3::new(1.0, 2.0, 3.0), 45.0));
+        let f = forward(&cam);
+        // Normalized zero vector is NaN; must not panic
+        assert!(f.x.is_nan() || f.x.is_finite());
+        assert!(f.y.is_nan() || f.y.is_finite());
+        assert!(f.z.is_nan() || f.z.is_finite());
+    }
 }
