@@ -188,13 +188,9 @@ pub fn fit(img: &ImageRgbe, max_w: u32, max_h: u32) -> ImageRgbe {
     if img.width <= max_w && img.height <= max_h {
         return img.clone();
     }
-    let aspect = img.width as f64 / img.height as f64;
-    let target_w = if max_w as f64 / max_h as f64 > aspect { (max_h as f64 * aspect).round() as u32 } else { max_w };
-    let target_h = ((target_w as f64 / aspect).round().max(1.0)) as u32;
-    let target_h = target_h.min(max_h);
-    let target_w = target_w.min(max_w);
-    let target_w = target_w.max(1);
-    let target_h = target_h.max(1);
+    let scale = (max_w as f64 / img.width as f64).min(max_h as f64 / img.height as f64);
+    let target_w = (img.width as f64 * scale).round().max(1.0) as u32;
+    let target_h = (img.height as f64 * scale).round().max(1.0) as u32;
     let scale_x = img.width as f64 / target_w as f64;
     let scale_y = img.height as f64 / target_h as f64;
     let mut out = Vec::with_capacity((target_w as usize) * (target_h as usize) * 4);
@@ -685,5 +681,37 @@ mod tests {
         assert_eq!(fit_img.width, 10);
         assert_eq!(fit_img.height, 5);
         assert_eq!(fit_img.rgbe, img.rgbe);
+    }
+
+    #[test]
+    fn encode_decode_round_trip() {
+        for rgb in [[0.0, 0.0, 0.0], [0.1, 0.2, 0.3], [1.0, 1.0, 1.0], [10.0, 10.0, 10.0], [100.0, 50.0, 25.0], [0.001, 0.002, 0.003]] {
+            let enc = encode_linear_to_rgbe(rgb);
+            let dec = decode_rgbe(enc);
+            if rgb[0] == 0.0 && rgb[1] == 0.0 && rgb[2] == 0.0 {
+                assert_eq!(dec, [0.0, 0.0, 0.0]);
+            } else {
+                for i in 0..3 {
+                    let rel_error = (dec[i] - rgb[i]).abs() / rgb[i].max(1e-12);
+                    assert!(rel_error < 0.02, "round trip failed for {:?}: got {:?}, rel error {}", rgb, dec, rel_error);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fit_very_wide_image_maintains_aspect() {
+        let img = ImageRgbe { width: 1000, height: 1, rgbe: vec![0u8; 1000 * 1 * 4], ..Default::default() };
+        let fit_img = fit(&img, 100, 100);
+        assert_eq!(fit_img.width, 100);
+        assert_eq!(fit_img.height, 1);
+    }
+
+    #[test]
+    fn fit_very_tall_image_maintains_aspect() {
+        let img = ImageRgbe { width: 1, height: 1000, rgbe: vec![0u8; 1 * 1000 * 4], ..Default::default() };
+        let fit_img = fit(&img, 100, 100);
+        assert_eq!(fit_img.width, 1);
+        assert_eq!(fit_img.height, 100);
     }
 }
