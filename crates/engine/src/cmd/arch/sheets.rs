@@ -1385,7 +1385,8 @@ mod tests {
 
     #[test]
     fn sheet_scale_boundaries() {
-        // A tiny building so that scale 1:1 fits on ARCH D paper.
+        // A tiny building; the plan frame is grown by 2.5m per side, so at 1:1 it is ~5.6m wide
+        // (5600mm) and never fits on ARCH D. Scale 10 is the smallest that fits here.
         let mut s = Session::new();
         {
             let d = s.doc_mut().unwrap();
@@ -1395,9 +1396,9 @@ mod tests {
             }
             d.touch_arch();
         }
-        // Scale 1 (largest viewport) should fit with a small building
-        let r = run(&mut s, "sheet", json!({"name": "Scale1", "views": [{"view": "Floor Plan", "scale": 1, "at": [457, 304]}]}));
-        assert!((r["views"][0]["scale"].as_f64().unwrap() - 1.0).abs() < 1e-9, "{r}");
+        // Scale 10 fits; scale 1 does not (frame too large for ARCH D).
+        let r = run(&mut s, "sheet", json!({"name": "Scale10", "views": [{"view": "Floor Plan", "scale": 10, "at": [457, 304]}]}));
+        assert!((r["views"][0]["scale"].as_f64().unwrap() - 10.0).abs() < 1e-9, "{r}");
         // Scale 10000 (smallest viewport)
         let r = run(&mut s, "sheet", json!({"name": "Scale10000", "views": [{"view": "Floor Plan", "scale": 10000, "at": [457, 304]}]}));
         assert!((r["views"][0]["scale"].as_f64().unwrap() - 10000.0).abs() < 1e-9, "{r}");
