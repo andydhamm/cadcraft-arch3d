@@ -441,6 +441,64 @@ mod tests {
     }
 
     #[test]
+    fn zero_length_dashed_line_draws_nothing() {
+        let d = Drawing::new_metric();
+        let ann = ann_of(vec![line("L", Vec2::ZERO, Vec2::ZERO).dashed()], vec![]);
+        let l = lines_list(&d, false, &ann, false);
+        assert!(l.prims.is_empty(), "zero-length dashed line should draw nothing");
+    }
+
+    #[test]
+    fn short_dashed_line_clips_last_dash() {
+        let d = Drawing::new_metric();
+        // 0.05 m line, shorter than one dash (0.15 m): one clipped dash.
+        let ann = ann_of(vec![line("L", Vec2::ZERO, Vec2::new(0.05, 0.0)).dashed()], vec![]);
+        let l = lines_list(&d, false, &ann, false);
+        assert_eq!(l.prims.len(), 1, "one clipped dash");
+        assert_eq!(l.verts.len(), 2);
+        assert_eq!(l.verts[0], Vec2::ZERO);
+        assert!((l.verts[1].x - 0.05).abs() < 1e-9, "dash clipped at line end");
+    }
+
+    #[test]
+    fn dashed_line_at_exact_boundary() {
+        let d = Drawing::new_metric();
+        // 0.5 m = 2 dashes (0.15) + 2 gaps (0.1) exactly: draws 2 dashes.
+        let ann = ann_of(vec![line("L", Vec2::ZERO, Vec2::new(0.5, 0.0)).dashed()], vec![]);
+        let l = lines_list(&d, false, &ann, false);
+        assert_eq!(l.prims.len(), 2, "exactly two dashes");
+        // Second dash ends at 0.4, not 0.5 (the gap after it is not drawn).
+        assert!((l.verts.last().unwrap().x - 0.4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn label_with_missing_layer_draws() {
+        let d = Drawing::new_metric();
+        let ann = ann_of(vec![], vec![PlanLabel::new("NOPE", PlanLabelKind::RoomName, "X", Vec2::ZERO, 0.2, Handle(0x1))]);
+        let mut list = DisplayList::default();
+        push_plan_labels(&d, &mut list, false, &ann);
+        assert!(!list.prims.is_empty(), "label with missing layer should draw");
+    }
+
+    #[test]
+    fn multiple_labels_distinct_handles() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-ROOM");
+        let ann = ann_of(
+            vec![],
+            vec![
+                PlanLabel::new("A-ROOM", PlanLabelKind::RoomName, "A", Vec2::new(0.0, 0.0), 0.2, Handle(0x10)),
+                PlanLabel::new("A-ROOM", PlanLabelKind::RoomName, "B", Vec2::new(5.0, 0.0), 0.2, Handle(0x20)),
+            ],
+        );
+        let mut list = DisplayList::default();
+        push_plan_labels(&d, &mut list, false, &ann);
+        assert!(!list.prims.is_empty());
+        let handles: std::collections::HashSet<Handle> = list.prims.iter().map(|p| p.handle).collect();
+        assert!(handles.contains(&Handle(0x10)) && handles.contains(&Handle(0x20)), "both label handles present");
+    }
+
+    #[test]
     fn annotation_follows_plan_level_not_the_active_views_level() {
         let mut d = Drawing::new_metric();
         d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }, Level { index: 1, elevation: 3.0, ..Default::default() }];
