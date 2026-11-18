@@ -1233,6 +1233,21 @@ mod tests {
     }
 
     #[test]
+    fn variance_of_mean_handles_edge_cases() {
+        // All zeros
+        assert_eq!(PathTracer::variance_of_mean([0.0, 0.0, 0.0, 4.0], 0.0), 0.0);
+        // Large values stay finite
+        let v = PathTracer::variance_of_mean([1e6, 1e6, 1e6, 4.0], 1e12);
+        assert!(v.is_finite());
+        // sum_sq too small: variance clamps to 0, not negative
+        let v = PathTracer::variance_of_mean([1.0, 1.0, 1.0, 4.0], 0.2);
+        assert_eq!(v, 0.0, "negative variance clamps to 0");
+        // NaN luminance components
+        let v = PathTracer::variance_of_mean([f32::NAN, 0.0, 0.0, 4.0], 1.0);
+        assert!(v.is_finite(), "NaN radiance gives finite variance");
+    }
+
+    #[test]
     fn metered_scale_keeps_the_legacy_night() {
         let lum = vec![0.0, 1.0, 100.0, 1e-3];
         let hit = vec![true, false, true, false];
@@ -2089,6 +2104,18 @@ mod tests {
         for v in [0.0f32, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0] {
             let wgsl = hable(v);
             let rust = crate::exposure::tone_map(v, crate::exposure::TONE_HABLE);
+            assert!((wgsl - rust).abs() <= 1e-6, "v={v}: wgsl={wgsl} rust={rust}");
+        }
+    }
+
+    #[test]
+    fn aces_tone_map_matches_rust_reference() {
+        fn aces(x: f32) -> f32 {
+            (x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14)).clamp(0.0, 1.0)
+        }
+        for v in [0.0f32, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0] {
+            let wgsl = aces(v);
+            let rust = crate::exposure::tone_map(v, crate::exposure::TONE_ACES);
             assert!((wgsl - rust).abs() <= 1e-6, "v={v}: wgsl={wgsl} rust={rust}");
         }
     }
