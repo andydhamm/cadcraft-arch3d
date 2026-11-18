@@ -2037,7 +2037,7 @@ mod tests {
             thickness: 0.1,
             height: 2.0,
             wall_type: "Glass".into(),
-            split: Some(WallSplit { height: 1.0, upper: "Glass".into(), upper_thickness: 0.01 }),
+            split: Some(WallSplit { height: 1.0, upper: "Glass".into(), upper_thickness: 0.01, ..Default::default() }),
             ..Wall::default()
         });
         d.touch_arch();
