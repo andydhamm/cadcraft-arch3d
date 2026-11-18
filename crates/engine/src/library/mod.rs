@@ -774,6 +774,20 @@ mod tests {
     }
 
     #[test]
+    fn normal_map_bytes_returns_none_when_absent() {
+        use super::testing;
+        testing::install_io();
+        let dir = crate::temp_dir::TempDir::new("library-normal-absent");
+        let mut lib = Library::with_user_dir(Some(dir.to_path_buf()));
+        // A built-in item has no normal map.
+        assert_eq!(lib.normal_map_bytes("door:hinged"), Ok(None));
+        // A sample item without a normal map.
+        assert_eq!(lib.normal_map_bytes("armchair").unwrap(), None);
+        // A non-existent item.
+        assert!(lib.normal_map_bytes("nothing").is_err());
+    }
+
+    #[test]
     fn hostile_state_entries_are_dropped() {
         let v = serde_json::json!({
             "tags": {"a": ["Favorites", "", " x", 5, "ok"], "": ["y"], "b": "nope"},
