@@ -543,9 +543,9 @@ mod tests {
         assert_eq!(bytes.len(), 256);
         let word = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
         assert_eq!(word(80), 1e30, "extreme exposure");
+        assert_eq!(word(88), 8.0, "pcf radius");
+        assert_eq!(word(92), 16384.0, "atlas size");
         assert_eq!(word(96), 1e30, "extreme ambient lux");
-        assert_eq!(word(108), 8.0, "pcf radius");
-        assert_eq!(word(112), 16384.0, "atlas size");
 
         // Very small values
         let small = LitParams { exposure: 1e-30, ambient: 1e-30, sun_intensity: 1e-30, ambient_lux: 1e-30, ..Default::default() };
