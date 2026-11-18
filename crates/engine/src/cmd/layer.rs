@@ -396,7 +396,10 @@ fn all_layers(s: &mut Session, f: fn(&mut Layer)) -> Result<Value> {
 }
 
 fn run_state_save(s: &mut Session, p: &Value) -> Result<Value> {
-    let name = str_param(p, "name").ok_or_else(|| bad("layerstate.save", "`name` is required"))?.to_string();
+    let name = str_param(p, "name").map(str::trim).ok_or_else(|| bad("layerstate.save", "`name` is required"))?;
+    if name.is_empty() {
+        return Err(bad("layerstate.save", "`name` is required"));
+    }
     let d = s.doc_mut()?;
     let layers = d.layers.clone();
     d.layer_states.retain(|st| st.name != name);
@@ -591,6 +594,7 @@ mod tests {
     #[test]
     fn restore_layers_skips_missing_layers() {
         let mut d = cadcraft_doc::Drawing::new_imperial();
+        d.layers.clear();
         d.layers.push(cadcraft_doc::Layer::new("A"));
         let saved = vec![cadcraft_doc::Layer::new("A"), cadcraft_doc::Layer::new("B"), cadcraft_doc::Layer::new("C")];
         super::restore_layers(&mut d, saved);
@@ -601,6 +605,7 @@ mod tests {
     #[test]
     fn restore_layers_case_insensitive() {
         let mut d = cadcraft_doc::Drawing::new_imperial();
+        d.layers.clear();
         d.layers.push(cadcraft_doc::Layer::new("A-Wall"));
         let mut saved = cadcraft_doc::Layer::new("a-wall");
         saved.frozen = true;

@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// A valid view name (the characters symbol table names can't hold are refused).
 fn valid_name(n: &str) -> bool {
-    !n.is_empty() && n.chars().count() <= 255 && !n.starts_with('*') && !n.chars().any(|c| "<>/\\\":;?*|,=`".contains(c))
+    !n.is_empty() && n.chars().count() <= 255 && !n.starts_with('*') && !n.chars().any(|c| " <>/\\\":;?*|,=`".contains(c))
 }
 
 /// The layer state holding view `name`'s layer snapshot.
