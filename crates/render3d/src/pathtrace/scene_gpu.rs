@@ -1896,4 +1896,85 @@ mod tests {
         // Every triangle has at least one NaN vertex, so no triangles are pushed.
         assert_eq!(gpu.tris.len(), 0, "all-NaN horizon positions produce no triangles");
     }
+
+    #[test]
+    fn apply_lambert_makes_every_material_diffuse() {
+        let mut scene = GpuScene {
+            materials: vec![
+                GpuMaterial {
+                    albedo: [0.5, 0.3, 0.1],
+                    metallic: 0.8,
+                    roughness: 0.2,
+                    ior: 1.5,
+                    transmission: 0.5,
+                    flags: 0,
+                    emission: [0.0, 0.0, 0.0],
+                    _pad: 0,
+                },
+                GpuMaterial {
+                    albedo: [1.0, 1.0, 1.0],
+                    metallic: 1.0,
+                    roughness: 0.0,
+                    ior: 1.5,
+                    transmission: 0.65,
+                    flags: MAT_GLASS,
+                    emission: [0.0, 0.0, 0.0],
+                    _pad: 0,
+                },
+                GpuMaterial {
+                    albedo: [0.9, 0.9, 0.9],
+                    metallic: 0.0,
+                    roughness: 1.0,
+                    ior: 1.5,
+                    transmission: 0.0,
+                    flags: MAT_EMIT_CAMERA_ONLY,
+                    emission: [20000.0, 20000.0, 20000.0],
+                    _pad: 0,
+                },
+            ],
+            ..Default::default()
+        };
+        apply_lambert(&mut scene, 0.7);
+        // First two: pure Lambert, no emission, flags preserved
+        assert_eq!(
+            scene.materials[0],
+            GpuMaterial {
+                albedo: [0.7, 0.7, 0.7],
+                metallic: 0.0,
+                roughness: 1.0,
+                ior: 1.0,
+                transmission: 0.0,
+                flags: 0,
+                emission: [0.0, 0.0, 0.0],
+                _pad: 0
+            }
+        );
+        assert_eq!(
+            scene.materials[1],
+            GpuMaterial {
+                albedo: [0.7, 0.7, 0.7],
+                metallic: 0.0,
+                roughness: 1.0,
+                ior: 1.0,
+                transmission: 0.0,
+                flags: MAT_GLASS,
+                emission: [0.0, 0.0, 0.0],
+                _pad: 0
+            }
+        );
+        // Lens: emission preserved, flags preserved
+        assert_eq!(
+            scene.materials[2],
+            GpuMaterial {
+                albedo: [0.7, 0.7, 0.7],
+                metallic: 0.0,
+                roughness: 1.0,
+                ior: 1.0,
+                transmission: 0.0,
+                flags: MAT_EMIT_CAMERA_ONLY,
+                emission: [20000.0, 20000.0, 20000.0],
+                _pad: 0
+            }
+        );
+    }
 }
