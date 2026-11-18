@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-18 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-18 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
@@ -32,7 +32,7 @@ Updated 2026-11-18 11:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 18 17:14–Dec 03 18:51 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 18 17:29–Dec 03 19:06 UTC |
 
 ## Phase 22 segments
 
