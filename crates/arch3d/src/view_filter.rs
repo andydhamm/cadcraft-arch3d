@@ -293,10 +293,11 @@ fn facing_exterior(w: &cadcraft_doc::arch::Wall, rooms: &[&cadcraft_doc::arch::R
             let dist_b = side_b.dist(*outer_centroid);
             if (dist_a - dist_b).abs() < 1e-9 {
                 // Both sides equidistant from the centroid (e.g. a single wall);
-                // the wall faces the eye.
-                return true;
+                // pick side_a as outer and let the dot product decide.
+                outer_is_a = true;
+            } else {
+                outer_is_a = dist_a >= dist_b;
             }
-            outer_is_a = dist_a >= dist_b;
         }
     }
 
