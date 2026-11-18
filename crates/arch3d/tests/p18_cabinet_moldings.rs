@@ -111,3 +111,56 @@ fn a_filler_under_crown_builds_its_crown_piece() {
     without_filler.cabinets[1].crown = None;
     assert!((run_length(&cadcraft_arch::casework_molding::crown_run(&without_filler, &without_filler.cabinets[0]).unwrap()) - 1.21).abs() < 1e-9);
 }
+
+#[test]
+fn tall_cabinet_crown_probe() {
+    let mut c = wall_cabinet(0, 0.0);
+    c.kind = CabinetKind::Tall;
+    c.crown = Some(crown_molding());
+    let mut model = ArchModel::default();
+    model.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+    model.cabinets.push(c);
+    let scene = Scene3d::build(&model);
+    let hit = scene.probe(cadcraft_geom::Vec3::new(0.0, 0.308, 2.18));
+    assert!(hit.as_ref().is_some_and(|h| h.id == "cb0" && h.part == "cabinet"), "hit={hit:?}");
+}
+
+#[test]
+fn three_cabinets_crown_lengths() {
+    let mut a = wall_cabinet(0, 0.0);
+    let mut b = wall_cabinet(1, 0.9);
+    let mut c = wall_cabinet(2, 1.8);
+    a.crown = Some(crown_molding());
+    b.crown = Some(crown_molding());
+    c.crown = Some(crown_molding());
+    let mut model = ArchModel::default();
+    model.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+    model.cabinets.push(a.clone());
+    model.cabinets.push(b.clone());
+    model.cabinets.push(c.clone());
+    // Middle cabinet has no returns: just the face line (depth)
+    let b_run = cadcraft_arch::casework_molding::crown_run(&model, &b).unwrap();
+    assert!((run_length(&b_run) - 0.305).abs() < 1e-9);
+    // End cabinets have one return each
+    let a_run = cadcraft_arch::casework_molding::crown_run(&model, &a).unwrap();
+    assert!((run_length(&a_run) - 0.905).abs() < 1e-9);
+    let c_run = cadcraft_arch::casework_molding::crown_run(&model, &c).unwrap();
+    assert!((run_length(&c_run) - 0.905).abs() < 1e-9);
+}
+
+#[test]
+fn neighbour_gap_exposes_end() {
+    let mut a = wall_cabinet(0, 0.0);
+    let mut b = wall_cabinet(1, 1.0);
+    a.crown = Some(crown_molding());
+    b.crown = Some(crown_molding());
+    let mut model = ArchModel::default();
+    model.levels.push(Level { index: 0, elevation: 0.0, ..Default::default() });
+    model.cabinets.push(a.clone());
+    model.cabinets.push(b.clone());
+    // Both should have full returns (depth + width + depth)
+    let a_run = cadcraft_arch::casework_molding::crown_run(&model, &a).unwrap();
+    assert!((run_length(&a_run) - 1.21).abs() < 1e-9);
+    let b_run = cadcraft_arch::casework_molding::crown_run(&model, &b).unwrap();
+    assert!((run_length(&b_run) - 1.21).abs() < 1e-9);
+}

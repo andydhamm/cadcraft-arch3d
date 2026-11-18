@@ -206,4 +206,65 @@ mod tests {
         let clear = Opts { crown: Some(None), ..Default::default() };
         assert!(clear.apply("cabinet", &mut c).is_ok());
     }
+
+    #[test]
+    fn light_rail_on_base_cabinet_is_refused() {
+        let mut s = crate::Session::new();
+        let mut c = Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            position: Vec2::new(0.0, 0.0),
+            width: 0.6,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 1.372,
+            ..Default::default()
+        };
+        let bad_item = Opts {
+            light_rail: Some(Some(CabinetMolding {
+                profile: crate::library::molding::profile_of(&s.library, "molding:casing").unwrap(),
+                size: None,
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        assert!(bad_item.apply("cabinet", &mut c).is_err());
+    }
+
+    #[test]
+    fn crown_size_without_crown_is_refused() {
+        let mut s = crate::Session::new();
+        let mut c = Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Wall,
+            position: Vec2::new(0.0, 0.0),
+            width: 0.6,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 1.372,
+            ..Default::default()
+        };
+        let opts = Opts { crown_size: Some(Some([0.05, 0.05])), ..Default::default() };
+        assert!(opts.apply("cabinet", &mut c).is_err());
+    }
+
+    #[test]
+    fn parse_crown_item() {
+        let s = crate::Session::new();
+        let p = serde_json::json!({ "crown": "molding:crown" });
+        let opts = parse("cabinet", &s, &p).unwrap();
+        assert!(opts.crown.is_some());
+        let crown = opts.crown.unwrap().unwrap();
+        assert_eq!(crown.profile.item, "molding:crown");
+    }
+
+    #[test]
+    fn parse_crown_size() {
+        let s = crate::Session::new();
+        let p = serde_json::json!({ "crownSize": [0.05, 0.06] });
+        let opts = parse("cabinet", &s, &p).unwrap();
+        assert!(opts.crown_size.is_some());
+        let size = opts.crown_size.unwrap().unwrap();
+        assert_eq!(size, [0.05, 0.06]);
+    }
 }
