@@ -124,7 +124,7 @@ pub(crate) fn inspect_sheets(d: &Drawing, p: &Value, out: &mut JsonMap<String, V
 mod tests {
     use super::*;
     use crate::Session;
-    use cadcraft_doc::arch::sheet::{Schedule, Sheet, SheetSet};
+    use cadcraft_doc::arch::sheet::{Schedule, Sheet, SheetSet, SheetSource, SheetView};
     use cadcraft_doc::arch::{ArchId, Opening, OpeningKind};
 
     fn inspect(s: &mut Session, p: Value) -> Value {
@@ -183,5 +183,110 @@ mod tests {
         assert!(!rows.is_empty(), "{v}");
         assert_eq!(rows[0]["number"], json!("D01"), "{v}");
         assert_eq!(v["cabinets"], json!([]), "{v}");
+    }
+
+    #[test]
+    fn inspect_schedules_handles_non_finite_at() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.schedules.push(Schedule {
+                name: "Doors".into(),
+                columns: vec!["number".into()],
+                at: [f64::NAN, f64::INFINITY],
+                ..Schedule::default()
+            });
+        }
+        let v = inspect(&mut s, json!({"schedules": true}));
+        let schedules = v["schedules"].as_array().expect("schedules array");
+        assert_eq!(schedules.len(), 1, "{v}");
+        assert!(schedules[0]["at"][0].is_null(), "NaN should serialize to null: {v}");
+        assert!(schedules[0]["at"][1].is_null(), "Inf should serialize to null: {v}");
+    }
+
+    #[test]
+    fn inspect_schedules_out_of_range_level() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.schedules.push(Schedule { name: "Doors".into(), columns: vec!["number".into()], level: Some(99), ..Schedule::default() });
+        }
+        let v = inspect(&mut s, json!({"schedules": true}));
+        let schedules = v["schedules"].as_array().expect("schedules array");
+        assert_eq!(schedules.len(), 1, "{v}");
+        assert_eq!(schedules[0]["level"], 99, "level index reported as-is even if out of range: {v}");
+    }
+
+    #[test]
+    fn inspect_sheets_unknown_paper_size() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.sheets.push(Sheet { name: "A101".into(), number: "A101".into(), size: "CUSTOM".into(), ..Sheet::default() });
+        }
+        let v = inspect(&mut s, json!({"sheets": true}));
+        let sheets = v["sheets"].as_array().expect("sheets array");
+        assert_eq!(sheets.len(), 1, "{v}");
+        assert!(sheets[0]["paper"].is_null(), "unknown paper size should give null: {v}");
+    }
+
+    #[test]
+    fn inspect_sheets_missing_layout() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.sheets.push(Sheet { name: "MISSING".into(), number: "A101".into(), ..Sheet::default() });
+        }
+        let v = inspect(&mut s, json!({"sheets": true}));
+        let sheets = v["sheets"].as_array().expect("sheets array");
+        assert_eq!(sheets.len(), 1, "{v}");
+        assert_eq!(sheets[0]["views"], json!([]), "no layout means no linked views: {v}");
+        assert_eq!(sheets[0]["titleBlock"], json!({}), "no layout means empty titleBlock: {v}");
+    }
+
+    #[test]
+    fn inspect_sheets_view_non_finite_values() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let mut sh = Sheet { name: "A101".into(), number: "A101".into(), ..Sheet::default() };
+            sh.views.push(SheetView {
+                number: 1,
+                source: SheetSource::View { id: ArchId(0) },
+                scale: f64::NAN,
+                at: [f64::INFINITY, f64::NEG_INFINITY],
+                size: [f64::NAN, 0.0],
+                ..SheetView::default()
+            });
+            d.arch.sheets.push(sh);
+        }
+        let v = inspect(&mut s, json!({"sheets": true}));
+        let sheets = v["sheets"].as_array().expect("sheets array");
+        let views = sheets[0]["views"].as_array().expect("views array");
+        assert_eq!(views.len(), 1, "{v}");
+        assert!(views[0]["scale"].is_null(), "NaN scale should be null: {v}");
+        assert!(views[0]["at"][0].is_null(), "Inf at x should be null: {v}");
+        assert!(views[0]["at"][1].is_null(), "NegInf at y should be null: {v}");
+        assert!(views[0]["size"][0].is_null(), "NaN size x should be null: {v}");
+        assert_eq!(views[0]["size"][1], 0.0, "{v}");
+    }
+
+    #[test]
+    fn inspect_sheets_camera_view_scale_zero() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let mut sh = Sheet { name: "A101".into(), number: "A101".into(), ..Sheet::default() };
+            sh.views.push(SheetView {
+                number: 1,
+                source: SheetSource::Camera { name: "Front".into(), width: 800.0, pixels: [1920, 1080] },
+                scale: 0.0,
+                at: [200.0, 300.0],
+                size: [400.0, 225.0],
+                ..SheetView::default()
+            });
+            d.arch.sheets.push(sh);
+        }
+        let v = inspect(&mut s, json!({"sheets": true}));
+        let sheets = v["sheets"].as_array().expect("sheets array");
+        let views = sheets[0]["views"].as_array().expect("views array");
+        assert_eq!(views.len(), 1, "{v}");
+        assert_eq!(views[0]["scale"], 0.0, "camera view has scale 0: {v}");
+        assert_eq!(views[0]["source"]["kind"], "camera", "{v}");
+        assert_eq!(views[0]["source"]["name"], "Front", "{v}");
     }
 }
