@@ -1948,6 +1948,109 @@ mod tests {
     }
 
     #[test]
+    fn glass_wall_with_opening_draws_gap_edges() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.01,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.arch.push_opening(Opening::new(wid, 5.0, 1.0, 2.1, OpeningKind::Door));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        // No fill (no tris), one outline, two gap edges (one per side of the opening)
+        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
+        assert!(tris.is_empty(), "glass wall should have no filled poché");
+        let outlines: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len >= 4).collect();
+        assert_eq!(outlines.len(), 1, "glass wall should have one outline");
+        let gap_edges: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len == 2).collect();
+        assert_eq!(gap_edges.len(), 2, "glass wall with one opening should have two gap edges");
+    }
+
+    #[test]
+    fn glass_wall_outline_has_correct_vertices() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.01,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let outline = list.prims.iter().find(|p| p.handle == handle && p.kind == Kind::Polyline && p.len >= 4);
+        assert!(outline.is_some(), "no outline found");
+        let Some(outline) = outline else { return };
+        let pts = list.points(outline);
+        // A straight wall's outline is a closed rectangle: 4 corners + closing point = 5
+        assert_eq!(pts.len(), 5, "outline should have 5 points");
+        // The wall is 10mm thick, so half-thickness is 0.005
+        let expected = [Vec2::new(0.0, -0.005), Vec2::new(10.0, -0.005), Vec2::new(10.0, 0.005), Vec2::new(0.0, 0.005), Vec2::new(0.0, -0.005)];
+        for (i, (got, exp)) in pts.iter().zip(expected.iter()).enumerate() {
+            assert!((got.x - exp.x).abs() < 1e-9, "x[{}]: {} != {}", i, got.x, exp.x);
+            assert!((got.y - exp.y).abs() < 1e-9, "y[{}]: {} != {}", i, got.y, exp.y);
+        }
+    }
+
+    #[test]
+    fn glass_wall_uses_layer_color() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-WALL");
+        if let Some(l) = d.layer_mut("A-WALL") {
+            l.color = Color::True(Rgb::from_u32(0x00ff00));
+        }
+        d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.01,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        for p in &list.prims {
+            assert_eq!(p.color, Rgb::from_u32(0x00ff00), "glass wall outline should use A-WALL color");
+            assert!(!p.aci7, "A-WALL is a true color");
+        }
+    }
+
+    #[test]
+    fn split_wall_with_glass_lower_type_keeps_fill() {
+        use cadcraft_doc::arch::WallSplit;
+        let mut d = Drawing::new_metric();
+        // A wall split at 1.0 with a glass lower type and glass upper type
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.1,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            split: Some(WallSplit { height: 1.0, upper: "Glass".into(), upper_thickness: 0.01, ..Default::default() }),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        // A split wall is not "glass" by is_glass(), so it keeps its fill
+        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
+        assert!(!tris.is_empty(), "split wall with glass lower type should keep its fill");
+    }
+
+    #[test]
     fn plan_build_runs_the_ceiling_and_foundation_passes() {
         use cadcraft_doc::arch::{Foundation, FoundationKind, Soffit, Tray};
         let base = two_level_drawing();
