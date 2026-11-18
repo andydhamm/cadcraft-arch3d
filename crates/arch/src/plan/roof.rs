@@ -529,6 +529,21 @@ mod tests {
     }
 
     #[test]
+    fn roof_edges_only_eaves_draw_nothing() {
+        let mut m = ArchModel::default();
+        m.push_roof(Roof {
+            edges: vec![
+                RoofEdge { kind: RoofEdgeKind::Eave, a: Vec2::ZERO, b: Vec2::new(4.0, 0.0), ..RoofEdge::default() },
+                RoofEdge { kind: RoofEdgeKind::Eave, a: Vec2::new(4.0, 0.0), b: Vec2::new(4.0, 4.0), ..RoofEdge::default() },
+            ],
+            ..Roof::default()
+        });
+        let mut out = PlanAnnotation::default();
+        roof_edges(&m, &mut out);
+        assert!(out.lines.is_empty());
+    }
+
+    #[test]
     fn two_roofs_are_drawn_independently() {
         let mut m = ArchModel::default();
         let r0 = m.push_roof(Roof {

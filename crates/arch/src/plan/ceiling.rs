@@ -810,6 +810,17 @@ mod tests {
     }
 
     #[test]
+    fn ceiling_plan_room_without_ceiling_type() {
+        let mut m = ArchModel::default();
+        m.levels = vec![Level { elevation: 0.0, ceiling_height: 2.4, ..Level::default() }];
+        m.push_room(Room { level: 0, room_type: RoomType::Garage, polygon: rect(0.0, 0.0, 4.0, 4.0), ..Room::default() });
+        let mut out = PlanAnnotation::default();
+        ceiling_plan(&m, Some(0), &mut out);
+        assert!(out.lines.is_empty());
+        assert!(out.labels.is_empty());
+    }
+
+    #[test]
     fn empty_model_draws_nothing() {
         let m = level_model(0);
         let mut out = PlanAnnotation::default();
