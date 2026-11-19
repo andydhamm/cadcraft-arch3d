@@ -211,9 +211,9 @@ fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
     if row == 0.0 {
         h = 31.0 * 0.03 - 1.0;
     }
-    // Small per-column variation, symmetric so h[0,y] == h[255,y].
-    let dist_x = x.min(256 - x);
-    h += jitter(hash(salt, dist_x as u64, (y % 32) as u64, 7), 1) as f32 * 0.01;
+    // Small per-column variation, periodic with period N so the normal map tiles.
+    let phase = (x as f32 / N as f32) * 2.0 * std::f32::consts::PI;
+    h += 0.005 * phase.sin();
     h
 }
 
@@ -223,9 +223,8 @@ fn shingle_height(salt: u64, x: usize, y: usize) -> f32 {
     let course = (y / 32) % 2;
     let row = (y % 32) as f32;
     let offset = if course == 1 { 256 } else { 0 };
-    // Use symmetric x distance so h[0,y] == h[255,y].
-    let dist_x = x.min(256 - x);
-    let u6 = (dist_x * 6 + offset) % 1536;
+    // Periodic in x with period N (6 * 256 = 1536).
+    let u6 = ((x as u32) * 6 + offset) % 1536;
     let gap = u6 % 512;
     let mut h = 0.0f32;
     // Course butt: full recess rows 30..31, bevel row 29.
