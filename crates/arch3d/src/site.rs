@@ -71,8 +71,9 @@ pub fn horizon_mesh(model: &ArchModel) -> Option<Mesh> {
             max_y = p.y;
         }
     }
-    let half_x = (max_x - centroid.x).abs().max(centroid.x - min_x).max(HORIZON_RADIUS);
-    let half_y = (max_y - centroid.y).abs().max(centroid.y - min_y).max(HORIZON_RADIUS);
+    // The outer ring must be strictly larger than the boundary so the prism has area.
+    let half_x = (max_x - centroid.x).abs().max(centroid.x - min_x).max(HORIZON_RADIUS) + 1.0;
+    let half_y = (max_y - centroid.y).abs().max(centroid.y - min_y).max(HORIZON_RADIUS) + 1.0;
     let ring = vec![
         Vec2::new(centroid.x - half_x, centroid.y - half_y),
         Vec2::new(centroid.x + half_x, centroid.y - half_y),
