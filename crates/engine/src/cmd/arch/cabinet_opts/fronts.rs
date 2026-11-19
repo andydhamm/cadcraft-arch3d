@@ -16,11 +16,11 @@ pub(crate) struct Opts {
 
 /// Parse this group's keys of `p`; anything but a known name is refused.
 pub(crate) fn parse(cmd: &str, _s: &Session, p: &Value) -> Result<Opts> {
-    let construction = match p.get("construction") {
+    let construction = match p.get("construction").filter(|v| !v.is_null()) {
         None => None,
         Some(v) => Some(v.as_str().and_then(Construction::parse).ok_or_else(|| bad(cmd, "`construction` must be \"frameless\" or \"framed\""))?),
     };
-    let mount = match p.get("mount") {
+    let mount = match p.get("mount").filter(|v| !v.is_null()) {
         None => None,
         Some(v) => Some(v.as_str().and_then(FrontMount::parse).ok_or_else(|| bad(cmd, "`mount` must be \"overlay\" or \"inset\""))?),
     };
