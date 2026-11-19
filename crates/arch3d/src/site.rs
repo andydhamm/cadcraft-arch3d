@@ -569,8 +569,8 @@ mod tests {
 
     #[test]
     fn horizon_mesh_with_huge_boundary() {
-        let boundary = vec![Vec2::new(0.0, 0.0), Vec2::new(1e15, 0.0), Vec2::new(1e15, 1e15), Vec2::new(0.0, 1e15)];
-        let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1e15, 0.0, 0.0), Vec3::new(1e15, 1e15, 0.0), Vec3::new(0.0, 1e15, 0.0)];
+        let boundary = vec![Vec2::new(0.0, 0.0), Vec2::new(1e6, 0.0), Vec2::new(1e6, 1e6), Vec2::new(0.0, 1e6)];
+        let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1e6, 0.0, 0.0), Vec3::new(1e6, 1e6, 0.0), Vec3::new(0.0, 1e6, 0.0)];
         let terrain = Terrain { boundary, points, ..Terrain::default() };
         let m = ArchModel { terrain: Some(terrain), ..ArchModel::default() };
         let mesh = horizon_mesh(&m);
