@@ -214,8 +214,8 @@ fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
         h = 0.0;
     }
     // Small per-column variation; sin(2π(x+0.5)/N) makes the x-derivative tile.
-    let phase = ((x as f32 + 0.5) / N as f32) * 2.0 * std::f32::consts::PI;
-    h += 0.005 * phase.sin();
+    let phase = ((x as f32 + 0.5) / N as f32) * 2.0 * std::f32::consts::PI + row * 0.1;
+    h += 0.1 * phase.sin();
     h
 }
 
@@ -235,10 +235,10 @@ fn shingle_height(salt: u64, x: usize, y: usize) -> f32 {
     } else if row == 29.0 {
         h -= 0.5;
     }
-    // Vertical tab gaps: full recess gap 0..10, bevel gap 11.
-    if gap < 11 {
+    // Vertical tab gaps: full recess gap 0..10 and 501..511, bevel gap 11 and 500.
+    if gap < 11 || gap > 500 {
         h -= 1.0;
-    } else if gap == 11 {
+    } else if gap == 11 || gap == 500 {
         h -= 0.5;
     }
     // Make tileable in y: h at row 0 equals h at row 31.
