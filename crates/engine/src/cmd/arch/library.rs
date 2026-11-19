@@ -526,6 +526,21 @@ mod tests {
     }
 
     #[test]
+    fn for_molding_targets_with_malformed_keys() {
+        let dir = TempDir::new("library-for-molding-malformed");
+        let mut s = session(&dir);
+        square_room(&mut s);
+        // Malformed keys: missing or non-numeric ids
+        for key in ["room//molding", "cabinet//crown", "cabinet//lightRail", "moldingLine/", "room/r/molding", "cabinet/cb/crown", "moldingLine/ml"] {
+            let e = s.execute("library", &json!({"for": key})).unwrap_err().to_string();
+            assert!(e.contains("the drawing has no"), "{key}: {e}");
+        }
+        // Valid keys still work
+        let r = run(&mut s, "library", json!({"for": "room/r0/molding"}));
+        assert!(r["total"].as_u64().unwrap_or(0) > 0);
+    }
+
+    #[test]
     fn unknown_chip_kinds_are_refused() {
         let dir = TempDir::new("library-chips");
         let mut s = session(&dir);
