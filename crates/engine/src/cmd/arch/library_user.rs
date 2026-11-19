@@ -504,4 +504,22 @@ mod tests {
         let found = s.execute("library", &json!({"chips": [{"kind": "category", "value": "User catalog"}]})).unwrap();
         assert_eq!(found["total"], json!(0));
     }
+
+    #[test]
+    fn library_add_molding_small_and_large_profiles() {
+        let dir = TempDir::new("library-add-molding-size");
+        let mut s = session(&dir);
+        // Too small: width < 0.002 m
+        let h = pline(&mut s, json!([[0, 0], [0.001, 0], [0.001, 0.05], [0, 0.05]]), true);
+        let e = s.execute("library.add", &json!({"objects": [h], "name": "Too small", "kind": "molding"})).unwrap_err().to_string();
+        assert!(e.contains("width") || e.contains("range") || e.contains("profile"), "{e}");
+        // Too large: height > 0.5 m
+        let h = pline(&mut s, json!([[0, 0], [0.02, 0], [0.02, 0.6], [0, 0.6]]), true);
+        let e = s.execute("library.add", &json!({"objects": [h], "name": "Too large", "kind": "molding"})).unwrap_err().to_string();
+        assert!(e.contains("height") || e.contains("range") || e.contains("profile"), "{e}");
+        // Just right: 0.02 x 0.05 m
+        let h = pline(&mut s, json!([[0, 0], [0.02, 0], [0.02, 0.05], [0, 0.05]]), true);
+        let r = s.execute("library.add", &json!({"objects": [h], "name": "Just right", "kind": "molding"})).unwrap();
+        assert_eq!(r["item"], json!("user:just-right"));
+    }
 }
