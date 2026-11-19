@@ -638,6 +638,16 @@ mod tests {
     }
 
     #[test]
+    fn merge_collinear_infinity_dropped() {
+        // A line with Infinity in one endpoint should be dropped.
+        let inf_line = Line2::new([0.0, 0.0], [f64::INFINITY, 1.0], ArchKind::Wall, ArchId(0));
+        let good_line = Line2::new([0.0, 0.0], [1.0, 0.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![inf_line, good_line]);
+        assert_eq!(out.len(), 1, "Infinity line should be dropped");
+        assert!((out[0].b[0] - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
     fn merge_collinear_very_short_line_dropped() {
         // A line shorter than MIN_RUN should be dropped.
         let short = Line2::new([0.0, 0.0], [1e-6, 0.0], ArchKind::Wall, ArchId(0));
