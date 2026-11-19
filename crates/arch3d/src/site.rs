@@ -52,11 +52,32 @@ pub fn horizon_mesh(model: &ArchModel) -> Option<Mesh> {
         return None;
     }
     centroid = centroid * (1.0 / n);
+    // The ring must contain the boundary and reach at least HORIZON_RADIUS from the centroid.
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for &p in &terrain.boundary {
+        if p.x < min_x {
+            min_x = p.x;
+        }
+        if p.x > max_x {
+            max_x = p.x;
+        }
+        if p.y < min_y {
+            min_y = p.y;
+        }
+        if p.y > max_y {
+            max_y = p.y;
+        }
+    }
+    let half_x = (max_x - centroid.x).abs().max(centroid.x - min_x).max(HORIZON_RADIUS);
+    let half_y = (max_y - centroid.y).abs().max(centroid.y - min_y).max(HORIZON_RADIUS);
     let ring = vec![
-        Vec2::new(centroid.x - HORIZON_RADIUS, centroid.y - HORIZON_RADIUS),
-        Vec2::new(centroid.x + HORIZON_RADIUS, centroid.y - HORIZON_RADIUS),
-        Vec2::new(centroid.x + HORIZON_RADIUS, centroid.y + HORIZON_RADIUS),
-        Vec2::new(centroid.x - HORIZON_RADIUS, centroid.y + HORIZON_RADIUS),
+        Vec2::new(centroid.x - half_x, centroid.y - half_y),
+        Vec2::new(centroid.x + half_x, centroid.y - half_y),
+        Vec2::new(centroid.x + half_x, centroid.y + half_y),
+        Vec2::new(centroid.x - half_x, centroid.y + half_y),
     ];
     let z0 = mean - TERRAIN_SKIRT;
     let z1 = mean;
