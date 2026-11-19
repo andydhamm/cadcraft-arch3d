@@ -851,6 +851,81 @@ mod tests {
     }
 
     #[test]
+    fn set_backdrop_switches_between_images() {
+        let mut model = ArchModel::default();
+        let img_a = cadcraft_doc::arch::ImageRgba {
+            width: 2,
+            height: 2,
+            rgba: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255],
+            ..Default::default()
+        };
+        let img_b = cadcraft_doc::arch::ImageRgba {
+            width: 2,
+            height: 2,
+            rgba: vec![0, 0, 255, 255, 255, 0, 0, 255, 0, 255, 0, 255, 255, 255, 255, 255],
+            ..Default::default()
+        };
+        model.images.insert("a".into(), img_a.clone());
+        model.images.insert("b".into(), img_b.clone());
+
+        let mut scene = Scene3d::default();
+        let backdrop_a = Backdrop::Image { item: "a".into(), projection: cadcraft_doc::arch::Projection::Flat, horizon: 0.0 };
+        set_backdrop(&model, &mut scene, Some(&backdrop_a));
+        assert_eq!(scene.textures.get("item:a"), Some(&img_a));
+        assert!(scene.textures.get("item:b").is_none());
+
+        let backdrop_b = Backdrop::Image { item: "b".into(), projection: cadcraft_doc::arch::Projection::Flat, horizon: 0.0 };
+        set_backdrop(&model, &mut scene, Some(&backdrop_b));
+        assert_eq!(scene.textures.get("item:b"), Some(&img_b));
+        assert!(scene.textures.get("item:a").is_none(), "previous backdrop image must be removed");
+    }
+
+    #[test]
+    fn set_backdrop_with_missing_image() {
+        let mut model = ArchModel::default();
+        let mut scene = Scene3d::default();
+        let backdrop = Backdrop::Image { item: "nonexistent".into(), projection: cadcraft_doc::arch::Projection::Flat, horizon: 0.0 };
+        set_backdrop(&model, &mut scene, Some(&backdrop));
+        assert_eq!(scene.backdrop, Some(backdrop));
+        assert!(scene.textures.get("item:nonexistent").is_none(), "no texture for missing image");
+    }
+
+    #[test]
+    fn set_backdrop_with_invalid_image() {
+        let mut model = ArchModel::default();
+        let invalid = cadcraft_doc::arch::ImageRgba { width: 0, height: 0, rgba: Vec::new(), ..Default::default() };
+        model.images.insert("bad".into(), invalid);
+        let mut scene = Scene3d::default();
+        let backdrop = Backdrop::Image { item: "bad".into(), projection: cadcraft_doc::arch::Projection::Flat, horizon: 0.0 };
+        set_backdrop(&model, &mut scene, Some(&backdrop));
+        assert_eq!(scene.backdrop, Some(backdrop));
+        assert!(scene.textures.get("item:bad").is_none(), "no texture for invalid image");
+    }
+
+    #[test]
+    fn set_backdrop_preserves_other_textures() {
+        let mut model = ArchModel::default();
+        let backdrop_img = cadcraft_doc::arch::ImageRgba {
+            width: 2,
+            height: 2,
+            rgba: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255],
+            ..Default::default()
+        };
+        model.images.insert("sky".into(), backdrop_img.clone());
+
+        let mut scene = Scene3d::default();
+        scene
+            .textures
+            .insert("other".into(), cadcraft_doc::arch::ImageRgba { width: 1, height: 1, rgba: vec![128, 128, 128, 255], ..Default::default() });
+
+        let backdrop = Backdrop::Image { item: "sky".into(), projection: cadcraft_doc::arch::Projection::Flat, horizon: 0.0 };
+        set_backdrop(&model, &mut scene, Some(&backdrop));
+        assert_eq!(scene.textures.get("item:sky"), Some(&backdrop_img));
+        assert!(scene.textures.get("other").is_some(), "other textures must be preserved");
+        assert_eq!(scene.textures.len(), 2);
+    }
+
+    #[test]
     fn build_extrudes_a_rectangle_to_the_wall_height() {
         let model = two_wall_model();
         let scene = Scene3d::build(&model);
@@ -861,6 +936,19 @@ mod tests {
         for id in [ArchId(1), ArchId(2)] {
             assert!(scene.mesh_for(&id).is_some(), "no mesh for wall {}", id.0);
         }
+    }
+
+    #[test]
+    fn scene3d_can_be_built_with_default() {
+        // The spec requires shared structs to be built with ..Default::default()
+        // outside their declaring module. Verify Scene3d supports this.
+        let scene = Scene3d { meshes: vec![], ..Default::default() };
+        assert_eq!(scene.mesh_count(), 0);
+        assert_eq!(scene.triangle_count(), 0);
+        assert!(scene.horizon.is_none());
+        assert!(scene.materials.is_empty());
+        assert!(scene.textures.is_empty());
+        assert!(scene.backdrop.is_none());
     }
 
     #[test]

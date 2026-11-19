@@ -560,6 +560,95 @@ mod tests {
     }
 
     #[test]
+    fn multiple_sun_angles_round_trip() {
+        let mut model = ArchModel::default();
+        model.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        model.sun_angles.push(cadcraft_doc::arch::SunAngle {
+            name: "Morning".into(),
+            date: Some("2026-06-21".into()),
+            time: Some("08:00".into()),
+            ..Default::default()
+        });
+        model.sun_angles.push(cadcraft_doc::arch::SunAngle {
+            name: "Noon".into(),
+            date: Some("2026-06-21".into()),
+            time: Some("12:00".into()),
+            ..Default::default()
+        });
+        model.sun_angles.push(cadcraft_doc::arch::SunAngle {
+            name: "Evening".into(),
+            azimuth: Some(270.0),
+            elevation: Some(30.0),
+            ..Default::default()
+        });
+
+        let text = arch_chunks(&model).expect("sun angles should serialize").join("");
+        let back = parse_arch(&text).expect("sun angles should parse back");
+        assert_eq!(back.sun_angles.len(), 3);
+        assert_eq!(back.sun_angles[0].name, "Morning");
+        assert_eq!(back.sun_angles[1].name, "Noon");
+        assert_eq!(back.sun_angles[2].name, "Evening");
+        assert_eq!(back.sun_angles[2].azimuth, Some(270.0));
+        assert_eq!(back.sun_angles[2].elevation, Some(30.0));
+    }
+
+    #[test]
+    fn look_with_all_fields_round_trips() {
+        use cadcraft_doc::arch::{ExposureSetting, Technique, ToneMap};
+        let mut model = ArchModel::default();
+        model.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        model.look = cadcraft_doc::arch::Look {
+            technique: Technique::Path,
+            exposure: ExposureSetting::Manual { ev100: 5.5 },
+            tone_map: ToneMap::Hable,
+            sun: cadcraft_doc::arch::SunLook { on: true, intensity: 80_000.0, shadows: true, angle: Some("Noon".into()) },
+            sky: cadcraft_doc::arch::SkyLook {
+                on: true,
+                turbidity: 4.5,
+                stars: true,
+                moon: cadcraft_doc::arch::MoonLook { lux: 0.5, azimuth: 180.0, elevation: 45.0 },
+            },
+            backdrop: None,
+            light_set: Some("Day".into()),
+            cutaway: true,
+            clip: Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [100.0, 100.0, 50.0] }),
+            near_clip: Some(0.5),
+        };
+
+        let text = arch_chunks(&model).expect("full look should serialize").join("");
+        let back = parse_arch(&text).expect("full look should parse back");
+        assert_eq!(back.look.technique, Technique::Path);
+        assert_eq!(back.look.exposure, ExposureSetting::Manual { ev100: 5.5 });
+        assert_eq!(back.look.tone_map, ToneMap::Hable);
+        assert_eq!(back.look.sun.intensity, 80_000.0);
+        assert_eq!(back.look.sun.angle, Some("Noon".into()));
+        assert_eq!(back.look.sky.turbidity, 4.5);
+        assert!(back.look.sky.stars);
+        assert_eq!(back.look.sky.moon.lux, 0.5);
+        assert_eq!(back.look.light_set, Some("Day".into()));
+        assert!(back.look.cutaway);
+        assert_eq!(back.look.clip, Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [100.0, 100.0, 50.0] }));
+        assert_eq!(back.look.near_clip, Some(0.5));
+    }
+
+    #[test]
+    fn hostile_look_payload_never_panics() {
+        // Wrong types for look fields
+        assert!(parse_arch(r#"{"version":9,"model":{"walls":[],"look":{"technique":42}}}"#).is_none());
+        assert!(parse_arch(r#"{"version":9,"model":{"walls":[],"look":{"exposure":42}}}"#).is_none());
+        assert!(parse_arch(r#"{"version":9,"model":{"walls":[],"look":{"sun":42}}}"#).is_none());
+        assert!(parse_arch(r#"{"version":9,"model":{"walls":[],"look":{"sky":42}}}"#).is_none());
+        assert!(parse_arch(r#"{"version":9,"model":{"walls":[],"look":{"clip":42}}}"#).is_none());
+        // Wrong types for sun_angles
+        assert!(parse_arch(r#"{"version":9,"model":{"walls":[],"sun_angles":42}}"#).is_none());
+        assert!(parse_arch(r#"{"version":9,"model":{"walls":[],"sun_angles":["not","an","object"]}}"#).is_none());
+        // Bad look: out-of-range values should load default (not panic)
+        let bad = r#"{"version":9,"model":{"walls":[],"look":{"exposure":{"mode":"manual","ev100":99.0}}}}"#;
+        let loaded = parse_arch(bad).expect("bad look payload should still parse");
+        assert_eq!(loaded.look, cadcraft_doc::arch::Look::default());
+    }
+
+    #[test]
     fn arch_chunks_roundtrips_a_model() {
         let m = one_wall_model();
         let chunks = match arch_chunks(&m) {
@@ -574,6 +663,17 @@ mod tests {
     #[test]
     fn arch_chunks_is_none_for_an_empty_model() {
         assert!(arch_chunks(&ArchModel::default()).is_none());
+    }
+
+    #[test]
+    fn look_is_default_for_models_without_it() {
+        // A model serialized before phase 19 (no look field) should parse with default look
+        let mut m = one_wall_model();
+        let json = serde_json::json!({ "version": 8, "model": m }).to_string();
+        let text = crate::dxf_ext::json_chunks(&json).join("");
+        let parsed = parse_arch(&text).expect("a v8 payload without look must parse");
+        assert_eq!(parsed.look, cadcraft_doc::arch::Look::default());
+        assert!(parsed.sun_angles.is_empty());
     }
 
     #[test]
