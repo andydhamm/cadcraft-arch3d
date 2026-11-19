@@ -469,6 +469,81 @@ mod tests {
     }
 
     #[test]
+    fn validate_refuses_nan_in_all_fields() {
+        let bad = |f: &dyn Fn(&mut Look)| {
+            let mut l = Look::default();
+            f(&mut l);
+            l.validate().unwrap_err()
+        };
+        assert!(bad(&|l| l.sun.intensity = f64::NAN).contains("sun.intensity"));
+        assert!(bad(&|l| l.sky.turbidity = f64::NAN).contains("turbidity"));
+        assert!(bad(&|l| l.sky.moon.lux = f64::NAN).contains("moon.lux"));
+        assert!(bad(&|l| l.sky.moon.elevation = f64::NAN).contains("moon.elevation"));
+        assert!(bad(&|l| l.near_clip = Some(f64::NAN)).contains("nearClip"));
+        assert!(bad(&|l| l.near_clip = Some(f64::INFINITY)).contains("nearClip"));
+        assert!(bad(&|l| l.clip = Some(ClipBox { min: [f64::NAN, 0.0, 0.0], max: [1.0, 1.0, 1.0] })).contains("clip.min"));
+        assert!(bad(&|l| l.clip = Some(ClipBox { min: [0.0, 0.0, 0.0], max: [1.0, f64::NAN, 1.0] })).contains("clip.max"));
+    }
+
+    #[test]
+    fn sun_angle_boundary_names_and_times() {
+        let s = |f: &dyn Fn(&mut SunAngle)| {
+            let mut a = SunAngle { name: "a".into(), ..Default::default() };
+            f(&mut a);
+            a.validate()
+        };
+        // Name exactly 64 characters is valid.
+        assert!(
+            s(&|a| {
+                a.name = "x".repeat(64);
+                a.azimuth = Some(90.0);
+                a.elevation = Some(45.0);
+            })
+            .is_ok()
+        );
+        // "solar-noon" is a valid time.
+        assert!(
+            s(&|a| {
+                a.date = Some("2026-06-21".into());
+                a.time = Some("solar-noon".into());
+            })
+            .is_ok()
+        );
+        // Single-digit hour and minute are valid.
+        assert!(
+            s(&|a| {
+                a.date = Some("2026-06-21".into());
+                a.time = Some("0:0".into());
+            })
+            .is_ok()
+        );
+        // Maximum time is valid.
+        assert!(
+            s(&|a| {
+                a.date = Some("2026-06-21".into());
+                a.time = Some("23:59:59".into());
+            })
+            .is_ok()
+        );
+        // NaN azimuth is rejected.
+        assert!(
+            s(&|a| {
+                a.azimuth = Some(f64::NAN);
+                a.elevation = Some(45.0);
+            })
+            .is_err()
+        );
+        // Infinity azimuth is rejected.
+        assert!(
+            s(&|a| {
+                a.azimuth = Some(f64::INFINITY);
+                a.elevation = Some(45.0);
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
     fn sky_hdri_and_image_horizon_serde() {
         assert_eq!(serde_json::to_value(Backdrop::Sky).unwrap(), serde_json::json!({"kind": "sky"}));
         assert_eq!(serde_json::from_str::<Backdrop>(r#"{"kind":"sky"}"#).unwrap(), Backdrop::Sky);

@@ -205,6 +205,25 @@ mod tests {
     }
 
     #[test]
+    fn image_rgbe_to_rgb() {
+        let img = ImageRgbe {
+            width: 2,
+            height: 2,
+            rgbe: vec![10, 20, 30, 136, 40, 50, 60, 136, 70, 80, 90, 136, 100, 110, 120, 136],
+            ..Default::default()
+        };
+        let rgb = img.to_rgb();
+        assert_eq!(rgb.len(), 4);
+        assert_eq!(rgb[0], [10.0, 20.0, 30.0]);
+        assert_eq!(rgb[1], [40.0, 50.0, 60.0]);
+        assert_eq!(rgb[2], [70.0, 80.0, 90.0]);
+        assert_eq!(rgb[3], [100.0, 110.0, 120.0]);
+        // Empty image returns empty vec.
+        let empty = ImageRgbe::default();
+        assert!(empty.to_rgb().is_empty());
+    }
+
+    #[test]
     fn is_valid_rejects_zero_dimensions() {
         let img = ImageRgbe { width: 0, height: 10, rgbe: vec![0u8; 40] };
         assert!(!img.is_valid());

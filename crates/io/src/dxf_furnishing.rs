@@ -160,6 +160,26 @@ mod tests {
     }
 
     #[test]
+    fn backdrop_sky_and_hdri_dxf_round_trip() {
+        let mut d = Drawing::new_metric();
+        d.arch.backdrop = Some(Backdrop::Sky);
+        let text = crate::write_dxf(&d);
+        let back = crate::read_dxf(text.as_bytes()).unwrap();
+        assert_eq!(back.arch.backdrop, Some(Backdrop::Sky));
+
+        let mut d2 = Drawing::new_metric();
+        let mut img = ImageRgba::default();
+        img.width = 2;
+        img.height = 2;
+        img.rgba = vec![255; 16];
+        d2.arch.images.insert("studio".into(), img);
+        d2.arch.backdrop = Some(Backdrop::Hdri { image: "studio".into(), intensity: 2.0, rotation: 90.0, horizon: 5.0 });
+        let text2 = crate::write_dxf(&d2);
+        let back2 = crate::read_dxf(text2.as_bytes()).unwrap();
+        assert_eq!(back2.arch.backdrop, d2.arch.backdrop);
+    }
+
+    #[test]
     fn a_phase13_dxf_still_reads() {
         use cadcraft_arch::casework::cabinet_defaults;
         use cadcraft_doc::arch::CabinetKind;
