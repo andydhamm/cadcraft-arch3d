@@ -522,6 +522,29 @@ mod tests {
     }
 
     #[test]
+    fn run_length_edge_cases() {
+        // Empty path
+        let r = MoldingRun { path: vec![], ..Default::default() };
+        assert_eq!(run_length(&r), 0.0);
+
+        // Single point
+        let r = MoldingRun { path: vec![Vec2::new(0.0, 0.0)], ..Default::default() };
+        assert_eq!(run_length(&r), 0.0);
+
+        // Two points, open
+        let r = MoldingRun { path: vec![Vec2::new(0.0, 0.0), Vec2::new(3.0, 4.0)], ..Default::default() };
+        assert!((run_length(&r) - 5.0).abs() < 1e-12);
+
+        // Two points, closed (no closing segment added for len <= 2)
+        let r = MoldingRun { path: vec![Vec2::new(0.0, 0.0), Vec2::new(3.0, 4.0)], closed: true, ..Default::default() };
+        assert!((run_length(&r) - 5.0).abs() < 1e-12);
+
+        // Infinity point
+        let r = MoldingRun { path: vec![Vec2::new(0.0, 0.0), Vec2::new(f64::INFINITY, 0.0)], ..Default::default() };
+        assert_eq!(run_length(&r), 0.0);
+    }
+
+    #[test]
     fn brief_room_base_is_14_minus_the_door_trim() {
         let mut model = ArchModel::default();
         model.levels.push(Level { index: 0, name: "Level 1".into(), elevation: 0.0, ceiling_height: 2.4, structure: 0.3, ..Default::default() });
