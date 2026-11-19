@@ -502,8 +502,9 @@ impl Pane3d {
             match self.look_and_sun() {
                 (look, Ok(sun_dir)) => {
                     let budget = cadcraft_render3d::Lighting::default().budget;
-                    let mut l =
-                        cadcraft_render3d::look::lighting_for(&look, sun_dir, budget).with_moon(if self.night { None } else { self.moon_dir });
+                    // At night the sun light is off, but a named sun angle still has a direction.
+                    let dir = if self.night { self.view.sun_dir } else { sun_dir };
+                    let mut l = cadcraft_render3d::look::lighting_for(&look, dir, budget).with_moon(if self.night { None } else { self.moon_dir });
                     l.meter_night = true;
                     if self.environment_for.as_ref() == Some(&(look, sun_dir)) {
                         l.environment = self.environment.clone();
@@ -4087,5 +4088,31 @@ mod tests {
             }
         }
         assert!(lock_final(&h.state().finalize).done.is_some(), "raster finalize completes after path");
+    }
+
+    #[test]
+    fn lighting_returns_independent_clone() {
+        let mut pane = site_pane();
+        let l1 = pane.lighting();
+        let l2 = pane.lighting();
+        assert_eq!(l1, l2, "two calls with unchanged inputs return equal lighting");
+    }
+
+    #[test]
+    fn view_state_lighting_equality() {
+        let mut pane = site_pane();
+        let l = pane.lighting();
+        let vp = [[1.0f32; 4]; 4];
+        let state1: ViewState = (pane.scene_key(), (320, 200), vp, pane.style, l.clone(), 2);
+        let state2: ViewState = (pane.scene_key(), (320, 200), vp, pane.style, l.clone(), 2);
+        assert_eq!(state1, state2, "identical ViewStates compare equal");
+    }
+
+    #[test]
+    fn lighting_sun_dir_none_when_night() {
+        let mut pane = site_pane();
+        pane.night = true;
+        let l = pane.lighting();
+        assert!(l.sun_dir.is_none(), "night has no sun direction");
     }
 }
