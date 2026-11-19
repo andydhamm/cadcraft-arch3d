@@ -1090,6 +1090,19 @@ mod tests {
     }
 
     #[test]
+    fn node_names_unknown_material() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "unknown-material".into();
+            m.object = ArchId(5);
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["unknown-material-o5"]);
+    }
+
+    #[test]
     fn node_names_for_soffits_foundations_footings_slabs_stack_layers_and_wall_rises() {
         let mesh = |material: &str, object: u32| {
             let mut m = wall_mesh();

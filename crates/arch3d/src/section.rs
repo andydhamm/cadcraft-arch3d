@@ -186,3 +186,34 @@ pub fn section_view(scene: &Scene3d, plane: &Plane, up: [f64; 3]) -> Option<Sect
     let beyond = visible_lines_beyond(scene, &view, Some(plane), &caps);
     Some(SectionView { view, cut, beyond })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plane_new_with_zero_normal() {
+        assert!(Plane::new([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn plane_new_with_non_finite_normal() {
+        assert!(Plane::new([0.0, 0.0, 0.0], [f64::NAN, 0.0, 0.0]).is_none());
+        assert!(Plane::new([0.0, 0.0, 0.0], [f64::INFINITY, 0.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn plane_new_with_non_finite_point() {
+        assert!(Plane::new([f64::NAN, 0.0, 0.0], [0.0, 1.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn section_cut_with_empty_scene() {
+        let scene = Scene3d::default();
+        let plane = Plane::new([0.0, 0.0, 0.0], [0.0, 1.0, 0.0]).unwrap();
+        let view = OrthoView::new([0.0, 1.0, 0.0], [0.0, 0.0, 1.0]).unwrap();
+        let cut = section_cut(&scene, &plane, &view);
+        assert!(cut.rings.is_empty());
+        assert!(cut.lines.is_empty());
+    }
+}
