@@ -745,6 +745,25 @@ mod tests {
     }
 
     #[test]
+    fn band_offset_with_nan_wall_thickness() {
+        let off = band_offset(0.05, 0.02, f64::NAN);
+        assert_eq!(off, 0.05, "NaN wall thickness should return the offset unchanged");
+    }
+
+    #[test]
+    fn band_offset_with_nan_depth() {
+        let off = band_offset(0.05, f64::NAN, 0.3);
+        assert_eq!(off, 0.05, "NaN depth should return the offset unchanged");
+    }
+
+    #[test]
+    fn band_offset_with_zero_wall_thickness() {
+        // When wall thickness is zero, min > max, so offset is clamped to 0.
+        let off = band_offset(0.05, 0.02, 0.0);
+        assert_eq!(off, 0.0, "zero wall thickness should clamp to 0");
+    }
+
+    #[test]
     fn a_window_produces_frame_glass_and_sill_meshes() {
         let model = wall_model();
         let o = window_opening();
