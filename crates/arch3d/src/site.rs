@@ -52,11 +52,33 @@ pub fn horizon_mesh(model: &ArchModel) -> Option<Mesh> {
         return None;
     }
     centroid = centroid * (1.0 / n);
+    // The ring must contain the boundary and reach at least HORIZON_RADIUS from the centroid.
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for &p in &terrain.boundary {
+        if p.x < min_x {
+            min_x = p.x;
+        }
+        if p.x > max_x {
+            max_x = p.x;
+        }
+        if p.y < min_y {
+            min_y = p.y;
+        }
+        if p.y > max_y {
+            max_y = p.y;
+        }
+    }
+    // The outer ring must be strictly larger than the boundary so the prism has area.
+    let half_x = (max_x - centroid.x).abs().max(centroid.x - min_x).max(HORIZON_RADIUS) + 1.0;
+    let half_y = (max_y - centroid.y).abs().max(centroid.y - min_y).max(HORIZON_RADIUS) + 1.0;
     let ring = vec![
-        Vec2::new(centroid.x - HORIZON_RADIUS, centroid.y - HORIZON_RADIUS),
-        Vec2::new(centroid.x + HORIZON_RADIUS, centroid.y - HORIZON_RADIUS),
-        Vec2::new(centroid.x + HORIZON_RADIUS, centroid.y + HORIZON_RADIUS),
-        Vec2::new(centroid.x - HORIZON_RADIUS, centroid.y + HORIZON_RADIUS),
+        Vec2::new(centroid.x - half_x, centroid.y - half_y),
+        Vec2::new(centroid.x + half_x, centroid.y - half_y),
+        Vec2::new(centroid.x + half_x, centroid.y + half_y),
+        Vec2::new(centroid.x - half_x, centroid.y + half_y),
     ];
     let z0 = mean - TERRAIN_SKIRT;
     let z1 = mean;
@@ -534,5 +556,24 @@ mod tests {
         let out = site_meshes(&model);
         assert_eq!(out.meshes.len(), 6, "crown and trunk each");
         assert_eq!(out.plants, 3);
+    }
+
+    #[test]
+    fn horizon_mesh_none_on_nan_boundary() {
+        let mut m = model_with(Vec::new());
+        if let Some(t) = m.terrain.as_mut() {
+            t.boundary[0].x = f64::NAN;
+        }
+        assert!(horizon_mesh(&m).is_none(), "horizon should be None with NaN boundary");
+    }
+
+    #[test]
+    fn horizon_mesh_with_huge_boundary() {
+        let boundary = vec![Vec2::new(0.0, 0.0), Vec2::new(1e6, 0.0), Vec2::new(1e6, 1e6), Vec2::new(0.0, 1e6)];
+        let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1e6, 0.0, 0.0), Vec3::new(1e6, 1e6, 0.0), Vec3::new(0.0, 1e6, 0.0)];
+        let terrain = Terrain { boundary, points, ..Terrain::default() };
+        let m = ArchModel { terrain: Some(terrain), ..ArchModel::default() };
+        let mesh = horizon_mesh(&m);
+        assert!(mesh.is_some(), "horizon should be Some with huge boundary");
     }
 }
