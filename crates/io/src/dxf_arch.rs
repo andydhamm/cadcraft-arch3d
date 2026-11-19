@@ -601,18 +601,20 @@ mod tests {
             technique: Technique::Path,
             exposure: ExposureSetting::Manual { ev100: 5.5 },
             tone_map: ToneMap::Hable,
-            sun: cadcraft_doc::arch::SunLook { on: true, intensity: 80_000.0, shadows: true, angle: Some("Noon".into()) },
+            sun: cadcraft_doc::arch::SunLook { on: true, intensity: 80_000.0, shadows: true, angle: Some("Noon".into()), ..Default::default() },
             sky: cadcraft_doc::arch::SkyLook {
                 on: true,
                 turbidity: 4.5,
                 stars: true,
-                moon: cadcraft_doc::arch::MoonLook { lux: 0.5, azimuth: 180.0, elevation: 45.0 },
+                moon: cadcraft_doc::arch::MoonLook { lux: 0.5, azimuth: 180.0, elevation: 45.0, ..Default::default() },
+                ..Default::default()
             },
             backdrop: None,
             light_set: Some("Day".into()),
             cutaway: true,
-            clip: Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [100.0, 100.0, 50.0] }),
+            clip: Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [100.0, 100.0, 50.0], ..Default::default() }),
             near_clip: Some(0.5),
+            ..Default::default()
         };
 
         let text = arch_chunks(&model).expect("full look should serialize").join("");
@@ -627,7 +629,7 @@ mod tests {
         assert_eq!(back.look.sky.moon.lux, 0.5);
         assert_eq!(back.look.light_set, Some("Day".into()));
         assert!(back.look.cutaway);
-        assert_eq!(back.look.clip, Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [100.0, 100.0, 50.0] }));
+        assert_eq!(back.look.clip, Some(cadcraft_doc::arch::ClipBox { min: [0.0, 0.0, 0.0], max: [100.0, 100.0, 50.0], ..Default::default() }));
         assert_eq!(back.look.near_clip, Some(0.5));
     }
 
