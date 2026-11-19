@@ -658,4 +658,52 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn normal_map_tiles_seamlessly() {
+        for f in Finish::ALL {
+            let t = normal_map(f);
+            // Left edge must match right edge.
+            for y in 0..N {
+                let left = (y * N) * 4;
+                let right = (y * N + N - 1) * 4;
+                for k in 0..4 {
+                    assert_eq!(t.rgba[left + k], t.rgba[right + k], "{f:?} y={y} k={k} left-right seam");
+                }
+            }
+            // Top edge must match bottom edge.
+            for x in 0..N {
+                let top = x * 4;
+                let bottom = ((N - 1) * N + x) * 4;
+                for k in 0..4 {
+                    assert_eq!(t.rgba[top + k], t.rgba[bottom + k], "{f:?} x={x} k={k} top-bottom seam");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn normal_vectors_are_unit_length() {
+        for f in Finish::ALL {
+            let t = normal_map(f);
+            for p in t.rgba.chunks_exact(4) {
+                let r = (p[0] as f64 / 255.0 - 0.5) * 2.0;
+                let g = (p[1] as f64 / 255.0 - 0.5) * 2.0;
+                let b = (p[2] as f64 / 255.0 - 0.5) * 2.0;
+                let len_sq = r * r + g * g + b * b;
+                assert!((len_sq - 1.0).abs() < 0.05, "{f:?} pixel {p:?} len_sq={len_sq}");
+            }
+        }
+    }
+
+    #[test]
+    fn flat_normal_map_returns_flat() {
+        let t = flat_normal_map();
+        assert_eq!(t.width, TEXTURE_SIZE);
+        assert_eq!(t.height, TEXTURE_SIZE);
+        assert_eq!(t.rgba.len(), N * N * 4);
+        for p in t.rgba.chunks_exact(4) {
+            assert_eq!(p, &[128, 128, 255, 255]);
+        }
+    }
 }

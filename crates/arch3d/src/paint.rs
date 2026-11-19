@@ -541,4 +541,37 @@ mod tests {
         // Should not crash
         assert!(scene.meshes.iter().all(|m| m.object != ArchId(0) || m.material != "paint:wall/w0/right"));
     }
+
+    #[test]
+    fn finish_def_sets_normal_texture_for_every_finish() {
+        for f in Finish::ALL {
+            let def = finish_def(f);
+            let expected = format!("finish:{}:normal", f.name());
+            assert_eq!(def.normal_texture.as_deref(), Some(expected.as_str()), "{f:?}");
+            assert_eq!(def.normal_scale, 1.0);
+        }
+    }
+
+    #[test]
+    fn ref_def_item_normal_map() {
+        let mut model = ArchModel::default();
+        let mut img = ImageRgba::default();
+        img.width = 4;
+        img.height = 4;
+        img.rgba = std::iter::repeat([255u8, 0, 0, 255]).take(16).flatten().collect();
+        model.images.insert("oak".to_string(), img.clone());
+        let mut normal = ImageRgba::default();
+        normal.width = 4;
+        normal.height = 4;
+        normal.rgba = std::iter::repeat([128u8, 128, 255, 255]).take(16).flatten().collect();
+        model.images.insert("oak:normal".to_string(), normal);
+
+        let def = ref_def(&model, &MaterialRef::Item("oak".to_string()));
+        assert_eq!(def.texture.as_deref(), Some("item:oak"));
+        assert_eq!(def.normal_texture.as_deref(), Some("oak:normal"));
+
+        // Without a normal map image, normal_texture is None.
+        let def2 = ref_def(&model, &MaterialRef::Item("plain".to_string()));
+        assert_eq!(def2.normal_texture, None);
+    }
 }
