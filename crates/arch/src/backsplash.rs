@@ -439,4 +439,12 @@ mod tests {
         // No model at all.
         assert!(segments(&ArchModel::default(), &run_bs()).is_empty());
     }
+
+    #[test]
+    fn backsplash_with_no_cabinets_or_counter_gives_no_segments() {
+        let m = base_model();
+        // No cabinets, no counter reference
+        let b = Backsplash::default();
+        assert!(segments(&m, &b).is_empty());
+    }
 }

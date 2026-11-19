@@ -269,4 +269,23 @@ mod tests {
         assert!(!s.is_empty(), "zero-depth cabinet should still produce a symbol");
         assert!(s.iter().flatten().all(|p| p.is_finite()), "all points should be finite");
     }
+
+    #[test]
+    fn cabinet_symbol_in_claimed_cabinet_drops_counter_ring() {
+        use crate::countertop;
+        let mut m = ArchModel::default();
+        let c = m.push_cabinet(cabinet_defaults(CabinetKind::Base));
+        // Push a countertop that claims the cabinet
+        m.push_countertop(cadcraft_doc::arch::Countertop {
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)],
+            cabinets: vec![c],
+            ..Default::default()
+        });
+        let claimed = countertop::claimed_cabinets(&m);
+        assert!(claimed.contains(&c), "cabinet should be claimed");
+        let sym = cabinet_symbol_in(&m, &m.cabinets[0]);
+        // A base cabinet with counter normally has 3 rings (footprint, fronts, counter)
+        // When claimed, it should have 2 (footprint, fronts)
+        assert_eq!(sym.len(), 2, "claimed cabinet should drop counter ring");
+    }
 }
