@@ -16,11 +16,11 @@ pub(crate) struct Opts {
 
 /// Parse this group's keys of `p`; anything but a known name is refused.
 pub(crate) fn parse(cmd: &str, _s: &Session, p: &Value) -> Result<Opts> {
-    let construction = match p.get("construction").filter(|v| !v.is_null()) {
+    let construction = match p.get("construction") {
         None => None,
         Some(v) => Some(v.as_str().and_then(Construction::parse).ok_or_else(|| bad(cmd, "`construction` must be \"frameless\" or \"framed\""))?),
     };
-    let mount = match p.get("mount").filter(|v| !v.is_null()) {
+    let mount = match p.get("mount") {
         None => None,
         Some(v) => Some(v.as_str().and_then(FrontMount::parse).ok_or_else(|| bad(cmd, "`mount` must be \"overlay\" or \"inset\""))?),
     };
@@ -95,18 +95,16 @@ mod tests {
         let s = Session::new();
         // Empty string for construction is refused
         assert!(parse("cabinet", &s, &json!({"construction": ""})).is_err());
-        // Null construction is treated as absent
-        let opts = parse("cabinet", &s, &json!({"construction": null})).unwrap();
-        assert!(opts.construction.is_none());
+        // Null construction is an error
+        assert!(parse("cabinet", &s, &json!({"construction": null})).is_err());
         // Case sensitivity: "Frameless" is refused
         assert!(parse("cabinet", &s, &json!({"construction": "Frameless"})).is_err());
         // Case sensitivity: "FRAMED" is refused
         assert!(parse("cabinet", &s, &json!({"construction": "FRAMED"})).is_err());
         // Empty string for mount is refused
         assert!(parse("cabinet", &s, &json!({"mount": ""})).is_err());
-        // Null mount is treated as absent
-        let opts = parse("cabinet", &s, &json!({"mount": null})).unwrap();
-        assert!(opts.mount.is_none());
+        // Null mount is an error
+        assert!(parse("cabinet", &s, &json!({"mount": null})).is_err());
         // Case sensitivity: "Overlay" is refused
         assert!(parse("cabinet", &s, &json!({"mount": "Overlay"})).is_err());
         // Case sensitivity: "INSET" is refused
