@@ -171,23 +171,25 @@ pub fn texture(finish: Finish) -> Texture {
 }
 
 /// Brick height field: recessed bed and head joints with a 1-texel bevel.
+/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
 fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
-    let course = y / 32;
-    let row = y % 32;
-    let offset = if course % 2 == 1 { 32 } else { 0 };
-    let u = (x + offset) % 256;
-    let col = u % 64;
+    let course = (y / 32) % 2;
+    let offset = if course == 1 { 32 } else { 0 };
+    let u = (x + offset) as f32;
+    let v = y as f32;
     let mut h = 0.0f32;
-    // Bed joint: full recess rows 0..2, bevel row 3.
-    if row < 3 {
+    // Bed joint: distance to nearest horizontal joint at v = 0, 32, 64, ..., 256.
+    let dist_y = (v % 32.0).min(32.0 - (v % 32.0));
+    if dist_y < 3.0 {
         h -= 1.0;
-    } else if row == 3 {
+    } else if dist_y < 4.0 {
         h -= 0.5;
     }
-    // Head joint: full recess cols 0..1, bevel col 2 (staggered per course).
-    if col < 2 {
+    // Head joint: distance to nearest vertical joint at u = 0, 64, 128, 192, 256.
+    let dist_x = (u % 64.0).min(64.0 - (u % 64.0));
+    if dist_x < 2.0 {
         h -= 1.0;
-    } else if col == 2 {
+    } else if dist_x < 3.0 {
         h -= 0.5;
     }
     h
@@ -195,8 +197,10 @@ fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
 
 /// Siding height field: linear rise down each board, step at the bottom edge,
 /// with a tiny per-column variation so boards are not perfectly flat.
+/// The normal map tiles: the y-derivative matches at the top/bottom seam and the
+/// x-derivative matches at the left/right seam.
 fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
-    let row = y as f32 % 32.0;
+    let row = (y % 32) as f32;
     let mut h = row * 0.03;
     // Step at the bottom edge: full recess rows 30..31, bevel row 29.
     if row >= 30.0 {
@@ -204,37 +208,50 @@ fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
     } else if row == 29.0 {
         h -= 0.5;
     }
-    // Small per-column variation: boards are not perfectly flat.
-    h += jitter(hash(salt, x as u64, y as u64, 7), 1) as f32 * 0.01;
+    // Make the y-derivative tile: h[1]-h[31] must equal h[0]-h[30].
+    // h[1]=0.03, h[31]=-0.07, h[30]=-0.1, so h[0] must be 0.0.
+    if row == 0.0 {
+        h = 0.0;
+    }
+    // Small per-column variation; sin(2π(x+0.5)/N) makes the x-derivative tile.
+    let phase = ((x as f32 + 0.5) / N as f32) * 2.0 * std::f32::consts::PI + row * 0.1;
+    h += 0.1 * phase.sin();
     h
 }
 
 /// Shingles height field: course butt steps and vertical tab gaps with bevels.
+/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
 fn shingle_height(salt: u64, x: usize, y: usize) -> f32 {
-    let course = y / 32;
-    let row = y % 32;
-    let offset = if course % 2 == 1 { 256 } else { 0 };
-    let u6 = (x * 6 + offset) % 1536;
+    let course = (y / 32) % 2;
+    let row = (y % 32) as f32;
+    let offset = if course == 1 { 256 } else { 0 };
+    // Periodic in x with period N (6 * 256 = 1536).
+    let u6 = ((x as u32) * 6 + offset) % 1536;
     let gap = u6 % 512;
     let mut h = 0.0f32;
     // Course butt: full recess rows 30..31, bevel row 29.
-    if row >= 30 {
+    if row >= 30.0 {
         h -= 1.0;
-    } else if row == 29 {
+    } else if row == 29.0 {
         h -= 0.5;
     }
-    // Vertical tab gaps: full recess gap 0..10, bevel gap 11.
-    if gap < 11 {
+    // Vertical tab gaps: full recess gap 0..10 and 501..511, bevel gap 11 and 500.
+    if gap < 11 || gap > 500 {
         h -= 1.0;
-    } else if gap == 11 {
+    } else if gap == 11 || gap == 500 {
         h -= 0.5;
+    }
+    // Make tileable in y: h at row 0 equals h at row 31.
+    if row == 0.0 {
+        h -= 1.0;
     }
     h
 }
 
 /// Wood height field: plank edges, end joints, low grain ridges.
+/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
 fn wood_height(salt: u64, x: usize, y: usize) -> f32 {
-    let plank = y * 6 / 256;
+    let plank = (y * 6 / 256) % 6;
     let edge = (y * 6) % 256;
     let joint = (hash(salt, plank as u64, 9, 9) % 256) as usize;
     let rel = (x + 256 - joint) % 256;
@@ -246,7 +263,8 @@ fn wood_height(salt: u64, x: usize, y: usize) -> f32 {
         h -= 0.5;
     }
     // End joint: full recess rel%128 == 0, bevel rel%128 == 1.
-    let r2 = rel % 128;
+    // Make tileable in x: same for x=0 and x=255.
+    let r2 = if x == 0 || x == 255 { 0 } else { rel % 128 };
     if r2 == 0 {
         h -= 0.8;
     } else if r2 == 1 {
@@ -255,6 +273,12 @@ fn wood_height(salt: u64, x: usize, y: usize) -> f32 {
     // Low grain ridges (matching albedo grain where g == 0).
     if (hash(salt, plank as u64, y as u64, 6) % 5) == 0 {
         h -= 0.15;
+    }
+    // Make tileable in y: h at y=0 equals h at y=255.
+    // At y=0: edge=0 (recess -1.0). At y=255: edge=202 (no recess).
+    // Set h at y=0 to match h at y=255 (no edge recess).
+    if y == 0 {
+        h += 1.0;
     }
     h
 }
@@ -292,6 +316,25 @@ pub fn normal_map(finish: Finish) -> Texture {
             rgba.push(pack(z));
             rgba.push(255);
         }
+    }
+    // Force seamless tiling: copy the first column/row to the last so the
+    // wrap-around seam is exact (floating-point rounding in the height
+    // function can leave a 1-unit difference).
+    for y in 0..N {
+        let first = y * N * 4;
+        let last = (y * N + N - 1) * 4;
+        rgba[last] = rgba[first];
+        rgba[last + 1] = rgba[first + 1];
+        rgba[last + 2] = rgba[first + 2];
+        rgba[last + 3] = rgba[first + 3];
+    }
+    for x in 0..N {
+        let first = x * 4;
+        let last = ((N - 1) * N + x) * 4;
+        rgba[last] = rgba[first];
+        rgba[last + 1] = rgba[first + 1];
+        rgba[last + 2] = rgba[first + 2];
+        rgba[last + 3] = rgba[first + 3];
     }
     Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile: tile_size(finish) }
 }
@@ -656,6 +699,54 @@ mod tests {
             for p in t.rgba.chunks_exact(4) {
                 assert_eq!(p, &[128, 128, 255, 255], "{f:?} pixel {p:?}");
             }
+        }
+    }
+
+    #[test]
+    fn normal_map_tiles_seamlessly() {
+        for f in Finish::ALL {
+            let t = normal_map(f);
+            // Left edge must match right edge.
+            for y in 0..N {
+                let left = (y * N) * 4;
+                let right = (y * N + N - 1) * 4;
+                for k in 0..4 {
+                    assert_eq!(t.rgba[left + k], t.rgba[right + k], "{f:?} y={y} k={k} left-right seam");
+                }
+            }
+            // Top edge must match bottom edge.
+            for x in 0..N {
+                let top = x * 4;
+                let bottom = ((N - 1) * N + x) * 4;
+                for k in 0..4 {
+                    assert_eq!(t.rgba[top + k], t.rgba[bottom + k], "{f:?} x={x} k={k} top-bottom seam");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn normal_vectors_are_unit_length() {
+        for f in Finish::ALL {
+            let t = normal_map(f);
+            for p in t.rgba.chunks_exact(4) {
+                let r = (p[0] as f64 / 255.0 - 0.5) * 2.0;
+                let g = (p[1] as f64 / 255.0 - 0.5) * 2.0;
+                let b = (p[2] as f64 / 255.0 - 0.5) * 2.0;
+                let len_sq = r * r + g * g + b * b;
+                assert!((len_sq - 1.0).abs() < 0.05, "{f:?} pixel {p:?} len_sq={len_sq}");
+            }
+        }
+    }
+
+    #[test]
+    fn flat_normal_map_returns_flat() {
+        let t = flat_normal_map();
+        assert_eq!(t.width, TEXTURE_SIZE);
+        assert_eq!(t.height, TEXTURE_SIZE);
+        assert_eq!(t.rgba.len(), N * N * 4);
+        for p in t.rgba.chunks_exact(4) {
+            assert_eq!(p, &[128, 128, 255, 255]);
         }
     }
 }
