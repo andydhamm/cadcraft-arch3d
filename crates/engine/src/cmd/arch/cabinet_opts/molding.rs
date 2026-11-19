@@ -141,6 +141,7 @@ mod tests {
     use super::*;
     use cadcraft_doc::arch::{ArchId, CabinetKind};
     use cadcraft_geom::Vec2;
+    use serde_json::json;
 
     #[test]
     fn crown_and_light_rail_params() {
