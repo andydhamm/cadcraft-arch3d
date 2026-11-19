@@ -197,7 +197,8 @@ fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
 
 /// Siding height field: linear rise down each board, step at the bottom edge,
 /// with a tiny per-column variation so boards are not perfectly flat.
-/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
+/// The normal map tiles: the y-derivative matches at the top/bottom seam and the
+/// x-derivative matches at the left/right seam.
 fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
     let row = (y % 32) as f32;
     let mut h = row * 0.03;
@@ -207,12 +208,13 @@ fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
     } else if row == 29.0 {
         h -= 0.5;
     }
-    // Make tileable in y: h at row 0 equals h at row 31.
+    // Make the y-derivative tile: h[1]-h[31] must equal h[0]-h[30].
+    // h[1]=0.03, h[31]=-0.07, h[30]=-0.1, so h[0] must be 0.0.
     if row == 0.0 {
-        h = 31.0 * 0.03 - 1.0;
+        h = 0.0;
     }
-    // Small per-column variation, periodic with period N so the normal map tiles.
-    let phase = (x as f32 / N as f32) * 2.0 * std::f32::consts::PI;
+    // Small per-column variation; sin(2π(x+0.5)/N) makes the x-derivative tile.
+    let phase = ((x as f32 + 0.5) / N as f32) * 2.0 * std::f32::consts::PI;
     h += 0.005 * phase.sin();
     h
 }
