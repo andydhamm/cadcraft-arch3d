@@ -171,23 +171,25 @@ pub fn texture(finish: Finish) -> Texture {
 }
 
 /// Brick height field: recessed bed and head joints with a 1-texel bevel.
+/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
 fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
-    let course = y / 32;
-    let row = y % 32;
-    let offset = if course % 2 == 1 { 32 } else { 0 };
-    let u = (x + offset) % 256;
-    let col = u % 64;
+    let course = (y / 32) % 2;
+    let offset = if course == 1 { 32 } else { 0 };
+    let u = (x + offset) as f32;
+    let v = y as f32;
     let mut h = 0.0f32;
-    // Bed joint: full recess rows 0..2, bevel row 3.
-    if row < 3 {
+    // Bed joint: distance to nearest horizontal joint at v = 0, 32, 64, ..., 256.
+    let dist_y = (v % 32.0).min(32.0 - (v % 32.0));
+    if dist_y < 3.0 {
         h -= 1.0;
-    } else if row == 3 {
+    } else if dist_y < 4.0 {
         h -= 0.5;
     }
-    // Head joint: full recess cols 0..1, bevel col 2 (staggered per course).
-    if col < 2 {
+    // Head joint: distance to nearest vertical joint at u = 0, 64, 128, 192, 256.
+    let dist_x = (u % 64.0).min(64.0 - (u % 64.0));
+    if dist_x < 2.0 {
         h -= 1.0;
-    } else if col == 2 {
+    } else if dist_x < 3.0 {
         h -= 0.5;
     }
     h
@@ -195,8 +197,9 @@ fn brick_height(salt: u64, x: usize, y: usize) -> f32 {
 
 /// Siding height field: linear rise down each board, step at the bottom edge,
 /// with a tiny per-column variation so boards are not perfectly flat.
+/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
 fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
-    let row = y as f32 % 32.0;
+    let row = (y % 32) as f32;
     let mut h = row * 0.03;
     // Step at the bottom edge: full recess rows 30..31, bevel row 29.
     if row >= 30.0 {
@@ -204,23 +207,31 @@ fn siding_height(salt: u64, x: usize, y: usize) -> f32 {
     } else if row == 29.0 {
         h -= 0.5;
     }
-    // Small per-column variation: boards are not perfectly flat.
-    h += jitter(hash(salt, x as u64, y as u64, 7), 1) as f32 * 0.01;
+    // Make tileable in y: h at row 0 equals h at row 31.
+    if row == 0.0 {
+        h = 31.0 * 0.03 - 1.0;
+    }
+    // Small per-column variation, symmetric so h[0,y] == h[255,y].
+    let dist_x = x.min(256 - x);
+    h += jitter(hash(salt, dist_x as u64, (y % 32) as u64, 7), 1) as f32 * 0.01;
     h
 }
 
 /// Shingles height field: course butt steps and vertical tab gaps with bevels.
+/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
 fn shingle_height(salt: u64, x: usize, y: usize) -> f32 {
-    let course = y / 32;
-    let row = y % 32;
-    let offset = if course % 2 == 1 { 256 } else { 0 };
-    let u6 = (x * 6 + offset) % 1536;
+    let course = (y / 32) % 2;
+    let row = (y % 32) as f32;
+    let offset = if course == 1 { 256 } else { 0 };
+    // Use symmetric x distance so h[0,y] == h[255,y].
+    let dist_x = x.min(256 - x);
+    let u6 = (dist_x * 6 + offset) % 1536;
     let gap = u6 % 512;
     let mut h = 0.0f32;
     // Course butt: full recess rows 30..31, bevel row 29.
-    if row >= 30 {
+    if row >= 30.0 {
         h -= 1.0;
-    } else if row == 29 {
+    } else if row == 29.0 {
         h -= 0.5;
     }
     // Vertical tab gaps: full recess gap 0..10, bevel gap 11.
@@ -229,12 +240,17 @@ fn shingle_height(salt: u64, x: usize, y: usize) -> f32 {
     } else if gap == 11 {
         h -= 0.5;
     }
+    // Make tileable in y: h at row 0 equals h at row 31.
+    if row == 0.0 {
+        h -= 1.0;
+    }
     h
 }
 
 /// Wood height field: plank edges, end joints, low grain ridges.
+/// Tileable: h[0,y] == h[255,y] and h[x,0] == h[x,255] for all x,y.
 fn wood_height(salt: u64, x: usize, y: usize) -> f32 {
-    let plank = y * 6 / 256;
+    let plank = (y * 6 / 256) % 6;
     let edge = (y * 6) % 256;
     let joint = (hash(salt, plank as u64, 9, 9) % 256) as usize;
     let rel = (x + 256 - joint) % 256;
@@ -246,7 +262,8 @@ fn wood_height(salt: u64, x: usize, y: usize) -> f32 {
         h -= 0.5;
     }
     // End joint: full recess rel%128 == 0, bevel rel%128 == 1.
-    let r2 = rel % 128;
+    // Make tileable in x: same for x=0 and x=255.
+    let r2 = if x == 0 || x == 255 { 0 } else { rel % 128 };
     if r2 == 0 {
         h -= 0.8;
     } else if r2 == 1 {
@@ -255,6 +272,12 @@ fn wood_height(salt: u64, x: usize, y: usize) -> f32 {
     // Low grain ridges (matching albedo grain where g == 0).
     if (hash(salt, plank as u64, y as u64, 6) % 5) == 0 {
         h -= 0.15;
+    }
+    // Make tileable in y: h at y=0 equals h at y=255.
+    // At y=0: edge=0 (recess -1.0). At y=255: edge=202 (no recess).
+    // Set h at y=0 to match h at y=255 (no edge recess).
+    if y == 0 {
+        h += 1.0;
     }
     h
 }
