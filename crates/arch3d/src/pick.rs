@@ -434,7 +434,7 @@ mod tests {
     #[test]
     fn bvh_build_with_nan_positions() {
         let mut m = Mesh::new("test", ArchId(1));
-        m.positions = vec![[0.0, 0.0, 0.0], [f64::NAN, 0.0, 0.0], [1.0, 0.0, 0.0]];
+        m.positions = vec![[0.0, 0.0, 0.0], [f32::NAN, 0.0, 0.0], [1.0, 0.0, 0.0]];
         m.normals = vec![[0.0, 0.0, 1.0]; 3];
         m.uvs = vec![[0.0, 0.0]; 3];
         m.indices = vec![0, 1, 2];
@@ -447,7 +447,7 @@ mod tests {
     #[test]
     fn bvh_build_with_infinity_positions() {
         let mut m = Mesh::new("test", ArchId(1));
-        m.positions = vec![[0.0, 0.0, 0.0], [f64::INFINITY, 0.0, 0.0], [1.0, 0.0, 0.0]];
+        m.positions = vec![[0.0, 0.0, 0.0], [f32::INFINITY, 0.0, 0.0], [1.0, 0.0, 0.0]];
         m.normals = vec![[0.0, 0.0, 1.0]; 3];
         m.uvs = vec![[0.0, 0.0]; 3];
         m.indices = vec![0, 1, 2];
