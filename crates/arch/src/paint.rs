@@ -788,6 +788,23 @@ mod tests {
     }
 
     #[test]
+    fn countertop_with_empty_or_nan_polygon_has_no_room() {
+        let mut m = ArchModel::default();
+        // Empty polygon
+        let ct1 = m.push_countertop(cadcraft_doc::arch::Countertop { polygon: vec![], ..Default::default() });
+        // NaN coordinates
+        let ct2 = m.push_countertop(cadcraft_doc::arch::Countertop {
+            polygon: vec![Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)],
+            ..Default::default()
+        });
+        let all = surfaces(&m);
+        let ct1_info = all.iter().find(|i| i.surface == Surface::Countertop(ct1)).unwrap();
+        let ct2_info = all.iter().find(|i| i.surface == Surface::Countertop(ct2)).unwrap();
+        assert_eq!(ct1_info.room, None);
+        assert_eq!(ct2_info.room, None);
+    }
+
+    #[test]
     fn spanning_wall_side_finds_room_on_each_level() {
         let mut m = ArchModel::default();
         m.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });

@@ -290,6 +290,30 @@ mod tests {
     }
 
     #[test]
+    fn surface_key_edge_cases() {
+        // Very large ID
+        let s = Surface::Countertop(ArchId(u32::MAX));
+        assert_eq!(s.key(), "countertop/ct4294967295");
+        assert_eq!(Surface::parse("countertop/ct4294967295"), Some(s));
+
+        // Leading zeros should be refused
+        assert_eq!(Surface::parse("countertop/ct01"), None);
+        assert_eq!(Surface::parse("backsplash/bs00"), None);
+
+        // Empty prefix
+        assert_eq!(Surface::parse("countertop/"), None);
+        assert_eq!(Surface::parse("backsplash/"), None);
+
+        // Non-numeric suffix
+        assert_eq!(Surface::parse("countertop/cta"), None);
+        assert_eq!(Surface::parse("backsplash/bsa"), None);
+
+        // Mixed case
+        assert_eq!(Surface::parse("countertop/CT0"), None);
+        assert_eq!(Surface::parse("backsplash/BS0"), None);
+    }
+
+    #[test]
     fn material_ref_parses_short_and_key_forms() {
         assert_eq!(MaterialRef::parse("siding"), Some(MaterialRef::Finish(Finish::Siding)));
         assert_eq!(MaterialRef::parse("finish:siding").map(|m| m.key()), Some("finish:siding".into()));
