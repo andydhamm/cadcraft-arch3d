@@ -317,6 +317,25 @@ pub fn normal_map(finish: Finish) -> Texture {
             rgba.push(255);
         }
     }
+    // Force seamless tiling: copy the first column/row to the last so the
+    // wrap-around seam is exact (floating-point rounding in the height
+    // function can leave a 1-unit difference).
+    for y in 0..N {
+        let first = y * N * 4;
+        let last = (y * N + N - 1) * 4;
+        rgba[last] = rgba[first];
+        rgba[last + 1] = rgba[first + 1];
+        rgba[last + 2] = rgba[first + 2];
+        rgba[last + 3] = rgba[first + 3];
+    }
+    for x in 0..N {
+        let first = x * 4;
+        let last = ((N - 1) * N + x) * 4;
+        rgba[last] = rgba[first];
+        rgba[last + 1] = rgba[first + 1];
+        rgba[last + 2] = rgba[first + 2];
+        rgba[last + 3] = rgba[first + 3];
+    }
     Texture { finish, width: TEXTURE_SIZE, height: TEXTURE_SIZE, rgba, tile: tile_size(finish) }
 }
 
