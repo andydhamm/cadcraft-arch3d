@@ -232,4 +232,63 @@ mod tests {
         assert_eq!(default_profile(MoldingKind::Crown).item, "molding:crown");
         assert_eq!(default_profile(MoldingKind::Chair).item, "molding:chair-rail");
     }
+
+    #[test]
+    fn validate_profile_accepts_exactly_three_points() {
+        let tri = [[0.0, 0.0], [0.02, 0.0], [0.0, 0.02]];
+        assert_eq!(validate_profile(&tri), Ok(()));
+    }
+
+    #[test]
+    fn validate_profile_accepts_max_profile_points() {
+        let n = MAX_PROFILE_POINTS;
+        let mut pts = Vec::with_capacity(n);
+        for i in 0..n {
+            let angle = 2.0 * std::f64::consts::PI * i as f64 / n as f64;
+            pts.push([0.01 + 0.01 * angle.cos(), 0.01 + 0.01 * angle.sin()]);
+        }
+        let min_x = pts.iter().map(|p| p[0]).fold(f64::MAX, f64::min);
+        let min_y = pts.iter().map(|p| p[1]).fold(f64::MAX, f64::min);
+        let pts: Vec<[f64; 2]> = pts.iter().map(|p| [p[0] - min_x, p[1] - min_y]).collect();
+        assert_eq!(validate_profile(&pts), Ok(()));
+    }
+
+    #[test]
+    fn profile_from_polyline_empty_and_single_point() {
+        assert!(profile_from_polyline(&[]).is_err());
+        let one = vec![Vec2::new(0.0, 0.0)];
+        assert!(profile_from_polyline(&one).is_err());
+    }
+
+    #[test]
+    fn profile_from_polyline_nan_and_inf_points() {
+        let nan = vec![Vec2::new(0.0, 0.0), Vec2::new(f64::NAN, 0.0), Vec2::new(0.02, 0.02)];
+        assert!(profile_from_polyline(&nan).is_err());
+        let inf = vec![Vec2::new(0.0, 0.0), Vec2::new(f64::INFINITY, 0.0), Vec2::new(0.02, 0.02)];
+        assert!(profile_from_polyline(&inf).is_err());
+    }
+
+    #[test]
+    fn scaled_profile_at_boundary_sizes() {
+        let p = builtin_profile("molding:base").unwrap();
+        let small = scaled(&p, [0.002, 0.002]).unwrap();
+        let s = small.size();
+        assert!((s[0] - 0.002).abs() < 1e-9 && (s[1] - 0.002).abs() < 1e-9);
+        assert_eq!(validate_profile(&small.points), Ok(()));
+        let large = scaled(&p, [0.5, 0.5]).unwrap();
+        let s = large.size();
+        assert!((s[0] - 0.5).abs() < 1e-9 && (s[1] - 0.5).abs() < 1e-9);
+        assert_eq!(validate_profile(&large.points), Ok(()));
+    }
+
+    #[test]
+    fn scaled_profile_preserves_validation() {
+        let p = builtin_profile("molding:crown").unwrap();
+        for w in [0.01, 0.05, 0.1, 0.2] {
+            for h in [0.01, 0.05, 0.1, 0.2] {
+                let q = scaled(&p, [w, h]).unwrap();
+                assert_eq!(validate_profile(&q.points), Ok(()), "scaled to [{}, {}]", w, h);
+            }
+        }
+    }
 }

@@ -279,4 +279,32 @@ mod tests {
         assert!(rec.keywords.is_empty());
         assert!(!rec.read_only);
     }
+
+    #[test]
+    fn item_record_with_profile_serde() {
+        let json = serde_json::json!({
+            "id": "molding:base",
+            "name": "Base molding",
+            "category": "Cabinet parts",
+            "folder": "Moldings",
+            "kind": "molding",
+            "symbol_type": "molding",
+            "profile": [[0.0, 0.0], [0.015, 0.0], [0.015, 0.075]],
+            "licence": "CC0-1.0",
+            "source": "built-in",
+            "catalog": "builtin"
+        });
+        let rec: ItemRecord = serde_json::from_value(json).unwrap();
+        assert_eq!(rec.kind, ItemKind::Molding);
+        assert_eq!(rec.profile.as_ref().unwrap().len(), 3);
+        let out = serde_json::to_value(&rec).unwrap();
+        assert_eq!(out["profile"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn item_record_without_profile_skips_field() {
+        let rec = ItemRecord { id: "test".into(), name: "Test".into(), ..Default::default() };
+        let out = serde_json::to_value(&rec).unwrap();
+        assert!(out.get("profile").is_none(), "profile should be skipped when None");
+    }
 }

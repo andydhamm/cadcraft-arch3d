@@ -93,4 +93,11 @@ mod tests {
     fn query_for_kind_only_returns_none() {
         assert!(query_for("cabinet").is_none());
     }
+
+    #[test]
+    fn query_for_room_without_sub_returns_materials() {
+        let q = query_for("room/r1").unwrap();
+        assert_eq!(q.chips[0].kind, ChipKind::Category);
+        assert_eq!(q.chips[0].value, "Materials");
+    }
 }
