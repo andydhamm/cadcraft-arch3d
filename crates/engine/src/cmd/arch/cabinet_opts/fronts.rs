@@ -91,6 +91,31 @@ mod tests {
     }
 
     #[test]
+    fn fronts_parse_edge_cases() {
+        let s = Session::new();
+        // Empty string for construction is refused
+        assert!(parse("cabinet", &s, &json!({"construction": ""})).is_err());
+        // Null construction is an error
+        assert!(parse("cabinet", &s, &json!({"construction": null})).is_err());
+        // Case sensitivity: "Frameless" is refused
+        assert!(parse("cabinet", &s, &json!({"construction": "Frameless"})).is_err());
+        // Case sensitivity: "FRAMED" is refused
+        assert!(parse("cabinet", &s, &json!({"construction": "FRAMED"})).is_err());
+        // Empty string for mount is refused
+        assert!(parse("cabinet", &s, &json!({"mount": ""})).is_err());
+        // Null mount is an error
+        assert!(parse("cabinet", &s, &json!({"mount": null})).is_err());
+        // Case sensitivity: "Overlay" is refused
+        assert!(parse("cabinet", &s, &json!({"mount": "Overlay"})).is_err());
+        // Case sensitivity: "INSET" is refused
+        assert!(parse("cabinet", &s, &json!({"mount": "INSET"})).is_err());
+        // Both together
+        let opts = parse("cabinet", &s, &json!({"construction": "framed", "mount": "inset"})).unwrap();
+        assert!(matches!(opts.construction, Some(Construction::Framed)));
+        assert!(matches!(opts.mount, Some(FrontMount::Inset)));
+    }
+
+    #[test]
     fn inset_mount_rejects_face_that_only_fits_overlay() {
         let mut s = Session::new();
         // Overlay base cabinet face height: 0.876 - 0.1 (toe) = 0.776.

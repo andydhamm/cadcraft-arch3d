@@ -658,6 +658,19 @@ mod tests {
     }
 
     #[test]
+    fn cabinet_opts_error_refuses_whole_call() {
+        let mut s = session();
+        // Invalid construction should refuse the whole call, placing nothing
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "at": [1.0, 1.0], "widths": [0.6, 0.6], "construction": "invalid" }));
+        assert!(r.is_err());
+        assert!(cabinets(&s).is_empty());
+        // Invalid mount should refuse the whole call
+        let r = run(&mut s, "cabinet", json!({ "kind": "base", "at": [2.0, 1.0], "widths": [0.6, 0.6], "mount": "invalid" }));
+        assert!(r.is_err());
+        assert!(cabinets(&s).is_empty());
+    }
+
+    #[test]
     fn cabinet_accepts_fronts_open() {
         let mut s = session();
         let r = run(&mut s, "cabinet", json!({ "kind": "wall", "at": [1.0, 1.0], "fronts": "open" }));

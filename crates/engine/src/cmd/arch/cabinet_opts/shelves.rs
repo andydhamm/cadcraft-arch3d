@@ -57,6 +57,38 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn shelves_boundary_values() {
+        let s = Session::new();
+        // 0 shelves is valid
+        let opts = parse("cabinet", &s, &json!({"shelves": 0})).unwrap();
+        assert_eq!(opts.shelves, Some(Some(0)));
+        // 12 shelves is valid (MAX_SHELVES)
+        let opts = parse("cabinet", &s, &json!({"shelves": 12})).unwrap();
+        assert_eq!(opts.shelves, Some(Some(12)));
+        // 13 shelves is refused
+        assert!(parse("cabinet", &s, &json!({"shelves": 13})).is_err());
+        // Negative shelves is refused
+        assert!(parse("cabinet", &s, &json!({"shelves": -1})).is_err());
+        // Float shelves is refused
+        assert!(parse("cabinet", &s, &json!({"shelves": 2.5})).is_err());
+        // Very large number is refused
+        assert!(parse("cabinet", &s, &json!({"shelves": 1000000})).is_err());
+        // String number "3" is valid
+        let opts = parse("cabinet", &s, &json!({"shelves": "3"})).unwrap();
+        assert_eq!(opts.shelves, Some(Some(3)));
+        // String number with whitespace is valid
+        let opts = parse("cabinet", &s, &json!({"shelves": " 4 "})).unwrap();
+        assert_eq!(opts.shelves, Some(Some(4)));
+        // "auto" case variations
+        let opts = parse("cabinet", &s, &json!({"shelves": "AUTO"})).unwrap();
+        assert_eq!(opts.shelves, Some(None));
+        let opts = parse("cabinet", &s, &json!({"shelves": "Auto"})).unwrap();
+        assert_eq!(opts.shelves, Some(None));
+        let opts = parse("cabinet", &s, &json!({"shelves": " auto "})).unwrap();
+        assert_eq!(opts.shelves, Some(None));
+    }
+
+    #[test]
     fn shelves_option() {
         let session = Session::new();
         let opts = parse("cabinet", &session, &json!({"shelves": 4})).unwrap();
