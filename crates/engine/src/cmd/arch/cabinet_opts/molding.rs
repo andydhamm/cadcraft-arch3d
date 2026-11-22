@@ -141,6 +141,7 @@ mod tests {
     use super::*;
     use cadcraft_doc::arch::{ArchId, CabinetKind};
     use cadcraft_geom::Vec2;
+    use serde_json::json;
 
     #[test]
     fn crown_and_light_rail_params() {
@@ -246,6 +247,62 @@ mod tests {
         };
         let opts = Opts { crown_size: Some(Some([0.05, 0.05])), ..Default::default() };
         assert!(opts.apply("cabinet", &mut c).is_err());
+    }
+
+    #[test]
+    fn molding_size_validation() {
+        let s = crate::Session::new();
+        // Width too small
+        assert!(parse("cabinet", &s, &json!({"crownSize": [0.001, 0.05]})).is_err());
+        // Width too large
+        assert!(parse("cabinet", &s, &json!({"crownSize": [0.51, 0.05]})).is_err());
+        // Height too small
+        assert!(parse("cabinet", &s, &json!({"crownSize": [0.05, 0.001]})).is_err());
+        // Height too large
+        assert!(parse("cabinet", &s, &json!({"crownSize": [0.05, 0.51]})).is_err());
+        // NaN width (null in JSON)
+        assert!(parse("cabinet", &s, &json!({"crownSize": [null, 0.05]})).is_err());
+        // Wrong array length
+        assert!(parse("cabinet", &s, &json!({"crownSize": [0.05]})).is_err());
+        assert!(parse("cabinet", &s, &json!({"crownSize": [0.05, 0.05, 0.05]})).is_err());
+        // Boundary values are valid
+        let opts = parse("cabinet", &s, &json!({"crownSize": [0.002, 0.002]})).unwrap();
+        assert_eq!(opts.crown_size, Some(Some([0.002, 0.002])));
+        let opts = parse("cabinet", &s, &json!({"crownSize": [0.5, 0.5]})).unwrap();
+        assert_eq!(opts.crown_size, Some(Some([0.5, 0.5])));
+    }
+
+    #[test]
+    fn molding_combined_crown_and_light_rail() {
+        let mut s = crate::Session::new();
+        let mut c = Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Wall,
+            position: Vec2::new(0.0, 0.0),
+            width: 0.6,
+            depth: 0.305,
+            height: 0.762,
+            elevation: 1.372,
+            ..Default::default()
+        };
+        let opts = Opts {
+            crown: Some(Some(CabinetMolding {
+                profile: crate::library::molding::profile_of(&s.library, "molding:crown").unwrap(),
+                size: Some([0.05, 0.05]),
+                ..Default::default()
+            })),
+            light_rail: Some(Some(CabinetMolding {
+                profile: crate::library::molding::profile_of(&s.library, "molding:casing").unwrap(),
+                size: Some([0.04, 0.06]),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        opts.apply("cabinet", &mut c).unwrap();
+        assert!(c.crown.is_some());
+        assert!(c.light_rail.is_some());
+        assert_eq!(c.crown.as_ref().unwrap().profile.item, "molding:crown");
+        assert_eq!(c.light_rail.as_ref().unwrap().profile.item, "molding:casing");
     }
 
     #[test]

@@ -39,6 +39,24 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn corner_null_and_combined() {
+        let mut s = Session::new();
+        if let Ok(mut d) = s.doc_mut() {
+            d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+            d.touch_arch();
+        }
+        // Null corner is treated as absent
+        let r = s.execute("cabinet", &json!({ "kind": "base", "at": [1.0, 1.0], "corner": null }));
+        assert!(r.is_ok(), "{r:?}");
+        let corner = |s: &Session| s.doc().map(|d| d.arch.cabinets.first().map(|c| c.corner)).ok().flatten();
+        assert_eq!(corner(&s), Some(CornerPref::Auto)); // default
+        // Combined with other options
+        let r = s.execute("cabinet.edit", &json!({ "id": "cb0", "corner": "blind", "construction": "framed", "mount": "inset" }));
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(corner(&s), Some(CornerPref::Blind));
+    }
+
+    #[test]
     fn corner_option_round_trips() {
         let mut s = Session::new();
         if let Ok(mut d) = s.doc_mut() {

@@ -61,6 +61,16 @@ mod tests {
     }
 
     #[test]
+    fn backsplash_combined_with_other_options() {
+        let mut s = session();
+        s.execute("cabinet", &json!({ "kind": "base", "at": [1.0, 1.0], "backsplash": false, "construction": "framed", "mount": "inset" })).unwrap();
+        assert_eq!(off(&s, 0), Some(true));
+        let v = s.execute("arch.inspect", &json!({ "cabinets": true })).unwrap();
+        assert_eq!(v["cabinets"][0]["construction"], "framed");
+        assert_eq!(v["cabinets"][0]["mount"], "inset");
+    }
+
+    #[test]
     fn cabinet_backsplash_option_round_trips() {
         let mut s = session();
         s.execute("cabinet", &json!({ "kind": "base", "at": [1.0, 1.0], "widths": [0.6, 0.6] })).unwrap();
