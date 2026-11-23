@@ -5,11 +5,12 @@
 use serde_json::{Value, json};
 
 use cadcraft_arch3d::Scene3d;
-use cadcraft_arch3d::camera::{Camera, FullCamera, MAX_DISTANCE, Orbit, ray_at};
+use cadcraft_arch3d::camera::{Camera, FullCamera, MAX_DISTANCE, Orbit};
 use cadcraft_arch3d::incremental::ObjectKind;
+use cadcraft_arch3d::lens::{LensView, ray_at_lens};
 use cadcraft_arch3d::pick::Bvh;
 use cadcraft_arch3d::view_filter::ViewFilter;
-use cadcraft_doc::arch::{Camera3d, CameraKind, handle_json};
+use cadcraft_doc::arch::{Camera3d, CameraKind, LensProjection, handle_json};
 use cadcraft_doc::{ArchId, opening_label, railing_label, roof_label, room_label, stair_label, wall_label};
 use cadcraft_geom::Vec3;
 
@@ -25,7 +26,12 @@ const MAX_COORD: f64 = 1e9;
 
 /// `pick3d` command spec.
 pub fn specs() -> Vec<CommandSpec> {
-    vec![CommandSpec::new("pick3d", "Pick 3D", run_pick3d).menu(&["Architecture", "Pick 3D"]).params("{camera,size:[w,h],pixel:[x,y]}").noundo()]
+    vec![
+        CommandSpec::new("pick3d", "Pick 3D", run_pick3d)
+            .menu(&["Architecture", "Pick 3D"])
+            .params("{camera, size: [w,h], pixel: [x,y], cutaway?, clip?, nearClip?, projection?, compression?, shift?}")
+            .noundo(),
+    ]
 }
 
 fn finite(v: &Value, what: &str) -> Result<f64, EngineError> {
@@ -182,11 +188,12 @@ fn run_pick3d(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let (camera, saved_camera) = pick_camera(&doc.arch, cam)?;
     let size = parse_size(params.get("size"))?;
     let pixel = parse_pixel(params.get("pixel"), size)?;
-    let Some((origin, dir)) = ray_at(&camera, size, pixel) else {
-        return Ok(json!({ "ok": true, "hit": null, "filter": {"hidden": 0, "clip": false, "nearClip": null} }));
-    };
     let mut look = crate::cmd::arch::look::effective_look(&doc.arch, saved_camera);
     let _ = crate::cmd::arch::look::apply_look_params("pick3d", params, &doc.arch, &mut look, true)?;
+    let lens = LensView { panini: look.lens.projection == LensProjection::Panini, compression: look.lens.compression, shift: look.lens.shift };
+    let Some((origin, dir)) = ray_at_lens(&camera, &lens, size, pixel) else {
+        return Ok(json!({ "ok": true, "hit": null, "filter": {"hidden": 0, "clip": false, "nearClip": null} }));
+    };
     let mut filter = ViewFilter::from_look(&look, &doc.arch, &camera);
     if let Some((level, lower)) = saved_camera.and_then(|c| crate::cmd::arch::render::overview_of(c, &doc.arch)) {
         filter = filter.with_overview(&doc.arch, level, lower);
@@ -367,6 +374,89 @@ mod tests {
         for c in bads {
             assert!(s.execute("pick3d", &params(c.clone(), json!([50, 50]))).is_err(), "accepted {c}");
         }
+    }
+
+    #[test]
+    fn pick3d_through_panini_returns_the_object_drawn_there() {
+        let mut s = session();
+        let camera = json!({"kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": 100.0});
+        let lens = cadcraft_arch3d::lens::LensView { panini: true, compression: 1.0, shift: 0.0 };
+        let point = [2.5, 0.0, 0.2];
+        let size = (100, 100);
+        let px = cadcraft_arch3d::lens::project_point_lens(&parse_camera(&camera).unwrap(), &lens, size, point).unwrap();
+        let p = json!({ "camera": camera.clone(), "size": [100, 100], "pixel": [px[0], px[1]], "projection": "panini", "compression": 1.0 });
+        let with_lens = s.execute("pick3d", &p).unwrap();
+        let p2 = json!({ "camera": camera, "size": [100, 100], "pixel": [px[0], px[1]] });
+        let without_lens = s.execute("pick3d", &p2).unwrap();
+        assert_eq!(with_lens["hit"]["id"], "o0", "{with_lens}");
+        assert_eq!(without_lens["hit"]["id"], "w0", "{without_lens}");
+    }
+
+    #[test]
+    fn pick3d_neutral_lens_is_unchanged() {
+        let mut s = session();
+        let camera = front();
+        let lens = cadcraft_arch3d::lens::LensView::default();
+        let size = (100, 100);
+        let point = [3.0, 0.0, 1.0];
+        let px = cadcraft_arch3d::lens::project_point_lens(&parse_camera(&camera).unwrap(), &lens, size, point).unwrap();
+        let p = json!({ "camera": camera.clone(), "size": [100, 100], "pixel": [px[0], px[1]], "projection": "rectilinear" });
+        let with_neutral = s.execute("pick3d", &p).unwrap();
+        let p2 = json!({ "camera": camera, "size": [100, 100], "pixel": [px[0], px[1]] });
+        let without = s.execute("pick3d", &p2).unwrap();
+        assert_eq!(with_neutral["hit"], without["hit"]);
+    }
+
+    #[test]
+    fn pick3d_uses_a_saved_cameras_lens() {
+        let mut s = Session::new();
+        let doc = s.doc_mut().unwrap();
+        let wall_id =
+            doc.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        doc.arch.push_opening(Opening::new(wall_id, 3.0, 0.9, 2.0, OpeningKind::Door));
+        doc.arch.cameras.push(cadcraft_doc::arch::Camera3d {
+            name: "wide".to_string(),
+            kind: CameraKind::Full,
+            eye: Some([3.45, -5.0]),
+            eye_height: Some(1.0),
+            target: Some([3.45, 0.0, 1.0]),
+            fov_deg: Some(100.0),
+            look: Some(cadcraft_doc::arch::Look {
+                lens: cadcraft_doc::arch::Lens { projection: LensProjection::Panini, compression: 1.0, shift: 0.0, aperture: None, focus: None },
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        doc.touch_arch();
+        let lens = cadcraft_arch3d::lens::LensView { panini: true, compression: 1.0, shift: 0.0 };
+        let point = [2.5, 0.0, 0.2];
+        let size = (100, 100);
+        let px = cadcraft_arch3d::lens::project_point_lens(
+            &parse_camera(&json!({"kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": 100.0})).unwrap(),
+            &lens,
+            size,
+            point,
+        )
+        .unwrap();
+        let p = json!({ "camera": "wide", "size": [100, 100], "pixel": [px[0], px[1]] });
+        let hit = s.execute("pick3d", &p).unwrap()["hit"].clone();
+        assert_eq!(hit["id"], "o0", "{hit}");
+    }
+
+    #[test]
+    fn pick3d_refuses_bad_lens_params() {
+        let mut s = session();
+        let base = json!({ "camera": front(), "size": [100, 100], "pixel": [50, 50] });
+        for bad in [
+            json!({"camera": front(), "size": [100, 100], "pixel": [50, 50], "projection": "bogus"}),
+            json!({"camera": front(), "size": [100, 100], "pixel": [50, 50], "compression": -0.1}),
+            json!({"camera": front(), "size": [100, 100], "pixel": [50, 50], "compression": 2.0}),
+            json!({"camera": front(), "size": [100, 100], "pixel": [50, 50], "shift": 2.0}),
+            json!({"camera": front(), "size": [100, 100], "pixel": [50, 50], "projection": "panini", "compression": 1.1}),
+        ] {
+            assert!(s.execute("pick3d", &bad).is_err(), "accepted {bad}");
+        }
+        assert!(s.execute("pick3d", &base).is_ok());
     }
 
     #[test]
