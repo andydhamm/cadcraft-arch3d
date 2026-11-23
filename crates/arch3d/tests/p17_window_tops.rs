@@ -101,6 +101,34 @@ fn z_range(m: &Mesh) -> (f64, f64) {
 }
 
 #[test]
+fn segment_top_with_grille() {
+    let mut o = window(OpeningTop::Segment, 0.9, 1.2, 0.9, 0.15);
+    o.grille = Some(Grille { across: 2, down: 2, ..Default::default() });
+    let model = with(flat_wall(), o.clone());
+    let ms = meshes_of(&model, &o, None);
+    let bars = ms.iter().find(|m| m.material == "window-grille").expect("grille bars");
+    let glass = ms.iter().find(|m| m.material == "window-glass").expect("glass");
+    // Every bar vertex lies inside the glass outline
+    let (_, gt) = z_range(glass);
+    let (_, bt) = z_range(bars);
+    assert!(bt <= gt + 1e-4, "bars should not extend above glass");
+}
+
+#[test]
+fn roof_top_with_grille() {
+    let m = gable_house();
+    let mut o = roof_window(&m, 0.15);
+    o.grille = Some(Grille { across: 2, down: 2, ..Default::default() });
+    let model = with(m, o.clone());
+    let ms = meshes_of(&model, &o, None);
+    let bars = ms.iter().find(|m| m.material == "window-grille").expect("grille bars");
+    let glass = ms.iter().find(|m| m.material == "window-glass").expect("glass");
+    let (_, gt) = z_range(glass);
+    let (_, bt) = z_range(bars);
+    assert!(bt <= gt + 1e-4, "bars should not extend above glass");
+}
+
+#[test]
 fn round_top_hole_probes() {
     // 0.9 x 1.5 at sill 0.6: spring 1.65, rough arc radius 0.51, rough top 2.16.
     let s = Scene3d::build(&with(flat_wall(), window(OpeningTop::Round, 0.9, 1.5, 0.6, 0.0)));
