@@ -193,7 +193,7 @@ pub fn validate(o: &mut Opening, roof_top: Option<&[Vec2]>) -> Result<(), String
                 o.top_rise = o.width / 6.0;
             }
             let r = o.top_rise;
-            if r > 0.0 && r <= o.width / 2.0 && r <= o.height - 0.1 {
+            if r > 0.0 && r <= o.width / 2.0 + 1e-9 && r <= o.height - 0.1 + 1e-9 {
                 Ok(())
             } else {
                 Err("a segment top needs 0 < rise <= width/2 and rise <= height - 0.1".into())
