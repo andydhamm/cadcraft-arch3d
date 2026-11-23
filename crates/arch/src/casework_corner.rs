@@ -735,6 +735,24 @@ mod tests {
     }
 
     #[test]
+    fn corner_info_different_levels() {
+        let mut m = runs(0.6, None);
+        m.cabinets[3].level = 1;
+        m.cabinets[4].level = 1;
+        assert!(corner_info(&m, &m.cabinets[0]).is_none(), "different levels should not form a corner");
+    }
+
+    #[test]
+    fn offset_ring_triangle() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)];
+        let dist = vec![0.1, 0.1, 0.1];
+        let out = offset_ring(&ring, &dist);
+        assert_eq!(out.len(), 3);
+        // All vertices should be finite
+        assert!(out.iter().all(|p| p.is_finite()));
+    }
+
+    #[test]
     fn hostile_cabinets_give_no_corner() {
         let good = runs(0.6, None);
         for f in 0..6 {
