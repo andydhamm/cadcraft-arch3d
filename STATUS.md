@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-23 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 23:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 4 of 35 segments merged · 0 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 5 of 35 segments merged · 0 of 15 acceptance checks**
 
-11,410 workspace tests passing at the last merge · 1325 segments merged in all · 0 of 15 seats working · PAUSED
+11,415 workspace tests passing at the last merge · 1326 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,18 +32,19 @@ Updated 2026-11-23 22:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 5.3 h so far · expected done Nov 25 11:15–Nov 29 09:34 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 5.5 h so far · expected done Nov 25 05:16–Nov 27 19:16 UTC |
 
 ## Phase 22 segments
 
-25 queued, 6 merging, 4 merged
+23 queued, 5 merged, 5 merging, 2 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | merging | mai-flash-esc |
 | `p22-arch3d-calibrate` | Calibration scenes: spheres, boxes and point lights that replace the model for a render | merging | claude-sonnet-c |
-| `p22-r3d-types` | render3d contract: LensOptions, Lighting lens/film/sun disc, PathOptions and PathStats photo fields, the stub modules | merging | claude-sonnet-d |
+| `p22-r3d-kernel-hooks` | Path tracer groundwork: frame and material layouts, WGSL hook files, tracer hook points, all inert | working | claude-sonnet-d |
 | `p22-engine-look-keys` | Engine: the lens, film and sun-disc look keys on look, camera, render and pick3d | merging | claude-sonnet-c |
+| `p22-r3d-lens-raster` | Raster views: the wide-angle projection and shift as a post-warp | working | claude-sonnet-b |
 | `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | merging | mai-flash-b |
 | `p22-io-glb-ext` | glTF export of the new PBR fields as KHR material extensions | merging | bonsai-b |
 
@@ -51,6 +52,7 @@ Updated 2026-11-23 22:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 23 22:49 | `p22-r3d-types` | merged | 11,415 pass | claude-sonnet-d |
 | Nov 23 22:15 | `p22-arch3d-lens` | merged | 11,410 pass | claude-sonnet-d |
 | Nov 23 21:58 | `p22-arch3d-material-ext` | merged | 11,404 pass | claude-sonnet-c |
 | Nov 23 21:24 | `p22-doc-look` | merged | 11,399 pass | claude-sonnet-a |
@@ -62,24 +64,23 @@ Updated 2026-11-23 22:45 UTC. This page and the card in the README are regenerat
 | Nov 23 14:57 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | darwin-ws3 |
 | Nov 23 14:23 | `harden-p17-exports-rebuild` | merged | 11,289 pass | tturbo-mac |
 | Nov 23 12:57 | `harden-p18-observables-2` | refused | 11,296 pass | tturbo-mac |
-| Nov 23 01:34 | `harden-p18-molding-kit-1` | merged | 11,282 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 1399 |
-| bonsai-b | bonsai2-27b | idle | 1307 |
+| bonsai-a | bonsai2-27b | gate | 1399 |
+| bonsai-b | bonsai2-27b | agent | 1307 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 164 |
-| claude-sonnet-b | sonnet | idle | 169 |
+| claude-sonnet-b | sonnet | agent | 169 |
 | claude-sonnet-c | sonnet | idle | 107 |
-| claude-sonnet-d | sonnet | idle | 102 |
+| claude-sonnet-d | sonnet | agent | 102 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 81 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 177 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1196 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1196 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 703 |
