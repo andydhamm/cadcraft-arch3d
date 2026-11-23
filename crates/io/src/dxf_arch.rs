@@ -2783,4 +2783,117 @@ mod tests {
         let model: ArchModel = serde_json::from_value(v).unwrap();
         assert_eq!(model.walls[0].finish, None, "an older record without the finish key must read None");
     }
+
+    /// Mixed finishes: some entities with finishes, some without — the None ones must not
+    /// gain a finish and the Some ones must keep theirs.
+    #[test]
+    fn mixed_finishes_some_none_some_some() {
+        let mut d = Drawing::new_metric();
+        d.arch.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2) });
+        d.arch.push_wall(Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), 0.2));
+        d.arch.push_roof(Roof { covering: Some(Finish::Shingles), ..Roof::default() });
+        d.arch.push_roof(Roof::default());
+        d.arch.push_room(Room {
+            floor_finish: Some(Finish::Wood),
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(9.0, 0.0), Vec2::new(9.0, 9.0), Vec2::new(0.0, 9.0)],
+            ..Room::default()
+        });
+        d.arch.push_room(Room {
+            polygon: vec![Vec2::new(0.0, 10.0), Vec2::new(9.0, 10.0), Vec2::new(9.0, 19.0), Vec2::new(0.0, 19.0)],
+            ..Room::default()
+        });
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+
+        assert_eq!(back.arch.walls.len(), 2);
+        assert_eq!(back.arch.roofs.len(), 2);
+        assert_eq!(back.arch.rooms.len(), 2);
+        assert_eq!(back.arch.walls[0].finish, Some(Finish::Brick), "wall 0 finish lost");
+        assert_eq!(back.arch.walls[1].finish, None, "wall 1 gained a finish");
+        assert_eq!(back.arch.roofs[0].covering, Some(Finish::Shingles), "roof 0 finish lost");
+        assert_eq!(back.arch.roofs[1].covering, None, "roof 1 gained a finish");
+        assert_eq!(back.arch.rooms[0].floor_finish, Some(Finish::Wood), "room 0 finish lost");
+        assert_eq!(back.arch.rooms[1].floor_finish, None, "room 1 gained a finish");
+    }
+
+    /// A wall with a NaN endpoint still carries its finish through the XRECORD round trip
+    /// (no proxy is written, but the model data must survive).
+    #[test]
+    fn wall_finish_survives_with_nan_coordinates() {
+        let mut d = Drawing::new_metric();
+        d.arch.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(f64::NAN, 0.0), Vec2::new(10.0, 0.0), 0.2) });
+        d.arch.push_wall(Wall { finish: Some(Finish::Wood), ..Wall::new(Vec2::new(0.0, 1.0), Vec2::new(10.0, 1.0), 0.2) });
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+
+        assert_eq!(back.arch.walls.len(), 2, "both walls must survive through the XRECORD");
+        assert_eq!(back.arch.walls[0].finish, Some(Finish::Brick), "NaN wall finish lost");
+        assert_eq!(back.arch.walls[1].finish, Some(Finish::Wood), "valid wall finish lost");
+    }
+
+    /// Multiple roofs each keep their own covering finish through a round trip.
+    #[test]
+    fn multiple_roofs_different_finishes() {
+        let mut d = Drawing::new_metric();
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        d.arch.push_roof(Roof { covering: Some(Finish::Shingles), level: 0, ..Roof::default() });
+        d.arch.push_roof(Roof { covering: Some(Finish::Wood), level: 1, ..Roof::default() });
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+
+        assert_eq!(back.arch.roofs.len(), 2);
+        assert_eq!(back.arch.roofs[0].covering, Some(Finish::Shingles), "roof 0 finish changed");
+        assert_eq!(back.arch.roofs[1].covering, Some(Finish::Wood), "roof 1 finish changed");
+    }
+
+    /// Multiple rooms each keep their own floor finish through a round trip.
+    #[test]
+    fn multiple_rooms_different_floor_finishes() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-ROOM");
+        d.arch.push_room(Room {
+            floor_finish: Some(Finish::Wood),
+            polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
+            ..Room::default()
+        });
+        d.arch.push_room(Room {
+            floor_finish: Some(Finish::Tile),
+            polygon: vec![Vec2::new(5.0, 0.0), Vec2::new(9.0, 0.0), Vec2::new(9.0, 3.0), Vec2::new(5.0, 3.0)],
+            ..Room::default()
+        });
+        d.arch.push_room(Room {
+            floor_finish: Some(Finish::Carpet),
+            polygon: vec![Vec2::new(0.0, 4.0), Vec2::new(4.0, 4.0), Vec2::new(4.0, 7.0), Vec2::new(0.0, 7.0)],
+            ..Room::default()
+        });
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+
+        assert_eq!(back.arch.rooms.len(), 3);
+        assert_eq!(back.arch.rooms[0].floor_finish, Some(Finish::Wood), "room 0 finish changed");
+        assert_eq!(back.arch.rooms[1].floor_finish, Some(Finish::Tile), "room 1 finish changed");
+        assert_eq!(back.arch.rooms[2].floor_finish, Some(Finish::Carpet), "room 2 finish changed");
+    }
+
+    /// Finishes on walls that form a joined layout (L-shape with T-junction) survive the
+    /// round trip with each wall keeping its own finish.
+    #[test]
+    fn finishes_survive_joined_wall_layout() {
+        let mut d = Drawing::new_metric();
+        d.arch.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2) });
+        d.arch.push_wall(Wall { finish: Some(Finish::Stone), ..Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), 0.2) });
+        d.arch.push_wall(Wall { finish: Some(Finish::Wood), ..Wall::new(Vec2::new(5.0, 0.0), Vec2::new(5.0, 4.0), 0.2) });
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+
+        assert_eq!(back.arch.walls.len(), 3);
+        assert_eq!(back.arch.walls[0].finish, Some(Finish::Brick), "wall 0 finish changed");
+        assert_eq!(back.arch.walls[1].finish, Some(Finish::Stone), "wall 1 finish changed");
+        assert_eq!(back.arch.walls[2].finish, Some(Finish::Wood), "wall 2 finish changed");
+    }
 }
