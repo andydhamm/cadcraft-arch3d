@@ -1307,7 +1307,8 @@ fn the_showcase_has_its_phase19_look_cameras() {
     let dusk = look("dusk");
     assert_eq!(dusk.pointer("/sun/angle").and_then(|v| v.as_str()), Some("dusk"), "{dusk}");
     assert_eq!(strd(&dusk, "lightSet", ""), "Evening");
-    assert_eq!(dusk.pointer("/exposure/ev100").and_then(|v| v.as_f64()), Some(4.0), "{dusk}");
+    assert_eq!(dusk.pointer("/exposure/ev100").and_then(|v| v.as_f64()), Some(8.0), "{dusk}");
+    assert_eq!(strd(&dusk, "technique", ""), "path", "the dusk camera path-traces (its fixed EV100 4 raster washed the sky out): {dusk}");
     assert_eq!(dusk.pointer("/backdrop/kind").and_then(|v| v.as_str()), Some("sky"), "{dusk}");
     let d = cam("dusk");
     assert_eq!(xy(&d, "eye"), Some((16.0, -12.0)), "the dusk camera frames the south windows: {d}");

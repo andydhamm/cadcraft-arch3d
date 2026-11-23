@@ -257,8 +257,8 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64):
     for c in LOOK_CAMERAS:
         f = file_name('camera', c, '.png')
         params = {'camera': c, 'size': size, 'out': f}
-        if c == 'noon-hdri':
-            params['spp'] = spp  # its technique path-traces by itself
+        if c in ('dusk', 'noon-hdri'):
+            params['spp'] = spp  # their technique path-traces by itself
         add(f, 'look', c, [('render', params)])
     replay = ['--commands', SCRIPT]
     for sp in SET_SCRIPTS:
