@@ -1754,7 +1754,7 @@ fn a_deck_with_zero_height_keeps_the_cache_exact() {
     ] {
         s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
     }
-    let m = s.doc().expect("a drawing").arch.clone();
+    let mut m = s.doc().expect("a drawing").arch.clone();
     let deck_room = m.rooms.iter().find(|r| r.deck_height.is_some()).expect("a deck room");
     assert_eq!(deck_room.deck_height, Some(0.0), "the deck has zero height");
     let (mut cache, full) = SceneCache::new(&m);
@@ -1790,7 +1790,7 @@ fn multiple_decks_keep_the_cache_exact() {
     ] {
         s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
     }
-    let m = s.doc().expect("a drawing").arch.clone();
+    let mut m = s.doc().expect("a drawing").arch.clone();
     let deck_rooms: Vec<_> = m.rooms.iter().filter(|r| r.deck_height.is_some()).collect();
     assert_eq!(deck_rooms.len(), 2, "two deck rooms");
     let (mut cache, full) = SceneCache::new(&m);
