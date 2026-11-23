@@ -10,6 +10,7 @@
 
 pub mod backsplash;
 pub mod cabinet_parts;
+pub mod calibrate;
 pub mod camera;
 pub mod casework;
 pub(crate) mod ceiling;
@@ -294,6 +295,8 @@ pub struct MaterialDef {
     pub tint: Option<[u8; 3]>,
     /// The optional PBR fields (coat, anisotropy, sheen, transmission, …); all off by default.
     pub ext: MaterialExt,
+    /// Emitted light in nits (white); 0 = not emissive.
+    pub emission: f32,
 }
 
 impl Default for MaterialDef {
@@ -309,6 +312,7 @@ impl Default for MaterialDef {
             normal_scale: 1.0,
             tint: None,
             ext: MaterialExt::default(),
+            emission: 0.0,
         }
     }
 }
