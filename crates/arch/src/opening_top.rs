@@ -352,8 +352,8 @@ mod tests {
         let mut o = win(OpeningTop::Segment, 3.0, 0.9, 1.2, 0.9);
         o.top_rise = 0.45;
         assert!(validate(&mut o, None).is_ok(), "rise exactly w/2 should pass");
-        // Rise exactly height - 0.1 should pass
-        let mut o2 = win(OpeningTop::Segment, 3.0, 0.9, 1.2, 0.9);
+        // Rise exactly height - 0.1 should pass (w/2 must be >= rise)
+        let mut o2 = win(OpeningTop::Segment, 3.0, 2.2, 1.2, 0.9);
         o2.top_rise = 1.1;
         assert!(validate(&mut o2, None).is_ok(), "rise exactly height - 0.1 should pass");
         // Rise just above w/2 should fail
@@ -361,7 +361,7 @@ mod tests {
         o3.top_rise = 0.451;
         assert!(validate(&mut o3, None).is_err(), "rise above w/2 should fail");
         // Rise just above height - 0.1 should fail
-        let mut o4 = win(OpeningTop::Segment, 3.0, 0.9, 1.2, 0.9);
+        let mut o4 = win(OpeningTop::Segment, 3.0, 2.2, 1.2, 0.9);
         o4.top_rise = 1.101;
         assert!(validate(&mut o4, None).is_err(), "rise above height - 0.1 should fail");
     }
