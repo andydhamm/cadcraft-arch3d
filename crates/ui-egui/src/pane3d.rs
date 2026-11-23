@@ -574,7 +574,7 @@ impl Pane3d {
                 cadcraft_doc::arch::Technique::Clay => self.style = Style3d::Clay,
                 cadcraft_doc::arch::Technique::Technical => self.style = Style3d::Technical,
                 cadcraft_doc::arch::Technique::Standard => self.style = Style3d::Shaded,
-                cadcraft_doc::arch::Technique::Path => {
+                cadcraft_doc::arch::Technique::Path | cadcraft_doc::arch::Technique::Photoreal => {
                     let mut f = lock_final(&self.finalize);
                     f.mode = cadcraft_engine::FinalMode::Path;
                     // Leave the user's chosen style alone; the path mode is separate.

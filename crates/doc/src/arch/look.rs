@@ -39,6 +39,8 @@ pub enum Technique {
     Clay,
     /// Technical line view.
     Technical,
+    /// The path tracer with the photoreal rung ladder (phase 22).
+    Photoreal,
 }
 
 /// Exposure control.
@@ -80,11 +82,18 @@ pub struct SunLook {
     pub shadows: bool,
     /// Name of a [`SunAngle`], if the look uses one.
     pub angle: Option<String>,
+    /// Angular diameter of the sun disc in degrees; 0 = a point.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub disc: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 
 impl Default for SunLook {
     fn default() -> Self {
-        SunLook { on: true, intensity: 100_000.0, shadows: true, angle: None }
+        SunLook { on: true, intensity: 100_000.0, shadows: true, angle: None, disc: 0.0 }
     }
 }
 
@@ -170,6 +179,12 @@ pub struct Look {
     /// Near clip distance, metres.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub near_clip: Option<f64>,
+    /// Lens: projection, shift, aperture and focus (phase 22).
+    #[serde(skip_serializing_if = "Lens::is_default")]
+    pub lens: Lens,
+    /// Film: bloom, vignette and grade (phase 22).
+    #[serde(skip_serializing_if = "Film::is_default")]
+    pub film: Film,
 }
 
 impl Default for Look {
@@ -185,6 +200,8 @@ impl Default for Look {
             cutaway: false,
             clip: None,
             near_clip: None,
+            lens: Lens::default(),
+            film: Film::default(),
         }
     }
 }
@@ -226,6 +243,137 @@ impl Look {
         {
             return Err(format!("`nearClip` must be above 0 and at most {MAX_NEAR_CLIP}, not {n}"));
         }
+        in_range("sun.disc", self.sun.disc, 0.0, MAX_SUN_DISC)?;
+        self.lens.validate()?;
+        self.film.validate()?;
+        Ok(())
+    }
+}
+
+/// Largest sun disc angular diameter, degrees.
+pub const MAX_SUN_DISC: f64 = 10.0;
+
+/// Lens projection.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LensProjection {
+    /// Straight lines stay straight.
+    #[default]
+    Rectilinear,
+    /// Panini projection: keeps the horizontal field of view, tames wide-angle stretching.
+    Panini,
+}
+
+/// The camera lens of a look.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Lens {
+    /// Projection.
+    pub projection: LensProjection,
+    /// Panini compression, 0..=1.
+    pub compression: f64,
+    /// Vertical shift as a fraction of the frame height, -1..=1.
+    pub shift: f64,
+    /// F-number (thin lens depth of field); `None` = pinhole.
+    pub aperture: Option<f64>,
+    /// Focus distance in metres along the view axis; `None` = automatic.
+    pub focus: Option<f64>,
+}
+
+impl Default for Lens {
+    fn default() -> Self {
+        Lens { projection: LensProjection::Rectilinear, compression: 0.7, shift: 0.0, aperture: None, focus: None }
+    }
+}
+
+impl Lens {
+    /// Whether the lens changes nothing: rectilinear, no shift, no aperture.
+    /// Compression and focus do not count.
+    pub fn is_neutral(&self) -> bool {
+        self.projection == LensProjection::Rectilinear && self.shift == 0.0 && self.aperture.is_none()
+    }
+
+    /// Whether this equals the default lens (used to skip serialization).
+    pub fn is_default(&self) -> bool {
+        *self == Lens::default()
+    }
+
+    /// Check every field; the error names the field and value.
+    pub fn validate(&self) -> Result<(), String> {
+        in_range("lens.compression", self.compression, 0.0, 1.0)?;
+        in_range("lens.shift", self.shift, -1.0, 1.0)?;
+        if let Some(a) = self.aperture {
+            in_range("lens.aperture", a, 0.5, 64.0)?;
+        }
+        if let Some(f) = self.focus
+            && !(f.is_finite() && f > 0.0 && f <= 10_000.0)
+        {
+            return Err(format!("`lens.focus` must be above 0 and at most 10000, not {f}"));
+        }
+        Ok(())
+    }
+}
+
+/// The film of a look: bloom, vignette and colour grade.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Film {
+    /// Bloom strength, 0..=1.
+    pub bloom: f64,
+    /// Bloom threshold in display-linear units, above 0.
+    pub bloom_threshold: f64,
+    /// Vignette strength, 0..=1.
+    pub vignette: f64,
+    /// White balance in kelvin; `None` = off.
+    pub white_balance: Option<f64>,
+    /// Contrast about 0.18, 0.5..=2.
+    pub contrast: f64,
+    /// Saturation, 0..=2.
+    pub saturation: f64,
+    /// Lift added after the grade, -0.5..=0.5.
+    pub lift: f64,
+}
+
+impl Default for Film {
+    fn default() -> Self {
+        Film { bloom: 0.0, bloom_threshold: 1.0, vignette: 0.0, white_balance: None, contrast: 1.0, saturation: 1.0, lift: 0.0 }
+    }
+}
+
+impl Film {
+    /// The photoreal preset.
+    pub fn photoreal() -> Film {
+        Film { bloom: 0.1, bloom_threshold: 1.0, vignette: 0.15, white_balance: None, contrast: 1.05, saturation: 1.0, lift: 0.0 }
+    }
+
+    /// Whether the film changes nothing (the bloom threshold does not count).
+    pub fn is_neutral(&self) -> bool {
+        self.bloom == 0.0
+            && self.vignette == 0.0
+            && self.white_balance.is_none()
+            && self.contrast == 1.0
+            && self.saturation == 1.0
+            && self.lift == 0.0
+    }
+
+    /// Whether this equals the default film (used to skip serialization).
+    pub fn is_default(&self) -> bool {
+        *self == Film::default()
+    }
+
+    /// Check every field; the error names the field and value.
+    pub fn validate(&self) -> Result<(), String> {
+        in_range("film.bloom", self.bloom, 0.0, 1.0)?;
+        if !(self.bloom_threshold.is_finite() && self.bloom_threshold > 0.0 && self.bloom_threshold <= 1000.0) {
+            return Err(format!("`film.bloomThreshold` must be above 0 and at most 1000, not {}", self.bloom_threshold));
+        }
+        in_range("film.vignette", self.vignette, 0.0, 1.0)?;
+        if let Some(k) = self.white_balance {
+            in_range("film.whiteBalance", k, 1500.0, 15000.0)?;
+        }
+        in_range("film.contrast", self.contrast, 0.5, 2.0)?;
+        in_range("film.saturation", self.saturation, 0.0, 2.0)?;
+        in_range("film.lift", self.lift, -0.5, 0.5)?;
         Ok(())
     }
 }
@@ -322,6 +470,90 @@ impl SunAngle {
 mod tests {
     use super::*;
     use crate::arch::Projection;
+
+    #[test]
+    fn look_lens_and_film_default_neutral_and_skip_serialization() {
+        let l = Look::default();
+        assert!(l.lens.is_neutral() && l.film.is_neutral());
+        assert_eq!(l.lens.compression, 0.7);
+        let v = serde_json::to_value(&l).unwrap();
+        assert!(v.get("lens").is_none() && v.get("film").is_none());
+        assert!(v["sun"].get("disc").is_none());
+        let mut m = Look::default();
+        m.lens.shift = 0.25;
+        m.film = Film::photoreal();
+        m.sun.disc = 0.53;
+        let v = serde_json::to_value(&m).unwrap();
+        assert_eq!(v["lens"]["shift"], 0.25);
+        assert_eq!(v["film"]["bloomThreshold"], 1.0);
+        assert_eq!(v["sun"]["disc"], 0.53);
+        assert_eq!(serde_json::from_value::<Look>(v).unwrap(), m);
+        let mut n = Lens::default();
+        n.compression = 0.2;
+        n.focus = Some(3.0);
+        assert!(n.is_neutral());
+        n.projection = LensProjection::Panini;
+        assert!(!n.is_neutral());
+        assert_eq!(serde_json::to_value(LensProjection::Panini).unwrap(), "panini");
+        assert_eq!(serde_json::to_value(Technique::Photoreal).unwrap(), "photoreal");
+    }
+
+    #[test]
+    fn film_photoreal_has_the_brief_defaults() {
+        let f = Film::photoreal();
+        assert_eq!((f.bloom, f.bloom_threshold, f.vignette, f.white_balance), (0.1, 1.0, 0.15, None));
+        assert_eq!((f.contrast, f.saturation, f.lift), (1.05, 1.0, 0.0));
+        assert!(!f.is_neutral());
+        assert!(f.validate().is_ok());
+    }
+
+    #[test]
+    fn lens_and_film_validate_ranges() {
+        let bad_lens = |f: fn(&mut Lens)| {
+            let mut l = Lens::default();
+            f(&mut l);
+            l.validate().is_err()
+        };
+        assert!(bad_lens(|l| l.compression = 1.1));
+        assert!(bad_lens(|l| l.shift = -1.5));
+        assert!(bad_lens(|l| l.aperture = Some(0.4)));
+        assert!(bad_lens(|l| l.aperture = Some(65.0)));
+        assert!(bad_lens(|l| l.focus = Some(0.0)));
+        assert!(bad_lens(|l| l.focus = Some(10001.0)));
+        assert!(bad_lens(|l| l.shift = f64::NAN));
+        assert!(Lens { aperture: Some(64.0), focus: Some(10000.0), shift: 1.0, ..Lens::default() }.validate().is_ok());
+        let bad_film = |f: fn(&mut Film)| {
+            let mut l = Film::default();
+            f(&mut l);
+            l.validate().is_err()
+        };
+        assert!(bad_film(|f| f.bloom = 1.1));
+        assert!(bad_film(|f| f.bloom_threshold = 0.0));
+        assert!(bad_film(|f| f.bloom_threshold = 1001.0));
+        assert!(bad_film(|f| f.vignette = -0.1));
+        assert!(bad_film(|f| f.white_balance = Some(1000.0)));
+        assert!(bad_film(|f| f.white_balance = Some(20000.0)));
+        assert!(bad_film(|f| f.contrast = 0.4));
+        assert!(bad_film(|f| f.saturation = 2.1));
+        assert!(bad_film(|f| f.lift = 0.6));
+        let mut look = Look::default();
+        look.sun.disc = 11.0;
+        assert!(look.validate().is_err());
+        look.sun.disc = 10.0;
+        look.film.lift = 0.9;
+        assert!(look.validate().is_err());
+    }
+
+    #[test]
+    fn old_look_json_still_deserializes() {
+        let old = r#"{"technique":"path","sun":{"on":true,"intensity":50000.0,"shadows":false,"angle":null},"cutaway":true}"#;
+        let l: Look = serde_json::from_str(old).unwrap();
+        assert_eq!(l.technique, Technique::Path);
+        assert!(l.lens.is_neutral() && l.film.is_neutral() && l.sun.disc == 0.0);
+        assert!(l.cutaway && l.sun.intensity == 50000.0);
+        let back = serde_json::to_value(&l).unwrap();
+        assert!(back.get("lens").is_none() && back.get("film").is_none());
+    }
 
     #[test]
     fn defaults_match_the_brief() {
