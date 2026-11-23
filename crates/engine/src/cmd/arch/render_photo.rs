@@ -183,7 +183,12 @@ pub(crate) fn resolve_focus_pick(
     if !(pixel[0].is_finite() && pixel[1].is_finite()) || pixel[0] < 0.0 || pixel[1] < 0.0 || pixel[0] > w || pixel[1] > h {
         return Err(err(format!("`focus.pick` must be a pixel inside the {}x{} image", size.0, size.1)));
     }
-    let lens = LensView { panini: look.lens.projection == LensProjection::Panini, compression: look.lens.compression, shift: look.lens.shift };
+    let lens = LensView {
+        panini: look.lens.projection == LensProjection::Panini,
+        compression: look.lens.compression,
+        shift: look.lens.shift,
+        ..Default::default()
+    };
     let (origin, dir) =
         ray_at_lens(camera, &lens, size, [pixel[0] as f32, pixel[1] as f32]).ok_or_else(|| err("`focus.pick` has no ray through that pixel"))?;
     let scene = match calibration {
@@ -378,6 +383,7 @@ pub(crate) fn parse_calibrate(params: &Value) -> Result<Option<Calibration>, Eng
     let c = Calibration {
         objects: objs.iter().map(parse_object).collect::<Result<_, _>>()?,
         lights: lights.iter().map(parse_light).collect::<Result<_, _>>()?,
+        ..Default::default()
     };
     calibrate::validate(&c).map_err(|e| err(format!("`calibrate`: {e}")))?;
     Ok(Some(c))
