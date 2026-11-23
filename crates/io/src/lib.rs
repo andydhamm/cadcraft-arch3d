@@ -23,6 +23,7 @@ mod dxf_table;
 mod dxf_write;
 mod dxf_xref;
 pub mod glb;
+mod glb_ext;
 mod glb_lights;
 pub mod gltf_read;
 pub mod ifc;
