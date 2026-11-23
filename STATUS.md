@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-23 16:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 16:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 0 of 1 segments merged**
 
@@ -32,20 +32,21 @@ Updated 2026-11-23 16:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | pending | — | 2.5 h so far · expected done Nov 23 16:18–Nov 27 14:17 UTC |
+| 22 | Photoreal stills | pending | — | 2.7 h so far · expected done Nov 23 16:33–Nov 27 14:32 UTC |
 
 ## Phase 22 segments
 
-1 gate
+1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-0ebb256d3` | merge upstream upstream/main up to 0ebb256d3 (35 commits) | gate | claude-sonnet-b |
+| `upstream-sync-0ebb256d3` | merge upstream upstream/main up to 0ebb256d3 (35 commits) | merging | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 23 16:00 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | bonsai-a |
 | Nov 23 15:33 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | mai-flash-b |
 | Nov 23 14:57 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | darwin-ws3 |
 | Nov 23 14:23 | `harden-p17-exports-rebuild` | merged | 11,289 pass | tturbo-mac |
@@ -57,18 +58,17 @@ Updated 2026-11-23 16:00 UTC. This page and the card in the README are regenerat
 | Nov 19 09:40 | `harden-p19-normal-maps-1` | merged | 11,247 pass | tturbo-mac |
 | Nov 19 06:31 | `harden-p18-scene-plumbing-3` | merged | 11,242 pass | tturbo-mac |
 | Nov 19 03:43 | `harden-p19-foundation-4` | merged | 11,231 pass | tturbo-mac |
-| Nov 19 02:55 | `harden-p18-molding-kit-2` | merged | 11,222 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 1384 |
+| bonsai-a | bonsai2-27b | gate | 1384 |
 | bonsai-b | bonsai2-27b | idle | 1300 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 163 |
-| claude-sonnet-b | sonnet | gate | 168 |
+| claude-sonnet-b | sonnet | idle | 169 |
 | claude-sonnet-c | sonnet | idle | 104 |
 | claude-sonnet-d | sonnet | idle | 99 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1292 |
@@ -76,5 +76,5 @@ Updated 2026-11-23 16:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 80 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1185 |
+| tturbo-mac | tturbo-ultraheretic | idle | 1186 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
