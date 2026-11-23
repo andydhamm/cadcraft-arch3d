@@ -202,7 +202,13 @@ pub fn segment_area(chord: f64, sagitta: f64) -> f64 {
     }
     let s = sagitta.abs();
     let r = (chord * chord / 4.0 + s * s) / (2.0 * s);
-    let a = r * r * ((r - s) / r).clamp(-1.0, 1.0).acos() - (r - s) * (2.0 * r * s - s * s).max(0.0).sqrt();
+    let x = (r - s) / r;
+    let a = if x == 1.0 {
+        // s is so small relative to r that (r-s)/r rounds to 1.0; use the shallow-arc approximation.
+        2.0 / 3.0 * chord * s
+    } else {
+        r * r * x.clamp(-1.0, 1.0).acos() - (r - s) * (2.0 * r * s - s * s).max(0.0).sqrt()
+    };
     if sagitta < 0.0 { -a } else { a }
 }
 
