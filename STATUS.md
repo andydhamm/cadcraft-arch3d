@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-23 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 18:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 1 of 2 segments merged**
+**Phase 22 of 22: Photoreal stills — 1 of 35 segments merged · 0 of 15 acceptance checks**
 
 11,377 workspace tests passing at the last merge · 1321 segments merged in all · 0 of 15 seats working
 
@@ -32,15 +32,19 @@ Updated 2026-11-23 18:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | planning | — | 0.5 h so far · expected done Nov 23 18:18–Nov 27 16:17 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 0.8 h so far · expected done Nov 24 04:48–Dec 04 09:05 UTC |
 
 ## Phase 22 segments
 
-1 merged, 1 gate
+29 queued, 4 gate, 1 merged, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | gate | tturbo-mac2 |
+| `p22-doc-look` | Look: lens, film, sun disc, technique photoreal; the rung table | gate | claude-sonnet-a |
+| `p22-arch3d-lens` | arch3d::lens: Panini, shift and thin-lens math shared by every renderer and by picking | merging | claude-sonnet-d |
+| `p22-arch3d-material-ext` | MaterialExt: the optional PBR fields and the table that gives library materials their values | gate | claude-sonnet-c |
+| `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | gate | mai-flash-b |
 
 ## Recent merges
 
@@ -63,18 +67,18 @@ Updated 2026-11-23 18:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1385 |
-| bonsai-b | bonsai2-27b | agent | 1301 |
+| bonsai-a | bonsai2-27b | gate | 1385 |
+| bonsai-b | bonsai2-27b | gate | 1301 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | idle | 163 |
+| claude-sonnet-a | sonnet | gate | 163 |
 | claude-sonnet-b | sonnet | idle | 169 |
-| claude-sonnet-c | sonnet | idle | 104 |
-| claude-sonnet-d | sonnet | idle | 99 |
+| claude-sonnet-c | sonnet | gate | 104 |
+| claude-sonnet-d | sonnet | idle | 100 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1292 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
-| mai-flash-b | mai-code-1.1-flash | idle | 80 |
+| mai-flash-b | mai-code-1.1-flash | gate | 80 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1189 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 701 |
