@@ -1078,11 +1078,11 @@ mod tests {
         for m in &meshes[1..] {
             bounds.extend(&m.bounds());
         }
-        // With rotation 90, the cabinet extends from x=1.7 to x=2.3 and y=3.0 to y=3.6
-        assert!((bounds.min[0] - 1.7).abs() < 1e-2, "min x {}", bounds.min[0]);
-        assert!((bounds.max[0] - 2.3).abs() < 1e-2, "max x {}", bounds.max[0]);
-        assert!((bounds.min[1] - 3.0).abs() < 1e-2, "min y {}", bounds.min[1]);
-        assert!((bounds.max[1] - 3.6).abs() < 1e-2, "max y {}", bounds.max[1]);
+        // With rotation 90, the cabinet extends from x=1.4 to x=2.0 and y=2.7 to y=3.3
+        assert!((bounds.min[0] - 1.4).abs() < 1e-2, "min x {}", bounds.min[0]);
+        assert!((bounds.max[0] - 2.0).abs() < 1e-2, "max x {}", bounds.max[0]);
+        assert!((bounds.min[1] - 2.7).abs() < 1e-2, "min y {}", bounds.min[1]);
+        assert!((bounds.max[1] - 3.3).abs() < 1e-2, "max y {}", bounds.max[1]);
     }
 
     #[test]

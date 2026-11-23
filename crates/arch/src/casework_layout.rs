@@ -258,7 +258,11 @@ fn lines(model: &ArchModel, ok: impl Fn(&Cabinet, &Cabinet) -> bool, pre: impl F
 /// Counter runs: touching (or bridged) in-line base cabinets with a matching counter.
 pub fn counter_runs(model: &ArchModel) -> Vec<CounterRun> {
     let top = |c: &Cabinet| c.elevation + c.height;
-    let ok = |a: &Cabinet, b: &Cabinet| (top(a) - top(b)).abs() <= EPS && (a.counter_thickness - b.counter_thickness).abs() <= EPS;
+    let ok = |a: &Cabinet, b: &Cabinet| {
+        (top(a) - top(b)).abs() <= EPS
+            && (a.counter_thickness - b.counter_thickness).abs() <= EPS
+            && (a.counter_overhang - b.counter_overhang).abs() <= EPS
+    };
     let mut runs = Vec::new();
     let claimed = crate::countertop::claimed_cabinets(model);
     for line in lines(model, ok, |c| c.counter && !claimed.contains(&c.id)) {

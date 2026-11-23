@@ -737,6 +737,7 @@ mod tests {
     #[test]
     fn corner_info_different_levels() {
         let mut m = runs(0.6, None);
+        m.cabinets[3].level = 1;
         m.cabinets[4].level = 1;
         assert!(corner_info(&m, &m.cabinets[0]).is_none(), "different levels should not form a corner");
     }

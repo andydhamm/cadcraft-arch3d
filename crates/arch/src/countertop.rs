@@ -202,7 +202,12 @@ pub fn segment_area(chord: f64, sagitta: f64) -> f64 {
     }
     let s = sagitta.abs();
     let r = (chord * chord / 4.0 + s * s) / (2.0 * s);
-    let a = r * r * ((r - s) / r).clamp(-1.0, 1.0).acos() - (r - s) * (2.0 * r * s - s * s).max(0.0).sqrt();
+    let a = if s / r < 0.1 {
+        // Numerically stable approximation for shallow arcs: A ≈ (2/3)·chord·s + (2/45)·s³/chord
+        (2.0 / 3.0) * chord * s + (2.0 / 45.0) * s * s * s / chord
+    } else {
+        r * r * ((r - s) / r).clamp(-1.0, 1.0).acos() - (r - s) * (2.0 * r * s - s * s).max(0.0).sqrt()
+    };
     if sagitta < 0.0 { -a } else { a }
 }
 
@@ -458,11 +463,19 @@ mod tests {
 
     #[test]
     fn counter_cabinets_under_non_convex_polygon() {
-        // L-shaped polygon: cabinet in the notch should not be included
+        // Rectangle with a notch at the top: cabinet in the notch should not be included
         let mut m = model(vec![cab(0, 0.0, CabinetKind::Base), cab(1, 0.6, CabinetKind::Base), cab(2, 0.0, CabinetKind::Base)]);
         m.cabinets[2].position = Vec2::new(0.3, 0.3); // In the notch
-        let poly =
-            vec![Vec2::new(-0.5, -0.5), Vec2::new(1.5, -0.5), Vec2::new(1.5, 0.0), Vec2::new(0.5, 0.0), Vec2::new(0.5, 0.5), Vec2::new(-0.5, 0.5)];
+        let poly = vec![
+            Vec2::new(-0.5, -0.5),
+            Vec2::new(1.5, -0.5),
+            Vec2::new(1.5, 0.5),
+            Vec2::new(0.6, 0.5),
+            Vec2::new(0.6, 0.4),
+            Vec2::new(0.0, 0.4),
+            Vec2::new(0.0, 0.5),
+            Vec2::new(-0.5, 0.5),
+        ];
         let ids = counter_cabinets_under(&m, 0, &poly);
         assert_eq!(ids.len(), 2, "cabinet in the notch should be excluded");
         assert!(ids.contains(&ArchId(0)));
