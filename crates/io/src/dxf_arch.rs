@@ -2885,7 +2885,7 @@ mod tests {
     fn finishes_survive_joined_wall_layout() {
         let mut d = Drawing::new_metric();
         d.arch.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2) });
-        d.arch.push_wall(Wall { finish: Some(Finish::Stone), ..Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), 0.2) });
+        d.arch.push_wall(Wall { finish: Some(Finish::Tile), ..Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), 0.2) });
         d.arch.push_wall(Wall { finish: Some(Finish::Wood), ..Wall::new(Vec2::new(5.0, 0.0), Vec2::new(5.0, 4.0), 0.2) });
 
         let text = write_dxf(&d);
@@ -2893,7 +2893,7 @@ mod tests {
 
         assert_eq!(back.arch.walls.len(), 3);
         assert_eq!(back.arch.walls[0].finish, Some(Finish::Brick), "wall 0 finish changed");
-        assert_eq!(back.arch.walls[1].finish, Some(Finish::Stone), "wall 1 finish changed");
+        assert_eq!(back.arch.walls[1].finish, Some(Finish::Tile), "wall 1 finish changed");
         assert_eq!(back.arch.walls[2].finish, Some(Finish::Wood), "wall 2 finish changed");
     }
 }
