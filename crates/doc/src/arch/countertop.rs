@@ -263,4 +263,72 @@ mod tests {
         assert_eq!(countertop_label(ArchId(2)), "ct2");
         assert_eq!(backsplash_label(ArchId(2)), "bs2");
     }
+
+    #[test]
+    fn edge_profile_parse_rejects_empty_and_whitespace() {
+        assert_eq!(EdgeProfile::parse(""), None);
+        assert_eq!(EdgeProfile::parse("  "), None);
+        assert_eq!(EdgeProfile::parse("square "), None);
+        assert_eq!(EdgeProfile::parse(" Square"), None);
+        assert_eq!(EdgeProfile::parse("SQUARE"), None);
+        assert_eq!(EdgeProfile::parse("eased "), None);
+    }
+
+    #[test]
+    fn countertop_edge_returns_default_for_out_of_range() {
+        let mut c = Countertop::default();
+        c.edges.push(CounterEdge { sagitta: 0.05, profile: EdgeProfile::Bevel, waterfall: false });
+        assert_eq!(c.edge(0).profile, EdgeProfile::Bevel);
+        assert_eq!(c.edge(0).sagitta, 0.05);
+        // Out of range returns default
+        assert_eq!(c.edge(1), CounterEdge::default());
+        assert_eq!(c.edge(100), CounterEdge::default());
+    }
+
+    #[test]
+    fn backsplash_with_counter_and_wall_round_trips() {
+        let mut b = Backsplash::default();
+        b.id = ArchId(3);
+        b.level = 1;
+        b.counter = Some(CounterRef::Countertop(ArchId(2)));
+        b.wall = Some(ArchId(5));
+        b.height = 0.6;
+        b.to_ceiling = true;
+        b.thickness = 0.015;
+        b.layer = "A-BSP".into();
+        let json = serde_json::to_string(&b).unwrap();
+        let back: Backsplash = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, b);
+        assert!(json.contains("\"countertop\":2"));
+        assert!(json.contains("\"wall\":5"));
+        assert!(json.contains("\"toCeiling\":true"));
+    }
+
+    #[test]
+    fn countertop_with_edges_serde_round_trip() {
+        let mut c = Countertop::default();
+        c.id = ArchId(4);
+        c.polygon = vec![Vec2::new(0.0, 0.0), Vec2::new(2.0, 0.0), Vec2::new(2.0, 1.0), Vec2::new(0.0, 1.0)];
+        c.edges = vec![
+            CounterEdge { sagitta: 0.0, profile: EdgeProfile::Square, waterfall: false },
+            CounterEdge { sagitta: 0.1, profile: EdgeProfile::Eased, waterfall: true },
+            CounterEdge { sagitta: 0.0, profile: EdgeProfile::Bevel, waterfall: false },
+            CounterEdge { sagitta: 0.0, profile: EdgeProfile::Bullnose, waterfall: false },
+        ];
+        c.cabinets = vec![ArchId(1), ArchId(2)];
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Countertop = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, c);
+        assert_eq!(back.edges.len(), 4);
+        assert_eq!(back.cabinets.len(), 2);
+    }
+
+    #[test]
+    fn counter_ref_cabinet_default_round_trips() {
+        let r = CounterRef::Cabinet(ArchId(7));
+        let j = serde_json::to_string(&r).unwrap();
+        assert_eq!(serde_json::from_str::<CounterRef>(&j).unwrap(), r);
+        assert!(j.contains("cabinet"));
+        assert!(j.contains("7"));
+    }
 }
