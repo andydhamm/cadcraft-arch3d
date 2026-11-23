@@ -582,6 +582,35 @@ mod tests {
     }
 
     #[test]
+    fn row_heights_all_fixed_exact() {
+        let c = base();
+        let b = face_box(&c);
+        let h = b.v1 - b.v0;
+        let face = FaceLayout {
+            rows: vec![row(FaceKind::Door, Some(h / 2.0), 0), row(FaceKind::Drawer, Some(h / 2.0 - FACE_REVEAL), 0)],
+            ..FaceLayout::default()
+        };
+        let heights = row_heights(&c, &face);
+        assert!(heights.is_some(), "all fixed rows summing exactly should be valid");
+    }
+
+    #[test]
+    fn face_fronts_appliance_row() {
+        let mut c = base();
+        c.width = 0.762;
+        c.height = 2.0;
+        c.fronts = Fronts::Doors;
+        c.doors = 2;
+        let face = FaceLayout { rows: vec![row(FaceKind::Appliance, Some(0.737), 1), row(FaceKind::Door, None, 0)], ..FaceLayout::default() };
+        let m = ArchModel::default();
+        let fronts = face_fronts(&m, &c, &face);
+        assert_eq!(fronts.len(), 3, "one appliance + two doors");
+        assert_eq!(fronts[0].kind, FrontKind::Appliance);
+        assert_eq!(fronts[1].kind, FrontKind::Door);
+        assert_eq!(fronts[2].kind, FrontKind::Door);
+    }
+
+    #[test]
     fn face_fronts_pull_without_symbol() {
         let mut c = base();
         c.pull = Some("own:bar".to_string());

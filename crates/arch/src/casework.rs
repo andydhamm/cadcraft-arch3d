@@ -577,6 +577,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_cabinet_width_boundaries() {
+        let mut c = cabinet_defaults(CabinetKind::Base);
+        c.width = 0.2;
+        assert!(validate_cabinet(&c).is_ok(), "width 0.2 should be valid");
+        c.width = 1.5;
+        assert!(validate_cabinet(&c).is_ok(), "width 1.5 should be valid");
+        c.width = 0.199;
+        assert!(validate_cabinet(&c).is_err(), "width 0.199 should be invalid");
+        c.width = 1.501;
+        assert!(validate_cabinet(&c).is_err(), "width 1.501 should be invalid");
+    }
+
+    #[test]
+    fn validate_cabinet_shelves_boundary() {
+        let mut c = cabinet_defaults(CabinetKind::Wall);
+        c.shelves = Some(MAX_SHELVES);
+        assert!(validate_cabinet(&c).is_ok(), "shelves at MAX_SHELVES should be valid");
+        c.shelves = Some(MAX_SHELVES + 1);
+        assert!(validate_cabinet(&c).is_err(), "shelves above MAX_SHELVES should be invalid");
+    }
+
+    #[test]
     fn on_wall_with_different_base_level() {
         let mut m = ArchModel::default();
         m.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });

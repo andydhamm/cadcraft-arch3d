@@ -258,7 +258,11 @@ fn lines(model: &ArchModel, ok: impl Fn(&Cabinet, &Cabinet) -> bool, pre: impl F
 /// Counter runs: touching (or bridged) in-line base cabinets with a matching counter.
 pub fn counter_runs(model: &ArchModel) -> Vec<CounterRun> {
     let top = |c: &Cabinet| c.elevation + c.height;
-    let ok = |a: &Cabinet, b: &Cabinet| (top(a) - top(b)).abs() <= EPS && (a.counter_thickness - b.counter_thickness).abs() <= EPS;
+    let ok = |a: &Cabinet, b: &Cabinet| {
+        (top(a) - top(b)).abs() <= EPS
+            && (a.counter_thickness - b.counter_thickness).abs() <= EPS
+            && (a.counter_overhang - b.counter_overhang).abs() <= EPS
+    };
     let mut runs = Vec::new();
     let claimed = crate::countertop::claimed_cabinets(model);
     for line in lines(model, ok, |c| c.counter && !claimed.contains(&c.id)) {
@@ -653,6 +657,26 @@ mod tests {
         let m = model(vec![c0, c1]);
         let runs = counter_runs(&m);
         assert_eq!(runs.len(), 2);
+    }
+
+    #[test]
+    fn counter_runs_do_not_join_different_overhangs() {
+        let mut c0 = cab(0, 0.0, Fronts::Doors);
+        let mut c1 = cab(1, 0.6, Fronts::Doors);
+        c1.counter_overhang = 0.05;
+        let m = model(vec![c0, c1]);
+        let runs = counter_runs(&m);
+        assert_eq!(runs.len(), 2, "different overhangs should split runs");
+    }
+
+    #[test]
+    fn counter_runs_do_not_join_different_tops() {
+        let mut c0 = cab(0, 0.0, Fronts::Doors);
+        let mut c1 = cab(1, 0.6, Fronts::Doors);
+        c1.height = 0.9;
+        let m = model(vec![c0, c1]);
+        let runs = counter_runs(&m);
+        assert_eq!(runs.len(), 2, "different tops should split runs");
     }
 
     #[test]
