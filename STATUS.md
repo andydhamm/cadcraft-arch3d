@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-23 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 3 of 35 segments merged · 0 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 4 of 35 segments merged · 0 of 15 acceptance checks**
 
-11,404 workspace tests passing at the last merge · 1324 segments merged in all · 0 of 15 seats working
+11,410 workspace tests passing at the last merge · 1325 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,16 +32,15 @@ Updated 2026-11-23 22:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 4.8 h so far · expected done Nov 25 18:06–Dec 02 17:40 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 5.0 h so far · expected done Nov 25 09:14–Nov 29 02:59 UTC |
 
 ## Phase 22 segments
 
-25 queued, 6 merging, 3 merged, 1 working
+25 queued, 5 merging, 4 merged, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | merging | mai-flash-esc |
-| `p22-arch3d-lens` | arch3d::lens: Panini, shift and thin-lens math shared by every renderer and by picking | merging | claude-sonnet-d |
 | `p22-arch3d-calibrate` | Calibration scenes: spheres, boxes and point lights that replace the model for a render | merging | claude-sonnet-c |
 | `p22-r3d-types` | render3d contract: LensOptions, Lighting lens/film/sun disc, PathOptions and PathStats photo fields, the stub modules | merging | claude-sonnet-d |
 | `p22-engine-look-keys` | Engine: the lens, film and sun-disc look keys on look, camera, render and pick3d | merging | claude-sonnet-c |
@@ -52,6 +51,7 @@ Updated 2026-11-23 22:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 23 22:15 | `p22-arch3d-lens` | merged | 11,410 pass | claude-sonnet-d |
 | Nov 23 21:58 | `p22-arch3d-material-ext` | merged | 11,404 pass | claude-sonnet-c |
 | Nov 23 21:24 | `p22-doc-look` | merged | 11,399 pass | claude-sonnet-a |
 | Nov 23 19:14 | `harden-p18-observables-1` | merged | 11,394 pass | tturbo-mac |
@@ -63,14 +63,13 @@ Updated 2026-11-23 22:15 UTC. This page and the card in the README are regenerat
 | Nov 23 14:23 | `harden-p17-exports-rebuild` | merged | 11,289 pass | tturbo-mac |
 | Nov 23 12:57 | `harden-p18-observables-2` | refused | 11,296 pass | tturbo-mac |
 | Nov 23 01:34 | `harden-p18-molding-kit-1` | merged | 11,282 pass | tturbo-mac |
-| Nov 22 17:13 | `harden-p18-observables-3` | merged | 11,263 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1395 |
-| bonsai-b | bonsai2-27b | agent | 1305 |
+| bonsai-a | bonsai2-27b | agent | 1397 |
+| bonsai-b | bonsai2-27b | agent | 1306 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 164 |
