@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-23 15:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 15:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 0 of 1 segments merged**
 
@@ -32,7 +32,7 @@ Updated 2026-11-23 15:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | pending | — | 1.7 h so far · expected done Nov 23 15:33–Nov 27 13:32 UTC |
+| 22 | Photoreal stills | pending | — | 2.0 h so far · expected done Nov 23 15:48–Nov 27 13:47 UTC |
 
 ## Phase 22 segments
 
@@ -76,5 +76,5 @@ Updated 2026-11-23 15:15 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 80 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1183 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1184 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
