@@ -1675,3 +1675,8 @@ menu	View	视图
 	This drawing has no blocks.	此图形中没有块。
 	This library has no drawings or blocks.	此库中没有图形或块。
 	Only the first {n} are shown.	仅显示前 {n} 个。
+	Dimension Style	标注样式
+	Dimension Style Overrides	标注样式替代
+	Remove Style Overrides	删除样式替代
+	Save as New Style...	另存为新样式...
+	Describe Properties	描述特性
