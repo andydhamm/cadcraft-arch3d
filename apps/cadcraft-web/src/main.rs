@@ -128,6 +128,8 @@ mod web {
             groups: cadcraft_io::entity_groups,
             entity: cadcraft_io::entity_from_groups,
         });
+        // ... and non-graphic objects (tables, dictionaries, layouts) as DXF records.
+        cadcraft_engine::cmd::file::set_object_records(cadcraft_io::object_records);
         // The library's file readers (the sample set is embedded).
         cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
             read_glb: cadcraft_io::gltf_read::read_glb,

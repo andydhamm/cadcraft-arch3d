@@ -236,19 +236,28 @@ impl Drawing {
         }
     }
 
-    /// Allocate a fresh handle.
-    ///
-    /// Always returns a handle below [`ARCH_HANDLE_BASE`]; that range is reserved
-    /// for synthetic arch-proxy handles and must never appear in the entity store.
+    /// Allocate a fresh handle. It skips the handles the drawing's file gave the objects CADCraft
+    /// writes itself ([`foreign::Foreign::handles`]): AutoLISP names those objects by them, and a
+    /// file CADCraft wrote numbers them above its `$HANDSEED` (#495).
     pub fn new_handle(&mut self) -> Handle {
-        // Guard: arch-proxy range [ARCH_HANDLE_BASE, u64::MAX] is reserved.
-        // This branch is unreachable in normal use (18+ quadrillion handles needed).
-        if self.handseed >= ARCH_HANDLE_BASE {
-            self.handseed = ARCH_HANDLE_BASE.saturating_sub(1);
-        }
-        let h = Handle(self.handseed);
-        self.handseed = self.handseed.saturating_add(1);
+        let h = self.next_handle();
+        self.handseed = h.0.saturating_add(1);
         h
+    }
+    /// The handle [`Drawing::new_handle`] gives out next (AutoCAD's `HANDSEED`), without taking it.
+    pub fn next_handle(&self) -> Handle {
+        let mut h = self.handseed;
+        if h >= ARCH_HANDLE_BASE {
+            h = ARCH_HANDLE_BASE.saturating_sub(1);
+            while h > 0 && self.foreign.handles.contains_key(&Handle(h)) {
+                h = h.saturating_sub(1);
+            }
+            return Handle(h);
+        }
+        while self.foreign.handles.contains_key(&Handle(h)) && h < u64::MAX {
+            h = h.saturating_add(1);
+        }
+        Handle(h)
     }
     /// Make sure future handles don't collide with `h` (after loading a file).
     ///
@@ -260,7 +269,7 @@ impl Drawing {
             return;
         }
         if h.0 >= self.handseed {
-            self.handseed = h.0.saturating_add(1);
+            self.handseed = h.0.saturating_add(1).min(ARCH_HANDLE_BASE);
         }
     }
 
