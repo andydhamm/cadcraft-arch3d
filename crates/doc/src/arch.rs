@@ -5290,4 +5290,52 @@ mod tests {
         m.prune_hdr_images();
         assert!(m.hdr_images.is_empty());
     }
+
+    #[test]
+    fn phase18_collections_round_trip() {
+        let mut m = ArchModel::default();
+        let ct_id = m.push_countertop(Countertop::default());
+        let bs_id = m.push_backsplash(Backsplash::default());
+        let ml_id = m.push_molding_line(MoldingLine::default());
+        assert_eq!(ct_id, ArchId(0));
+        assert_eq!(bs_id, ArchId(0));
+        assert_eq!(ml_id, ArchId(0));
+        let json = serde_json::to_string(&m).unwrap();
+        let back: ArchModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.countertops.len(), 1);
+        assert_eq!(back.backsplashes.len(), 1);
+        assert_eq!(back.molding_lines.len(), 1);
+        assert_eq!(back.next_countertop_id, 1);
+        assert_eq!(back.next_backsplash_id, 1);
+        assert_eq!(back.next_molding_line_id, 1);
+    }
+
+    #[test]
+    fn phase18_index_methods_find_and_miss() {
+        let mut m = ArchModel::default();
+        m.push_countertop(Countertop::default());
+        m.push_countertop(Countertop::default());
+        m.push_backsplash(Backsplash::default());
+        m.push_molding_line(MoldingLine::default());
+        assert_eq!(m.countertop_index(ArchId(0)), Some(0));
+        assert_eq!(m.countertop_index(ArchId(1)), Some(1));
+        assert_eq!(m.countertop_index(ArchId(99)), None);
+        assert_eq!(m.backsplash_index(ArchId(0)), Some(0));
+        assert_eq!(m.molding_line_index(ArchId(0)), Some(0));
+        assert!(m.countertop(ArchId(0)).is_some());
+        assert!(m.backsplash(ArchId(0)).is_some());
+        assert!(m.molding_line(ArchId(0)).is_some());
+        assert!(m.countertop(ArchId(99)).is_none());
+        assert!(m.backsplash(ArchId(99)).is_none());
+        assert!(m.molding_line(ArchId(99)).is_none());
+    }
+
+    #[test]
+    fn arch_kind_phase18_sorting() {
+        // Phase 18 kinds sort after Foundation and before the next phase
+        assert!(ArchKind::Foundation < ArchKind::Countertop);
+        assert!(ArchKind::Countertop < ArchKind::Backsplash);
+        assert!(ArchKind::Backsplash < ArchKind::MoldingLine);
+        assert!(ArchKind::MoldingLine < ArchKind::Cabinet);
+    }
 }
