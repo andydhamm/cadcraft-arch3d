@@ -18,6 +18,8 @@ use cadcraft_doc::Drawing;
 use cadcraft_doc::arch::Finish;
 use serde_json::{Value, json};
 
+use super::glb_ext;
+
 /// Build a GLB from the 3D scene extracted from the drawing's arch model.
 pub fn write_drawing(drawing: &Drawing) -> Vec<u8> {
     write(&Scene3d::build(&drawing.arch))
@@ -480,7 +482,7 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
             }
             let (ext_map, ext_used) = glb_ext::material_extensions(&cadcraft_arch3d::material_ext::resolve(scene, &m.material));
             if !ext_map.is_empty() {
-                mat.insert("extensions".to_string(), Value::Object(ext_map));
+                mat["extensions"] = Value::Object(ext_map);
             }
             for name in ext_used {
                 ext_names.push(name.to_string());

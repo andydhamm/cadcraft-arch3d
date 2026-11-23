@@ -27,8 +27,8 @@ pub(crate) fn material_extensions(ext: &MaterialExt) -> (Map<String, Value>, Vec
         map.insert(
             "KHR_materials_clearcoat".to_string(),
             json!({
-                "clearcoatFactor": r6(ext.clearcoat),
-                "clearcoatRoughnessFactor": r6(ext.clearcoat_roughness),
+                "clearcoatFactor": r6(ext.clearcoat.into()),
+                "clearcoatRoughnessFactor": r6(ext.clearcoat_roughness.into()),
             }),
         );
     }
@@ -38,23 +38,23 @@ pub(crate) fn material_extensions(ext: &MaterialExt) -> (Map<String, Value>, Vec
         map.insert(
             "KHR_materials_anisotropy".to_string(),
             json!({
-                "anisotropyStrength": r6(ext.anisotropy),
-                "anisotropyRotation": r6(ext.anisotropy_rotation),
+                "anisotropyStrength": r6(ext.anisotropy.into()),
+                "anisotropyRotation": r6(ext.anisotropy_rotation.into()),
             }),
         );
     }
 
-    if ext.sheen_color[0] > 0.0 || ext.sheen_color[1] > 0.0 || ext.sheen_color[2] > 0.0 {
+    if ext.sheen[0] > 0.0 || ext.sheen[1] > 0.0 || ext.sheen[2] > 0.0 {
         used.push("KHR_materials_sheen");
         map.insert(
             "KHR_materials_sheen".to_string(),
             json!({
                 "sheenColorFactor": [
-                    r6(ext.sheen_color[0]),
-                    r6(ext.sheen_color[1]),
-                    r6(ext.sheen_color[2]),
+                    r6(ext.sheen[0].into()),
+                    r6(ext.sheen[1].into()),
+                    r6(ext.sheen[2].into()),
                 ],
-                "sheenRoughnessFactor": r6(ext.sheen_roughness),
+                "sheenRoughnessFactor": r6(ext.sheen_roughness.into()),
             }),
         );
     }
@@ -64,7 +64,7 @@ pub(crate) fn material_extensions(ext: &MaterialExt) -> (Map<String, Value>, Vec
         map.insert(
             "KHR_materials_transmission".to_string(),
             json!({
-                "transmissionFactor": r6(ext.transmission),
+                "transmissionFactor": r6(ext.transmission.into()),
             }),
         );
         if !ext.thin && ext.thickness > 0.0 {
@@ -72,7 +72,7 @@ pub(crate) fn material_extensions(ext: &MaterialExt) -> (Map<String, Value>, Vec
             map.insert(
                 "KHR_materials_volume".to_string(),
                 json!({
-                    "thicknessFactor": r6(ext.thickness),
+                    "thicknessFactor": r6(ext.thickness.into()),
                 }),
             );
         }
