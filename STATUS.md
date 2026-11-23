@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-23 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 21:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 2 of 35 segments merged · 0 of 15 acceptance checks**
 
-11,399 workspace tests passing at the last merge · 1323 segments merged in all · 0 of 15 seats working
+11,399 workspace tests passing at the last merge · 1323 segments merged in all · 0 of 15 seats working · PAUSED
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-23 21:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 4.0 h so far · expected done Nov 26 02:54–Dec 15 13:05 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 4.3 h so far · expected done Nov 26 06:28–Dec 16 21:44 UTC |
 
 ## Phase 22 segments
 
@@ -68,18 +68,18 @@ Updated 2026-11-23 21:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1392 |
-| bonsai-b | bonsai2-27b | agent | 1303 |
+| bonsai-a | bonsai2-27b | gate | 1393 |
+| bonsai-b | bonsai2-27b | gate | 1304 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 164 |
 | claude-sonnet-b | sonnet | idle | 169 |
 | claude-sonnet-c | sonnet | agent | 105 |
-| claude-sonnet-d | sonnet | gate | 100 |
+| claude-sonnet-d | sonnet | gate | 101 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 81 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 176 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1194 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1195 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 703 |
