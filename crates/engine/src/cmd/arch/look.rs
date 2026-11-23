@@ -141,7 +141,8 @@ fn parse_technique(cmd: &str, v: &Value) -> Result<Technique, EngineError> {
         Some("path") => Ok(Technique::Path),
         Some("clay") => Ok(Technique::Clay),
         Some("technical") => Ok(Technique::Technical),
-        _ => Err(parse_err(cmd, "technique", v, "standard, path, clay or technical")),
+        Some("photoreal") => Ok(Technique::Photoreal),
+        _ => Err(parse_err(cmd, "technique", v, "standard, path, clay, technical or photoreal")),
     }
 }
 
