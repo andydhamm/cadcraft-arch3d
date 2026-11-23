@@ -337,7 +337,7 @@ pub struct Cabinet {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub filler: bool,
     /// Whether a backsplash is suppressed over this cabinet.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, rename = "backsplashOff", skip_serializing_if = "std::ops::Not::not")]
     pub backsplash_off: bool,
     /// Crown molding on top.
     #[serde(default, skip_serializing_if = "Option::is_none")]
