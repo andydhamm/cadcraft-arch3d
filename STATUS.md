@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-23 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
-11,263 workspace tests passing at the last merge · 1317 segments merged in all · 0 of 15 seats working
+11,282 workspace tests passing at the last merge · 1318 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-23 01:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 23 06:59–Dec 08 08:36 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 23 07:14–Dec 08 08:51 UTC |
 
 ## Phase 22 segments
 
@@ -43,6 +43,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 23 01:34 | `harden-p18-molding-kit-1` | merged | 11,282 pass | tturbo-mac |
 | Nov 22 17:13 | `harden-p18-observables-3` | merged | 11,263 pass | tturbo-mac |
 | Nov 19 11:52 | `harden-p18-scene-plumbing-1` | merged | 11,256 pass | tturbo-mac |
 | Nov 19 11:24 | `harden-p19-foundation-1` | merged | 11,251 pass | tturbo-mac |
@@ -54,7 +55,6 @@ none yet
 | Nov 19 01:20 | `harden-p19-horizon-1` | merged | 11,214 pass | tturbo-mac |
 | Nov 18 23:11 | `harden-p19-exposure-1` | merged | 11,209 pass | tturbo-mac |
 | Nov 18 21:59 | `harden-p19-exposure-2` | merged | 11,198 pass | tturbo-mac |
-| Nov 18 21:32 | `harden-p19-exposure-3` | merged | 11,195 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -73,5 +73,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1156 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1157 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
