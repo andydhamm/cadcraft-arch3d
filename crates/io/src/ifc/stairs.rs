@@ -191,4 +191,22 @@ mod tests {
         assert_eq!(text.matches(".QUARTER_TURN_STAIR.").count(), 1, "one L stair");
         assert_eq!(text.matches(".HALF_TURN_STAIR.").count(), 1, "one U stair");
     }
+
+    #[test]
+    fn a_stair_with_no_railings_exports_only_the_stair() {
+        let mut m = ArchModel::default();
+        m.push_stair(Stair { shape: StairShape::Straight, ..Stair::default() });
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCSTAIR(").count(), 1, "one stair: {text}");
+        assert_eq!(text.matches("=IFCRAILING(").count(), 0, "no railings: {text}");
+    }
+
+    #[test]
+    fn a_railing_with_a_very_small_path() {
+        let mut m = ArchModel::default();
+        m.push_railing(Railing { path: vec![Vec2::new(0.0, 0.0), Vec2::new(0.01, 0.0)], follows: None, ..Railing::default() });
+        let text = write_model(&m, &Scene3d::build(&m), &IfcOptions::default());
+        assert_eq!(text.matches("=IFCRAILING(").count(), 1, "one railing: {text}");
+        assert!(text.contains(".GUARDRAIL."), "free-standing rail is a guardrail");
+    }
 }
