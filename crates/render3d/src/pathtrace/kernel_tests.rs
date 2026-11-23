@@ -518,7 +518,8 @@ fn aovs_hold_the_first_hit() {
     let albedo = material_for("floor").albedo;
     // Pixel (3, 3) is on the floor.
     let (a, n) = (aov[2 * (3 * 8 + 3)], aov[2 * (3 * 8 + 3) + 1]);
-    assert_eq!(a[3], 1.0);
+    // A hit reads 1 + the first hit's roughness [p22].
+    assert_eq!(a[3], 1.0 + material_for("floor").roughness);
     for c in 0..3 {
         assert!((a[c] - albedo[c]).abs() < 1e-6, "{a:?}");
     }

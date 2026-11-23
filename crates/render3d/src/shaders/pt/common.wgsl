@@ -27,6 +27,12 @@ fn pt_step(p: vec3<f32>, d: vec3<f32>) -> vec3<f32> {
 const MAT_GLASS: u32 = 1u;
 const MAT_EMIT_CAMERA_ONLY: u32 = 2u;
 const MAT_NO_SHADOW: u32 = 4u;
+// [p22] Thin-walled glass (no refraction offset).
+const MAT_THIN: u32 = 16u;
+// [p22] The material has a coat, sheen or anisotropy lobe (bsdf_ext.wgsl).
+const MAT_EXT: u32 = 32u;
+// [p22] Rough or thin transmission (bsdf_trans.wgsl).
+const MAT_TRANS: u32 = 64u;
 
 const LIGHT_POINT: u32 = 0u;
 const LIGHT_SPOT: u32 = 1u;
@@ -50,6 +56,17 @@ const FRAME_SUN_NO_SHADOW: u32 = 128u;
 const FRAME_NORMAL_MAPS: u32 = 256u;
 // [p19-exposure] surfaces are Lambertian.
 const FRAME_LAMBERT: u32 = 512u;
+
+// [p22] Frame.photo.x flags: which photographic features the kernel runs.
+const PHOTO_PANINI: u32 = 1u;
+const PHOTO_DOF: u32 = 2u;
+const PHOTO_EDGES: u32 = 4u;
+const PHOTO_MATERIALS: u32 = 8u;
+const PHOTO_VARIATION: u32 = 16u;
+const PHOTO_SUN_DISC: u32 = 32u;
+const PHOTO_CLAMP: u32 = 64u;
+const PHOTO_ADAPTIVE: u32 = 128u;
+const PHOTO_SHIFT: u32 = 256u;
 
 const MAX_PATH_DEPTH: u32 = 64u;
 const STACK_SIZE: u32 = 64u;
@@ -83,6 +100,19 @@ struct Frame {
     view: vec4<f32>,
     tex: vec4<u32>,
     look: vec4<u32>,
+    // [p22] x = PHOTO_* flags, y = edge table offset in the aux buffer, z = triangles in the edge
+    // table, w unused.
+    photo: vec4<u32>,
+    // [p22] Panini compression, shift, aperture radius (m), focus distance (m).
+    lens: vec4<f32>,
+    // [p22] tan half horizontal fov, tan half vertical fov, 0, 0.
+    lens2: vec4<f32>,
+    // [p22] The camera's right, up and forward unit vectors (w unused).
+    cam_right: vec4<f32>,
+    cam_up: vec4<f32>,
+    cam_fwd: vec4<f32>,
+    // [p22] Edge radius override or -1, sun disc cos half angle, clamp limit in nits, unused.
+    photo_f: vec4<f32>,
 };
 
 struct Node { min: vec3<f32>, left_or_first: u32, max: vec3<f32>, count: u32 };
@@ -96,6 +126,17 @@ struct Material {
     transmission: f32,
     flags: u32,
     _pad: u32,
+    // [p22] The layered model (p22-r3d-material-map fills these; zero = off).
+    coat: f32,
+    coat_roughness: f32,
+    aniso: f32,
+    aniso_rot: f32,
+    sheen: vec3<f32>,
+    sheen_roughness: f32,
+    thickness: f32,
+    edge_radius: f32,
+    var_scale: f32,
+    var_amount: f32,
 };
 struct Light {
     position: vec3<f32>,
@@ -120,10 +161,13 @@ struct Probe { point: vec3<f32>, _a: f32, normal: vec3<f32>, _b: f32 };
 @group(0) @binding(4) var<storage, read> lights: array<Light>;
 // The per-still aux buffer: IES tables first, then data at the offsets the frame records.
 @group(0) @binding(5) var<storage, read> ies: array<f32>;
-// Per pixel (or per probe): the radiance sum in rgb, the sample count in w.
+// Per pixel (or per probe): the radiance sum in rgb, the sample count in w. For a pixel, the second
+// half of the buffer, accum[n + i] with n = width * height, is (luminance-squared sum, hit count,
+// clamp-loss luminance sum, adaptive state: 0 active, 1 converged).
 @group(0) @binding(6) var<storage, read_write> accum: array<vec4<f32>>;
 // Per pixel, two entries: [2i] the first hit's albedo (w = 1 when hit), [2i + 1] its normal and
-// distance. Written on a pixel's first sample only (sample_base == 0); the denoiser's guides.
+// distance. Written on a pixel's first sample only; the denoiser's guides. [2i].w = 0 on a miss,
+// 1 + the first hit's roughness on a hit (every reader tests > 0.5).
 @group(0) @binding(7) var<storage, read_write> aov: array<vec4<f32>>;
 @group(0) @binding(8) var<storage, read> probes: array<Probe>;
 

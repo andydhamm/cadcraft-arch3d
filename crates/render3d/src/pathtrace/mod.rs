@@ -19,12 +19,17 @@
 //! driver and the irradiance probes), [`denoise`] (the à-trous filter), [`cache`] (the on-disk
 //! pipeline cache).
 
+mod adaptive;
 #[cfg(test)]
 mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
+mod edge_table;
 pub mod env;
+mod learned;
+mod lens;
+mod post;
 pub mod rt;
 pub mod scene_gpu;
 pub mod shaders;
