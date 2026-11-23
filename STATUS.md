@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-23 22:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 22:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 3 of 35 segments merged · 0 of 15 acceptance checks**
 
@@ -32,18 +32,18 @@ Updated 2026-11-23 22:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 4.5 h so far · expected done Nov 25 15:34–Dec 02 06:26 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 4.8 h so far · expected done Nov 25 18:06–Dec 02 17:40 UTC |
 
 ## Phase 22 segments
 
-25 queued, 3 merged, 3 merging, 2 gate, 2 working
+25 queued, 6 merging, 3 merged, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | gate | mai-flash-esc |
+| `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | merging | mai-flash-esc |
 | `p22-arch3d-lens` | arch3d::lens: Panini, shift and thin-lens math shared by every renderer and by picking | merging | claude-sonnet-d |
-| `p22-arch3d-calibrate` | Calibration scenes: spheres, boxes and point lights that replace the model for a render | working | claude-sonnet-c |
-| `p22-r3d-types` | render3d contract: LensOptions, Lighting lens/film/sun disc, PathOptions and PathStats photo fields, the stub modules | gate | claude-sonnet-d |
+| `p22-arch3d-calibrate` | Calibration scenes: spheres, boxes and point lights that replace the model for a render | merging | claude-sonnet-c |
+| `p22-r3d-types` | render3d contract: LensOptions, Lighting lens/film/sun disc, PathOptions and PathStats photo fields, the stub modules | merging | claude-sonnet-d |
 | `p22-engine-look-keys` | Engine: the lens, film and sun-disc look keys on look, camera, render and pick3d | merging | claude-sonnet-c |
 | `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | merging | mai-flash-b |
 | `p22-io-glb-ext` | glTF export of the new PBR fields as KHR material extensions | working | bonsai-b |
@@ -69,18 +69,18 @@ Updated 2026-11-23 22:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1393 |
-| bonsai-b | bonsai2-27b | agent | 1304 |
+| bonsai-a | bonsai2-27b | agent | 1395 |
+| bonsai-b | bonsai2-27b | agent | 1305 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 164 |
 | claude-sonnet-b | sonnet | idle | 169 |
-| claude-sonnet-c | sonnet | agent | 106 |
-| claude-sonnet-d | sonnet | gate | 101 |
+| claude-sonnet-c | sonnet | idle | 107 |
+| claude-sonnet-d | sonnet | idle | 102 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 81 |
-| mai-flash-esc | mai-code-1.1-flash | gate | 176 |
+| mai-flash-esc | mai-code-1.1-flash | idle | 177 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1195 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 703 |
