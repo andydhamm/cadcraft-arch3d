@@ -32,6 +32,7 @@ pub mod floors;
 pub mod hlr;
 pub mod icon;
 pub mod incremental;
+pub mod lens;
 pub mod light;
 pub mod mesh;
 pub mod openings;
