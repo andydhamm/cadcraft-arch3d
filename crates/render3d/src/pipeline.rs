@@ -1410,6 +1410,13 @@ mod tests {
     }
 
     #[test]
+    fn fill_depth_bias_has_expected_values() {
+        assert_eq!(FILL_DEPTH_BIAS.constant, 2);
+        assert_eq!(FILL_DEPTH_BIAS.slope_scale, 2.0);
+        assert_eq!(FILL_DEPTH_BIAS.clamp, 0.0);
+    }
+
+    #[test]
     fn clay_renders_every_material_grey() {
         // The clay look is one grey for every material, textured or not.
         let (albedo, metallic, roughness, alpha) = clay_pbr();

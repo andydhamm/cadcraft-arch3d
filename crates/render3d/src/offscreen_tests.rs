@@ -443,6 +443,109 @@ fn technical_outlines_a_smooth_cylinder() {
     assert!(inside * 10 <= rows * 2, "the smooth middle draws no lines: {inside} of {rows} rows have a dark pixel there");
 }
 
+/// A smooth cylinder of radius `r` (z -2..2, `sides` faces).
+fn smooth_cylinder_r(sides: u32, r: f32) -> Mesh {
+    let mut m = Mesh::new("wall", ArchId(1));
+    for k in 0..sides {
+        let a = std::f32::consts::TAU * k as f32 / sides as f32;
+        let (x, y) = (a.cos() * r, a.sin() * r);
+        for z in [-2.0_f32, 2.0] {
+            m.positions.push([x, y, z]);
+            m.normals.push([a.cos(), a.sin(), 0.0]);
+            m.uvs.push([x, z]);
+        }
+    }
+    for k in 0..sides {
+        let n = (k + 1) % sides;
+        let (b0, t0, b1, t1) = (2 * k, 2 * k + 1, 2 * n, 2 * n + 1);
+        m.indices.extend_from_slice(&[b0, b1, t1, b0, t1, t0]);
+    }
+    m
+}
+
+/// The depth bias pushes fills back so silhouettes show even on a small cylinder.
+#[test]
+fn technical_outlines_a_small_cylinder() {
+    let Some(mut r) = renderer((96, 96)) else { return };
+    let s = scene(vec![smooth_cylinder_r(32, 0.5)]);
+    let cam = Camera::Orbit(Orbit::at_origin(-90.0, 0.0, 6.0, 45.0));
+    r.render_with(&s, 1, &cam, &Light::DEFAULT, &RenderOptions { style: Style::Technical, ..Default::default() });
+    let img = r.read_rgba().expect("readback");
+    let lum = |p: [u8; 4]| 0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2]);
+    let bg = clear_srgb();
+    let (mut rows, mut lined) = (0, 0);
+    for y in 36..60 {
+        let xs: Vec<u32> = (0..96).filter(|&x| !close(px(&img, 96, x, y), bg, 12)).collect();
+        let (Some(&xl), Some(&xr)) = (xs.first(), xs.last()) else { continue };
+        if xr - xl < 4 {
+            continue;
+        }
+        rows += 1;
+        let dark = |x: u32| lum(px(&img, 96, x, y)) < 60.0;
+        lined += usize::from((xl..xl + 2).any(dark) && (xr - 1..=xr).any(dark));
+    }
+    assert!(rows >= 10, "the small cylinder is drawn: {rows} rows");
+    assert!(lined * 10 >= rows * 8, "both sides of the outline carry the line colour: {lined} of {rows}");
+}
+
+/// Sharp edges of a cube are outlined in technical style; the cube has no smooth silhouette,
+/// only creases, which the line pass draws regardless of the fill depth bias.
+#[test]
+fn technical_outlines_cube_edges() {
+    let Some(mut r) = renderer((96, 96)) else { return };
+    let s = scene(vec![cuboid("wall", [-1.5, -1.5, -1.5], [1.5, 1.5, 1.5])]);
+    let cam = Camera::Orbit(Orbit::at_origin(35.0, 25.0, 8.0, 45.0));
+    r.render_with(&s, 1, &cam, &Light::DEFAULT, &RenderOptions { style: Style::Technical, ..Default::default() });
+    let img = r.read_rgba().expect("readback");
+    let lum = |p: [u8; 4]| 0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2]);
+    let bg = clear_srgb();
+    // Count dark pixels (edges) that are not the background.
+    let mut dark = 0;
+    let mut total = 0;
+    for y in 0..96 {
+        for x in 0..96 {
+            let p = px(&img, 96, x, y);
+            if !close(p, bg, 12) {
+                total += 1;
+                if lum(p) < 60.0 {
+                    dark += 1;
+                }
+            }
+        }
+    }
+    assert!(total > 100, "the cube is drawn: {total} non-background pixels");
+    // A significant fraction of the cube's pixels are dark edges.
+    assert!(dark * 10 >= total, "cube edges are outlined: {dark} of {total} pixels are dark");
+}
+
+/// The fill depth bias is applied to the shadowed main-pass pipelines too: a technical render
+/// with sun shadows still outlines the cylinder's silhouette.
+#[test]
+fn technical_outlines_cylinder_with_sun_shadow() {
+    let Some(mut r) = renderer((96, 96)) else { return };
+    let s = scene(vec![smooth_cylinder(32)]);
+    let cam = Camera::Orbit(Orbit::at_origin(-90.0, 0.0, 12.0, 45.0));
+    let light = Light::new([0.0, -0.5, 0.866], 0.25);
+    let map = r.build_shadow(&s, 1, &light, false).expect("shadow map");
+    r.render_with(&s, 1, &cam, &light, &RenderOptions { style: Style::Technical, shadow: Some(&map), ..Default::default() });
+    let img = r.read_rgba().expect("readback");
+    let lum = |p: [u8; 4]| 0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2]);
+    let bg = clear_srgb();
+    let (mut rows, mut lined) = (0, 0);
+    for y in 30..66 {
+        let xs: Vec<u32> = (0..96).filter(|&x| !close(px(&img, 96, x, y), bg, 12)).collect();
+        let (Some(&xl), Some(&xr)) = (xs.first(), xs.last()) else { continue };
+        if xr - xl < 8 {
+            continue;
+        }
+        rows += 1;
+        let dark = |x: u32| lum(px(&img, 96, x, y)) < 60.0;
+        lined += usize::from((xl..xl + 2).any(dark) && (xr - 1..=xr).any(dark));
+    }
+    assert!(rows >= 20, "the cylinder is drawn across the middle rows: {rows}");
+    assert!(lined * 10 >= rows * 8, "silhouettes show with sun shadows: {lined} of {rows} rows outlined");
+}
+
 // ---- phase 19: exposure -------------------------------------------------------------------------
 
 use crate::exposure::tone_map;
