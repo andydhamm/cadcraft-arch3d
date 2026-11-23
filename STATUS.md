@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-23 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 15:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 0 of 1 segments merged**
 
@@ -32,7 +32,7 @@ Updated 2026-11-23 14:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | pending | — | 1.2 h so far · expected done Nov 23 15:03–Nov 27 13:02 UTC |
+| 22 | Photoreal stills | pending | — | 1.5 h so far · expected done Nov 23 15:18–Nov 27 13:17 UTC |
 
 ## Phase 22 segments
 
@@ -46,6 +46,7 @@ Updated 2026-11-23 14:45 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 23 14:57 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | darwin-ws3 |
 | Nov 23 14:23 | `harden-p17-exports-rebuild` | merged | 11,289 pass | tturbo-mac |
 | Nov 23 12:57 | `harden-p18-observables-2` | refused | 11,296 pass | tturbo-mac |
 | Nov 23 01:34 | `harden-p18-molding-kit-1` | merged | 11,282 pass | tturbo-mac |
@@ -57,13 +58,12 @@ Updated 2026-11-23 14:45 UTC. This page and the card in the README are regenerat
 | Nov 19 03:43 | `harden-p19-foundation-4` | merged | 11,231 pass | tturbo-mac |
 | Nov 19 02:55 | `harden-p18-molding-kit-2` | merged | 11,222 pass | tturbo-mac |
 | Nov 19 02:19 | `harden-p19-foundation-5` | merged | 11,217 pass | tturbo-mac |
-| Nov 19 01:20 | `harden-p19-horizon-1` | merged | 11,214 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1383 |
+| bonsai-a | bonsai2-27b | merging | 1384 |
 | bonsai-b | bonsai2-27b | idle | 1300 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
@@ -71,10 +71,10 @@ Updated 2026-11-23 14:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 168 |
 | claude-sonnet-c | sonnet | idle | 104 |
 | claude-sonnet-d | sonnet | idle | 99 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1291 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1291 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 80 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1182 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1183 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
