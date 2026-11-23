@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-23 16:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 17:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 1 of 2 segments merged**
 
@@ -32,7 +32,7 @@ Updated 2026-11-23 16:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | pending | — | 3.2 h so far · expected done Nov 23 18:02–Nov 30 05:26 UTC |
+| 22 | Photoreal stills | pending | — | 3.5 h so far · expected done Nov 23 18:24–Nov 30 18:03 UTC |
 
 ## Phase 22 segments
 
@@ -64,17 +64,17 @@ Updated 2026-11-23 16:45 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1385 |
-| bonsai-b | bonsai2-27b | agent | 1300 |
+| bonsai-b | bonsai2-27b | gate | 1300 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 163 |
 | claude-sonnet-b | sonnet | idle | 169 |
 | claude-sonnet-c | sonnet | idle | 104 |
 | claude-sonnet-d | sonnet | idle | 99 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1292 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1292 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 80 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1186 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1187 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 700 |
