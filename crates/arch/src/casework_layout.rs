@@ -656,6 +656,26 @@ mod tests {
     }
 
     #[test]
+    fn counter_runs_do_not_join_different_overhangs() {
+        let mut c0 = cab(0, 0.0, Fronts::Doors);
+        let mut c1 = cab(1, 0.6, Fronts::Doors);
+        c1.counter_overhang = 0.05;
+        let m = model(vec![c0, c1]);
+        let runs = counter_runs(&m);
+        assert_eq!(runs.len(), 2, "different overhangs should split runs");
+    }
+
+    #[test]
+    fn counter_runs_do_not_join_different_tops() {
+        let mut c0 = cab(0, 0.0, Fronts::Doors);
+        let mut c1 = cab(1, 0.6, Fronts::Doors);
+        c1.height = 0.9;
+        let m = model(vec![c0, c1]);
+        let runs = counter_runs(&m);
+        assert_eq!(runs.len(), 2, "different tops should split runs");
+    }
+
+    #[test]
     fn gaps_at_exact_bounds() {
         let m = model(vec![cab(0, 0.0, Fronts::Doors), cab(1, 0.9, Fronts::Doors), cab(2, 2.7, Fronts::Doors)]);
         let g = gaps(&m);

@@ -428,6 +428,49 @@ mod tests {
     }
 
     #[test]
+    fn segment_area_with_huge_chord_and_small_sagitta() {
+        // Numerical stability: huge chord, tiny sagitta
+        let a = segment_area(1e15, 0.001);
+        assert!(a.is_finite() && a > 0.0);
+        // Approximation: 2/3 * chord * sagitta for shallow arcs
+        let approx = 2.0 / 3.0 * 1e15 * 0.001;
+        assert!((a - approx).abs() / approx < 1e-6, "huge chord: {} vs {}", a, approx);
+    }
+
+    #[test]
+    fn custom_outline_triangle_minimum_vertices() {
+        let m = ArchModel::default();
+        let ct = Countertop { id: ArchId(0), polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)], ..Default::default() };
+        let o = custom_outline(&m, &ct);
+        assert!(o.is_some(), "triangle should be a valid countertop");
+        let o = o.unwrap();
+        assert_eq!(o.ring.len(), 3);
+        assert!((outline_area(&o) - 0.5).abs() < 1e-12, "triangle area should be 0.5");
+    }
+
+    #[test]
+    fn custom_outline_degenerate_triangle_collinear() {
+        // Three collinear points: zero area, should be rejected
+        let m = ArchModel::default();
+        let ct = Countertop { id: ArchId(0), polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(2.0, 0.0)], ..Default::default() };
+        assert!(custom_outline(&m, &ct).is_none(), "collinear points should be rejected");
+    }
+
+    #[test]
+    fn counter_cabinets_under_non_convex_polygon() {
+        // L-shaped polygon: cabinet in the notch should not be included
+        let mut m = model(vec![cab(0, 0.0, CabinetKind::Base), cab(1, 0.6, CabinetKind::Base), cab(2, 0.0, CabinetKind::Base)]);
+        m.cabinets[2].position = Vec2::new(0.3, 0.3); // In the notch
+        let poly =
+            vec![Vec2::new(-0.5, -0.5), Vec2::new(1.5, -0.5), Vec2::new(1.5, 0.0), Vec2::new(0.5, 0.0), Vec2::new(0.5, 0.5), Vec2::new(-0.5, 0.5)];
+        let ids = counter_cabinets_under(&m, 0, &poly);
+        assert_eq!(ids.len(), 2, "cabinet in the notch should be excluded");
+        assert!(ids.contains(&ArchId(0)));
+        assert!(ids.contains(&ArchId(1)));
+        assert!(!ids.contains(&ArchId(2)));
+    }
+
+    #[test]
     fn outlines_survive_nan_and_empty_polygons() {
         let mut m = model(vec![cab(0, f64::NAN, CabinetKind::Base), cab(1, 0.0, CabinetKind::Tall)]);
         m.cabinets[1].depth = f64::INFINITY;

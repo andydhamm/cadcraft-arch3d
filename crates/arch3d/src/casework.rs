@@ -1036,6 +1036,56 @@ mod tests {
     }
 
     #[test]
+    fn counter_hole_at_exact_edge_boundary() {
+        // A cutout that extends exactly to the counter edge
+        let mut model = model_of(vec![cab(0, 0.0, Fronts::Doors)]);
+        model.furnishings.push(Furnishing {
+            id: ArchId(0),
+            at: [-0.1, 0.3],
+            size: [0.5, 0.4, 0.2],
+            host: FurnishingHost::Cabinet { cabinet: ArchId(0) },
+            cutout: Some([0.4, 0.3]),
+            ..Furnishing::default()
+        });
+        let all = counters(&model);
+        assert_eq!(all.len(), 1);
+        let area = top_area(&all[0].1);
+        // Hole extends from u=-0.3 to u=0.1, clipped to counter at u=-0.3
+        // Effective hole width: 0.4 (full), depth: 0.3
+        let expect = 0.6 * 0.625 - 0.4 * 0.3;
+        assert!((area - expect).abs() < 1e-6, "{area} vs {expect}");
+    }
+
+    #[test]
+    fn cabinet_rotation_90_extends_in_negative_x() {
+        let mut model = ArchModel::default();
+        model.cabinets.push(Cabinet {
+            id: ArchId(0),
+            kind: CabinetKind::Base,
+            level: 0,
+            position: Vec2::new(2.0, 3.0),
+            rotation: 90.0,
+            width: 0.6,
+            depth: 0.6,
+            height: 0.876,
+            elevation: 0.0,
+            fronts: Fronts::Doors,
+            doors: 1,
+            ..Cabinet::default()
+        });
+        let meshes = cabinet_meshes(&model, &model.cabinets[0]);
+        let mut bounds = meshes[0].bounds();
+        for m in &meshes[1..] {
+            bounds.extend(&m.bounds());
+        }
+        // With rotation 90, the cabinet extends from x=1.7 to x=2.3 and y=3.0 to y=3.6
+        assert!((bounds.min[0] - 1.7).abs() < 1e-2, "min x {}", bounds.min[0]);
+        assert!((bounds.max[0] - 2.3).abs() < 1e-2, "max x {}", bounds.max[0]);
+        assert!((bounds.min[1] - 3.0).abs() < 1e-2, "min y {}", bounds.min[1]);
+        assert!((bounds.max[1] - 3.6).abs() < 1e-2, "max y {}", bounds.max[1]);
+    }
+
+    #[test]
     fn pull_on_a_small_front() {
         let mut model = ArchModel::default();
         model.cabinets.push(Cabinet {
