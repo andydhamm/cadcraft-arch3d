@@ -287,4 +287,102 @@ mod tests {
         let long: Vec<Vec2> = (0..4097).map(|i| v(i as f64, 0.0)).collect();
         assert!(s(&SQ, &long, &vec![0.0; 4097], false).is_none());
     }
+
+    #[test]
+    fn sweep_with_triangle_profile() {
+        let tri = [[0.0, 0.0], [0.1, 0.0], [0.0, 0.1]];
+        let m = sweep(&tri, &[v(0.0, 0.0), v(1.0, 0.0)], &[0.0, 0.0], false, 1.0, "wood", ArchId(1)).unwrap();
+        assert!(m.is_manifold());
+        // Volume = area * length = 0.005 * 1.0 = 0.005
+        assert!((volume(&m) - 0.005).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sweep_side_zero_uses_positive() {
+        let m1 = sweep(&SQ, &[v(0.0, 0.0), v(1.0, 0.0)], &[0.0, 0.0], false, 0.0, "wood", ArchId(1)).unwrap();
+        let m2 = sweep(&SQ, &[v(0.0, 0.0), v(1.0, 0.0)], &[0.0, 0.0], false, 1.0, "wood", ArchId(1)).unwrap();
+        assert_eq!(m1.bounds(), m2.bounds());
+        assert!((volume(&m1) - volume(&m2)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn sweep_closed_path_negative_side() {
+        let path = [v(0.0, 0.0), v(2.0, 0.0), v(2.0, 1.0), v(0.0, 1.0)];
+        let m = sweep(&SQ, &path, &[0.0; 4], true, -1.0, "wood", ArchId(1)).unwrap();
+        assert!(m.is_manifold());
+        let m2 = sweep(&SQ, &path, &[0.0; 4], true, 1.0, "wood", ArchId(1)).unwrap();
+        assert!(m2.is_manifold());
+        // Same path, opposite sides: same triangle count, different volumes
+        // (side +1 sweeps inside the loop, side -1 outside).
+        assert_eq!(m.triangle_count(), m2.triangle_count());
+        assert!(volume(&m) > 0.0 && volume(&m2) > 0.0);
+        assert!((volume(&m) - volume(&m2)).abs() > 1e-6);
+    }
+
+    #[test]
+    fn sweep_closed_path_reversed_direction() {
+        let path = [v(0.0, 0.0), v(2.0, 0.0), v(2.0, 1.0), v(0.0, 1.0)];
+        let reversed = [v(0.0, 0.0), v(0.0, 1.0), v(2.0, 1.0), v(2.0, 0.0)];
+        let m = sweep(&SQ, &path, &[0.0; 4], true, 1.0, "wood", ArchId(1)).unwrap();
+        let m2 = sweep(&SQ, &reversed, &[0.0; 4], true, -1.0, "wood", ArchId(1)).unwrap();
+        // Reversing the path and flipping the side gives the same volume.
+        assert!((volume(&m) - volume(&m2)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sweep_profile_with_zero_width() {
+        let thin = [[0.0, 0.0], [0.001, 0.0], [0.001, 0.02], [0.0, 0.02]];
+        let m = sweep(&thin, &[v(0.0, 0.0), v(1.0, 0.0)], &[0.0, 0.0], false, 1.0, "wood", ArchId(1));
+        assert!(m.is_none(), "profile narrower than 2 mm must be rejected");
+    }
+
+    #[test]
+    fn sweep_path_with_duplicate_consecutive_points() {
+        let path = [v(0.0, 0.0), v(0.5, 0.0), v(0.5, 0.0), v(1.0, 0.0)];
+        let z = [0.0, 0.0, 0.0, 0.0];
+        let m = sweep(&SQ, &path, &z, false, 1.0, "wood", ArchId(1)).unwrap();
+        // Duplicate points are dropped; the result is the same as a 2-segment path.
+        let m2 = sweep(&SQ, &[v(0.0, 0.0), v(0.5, 0.0), v(1.0, 0.0)], &[0.0, 0.0, 0.0], false, 1.0, "wood", ArchId(1)).unwrap();
+        assert_eq!(m.triangle_count(), m2.triangle_count());
+        assert!((volume(&m) - volume(&m2)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sweep_path_near_max_points() {
+        let path: Vec<Vec2> = (0..4096).map(|i| v(i as f64 * 0.01, 0.0)).collect();
+        let z: Vec<f64> = vec![0.0; 4096];
+        let m = sweep(&SQ, &path, &z, false, 1.0, "wood", ArchId(1)).unwrap();
+        assert!(m.is_manifold());
+        // Length = 40.95 (4095 segments of 0.01)
+        assert!((volume(&m) - 0.01 * 40.95).abs() < 1e-4);
+    }
+
+    #[test]
+    fn sweep_manifold_check() {
+        let m = sweep(&SQ, &[v(0.0, 0.0), v(1.0, 0.0), v(1.0, 1.0)], &[0.0; 3], false, 1.0, "wood", ArchId(1)).unwrap();
+        assert!(m.is_manifold());
+    }
+
+    #[test]
+    fn sweep_uv_coordinates() {
+        let m = sweep(&SQ, &[v(0.0, 0.0), v(1.0, 0.0)], &[0.0, 0.0], false, 1.0, "wood", ArchId(1)).unwrap();
+        // u should range from 0 to 1.0 (path length)
+        let u_min = m.uvs.iter().map(|uv| uv[0]).fold(f32::MAX, f32::min);
+        let u_max = m.uvs.iter().map(|uv| uv[0]).fold(f32::MIN, f32::max);
+        assert!(u_min.abs() < 1e-6);
+        assert!((u_max - 1.0).abs() < 1e-6);
+        // v should range from 0 to 0.1 (profile height)
+        let v_min = m.uvs.iter().map(|uv| uv[1]).fold(f32::MAX, f32::min);
+        let v_max = m.uvs.iter().map(|uv| uv[1]).fold(f32::MIN, f32::max);
+        assert!(v_min.abs() < 1e-6);
+        assert!((v_max - 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sweep_with_nonzero_base_z() {
+        let m = sweep(&SQ, &[v(0.0, 0.0), v(1.0, 0.0)], &[2.0, 2.0], false, 1.0, "wood", ArchId(1)).unwrap();
+        let b = m.bounds();
+        assert!((b.min[2] - 2.0).abs() < 1e-6);
+        assert!((b.max[2] - 2.1).abs() < 1e-6);
+    }
 }
