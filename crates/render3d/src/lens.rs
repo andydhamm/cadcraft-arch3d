@@ -74,7 +74,7 @@ mod tests {
         let n = LensOptions::default();
         assert!(n.is_neutral() && !n.warps());
         assert!(LensOptions::from_look(&Lens::default()).is_neutral());
-        let l = Lens { projection: LensProjection::Panini, compression: 0.5, shift: 0.25, aperture: Some(2.8), focus: Some(3.0) };
+        let l = Lens { projection: LensProjection::Panini, compression: 0.5, shift: 0.25, aperture: Some(2.8), focus: Some(3.0), ..Lens::default() };
         let o = LensOptions::from_look(&l);
         assert!(o.panini && o.warps() && !o.is_neutral());
         assert_eq!((o.compression, o.shift, o.aperture, o.focus), (0.5, 0.25, Some(2.8), Some(3.0)));
