@@ -190,7 +190,12 @@ fn run_pick3d(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let pixel = parse_pixel(params.get("pixel"), size)?;
     let mut look = crate::cmd::arch::look::effective_look(&doc.arch, saved_camera);
     let _ = crate::cmd::arch::look::apply_look_params("pick3d", params, &doc.arch, &mut look, true)?;
-    let lens = LensView { panini: look.lens.projection == LensProjection::Panini, compression: look.lens.compression, shift: look.lens.shift };
+    let lens = LensView {
+        panini: look.lens.projection == LensProjection::Panini,
+        compression: look.lens.compression,
+        shift: look.lens.shift,
+        ..LensView::default()
+    };
     let Some((origin, dir)) = ray_at_lens(&camera, &lens, size, pixel) else {
         return Ok(json!({ "ok": true, "hit": null, "filter": {"hidden": 0, "clip": false, "nearClip": null} }));
     };
@@ -380,7 +385,7 @@ mod tests {
     fn pick3d_through_panini_returns_the_object_drawn_there() {
         let mut s = session();
         let camera = json!({"kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": 100.0});
-        let lens = cadcraft_arch3d::lens::LensView { panini: true, compression: 1.0, shift: 0.0 };
+        let lens = cadcraft_arch3d::lens::LensView { panini: true, compression: 1.0, ..Default::default() };
         let point = [2.5, 0.0, 0.2];
         let size = (100, 100);
         let px = cadcraft_arch3d::lens::project_point_lens(&parse_camera(&camera).unwrap(), &lens, size, point).unwrap();
@@ -422,13 +427,13 @@ mod tests {
             target: Some([3.45, 0.0, 1.0]),
             fov_deg: Some(100.0),
             look: Some(cadcraft_doc::arch::Look {
-                lens: cadcraft_doc::arch::Lens { projection: LensProjection::Panini, compression: 1.0, shift: 0.0, aperture: None, focus: None },
+                lens: cadcraft_doc::arch::Lens { projection: LensProjection::Panini, compression: 1.0, shift: 0.0, ..Default::default() },
                 ..Default::default()
             }),
             ..Default::default()
         });
         doc.touch_arch();
-        let lens = cadcraft_arch3d::lens::LensView { panini: true, compression: 1.0, shift: 0.0 };
+        let lens = cadcraft_arch3d::lens::LensView { panini: true, compression: 1.0, ..Default::default() };
         let point = [2.5, 0.0, 0.2];
         let size = (100, 100);
         let px = cadcraft_arch3d::lens::project_point_lens(
