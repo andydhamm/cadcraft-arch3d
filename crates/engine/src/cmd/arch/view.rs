@@ -1164,4 +1164,155 @@ mod tests {
         let cam = s.doc().unwrap().arch.camera_by_name("a").unwrap();
         assert_eq!(cam.azimuth_deg, Some(45.0));
     }
+
+    #[test]
+    fn camera_update_refuses_no_keys() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        assert!(s.execute("camera.update", &json!({ "name": "a" })).is_err());
+    }
+
+    #[test]
+    fn camera_update_refuses_invalid_elevation() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        assert!(s.execute("camera.update", &json!({ "name": "a", "elevation": 90.0 })).is_err());
+        assert!(s.execute("camera.update", &json!({ "name": "a", "elevation": -90.0 })).is_err());
+        let r = s.execute("camera.update", &json!({ "name": "a", "elevation": 45.0 })).unwrap();
+        assert_eq!(r["cameras"][0]["elevation"], json!(45.0));
+    }
+
+    #[test]
+    fn camera_update_refuses_invalid_distance() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        assert!(s.execute("camera.update", &json!({ "name": "a", "distance": 0.0 })).is_err());
+        assert!(s.execute("camera.update", &json!({ "name": "a", "distance": 2000000.0 })).is_err());
+        let r = s.execute("camera.update", &json!({ "name": "a", "distance": 50.0 })).unwrap();
+        assert_eq!(r["cameras"][0]["distance"], json!(50.0));
+    }
+
+    #[test]
+    fn camera_update_refuses_level_on_non_overview() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        assert!(s.execute("camera.update", &json!({ "name": "a", "level": 0 })).is_err());
+    }
+
+    #[test]
+    fn camera_update_refuses_lowerlevels_on_non_overview() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        assert!(s.execute("camera.update", &json!({ "name": "a", "lowerLevels": true })).is_err());
+    }
+
+    #[test]
+    fn camera_update_refuses_eye_pick() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        assert!(s.execute("camera.update", &json!({ "name": "a", "focus": { "pick": [100, 100] } })).is_err());
+    }
+
+    #[test]
+    fn camera_orbit_refuses_no_deltas() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "a", "azimuth": 0.0 })).unwrap();
+        assert!(s.execute("camera.orbit", &json!({ "name": "a" })).is_err());
+    }
+
+    #[test]
+    fn camera_orbit_on_full_camera() {
+        let mut s = Session::new();
+        s.execute(
+            "camera",
+            &json!({
+                "save": "a",
+                "kind": "full",
+                "eye": [3.0, -8.0, 1.6],
+                "target": [3.0, 0.0, 1.05]
+            }),
+        )
+        .unwrap();
+        let r = s.execute("camera.orbit", &json!({ "name": "a", "azimuth": 90.0 })).unwrap();
+        let cam = r["cameras"][0];
+        assert!(cam["eye"][0] != json!(3.0) || cam["eye"][1] != json!(-8.0));
+        assert_eq!(cam["target"], json!([3.0, 0.0, 1.05]));
+    }
+
+    #[test]
+    fn camera_reset_refuses_no_saved_state() {
+        let mut s = Session::new();
+        let doc = s.doc_mut().unwrap();
+        doc.arch.cameras.push(cadcraft_doc::arch::Camera3d {
+            name: "a".into(),
+            kind: cadcraft_doc::arch::CameraKind::Orbit,
+            azimuth_deg: Some(0.0),
+            distance: Some(10.0),
+            saved: None,
+            ..Default::default()
+        });
+        doc.touch_arch();
+        assert!(s.execute("camera.reset", &json!({ "name": "a" })).is_err());
+    }
+
+    #[test]
+    fn camera_save_overview_defaults() {
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "camera",
+                &json!({
+                    "save": "a",
+                    "kind": "overview",
+                    "level": 0
+                }),
+            )
+            .unwrap();
+        let cam = r["cameras"][0];
+        assert_eq!(cam["azimuth"], json!(30.0));
+        assert_eq!(cam["elevation"], json!(50.0));
+    }
+
+    #[test]
+    fn camera_update_eye_equals_target_refused() {
+        let mut s = Session::new();
+        s.execute(
+            "camera",
+            &json!({
+                "save": "a",
+                "kind": "full",
+                "eye": [3.0, -8.0, 1.6],
+                "target": [3.0, 0.0, 1.05]
+            }),
+        )
+        .unwrap();
+        assert!(
+            s.execute(
+                "camera.update",
+                &json!({
+                    "name": "a",
+                    "eye": [3.0, 0.0],
+                    "eyeHeight": 1.05
+                })
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn camera_save_captures_sun_disc() {
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "camera",
+                &json!({
+                    "save": "a",
+                    "azimuth": 0.0,
+                    "sun": { "disc": 0.53 }
+                }),
+            )
+            .unwrap();
+        let cam = r["cameras"][0];
+        assert_eq!(cam["look"]["sun"]["disc"], json!(0.53));
+    }
 }
