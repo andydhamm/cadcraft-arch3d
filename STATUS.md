@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-23 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 4 of 35 segments merged · 0 of 15 acceptance checks**
 
-11,410 workspace tests passing at the last merge · 1325 segments merged in all · 0 of 15 seats working
+11,410 workspace tests passing at the last merge · 1325 segments merged in all · 0 of 15 seats working · PAUSED
 
 ## Phases
 
@@ -32,11 +32,11 @@ Updated 2026-11-23 22:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 5.0 h so far · expected done Nov 25 09:14–Nov 29 02:59 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 5.3 h so far · expected done Nov 25 11:15–Nov 29 09:34 UTC |
 
 ## Phase 22 segments
 
-25 queued, 5 merging, 4 merged, 1 working
+25 queued, 6 merging, 4 merged
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -45,7 +45,7 @@ Updated 2026-11-23 22:30 UTC. This page and the card in the README are regenerat
 | `p22-r3d-types` | render3d contract: LensOptions, Lighting lens/film/sun disc, PathOptions and PathStats photo fields, the stub modules | merging | claude-sonnet-d |
 | `p22-engine-look-keys` | Engine: the lens, film and sun-disc look keys on look, camera, render and pick3d | merging | claude-sonnet-c |
 | `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | merging | mai-flash-b |
-| `p22-io-glb-ext` | glTF export of the new PBR fields as KHR material extensions | working | bonsai-b |
+| `p22-io-glb-ext` | glTF export of the new PBR fields as KHR material extensions | merging | bonsai-b |
 
 ## Recent merges
 
@@ -68,8 +68,8 @@ Updated 2026-11-23 22:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1397 |
-| bonsai-b | bonsai2-27b | agent | 1306 |
+| bonsai-a | bonsai2-27b | merging | 1399 |
+| bonsai-b | bonsai2-27b | idle | 1307 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 164 |
@@ -81,5 +81,5 @@ Updated 2026-11-23 22:30 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 81 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 177 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1195 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1196 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 703 |
