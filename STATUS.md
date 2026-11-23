@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-23 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 6 of 35 segments merged · 0 of 15 acceptance checks**
 
@@ -32,11 +32,11 @@ Updated 2026-11-23 23:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 5.8 h so far · expected done Nov 25 01:07–Nov 26 22:41 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 6.0 h so far · expected done Nov 25 02:29–Nov 27 01:59 UTC |
 
 ## Phase 22 segments
 
-21 queued, 6 merged, 6 merging, 2 working
+21 queued, 7 merging, 6 merged, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -47,7 +47,7 @@ Updated 2026-11-23 23:15 UTC. This page and the card in the README are regenerat
 | `p22-engine-pick-lens` | pick3d maps the pixel back through the lens | working | mai-flash-b |
 | `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | merging | mai-flash-b |
 | `p22-io-glb-ext` | glTF export of the new PBR fields as KHR material extensions | merging | bonsai-b |
-| `p22-ui-pane-photoreal` | 3D pane: Photoreal in the look row, the lens in the live view and its pick, Finalize as the preset | working | claude-sonnet-a |
+| `p22-ui-pane-photoreal` | 3D pane: Photoreal in the look row, the lens in the live view and its pick, Finalize as the preset | merging | claude-sonnet-a |
 
 ## Recent merges
 
@@ -70,11 +70,11 @@ Updated 2026-11-23 23:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1400 |
-| bonsai-b | bonsai2-27b | agent | 1308 |
+| bonsai-a | bonsai2-27b | idle | 1401 |
+| bonsai-b | bonsai2-27b | idle | 1309 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | agent | 164 |
+| claude-sonnet-a | sonnet | idle | 166 |
 | claude-sonnet-b | sonnet | idle | 171 |
 | claude-sonnet-c | sonnet | idle | 107 |
 | claude-sonnet-d | sonnet | idle | 103 |
