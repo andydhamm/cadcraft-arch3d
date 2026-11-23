@@ -31,6 +31,7 @@ pub mod shadow;
 pub mod shadow_atlas;
 pub mod textures;
 pub mod types;
+pub mod warp;
 
 #[cfg(test)]
 pub(crate) mod gputest;
