@@ -30,6 +30,7 @@ pub mod shadow;
 pub mod shadow_atlas;
 pub mod textures;
 pub mod types;
+pub mod tza;
 
 #[cfg(test)]
 pub(crate) mod gputest;
@@ -52,6 +53,7 @@ pub use lit_frame::Lighting;
 pub use offscreen::{Offscreen, RenderOptions, Style, headless_png, render_png, render_png_with};
 pub use pipeline::{Draw, GpuMeshes, material_albedo, upload};
 pub use types::{ArchId, Bounds3, Mesh, Scene3d};
+pub use tza::{Model, ModelChoice, Tensor, half_to_f32, info, model, parse};
 
 /// Errors returned by the render3d crate.
 #[derive(Debug, thiserror::Error)]
