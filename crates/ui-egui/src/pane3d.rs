@@ -112,6 +112,7 @@ type ViewState = (u64, (u32, u32), [[f32; 4]; 4], Style3d, cadcraft_render3d::Li
 
 /// A finished Finalize Render still and the view it was made for.
 #[derive(Debug)]
+#[allow(dead_code)]
 struct FinalDone {
     state: ViewState,
     width: u32,
