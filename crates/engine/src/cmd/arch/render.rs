@@ -591,7 +591,7 @@ fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'
     if params.get("style").is_none() {
         style = technique_style(look.technique).to_string();
     }
-    if params.get("final").is_none() && look.technique == Technique::Path {
+    if params.get("final").is_none() && matches!(look.technique, Technique::Path | Technique::Photoreal) {
         (final_render, final_mode) = (true, FinalMode::Path);
     }
     let sun_dir = effective_sun_dir(&doc.arch, &look, explicit);
@@ -621,7 +621,7 @@ fn technique_style(t: Technique) -> &'static str {
     match t {
         Technique::Clay => "clay",
         Technique::Technical => "technical",
-        Technique::Standard | Technique::Path => "shaded",
+        Technique::Standard | Technique::Path | Technique::Photoreal => "shaded",
     }
 }
 
