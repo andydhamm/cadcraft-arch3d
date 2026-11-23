@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-22 17:47 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 00:47 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Phase 22**
 
@@ -32,7 +32,7 @@ Updated 2026-11-22 17:47 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Phase 22 | pending | — |  · expected done Nov 22 23:17–Dec 08 00:54 UTC |
+| 22 | Phase 22 | pending | — |  · expected done Nov 23 06:17–Dec 08 07:54 UTC |
 
 ## Phase 22 segments
 
@@ -60,8 +60,8 @@ none yet
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1382 |
-| bonsai-b | bonsai2-27b | idle | 1300 |
+| bonsai-a | bonsai2-27b | down | 1382 |
+| bonsai-b | bonsai2-27b | down | 1300 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 163 |
@@ -73,5 +73,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | down | 1155 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1155 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
