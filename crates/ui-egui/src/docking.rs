@@ -24,11 +24,21 @@ pub enum Panel {
     DetectionReview,
     /// The Library: categories, folders, search, chips, history, tags and details.
     Library,
+    Blocks,
 }
 
 impl Panel {
-    pub const ALL: &[Self] =
-        &[Self::Canvas, Self::ToolSets, Self::Layers, Self::Properties, Self::ExternalRefs, Self::DetectionReview, Self::Library];
+    pub const ALL: &[Self] = &[
+        Self::Canvas,
+        Self::ToolSets,
+        Self::QuickCalc,
+        Self::Layers,
+        Self::Properties,
+        Self::ExternalRefs,
+        Self::DetectionReview,
+        Self::Library,
+        Self::Blocks,
+    ];
     pub fn id(self) -> &'static str {
         match self {
             Self::Canvas => "canvas",
@@ -39,6 +49,7 @@ impl Panel {
             Self::ExternalRefs => "externalReferences",
             Self::DetectionReview => "detection-review",
             Self::Library => "library",
+            Self::Blocks => "blocks",
         }
     }
     fn label(self) -> &'static str {
@@ -51,6 +62,7 @@ impl Panel {
             Self::ExternalRefs => "External References",
             Self::DetectionReview => "Detection Review",
             Self::Library => "Library",
+            Self::Blocks => "Blocks",
         }
     }
     /// The icon a palette shows in a column collapsed to icons.
@@ -65,10 +77,11 @@ impl Panel {
             Self::ExternalRefs => Some(Icon::Attach),
             Self::DetectionReview => Some(Icon::Table),
             Self::Library => Some(Icon::Table),
+            Self::Blocks => Some(Icon::Blocks),
         }
     }
     /// Palettes outside the default arrangement, opened on request (QUICKCALC).
-    pub const ON_DEMAND: &[Self] = &[Self::QuickCalc, Self::DetectionReview, Self::Library];
+    pub const ON_DEMAND: &[Self] = &[Self::QuickCalc, Self::Blocks, Self::DetectionReview, Self::Library];
 }
 
 /// The drawing view never moves, floats, closes or takes tabs; palettes dock beside it.
@@ -163,6 +176,7 @@ fn home_anchor(layout: &Layout<Panel>, panel: Panel) -> Option<(Panel, bool)> {
         Panel::QuickCalc | Panel::DetectionReview | Panel::Library => {
             &[(Panel::ExternalRefs, true), (Panel::Properties, true), (Panel::Layers, true)]
         }
+        Panel::Blocks => &[(Panel::QuickCalc, true), (Panel::ExternalRefs, true), (Panel::Properties, true), (Panel::Layers, true)],
     };
     if let Some(found) = neighbours.iter().copied().find(|(neighbour, _)| docked(layout, *neighbour)) {
         return Some(found);
@@ -440,6 +454,12 @@ impl DockContent<Panel> for Panels<'_> {
                     .auto_shrink([false, false])
                     .show(ui, |ui| crate::library_panel::section(app, ui));
             }
+            Panel::Blocks => {
+                egui::ScrollArea::vertical()
+                    .id_salt("dock-blocks")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| crate::blocks_palette::section(app, ui));
+            }
         }
     }
     fn logical_label(&self, panel: &Panel) -> String {
@@ -468,6 +488,7 @@ fn panel_limits(panel: &Panel) -> PanelLimits {
         Panel::QuickCalc => (egui::vec2(240.0, 160.0), 600.0),
         Panel::ToolSets => (egui::vec2(220.0, 150.0), 480.0),
         Panel::Layers | Panel::Properties | Panel::ExternalRefs | Panel::DetectionReview | Panel::Library => (egui::vec2(220.0, 100.0), 720.0),
+        Panel::Blocks => (egui::vec2(240.0, 260.0), 720.0),
     };
     PanelLimits { min, max: egui::vec2(max_width, 1_000_000.0) }
 }

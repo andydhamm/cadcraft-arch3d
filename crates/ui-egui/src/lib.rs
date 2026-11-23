@@ -47,6 +47,8 @@ pub mod archdetect_review;
 pub mod library_panel;
 pub mod xrefs;
 
+pub mod blocks_palette;
+
 pub mod dyngrips;
 pub mod dyninput;
 pub mod electrical_tools;
