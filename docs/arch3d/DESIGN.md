@@ -545,3 +545,44 @@ Planned against arch3d at febe33d37 and the phase-17 plan: 19 packages in five w
 
 - Critical path: foundation → exposure → env-raster → sky → demo.
 - Planning lessons: the last wave's UI package (p19-pane) had no acceptance check, since checks drive the CLI, and its own tests were its only judge (decision 67); it was redone as three narrow segments (`p19t`: lighting, scene, controls), each naming the pane function its tests call. The demo was planned on a small house, against decision 48; the first showcase segment meant to make up for it merged without its script (decisions 52, 68) and the second (`p21t-showcase-house-c`) landed it. The gallery segment then merged empty and was landed by a second segment (`p21t-gallery-tool-b`): a segment's merge must be checked against its file list by the merger.
+
+## Phase 22 plan
+
+## Phase 22 — photoreal stills (plan)
+
+Planned against arch3d at 2674a60f0. 33 segments; checks 01–15 under `tests/acceptance/phase-22` with `p22lib.inc` (its header is the command contract). The spec file the brief names (`docs/superpowers/specs/2026-11-12-…`) is not in the tree, so the brief's text is the whole scope.
+
+### Decisions (71–80)
+71. **Lens, film and the sun's disc are look data** (`Look.lens`, `Look.film`, `SunLook.disc`, `Technique::Photoreal`), so they are stored per camera, resolved in one place (decision 62), overlaid per render and reach `pick3d` through the same parser. Neutral values are not serialized: older drawings stay byte-identical.
+72. **Photoreal is a table, not a mode.** `doc::arch::photo::rung(n)` is the cumulative list of what rungs 0–7 switch on; `technique: photoreal` is rung 7 and `render.ladder` renders `rung: 0..7` with one seed. A key the request names wins over the preset; a camera's own non-neutral film and sun disc win over the preset's.
+73. **Rung 0 is today's still with the lens neutral**, so for a camera without lens settings it is pixel-identical to a plain path-traced final; the lens is the camera's own from rung 1 on. Photoreal never invents a lens or an aperture (it must not lie about the design).
+74. **One lens function.** `arch3d::lens` (Panini that keeps the horizontal field, shift as a fraction of the height, the 36 mm thin lens) is the reference: the path tracer's ray generation ports it, the raster views post-warp with it, `pick3d`, the pane's pick and `render {samples}` call it. Verticals stay vertical for a level camera at every compression; shift is how a tall house is framed.
+75. **The carriers already exist.** `Lighting` (built by `lighting_for` from the look) carries lens, film and sun disc to the interactive view, the raster Finalize, the path tracer and the pane; `render3d::look::apply_photo` maps `PhotoSettings` onto `PathOptions` for the CLI and the pane alike.
+76. **Every path-tracer feature is a hook that is inert when off**: its own WGSL file and Rust module behind a frame flag, drawing no random number and doing no arithmetic when off, so existing techniques render exactly as before (check 12c compares pixels with every control named at its neutral value). The GPU material grows to 96 bytes and the frame only at its end.
+77. **Linear output is an observable** (`render {pfm, pfmStage}`): radiance after the denoiser, or display-linear after the film and before the tone curve. Energy, furnace, blur and error numbers are measured there, not in 8-bit PNGs. `render {calibrate}` replaces the model with spheres, boxes and point lights for the same reason the furnace and `albedo` params exist.
+78. **Material extensions come from a name table** (`arch3d::material_ext`): stainless appliances anisotropy, counters and tile clear coat, carpet and fabric sheen, glazing transmission and volume; the nine finishes of phase-14 check 01 are untouched. The path tracer reads them only under `materials: full`; glTF always exports them as KHR extensions and nothing else in the file moves. Rounded edges and variation are never exported.
+79. **Noise is one number with one definition**: the 95th percentile over hit pixels of the standard error of the mean over max(L, 5 % of the frame mean). Adaptive and uniform renders stop on it, the reply reports it, and check 09 confirms it against two seeds. The clamp limits what a path adds after its first hit, in display units at the still's starting exposure, and `clampLoss` is the exact fraction of the frame's light removed.
+80. **The learned denoiser is our code on committed weights.** `assets/denoise/README.md` is the specification; `render3d::tza` reads the files, `render3d::unet` is the CPU reference, `pathtrace::learned` the WGSL network tested against it. Native only; anything else falls back to the filter and the reply says so (`denoiseFallback`). Film runs on the CPU so it is deterministic on every adapter.
+
+### Numbers the checks lock
+- **Panini:** hfov 100°, a 1 m sphere 20 m away centred 47.5° off axis (inside the frame's left quarter): aspect cos α / √(cos² α − sin² 47.5°) = 1.48 ± 3 % rectilinear, under 1.15 at compression 1.0, in all three renderers; verticals within ±0.5 px; `pick3d` at the warped pixel returns the window drawn there. (The brief's "left quarter" is read as this position: it is the one where a small sphere gives 1.48.)
+- **Shift:** 0.25 moves the horizon 100 px of 400 down the image; poles stay in their columns.
+- **Depth of field:** 60° horizontal, f/2.8, focus 3 m, 1921 px wide: f = 31.18 mm, aperture 11.13 mm; blur 6.17 px at 1.5 m and 4.32 px at 10 m ± 10 % (second moment of the PFM); in focus ≥ 95 % of the light within 1.5 px; aperture off is the pinhole image.
+- **Edges:** 1 m cube, sun at azimuth 120° elevation 10° (faces 0.853 and 0.492): radius 0 one step; 5 mm from 0.5 m ≥ 3 px and a highlight above both faces; total energy within 1 %.
+- **Materials:** furnace per lobe in [0.95, 1.02]; coat peak ≥ 3×, sheen rim ≥ 1.15×, anisotropy 0.8 highlight ≥ 3:1, an emitter shows through rough and thin transmission; variation keeps the mean within 2 %.
+- **Sun disc:** 0.3 × 0.3 × 3 m pole, elevation 30°: 10–90 % over 0.687 × 0.0555 m ± 15 % at y = 5.196.
+- **Film:** neutral = film off; bloom within 1 % of the frame's energy; vignette 0.15 → corner 0.85, mid edge 0.904; white balance 3000 K neutralises a 3000 K fixture; mid grey 0.18 ± 2 % under the Photoreal film; contrast 1.5 takes 0.36 to 0.45.
+- **Adaptive:** showcase `Kitchen` camera, ≤ 60 % of the uniform samples for the same noise; 60 s budget stops in 55–65 s.
+- **Learned denoiser:** 32 tensors per file, `enc_conv0.weight` 32 × 9 × 3 × 3; flat frame within 1 %; kitchen 64 spp MRSE ≤ half the filter's against 4096 spp; 1920 × 1080 under 5 s on a GPU.
+- **Ladder:** eight rungs, same seed; sheet 8 w × (h + 24) with a (24, 24, 24) label band.
+
+### Check notes
+- `run` uses the software adapter unless `CADCRAFT_RENDER_ADAPTER` is set; checks 09 and 10 then use smaller frames and a looser noise target (the 60 % and half-error rules are unchanged), and the 5 s denoise bar applies only on a GPU (decision 34). Both replay the whole showcase house and are the slow ones.
+- Checks were written from the code, not run (the commands do not exist yet): decision 42 applies at the first green run; expect the measurement set-ups (thresholds for masks, the sphere tessellation, the sheen and coat ratios) to be where a check defect would show.
+
+### Risks and gaps
+- The kernel-hooks segment is the critical path (types → hooks → material map → lobes, edges, variation); adaptive, sun disc, clamp, film and the denoiser hang off it in parallel.
+- The learned denoiser at 1080p needs tiling on devices with small storage limits; the brief's half-error number at 64 spp is not guaranteed at the small frame the software adapter uses.
+- Thin translucency, sheen and anisotropy have no model material beyond the name table (no drapery object exists); the pane shows projection and shift only; no clip-box-style viewport handles for focus.
+- The committed gallery still owes the phase-19/20/21 run; phase 22 adds three ladders and three 1920 × 1080 finals behind `render_all.py --full` (operator's run).
+- Out of scope by the brief: upscaling, volumetrics, caustics, animated renders, hair or fur, people, an exposure triangle, polygonal bokeh, depth of field or film in the live pane, C++ or closed-binary denoisers.
