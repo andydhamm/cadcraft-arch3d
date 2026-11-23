@@ -311,6 +311,39 @@ mod tests {
         let m = sweep(&SQ, &path, &[0.0; 4], true, -1.0, "wood", ArchId(1)).unwrap();
         assert!(m.is_manifold());
         let m2 = sweep(&SQ, &path, &[0.0; 4], true, 1.0, "wood", ArchId(1)).unwrap();
+        assert!(m2.is_manifold());
+        // Same path, opposite sides: same triangle count, different volumes
+        // (side +1 sweeps inside the loop, side -1 outside).
+        assert_eq!(m.triangle_count(), m2.triangle_count());
+        assert!(volume(&m) > 0.0 && volume(&m2) > 0.0);
+        assert!((volume(&m) - volume(&m2)).abs() > 1e-6);
+    }
+
+    #[test]
+    fn sweep_closed_path_reversed_direction() {
+        let path = [v(0.0, 0.0), v(2.0, 0.0), v(2.0, 1.0), v(0.0, 1.0)];
+        let reversed = [v(0.0, 0.0), v(0.0, 1.0), v(2.0, 1.0), v(2.0, 0.0)];
+        let m = sweep(&SQ, &path, &[0.0; 4], true, 1.0, "wood", ArchId(1)).unwrap();
+        let m2 = sweep(&SQ, &reversed, &[0.0; 4], true, -1.0, "wood", ArchId(1)).unwrap();
+        // Reversing the path and flipping the side gives the same volume.
+        assert!((volume(&m) - volume(&m2)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sweep_profile_with_zero_width() {
+        let thin = [[0.0, 0.0], [0.001, 0.0], [0.001, 0.02], [0.0, 0.02]];
+        let m = sweep(&thin, &[v(0.0, 0.0), v(1.0, 0.0)], &[0.0, 0.0], false, 1.0, "wood", ArchId(1));
+        assert!(m.is_none(), "profile narrower than 2 mm must be rejected");
+    }
+
+    #[test]
+    fn sweep_path_with_duplicate_consecutive_points() {
+        let path = [v(0.0, 0.0), v(0.5, 0.0), v(0.5, 0.0), v(1.0, 0.0)];
+        let z = [0.0, 0.0, 0.0, 0.0];
+        let m = sweep(&SQ, &path, &z, false, 1.0, "wood", ArchId(1)).unwrap();
+        // Duplicate points are dropped; the result is the same as a 2-segment path.
+        let m2 = sweep(&SQ, &[v(0.0, 0.0), v(0.5, 0.0), v(1.0, 0.0)], &[0.0, 0.0, 0.0], false, 1.0, "wood", ArchId(1)).unwrap();
+        assert_eq!(m.triangle_count(), m2.triangle_count());
         assert!((volume(&m) - volume(&m2)).abs() < 1e-6);
     }
 
