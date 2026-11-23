@@ -17,6 +17,7 @@ pub mod environment;
 pub mod exposure;
 pub mod final_render;
 pub mod frame_look;
+pub mod lens;
 pub mod light;
 pub mod lights;
 pub mod lit;
