@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use cadcraft_doc::arch::{Camera3d, CameraKind};
 
-use super::look::{LOOK_KEYS, apply_look_params, effective_look};
+use super::look::{LOOK_KEYS, apply_look_params, apply_look_params_with, effective_look};
 use crate::{
     EngineError, Session,
     cmd::{CommandSpec, bad},
@@ -23,13 +23,13 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("view3d", "3D View", run_view3d).menu(&["Architecture", "3D View"]).params("{}").noundo(),
         CommandSpec::new("camera", "Camera", run_camera).params(
-            "{save:name, kind?:orbit|full|overview, target?, azimuth?, elevation?, distance?, eye?, eyeHeight?, fov?, level?: name|index, lowerLevels?: bool, technique?, exposure?, toneMap?, sun?: {angle?…}, sky?, lightSet?, cutaway?, clip?, nearClip?} | {list:true} | {use:name} | {delete:name} | {azimuth?, elevation?, distance?, target?}",
+            "{save:name, kind?:orbit|full|overview, target?, azimuth?, elevation?, distance?, eye?, eyeHeight?, fov?, level?: name|index, lowerLevels?: bool, technique?, exposure?, toneMap?, sun?: {angle?…}, sky?, lightSet?, cutaway?, clip?, nearClip?, projection?: rectilinear|panini, compression?, shift?, aperture?: null|f-number, focus?: null|metres|{pick: [x,y]}, film?: null|photoreal|{bloom?, bloomThreshold?, vignette?, whiteBalance?, contrast?, saturation?, lift?}} | {list:true} | {use:name} | {delete:name} | {azimuth?, elevation?, distance?, target?}",
         ),
         CommandSpec::new("camera.reset", "Reset Camera", run_camera_reset).params("{name?: camera (default: the active one)}"),
         CommandSpec::new("camera.orbit", "Orbit Camera", run_camera_orbit)
             .params("{name?, azimuth?: delta degrees, elevation?: delta degrees (result within ±89), distance?: factor > 0}"),
         CommandSpec::new("camera.update", "Update Camera", run_camera_update)
-            .params("{name?, target?, azimuth?, elevation?, distance?, eye?, eyeHeight?, fov?, level?, lowerLevels?, + the look keys of camera save}"),
+            .params("{name?, target?, azimuth?, elevation?, distance?, eye?, eyeHeight?, fov?, level?, lowerLevels?, + the look keys of camera save (technique, exposure, toneMap, sun {disc}, sky, lightSet, cutaway, clip, nearClip, projection, compression, shift, aperture, focus, film)}"),
         CommandSpec::new("walkthrough", "Walkthrough", run_walkthrough)
             .menu(&["Architecture", "Walkthrough"])
             .params("{eye,yaw,forward?,strafe?,turn?,step?}")
@@ -313,7 +313,7 @@ fn camera_save(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     // The camera keeps its look: the effective global look (with the backdrop) under this call's
     // own look keys, stored complete so later global changes never reach it.
     let mut look = effective_look(&s.doc()?.arch, None);
-    apply_look_params("camera", params, &s.doc()?.arch, &mut look, false)?;
+    apply_look_params_with("camera", params, &s.doc()?.arch, &mut look, false, true)?;
     cam.light_set = look.light_set.clone();
     cam.look = Some(look);
     cam.saved = Some(Box::new(cam.clone()));
