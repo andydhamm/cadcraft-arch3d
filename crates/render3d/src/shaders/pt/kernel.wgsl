@@ -15,6 +15,15 @@
 // probes[i] (rgb lux in accum[i]): direct light from every light and the sun with shadow rays,
 // plus, with bounces > 0, cosine-sampled paths times π.
 //
+// Accumulator layout (n = width * height): accum[i] = (radiance sum rgb, sample count) and
+// accum[n + i] = (luminance-squared sum, hit count, clamp-loss luminance sum, adaptive state: 0
+// active, 1 converged). aov[2i].w = 0 on a miss, 1 + the first hit's roughness on a hit.
+// Under PHOTO_ADAPTIVE a converged pixel returns at once and a pixel's sample index is its own
+// count u32(accum[i].w) + k; otherwise frame.sample_base + k.
+//
+// [p22] Hook files (documented stubs, inert with every option off): lens (camera_ray), edges
+// (pt_round_edge), variation (pt_vary), bsdf_ext, bsdf_trans, sun_disc, clamp (pt_clamp).
+//
 // traverse_test_main: for the traversal test, probes[i] is a ray (point = origin, normal =
 // direction) and accum[i] = (t, bitcast tri, u, v) of trace(origin, dir, PT_INF).
 
@@ -147,7 +156,7 @@ fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<f
         }
         sum = sum + f * s.li * v * (pick.weight * w / s.pdf);
     }
-    let sun = sun_sample();
+    let sun = sun_sample_at(r);
     if (light_luminance(sun.li) > 0.0) {
         let f = bsdf_eval(m, n, wo, sun.dir);
         if (light_luminance(f) > 0.0) {
@@ -231,7 +240,8 @@ fn pt_shading_normal(tri: u32, n: vec3<f32>, u: f32, v: f32) -> vec3<f32> {
 }
 
 // What a path adds up to and what its first hit looked like.
-struct PathResult { radiance: vec3<f32>, albedo: vec3<f32>, normal: vec3<f32>, t: f32, hit: u32 };
+// `loss` is the luminance the firefly clamp removed (clamp.wgsl); `roughness` the first hit's.
+struct PathResult { radiance: vec3<f32>, albedo: vec3<f32>, normal: vec3<f32>, t: f32, hit: u32, loss: f32, roughness: f32 };
 
 // The radiance arriving along the ray (o, d) (unit d) of a path that has made start_depth
 // vertices; `mode` and `prev_pdf` say how its first segment treats area lights.
@@ -242,6 +252,10 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
     res.normal = vec3<f32>(0.0);
     res.t = 0.0;
     res.hit = 0u;
+    res.loss = 0.0;
+    res.roughness = 0.0;
+    // The clamp's running loss, a plain local: a pointer to a member of `res` does not translate.
+    var clamp_loss = 0.0;
     var o = o_in;
     var d = d_in;
     var mode = mode_in;
@@ -251,10 +265,11 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
     let sel = select(1.0 / f32(max(n_lights, 1u)), 1.0, n_lights <= ALL_LIGHTS_MAX);
     for (var depth = start_depth; depth < MAX_PATH_DEPTH; depth = depth + 1u) {
         let h = trace(o, d, PT_INF);
-        res.radiance = res.radiance + throughput * area_lights_seen(o, d, h.t, mode, prev_pdf, sel);
+        res.radiance = res.radiance + pt_clamp(throughput * area_lights_seen(o, d, h.t, mode, prev_pdf, sel), depth, &clamp_loss);
         if (h.t < 0.0) {
             // The sky has no light sample, so every ray that escapes counts it.
-            res.radiance = res.radiance + throughput * env_escape(d, depth, mode, prev_pdf);
+            res.radiance = res.radiance + pt_clamp(throughput * env_escape(d, depth, mode, prev_pdf), depth, &clamp_loss);
+            res.radiance = res.radiance + pt_clamp(throughput * sun_disc_seen(d, depth, mode, prev_pdf), depth, &clamp_loss);
             break;
         }
         let tri = tris[h.tri];
@@ -264,19 +279,21 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
         }
         n = pt_shading_normal(h.tri, n, h.u, h.v);
         let p = o + d * h.t;
-        let m = materials[tri.material];
+        n = pt_round_edge(h.tri, n, p);
+        let m = pt_vary(materials[tri.material], p);
         if (depth == 0u) {
             res.albedo = m.albedo;
             res.normal = n;
             res.t = h.t;
             res.hit = 1u;
+            res.roughness = m.roughness;
         }
         if (depth == 0u || (m.flags & MAT_EMIT_CAMERA_ONLY) == 0u) {
-            res.radiance = res.radiance + throughput * m.emission;
+            res.radiance = res.radiance + pt_clamp(throughput * m.emission, depth, &clamp_loss);
         }
-        let glass = (m.flags & MAT_GLASS) != 0u;
+        let glass = (m.flags & MAT_GLASS) != 0u && !trans_active(m);
         if (!glass) {
-            res.radiance = res.radiance + throughput * direct_light(m, p, n, -d, r);
+            res.radiance = res.radiance + pt_clamp(throughput * direct_light(m, p, n, -d, r), depth, &clamp_loss);
         }
         if (frame.bounces == 0u) {
             break;
@@ -307,6 +324,7 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
             throughput = throughput / q;
         }
     }
+    res.loss = clamp_loss;
     return res;
 }
 
@@ -316,36 +334,47 @@ fn trace_main(@builtin(global_invocation_id) id: vec3<u32>) {
         return;
     }
     let i = id.y * frame.size.x + id.x;
+    let n_pixels = frame.size.x * frame.size.y;
+    // [p22] Adaptive sampling: a converged pixel is done, and a pixel's sample index is its own count.
+    var base = frame.sample_base;
+    if ((frame.photo.x & PHOTO_ADAPTIVE) != 0u) {
+        if (accum[n_pixels + i].w > 0.5) {
+            return;
+        }
+        base = u32(accum[i].w);
+    }
     var sum = vec3<f32>(0.0);
     var sq = 0.0;
     var hits = 0u;
+    var loss = 0.0;
     for (var k = 0u; k < frame.spp_this_pass; k = k + 1u) {
-        let s = frame.sample_base + k;
+        let s = base + k;
         var r = rng_new(i, s, frame.seed);
         let px = f32(id.x) + rand(&r);
         let py = f32(id.y) + rand(&r);
-        let ndc = vec2<f32>(2.0 * px / f32(frame.size.x) - 1.0, 1.0 - 2.0 * py / f32(frame.size.y));
-        let far4 = frame.inv_view_proj * vec4<f32>(ndc, 1.0, 1.0);
-        let near4 = frame.inv_view_proj * vec4<f32>(ndc, 0.0, 1.0);
-        let dir = normalize(far4.xyz / far4.w - near4.xyz / near4.w);
-        let t0 = camera_t_min(dir);
-        let res = path_radiance(frame.eye.xyz + dir * t0, dir, 0u, AREA_SEEN, 0.0, &r);
+        let cam = camera_ray(px, py, &r);
+        let res = path_radiance(cam.o, cam.d, 0u, AREA_SEEN, 0.0, &r);
         hits = hits + res.hit;
         if (finite_rgb(res.radiance)) {
             let l = dot(res.radiance, vec3<f32>(0.2126, 0.7152, 0.0722));
             sum = sum + res.radiance;
             sq = sq + l * l;
+            if (res.loss == res.loss && res.loss < PT_INF) {
+                loss = loss + res.loss;
+            }
         }
         if (s == 0u) {
-            aov[2u * i] = vec4<f32>(res.albedo, f32(res.hit));
+            aov[2u * i] = vec4<f32>(res.albedo, select(0.0, 1.0 + res.roughness, res.hit != 0u));
             aov[2u * i + 1u] = vec4<f32>(res.normal, res.t);
         }
     }
     accum[i] = accum[i] + vec4<f32>(sum, f32(frame.spp_this_pass));
-    accum[frame.size.x * frame.size.y + i].x = accum[frame.size.x * frame.size.y + i].x + sq;
+    accum[n_pixels + i].x = accum[n_pixels + i].x + sq;
     // The samples whose camera ray hit a surface: a pixel still at 0 missed on every sample, and only such a pixel
     // shows the backdrop (tracer.rs `backdrop_composite`), so an edge pixel some samples hit keeps its shading.
-    accum[frame.size.x * frame.size.y + i].y = accum[frame.size.x * frame.size.y + i].y + f32(hits);
+    accum[n_pixels + i].y = accum[n_pixels + i].y + f32(hits);
+    // The luminance the firefly clamp removed (clamp.wgsl).
+    accum[n_pixels + i].z = accum[n_pixels + i].z + loss;
 }
 
 @compute @workgroup_size(64)
@@ -371,7 +400,7 @@ fn irradiance_main(@builtin(global_invocation_id) id: vec3<u32>) {
             let v = visibility(o, s.dir, light_shadow_limit(light, s));
             e = e + s.li * v * (cos_n * pick.weight / s.pdf);
         }
-        let sun = sun_sample();
+        let sun = sun_sample_at(&r);
         let cos_sun = max(dot(n, sun.dir), 0.0);
         if (light_luminance(sun.li) > 0.0 && cos_sun > 0.0) {
             e = e + sun.li * sun_visibility(o, sun.dir) * cos_sun;

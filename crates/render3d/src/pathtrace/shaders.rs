@@ -10,15 +10,37 @@ pub const COMMON_WGSL: &str = include_str!("../shaders/pt/common.wgsl");
 pub const TRAVERSE_WGSL: &str = include_str!("../shaders/pt/traverse.wgsl");
 pub const BSDF_WGSL: &str = include_str!("../shaders/pt/bsdf.wgsl");
 pub const LIGHTS_WGSL: &str = include_str!("../shaders/pt/lights.wgsl");
+/// Phase-22 hook files: documented stubs a later package fills, each in its own file.
+pub const LENS_WGSL: &str = include_str!("../shaders/pt/lens.wgsl");
+pub const EDGES_WGSL: &str = include_str!("../shaders/pt/edges.wgsl");
+pub const VARIATION_WGSL: &str = include_str!("../shaders/pt/variation.wgsl");
+pub const BSDF_EXT_WGSL: &str = include_str!("../shaders/pt/bsdf_ext.wgsl");
+pub const BSDF_TRANS_WGSL: &str = include_str!("../shaders/pt/bsdf_trans.wgsl");
+pub const SUN_DISC_WGSL: &str = include_str!("../shaders/pt/sun_disc.wgsl");
+pub const CLAMP_WGSL: &str = include_str!("../shaders/pt/clamp.wgsl");
 pub const KERNEL_WGSL: &str = include_str!("../shaders/pt/kernel.wgsl");
 pub const RESOLVE_WGSL: &str = include_str!("../shaders/pt/resolve.wgsl");
 pub const DENOISE_WGSL: &str = include_str!("../shaders/pt/denoise.wgsl");
 pub const RQ_TRAVERSE_WGSL: &str = include_str!("../shaders/pt/traverse_rq.wgsl");
 
+/// The hook files `bsdf.wgsl` and the kernel call into, ahead of bsdf; the rest follow lights.
+const HOOKS_BEFORE_BSDF: [&str; 5] = [LENS_WGSL, EDGES_WGSL, VARIATION_WGSL, BSDF_EXT_WGSL, BSDF_TRANS_WGSL];
+const HOOKS_AFTER_LIGHTS: [&str; 2] = [SUN_DISC_WGSL, CLAMP_WGSL];
+
 /// The kernel module's source.
 pub fn kernel_source() -> String {
     let spec = super::spec_albedo::spec_albedo_wgsl();
-    [COMMON_WGSL, TRAVERSE_WGSL, spec.as_str(), BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
+    [
+        COMMON_WGSL,
+        TRAVERSE_WGSL,
+        spec.as_str(),
+        HOOKS_BEFORE_BSDF.join("\n").as_str(),
+        BSDF_WGSL,
+        LIGHTS_WGSL,
+        HOOKS_AFTER_LIGHTS.join("\n").as_str(),
+        KERNEL_WGSL,
+    ]
+    .join("\n")
 }
 
 /// The ray-query kernel module's source: same modules as [`kernel_source`] but the ray-query
@@ -30,7 +52,18 @@ pub fn rq_kernel_source() -> String {
     let spec = super::spec_albedo::spec_albedo_wgsl();
     let (directives, traversal): (Vec<&str>, Vec<&str>) = RQ_TRAVERSE_WGSL.lines().partition(|l| l.trim_start().starts_with("enable "));
     let traversal = traversal.join("\n");
-    [directives.join("\n").as_str(), COMMON_WGSL, traversal.as_str(), spec.as_str(), BSDF_WGSL, LIGHTS_WGSL, KERNEL_WGSL].join("\n")
+    [
+        directives.join("\n").as_str(),
+        COMMON_WGSL,
+        traversal.as_str(),
+        spec.as_str(),
+        HOOKS_BEFORE_BSDF.join("\n").as_str(),
+        BSDF_WGSL,
+        LIGHTS_WGSL,
+        HOOKS_AFTER_LIGHTS.join("\n").as_str(),
+        KERNEL_WGSL,
+    ]
+    .join("\n")
 }
 
 /// Every compute pipeline and the layouts their bind groups follow.
@@ -240,6 +273,39 @@ mod tests {
         assert!(source.contains("moon_direct(m, p, n, wo)"));
         assert!(source.contains("!hit_clipped("));
         assert!(!source.contains("visibility(o, sun.dir, 1.0e6)"));
+    }
+
+    #[test]
+    fn kernel_sources_compile_with_the_hook_files() {
+        let hooks = [
+            "fn camera_ray(px: f32, py: f32, r: ptr<function, Rng>) -> CameraRay",
+            "fn pt_round_edge(tri: u32, n: vec3<f32>, p: vec3<f32>) -> vec3<f32>",
+            "fn pt_vary(m: Material, p: vec3<f32>) -> Material",
+            "fn ext_active(m: Material) -> bool",
+            "fn trans_active(m: Material) -> bool",
+            "fn sun_sample_at(r: ptr<function, Rng>) -> LightSample",
+            "fn sun_disc_seen(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32>",
+            "fn pt_clamp(c: vec3<f32>, depth: u32, loss: ptr<function, f32>) -> vec3<f32>",
+            "glass = (m.flags & MAT_GLASS) != 0u && !trans_active(m)",
+        ];
+        for source in [kernel_source(), rq_kernel_source()] {
+            for h in hooks {
+                assert_eq!(source.matches(h).count(), 1, "{h}");
+            }
+            assert!(source.contains("if (trans_active(m)) {\n        return trans_sample(m, n, wo, u);"));
+        }
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute device");
+            return;
+        };
+        if let Err(e) = PtPipelines::new(&gpu, None) {
+            assert!(false, "the kernel with the hook files must compile: {e}");
+        }
+        if gpu.ray_query {
+            if let Err(e) = build_rq_pipelines(&gpu, None) {
+                assert!(false, "the ray-query kernel with the hook files must compile: {e}");
+            }
+        }
     }
 
     #[test]
