@@ -662,11 +662,10 @@ impl Pane3d {
     /// part here.
     pub fn pick_ray(&self, pixel: [f32; 2], size: (u32, u32)) -> Option<(cadcraft_geom::Vec3, cadcraft_geom::Vec3)> {
         let lens = &self.view.look.lens;
-        let view = cadcraft_arch3d::lens::LensView {
-            panini: lens.projection == cadcraft_doc::arch::LensProjection::Panini,
-            compression: lens.compression,
-            shift: lens.shift,
-        };
+        let mut view = cadcraft_arch3d::lens::LensView::default();
+        view.panini = lens.projection == cadcraft_doc::arch::LensProjection::Panini;
+        view.compression = lens.compression;
+        view.shift = lens.shift;
         cadcraft_arch3d::lens::ray_at_lens(&self.camera(), &view, size, pixel)
     }
 
