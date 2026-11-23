@@ -146,6 +146,32 @@ if man.get('scriptSha256') != sha:
     # (tools/showcase/render_all.py --out docs/arch3d/showcase/renders); between closes the images may trail the script.
     print(f"note: the committed renders are of an earlier bilevel.json (manifest scriptSha256 {str(man.get('scriptSha256'))[:12]}, "
           f"bilevel.json {sha[:12]}); the operator re-renders at the phase's close")
+def foreground_sampled(path, tol=8, samples=250000):
+    """p16lib's foreground() for a committed render: the same two numbers from one decode, and from a grid of about
+    `samples` pixels when the image is large. 2026-11-23 (operator): the gallery's 14 sheet images are 7746 x 5164 and
+    foreground() decoded each twice and walked every second pixel in Python, about 98 s a sheet and 23 minutes for the
+    check, over the gate's 900 s. An image of up to a megapixel is read as before (every second pixel)."""
+    w, h, nch, rows = png(path)
+    if w < 2 or h < 2:
+        fail(f"{os.path.basename(path)} is {w} x {h}")
+    st = max(2, int(math.ceil(math.sqrt(w * h / float(samples)))))
+    px = lambda x, y: tuple(rows[y][x * nch:x * nch + min(3, nch)])
+    cs = [px(0, 0), px(w - 1, 0), px(0, h - 1), px(w - 1, h - 1)]
+    clear = max(cs, key=cs.count)
+    n = fg = 0
+    lum = []
+    for y in range(0, h, st):
+        r = rows[y]
+        for x in range(0, w, st):
+            c = r[x * nch:x * nch + 3]
+            n += 1
+            if max(abs(c[k] - clear[k]) for k in range(min(3, nch))) > tol:
+                fg += 1
+            lum.append(0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] if nch >= 3 else float(c[0]))
+    m = sum(lum) / n
+    return fg / n, math.sqrt(sum((v - m) ** 2 for v in lum) / n)
+
+
 tracked = set(subprocess.run(['git', 'ls-files', 'docs/arch3d/showcase/renders'], capture_output=True, text=True, cwd=ROOT).stdout.split())
 kinds = {}
 total = 0
@@ -154,7 +180,7 @@ for im in man.get('images', []):
     f = os.path.join(ROOT, rel)
     if rel not in tracked or not os.path.exists(f):
         fail(f"{rel} ({im.get('kind')}) is committed")
-    frac, sd = foreground(f)
+    frac, sd = foreground_sampled(f)
     # Line drawings (plans, electrical plans, elevations, sections: thin lines on white) as phase-15 check 11 takes them
     # (0.5 % at least); shaded and rendered views 5 %. A plan of the showcase covers ~3 % of its frame.
     # Revised 2026-11-16 (operator): the full gallery (render_all.py --full) also commits plan views, reflected ceiling,
