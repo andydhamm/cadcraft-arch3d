@@ -67,7 +67,7 @@ fn room_slot(ctx: &Ctx, id: ArchId) -> usize {
 mod tests {
     use super::super::{IfcOptions, write_model};
     use cadcraft_arch3d::Scene3d;
-    use cadcraft_doc::arch::{ArchModel, Room, RoomType};
+    use cadcraft_doc::arch::{ArchModel, Level, Room, RoomType};
     use cadcraft_geom::Vec2;
 
     fn deck_model() -> ArchModel {
@@ -113,5 +113,30 @@ mod tests {
         guids.sort_unstable();
         guids.dedup();
         assert_eq!(guids.len(), n, "every deck piece has its own GlobalId");
+    }
+
+    #[test]
+    fn an_empty_model_exports_no_deck_pieces() {
+        let m = ArchModel::default();
+        let text = export(&m);
+        assert_eq!(text.matches("=IFCMEMBER(").count(), 0, "no members in empty model: {text}");
+        assert_eq!(text.matches("=IFCCOLUMN(").count(), 0, "no columns in empty model: {text}");
+        assert_eq!(text.matches("=IFCFOOTING(").count(), 0, "no footings in empty model: {text}");
+    }
+
+    #[test]
+    fn multiple_decks_export_their_own_pieces() {
+        let mut m = ArchModel::default();
+        m.levels.push(Level::default());
+        let poly1 = vec![Vec2::new(2.0, 8.1), Vec2::new(6.0, 8.1), Vec2::new(6.0, 11.1), Vec2::new(2.0, 11.1)];
+        let poly2 = vec![Vec2::new(-4.0, 8.1), Vec2::new(0.0, 8.1), Vec2::new(0.0, 11.1), Vec2::new(-4.0, 11.1)];
+        m.push_room(Room { polygon: poly1, room_type: RoomType::Deck, deck_height: Some(0.9), ..Room::default() });
+        m.push_room(Room { polygon: poly2, room_type: RoomType::Deck, deck_height: Some(0.9), ..Room::default() });
+        let text = export(&m);
+        // Each deck has its own members, columns, and piers.
+        assert!(text.contains(",'deck-r0-joist-0',"), "first deck joist: {text}");
+        assert!(text.contains(",'deck-r1-joist-0',"), "second deck joist: {text}");
+        assert!(text.contains(",'deck-r0-post-0',"), "first deck post: {text}");
+        assert!(text.contains(",'deck-r1-post-0',"), "second deck post: {text}");
     }
 }
