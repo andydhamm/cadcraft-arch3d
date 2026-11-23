@@ -53,7 +53,8 @@ class RenderAll(unittest.TestCase):
         look = {r[2]: r for r in ra.plan(LEVELS, VIEWS, SHEETS, True) if r[1] == 'look'}
         self.assertEqual(sorted(look), ['dusk', 'noon-hdri', 'overview'])
         self.assertEqual(look['noon-hdri'][3][0][1].get('spp'), 64)
-        self.assertNotIn('spp', look['dusk'][3][0][1])
+        self.assertEqual(look['dusk'][3][0][1].get('spp'), 64)
+        self.assertNotIn('spp', look['overview'][3][0][1])
 
     def test_drawing_set_steps_replay_three_scripts(self):
         rows = [r for r in ra.plan(LEVELS, VIEWS, SHEETS, True) if r[1] == 'replay']
