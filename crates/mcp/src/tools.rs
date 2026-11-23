@@ -27,6 +27,7 @@ pub fn tool_definitions(has_ui: bool) -> Value {
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
                 "background": {"type": "string", "description": "\"dark\" (default without plot_style), \"white\" (default with one), \"paper\" or \"#rrggbb\""},
                 "plot_style": {"type": "string", "description": "a plot style table: monochrome.ctb, grayscale.ctb, default.ctb, default.stb, monochrome.stb, or one the drawing holds; \"none\" or \"\" for the objects' own properties"},
+                "sun": {"anyOf": [{"const": false}, {"type": "object", "properties": {"date": {"type": "string"}, "time": {"type": "string"}}, "required": ["date", "time"]}]},
                 "path": {"type": "string"}}}}),
         json!({"name": "find_text", "description": "Read the drawing's texts: TEXT, MTEXT (formatting removed), block attributes and multileaders, each with its text, insertion point `at`, height, rotation, style, layer and handle. Filter by `contains` (any case; `query` is the same filter), `layer` and/or `window` [[x0,y0],[x1,y1]] around the insertion points; page with offset and limit (default 200). Use it to find room names, sheet titles and notes without reading all the geometry.",
             "inputSchema": {"type": "object", "properties": {"contains": {"type": "string"}, "query": {"type": "string"}, "layer": {"type": "string"},

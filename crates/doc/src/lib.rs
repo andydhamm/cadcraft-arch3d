@@ -247,6 +247,13 @@ impl Drawing {
     /// The handle [`Drawing::new_handle`] gives out next (AutoCAD's `HANDSEED`), without taking it.
     pub fn next_handle(&self) -> Handle {
         let mut h = self.handseed;
+        if h >= ARCH_HANDLE_BASE {
+            h = ARCH_HANDLE_BASE.saturating_sub(1);
+            while h > 0 && self.foreign.handles.contains_key(&Handle(h)) {
+                h = h.saturating_sub(1);
+            }
+            return Handle(h);
+        }
         while self.foreign.handles.contains_key(&Handle(h)) && h < u64::MAX {
             h = h.saturating_add(1);
         }
@@ -262,7 +269,7 @@ impl Drawing {
             return;
         }
         if h.0 >= self.handseed {
-            self.handseed = h.0.saturating_add(1);
+            self.handseed = h.0.saturating_add(1).min(ARCH_HANDLE_BASE);
         }
     }
 
