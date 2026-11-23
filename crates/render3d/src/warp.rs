@@ -20,7 +20,11 @@ const MAX_SOURCE_SCALE: u32 = 4;
 
 /// The lens as `arch3d`'s `f64` math takes it.
 fn lens_view(lens: &LensOptions) -> LensView {
-    LensView { panini: lens.panini, compression: f64::from(lens.compression), shift: f64::from(lens.shift) }
+    let mut l = LensView::default();
+    l.panini = lens.panini;
+    l.compression = f64::from(lens.compression);
+    l.shift = f64::from(lens.shift);
+    l
 }
 
 /// The source frame a warped output of `size` needs: `(tan_v of the source, height in pixels)`.
