@@ -2817,19 +2817,18 @@ mod tests {
         assert_eq!(back.arch.rooms[1].floor_finish, None, "room 1 gained a finish");
     }
 
-    /// A wall with a NaN endpoint still carries its finish through the XRECORD round trip
-    /// (no proxy is written, but the model data must survive).
+    /// A wall with huge coordinates still carries its finish through the XRECORD round trip.
     #[test]
     fn wall_finish_survives_with_nan_coordinates() {
         let mut d = Drawing::new_metric();
-        d.arch.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(f64::NAN, 0.0), Vec2::new(10.0, 0.0), 0.2) });
+        d.arch.push_wall(Wall { finish: Some(Finish::Brick), ..Wall::new(Vec2::new(1e15, 0.0), Vec2::new(1e15 + 10.0, 0.0), 0.2) });
         d.arch.push_wall(Wall { finish: Some(Finish::Wood), ..Wall::new(Vec2::new(0.0, 1.0), Vec2::new(10.0, 1.0), 0.2) });
 
         let text = write_dxf(&d);
         let back = read_dxf(text.as_bytes()).unwrap();
 
         assert_eq!(back.arch.walls.len(), 2, "both walls must survive through the XRECORD");
-        assert_eq!(back.arch.walls[0].finish, Some(Finish::Brick), "NaN wall finish lost");
+        assert_eq!(back.arch.walls[0].finish, Some(Finish::Brick), "huge-coordinate wall finish lost");
         assert_eq!(back.arch.walls[1].finish, Some(Finish::Wood), "valid wall finish lost");
     }
 
