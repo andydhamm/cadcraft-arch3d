@@ -297,6 +297,7 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
     let mut materials: Vec<Value> = Vec::new();
     let mut material_index: HashMap<String, u32> = HashMap::new();
     let names = node_names(scene);
+    let mut ext_names: Vec<String> = Vec::new();
 
     let written_meshes: Vec<&Mesh> = scene.meshes.iter().filter(|m| !m.positions.is_empty()).collect();
     let mut pngs: Vec<(String, Vec<u8>, String)> = Vec::new();
@@ -476,6 +477,13 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
             }
             if is_glass {
                 mat["alphaMode"] = json!("BLEND");
+            }
+            let (ext_map, ext_used) = glb_ext::material_extensions(&cadcraft_arch3d::material_ext::resolve(scene, &m.material));
+            if !ext_map.is_empty() {
+                mat.insert("extensions".to_string(), Value::Object(ext_map));
+            }
+            for name in ext_used {
+                ext_names.push(name.to_string());
             }
             materials.push(mat);
             let idx = (materials.len() - 1) as u32;
@@ -684,9 +692,19 @@ fn build_bin(scene: &Scene3d) -> (String, Vec<u8>) {
         value["images"] = json!(images);
         value["textures"] = json!(textures);
     }
-    if has_root && !light_defs.is_empty() {
-        value["extensionsUsed"] = json!(["KHR_lights_punctual"]);
-        value["extensions"] = json!({ "KHR_lights_punctual": { "lights": light_defs } });
+    if has_root {
+        let mut all_names: Vec<String> = ext_names;
+        if !light_defs.is_empty() {
+            all_names.push("KHR_lights_punctual".to_string());
+        }
+        if !all_names.is_empty() {
+            all_names.sort();
+            all_names.dedup();
+            value["extensionsUsed"] = Value::Array(all_names.iter().map(|n| Value::String(n.clone())).collect());
+            if !light_defs.is_empty() {
+                value["extensions"] = json!({ "KHR_lights_punctual": { "lights": light_defs } });
+            }
+        }
     }
 
     (json_string(value), bin)
@@ -3257,5 +3275,65 @@ mod tests {
         assert_eq!(indices[0], 5); // brick-normal
         assert_eq!(indices[1], 1); // siding-normal
         assert_eq!(indices[2], 3); // shingles-normal
+    }
+
+    #[test]
+    fn counter_exports_clearcoat() {
+        let scene = p17_scene(&[("counter", 1)]);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mat = &json["materials"][0];
+        assert!(mat.get("extensions").is_some(), "counter should have extensions");
+        assert!(mat["extensions"].get("KHR_materials_clearcoat").is_some(), "missing KHR_materials_clearcoat");
+    }
+
+    #[test]
+    fn stainless_exports_anisotropy_and_carpet_sheen() {
+        let scene = p17_scene(&[("fixture-range", 1), ("floor-carpet", 2)]);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mats = json["materials"].as_array().unwrap();
+        let stainless = mats.iter().find(|m| m["name"].as_str().unwrap_or("") == "fixture-range").unwrap();
+        assert!(stainless.get("extensions").is_some(), "fixture-range should have extensions");
+        assert!(stainless["extensions"].get("KHR_materials_anisotropy").is_some(), "missing KHR_materials_anisotropy on fixture-range",);
+        assert!(stainless["extensions"].get("KHR_materials_sheen").is_some(), "missing KHR_materials_sheen on fixture-range",);
+        let carpet = mats.iter().find(|m| m["name"].as_str().unwrap_or("") == "floor-carpet").unwrap();
+        assert!(carpet.get("extensions").is_some(), "floor-carpet should have extensions");
+        assert!(carpet["extensions"].get("KHR_materials_sheen").is_some(), "missing KHR_materials_sheen on floor-carpet",);
+    }
+
+    #[test]
+    fn glass_exports_transmission_and_volume() {
+        let scene = p17_scene(&[("glass", 1)]);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mat = &json["materials"][0];
+        assert!(mat.get("extensions").is_some(), "glass should have extensions");
+        assert!(mat["extensions"].get("KHR_materials_transmission").is_some(), "missing KHR_materials_transmission",);
+        assert!(mat["extensions"].get("KHR_materials_volume").is_some(), "missing KHR_materials_volume");
+    }
+
+    #[test]
+    fn plain_materials_export_no_extensions() {
+        let scene = p17_scene(&[("wall", 1)]);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let mat = &json["materials"][0];
+        assert!(mat.get("extensions").is_none(), "wall should not have extensions");
+        assert!(json.get("extensionsUsed").is_none(), "no extensionsUsed for plain wall scene");
+    }
+
+    #[test]
+    fn extensions_used_lists_exactly_what_is_used() {
+        let scene = p17_scene(&[("counter", 1), ("fixture-range", 2), ("floor-carpet", 3), ("glass", 4), ("wall", 5)]);
+        let a = write(&scene);
+        let b = write(&scene);
+        assert_eq!(a, b, "two exports of the same scene must be byte-identical");
+        let json = glb_json_chunk(&a);
+        let ext_used = json["extensionsUsed"].as_array().cloned().unwrap();
+        let names: Vec<String> = ext_used.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect();
+        let expected =
+            vec!["KHR_materials_anisotropy", "KHR_materials_clearcoat", "KHR_materials_sheen", "KHR_materials_transmission", "KHR_materials_volume"];
+        assert_eq!(names, expected, "extensionsUsed: {:?}", names);
     }
 }
