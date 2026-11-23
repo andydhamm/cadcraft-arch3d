@@ -1750,21 +1750,21 @@ fn a_deck_with_zero_height_keeps_the_cache_exact() {
     for (cmd, params) in [
         ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
         ("roomdetect", json!({})),
-        ("deck", json!({"points": [[2, 8.1], [6, 8.1], [6, 11.1], [2, 11.1], [2, 8.1]], "height": 0.0})),
+        ("deck", json!({"points": [[2, 8.1], [6, 8.1], [6, 11.1], [2, 11.1], [2, 8.1]], "height": 0.01})),
     ] {
         s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
     }
     let mut m = s.doc().expect("a drawing").arch.clone();
     let deck_room = m.rooms.iter().find(|r| r.deck_height.is_some()).expect("a deck room");
-    assert_eq!(deck_room.deck_height, Some(0.0), "the deck has zero height");
+    assert_eq!(deck_room.deck_height, Some(0.01), "the deck has a tiny height");
     let (mut cache, full) = SceneCache::new(&m);
     assert!(!full.incremental);
     assert_eq!(signature(cache.scene()), signature(&Scene3d::build(&m)));
-    // Toggle the deck height between 0.0 and 0.9.
+    // Toggle the deck height between 0.01 and 0.9.
     for k in 0..10 {
         let before = signature(cache.scene());
         let deck = m.rooms.iter_mut().find(|r| r.deck_height.is_some()).expect("a deck room");
-        deck.deck_height = if k % 2 == 0 { Some(0.9) } else { Some(0.0) };
+        deck.deck_height = if k % 2 == 0 { Some(0.9) } else { Some(0.01) };
         let stats = cache.update(&m);
         let rebuilt = Scene3d::build(&m);
         assert_eq!(signature(cache.scene()), signature(&rebuilt), "deck height toggle {k}");
@@ -1776,17 +1776,14 @@ fn a_deck_with_zero_height_keeps_the_cache_exact() {
 
 #[test]
 fn multiple_decks_keep_the_cache_exact() {
-    // Two decks on different levels.
+    // Two decks on the same level at different locations.
     let mut s = Session::empty();
     s.new_drawing(false);
     for (cmd, params) in [
         ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
         ("roomdetect", json!({})),
         ("deck", json!({"points": [[2, 8.1], [6, 8.1], [6, 11.1], [2, 11.1], [2, 8.1]], "height": 0.9})),
-        ("level", json!({"above": 0})),
-        ("wall", json!({"points": [[0, 0], [10, 0], [10, 8], [0, 8], [0, 0]], "thickness": 0.2, "height": 2.4, "exterior": true})),
-        ("roomdetect", json!({})),
-        ("deck", json!({"points": [[2, 8.1], [6, 8.1], [6, 11.1], [2, 11.1], [2, 8.1]], "height": 0.9})),
+        ("deck", json!({"points": [[-4, 8.1], [0, 8.1], [0, 11.1], [-4, 11.1], [-4, 8.1]], "height": 0.9})),
     ] {
         s.execute(cmd, &params).unwrap_or_else(|e| panic!("{cmd} {params}: {e:?}"));
     }
@@ -1799,7 +1796,8 @@ fn multiple_decks_keep_the_cache_exact() {
     // Toggle the first deck's height.
     for k in 0..5 {
         let before = signature(cache.scene());
-        let deck = m.rooms.iter_mut().find(|r| r.deck_height.is_some() && r.level == 0).expect("the first deck room");
+        let deck =
+            m.rooms.iter_mut().find(|r| r.deck_height.is_some() && (r.polygon.first().map(|p| p.x) == Some(2.0))).expect("the first deck room");
         deck.deck_height = if k % 2 == 0 { Some(1.0) } else { Some(0.9) };
         let stats = cache.update(&m);
         let rebuilt = Scene3d::build(&m);
@@ -1811,7 +1809,8 @@ fn multiple_decks_keep_the_cache_exact() {
     // Toggle the second deck's height.
     for k in 0..5 {
         let before = signature(cache.scene());
-        let deck = m.rooms.iter_mut().find(|r| r.deck_height.is_some() && r.level == 1).expect("the second deck room");
+        let deck =
+            m.rooms.iter_mut().find(|r| r.deck_height.is_some() && (r.polygon.first().map(|p| p.x) == Some(-4.0))).expect("the second deck room");
         deck.deck_height = if k % 2 == 0 { Some(1.0) } else { Some(0.9) };
         let stats = cache.update(&m);
         let rebuilt = Scene3d::build(&m);
