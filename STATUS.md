@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-23 13:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 0 of 1 segments merged**
 
@@ -32,15 +32,15 @@ Updated 2026-11-23 13:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | pending | — | 0.2 h so far · expected done Nov 23 14:04–Nov 27 12:02 UTC |
+| 22 | Photoreal stills | pending | — | 0.5 h so far · expected done Nov 23 14:18–Nov 27 12:17 UTC |
 
 ## Phase 22 segments
 
-1 working
+1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-0ebb256d3` | merge upstream upstream/main up to 0ebb256d3 (35 commits) | working | mai-flash-b |
+| `upstream-sync-0ebb256d3` | merge upstream upstream/main up to 0ebb256d3 (35 commits) | gate | mai-flash-b |
 
 ## Recent merges
 
@@ -63,7 +63,7 @@ Updated 2026-11-23 13:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1382 |
+| bonsai-a | bonsai2-27b | gate | 1383 |
 | bonsai-b | bonsai2-27b | idle | 1300 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
@@ -74,7 +74,7 @@ Updated 2026-11-23 13:45 UTC. This page and the card in the README are regenerat
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1290 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
-| mai-flash-b | mai-code-1.1-flash | agent | 79 |
+| mai-flash-b | mai-code-1.1-flash | gate | 79 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 175 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1181 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1181 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 700 |
