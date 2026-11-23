@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-23 21:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-23 22:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 2 of 35 segments merged · 0 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 3 of 35 segments merged · 0 of 15 acceptance checks**
 
-11,399 workspace tests passing at the last merge · 1323 segments merged in all · 0 of 15 seats working · PAUSED
+11,404 workspace tests passing at the last merge · 1324 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,25 +32,27 @@ Updated 2026-11-23 21:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 4.3 h so far · expected done Nov 26 06:28–Dec 16 21:44 UTC |
+| 22 | Photoreal stills | building | 0 / 15 | 4.5 h so far · expected done Nov 25 15:34–Dec 02 06:26 UTC |
 
 ## Phase 22 segments
 
-27 queued, 3 merging, 2 merged, 2 gate, 1 working
+25 queued, 3 merged, 3 merging, 2 gate, 2 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | gate | mai-flash-esc |
 | `p22-arch3d-lens` | arch3d::lens: Panini, shift and thin-lens math shared by every renderer and by picking | merging | claude-sonnet-d |
-| `p22-arch3d-material-ext` | MaterialExt: the optional PBR fields and the table that gives library materials their values | merging | claude-sonnet-c |
+| `p22-arch3d-calibrate` | Calibration scenes: spheres, boxes and point lights that replace the model for a render | working | claude-sonnet-c |
 | `p22-r3d-types` | render3d contract: LensOptions, Lighting lens/film/sun disc, PathOptions and PathStats photo fields, the stub modules | gate | claude-sonnet-d |
-| `p22-engine-look-keys` | Engine: the lens, film and sun-disc look keys on look, camera, render and pick3d | working | claude-sonnet-c |
+| `p22-engine-look-keys` | Engine: the lens, film and sun-disc look keys on look, camera, render and pick3d | merging | claude-sonnet-c |
 | `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | merging | mai-flash-b |
+| `p22-io-glb-ext` | glTF export of the new PBR fields as KHR material extensions | working | bonsai-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 23 21:58 | `p22-arch3d-material-ext` | merged | 11,404 pass | claude-sonnet-c |
 | Nov 23 21:24 | `p22-doc-look` | merged | 11,399 pass | claude-sonnet-a |
 | Nov 23 19:14 | `harden-p18-observables-1` | merged | 11,394 pass | tturbo-mac |
 | Nov 23 17:27 | `harden-p18-observables-2` | merged | 11,377 pass | tturbo-mac |
@@ -62,24 +64,23 @@ Updated 2026-11-23 21:45 UTC. This page and the card in the README are regenerat
 | Nov 23 12:57 | `harden-p18-observables-2` | refused | 11,296 pass | tturbo-mac |
 | Nov 23 01:34 | `harden-p18-molding-kit-1` | merged | 11,282 pass | tturbo-mac |
 | Nov 22 17:13 | `harden-p18-observables-3` | merged | 11,263 pass | tturbo-mac |
-| Nov 19 11:52 | `harden-p18-scene-plumbing-1` | merged | 11,256 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1393 |
-| bonsai-b | bonsai2-27b | gate | 1304 |
+| bonsai-a | bonsai2-27b | agent | 1393 |
+| bonsai-b | bonsai2-27b | agent | 1304 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 164 |
 | claude-sonnet-b | sonnet | idle | 169 |
-| claude-sonnet-c | sonnet | agent | 105 |
+| claude-sonnet-c | sonnet | agent | 106 |
 | claude-sonnet-d | sonnet | gate | 101 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 128 |
 | mai-flash-b | mai-code-1.1-flash | idle | 81 |
 | mai-flash-esc | mai-code-1.1-flash | gate | 176 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1195 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1195 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 703 |
