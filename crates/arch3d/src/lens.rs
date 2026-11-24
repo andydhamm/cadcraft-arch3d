@@ -89,7 +89,7 @@ pub fn dir_to_frame(l: &LensView, tan_h: f64, tan_v: f64, cam_dir: [f64; 3]) -> 
         }
         (s * phi.sin() / k, s * y / hyp * tan_h / tan_v / k)
     } else {
-        if z <= 1e-9 {
+        if z < 1e-9 {
             return None;
         }
         ((x / z) / tan_h, (y / z) / tan_v)
