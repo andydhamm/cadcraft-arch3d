@@ -4,7 +4,7 @@
 
 use std::sync::Mutex;
 
-use cadcraft_arch3d::camera::{project_point, ray_at};
+use cadcraft_arch3d::lens::{LensView, project_point_lens, ray_at_lens};
 use cadcraft_arch3d::light::scene_lights_with;
 use cadcraft_arch3d::pick::Bvh;
 use cadcraft_arch3d::view_filter::ViewFilter;
@@ -48,13 +48,37 @@ struct State {
     cache_saved: bool,
     /// Path-traced stills rendered (a fallback to raster is not one).
     path_traces: u64,
+    /// The calibration scene last rendered and its scene key.
+    calib: Option<(u64, Scene3d)>,
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
 
 /// Install the renderer as the engine's render hook (idempotent: the first call wins).
 pub(crate) fn install() {
-    set_render_hooks(RenderHooks::new(render_one, stats).with_illuminance(illuminance_one));
+    set_render_hooks(RenderHooks::new(render_one, stats).with_illuminance(illuminance_one).with_denoiser_info(denoiser_info));
+}
+
+/// The embedded denoiser weights and whether the learned denoiser can run on the session's
+/// compute device (created on first use, like a path render's).
+fn denoiser_info() -> Result<Value, String> {
+    let mut info = cadcraft_render3d::tza::info();
+    let (available, reason) = {
+        let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
+        let state = ready(&mut guard, &cadcraft_engine::doc::Drawing::new_metric(), (64, 64), None)?;
+        match compute_of(state, false)? {
+            None => (false, "no compute shaders".to_string()),
+            Some(gpu) => match cadcraft_render3d::pathtrace::learned::available(&gpu) {
+                Ok(()) => (true, String::new()),
+                Err(why) => (false, why),
+            },
+        }
+    };
+    if let Some(map) = info.as_object_mut() {
+        map.insert("available".into(), json!(available));
+        map.insert("reason".into(), json!(reason));
+    }
+    Ok(info)
 }
 
 fn stats() -> RenderStats {
@@ -95,7 +119,17 @@ fn ready<'a>(
 ) -> Result<&'a mut State, String> {
     if guard.is_none() {
         let off = Offscreen::create_with(adapter_choice(), size).map_err(gpu)?;
-        *guard = Some(State { off, scene: None, filtered: None, compute: None, rt_asked: false, cache: None, cache_saved: false, path_traces: 0 });
+        *guard = Some(State {
+            off,
+            scene: None,
+            filtered: None,
+            compute: None,
+            rt_asked: false,
+            cache: None,
+            cache_saved: false,
+            path_traces: 0,
+            calib: None,
+        });
     }
     let state = guard.as_mut().ok_or("renderer unavailable")?;
     let key = drawing.arch_revision;
@@ -213,6 +247,11 @@ fn software_spp(p: &PathParams, on_cpu: bool) -> u32 {
     if on_cpu && !p.spp_given && p.snapshots.is_empty() { SOFTWARE_SPP } else { p.spp }
 }
 
+/// The samples per pixel of a still: `software_spp`, except a rung or an adaptive render keeps its own.
+fn still_spp(req: &RenderRequest, on_cpu: bool) -> u32 {
+    if crate::render_photo::keeps_spp(&req.photo) { req.path.spp } else { software_spp(&req.path, on_cpu) }
+}
+
 /// The fixtures that can cast a shadow: every light but a strip (a strip counts as one drawn light
 /// and is never shadow-mapped in the raster; its shadows are the path tracer's).
 fn shadow_casting_lights(scene: &Scene3d) -> usize {
@@ -293,13 +332,27 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     if let (Some(c), None) = (&compute, &state.cache) {
         state.cache = Some(cache::open(c, cache::cache_dir().as_deref()));
     }
-    let State { off, scene, filtered, cache: pcache, cache_saved, path_traces, .. } = state;
+    let State { off, scene, filtered, cache: pcache, cache_saved, path_traces, calib, .. } = state;
     let (look, sun_dir) = req.resolved_sun();
     // A request may set `look.sun.angle` without an explicit `sun_dir`; the render hook must resolve
     // the named angle to the actual toward-sun direction or the interactive view falls back to the
     // default daylight and no shadows are built.
     let sun_dir = sun_dir.or_else(|| cadcraft_engine::effective_sun_dir(&req.drawing.arch, &look, None));
-    let (base_light_key, base) = scene.as_mut().map(|(_, k, s)| (k.clone(), s)).ok_or("renderer unavailable")?;
+    // A calibration replaces the drawing's scene: its own key, no light set and no view filter.
+    let (base_light_key, base_key, base): (String, u64, &mut Scene3d) = match &req.calibrate {
+        Some(c) => {
+            let ckey = crate::render_photo::calibrate_key(c);
+            if calib.as_ref().is_none_or(|(k, _)| *k != ckey) {
+                *calib = Some((ckey, cadcraft_arch3d::calibrate::scene(c)));
+            }
+            let (_, s) = calib.as_mut().ok_or("renderer unavailable")?;
+            (String::new(), ckey, s)
+        }
+        None => {
+            let (k, s) = scene.as_mut().map(|(_, k, s)| (k.clone(), s)).ok_or("renderer unavailable")?;
+            (k, revision, s)
+        }
+    };
     // The effective look's backdrop replaces the cached scene's (no rebuild).
     cadcraft_arch3d::set_backdrop(&req.drawing.arch, base, look.backdrop.as_ref());
     let base = &*base;
@@ -310,12 +363,12 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     // The view's filter: the cutaway's hidden objects leave the scene (a filtered copy, cached by
     // revision, light set and hidden set, with its own scene key so uploads and shadow maps follow);
     // the clip box and near clip reach the raster and the path tracer through the look.
-    let mut filter = ViewFilter::from_look(&look, &req.drawing.arch, &camera);
-    if let Some((level, lower)) = req.overview {
+    let mut filter = if req.calibrate.is_some() { ViewFilter::default() } else { ViewFilter::from_look(&look, &req.drawing.arch, &camera) };
+    if let (Some((level, lower)), None) = (req.overview, &req.calibrate) {
         filter = filter.with_overview(&req.drawing.arch, level, lower);
     }
     let (scene, key): (&Scene3d, u64) = if filter.hidden.is_empty() && filter.levels.is_none() {
-        (base, revision)
+        (base, base_key)
     } else {
         let hidden_key = hidden_set_key(&filter);
         let want = (revision, base_light_key, hidden_key);
@@ -336,6 +389,13 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     if let Some(x) = req.path.exposure {
         lighting.exposure = x as f32;
     }
+    // The photo settings reach the path options and the lighting (lens, film, sun disc) for every
+    // mode; the request's own samples and bounces stay what the path params say.
+    let mut opts = path_options(&req.path, &look, req.albedo);
+    cadcraft_render3d::look::apply_photo(&mut opts, &mut lighting, &req.photo);
+    opts.bounces = req.path.bounces;
+    opts.keep_linear = req.linear.as_ref().map(|(_, stage)| crate::render_photo::stage_of(*stage));
+    let lens = crate::render_photo::lens_view(&lighting);
     let maps_before = off.shadow_maps_built();
 
     // The manual EV100 from the look, if any, used for exact echo in replies.
@@ -354,12 +414,12 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
         _ => None,
     };
 
+    let mut pfm_info: Option<serde_json::Map<String, Value>> = None;
     let (rgba, size, drawn, shadowed, png) = if want_path {
-        let mut opts = path_options(&req.path, &look, req.albedo);
         // The default 256 spp is too slow on a software (CPU) adapter: lower an unchanged default
         // to 64 (an explicit spp, or snapshots that may need more samples, are kept).
         let on_cpu = compute.as_ref().is_some_and(|c| c.info.adapter_type == "Cpu");
-        opts.spp = software_spp(&req.path, on_cpu);
+        opts.spp = still_spp(req, on_cpu);
         let cache_ref = pcache.as_ref().and_then(|(c, _)| c.as_ref());
         let (png, stats, fallback) =
             render_final_with(off, compute.as_ref(), scene, key, &camera, &lighting, req.ground, req.size, true, &opts, cache_ref).map_err(gpu)?;
@@ -405,10 +465,22 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
                     snaps.push(json!({ "spp": spp, "out": file }));
                 }
                 path_info.insert("snapshots".into(), Value::Array(snaps));
+                path_info.extend(crate::render_photo::path_keys(&st, compute.as_ref()));
+                if let Some((path, stage)) = &req.linear {
+                    let written = match crate::render_photo::pfm_bytes(&st, req.size) {
+                        Some(bytes) => {
+                            write_png(path, &bytes)?;
+                            Some(path.as_path())
+                        }
+                        None => None,
+                    };
+                    pfm_info = Some(crate::render_photo::pfm_keys(written, *stage));
+                }
             }
             (_, fallback) => {
                 final_mode = Some("raster");
                 path_info.insert("fallback".into(), json!(fallback.unwrap_or("no compute shaders")));
+                path_info.extend(crate::render_photo::raster_fallback_keys(req.photo.denoise));
             }
         }
         let rgba = png_rgba(&png).map_err(gpu)?;
@@ -471,7 +543,7 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     };
 
     let samples: Vec<Value> = if !req.samples.is_empty() {
-        req.samples.iter().take(MAX_SAMPLES).map(|p| sample(pick_target, &bvh, &filter, &camera, size, &rgba, *p)).collect()
+        req.samples.iter().take(MAX_SAMPLES).map(|p| sample(pick_target, &bvh, &filter, &camera, &lens, size, &rgba, *p)).collect()
     } else {
         Vec::new()
     };
@@ -495,6 +567,12 @@ fn render_one(req: &RenderRequest) -> Result<Value, String> {
     if let Some(map) = reply.as_object_mut() {
         map.extend(path_info);
         map.extend(exposure_info);
+        map.insert("photo".into(), crate::render_photo::photo_value(&req.photo, opts.bounces, lighting.sun_disc_deg));
+        if let Some(p) = pfm_info {
+            map.extend(p);
+        } else if let Some((_, stage)) = &req.linear {
+            map.extend(crate::render_photo::pfm_keys(None, *stage));
+        }
     }
     Ok(reply)
 }
@@ -536,8 +614,8 @@ fn illuminance_one(req: &IlluminanceRequest) -> Result<Value, String> {
 /// Pixel `x` spans `[x, x + 1)` in `project_point`'s coordinates, and the visibility ray goes
 /// through `p`'s exact projection: a ray through a pixel's corner misses `p` by centimetres
 /// where the surface is seen at a grazing angle.
-fn sample(scene: &Scene3d, bvh: &Bvh, filter: &ViewFilter, camera: &Camera, size: (u32, u32), rgba: &[u8], p: [f64; 3]) -> Value {
-    let pixel = project_point(camera, size, p).and_then(|px| {
+fn sample(scene: &Scene3d, bvh: &Bvh, filter: &ViewFilter, camera: &Camera, lens: &LensView, size: (u32, u32), rgba: &[u8], p: [f64; 3]) -> Value {
+    let pixel = project_point_lens(camera, lens, size, p).and_then(|px| {
         let (x, y) = (px[0].floor(), px[1].floor());
         let inside = x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x < size.0 as f32 && y < size.1 as f32;
         inside.then_some((px, x as u32, y as u32))
@@ -547,7 +625,7 @@ fn sample(scene: &Scene3d, bvh: &Bvh, filter: &ViewFilter, camera: &Camera, size
     };
     let at = (usize::try_from(y).unwrap_or(0)).saturating_mul(size.0 as usize).saturating_add(x as usize).saturating_mul(4);
     let rgb = rgba.get(at..at.saturating_add(3)).map(<[u8]>::to_vec);
-    let visible = ray_at(camera, size, px)
+    let visible = ray_at_lens(camera, lens, size, px)
         .and_then(|(origin, dir)| scene.pick_filtered(bvh, origin, dir, &|h| filter.accepts(h.point)))
         .is_some_and(|hit| distance(hit.point, Vec3::new(p[0], p[1], p[2])) <= VISIBLE_TOLERANCE);
     json!({ "point": p, "pixel": [x, y], "rgb": rgb, "visible": visible })
@@ -716,8 +794,8 @@ mod tests {
         for k in 1..8 {
             for z in [0.3, 1.0, 1.7] {
                 for p in [[f64::from(k) * 0.5, 0.0, z], [0.0, f64::from(k) * 0.5, z]] {
-                    let s = sample(&scene, &Bvh::build(&scene), &ViewFilter::default(), &camera, size, &rgba, p);
-                    let Some(px) = project_point(&camera, size, p) else { continue };
+                    let s = sample(&scene, &Bvh::build(&scene), &ViewFilter::default(), &camera, &LensView::default(), size, &rgba, p);
+                    let Some(px) = project_point_lens(&camera, &LensView::default(), size, p) else { continue };
                     let (x, y) = (px[0].floor(), px[1].floor());
                     if x < 0.0 || y < 0.0 || x >= size.0 as f32 || y >= size.1 as f32 {
                         continue;
@@ -755,7 +833,7 @@ mod tests {
         }
     }
 
-    fn reset() -> std::sync::MutexGuard<'static, ()> {
+    pub(super) fn reset() -> std::sync::MutexGuard<'static, ()> {
         static SERIAL: Mutex<()> = Mutex::new(());
         // A test that panicked while holding the lock must not hide the others.
         let g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -2250,5 +2328,190 @@ mod tests {
         assert_eq!(f.albedo, 0.5);
         assert_eq!(f.emission, 100.0);
         assert_eq!(opts.snapshots, vec![4, 16, 64]);
+    }
+}
+
+#[cfg(test)]
+mod photo_tests {
+    use super::*;
+    use cadcraft_arch3d::calibrate::{CalibLight, CalibObject, Calibration};
+    use cadcraft_engine::LinearStageParam;
+    use cadcraft_engine::doc::Drawing;
+    use cadcraft_engine::doc::arch::{DenoiseMode, EdgeMode, Lens, LensProjection, Wall};
+    use cadcraft_geom::Vec2;
+
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        super::tests::reset()
+    }
+
+    /// Render, or `None` (after saying so) when this machine has no GPU adapter.
+    fn render(req: &RenderRequest) -> Option<Value> {
+        match render_one(req) {
+            Ok(v) => Some(v),
+            Err(e) if e.starts_with("NO_ADAPTER") => {
+                eprintln!("SKIP: {e}");
+                None
+            }
+            Err(e) => panic!("render failed: {e}"),
+        }
+    }
+
+    fn room() -> Drawing {
+        let mut d = Drawing::new_metric();
+        let c = [(-0.1, -0.1), (4.1, -0.1), (4.1, 4.1), (-0.1, 4.1)];
+        for k in 0..4 {
+            let (a, b) = (c[k], c[(k + 1) % 4]);
+            let mut w = Wall::new(Vec2::new(a.0, a.1), Vec2::new(b.0, b.1), 0.2);
+            w.height = 2.4;
+            d.arch.push_wall(w);
+        }
+        d.touch_arch();
+        d
+    }
+
+    fn plain(d: &Drawing) -> RenderRequest<'_> {
+        RenderRequest::new(d, None, (96, 64), None, false, SunChoice::Default, "shaded".into(), false, 8, Vec::new())
+    }
+
+    fn path_req(d: &Drawing) -> RenderRequest<'_> {
+        let mut r = plain(d);
+        r.final_render = true;
+        r.final_mode = FinalMode::Path;
+        r.path = PathParams { spp: 4, spp_given: true, bounces: 1, denoise: false, ..PathParams::default() };
+        r
+    }
+
+    #[test]
+    fn calibrate_scene_renders_without_a_drawing_scene() {
+        let _g = serial();
+        let d = Drawing::new_metric();
+        let mut c = Calibration::default();
+        c.objects.push(CalibObject { segments: 32, ..CalibObject::default() });
+        c.lights.push(CalibLight::default());
+        let mut req = plain(&d);
+        req.calibrate = Some(c.clone());
+        let Some(v) = render(&req) else { return };
+        assert_eq!(v["ok"], true, "{v}");
+        assert_eq!(v["lights"], 1, "the calibration's light, not the drawing's: {v}");
+        assert_eq!(v["filter"]["hidden"], 0, "{v}");
+        // Its own scene key: the calibration scene is cached under a key that is not a revision.
+        let key = crate::render_photo::calibrate_key(&c);
+        assert_ne!(key, d.arch_revision);
+        let cached = STATE.lock().ok().and_then(|g| g.as_ref().and_then(|s| s.calib.as_ref().map(|(k, _)| *k)));
+        assert_eq!(cached, Some(key));
+        // Without a calibration the (empty) drawing's own scene renders, with no lights.
+        let Some(v) = render(&plain(&d)) else { return };
+        assert_eq!(v["lights"], 0, "{v}");
+    }
+
+    #[test]
+    fn photo_reply_echoes_defaults_for_a_plain_render() {
+        let _g = serial();
+        let d = room();
+        let Some(v) = render(&plain(&d)) else { return };
+        let disc = f64::from(Look::default().sun.disc as f32);
+        assert_eq!(
+            v["photo"],
+            json!({
+                "rung": null, "edges": false, "materials": "basic", "variation": false, "bounces": 4, "sunDisc": disc,
+                "clamp": null, "adaptive": false, "noiseTarget": null, "timeBudget": null, "roughnessGuide": false,
+                "denoise": "filter",
+            }),
+            "{v}"
+        );
+        assert!(v.get("pfm").is_none(), "{v}");
+        assert!(v.get("stop").is_none(), "a raster frame reports no path statistics: {v}");
+        // The builder reports each edge mode.
+        let mut p = cadcraft_engine::doc::arch::PhotoSettings::default();
+        p.edges = EdgeMode::Radius(0.003);
+        assert_eq!(crate::render_photo::photo_value(&p, 4, 0.0)["edges"], json!({ "radius": 0.003 }));
+        p.edges = EdgeMode::PerMaterial;
+        assert_eq!(crate::render_photo::photo_value(&p, 4, 0.0)["edges"], json!(true));
+    }
+
+    #[test]
+    fn path_reply_reports_stop_and_spp_stats() {
+        let _g = serial();
+        let d = room();
+        let Some(v) = render(&path_req(&d)) else { return };
+        if v["finalMode"] != "path" {
+            assert_eq!(v["fallback"], "no compute shaders", "{v}");
+            assert!(v.get("stop").is_none(), "{v}");
+            // The learned denoiser asked for on a device without compute shaders.
+            let mut req = path_req(&d);
+            req.photo.denoise = DenoiseMode::Learned;
+            let Some(v) = render(&req) else { return };
+            assert_eq!(v["denoiser"], "none", "{v}");
+            assert_eq!(v["denoiseFallback"], "no compute shaders", "{v}");
+            return eprintln!("SKIP: no compute device");
+        }
+        assert_eq!(v["stop"], "samples", "{v}");
+        assert_eq!((v["sppMin"].clone(), v["sppMax"].clone()), (json!(4), json!(4)), "{v}");
+        assert_eq!(v["sppMean"].as_f64(), Some(4.0), "{v}");
+        assert_eq!(v["samplesTotal"].as_u64(), Some(4 * 96 * 64), "{v}");
+        for k in ["noise", "seconds", "clampLoss", "denoiseSeconds"] {
+            assert!(v[k].is_number(), "{k}: {v}");
+        }
+        assert_eq!(v["denoiser"], "none", "{v}");
+        assert!(v["computeAdapter"]["name"].is_string() && v["computeAdapter"]["type"].is_string(), "{v}");
+    }
+
+    #[test]
+    fn pfm_is_written_at_the_requested_stage() {
+        let _g = serial();
+        let d = room();
+        let dir = std::env::temp_dir().join(format!("cadcraft-render-hook-pfm-{}", std::process::id()));
+        let file = dir.join("nested").join("out.pfm");
+        let mut req = path_req(&d);
+        req.linear = Some((file.clone(), LinearStageParam::Film));
+        let Some(v) = render(&req) else { return };
+        if v["finalMode"] != "path" {
+            assert!(v["pfm"].is_null() && v["pfmStage"].is_null(), "{v}");
+            assert!(!file.exists());
+            return eprintln!("SKIP: no compute device");
+        }
+        assert_eq!(v["pfm"], json!(file.display().to_string()), "{v}");
+        assert_eq!(v["pfmStage"], "film", "{v}");
+        let bytes = std::fs::read(&file).unwrap_or_default();
+        let head = b"PF\n96 64\n-1.0\n";
+        assert_eq!(bytes.get(..head.len()), Some(&head[..]), "the PFM was written, parent folders created");
+        assert_eq!(bytes.len(), head.len() + 96 * 64 * 12);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn samples_follow_the_lens() {
+        let d = room();
+        let scene = cadcraft_arch3d::build(&d.arch);
+        let bvh = Bvh::build(&scene);
+        let eye = Vec3::new(3.6, 3.6, 1.6);
+        let camera = Camera::Full(cadcraft_render3d::camera::FullCamera::new(eye, Vec3::new(1.8, 1.0, 0.3), 80.0));
+        let size = (120u32, 90u32);
+        let rgba = vec![0u8; (size.0 * size.1 * 4) as usize];
+        let look = Look { lens: Lens { projection: LensProjection::Panini, compression: 0.8, shift: 0.15, ..Lens::default() }, ..Look::default() };
+        let lens = crate::render_photo::lens_view(&lighting_for(&look, None, 8));
+        assert!(!lens.is_neutral());
+        let (mut seen, mut moved) = (0, 0);
+        for k in 1..8 {
+            for z in [0.3, 1.0, 1.7] {
+                for p in [[f64::from(k) * 0.5, 0.0, z], [0.0, f64::from(k) * 0.5, z]] {
+                    let s = sample(&scene, &bvh, &ViewFilter::default(), &camera, &lens, size, &rgba, p);
+                    let Some(px) = project_point_lens(&camera, &lens, size, p) else { continue };
+                    let (x, y) = (px[0].floor(), px[1].floor());
+                    if x < 0.0 || y < 0.0 || x >= size.0 as f32 || y >= size.1 as f32 {
+                        continue;
+                    }
+                    seen += 1;
+                    assert_eq!(s["pixel"], json!([x as u32, y as u32]), "{p:?}: {s}");
+                    assert_eq!(s["visible"], true, "the warped ray reaches {p:?}: {s}");
+                    let flat = cadcraft_arch3d::camera::project_point(&camera, size, p);
+                    if flat.is_some_and(|q| q[0].floor() != x || q[1].floor() != y) {
+                        moved += 1;
+                    }
+                }
+            }
+        }
+        assert!(seen >= 10, "enough points are on screen: {seen}");
+        assert!(moved > 0, "the lens moves at least one sample off its rectilinear pixel");
     }
 }

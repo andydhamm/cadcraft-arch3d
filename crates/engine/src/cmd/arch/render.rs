@@ -280,12 +280,21 @@ pub struct RenderHooks {
     /// Path-traced illuminance (phase 11): the reply JSON (`p11-cli-render-path`) or an error;
     /// `None` = `illuminance {"method":"path"}` is refused.
     pub illuminance: Option<fn(&IlluminanceRequest) -> Result<Value, String>>,
+    /// The learned denoiser's weights and whether it can run (phase 22): `{models, available,
+    /// reason}`; `None` = `denoiser.info` says no renderer is installed.
+    pub denoiser_info: Option<fn() -> Result<Value, String>>,
 }
 
 impl RenderHooks {
     /// The renderer's two entry points.
     pub fn new(render: fn(&RenderRequest) -> Result<Value, String>, stats: fn() -> RenderStats) -> Self {
-        Self { render, stats, illuminance: None }
+        Self { render, stats, illuminance: None, denoiser_info: None }
+    }
+
+    /// The same hooks with the report behind `denoiser.info` (phase 22).
+    pub fn with_denoiser_info(mut self, f: fn() -> Result<Value, String>) -> Self {
+        self.denoiser_info = Some(f);
+        self
     }
 
     /// The same hooks with a path-traced illuminance (phase 11).

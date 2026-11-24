@@ -21,13 +21,15 @@
 
 mod adaptive;
 #[cfg(test)]
+mod adaptive_tests;
+#[cfg(test)]
 mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
 mod edge_table;
 pub mod env;
-mod learned;
+pub mod learned;
 mod lens;
 mod post;
 pub mod rt;
@@ -330,13 +332,16 @@ pub use crate::exposure::auto_exposure_from_luminances;
 mod lights_tests;
 
 #[cfg(test)]
+mod clamp_tests;
+
+#[cfg(test)]
 mod kernel_tests;
 
 #[cfg(test)]
 mod lens_tests;
 
 #[cfg(test)]
-mod variation_tests;
+mod edges_tests;
 
 #[cfg(test)]
 mod tests {
