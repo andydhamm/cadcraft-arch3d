@@ -368,6 +368,49 @@ class RenderAll(unittest.TestCase):
         self.assertIsNone(old['ladders'])
         self.assertIsNone(old['photoreal'])
 
+    def test_photo_steps_require_full(self):
+        """Photo steps only appear when with_set=True (i.e. --full)."""
+        plain = ra.plan(LEVELS, VIEWS, SHEETS, False, with_photo=True)
+        self.assertEqual([r[1] for r in plain if r[1] in ra.PHOTO_KINDS], [])
+        self.assertNotIn('photo.dxf', [r[0] for r in plain])
+        full = ra.plan(LEVELS, VIEWS, SHEETS, True, with_photo=True)
+        self.assertEqual([r[1] for r in full if r[1] in ra.PHOTO_KINDS],
+                         ['ladder', 'ladder', 'ladder', 'photoreal', 'photoreal', 'photoreal'])
+
+    def test_level_missing_kind_defaults_to_floor(self):
+        """A level dict with a missing or falsy kind is treated as a floor."""
+        levels = [{'name': 'Main'}, {'name': 'Upper', 'kind': None}]
+        rows = ra.plan(levels, [], [], True)
+        plan_rows = [r for r in rows if r[1] == 'plan']
+        self.assertEqual(len(plan_rows), 2)
+        planview_rows = [r for r in rows if r[1] == 'planview']
+        self.assertEqual(len(planview_rows), 2)
+        for r in planview_rows:
+            self.assertIn('Floor Plan', r[2])
+
+    def test_level_empty_name(self):
+        """A level with an empty name produces plan-x.png."""
+        levels = [{'name': '', 'kind': 'floor'}]
+        rows = ra.plan(levels, [], [], False)
+        plan_rows = [r for r in rows if r[1] == 'plan']
+        self.assertEqual(len(plan_rows), 1)
+        self.assertEqual(plan_rows[0][0], 'plan-x.png')
+
+    def test_electrical_levels_hardcoded(self):
+        """Electrical steps are always added for Lower and Main, even if not in levels."""
+        levels = [{'name': 'Ground', 'kind': 'floor'}]
+        rows = ra.plan(levels, [], [], False)
+        electrical_rows = [r for r in rows if r[1] == 'electrical']
+        self.assertEqual(len(electrical_rows), 2)
+        self.assertEqual([r[2] for r in electrical_rows], ['Lower', 'Main'])
+
+    def test_duplicate_file_names_across_kinds(self):
+        """File names from different kinds must not collide."""
+        levels = [{'name': 'Camera', 'kind': 'floor'}, {'name': 'Night', 'kind': 'floor'}]
+        rows = ra.plan(levels, VIEWS, SHEETS, True)
+        names = [r[0] for r in rows]
+        self.assertEqual(len(names), len(set(names)), 'no duplicate file names across kinds')
+
     def test_readme_gallery_matches_the_plan(self):
         with open(os.path.join(SHOWCASE, 'phase-21-showcase.json'), encoding='utf-8') as f:
             script = json.load(f)

@@ -128,4 +128,36 @@ mod tests {
             assert!(parts.get(3).is_some_and(|b| b.starts_with('#')), "{name}: {line}");
         }
     }
+
+    #[test]
+    fn foundation_without_stems_writes_only_ifcfooting() {
+        let m = model();
+        let text = export(&m, vec![square("footing", 0)]);
+        assert!(!text.contains("IFCWALL("), "{text}");
+        let footing = line_with(&text, "'footing-fd0'");
+        assert!(footing.contains("=IFCFOOTING("), "{text}");
+        assert!(footing.ends_with(",$,.STRIP_FOOTING.);"), "{footing}");
+    }
+
+    #[test]
+    fn foundation_without_footings_writes_only_ifcwall() {
+        let m = model();
+        let text = export(&m, vec![square("foundation", 0)]);
+        assert!(text.contains("IFCWALL("), "{text}");
+        assert!(!text.contains("IFCFOOTING("), "{text}");
+        let wall = line_with(&text, "'foundation-fd0'");
+        assert!(wall.contains("=IFCWALL("), "{text}");
+        assert!(wall.ends_with(",$,.STANDARD.);"), "{wall}");
+    }
+
+    #[test]
+    fn multiple_foundations_each_get_their_own_ifc_entities() {
+        let mut m = model();
+        m.push_foundation(Foundation::default());
+        let text = export(&m, vec![square("foundation", 0), square("foundation", 1), square("footing", 0), square("footing", 1)]);
+        assert!(text.contains("'foundation-fd0'"), "{text}");
+        assert!(text.contains("'foundation-fd1'"), "{text}");
+        assert!(text.contains("'footing-fd0'"), "{text}");
+        assert!(text.contains("'footing-fd1'"), "{text}");
+    }
 }

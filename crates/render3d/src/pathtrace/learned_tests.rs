@@ -41,6 +41,48 @@ fn gpu_network_matches_the_cpu_reference() {
 }
 
 #[test]
+fn gpu_network_matches_the_cpu_reference_at_160_by_96() {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("SKIP: no compute adapter");
+        return;
+    };
+    let (w, h) = (160usize, 96usize);
+    for which in [ModelChoice::Small, ModelChoice::Base] {
+        let net = Net::from_model(tza::model(which).expect("model parses")).expect("net builds");
+        // Nine planes: colour 0.18, albedo 0.01, normals +x / +y / +z in three regions, then two more planes of 0.
+        let mut input = vec![0.0_f32; 9 * w * h];
+        for y in 0..h {
+            for x in 0..w {
+                let i = y * w + x;
+                let n = if x < w / 3 {
+                    0
+                } else if y < h / 2 {
+                    1
+                } else {
+                    2
+                };
+                for c in 0..3 {
+                    input[c * w * h + i] = 0.18;
+                    input[(3 + c) * w * h + i] = 0.01;
+                }
+                for c in 0..3 {
+                    input[(6 + c) * w * h + i] = if c == n { 1.0 } else { 0.0 };
+                }
+            }
+        }
+        let padded = (w as u32, h as u32);
+        let want = unet::forward_cpu(&net, &input, padded).expect("cpu forward");
+        let got = forward_gpu(&gpu, &net, &input, padded).expect("gpu forward");
+        assert_eq!(got.len(), want.len());
+        let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+        assert!(worst < 2e-3, "{which:?}: the GPU differs from the CPU by {worst} at 160 x 96");
+    }
+}
+
+// This calls `learned::denoise` directly and keeps a border margin: the network's own answer next to
+// the zero-padded border is covered by `flat_frame_through_finish_linear_changes_no_pixel_by_one_percent`
+// in post.rs, where `keep_converged` holds a converged pixel to its input.
+#[test]
 fn flat_grey_frame_changes_under_one_percent() {
     let Some(gpu) = crate::gputest::shared_compute() else {
         eprintln!("skipped: no compute adapter");

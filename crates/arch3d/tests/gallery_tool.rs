@@ -76,6 +76,31 @@ fn test_readme_gallery_matches_the_plan() {
     run_case("test_readme_gallery_matches_the_plan");
 }
 
+#[test]
+fn gallery_photo_steps_require_full() {
+    run_case("test_photo_steps_require_full");
+}
+
+#[test]
+fn gallery_level_missing_kind_defaults_to_floor() {
+    run_case("test_level_missing_kind_defaults_to_floor");
+}
+
+#[test]
+fn gallery_level_empty_name() {
+    run_case("test_level_empty_name");
+}
+
+#[test]
+fn gallery_electrical_levels_hardcoded() {
+    run_case("test_electrical_levels_hardcoded");
+}
+
+#[test]
+fn gallery_duplicate_file_names_across_kinds() {
+    run_case("test_duplicate_file_names_across_kinds");
+}
+
 /// The photoreal run (phase 22): ladders, finals and the photo script.
 #[test]
 fn gallery_plan_lists_ladders_and_photoreal_finals() {
