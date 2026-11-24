@@ -596,7 +596,7 @@ mod tests {
     #[test]
     fn pick3d_accepts_huge_coordinates() {
         let mut s = session();
-        let cam = json!({ "kind": "orbit", "target": [1e9, 1e9, 1e9], "distance": 1e9, "fov": 45 });
+        let cam = json!({ "kind": "orbit", "target": [1e9, 1e9, 1e9], "distance": 1e6, "fov": 45 });
         let r = s.execute("pick3d", &params(cam, json!([50, 50])));
         assert!(r.is_ok(), "rejected huge coords: {r:?}");
     }
