@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 23:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 42 of 45 segments merged · 12 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 43 of 45 segments merged · 12 of 15 acceptance checks**
 
-12,056 workspace tests passing at the last merge · 1400 segments merged in all · 0 of 15 seats working
+12,062 workspace tests passing at the last merge · 1401 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,22 +32,22 @@ Updated 2026-11-24 23:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 29.8 h so far · expected done Nov 25 03:22–Nov 26 05:15 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 30.0 h so far · expected done Nov 25 01:54–Nov 25 23:52 UTC |
 
 ## Phase 22 segments
 
-42 merged, 2 merging, 1 gate
+43 merged, 1 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | gate | claude-sonnet-d |
-| `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | merging | claude-sonnet-b |
 | `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | merging | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 23:26 | `p22g-learned-kitchen-error` | merged | 12,062 pass, 1 fail | claude-sonnet-b |
 | Nov 24 21:55 | `p22g-trans-shadow-side` | merged | 12,056 pass | claude-sonnet-c |
 | Nov 24 21:19 | `harden-p22f-adaptive-freeze` | merged | 12,052 pass | tturbo-mac |
 | Nov 24 20:35 | `harden-p22-arch3d-lens` | merged | 12,047 pass | tturbo-mac |
@@ -59,24 +59,23 @@ Updated 2026-11-24 23:15 UTC. This page and the card in the README are regenerat
 | Nov 24 18:52 | `harden-p22-r3d-edges` | merged | 12,004 pass | tturbo-mac2 |
 | Nov 24 18:52 | `p22f-adaptive-freeze` | merged | 12,004 pass | claude-sonnet-a |
 | Nov 24 18:22 | `harden-p22f-learned-keeps-converged` | merged | 11,985 pass | tturbo-mac |
-| Nov 24 18:22 | `harden-p22f-ladder-reply-look` | merged | 11,985 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1444 |
+| bonsai-a | bonsai2-27b | merging | 1445 |
 | bonsai-b | bonsai2-27b | gate | 1369 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
-| claude-sonnet-d | sonnet | gate | 116 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1330 |
+| claude-sonnet-d | sonnet | gate | 117 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1331 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1240 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 746 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 746 |
