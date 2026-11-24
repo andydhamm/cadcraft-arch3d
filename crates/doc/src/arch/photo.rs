@@ -78,6 +78,7 @@ pub enum Materials {
 #[serde(default, rename_all = "camelCase")]
 pub struct PhotoSettings {
     /// The rung these settings came from, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rung: Option<u8>,
     /// Apply the look's lens.
     pub lens: bool,
@@ -90,16 +91,21 @@ pub struct PhotoSettings {
     /// Path bounces.
     pub bounces: u32,
     /// Sun disc diameter in degrees; `None` = the look's.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sun_disc: Option<f64>,
     /// Firefly clamp in display units; `None` = none.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clamp: Option<f64>,
     /// Film; `None` = the look's, `Some` replaces it.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub film: Option<Film>,
     /// Adaptive sampling.
     pub adaptive: bool,
     /// Adaptive noise target.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub noise_target: Option<f64>,
     /// Adaptive time budget, seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub time_budget: Option<f64>,
     /// Feed a roughness guide to the denoiser.
     pub roughness_guide: bool,
