@@ -3441,6 +3441,31 @@ mod tests {
     }
 
     #[test]
+    fn finalize_options_photoreal_neutral_film_keeps_rung_film() {
+        use cadcraft_doc::arch::photo;
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
+        // The film is neutral by default, so rung(7)'s film should be kept.
+        let rung = photo::rung(7);
+        assert!(!rung.film.is_neutral(), "rung(7) has a non-neutral film");
+        let (_, lighting) = pane.finalize_options();
+        assert!(!lighting.film.is_neutral(), "Photoreal with neutral film keeps rung(7)'s film");
+        assert_eq!(lighting.film.vignette, rung.film.vignette);
+        assert_eq!(lighting.film.chromatic_aberration, rung.film.chromatic_aberration);
+    }
+
+    #[test]
+    fn finalize_options_plain_look_with_lens_shift_unchanged() {
+        let mut pane = Pane3d::new();
+        pane.view.look.lens.shift = 0.5;
+        pane.view.look.lens.compression = 0.3;
+        pane.view.look.lens.projection = cadcraft_doc::arch::LensProjection::Panini;
+        let (opts, lighting) = pane.finalize_options();
+        assert_eq!(opts, cadcraft_render3d::pathtrace::PathOptions::default());
+        assert_eq!(lighting, pane.lighting);
+    }
+
+    #[test]
     fn finalize_options_is_unchanged_for_a_plain_look() {
         let mut pane = Pane3d::new();
         pane.view.look.lens.shift = 0.2;
@@ -3464,6 +3489,39 @@ mod tests {
         // A neutral lens (rectilinear, no shift) is the plain ray again.
         pane.view.look.lens.projection = cadcraft_doc::arch::LensProjection::Rectilinear;
         assert_eq!(pane.pick_ray(off_axis, size), Some(plain));
+    }
+
+    #[test]
+    fn pick_ray_center_pixel_is_straight() {
+        let mut pane = Pane3d::new();
+        let size = (800, 600);
+        let center = [400.0, 300.0];
+        let ray = pane.pick_ray(center, size).expect("center ray");
+        let cam = pane.camera();
+        let eye = cam.eye();
+        let target = cam.target();
+        let expected_dir = (target - eye).normalized();
+        let actual_dir = ray.1;
+        assert!(actual_dir.is_finite(), "center ray direction must be finite");
+        // The center pixel ray should point roughly toward the target.
+        let dot = actual_dir.dot(expected_dir);
+        assert!(dot > 0.999, "center ray should point toward target, dot={dot}");
+        // Origin should be the camera eye.
+        assert!((ray.0 - eye).len() < 1e-6, "ray origin should be the camera eye");
+    }
+
+    #[test]
+    fn pick_ray_extreme_shift_stays_finite() {
+        let mut pane = Pane3d::new();
+        let size = (800, 600);
+        let pixel = [100.0, 200.0];
+        for shift in [-1.0, 0.0, 1.0] {
+            pane.view.look.lens.shift = shift;
+            let ray = pane.pick_ray(pixel, size).expect("ray at shift {shift}");
+            assert!(ray.0.is_finite(), "origin finite at shift {shift}");
+            assert!(ray.1.is_finite(), "direction finite at shift {shift}");
+            assert!(ray.1.len() > 0.9 && ray.1.len() < 1.1, "direction should be unit length at shift {shift}");
+        }
     }
 
     #[test]
