@@ -788,6 +788,36 @@ mod tests {
     }
 
     #[test]
+    fn opening_holes_round_top() {
+        let outer = rect_outer();
+        let op = Opening { width: 0.9, height: 1.5, sill: 0.6, offset: 4.0, top: OpeningTop::Round, ..Default::default() };
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
+        assert_eq!(holes.len(), 1, "round top opening should produce one hole");
+        let h = &holes[0];
+        // The rough top should be at 2.16 (sill + height + ROUGH_ALLOWANCE/2)
+        let v_max = h.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!((v_max - 2.16).abs() < 1e-6, "rough top should be 2.16, got {}", v_max);
+        // The rough sides should be at u = 4.0 +- 0.51
+        let u_min = h.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let u_max = h.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+        assert!((u_min - 3.49).abs() < 1e-6, "rough left should be 3.49, got {}", u_min);
+        assert!((u_max - 4.51).abs() < 1e-6, "rough right should be 4.51, got {}", u_max);
+    }
+
+    #[test]
+    fn opening_holes_segment_top() {
+        let outer = rect_outer();
+        let mut op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 4.0, top: OpeningTop::Segment, ..Default::default() };
+        op.top_rise = 0.15;
+        let holes = opening_holes(&[&op], 0.0, 10.0, 2.4, &outer, None);
+        assert_eq!(holes.len(), 1, "segment top opening should produce one hole");
+        let h = &holes[0];
+        // The rough top should be at 2.16 (sill + height + ROUGH_ALLOWANCE/2)
+        let v_max = h.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!((v_max - 2.16).abs() < 1e-6, "rough top should be 2.16, got {}", v_max);
+    }
+
+    #[test]
     fn rough_opening_hole_uses_the_allowance() {
         let outer = rect_outer();
         let op = Opening { width: 0.9, height: 1.2, sill: 0.9, offset: 4.0, ..Default::default() };

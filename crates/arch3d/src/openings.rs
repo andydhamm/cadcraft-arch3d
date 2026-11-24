@@ -745,6 +745,28 @@ mod tests {
     }
 
     #[test]
+    fn shaped_window_zero_frame_width() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.top = OpeningTop::Round;
+        o.frame_width = 0.0;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_glass = meshes.iter().any(|m| m.material == "window-glass");
+        assert!(has_glass, "zero frame width should still produce glass");
+    }
+
+    #[test]
+    fn shaped_window_zero_casing_width() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.top = OpeningTop::Round;
+        o.casing_width = 0.0;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_casing = meshes.iter().any(|m| m.material.contains("casing"));
+        assert!(!has_casing, "zero casing width should not produce casing");
+    }
+
+    #[test]
     fn band_offset_with_nan_wall_thickness() {
         let off = band_offset(0.05, 0.02, f64::NAN);
         assert_eq!(off, 0.05, "NaN wall thickness should return the offset unchanged");
