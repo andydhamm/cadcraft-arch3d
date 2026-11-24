@@ -791,4 +791,104 @@ mod tests {
         assert_eq!(serde_json::to_value(&j).unwrap()["horizon"], 12.5);
         assert_eq!(serde_json::from_value::<Backdrop>(serde_json::to_value(&j).unwrap()).unwrap(), j);
     }
+
+    #[test]
+    fn lens_validate_nan_in_all_fields() {
+        let bad = |f: fn(&mut Lens)| {
+            let mut l = Lens::default();
+            f(&mut l);
+            l.validate().is_err()
+        };
+        assert!(bad(|l| l.compression = f64::NAN));
+        assert!(bad(|l| l.shift = f64::NAN));
+        assert!(bad(|l| l.aperture = Some(f64::NAN)));
+        assert!(bad(|l| l.focus = Some(f64::NAN)));
+        assert!(bad(|l| l.focus = Some(f64::INFINITY)));
+        // Valid boundary values
+        assert!(Lens { compression: 0.0, shift: -1.0, aperture: Some(0.5), focus: Some(0.001), ..Lens::default() }.validate().is_ok());
+        assert!(Lens { compression: 1.0, shift: 1.0, aperture: Some(64.0), focus: Some(10000.0), ..Lens::default() }.validate().is_ok());
+    }
+
+    #[test]
+    fn film_validate_nan_in_all_fields() {
+        let bad = |f: fn(&mut Film)| {
+            let mut l = Film::default();
+            f(&mut l);
+            l.validate().is_err()
+        };
+        assert!(bad(|f| f.bloom = f64::NAN));
+        assert!(bad(|f| f.bloom_threshold = f64::NAN));
+        assert!(bad(|f| f.bloom_threshold = f64::INFINITY));
+        assert!(bad(|f| f.vignette = f64::NAN));
+        assert!(bad(|f| f.white_balance = Some(f64::NAN)));
+        assert!(bad(|f| f.contrast = f64::NAN));
+        assert!(bad(|f| f.saturation = f64::NAN));
+        assert!(bad(|f| f.lift = f64::NAN));
+        // Valid boundary values
+        let f = Film { bloom: 0.0, bloom_threshold: 0.001, vignette: 0.0, white_balance: Some(1500.0), contrast: 0.5, saturation: 0.0, lift: -0.5 };
+        assert!(f.validate().is_ok());
+        let f = Film { bloom: 1.0, bloom_threshold: 1000.0, vignette: 1.0, white_balance: Some(15000.0), contrast: 2.0, saturation: 2.0, lift: 0.5 };
+        assert!(f.validate().is_ok());
+    }
+
+    #[test]
+    fn look_with_non_default_lens_and_film_round_trips() {
+        let mut l = Look::default();
+        l.lens = Lens { projection: LensProjection::Panini, compression: 0.5, shift: 0.25, aperture: Some(2.8), focus: Some(5.0) };
+        l.film = Film::photoreal();
+        l.sun.disc = 0.53;
+        let json = serde_json::to_string(&l).unwrap();
+        let back: Look = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, l);
+        assert_eq!(back.lens.projection, LensProjection::Panini);
+        assert_eq!(back.lens.aperture, Some(2.8));
+        assert_eq!(back.film.bloom, 0.1);
+        assert_eq!(back.sun.disc, 0.53);
+        assert!(back.validate().is_ok());
+    }
+
+    #[test]
+    fn sun_disc_boundary_values() {
+        let mut l = Look::default();
+        l.sun.disc = 0.0;
+        assert!(l.validate().is_ok());
+        l.sun.disc = 10.0;
+        assert!(l.validate().is_ok());
+        l.sun.disc = 10.1;
+        assert!(l.validate().is_err());
+        l.sun.disc = -0.1;
+        assert!(l.validate().is_err());
+        l.sun.disc = f64::NAN;
+        assert!(l.validate().is_err());
+        // Serialization: 0.0 is skipped, non-zero is written
+        l.sun.disc = 0.0;
+        let v = serde_json::to_value(&l).unwrap();
+        assert!(v["sun"].get("disc").is_none(), "disc 0.0 should be skipped");
+        l.sun.disc = 0.53;
+        let v = serde_json::to_value(&l).unwrap();
+        assert_eq!(v["sun"]["disc"], 0.53);
+    }
+
+    #[test]
+    fn technique_photoreal_serde() {
+        assert_eq!(serde_json::to_string(&Technique::Photoreal).unwrap(), "\"photoreal\"");
+        assert_eq!(serde_json::to_string(&Technique::Standard).unwrap(), "\"standard\"");
+        assert_eq!(serde_json::to_string(&Technique::Path).unwrap(), "\"path\"");
+        assert_eq!(serde_json::to_string(&Technique::Cray).unwrap(), "\"clay\"");
+        assert_eq!(serde_json::to_string(&Technique::Technical).unwrap(), "\"technical\"");
+        let t: Technique = serde_json::from_str("\"photoreal\"").unwrap();
+        assert_eq!(t, Technique::Photoreal);
+        let t: Technique = serde_json::from_str("\"standard\"").unwrap();
+        assert_eq!(t, Technique::Standard);
+    }
+
+    #[test]
+    fn look_with_photoreal_technique_round_trips() {
+        let mut l = Look::default();
+        l.technique = Technique::Photoreal;
+        let json = serde_json::to_string(&l).unwrap();
+        assert!(json.contains("\"technique\":\"photoreal\""), "{json}");
+        let back: Look = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.technique, Technique::Photoreal);
+    }
 }

@@ -201,4 +201,128 @@ mod tests {
         }
         assert_eq!(RUNG_NAMES.len(), PHOTOREAL_RUNG as usize + 1);
     }
+
+    #[test]
+    fn photo_settings_default_has_no_rung() {
+        let s = PhotoSettings::default();
+        assert_eq!(s.rung, None);
+        assert!(s.lens);
+        assert_eq!(s.edges, EdgeMode::Off);
+        assert_eq!(s.materials, Materials::Basic);
+        assert!(!s.variation);
+        assert_eq!(s.bounces, 4);
+        assert_eq!(s.sun_disc, None);
+        assert_eq!(s.clamp, None);
+        assert_eq!(s.film, None);
+        assert!(!s.adaptive);
+        assert_eq!(s.noise_target, None);
+        assert_eq!(s.time_budget, None);
+        assert!(!s.roughness_guide);
+        assert_eq!(s.denoise, DenoiseMode::Filter);
+        assert_eq!(s.denoise_model, DenoiseModel::Auto);
+        assert_eq!(s.spp, 256);
+    }
+
+    #[test]
+    fn photo_settings_serde_round_trip() {
+        let s = PhotoSettings {
+            rung: Some(5),
+            lens: true,
+            edges: EdgeMode::Radius(0.003),
+            materials: Materials::Full,
+            variation: true,
+            bounces: 12,
+            sun_disc: Some(0.53),
+            clamp: Some(32.0),
+            film: Some(Film::photoreal()),
+            adaptive: true,
+            noise_target: Some(0.02),
+            time_budget: Some(600.0),
+            roughness_guide: true,
+            denoise: DenoiseMode::Learned,
+            denoise_model: DenoiseModel::Small,
+            spp: 4096,
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        let back: PhotoSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, s);
+        assert_eq!(back.edges, EdgeMode::Radius(0.003));
+        assert_eq!(back.denoise_model, DenoiseModel::Small);
+    }
+
+    #[test]
+    fn edge_mode_serde_all_variants() {
+        assert_eq!(serde_json::to_string(&EdgeMode::Off).unwrap(), "\"off\"");
+        assert_eq!(serde_json::to_string(&EdgeMode::PerMaterial).unwrap(), "\"perMaterial\"");
+        let radius = serde_json::to_string(&EdgeMode::Radius(0.002)).unwrap();
+        assert!(radius.starts_with("{\"radius\":"), "{radius}");
+        let back: EdgeMode = serde_json::from_str(&radius).unwrap();
+        assert_eq!(back, EdgeMode::Radius(0.002));
+        let off: EdgeMode = serde_json::from_str("\"off\"").unwrap();
+        assert_eq!(off, EdgeMode::Off);
+        let pm: EdgeMode = serde_json::from_str("\"perMaterial\"").unwrap();
+        assert_eq!(pm, EdgeMode::PerMaterial);
+    }
+
+    #[test]
+    fn denoise_mode_and_model_serde() {
+        assert_eq!(serde_json::to_string(&DenoiseMode::None).unwrap(), "\"none\"");
+        assert_eq!(serde_json::to_string(&DenoiseMode::Filter).unwrap(), "\"filter\"");
+        assert_eq!(serde_json::to_string(&DenoiseMode::Learned).unwrap(), "\"learned\"");
+        assert_eq!(serde_json::to_string(&DenoiseModel::Auto).unwrap(), "\"auto\"");
+        assert_eq!(serde_json::to_string(&DenoiseModel::Base).unwrap(), "\"base\"");
+        assert_eq!(serde_json::to_string(&DenoiseModel::Small).unwrap(), "\"small\"");
+        let m: DenoiseMode = serde_json::from_str("\"learned\"").unwrap();
+        assert_eq!(m, DenoiseMode::Learned);
+        let d: DenoiseModel = serde_json::from_str("\"small\"").unwrap();
+        assert_eq!(d, DenoiseModel::Small);
+    }
+
+    #[test]
+    fn materials_serde() {
+        assert_eq!(serde_json::to_string(&Materials::Basic).unwrap(), "\"basic\"");
+        assert_eq!(serde_json::to_string(&Materials::Full).unwrap(), "\"full\"");
+        let f: Materials = serde_json::from_str("\"full\"").unwrap();
+        assert_eq!(f, Materials::Full);
+    }
+
+    #[test]
+    fn photo_settings_old_json_loads_with_defaults() {
+        let old = r#"{"lens":true,"bounces":4,"spp":256}"#;
+        let s: PhotoSettings = serde_json::from_str(old).unwrap();
+        assert_eq!(s.rung, None);
+        assert!(s.lens);
+        assert_eq!(s.bounces, 4);
+        assert_eq!(s.spp, 256);
+        assert_eq!(s.edges, EdgeMode::Off);
+        assert_eq!(s.materials, Materials::Basic);
+        assert!(!s.adaptive);
+        assert_eq!(s.denoise, DenoiseMode::Filter);
+    }
+
+    #[test]
+    fn photo_settings_none_fields_skip_serialization() {
+        let s = PhotoSettings::default();
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(!json.contains("rung"), "rung should be skipped when None: {json}");
+        assert!(!json.contains("sunDisc"), "sunDisc should be skipped when None: {json}");
+        assert!(!json.contains("clamp"), "clamp should be skipped when None: {json}");
+        assert!(!json.contains("film"), "film should be skipped when None: {json}");
+        assert!(!json.contains("noiseTarget"), "noiseTarget should be skipped when None: {json}");
+        assert!(!json.contains("timeBudget"), "timeBudget should be skipped when None: {json}");
+    }
+
+    #[test]
+    fn rung_above_max_behaves_as_max() {
+        let r8 = rung(8);
+        let r9 = rung(9);
+        let r100 = rung(100);
+        let r7 = rung(7);
+        assert_eq!(r8, r7);
+        assert_eq!(r9, r7);
+        assert_eq!(r100, r7);
+        assert_eq!(r8.rung, Some(7));
+        assert_eq!(r9.rung, Some(7));
+        assert_eq!(r100.rung, Some(7));
+    }
 }
