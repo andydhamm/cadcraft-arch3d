@@ -56,7 +56,10 @@ pub(super) fn finish_linear(
     };
     let (out, used) = match learned {
         Some(out) => (out, DenoiseMode::Learned),
-        None => (super::denoise::denoise(gpu, &colors, &aov, size).map_err(|e| format!("denoise: {e}"))?, DenoiseMode::Filter),
+        None => (
+            super::denoise::denoise_guided(gpu, &colors, &aov, size, opts.roughness_guide).map_err(|e| format!("denoise: {e}"))?,
+            DenoiseMode::Filter,
+        ),
     };
     stats.denoise_seconds = start.elapsed().as_secs_f32();
     stats.denoiser = used;
