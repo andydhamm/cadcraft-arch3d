@@ -105,11 +105,36 @@ fn read_budgeted(bytes: &[u8], mut table_cells_left: usize) -> Result<Drawing> {
     // its $HANDSEED can be lower than its handles, and entities made while reading (the faces of
     // a polygon mesh) would otherwise get handles that records further on still have. A file
     // CADCraft wrote names its own next handle, above which its rebuilt records are numbered
-    // (#495), so it is left to that.
+    // (#495), so for it only the entity records are reserved. Handles in the reserved band are
+    // reserved for allocation rather than followed (#913): a handle-less entity read before the
+    // section that names one is placed would otherwise be given it and replace the record (#1276).
     let ours = secs.iter().any(|s| s.name == "OBJECTS" && s.tags.iter().any(|t| t.code == 3 && t.str() == crate::dxf_ext::HANDSEED_KEY));
-    for t in secs.iter().filter(|_| !ours).flat_map(|s| s.tags.iter()).filter(|t| t.code == 5 || t.code == 105) {
-        if let Some(h) = Handle::parse_hex(t.str().trim()) {
-            d.bump_handseed(h);
+    if ours {
+        // Its table and object records are numbered above its seed and rebuilt on save (#495),
+        // so only its entities are reserved. Reading is section by section: an entity that has
+        // no handle, or repeats one within its section, gets a fresh handle, and that must not
+        // be one an entity of a later section still names. `BLOCK` and `ENDBLK` are structural
+        // records, not entities, and are left out so they don't move the saved seed.
+        for (kind, tags) in secs.iter().filter(|s| s.name == "BLOCKS" || s.name == "ENTITIES").flat_map(|s| records(&s.tags)) {
+            if matches!(kind.as_str(), "BLOCK" | "ENDBLK") {
+                continue;
+            }
+            if let Some(h) = tags.iter().find(|t| t.code == 5).and_then(|t| Handle::parse_hex(t.str().trim())) {
+                d.bump_handseed(h);
+                d.reserve_handle(h);
+            }
+        }
+    } else {
+        for s in &secs {
+            let entity_section = s.name == "BLOCKS" || s.name == "ENTITIES";
+            for t in s.tags.iter().filter(|t| t.code == 5 || t.code == 105) {
+                if let Some(h) = Handle::parse_hex(t.str().trim()) {
+                    d.bump_handseed(h);
+                    if entity_section {
+                        d.reserve_handle(h);
+                    }
+                }
+            }
         }
     }
     let mut skipped = std::collections::BTreeMap::new();
@@ -151,6 +176,9 @@ fn read_budgeted(bytes: &[u8], mut table_cells_left: usize) -> Result<Drawing> {
     crate::dxf_raw::read(&secs, &mut d);
     crate::dxf_clip::read(&mut d);
     d.skipped_records = skipped;
+    // Every record is placed now, and an object holding a reserved handle keeps it from new
+    // objects by itself. Kept, the set would be copied with every undo step of the drawing.
+    d.reserved_handles.clear();
     Ok(d)
 }
 
@@ -244,33 +272,41 @@ mod arch_handle_tests {
         assert!(!is_arch_handle(e.handle));
     }
 
-    /// A LINE at handle FFFFFFFF00000005 (in the reserved range) is reassigned to a fresh handle below ARCH_HANDLE_BASE.
+    fn handle_of_line_at(h: &str) -> Handle {
+        let dxf = format!("0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n{h}\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n");
+        let d = read(dxf.as_bytes()).unwrap();
+        d.model.iter().next().unwrap().handle
+    }
+
+    /// A LINE at a reserved-range handle keeps it: a file's handles keep their identity.
     #[test]
     fn a_file_handle_in_the_reserved_range_is_reassigned() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\nFFFFFFFF00000005\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n";
-        let d = read(dxf.as_bytes()).unwrap();
-        let e = d.model.iter().next().unwrap();
-        assert!(e.handle.0 < ARCH_HANDLE_BASE, "handle {:x} should be below reserved range", e.handle.0);
-        assert!(!is_arch_handle(e.handle));
+        let h = handle_of_line_at("FFFFFFFF00000005");
+        assert_eq!(h, Handle(0xFFFF_FFFF_0000_0005));
+        assert!(h.0 >= ARCH_HANDLE_BASE);
     }
 
-    /// A LINE at handle FFFFFFFF00010005 (room range) is also reassigned.
+    /// Likewise in the room range.
     #[test]
     fn a_file_handle_in_the_room_range_is_reassigned() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\nFFFFFFFF00010005\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n";
-        let d = read(dxf.as_bytes()).unwrap();
-        let e = d.model.iter().next().unwrap();
-        assert!(e.handle.0 < ARCH_HANDLE_BASE, "handle {:x} should be below reserved range", e.handle.0);
-        assert!(!is_arch_handle(e.handle));
+        assert_eq!(handle_of_line_at("FFFFFFFF00010005"), Handle(0xFFFF_FFFF_0001_0005));
     }
 
-    /// A LINE at handle FFFFFFFF00008005 (opening range) is also reassigned.
+    /// Likewise in the opening range.
     #[test]
     fn a_file_handle_in_the_opening_range_is_reassigned() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\nFFFFFFFF00008005\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n";
-        let d = read(dxf.as_bytes()).unwrap();
-        let e = d.model.iter().next().unwrap();
-        assert!(e.handle.0 < ARCH_HANDLE_BASE, "handle {:x} should be below reserved range", e.handle.0);
-        assert!(!is_arch_handle(e.handle));
+        assert_eq!(handle_of_line_at("FFFFFFFF00008005"), Handle(0xFFFF_FFFF_0000_8005));
+    }
+
+    /// A LINE at a handle in the arch range keeps its handle: a file's handles keep their identity.
+    #[test]
+    fn a_file_handle_in_the_arch_ranges_keeps_its_handle() {
+        for h in ["FFFFFFFF00000005", "FFFFFFFF00010005", "FFFFFFFF00008005"] {
+            let dxf = format!("0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n{h}\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n");
+            let d = read(dxf.as_bytes()).unwrap();
+            let e = d.model.iter().next().unwrap();
+            assert_eq!(e.handle, Handle::parse_hex(h).unwrap());
+            assert!(e.handle.0 >= ARCH_HANDLE_BASE);
+        }
     }
 }
