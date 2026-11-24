@@ -399,4 +399,41 @@ mod tests {
         draw_label(&mut band, 1, "Photoreal");
         assert_eq!(band.len(), 1 * BAND as usize * 4);
     }
+
+    #[test]
+    fn compose_sheet_refuses_different_width() {
+        let mut imgs: Vec<_> = (0..8).map(|i| solid(64, 10, 100 + i as u8)).collect();
+        imgs[3] = solid(65, 10, 0);
+        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
+        assert!(err.contains("rung 3"), "{err}");
+    }
+
+    #[test]
+    fn compose_sheet_refuses_zero_size_images() {
+        let imgs: Vec<_> = (0..8).map(|i| solid(0, 10, 100 + i as u8)).collect();
+        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
+        assert!(err.contains("empty"), "{err}");
+        let imgs: Vec<_> = (0..8).map(|i| solid(64, 0, 100 + i as u8)).collect();
+        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
+        assert!(err.contains("empty"), "{err}");
+    }
+
+    #[test]
+    fn ladder_rung_reply_includes_lens_in_look() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({"save": "c", "azimuth": 30, "elevation": 20, "distance": 12})).unwrap();
+        let doc = s.doc().unwrap();
+
+        let base = json!({"camera": "c", "seed": 5});
+        let out = std::path::Path::new("out");
+
+        for n in 0..=7u8 {
+            let p = rung_params(&base, n, out);
+            let req = build_request(doc, &p).unwrap();
+            let mut reply = json!({});
+            finish_reply(&mut reply, &req);
+
+            assert!(reply["look"].get("lens").is_some(), "rung {n} missing lens");
+        }
+    }
 }
