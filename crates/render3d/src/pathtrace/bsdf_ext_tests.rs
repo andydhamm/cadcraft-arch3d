@@ -347,3 +347,71 @@ fn aniso_rot_preserves_energy() {
         }
     }
 }
+
+/// A mirror clear coat (coat_roughness = 0) over an anisotropic base: the coat is a delta lobe
+/// while the base samples VNDF. Both paths must coexist and conserve energy.
+#[test]
+fn coat_mirror_with_aniso_conserves_energy() {
+    let mat = GpuMaterial {
+        albedo: [1.0; 3],
+        metallic: 1.0,
+        roughness: 0.3,
+        aniso: 0.8,
+        coat: 1.0,
+        coat_roughness: 0.0,
+        flags: MAT_EXT,
+        ..Default::default()
+    };
+    check_furnace("mirror coat with aniso", mat);
+}
+
+/// All three layers active at once (coat + sheen + anisotropy). The layer scaling factors
+/// must compose correctly: base gets (1 - coat F)(1 - sheen E), sheen gets (1 - coat F).
+#[test]
+fn all_layers_combined_conserves_energy() {
+    let mat = GpuMaterial {
+        albedo: [1.0; 3],
+        metallic: 0.0,
+        roughness: 0.3,
+        aniso: 0.8,
+        coat: 1.0,
+        coat_roughness: 0.2,
+        sheen: [1.0; 3],
+        sheen_roughness: 0.3,
+        ior: 1.5,
+        flags: MAT_EXT,
+        ..Default::default()
+    };
+    check_furnace("all layers combined", mat);
+}
+
+/// Sheen at the extremes of its roughness parameter: the E table spans alpha 0.02 to 1.0,
+/// so sheen_roughness 0.0 and 1.0 hit the table boundaries.
+#[test]
+fn sheen_roughness_extremes_conserves_energy() {
+    let smooth = GpuMaterial { sheen: [1.0; 3], sheen_roughness: 0.0, ..layered(0.3) };
+    let rough = GpuMaterial { sheen: [1.0; 3], sheen_roughness: 1.0, ..layered(0.3) };
+    check_furnace("sheen smooth", smooth);
+    check_furnace("sheen rough", rough);
+}
+
+/// MAT_EXT flag is set but no layers have non-zero values: the ext code runs but the material
+/// should behave like a plain layered material and still conserve energy.
+#[test]
+fn ext_flag_no_layers_conserves_energy() {
+    let mat = GpuMaterial {
+        albedo: [1.0; 3],
+        metallic: 0.0,
+        roughness: 0.4,
+        coat: 0.0,
+        coat_roughness: 0.0,
+        sheen: [0.0; 3],
+        sheen_roughness: 0.0,
+        aniso: 0.0,
+        aniso_rot: 0.0,
+        ior: 1.5,
+        flags: MAT_EXT,
+        ..Default::default()
+    };
+    check_furnace("ext flag, no layers", mat);
+}
