@@ -10,7 +10,7 @@
 // does not see the disc itself (depth 0 returns zero; the backdrop shows the sun as before).
 
 fn sun_disc_on() -> bool {
-    return (frame.flags & FRAME_SUN) != 0u && (frame.photo.x & PHOTO_SUN_DISC) != 0u;
+    return (frame.flags & FRAME_SUN) != 0u && (frame.photo.x & PHOTO_SUN_DISC) != 0u && frame.photo_f.y > 0.0;
 }
 
 // The solid angle of the disc (sr).
