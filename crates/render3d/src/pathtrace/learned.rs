@@ -464,13 +464,21 @@ impl Plan {
 }
 
 /// Tile origins along a side of `total` pixels with tiles of `t`: overlapping by [`OVERLAP`], the last
-/// one flush with the end.
+/// one flush with the end when there are only two tiles, otherwise at the regular step.
 fn starts(total: u32, t: u32) -> Vec<u32> {
     let mut v = vec![0];
+    if total <= t {
+        return v;
+    }
     let step = t.saturating_sub(OVERLAP).max(16);
-    let mut s = 0u32;
-    while s.saturating_add(t) < total {
-        s = (s + step).min(total - t);
+    let mut s = step;
+    while s + t < total {
+        v.push(s);
+        s += step;
+    }
+    if v.len() == 1 {
+        v.push(total - t);
+    } else {
         v.push(s);
     }
     v
@@ -484,7 +492,10 @@ fn ramp(i: u32, t: u32, first: bool, last: bool) -> f32 {
         w = w.min((i as f32 + 0.5) / OVERLAP as f32);
     }
     let from_end = t - 1 - i;
-    if !last && from_end < OVERLAP {
+    // For a tile that is not first, the boundary pixel (i == OVERLAP) has full weight;
+    // the right ramp starts one pixel later.
+    let right_limit = if first { OVERLAP } else { OVERLAP - 1 };
+    if !last && from_end < right_limit {
         w = w.min((from_end as f32 + 0.5) / OVERLAP as f32);
     }
     w

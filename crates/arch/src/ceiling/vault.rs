@@ -251,6 +251,71 @@ mod tests {
         assert!(six.rooms.iter().all(|r| ceiling_warning(&six, r).is_none()));
     }
 
+    /// A vaulted room under two roofs on the same level takes the lower underside.
+    #[test]
+    fn vaulted_room_takes_lowest_of_multiple_roofs() {
+        let mut m = house(None);
+        m.rooms[0].flat_ceiling = false;
+        // Roof 1: flat underside at 3.0 over the whole room.
+        m.push_roof(Roof {
+            planes: vec![RoofPlane {
+                ring: rect(-1.0, -1.0, 11.0, 9.0),
+                slope: 0.0,
+                base_edge: [-1.0, -1.0, 11.0, -1.0],
+                eave_z: 3.0,
+                ..RoofPlane::default()
+            }],
+            ..Roof::default()
+        });
+        // Roof 2: flat underside at 2.8 (lower).
+        m.push_roof(Roof {
+            planes: vec![RoofPlane {
+                ring: rect(-1.0, -1.0, 11.0, 9.0),
+                slope: 0.0,
+                base_edge: [-1.0, -1.0, 11.0, -1.0],
+                eave_z: 2.8,
+                ..RoofPlane::default()
+            }],
+            ..Roof::default()
+        });
+        // The vault follows the lower roof (2.8), not the higher one (3.0) or the flat ceiling (2.4).
+        assert!(near(rough(&m, 0, 5.0, 1.5), 2.8), "{}", rough(&m, 0, 5.0, 1.5));
+        assert!(near(rough(&m, 0, 1.0, 0.5), 2.8), "{}", rough(&m, 0, 1.0, 0.5));
+    }
+
+    /// A vaulted room under a flat roof (slope 0) takes the flat roof's underside.
+    #[test]
+    fn vaulted_room_under_flat_roof() {
+        let mut m = house(None);
+        m.rooms[0].flat_ceiling = false;
+        m.push_roof(Roof {
+            planes: vec![RoofPlane {
+                ring: rect(-1.0, -1.0, 11.0, 9.0),
+                slope: 0.0,
+                base_edge: [-1.0, -1.0, 11.0, -1.0],
+                eave_z: 3.5,
+                ..RoofPlane::default()
+            }],
+            ..Roof::default()
+        });
+        assert!(near(rough(&m, 0, 5.0, 1.5), 3.5), "{}", rough(&m, 0, 5.0, 1.5));
+        assert!(near(rough(&m, 0, 1.0, 0.5), 3.5), "{}", rough(&m, 0, 1.0, 0.5));
+        // A flat ceiling under the same flat roof stays at its own height (below the underside).
+        let mut flat = house(None);
+        flat.rooms[0].ceiling_height = Some(2.45);
+        flat.push_roof(Roof {
+            planes: vec![RoofPlane {
+                ring: rect(-1.0, -1.0, 11.0, 9.0),
+                slope: 0.0,
+                base_edge: [-1.0, -1.0, 11.0, -1.0],
+                eave_z: 3.5,
+                ..RoofPlane::default()
+            }],
+            ..Roof::default()
+        });
+        assert!(near(rough(&flat, 0, 5.0, 1.5), 2.45), "{}", rough(&flat, 0, 5.0, 1.5));
+    }
+
     #[test]
     fn vault_queries_survive_nan_roof_planes() {
         let mut m = house(Some(6.0));

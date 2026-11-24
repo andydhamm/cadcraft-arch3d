@@ -507,4 +507,88 @@ mod tests {
         let (before, after) = (mse(&noisy), mse(&out));
         assert!(after <= before * 0.5, "mse before {before}, after {after}");
     }
+
+    #[test]
+    fn pu_handles_zero_negative_and_nan() {
+        assert_eq!(pu(0.0), 0.0);
+        assert_eq!(pu(-1.0), 0.0);
+        assert_eq!(pu(f32::NAN), 0.0);
+        assert_eq!(pu(f32::INFINITY), 0.0);
+        assert_eq!(pu(-f32::INFINITY), 0.0);
+
+        assert_eq!(pu_inv(0.0), 0.0);
+        assert_eq!(pu_inv(-1.0), 0.0);
+        assert_eq!(pu_inv(f32::NAN), 0.0);
+        assert_eq!(pu_inv(f32::INFINITY), 0.0);
+        assert_eq!(pu_inv(-f32::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn autoexposure_all_black_returns_one() {
+        let img = vec![[0.0_f32; 3]; 32 * 32];
+        assert_eq!(autoexposure(&img, (32, 32)), 1.0);
+    }
+
+    #[test]
+    fn encode_input_clamps_and_sanitizes() {
+        let n = 4 * 4;
+        let color: Vec<[f32; 3]> = (0..n).map(|_| [f32::NAN, -0.5, 2.0]).collect();
+        let albedo: Vec<[f32; 3]> = (0..n).map(|_| [1.5, 0.5, -0.5]).collect();
+        let normal: Vec<[f32; 3]> = (0..n).map(|_| [2.0, 0.0, -2.0]).collect();
+
+        let (input, padded) = encode_input(&color, &albedo, &normal, (4, 4), 1.0);
+        assert_eq!(padded, (16, 16));
+
+        let plane = 16 * 16;
+        // Color: NaN -> 0, -0.5 -> 0 (clamped at 0), 2.0 -> PU(2.0) * NORM_SCALE
+        assert_eq!(input[0], 0.0);
+        assert_eq!(input[plane], 0.0);
+        assert_eq!(input[2 * plane], pu(2.0) * NORM_SCALE);
+        // Albedo: clamp to 0..1
+        assert_eq!(input[3 * plane], 1.0);
+        assert_eq!(input[4 * plane], 0.5);
+        assert_eq!(input[5 * plane], 0.0);
+        // Normal: clamp to -1..1, then x 0.5 + 0.5
+        assert_eq!(input[6 * plane], 1.0);
+        assert_eq!(input[7 * plane], 0.5);
+        assert_eq!(input[8 * plane], 0.0);
+    }
+
+    #[test]
+    fn decode_output_handles_nan_and_zero_scale() {
+        let padded = (16, 16);
+        let size = (4, 4);
+        let plane = 16 * 16;
+        let mut out = vec![0.0_f32; 3 * plane];
+        out[plane] = f32::NAN;
+        out[2 * plane] = NORM_SCALE;
+
+        let decoded = decode_output(&out, padded, size, 0.0);
+        assert_eq!(decoded.len(), 16);
+        assert_eq!(decoded[0][0], 0.0);
+        assert_eq!(decoded[0][1], 0.0);
+        assert!((decoded[0][2] - 1.0).abs() < 0.01);
+        for p in &decoded {
+            assert!(p.iter().all(|v| v.is_finite()));
+        }
+    }
+
+    #[test]
+    fn denoise_cpu_validates_input_sizes() {
+        let net = net(ModelChoice::Small);
+        let (w, h) = (4, 4);
+        let n = w * h;
+        let color = vec![[0.5; 3]; n];
+        let albedo = vec![[0.5; 3]; n];
+        let normal = vec![[0.0, 0.0, 1.0]; n];
+
+        let result = denoise_cpu(&net, &vec![[0.5; 3]; n + 1], &albedo, &normal, (w as u32, h as u32));
+        assert!(result.is_err());
+
+        let result = denoise_cpu(&net, &color, &vec![[0.5; 3]; n + 1], &normal, (w as u32, h as u32));
+        assert!(result.is_err());
+
+        let result = denoise_cpu(&net, &color, &albedo, &vec![[0.0, 0.0, 1.0]; n + 1], (w as u32, h as u32));
+        assert!(result.is_err());
+    }
 }

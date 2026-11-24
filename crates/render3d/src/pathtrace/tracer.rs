@@ -1111,7 +1111,7 @@ pub fn upload_scene(gpu: &ComputeGpu, scene: &GpuScene) -> SceneBuffers {
 /// Dispatch the kernel module's `entry` (a `@workgroup_size(64)` entry over `frame.probe_count`
 /// probes, e.g. `traverse_test_main`, `irradiance_main`, or a test entry a segment adds) once with
 /// `frame` and `probes`, and read back `accum[0..probes.len()]` (zeroed before the dispatch).
-/// The pipeline is built for the call (tests; the driver keeps `PtPipelines`).
+/// The entry's pipeline is built on the first call and kept on the device (`ComputeGpu::entry_pipelines`).
 pub fn run_entry(gpu: &ComputeGpu, buffers: &SceneBuffers, entry: &str, frame: &GpuFrame, probes: &[GpuProbe]) -> Result<Vec<[f32; 4]>, String> {
     run_entry_on(gpu, buffers, entry, frame, probes, None)
 }
@@ -1141,7 +1141,8 @@ fn run_entry_on(
     let d = &gpu.device;
     let n = probes.len().max(1);
     let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
-    let pipelines = super::shaders::PtPipelines::new(gpu, None)?;
+    // The device's own pipelines (built once): only their kernel layout is used here.
+    let pipelines = super::shaders::PtPipelines::shared(gpu, None)?;
     // With a ray-query scene: the rq module, its two-group layout and the scene's TLAS as group 1.
     let rq = match rq_scene {
         Some(scene) => {
@@ -1150,24 +1151,36 @@ fn run_entry_on(
         }
         None => None,
     };
-    let source = if rq.is_some() { super::shaders::rq_kernel_source() } else { super::shaders::kernel_source() };
-    let module =
-        d.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("pt test kernel"), source: wgpu::ShaderSource::Wgsl(source.into()) });
-    let plain_layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("pt test"),
-        bind_group_layouts: &[Some(&pipelines.kernel_layout)],
-        immediate_size: 0,
-    });
-    let layout = rq.as_ref().map_or(&plain_layout, |(_, p)| &p.rq_pipeline_layout);
     let kernel_layout = rq.as_ref().map_or(&pipelines.kernel_layout, |(_, p)| &p.kernel_bind_group_layout);
-    let pipeline = d.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some(entry),
-        layout: Some(layout),
-        module: &module,
-        entry_point: Some(entry),
-        compilation_options: Default::default(),
-        cache: None,
-    });
+    // An entry of the plain kernel is built once per device and kept after a dispatch that raised no
+    // validation error. The ray-query kernel's are built per call (few tests; its layouts belong to
+    // the call's `build_rq_pipelines`).
+    let kept = if rq.is_none() { gpu.entry_pipelines.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(entry).cloned() } else { None };
+    let fresh = kept.is_none();
+    let pipeline = match kept {
+        Some(p) => p,
+        None => {
+            let source = if rq.is_some() { super::shaders::rq_kernel_source() } else { super::shaders::kernel_source() };
+            let module = d.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("pt test kernel"),
+                source: wgpu::ShaderSource::Wgsl(source.into()),
+            });
+            let plain_layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("pt test"),
+                bind_group_layouts: &[Some(&pipelines.kernel_layout)],
+                immediate_size: 0,
+            });
+            let layout = rq.as_ref().map_or(&plain_layout, |(_, p)| &p.rq_pipeline_layout);
+            d.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some(entry),
+                layout: Some(layout),
+                module: &module,
+                entry_point: Some(entry),
+                compilation_options: Default::default(),
+                cache: None,
+            })
+        }
+    };
     let frame_buf = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("pt frame"),
         contents: bytemuck::bytes_of(frame),
@@ -1225,6 +1238,9 @@ fn run_entry_on(
     gpu.queue.submit([enc.finish()]);
     if let Some(e) = futures::executor::block_on(scope.pop()) {
         return Err(e.to_string());
+    }
+    if fresh && rq.is_none() {
+        gpu.entry_pipelines.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(entry.to_string(), pipeline.clone());
     }
     let slice = read.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();

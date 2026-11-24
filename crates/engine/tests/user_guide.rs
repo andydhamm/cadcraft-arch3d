@@ -250,6 +250,10 @@ fn user_guide_sh_blocks_execute_through_the_engine() {
                         params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
                     }
                 }
+                // The ladder renders through the 3D renderer, which the engine alone does not have; check 09 runs it.
+                if id == "render.ladder" {
+                    continue;
+                }
                 if let Err(error) = session.execute(id, &params) {
                     panic!("sh block {}: user-guide command `{command}` failed: {error:?}", b + 1);
                 }
@@ -362,6 +366,48 @@ fn user_guide_light_sky_cameras_block_runs() {
     for name in ["dusk", "noon-hdri", "overview", "noon"] {
         assert!(text.contains(&format!("\"{name}\"")), "arch.inspect should list `{name}`: {text}");
     }
+}
+
+/// The Photoreal stills section names the preset, the lens and render keys, the ladder and the denoiser,
+/// sits before Out of scope, and has one `sh` block.
+#[test]
+fn user_guide_has_a_photoreal_stills_section() {
+    let text = section("Photoreal stills");
+    for word in [
+        "technique",
+        "photoreal",
+        "panini",
+        "compression",
+        "shift",
+        "aperture",
+        "focus",
+        "pick",
+        "bloom",
+        "vignette",
+        "whiteBalance",
+        "edges",
+        "materials",
+        "variation",
+        "clamp",
+        "adaptive",
+        "noiseTarget",
+        "timeBudget",
+        "denoise",
+        "pfm",
+        "stop",
+        "noise",
+        "sppMean",
+        "clampLoss",
+        "denoiser",
+        "denoiseFallback",
+        "render.ladder",
+        "denoiser.info",
+        "native only",
+    ] {
+        assert!(text.contains(word), "the photoreal section should mention `{word}`");
+    }
+    assert!(GUIDE.find("\n## Photoreal stills\n") < GUIDE.find("\n## Out of scope\n"), "Photoreal stills comes before Out of scope");
+    assert_eq!(sh_blocks(text).len(), 1, "the section should have exactly one sh block");
 }
 
 #[test]

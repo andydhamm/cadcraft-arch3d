@@ -75,3 +75,24 @@ fn test_plan_mixed_level_kinds() {
 fn test_readme_gallery_matches_the_plan() {
     run_case("test_readme_gallery_matches_the_plan");
 }
+
+/// The photoreal run (phase 22): ladders, finals and the photo script.
+#[test]
+fn gallery_plan_lists_ladders_and_photoreal_finals() {
+    run_case("test_plan_lists_ladders_and_photoreal_finals");
+}
+
+#[test]
+fn gallery_plan_without_photo_skips_them() {
+    run_case("test_plan_without_photo_skips_them");
+}
+
+#[test]
+fn gallery_default_plan_is_unchanged() {
+    run_case("test_default_plan_is_unchanged");
+}
+
+#[test]
+fn gallery_manifest_names_the_photo_script() {
+    run_case("test_manifest_names_the_photo_script");
+}
