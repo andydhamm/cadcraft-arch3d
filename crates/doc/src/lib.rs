@@ -549,6 +549,40 @@ pub use anno::*;
 mod tests;
 
 #[cfg(test)]
+mod handseed_tests {
+    use super::*;
+
+    #[test]
+    fn handseed_never_enters_the_reserved_range() {
+        let mut d = Drawing::new_imperial();
+        let before = d.handseed;
+        // A handle in the reserved range is not followed.
+        d.bump_handseed(Handle(ARCH_HANDLE_BASE.saturating_add(7)));
+        assert_eq!(d.handseed, before, "bump_handseed with a reserved-range handle must leave handseed unchanged");
+        let h = d.new_handle();
+        assert!(h.0 < ARCH_HANDLE_BASE, "new_handle must not return a handle in the reserved range");
+    }
+
+    #[test]
+    fn new_handle_after_bump_to_base_returns_base_minus_one() {
+        // The seed follows handles below HANDLE_LIMIT; the next handle is one past the bump.
+        let mut d = Drawing::new_imperial();
+        d.bump_handseed(Handle(HANDLE_LIMIT - 2));
+        let h = d.new_handle();
+        assert_eq!(h.0, HANDLE_LIMIT - 1);
+        assert!(h.0 < ARCH_HANDLE_BASE);
+    }
+
+    #[test]
+    fn bump_handseed_with_u64_max_is_ignored() {
+        let mut d = Drawing::new_imperial();
+        let before = d.handseed;
+        d.bump_handseed(Handle(u64::MAX));
+        assert_eq!(d.handseed, before, "bump_handseed with u64::MAX must leave handseed unchanged");
+    }
+}
+
+#[cfg(test)]
 mod arch_layers_tests {
     use super::*;
 

@@ -272,6 +272,32 @@ mod arch_handle_tests {
         assert!(!is_arch_handle(e.handle));
     }
 
+    fn handle_of_line_at(h: &str) -> Handle {
+        let dxf = format!("0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n{h}\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n");
+        let d = read(dxf.as_bytes()).unwrap();
+        d.model.iter().next().unwrap().handle
+    }
+
+    /// A LINE at a reserved-range handle keeps it: a file's handles keep their identity.
+    #[test]
+    fn a_file_handle_in_the_reserved_range_is_reassigned() {
+        let h = handle_of_line_at("FFFFFFFF00000005");
+        assert_eq!(h, Handle(0xFFFF_FFFF_0000_0005));
+        assert!(h.0 >= ARCH_HANDLE_BASE);
+    }
+
+    /// Likewise in the room range.
+    #[test]
+    fn a_file_handle_in_the_room_range_is_reassigned() {
+        assert_eq!(handle_of_line_at("FFFFFFFF00010005"), Handle(0xFFFF_FFFF_0001_0005));
+    }
+
+    /// Likewise in the opening range.
+    #[test]
+    fn a_file_handle_in_the_opening_range_is_reassigned() {
+        assert_eq!(handle_of_line_at("FFFFFFFF00008005"), Handle(0xFFFF_FFFF_0000_8005));
+    }
+
     /// A LINE at a handle in the arch range keeps its handle: a file's handles keep their identity.
     #[test]
     fn a_file_handle_in_the_arch_ranges_keeps_its_handle() {
