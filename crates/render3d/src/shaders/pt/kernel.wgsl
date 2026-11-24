@@ -162,7 +162,8 @@ fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<f
         if (light_luminance(f) > 0.0) {
             // A disc sun (delta 0) is weighted against the BSDF ray that reaches it (sun_disc_seen).
             let w = select(1.0, power_heuristic(sun.pdf, bsdf_pdf(m, n, wo, sun.dir)), sun.delta == 0u);
-            sum = sum + f * sun.li * sun_visibility(pt_offset(p, trans_shadow_normal(m, n, wo, sun.dir)), sun.dir) * w;
+            let o = pt_offset(p, trans_shadow_normal(m, n, wo, sun.dir));
+            sum = sum + f * sun.li * sun_visibility(o, sun.dir) * w;
         }
     }
     sum = sum + env_direct(m, p, n, wo, r) + moon_direct(m, p, n, wo);
