@@ -338,4 +338,65 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn compose_sheet_refuses_wrong_pixel_count() {
+        let mut imgs: Vec<_> = (0..8).map(|i| solid(64, 10, 100 + i as u8)).collect();
+        // Right dimensions, wrong pixel count.
+        imgs[0] = (64, 10, vec![0u8; 2561]);
+        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
+        assert!(err.contains("wrong pixel count"), "{err}");
+    }
+
+    #[test]
+    fn compose_sheet_refuses_different_height() {
+        let mut imgs: Vec<_> = (0..8).map(|i| solid(64, 10, 100 + i as u8)).collect();
+        imgs[3] = solid(64, 11, 0);
+        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
+        assert!(err.contains("rung 3"), "{err}");
+    }
+
+    #[test]
+    fn compose_sheet_refuses_sheet_too_large() {
+        let w = 1000u32;
+        let h = 50000u32;
+        // 8 * 1000 * (50000 + 24) = 400,192,000 > 400,000,000.
+        let imgs: Vec<_> = (0..8).map(|i| (w, h, vec![100u8 + i as u8; (w * h * 4) as usize])).collect();
+        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
+        assert!(err.contains("too large"), "{err}");
+    }
+
+    #[test]
+    fn compose_sheet_handles_1x1_image() {
+        let imgs: Vec<_> = (0..8).map(|i| solid(1, 1, 100 + i as u8)).collect();
+        let (sw, sh, px) = compose_sheet(&imgs, &RUNG_NAMES).unwrap();
+        assert_eq!((sw, sh), (8, 25));
+        assert_eq!(px.len(), (8 * 25 * 4) as usize);
+    }
+
+    #[test]
+    fn rung_params_ignores_extra_fields() {
+        let base = json!({"camera": "front", "extra": "ignored", "another": 42});
+        let p = rung_params(&base, 0, Path::new("/tmp/x"));
+        assert_eq!(p["camera"], "front");
+        assert!(p.get("extra").is_none());
+        assert!(p.get("another").is_none());
+    }
+
+    #[test]
+    fn rung_params_replaces_out() {
+        let base = json!({"camera": "front", "out": "original.png"});
+        let p = rung_params(&base, 3, Path::new("/tmp/x"));
+        assert_eq!(p["out"], "/tmp/x/rung-3.png");
+    }
+
+    #[test]
+    fn draw_label_handles_very_small_width() {
+        let mut band = vec![0u8; 1 * BAND as usize * 4];
+        for px in band.chunks_exact_mut(4) {
+            px.copy_from_slice(&BAND_BG);
+        }
+        draw_label(&mut band, 1, "Photoreal");
+        assert_eq!(band.len(), 1 * BAND as usize * 4);
+    }
 }
