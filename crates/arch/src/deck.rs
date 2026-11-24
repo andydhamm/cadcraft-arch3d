@@ -188,13 +188,26 @@ struct Chord {
 /// The chords of the line `u = c` inside the closed polygon `pts` (points are `(u, v)`): even-odd,
 /// half-open at vertices, sorted along `v`. Chords shorter than 1e-9 are dropped.
 fn chords(pts: &[(f64, f64)], c: f64) -> Vec<Chord> {
+    let n = pts.len();
     let mut hits: Vec<(f64, usize)> = Vec::new();
+    // Non-vertex crossings: endpoints strictly on opposite sides of the line.
     for (i, &(u0, v0)) in pts.iter().enumerate() {
-        let Some(&(u1, v1)) = pts.get((i + 1) % pts.len()) else { continue };
-        if (u0 > c) != (u1 > c) {
+        let Some(&(u1, v1)) = pts.get((i + 1) % n) else { continue };
+        if (u0 - c) * (u1 - c) < 0.0 {
             let v = v0 + (c - u0) / (u1 - u0) * (v1 - v0);
             if v.is_finite() {
                 hits.push((v, i));
+            }
+        }
+    }
+    // Vertex crossings: a vertex on the line counts only if the two adjacent edges are on
+    // opposite sides (the line passes through the interior at that vertex).
+    for (i, &(u0, v0)) in pts.iter().enumerate() {
+        if u0 == c {
+            let Some(&(u_prev, _)) = pts.get((i + n - 1) % n) else { continue };
+            let Some(&(u_next, _)) = pts.get((i + 1) % n) else { continue };
+            if (u_prev - c) * (u_next - c) < 0.0 {
+                hits.push((v0, i));
             }
         }
     }
@@ -570,5 +583,52 @@ mod tests {
         // A room that is not a deck (the old stub's answer for everything) has no frame.
         let m = house();
         assert!(frame(&m, &north_deck(), &|_| 0.0).is_none());
+    }
+
+    #[test]
+    fn chords_vertical_line_through_square() {
+        // Square from (0,0) to (4,4); line u=2 crosses it from v=0 to v=4.
+        let sq = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)];
+        let c = super::chords(&sq, 2.0);
+        assert_eq!(c.len(), 1);
+        assert!((c[0].lo - 0.0).abs() < 1e-9 && (c[0].hi - 4.0).abs() < 1e-9);
+        // Line u=5 misses the square.
+        assert!(super::chords(&sq, 5.0).is_empty());
+        // Line u=0 passes through two vertices; even-odd gives no chord.
+        assert!(super::chords(&sq, 0.0).is_empty());
+    }
+
+    #[test]
+    fn deck_edges_no_walls_nearby() {
+        let m = house();
+        // A deck far from the house has no wall contacts.
+        let room = Room {
+            polygon: vec![Vec2::new(50.0, 50.0), Vec2::new(54.0, 50.0), Vec2::new(54.0, 53.0), Vec2::new(50.0, 53.0)],
+            deck_height: Some(0.9),
+            ..Room::default()
+        };
+        let edges = deck_edges(&m, &room);
+        assert_eq!(edges.len(), 4);
+        assert!(edges.iter().all(|e| e.wall.is_none() && e.contact == 0.0));
+        assert_eq!(ledger_edge(&edges), None);
+    }
+
+    #[test]
+    fn deck_frame_at_minimum_area() {
+        let m = house();
+        // A deck with area just above MIN_AREA (0.1 m2) gets a frame.
+        let room = Room {
+            polygon: vec![Vec2::new(20.0, 20.0), Vec2::new(20.5, 20.0), Vec2::new(20.5, 20.5), Vec2::new(20.0, 20.5)],
+            deck_height: Some(0.9),
+            ..Room::default()
+        };
+        assert!(frame(&m, &Room { room_type: RoomType::Deck, ..room }, &|_| 0.0).is_some());
+        // A deck with area just below MIN_AREA does not.
+        let small = Room {
+            polygon: vec![Vec2::new(20.0, 20.0), Vec2::new(20.3, 20.0), Vec2::new(20.3, 20.3), Vec2::new(20.0, 20.3)],
+            deck_height: Some(0.9),
+            ..Room::default()
+        };
+        assert!(frame(&m, &Room { room_type: RoomType::Deck, ..small }, &|_| 0.0).is_none());
     }
 }

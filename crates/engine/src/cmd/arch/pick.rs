@@ -41,10 +41,10 @@ fn finite(v: &Value, what: &str) -> Result<f64, EngineError> {
     }
 }
 
-/// Optional finite number field; absent/null yields `default`.
+/// Optional finite number field; absent yields `default`, null is refused.
 fn num(obj: &Value, key: &str, default: f64) -> Result<f64, EngineError> {
     match obj.get(key) {
-        None | Some(Value::Null) => Ok(default),
+        None => Ok(default),
         Some(v) => finite(v, key),
     }
 }
@@ -78,7 +78,10 @@ pub(crate) fn parse_camera(cam: &Value) -> Result<Camera, EngineError> {
         None | Some(Value::Null) => "orbit",
         Some(v) => v.as_str().ok_or_else(|| bad("pick3d", "`camera.kind` must be a string"))?,
     };
-    let fov = num(cam, "fov", 45.0)?;
+    let fov = match cam.get("fov") {
+        None => 45.0,
+        Some(v) => finite(v, "fov")?,
+    };
     if fov <= 0.0 || fov >= 180.0 {
         return Err(bad("pick3d", "`fov` must be in (0, 180) degrees"));
     }
@@ -517,6 +520,85 @@ mod tests {
             "clip": {"min": [2.0, 2.0, 2.0], "max": [1.0, 1.0, 1.0]}
         });
         assert!(s.execute("pick3d", &p).is_err());
+    }
+
+    #[test]
+    fn pick3d_refuses_nan_camera_params() {
+        let mut s = session();
+        let nan = serde_json::Value::from(f64::NAN);
+        let bads = [
+            json!({ "kind": "full", "eye": [nan, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": 45 }),
+            json!({ "kind": "full", "eye": [3.45, -5.0, 1.0], "target": [nan, 0.0, 1.0], "fov": 45 }),
+            json!({ "kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": nan }),
+            json!({ "kind": "orbit", "target": [nan, 0.0, 0.0], "fov": 45 }),
+            json!({ "kind": "orbit", "azimuth": nan, "fov": 45 }),
+            json!({ "kind": "orbit", "elevation": nan, "fov": 45 }),
+            json!({ "kind": "orbit", "distance": nan, "fov": 45 }),
+        ];
+        for c in bads {
+            assert!(s.execute("pick3d", &params(c.clone(), json!([50, 50]))).is_err(), "accepted {c}");
+        }
+    }
+
+    #[test]
+    fn pick3d_accepts_pixel_at_viewport_edge() {
+        let mut s = session();
+        let cam = front();
+        for px in [json!([0, 0]), json!([100, 0]), json!([0, 100]), json!([100, 100]), json!([50, 0]), json!([0, 50])] {
+            let r = s.execute("pick3d", &params(cam.clone(), px.clone()));
+            assert!(r.is_ok(), "rejected edge pixel {px}: {r:?}");
+        }
+    }
+
+    #[test]
+    fn pick3d_per_call_lens_overrides_saved_camera() {
+        let mut s = Session::new();
+        let doc = s.doc_mut().unwrap();
+        let wall_id =
+            doc.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        doc.arch.push_opening(Opening::new(wall_id, 3.0, 0.9, 2.0, OpeningKind::Door));
+        doc.arch.cameras.push(cadcraft_doc::arch::Camera3d {
+            name: "wide".to_string(),
+            kind: CameraKind::Full,
+            eye: Some([3.45, -5.0]),
+            eye_height: Some(1.0),
+            target: Some([3.45, 0.0, 1.0]),
+            fov_deg: Some(100.0),
+            look: Some(cadcraft_doc::arch::Look {
+                lens: cadcraft_doc::arch::Lens { projection: LensProjection::Panini, compression: 1.0, shift: 0.0, ..Default::default() },
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        doc.touch_arch();
+        let lens = cadcraft_arch3d::lens::LensView { panini: true, compression: 1.0, ..Default::default() };
+        let camera = parse_camera(&json!({"kind": "full", "eye": [3.45, -5.0, 1.0], "target": [3.45, 0.0, 1.0], "fov": 100.0})).unwrap();
+        let point = [2.5, 0.0, 0.2];
+        let size = (100, 100);
+        let px = cadcraft_arch3d::lens::project_point_lens(&camera, &lens, size, point).unwrap();
+        // Use the saved camera (panini) with a per-call rectilinear override.
+        let p = json!({ "camera": "wide", "size": [100, 100], "pixel": [px[0], px[1]], "projection": "rectilinear" });
+        let hit = s.execute("pick3d", &p).unwrap();
+        // With rectilinear at this pixel, the door is not hit (the wall is).
+        assert_eq!(hit["hit"]["id"], "w0", "{hit}");
+    }
+
+    #[test]
+    fn pick3d_refuses_nan_pixel() {
+        let mut s = session();
+        let nan = serde_json::Value::from(f64::NAN);
+        let bads = [json!([nan, 50]), json!([50, nan]), json!([nan, nan])];
+        for px in bads {
+            assert!(s.execute("pick3d", &params(front(), px.clone())).is_err(), "accepted {px}");
+        }
+    }
+
+    #[test]
+    fn pick3d_accepts_huge_coordinates() {
+        let mut s = session();
+        let cam = json!({ "kind": "orbit", "target": [1e9, 1e9, 1e9], "distance": 1e6, "fov": 45 });
+        let r = s.execute("pick3d", &params(cam, json!([50, 50])));
+        assert!(r.is_ok(), "rejected huge coords: {r:?}");
     }
 
     #[test]
