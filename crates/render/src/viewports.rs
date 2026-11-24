@@ -1,5 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::display::append;
+use cadcraft_doc::{is_opening_handle, is_railing_handle, is_roof_handle, is_room_handle, is_stair_handle};
+
 use super::display::{DImage, DPrim, DisplayList, Kind, NO_LAYER, PlotText, VIEWPORT_CONTENT};
 use super::draw::entity;
 #[cfg(not(target_arch = "wasm32"))]
