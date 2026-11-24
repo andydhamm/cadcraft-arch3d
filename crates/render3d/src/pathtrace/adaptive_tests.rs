@@ -250,7 +250,7 @@ fn fill_stats_small_accumulator() {
     fill_stats(&accum, 2, &mut stats);
     assert_eq!(stats.spp_min, 10);
     assert_eq!(stats.spp_max, 20);
-    assert!((stats.spp_mean - 15.0).abs() < 1e-6, "mean {stats.spp_mean}");
+    assert!((stats.spp_mean - 15.0).abs() < 1e-6, "mean {}", stats.spp_mean);
     assert_eq!(stats.samples_total, 30);
     assert!(stats.noise >= 0.0 && stats.noise.is_finite());
 }
