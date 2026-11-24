@@ -3,7 +3,10 @@
 //! environment. They run the kernel's test entries through [`run_entry`] on the shared compute
 //! device and skip (with a SKIP line) without one.
 
-use super::scene_gpu::{FRAME_FURNACE, GpuFrame, GpuMaterial, GpuProbe, GpuScene, MAT_THIN, MAT_TRANS, PHOTO_MATERIALS, build_gpu_scene};
+use super::scene_gpu::{
+    FRAME_ENV, FRAME_FURNACE, FRAME_SUN, GpuFrame, GpuLight, GpuMaterial, GpuProbe, GpuScene, LIGHT_POINT, MAT_THIN, MAT_TRANS, PHOTO_MATERIALS,
+    build_gpu_scene,
+};
 use super::tracer::{run_entry, upload_scene};
 use crate::types::{ArchId, Mesh, Scene3d};
 
@@ -322,4 +325,150 @@ fn rough_glass_sphere_in_a_uniform_environment_is_one() {
     assert_eq!(out.len(), 64);
     let mean: f64 = out.iter().map(|a| f64::from(a[0]) / f64::from(spp)).sum::<f64>() / 64.0;
     assert!((mean - 1.0).abs() <= 0.02, "the ball renders {mean}, want 1.0 +- 2 %");
+}
+
+// ---- Light samples reach the far side (shadow rays leave on the side the sample goes to) ----------
+
+/// An 8 x 8 camera 4 m from a radius-3 sphere along +x (90 degree field), `bounces` and `spp` set.
+fn ball_frame(bounces: u32, spp: u32) -> GpuFrame {
+    let (eye, f, r, u) = ([-4.0f32, 0.0, 0.0], [1.0f32, 0.0, 0.0], [0.0f32, -1.0, 0.0], [0.0f32, 0.0, 1.0]);
+    let a = -0.5f32;
+    GpuFrame {
+        inv_view_proj: [
+            [r[0], r[1], r[2], 0.0],
+            [u[0], u[1], u[2], 0.0],
+            [eye[0] * a, eye[1] * a, eye[2] * a, a],
+            [eye[0] + f[0], eye[1] + f[1], eye[2] + f[2], 1.0],
+        ],
+        eye: [eye[0], eye[1], eye[2], 1.0],
+        size: [8, 8],
+        probe_count: 64,
+        bounces,
+        spp_this_pass: spp,
+        seed: 3,
+        photo: [PHOTO_MATERIALS, 0, 0, 0],
+        ..Default::default()
+    }
+}
+
+/// Run `trace_main` over the 64 pixels of `frame` on `scene`; `None` after a SKIP line.
+fn trace_pixels(scene: &GpuScene, frame: &GpuFrame) -> Option<Vec<[f32; 4]>> {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("SKIP: no compute device");
+        return None;
+    };
+    let buffers = upload_scene(&gpu, scene);
+    let frame = GpuFrame { light_count: scene.lights.len() as u32, ..*frame };
+    match run_entry(&gpu, &buffers, "trace_main", &frame, &vec![GpuProbe::default(); 64]) {
+        Ok(out) => {
+            assert_eq!(out.len(), 64);
+            Some(out)
+        }
+        Err(e) => {
+            assert!(false, "trace_main: {e}");
+            None
+        }
+    }
+}
+
+/// `frame` with a uniform radiance-1.0 environment baked into `scene`, light-sampled.
+fn with_uniform_env(scene: &mut GpuScene, frame: GpuFrame) -> GpuFrame {
+    let lighting = crate::lit_frame::Lighting {
+        sun: None,
+        environment: Some(std::sync::Arc::new(crate::environment::Environment::uniform([1.0; 3], 16, 8))),
+        ..Default::default()
+    };
+    let mut frame = frame;
+    super::tracer::frame_environment(&mut frame, &mut scene.ies, &lighting);
+    frame
+}
+
+/// Mean radiance of the camera rays that hit a closed sphere of `material` in the uniform environment.
+fn env_furnace_mean(material: GpuMaterial) -> Option<f64> {
+    let scene = Scene3d { meshes: vec![sphere("ball", 3.0, 3)], ..Default::default() };
+    let mut gpu_scene = build_gpu_scene(&scene, false, None);
+    gpu_scene.materials[0] = material;
+    let spp = 1024u32;
+    let frame = with_uniform_env(&mut gpu_scene, ball_frame(16, spp));
+    assert_ne!(frame.flags & FRAME_ENV, 0, "the environment is on (importance sampled)");
+    let out = trace_pixels(&gpu_scene, &frame)?;
+    Some(out.iter().map(|a| f64::from(a[0]) / f64::from(spp)).sum::<f64>() / 64.0)
+}
+
+#[test]
+fn thin_sheet_furnace_sphere_keeps_its_energy() {
+    let Some(mean) = env_furnace_mean(thin_sheet([1.0; 3], 0.8, 0.6)) else {
+        return;
+    };
+    assert!((0.95..=1.02).contains(&mean), "thin translucent sphere renders {mean}");
+}
+
+#[test]
+fn rough_glass_furnace_sphere_keeps_its_energy_with_light_samples() {
+    let Some(mean) = env_furnace_mean(rough_glass([1.0; 3], 0.3, 1.0)) else {
+        return;
+    };
+    assert!((0.95..=1.02).contains(&mean), "rough glass sphere renders {mean}");
+}
+
+/// A 4 x 4 m quad on z = 0 (counter-clockwise seen from +z).
+fn quad(material: &str) -> Mesh {
+    let mut m = Mesh::new(material, ArchId(1));
+    m.positions.extend([[-2.0, -2.0, 0.0], [2.0, -2.0, 0.0], [2.0, 2.0, 0.0], [-2.0, 2.0, 0.0]]);
+    m.indices.extend([0, 1, 2, 0, 2, 3]);
+    m
+}
+
+#[test]
+fn far_side_light_sample_is_not_self_shadowed() {
+    let scene = Scene3d { meshes: vec![quad("sheet")], ..Default::default() };
+    let mut gpu_scene = build_gpu_scene(&scene, false, None);
+    gpu_scene.materials[0] = thin_sheet([0.8; 3], 0.5, 1.0);
+    let (d, intensity) = (2.0f32, 10.0f32);
+    gpu_scene.lights = vec![GpuLight { position: [0.0, 0.0, -d], kind: LIGHT_POINT, rgb: [intensity; 3], ..Default::default() }];
+    // From (0, 0, 3) looking down -z with a narrow field (about 0.12 m wide on the sheet).
+    let (eye, f, r, u) = ([0.0f32, 0.0, 3.0], [0.0f32, 0.0, -1.0], [0.02f32, 0.0, 0.0], [0.0f32, 0.02, 0.0]);
+    let a = -0.5f32;
+    let spp = 64u32;
+    let frame = GpuFrame {
+        inv_view_proj: [
+            [r[0], r[1], r[2], 0.0],
+            [u[0], u[1], u[2], 0.0],
+            [eye[0] * a, eye[1] * a, eye[2] * a, a],
+            [eye[0] + f[0], eye[1] + f[1], eye[2] + f[2], 1.0],
+        ],
+        eye: [eye[0], eye[1], eye[2], 1.0],
+        size: [8, 8],
+        probe_count: 64,
+        bounces: 0,
+        spp_this_pass: spp,
+        seed: 5,
+        photo: [PHOTO_MATERIALS, 0, 0, 0],
+        ..Default::default()
+    };
+    let Some(out) = trace_pixels(&gpu_scene, &frame) else {
+        return;
+    };
+    let mean: f64 = out.iter().map(|p| f64::from(p[0]) / f64::from(spp)).sum::<f64>() / 64.0;
+    let want = 0.8 * f64::from(intensity) / (std::f64::consts::PI * f64::from(d * d));
+    assert!((mean - want).abs() <= 0.05 * want, "camera-side radiance {mean}, want {want} +- 5 %");
+}
+
+#[test]
+fn opaque_direct_light_is_unchanged_by_the_shadow_side() {
+    let scene = Scene3d { meshes: vec![sphere("ball", 3.0, 2)], ..Default::default() };
+    let mut gpu_scene = build_gpu_scene(&scene, false, None);
+    // Opaque (no MAT_TRANS): the materials switch must change nothing.
+    gpu_scene.materials[0] = GpuMaterial { albedo: [0.7, 0.5, 0.3], roughness: 0.4, ior: 1.5, ..Default::default() };
+    gpu_scene.lights = vec![GpuLight { position: [-6.0, 3.0, 4.0], kind: LIGHT_POINT, rgb: [60.0; 3], ..Default::default() }];
+    let spp = 4u32;
+    let base = GpuFrame { flags: FRAME_SUN, sun_dir: [0.0, 0.6, 0.8, 0.0], sun_rgb: [1.0; 4], ..ball_frame(2, spp) };
+    let frame = with_uniform_env(&mut gpu_scene, base);
+    let on = GpuFrame { photo: [PHOTO_MATERIALS, 0, 0, 0], ..frame };
+    let off = GpuFrame { photo: [0, 0, 0, 0], ..frame };
+    let (Some(a), Some(b)) = (trace_pixels(&gpu_scene, &on), trace_pixels(&gpu_scene, &off)) else {
+        return;
+    };
+    assert!(a.iter().any(|p| p[0] > 0.0), "the scene is lit");
+    assert_eq!(a, b, "an opaque scene renders identically with PHOTO_MATERIALS on and off");
 }
