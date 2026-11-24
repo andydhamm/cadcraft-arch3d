@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-23 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 7 of 35 segments merged · 0 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 11 of 35 segments merged · 1 of 15 acceptance checks**
 
-11,426 workspace tests passing at the last merge · 1328 segments merged in all · 0 of 15 seats working
+11,451 workspace tests passing at the last merge · 1333 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,56 +32,58 @@ Updated 2026-11-23 23:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 0 / 15 | 6.3 h so far · expected done Nov 24 23:14–Nov 26 12:33 UTC |
+| 22 | Photoreal stills | building | 1 / 15 | 6.5 h so far · expected done Nov 24 12:34–Nov 25 10:41 UTC |
 
 ## Phase 22 segments
 
-20 queued, 7 merged, 6 merging, 2 working
+14 queued, 11 merged, 7 working, 3 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | merging | mai-flash-esc |
-| `p22-r3d-kernel-hooks` | Path tracer groundwork: frame and material layouts, WGSL hook files, tracer hook points, all inert | merging | claude-sonnet-d |
-| `p22-engine-render-params` | Engine: the photoreal render params, the preset, focus pick and calibrate on RenderRequest | working | claude-sonnet-b |
-| `p22-r3d-lens-raster` | Raster views: the wide-angle projection and shift as a post-warp | merging | claude-sonnet-b |
-| `p22-engine-pick-lens` | pick3d maps the pixel back through the lens | working | mai-flash-b |
-| `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | merging | mai-flash-b |
-| `p22-io-glb-ext` | glTF export of the new PBR fields as KHR material extensions | merging | bonsai-b |
-| `p22-ui-pane-photoreal` | 3D pane: Photoreal in the look row, the lens in the live view and its pick, Finalize as the preset | merging | claude-sonnet-a |
+| `p22-r3d-material-map` | Fill the GPU material's extension fields from MaterialExt | working | claude-sonnet-c |
+| `p22-engine-render-params` | Engine: the photoreal render params, the preset, focus pick and calibrate on RenderRequest | merging | claude-sonnet-b |
+| `p22-r3d-linear-out` | Path tracer: keep the linear image (radiance and film stages) | working | mai-flash |
+| `p22-r3d-lens-path` | Path tracer ray generation: Panini, shift and the thin lens | working | claude-sonnet-d |
+| `p22-engine-pick-lens` | pick3d maps the pixel back through the lens | merging | mai-flash-b |
+| `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | working | claude-sonnet-a |
+| `p22-r3d-clamp` | Per-sample clamp of indirect contributions, with its energy loss reported | working | mai-flash-b |
+| `p22-r3d-adaptive` | Adaptive sampling, the noise target and the time budget | working | tturbo-mac2 |
+| `p22-r3d-roughness-guide` | The edge-aware filter gains the roughness buffer as a guide | working | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 23 23:58 | `p22-r3d-tza` | refused | 0 pass | mai-flash-b |
+| Nov 23 23:58 | `harden-p13-io-finish-round-trip` | merged | 11,451 pass | tturbo-mac |
+| Nov 23 23:58 | `p22-ui-pane-photoreal` | merged | 11,451 pass | claude-sonnet-a |
+| Nov 23 23:58 | `p22-r3d-lens-raster` | merged | 11,451 pass | claude-sonnet-b |
+| Nov 23 23:58 | `p22-io-glb-ext` | merged | 11,451 pass | bonsai-b |
+| Nov 23 23:58 | `p22-r3d-kernel-hooks` | merged | 11,451 pass | claude-sonnet-d |
 | Nov 23 23:37 | `p22-arch3d-calibrate` | merged | 11,426 pass | claude-sonnet-c |
 | Nov 23 23:10 | `p22-engine-look-keys` | merged | 11,421 pass | claude-sonnet-c |
 | Nov 23 22:49 | `p22-r3d-types` | merged | 11,415 pass | claude-sonnet-d |
 | Nov 23 22:15 | `p22-arch3d-lens` | merged | 11,410 pass | claude-sonnet-d |
 | Nov 23 21:58 | `p22-arch3d-material-ext` | merged | 11,404 pass | claude-sonnet-c |
 | Nov 23 21:24 | `p22-doc-look` | merged | 11,399 pass | claude-sonnet-a |
-| Nov 23 19:14 | `harden-p18-observables-1` | merged | 11,394 pass | tturbo-mac |
-| Nov 23 17:27 | `harden-p18-observables-2` | merged | 11,377 pass | tturbo-mac |
-| Nov 23 16:38 | `upstream-sync-0ebb256d3` | merged | 11,363 pass | darwin-ws3 |
-| Nov 23 16:00 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | bonsai-a |
-| Nov 23 15:33 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | mai-flash-b |
-| Nov 23 14:57 | `upstream-sync-0ebb256d3` | refused | 11,363 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | agent | 1401 |
-| bonsai-b | bonsai2-27b | agent | 1309 |
+| bonsai-b | bonsai2-27b | gate | 1310 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | idle | 166 |
-| claude-sonnet-b | sonnet | agent | 171 |
-| claude-sonnet-c | sonnet | idle | 107 |
-| claude-sonnet-d | sonnet | idle | 103 |
+| claude-sonnet-a | sonnet | agent | 166 |
+| claude-sonnet-b | sonnet | agent | 173 |
+| claude-sonnet-c | sonnet | agent | 107 |
+| claude-sonnet-d | sonnet | agent | 103 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 128 |
-| mai-flash-b | mai-code-1.1-flash | agent | 81 |
+| mai-flash | mai-code-1.1-flash | agent | 128 |
+| mai-flash-b | mai-code-1.1-flash | agent | 83 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 177 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1197 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 703 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1198 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 703 |
