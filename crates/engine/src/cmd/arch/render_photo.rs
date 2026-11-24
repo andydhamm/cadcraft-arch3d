@@ -556,6 +556,84 @@ mod tests {
     }
 
     #[test]
+    fn parse_pfm_hostile_paths() {
+        // Path too long (> 4096)
+        let long = "a".repeat(4097);
+        let p = json!({"pfm": long});
+        assert!(parse_pfm(&p).is_err(), "path > 4096 should be refused");
+        // Exactly 4096 is OK
+        let ok_long = "a".repeat(4096);
+        let p = json!({"pfm": ok_long});
+        assert!(parse_pfm(&p).is_ok(), "path == 4096 should be accepted");
+        // Null byte in path
+        let p = json!({"pfm": "a\0b.pfm"});
+        assert!(parse_pfm(&p).is_err(), "path with null byte should be refused");
+        // Whitespace-only path
+        let p = json!({"pfm": "   "});
+        assert!(parse_pfm(&p).is_err(), "whitespace-only path should be refused");
+        // Non-string pfm
+        let p = json!({"pfm": 42});
+        assert!(parse_pfm(&p).is_err(), "non-string pfm should be refused");
+    }
+
+    #[test]
+    fn parse_calibrate_defaults_for_missing_fields() {
+        // Object with only shape: at, size, segments, material all default
+        let c = parse_calibrate(&json!({"calibrate": {"objects": [{"shape": "sphere"}]}})).unwrap().unwrap();
+        let o = &c.objects[0];
+        assert_eq!(o.shape, CalibShape::Sphere);
+        // Verify defaults are sensible (at origin, unit size)
+        assert!(o.at.iter().all(|v| v.is_finite()));
+        assert!(o.size.iter().all(|v| v.is_finite() && *v > 0.0));
+        assert!(o.segments > 0);
+        // Light with only candela: at and kelvin default
+        let c = parse_calibrate(&json!({"calibrate": {"objects": [{"shape": "sphere"}], "lights": [{"candela": 50}]}})).unwrap().unwrap();
+        let l = &c.lights[0];
+        assert_eq!(l.candela, 50.0);
+        assert!(l.at.iter().all(|v| v.is_finite()));
+        assert!(l.kelvin.is_finite() && l.kelvin > 0.0);
+        // Light with no fields at all
+        let c = parse_calibrate(&json!({"calibrate": {"objects": [{"shape": "sphere"}], "lights": [{}]}})).unwrap().unwrap();
+        let l = &c.lights[0];
+        assert!(l.at.iter().all(|v| v.is_finite()));
+        assert!(l.candela.is_finite() && l.candela > 0.0);
+        assert!(l.kelvin.is_finite() && l.kelvin > 0.0);
+    }
+
+    #[test]
+    fn parse_calibrate_scalar_size_for_box() {
+        // Scalar size applies to all three axes
+        let c = parse_calibrate(&json!({"calibrate": {"objects": [{"shape": "box", "size": 2}]}})).unwrap().unwrap();
+        assert_eq!(c.objects[0].size, [2.0, 2.0, 2.0]);
+        // Scalar size of 0 is refused (too small)
+        let err = parse_calibrate(&json!({"calibrate": {"objects": [{"shape": "box", "size": 0}]}})).unwrap_err().to_string();
+        assert!(err.contains("size"), "{err}");
+        // Scalar size too large is refused
+        let err = parse_calibrate(&json!({"calibrate": {"objects": [{"shape": "box", "size": 5000}]}})).unwrap_err().to_string();
+        assert!(err.contains("size"), "{err}");
+        // Non-finite scalar size is refused
+        let err = parse_calibrate(&json!({"calibrate": {"objects": [{"shape": "box", "size": null}]}})).unwrap_err().to_string();
+        assert!(err.contains("size"), "{err}");
+    }
+
+    #[test]
+    fn focus_pick_nan_pixel_refused() {
+        let d = Drawing::new_metric();
+        let cam = Camera::Full(FullCamera::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 5.0, 0.0), 40.0));
+        let p = sphere_params(json!({"focus": {"pick": [f64::NAN, 50.0]}}));
+        let mut look = Look::default();
+        let mut path = PathParams::default();
+        assert!(parse_photo(&p, &mut look, &d, Some(&cam), (100, 100), &mut path, false).is_err(), "NaN x should be refused");
+        let p = sphere_params(json!({"focus": {"pick": [50.0, f64::NAN]}}));
+        let mut look = Look::default();
+        assert!(parse_photo(&p, &mut look, &d, Some(&cam), (100, 100), &mut path, false).is_err(), "NaN y should be refused");
+        // Infinity is also refused
+        let p = sphere_params(json!({"focus": {"pick": [f64::INFINITY, 50.0]}}));
+        let mut look = Look::default();
+        assert!(parse_photo(&p, &mut look, &d, Some(&cam), (100, 100), &mut path, false).is_err(), "infinite x should be refused");
+    }
+
+    #[test]
     fn calibrate_parses_and_caps() {
         let c = parse_calibrate(&json!({"calibrate": {
             "objects": [{"shape": "box", "at": [1, 2, 3], "size": [1, 2, 3], "material": {
