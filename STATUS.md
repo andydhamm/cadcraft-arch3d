@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 11 of 35 segments merged · 1 of 15 acceptance checks**
 
@@ -32,11 +32,11 @@ Updated 2026-11-24 00:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 1 / 15 | 7.0 h so far · expected done Nov 24 14:02–Nov 25 13:49 UTC |
+| 22 | Photoreal stills | building | 1 / 15 | 7.3 h so far · expected done Nov 24 14:45–Nov 25 15:23 UTC |
 
 ## Phase 22 segments
 
-13 queued, 11 merged, 9 merging, 2 working
+13 queued, 11 merged, 10 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -44,7 +44,7 @@ Updated 2026-11-24 00:30 UTC. This page and the card in the README are regenerat
 | `p22-r3d-material-map` | Fill the GPU material's extension fields from MaterialExt | merging | claude-sonnet-c |
 | `p22-engine-render-params` | Engine: the photoreal render params, the preset, focus pick and calibrate on RenderRequest | merging | claude-sonnet-b |
 | `p22-r3d-linear-out` | Path tracer: keep the linear image (radiance and film stages) | merging | mai-flash |
-| `p22-r3d-lens-path` | Path tracer ray generation: Panini, shift and the thin lens | working | claude-sonnet-d |
+| `p22-r3d-lens-path` | Path tracer ray generation: Panini, shift and the thin lens | merging | claude-sonnet-d |
 | `p22-engine-pick-lens` | pick3d maps the pixel back through the lens | merging | mai-flash-b |
 | `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | merging | claude-sonnet-a |
 | `p22-r3d-clamp` | Per-sample clamp of indirect contributions, with its energy loss reported | merging | mai-flash-b |
@@ -73,18 +73,18 @@ Updated 2026-11-24 00:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1403 |
-| bonsai-b | bonsai2-27b | agent | 1312 |
+| bonsai-a | bonsai2-27b | agent | 1405 |
+| bonsai-b | bonsai2-27b | agent | 1313 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 167 |
 | claude-sonnet-b | sonnet | idle | 174 |
 | claude-sonnet-c | sonnet | idle | 108 |
-| claude-sonnet-d | sonnet | agent | 104 |
+| claude-sonnet-d | sonnet | idle | 105 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 129 |
 | mai-flash-b | mai-code-1.1-flash | idle | 84 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 177 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1199 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 704 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1200 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 705 |
