@@ -395,6 +395,31 @@ mod tests {
     }
 
     #[test]
+    fn check_height_with_missing_wall() {
+        let model = ArchModel::default();
+        let o = Opening { host: ArchId(99), top: OpeningTop::Roof, height: 1.5, sill: 0.5, ..Opening::default() };
+        assert_eq!(check_height(&model, &o), 1.5, "missing wall should return o.height");
+    }
+
+    #[test]
+    fn check_height_with_non_finite_wall_height() {
+        let mut model = ArchModel::default();
+        let host = wall(&mut model, Vec2::ZERO, Vec2::new(5.0, 0.0), 0.2);
+        model.walls.iter_mut().find(|w| w.id == host).map(|w| w.height = f64::NAN);
+        let o = Opening { host, top: OpeningTop::Roof, height: 1.5, sill: 0.5, ..Opening::default() };
+        assert_eq!(check_height(&model, &o), 1.5, "non-finite wall height should return o.height");
+    }
+
+    #[test]
+    fn check_height_roof_top_zero_room() {
+        let mut model = ArchModel::default();
+        let host = wall(&mut model, Vec2::ZERO, Vec2::new(5.0, 0.0), 0.2);
+        // Wall height is 0.2, sill is 0.2, so room = 0.0
+        let o = Opening { host, top: OpeningTop::Roof, height: 1.5, sill: 0.2, ..Opening::default() };
+        assert_eq!(check_height(&model, &o), 1.5, "zero room should return o.height");
+    }
+
+    #[test]
     fn check_height_clamps_only_roof_tops() {
         let mut model = ArchModel::default();
         let host = wall(&mut model, Vec2::ZERO, Vec2::new(5.0, 0.0), 0.2);

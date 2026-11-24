@@ -80,3 +80,86 @@ pub(crate) fn material_extensions(ext: &MaterialExt) -> (Map<String, Value>, Vec
 
     (map, used)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_arch3d::MaterialExt;
+
+    #[test]
+    fn zero_fields_emit_no_extensions() {
+        let ext = MaterialExt::default();
+        let (map, used) = material_extensions(&ext);
+        assert!(map.is_empty());
+        assert!(used.is_empty());
+    }
+
+    #[test]
+    fn clearcoat_only_emits_clearcoat() {
+        let ext = MaterialExt { clearcoat: 0.5, clearcoat_roughness: 0.2, ..MaterialExt::default() };
+        let (map, used) = material_extensions(&ext);
+        assert_eq!(used, vec!["KHR_materials_clearcoat"]);
+        assert!(map.contains_key("KHR_materials_clearcoat"));
+        assert!(!map.contains_key("KHR_materials_anisotropy"));
+        assert!(!map.contains_key("KHR_materials_sheen"));
+        assert!(!map.contains_key("KHR_materials_transmission"));
+        assert!(!map.contains_key("KHR_materials_volume"));
+    }
+
+    #[test]
+    fn thin_transmission_emits_no_volume() {
+        let ext = MaterialExt { transmission: 0.8, thin: true, thickness: 0.01, ..MaterialExt::default() };
+        let (map, used) = material_extensions(&ext);
+        assert!(used.contains(&"KHR_materials_transmission"));
+        assert!(!used.contains(&"KHR_materials_volume"));
+        assert!(!map.contains_key("KHR_materials_volume"));
+    }
+
+    #[test]
+    fn all_fields_emit_all_extensions() {
+        let ext = MaterialExt {
+            clearcoat: 0.5,
+            clearcoat_roughness: 0.2,
+            anisotropy: 0.8,
+            anisotropy_rotation: 0.5,
+            sheen: [0.3, 0.4, 0.5],
+            sheen_roughness: 0.6,
+            transmission: 0.7,
+            thin: false,
+            thickness: 0.02,
+            ..MaterialExt::default()
+        };
+        let (map, used) = material_extensions(&ext);
+        assert_eq!(used.len(), 5);
+        assert!(used.contains(&"KHR_materials_clearcoat"));
+        assert!(used.contains(&"KHR_materials_anisotropy"));
+        assert!(used.contains(&"KHR_materials_sheen"));
+        assert!(used.contains(&"KHR_materials_transmission"));
+        assert!(used.contains(&"KHR_materials_volume"));
+        assert_eq!(map.len(), 5);
+    }
+
+    #[test]
+    fn nan_fields_emit_no_extensions() {
+        let ext = MaterialExt {
+            clearcoat: f32::NAN,
+            anisotropy: f32::NAN,
+            sheen: [f32::NAN, f32::NAN, f32::NAN],
+            transmission: f32::NAN,
+            thickness: f32::NAN,
+            ..MaterialExt::default()
+        };
+        let (map, used) = material_extensions(&ext);
+        assert!(map.is_empty());
+        assert!(used.is_empty());
+    }
+
+    #[test]
+    fn values_rounded_to_six_decimals() {
+        let ext = MaterialExt { clearcoat: 0.1234567, clearcoat_roughness: 0.9876543, ..MaterialExt::default() };
+        let (map, _used) = material_extensions(&ext);
+        let cc = &map["KHR_materials_clearcoat"];
+        assert_eq!(cc["clearcoatFactor"].as_f64().unwrap(), 0.123457);
+        assert_eq!(cc["clearcoatRoughnessFactor"].as_f64().unwrap(), 0.987654);
+    }
+}

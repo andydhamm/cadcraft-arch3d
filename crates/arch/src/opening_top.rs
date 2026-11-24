@@ -193,7 +193,7 @@ pub fn validate(o: &mut Opening, roof_top: Option<&[Vec2]>) -> Result<(), String
                 o.top_rise = o.width / 6.0;
             }
             let r = o.top_rise;
-            if r > 0.0 && r <= o.width / 2.0 && r <= o.height - 0.1 {
+            if r > 0.0 && r <= o.width / 2.0 + 1e-9 && r <= o.height - 0.1 + 1e-9 {
                 Ok(())
             } else {
                 Err("a segment top needs 0 < rise <= width/2 and rise <= height - 0.1".into())
@@ -334,6 +334,71 @@ mod tests {
         o2.roof_offset = 0.25;
         let r2 = rough_outline(&o2, 1.2, Some(&roof)).unwrap_or_default();
         assert!(r2.iter().any(|p| (p.x - 4.0).abs() < 1e-9 && (p.y - (4.4 - 0.25)).abs() < 1e-9));
+    }
+
+    #[test]
+    fn validate_round_top_boundary_height() {
+        // Round top with height exactly w/2 + 0.1 should pass
+        let mut o = win(OpeningTop::Round, 3.0, 0.9, 0.55, 0.9);
+        assert!(validate(&mut o, None).is_ok(), "height exactly w/2 + 0.1 should pass");
+        // Just below should fail
+        let mut o2 = win(OpeningTop::Round, 3.0, 0.9, 0.549, 0.9);
+        assert!(validate(&mut o2, None).is_err(), "height below w/2 + 0.1 should fail");
+    }
+
+    #[test]
+    fn validate_segment_top_boundaries() {
+        // Rise exactly w/2 should pass
+        let mut o = win(OpeningTop::Segment, 3.0, 0.9, 1.2, 0.9);
+        o.top_rise = 0.45;
+        assert!(validate(&mut o, None).is_ok(), "rise exactly w/2 should pass");
+        // Rise exactly height - 0.1 should pass (w/2 must be >= rise)
+        let mut o2 = win(OpeningTop::Segment, 3.0, 2.2, 1.2, 0.9);
+        o2.top_rise = 1.1;
+        assert!(validate(&mut o2, None).is_ok(), "rise exactly height - 0.1 should pass");
+        // Rise just above w/2 should fail
+        let mut o3 = win(OpeningTop::Segment, 3.0, 0.9, 1.2, 0.9);
+        o3.top_rise = 0.451;
+        assert!(validate(&mut o3, None).is_err(), "rise above w/2 should fail");
+        // Rise just above height - 0.1 should fail
+        let mut o4 = win(OpeningTop::Segment, 3.0, 2.2, 1.2, 0.9);
+        o4.top_rise = 1.101;
+        assert!(validate(&mut o4, None).is_err(), "rise above height - 0.1 should fail");
+    }
+
+    #[test]
+    fn validate_roof_top_boundaries() {
+        let roof = gable();
+        // roof_offset exactly 0 should pass
+        let mut o = win(OpeningTop::Roof, 3.0, 1.0, 1.0, 1.2);
+        o.roof_offset = 0.0;
+        assert!(validate(&mut o, Some(&roof)).is_ok(), "roof_offset 0 should pass");
+        // roof_offset exactly 1 should pass
+        let mut o2 = win(OpeningTop::Roof, 3.0, 1.0, 1.0, 1.2);
+        o2.roof_offset = 1.0;
+        assert!(validate(&mut o2, Some(&roof)).is_ok(), "roof_offset 1 should pass");
+        // roof_offset just above 1 should fail
+        let mut o3 = win(OpeningTop::Roof, 3.0, 1.0, 1.0, 1.2);
+        o3.roof_offset = 1.001;
+        assert!(validate(&mut o3, Some(&roof)).is_err(), "roof_offset above 1 should fail");
+        // roof_offset just below 0 should fail
+        let mut o4 = win(OpeningTop::Roof, 3.0, 1.0, 1.0, 1.2);
+        o4.roof_offset = -0.001;
+        assert!(validate(&mut o4, Some(&roof)).is_err(), "roof_offset below 0 should fail");
+    }
+
+    #[test]
+    fn roof_outline_with_multiple_vertices() {
+        // A roof with multiple vertices inside the window span
+        let roof = vec![Vec2::new(0.0, 2.4), Vec2::new(2.0, 3.4), Vec2::new(4.0, 3.0), Vec2::new(6.0, 3.4), Vec2::new(8.0, 2.4)];
+        let mut o = win(OpeningTop::Roof, 4.0, 1.0, 1.0, 1.2);
+        let r = rough_outline(&o, 1.2, Some(&roof)).unwrap_or_default();
+        // The outline should include the vertex at u=4.0 (v=3.0-0.15=2.85)
+        assert!(r.iter().any(|p| (p.x - 4.0).abs() < 1e-9 && (p.y - 2.85).abs() < 1e-9), "outline should include the roof vertex at u=4.0");
+        // The outline should include the vertices at u=2.0 and u=6.0 if they're in the rough span
+        // Rough span: 4.0 +- (0.5 + 0.06) = [3.44, 4.56], so u=2.0 and u=6.0 are outside
+        assert!(!r.iter().any(|p| (p.x - 2.0).abs() < 1e-9));
+        assert!(!r.iter().any(|p| (p.x - 6.0).abs() < 1e-9));
     }
 
     #[test]
