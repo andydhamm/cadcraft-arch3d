@@ -56,6 +56,38 @@ mod tests {
         Err("boom".into())
     }
 
+    fn non_object_hook() -> Result<Value, String> {
+        Ok(json!("some info string"))
+    }
+
+    fn null_hook() -> Result<Value, String> {
+        Ok(Value::Null)
+    }
+
+    fn array_hook() -> Result<Value, String> {
+        Ok(json!([1, 2, 3]))
+    }
+
+    fn number_hook() -> Result<Value, String> {
+        Ok(json!(42))
+    }
+
+    fn empty_object_hook() -> Result<Value, String> {
+        Ok(json!({}))
+    }
+
+    fn object_with_ok_hook() -> Result<Value, String> {
+        Ok(json!({ "ok": false, "models": [] }))
+    }
+
+    fn object_preserving_hook() -> Result<Value, String> {
+        Ok(json!({ "available": true, "reason": "all good", "models": [{ "name": "small" }] }))
+    }
+
+    fn error_hook() -> Result<Value, String> {
+        Err("no compute shaders".into())
+    }
+
     #[test]
     fn denoiser_info_returns_the_hooks_models() {
         let v = reply(Some(hook));
@@ -64,6 +96,69 @@ mod tests {
         assert_eq!(v["models"][0]["name"], "base");
         let v = reply(Some(failing));
         assert_eq!((v["ok"].clone(), v["available"].clone(), v["reason"].clone()), (json!(true), json!(false), json!("boom")));
+    }
+
+    #[test]
+    fn denoiser_info_hook_returns_string_wrapped_in_info() {
+        let v = reply(Some(non_object_hook));
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["info"], "some info string");
+        assert!(v.get("available").is_none(), "non-object should not add available");
+        assert!(v.get("models").is_none(), "non-object should not add models");
+    }
+
+    #[test]
+    fn denoiser_info_hook_returns_null_wrapped_in_info() {
+        let v = reply(Some(null_hook));
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["info"], Value::Null);
+    }
+
+    #[test]
+    fn denoiser_info_hook_returns_array_wrapped_in_info() {
+        let v = reply(Some(array_hook));
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["info"], json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn denoiser_info_hook_returns_number_wrapped_in_info() {
+        let v = reply(Some(number_hook));
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["info"], 42);
+    }
+
+    #[test]
+    fn denoiser_info_hook_empty_object_gets_ok_added() {
+        let v = reply(Some(empty_object_hook));
+        assert_eq!(v["ok"], true);
+        assert!(v.get("available").is_none(), "empty object should not gain available");
+        assert!(v.get("models").is_none(), "empty object should not gain models");
+    }
+
+    #[test]
+    fn denoiser_info_hook_overwrites_existing_ok() {
+        let v = reply(Some(object_with_ok_hook));
+        assert_eq!(v["ok"], true, "ok should be overwritten to true");
+        assert_eq!(v["models"], json!([]), "existing fields preserved");
+    }
+
+    #[test]
+    fn denoiser_info_hook_preserves_existing_fields() {
+        let v = reply(Some(object_preserving_hook));
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["available"], true);
+        assert_eq!(v["reason"], "all good");
+        assert_eq!(v["models"][0]["name"], "small");
+    }
+
+    #[test]
+    fn denoiser_info_hook_error_reports_reason_and_empty_models() {
+        let v = reply(Some(error_hook));
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["available"], false);
+        assert_eq!(v["reason"], "no compute shaders");
+        assert_eq!(v["models"], json!([]));
     }
 
     #[test]
