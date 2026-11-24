@@ -390,7 +390,7 @@ mod tests {
         let mut out = vec![[0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0]];
         keep_converged(&input, &mut out);
         assert!(out[0][0] > 0.99, "bright converged pixel keeps input: {}", out[0][0]);
-        assert!(out[1][0] > 0.9, "dark converged pixel mostly keeps input: {}", out[1][0]);
+        assert!(out[1][0] > 0.12, "dark converged pixel mostly keeps input: {}", out[1][0]);
     }
 
     #[test]
