@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 22 of 36 segments merged · 1 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 26 of 36 segments merged · 6 of 15 acceptance checks**
 
-11,632 workspace tests passing at the last merge · 1345 segments merged in all · 0 of 15 seats working
+11,651 workspace tests passing at the last merge · 1349 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,22 +32,19 @@ Updated 2026-11-24 05:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 1 / 15 | 11.5 h so far · expected done Nov 24 11:09–Nov 25 03:14 UTC |
+| 22 | Photoreal stills | building | 6 / 15 | 11.8 h so far · expected done Nov 24 09:01–Nov 24 21:58 UTC |
 
 ## Phase 22 segments
 
-22 merged, 10 merging, 4 queued
+26 merged, 6 merging, 3 queued, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22-cli-hook` | CLI renderer: photoreal options into the renderers, calibrate scenes, PFM output and the reply keys | merging | claude-sonnet-b |
-| `p22-r3d-edges` | Rounded-edge shading in the path tracer | merging | mai-flash-b |
 | `p22-r3d-bsdf-ext` | Path tracer BSDF: clear coat, sheen and anisotropy | merging | claude-sonnet-b |
 | `p22-r3d-bsdf-transmission` | Path tracer BSDF: thin translucency and rough glass with volume | merging | claude-sonnet-b |
 | `p22-r3d-variation` | Procedural surface variation (roughness and colour) in the path tracer | merging | claude-sonnet-d |
-| `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | merging | mai-flash |
-| `p22-r3d-unet-cpu` | The denoiser network on the CPU: transforms, autoexposure and a reference forward pass | merging | claude-sonnet-a |
-| `p22-engine-denoiser-info` | denoiser.info: the loaded weights and whether the learned denoiser can run | merging | claude-sonnet-d |
+| `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | merging | claude-sonnet-c |
+| `p22-r3d-unet-gpu` | The learned denoiser in WGSL compute shaders | working | claude-sonnet-b |
 | `p22-engine-ladder` | render.ladder: one PNG per rung and a labelled contact sheet | merging | claude-sonnet-d |
 | `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | merging | claude-sonnet-c |
 
@@ -55,35 +52,35 @@ Updated 2026-11-24 05:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 05:05 | `p22-r3d-variation` | refused | 0 pass | claude-sonnet-d |
+| Nov 24 05:05 | `p22-r3d-sun-disc` | refused | 0 pass | mai-flash |
+| Nov 24 05:05 | `p22-r3d-edges` | merged | 11,651 pass | mai-flash-b |
+| Nov 24 05:05 | `p22-r3d-unet-cpu` | merged | 11,651 pass | claude-sonnet-a |
+| Nov 24 05:05 | `p22-cli-hook` | merged | 11,651 pass | claude-sonnet-b |
+| Nov 24 05:05 | `p22-engine-denoiser-info` | merged | 11,651 pass | claude-sonnet-d |
 | Nov 24 04:41 | `p22-engine-ladder` | refused | 11,637 pass | claude-sonnet-a |
 | Nov 24 02:27 | `harden-p22-engine-look-keys` | merged | 11,632 pass | tturbo-mac |
 | Nov 24 02:27 | `p22-r3d-clamp` | merged | 11,632 pass | mai-flash-b |
 | Nov 24 02:27 | `p22-r3d-roughness-guide` | merged | 11,632 pass | claude-sonnet-b |
 | Nov 24 02:27 | `p22-r3d-film` | merged | 11,632 pass | claude-sonnet-a |
 | Nov 24 02:27 | `p22-r3d-adaptive` | merged | 11,632 pass | mai-flash-esc |
-| Nov 24 02:05 | `p22-r3d-tza` | merged | 11,591 pass | bonsai-b |
-| Nov 24 01:39 | `p22-r3d-sun-disc` | refused | 0 pass | claude-sonnet-a |
-| Nov 24 01:39 | `p22-engine-pick-lens` | merged | 11,586 pass | mai-flash-b |
-| Nov 24 01:39 | `p22-r3d-lens-path` | merged | 11,586 pass | claude-sonnet-d |
-| Nov 24 01:39 | `p22-r3d-linear-out` | merged | 11,586 pass | mai-flash |
-| Nov 24 01:39 | `p22-r3d-material-map` | merged | 11,586 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1418 |
-| bonsai-b | bonsai2-27b | agent | 1326 |
+| bonsai-a | bonsai2-27b | agent | 1419 |
+| bonsai-b | bonsai2-27b | gate | 1326 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 170 |
-| claude-sonnet-b | sonnet | idle | 178 |
-| claude-sonnet-c | sonnet | idle | 110 |
-| claude-sonnet-d | sonnet | idle | 109 |
+| claude-sonnet-b | sonnet | agent | 178 |
+| claude-sonnet-c | sonnet | idle | 111 |
+| claude-sonnet-d | sonnet | idle | 110 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 131 |
+| mai-flash | mai-code-1.1-flash | down | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1207 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 712 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1208 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 712 |
