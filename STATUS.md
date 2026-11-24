@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 23:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 23:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 43 of 45 segments merged · 12 of 15 acceptance checks**
 
@@ -32,15 +32,15 @@ Updated 2026-11-24 23:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 30.0 h so far · expected done Nov 25 01:54–Nov 25 23:52 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 30.3 h so far · expected done Nov 25 02:09–Nov 26 00:07 UTC |
 
 ## Phase 22 segments
 
-43 merged, 1 gate, 1 merging
+43 merged, 1 escalate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | gate | claude-sonnet-d |
+| `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | escalate |  |
 | `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | merging | claude-sonnet-a |
 
 ## Recent merges
@@ -71,8 +71,8 @@ Updated 2026-11-24 23:30 UTC. This page and the card in the README are regenerat
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
-| claude-sonnet-d | sonnet | gate | 117 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1331 |
+| claude-sonnet-d | sonnet | idle | 117 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1332 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
