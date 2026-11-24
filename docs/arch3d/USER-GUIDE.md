@@ -976,7 +976,99 @@ cargo run -q -p cadcraft-cli -- run --metric \
   --save sheets.dxf
 ```
 
+## Photoreal stills
+
+A photoreal still is a path-traced `render` with a camera that behaves like a real one. Save a camera with
+`technique: "photoreal"` and render it:
+
+```text
+camera {"save":"photo","kind":"full","eye":[3,-6,1.6],"target":[3,0,1.2],"fov":60,"technique":"photoreal"}
+render {"camera":"photo"}
+```
+
+The technique turns on all eight rungs below. `render.ladder` shows them one at a time.
+
+| Rung | Name             | What it adds (cumulative)                                                        |
+|------|------------------|----------------------------------------------------------------------------------|
+| 0    | today            | the path tracer as it was: neutral lens                                           |
+| 1    | lens             | the camera's own lens: projection, compression, shift, aperture and focus         |
+| 2    | edges            | rounded edges, so corners catch light                                             |
+| 3    | materials        | full materials (clear coat, anisotropy, sheen, transmission) and surface variation |
+| 4    | light            | 12 bounces, a sun disc of 0.53°, and a firefly clamp of 32                        |
+| 5    | film             | the photoreal film: bloom 0.1, vignette 0.15, contrast 1.05                       |
+| 6    | adaptive         | adaptive sampling to a noise target of 0.02, a 600 s time budget, a roughness guide |
+| 7    | learned denoiser | the learned denoiser                                                              |
+
+### Lens
+
+These keys go on `camera` (save or update), on `look`, or on one `render` call. The field of view stays the vertical
+one. The thin lens is modelled on a 36 mm wide sensor: the focal length is `f = 0.018 / tan(hfov / 2)`, the aperture
+diameter is `f / N`, and the focus distance is measured along the view axis.
+
+- `projection` is `rectilinear` or `panini`; Panini keeps the horizontal field of view and tames wide-angle stretching.
+- `compression` (0 to 1, default 0.7) is the Panini compression.
+- `shift` (-1 to 1) is a fraction of the frame height: +0.25 moves the horizon 25 % of the height down the image.
+- `aperture` is `null` (a pinhole, everything sharp) or an f-number from 0.5 to 64.
+- `focus` is `null` or a distance in metres (0 to 10000], or `{"pick":[x,y]}`, a pixel of the render `size`; the
+  reply echoes the distance it resolved to as a number.
+
+The raster views (the live pane, `camera` previews and the hidden-line views) take only `projection` and `shift`.
+Depth of field is rendered by the path tracer only.
+
+### Film
+
+`film` is `null`, `"photoreal"` or an object. Bloom, vignette and the grade are applied after exposure.
+
+- `bloom` (0 to 1) and `bloomThreshold` (above 0): how much light above the threshold spreads.
+- `vignette` (0 to 1): multiplies the image by `1 - v (d / d_corner)^2`, with `d` the distance from the centre.
+- `whiteBalance` is `null` or 1500 to 15000 K: divides by the colour of that temperature, normalised to green.
+- `contrast` (0.5 to 2): `(x - 0.18) contrast + 0.18`.
+- `saturation` (0 to 2): scales about the luminance.
+- `lift` (-0.5 to 0.5): added after the rest.
+
+The sun also takes `disc` (0 to 10), its angular diameter in degrees.
+
+### Render-only keys
+
+These apply to one `render` call only:
+
+- `edges`: `false`, `true` or `{"radius": 0 to 0.05}` (metres);
+- `materials`: `basic` or `full`; `variation`: surface variation on or off;
+- `clamp`: `null` or a positive limit (display units at the starting exposure) on everything a path adds after its
+  first hit; `clampLoss` in the reply says how much that removed;
+- `adaptive`: stop sampling pixels that have settled; `noiseTarget` (0.001 to 1); `timeBudget` in seconds (1 to
+  86400), with `spp` then the cap per pixel;
+- `denoise`: `false`, `true`, `filter` or `learned`;
+- `pfm`: a path to write a linear float image (PFM).
+
+The reply says how the render ended and how clean it is: `stop` is `samples`, `noise target` or `time budget`;
+`noise` is the 95th percentile of the relative noise over hit pixels; `sppMean` is the mean samples per pixel;
+`clampLoss` is what the clamp removed; `denoiser` is `none`, `filter` or `learned`; `denoiseFallback` is present
+when the learned denoiser was asked for and the filter ran instead, and says why.
+
+### The learned denoiser
+
+`denoiser.info {}` reports whether the learned denoiser can run and which models are loaded. It is native only. On
+the web, or on a machine without a compute device, `denoise: "learned"` falls back to the filter and the reply says
+so in `denoiseFallback`.
+
+### The ladder
+
+`render.ladder {"camera":"photo","out":"dir"}` renders the camera at each rung to `dir/rung-<n>.png` and joins them
+in `dir/ladder.png`, a labelled sheet eight images wide. It takes `size`, `spp`, `seed`, `noiseTarget` and
+`timeBudget`.
+
+```sh
+cargo run -q -p cadcraft-cli -- run --metric \
+  --cmd 'wall {"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}' \
+  --cmd 'camera {"save":"photo","kind":"full","eye":[3,-6,1.6],"target":[3,0,1.2],"fov":60,"technique":"photoreal"}' \
+  --cmd 'render.ladder {"camera":"photo","out":"target/guide/ladder","size":[48,32],"spp":2,"timeBudget":5}'
+```
+
+The same session is in `docs/arch3d/mcp-examples/11-photoreal.jsonl`.
+
 ## Out of scope
 
-Not part of arch3d so far: SSAO, TAA, cascaded shadows, animated walkthrough paths, and gamepad or 3D-mouse input.
+Not part of arch3d so far: upscaling, volumetrics, caustics, animated renders, polygonal bokeh, the exposure
+triangle, film or depth of field in the live pane, SSAO, TAA, cascaded shadows, animated walkthrough paths, and gamepad or 3D-mouse input.
 Moldings, material regions, plan check, materials list and costing, and the contextual toolbar are also out of scope.
