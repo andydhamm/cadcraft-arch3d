@@ -743,6 +743,13 @@ fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
             let lux = lighting.look.sun.intensity as f32;
             frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
             frame.sun_rgb = [lux, lux, lux, 0.0];
+            // The sun as a disc: `photo_f.y` = cos of half its angular diameter (`sun_disc.wgsl`).
+            let disc = lighting.sun_disc_deg;
+            if disc.is_finite() && disc > 0.0 {
+                let half = (f64::from(disc.min(90.0)) / 2.0).to_radians();
+                frame.photo[0] |= super::scene_gpu::PHOTO_SUN_DISC;
+                frame.photo_f[1] = half.cos() as f32;
+            }
         }
         if lighting.look.sky.on {
             frame.flags |= FRAME_SKY;
@@ -1619,8 +1626,7 @@ mod tests {
         let (plain, stats) = seeded_image(&gpu, 0);
         assert_eq!(stats.clamp_loss, 0.0, "nothing is clamped");
         // Every flag on a stub changes nothing; adaptive sampling's own-count index equals the uniform one.
-        let all =
-            PHOTO_PANINI | PHOTO_DOF | PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_SUN_DISC | PHOTO_CLAMP | PHOTO_ADAPTIVE | PHOTO_SHIFT;
+        let all = PHOTO_PANINI | PHOTO_DOF | PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_CLAMP | PHOTO_ADAPTIVE | PHOTO_SHIFT;
         let (flagged, _) = seeded_image(&gpu, all);
         assert_eq!(plain, flagged, "the hook stubs draw no random number and change no arithmetic");
         let (again, _) = seeded_image(&gpu, 0);

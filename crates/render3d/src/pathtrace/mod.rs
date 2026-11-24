@@ -333,6 +333,9 @@ mod lights_tests;
 mod kernel_tests;
 
 #[cfg(test)]
+mod sun_disc_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
