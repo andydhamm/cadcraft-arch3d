@@ -24,6 +24,8 @@ mod adaptive;
 mod adaptive_tests;
 #[cfg(test)]
 mod bsdf_tests;
+#[cfg(test)]
+mod bsdf_trans_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
@@ -40,6 +42,9 @@ pub mod tracer;
 
 #[cfg(test)]
 mod traverse_tests;
+
+#[cfg(test)]
+mod bsdf_ext_tests;
 
 pub use device::{ComputeGpu, request_compute};
 pub use tracer::{PathTracer, irradiance};
@@ -341,7 +346,13 @@ mod kernel_tests;
 mod lens_tests;
 
 #[cfg(test)]
+mod sun_disc_tests;
+
+#[cfg(test)]
 mod edges_tests;
+
+#[cfg(test)]
+mod variation_tests;
 
 #[cfg(test)]
 mod tests {

@@ -758,6 +758,8 @@ fn frame_lighting(frame: &mut GpuFrame, aux: &mut Vec<f32>, lighting: &Lighting,
 /// above the horizon, `FRAME_SUN_NO_SHADOW` when the look has cast shadows off; the gradient sky
 /// (`FRAME_SKY`, `sky_zenith`, `sky_horizon`) only when the look's sky is on as well.
 fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
+    frame.photo[0] &= !super::scene_gpu::PHOTO_SUN_DISC;
+    frame.photo_f[1] = 0.0;
     if let Some(sun) = lighting.sun {
         let d = sun.normalized().dir;
         // The moon as the raster's directional light is `frame_moon`'s, not a sun.
@@ -769,6 +771,12 @@ fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
             let lux = lighting.look.sun.intensity as f32;
             frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
             frame.sun_rgb = [lux, lux, lux, 0.0];
+            let disc = lighting.sun_disc_deg;
+            if disc.is_finite() && disc > 0.0 {
+                let half = (f64::from(disc.min(90.0)) / 2.0).to_radians();
+                frame.photo[0] |= super::scene_gpu::PHOTO_SUN_DISC;
+                frame.photo_f[1] = half.cos() as f32;
+            }
         }
         if lighting.look.sky.on {
             frame.flags |= FRAME_SKY;

@@ -101,7 +101,13 @@ def hcam(eye, yaw, hfov, size, pitch=0.0):
 
 
 def obj(shape, at, size, **material):
-    return {'shape': shape, 'at': list(at), 'size': size, 'material': material}
+    # `segments` is the object's key (see the header: {shape, at, size, segments?, material}), not a material's. It went
+    # into the material until 2026-11-23, and checks 03 and 07 were refused: unknown key `segments` in `material`.
+    o = {'shape': shape, 'at': list(at), 'size': size}
+    if 'segments' in material:
+        o['segments'] = material.pop('segments')
+    o['material'] = material
+    return o
 
 
 def calib(objects, lights=None):
