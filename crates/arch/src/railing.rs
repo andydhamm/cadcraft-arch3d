@@ -566,4 +566,29 @@ mod tests {
         let o = offset_path(&p, 1.0);
         assert_eq!(o.len(), 512);
     }
+
+    #[test]
+    fn offset_path_single_point() {
+        // A single point has no direction; offset gives nothing.
+        assert!(offset_path(&[v(1.0, 2.0)], 0.5).is_empty());
+        // Two identical points also give nothing.
+        assert!(offset_path(&[v(1.0, 2.0), v(1.0, 2.0)], 0.5).is_empty());
+    }
+
+    #[test]
+    fn built_path_degenerate_closed() {
+        // A "closed" path with all points the same is degenerate.
+        let p = [v(0.0, 0.0), v(0.0, 0.0), v(0.0, 0.0), v(0.0, 0.0)];
+        let b = built_path(&p, 0.5);
+        // After dropping duplicates, there's only one point, so no offset.
+        assert!(b.is_empty());
+    }
+
+    #[test]
+    fn post_points_single_segment_exact_spacing() {
+        // A 3.6 m segment with 1.8 m spacing: posts at 0, 1.8, 3.6.
+        let p = post_points(&[v(0.0, 0.0), v(3.6, 0.0)], 1.8);
+        assert_eq!(p.len(), 3);
+        assert!((p[0].x - 0.0).abs() < 1e-9 && (p[1].x - 1.8).abs() < 1e-9 && (p[2].x - 3.6).abs() < 1e-9);
+    }
 }

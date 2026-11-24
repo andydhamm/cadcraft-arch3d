@@ -364,4 +364,39 @@ mod tests {
         s.width = f64::NAN;
         assert_eq!(super::sides_against_walls(&m, &s), [false, false]);
     }
+
+    #[test]
+    fn surface_v_at_tread_overlap() {
+        // At the overlap between two treads (due to nosing), the higher tread wins.
+        let l = Flight::new(&stair(), 0.0).unwrap().line;
+        // Tread 1 spans u in [-NOSING, tread], tread 2 spans u in [tread-NOSING, 2*tread].
+        // At u = tread - NOSING/2, both cover it; tread 2 is higher.
+        let u = l.tread - NOSING / 2.0;
+        assert!((l.surface_v(u) - 2.0 * l.riser).abs() < 1e-12);
+        // At u = -NOSING/2, only tread 1 covers it.
+        assert!((l.surface_v(-NOSING / 2.0) - l.riser).abs() < 1e-12);
+    }
+
+    #[test]
+    fn single_tread_flight() {
+        let mut s = stair();
+        s.treads = 1;
+        s.risers = 2;
+        s.run = 0.254;
+        let f = Flight::new(&s, 0.0).unwrap();
+        assert_eq!(f.line.treads, 1);
+        assert!((f.line.nosing_v(0.1) - (s.riser_height + (0.1 + NOSING) * s.riser_height / s.tread_depth)).abs() < 1e-9);
+        assert!((f.line.surface_v(0.1) - s.riser_height).abs() < 1e-12);
+        assert!((f.line.surface_v(0.3) - s.rise).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nosing_v_at_zero_and_run() {
+        let l = Flight::new(&stair(), 0.0).unwrap().line;
+        // At u = 0 (the start line), the nosing line is at rh + NOSING * rh / td.
+        assert!((l.nosing_v(0.0) - (l.riser + NOSING * l.riser / l.tread)).abs() < 1e-12);
+        // At u = run, the nosing line is at the top (rise).
+        let v = l.nosing_v(l.run);
+        assert!(v >= l.rise - 1e-9);
+    }
 }
