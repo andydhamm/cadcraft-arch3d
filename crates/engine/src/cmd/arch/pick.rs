@@ -88,8 +88,8 @@ pub(crate) fn parse_camera(cam: &Value) -> Result<Camera, EngineError> {
     match kind {
         "orbit" => {
             let distance = num(cam, "distance", 10.0)?;
-            if distance <= 0.0 || distance > MAX_COORD {
-                return Err(bad("pick3d", format!("`distance` must be in (0, {MAX_COORD}]")));
+            if distance <= 0.0 || distance > MAX_DISTANCE {
+                return Err(bad("pick3d", format!("`distance` must be in (0, {MAX_DISTANCE}]")));
             }
             let target = vec3_field(cam, "target", Vec3::new(0.0, 0.0, 0.0))?;
             Ok(Camera::Orbit(Orbit::new(target, num(cam, "azimuth", 0.0)?, num(cam, "elevation", 30.0)?, distance, fov)))
