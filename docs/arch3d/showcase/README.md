@@ -58,6 +58,18 @@ The script saves seven cameras: Front, Back, Kitchen and Living for the plan-sty
 - **noon-hdri** — the `noon` sun angle (21 June, solar noon), the `polyhaven:kloofendal-puresky` HDRI backdrop and the light set Day; its technique path-traces by itself.
 - **overview** — a cutaway overview of the Main level under the noon sun.
 
+`phase-22-showcase.json` (replayed after `bilevel.json`; it changes nothing but cameras) saves three more, all with the `photoreal` technique, and leaves `Front` active:
+
+| Camera | Pose | Lens and look |
+|---|---|---|
+| **Kitchen-photo** | the pose of `Kitchen` | Panini 0.7, noon sun, light set Day, auto exposure |
+| **Living-photo** | the pose of `Living` | Panini 0.7, aperture f/8, focus 6.0 m, noon sun, light set Day |
+| **Dusk-photo** | the exterior pose of `dusk` | shift 0.15, dusk sun, sky on, light set Evening, EV100 8 |
+
+### Realism ladders
+
+`render.ladder {"camera": "Kitchen-photo", "out": "ladder-kitchen"}` writes one PNG per realism rung and a labelled contact sheet. The 1920 x 1080 finals are `render {"camera": "Kitchen-photo", "size": [1920, 1080], "out": "photoreal-kitchen.png"}` (likewise for `Living-photo` and `Dusk-photo`). These images are written by `render_all.py --full` and are not committed until that run (decision 69).
+
 [Phase 19 demo](./phase-19-demo.json) is the small demo of the same features on a tiny model. The script also creates four elevations (South, North, East, West) and two sections (Section A across the house, Section B across x = 13).
 
 ## The drawing set

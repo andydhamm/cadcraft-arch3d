@@ -1,0 +1,6 @@
+[
+  {"cmd": "camera", "params": {"save": "Kitchen-photo", "kind": "full", "eye": [12.0, 1.5, 3.1], "target": [15.0, 12.0, 2.4], "fov": 70, "technique": "photoreal", "projection": "panini", "compression": 0.7, "sun": {"angle": "noon"}, "lightSet": "Day", "exposure": "auto"}},
+  {"cmd": "camera", "params": {"save": "Living-photo", "kind": "full", "eye": [22, 2.5, 3.1], "target": [22, 10, 2.3], "fov": 70, "technique": "photoreal", "projection": "panini", "compression": 0.7, "aperture": 8, "focus": 6.0, "sun": {"angle": "noon"}, "lightSet": "Day", "exposure": "auto"}},
+  {"cmd": "camera", "params": {"save": "Dusk-photo", "kind": "full", "eye": [16.0, -12.0, 1.9], "target": [16.0, 8.0, 2.2], "fov": 60, "technique": "photoreal", "shift": 0.15, "sun": {"angle": "dusk"}, "sky": {"on": true}, "lightSet": "Evening", "exposure": {"ev100": 8}}},
+  {"cmd": "camera", "params": {"use": "Front"}}
+]
