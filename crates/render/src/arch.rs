@@ -2050,6 +2050,91 @@ mod tests {
         assert!(!tris.is_empty(), "split wall with glass lower type should keep its fill");
     }
 
+    /// on_shown_level returns true for level 0 when plan_level is Some(0).
+    #[test]
+    fn on_shown_level_with_level_zero() {
+        let mut d = Drawing::new_metric();
+        d.arch.plan_level = Some(0);
+        assert!(on_shown_level(&d, 0));
+        assert!(!on_shown_level(&d, 1));
+
+        d.arch.plan_level = None;
+        assert!(on_shown_level(&d, 0));
+        assert!(on_shown_level(&d, 1));
+        assert!(on_shown_level(&d, 999));
+    }
+
+    /// wall_on_shown_level falls back to base_level comparison when the plan_level
+    /// index does not exist in d.arch.levels.
+    #[test]
+    fn wall_on_shown_level_with_missing_level_index() {
+        let mut d = Drawing::new_metric();
+        d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        // Only level 0 exists; plan_level = Some(5) is out of range.
+        d.arch.plan_level = Some(5);
+        // The wall has base_level 0, so it should not draw on level 5.
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(list.prims.is_empty(), "wall should not draw when plan_level index is out of range");
+
+        // But it should draw when plan_level matches its base_level.
+        d.arch.plan_level = Some(0);
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(!list.prims.is_empty(), "wall should draw on its base level");
+    }
+
+    /// An opening on a spanning wall draws only on the wall's base level, not on levels
+    /// the wall spans above it.
+    #[test]
+    fn opening_on_spanning_wall_draws_only_on_base_level() {
+        use cadcraft_doc::arch::Level;
+        let mut d = Drawing::new_metric();
+        d.arch.levels = vec![Level { index: 0, elevation: 0.0, ..Default::default() }, Level { index: 1, elevation: 2.7, ..Default::default() }];
+        // Wall spans both levels (base 0, top 1).
+        let wid = d.arch.add_wall(Wall { base_level: 0, top_level: Some(1), ..wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2) });
+        // Opening on that wall (no explicit level, so it uses the host's base level 0).
+        let oid = d.arch.push_opening(Opening::new(wid, 5.0, 1.0, 2.1, OpeningKind::Door));
+        d.touch_arch();
+
+        // On level 0: both wall and opening draw.
+        d.arch.plan_level = Some(0);
+        let list0 = build_arch(&d, &Options::default(), false);
+        let wall_prims0: Vec<&DPrim> = list0.prims.iter().filter(|p| p.handle == arch_handle(wid)).collect();
+        let open_prims0: Vec<&DPrim> = list0.prims.iter().filter(|p| p.handle == opening_handle(oid)).collect();
+        assert!(!wall_prims0.is_empty(), "wall should draw on level 0");
+        assert!(!open_prims0.is_empty(), "opening should draw on level 0 (wall's base level)");
+
+        // On level 1: the wall spans it so it draws, but the opening does not (it's on base level 0).
+        d.arch.plan_level = Some(1);
+        let list1 = build_arch(&d, &Options::default(), false);
+        let wall_prims1: Vec<&DPrim> = list1.prims.iter().filter(|p| p.handle == arch_handle(wid)).collect();
+        let open_prims1: Vec<&DPrim> = list1.prims.iter().filter(|p| p.handle == opening_handle(oid)).collect();
+        assert!(!wall_prims1.is_empty(), "spanning wall should draw on level 1");
+        assert!(open_prims1.is_empty(), "opening should not draw on level 1 (it's on base level 0)");
+    }
+
+    /// Setting plan_level to a level that has no objects draws nothing for that level.
+    #[test]
+    fn plan_level_with_no_objects_draws_nothing() {
+        let mut d = two_level_drawing();
+        // Level 2 exists but has no walls, rooms, or openings.
+        d.arch.levels.push(cadcraft_doc::arch::Level { index: 2, elevation: 5.4, ..Default::default() });
+        d.arch.plan_level = Some(2);
+        let list = build_arch(&d, &Options::default(), false);
+        // No prims should be drawn for level 2 (no objects there).
+        assert!(list.prims.is_empty(), "no objects on level 2, so nothing should draw");
+    }
+
+    /// on_shown_level works with a plan_level larger than any defined level index.
+    #[test]
+    fn on_shown_level_with_large_plan_level() {
+        let mut d = Drawing::new_metric();
+        d.arch.plan_level = Some(100);
+        assert!(!on_shown_level(&d, 0));
+        assert!(!on_shown_level(&d, 1));
+        assert!(on_shown_level(&d, 100));
+        assert!(!on_shown_level(&d, 101));
+    }
+
     #[test]
     fn plan_build_runs_the_ceiling_and_foundation_passes() {
         use cadcraft_doc::arch::{Foundation, FoundationKind, Soffit, Tray};
