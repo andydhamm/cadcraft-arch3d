@@ -142,11 +142,11 @@ mod tests {
     #[test]
     fn nan_fields_emit_no_extensions() {
         let ext = MaterialExt {
-            clearcoat: f64::NAN,
-            anisotropy: f64::NAN,
-            sheen: [f64::NAN, f64::NAN, f64::NAN],
-            transmission: f64::NAN,
-            thickness: f64::NAN,
+            clearcoat: f32::NAN,
+            anisotropy: f32::NAN,
+            sheen: [f32::NAN, f32::NAN, f32::NAN],
+            transmission: f32::NAN,
+            thickness: f32::NAN,
             ..MaterialExt::default()
         };
         let (map, used) = material_extensions(&ext);
