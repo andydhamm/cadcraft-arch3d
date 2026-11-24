@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 07:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 31 of 36 segments merged · 6 of 15 acceptance checks**
 
@@ -32,7 +32,7 @@ Updated 2026-11-24 07:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 6 / 15 | 13.5 h so far · expected done Nov 24 08:36–Nov 24 18:41 UTC |
+| 22 | Photoreal stills | building | 6 / 15 | 13.8 h so far · expected done Nov 24 08:51–Nov 24 18:56 UTC |
 
 ## Phase 22 segments
 
@@ -66,8 +66,8 @@ Updated 2026-11-24 07:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1424 |
-| bonsai-b | bonsai2-27b | agent | 1332 |
+| bonsai-a | bonsai2-27b | idle | 1425 |
+| bonsai-b | bonsai2-27b | merging | 1334 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 172 |
