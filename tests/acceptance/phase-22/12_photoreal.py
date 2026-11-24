@@ -46,7 +46,7 @@ for key, v in want.items():
         fail('(a) Photoreal sets photo.%s to %r: %r' % (key, v, p.get(key)))
 if p.get('edges') is False:
     fail('(a) Photoreal rounds edges')
-near(p.get('sunDisc'), 0.53, 1e-9, '(a) photo.sunDisc')
+near(p.get('sunDisc'), 0.53, 1e-6, '(a) photo.sunDisc')   # 0.53 as a 32-bit float is 0.52999997 (operator 2026-11-24)
 near(p.get('clamp'), 32.0, 1e-9, '(a) photo.clamp')
 near(p.get('noiseTarget'), 0.02, 1e-9, '(a) photo.noiseTarget')
 near(p.get('timeBudget'), 30.0, 1e-9, '(a) the given time budget')
