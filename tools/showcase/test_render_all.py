@@ -324,6 +324,50 @@ class RenderAll(unittest.TestCase):
         for n in names:
             self.assertFalse(re.search(r'-\d+\.\w+$', n), f'unexpected dedup suffix in {n}')
 
+    def test_plan_lists_ladders_and_photoreal_finals(self):
+        rows = ra.plan(LEVELS, VIEWS, SHEETS, True, with_photo=True)
+        ladders = [r for r in rows if r[1] == 'ladder']
+        finals = [r for r in rows if r[1] == 'photoreal']
+        self.assertEqual(len(ladders), 3, 'three ladder steps')
+        self.assertEqual(len(finals), 3, 'three photoreal finals')
+        self.assertEqual([r[0] for r in ladders], ['ladder-kitchen', 'ladder-living', 'ladder-dusk'])
+        self.assertEqual([r[0] for r in finals], ['photoreal-kitchen.png', 'photoreal-living.png', 'photoreal-dusk.png'])
+        self.assertEqual([r[2] for r in ladders], ra.PHOTO_CAMERA_NAMES)
+        self.assertEqual([r[2] for r in finals], ra.PHOTO_CAMERA_NAMES)
+        photo_replay = next((r for r in rows if r[0] == 'photo.dxf' and r[1] == 'replay'), None)
+        self.assertIsNotNone(photo_replay)
+        self.assertIn('photo.dxf', [r[0] for r in rows])
+
+    def test_plan_without_photo_skips_them(self):
+        rows = ra.plan(LEVELS, VIEWS, SHEETS, True, with_photo=False)
+        self.assertEqual([r[1] for r in rows if r[1] in ra.PHOTO_KINDS], [])
+        self.assertNotIn('photo.dxf', [r[0] for r in rows])
+
+    def test_default_plan_is_unchanged(self):
+        with_photo = ra.plan(LEVELS, VIEWS, SHEETS, True)
+        no_photo = ra.plan(LEVELS, VIEWS, SHEETS, True, with_photo=False)
+        self.assertEqual(with_photo, no_photo, 'default plan matches the with_photo=False plan')
+        # The pre-existing steps are byte-for-byte the same set and order.
+        self.assertEqual([r for r in with_photo], [r for r in no_photo])
+
+    def test_manifest_names_the_photo_script(self):
+        images = [{'file': 'photoreal-kitchen.png', 'kind': 'photoreal', 'view': 'Kitchen-photo'}]
+        m = ra.manifest(images, {}, False, 'a' * 64, {'phase-20-showcase.json': 'b' * 64},
+                        'drawing-set.pdf', 'c' * 64, ['ladder-kitchen', 'ladder-living', 'ladder-dusk'],
+                        ['photoreal-kitchen.png', 'photoreal-living.png', 'photoreal-dusk.png'])
+        self.assertEqual(m['photoScript'], 'c' * 64)
+        self.assertEqual(m['ladders'], ['ladder-kitchen', 'ladder-living', 'ladder-dusk'])
+        self.assertEqual(m['photoreal'], ['photoreal-kitchen.png', 'photoreal-living.png', 'photoreal-dusk.png'])
+        # The pre-existing keys are intact.
+        self.assertEqual(m['scriptSha256'], 'a' * 64)
+        self.assertEqual(m['contactSheet'], 'contact-sheet.png')
+        self.assertEqual(m['sheetImages'], True)
+        # When omitted, the photo keys default to None (old call site still works).
+        old = ra.manifest(images, {}, False, 'a' * 64, {}, None)
+        self.assertIsNone(old['photoScript'])
+        self.assertIsNone(old['ladders'])
+        self.assertIsNone(old['photoreal'])
+
     def test_readme_gallery_matches_the_plan(self):
         with open(os.path.join(SHOWCASE, 'phase-21-showcase.json'), encoding='utf-8') as f:
             script = json.load(f)
@@ -338,14 +382,14 @@ class RenderAll(unittest.TestCase):
         self.assertEqual(len(numbers), 14)
         views = VIEWS[:6] + [{'name': n, 'id': f'v{6 + i}', 'kind': 'interior'} for i, n in enumerate(interiors)]
         sheets = [{'number': n, 'layout': n} for n in numbers]
-        names = set(files(ra.plan(LEVELS, views, sheets, True))) | {'contact-sheet.png', 'drawing-set.pdf'}
+        names = set(files(ra.plan(LEVELS, views, sheets, True, with_photo=True))) | {'contact-sheet.png', 'drawing-set.pdf'}
         with open(os.path.join(SHOWCASE, 'README.md'), encoding='utf-8') as f:
             readme = f.read()
         linked = re.findall(r'renders/([A-Za-z0-9._-]+)', readme)
         self.assertTrue(linked)
         for l in linked:
             self.assertIn(l, names, f'README links renders/{l}, which the tool does not write')
-        for l in sorted(names - {'set.dxf'} -{n for n in names if n.startswith('showcase.')}):
+        for l in sorted(names - {'set.dxf', 'photo.dxf'} - {n for n in names if n.startswith('showcase.')}):
             self.assertIn(l, linked, f'the tool writes {l}, which the README does not list')
         for s in ('phase-21-showcase.json', 'plot', 'showcase-set.pdf'):
             self.assertIn(s, readme)

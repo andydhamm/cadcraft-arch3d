@@ -162,6 +162,15 @@ Drawing set
 
 - [The drawing set as one PDF](./renders/drawing-set.pdf)
 
+Photoreal (phase 22; written only by `render_all.py --full`)
+
+- [Ladder — Kitchen](./renders/ladder-kitchen)
+- [Ladder — Living](./renders/ladder-living)
+- [Ladder — Dusk](./renders/ladder-dusk)
+- [Photoreal — Kitchen](./renders/photoreal-kitchen.png)
+- [Photoreal — Living](./renders/photoreal-living.png)
+- [Photoreal — Dusk](./renders/photoreal-dusk.png)
+
 ## Replay
 
 ```sh
