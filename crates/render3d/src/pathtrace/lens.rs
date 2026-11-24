@@ -1,31 +1,64 @@
-//! The path tracer's camera frame (phase 22): the basis and field of view the WGSL `camera_ray`
+//! The path tracer's camera frame (phase 22): the basis, field of view and lens the WGSL `camera_ray`
 //! (`shaders/pt/lens.wgsl`) needs for a lens that is not a plain pinhole. [`fill_frame`] writes
-//! `cam_right`, `cam_up`, `cam_fwd` and `lens2` and nothing else; p22-r3d-lens fills the `lens`
-//! vector and the `PHOTO_PANINI` / `PHOTO_DOF` / `PHOTO_SHIFT` flags.
+//! `cam_right`, `cam_up`, `cam_fwd`, `lens2`, `lens` and the `PHOTO_PANINI` / `PHOTO_SHIFT` /
+//! `PHOTO_DOF` flags from `lighting.lens`. A neutral lens leaves `lens` and the flags at zero, which
+//! is the pinhole code path.
 
-use super::scene_gpu::GpuFrame;
+use super::scene_gpu::{GpuFrame, PHOTO_DOF, PHOTO_PANINI, PHOTO_SHIFT};
 use crate::camera::Camera;
 use crate::lit_frame::Lighting;
+use cadcraft_arch3d::lens::{aperture_radius_m, camera_basis};
 
-/// Set the camera basis (unit right, up and forward, w = 0) and the tangents of the half field of
-/// view (`lens2.x` horizontal, `lens2.y` vertical) of `camera` at `size` pixels. A camera with a
-/// non-finite number leaves the frame as it was.
-pub(super) fn fill_frame(frame: &mut GpuFrame, _lighting: &Lighting, camera: &Camera, size: (u32, u32)) {
-    let view = camera.view();
-    let row = |r: usize| [view.m[r][0], view.m[r][1], view.m[r][2]];
-    let (right, up) = (row(0), row(1));
-    let fwd = crate::camera::forward(camera);
+/// Set the camera basis (unit right, up and forward, w = 0), the tangents of the half field of view
+/// (`lens2.x` horizontal, `lens2.y` vertical), the lens vector (`lens` = panini compression, shift,
+/// aperture radius in metres, focus distance in metres) and the lens flags of `camera` at `size`
+/// pixels. A camera with a non-finite number leaves the frame as it was.
+pub(super) fn fill_frame(frame: &mut GpuFrame, lighting: &Lighting, camera: &Camera, size: (u32, u32)) {
+    let (right, up, fwd) = camera_basis(camera);
     let tan_v = (camera.fov_deg().to_radians() * 0.5).tan();
     let aspect = f64::from(size.0.max(1)) / f64::from(size.1.max(1));
     let tan_h = tan_v * aspect;
-    let all = [right[0], right[1], right[2], up[0], up[1], up[2], fwd.x, fwd.y, fwd.z, tan_v, tan_h];
-    if !all.iter().all(|v| v.is_finite()) {
+    let all = [right[0], right[1], right[2], up[0], up[1], up[2], fwd[0], fwd[1], fwd[2], tan_v, tan_h];
+    if !all.iter().all(|v| v.is_finite()) || tan_h <= 0.0 || tan_v <= 0.0 {
         return;
     }
-    frame.cam_right = [right[0] as f32, right[1] as f32, right[2] as f32, 0.0];
-    frame.cam_up = [up[0] as f32, up[1] as f32, up[2] as f32, 0.0];
-    frame.cam_fwd = [fwd.x as f32, fwd.y as f32, fwd.z as f32, 0.0];
+    let as4 = |v: [f64; 3]| [v[0] as f32, v[1] as f32, v[2] as f32, 0.0];
+    frame.cam_right = as4(right);
+    frame.cam_up = as4(up);
+    frame.cam_fwd = as4(fwd);
     frame.lens2 = [tan_h as f32, tan_v as f32, 0.0, 0.0];
+
+    let opts = &lighting.lens;
+    let mut flags = 0;
+    let mut lens = [0.0f32; 4];
+    if opts.panini && opts.compression.is_finite() {
+        flags |= PHOTO_PANINI;
+        lens[0] = opts.compression.clamp(0.0, 1.0e6);
+    }
+    if opts.shift.is_finite() && opts.shift != 0.0 {
+        flags |= PHOTO_SHIFT;
+        lens[1] = opts.shift;
+    }
+    if let Some(n) = opts.aperture {
+        let radius = aperture_radius_m(tan_h, f64::from(n));
+        if radius.is_finite() && radius > 0.0 {
+            // The look's focus, or the distance from the eye to the target along the forward axis.
+            let focus = match opts.focus {
+                Some(f) if f.is_finite() && f > 0.0 => f64::from(f),
+                _ => {
+                    let (eye, target) = (camera.eye(), camera.target());
+                    (target.x - eye.x) * fwd[0] + (target.y - eye.y) * fwd[1] + (target.z - eye.z) * fwd[2]
+                }
+            };
+            if focus.is_finite() {
+                flags |= PHOTO_DOF;
+                lens[2] = radius as f32;
+                lens[3] = focus.max(0.01) as f32;
+            }
+        }
+    }
+    frame.photo[0] |= flags;
+    frame.lens = lens;
 }
 
 #[cfg(test)]
