@@ -6,7 +6,7 @@ use std::path::Path;
 use cadcraft_doc::arch::photo::RUNG_NAMES;
 use serde_json::{Value, json};
 
-use crate::cmd::arch::render::{build_request, render_hooks};
+use crate::cmd::arch::render::{build_request, finish_reply, render_hooks};
 use crate::cmd::{CommandSpec, bad};
 use crate::{EngineError, Session};
 
@@ -164,6 +164,7 @@ fn run_ladder(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         let name = RUNG_NAMES.get(n).copied().unwrap_or("");
         let request = build_request(doc, p)?;
         let mut reply = (hooks.render)(&request).map_err(|e| bad("render.ladder", format!("rung {n} ({name}) failed: {e}")))?;
+        finish_reply(&mut reply, &request);
         if let Value::Object(m) = &mut reply {
             m.insert("rung".to_string(), json!(n));
             m.insert("name".to_string(), json!(name));
@@ -289,5 +290,52 @@ mod tests {
     fn ladder_command_is_registered_with_its_label() {
         let spec = crate::cmd::command_specs().into_iter().find(|c| c.id == "render.ladder");
         assert_eq!(spec.map(|c| c.label.to_string()).as_deref(), Some("Realism Ladder"));
+    }
+
+    #[test]
+    fn ladder_rung_reply_carries_the_look() {
+        let mut s = Session::new();
+        // Save a camera
+        s.execute("camera", &json!({"save": "c", "azimuth": 30, "elevation": 20, "distance": 12})).unwrap();
+        let doc = s.doc().unwrap();
+
+        let base = json!({"camera": "c", "seed": 5});
+        let out = std::path::Path::new("out");
+
+        for n in 0..=7u8 {
+            let p = rung_params(&base, n, out);
+            let req = build_request(doc, &p).unwrap();
+            let mut reply = json!({});
+            finish_reply(&mut reply, &req);
+
+            assert!(reply.get("look").is_some(), "rung {n} missing look");
+            assert!(reply["look"].get("film").is_some(), "rung {n} missing film");
+            assert!(reply["look"].get("lens").is_some(), "rung {n} missing lens");
+        }
+    }
+
+    #[test]
+    fn ladder_rung_look_has_the_film_from_rung_five() {
+        let mut s = Session::new();
+        // Save a camera
+        s.execute("camera", &json!({"save": "c", "azimuth": 30, "elevation": 20, "distance": 12})).unwrap();
+        let doc = s.doc().unwrap();
+
+        let base = json!({"camera": "c", "seed": 5});
+        let out = std::path::Path::new("out");
+
+        for n in 0..=7u8 {
+            let p = rung_params(&base, n, out);
+            let req = build_request(doc, &p).unwrap();
+            let mut reply = json!({});
+            finish_reply(&mut reply, &req);
+
+            let vignette = reply["look"]["film"]["vignette"].as_f64().unwrap_or(-1.0);
+            if n <= 4 {
+                assert_eq!(vignette, 0.0, "rung {n} vignette should be 0.0");
+            } else {
+                assert_eq!(vignette, 0.15, "rung {n} vignette should be 0.15");
+            }
+        }
     }
 }
