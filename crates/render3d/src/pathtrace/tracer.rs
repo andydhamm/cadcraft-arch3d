@@ -335,10 +335,10 @@ impl PathTracer {
         if let Some(budget) = self.opts.time_budget {
             match self.seconds_per_sample {
                 Some(sps) if budget.is_finite() && sps.is_finite() && sps > 0.0 => {
-                    let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 0.5;
+                    let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 0.25;
                     // A pass is also kept to about a second, so a sudden slowdown (a contended device)
                     // can overrun the budget by little before the next measurement sees it.
-                    let fit = (left.min(1.0) / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
+                    let fit = (left.min(0.5) / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
                     // Grow gradually: one slow (contended) pass must not be followed by a huge one.
                     this_pass = this_pass.min(fit).min(self.last_pass.saturating_mul(2).max(1));
                 }
@@ -450,8 +450,11 @@ impl PathTracer {
 
         // Between passes: the adaptive sampler may end the still, and so may the time budget.
         if self.spp_done < self.opts.spp {
-            let mut stop = self.adaptive.after_pass(gpu, &self.accum, &mut self.stats);
-            if stop.is_none() && self.opts.time_budget.is_some_and(|b| b.is_finite() && self.stats.seconds >= b) {
+            let spent = self.opts.time_budget.is_some_and(|b| b.is_finite() && self.stats.seconds >= b);
+            // A spent budget ends the still without paying for a measurement readback first.
+            let mut stop = if spent { None } else { self.adaptive.after_pass(gpu, &self.accum, &mut self.stats) };
+            self.stats.seconds = self.started.elapsed().as_secs_f32();
+            if stop.is_none() && spent {
                 stop = Some(super::StopReason::TimeBudget);
             }
             if let Some(reason) = stop {
