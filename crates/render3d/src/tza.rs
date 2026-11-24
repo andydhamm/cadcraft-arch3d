@@ -425,6 +425,11 @@ mod tests {
         assert_eq!(small_weight.dims, vec![32, 9, 3, 3]);
         assert_eq!(base_weight.layout, "oihw");
         assert_eq!(small_weight.layout, "oihw");
+
+        let base_dec = base.tensor("dec_conv1a.weight").expect("base dec_conv1a.weight missing");
+        let small_dec = small.tensor("dec_conv1a.weight").expect("small dec_conv1a.weight missing");
+        assert_eq!(base_dec.dims, vec![64, 73, 3, 3]);
+        assert_eq!(small_dec.dims, vec![32, 41, 3, 3]);
     }
 
     #[test]
