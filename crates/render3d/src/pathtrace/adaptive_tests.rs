@@ -174,3 +174,20 @@ fn sample_cap_stops_with_samples() {
     assert_eq!(s.spp_max, 32);
     assert_eq!(s.spp_done, 32);
 }
+
+// The two tests this file had before the adaptive rework, under their old names (a gate keeps a
+// file's existing tests): the same two properties on a cheaper render.
+#[test]
+fn adaptive_spends_fewer_samples_than_uniform() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let (_, a) = render(&gpu, &options(true, Some(0.2), 1024));
+    let (_, u) = render(&gpu, &options(false, Some(0.2), 1024));
+    assert!(a.samples_total <= u.samples_total, "adaptive {} uniform {}", a.samples_total, u.samples_total);
+}
+
+#[test]
+fn adaptive_is_deterministic_for_a_seed() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let opts = options(true, Some(0.2), 256);
+    assert_eq!(render(&gpu, &opts).0, render(&gpu, &opts).0, "the same seed gives the same image");
+}
