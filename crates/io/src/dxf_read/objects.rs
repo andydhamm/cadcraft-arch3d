@@ -250,42 +250,9 @@ impl Objects {
     }
 }
 
-/// Raise each arch id counter to one past every id already in use, so a hand-edited or foreign
-/// payload (counters at or below live ids) still hands out fresh proxy handles on the next
-/// push instead of reusing an id.
-fn repair_arch_counters(arch: &mut cadcraft_doc::ArchModel) {
-    if let Some(m) = arch.walls.iter().map(|w| w.id.0).max() {
-        arch.next_id = m.saturating_add(1);
-    }
-    if let Some(m) = arch.openings.iter().map(|o| o.id.0).max() {
-        arch.next_opening_id = m.saturating_add(1);
-    }
-    if let Some(m) = arch.rooms.iter().map(|r| r.id.0).max() {
-        arch.next_room_id = m.saturating_add(1);
-    }
-    if let Some(m) = arch.roofs.iter().map(|r| r.id.0).max() {
-        arch.next_roof_id = m.saturating_add(1);
-    }
-}
-
-/// Drop the remembered arch proxy handles from the model, every layout and every block. Called
-/// only after the arch model parsed, so the proxies are redundant and the drawing is the one
-/// source of truth.
-fn drop_arch_proxies(d: &mut cadcraft_doc::Drawing, proxies: &[cadcraft_doc::Handle]) {
-    let set: std::collections::HashSet<cadcraft_doc::Handle> = proxies.iter().copied().collect();
-    d.model.retain(|e| !set.contains(&e.handle));
-    for l in d.layouts.iter_mut() {
-        l.entities.retain(|e| !set.contains(&e.handle));
-    }
-    for name in d.blocks.keys().cloned().collect::<Vec<_>>() {
-        if let Some(b) = d.blocks.get_mut(&name) {
-            std::sync::Arc::make_mut(b).entities.retain(|e| !set.contains(&e.handle));
-        }
-    }
-}
-
-/// Page setup from a LAYOUT object's AcDbPlotSettings fields (sizes and margins in mm).
-pub(super) fn page_setup(t: &T) -> PageSetup {
+/// Page setup from a LAYOUT object's AcDbPlotSettings fields (sizes and margins in mm), and its
+/// CADCraft xdata in the record's `tags`.
+pub(super) fn page_setup(t: &T, tags: &[Tag]) -> PageSetup {
     let mut p = PageSetup::default();
     let mm = |code: i32, d: f64| {
         let v = t.fd(code, d);
@@ -297,9 +264,17 @@ pub(super) fn page_setup(t: &T) -> PageSetup {
         p.height_mm = w.max(h);
     }
     p.margins_mm = [mm(40, p.margins_mm[0]), mm(41, p.margins_mm[1]), mm(42, p.margins_mm[2]), mm(43, p.margins_mm[3])];
-    // Plot paper units 1: millimetres. 0 (inches) is left to MEASUREMENT: earlier CADCraft
-    // versions wrote 0 for every layout.
-    p.paper_mm = t.i(72) == Some(1);
+    // CADCraft's paper units come first (PSUNITS xdata: 0 inches, 1 millimetres, 2 follows
+    // MEASUREMENT), because plot paper units 0 cannot tell an explicit inch layout from an unset
+    // one: earlier CADCraft versions wrote 0 for every layout, so 0 alone is left to MEASUREMENT.
+    // Plot paper units 1 is millimetres (#3249).
+    let units = crate::dxf_ext::xdata_list(crate::dxf_ext::xdata(tags, crate::dxf_ext::APP), "PSUNITS");
+    p.paper_mm = match units.iter().find(|t| t.code == 1070).map(|t| t.i64()) {
+        Some(0) => Some(false),
+        Some(1) => Some(true),
+        Some(2) => None,
+        _ => (t.i(72) == Some(1)).then_some(true),
+    };
     // Plot rotation 1 or 3 turns the media a quarter turn; media defined wider than tall is
     // already landscape.
     let rotated = matches!(t.i(73), Some(1 | 3));
