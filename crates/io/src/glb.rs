@@ -3342,7 +3342,7 @@ mod tests {
     #[test]
     fn node_names_empty_scene() {
         let scene = Scene3d::default();
-        assert_eq!(node_names(&scene), []);
+        assert_eq!(node_names(&scene), Vec::<String>::new());
     }
 
     #[test]
