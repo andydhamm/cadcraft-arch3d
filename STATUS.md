@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 20:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 41 of 45 segments merged · 12 of 15 acceptance checks**
 
@@ -32,7 +32,7 @@ Updated 2026-11-24 20:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 27.3 h so far · expected done Nov 25 01:33–Nov 26 00:52 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 27.5 h so far · expected done Nov 25 01:48–Nov 26 01:07 UTC |
 
 ## Phase 22 segments
 
@@ -41,8 +41,8 @@ Updated 2026-11-24 20:45 UTC. This page and the card in the README are regenerat
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p22g-trans-shadow-side` | Path tracer: light samples through thin and rough transmission leave from the far side (thin translucency furnace loses 20 % today) | working | claude-sonnet-c |
-| `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | working | claude-sonnet-d |
-| `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | gate | bonsai-b |
+| `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | gate | claude-sonnet-d |
+| `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | working | bonsai-b |
 | `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | gate | claude-sonnet-a |
 
 ## Recent merges
@@ -66,15 +66,15 @@ Updated 2026-11-24 20:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1438 |
-| bonsai-b | bonsai2-27b | gate | 1361 |
+| bonsai-a | bonsai2-27b | gate | 1438 |
+| bonsai-b | bonsai2-27b | agent | 1363 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | gate | 175 |
 | claude-sonnet-b | sonnet | idle | 184 |
 | claude-sonnet-c | sonnet | agent | 120 |
-| claude-sonnet-d | sonnet | agent | 111 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1316 |
+| claude-sonnet-d | sonnet | gate | 112 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1317 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
