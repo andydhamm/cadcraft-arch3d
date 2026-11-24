@@ -19,6 +19,7 @@ use serde_json::{Value, json};
 
 use crate::cmd::arch::look::{apply_look_params, describe_look, effective_look, effective_sun_dir};
 use crate::cmd::arch::pick::parse_camera;
+use crate::cmd::arch::render_photo;
 use crate::cmd::{CommandSpec, bad};
 use crate::{EngineError, Session};
 
@@ -70,6 +71,22 @@ pub struct RenderRequest<'a> {
     pub albedo: Option<f64>,
     /// A floor overview (phase 19): `(level index, lower levels shown)`; `None` = every level.
     pub overview: Option<(u32, bool)>,
+    /// The photoreal settings (phase 22); the defaults for callers that do not set them.
+    pub photo: cadcraft_doc::arch::photo::PhotoSettings,
+    /// A linear image to write (`pfm` path and which stage).
+    pub linear: Option<(PathBuf, LinearStageParam)>,
+    /// A calibration scene that replaces the drawing's.
+    pub calibrate: Option<cadcraft_arch3d::calibrate::Calibration>,
+}
+
+/// Which stage of the pipeline a `pfm` file holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LinearStageParam {
+    /// Radiance in nits, after the denoiser.
+    #[default]
+    Radiance,
+    /// Display linear: after exposure and film, before the tone curve.
+    Film,
 }
 
 /// Which Finalize Render a request runs (phase 11): the phase-10 shadow-mapped still, or the path
@@ -187,6 +204,9 @@ impl<'a> RenderRequest<'a> {
             legacy_night: matches!(sun, SunChoice::Off),
             albedo: None,
             overview: None,
+            photo: cadcraft_doc::arch::photo::PhotoSettings::default(),
+            linear: None,
+            calibrate: None,
         }
     }
 
@@ -393,9 +413,11 @@ fn parse_path_params(v: &Value) -> Result<PathParams, EngineError> {
     let bounces = whole("bounces", 0, 32, 4)?;
     let seed = whole("seed", 0, 4294967295, 0)?;
 
+    // "filter" and "learned" also run a denoiser; render_photo checks which.
     let denoise = match v.get("denoise") {
         None => true,
-        Some(val) => val.as_bool().ok_or_else(|| bad("render", "`denoise` must be a boolean"))?,
+        Some(Value::String(s)) if s == "filter" || s == "learned" => true,
+        Some(val) => val.as_bool().ok_or_else(|| bad("render", "`denoise` must be a boolean, \"filter\" or \"learned\""))?,
     };
     let rt = match v.get("rt") {
         None => false,
@@ -574,7 +596,7 @@ fn camera_from_params<'a>(v: Option<&Value>, doc: &'a Drawing) -> Result<(Option
 
 /// Read a `render`'s params into a request: the camera, the effective look (the saved camera's or
 /// the drawing's, then this render's own look keys), its sun direction and the legacy sun choice.
-fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'a>, EngineError> {
+pub(crate) fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'a>, EngineError> {
     let size = parse_size(params.get("size"))?;
     let (camera, saved) = camera_from_params(params.get("camera"), doc)?;
     let (mut final_render, mut final_mode) = parse_final(params.get("final"))?;
@@ -583,7 +605,7 @@ fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'
     let budget = parse_budget(params.get("budget"))?;
     let samples = parse_samples(params.get("samples"))?;
     let out = params.get("out").and_then(Value::as_str).map(PathBuf::from);
-    let path = parse_path_params(params)?;
+    let mut path = parse_path_params(params)?;
 
     let mut look = effective_look(&doc.arch, saved);
     let explicit = apply_look_params("render", params, &doc.arch, &mut look, true)?;
@@ -594,6 +616,12 @@ fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'
     if params.get("final").is_none() && matches!(look.technique, Technique::Path | Technique::Photoreal) {
         (final_render, final_mode) = (true, FinalMode::Path);
     }
+    let (photo, force_path) = render_photo::parse_photo(params, &mut look, doc, camera.as_ref(), size, &mut path, params.get("final").is_some())?;
+    if force_path {
+        (final_render, final_mode) = (true, FinalMode::Path);
+    }
+    let linear = render_photo::parse_pfm(params)?;
+    let calibrate = render_photo::parse_calibrate(params)?;
     let sun_dir = effective_sun_dir(&doc.arch, &look, explicit);
     let sun = if !look.sun.on {
         SunChoice::Off
@@ -612,6 +640,9 @@ fn build_request<'a>(doc: &'a Drawing, params: &Value) -> Result<RenderRequest<'
     request.legacy_night = legacy_night;
     request.albedo = parse_albedo(params.get("albedo"))?;
     request.overview = saved.and_then(|c| overview_of(c, &doc.arch));
+    request.photo = photo;
+    request.linear = linear;
+    request.calibrate = calibrate;
     Ok(request)
 }
 
@@ -657,7 +688,7 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("render", "Render 3D", run_render)
             .menu(&["Architecture", "Render 3D"])
-            .params("{out?: path, size?: [w,h], camera?: name|{…}, lightSet?: name|null, final?: bool | \"raster\" | \"path\", sun?: false | \"default\" | {on?, intensity?, shadows?, angle?: name} + one of {date, time} | {azimuth, elevation (compass)}, technique?, exposure?: \"auto\" | {ev100} | number (path tracer), toneMap?, sky?: bool | {on?, turbidity?, stars?, moon?}, cutaway?, clip?, nearClip? (look keys, for this render only; reply gains look and sunDir), style?: shaded | shaded-edges | hidden-line | glass-house | clay | technical, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}}")
+            .params("{out?: path, size?: [w,h], camera?: name|{…}, lightSet?: name|null, final?: bool | \"raster\" | \"path\", sun?: false | \"default\" | {on?, intensity?, shadows?, angle?: name} + one of {date, time} | {azimuth, elevation (compass)}, technique?, exposure?: \"auto\" | {ev100} | number (path tracer), toneMap?, sky?: bool | {on?, turbidity?, stars?, moon?}, cutaway?, clip?, nearClip? (look keys, for this render only; reply gains look and sunDir), style?: shaded | shaded-edges | hidden-line | glass-house | clay | technical, ground?: bool, budget?, samples?: [[x,y,z], ...], spp?: 1..=65536, bounces?: 0..=32, seed?: 0..=4294967295, denoise?: bool, rt?: bool, snapshots?: (≤8, ascending, each 1..=spp), furnace?: {albedo: 0<a<1, emission: 0<e<=1000}, rung?: 0..=7, edges?: bool | {radius: 0..=0.05}, materials?: basic|full, variation?: bool, clamp?: null|(0,1e6], adaptive?: bool, noiseTarget?: 0.001..=1, timeBudget?: 1..=86400 s, denoise?: bool|filter|learned, denoiseModel?: base|small, roughnessGuide?: bool, focus?: {pick: [x,y]}, pfm?: path, pfmStage?: radiance|film, calibrate?: {objects: [{shape: sphere|box, at, size, segments?, material?}] (1..=16), lights?: [{at, candela, kelvin?}] (up to 8)}}")
             .noundo(),
     ]
 }

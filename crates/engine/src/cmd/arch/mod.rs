@@ -62,6 +62,7 @@ pub mod plant;
 pub mod planview;
 pub mod railing;
 pub mod render;
+pub(crate) mod render_photo;
 pub mod roofauto;
 pub mod roofplane;
 pub mod room;
