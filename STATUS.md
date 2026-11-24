@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 03:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 22 of 36 segments merged · 1 of 15 acceptance checks**
 
@@ -32,24 +32,24 @@ Updated 2026-11-24 02:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 1 / 15 | 9.3 h so far · expected done Nov 24 07:42–Nov 24 20:39 UTC |
+| 22 | Photoreal stills | building | 1 / 15 | 9.5 h so far · expected done Nov 24 08:05–Nov 24 21:24 UTC |
 
 ## Phase 22 segments
 
-22 merged, 6 merging, 4 queued, 3 gate, 1 escalate
+22 merged, 6 merging, 4 queued, 3 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22-cli-hook` | CLI renderer: photoreal options into the renderers, calibrate scenes, PFM output and the reply keys | escalate |  |
+| `p22-cli-hook` | CLI renderer: photoreal options into the renderers, calibrate scenes, PFM output and the reply keys | working | mai-flash-esc |
 | `p22-r3d-edges` | Rounded-edge shading in the path tracer | merging | mai-flash-b |
 | `p22-r3d-bsdf-ext` | Path tracer BSDF: clear coat, sheen and anisotropy | gate | bonsai-a |
 | `p22-r3d-bsdf-transmission` | Path tracer BSDF: thin translucency and rough glass with volume | merging | claude-sonnet-b |
 | `p22-r3d-variation` | Procedural surface variation (roughness and colour) in the path tracer | merging | claude-sonnet-d |
 | `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | merging | mai-flash |
 | `p22-r3d-unet-cpu` | The denoiser network on the CPU: transforms, autoexposure and a reference forward pass | merging | claude-sonnet-a |
-| `p22-engine-denoiser-info` | denoiser.info: the loaded weights and whether the learned denoiser can run | gate | claude-sonnet-d |
+| `p22-engine-denoiser-info` | denoiser.info: the loaded weights and whether the learned denoiser can run | working | claude-sonnet-d |
 | `p22-engine-ladder` | render.ladder: one PNG per rung and a labelled contact sheet | merging | claude-sonnet-a |
-| `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | gate | claude-sonnet-c |
+| `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | working | claude-sonnet-c |
 
 ## Recent merges
 
@@ -72,18 +72,18 @@ Updated 2026-11-24 02:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1409 |
-| bonsai-b | bonsai2-27b | agent | 1319 |
+| bonsai-a | bonsai2-27b | gate | 1410 |
+| bonsai-b | bonsai2-27b | gate | 1320 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 170 |
 | claude-sonnet-b | sonnet | idle | 175 |
-| claude-sonnet-c | sonnet | gate | 108 |
-| claude-sonnet-d | sonnet | gate | 106 |
+| claude-sonnet-c | sonnet | agent | 109 |
+| claude-sonnet-d | sonnet | agent | 107 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
-| mai-flash-esc | mai-code-1.1-flash | down | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1203 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 178 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1203 |
 | tturbo-mac2 | tturbo-ultraheretic | gate | 707 |
