@@ -336,7 +336,9 @@ impl PathTracer {
             match self.seconds_per_sample {
                 Some(sps) if budget.is_finite() && sps.is_finite() && sps > 0.0 => {
                     let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 0.5;
-                    let fit = (left / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
+                    // A pass is also kept to about a second, so a sudden slowdown (a contended device)
+                    // can overrun the budget by little before the next measurement sees it.
+                    let fit = (left.min(1.0) / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
                     // Grow gradually: one slow (contended) pass must not be followed by a huge one.
                     this_pass = this_pass.min(fit).min(self.last_pass.saturating_mul(2).max(1));
                 }
@@ -425,7 +427,9 @@ impl PathTracer {
         if self.opts.time_budget.is_some() {
             // The clock must see the pass finished, not just queued.
             let _ = d.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(std::time::Duration::from_secs(300)) });
-            self.seconds_per_sample = Some(pass_started.elapsed().as_secs_f32() / this_pass.max(1) as f32);
+            // Keep the slower of the last two estimates: a lucky quick pass must not license a huge one.
+            let sps = pass_started.elapsed().as_secs_f32() / this_pass.max(1) as f32;
+            self.seconds_per_sample = Some(self.seconds_per_sample.map_or(sps, |old| if old.is_finite() { sps.max(old * 0.5) } else { sps }));
             self.last_pass = this_pass.max(1);
         }
 
