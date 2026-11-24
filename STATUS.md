@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-24 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 13:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 36 of 36 segments merged · 10 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 36 of 41 segments merged · 10 of 15 acceptance checks**
 
 11,874 workspace tests passing at the last merge · 1371 segments merged in all · 0 of 15 seats working
 
@@ -32,12 +32,19 @@ Updated 2026-11-24 12:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 10 / 15 | 19.3 h so far · expected done Nov 24 12:45–Nov 24 23:46 UTC |
+| 22 | Photoreal stills | building | 10 / 15 | 19.5 h so far · expected done Nov 24 14:55–Nov 25 00:50 UTC |
 
 ## Phase 22 segments
 
-36 merged
+36 merged, 4 working, 1 merging
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `p22f-ladder-reply-look` | render.ladder: each rung's reply carries look, sunDir and albedo like render's | working | darwin-ws3 |
+| `p22f-adaptive-freeze` | Adaptive sampling that really adapts: set PHOTO_ADAPTIVE, freeze converged pixels, per-pixel sample statistics | working | claude-sonnet-c |
+| `p22f-learned-keeps-converged` | Learned denoiser: a converged pixel keeps its value (flat frame within 1 %), and the device network is checked at 160 x 96 | merging | claude-sonnet-a |
+| `p22f-aniso-multiscatter` | Anisotropic specular lobe: multiple-scattering energy compensation so a white anisotropic metal passes the furnace | working | claude-sonnet-d |
+| `upstream-sync-a1d92d995` | merge upstream upstream/main up to a1d92d995 (35 commits) | working | tturbo-mac2 |
 
 ## Recent merges
 
@@ -60,18 +67,18 @@ Updated 2026-11-24 12:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1427 |
-| bonsai-b | bonsai2-27b | idle | 1345 |
+| bonsai-a | bonsai2-27b | agent | 1427 |
+| bonsai-b | bonsai2-27b | agent | 1345 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | idle | 172 |
+| claude-sonnet-a | sonnet | idle | 173 |
 | claude-sonnet-b | sonnet | idle | 180 |
-| claude-sonnet-c | sonnet | idle | 112 |
-| claude-sonnet-d | sonnet | idle | 110 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1298 |
+| claude-sonnet-c | sonnet | agent | 112 |
+| claude-sonnet-d | sonnet | agent | 110 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1298 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
-| mai-flash | mai-code-1.1-flash | idle | 131 |
-| mai-flash-b | mai-code-1.1-flash | idle | 85 |
+| mai-flash | mai-code-1.1-flash | down | 131 |
+| mai-flash-b | mai-code-1.1-flash | down | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1222 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 724 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 724 |
