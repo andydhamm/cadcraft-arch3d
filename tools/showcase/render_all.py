@@ -12,6 +12,11 @@ LOOK_CAMERAS = ['dusk', 'noon-hdri', 'overview']
 SET_KINDS = ('planview', 'rcp', 'roofplan', 'siteplan', 'interior', 'sheet', 'drawingset')
 PLAN_LEVEL_KINDS = ('floor', 'landing')
 ELECTRICAL_LEVELS = ['Lower', 'Main']
+PHOTO_CAMERA_NAMES = ['Kitchen-photo', 'Living-photo', 'Dusk-photo']
+PHOTO_FOLDERS = ('kitchen', 'living', 'dusk')
+PHOTO_KINDS = ('ladder', 'photoreal')
+PHOTO_SCRIPT_NAME = 'phase-22-showcase.json'
+PHOTO_SCRIPT = os.path.join(ROOT, 'docs', 'arch3d', 'showcase', PHOTO_SCRIPT_NAME)
 TILE_W, BAND = 320, 12
 
 
@@ -209,13 +214,15 @@ def _level_rows(levels):
     return out
 
 
-def plan(levels, views, sheets, with_set, size=(960, 720), spp=64):
+def plan(levels, views, sheets, with_set, size=(960, 720), spp=64, with_photo=False):
     """The gallery as rows of (file, kind, view, commands), in a fixed order. Pure: it runs nothing.
 
     `levels` are names or {name, kind} rows, `views` {name, id, kind} rows, `sheets` {number, layout} rows.
     A command is (name, params), where a `path` or `out` param is a bare file name that `main` puts under
     the output directory. A `replay` row's commands are cadcraft-cli `run` arguments instead. Rows of
     kinds in SET_KINDS run on set.dxf, the others on bilevel.dxf; `drawingset` is the PDF, not an image.
+    With `with_photo` the photoreal run (a phase-22 camera replay plus the ladders and finals) is added,
+    after the look cameras; it is what `--full` writes that `--no-photo` leaves out.
     """
     size = list(size)
     rows, seen = [], set()
@@ -260,6 +267,16 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64):
         if c in ('dusk', 'noon-hdri'):
             params['spp'] = spp  # their technique path-traces by itself
         add(f, 'look', c, [('render', params)])
+    if with_photo:
+        # The photoreal run (phase 22): replay the house plus the phase-22 camera
+        # script into photo.dxf, then the ladders and 1920x1080 finals for each
+        # photoreal camera. Skipped by --no-photo.
+        replay_photo = ['--commands', SCRIPT, '--commands', PHOTO_SCRIPT]
+        add('photo.dxf', 'replay', 'photo', replay_photo + ['--save', 'photo.dxf'])
+        for cam, folder in zip(PHOTO_CAMERA_NAMES, PHOTO_FOLDERS):
+            add(folder, 'ladder', cam, [('render.ladder', {'camera': cam, 'out': folder, 'size': [640, 400]}])
+            f = file_name('photoreal', folder, '.png')
+            add(f, 'photoreal', cam, [('render', {'camera': cam, 'size': [1920, 1080], 'out': f})])
     replay = ['--commands', SCRIPT]
     for sp in SET_SCRIPTS:
         replay += ['--commands', sp]
@@ -285,10 +302,12 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64):
     return rows
 
 
-def manifest(images, exports, skipped, script_sha256, set_scripts, drawing_set, sheet_images=True):
+def manifest(images, exports, skipped, script_sha256, set_scripts, drawing_set,
+            photo_script=None, ladders=None, photoreal=None, sheet_images=True):
     """The manifest.json content."""
     return {'images': images, 'exports': exports, 'contactSheet': 'contact-sheet.png', 'technicalSkipped': skipped,
-            'scriptSha256': script_sha256, 'setScripts': set_scripts, 'drawingSet': drawing_set, 'sheetImages': sheet_images}
+            'scriptSha256': script_sha256, 'setScripts': set_scripts, 'drawingSet': drawing_set,
+            'photoScript': photo_script, 'ladders': ladders, 'photoreal': photoreal, 'sheetImages': sheet_images}
 
 
 def parse_args(argv):
@@ -300,6 +319,7 @@ def parse_args(argv):
     ap.add_argument('--no-exports', action='store_true', help='skip GLB/IFC/OBJ export steps and leave exports empty')
     ap.add_argument('--full', action='store_true', help='the full gallery: also the look cameras, plan views, interior elevations, sheets and the drawing-set PDF')
     ap.add_argument('--no-set', action='store_true', help='with --full: skip it after all (a plain run never renders it)')
+    ap.add_argument('--no-photo', action='store_true', help='with --full: skip the photoreal ladders and finals')
     return ap.parse_args(argv)
 
 
@@ -331,9 +351,11 @@ def main(argv):
     os.makedirs(out, exist_ok=True)
     dxf = os.path.join(out, 'bilevel.dxf')
     set_dxf = os.path.join(out, 'set.dxf')
+    photo_dxf = os.path.join(out, 'photo.dxf')
     r = Runner(cli_base(a.cli_json), dxf)
     rs = Runner(r.base, set_dxf)
-    images, exports, skipped, drawing_set = [], {}, False, None
+    r_photo = Runner(r.base, photo_dxf) if (a.full and not a.no_photo) else None
+    images, exports, skipped, drawing_set, ladders, photoreal_files, photo_script_sha = [], {}, False, None, [], [], None
 
     def p(f):
         return os.path.join(out, f)
@@ -346,6 +368,7 @@ def main(argv):
     try:
         script_sha256 = sha256_file(SCRIPT)
         set_scripts = {} if skip_set else {n: sha256_file(f) for n, f in zip(SET_SCRIPT_NAMES, SET_SCRIPTS)}
+        photo_script_sha = sha256_file(PHOTO_SCRIPT) if r_photo is not None else None
         r.run('replay', [], file=False, extra=['--commands', SCRIPT, '--save', dxf])
         if not os.path.exists(dxf):
             raise Step('replay', 'bilevel.dxf was not written')
@@ -360,6 +383,18 @@ def main(argv):
             if not os.path.exists(set_dxf):
                 raise Step('replay set', 'set.dxf was not written')
             insp = inspect_rows(rs, {"planViews": True, "views": True, "sheets": True, "levels": True, "cameras": True})
+        photo_cams = set()
+        if r_photo is not None:
+            # The photoreal run replays the house plus the phase-22 cameras into photo.dxf.
+            rep = next((row for row in plan([], [], [], True, with_photo=True) if row[0] == 'photo.dxf'), None)
+            if rep is None:
+                raise Step('replay photo', 'the plan has no photo replay step')
+            args = [p(x) if i and rep[3][i - 1] == '--save' else x for i, x in enumerate(rep[3])]
+            r_photo.run('replay photo', [], file=False, extra=args)
+            if not os.path.exists(photo_dxf):
+                raise Step('replay photo', 'photo.dxf was not written')
+            photo_insp = inspect_rows(r_photo, {"cameras": True})
+            photo_cams = {c.get('name') for c in photo_insp.get('cameras', []) if isinstance(c, dict)}
         levels = [l for l in insp.get('levels', []) if isinstance(l, dict) and isinstance(l.get('name'), str)]
         views = [v for v in insp.get('views', []) if isinstance(v, dict) and 'name' in v and 'id' in v]
         sheets = [s for s in insp.get('sheets', []) if isinstance(s, dict)]
