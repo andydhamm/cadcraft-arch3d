@@ -874,7 +874,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&Technique::Photoreal).unwrap(), "\"photoreal\"");
         assert_eq!(serde_json::to_string(&Technique::Standard).unwrap(), "\"standard\"");
         assert_eq!(serde_json::to_string(&Technique::Path).unwrap(), "\"path\"");
-        assert_eq!(serde_json::to_string(&Technique::Cray).unwrap(), "\"clay\"");
+        assert_eq!(serde_json::to_string(&Technique::Clay).unwrap(), "\"clay\"");
         assert_eq!(serde_json::to_string(&Technique::Technical).unwrap(), "\"technical\"");
         let t: Technique = serde_json::from_str("\"photoreal\"").unwrap();
         assert_eq!(t, Technique::Photoreal);
