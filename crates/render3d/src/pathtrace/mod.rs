@@ -346,6 +346,9 @@ mod kernel_tests;
 mod lens_tests;
 
 #[cfg(test)]
+mod sun_disc_tests;
+
+#[cfg(test)]
 mod edges_tests;
 
 #[cfg(test)]
