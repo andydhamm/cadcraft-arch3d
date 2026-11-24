@@ -41,10 +41,10 @@ fn finite(v: &Value, what: &str) -> Result<f64, EngineError> {
     }
 }
 
-/// Optional finite number field; absent/null yields `default`.
+/// Optional finite number field; absent yields `default`, null is refused.
 fn num(obj: &Value, key: &str, default: f64) -> Result<f64, EngineError> {
     match obj.get(key) {
-        None | Some(Value::Null) => Ok(default),
+        None => Ok(default),
         Some(v) => finite(v, key),
     }
 }
@@ -88,8 +88,8 @@ pub(crate) fn parse_camera(cam: &Value) -> Result<Camera, EngineError> {
     match kind {
         "orbit" => {
             let distance = num(cam, "distance", 10.0)?;
-            if distance <= 0.0 || distance > MAX_COORD {
-                return Err(bad("pick3d", format!("`distance` must be in (0, {MAX_COORD}]")));
+            if distance <= 0.0 || distance > MAX_DISTANCE {
+                return Err(bad("pick3d", format!("`distance` must be in (0, {MAX_DISTANCE}]")));
             }
             let target = vec3_field(cam, "target", Vec3::new(0.0, 0.0, 0.0))?;
             Ok(Camera::Orbit(Orbit::new(target, num(cam, "azimuth", 0.0)?, num(cam, "elevation", 30.0)?, distance, fov)))
