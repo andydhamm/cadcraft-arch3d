@@ -6,7 +6,6 @@ use std::path::Path;
 use cadcraft_doc::arch::photo::RUNG_NAMES;
 use serde_json::{Value, json};
 
-use crate::atomic_write::write_atomic_making_folders;
 use crate::cmd::arch::render::{build_request, render_hooks};
 use crate::cmd::{CommandSpec, bad};
 use crate::{EngineError, Session};
@@ -179,7 +178,14 @@ fn run_ladder(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let (sw, sh, pixels) = compose_sheet(&images, &RUNG_NAMES).map_err(|e| bad("render.ladder", e))?;
     let png = cadcraft_io::png::encode_rgba8(sw, sh, &pixels).map_err(|e| bad("render.ladder", e.to_string()))?;
     let sheet = out.join("ladder.png");
-    write_atomic_making_folders(&sheet, &png).map_err(|e| bad("render.ladder", format!("cannot write `{}`: {e}", sheet.display())))?;
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::atomic_write::write_atomic_making_folders(&sheet, &png)
+        .map_err(|e| bad("render.ladder", format!("cannot write `{}`: {e}", sheet.display())))?;
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = &png;
+        return Err(bad("render.ladder", "writing the contact sheet is not available in the web build"));
+    }
     let (w, h) = images.first().map_or((0, 0), |i| (i.0, i.1));
     Ok(json!({"ok": true, "camera": camera, "size": [w, h], "rungs": rungs, "sheet": sheet.to_string_lossy()}))
 }
