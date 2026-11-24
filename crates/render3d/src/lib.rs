@@ -33,6 +33,7 @@ pub mod shadow_atlas;
 pub mod textures;
 pub mod types;
 pub mod tza;
+pub mod unet;
 pub mod warp;
 
 #[cfg(test)]
