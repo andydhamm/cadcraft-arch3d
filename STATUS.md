@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 27 of 36 segments merged · 6 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 31 of 36 segments merged · 6 of 15 acceptance checks**
 
-11,656 workspace tests passing at the last merge · 1350 segments merged in all · 0 of 15 seats working · PAUSED
+11,676 workspace tests passing at the last merge · 1354 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,27 +32,27 @@ Updated 2026-11-24 06:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 6 / 15 | 13.0 h so far · expected done Nov 24 09:49–Nov 24 22:18 UTC |
+| 22 | Photoreal stills | building | 6 / 15 | 13.3 h so far · expected done Nov 24 08:21–Nov 24 18:26 UTC |
 
 ## Phase 22 segments
 
-27 merged, 7 merging, 1 queued, 1 gate
+31 merged, 4 merging, 1 queued
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22-r3d-bsdf-ext` | Path tracer BSDF: clear coat, sheen and anisotropy | merging | claude-sonnet-b |
-| `p22-r3d-bsdf-transmission` | Path tracer BSDF: thin translucency and rough glass with volume | merging | claude-sonnet-b |
-| `p22-r3d-variation` | Procedural surface variation (roughness and colour) in the path tracer | merging | claude-sonnet-d |
-| `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | merging | claude-sonnet-c |
 | `p22-r3d-unet-gpu` | The learned denoiser in WGSL compute shaders | merging | claude-sonnet-b |
 | `p22-showcase-cameras` | The showcase house's three Photoreal cameras | merging | claude-sonnet-b |
-| `p22-docs-user-guide` | User guide and MCP example: Photoreal stills | gate | claude-sonnet-a |
+| `p22-docs-user-guide` | User guide and MCP example: Photoreal stills | merging | claude-sonnet-a |
 | `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 06:33 | `p22-r3d-variation` | merged | 11,676 pass | claude-sonnet-d |
+| Nov 24 06:33 | `p22-r3d-sun-disc` | merged | 11,676 pass | claude-sonnet-c |
+| Nov 24 06:33 | `p22-r3d-bsdf-ext` | merged | 11,676 pass | claude-sonnet-b |
+| Nov 24 06:33 | `p22-r3d-bsdf-transmission` | merged | 11,676 pass | claude-sonnet-b |
 | Nov 24 05:26 | `p22-engine-ladder` | merged | 11,656 pass | claude-sonnet-d |
 | Nov 24 05:05 | `p22-r3d-variation` | refused | 0 pass | claude-sonnet-d |
 | Nov 24 05:05 | `p22-r3d-sun-disc` | refused | 0 pass | mai-flash |
@@ -61,20 +61,16 @@ Updated 2026-11-24 06:30 UTC. This page and the card in the README are regenerat
 | Nov 24 05:05 | `p22-cli-hook` | merged | 11,651 pass | claude-sonnet-b |
 | Nov 24 05:05 | `p22-engine-denoiser-info` | merged | 11,651 pass | claude-sonnet-d |
 | Nov 24 04:41 | `p22-engine-ladder` | refused | 11,637 pass | claude-sonnet-a |
-| Nov 24 02:27 | `harden-p22-engine-look-keys` | merged | 11,632 pass | tturbo-mac |
-| Nov 24 02:27 | `p22-r3d-clamp` | merged | 11,632 pass | mai-flash-b |
-| Nov 24 02:27 | `p22-r3d-roughness-guide` | merged | 11,632 pass | claude-sonnet-b |
-| Nov 24 02:27 | `p22-r3d-film` | merged | 11,632 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1422 |
-| bonsai-b | bonsai2-27b | gate | 1329 |
+| bonsai-b | bonsai2-27b | agent | 1331 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | gate | 171 |
+| claude-sonnet-a | sonnet | idle | 172 |
 | claude-sonnet-b | sonnet | idle | 180 |
 | claude-sonnet-c | sonnet | idle | 111 |
 | claude-sonnet-d | sonnet | idle | 110 |
@@ -83,5 +79,5 @@ Updated 2026-11-24 06:30 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | idle | 1210 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 714 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1210 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 714 |
