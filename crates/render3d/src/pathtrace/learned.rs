@@ -3,6 +3,11 @@
 
 use super::device::ComputeGpu;
 
+/// Whether the learned denoiser can run on `gpu`; `Err` says why not.
+pub fn available(_gpu: &ComputeGpu) -> Result<(), String> {
+    Ok(())
+}
+
 /// Denoise `color` (linear RGB with the variance of the mean in w) guided by `aov` (the kernel's
 /// two entries per pixel) with the learned model; the same shapes as `denoise::denoise`.
 pub(super) fn denoise(_gpu: &ComputeGpu, _color: &[[f32; 4]], _aov: &[[f32; 4]], _size: (u32, u32)) -> Result<Vec<[f32; 4]>, String> {

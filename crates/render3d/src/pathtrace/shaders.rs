@@ -18,6 +18,7 @@ pub const BSDF_EXT_WGSL: &str = include_str!("../shaders/pt/bsdf_ext.wgsl");
 pub const BSDF_TRANS_WGSL: &str = include_str!("../shaders/pt/bsdf_trans.wgsl");
 pub const SUN_DISC_WGSL: &str = include_str!("../shaders/pt/sun_disc.wgsl");
 pub const CLAMP_WGSL: &str = include_str!("../shaders/pt/clamp.wgsl");
+pub const ADAPT_WGSL: &str = include_str!("../shaders/pt/adapt.wgsl");
 pub const KERNEL_WGSL: &str = include_str!("../shaders/pt/kernel.wgsl");
 pub const RESOLVE_WGSL: &str = include_str!("../shaders/pt/resolve.wgsl");
 pub const DENOISE_WGSL: &str = include_str!("../shaders/pt/denoise.wgsl");
@@ -25,7 +26,7 @@ pub const RQ_TRAVERSE_WGSL: &str = include_str!("../shaders/pt/traverse_rq.wgsl"
 
 /// The hook files `bsdf.wgsl` and the kernel call into, ahead of bsdf; the rest follow lights.
 const HOOKS_BEFORE_BSDF: [&str; 5] = [LENS_WGSL, EDGES_WGSL, VARIATION_WGSL, BSDF_EXT_WGSL, BSDF_TRANS_WGSL];
-const HOOKS_AFTER_LIGHTS: [&str; 2] = [SUN_DISC_WGSL, CLAMP_WGSL];
+const HOOKS_AFTER_LIGHTS: [&str; 3] = [SUN_DISC_WGSL, CLAMP_WGSL, ADAPT_WGSL];
 
 /// The kernel module's source.
 pub fn kernel_source() -> String {

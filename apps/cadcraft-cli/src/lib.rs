@@ -18,6 +18,7 @@ mod output;
 mod perf;
 mod render;
 mod render_hook;
+mod render_photo;
 mod roundtrip;
 mod run;
 mod sample;
