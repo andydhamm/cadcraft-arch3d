@@ -12,7 +12,10 @@
 //   base   today's Lambert diffuse + GGX specular with the spec-albedo energy split of
 //          bsdf_lobes (bsdf_spec_albedo is the isotropic table; the anisotropic lobe borrows it,
 //          its albedo differs by well under a percent of F0). Anisotropy: alpha_b = alpha,
-//          alpha_t = mix(alpha, 1, aniso^2), tangent pt_tangent(n, aniso_rot).
+//          alpha_t = mix(alpha, 1, aniso^2), tangent pt_tangent(n, aniso_rot). The anisotropic
+//          lobe is multiplied by 1 + f0 (1 - E) / E (E = its albedo with F = 1, a 64-point
+//          estimate): the multiple-scattering compensation. A white metal at roughness 0.3,
+//          anisotropy 0.8 reflected 0.71 of a furnace without it (see bsdf_ext_tests.rs).
 //
 // E(NoV, a), the sheen lobe's directional albedo, is a bilinear lookup in the table below,
 // computed by quadrature of D * V * NoL over the hemisphere (rows: a = 0.02 0.05 0.09 0.25
@@ -99,6 +102,9 @@ struct ExtMix {
     // Delta lobes: the base specular and the coat.
     base_mirror: u32,
     coat_mirror: u32,
+    // The multiple-scattering factor of the anisotropic base lobe (1 + f0 (1 - E) / E); 1 for
+    // every other lobe.
+    spec_ms: vec3<f32>,
 };
 
 // The directional albedo of an anisotropic GGX lobe with Fresnel F0 f0 seen from lo (frame T, B,
@@ -106,10 +112,12 @@ struct ExtMix {
 // R2 sequence), so it is the same number in eval, pdf and sample. It is the lobe's own albedo,
 // which the layers below take out of their share: the coat's albedo is below F(NoV) because
 // the visible normals tilt toward the viewer, and an anisotropic lobe loses a different
-// amount below the horizon than the isotropic table.
-fn ext_ggx_albedo(lo: vec3<f32>, at: f32, ab: f32, f0: vec3<f32>) -> vec3<f32> {
+// amount below the horizon than the isotropic table. ext_ggx_albedo2 returns the two Schlick
+// sums: A = mean(G2/G1) (the albedo with F = 1) and B = mean(G2/G1 (1 - VoH)^5).
+fn ext_ggx_albedo2(lo: vec3<f32>, at: f32, ab: f32) -> vec2<f32> {
     let lam_o = ext_aniso_lambda(lo, at, ab);
-    var acc = vec3<f32>(0.0);
+    var a = 0.0;
+    var b = 0.0;
     for (var k = 0u; k < 64u; k = k + 1u) {
         let u1 = fract(0.5 + f32(k) * 0.7548776662);
         let u2 = fract(0.5 + f32(k) * 0.5698402910);
@@ -117,10 +125,19 @@ fn ext_ggx_albedo(lo: vec3<f32>, at: f32, ab: f32, f0: vec3<f32>) -> vec3<f32> {
         let li = reflect(-lo, h);
         if (li.z > 0.0) {
             let g = (1.0 + lam_o) / (1.0 + lam_o + ext_aniso_lambda(li, at, ab));
-            acc = acc + bsdf_schlick(f0, max(dot(lo, h), 0.0)) * g;
+            let w = 1.0 - max(dot(lo, h), 0.0);
+            let w2 = w * w;
+            a = a + g;
+            b = b + g * (w2 * w2 * w);
         }
     }
-    return acc / 64.0;
+    return vec2<f32>(a, b) / 64.0;
+}
+
+// ext_ggx_albedo2 for a Fresnel F0 f0: Schlick is linear in f0, f0 A + (1 - f0) B.
+fn ext_ggx_albedo(lo: vec3<f32>, at: f32, ab: f32, f0: vec3<f32>) -> vec3<f32> {
+    let s = ext_ggx_albedo2(lo, at, ab);
+    return f0 * s.x + (vec3<f32>(1.0) - f0) * s.y;
 }
 
 // The view direction in the material's frame (tangent, bitangent, normal).
@@ -139,6 +156,7 @@ fn ext_mix(m: Material, lo: vec3<f32>) -> ExtMix {
     x.alpha_b = l.alpha;
     x.alpha_t = mix(l.alpha, 1.0, aniso * aniso);
     x.base_mirror = select(0u, 1u, l.mirror != 0u && aniso <= 0.0);
+    x.spec_ms = vec3<f32>(1.0);
     // Base lobes (the energy split of bsdf_lobes, recomputed because an anisotropic lobe is
     // never a mirror).
     var spec_albedo = vec3<f32>(0.0);
@@ -147,7 +165,12 @@ fn ext_mix(m: Material, lo: vec3<f32>) -> ExtMix {
         if (x.base_mirror != 0u) {
             spec_albedo = l.fresnel;
         } else if (aniso > 0.0) {
-            spec_albedo = ext_ggx_albedo(lo, x.alpha_t, x.alpha_b, l.f0);
+            // Multiple-scattering compensation: scale the lobe by 1 + f0 (1 - E) / E, E being
+            // its albedo with F = 1, so a white metal returns all its energy.
+            let s = ext_ggx_albedo2(lo, x.alpha_t, x.alpha_b);
+            let e = clamp(s.x, 0.05, 1.0);
+            x.spec_ms = vec3<f32>(1.0) + l.f0 * ((1.0 - e) / e);
+            spec_albedo = min((l.f0 * s.x + (vec3<f32>(1.0) - l.f0) * s.y) * x.spec_ms, vec3<f32>(1.0));
         } else {
             spec_albedo = bsdf_spec_albedo(l.f0, clamp(m.roughness, 0.0, 1.0), nov);
         }
@@ -260,7 +283,7 @@ fn ext_eval(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> vec3<f32
     var f = x.diffuse * (nol / PT_PI);
     if (x.base_mirror == 0u && x.p.y > 0.0) {
         let g2 = 1.0 / (1.0 + ext_aniso_lambda(lo, x.alpha_t, x.alpha_b) + ext_aniso_lambda(li, x.alpha_t, x.alpha_b));
-        f = f + bsdf_schlick(x.f0, voh) * (ext_aniso_d(h, x.alpha_t, x.alpha_b) * g2 / (4.0 * nov));
+        f = f + bsdf_schlick(x.f0, voh) * x.spec_ms * (ext_aniso_d(h, x.alpha_t, x.alpha_b) * g2 / (4.0 * nov));
     }
     f = f * x.base_layer;
     // Sheen, under the coat.
