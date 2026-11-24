@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 36 of 41 segments merged · 10 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 38 of 41 segments merged · 12 of 15 acceptance checks**
 
-11,879 workspace tests passing at the last merge · 1372 segments merged in all · 0 of 15 seats working
+11,904 workspace tests passing at the last merge · 1378 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,36 +32,34 @@ Updated 2026-11-24 14:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 10 / 15 | 20.5 h so far · expected done Nov 24 16:31–Nov 25 05:35 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 20.8 h so far · expected done Nov 24 15:41–Nov 25 03:33 UTC |
 
 ## Phase 22 segments
 
-36 merged, 3 merging, 1 gate, 1 working
+38 merged, 2 gate, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22f-ladder-reply-look` | render.ladder: each rung's reply carries look, sunDir and albedo like render's | merging | darwin-ws3 |
 | `p22f-adaptive-freeze` | Adaptive sampling that really adapts: set PHOTO_ADAPTIVE, freeze converged pixels, per-pixel sample statistics | gate | claude-sonnet-c |
-| `p22f-learned-keeps-converged` | Learned denoiser: a converged pixel keeps its value (flat frame within 1 %), and the device network is checked at 160 x 96 | merging | claude-sonnet-a |
 | `p22f-aniso-multiscatter` | Anisotropic specular lobe: multiple-scattering energy compensation so a white anisotropic metal passes the furnace | merging | claude-sonnet-d |
-| `upstream-sync-a1d92d995` | merge upstream upstream/main up to a1d92d995 (35 commits) | working | claude-sonnet-b |
+| `upstream-sync-a1d92d995` | merge upstream upstream/main up to a1d92d995 (35 commits) | gate | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 14:06 | `harden-p22-engine-ladder` | refused | 0 pass | tturbo-mac |
+| Nov 24 14:06 | `harden-p22-r3d-bsdf-transmission` | merged | 11,904 pass | tturbo-mac |
+| Nov 24 14:06 | `harden-p22-gallery-tool` | merged | 11,904 pass | tturbo-mac2 |
+| Nov 24 14:06 | `harden-p16-exports` | merged | 11,904 pass | tturbo-mac |
+| Nov 24 14:06 | `harden-p22-docs-user-guide` | merged | 11,904 pass | tturbo-mac2 |
+| Nov 24 14:06 | `p22f-ladder-reply-look` | merged | 11,904 pass | darwin-ws3 |
+| Nov 24 14:06 | `p22f-learned-keeps-converged` | merged | 11,904 pass | claude-sonnet-a |
 | Nov 24 13:12 | `harden-p15-render-plan-level` | merged | 11,879 pass | tturbo-mac |
 | Nov 24 11:45 | `upstream-sync-bf1d872e5` | merged | 11,874 pass | claude-sonnet-c |
 | Nov 24 11:15 | `harden-p22-ui-pane-photoreal` | merged | 11,772 pass | tturbo-mac |
 | Nov 24 11:15 | `harden-p22-r3d-unet-gpu` | merged | 11,772 pass | tturbo-mac2 |
 | Nov 24 11:15 | `harden-p22-r3d-material-map` | merged | 11,772 pass | tturbo-mac |
-| Nov 24 11:15 | `harden-p22-cli-hook` | merged | 11,772 pass | tturbo-mac |
-| Nov 24 11:15 | `harden-p22-engine-render-params` | merged | 11,772 pass | tturbo-mac2 |
-| Nov 24 11:15 | `p22-gallery-tool` | merged | 11,772 pass | claude-sonnet-c |
-| Nov 24 10:14 | `harden-p22-doc-look` | merged | 11,736 pass | tturbo-mac |
-| Nov 24 10:14 | `harden-p22-r3d-unet-cpu` | merged | 11,736 pass | tturbo-mac2 |
-| Nov 24 10:14 | `harden-p22-r3d-roughness-guide` | merged | 11,736 pass | tturbo-mac |
-| Nov 24 10:14 | `harden-p16-vault-ceiling` | merged | 11,736 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -72,7 +70,7 @@ Updated 2026-11-24 14:00 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 173 |
-| claude-sonnet-b | sonnet | agent | 181 |
+| claude-sonnet-b | sonnet | gate | 181 |
 | claude-sonnet-c | sonnet | gate | 113 |
 | claude-sonnet-d | sonnet | idle | 111 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1300 |
@@ -80,5 +78,5 @@ Updated 2026-11-24 14:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1224 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 727 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1224 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 727 |
