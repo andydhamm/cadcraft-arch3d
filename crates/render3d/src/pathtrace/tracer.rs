@@ -8,7 +8,7 @@ use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
     FRAME_CLIP, FRAME_FURNACE, FRAME_GROUND, FRAME_MOON, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES,
-    build_gpu_scene,
+    PHOTO_CLAMP, build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
 use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
@@ -175,9 +175,14 @@ impl PathTracer {
         }
 
         let mut gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+        let mut material_flags = 0;
         if opts.furnace.is_none() {
+            let names = super::scene_gpu::material_names(scene, ground);
+            super::scene_gpu::apply_material_ext(&mut gpu_scene, scene, &names, opts);
+            material_flags = super::scene_gpu::material_photo_flags(opts);
             if let Some(a) = lambert_albedo(lighting, opts) {
                 super::scene_gpu::apply_lambert(&mut gpu_scene, a);
+                material_flags = 0;
             }
         }
         if gpu_scene.tris.len() > MAX_GPU_TRIANGLES {
@@ -227,6 +232,11 @@ impl PathTracer {
         };
 
         let eye = camera.eye();
+        let exposure0 = match opts.exposure {
+            Exposure::Fixed(x) => x,
+            Exposure::Auto if daylight => DAY_EXPOSURE,
+            Exposure::Auto => lighting.exposure,
+        };
         let mut frame = GpuFrame {
             inv_view_proj: inv_vp,
             eye: [eye.x as f32, eye.y as f32, eye.z as f32, 0.0],
@@ -240,6 +250,12 @@ impl PathTracer {
             look: [1, 0, 0, 0],
             ..Default::default()
         };
+        if let Some(limit) = opts.clamp {
+            if limit.is_finite() && limit > 0.0 {
+                frame.photo[0] |= PHOTO_CLAMP;
+                frame.photo_f[2] = limit / exposure0;
+            }
+        }
         if let Some(f) = opts.furnace {
             frame.flags |= FRAME_FURNACE;
             frame.furnace = [f.albedo, f.emission, f.emission / (1.0 - f.albedo), 0.0];
@@ -257,6 +273,7 @@ impl PathTracer {
             && frame.env[3] & 2 != 0;
         super::lens::fill_frame(&mut frame, lighting, camera, size);
         super::edge_table::fill(&mut gpu_scene, &mut frame, opts);
+        frame.photo[0] |= material_flags;
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
 
         Ok(PathTracer {
@@ -399,6 +416,8 @@ impl PathTracer {
         // Between passes: the adaptive sampler may end the still, and so may the time budget.
         if self.spp_done < self.opts.spp {
             let mut stop = self.adaptive.after_pass(gpu, &self.accum, &self.aov);
+            self.stats.noise = self.adaptive.last_noise();
+            self.adaptive.apply_stats(&mut self.stats);
             if stop.is_none() && self.opts.time_budget.is_some_and(|b| b.is_finite() && self.stats.seconds >= b) {
                 stop = Some(super::StopReason::TimeBudget);
             }
@@ -523,6 +542,9 @@ impl PathTracer {
 
         // Denoise as the options ask (`post`); a neutral film keeps the plain resolve below.
         let mut stats = self.stats.clone();
+        let exposure = self.auto_exposure(gpu);
+        self.exposure = exposure;
+        stats.exposure = exposure;
         let result = super::post::finish_linear(
             gpu,
             &self.opts,
@@ -533,6 +555,7 @@ impl PathTracer {
                 let data = self.read_buffer(gpu, &self.aov, aov_bytes)?;
                 Ok(bytemuck::cast_slice::<u8, [f32; 4]>(&data).to_vec())
             },
+            exposure,
             &mut stats,
         );
         self.stats = stats;
@@ -555,11 +578,14 @@ impl PathTracer {
         enc.copy_buffer_to_buffer(&src, 0, &self.accum, 0, (pixels * 16) as u64);
         gpu.queue.submit([enc.finish()]);
 
-        self.exposure = self.auto_exposure(gpu);
-        self.stats.exposure = self.exposure;
-
         // Resolve.
-        match self.resolve(gpu) {
+        // A film that changes something resolves on the CPU; a neutral one keeps the GPU resolve.
+        let resolved = if self.film.is_neutral() {
+            self.resolve(gpu)
+        } else {
+            Some(super::post::film_rgba(&final_accum, self.exposure, self.frame.look[0], &self.film, self.size))
+        };
+        match resolved {
             Some(mut rgba) => {
                 self.backdrop_composite(gpu, &mut rgba);
                 self.status = PathStatus::Done { width: w, height: h, rgba };
@@ -608,7 +634,7 @@ impl PathTracer {
             exposure: f32,
             tonemap: u32,
         }
-        let exposure = self.auto_exposure(gpu);
+        let exposure = self.exposure;
         let params = ResolveParams { size: [w, h], exposure, tonemap: self.frame.look[0] };
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -1619,8 +1645,7 @@ mod tests {
         let (plain, stats) = seeded_image(&gpu, 0);
         assert_eq!(stats.clamp_loss, 0.0, "nothing is clamped");
         // Every flag on a stub changes nothing; adaptive sampling's own-count index equals the uniform one.
-        let all =
-            PHOTO_PANINI | PHOTO_DOF | PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_SUN_DISC | PHOTO_CLAMP | PHOTO_ADAPTIVE | PHOTO_SHIFT;
+        let all = PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_SUN_DISC | PHOTO_CLAMP | PHOTO_ADAPTIVE;
         let (flagged, _) = seeded_image(&gpu, all);
         assert_eq!(plain, flagged, "the hook stubs draw no random number and change no arithmetic");
         let (again, _) = seeded_image(&gpu, 0);
