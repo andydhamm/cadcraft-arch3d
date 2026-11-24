@@ -24,7 +24,11 @@ pub(crate) fn calibrate_key(c: &Calibration) -> u64 {
 /// The lens the picking and the sample points follow: the lighting's (the look's, after the
 /// photo settings were applied).
 pub(crate) fn lens_view(lighting: &Lighting) -> LensView {
-    LensView { panini: lighting.lens.panini, compression: f64::from(lighting.lens.compression), shift: f64::from(lighting.lens.shift) }
+    let mut v = LensView::default();
+    v.panini = lighting.lens.panini;
+    v.compression = f64::from(lighting.lens.compression);
+    v.shift = f64::from(lighting.lens.shift);
+    v
 }
 
 /// The renderer's linear stage for a request's.

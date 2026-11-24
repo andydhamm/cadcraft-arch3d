@@ -2363,7 +2363,9 @@ mod photo_tests {
     fn calibrate_scene_renders_without_a_drawing_scene() {
         let _g = serial();
         let d = Drawing::new_metric();
-        let c = Calibration { objects: vec![CalibObject { segments: 32, ..CalibObject::default() }], lights: vec![CalibLight::default()] };
+        let mut c = Calibration::default();
+        c.objects.push(CalibObject { segments: 32, ..CalibObject::default() });
+        c.lights.push(CalibLight::default());
         let mut req = plain(&d);
         req.calibrate = Some(c.clone());
         let Some(v) = render(&req) else { return };
