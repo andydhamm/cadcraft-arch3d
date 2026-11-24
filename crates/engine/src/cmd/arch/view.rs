@@ -1234,7 +1234,7 @@ mod tests {
         )
         .unwrap();
         let r = s.execute("camera.orbit", &json!({ "name": "a", "azimuth": 90.0 })).unwrap();
-        let cam = r["cameras"][0];
+        let cam = &r["cameras"][0];
         assert!(cam["eye"][0] != json!(3.0) || cam["eye"][1] != json!(-8.0));
         assert_eq!(cam["target"], json!([3.0, 0.0, 1.05]));
     }
@@ -1268,7 +1268,7 @@ mod tests {
                 }),
             )
             .unwrap();
-        let cam = r["cameras"][0];
+        let cam = &r["cameras"][0];
         assert_eq!(cam["azimuth"], json!(30.0));
         assert_eq!(cam["elevation"], json!(50.0));
     }
@@ -1312,7 +1312,7 @@ mod tests {
                 }),
             )
             .unwrap();
-        let cam = r["cameras"][0];
+        let cam = &r["cameras"][0];
         assert_eq!(cam["look"]["sun"]["disc"], json!(0.53));
     }
 }
