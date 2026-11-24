@@ -610,4 +610,59 @@ mod tests {
         let (rough, glossy) = (half_rmse(&on, 4, N / 2 - 4), half_rmse(&on, N / 2 + 4, N - 4));
         assert!(glossy > 1.5 * rough, "glossy noise {glossy} should stay above the rough half's {rough}");
     }
+
+    #[test]
+    fn uniform_roughness_point_three_equals_guide_off() {
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0xabcdef12);
+        // At roughness 0.3, clamp(0.3/0.3, 0.25, 1) = 1.0 so the colour sigma is unchanged,
+        // and with uniform roughness dr = 0 so the roughness weight is 1.0 everywhere.
+        // Guide on must equal guide off to within floating point noise.
+        let (colors, aov) = roughness_frame(|_, _| 0.5 * (1.0 + 0.2 * noise.next()), 0.01);
+        let aov03: Vec<[f32; 4]> = aov.iter().enumerate().map(|(k, a)| if k % 2 == 0 && a[3] > 0.5 { [a[0], a[1], a[2], 1.3] } else { *a }).collect();
+        let off = denoise_guided(&gpu, &colors, &aov03, (N, N), false).unwrap();
+        let on = denoise_guided(&gpu, &colors, &aov03, (N, N), true).unwrap();
+        assert!(
+            off.iter().zip(&on).all(|(a, b)| a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= 1e-6)),
+            "uniform roughness 0.3 with guide on differs from guide off"
+        );
+    }
+
+    #[test]
+    fn nan_roughness_does_not_crash() {
+        let Some(gpu) = compute() else { return };
+        // One pixel gets a NaN roughness (hit flag w = NaN). The filter must not crash and
+        // must produce finite output; the affected pixels simply are not filtered.
+        let mut colors = Vec::new();
+        let mut aov = Vec::new();
+        for y in 0..N {
+            for x in 0..N {
+                colors.push([0.5, 0.5, 0.5, 1.0]);
+                let w = if x == N / 2 && y == N / 2 { f32::NAN } else { 1.0 + ROUGH };
+                aov.push([WALL[0], WALL[1], WALL[2], w]);
+                aov.push([UP[0], UP[1], UP[2], 1.0]);
+            }
+        }
+        let out = denoise_guided(&gpu, &colors, &aov, (N, N), true).unwrap();
+        assert!(out.iter().all(|p| p.iter().all(|v| v.is_finite())), "NaN roughness made the output non-finite");
+    }
+
+    #[test]
+    fn huge_roughness_is_clamped_like_point_three() {
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x13579bdf);
+        // Roughness 1000.0 clamps to 1.0 for the sigma_c scaling, exactly like 0.3.
+        // With uniform roughness dr = 0, so the roughness weight is 1.0.
+        // The two must filter identically to within floating point noise.
+        let (colors, aov) = roughness_frame(|_, _| 0.5 * (1.0 + 0.2 * noise.next()), 0.01);
+        let aov03: Vec<[f32; 4]> = aov.iter().enumerate().map(|(k, a)| if k % 2 == 0 && a[3] > 0.5 { [a[0], a[1], a[2], 1.3] } else { *a }).collect();
+        let aov1000: Vec<[f32; 4]> =
+            aov.iter().enumerate().map(|(k, a)| if k % 2 == 0 && a[3] > 0.5 { [a[0], a[1], a[2], 1001.0] } else { *a }).collect();
+        let out03 = denoise_guided(&gpu, &colors, &aov03, (N, N), true).unwrap();
+        let out1000 = denoise_guided(&gpu, &colors, &aov1000, (N, N), true).unwrap();
+        assert!(
+            out03.iter().zip(&out1000).all(|(a, b)| a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= 1e-6)),
+            "roughness 1000.0 differs from roughness 0.3"
+        );
+    }
 }
