@@ -371,7 +371,7 @@ def main(argv):
         for lv in ELECTRICAL_LEVELS:
             if lv not in {l['name'] for l in levels}:
                 raise Step(f'electrical {lv}', 'no such level')
-        for file, kind, view, commands in plan(levels, views, sheets, not skip_set, size=(w, h), spp=a.spp):
+        for file, kind, view, commands in plan(levels, views, sheets, not skip_set, size=(w, h), spp=a.spp, with_photo=photo):
             if kind == 'replay':
                 continue
             if kind in ('elevation', 'section') and view not in names:
@@ -380,6 +380,8 @@ def main(argv):
                 raise Step(f'camera {view}', 'the drawing has no such camera')
             if kind in ('planview', 'rcp', 'roofplan', 'siteplan') and view not in pv_names:
                 raise Step(f'{kind} {view}', 'the drawing has no such plan view')
+            if kind in ('ladder', 'photoreal') and view not in photo_cams:
+                raise Step(f'{kind} {view}', 'the drawing has no such camera')
             if kind == 'export':
                 if a.no_exports:
                     continue
@@ -388,7 +390,12 @@ def main(argv):
                     raise Step(f'export {view}', f'{file} was not written')
                 exports[view] = file
                 continue
-            runner = rs if kind in SET_KINDS else r
+            if kind in PHOTO_KINDS:
+                runner = r_photo
+            elif kind in SET_KINDS:
+                runner = rs
+            else:
+                runner = r
             _, errs = runner.run(f'{kind} {view}', [resolve(c) for c in commands], allow_refusal=(kind == 'technical'))
             if kind == 'technical' and errs:
                 if not any('not available yet' in e for e in errs):
@@ -397,6 +404,13 @@ def main(argv):
                 continue
             if not os.path.exists(p(file)):
                 raise Step(f"{kind} {view}", f"{file} was not written")
+            if kind in PHOTO_KINDS:
+                if kind == 'ladder':
+                    ladders.append(file)
+                else:
+                    photoreal_files.append(file)
+                    images.append({'file': file, 'kind': kind, 'view': view})
+                continue
             if kind == 'drawingset':
                 drawing_set = file
             else:
@@ -406,7 +420,8 @@ def main(argv):
         except (ValueError, OSError, zlib.error, struct.error) as e:
             raise Step('contact sheet', str(e))
         with open(p('manifest.json'), 'w', encoding='utf-8') as f:
-            json.dump(manifest(images, exports, skipped, script_sha256, set_scripts, drawing_set), f, indent=2)
+            json.dump(manifest(images, exports, skipped, script_sha256, set_scripts, drawing_set,
+                               photo_script_sha, ladders, photoreal_files), f, indent=2)
             f.write('\n')
     except Step as e:
         print(f"render_all: step '{e.step}' failed: {e.why}", file=sys.stderr)
