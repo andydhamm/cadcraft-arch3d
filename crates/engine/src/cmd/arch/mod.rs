@@ -29,6 +29,7 @@ mod countertop_inspect;
 pub mod deck;
 mod deck_inspect;
 pub(crate) mod defaults;
+pub mod denoiser;
 pub(crate) mod dim_inspect;
 pub mod dimdrive;
 pub mod electrical;
@@ -167,6 +168,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(cabinet_fill::specs());
     v.extend(material::specs());
     v.extend(illuminance::specs());
+    v.extend(denoiser::specs());
     v.extend(render::specs());
     v.extend(sunstudy::specs());
     v.extend(sunangle::specs());

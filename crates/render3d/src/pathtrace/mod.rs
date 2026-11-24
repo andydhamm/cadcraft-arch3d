@@ -29,7 +29,7 @@ pub mod denoise;
 pub mod device;
 mod edge_table;
 pub mod env;
-mod learned;
+pub mod learned;
 mod lens;
 mod post;
 pub mod rt;
@@ -339,6 +339,9 @@ mod kernel_tests;
 
 #[cfg(test)]
 mod lens_tests;
+
+#[cfg(test)]
+mod edges_tests;
 
 #[cfg(test)]
 mod tests {
