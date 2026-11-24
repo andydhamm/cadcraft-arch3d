@@ -2520,6 +2520,7 @@ mod photo_tests {
         let _g = serial();
         let d = room(); // has 4 lights
         let mut c = Calibration::default();
+        c.objects.push(CalibObject::default());
         c.lights.push(CalibLight::default());
         c.lights.push(CalibLight::default());
         c.lights.push(CalibLight::default());

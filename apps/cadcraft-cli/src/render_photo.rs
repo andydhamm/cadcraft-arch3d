@@ -242,8 +242,8 @@ mod tests {
         let v2 = lens_view(&lighting);
         assert!(!v2.is_neutral(), "non-default lens must produce non-neutral lens view");
         assert_eq!(v2.panini, true);
-        assert_eq!(v2.compression, 0.8);
-        assert_eq!(v2.shift, 0.1);
+        assert!((v2.compression - 0.8).abs() < 1e-6, "compression: {}", v2.compression);
+        assert!((v2.shift - 0.1).abs() < 1e-6, "shift: {}", v2.shift);
     }
 
     #[test]
