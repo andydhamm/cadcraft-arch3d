@@ -337,7 +337,7 @@ pub struct Cabinet {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub filler: bool,
     /// Whether a backsplash is suppressed over this cabinet.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, rename = "backsplashOff", skip_serializing_if = "std::ops::Not::not")]
     pub backsplash_off: bool,
     /// Crown molding on top.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -705,5 +705,74 @@ mod tests {
         assert_eq!(json.get("pull"), Some(&serde_json::Value::String("".into())));
         let back: Cabinet = serde_json::from_value(json).unwrap();
         assert_eq!(back, c);
+    }
+
+    #[test]
+    fn construction_front_mount_corner_pref_face_kind_keys_round_trip() {
+        for c in [Construction::Frameless, Construction::Framed] {
+            assert_eq!(Construction::parse(c.key()), Some(c));
+            let j = serde_json::to_string(&c).unwrap();
+            assert_eq!(j, format!("\"{}\"", c.key()));
+            assert_eq!(serde_json::from_str::<Construction>(&j).unwrap(), c);
+        }
+        for m in [FrontMount::Overlay, FrontMount::Inset] {
+            assert_eq!(FrontMount::parse(m.key()), Some(m));
+            let j = serde_json::to_string(&m).unwrap();
+            assert_eq!(j, format!("\"{}\"", m.key()));
+            assert_eq!(serde_json::from_str::<FrontMount>(&j).unwrap(), m);
+        }
+        for c in [CornerPref::Auto, CornerPref::None, CornerPref::Blind, CornerPref::Diagonal, CornerPref::LazySusan] {
+            assert_eq!(CornerPref::parse(c.key()), Some(c));
+            let j = serde_json::to_string(&c).unwrap();
+            assert_eq!(j, format!("\"{}\"", c.key()));
+            assert_eq!(serde_json::from_str::<CornerPref>(&j).unwrap(), c);
+        }
+        for k in [FaceKind::Door, FaceKind::Drawer, FaceKind::False, FaceKind::Opening, FaceKind::Appliance] {
+            assert_eq!(FaceKind::parse(k.key()), Some(k));
+            let j = serde_json::to_string(&k).unwrap();
+            assert_eq!(j, format!("\"{}\"", k.key()));
+            assert_eq!(serde_json::from_str::<FaceKind>(&j).unwrap(), k);
+        }
+    }
+
+    #[test]
+    fn cabinet_with_face_layout_round_trips() {
+        let c = Cabinet {
+            id: ArchId(10),
+            face: Some(FaceLayout {
+                rows: vec![
+                    FaceRow { kind: FaceKind::Drawer, height: Some(0.15), across: 2, appliance: None },
+                    FaceRow { kind: FaceKind::Door, height: None, across: 0, appliance: None },
+                ],
+            }),
+            ..cab()
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Cabinet = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, c);
+        assert!(json.contains("\"face\""));
+        assert!(json.contains("\"rows\""));
+    }
+
+    #[test]
+    fn cabinet_with_shelves_and_filler_round_trips() {
+        let c = Cabinet { id: ArchId(11), shelves: Some(3), filler: true, backsplash_off: true, ..cab() };
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Cabinet = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, c);
+        assert!(json.contains("\"shelves\":3"));
+        assert!(json.contains("\"filler\":true"));
+        assert!(json.contains("\"backsplashOff\":true"));
+    }
+
+    #[test]
+    fn cabinet_with_construction_and_mount_round_trips() {
+        let c = Cabinet { id: ArchId(12), construction: Construction::Framed, mount: FrontMount::Inset, corner: CornerPref::Blind, ..cab() };
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Cabinet = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, c);
+        assert!(json.contains("\"construction\":\"framed\""));
+        assert!(json.contains("\"mount\":\"inset\""));
+        assert!(json.contains("\"corner\":\"blind\""));
     }
 }

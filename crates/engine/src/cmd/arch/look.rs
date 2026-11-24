@@ -5,7 +5,7 @@
 
 use cadcraft_arch::site::true_to_drawing;
 use cadcraft_arch::sun::{Sun, sun_dir, sun_position};
-use cadcraft_doc::arch::{ArchModel, Camera3d, ClipBox, ExposureSetting, Look, SunAngle, Technique, ToneMap};
+use cadcraft_doc::arch::{ArchModel, Camera3d, ClipBox, ExposureSetting, Film, LensProjection, Look, SunAngle, Technique, ToneMap};
 use serde_json::{Map, Value, json};
 
 use super::backdrop::describe as describe_backdrop;
@@ -13,14 +13,30 @@ use crate::cmd::{CommandSpec, bad};
 use crate::{EngineError, Session};
 
 /// The keys the look reads (shared by `look` and `render`).
-pub(crate) const LOOK_KEYS: &[&str] = &["technique", "exposure", "toneMap", "sun", "sky", "lightSet", "cutaway", "clip", "nearClip"];
+pub(crate) const LOOK_KEYS: &[&str] = &[
+    "technique",
+    "exposure",
+    "toneMap",
+    "sun",
+    "sky",
+    "lightSet",
+    "cutaway",
+    "clip",
+    "nearClip",
+    "projection",
+    "compression",
+    "shift",
+    "aperture",
+    "focus",
+    "film",
+];
 
 /// `look` command spec.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec::new("look", "Render Look", run_look)
             .menu(&["Architecture", "Render Look"])
-            .params("{technique?: standard|path|clay|technical, exposure?: \"auto\"|{ev100: -10..24}, toneMap?: aces|hable|none, sun?: false|\"default\"|{on?, intensity?: 0..200000, shadows?, angle?: name|null}, sky?: bool|{on?, turbidity?: 1.7..10, stars?, moon?: {lux?: 0..10, azimuth?, elevation?: -90..90}}, lightSet?: name|null, cutaway?: bool, clip?: null|{min: [x,y,z], max: [x,y,z]}, nearClip?: null|metres}"),
+            .params("{technique?: standard|path|clay|technical|photoreal, exposure?: \"auto\"|{ev100: -10..24}, toneMap?: aces|hable|none, sun?: false|\"default\"|{on?, intensity?: 0..200000, shadows?, angle?: name|null}, sky?: bool|{on?, turbidity?: 1.7..10, stars?, moon?: {lux?: 0..10, azimuth?, elevation?: -90..90}}, lightSet?: name|null, cutaway?: bool, clip?: null|{min: [x,y,z], max: [x,y,z]}, nearClip?: null|metres, projection?: rectilinear|panini, compression?: 0..1, shift?: -1..1, aperture?: null|0.5..64, focus?: null|metres in (0, 10000], film?: null|photoreal|{bloom?: 0..1, bloomThreshold?: >0, vignette?: 0..1, whiteBalance?: null|1500..15000, contrast?: 0.5..2, saturation?: 0..2, lift?: -0.5..0.5}} (sun also takes disc?: 0..10 degrees)"),
     ]
 }
 
@@ -120,7 +136,23 @@ pub(crate) fn describe_look(l: &Look) -> Value {
             ExposureSetting::Manual { ev100 } => json!({"ev100": ev100}),
         },
         "toneMap": enum_name(serde_json::to_value(l.tone_map)),
-        "sun": {"on": l.sun.on, "intensity": l.sun.intensity, "shadows": l.sun.shadows, "angle": l.sun.angle},
+        "sun": {"on": l.sun.on, "intensity": l.sun.intensity, "shadows": l.sun.shadows, "angle": l.sun.angle, "disc": l.sun.disc},
+        "lens": {
+            "projection": enum_name(serde_json::to_value(l.lens.projection)),
+            "compression": l.lens.compression,
+            "shift": l.lens.shift,
+            "aperture": l.lens.aperture,
+            "focus": l.lens.focus,
+        },
+        "film": {
+            "bloom": l.film.bloom,
+            "bloomThreshold": l.film.bloom_threshold,
+            "vignette": l.film.vignette,
+            "whiteBalance": l.film.white_balance,
+            "contrast": l.film.contrast,
+            "saturation": l.film.saturation,
+            "lift": l.film.lift,
+        },
         "sky": {
             "on": l.sky.on,
             "turbidity": l.sky.turbidity,
@@ -141,7 +173,8 @@ fn parse_technique(cmd: &str, v: &Value) -> Result<Technique, EngineError> {
         Some("path") => Ok(Technique::Path),
         Some("clay") => Ok(Technique::Clay),
         Some("technical") => Ok(Technique::Technical),
-        _ => Err(parse_err(cmd, "technique", v, "standard, path, clay or technical")),
+        Some("photoreal") => Ok(Technique::Photoreal),
+        _ => Err(parse_err(cmd, "technique", v, "standard, path, clay, technical or photoreal")),
     }
 }
 
@@ -191,7 +224,7 @@ fn parse_sun(cmd: &str, model: &ArchModel, v: &Value, render: bool, look: &mut L
         }
         Value::String(s) if s == "default" => Ok(None),
         Value::Object(o) => {
-            check_keys(cmd, "`sun`", o, &["on", "intensity", "shadows", "angle", "date", "time", "azimuth", "elevation"])?;
+            check_keys(cmd, "`sun`", o, &["on", "intensity", "shadows", "angle", "disc", "date", "time", "azimuth", "elevation"])?;
             if let Some(x) = o.get("on") {
                 look.sun.on = bool_of(cmd, "sun.on", x)?;
             }
@@ -200,6 +233,9 @@ fn parse_sun(cmd: &str, model: &ArchModel, v: &Value, render: bool, look: &mut L
             }
             if let Some(x) = o.get("shadows") {
                 look.sun.shadows = bool_of(cmd, "sun.shadows", x)?;
+            }
+            if let Some(x) = o.get("disc") {
+                look.sun.disc = num_of(cmd, "sun.disc", x)?;
             }
             let angle = match o.get("angle") {
                 None => None,
@@ -257,6 +293,81 @@ fn parse_sun(cmd: &str, model: &ArchModel, v: &Value, render: bool, look: &mut L
         }
         _ => Err(parse_err(cmd, "sun", v, "false, \"default\" or an object")),
     }
+}
+
+/// The `{pick: [x, y]}` form of `focus`: the pixel to focus on, `None` for any other value.
+/// A caller that renders resolves it to a distance along the view axis.
+pub(crate) fn focus_pick(v: &Value) -> Result<Option<[f64; 2]>, EngineError> {
+    let Value::Object(o) = v else { return Ok(None) };
+    let cmd = "focus";
+    check_keys(cmd, "`focus`", o, &["pick"])?;
+    let p = o.get("pick").ok_or_else(|| bad(cmd, "`focus` object needs `pick: [x, y]`"))?;
+    let arr = p.as_array().filter(|a| a.len() == 2).ok_or_else(|| parse_err(cmd, "focus.pick", p, "[x, y]"))?;
+    let (Some(x), Some(y)) = (arr.first(), arr.get(1)) else { return Err(parse_err(cmd, "focus.pick", p, "[x, y]")) };
+    let (x, y) = (num_of(cmd, "focus.pick", x)?, num_of(cmd, "focus.pick", y)?);
+    if x < 0.0 || y < 0.0 {
+        return Err(bad(cmd, format!("`focus.pick` must be a pixel inside the image, not {p}")));
+    }
+    Ok(Some([x, y]))
+}
+
+fn parse_projection(cmd: &str, v: &Value) -> Result<LensProjection, EngineError> {
+    match v.as_str() {
+        Some("rectilinear") => Ok(LensProjection::Rectilinear),
+        Some("panini") => Ok(LensProjection::Panini),
+        _ => Err(parse_err(cmd, "projection", v, "rectilinear or panini")),
+    }
+}
+
+fn opt_num(cmd: &str, key: &str, v: &Value) -> Result<Option<f64>, EngineError> {
+    if v.is_null() { Ok(None) } else { num_of(cmd, key, v).map(Some) }
+}
+
+/// `focus`: null, metres, or (where `allow_pick`) the pick form, which leaves the look alone.
+fn parse_focus(cmd: &str, v: &Value, allow_pick: bool, look: &mut Look) -> Result<(), EngineError> {
+    if v.is_object() {
+        if !allow_pick {
+            return Err(bad(cmd, "`focus: {pick}` needs a render: give a distance in metres or null"));
+        }
+        focus_pick(v)?;
+        return Ok(());
+    }
+    look.lens.focus = opt_num(cmd, "focus", v).map_err(|_| parse_err(cmd, "focus", v, "null or a distance in metres"))?;
+    Ok(())
+}
+
+fn parse_film(cmd: &str, v: &Value, look: &mut Look) -> Result<(), EngineError> {
+    match v {
+        Value::Null => look.film = Film::default(),
+        Value::String(s) if s == "photoreal" => look.film = Film::photoreal(),
+        Value::Object(o) => {
+            check_keys(cmd, "`film`", o, &["bloom", "bloomThreshold", "vignette", "whiteBalance", "contrast", "saturation", "lift"])?;
+            let f = &mut look.film;
+            if let Some(x) = o.get("bloom") {
+                f.bloom = num_of(cmd, "film.bloom", x)?;
+            }
+            if let Some(x) = o.get("bloomThreshold") {
+                f.bloom_threshold = num_of(cmd, "film.bloomThreshold", x)?;
+            }
+            if let Some(x) = o.get("vignette") {
+                f.vignette = num_of(cmd, "film.vignette", x)?;
+            }
+            if let Some(x) = o.get("whiteBalance") {
+                f.white_balance = opt_num(cmd, "film.whiteBalance", x)?;
+            }
+            if let Some(x) = o.get("contrast") {
+                f.contrast = num_of(cmd, "film.contrast", x)?;
+            }
+            if let Some(x) = o.get("saturation") {
+                f.saturation = num_of(cmd, "film.saturation", x)?;
+            }
+            if let Some(x) = o.get("lift") {
+                f.lift = num_of(cmd, "film.lift", x)?;
+            }
+        }
+        _ => return Err(parse_err(cmd, "film", v, "null, \"photoreal\" or an object")),
+    }
+    Ok(())
 }
 
 fn parse_sky(cmd: &str, v: &Value, look: &mut Look) -> Result<(), EngineError> {
@@ -331,6 +442,19 @@ pub(crate) fn apply_look_params(
     look: &mut Look,
     render: bool,
 ) -> Result<Option<[f64; 3]>, EngineError> {
+    apply_look_params_with(cmd, params, model, look, render, render)
+}
+
+/// [`apply_look_params`] with `allow_pick` saying whether `focus: {pick}` is accepted (left for the
+/// caller to resolve, `look.lens.focus` untouched): `render` and `camera {save}` allow it.
+pub(crate) fn apply_look_params_with(
+    cmd: &str,
+    params: &Value,
+    model: &ArchModel,
+    look: &mut Look,
+    render: bool,
+    allow_pick: bool,
+) -> Result<Option<[f64; 3]>, EngineError> {
     let Some(obj) = params.as_object() else {
         return if params.is_null() { Ok(None) } else { Err(bad(cmd, "params must be an object")) };
     };
@@ -352,6 +476,14 @@ pub(crate) fn apply_look_params(
             },
             "cutaway" => work.cutaway = bool_of(cmd, "cutaway", v)?,
             "clip" => parse_clip(cmd, v, &mut work)?,
+            "projection" => work.lens.projection = parse_projection(cmd, v)?,
+            "compression" => work.lens.compression = num_of(cmd, "compression", v)?,
+            "shift" => work.lens.shift = num_of(cmd, "shift", v)?,
+            "aperture" => {
+                work.lens.aperture = opt_num(cmd, "aperture", v).map_err(|_| parse_err(cmd, "aperture", v, "null or an f-number"))?;
+            }
+            "focus" => parse_focus(cmd, v, allow_pick, &mut work)?,
+            "film" => parse_film(cmd, v, &mut work)?,
             "nearClip" => match v {
                 Value::Null => work.near_clip = None,
                 _ => work.near_clip = Some(num_of(cmd, "nearClip", v)?),
@@ -538,6 +670,124 @@ mod tests {
     }
 
     #[test]
+    fn look_reports_neutral_lens_film_and_disc() {
+        let mut s = Session::new();
+        let l = s.execute("look", &json!({})).unwrap()["look"].clone();
+        assert_eq!(l["lens"], json!({"projection": "rectilinear", "compression": 0.7, "shift": 0.0, "aperture": null, "focus": null}));
+        assert_eq!(
+            l["film"],
+            json!({"bloom": 0.0, "bloomThreshold": 1.0, "vignette": 0.0, "whiteBalance": null, "contrast": 1.0, "saturation": 1.0, "lift": 0.0})
+        );
+        assert_eq!(l["sun"]["disc"], json!(0.0));
+    }
+
+    #[test]
+    fn look_sets_and_refuses_lens_keys() {
+        let mut s = Session::new();
+        let r = s.execute("look", &json!({"projection": "panini", "compression": 0.5, "shift": 0.25, "aperture": 2.8, "focus": 4})).unwrap();
+        assert_eq!(r["look"]["lens"], json!({"projection": "panini", "compression": 0.5, "shift": 0.25, "aperture": 2.8, "focus": 4.0}));
+        let r = s.execute("look", &json!({"aperture": null, "focus": null})).unwrap();
+        assert!(r["look"]["lens"]["aperture"].is_null() && r["look"]["lens"]["focus"].is_null());
+        for p in [
+            json!({"projection": "fisheye"}),
+            json!({"compression": 1.5}),
+            json!({"shift": -2}),
+            json!({"aperture": 0.1}),
+            json!({"aperture": "f2"}),
+            json!({"focus": 0}),
+            json!({"focus": 20000}),
+            json!({"focus": {"pick": [1, 2]}}),
+            json!({"shift": 0.1, "compression": "x"}),
+        ] {
+            assert!(s.execute("look", &p).is_err(), "should refuse {p}");
+        }
+        assert_eq!(s.doc().unwrap().arch.look.lens.shift, 0.25);
+        assert_eq!(focus_pick(&json!({"pick": [3, 4]})).unwrap(), Some([3.0, 4.0]));
+        assert_eq!(focus_pick(&json!(2.0)).unwrap(), None);
+        assert!(focus_pick(&json!({"pick": [1]})).is_err());
+        let mut l = Look::default();
+        apply_look_params("render", &json!({"focus": {"pick": [1, 2]}}), &model(), &mut l, true).unwrap();
+        assert_eq!(l.lens.focus, None);
+    }
+
+    #[test]
+    fn film_object_and_photoreal_and_null_forms() {
+        let mut s = Session::new();
+        let r = s.execute("look", &json!({"film": {"bloom": 0.3, "whiteBalance": 5000}})).unwrap();
+        assert_eq!(r["look"]["film"]["bloom"], json!(0.3));
+        assert_eq!(r["look"]["film"]["whiteBalance"], json!(5000.0));
+        let r = s.execute("look", &json!({"film": {"vignette": 0.2}})).unwrap();
+        assert_eq!(r["look"]["film"]["bloom"], json!(0.3));
+        assert_eq!(r["look"]["film"]["vignette"], json!(0.2));
+        let r = s.execute("look", &json!({"film": {"whiteBalance": null}})).unwrap();
+        assert!(r["look"]["film"]["whiteBalance"].is_null());
+        let r = s.execute("look", &json!({"film": "photoreal"})).unwrap();
+        assert_eq!(r["look"]["film"]["bloom"], json!(0.1));
+        assert_eq!(r["look"]["film"]["vignette"], json!(0.15));
+        assert_eq!(r["look"]["film"]["contrast"], json!(1.05));
+        let r = s.execute("look", &json!({"film": null})).unwrap();
+        assert_eq!(r["look"]["film"]["bloom"], json!(0.0));
+        assert!(s.doc().unwrap().arch.look.film.is_neutral());
+        for p in [
+            json!({"film": "vintage"}),
+            json!({"film": {"glow": 1}}),
+            json!({"film": {"bloom": 2}}),
+            json!({"film": {"bloomThreshold": 0}}),
+            json!({"film": {"whiteBalance": 100}}),
+            json!({"film": {"contrast": 3}}),
+            json!({"film": {"saturation": -1}}),
+            json!({"film": {"lift": 1}}),
+            json!({"film": 5}),
+        ] {
+            assert!(s.execute("look", &p).is_err(), "should refuse {p}");
+        }
+    }
+
+    #[test]
+    fn camera_save_captures_lens_and_film() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({"save": "c1", "azimuth": 30, "elevation": 20, "distance": 12, "projection": "panini", "shift": 0.1, "film": "photoreal", "sun": {"disc": 0.53}})).unwrap();
+        let l = s.doc().unwrap().arch.camera_by_name("c1").and_then(|c| c.look.clone()).unwrap();
+        assert_eq!(l.lens.projection, LensProjection::Panini);
+        assert_eq!(l.lens.shift, 0.1);
+        assert_eq!(l.film, Film::photoreal());
+        assert_eq!(l.sun.disc, 0.53);
+        s.execute("camera.update", &json!({"name": "c1", "aperture": 4.0})).unwrap();
+        let l = s.doc().unwrap().arch.camera_by_name("c1").and_then(|c| c.look.clone()).unwrap();
+        assert_eq!((l.lens.aperture, l.lens.projection), (Some(4.0), LensProjection::Panini));
+        assert!(s.execute("camera.update", &json!({"name": "c1", "focus": {"pick": [1, 1]}})).is_err());
+        assert!(s.execute("camera.update", &json!({"name": "c1", "shift": 5})).is_err());
+        let r = s.execute("arch.inspect", &json!({"cameras": true})).unwrap();
+        assert_eq!(r["cameras"][0]["look"]["lens"]["projection"], json!("panini"));
+        assert!(s.doc().unwrap().arch.look.lens.is_default());
+    }
+
+    #[test]
+    fn sun_disc_alone_keeps_the_direction() {
+        let m = site_model(0.0);
+        let (l, d) = apply(&m, json!({"sun": {"disc": 0.53}}), true).unwrap();
+        assert_eq!(l.sun.disc, 0.53);
+        assert!(d.is_none());
+        let (l, d) = apply(&m, json!({"sun": {"disc": 1.0, "azimuth": 90, "elevation": 30}}), true).unwrap();
+        assert_eq!(l.sun.disc, 1.0);
+        assert!(d.is_some());
+        assert!(apply(&m, json!({"sun": {"disc": 11}}), true).is_err());
+        assert!(apply(&m, json!({"sun": {"disc": "wide"}}), false).is_err());
+        let mut s = Session::new();
+        let r = s.execute("look", &json!({"sun": {"disc": 0.5}})).unwrap();
+        assert_eq!(r["look"]["sun"]["disc"], json!(0.5));
+    }
+
+    #[test]
+    fn technique_photoreal_parses_and_echoes() {
+        let mut s = Session::new();
+        let r = s.execute("look", &json!({"technique": "photoreal"})).unwrap();
+        assert_eq!(r["look"]["technique"], json!("photoreal"));
+        assert_eq!(s.doc().unwrap().arch.look.technique, Technique::Photoreal);
+        assert!(s.execute("look", &json!({"technique": "photo"})).is_err());
+    }
+
+    #[test]
     fn effective_look_prefers_the_camera() {
         let mut m = model();
         m.look.tone_map = ToneMap::Hable;
@@ -553,7 +803,7 @@ mod tests {
         assert_eq!(effective_look(&m, Some(&cam)), own);
         let d = describe_look(&own);
         let keys: Vec<&str> = d.as_object().map(|o| o.keys().map(String::as_str).collect()).unwrap_or_default();
-        assert_eq!(keys.len(), 10, "{keys:?}");
+        assert_eq!(keys.len(), 12, "{keys:?}");
     }
 
     #[test]

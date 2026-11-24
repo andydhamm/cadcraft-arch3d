@@ -32,6 +32,23 @@ pub const MAT_GLASS: u32 = 1;
 pub const MAT_EMIT_CAMERA_ONLY: u32 = 2;
 /// A fixture housing: never in a shadow ray's way (as in the raster maps and the CPU illuminance).
 pub const MAT_NO_SHADOW: u32 = 4;
+/// Thin-walled transmission: the surface is a shell, with no refraction offset [p22].
+pub const MAT_THIN: u32 = 16;
+/// The material has a coat, sheen or anisotropy lobe (`pt/bsdf_ext.wgsl`) [p22].
+pub const MAT_EXT: u32 = 32;
+/// Rough or thin transmission (`pt/bsdf_trans.wgsl`) [p22].
+pub const MAT_TRANS: u32 = 64;
+
+/// `GpuFrame::photo[0]` flags [p22]: which photographic features the kernel runs.
+pub const PHOTO_PANINI: u32 = 1;
+pub const PHOTO_DOF: u32 = 2;
+pub const PHOTO_EDGES: u32 = 4;
+pub const PHOTO_MATERIALS: u32 = 8;
+pub const PHOTO_VARIATION: u32 = 16;
+pub const PHOTO_SUN_DISC: u32 = 32;
+pub const PHOTO_CLAMP: u32 = 64;
+pub const PHOTO_ADAPTIVE: u32 = 128;
+pub const PHOTO_SHIFT: u32 = 256;
 /// The triangle is single-sided (front-facing only; the normal points outward).
 pub const TRI_SINGLE_SIDED: u32 = 8;
 
@@ -99,6 +116,19 @@ pub struct GpuMaterial {
     pub transmission: f32,
     pub flags: u32,
     pub _pad: u32,
+    /// Clear coat strength and roughness, anisotropy and its rotation [p22].
+    pub coat: f32,
+    pub coat_roughness: f32,
+    pub aniso: f32,
+    pub aniso_rot: f32,
+    /// Sheen colour and roughness [p22].
+    pub sheen: [f32; 3],
+    pub sheen_roughness: f32,
+    /// Shell thickness (m), edge rounding radius (m), variation scale (m) and amount [p22].
+    pub thickness: f32,
+    pub edge_radius: f32,
+    pub var_scale: f32,
+    pub var_amount: f32,
 }
 
 /// A light: `rgb` is intensity (cd) × colour / luminance(colour) (luminance = candela); an area
@@ -174,6 +204,19 @@ pub struct GpuFrame {
     pub tex: [u32; 4],
     /// Tone-curve code: x is 1 ACES (p19-exposure adds 2 Hable, 3 none).
     pub look: [u32; 4],
+    /// [p22] x = `PHOTO_*` flags; y = the edge table's offset in the aux buffer; z = triangles in
+    /// the edge table; w unused.
+    pub photo: [u32; 4],
+    /// [p22] Panini compression, shift, aperture radius (m), focus distance (m).
+    pub lens: [f32; 4],
+    /// [p22] Tan half horizontal fov, tan half vertical fov, 0, 0.
+    pub lens2: [f32; 4],
+    /// [p22] The camera's right, up and forward unit vectors (w unused).
+    pub cam_right: [f32; 4],
+    pub cam_up: [f32; 4],
+    pub cam_fwd: [f32; 4],
+    /// [p22] Edge radius override or -1, sun disc cos half angle, clamp limit in nits, unused.
+    pub photo_f: [f32; 4],
 }
 
 /// One irradiance probe: a point and the unit normal of the surface it lies on.
@@ -917,10 +960,85 @@ mod tests {
     fn layouts_match_the_wgsl() {
         assert_eq!(std::mem::size_of::<GpuNode>(), 32);
         assert_eq!(std::mem::size_of::<GpuTri>(), 64);
-        assert_eq!(std::mem::size_of::<GpuMaterial>(), 48);
+        assert_eq!(std::mem::size_of::<GpuMaterial>(), 96);
         assert_eq!(std::mem::size_of::<GpuLight>(), 80);
-        assert_eq!(std::mem::size_of::<GpuFrame>(), 368);
+        assert_eq!(std::mem::size_of::<GpuFrame>(), 480);
         assert_eq!(std::mem::size_of::<GpuProbe>(), 32);
+    }
+
+    #[test]
+    fn gpu_frame_and_material_sizes_match_wgsl() {
+        // The Frame and Material structs of common.wgsl, field by field (vec4 = 16 bytes).
+        assert_eq!(std::mem::size_of::<GpuFrame>(), 480);
+        assert_eq!(std::mem::offset_of!(GpuFrame, photo), 368);
+        assert_eq!(std::mem::offset_of!(GpuFrame, lens), 384);
+        assert_eq!(std::mem::offset_of!(GpuFrame, lens2), 400);
+        assert_eq!(std::mem::offset_of!(GpuFrame, cam_right), 416);
+        assert_eq!(std::mem::offset_of!(GpuFrame, cam_up), 432);
+        assert_eq!(std::mem::offset_of!(GpuFrame, cam_fwd), 448);
+        assert_eq!(std::mem::offset_of!(GpuFrame, photo_f), 464);
+        assert_eq!(std::mem::size_of::<GpuMaterial>(), 96);
+        assert_eq!(std::mem::offset_of!(GpuMaterial, coat), 48);
+        assert_eq!(std::mem::offset_of!(GpuMaterial, sheen), 64);
+        assert_eq!(std::mem::offset_of!(GpuMaterial, sheen_roughness), 76);
+        assert_eq!(std::mem::offset_of!(GpuMaterial, thickness), 80);
+        assert_eq!(std::mem::offset_of!(GpuMaterial, var_amount), 92);
+        // The WGSL declares the same fields in the same order, and the same constants.
+        let common = super::super::shaders::COMMON_WGSL;
+        let tail = [
+            "look: vec4<u32>",
+            "photo: vec4<u32>",
+            "lens: vec4<f32>",
+            "lens2: vec4<f32>",
+            "cam_right: vec4<f32>",
+            "cam_up: vec4<f32>",
+            "cam_fwd: vec4<f32>",
+            "photo_f: vec4<f32>",
+        ];
+        let mut at = 0;
+        for f in tail {
+            let i = common[at..].find(f);
+            assert!(i.is_some(), "{f} missing or out of order in Frame");
+            at += i.unwrap_or(0) + f.len();
+        }
+        let mat = [
+            "_pad: u32",
+            "coat: f32",
+            "coat_roughness: f32",
+            "aniso: f32",
+            "aniso_rot: f32",
+            "sheen: vec3<f32>",
+            "sheen_roughness: f32",
+            "thickness: f32",
+            "edge_radius: f32",
+            "var_scale: f32",
+            "var_amount: f32",
+        ];
+        let mut at = common.find("struct Material").unwrap_or(0);
+        for f in mat {
+            let i = common[at..].find(f);
+            assert!(i.is_some(), "{f} missing or out of order in Material");
+            at += i.unwrap_or(0) + f.len();
+        }
+        let flags = [
+            ("PHOTO_PANINI", PHOTO_PANINI),
+            ("PHOTO_DOF", PHOTO_DOF),
+            ("PHOTO_EDGES", PHOTO_EDGES),
+            ("PHOTO_MATERIALS", PHOTO_MATERIALS),
+            ("PHOTO_VARIATION", PHOTO_VARIATION),
+            ("PHOTO_SUN_DISC", PHOTO_SUN_DISC),
+            ("PHOTO_CLAMP", PHOTO_CLAMP),
+            ("PHOTO_ADAPTIVE", PHOTO_ADAPTIVE),
+            ("PHOTO_SHIFT", PHOTO_SHIFT),
+            ("MAT_THIN", MAT_THIN),
+            ("MAT_EXT", MAT_EXT),
+            ("MAT_TRANS", MAT_TRANS),
+        ];
+        for (name, v) in flags {
+            assert!(common.contains(&format!("const {name}: u32 = {v}u;")), "{name} differs in common.wgsl");
+        }
+        let (a, b) = (GpuFrame::default(), GpuMaterial::default());
+        assert_eq!((a.photo, b.flags & (MAT_THIN | MAT_EXT | MAT_TRANS)), ([0; 4], 0));
     }
 
     #[test]
@@ -951,7 +1069,8 @@ mod tests {
         assert_eq!(std::mem::offset_of!(GpuFrame, view), 320);
         assert_eq!(std::mem::offset_of!(GpuFrame, tex), 336);
         assert_eq!(std::mem::offset_of!(GpuFrame, look), 352);
-        assert_eq!(std::mem::size_of::<GpuFrame>(), 368);
+        assert_eq!(std::mem::offset_of!(GpuFrame, photo), 368);
+        assert_eq!(std::mem::size_of::<GpuFrame>(), 480);
 
         // The six new flag bits have their reserved values and all ten bits are distinct.
         assert_eq!((FRAME_ENV, FRAME_MOON, FRAME_CLIP, FRAME_SUN_NO_SHADOW, FRAME_NORMAL_MAPS, FRAME_LAMBERT), (16, 32, 64, 128, 256, 512));
@@ -1702,8 +1821,8 @@ mod tests {
         let bytes = bytemuck::bytes_of(&frame);
         let back = bytemuck::from_bytes::<GpuFrame>(bytes);
         assert_eq!(*back, frame, "GpuFrame did not round-trip through bytes");
-        // The byte size must be exactly 368 (the spec's size).
-        assert_eq!(bytes.len(), 368);
+        // The byte size must be exactly 480 (368 and the phase-22 photo block).
+        assert_eq!(bytes.len(), 480);
     }
 
     #[test]
@@ -1909,7 +2028,7 @@ mod tests {
                     transmission: 0.5,
                     flags: 0,
                     emission: [0.0, 0.0, 0.0],
-                    _pad: 0,
+                    ..Default::default()
                 },
                 GpuMaterial {
                     albedo: [1.0, 1.0, 1.0],
@@ -1919,7 +2038,7 @@ mod tests {
                     transmission: 0.65,
                     flags: MAT_GLASS,
                     emission: [0.0, 0.0, 0.0],
-                    _pad: 0,
+                    ..Default::default()
                 },
                 GpuMaterial {
                     albedo: [0.9, 0.9, 0.9],
@@ -1929,7 +2048,7 @@ mod tests {
                     transmission: 0.0,
                     flags: MAT_EMIT_CAMERA_ONLY,
                     emission: [20000.0, 20000.0, 20000.0],
-                    _pad: 0,
+                    ..Default::default()
                 },
             ],
             ..Default::default()
@@ -1946,7 +2065,7 @@ mod tests {
                 transmission: 0.0,
                 flags: 0,
                 emission: [0.0, 0.0, 0.0],
-                _pad: 0
+                ..Default::default()
             }
         );
         assert_eq!(
@@ -1959,7 +2078,7 @@ mod tests {
                 transmission: 0.0,
                 flags: MAT_GLASS,
                 emission: [0.0, 0.0, 0.0],
-                _pad: 0
+                ..Default::default()
             }
         );
         // Lens: emission preserved, flags preserved
@@ -1973,7 +2092,7 @@ mod tests {
                 transmission: 0.0,
                 flags: MAT_EMIT_CAMERA_ONLY,
                 emission: [20000.0, 20000.0, 20000.0],
-                _pad: 0
+                ..Default::default()
             }
         );
     }

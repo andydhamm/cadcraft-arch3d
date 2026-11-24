@@ -143,6 +143,8 @@ struct FinalUi {
     path_progress: Option<(u32, u32)>,
     /// The last path Finalize ran as raster: the device has no compute shaders.
     fallback: bool,
+    /// Why the finished path Finalize stopped and which denoiser ran.
+    path_done: Option<(cadcraft_render3d::pathtrace::StopReason, cadcraft_doc::arch::DenoiseMode)>,
 }
 
 impl Default for FinalUi {
@@ -158,8 +160,26 @@ impl Default for FinalUi {
             samples: cadcraft_render3d::pathtrace::DEFAULT_SPP,
             path_progress: None,
             fallback: false,
+            path_done: None,
         }
     }
+}
+
+/// The finished path Finalize's label: why it stopped and which denoiser ran.
+fn finalize_done_label(stop: cadcraft_render3d::pathtrace::StopReason, denoiser: cadcraft_doc::arch::DenoiseMode) -> String {
+    use cadcraft_doc::arch::DenoiseMode;
+    use cadcraft_render3d::pathtrace::StopReason;
+    let stop = match stop {
+        StopReason::Samples => crate::i18n::t("samples"),
+        StopReason::NoiseTarget => crate::i18n::t("noise target"),
+        StopReason::TimeBudget => crate::i18n::t("time budget"),
+    };
+    let denoiser = match denoiser {
+        DenoiseMode::None => crate::i18n::t("no denoiser"),
+        DenoiseMode::Filter => crate::i18n::t("filter denoiser"),
+        _ => crate::i18n::t("learned denoiser"),
+    };
+    crate::i18n::format("Stopped on {stop}, {denoiser}", &[("stop", stop.to_string()), ("denoiser", denoiser.to_string())])
 }
 
 /// The running path Finalize's label: samples done of samples wanted.
@@ -574,7 +594,7 @@ impl Pane3d {
                 cadcraft_doc::arch::Technique::Clay => self.style = Style3d::Clay,
                 cadcraft_doc::arch::Technique::Technical => self.style = Style3d::Technical,
                 cadcraft_doc::arch::Technique::Standard => self.style = Style3d::Shaded,
-                cadcraft_doc::arch::Technique::Path => {
+                cadcraft_doc::arch::Technique::Path | cadcraft_doc::arch::Technique::Photoreal => {
                     let mut f = lock_final(&self.finalize);
                     f.mode = cadcraft_engine::FinalMode::Path;
                     // Leave the user's chosen style alone; the path mode is separate.
@@ -637,10 +657,49 @@ impl Pane3d {
         self.full = Some(f);
     }
 
+    /// The ray through `pixel` (y-down, device pixels of a `size` view), bent by the look's lens
+    /// exactly as the live view draws it. Depth of field and film never show live, so they play no
+    /// part here.
+    pub fn pick_ray(&self, pixel: [f32; 2], size: (u32, u32)) -> Option<(cadcraft_geom::Vec3, cadcraft_geom::Vec3)> {
+        let lens = &self.view.look.lens;
+        let mut view = cadcraft_arch3d::lens::LensView::default();
+        view.panini = lens.projection == cadcraft_doc::arch::LensProjection::Panini;
+        view.compression = lens.compression;
+        view.shift = lens.shift;
+        cadcraft_arch3d::lens::ray_at_lens(&self.camera(), &view, size, pixel)
+    }
+
+    /// The options and lighting of the path-traced Finalize. A Photoreal look gets the top rung of
+    /// the photo ladder (the look's own non-neutral film and sun disc win, as in the engine);
+    /// any other look is rendered as before.
+    fn finalize_options(&self) -> (cadcraft_render3d::pathtrace::PathOptions, cadcraft_render3d::Lighting) {
+        use cadcraft_doc::arch::photo;
+        let look = &self.view.look;
+        let spp = lock_final(&self.finalize).samples.clamp(1, cadcraft_render3d::pathtrace::MAX_SPP);
+        let mut opts = cadcraft_render3d::pathtrace::PathOptions { spp, ..Default::default() };
+        let mut lighting = self.lighting.clone();
+        if look.technique == cadcraft_doc::arch::Technique::Photoreal {
+            cadcraft_render3d::look::apply_photo(&mut opts, &mut lighting, &photo::rung(7));
+            if !look.film.is_neutral() {
+                lighting.film = look.film.clone();
+            }
+            if look.sun.disc > 0.0 {
+                lighting.sun_disc_deg = look.sun.disc as f32;
+            }
+        } else {
+            cadcraft_render3d::look::apply_photo(&mut opts, &mut lighting, &photo::PhotoSettings::default());
+            // The plain Finalize keeps the user's samples, bounces and the live lighting.
+            opts.spp = spp;
+            opts.bounces = cadcraft_render3d::pathtrace::PathOptions::default().bounces;
+            lighting = self.lighting.clone();
+        }
+        (opts, lighting)
+    }
+
     /// The proxy handle under `pixel` (y-down, device pixels of a `size` view), if the ray hits.
     pub fn pick_handle_at(&self, size: (u32, u32), pixel: [f32; 2]) -> Option<cadcraft_doc::Handle> {
         let scene = self.scene.as_ref()?;
-        let (origin, dir) = cadcraft_render3d::camera::ray_at(&self.camera(), size, pixel)?;
+        let (origin, dir) = self.pick_ray(pixel, size)?;
         let hit = scene.pick(origin, dir)?;
         if self.filter.as_ref().is_some_and(|f| !f.accepts(hit.point)) {
             return None;
@@ -660,7 +719,7 @@ impl Pane3d {
     /// What the ray through `pixel` strikes (see [`Click`]).
     pub fn click_at(&self, size: (u32, u32), pixel: [f32; 2]) -> Option<Click> {
         let scene = self.scene.as_ref()?;
-        let (origin, dir) = cadcraft_render3d::camera::ray_at(&self.camera(), size, pixel)?;
+        let (origin, dir) = self.pick_ray(pixel, size)?;
         let hit = scene.pick(origin, dir)?;
         if self.filter.as_ref().is_some_and(|f| !f.accepts(hit.point)) {
             return None;
@@ -923,6 +982,62 @@ fn look_row(ui: &mut egui::Ui, pane: &mut Pane3d) {
             pane.look_cmds.push(look_edit(pane, "cutaway", serde_json::json!(cutaway)));
         }
 
+        use cadcraft_doc::arch::{LensProjection, Technique};
+        ui.separator();
+        let technique = pane.view.look.technique;
+        let technique_name = |t: Technique| match t {
+            Technique::Standard => crate::i18n::t("Standard"),
+            Technique::Path => crate::i18n::t("Path traced"),
+            Technique::Clay => crate::i18n::t("Clay"),
+            Technique::Technical => crate::i18n::t("Technical"),
+            Technique::Photoreal => crate::i18n::t("Photoreal"),
+        };
+        egui::ComboBox::from_label(crate::i18n::t("Technique")).selected_text(technique_name(technique)).show_ui(ui, |ui| {
+            for (value, id) in [
+                (Technique::Standard, "standard"),
+                (Technique::Path, "path"),
+                (Technique::Clay, "clay"),
+                (Technique::Technical, "technical"),
+                (Technique::Photoreal, "photoreal"),
+            ] {
+                if ui.selectable_label(technique == value, technique_name(value)).clicked() && technique != value {
+                    pane.look_cmds.push(look_edit(pane, "technique", serde_json::json!(id)));
+                }
+            }
+        });
+
+        ui.separator();
+        let projection = pane.view.look.lens.projection;
+        egui::ComboBox::from_label(crate::i18n::t("Projection"))
+            .selected_text(match projection {
+                LensProjection::Rectilinear => crate::i18n::t("Rectilinear"),
+                LensProjection::Panini => crate::i18n::t("Panini"),
+            })
+            .show_ui(ui, |ui| {
+                for (value, id, label) in [
+                    (LensProjection::Rectilinear, "rectilinear", crate::i18n::t("Rectilinear")),
+                    (LensProjection::Panini, "panini", crate::i18n::t("Panini")),
+                ] {
+                    if ui.selectable_label(projection == value, label).clicked() && projection != value {
+                        pane.look_cmds.push(look_edit(pane, "projection", serde_json::json!(id)));
+                    }
+                }
+            });
+        if projection == LensProjection::Panini {
+            let mut compression = pane.view.look.lens.compression;
+            let label = ui.label(crate::i18n::t("Compression"));
+            let resp = ui.add(egui::DragValue::new(&mut compression).speed(0.01).range(0.0..=1.0)).labelled_by(label.id);
+            if (resp.drag_stopped() || resp.lost_focus()) && (compression - pane.view.look.lens.compression).abs() > 1e-9 {
+                pane.look_cmds.push(look_edit(pane, "compression", serde_json::json!(compression)));
+            }
+        }
+        let mut shift = pane.view.look.lens.shift;
+        let label = ui.label(crate::i18n::t("Shift"));
+        let resp = ui.add(egui::DragValue::new(&mut shift).speed(0.01).range(-1.0..=1.0)).labelled_by(label.id);
+        if (resp.drag_stopped() || resp.lost_focus()) && (shift - pane.view.look.lens.shift).abs() > 1e-9 {
+            pane.look_cmds.push(look_edit(pane, "shift", serde_json::json!(shift)));
+        }
+
         ui.separator();
         ui.label(crate::i18n::t("Exposure"));
         let auto_label = crate::i18n::t("Auto");
@@ -1167,6 +1282,9 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
         if fallback {
             ui.label(crate::i18n::t("No compute shaders: raster Finalize"));
         }
+        if has_still && let Some((stop, denoiser)) = lock_final(&finalize).path_done {
+            ui.label(finalize_done_label(stop, denoiser));
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if has_still && ui.button(crate::i18n::t("Save PNG")).clicked() {
             save_final_png(&finalize);
@@ -1208,7 +1326,16 @@ pub fn draw(ui: &mut egui::Ui, pane: &mut Pane3d) {
     if response.has_focus() {
         walk_keys(ui, pane);
     }
-    let callback = Pane3dCallback { scene, key: pane.scene_key(), camera: pane.camera(), size, style: pane.style, lighting, finalize };
+    let callback = Pane3dCallback {
+        scene,
+        key: pane.scene_key(),
+        camera: pane.camera(),
+        size,
+        style: pane.style,
+        lighting,
+        path: pane.finalize_options(),
+        finalize,
+    };
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(rect, callback));
 }
 
@@ -1377,6 +1504,8 @@ struct Pane3dCallback {
     size: (u32, u32),
     style: Style3d,
     lighting: cadcraft_render3d::Lighting,
+    /// The options and lighting a path-traced Finalize starts with ([`Pane3d::finalize_options`]).
+    path: (cadcraft_render3d::pathtrace::PathOptions, cadcraft_render3d::Lighting),
     finalize: Arc<std::sync::Mutex<FinalUi>>,
 }
 
@@ -1457,24 +1586,25 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
             ui_state.done = None;
             ui_state.path_progress = None;
             ui_state.fallback = false;
+            ui_state.path_done = None;
             let render = match ui_state.mode {
                 cadcraft_engine::FinalMode::Raster => {
                     cadcraft_render3d::FinalRender::start(off, &self.scene, self.key, &self.camera, &self.lighting, false, (w, h))
                 }
                 cadcraft_engine::FinalMode::Path => {
                     let compute = res.compute.get_or_insert_with(request_pane_compute).as_ref();
-                    let spp = ui_state.samples.clamp(1, cadcraft_render3d::pathtrace::MAX_SPP);
-                    let opts = cadcraft_render3d::pathtrace::PathOptions { spp, ..Default::default() };
+                    let (opts, path_lighting) = &self.path;
+                    let spp = opts.spp;
                     let render = cadcraft_render3d::FinalRender::start_path(
                         compute,
                         off,
                         &self.scene,
                         self.key,
                         &self.camera,
-                        &self.lighting,
+                        path_lighting,
                         false,
                         (w, h),
-                        &opts,
+                        opts,
                         None,
                     );
                     if render.fallback().is_some() {
@@ -1513,6 +1643,7 @@ impl egui_wgpu::CallbackTrait for Pane3dCallback {
                 let group = upload_still(device, queue, &res.layout, &res.sampler, width, height, &rgba);
                 res.final_image = Some((state.clone(), group));
                 ui_state.done = Some(FinalDone { state, width, height, rgba });
+                ui_state.path_done = res.final_render.as_ref().and_then(|r| r.path_stats()).map(|s| (s.stop, s.denoiser));
                 ui_state.progress = None;
                 ui_state.path_progress = None;
                 res.final_render = None;
@@ -2635,6 +2766,7 @@ mod tests {
             size,
             style: pane.style,
             lighting: cadcraft_render3d::Lighting::default(),
+            path: pane.finalize_options(),
             finalize: pane.finalize.clone(),
         }
     }
@@ -3266,6 +3398,75 @@ mod tests {
     }
 
     #[test]
+    fn look_row_queues_technique_and_projection_commands() {
+        let mut session = house_session();
+        let mut pane = Pane3d::new();
+        let cmds = [
+            look_edit(&pane, "technique", serde_json::json!("photoreal")),
+            look_edit(&pane, "projection", serde_json::json!("panini")),
+            look_edit(&pane, "compression", serde_json::json!(0.4)),
+            look_edit(&pane, "shift", serde_json::json!(-0.25)),
+        ];
+        assert_eq!(cmds[0], ("look", serde_json::json!({"technique": "photoreal"})));
+        assert_eq!(cmds[3], ("look", serde_json::json!({"shift": -0.25})));
+        pane.look_cmds.extend(cmds);
+        assert_eq!(apply_look(&mut pane, &mut session), 4);
+        let look = session.doc().expect("doc").arch.look.clone();
+        assert_eq!(look.technique, cadcraft_doc::arch::Technique::Photoreal);
+        assert_eq!(look.lens.projection, cadcraft_doc::arch::LensProjection::Panini);
+        assert_eq!((look.lens.compression, look.lens.shift), (0.4, -0.25));
+        // A loaded camera takes the same edits through camera.update.
+        session.execute("camera", &serde_json::json!({"save": "p", "azimuth": 20})).expect("save camera");
+        pane.loaded_camera = session.doc().expect("doc").arch.camera_by_name("p").cloned();
+        let cmd = look_edit(&pane, "technique", serde_json::json!("photoreal"));
+        assert_eq!(cmd, ("camera.update", serde_json::json!({"name": "p", "technique": "photoreal"})));
+        pane.look_cmds.push(cmd);
+        assert_eq!(apply_look(&mut pane, &mut session), 1);
+    }
+
+    #[test]
+    fn finalize_options_is_photoreal_for_a_photoreal_camera() {
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
+        let (opts, lighting) = pane.finalize_options();
+        assert_eq!(opts.bounces, 12);
+        assert!(opts.adaptive);
+        assert_eq!(opts.denoise_mode, cadcraft_doc::arch::DenoiseMode::Learned);
+        assert!(opts.clamp.is_some());
+        assert!(!lighting.film.is_neutral());
+        // The look's own film wins.
+        pane.view.look.film.vignette = 0.5;
+        let (_, lighting) = pane.finalize_options();
+        assert_eq!(lighting.film.vignette, 0.5);
+    }
+
+    #[test]
+    fn finalize_options_is_unchanged_for_a_plain_look() {
+        let mut pane = Pane3d::new();
+        pane.view.look.lens.shift = 0.2;
+        lock_final(&pane.finalize).samples = 33;
+        let (opts, lighting) = pane.finalize_options();
+        assert_eq!(opts, cadcraft_render3d::pathtrace::PathOptions { spp: 33, ..Default::default() });
+        assert_eq!(lighting, pane.lighting);
+    }
+
+    #[test]
+    fn pick_ray_follows_the_panini_lens() {
+        let mut pane = Pane3d::new();
+        let size = (800, 600);
+        let off_axis = [60.0, 100.0];
+        let plain = cadcraft_render3d::camera::ray_at(&pane.camera(), size, off_axis).expect("ray");
+        assert_eq!(pane.pick_ray(off_axis, size), Some(plain));
+        pane.view.look.lens.projection = cadcraft_doc::arch::LensProjection::Panini;
+        pane.view.look.lens.compression = 1.0;
+        let bent = pane.pick_ray(off_axis, size).expect("ray");
+        assert!((bent.1 - plain.1).len() > 1e-4, "the Panini ray differs off-axis");
+        // A neutral lens (rectilinear, no shift) is the plain ray again.
+        pane.view.look.lens.projection = cadcraft_doc::arch::LensProjection::Rectilinear;
+        assert_eq!(pane.pick_ray(off_axis, size), Some(plain));
+    }
+
+    #[test]
     fn look_row_sun_angle_and_sky() {
         let mut session = house_session();
         let st = session.state().expect("state");
@@ -3421,6 +3622,15 @@ mod tests {
             "Floor overview",
             "ACES",
             "Hable",
+            "Path traced",
+            "Photoreal",
+            "Projection",
+            "Rectilinear",
+            "Panini",
+            "Compression",
+            "Shift",
+            "no denoiser",
+            "Stopped on {stop}, {denoiser}",
         ];
         let file = include_str!("i18n/uk.tsv");
         for label in labels {

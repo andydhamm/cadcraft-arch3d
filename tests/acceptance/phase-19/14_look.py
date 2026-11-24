@@ -13,6 +13,16 @@ DEFAULT = {"technique": "standard", "exposure": "auto", "toneMap": "aces",
            "lightSet": None, "cutaway": False, "clip": None, "nearClip": None}
 
 
+def p19(look):
+    """The phase-19 part of a look. Phase 22 adds `lens`, `film` and `sun.disc` to the echo (its own checks 01 to 08 hold
+    them); compared exactly with them in, this check failed every phase-22 merge that touched the look (2026-11-23,
+    operator)."""
+    out = {k: v for k, v in look.items() if k not in ('backdrop', 'lens', 'film')}
+    if isinstance(out.get('sun'), dict):
+        out['sun'] = {k: v for k, v in out['sun'].items() if k != 'disc'}
+    return out
+
+
 def looks(rows):
     return [r['look'] for r in rows if isinstance(r, dict) and isinstance(r.get('look'), dict) and 'samples' not in r]
 
@@ -30,7 +40,7 @@ rows = run_ok(ROOM + ['look {}'], "look {}")
 lk = looks(rows)
 if not lk:
     fail(f"`look {{}}` replies {{\"look\": {{...}}}}: {json.dumps(rows)[-500:]}")
-got = {k: v for k, v in lk[-1].items() if k != 'backdrop'}
+got = p19(lk[-1])
 if not same(got, DEFAULT):
     fail(f"the default look is the brief's (ACES, auto, 100 000 lx sun with shadows, sky on, 0.25 lx moon):\n got  {got}\n want {DEFAULT}")
 print("ok: look {} reports the defaults")
@@ -41,16 +51,16 @@ dxf = os.path.join(tmp, 'look.dxf')
 rows = run_ok(ROOM + [SET, cmd('arch.inspect', {"look": True})], "setting a look", save=dxf)
 ins = [r['look'] for r in rows if isinstance(r, dict) and isinstance(r.get('look'), dict)]
 want = dict(DEFAULT, exposure={"ev100": 3.0}, toneMap="hable", cutaway=True)
-if not ins or not same({k: v for k, v in ins[-1].items() if k != 'backdrop'}, want):
+if not ins or not same(p19(ins[-1]), want):
     fail(f"arch.inspect {{look: true}} shows the set look: {ins[-1:] or json.dumps(rows)[-400:]}")
 rc, rr, so, se = run(['look {}', cmd('look', {"toneMap": "filmic", "exposure": {"ev100": 4}}), 'look {}'], file=dxf, expect_ok=False)
 lk = looks(rr)
-if len(lk) < 2 or not same({k: v for k, v in lk[0].items() if k != 'backdrop'}, want):
+if len(lk) < 2 or not same(p19(lk[0]), want):
     fail(f"the look survives --save and reopening the DXF: {lk[:1] or json.dumps(rr)[-400:]}")
 if not errors(se) or not same(lk[-1], lk[0]):
     fail(f"a refused look (toneMap \"filmic\") prints an error line and changes nothing, not even the valid exposure: {errors(se)}, {lk[-1]}")
 rows = run_ok(ROOM + [SET, 'undo {}', 'look {}'], "undo of a look")
-if not same({k: v for k, v in looks(rows)[-1].items() if k != 'backdrop'}, DEFAULT):
+if not same(p19(looks(rows)[-1]), DEFAULT):
     fail(f"one undo restores the default look: {looks(rows)[-1]}")
 print("ok: look set, inspected, saved and reopened; a refused look changes nothing; undo restores")
 

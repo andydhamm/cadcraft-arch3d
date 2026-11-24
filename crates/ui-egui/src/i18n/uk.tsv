@@ -1724,3 +1724,17 @@
 	This drawing has no blocks.	У цьому кресленні немає блоків.
 	This library has no drawings or blocks.	У цій бібліотеці немає креслень і блоків.
 	Only the first {n} are shown.	Показано лише перші {n}.
+	Path traced	Трасування шляхів
+	Photoreal	Фотореалістичний
+	Projection	Проєкція
+	Rectilinear	Прямолінійна
+	Panini	Паніні
+	Compression	Стиснення
+	Shift	Зсув
+	samples	вибірки
+	noise target	ціль шуму
+	time budget	бюджет часу
+	no denoiser	без шумоподавлення
+	filter denoiser	фільтр шумоподавлення
+	learned denoiser	навчене шумоподавлення
+	Stopped on {stop}, {denoiser}	Зупинено: {stop}, {denoiser}

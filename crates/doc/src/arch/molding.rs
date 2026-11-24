@@ -188,4 +188,65 @@ mod tests {
         assert_eq!(molding_line_label(ArchId(5)), "ml5");
         assert_eq!(MoldingLine::default().layer, MOLDING_LAYER);
     }
+
+    #[test]
+    fn molding_kind_parse_rejects_empty_and_whitespace() {
+        assert_eq!(MoldingKind::parse(""), None);
+        assert_eq!(MoldingKind::parse("  "), None);
+        assert_eq!(MoldingKind::parse("base "), None);
+        assert_eq!(MoldingKind::parse(" base"), None);
+        assert_eq!(MoldingKind::parse("Base"), None);
+        assert_eq!(MoldingKind::parse("BASE"), None);
+        assert_eq!(MoldingKind::parse("crown "), None);
+    }
+
+    #[test]
+    fn molding_profile_size_ignores_negative_and_non_finite() {
+        let p = MoldingProfile { item: String::new(), points: vec![[-0.1, 0.0], [0.0, -0.1], [0.05, 0.08], [f64::NAN, 1.0], [2.0, f64::INFINITY]] };
+        // Negative points are ignored (max with 0.0), non-finite are skipped
+        assert_eq!(p.size(), [0.05, 0.08]);
+    }
+
+    #[test]
+    fn molding_line_serde_round_trip() {
+        let mut ml = MoldingLine::default();
+        ml.id = ArchId(5);
+        ml.level = 1;
+        ml.points = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0)];
+        ml.closed = true;
+        ml.elevation = 2.1;
+        ml.inset = 0.05;
+        ml.flip = true;
+        ml.profile = MoldingProfile { item: "crown-01".into(), points: vec![[0.0, 0.0], [0.02, 0.0], [0.01, 0.09]] };
+        ml.layer = "A-TRIM".into();
+        let json = serde_json::to_string(&ml).unwrap();
+        let back: MoldingLine = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ml);
+    }
+
+    #[test]
+    fn room_molding_serde_round_trip() {
+        let rm = RoomMolding {
+            kind: MoldingKind::Crown,
+            profile: MoldingProfile { item: "crown-02".into(), points: vec![[0.0, 0.0], [0.03, 0.0], [0.015, 0.1]] },
+            offset: 0.05,
+        };
+        let json = serde_json::to_string(&rm).unwrap();
+        let back: RoomMolding = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, rm);
+        assert!(json.contains("\"kind\":\"crown\""));
+        assert!(json.contains("\"offset\":0.05"));
+    }
+
+    #[test]
+    fn cabinet_molding_serde_round_trip() {
+        let cm = CabinetMolding {
+            profile: MoldingProfile { item: "crown-03".into(), points: vec![[0.0, 0.0], [0.04, 0.0], [0.02, 0.12]] },
+            size: Some([0.05, 0.15]),
+        };
+        let json = serde_json::to_string(&cm).unwrap();
+        let back: CabinetMolding = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, cm);
+        assert!(json.contains("\"size\":[0.05,0.15]"));
+    }
 }

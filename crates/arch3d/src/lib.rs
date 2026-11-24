@@ -10,6 +10,7 @@
 
 pub mod backsplash;
 pub mod cabinet_parts;
+pub mod calibrate;
 pub mod camera;
 pub mod casework;
 pub(crate) mod ceiling;
@@ -32,7 +33,9 @@ pub mod floors;
 pub mod hlr;
 pub mod icon;
 pub mod incremental;
+pub mod lens;
 pub mod light;
+pub mod material_ext;
 pub mod mesh;
 pub mod openings;
 pub mod pick;
@@ -61,6 +64,7 @@ pub mod walls;
 pub use crate::electrical::PlateBox;
 pub use crate::furnishing::FurnishingBox;
 pub use crate::incremental::{ObjectKey, ObjectKind, RebuildStats, SceneCache, changed_objects, object_key};
+pub use crate::material_ext::MaterialExt;
 pub use crate::mesh::{Bounds3, Mesh};
 pub use cadcraft_doc::ArchId;
 
@@ -289,6 +293,10 @@ pub struct MaterialDef {
     pub normal_scale: f32,
     /// The sRGB tint a paint gave (already multiplied into `base_color`).
     pub tint: Option<[u8; 3]>,
+    /// The optional PBR fields (coat, anisotropy, sheen, transmission, …); all off by default.
+    pub ext: MaterialExt,
+    /// Emitted light in nits (white); 0 = not emissive.
+    pub emission: f32,
 }
 
 impl Default for MaterialDef {
@@ -303,6 +311,8 @@ impl Default for MaterialDef {
             normal_texture: None,
             normal_scale: 1.0,
             tint: None,
+            ext: MaterialExt::default(),
+            emission: 0.0,
         }
     }
 }

@@ -12,6 +12,15 @@ T = 0.08 if BIG else 0.25
 SIZE = (240, 150) if BIG else (64, 40)
 base = dict(final='path', noiseTarget=T, spp=65536, timeBudget=3000, bounces=2, denoise=False)
 pa, pb, pu = [os.path.join(tmp, x + '.pfm') for x in ('a1', 'a2', 'u')]
+# Fail fast while adaptive sampling is missing. Without it the three kitchen renders below ignore `adaptive` and
+# `noiseTarget`, run 65536 uniform samples each and end only at the harness's timeout (2026-11-23: 15 minutes of every
+# merge while the phase was being built). A render that knows the keys says why it stopped.
+PROBE = {'kind': 'full', 'eye': [2.0, 0.3, 2.1], 'target': [2.0, 2.6, 0.0], 'fov': 90}
+rc, rows, so, se = run(ROOM + [render_cmd(os.path.join(tmp, 'probe.png'), PROBE, (32, 20), final='path', adaptive=True, noiseTarget=0.9,
+                                          spp=16, seed=1, bounces=1, denoise=False)], expect_ok=False, timeout=600)
+pr = [r for r in render_replies(rows) if r.get('finalMode') == 'path'][-1:]
+if rc != 0 or not pr or pr[0].get('stop') not in ('samples', 'noise target', 'time budget'):
+    fail('an adaptive render says why it stopped (reply `stop`): rc %d, stop %r: %s' % (rc, pr[0].get('stop') if pr else None, errors(se)[-2:]))
 cmds = showcase_cmds() + [
     render_cmd(os.path.join(tmp, 'a1.png'), 'Kitchen', SIZE, adaptive=True, seed=1, pfm=pa, **base),
     render_cmd(os.path.join(tmp, 'a2.png'), 'Kitchen', SIZE, adaptive=True, seed=2, pfm=pb, **base),

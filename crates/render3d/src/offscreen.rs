@@ -63,7 +63,7 @@ fn clamp_size(device: &wgpu::Device, (w, h): (u32, u32)) -> (u32, u32) {
 }
 
 /// Colour and depth attachments of one size.
-struct Targets {
+pub(crate) struct Targets {
     width: u32,
     height: u32,
     color: wgpu::Texture,
@@ -189,6 +189,9 @@ pub struct Offscreen {
     /// The clip box the next sun shadow map is built with (set by the lit frame before it builds one;
     /// `None` = no box, the fragment-free depth pipeline).
     pub(crate) shadow_clip: Option<[[f32; 3]; 2]>,
+    /// Phase 22: the lens warp pipeline (built on first use) and the rectilinear source frame it reads.
+    warp: Option<crate::warp::WarpPass>,
+    pub(crate) warp_src: Option<Targets>,
 }
 
 impl Offscreen {
@@ -265,6 +268,8 @@ impl Offscreen {
             meter: Default::default(),
             last_look: Default::default(),
             shadow_clip: None,
+            warp: None,
+            warp_src: None,
         }
     }
 
@@ -361,7 +366,68 @@ impl Offscreen {
     }
 
     /// [`Offscreen::encode`] with a shadow map, a shading style and an optional ground plane.
+    /// A lit frame whose lens warps (Panini or shift) is drawn into a rectilinear source frame and
+    /// warped into the colour target; any other frame is drawn straight into it.
     pub fn encode_with(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: &Scene3d,
+        scene_key: u64,
+        camera: &Camera,
+        light: &Light,
+        opts: &RenderOptions,
+    ) {
+        match opts.lit.map(|f| f.lighting.lens).filter(|l| l.warps()) {
+            Some(lens) => self.encode_warped(encoder, scene, scene_key, camera, light, opts, &lens),
+            None => self.encode_scene(encoder, scene, scene_key, camera, light, opts),
+        }
+    }
+
+    /// Draw into the source frame the lens needs, then warp it into the colour target.
+    #[allow(clippy::too_many_arguments)]
+    fn encode_warped(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: &Scene3d,
+        scene_key: u64,
+        camera: &Camera,
+        light: &Light,
+        opts: &RenderOptions,
+        lens: &crate::lens::LensOptions,
+    ) {
+        let (w, h) = self.size();
+        let tan_v = (camera.fov_deg().to_radians() * 0.5).tan();
+        let tan_h = tan_v * f64::from(w) / f64::from(h);
+        if !(tan_v.is_finite() && tan_h.is_finite() && tan_v > 0.0 && tan_h > 0.0) {
+            return self.encode_scene(encoder, scene, scene_key, camera, light, opts);
+        }
+        let (_, rows) = crate::warp::source_extent(lens, tan_h, tan_v, (w, h));
+        let max = self.device.limits().max_texture_dimension_2d.max(1);
+        let rows = rows.min(max).max(h);
+        // The tangent that matches the (possibly capped) height keeps the source's pixels square.
+        let tan_vs = tan_h * f64::from(rows) / f64::from(w);
+        let mut src = match self.warp_src.take() {
+            Some(t) if (t.width, t.height) == (w, rows) => t,
+            _ => Targets::new(&self.device, (w, rows)),
+        };
+        let mut src_camera = *camera;
+        let fov = (2.0 * tan_vs.atan()).to_degrees();
+        match &mut src_camera {
+            Camera::Orbit(o) => o.fov_deg = fov,
+            Camera::Full(f) => f.fov_deg = fov,
+        }
+        std::mem::swap(&mut self.targets, &mut src);
+        self.encode_scene(encoder, scene, scene_key, &src_camera, light, opts);
+        std::mem::swap(&mut self.targets, &mut src);
+        let warp = match &mut self.warp {
+            Some(p) => p,
+            slot => slot.insert(crate::warp::WarpPass::new(&self.device)),
+        };
+        warp.encode(&self.device, encoder, &src.color_view, &self.targets.color_view, lens, (tan_h, tan_v, tan_vs), (w, h), CLEAR);
+        self.warp_src = Some(src);
+    }
+
+    fn encode_scene(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         scene: &Scene3d,

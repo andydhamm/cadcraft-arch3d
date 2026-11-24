@@ -68,6 +68,12 @@ pub struct Lighting {
     /// The environment (light and/or background) the frame lights with; `None` when there is
     /// none (p19-env-path).
     pub environment: Option<std::sync::Arc<crate::environment::Environment>>,
+    /// The lens (neutral = today's pinhole rectilinear image).
+    pub lens: crate::lens::LensOptions,
+    /// The film: bloom, vignette and grade (neutral = none).
+    pub film: cadcraft_doc::arch::Film,
+    /// Angular diameter of the sun disc in degrees; 0 = a point.
+    pub sun_disc_deg: f32,
 }
 
 impl Lighting {
@@ -121,6 +127,9 @@ impl Default for Lighting {
             lambert: None,
             meter_night: false,
             environment: None,
+            lens: crate::lens::LensOptions::default(),
+            film: cadcraft_doc::arch::Film::default(),
+            sun_disc_deg: 0.0,
         }
     }
 }

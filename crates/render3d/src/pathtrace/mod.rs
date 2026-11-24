@@ -19,12 +19,17 @@
 //! driver and the irradiance probes), [`denoise`] (the à-trous filter), [`cache`] (the on-disk
 //! pipeline cache).
 
+mod adaptive;
 #[cfg(test)]
 mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
+mod edge_table;
 pub mod env;
+mod learned;
+mod lens;
+mod post;
 pub mod rt;
 pub mod scene_gpu;
 pub mod shaders;
@@ -110,6 +115,60 @@ pub struct PathOptions {
     /// The Lambert calibration albedo: every surface becomes pure Lambert with this albedo
     /// (`scene_gpu::apply_lambert`, filled by p19-exposure-2).
     pub lambert: Option<f32>,
+    /// Edge rounding (default off).
+    pub edges: cadcraft_doc::arch::EdgeMode,
+    /// The full layered material model.
+    pub materials_full: bool,
+    /// Procedural material variation.
+    pub variation: bool,
+    /// Firefly clamp in display units at the still's starting exposure; `None` = none.
+    pub clamp: Option<f32>,
+    /// Adaptive sampling: `spp` is the per-pixel cap.
+    pub adaptive: bool,
+    /// Adaptive noise target; `None` = none.
+    pub noise_target: Option<f32>,
+    /// Adaptive time budget in seconds; `None` = unlimited.
+    pub time_budget: Option<f32>,
+    /// Which denoiser runs (used only when `denoise` is true).
+    pub denoise_mode: cadcraft_doc::arch::DenoiseMode,
+    /// Which learned denoiser model.
+    pub denoise_model: cadcraft_doc::arch::DenoiseModel,
+    /// Feed a roughness guide to the denoiser.
+    pub roughness_guide: bool,
+    /// Keep the linear image in [`PathStats::linear`] at this stage.
+    pub keep_linear: Option<LinearStage>,
+}
+
+/// Which linear image [`PathOptions::keep_linear`] keeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinearStage {
+    /// The radiance before exposure and film.
+    Radiance,
+    /// After exposure and film, before tone mapping.
+    Film,
+}
+
+/// Why a render stopped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StopReason {
+    /// It reached its samples per pixel.
+    #[default]
+    Samples,
+    /// The noise estimate fell below the target.
+    NoiseTarget,
+    /// The time budget ran out.
+    TimeBudget,
+}
+
+impl StopReason {
+    /// `samples`, `noise target` or `time budget`.
+    pub fn name(self) -> &'static str {
+        match self {
+            StopReason::Samples => "samples",
+            StopReason::NoiseTarget => "noise target",
+            StopReason::TimeBudget => "time budget",
+        }
+    }
 }
 
 impl Default for PathOptions {
@@ -126,6 +185,17 @@ impl Default for PathOptions {
             snapshots: Vec::new(),
             tone_map: crate::exposure::TONE_ACES,
             lambert: None,
+            edges: cadcraft_doc::arch::EdgeMode::Off,
+            materials_full: false,
+            variation: false,
+            clamp: None,
+            adaptive: false,
+            noise_target: None,
+            time_budget: None,
+            denoise_mode: cadcraft_doc::arch::DenoiseMode::Filter,
+            denoise_model: cadcraft_doc::arch::DenoiseModel::Auto,
+            roughness_guide: false,
+            keep_linear: None,
         }
     }
 }
@@ -162,7 +232,7 @@ impl CacheOutcome {
 }
 
 /// What a path-traced render did.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PathStats {
     /// Samples per pixel accumulated so far.
     pub spp_done: u32,
@@ -179,6 +249,56 @@ pub struct PathStats {
     pub radiance: Option<RadianceStats>,
     /// `(spp, rgba)` images kept at the requested `snapshots`.
     pub snapshots: Vec<(u32, Vec<u8>)>,
+    /// Why the render stopped.
+    pub stop: StopReason,
+    /// The final noise estimate (0 when not measured).
+    pub noise: f32,
+    /// Mean, least and most samples per pixel.
+    pub spp_mean: f32,
+    pub spp_min: u32,
+    pub spp_max: u32,
+    /// Samples taken over all pixels.
+    pub samples_total: u64,
+    /// Seconds spent tracing.
+    pub seconds: f32,
+    /// Fraction of radiance the firefly clamp removed.
+    pub clamp_loss: f32,
+    /// The denoiser that ran; `None` when nothing ran.
+    pub denoiser: cadcraft_doc::arch::DenoiseMode,
+    /// Why the requested denoiser fell back to another, if it did.
+    pub denoise_fallback: Option<String>,
+    /// Seconds spent denoising.
+    pub denoise_seconds: f32,
+    /// The kept linear image (`keep_linear`), row 0 at the top.
+    pub linear: Option<Vec<[f32; 3]>>,
+}
+
+impl Default for PathStats {
+    fn default() -> Self {
+        PathStats {
+            spp_done: 0,
+            denoised: false,
+            rt: false,
+            rt_error: None,
+            pipeline_cache: CacheOutcome::default(),
+            exposure: 0.0,
+            radiance: None,
+            snapshots: Vec::new(),
+            stop: StopReason::Samples,
+            noise: 0.0,
+            spp_mean: 0.0,
+            spp_min: 0,
+            spp_max: 0,
+            samples_total: 0,
+            seconds: 0.0,
+            clamp_loss: 0.0,
+            // `None`: nothing ran (the doc enum's own default is the filter).
+            denoiser: cadcraft_doc::arch::DenoiseMode::None,
+            denoise_fallback: None,
+            denoise_seconds: 0.0,
+            linear: None,
+        }
+    }
 }
 
 /// Where a path-traced render is.
@@ -215,6 +335,24 @@ mod kernel_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn path_options_defaults_are_todays() {
+        use cadcraft_doc::arch::{DenoiseMode, DenoiseModel, EdgeMode};
+        let o = PathOptions::default();
+        assert_eq!((o.spp, o.bounces, o.denoise), (DEFAULT_SPP, DEFAULT_BOUNCES, true));
+        assert_eq!(o.edges, EdgeMode::Off);
+        assert!(!o.materials_full && !o.variation && !o.adaptive && !o.roughness_guide);
+        assert!(o.clamp.is_none() && o.noise_target.is_none() && o.time_budget.is_none() && o.keep_linear.is_none());
+        assert_eq!((o.denoise_mode, o.denoise_model), (DenoiseMode::Filter, DenoiseModel::Auto));
+        let s = PathStats::default();
+        assert_eq!(s.stop, StopReason::Samples);
+        assert_eq!(s.denoiser, DenoiseMode::None);
+        assert!(s.linear.is_none() && s.denoise_fallback.is_none());
+        assert_eq!(StopReason::NoiseTarget.name(), "noise target");
+        assert_eq!(StopReason::TimeBudget.name(), "time budget");
+        assert_eq!(StopReason::Samples.name(), "samples");
+    }
 
     #[test]
     fn furnace_converges_to_emission_over_one_minus_albedo() {
