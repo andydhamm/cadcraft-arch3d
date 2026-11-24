@@ -337,6 +337,33 @@ mod tests {
     }
 
     #[test]
+    fn kernel_source_contains_all_hook_files() {
+        let src = kernel_source();
+        // Each hook file should contribute at least one function.
+        assert!(src.contains("fn camera_ray"), "lens.wgsl hook missing");
+        assert!(src.contains("fn pt_round_edge"), "edges.wgsl hook missing");
+        assert!(src.contains("fn pt_vary"), "variation.wgsl hook missing");
+        assert!(src.contains("fn ext_active"), "bsdf_ext.wgsl hook missing");
+        assert!(src.contains("fn trans_active"), "bsdf_trans.wgsl hook missing");
+        assert!(src.contains("fn sun_sample_at"), "sun_disc.wgsl hook missing");
+        assert!(src.contains("fn pt_clamp"), "clamp.wgsl hook missing");
+    }
+
+    #[test]
+    fn rq_kernel_source_has_enable_directive_at_top() {
+        let src = rq_kernel_source();
+        // The enable directive must be before any declaration.
+        let enable_pos = src.find("enable ");
+        let first_decl_pos = src.find("struct ");
+        assert!(enable_pos.is_some(), "no enable directive found");
+        if let Some(e) = enable_pos {
+            if let Some(d) = first_decl_pos {
+                assert!(e < d, "enable directive must come before any declaration");
+            }
+        }
+    }
+
+    #[test]
     fn pt_hooks_are_stubs_with_todays_behaviour() {
         let src = kernel_source();
         let rq_src = rq_kernel_source();
