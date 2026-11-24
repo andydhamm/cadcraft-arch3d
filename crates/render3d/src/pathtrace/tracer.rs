@@ -335,7 +335,7 @@ impl PathTracer {
         if let Some(budget) = self.opts.time_budget {
             match self.seconds_per_sample {
                 Some(sps) if budget.is_finite() && sps.is_finite() && sps > 0.0 => {
-                    let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 2.0;
+                    let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 0.5;
                     let fit = (left / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
                     // Grow gradually: one slow (contended) pass must not be followed by a huge one.
                     this_pass = this_pass.min(fit).min(self.last_pass.saturating_mul(2).max(1));
