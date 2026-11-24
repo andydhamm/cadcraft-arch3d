@@ -329,11 +329,16 @@ impl PathTracer {
         }
         let mut this_pass = remaining.min(self.opts.spp_per_step);
         // Under a time budget, shrink the pass so it is not expected to overrun what is left by more than 2 s.
-        if let (Some(budget), Some(sps)) = (self.opts.time_budget, self.seconds_per_sample) {
-            if budget.is_finite() && sps.is_finite() && sps > 0.0 {
-                let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 2.0;
-                let fit = (left / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
-                this_pass = this_pass.min(fit);
+        if let Some(budget) = self.opts.time_budget {
+            match self.seconds_per_sample {
+                Some(sps) if budget.is_finite() && sps.is_finite() && sps > 0.0 => {
+                    let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 2.0;
+                    let fit = (left / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
+                    this_pass = this_pass.min(fit);
+                }
+                // No timing yet: a one-sample pass measures the speed without risking the budget.
+                None => this_pass = 1,
+                _ => {}
             }
         }
         let pass_started = std::time::Instant::now();
@@ -1714,8 +1719,9 @@ mod tests {
         let spent = PathOptions { spp: 64, spp_per_step: 4, time_budget: Some(0.0), denoise: false, ..Default::default() };
         let (_, stats) = render_to_rgba_stats(&gpu, &spent);
         assert_eq!(stats.stop, super::super::StopReason::TimeBudget);
-        assert_eq!((stats.spp_done, stats.spp_min, stats.spp_max), (4, 4, 4));
-        assert_eq!(stats.samples_total, 16 * 16 * 4);
+        // The first pass under a budget is one sample: it measures the speed.
+        assert_eq!((stats.spp_done, stats.spp_min, stats.spp_max), (1, 1, 1));
+        assert_eq!(stats.samples_total, 16 * 16);
     }
 
     #[test]
