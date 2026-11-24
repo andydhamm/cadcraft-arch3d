@@ -336,6 +336,9 @@ mod kernel_tests;
 mod lens_tests;
 
 #[cfg(test)]
+mod variation_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
