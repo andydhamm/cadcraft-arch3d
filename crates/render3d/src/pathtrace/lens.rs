@@ -6,6 +6,7 @@
 
 use super::scene_gpu::{GpuFrame, PHOTO_DOF, PHOTO_PANINI, PHOTO_SHIFT};
 use crate::camera::Camera;
+use crate::lens::LensOptions;
 use crate::lit_frame::Lighting;
 use cadcraft_arch3d::lens::{aperture_radius_m, camera_basis};
 
@@ -82,5 +83,45 @@ mod tests {
         assert!((frame.lens2[0] - 2.0 * frame.lens2[1]).abs() < 1e-5);
         assert_eq!(frame.lens, [0.0; 4]);
         assert_eq!(frame.photo, [0; 4]);
+    }
+
+    #[test]
+    fn lens_flags_and_values() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { panini: true, compression: 0.5, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_PANINI);
+        assert!((frame.lens[0] - 0.5).abs() < 1e-6);
+        assert_eq!(frame.lens[1], 0.0);
+        assert_eq!(frame.lens[2], 0.0);
+        assert_eq!(frame.lens[3], 0.0);
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { shift: 0.1, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_SHIFT);
+        assert_eq!(frame.lens[0], 0.0);
+        assert!((frame.lens[1] - 0.1).abs() < 1e-6);
+        assert_eq!(frame.lens[2], 0.0);
+        assert_eq!(frame.lens[3], 0.0);
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_DOF);
+        assert_eq!(frame.lens[0], 0.0);
+        assert_eq!(frame.lens[1], 0.0);
+        assert!(frame.lens[2] > 0.0);
+        assert!((frame.lens[3] - 3.0).abs() < 1e-6);
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting {
+            lens: LensOptions { panini: true, compression: 0.5, shift: 0.1, aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() },
+            ..Lighting::default()
+        };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_PANINI | PHOTO_SHIFT | PHOTO_DOF);
+        assert!((frame.lens[0] - 0.5).abs() < 1e-6);
+        assert!((frame.lens[1] - 0.1).abs() < 1e-6);
+        assert!(frame.lens[2] > 0.0);
+        assert!((frame.lens[3] - 3.0).abs() < 1e-6);
     }
 }

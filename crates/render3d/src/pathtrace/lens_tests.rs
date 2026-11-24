@@ -258,3 +258,80 @@ fn the_target_distance_is_the_default_focus() {
     let f = frame_for(&camera(), LensOptions { aperture: Some(2.8), focus: Some(0.0), ..LensOptions::default() }, 0);
     assert!((f.lens[3] - 5.0).abs() < 1e-4, "a non-positive focus is the default");
 }
+
+#[test]
+fn panini_compression_zero_is_rectilinear() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let cam = camera();
+    let px = grid();
+    let panini_frame = frame_for(&cam, LensOptions { panini: true, compression: 0.0, ..LensOptions::default() }, 0);
+    let rect_frame = frame_for(&cam, LensOptions::default(), 0);
+    let panini_dirs = rays(&gpu, &panini_frame, &px, false);
+    let rect_dirs = rays(&gpu, &rect_frame, &px, false);
+    for ((p, pd), rd) in px.iter().zip(&panini_dirs).zip(&rect_dirs) {
+        for k in 0..3 {
+            assert!((pd[k] - rd[k]).abs() < 1e-4, "pixel {p:?}: panini {pd:?} vs rect {rd:?}");
+        }
+    }
+}
+
+#[test]
+fn combined_lens_effects_compose() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let cam = camera();
+    let opts = LensOptions { panini: true, compression: 0.5, shift: 0.1, aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() };
+    let frame = frame_for(&cam, opts, 0);
+    assert_eq!(frame.photo[0] & (PHOTO_PANINI | PHOTO_SHIFT | PHOTO_DOF), PHOTO_PANINI | PHOTO_SHIFT | PHOTO_DOF);
+    let px = grid();
+    let dirs = rays(&gpu, &frame, &px, false);
+    for (p, d) in px.iter().zip(&dirs) {
+        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        assert!(len.is_finite() && (len - 1.0).abs() < 1e-4, "pixel {p:?}: direction not normalized: {d:?}");
+    }
+}
+
+#[test]
+fn fill_frame_ignores_nan_camera() {
+    let camera = Camera::Full(FullCamera::new(Vec3::new(f64::NAN, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), 60.0));
+    let mut frame = GpuFrame::default();
+    frame.cam_right = [1.0, 0.0, 0.0, 0.0];
+    frame.cam_up = [0.0, 1.0, 0.0, 0.0];
+    frame.cam_fwd = [0.0, 0.0, 1.0, 0.0];
+    frame.lens2 = [0.5, 0.5, 0.0, 0.0];
+    frame.lens = [0.5, 0.1, 0.01, 2.0];
+    frame.photo[0] = PHOTO_PANINI | PHOTO_SHIFT | PHOTO_DOF;
+    fill_frame(&mut frame, &Lighting::default(), &camera, SIZE);
+    assert_eq!(frame.cam_right, [1.0, 0.0, 0.0, 0.0]);
+    assert_eq!(frame.cam_up, [0.0, 1.0, 0.0, 0.0]);
+    assert_eq!(frame.cam_fwd, [0.0, 0.0, 1.0, 0.0]);
+    assert_eq!(frame.lens2, [0.5, 0.5, 0.0, 0.0]);
+    assert_eq!(frame.lens, [0.5, 0.1, 0.01, 2.0]);
+    assert_eq!(frame.photo[0], PHOTO_PANINI | PHOTO_SHIFT | PHOTO_DOF);
+}
+
+#[test]
+fn non_finite_focus_uses_default() {
+    let cam = camera();
+    let frame = frame_for(&cam, LensOptions { aperture: Some(2.8), focus: Some(f32::NAN), ..LensOptions::default() }, 0);
+    assert!((frame.lens[3] - 5.0).abs() < 1e-4, "focus should be 5.0, got {}", frame.lens[3]);
+}
+
+#[test]
+fn center_pixel_is_forward() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let cam = camera();
+    let centre = [SIZE.0 as f32 / 2.0, SIZE.1 as f32 / 2.0];
+    for opts in [
+        LensOptions::default(),
+        LensOptions { panini: true, compression: 0.5, ..LensOptions::default() },
+        LensOptions { panini: true, compression: 0.5, aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() },
+    ] {
+        let frame = frame_for(&cam, opts, 0);
+        let dirs = rays(&gpu, &frame, &[centre], false);
+        let d = dirs[0];
+        let fwd = [frame.cam_fwd[0], frame.cam_fwd[1], frame.cam_fwd[2]];
+        for k in 0..3 {
+            assert!((d[k] - fwd[k]).abs() < 1e-4, "options {:?}: center direction {d:?} vs forward {fwd:?}", opts);
+        }
+    }
+}
