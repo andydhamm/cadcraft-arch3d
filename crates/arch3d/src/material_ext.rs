@@ -140,7 +140,7 @@ const TABLE: &[(Matcher, MaterialExt)] = &[
     ),
     // Wood, siding, masonry and plain building surfaces: only variation.
     (
-        |n| has(n, &["wood", "siding", "brick", "shingle", "concrete", "drywall", "plaster"]) || matches!(n, "wall" | "floor" | "ceiling" | "roof"),
+        |n| has(n, &["wood", "siding", "brick", "shingle", "concrete", "drywall", "plaster", "wall", "floor", "ceiling", "roof"]),
         MaterialExt { variation_scale: 0.6, variation_amount: 0.12, ..OFF },
     ),
 ];
