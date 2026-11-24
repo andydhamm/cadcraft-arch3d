@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 06:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 06:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 27 of 36 segments merged · 6 of 15 acceptance checks**
 
@@ -32,7 +32,7 @@ Updated 2026-11-24 06:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 6 / 15 | 12.5 h so far · expected done Nov 24 09:19–Nov 24 21:48 UTC |
+| 22 | Photoreal stills | building | 6 / 15 | 12.8 h so far · expected done Nov 24 09:34–Nov 24 22:03 UTC |
 
 ## Phase 22 segments
 
