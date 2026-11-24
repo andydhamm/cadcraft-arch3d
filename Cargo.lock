@@ -871,6 +871,7 @@ name = "cadcraft-render3d"
 version = "0.21.0"
 dependencies = [
  "bytemuck",
+ "cadcraft-arch",
  "cadcraft-arch3d",
  "cadcraft-color",
  "cadcraft-doc",
