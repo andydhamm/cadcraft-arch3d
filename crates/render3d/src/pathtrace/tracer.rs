@@ -750,6 +750,12 @@ fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
             let lux = lighting.look.sun.intensity as f32;
             frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
             frame.sun_rgb = [lux, lux, lux, 0.0];
+            let disc = lighting.sun_disc_deg;
+            if disc.is_finite() && disc > 0.0 {
+                let half = (f64::from(disc.min(90.0)) / 2.0).to_radians();
+                frame.photo[0] |= super::scene_gpu::PHOTO_SUN_DISC;
+                frame.photo_f[1] = half.cos() as f32;
+            }
         }
         if lighting.look.sky.on {
             frame.flags |= FRAME_SKY;
