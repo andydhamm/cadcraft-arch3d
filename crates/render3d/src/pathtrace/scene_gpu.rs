@@ -2341,7 +2341,7 @@ mod ext_tests {
     fn edge_radius_nan_uses_default() {
         let mut scene = Scene3d::default();
         scene.meshes.push(tri_mesh("nan", 1, 0.0));
-        let ext = MaterialExt { edge_radius: Some(f64::NAN), ..Default::default() };
+        let ext = MaterialExt { edge_radius: Some(f32::NAN), ..Default::default() };
         scene.materials.insert("nan".into(), MaterialDef { ext, ..Default::default() });
         let base = build_gpu_scene(&scene, false, None);
         let mut gpu = base.clone();
@@ -2353,7 +2353,7 @@ mod ext_tests {
     fn emission_nan_is_not_set() {
         let mut scene = Scene3d::default();
         scene.meshes.push(tri_mesh("nanemit", 1, 0.0));
-        scene.materials.insert("nanemit".into(), MaterialDef { emission: f64::NAN, ..Default::default() });
+        scene.materials.insert("nanemit".into(), MaterialDef { emission: f32::NAN, ..Default::default() });
         let base = build_gpu_scene(&scene, false, None);
         let mut gpu = base.clone();
         apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions::default());
