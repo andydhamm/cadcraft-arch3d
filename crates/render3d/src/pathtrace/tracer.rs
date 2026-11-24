@@ -57,6 +57,8 @@ pub struct PathTracer {
     stopped: bool,
     /// Seconds per sample per pixel of the last pass (kept under a time budget to size the next).
     seconds_per_sample: Option<f32>,
+    /// Samples per pixel of the last pass (under a time budget the next pass at most doubles it).
+    last_pass: u32,
 }
 
 // The accumulator's layout (`n = width · height`; kernel.wgsl documents the same):
@@ -309,6 +311,7 @@ impl PathTracer {
             started: std::time::Instant::now(),
             stopped: false,
             seconds_per_sample: None,
+            last_pass: 1,
         })
     }
 
@@ -334,7 +337,8 @@ impl PathTracer {
                 Some(sps) if budget.is_finite() && sps.is_finite() && sps > 0.0 => {
                     let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 2.0;
                     let fit = (left / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
-                    this_pass = this_pass.min(fit);
+                    // Grow gradually: one slow (contended) pass must not be followed by a huge one.
+                    this_pass = this_pass.min(fit).min(self.last_pass.saturating_mul(2).max(1));
                 }
                 // No timing yet: a one-sample pass measures the speed without risking the budget.
                 None => this_pass = 1,
@@ -422,6 +426,7 @@ impl PathTracer {
             // The clock must see the pass finished, not just queued.
             let _ = d.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(std::time::Duration::from_secs(300)) });
             self.seconds_per_sample = Some(pass_started.elapsed().as_secs_f32() / this_pass.max(1) as f32);
+            self.last_pass = this_pass.max(1);
         }
 
         self.spp_done += this_pass;
