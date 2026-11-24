@@ -128,3 +128,129 @@ pub(crate) fn pfm_keys(written: Option<&std::path::Path>, stage: LinearStagePara
     m.insert("pfmStage".into(), written.map_or(Value::Null, |_| json!(stage_name(stage))));
     m
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cadcraft_arch3d::calibrate::{CalibLight, CalibObject, Calibration};
+    use cadcraft_engine::doc::arch::{DenoiseMode, EdgeMode, Lens, LensProjection, Materials, PhotoSettings};
+
+    #[test]
+    fn calibrate_key_is_deterministic_and_distinct() {
+        let mut c1 = Calibration::default();
+        c1.objects.push(CalibObject::default());
+        let mut c2 = Calibration::default();
+        c2.objects.push(CalibObject::default());
+        assert_eq!(calibrate_key(&c1), calibrate_key(&c2), "identical calibrations must have the same key");
+
+        let mut c3 = Calibration::default();
+        c3.objects.push(CalibObject { segments: 64, ..CalibObject::default() });
+        assert_ne!(calibrate_key(&c1), calibrate_key(&c3), "different calibrations must have different keys");
+
+        // Key must have the top bit set (distinguish from drawing revisions).
+        assert!(calibrate_key(&c1) >> 63 == 1);
+    }
+
+    #[test]
+    fn keeps_spp_for_rung_and_adaptive() {
+        let mut p = PhotoSettings::default();
+        assert!(!keeps_spp(&p), "default render does not keep spp");
+        p.rung = Some(3);
+        assert!(keeps_spp(&p), "rung render keeps spp");
+        p.rung = None;
+        p.adaptive = true;
+        assert!(keeps_spp(&p), "adaptive render keeps spp");
+    }
+
+    #[test]
+    fn photo_value_echoes_all_settings() {
+        let mut p = PhotoSettings::default();
+        p.rung = Some(7);
+        p.edges = EdgeMode::Radius(0.005);
+        p.materials = Materials::Full;
+        p.variation = true;
+        p.clamp = Some(10.0);
+        p.adaptive = true;
+        p.noise_target = Some(0.01);
+        p.time_budget = Some(30.0);
+        p.roughness_guide = true;
+        p.denoise = DenoiseMode::Learned;
+
+        let v = photo_value(&p, 8, 0.5);
+        assert_eq!(v["rung"], json!(7));
+        assert_eq!(v["edges"], json!({ "radius": 0.005 }));
+        assert_eq!(v["materials"], "full");
+        assert_eq!(v["variation"], true);
+        assert_eq!(v["bounces"], 8);
+        assert_eq!(v["sunDisc"], json!(0.5));
+        assert_eq!(v["clamp"], json!(10.0));
+        assert_eq!(v["adaptive"], true);
+        assert_eq!(v["noiseTarget"], json!(0.01));
+        assert_eq!(v["timeBudget"], json!(30.0));
+        assert_eq!(v["roughnessGuide"], true);
+        assert_eq!(v["denoise"], "learned");
+    }
+
+    #[test]
+    fn raster_fallback_keys_only_for_learned() {
+        let m = raster_fallback_keys(DenoiseMode::Learned);
+        assert_eq!(m["denoiser"], "none");
+        assert_eq!(m["denoiseFallback"], "no compute shaders");
+
+        let m2 = raster_fallback_keys(DenoiseMode::Filter);
+        assert!(m2.is_empty(), "no fallback keys when filter was asked: {m2:?}");
+
+        let m3 = raster_fallback_keys(DenoiseMode::None);
+        assert!(m3.is_empty(), "no fallback keys when none was asked: {m3:?}");
+    }
+
+    #[test]
+    fn pfm_bytes_requires_correct_size() {
+        let size = (10u32, 5u32);
+        let mut st = PathStats::default();
+        st.linear = Some(vec![[1.0, 1.0, 1.0]; 10 * 5]);
+        assert!(pfm_bytes(&st, size).is_some(), "correct size must produce PFM bytes");
+
+        st.linear = Some(vec![[1.0, 1.0, 1.0]; 100]); // wrong size
+        assert!(pfm_bytes(&st, size).is_none(), "wrong size must not produce PFM bytes");
+
+        st.linear = None;
+        assert!(pfm_bytes(&st, size).is_none(), "no linear image must not produce PFM bytes");
+    }
+
+    #[test]
+    fn pfm_keys_written_and_null() {
+        let path = std::path::Path::new("/tmp/test.pfm");
+        let m = pfm_keys(Some(path), LinearStageParam::Radiance);
+        assert_eq!(m["pfm"], json!("/tmp/test.pfm"));
+        assert_eq!(m["pfmStage"], "radiance");
+
+        let m2 = pfm_keys(None, LinearStageParam::Film);
+        assert!(m2["pfm"].is_null());
+        assert!(m2["pfmStage"].is_null());
+    }
+
+    #[test]
+    fn lens_view_neutral_and_non_neutral() {
+        let mut lighting = Lighting::default();
+        let v = lens_view(&lighting);
+        assert!(v.is_neutral(), "default lighting must produce neutral lens view");
+
+        lighting.lens.panini = true;
+        lighting.lens.compression = 0.8;
+        lighting.lens.shift = 0.1;
+        let v2 = lens_view(&lighting);
+        assert!(!v2.is_neutral(), "non-default lens must produce non-neutral lens view");
+        assert_eq!(v2.panini, true);
+        assert!((v2.compression - 0.8).abs() < 1e-6, "compression: {}", v2.compression);
+        assert!((v2.shift - 0.1).abs() < 1e-6, "shift: {}", v2.shift);
+    }
+
+    #[test]
+    fn stage_name_matches_stage_of() {
+        assert_eq!(stage_name(LinearStageParam::Radiance), "radiance");
+        assert_eq!(stage_name(LinearStageParam::Film), "film");
+        assert_eq!(stage_of(LinearStageParam::Radiance), LinearStage::Radiance);
+        assert_eq!(stage_of(LinearStageParam::Film), LinearStage::Film);
+    }
+}
