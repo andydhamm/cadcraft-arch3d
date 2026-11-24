@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 11:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 12:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 35 of 36 segments merged · 10 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 36 of 36 segments merged · 10 of 15 acceptance checks**
 
-11,772 workspace tests passing at the last merge · 1370 segments merged in all · 0 of 15 seats working
+11,874 workspace tests passing at the last merge · 1371 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,20 +32,18 @@ Updated 2026-11-24 11:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 10 / 15 | 18.3 h so far · expected done Nov 24 12:06–Nov 24 22:08 UTC |
+| 22 | Photoreal stills | building | 10 / 15 | 18.5 h so far · expected done Nov 24 12:00–Nov 24 23:01 UTC |
 
 ## Phase 22 segments
 
-35 merged, 1 merging
+36 merged
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 11:45 | `upstream-sync-bf1d872e5` | merged | 11,874 pass | claude-sonnet-c |
 | Nov 24 11:15 | `harden-p22-ui-pane-photoreal` | merged | 11,772 pass | tturbo-mac |
 | Nov 24 11:15 | `harden-p22-r3d-unet-gpu` | merged | 11,772 pass | tturbo-mac2 |
 | Nov 24 11:15 | `harden-p22-r3d-material-map` | merged | 11,772 pass | tturbo-mac |
@@ -57,7 +55,6 @@ Updated 2026-11-24 11:45 UTC. This page and the card in the README are regenerat
 | Nov 24 10:14 | `harden-p22-r3d-roughness-guide` | merged | 11,736 pass | tturbo-mac |
 | Nov 24 10:14 | `harden-p16-vault-ceiling` | merged | 11,736 pass | tturbo-mac |
 | Nov 24 10:14 | `p22-docs-user-guide` | merged | 11,736 pass | claude-sonnet-a |
-| Nov 24 10:14 | `harden-p16f2-silhouette-depth` | merged | 11,736 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -76,5 +73,5 @@ Updated 2026-11-24 11:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1220 |
+| tturbo-mac | tturbo-ultraheretic | idle | 1221 |
 | tturbo-mac2 | tturbo-ultraheretic | agent | 722 |
