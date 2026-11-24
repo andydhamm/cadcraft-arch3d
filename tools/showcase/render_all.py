@@ -274,7 +274,8 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64, with_photo=Fa
         replay_photo = ['--commands', SCRIPT, '--commands', PHOTO_SCRIPT]
         add('photo.dxf', 'replay', 'photo', replay_photo + ['--save', 'photo.dxf'])
         for cam, folder in zip(PHOTO_CAMERA_NAMES, PHOTO_FOLDERS):
-            add(folder, 'ladder', cam, [('render.ladder', {'camera': cam, 'out': folder, 'size': [640, 400]}])
+            ladder_dir = f'ladder-{folder}'
+            add(ladder_dir, 'ladder', cam, [('render.ladder', {'camera': cam, 'out': ladder_dir, 'size': [640, 400]}])
             f = file_name('photoreal', folder, '.png')
             add(f, 'photoreal', cam, [('render', {'camera': cam, 'size': [1920, 1080], 'out': f})])
     replay = ['--commands', SCRIPT]
@@ -355,6 +356,7 @@ def main(argv):
     r = Runner(cli_base(a.cli_json), dxf)
     rs = Runner(r.base, set_dxf)
     r_photo = Runner(r.base, photo_dxf) if (a.full and not a.no_photo) else None
+    photo = a.full and not a.no_photo
     images, exports, skipped, drawing_set, ladders, photoreal_files, photo_script_sha = [], {}, False, None, [], [], None
 
     def p(f):
