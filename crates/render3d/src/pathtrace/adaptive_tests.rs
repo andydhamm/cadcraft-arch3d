@@ -260,6 +260,83 @@ fn sample_cap_stops_with_samples() {
     assert_eq!(s.spp_done, 32);
 }
 
+#[test]
+fn pixel_errors_handles_nan_and_non_finite() {
+    // NaN in radiance sum: luminance is NaN, pixel is treated as a miss (None).
+    let accum = accum_of(&[(f32::NAN, 1.0, 16.0, true)]);
+    let errors = pixel_errors(&accum, 1);
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0], None, "NaN radiance gives no error");
+
+    // Infinity in radiance sum: luminance is infinite, treated as a miss.
+    let accum = accum_of(&[(f32::INFINITY, 1.0, 16.0, true)]);
+    let errors = pixel_errors(&accum, 1);
+    assert_eq!(errors[0], None, "infinite radiance gives no error");
+
+    // Negative radiance: luminance can be negative, but is finite.
+    let accum = accum_of(&[(-1.0, 0.25, 16.0, true)]);
+    let errors = pixel_errors(&accum, 1);
+    assert!(errors[0].is_some(), "negative radiance gives a finite error");
+
+    // NaN in luminance-squared sum: variance_of_mean clamps to 0, error is 0.
+    let mut accum = accum_of(&[(1.0, 1.0, 16.0, true)]);
+    accum[1][0] = f32::NAN;
+    let errors = pixel_errors(&accum, 1);
+    assert!(errors[0].is_some(), "NaN sum_sq gives a finite error (clamped)");
+    assert!(errors[0].unwrap().is_finite());
+}
+
+#[test]
+fn converged_mask_zero_and_infinite_target() {
+    // target = 0: only pixels with exactly zero error converge.
+    let accum = accum_of(&[(1.0, 0.0, 16.0, true), (1.0, 1e-4, 16.0, true)]);
+    let mask = converged_mask(&accum, 2, 0.0, 16);
+    assert_eq!(mask, vec![true, false], "only zero-error pixel converges at target 0");
+
+    // target = infinity: all hit pixels with enough samples converge.
+    let mask = converged_mask(&accum, 2, f32::INFINITY, 16);
+    assert_eq!(mask, vec![true, true], "all hit pixels converge at infinite target");
+
+    // min_samples = 0: a pixel with zero samples converges if its error is low.
+    let accum = accum_of(&[(1.0, 1e-4, 0.0, true)]);
+    let mask = converged_mask(&accum, 1, 0.1, 0);
+    assert_eq!(mask, vec![true], "zero min_samples lets a young pixel converge");
+}
+
+#[test]
+fn frame_noise_single_pixel() {
+    // One hit pixel: noise is that pixel's error.
+    let accum = accum_of(&[(1.0, 0.04, 16.0, true)]);
+    let noise = frame_noise_from_accum(&accum, 1);
+    // error = sqrt(0.04/16) / 1 = 0.05
+    assert!((noise - 0.05).abs() < 1e-6, "single pixel noise {noise}");
+
+    // One miss pixel: noise is 0.
+    let accum = accum_of(&[(0.0, 0.0, 16.0, false)]);
+    assert_eq!(frame_noise_from_accum(&accum, 1), 0.0);
+}
+
+#[test]
+fn fill_stats_small_accumulator() {
+    use super::adaptive::fill_stats;
+    let accum = accum_of(&[(1.0, 0.01, 10.0, true), (2.0, 0.04, 20.0, true)]);
+    let mut stats = PathStats::default();
+    fill_stats(&accum, 2, &mut stats);
+    assert_eq!(stats.spp_min, 10);
+    assert_eq!(stats.spp_max, 20);
+    assert!((stats.spp_mean - 15.0).abs() < 1e-6, "mean {}", stats.spp_mean);
+    assert_eq!(stats.samples_total, 30);
+    assert!(stats.noise >= 0.0 && stats.noise.is_finite());
+}
+
+#[test]
+fn converged_mask_all_miss_pixels() {
+    // All miss pixels: all converge (no error to check).
+    let accum = accum_of(&[(0.0, 0.0, 16.0, false), (0.0, 0.0, 16.0, false)]);
+    let mask = converged_mask(&accum, 2, 0.1, 16);
+    assert_eq!(mask, vec![true, true], "miss pixels always converge");
+}
+
 // The two tests this file had before the adaptive rework, under their old names (a gate keeps a
 // file's existing tests): the same two properties on a cheaper render.
 #[test]
