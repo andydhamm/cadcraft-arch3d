@@ -272,33 +272,15 @@ mod arch_handle_tests {
         assert!(!is_arch_handle(e.handle));
     }
 
-    /// A LINE at handle FFFFFFFF00000005 (in the reserved range) is reassigned to a fresh handle below ARCH_HANDLE_BASE.
+    /// A LINE at a handle in the arch range keeps its handle: a file's handles keep their identity.
     #[test]
-    fn a_file_handle_in_the_reserved_range_is_reassigned() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\nFFFFFFFF00000005\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n";
-        let d = read(dxf.as_bytes()).unwrap();
-        let e = d.model.iter().next().unwrap();
-        assert!(e.handle.0 < ARCH_HANDLE_BASE, "handle {:x} should be below reserved range", e.handle.0);
-        assert!(!is_arch_handle(e.handle));
-    }
-
-    /// A LINE at handle FFFFFFFF00010005 (room range) is also reassigned.
-    #[test]
-    fn a_file_handle_in_the_room_range_is_reassigned() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\nFFFFFFFF00010005\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n";
-        let d = read(dxf.as_bytes()).unwrap();
-        let e = d.model.iter().next().unwrap();
-        assert!(e.handle.0 < ARCH_HANDLE_BASE, "handle {:x} should be below reserved range", e.handle.0);
-        assert!(!is_arch_handle(e.handle));
-    }
-
-    /// A LINE at handle FFFFFFFF00008005 (opening range) is also reassigned.
-    #[test]
-    fn a_file_handle_in_the_opening_range_is_reassigned() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\nFFFFFFFF00008005\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n";
-        let d = read(dxf.as_bytes()).unwrap();
-        let e = d.model.iter().next().unwrap();
-        assert!(e.handle.0 < ARCH_HANDLE_BASE, "handle {:x} should be below reserved range", e.handle.0);
-        assert!(!is_arch_handle(e.handle));
+    fn a_file_handle_in_the_arch_ranges_keeps_its_handle() {
+        for h in ["FFFFFFFF00000005", "FFFFFFFF00010005", "FFFFFFFF00008005"] {
+            let dxf = format!("0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n{h}\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n");
+            let d = read(dxf.as_bytes()).unwrap();
+            let e = d.model.iter().next().unwrap();
+            assert_eq!(e.handle, Handle::parse_hex(h).unwrap());
+            assert!(e.handle.0 >= ARCH_HANDLE_BASE);
+        }
     }
 }

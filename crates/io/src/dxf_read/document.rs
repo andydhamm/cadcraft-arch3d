@@ -55,7 +55,9 @@ pub(super) fn parse_entities(
         }
         if let Some((c, mut k)) = kindent {
             let h = match handle {
-                // A file's handles keep their identity, however high they are (#913, #939).
+                // A file's handles keep their identity, however high they are (#913, #939),
+                // including the band the arch proxies use: arch proxies are not entities in
+                // the store, so a file entity there is only ever looked up as an entity.
                 Some(h) => {
                     d.bump_handseed(h);
                     h

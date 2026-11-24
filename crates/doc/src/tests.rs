@@ -1,3 +1,5 @@
+use crate::DimKind;
+use crate::arch::*;
 use crate::*;
 use cadcraft_geom::{Bounds2, Mat3, PolyVertex, Vec2, Vec3};
 
@@ -1351,11 +1353,7 @@ fn room_deck_fields_default_and_skip() {
     assert!(r.deck_rails.is_empty());
     let v = serde_json::to_value(&r).unwrap();
     assert!(v.get("deck_boards").is_none() && v.get("deck_rails").is_none());
-    let d = Room {
-        deck_boards: Some(30.0),
-        deck_rails: vec![RailSetting::Off, RailSetting::On],
-        ..Room::default()
-    };
+    let d = Room { deck_boards: Some(30.0), deck_rails: vec![RailSetting::Off, RailSetting::On], ..Room::default() };
     let back: Room = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
     assert_eq!(back, d);
 }

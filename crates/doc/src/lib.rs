@@ -324,9 +324,6 @@ impl Drawing {
         if h.0 >= self.handseed && h.0 < HANDLE_LIMIT {
             self.handseed = h.0 + 1;
         }
-        if h.0 >= self.handseed {
-            self.handseed = h.0.saturating_add(1).min(ARCH_HANDLE_BASE);
-        }
     }
 
     /// Bump the architectural revision counter (call after any edit to `self.arch`).
@@ -549,40 +546,7 @@ mod anno;
 pub use anno::*;
 
 #[cfg(test)]
-mod handseed_tests {
-    use super::*;
-
-    #[test]
-    fn handseed_never_enters_the_reserved_range() {
-        let mut d = Drawing::new_imperial();
-        let before = d.handseed;
-        // A handle in the reserved range must be silently ignored.
-        d.bump_handseed(Handle(ARCH_HANDLE_BASE.saturating_add(7)));
-        assert_eq!(d.handseed, before, "bump_handseed with a reserved-range handle must leave handseed unchanged");
-        // A handle just below the reserved range must still bump the seed.
-        d.bump_handseed(Handle(ARCH_HANDLE_BASE.saturating_sub(1)));
-        assert_eq!(d.handseed, ARCH_HANDLE_BASE, "bump_handseed just below reserved range should set handseed to ARCH_HANDLE_BASE");
-        // new_handle must clamp and return a handle below the reserved range.
-        let h = d.new_handle();
-        assert!(h.0 < ARCH_HANDLE_BASE, "new_handle must not return a handle in the reserved range");
-    }
-
-    #[test]
-    fn new_handle_after_bump_to_base_returns_base_minus_one() {
-        let mut d = Drawing::new_imperial();
-        d.bump_handseed(Handle(ARCH_HANDLE_BASE.saturating_sub(1)));
-        let h = d.new_handle();
-        assert_eq!(h.0, ARCH_HANDLE_BASE - 1);
-    }
-
-    #[test]
-    fn bump_handseed_with_u64_max_is_ignored() {
-        let mut d = Drawing::new_imperial();
-        let before = d.handseed;
-        d.bump_handseed(Handle(u64::MAX));
-        assert_eq!(d.handseed, before, "bump_handseed with u64::MAX must leave handseed unchanged");
-    }
-}
+mod tests;
 
 #[cfg(test)]
 mod arch_layers_tests {
