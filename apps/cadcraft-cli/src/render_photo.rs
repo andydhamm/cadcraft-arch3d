@@ -208,10 +208,10 @@ mod tests {
     fn pfm_bytes_requires_correct_size() {
         let size = (10u32, 5u32);
         let mut st = PathStats::default();
-        st.linear = Some(vec![1.0; 10 * 5 * 3]);
+        st.linear = Some(vec![[1.0, 1.0, 1.0]; 10 * 5]);
         assert!(pfm_bytes(&st, size).is_some(), "correct size must produce PFM bytes");
 
-        st.linear = Some(vec![1.0; 100]); // wrong size
+        st.linear = Some(vec![[1.0, 1.0, 1.0]; 100]); // wrong size
         assert!(pfm_bytes(&st, size).is_none(), "wrong size must not produce PFM bytes");
 
         st.linear = None;
