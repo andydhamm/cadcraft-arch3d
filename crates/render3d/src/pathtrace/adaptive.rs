@@ -97,7 +97,7 @@ fn counts(accum: &[[f32; 4]], pixels: usize) -> (u32, u32, f32, u64) {
 }
 
 /// Set the sample statistics and the noise of `stats` from a whole accumulator (the final image).
-pub(super) fn fill_stats(accum: &[[f32; 4]], pixels: usize, stats: &mut PathStats) {
+pub(crate) fn fill_stats(accum: &[[f32; 4]], pixels: usize, stats: &mut PathStats) {
     let (min, max, mean, total) = counts(accum, pixels);
     stats.spp_min = min;
     stats.spp_max = max;
