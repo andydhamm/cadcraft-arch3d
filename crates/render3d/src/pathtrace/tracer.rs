@@ -59,6 +59,8 @@ pub struct PathTracer {
     seconds_per_sample: Option<f32>,
     /// Samples per pixel of the last pass (under a time budget the next pass at most doubles it).
     last_pass: u32,
+    /// The first pass (one-time device costs) has been run and left out of the budget clock.
+    warmed_up: bool,
 }
 
 // The accumulator's layout (`n = width · height`; kernel.wgsl documents the same):
@@ -312,6 +314,7 @@ impl PathTracer {
             stopped: false,
             seconds_per_sample: None,
             last_pass: 1,
+            warmed_up: false,
         })
     }
 
@@ -427,10 +430,18 @@ impl PathTracer {
         if self.opts.time_budget.is_some() {
             // The clock must see the pass finished, not just queued.
             let _ = d.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(std::time::Duration::from_secs(300)) });
-            // Keep the slower of the last two estimates: a lucky quick pass must not license a huge one.
-            let sps = pass_started.elapsed().as_secs_f32() / this_pass.max(1) as f32;
-            self.seconds_per_sample = Some(self.seconds_per_sample.map_or(sps, |old| if old.is_finite() { sps.max(old * 0.5) } else { sps }));
-            self.last_pass = this_pass.max(1);
+            if self.seconds_per_sample.is_none() && !self.warmed_up {
+                // The first dispatch pays one-time costs (shader compilation on a software device,
+                // which can take many seconds under load). That is set-up, not tracing: restart the
+                // budget clock and measure the speed on the next one-sample pass.
+                self.warmed_up = true;
+                self.started = std::time::Instant::now();
+            } else {
+                // Keep the slower of the last two estimates: a lucky quick pass must not license a huge one.
+                let sps = pass_started.elapsed().as_secs_f32() / this_pass.max(1) as f32;
+                self.seconds_per_sample = Some(self.seconds_per_sample.map_or(sps, |old| if old.is_finite() { sps.max(old * 0.5) } else { sps }));
+                self.last_pass = this_pass.max(1);
+            }
         }
 
         self.spp_done += this_pass;
