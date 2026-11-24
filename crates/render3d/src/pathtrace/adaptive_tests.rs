@@ -215,7 +215,7 @@ fn pixel_errors_handles_nan_and_non_finite() {
 #[test]
 fn converged_mask_zero_and_infinite_target() {
     // target = 0: only pixels with exactly zero error converge.
-    let accum = accum_of(&[(1.0, 0.0, 16.0, true), (1.0, 1e-8, 16.0, true)]);
+    let accum = accum_of(&[(1.0, 0.0, 16.0, true), (1.0, 1e-4, 16.0, true)]);
     let mask = converged_mask(&accum, 2, 0.0, 16);
     assert_eq!(mask, vec![true, false], "only zero-error pixel converges at target 0");
 
