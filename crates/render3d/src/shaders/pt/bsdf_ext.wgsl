@@ -118,7 +118,7 @@ fn ext_ggx_albedo2(lo: vec3<f32>, at: f32, ab: f32) -> vec2<f32> {
     let lam_o = ext_aniso_lambda(lo, at, ab);
     var a = 0.0;
     var b = 0.0;
-    for (var k = 0u; k < 64u; k = k + 1u) {
+    for (var k = 0u; k < 256u; k = k + 1u) {
         let u1 = fract(0.5 + f32(k) * 0.7548776662);
         let u2 = fract(0.5 + f32(k) * 0.5698402910);
         let h = ext_sample_vndf(lo, at, ab, u1, u2);
@@ -131,7 +131,7 @@ fn ext_ggx_albedo2(lo: vec3<f32>, at: f32, ab: f32) -> vec2<f32> {
             b = b + g * (w2 * w2 * w);
         }
     }
-    return vec2<f32>(a, b) / 64.0;
+    return vec2<f32>(a, b) / 256.0;
 }
 
 // ext_ggx_albedo2 for a Fresnel F0 f0: Schlick is linear in f0, f0 A + (1 - f0) B.
@@ -164,15 +164,18 @@ fn ext_mix(m: Material, lo: vec3<f32>) -> ExtMix {
     if (l.p_spec > 0.0) {
         if (x.base_mirror != 0u) {
             spec_albedo = l.fresnel;
-        } else if (aniso > 0.0) {
-            // Multiple-scattering compensation: scale the lobe by 1 + f0 (1 - E) / E, E being
-            // its albedo with F = 1, so a white metal returns all its energy.
+        } else {
+            // Multiple-scattering compensation for all non-mirror specular lobes (isotropic and
+            // anisotropic): scale the lobe by 1 + f0 (1 - E) / E, E being its albedo with F = 1,
+            // so a white metal returns all its energy. E is estimated from the isotropic albedo
+            // table with the effective roughness sqrt(alpha_t * alpha_b), which is rotationally
+            // invariant; the anisotropic estimate is used for the diffuse split and lobe weight.
             let s = ext_ggx_albedo2(lo, x.alpha_t, x.alpha_b);
-            let e = clamp(s.x, 0.05, 1.0);
+            let alpha_eff = sqrt(x.alpha_t * x.alpha_b);
+            let e_iso = bsdf_spec_albedo(vec3<f32>(1.0), alpha_eff, nov);
+            let e = clamp(e_iso.x, 0.05, 1.0);
             x.spec_ms = vec3<f32>(1.0) + l.f0 * ((1.0 - e) / e);
             spec_albedo = min((l.f0 * s.x + (vec3<f32>(1.0) - l.f0) * s.y) * x.spec_ms, vec3<f32>(1.0));
-        } else {
-            spec_albedo = bsdf_spec_albedo(l.f0, clamp(m.roughness, 0.0, 1.0), nov);
         }
         diffuse = diffuse * (vec3<f32>(1.0) - spec_albedo);
     }
