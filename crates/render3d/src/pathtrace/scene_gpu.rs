@@ -2271,4 +2271,92 @@ mod ext_tests {
         assert_eq!(gpu.materials[1].emission, [300.0; 3]);
         assert_eq!(gpu.materials[0].emission, [0.0; 3]);
     }
+
+    #[test]
+    fn mat_trans_flag_set_when_thin() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("thin", 1, 0.0));
+        let ext = MaterialExt { thin: true, ..Default::default() };
+        scene.materials.insert("thin".into(), MaterialDef { ext, ..Default::default() });
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions { materials_full: true, ..Default::default() });
+        assert_eq!(gpu.materials[0].flags & MAT_TRANS, MAT_TRANS, "MAT_TRANS must be set when thin");
+        assert_eq!(gpu.materials[0].flags & MAT_THIN, MAT_THIN, "MAT_THIN must be set when thin");
+    }
+
+    #[test]
+    fn mat_trans_flag_set_when_transmission_and_rough() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("trans", 1, 0.0));
+        let ext = MaterialExt { transmission: 0.5, ..Default::default() };
+        scene.materials.insert("trans".into(), MaterialDef { ext, roughness: 0.1, ..Default::default() });
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions { materials_full: true, ..Default::default() });
+        assert_eq!(gpu.materials[0].flags & MAT_TRANS, MAT_TRANS, "MAT_TRANS must be set when transmission > 0 and rough");
+        assert_eq!(gpu.materials[0].flags & MAT_THIN, 0, "MAT_THIN must not be set when not thin");
+        assert_eq!(gpu.materials[0].transmission, 0.5);
+    }
+
+    #[test]
+    fn mat_trans_flag_not_set_when_smooth() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("smooth", 1, 0.0));
+        let ext = MaterialExt { transmission: 0.5, ..Default::default() };
+        scene.materials.insert("smooth".into(), MaterialDef { ext, roughness: 0.01, ..Default::default() });
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions { materials_full: true, ..Default::default() });
+        assert_eq!(gpu.materials[0].flags & MAT_TRANS, 0, "MAT_TRANS must not be set for smooth transmission");
+    }
+
+    #[test]
+    fn ior_and_overrides_are_copied() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("ior", 1, 0.0));
+        let ext = MaterialExt { ior: 2.0, metallic: Some(0.8), roughness: Some(0.3), ..Default::default() };
+        scene.materials.insert("ior".into(), MaterialDef { ext, ..Default::default() });
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions { materials_full: true, ..Default::default() });
+        assert_eq!(gpu.materials[0].ior, 2.0, "ior must be copied");
+        assert_eq!(gpu.materials[0].metallic, 0.8, "metallic override must be applied");
+        assert_eq!(gpu.materials[0].roughness, 0.3, "roughness override must be applied");
+    }
+
+    #[test]
+    fn edge_radius_zero_is_kept() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("zero", 1, 0.0));
+        let ext = MaterialExt { edge_radius: Some(0.0), ..Default::default() };
+        scene.materials.insert("zero".into(), MaterialDef { ext, ..Default::default() });
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions::default());
+        assert_eq!(gpu.materials[0].edge_radius, 0.0, "edge_radius 0.0 must be kept");
+    }
+
+    #[test]
+    fn edge_radius_nan_uses_default() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("nan", 1, 0.0));
+        let ext = MaterialExt { edge_radius: Some(f32::NAN), ..Default::default() };
+        scene.materials.insert("nan".into(), MaterialDef { ext, ..Default::default() });
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions::default());
+        assert_eq!(gpu.materials[0].edge_radius, cadcraft_doc::arch::DEFAULT_EDGE_RADIUS as f32, "NaN edge_radius must use default");
+    }
+
+    #[test]
+    fn emission_nan_is_not_set() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("nanemit", 1, 0.0));
+        scene.materials.insert("nanemit".into(), MaterialDef { emission: f32::NAN, ..Default::default() });
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), &PathOptions::default());
+        assert_eq!(gpu.materials[0].emission, [0.0; 3], "NaN emission must not be set");
+    }
 }
