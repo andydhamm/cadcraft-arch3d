@@ -160,4 +160,34 @@ mod tests {
         assert!(closed_polyline(&[Vec2::new(0.0, 0.0), Vec2::new(f64::INFINITY, 0.0), Vec2::new(1.0, 1.0)]).is_none());
         assert!(closed_polyline(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)]).is_none());
     }
+
+    #[test]
+    fn empty_model_has_no_ceiling_proxies() {
+        let m = ArchModel::default();
+        assert!(proxy_ceiling_entities(&m).is_empty());
+        assert!(proxy_layers(&m).is_empty());
+    }
+
+    #[test]
+    fn triangular_soffit_ring_is_a_valid_proxy() {
+        let mut m = model();
+        let p = |x, y| Vec2::new(x, y);
+        m.soffits[0].polygon = vec![p(0.0, 0.0), p(1.0, 0.0), p(0.5, 1.0)];
+        let tags = proxy_ceiling_entities(&m);
+        let clng = on_layer(&tags, "A-CLNG");
+        assert_eq!(clng.len(), 1);
+        assert_eq!(clng[0].2.iter().filter(|t| t.code == 10).count(), 3);
+    }
+
+    #[test]
+    fn soffit_ring_with_repeated_first_vertex_is_not_duplicated() {
+        let mut m = model();
+        let p = |x, y| Vec2::new(x, y);
+        m.soffits[0].polygon = vec![p(7.0, 7.3), p(9.0, 7.3), p(9.0, 7.9), p(7.0, 7.9), p(7.0, 7.3)];
+        let tags = proxy_ceiling_entities(&m);
+        let clng = on_layer(&tags, "A-CLNG");
+        assert_eq!(clng.len(), 1);
+        // The repeated vertex should be dropped, so 4 points not 5
+        assert_eq!(clng[0].2.iter().filter(|t| t.code == 10).count(), 4);
+    }
 }
