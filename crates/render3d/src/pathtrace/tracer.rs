@@ -565,7 +565,7 @@ impl PathTracer {
         let colors_accum = &accum[..pixels];
         // The reply describes the image that is written: its real per-pixel counts and noise.
         if self.opts.adaptive || self.opts.noise_target.is_some() {
-            super::adaptive::fill_stats(&accum, pixels, &mut self.stats);
+            super::adaptive::fill_stats(&accum, self.size, &mut self.stats);
         }
         // Each pixel holds its radiance summed over its samples, with the sample count in w.
         let mean_of = |p: &[f32; 4]| {
@@ -740,6 +740,15 @@ impl PathTracer {
         };
         read.unmap();
         Some(out)
+    }
+
+    /// The accumulator as it stands (radiance sums and counts, then the luminance-squared sums and
+    /// hit counts), for tests that compare the means of two renders.
+    #[cfg(test)]
+    pub(super) fn accum_snapshot(&self, gpu: &ComputeGpu) -> Option<Vec<[f32; 4]>> {
+        let bytes = (self.size.0 as usize).checked_mul(self.size.1 as usize)?.checked_mul(32)?;
+        let data = self.read_buffer(gpu, &self.accum, bytes as u64).ok()?;
+        Some(bytemuck::cast_slice(&data).to_vec())
     }
 
     fn read_buffer(&self, gpu: &ComputeGpu, buf: &wgpu::Buffer, size: u64) -> Result<Vec<u8>, String> {

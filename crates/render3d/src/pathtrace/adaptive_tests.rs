@@ -1,4 +1,4 @@
-use super::adaptive::{converged_mask, frame_noise_from_accum, pixel_errors};
+use super::adaptive::{MIN_SAMPLES_HIT, MIN_SAMPLES_MISS, converged_mask, frame_noise_from_accum, freeze_flags, pixel_errors};
 use super::device::ComputeGpu;
 use super::tracer::PathTracer;
 use super::{PathOptions, PathStats, PathStatus, StopReason};
@@ -24,42 +24,116 @@ fn accum_of(px: &[(f32, f32, f32, bool)]) -> Vec<[f32; 4]> {
     accum
 }
 
+/// A strip of 22 quiet hit pixels (64 samples, mean 1) with `special` pixels put in at their index.
+fn strip(special: &[(usize, (f32, f32, f32, bool))]) -> Vec<[f32; 4]> {
+    let mut px = vec![(1.0, 1e-4, 64.0, true); 22];
+    for &(i, p) in special {
+        px[i] = p;
+    }
+    accum_of(&px)
+}
+
 #[test]
 fn converged_mask_marks_pixels_under_the_target() {
-    // Quiet: error sqrt(1e-4 / 16) = 0.0025. Noisy: sqrt(4 / 16) / 1 = 0.5. Lbar = 1.
-    let accum = accum_of(&[(1.0, 1e-4, 16.0, true), (1.0, 4.0, 16.0, true), (0.0, 0.0, 16.0, false), (1.0, 1e-4, 8.0, true)]);
-    let errors = pixel_errors(&accum, 4);
-    assert_eq!(errors.len(), 4);
-    assert!((errors[0].unwrap_or(9.0) - 0.0025).abs() < 1e-4, "{errors:?}");
-    assert!((errors[1].unwrap_or(9.0) - 0.5).abs() < 1e-3, "{errors:?}");
-    assert_eq!(errors[2], None, "a miss pixel has no error");
-    assert_eq!(converged_mask(&accum, 4, 0.1, 16), vec![true, false, true, false]);
+    // Far apart so the 5 x 5 pooling of one does not reach another. Quiet: error
+    // sqrt(1e-4 / 64) = 0.00125. Noisy (index 7): own sqrt(4 / 64) = 0.25. A miss (14) and a young
+    // quiet pixel (21, 32 samples).
+    let accum = strip(&[(7, (1.0, 4.0, 64.0, true)), (14, (0.0, 0.0, 16.0, false)), (21, (1.0, 1e-4, 32.0, true))]);
+    let size = (22, 1);
+    let errors = pixel_errors(&accum, size);
+    assert_eq!(errors.len(), 22);
+    assert!((errors[0].unwrap_or(9.0) - 0.00125).abs() < 1e-4, "{errors:?}");
+    assert!((errors[7].unwrap_or(9.0) - 0.25).abs() < 1e-3, "{errors:?}");
+    assert_eq!(errors[14], None, "a miss pixel has no error");
+    let at = |m: &[bool], i: usize| m.get(i).copied();
+    let m = converged_mask(&accum, size, 0.1, 64);
+    assert_eq!([0, 7, 14, 21].map(|i| at(&m, i)), [Some(true), Some(false), Some(true), Some(false)]);
     // A looser target takes the noisy pixel; a stricter one takes the quiet pixel back.
-    assert_eq!(converged_mask(&accum, 4, 0.6, 16), vec![true, true, true, false]);
-    assert_eq!(converged_mask(&accum, 4, 0.001, 16), vec![false, false, true, false]);
+    let m = converged_mask(&accum, size, 0.3, 64);
+    assert_eq!(at(&m, 7), Some(true));
+    let m = converged_mask(&accum, size, 0.0005, 64);
+    assert_eq!([0, 14].map(|i| at(&m, i)), [Some(false), Some(true)]);
     // Fewer samples needed: the young pixel counts.
-    assert_eq!(converged_mask(&accum, 4, 0.1, 8), vec![true, false, true, true]);
+    assert_eq!(at(&converged_mask(&accum, size, 0.1, 32), 21), Some(true));
     // A short slice gives nothing, and does not panic.
-    assert!(converged_mask(&accum[..5], 4, 0.1, 16).is_empty());
-    assert!(pixel_errors(&[], 4).is_empty());
-    assert!(converged_mask(&accum, 0, 0.1, 16).is_empty());
+    assert!(converged_mask(&accum[..5], size, 0.1, 64).is_empty());
+    assert!(pixel_errors(&[], size).is_empty());
+    assert!(converged_mask(&accum, (0, 0), 0.1, 64).is_empty());
 }
 
 #[test]
 fn noise_metric_is_the_95th_percentile_of_relative_error() {
-    // Twenty hit pixels of mean luminance 1 (so Lbar = 1 and the floor 0.05 * Lbar is not reached).
-    // Standard errors sqrt(var / 16): 17 pixels 0.025, then 0.05, 0.1 and 0.25. The 95th percentile
-    // of 20 is the 19th smallest: 0.1.
-    let mut px = vec![(1.0, 0.01, 16.0, true); 17];
-    px.push((1.0, 0.04, 16.0, true));
-    px.push((1.0, 0.16, 16.0, true));
-    px.push((1.0, 1.0, 16.0, true));
-    let accum = accum_of(&px);
-    let noise = frame_noise_from_accum(&accum, 20);
-    assert!((noise - 0.1).abs() < 1e-3, "expected 0.1, got {noise}");
+    // A flat 5 x 4 frame of mean 1 and per-sample variance 0.04 at 16 samples: every pooled error
+    // is sqrt(0.04 / 16) = 0.05, so is the percentile.
+    let accum = accum_of(&[(1.0, 0.04, 16.0, true); 20]);
+    let noise = frame_noise_from_accum(&accum, (5, 4));
+    assert!((noise - 0.05).abs() < 1e-4, "expected 0.05, got {noise}");
+    // It is the 95th percentile of the per-pixel errors.
+    let mut errors: Vec<f32> = pixel_errors(&accum, (5, 4)).into_iter().flatten().collect();
+    errors.sort_by(|a, b| a.total_cmp(b));
+    assert_eq!(errors.get(18).copied(), Some(noise));
     // Miss pixels are left out of the percentile; a frame of misses has no noise.
-    assert_eq!(frame_noise_from_accum(&accum_of(&[(0.0, 0.0, 16.0, false); 4]), 4), 0.0);
-    assert_eq!(frame_noise_from_accum(&accum[..10], 20), 0.0);
+    assert_eq!(frame_noise_from_accum(&accum_of(&[(0.0, 0.0, 16.0, false); 4]), (4, 1)), 0.0);
+    assert_eq!(frame_noise_from_accum(&accum[..10], (5, 4)), 0.0);
+}
+
+/// A `side` x `side` frame of one-sample-variance-`var` pixels (mean 1, 64 samples) with the centre
+/// pixel's variance set to `centre`.
+fn square(side: usize, var: f32, centre: f32) -> Vec<[f32; 4]> {
+    let mut px = vec![(1.0, var, 64.0, true); side * side];
+    px[side * (side / 2) + side / 2] = (1.0, centre, 64.0, true);
+    accum_of(&px)
+}
+
+#[test]
+fn a_pixel_with_no_variance_beside_noisy_neighbours_is_not_converged() {
+    let size = (5, 5);
+    let centre = 12;
+    // 24 neighbours of relative variance 100 and a centre of 0: rho = 24 * 100 / 25 = 96.
+    let accum = square(5, 100.0, 0.0);
+    let e = pixel_errors(&accum, size).get(centre).copied().flatten().unwrap_or(0.0);
+    assert!((e - (96.0f32 / 64.0).sqrt()).abs() < 1e-3, "{e}");
+    assert!(e > 0.5);
+    assert_eq!(converged_mask(&accum, size, 0.25, 64).get(centre), Some(&false));
+    // Flat neighbours: the centre is as good as they are.
+    let flat = square(5, 0.0, 0.0);
+    assert_eq!(converged_mask(&flat, size, 0.25, 64).get(centre), Some(&true));
+}
+
+#[test]
+fn pooled_error_is_the_ratio_of_sums_over_the_window() {
+    // A 7 x 1 strip, 64 samples each; luminance 1, 2, 1, 2, 1, 2, 1 and per-sample variance
+    // 0.5, 2, 3, 4, 5, 6, 7. Lbar = 10 / 7, so the floor 0.0714 is never reached.
+    let l = [1.0f32, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0];
+    let v = [0.5f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+    let px: Vec<_> = l.iter().zip(&v).map(|(&l, &v)| (l, v, 64.0, true)).collect();
+    let errors = pixel_errors(&accum_of(&px), (7, 1));
+    // Pixel 0 (clipped window 0..=2): sum v = 5.5, sum L^2 = 6; own = 0.5 is smaller.
+    let e0 = errors.first().copied().flatten().unwrap_or(0.0);
+    assert!((e0 - (5.5f32 / 6.0 / 64.0).sqrt()).abs() < 1e-5, "{e0}");
+    // Pixel 3 (window 1..=5): sum v = 20, sum L^2 = 4 + 1 + 4 + 1 + 4 = 14; own = 4 / 4 = 1.
+    let e3 = errors.get(3).copied().flatten().unwrap_or(0.0);
+    assert!((e3 - (20.0f32 / 14.0 / 64.0).sqrt()).abs() < 1e-5, "{e3}");
+}
+
+#[test]
+fn hit_pixels_need_sixty_four_samples_and_misses_sixteen() {
+    assert_eq!((MIN_SAMPLES_HIT, MIN_SAMPLES_MISS), (64, 16));
+    let accum = accum_of(&[(1.0, 0.0, 63.0, true), (1.0, 0.0, 64.0, true), (0.0, 0.0, 15.0, false), (0.0, 0.0, 16.0, false)]);
+    assert_eq!(converged_mask(&accum, (4, 1), 0.25, MIN_SAMPLES_HIT), vec![false, true, false, true]);
+}
+
+#[test]
+fn a_frozen_pixel_thaws_when_its_neighbourhood_gets_noisier() {
+    let size = (5, 5);
+    let centre = 12;
+    let quiet = converged_mask(&square(5, 1e-4, 1e-4), size, 0.25, MIN_SAMPLES_HIT);
+    assert_eq!(freeze_flags(&quiet).get(centre), Some(&1.0), "frozen while the neighbourhood is quiet");
+    // The same pixel, its own samples unchanged, with noisy neighbours: the flag goes back to 0.
+    let noisy = converged_mask(&square(5, 100.0, 1e-4), size, 0.25, MIN_SAMPLES_HIT);
+    let flags = freeze_flags(&noisy);
+    assert_eq!(flags.get(centre), Some(&0.0), "{flags:?}");
+    assert_eq!(freeze_flags(&[true, false]), vec![1.0, 0.0]);
 }
 
 fn gpu_or_skip() -> Option<ComputeGpu> {
@@ -201,4 +275,97 @@ fn adaptive_is_deterministic_for_a_seed() {
     let Some(gpu) = gpu_or_skip() else { return };
     let opts = options(true, Some(0.2), 256);
     assert_eq!(render(&gpu, &opts).0, render(&gpu, &opts).0, "the same seed gives the same image");
+}
+
+// ---- rare bright paths ---------------------------------------------------------------------------
+
+const ROOM_W: u32 = 48;
+const ROOM_H: u32 = 32;
+
+/// A closed 6 m room lit only by a narrow spot hung from the ceiling: the lit patch on the floor is
+/// small, so the light reaches most of the room by rare bright paths (a bounce ray hitting the patch).
+fn rare_path_room() -> Scene3d {
+    let square = |lo: f64, hi: f64| [Vec2::new(lo, lo), Vec2::new(hi, lo), Vec2::new(hi, hi), Vec2::new(lo, hi)];
+    let mut floor = Mesh::new("floor", ArchId(1));
+    floor.push_prism(&square(-3.1, 3.1), -0.1, 0.0);
+    let mut ceiling = Mesh::new("ceiling", ArchId(2));
+    ceiling.push_prism(&square(-3.1, 3.1), 3.0, 3.1);
+    let slab = |id: u32, x0: f64, y0: f64, x1: f64, y1: f64| {
+        let mut m = Mesh::new("wall", ArchId(id));
+        m.push_prism(&[Vec2::new(x0, y0), Vec2::new(x1, y0), Vec2::new(x1, y1), Vec2::new(x0, y1)], 0.0, 3.0);
+        m
+    };
+    let light = SceneLight {
+        kind: LightKind::Spot,
+        position: Vec3::new(0.0, 0.0, 2.9),
+        direction: Vec3::new(0.0, 0.0, -1.0),
+        intensity: 60000.0,
+        color: [1.0; 3],
+        cos_inner: 5.0f64.to_radians().cos(),
+        cos_outer: 6.0f64.to_radians().cos(),
+        axis: light_axis(Vec3::new(0.0, 0.0, -1.0), 0.0),
+        ..Default::default()
+    };
+    let meshes = vec![
+        floor,
+        ceiling,
+        slab(3, -3.1, -3.1, 3.1, -3.0),
+        slab(4, -3.1, 3.0, 3.1, 3.1),
+        slab(5, -3.1, -3.0, -3.0, 3.0),
+        slab(6, 3.0, -3.0, 3.1, 3.0),
+    ];
+    let bounds = meshes[0].bounds();
+    Scene3d { bounds, meshes, lights: vec![light], ..Default::default() }
+}
+
+/// Render the rare-path room to the end: the stats and the accumulated mean luminance per pixel.
+fn render_room(gpu: &ComputeGpu, adaptive: bool, seed: u32) -> (PathStats, Vec<f64>) {
+    let camera = Camera::Full(cadcraft_arch3d::camera::FullCamera::new(Vec3::new(-2.6, -2.6, 1.4), Vec3::new(1.5, 1.5, 0.6), 75.0));
+    let lighting = Lighting { sun: None, ..Default::default() };
+    let opts = PathOptions { seed, ..options(adaptive, Some(0.25), 20000) };
+    let mut tracer = match PathTracer::new(gpu, &rare_path_room(), &camera, &lighting, false, (ROOM_W, ROOM_H), &opts, None) {
+        Ok(t) => t,
+        Err(e) => panic!("the tracer did not build: {e}"),
+    };
+    loop {
+        match tracer.step(gpu) {
+            PathStatus::Running { .. } => {}
+            PathStatus::Done { .. } => break,
+            other => panic!("the render ended {other:?}"),
+        }
+    }
+    let n = (ROOM_W * ROOM_H) as usize;
+    let Some(accum) = tracer.accum_snapshot(gpu) else { panic!("no accumulator") };
+    let means = accum
+        .iter()
+        .take(n)
+        .map(|p| {
+            let c = p[3].max(1.0);
+            f64::from(crate::pathtrace::luminance([p[0] / c, p[1] / c, p[2] / c]))
+        })
+        .collect();
+    (tracer.stats().clone(), means)
+}
+
+#[test]
+fn two_adaptive_seeds_agree_within_the_reported_noise() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let (a, xa) = render_room(&gpu, true, 1);
+    let (b, xb) = render_room(&gpu, true, 2);
+    assert_eq!((a.stop, b.stop), (StopReason::NoiseTarget, StopReason::NoiseTarget), "{a:?} {b:?}");
+    let frame_mean = xa.iter().zip(&xb).map(|(x, y)| (x + y) / 2.0).sum::<f64>() / xa.len() as f64;
+    let mut d: Vec<f64> =
+        xa.iter().zip(&xb).map(|(x, y)| (x - y).abs() / 2.0f64.sqrt() / ((x + y) / 2.0).max(0.05 * frame_mean).max(1e-12)).collect();
+    d.sort_by(|p, q| p.total_cmp(q));
+    let p95 = d.get(((0.95 * d.len() as f64).ceil() as usize).saturating_sub(1)).copied().unwrap_or(f64::INFINITY);
+    assert!(p95 <= 0.75, "p95 of d is {p95} (noise {} and {}, samples {} and {})", a.noise, b.noise, a.samples_total, b.samples_total);
+}
+
+#[test]
+fn adaptive_still_needs_fewer_samples_than_uniform_on_the_rare_path_room() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let (a, _) = render_room(&gpu, true, 1);
+    let (u, _) = render_room(&gpu, false, 1);
+    assert_eq!((a.stop, u.stop), (StopReason::NoiseTarget, StopReason::NoiseTarget), "{a:?} {u:?}");
+    assert!(a.samples_total as f64 <= 0.6 * u.samples_total as f64, "adaptive {} uniform {}", a.samples_total, u.samples_total);
 }
