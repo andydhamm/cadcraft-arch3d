@@ -133,7 +133,7 @@ fn light_shadow_limit(light: Light, s: LightSample) -> f32 {
 // lights and the sun.
 fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<function, Rng>) -> vec3<f32> {
     var sum = vec3<f32>(0.0);
-    let o = pt_offset(p, n);
+    let o = pt_offset(p, select(n, trans_near(m, n, wo), trans_active(m)));
     let pick = pick_lights(r);
     for (var k = 0u; k < pick.count; k = k + 1u) {
         let u = vec2<f32>(rand(r), rand(r));
@@ -146,7 +146,7 @@ fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<f
             continue;
         }
         let light = lights[pick.first + k];
-        let v = visibility(o, s.dir, light_shadow_limit(light, s));
+        let v = visibility(pt_offset(p, trans_shadow_normal(m, n, wo, s.dir)), s.dir, light_shadow_limit(light, s));
         if (!(light_luminance(v) > 0.0)) {
             continue;
         }
@@ -162,6 +162,7 @@ fn direct_light(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<f
         if (light_luminance(f) > 0.0) {
             // A disc sun (delta 0) is weighted against the BSDF ray that reaches it (sun_disc_seen).
             let w = select(1.0, power_heuristic(sun.pdf, bsdf_pdf(m, n, wo, sun.dir)), sun.delta == 0u);
+            let o = pt_offset(p, trans_shadow_normal(m, n, wo, sun.dir));
             sum = sum + f * sun.li * sun_visibility(o, sun.dir) * w;
         }
     }
@@ -299,14 +300,14 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
             res.radiance = res.radiance + pt_clamp(throughput * m.emission, depth, &clamp_loss);
         }
         let glass = (m.flags & MAT_GLASS) != 0u && !trans_active(m);
+        // Glass and MAT_TRANS keep the true side of the surface (entering or leaving).
+        let ns = select(n, tri.n, glass || trans_active(m));
         if (!glass) {
-            res.radiance = res.radiance + pt_clamp(throughput * direct_light(m, p, n, -d, r), depth, &clamp_loss);
+            res.radiance = res.radiance + pt_clamp(throughput * direct_light(m, p, select(n, tri.n, trans_active(m)), -d, r), depth, &clamp_loss);
         }
         if (frame.bounces == 0u) {
             break;
         }
-        // Glass keeps the true side of the surface (entering or leaving).
-        let ns = select(n, tri.n, glass || trans_active(m));
         let s = bsdf_sample(m, ns, -d, vec3<f32>(rand(r), rand(r), rand(r)));
         if (!(s.pdf > 0.0) || !(light_luminance(s.weight) > 0.0)) {
             break;
