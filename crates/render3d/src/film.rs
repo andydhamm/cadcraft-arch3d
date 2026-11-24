@@ -233,4 +233,35 @@ mod tests {
         let lum = 0.2126 * 0.38 + 0.7152 * 0.18;
         assert!(p[0].iter().all(|c| (c - (lum + 0.05)).abs() < 1.0e-5), "{:?}", p[0]);
     }
+
+    #[test]
+    fn bloom_on_single_pixel_conserves_energy() {
+        let mut p = vec![[10.0f32, 8.0, 6.0]];
+        let before = sum(&p);
+        let film = Film { bloom: 0.5, bloom_threshold: 1.0, ..Film::default() };
+        apply(&film, &mut p, (1, 1));
+        assert!((sum(&p) - before).abs() / before < 0.005);
+        assert!(p[0][0] > 0.0);
+    }
+
+    #[test]
+    fn bloom_above_threshold_does_nothing() {
+        let orig = vec![[0.5f32, 0.4, 0.3], [0.2, 0.1, 0.0]];
+        let mut p = orig.clone();
+        let film = Film { bloom: 1.0, bloom_threshold: 10.0, ..Film::default() };
+        apply(&film, &mut p, (2, 1));
+        for (a, b) in p.iter().flatten().zip(orig.iter().flatten()) {
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn grade_contrast_zero_gives_mid_grey() {
+        let mut p = vec![[0.0f32, 0.5, 1.0]];
+        let film = Film { contrast: 0.0, ..Film::default() };
+        apply(&film, &mut p, (1, 1));
+        for c in p[0] {
+            assert!((c - 0.18).abs() < 1.0e-6, "{:?} is not 0.18", p[0]);
+        }
+    }
 }

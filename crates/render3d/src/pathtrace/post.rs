@@ -328,4 +328,38 @@ mod tests {
         let got = linear_from_rgb(&rgb, LinearStage::Radiance, 1.0, &Film::default(), (2, 2));
         assert!(got.iter().all(|px| px == &[2.0, 2.0, 2.0]));
     }
+
+    #[test]
+    fn linear_from_rgb_empty() {
+        let got = linear_from_rgb(&[], LinearStage::Radiance, 1.0, &Film::default(), (0, 0));
+        assert!(got.is_empty());
+    }
+
+    #[test]
+    fn linear_from_rgb_alpha_zero_no_crash() {
+        let accum = [[1.0, 2.0, 3.0, 0.0]];
+        let got = linear_from_rgb(&accum, LinearStage::Radiance, 1.0, &Film::default(), (1, 1));
+        assert_eq!(got, vec![[1.0, 2.0, 3.0]]);
+    }
+
+    #[test]
+    fn srgb_u8_clamps_and_handles_nan() {
+        assert_eq!(srgb_u8(-1.0), 0);
+        assert_eq!(srgb_u8(2.0), 255);
+        assert_eq!(srgb_u8(f32::NAN), 0);
+        assert_eq!(srgb_u8(0.0), 0);
+        assert_eq!(srgb_u8(1.0), 255);
+    }
+
+    #[test]
+    fn film_rgba_tone_none_is_identity() {
+        use crate::exposure::TONE_NONE;
+        let accum = vec![[0.5, 0.5, 0.5, 1.0]];
+        let got = film_rgba(&accum, 1.0, TONE_NONE, &Film::default(), (1, 1));
+        let expected = srgb_u8(0.5);
+        assert_eq!(got[0], expected);
+        assert_eq!(got[1], expected);
+        assert_eq!(got[2], expected);
+        assert_eq!(got[3], 255);
+    }
 }
