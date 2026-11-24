@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 42 of 45 segments merged · 12 of 15 acceptance checks**
 
@@ -32,15 +32,15 @@ Updated 2026-11-24 22:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 29.0 h so far · expected done Nov 25 02:06–Nov 26 00:45 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 29.3 h so far · expected done Nov 25 02:21–Nov 26 01:00 UTC |
 
 ## Phase 22 segments
 
-42 merged, 2 gate, 1 working
+42 merged, 3 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | working | claude-sonnet-d |
+| `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | gate | claude-sonnet-d |
 | `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | gate | claude-sonnet-b |
 | `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | gate | claude-sonnet-a |
 
@@ -66,17 +66,17 @@ Updated 2026-11-24 22:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1444 |
-| bonsai-b | bonsai2-27b | agent | 1369 |
+| bonsai-b | bonsai2-27b | gate | 1369 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | gate | 176 |
-| claude-sonnet-b | sonnet | gate | 186 |
+| claude-sonnet-b | sonnet | gate | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
-| claude-sonnet-d | sonnet | agent | 114 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1325 |
+| claude-sonnet-d | sonnet | gate | 115 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1327 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1237 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 743 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1238 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 744 |
