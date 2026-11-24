@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 05:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 27 of 36 segments merged · 6 of 15 acceptance checks**
 
-11,656 workspace tests passing at the last merge · 1350 segments merged in all · 0 of 15 seats working
+11,656 workspace tests passing at the last merge · 1350 segments merged in all · 0 of 15 seats working · PAUSED
 
 ## Phases
 
@@ -32,11 +32,11 @@ Updated 2026-11-24 05:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 6 / 15 | 12.0 h so far · expected done Nov 24 08:49–Nov 24 21:18 UTC |
+| 22 | Photoreal stills | building | 6 / 15 | 12.3 h so far · expected done Nov 24 09:04–Nov 24 21:33 UTC |
 
 ## Phase 22 segments
 
-27 merged, 6 merging, 2 working, 1 queued
+27 merged, 7 merging, 1 queued, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
@@ -45,8 +45,8 @@ Updated 2026-11-24 05:30 UTC. This page and the card in the README are regenerat
 | `p22-r3d-variation` | Procedural surface variation (roughness and colour) in the path tracer | merging | claude-sonnet-d |
 | `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | merging | claude-sonnet-c |
 | `p22-r3d-unet-gpu` | The learned denoiser in WGSL compute shaders | merging | claude-sonnet-b |
-| `p22-showcase-cameras` | The showcase house's three Photoreal cameras | working | claude-sonnet-b |
-| `p22-docs-user-guide` | User guide and MCP example: Photoreal stills | working | claude-sonnet-a |
+| `p22-showcase-cameras` | The showcase house's three Photoreal cameras | merging | claude-sonnet-b |
+| `p22-docs-user-guide` | User guide and MCP example: Photoreal stills | gate | claude-sonnet-a |
 | `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | merging | claude-sonnet-c |
 
 ## Recent merges
@@ -70,18 +70,18 @@ Updated 2026-11-24 05:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1420 |
-| bonsai-b | bonsai2-27b | agent | 1328 |
+| bonsai-a | bonsai2-27b | agent | 1421 |
+| bonsai-b | bonsai2-27b | gate | 1328 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | agent | 170 |
-| claude-sonnet-b | sonnet | agent | 179 |
+| claude-sonnet-a | sonnet | gate | 171 |
+| claude-sonnet-b | sonnet | idle | 180 |
 | claude-sonnet-c | sonnet | idle | 111 |
 | claude-sonnet-d | sonnet | idle | 110 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
-| mai-flash-b | mai-code-1.1-flash | down | 85 |
+| mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1208 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1209 |
 | tturbo-mac2 | tturbo-ultraheretic | agent | 713 |
