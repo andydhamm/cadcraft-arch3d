@@ -529,6 +529,9 @@ impl PathTracer {
 
         // Denoise as the options ask (`post`); a neutral film keeps the plain resolve below.
         let mut stats = self.stats.clone();
+        let exposure = self.auto_exposure(gpu);
+        self.exposure = exposure;
+        stats.exposure = exposure;
         let result = super::post::finish_linear(
             gpu,
             &self.opts,
@@ -539,6 +542,7 @@ impl PathTracer {
                 let data = self.read_buffer(gpu, &self.aov, aov_bytes)?;
                 Ok(bytemuck::cast_slice::<u8, [f32; 4]>(&data).to_vec())
             },
+            exposure,
             &mut stats,
         );
         self.stats = stats;
@@ -560,9 +564,6 @@ impl PathTracer {
         let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt write denoised") });
         enc.copy_buffer_to_buffer(&src, 0, &self.accum, 0, (pixels * 16) as u64);
         gpu.queue.submit([enc.finish()]);
-
-        self.exposure = self.auto_exposure(gpu);
-        self.stats.exposure = self.exposure;
 
         // Resolve.
         match self.resolve(gpu) {
@@ -614,7 +615,7 @@ impl PathTracer {
             exposure: f32,
             tonemap: u32,
         }
-        let exposure = self.auto_exposure(gpu);
+        let exposure = self.exposure;
         let params = ResolveParams { size: [w, h], exposure, tonemap: self.frame.look[0] };
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
