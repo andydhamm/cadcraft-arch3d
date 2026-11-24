@@ -28,12 +28,16 @@ pub struct ComputeGpu {
     /// The path tracer's pipelines, built on first use and shared by every clone of this device
     /// (`PtPipelines::shared`), so a second still in one process compiles nothing.
     pub(crate) pipelines: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<super::shaders::PtPipelines>>>>,
+    /// The pipelines `run_entry` built on this device, by entry point, shared by every clone. A test
+    /// binary dispatches the same few entries hundreds of times; building one for each call made
+    /// the software adapter spend about 45 s a call (2026-11-24: the crate's tests ran over an hour).
+    pub(crate) entry_pipelines: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, wgpu::ComputePipeline>>>,
 }
 
 impl ComputeGpu {
     /// Builds a compute device description from the concrete adapter state.
     pub fn new(device: wgpu::Device, queue: wgpu::Queue, info: DeviceInfo, ray_query: bool, pipeline_cache: bool, adapter_key: String) -> Self {
-        Self { device, queue, info, ray_query, pipeline_cache, adapter_key, pipelines: Default::default() }
+        Self { device, queue, info, ray_query, pipeline_cache, adapter_key, pipelines: Default::default(), entry_pipelines: Default::default() }
     }
 }
 

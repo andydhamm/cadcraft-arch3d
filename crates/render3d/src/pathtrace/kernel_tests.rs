@@ -215,7 +215,7 @@ fn trace_accumulates_luminance_squares_after_the_colours() {
         seed: 11,
         ..camera_frame([2.0, 2.0, 1.2], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0])
     };
-    let pipelines = PtPipelines::new(&gpu, None).unwrap();
+    let pipelines = PtPipelines::shared(&gpu, None).unwrap();
     let module = d.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("pt test kernel"),
         source: wgpu::ShaderSource::Wgsl(kernel_source().into()),
@@ -654,7 +654,7 @@ fn pt_clip_box_clips_irradiance_shadow_rays() {
 fn run_with_aov(gpu: &ComputeGpu, scene: &GpuScene, frame: &GpuFrame) -> Vec<[f32; 4]> {
     let d = &gpu.device;
     let buffers = upload_scene(gpu, scene);
-    let pipelines = match PtPipelines::new(gpu, None) {
+    let pipelines = match PtPipelines::shared(gpu, None) {
         Ok(p) => p,
         Err(e) => {
             assert!(false, "{e}");
