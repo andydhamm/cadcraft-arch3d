@@ -364,6 +364,48 @@ fn user_guide_light_sky_cameras_block_runs() {
     }
 }
 
+/// The Photoreal stills section names the preset, the lens and render keys, the ladder and the denoiser,
+/// sits before Out of scope, and has one `sh` block.
+#[test]
+fn user_guide_has_a_photoreal_stills_section() {
+    let text = section("Photoreal stills");
+    for word in [
+        "technique",
+        "photoreal",
+        "panini",
+        "compression",
+        "shift",
+        "aperture",
+        "focus",
+        "pick",
+        "bloom",
+        "vignette",
+        "whiteBalance",
+        "edges",
+        "materials",
+        "variation",
+        "clamp",
+        "adaptive",
+        "noiseTarget",
+        "timeBudget",
+        "denoise",
+        "pfm",
+        "stop",
+        "noise",
+        "sppMean",
+        "clampLoss",
+        "denoiser",
+        "denoiseFallback",
+        "render.ladder",
+        "denoiser.info",
+        "native only",
+    ] {
+        assert!(text.contains(word), "the photoreal section should mention `{word}`");
+    }
+    assert!(GUIDE.find("\n## Photoreal stills\n") < GUIDE.find("\n## Out of scope\n"), "Photoreal stills comes before Out of scope");
+    assert_eq!(sh_blocks(text).len(), 1, "the section should have exactly one sh block");
+}
+
 #[test]
 fn user_guide_has_no_stray_words() {
     for word in ["habitat", "procedural twilight sky"] {
