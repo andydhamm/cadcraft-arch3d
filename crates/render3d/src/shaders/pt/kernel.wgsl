@@ -261,10 +261,15 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
     var mode = mode_in;
     var prev_pdf = prev_pdf_in;
     var throughput = vec3<f32>(1.0);
+    // [p22] Absorption per metre inside a tinted MAT_TRANS solid (0 outside), see trans_sigma.
+    var inside_sigma = vec3<f32>(0.0);
     let n_lights = min(arrayLength(&lights), frame.light_count);
     let sel = select(1.0 / f32(max(n_lights, 1u)), 1.0, n_lights <= ALL_LIGHTS_MAX);
     for (var depth = start_depth; depth < MAX_PATH_DEPTH; depth = depth + 1u) {
         let h = trace(o, d, PT_INF);
+        if (h.t >= 0.0) {
+            throughput = throughput * exp(-inside_sigma * h.t);
+        }
         res.radiance = res.radiance + pt_clamp(throughput * area_lights_seen(o, d, h.t, mode, prev_pdf, sel), depth, &clamp_loss);
         if (h.t < 0.0) {
             // The sky has no light sample, so every ray that escapes counts it.
@@ -299,12 +304,13 @@ fn path_radiance(o_in: vec3<f32>, d_in: vec3<f32>, start_depth: u32, mode_in: u3
             break;
         }
         // Glass keeps the true side of the surface (entering or leaving).
-        let ns = select(n, tri.n, glass);
+        let ns = select(n, tri.n, glass || trans_active(m));
         let s = bsdf_sample(m, ns, -d, vec3<f32>(rand(r), rand(r), rand(r)));
         if (!(s.pdf > 0.0) || !(light_luminance(s.weight) > 0.0)) {
             break;
         }
         throughput = throughput * s.weight;
+        inside_sigma = trans_inside_next(m, tri.n, -d, s.dir, inside_sigma);
         if (s.specular != 0u) {
             mode = AREA_SEEN;
         } else {
