@@ -355,9 +355,15 @@ fn lens_dir_at_center_is_forward_in_camera_space() {
         let d = dirs[0];
         // In camera space the center pixel direction must be (0, 0, 1).
         let c = [
-            f64::from(d[0]) * frame.cam_right[0] + f64::from(d[1]) * frame.cam_right[1] + f64::from(d[2]) * frame.cam_right[2],
-            f64::from(d[0]) * frame.cam_up[0] + f64::from(d[1]) * frame.cam_up[1] + f64::from(d[2]) * frame.cam_up[2],
-            f64::from(d[0]) * frame.cam_fwd[0] + f64::from(d[1]) * frame.cam_fwd[1] + f64::from(d[2]) * frame.cam_fwd[2],
+            f64::from(d[0]) * f64::from(frame.cam_right[0])
+                + f64::from(d[1]) * f64::from(frame.cam_right[1])
+                + f64::from(d[2]) * f64::from(frame.cam_right[2]),
+            f64::from(d[0]) * f64::from(frame.cam_up[0])
+                + f64::from(d[1]) * f64::from(frame.cam_up[1])
+                + f64::from(d[2]) * f64::from(frame.cam_up[2]),
+            f64::from(d[0]) * f64::from(frame.cam_fwd[0])
+                + f64::from(d[1]) * f64::from(frame.cam_fwd[1])
+                + f64::from(d[2]) * f64::from(frame.cam_fwd[2]),
         ];
         assert!(c[0].abs() < 1e-4, "options {:?}: camera-space x {} should be 0", opts, c[0]);
         assert!(c[1].abs() < 1e-4, "options {:?}: camera-space y {} should be 0", opts, c[1]);
