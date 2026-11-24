@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 07:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 31 of 36 segments merged · 6 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 33 of 36 segments merged · 8 of 15 acceptance checks**
 
-11,676 workspace tests passing at the last merge · 1354 segments merged in all · 0 of 15 seats working
+11,703 workspace tests passing at the last merge · 1358 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,16 +32,15 @@ Updated 2026-11-24 07:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 6 / 15 | 14.0 h so far · expected done Nov 24 09:06–Nov 24 19:11 UTC |
+| 22 | Photoreal stills | building | 8 / 15 | 14.3 h so far · expected done Nov 24 08:39–Nov 24 17:46 UTC |
 
 ## Phase 22 segments
 
-31 merged, 4 merging, 1 queued
+33 merged, 2 merging, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22-r3d-unet-gpu` | The learned denoiser in WGSL compute shaders | merging | claude-sonnet-b |
-| `p22-showcase-cameras` | The showcase house's three Photoreal cameras | merging | claude-sonnet-b |
+| `p22-gallery-tool` | Gallery tool: realism ladders and Photoreal finals behind --full | working | bonsai-b |
 | `p22-docs-user-guide` | User guide and MCP example: Photoreal stills | merging | claude-sonnet-a |
 | `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | merging | claude-sonnet-c |
 
@@ -49,6 +48,10 @@ Updated 2026-11-24 07:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 07:39 | `harden-p17-window-tops` | merged | 11,703 pass | tturbo-mac |
+| Nov 24 07:39 | `harden-p22-io-glb-ext` | merged | 11,703 pass | tturbo-mac |
+| Nov 24 07:39 | `p22-r3d-unet-gpu` | merged | 11,703 pass | claude-sonnet-b |
+| Nov 24 07:39 | `p22-showcase-cameras` | merged | 11,703 pass | claude-sonnet-b |
 | Nov 24 06:33 | `p22-r3d-variation` | merged | 11,676 pass | claude-sonnet-d |
 | Nov 24 06:33 | `p22-r3d-sun-disc` | merged | 11,676 pass | claude-sonnet-c |
 | Nov 24 06:33 | `p22-r3d-bsdf-ext` | merged | 11,676 pass | claude-sonnet-b |
@@ -57,17 +60,13 @@ Updated 2026-11-24 07:30 UTC. This page and the card in the README are regenerat
 | Nov 24 05:05 | `p22-r3d-variation` | refused | 0 pass | claude-sonnet-d |
 | Nov 24 05:05 | `p22-r3d-sun-disc` | refused | 0 pass | mai-flash |
 | Nov 24 05:05 | `p22-r3d-edges` | merged | 11,651 pass | mai-flash-b |
-| Nov 24 05:05 | `p22-r3d-unet-cpu` | merged | 11,651 pass | claude-sonnet-a |
-| Nov 24 05:05 | `p22-cli-hook` | merged | 11,651 pass | claude-sonnet-b |
-| Nov 24 05:05 | `p22-engine-denoiser-info` | merged | 11,651 pass | claude-sonnet-d |
-| Nov 24 04:41 | `p22-engine-ladder` | refused | 11,637 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1425 |
-| bonsai-b | bonsai2-27b | merging | 1334 |
+| bonsai-a | bonsai2-27b | agent | 1425 |
+| bonsai-b | bonsai2-27b | agent | 1334 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 172 |
@@ -80,4 +79,4 @@ Updated 2026-11-24 07:30 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1212 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 715 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 715 |
