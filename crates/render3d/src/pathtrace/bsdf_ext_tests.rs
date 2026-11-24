@@ -254,6 +254,66 @@ fn aniso_metal_aniso_extremes() {
     check_furnace("anisotropic metal, aniso 1.0", full);
 }
 
+/// Zero roughness (mirror limit) with anisotropy: the lobe is still anisotropic but very narrow.
+#[test]
+fn aniso_metal_zero_roughness_conserves_energy() {
+    let metal = GpuMaterial { albedo: [1.0; 3], metallic: 1.0, roughness: 0.0, aniso: 0.8, flags: MAT_EXT, ..Default::default() };
+    check_furnace("anisotropic metal, zero roughness", metal);
+}
+
+/// Energy conservation across a wider range of view cosines, including very grazing views.
+#[test]
+fn aniso_metal_full_nov_range() {
+    let metal = aniso_metal([1.0; 3], 0.0);
+    let novs = [0.05, 0.1, 0.3, 0.7, 0.99];
+    let mut probes = Vec::new();
+    for nov in novs {
+        for _ in 0..CHUNKS {
+            probes.push(probe(0, view(nov), PER_PROBE));
+        }
+    }
+    let Some(out) = run("bsdf_test_main", PHOTO_MATERIALS, vec![metal], &probes) else {
+        return;
+    };
+    for (k, nov) in novs.iter().enumerate() {
+        let mut m = 0.0f64;
+        for o in &out[k * CHUNKS..(k + 1) * CHUNKS] {
+            m += (o[0] + o[1] + o[2]) as f64 / (3.0 * CHUNKS as f64);
+        }
+        eprintln!("furnace anisotropic metal NoV {}: mean {:.4} loss {:.4}", nov, m, 1.0 - m);
+        assert!(m >= BAND.0 && m <= BAND.1, "anisotropic metal at NoV {}: mean weight {} outside {}", nov, m, BAND);
+    }
+}
+
+/// Multiple f0 values (not just white and the specific [1.0, 0.6, 0.2]): none should gain energy.
+#[test]
+fn aniso_metal_various_f0_do_not_gain_energy() {
+    let f0s = [[0.3f32; 3], [0.5f32; 3], [0.7f32; 3], [0.9f32; 3]];
+    for f0 in f0s {
+        let metal = aniso_metal(f0, 0.0);
+        let Some(mean) = furnace_rgb(metal) else {
+            continue;
+        };
+        for (k, row) in mean.iter().enumerate() {
+            for (c, m) in row.iter().enumerate() {
+                let target = f0[c] as f64;
+                assert!(*m <= target + 0.02, "f0 {:?} NoV {} channel {}: mean {} > {} + 0.02", f0, NOV[k], c, m, target);
+                assert!(*m >= 0.75 * target, "f0 {:?} NoV {} channel {}: mean {} < {} * 0.75", f0, NOV[k], c, m, target);
+            }
+        }
+    }
+}
+
+/// Isotropic metal (aniso = 0) must conserve energy at all roughness values, not just 0.3.
+#[test]
+fn isotropic_metal_all_roughness_conserves_energy() {
+    let roughnesses = [0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0];
+    for r in roughnesses {
+        let metal = GpuMaterial { albedo: [1.0; 3], metallic: 1.0, roughness: r, aniso: 0.0, flags: MAT_EXT, ..Default::default() };
+        check_furnace(&format!("isotropic metal roughness {}", r), metal);
+    }
+}
+
 /// A material with both clear coat and anisotropy must still conserve energy: the coat layer
 /// takes its share first, then the anisotropic base lobe is compensated.
 #[test]

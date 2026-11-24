@@ -167,13 +167,11 @@ fn ext_mix(m: Material, lo: vec3<f32>) -> ExtMix {
         } else {
             // Multiple-scattering compensation for all non-mirror specular lobes (isotropic and
             // anisotropic): scale the lobe by 1 + f0 (1 - E) / E, E being its albedo with F = 1,
-            // so a white metal returns all its energy. E is estimated from the isotropic albedo
-            // table with the effective roughness sqrt(alpha_t * alpha_b), which is rotationally
-            // invariant; the anisotropic estimate is used for the diffuse split and lobe weight.
+            // so a white metal returns all its energy. E is the anisotropic estimate from
+            // ext_ggx_albedo2 (the mean of G2/G1 over 256 visible normals), which is the lobe's
+            // own directional albedo and works for both isotropic and anisotropic cases.
             let s = ext_ggx_albedo2(lo, x.alpha_t, x.alpha_b);
-            let alpha_eff = sqrt(x.alpha_t * x.alpha_b);
-            let e_iso = bsdf_spec_albedo(vec3<f32>(1.0), alpha_eff, nov);
-            let e = clamp(e_iso.x, 0.05, 1.0);
+            let e = clamp(s.x, 0.05, 1.0);
             x.spec_ms = vec3<f32>(1.0) + l.f0 * ((1.0 - e) / e);
             spec_albedo = min((l.f0 * s.x + (vec3<f32>(1.0) - l.f0) * s.y) * x.spec_ms, vec3<f32>(1.0));
         }
