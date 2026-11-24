@@ -1685,9 +1685,9 @@ mod tests {
         let Some(gpu) = compute() else { return };
         let learned = PathOptions { spp: 4, denoise: true, denoise_mode: DenoiseMode::Learned, ..Default::default() };
         let (_, stats) = render_to_rgba_stats(&gpu, &learned);
-        assert_eq!(stats.denoiser, DenoiseMode::Filter);
+        // The learned denoiser runs where the device can; where it cannot, the filter stands in and says why.
         assert!(stats.denoised);
-        assert_eq!(stats.denoise_fallback.as_deref(), Some("the learned denoiser is not available yet"));
+        assert_eq!(stats.denoiser == DenoiseMode::Filter, stats.denoise_fallback.is_some());
         let filter = PathOptions { denoise_mode: DenoiseMode::Filter, ..learned.clone() };
         let (_, stats) = render_to_rgba_stats(&gpu, &filter);
         assert_eq!((stats.denoiser, stats.denoise_fallback), (DenoiseMode::Filter, None));

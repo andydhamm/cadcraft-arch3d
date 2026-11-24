@@ -109,7 +109,7 @@ pub(super) fn finish_linear(
         .collect();
     let start = std::time::Instant::now();
     let learned = if opts.denoise_mode == DenoiseMode::Learned {
-        match super::learned::denoise(gpu, &colors, &aov, size) {
+        match super::learned::denoise(gpu, super::learned::model_for(gpu, opts.denoise_model), &colors, &aov, size) {
             Ok(out) => Some(out),
             Err(why) => {
                 stats.denoise_fallback = Some(why);
