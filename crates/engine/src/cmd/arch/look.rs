@@ -826,4 +826,111 @@ mod tests {
         assert_eq!(v.overview, Some((2, false)));
         assert_eq!(v.sun_dir, None);
     }
+
+    #[test]
+    fn look_empty_params_returns_current_look() {
+        let mut s = Session::new();
+        let r = s.execute("look", &json!({})).unwrap();
+        assert!(r["look"].is_object());
+        assert_eq!(r["look"]["toneMap"], "aces");
+    }
+
+    #[test]
+    fn look_exposure_mode_forms() {
+        let mut s = Session::new();
+        // mode: auto
+        let r = s.execute("look", &json!({"exposure": {"mode": "auto"}})).unwrap();
+        assert_eq!(r["look"]["exposure"], json!("auto"));
+        // mode: manual with ev100
+        let r = s.execute("look", &json!({"exposure": {"mode": "manual", "ev100": 5}})).unwrap();
+        assert_eq!(r["look"]["exposure"], json!({"ev100": 5.0}));
+        // invalid mode
+        assert!(s.execute("look", &json!({"exposure": {"mode": "weird"}})).is_err());
+        // missing ev100 in manual
+        assert!(s.execute("look", &json!({"exposure": {"mode": "manual"}})).is_err());
+    }
+
+    #[test]
+    fn look_sun_angle_null_clears_it() {
+        let mut s = Session::new();
+        let doc = s.doc_mut().unwrap();
+        doc.arch.sun_angles.push(cadcraft_doc::arch::SunAngle {
+            name: "test".into(),
+            azimuth: Some(90.0),
+            elevation: Some(45.0),
+            ..Default::default()
+        });
+        doc.touch_arch();
+        let r = s.execute("look", &json!({"sun": {"angle": "test"}})).unwrap();
+        assert_eq!(r["look"]["sun"]["angle"], json!("test"));
+        let r = s.execute("look", &json!({"sun": {"angle": null}})).unwrap();
+        assert!(r["look"]["sun"]["angle"].is_null());
+    }
+
+    #[test]
+    fn look_film_object_unknown_key_refused() {
+        let mut s = Session::new();
+        assert!(s.execute("look", &json!({"film": {"bloom": 0.1, "glow": 0.5}})).is_err());
+        let r = s.execute("look", &json!({"film": {"bloom": 0.1}})).unwrap();
+        assert_eq!(r["look"]["film"]["bloom"], json!(0.1));
+    }
+
+    #[test]
+    fn look_clip_nearclip_cutaway() {
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "look",
+                &json!({
+                    "clip": {"min": [0.0, 0.0, 0.0], "max": [10.0, 10.0, 10.0]},
+                    "nearClip": 0.5,
+                    "cutaway": true
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["look"]["clip"], json!({"min": [0.0, 0.0, 0.0], "max": [10.0, 10.0, 10.0]}));
+        assert_eq!(r["look"]["nearClip"], json!(0.5));
+        assert_eq!(r["look"]["cutaway"], json!(true));
+        let r = s.execute("look", &json!({"clip": null})).unwrap();
+        assert!(r["look"]["clip"].is_null());
+        let r = s.execute("look", &json!({"nearClip": null})).unwrap();
+        assert!(r["look"]["nearClip"].is_null());
+    }
+
+    #[test]
+    fn look_sky_forms() {
+        let mut s = Session::new();
+        let r = s.execute("look", &json!({"sky": true})).unwrap();
+        assert_eq!(r["look"]["sky"]["on"], json!(true));
+        let r = s.execute("look", &json!({"sky": false})).unwrap();
+        assert_eq!(r["look"]["sky"]["on"], json!(false));
+        let r = s.execute("look", &json!({"sky": {"turbidity": 5.0, "stars": true}})).unwrap();
+        assert_eq!(r["look"]["sky"]["turbidity"], json!(5.0));
+        assert_eq!(r["look"]["sky"]["stars"], json!(true));
+        let r = s.execute("look", &json!({"sky": {"moon": {"lux": 5.0, "azimuth": 90.0, "elevation": 30.0}}})).unwrap();
+        assert_eq!(r["look"]["sky"]["moon"]["lux"], json!(5.0));
+        assert_eq!(r["look"]["sky"]["moon"]["azimuth"], json!(90.0));
+        assert_eq!(r["look"]["sky"]["moon"]["elevation"], json!(30.0));
+    }
+
+    #[test]
+    fn look_all_techniques_and_tonemaps() {
+        let mut s = Session::new();
+        for t in ["standard", "path", "clay", "technical", "photoreal"] {
+            let r = s.execute("look", &json!({"technique": t})).unwrap();
+            assert_eq!(r["look"]["technique"], json!(t));
+        }
+        for m in ["aces", "hable", "none"] {
+            let r = s.execute("look", &json!({"toneMap": m})).unwrap();
+            assert_eq!(r["look"]["toneMap"], json!(m));
+        }
+    }
+
+    #[test]
+    fn look_focus_pick_refused_in_look() {
+        let mut s = Session::new();
+        assert!(s.execute("look", &json!({"focus": {"pick": [100, 100]}})).is_err());
+        let r = s.execute("look", &json!({"focus": 5.0})).unwrap();
+        assert_eq!(r["look"]["lens"]["focus"], json!(5.0));
+    }
 }

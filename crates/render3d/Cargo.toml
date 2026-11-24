@@ -8,12 +8,14 @@ repository.workspace = true
 [dependencies]
 cadcraft-geom = { workspace = true }
 cadcraft-color = { workspace = true }
+cadcraft-arch = { workspace = true }
 cadcraft-arch3d = { workspace = true }
 cadcraft-doc = { workspace = true }
 cadcraft-gpu-optin = { workspace = true }
 wgpu = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png"] }
 thiserror = { workspace = true }
+serde_json = { workspace = true }
 futures = "0.3"
 bytemuck = { version = "1.24", features = ["derive"] }
 

@@ -44,6 +44,28 @@ fn linear_from_rgb(pixels: &[[f32; 4]], stage: LinearStage, exposure: f32, film:
     rgb
 }
 
+/// The CPU resolve a non-neutral film needs: mean radiance (as `finish_linear` left it) times the
+/// final `exposure`, the film, the tone curve `tone` (an `exposure::TONE_*` code), sRGB encode,
+/// opaque RGBA8. The GPU resolve stays the path for a neutral film.
+pub(super) fn film_rgba(pixels: &[[f32; 4]], exposure: f32, tone: u32, film: &Film, size: (u32, u32)) -> Vec<u8> {
+    let rgb = linear_from_rgb(pixels, LinearStage::Film, exposure, film, size);
+    let mut out = Vec::with_capacity(rgb.len() * 4);
+    for px in &rgb {
+        for &c in px {
+            out.push(srgb_u8(crate::exposure::tone_map(c, tone)));
+        }
+        out.push(255);
+    }
+    out
+}
+
+/// sRGB-encode `v` (clamped to 0..=1) to 0..=255, as the GPU resolve does.
+fn srgb_u8(v: f32) -> u8 {
+    let c = v.clamp(0.0, 1.0);
+    let e = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
+    (e * 255.0 + 0.5) as u8
+}
+
 /// The colours the resolve reads: the accumulator's radiance means, denoised as `opts` ask.
 ///
 /// `accum` is the whole accumulator (`2 · w · h` entries: the sums, then the second half
@@ -99,7 +121,10 @@ pub(super) fn finish_linear(
     };
     let (out, used) = match learned {
         Some(out) => (out, DenoiseMode::Learned),
-        None => (super::denoise::denoise(gpu, &colors, &aov, size).map_err(|e| format!("denoise: {e}"))?, DenoiseMode::Filter),
+        None => (
+            super::denoise::denoise_guided(gpu, &colors, &aov, size, opts.roughness_guide).map_err(|e| format!("denoise: {e}"))?,
+            DenoiseMode::Filter,
+        ),
     };
     stats.denoise_seconds = start.elapsed().as_secs_f32();
     stats.denoiser = used;
@@ -114,6 +139,26 @@ pub(super) fn finish_linear(
 mod tests {
     use super::*;
     use cadcraft_doc::arch::Film;
+
+    #[test]
+    fn film_resolve_matches_the_gpu_resolve_when_nearly_neutral() {
+        use crate::exposure::{TONE_ACES, TONE_HABLE};
+        let accum: Vec<[f32; 4]> = (0..16).map(|i| [i as f32 * 0.07, i as f32 * 0.03, 0.5, 2.0]).collect();
+        let film = Film { vignette: 1.0e-9, ..Film::default() };
+        for tone in [TONE_ACES, TONE_HABLE] {
+            let got = film_rgba(&accum, 1.5, tone, &film, (4, 4));
+            for (i, p) in accum.iter().enumerate() {
+                for c in 0..3 {
+                    // The shader's path: mean x exposure, tone curve, sRGB.
+                    let lin = crate::exposure::tone_map(p[c] / p[3].max(1.0) * 1.5, tone);
+                    let want = if lin <= 0.003_130_8 { lin * 12.92 } else { 1.055 * lin.powf(1.0 / 2.4) - 0.055 };
+                    let want = (want * 255.0 + 0.5) as i32;
+                    assert!((i32::from(got[i * 4 + c]) - want).abs() <= 1, "pixel {i} channel {c}");
+                }
+                assert_eq!(got[i * 4 + 3], 255);
+            }
+        }
+    }
 
     #[test]
     fn radiance_stage_equals_accumulated_means() {
