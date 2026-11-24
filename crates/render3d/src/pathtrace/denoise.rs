@@ -20,8 +20,11 @@ pub const ITERATIONS: u32 = 5;
 pub const SIGMA_COLOR: f32 = 4.0;
 pub const SIGMA_NORMAL: f32 = 64.0;
 pub const SIGMA_ALBEDO: f32 = 0.1;
+/// Edge-stopping width of the roughness guide (absolute difference of the first-hit roughness),
+/// used when the guide is on.
+pub const SIGMA_ROUGHNESS: f32 = 0.1;
 
-/// `DenoiseParams` of `denoise.wgsl` (std140, 32 bytes).
+/// `DenoiseParams` of `denoise.wgsl` (std140, 48 bytes).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 struct DenoiseParams {
@@ -32,6 +35,10 @@ struct DenoiseParams {
     sigma_n: f32,
     sigma_a: f32,
     _pad2: f32,
+    /// 1 when the roughness guide is on.
+    guide_roughness: u32,
+    sigma_r: f32,
+    _pad3: [u32; 2],
 }
 
 /// The compute pipeline of `atrous_main` and the layout of its bind group: params (uniform), src
@@ -112,7 +119,22 @@ fn check_inputs(gpu: &ComputeGpu, color: usize, aov: usize, size: (u32, u32)) ->
 /// luminance-squared, with negative or non-finite values treated as 0) guided by `aov` (two entries
 /// per pixel: albedo with w = 1 where something was hit, then normal and distance; the layout the
 /// kernel writes). Returns the filtered colours with w = 1. Pixels with no hit are left as they are.
+/// The roughness guide is off; see [`denoise_guided`].
 pub fn denoise(gpu: &ComputeGpu, color: &[[f32; 4]], aov: &[[f32; 4]], size: (u32, u32)) -> Result<Vec<[f32; 4]>, String> {
+    denoise_guided(gpu, color, aov, size, false)
+}
+
+/// [`denoise`] with the first-hit roughness (`aov[2i].w - 1` on a hit) as a further guide when
+/// `roughness_guide` is on: taps whose roughness differs from the centre's are weighted by
+/// exp(-Δr² / [`SIGMA_ROUGHNESS`]²), and the colour sigma shrinks to clamp(r / 0.3, 0.25, 1) of its
+/// value at glossy centres, so reflections are filtered less than diffuse walls.
+pub fn denoise_guided(
+    gpu: &ComputeGpu,
+    color: &[[f32; 4]],
+    aov: &[[f32; 4]],
+    size: (u32, u32),
+    roughness_guide: bool,
+) -> Result<Vec<[f32; 4]>, String> {
     let pixels = check_inputs(gpu, color.len(), aov.len(), size)?;
     let atrous = build_pipeline(gpu)?;
     let d = &gpu.device;
@@ -139,6 +161,8 @@ pub fn denoise(gpu: &ComputeGpu, color: &[[f32; 4]], aov: &[[f32; 4]], size: (u3
             sigma_c: SIGMA_COLOR,
             sigma_n: SIGMA_NORMAL,
             sigma_a: SIGMA_ALBEDO,
+            guide_roughness: u32::from(roughness_guide),
+            sigma_r: SIGMA_ROUGHNESS,
             ..Default::default()
         };
         let uniform = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -508,5 +532,82 @@ mod tests {
         pixels[(N / 2) as usize * N as usize + (N / 2) as usize].normal = [f32::NAN, 0.0, 1.0];
         let out = run(&gpu, &pixels, (N, N));
         assert!(out.iter().all(|p| p.iter().all(|v| v.is_finite())), "a NaN normal made the output non-finite");
+    }
+
+    /// Roughness of the left and right halves of the guide test frames.
+    const ROUGH: f32 = 0.9;
+    const GLOSSY: f32 = 0.05;
+
+    /// A frame whose left half has roughness [`ROUGH`] and right half [`GLOSSY`], with the same
+    /// albedo and normal everywhere; `color(x, y)` gives the colour. The hit flag is 1 + roughness.
+    fn roughness_frame(mut color: impl FnMut(u32, u32) -> f32, variance: f32) -> (Vec<[f32; 4]>, Vec<[f32; 4]>) {
+        let mut colors = Vec::new();
+        let mut aov = Vec::new();
+        for y in 0..N {
+            for x in 0..N {
+                let c = color(x, y);
+                colors.push([c, c, c, variance]);
+                let r = if x < N / 2 { ROUGH } else { GLOSSY };
+                aov.push([WALL[0], WALL[1], WALL[2], 1.0 + r]);
+                aov.push([UP[0], UP[1], UP[2], 1.0]);
+            }
+        }
+        (colors, aov)
+    }
+
+    #[test]
+    fn guide_off_is_todays_filter() {
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x1234_5679);
+        let (colors, aov) = roughness_frame(|_, _| 0.5 * (1.0 + 0.2 * noise.next()), 0.01);
+        let plain = denoise(&gpu, &colors, &aov, (N, N)).unwrap();
+        let off = denoise_guided(&gpu, &colors, &aov, (N, N), false).unwrap();
+        assert!(plain.iter().zip(&off).all(|(a, b)| a.map(f32::to_bits) == b.map(f32::to_bits)), "guide off differs from denoise");
+        // Roughness in the hit flag is ignored: a frame with plain w = 1 flags filters identically.
+        let flat: Vec<[f32; 4]> = aov.iter().enumerate().map(|(k, a)| if k % 2 == 0 { [a[0], a[1], a[2], 1.0] } else { *a }).collect();
+        let today = denoise(&gpu, &colors, &flat, (N, N)).unwrap();
+        assert!(today.iter().zip(&off).all(|(a, b)| a.map(f32::to_bits) == b.map(f32::to_bits)), "the roughness leaked into the plain filter");
+        let on = denoise_guided(&gpu, &colors, &aov, (N, N), true).unwrap();
+        assert!(on.iter().zip(&off).any(|(a, b)| a != b), "the guide changes nothing");
+    }
+
+    #[test]
+    fn roughness_boundary_stops_the_filter() {
+        let Some(gpu) = compute() else { return };
+        // Same albedo and normal; only the colour step (0.4 | 0.5) and the roughness differ.
+        let (colors, aov) = roughness_frame(|x, _| if x < N / 2 { 0.4 } else { 0.5 }, 1.0);
+        let off = denoise_guided(&gpu, &colors, &aov, (N, N), false).unwrap();
+        assert!(band_mean(&off, N / 2 - 1, N / 2) > 0.4 + 0.01, "without the guide the edge mixes");
+        let on = denoise_guided(&gpu, &colors, &aov, (N, N), true).unwrap();
+        for y in 0..N {
+            for x in 0..N {
+                let want = if x < N / 2 { 0.4 } else { 0.5 };
+                let p = on[(y * N + x) as usize];
+                assert!((p[0] - want).abs() <= 1e-4, "pixel ({x}, {y}) took {} across the boundary", p[0]);
+            }
+        }
+    }
+
+    #[test]
+    fn glossy_surfaces_are_filtered_less() {
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x7f4a_7c15);
+        let noisy: Vec<f32> = (0..N * N).map(|_| 0.5 * (1.0 + 0.2 * noise.next())).collect();
+        let (colors, aov) = roughness_frame(|x, y| noisy[(y * N + x) as usize], 5e-4);
+        // The noise of each half about its true mean 0.5, away from the boundary.
+        let half_rmse = |out: &[[f32; 4]], x0: u32, x1: u32| {
+            let mut sum = 0.0f64;
+            let mut count = 0u32;
+            for y in 0..N {
+                for x in x0..x1 {
+                    sum += f64::from(out[(y * N + x) as usize][0] - 0.5).powi(2);
+                    count += 1;
+                }
+            }
+            (sum / f64::from(count)).sqrt() as f32
+        };
+        let on = denoise_guided(&gpu, &colors, &aov, (N, N), true).unwrap();
+        let (rough, glossy) = (half_rmse(&on, 4, N / 2 - 4), half_rmse(&on, N / 2 + 4, N - 4));
+        assert!(glossy > 1.5 * rough, "glossy noise {glossy} should stay above the rough half's {rough}");
     }
 }

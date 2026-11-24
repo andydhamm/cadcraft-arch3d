@@ -5,7 +5,13 @@
 // tracer's AOVs (guide[2i] albedo, guide[2i + 1] normal). A pixel whose albedo guide has w = 1 is
 // a hit; taps without a hit are skipped and a pixel without a hit is copied.
 
-struct DenoiseParams { size: vec2<u32>, step: u32, _pad: u32, sigma_c: f32, sigma_n: f32, sigma_a: f32, _pad2: f32 };
+// `guide_roughness` = 1 adds the first-hit roughness (guide[2i].w - 1) as an edge-stopping guide
+// (sigma_r) and narrows the colour sigma on glossy centre pixels; 0 is the plain filter.
+struct DenoiseParams {
+    size: vec2<u32>, step: u32, _pad: u32,
+    sigma_c: f32, sigma_n: f32, sigma_a: f32, _pad2: f32,
+    guide_roughness: u32, sigma_r: f32, _pad3: u32, _pad4: u32,
+};
 
 @group(0) @binding(0) var<uniform> dp: DenoiseParams;
 @group(0) @binding(1) var<storage, read> src: array<vec4<f32>>;
@@ -49,6 +55,11 @@ fn atrous_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let a0 = guide[2u * i].rgb;
     let n0 = guide[2u * i + 1u].xyz;
     let denom_a = dp.sigma_a * dp.sigma_a + 1.0e-8;
+    let guided = dp.guide_roughness != 0u;
+    let r0 = guide[2u * i].w - 1.0;
+    // Glossy centres trust their colour more: sigma_c scales by clamp(r / 0.3, 0.25, 1).
+    let sigma_c = select(dp.sigma_c, dp.sigma_c * clamp(r0 / 0.3, 0.25, 1.0), guided);
+    let denom_r = dp.sigma_r * dp.sigma_r + 1.0e-8;
     let w = i32(dp.size.x);
     let h = i32(dp.size.y);
     let stride = i32(dp.step);
@@ -78,7 +89,11 @@ fn atrous_main(@builtin(global_invocation_id) id: vec3<u32>) {
             let da = guide[2u * j].rgb - a0;
             let cosn = dot(guide[2u * j + 1u].xyz, n0);
             let wn = select(0.0, pow(cosn, dp.sigma_n), cosn > 0.0);
-            let weight = b3(dx) * b3(dy) * exp(-(dl * dl) / (dp.sigma_c * dp.sigma_c * (v0 + vj) + 1.0e-8)) * wn * exp(-dot(da, da) / denom_a);
+            var weight = b3(dx) * b3(dy) * exp(-(dl * dl) / (sigma_c * sigma_c * (v0 + vj) + 1.0e-8)) * wn * exp(-dot(da, da) / denom_a);
+            if (guided) {
+                let dr = (guide[2u * j].w - 1.0) - r0;
+                weight = weight * exp(-(dr * dr) / denom_r);
+            }
             sum = sum + weight * c;
             wsum = wsum + weight;
             vsum = vsum + weight * weight * vj;
