@@ -89,7 +89,7 @@ pub fn dir_to_frame(l: &LensView, tan_h: f64, tan_v: f64, cam_dir: [f64; 3]) -> 
         }
         (s * phi.sin() / k, s * y / hyp * tan_h / tan_v / k)
     } else {
-        if z <= 1e-9 {
+        if z < 1e-9 {
             return None;
         }
         ((x / z) / tan_h, (y / z) / tan_v)
@@ -291,5 +291,151 @@ mod tests {
         assert!((far - 4.32).abs() < 0.01, "{far}");
         assert_eq!(blur_diameter_px(f64::NAN, 2.8, 3.0, 1.5, 100), 0.0);
         assert!((focal_length_m(th) - 0.018 / th).abs() < 1e-15);
+    }
+
+    #[test]
+    fn dir_to_frame_rejects_non_finite_and_behind_eye() {
+        let (th, tv) = tan_hv(60.0, 1.5);
+        let l = LensView::default();
+        // NaN in direction
+        assert!(dir_to_frame(&l, th, tv, [f64::NAN, 0.0, 1.0]).is_none());
+        assert!(dir_to_frame(&l, th, tv, [0.0, f64::NAN, 1.0]).is_none());
+        assert!(dir_to_frame(&l, th, tv, [0.0, 0.0, f64::NAN]).is_none());
+        // Inf in direction
+        assert!(dir_to_frame(&l, th, tv, [f64::INFINITY, 0.0, 1.0]).is_none());
+        // NaN/inf in tans
+        assert!(dir_to_frame(&l, f64::NAN, tv, [0.0, 0.0, 1.0]).is_none());
+        assert!(dir_to_frame(&l, th, f64::NAN, [0.0, 0.0, 1.0]).is_none());
+        assert!(dir_to_frame(&l, 0.0, tv, [0.0, 0.0, 1.0]).is_none());
+        // Behind the eye (rectilinear)
+        assert!(dir_to_frame(&l, th, tv, [0.0, 0.0, 0.0]).is_none());
+        assert!(dir_to_frame(&l, th, tv, [0.0, 0.0, -1.0]).is_none());
+        assert!(dir_to_frame(&l, th, tv, [0.0, 0.0, 1e-10]).is_none());
+        // Exactly at the threshold is accepted
+        assert!(dir_to_frame(&l, th, tv, [0.0, 0.0, 1e-9]).is_some());
+        // Panini: direction exactly at 179 degrees
+        let l_pan = LensView { panini: true, compression: 0.7, shift: 0.0 };
+        let phi = 179.0_f64.to_radians();
+        assert!(dir_to_frame(&l_pan, th, tv, [phi.sin(), 0.0, phi.cos()]).is_none());
+        // Just inside 179 degrees is accepted
+        let phi_ok = 178.0_f64.to_radians();
+        assert!(dir_to_frame(&l_pan, th, tv, [phi_ok.sin(), 0.0, phi_ok.cos()]).is_some());
+    }
+
+    #[test]
+    fn frame_to_dir_handles_non_finite_and_returns_forward() {
+        let (th, tv) = tan_hv(60.0, 1.5);
+        let l = LensView::default();
+        // Non-finite frame coords return forward
+        let fwd = frame_to_dir(&l, th, tv, [f64::NAN, 0.0]);
+        assert!((fwd[0] - 0.0).abs() < 1e-15 && (fwd[1] - 0.0).abs() < 1e-15 && (fwd[2] - 1.0).abs() < 1e-15);
+        let fwd = frame_to_dir(&l, th, tv, [0.0, f64::INFINITY]);
+        assert!((fwd[2] - 1.0).abs() < 1e-15);
+        // Non-finite tans return forward
+        let fwd = frame_to_dir(&l, f64::NAN, tv, [0.0, 0.0]);
+        assert!((fwd[2] - 1.0).abs() < 1e-15);
+        // Zero tans return forward
+        let fwd = frame_to_dir(&l, 0.0, tv, [0.0, 0.0]);
+        assert!((fwd[2] - 1.0).abs() < 1e-15);
+        // Result is always unit length
+        for n in [[0.0, 0.0], [1.0, 1.0], [-1.0, -1.0], [0.5, -0.3]] {
+            let d = frame_to_dir(&l, th, tv, n);
+            let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+            assert!((len - 1.0).abs() < 1e-12, "not unit: {d:?}");
+        }
+    }
+
+    #[test]
+    fn project_and_ray_round_trip_through_lens() {
+        let cam = Camera::Full(camera::FullCamera::new(Vec3::new(0.0, 0.0, -5.0), Vec3::new(0.0, 0.0, 1.0), 50.0));
+        let l = LensView { panini: true, compression: 0.7, shift: 0.1 };
+        let size = (800, 600);
+        // Project a point, then ray at that pixel should pass near the point
+        let p = [2.0, 1.0, 3.0];
+        let px = project_point_lens(&cam, &l, size, p).expect("project failed");
+        let (eye, dir) = ray_at_lens(&cam, &l, size, px).expect("ray failed");
+        // The ray should pass within 1 pixel of the original point
+        let t = (p[0] - eye.x) / dir.x;
+        let py = eye.y + t * dir.y;
+        let pz = eye.z + t * dir.z;
+        assert!((py - p[1]).abs() < 0.05, "y error: {}", (py - p[1]).abs());
+        assert!((pz - p[2]).abs() < 0.05, "z error: {}", (pz - p[2]).abs());
+    }
+
+    #[test]
+    fn zero_size_camera_rejected() {
+        let cam = Camera::Full(camera::FullCamera::new(Vec3::new(0.0, 0.0, -5.0), Vec3::new(0.0, 0.0, 1.0), 50.0));
+        let l = LensView::default();
+        assert!(project_point_lens(&cam, &l, (0, 600), [0.0, 0.0, 0.0]).is_none());
+        assert!(project_point_lens(&cam, &l, (800, 0), [0.0, 0.0, 0.0]).is_none());
+        assert!(ray_at_lens(&cam, &l, (0, 600), [0.0, 0.0]).is_none());
+        assert!(ray_at_lens(&cam, &l, (800, 0), [0.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn thin_lens_edge_cases() {
+        let th = 30.0_f64.to_radians().tan();
+        // f_number <= 0
+        assert_eq!(blur_diameter_px(th, 0.0, 3.0, 1.5, 100), 0.0);
+        assert_eq!(blur_diameter_px(th, -1.0, 3.0, 1.5, 100), 0.0);
+        // focus <= 0
+        assert_eq!(blur_diameter_px(th, 2.8, 0.0, 1.5, 100), 0.0);
+        assert_eq!(blur_diameter_px(th, 2.8, -1.0, 1.5, 100), 0.0);
+        // distance <= 0
+        assert_eq!(blur_diameter_px(th, 2.8, 3.0, 0.0, 100), 0.0);
+        // At focus distance, blur is zero
+        let at_focus = blur_diameter_px(th, 2.8, 3.0, 3.0, 100);
+        assert!((at_focus - 0.0).abs() < 1e-12, "at focus blur should be 0, got {at_focus}");
+        // Focal length edge cases
+        assert_eq!(focal_length_m(0.0), 0.0);
+        assert_eq!(focal_length_m(f64::NAN), 0.0);
+        assert_eq!(focal_length_m(f64::INFINITY), 0.0);
+        // Aperture radius edge cases
+        assert_eq!(aperture_radius_m(th, 0.0), 0.0);
+        assert_eq!(aperture_radius_m(th, f64::NAN), 0.0);
+        // Blur with non-finite distance
+        assert_eq!(blur_diameter_px(th, 2.8, 3.0, f64::INFINITY, 100), 0.0);
+    }
+
+    #[test]
+    fn compression_clamped_and_huge_values() {
+        let (th, tv) = tan_hv(60.0, 1.5);
+        // Non-finite compression clamps to 0 (rectilinear)
+        let l = LensView { panini: true, compression: f64::NAN, shift: 0.0 };
+        let d = l.d();
+        assert_eq!(d, 0.0);
+        let l = LensView { panini: true, compression: f64::INFINITY, shift: 0.0 };
+        assert_eq!(l.d(), 0.0);
+        // Huge compression clamps to 1e6
+        let l = LensView { panini: true, compression: 1e9, shift: 0.0 };
+        assert_eq!(l.d(), 1e6);
+        // Negative compression clamps to 0
+        let l = LensView { panini: true, compression: -0.5, shift: 0.0 };
+        assert_eq!(l.d(), 0.0);
+        // Huge shift still works (horizon moves off screen)
+        let l = LensView { shift: 10.0, ..LensView::default() };
+        let n = dir_to_frame(&l, th, tv, [0.0, 0.0, 1.0]).unwrap();
+        assert!((n[1] - (-20.0)).abs() < 1e-12, "horizon at ny={}", n[1]);
+        // Round trip with huge shift
+        let back = frame_to_dir(&l, th, tv, n);
+        assert!((back[0] - 0.0).abs() < 1e-12 && (back[1] - 0.0).abs() < 1e-12 && (back[2] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn panini_and_rectilinear_agree_at_center() {
+        let (th, tv) = tan_hv(100.0, 1.6);
+        // At the center (nx=ny=0), both projections give the forward direction
+        let l_rect = LensView::default();
+        let l_pan = LensView { panini: true, compression: 0.7, shift: 0.0 };
+        let d_rect = frame_to_dir(&l_rect, th, tv, [0.0, 0.0]);
+        let d_pan = frame_to_dir(&l_pan, th, tv, [0.0, 0.0]);
+        assert!((d_rect[0] - d_pan[0]).abs() < 1e-12);
+        assert!((d_rect[1] - d_pan[1]).abs() < 1e-12);
+        assert!((d_rect[2] - d_pan[2]).abs() < 1e-12);
+        // And dir_to_frame agrees at the forward direction
+        let n_rect = dir_to_frame(&l_rect, th, tv, [0.0, 0.0, 1.0]).unwrap();
+        let n_pan = dir_to_frame(&l_pan, th, tv, [0.0, 0.0, 1.0]).unwrap();
+        assert!((n_rect[0] - n_pan[0]).abs() < 1e-12);
+        assert!((n_rect[1] - n_pan[1]).abs() < 1e-12);
     }
 }
