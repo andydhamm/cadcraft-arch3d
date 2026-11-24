@@ -52,7 +52,7 @@ def check_ladder(rep, d, what):
             fail('%s rung %d: rounded edges from rung 2 on: %r' % (what, i, ph[i].get('edges')))
         if ph[i].get('materials') != ('full' if i >= 3 else 'basic') or ph[i].get('variation') is not (i >= 3):
             fail('%s rung %d: full materials and variation from rung 3 on: %r, %r' % (what, i, ph[i].get('materials'), ph[i].get('variation')))
-        if ph[i].get('bounces') != (12 if i >= 4 else 4) or abs(float(ph[i].get('sunDisc', -1)) - (0.53 if i >= 4 else 0.0)) > 1e-9:
+        if ph[i].get('bounces') != (12 if i >= 4 else 4) or abs(float(ph[i].get('sunDisc', -1)) - (0.53 if i >= 4 else 0.0)) > 1e-6:   # 0.53 as a 32-bit float is 0.52999997
             fail('%s rung %d: 12 bounces and the 0.53 degree sun from rung 4 on: %r, %r' % (what, i, ph[i].get('bounces'), ph[i].get('sunDisc')))
         if (ph[i].get('clamp') is not None) != (i >= 4):
             fail('%s rung %d: the clamp from rung 4 on: %r' % (what, i, ph[i].get('clamp')))
