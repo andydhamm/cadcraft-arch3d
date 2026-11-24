@@ -8,7 +8,7 @@ use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
     FRAME_CLIP, FRAME_FURNACE, FRAME_GROUND, FRAME_MOON, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES,
-    PHOTO_CLAMP, build_gpu_scene,
+    PHOTO_ADAPTIVE, PHOTO_CLAMP, build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
 use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
@@ -55,6 +55,12 @@ pub struct PathTracer {
     started: std::time::Instant,
     /// A stop reason ended the sampling before `opts.spp`: the next step finishes.
     stopped: bool,
+    /// Seconds per sample per pixel of the last pass (kept under a time budget to size the next).
+    seconds_per_sample: Option<f32>,
+    /// Samples per pixel of the last pass (under a time budget the next pass at most doubles it).
+    last_pass: u32,
+    /// The first pass (one-time device costs) has been run and left out of the budget clock.
+    warmed_up: bool,
 }
 
 // The accumulator's layout (`n = width · height`; kernel.wgsl documents the same):
@@ -256,6 +262,9 @@ impl PathTracer {
                 frame.photo_f[2] = limit / exposure0;
             }
         }
+        if opts.adaptive {
+            frame.photo[0] |= PHOTO_ADAPTIVE;
+        }
         if let Some(f) = opts.furnace {
             frame.flags |= FRAME_FURNACE;
             frame.furnace = [f.albedo, f.emission, f.emission / (1.0 - f.albedo), 0.0];
@@ -303,6 +312,9 @@ impl PathTracer {
             adaptive: super::adaptive::Adaptive::new(opts, size),
             started: std::time::Instant::now(),
             stopped: false,
+            seconds_per_sample: None,
+            last_pass: 1,
+            warmed_up: false,
         })
     }
 
@@ -321,7 +333,24 @@ impl PathTracer {
         if remaining == 0 || self.stopped {
             return self.finish(gpu);
         }
-        let this_pass = remaining.min(self.opts.spp_per_step);
+        let mut this_pass = remaining.min(self.opts.spp_per_step);
+        // Under a time budget, shrink the pass so it is not expected to overrun what is left by more than 2 s.
+        if let Some(budget) = self.opts.time_budget {
+            match self.seconds_per_sample {
+                Some(sps) if budget.is_finite() && sps.is_finite() && sps > 0.0 => {
+                    let left = (budget - self.started.elapsed().as_secs_f32()).max(0.0) + 0.25;
+                    // A pass is also kept to about a second, so a sudden slowdown (a contended device)
+                    // can overrun the budget by little before the next measurement sees it.
+                    let fit = (left.min(0.5) / sps).floor().clamp(1.0, u32::MAX as f32) as u32;
+                    // Grow gradually: one slow (contended) pass must not be followed by a huge one.
+                    this_pass = this_pass.min(fit).min(self.last_pass.saturating_mul(2).max(1));
+                }
+                // No timing yet: a one-sample pass measures the speed without risking the budget.
+                None => this_pass = 1,
+                _ => {}
+            }
+        }
+        let pass_started = std::time::Instant::now();
 
         let mut frame = self.frame;
         frame.sample_base = self.spp_done;
@@ -398,6 +427,23 @@ impl PathTracer {
             }
         }
 
+        if self.opts.time_budget.is_some() {
+            // The clock must see the pass finished, not just queued.
+            let _ = d.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(std::time::Duration::from_secs(300)) });
+            if self.seconds_per_sample.is_none() && !self.warmed_up {
+                // The first dispatch pays one-time costs (shader compilation on a software device,
+                // which can take many seconds under load). That is set-up, not tracing: restart the
+                // budget clock and measure the speed on the next one-sample pass.
+                self.warmed_up = true;
+                self.started = std::time::Instant::now();
+            } else {
+                // Keep the slower of the last two estimates: a lucky quick pass must not license a huge one.
+                let sps = pass_started.elapsed().as_secs_f32() / this_pass.max(1) as f32;
+                self.seconds_per_sample = Some(self.seconds_per_sample.map_or(sps, |old| if old.is_finite() { sps.max(old * 0.5) } else { sps }));
+                self.last_pass = this_pass.max(1);
+            }
+        }
+
         self.spp_done += this_pass;
         self.stats.spp_done = self.spp_done;
         self.adaptive.stats(self.spp_done, &mut self.stats);
@@ -415,10 +461,11 @@ impl PathTracer {
 
         // Between passes: the adaptive sampler may end the still, and so may the time budget.
         if self.spp_done < self.opts.spp {
-            let mut stop = self.adaptive.after_pass(gpu, &self.accum, &self.aov);
-            self.stats.noise = self.adaptive.last_noise();
-            self.adaptive.apply_stats(&mut self.stats);
-            if stop.is_none() && self.opts.time_budget.is_some_and(|b| b.is_finite() && self.stats.seconds >= b) {
+            let spent = self.opts.time_budget.is_some_and(|b| b.is_finite() && self.stats.seconds >= b);
+            // A spent budget ends the still without paying for a measurement readback first.
+            let mut stop = if spent { None } else { self.adaptive.after_pass(gpu, &self.accum, &mut self.stats) };
+            self.stats.seconds = self.started.elapsed().as_secs_f32();
+            if stop.is_none() && spent {
                 stop = Some(super::StopReason::TimeBudget);
             }
             if let Some(reason) = stop {
@@ -516,6 +563,10 @@ impl PathTracer {
         };
         let accum: Vec<[f32; 4]> = bytemuck::cast_slice(&accum_data).to_vec();
         let colors_accum = &accum[..pixels];
+        // The reply describes the image that is written: its real per-pixel counts and noise.
+        if self.opts.adaptive || self.opts.noise_target.is_some() {
+            super::adaptive::fill_stats(&accum, pixels, &mut self.stats);
+        }
         // Each pixel holds its radiance summed over its samples, with the sample count in w.
         let mean_of = |p: &[f32; 4]| {
             let n = p[3].max(1.0);
@@ -1691,8 +1742,9 @@ mod tests {
         let spent = PathOptions { spp: 64, spp_per_step: 4, time_budget: Some(0.0), denoise: false, ..Default::default() };
         let (_, stats) = render_to_rgba_stats(&gpu, &spent);
         assert_eq!(stats.stop, super::super::StopReason::TimeBudget);
-        assert_eq!((stats.spp_done, stats.spp_min, stats.spp_max), (4, 4, 4));
-        assert_eq!(stats.samples_total, 16 * 16 * 4);
+        // The first pass under a budget is one sample: it measures the speed.
+        assert_eq!((stats.spp_done, stats.spp_min, stats.spp_max), (1, 1, 1));
+        assert_eq!(stats.samples_total, 16 * 16);
     }
 
     #[test]
