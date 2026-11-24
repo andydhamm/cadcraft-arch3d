@@ -55,11 +55,8 @@ pub(super) fn parse_entities(
         }
         if let Some((c, mut k)) = kindent {
             let h = match handle {
-                // Handles in the arch-proxy reserved range [ARCH_HANDLE_BASE, ..] come from
-                // old CADCraft proxy linework or from external software that happened to use a
-                // handle in that range.  Give the entity a fresh handle so it is treated as
-                // ordinary linework and never confused with a synthetic arch proxy.
-                Some(h) if !cadcraft_doc::arch::is_reserved_file_handle(h) => {
+                // A file's handles keep their identity, however high they are (#913, #939).
+                Some(h) => {
                     d.bump_handseed(h);
                     h
                 }
