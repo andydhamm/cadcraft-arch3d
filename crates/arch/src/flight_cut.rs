@@ -137,4 +137,43 @@ mod tests {
         assert!((t[0].x - 0.55).abs() < 1e-9 && (t[1].x - 1.45).abs() < 1e-9);
         assert!((t[0].y - 1.2140994).abs() < 1e-4);
     }
+
+    #[test]
+    fn clip_slab_cases() {
+        // d > 0: slab from s=0 to s=1, a=0, d=2, h=1 -> s in [0, 1].
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        assert!(super::clip_slab(0.0, 2.0, 1.0, &mut lo, &mut hi));
+        assert!((lo - 0.0).abs() < 1e-12 && (hi - 1.0).abs() < 1e-12);
+        // d < 0: a=2, d=-2, h=1 -> s in [0.5, 1.5], clipped to [0.5, 1.0].
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        assert!(super::clip_slab(2.0, -2.0, 1.0, &mut lo, &mut hi));
+        assert!((lo - 0.5).abs() < 1e-12 && (hi - 1.0).abs() < 1e-12);
+        // d = 0, a inside: passes.
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        assert!(super::clip_slab(0.5, 0.0, 1.0, &mut lo, &mut hi));
+        // d = 0, a outside: fails.
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        assert!(!super::clip_slab(2.0, 0.0, 1.0, &mut lo, &mut hi));
+        // No overlap: a=5, d=1, h=1 -> s in [4, 6], no overlap with [0, 1].
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        assert!(!super::clip_slab(5.0, 1.0, 1.0, &mut lo, &mut hi));
+    }
+
+    #[test]
+    fn flight_cuts_no_stairs() {
+        let m = model();
+        // A wall far from the stair gets no cut.
+        let w = Wall { start: Vec2::new(20.0, 0.0), end: Vec2::new(20.0, 3.0), thickness: 0.1, height: 2.7, ..Default::default() };
+        assert!(flight_cuts(&m, &w).is_empty());
+        // A wall on a different level gets no cut.
+        let w = Wall { start: Vec2::new(3.0, 0.0), end: Vec2::new(3.0, 3.0), base_level: 1, thickness: 0.1, height: 2.7, ..Default::default() };
+        assert!(flight_cuts(&m, &w).is_empty());
+    }
+
+    #[test]
+    fn flight_cuts_divider_wall_is_skipped() {
+        let m = model();
+        let w = Wall { start: Vec2::new(3.0, 0.0), end: Vec2::new(3.0, 3.0), thickness: 0.1, height: 2.7, divider: true, ..Default::default() };
+        assert!(flight_cuts(&m, &w).is_empty());
+    }
 }
