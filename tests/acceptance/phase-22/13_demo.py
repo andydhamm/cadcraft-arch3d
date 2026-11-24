@@ -2,6 +2,9 @@
 # Photoreal cameras: Kitchen-photo, Living-photo and Dusk-photo (the exterior at the `dusk` sun angle). Here a small
 # realism ladder of the kitchen (eight non-blank columns) and small Photoreal stills of the other two; the gallery tool
 # renders them at full size (render_all.py --full: a ladder per camera and three 1920 x 1080 finals).
+# 2026-11-24: the tool check looked for the literal text photoreal- in render_all.py; the tool builds its file names
+# with file_name('photoreal', folder, '.png'), so the literal never occurs. It now looks for the three things the tool
+# must do: run render.ladder, replay the phase-22 script, and name the 1920 x 1080 Photoreal finals.
 # needs: p22-doc-look, p22-engine-look-keys, p22-engine-render-params, p22-cli-hook, p22-r3d-lens-path, p22-r3d-edges, p22-r3d-bsdf-ext, p22-r3d-bsdf-transmission, p22-r3d-variation, p22-r3d-sun-disc, p22-r3d-clamp, p22-r3d-film, p22-r3d-adaptive, p22-r3d-unet-gpu, p22-engine-ladder, p22-showcase-cameras, p22-gallery-tool
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p22lib.inc')).read())
@@ -51,7 +54,10 @@ for f, r, n in zip(stills, rs, NAMES[1:]):
     if luma_sd(f) < 1.0:
         fail('the Photoreal still of %s is blank' % n)
 tool = open(os.path.join(P22_ROOT, 'tools', 'showcase', 'render_all.py'), encoding='utf-8').read()
-for needle in ('render.ladder', 'phase-22-showcase.json', 'photoreal-'):
+for needle, what in (('render.ladder', 'it runs no realism ladder'),
+                     ('phase-22-showcase.json', 'it does not replay the phase-22 camera script'),
+                     ("'photoreal'", 'it names no Photoreal finals'),
+                     ('[1920, 1080]', 'the Photoreal finals are not 1920 x 1080')):
     if needle not in tool:
-        fail('tools/showcase/render_all.py does not mention %s: the full gallery has no ladders or Photoreal finals' % needle)
+        fail('tools/showcase/render_all.py does not mention %s: %s' % (needle, what))
 print('PASS 13')

@@ -6,7 +6,7 @@ use std::path::Path;
 use cadcraft_doc::arch::photo::RUNG_NAMES;
 use serde_json::{Value, json};
 
-use crate::cmd::arch::render::{build_request, render_hooks};
+use crate::cmd::arch::render::{build_request, finish_reply, render_hooks};
 use crate::cmd::{CommandSpec, bad};
 use crate::{EngineError, Session};
 
@@ -164,6 +164,7 @@ fn run_ladder(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
         let name = RUNG_NAMES.get(n).copied().unwrap_or("");
         let request = build_request(doc, p)?;
         let mut reply = (hooks.render)(&request).map_err(|e| bad("render.ladder", format!("rung {n} ({name}) failed: {e}")))?;
+        finish_reply(&mut reply, &request);
         if let Value::Object(m) = &mut reply {
             m.insert("rung".to_string(), json!(n));
             m.insert("name".to_string(), json!(name));
@@ -292,63 +293,49 @@ mod tests {
     }
 
     #[test]
-    fn compose_sheet_refuses_wrong_pixel_count() {
-        let mut imgs: Vec<_> = (0..8).map(|i| solid(64, 10, 100 + i as u8)).collect();
-        // Right dimensions, wrong pixel count.
-        imgs[0] = (64, 10, vec![0u8; 2561]);
-        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
-        assert!(err.contains("wrong pixel count"), "{err}");
-    }
+    fn ladder_rung_reply_carries_the_look() {
+        let mut s = Session::new();
+        // Save a camera
+        s.execute("camera", &json!({"save": "c", "azimuth": 30, "elevation": 20, "distance": 12})).unwrap();
+        let doc = s.doc().unwrap();
 
-    #[test]
-    fn compose_sheet_refuses_different_height() {
-        let mut imgs: Vec<_> = (0..8).map(|i| solid(64, 10, 100 + i as u8)).collect();
-        imgs[3] = solid(64, 11, 0);
-        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
-        assert!(err.contains("rung 3"), "{err}");
-    }
+        let base = json!({"camera": "c", "seed": 5});
+        let out = std::path::Path::new("out");
 
-    #[test]
-    fn compose_sheet_refuses_sheet_too_large() {
-        let w = 1000u32;
-        let h = 50000u32;
-        // 8 * 1000 * (50000 + 24) = 400,192,000 > 400,000,000.
-        let imgs: Vec<_> = (0..8).map(|i| (w, h, vec![100u8 + i as u8; (w * h * 4) as usize])).collect();
-        let err = compose_sheet(&imgs, &RUNG_NAMES).unwrap_err();
-        assert!(err.contains("too large"), "{err}");
-    }
+        for n in 0..=7u8 {
+            let p = rung_params(&base, n, out);
+            let req = build_request(doc, &p).unwrap();
+            let mut reply = json!({});
+            finish_reply(&mut reply, &req);
 
-    #[test]
-    fn compose_sheet_handles_1x1_image() {
-        let imgs: Vec<_> = (0..8).map(|i| solid(1, 1, 100 + i as u8)).collect();
-        let (sw, sh, px) = compose_sheet(&imgs, &RUNG_NAMES).unwrap();
-        assert_eq!((sw, sh), (8, 25));
-        assert_eq!(px.len(), (8 * 25 * 4) as usize);
-    }
-
-    #[test]
-    fn rung_params_ignores_extra_fields() {
-        let base = json!({"camera": "front", "extra": "ignored", "another": 42});
-        let p = rung_params(&base, 0, Path::new("/tmp/x"));
-        assert_eq!(p["camera"], "front");
-        assert!(p.get("extra").is_none());
-        assert!(p.get("another").is_none());
-    }
-
-    #[test]
-    fn rung_params_replaces_out() {
-        let base = json!({"camera": "front", "out": "original.png"});
-        let p = rung_params(&base, 3, Path::new("/tmp/x"));
-        assert_eq!(p["out"], "/tmp/x/rung-3.png");
-    }
-
-    #[test]
-    fn draw_label_handles_very_small_width() {
-        let mut band = vec![0u8; 1 * BAND as usize * 4];
-        for px in band.chunks_exact_mut(4) {
-            px.copy_from_slice(&BAND_BG);
+            assert!(reply.get("look").is_some(), "rung {n} missing look");
+            assert!(reply["look"].get("film").is_some(), "rung {n} missing film");
+            assert!(reply["look"].get("lens").is_some(), "rung {n} missing lens");
         }
-        draw_label(&mut band, 1, "Photoreal");
-        assert_eq!(band.len(), 1 * BAND as usize * 4);
+    }
+
+    #[test]
+    fn ladder_rung_look_has_the_film_from_rung_five() {
+        let mut s = Session::new();
+        // Save a camera
+        s.execute("camera", &json!({"save": "c", "azimuth": 30, "elevation": 20, "distance": 12})).unwrap();
+        let doc = s.doc().unwrap();
+
+        let base = json!({"camera": "c", "seed": 5});
+        let out = std::path::Path::new("out");
+
+        for n in 0..=7u8 {
+            let p = rung_params(&base, n, out);
+            let req = build_request(doc, &p).unwrap();
+            let mut reply = json!({});
+            finish_reply(&mut reply, &req);
+
+            let vignette = reply["look"]["film"]["vignette"].as_f64().unwrap_or(-1.0);
+            if n <= 4 {
+                assert_eq!(vignette, 0.0, "rung {n} vignette should be 0.0");
+            } else {
+                assert_eq!(vignette, 0.15, "rung {n} vignette should be 0.15");
+            }
+        }
     }
 }

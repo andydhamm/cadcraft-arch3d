@@ -214,6 +214,72 @@ fn sphere(material: &str, r: f32, levels: u32) -> Mesh {
     mesh
 }
 
+/// Light inside glass (n=1.5) at 60 degrees from the normal is beyond the critical angle
+/// (arcsin(1/1.5) = 41.8 degrees), so every sample must reflect back into the glass.
+#[test]
+fn total_internal_reflection_inside_glass() {
+    let count = 64usize;
+    // wo has z = -0.5: the viewer is on the far side of the surface (inside the glass).
+    let probes: Vec<GpuProbe> = (0..count).map(|_| probe(0, with_cos(-0.5), 1)).collect();
+    let Some(out) = run_with("bsdf_dir_test_main", vec![rough_glass([1.0; 3], 0.02, 1.0)], &probes, photo_frame()) else {
+        return;
+    };
+    for d in &out {
+        let dir = [f64::from(d[0]), f64::from(d[1]), f64::from(d[2])];
+        assert!(dir[2] < 0.0, "TIR: sample must reflect, not refract: {dir:?}");
+    }
+}
+
+#[test]
+fn thin_sheet_zero_transmission_is_opaque() {
+    let count = 64usize;
+    let probes: Vec<GpuProbe> = (0..count).map(|_| probe(0, with_cos(0.5), 1)).collect();
+    let sheet = thin_sheet([0.8, 0.6, 0.4], 0.5, 0.0);
+    let Some(out) = run_with("bsdf_dir_test_main", vec![sheet], &probes, photo_frame()) else {
+        return;
+    };
+    for d in &out {
+        let dir = [f64::from(d[0]), f64::from(d[1]), f64::from(d[2])];
+        assert!(dir[2] > 0.0, "transmission=0: no sample may pass through: {dir:?}");
+    }
+}
+
+#[test]
+fn thin_sheet_full_transmission_goes_through() {
+    let count = 64usize;
+    let probes: Vec<GpuProbe> = (0..count).map(|_| probe(0, with_cos(0.5), 1)).collect();
+    let sheet = thin_sheet([0.8, 0.6, 0.4], 0.5, 1.0);
+    let Some(out) = run_with("bsdf_dir_test_main", vec![sheet], &probes, photo_frame()) else {
+        return;
+    };
+    for d in &out {
+        let dir = [f64::from(d[0]), f64::from(d[1]), f64::from(d[2])];
+        assert!(dir[2] < 0.0, "transmission=1: every sample must pass through: {dir:?}");
+    }
+}
+
+#[test]
+fn trans_pdf_is_non_negative() {
+    let (nm, np) = (64usize, 128usize);
+    let mut probes = Vec::with_capacity(nm * np);
+    for i in 0..nm {
+        let mu = -1.0 + 2.0 * (i as f64 + 0.5) / nm as f64;
+        let s = (1.0 - mu * mu).sqrt();
+        for j in 0..np {
+            let phi = 2.0 * std::f64::consts::PI * (j as f64 + 0.5) / np as f64;
+            probes.push(probe(0, [(s * phi.cos()) as f32, (s * phi.sin()) as f32, mu as f32], 1));
+        }
+    }
+    let wo = with_cos(0.7);
+    let frame = GpuFrame { sun_dir: [wo[0], wo[1], wo[2], 0.0], ..photo_frame() };
+    let out = run_with("trans_pdf_test_main", vec![rough_glass([1.0; 3], 0.3, 0.8)], &probes, frame).expect("run");
+    for o in &out {
+        let pdf = f64::from(o[3]);
+        assert!(pdf >= 0.0, "PDF must be non-negative: {pdf}");
+        assert!(pdf.is_finite(), "PDF must be finite: {pdf}");
+    }
+}
+
 #[test]
 fn rough_glass_sphere_in_a_uniform_environment_is_one() {
     let Some(gpu) = crate::gputest::shared_compute() else {

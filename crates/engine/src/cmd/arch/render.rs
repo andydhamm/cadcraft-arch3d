@@ -677,6 +677,18 @@ fn parse_albedo(v: Option<&Value>) -> Result<Option<f64>, EngineError> {
     }
 }
 
+/// Add the effective look, sun direction and albedo to a render reply.
+///
+/// This is shared by `render` and `render.ladder` so every rung's reply carries the same
+/// diagnostic keys. It does nothing if `reply` is not a JSON object.
+pub(crate) fn finish_reply(reply: &mut serde_json::Value, request: &RenderRequest) {
+    if let Value::Object(m) = reply {
+        m.insert("look".to_string(), describe_look(&request.look));
+        m.insert("sunDir".to_string(), request.sun_dir.map_or(Value::Null, |d| json!(d)));
+        m.insert("albedo".to_string(), request.albedo.map_or(Value::Null, |a| json!(a)));
+    }
+}
+
 /// `render`: render a 3D still through the installed render hook.
 fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let hooks = render_hooks().ok_or_else(|| bad("render", "render needs the 3D renderer: run it from cadcraft-cli run or the app"))?;
@@ -684,11 +696,7 @@ fn run_render(s: &mut Session, params: &Value) -> Result<Value, EngineError> {
     let doc = s.doc()?;
     let request = build_request(doc, params)?;
     let mut reply = (hooks.render)(&request).map_err(|e| bad("render", e))?;
-    if let Value::Object(m) = &mut reply {
-        m.insert("look".to_string(), describe_look(&request.look));
-        m.insert("sunDir".to_string(), request.sun_dir.map_or(Value::Null, |d| json!(d)));
-        m.insert("albedo".to_string(), request.albedo.map_or(Value::Null, |a| json!(a)));
-    }
+    finish_reply(&mut reply, &request);
     Ok(reply)
 }
 
@@ -1192,5 +1200,23 @@ mod tests {
         assert!(err.contains("`albedo` must be a number"), "{err}");
         assert!(build_request(&d, &json!({"albedo": 0.0})).is_err());
         assert!(build_request(&d, &json!({"albedo": 1.0})).is_err());
+    }
+
+    #[test]
+    fn render_reply_keys_are_unchanged_by_finish_reply() {
+        let d = Drawing::new_metric();
+        let req = build_request(&d, &json!({"albedo": 0.5})).unwrap();
+        let mut reply = json!({"existing": 1});
+        finish_reply(&mut reply, &req);
+        assert_eq!(reply["existing"], 1);
+        assert!(reply.get("look").is_some());
+        assert!(reply.get("sunDir").is_some());
+        assert!(reply.get("albedo").is_some());
+        assert_eq!(reply["albedo"], 0.5);
+
+        // Non-object reply is untouched
+        let mut non_obj = json!("hello");
+        finish_reply(&mut non_obj, &req);
+        assert_eq!(non_obj, "hello");
     }
 }
