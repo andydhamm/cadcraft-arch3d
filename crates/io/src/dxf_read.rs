@@ -312,3 +312,58 @@ mod hatch_budget_tests {
         assert!(matches!(d.read_notes.as_slice(), [note] if note.contains("2 hatches")), "{:?}", d.read_notes);
     }
 }
+
+#[cfg(test)]
+mod arch_handle_tests {
+    use super::*;
+    use cadcraft_doc::{ARCH_HANDLE_BASE, is_arch_handle};
+
+    /// A LINE at handle A0000001 (below the reserved range) keeps its handle and is not an arch handle.
+    #[test]
+    fn a_file_line_at_a0000001_is_an_ordinary_entity() {
+        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n5\nA0000001\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n";
+        let d = read(dxf.as_bytes()).unwrap();
+        let e = d.model.iter().next().unwrap();
+        assert_eq!(e.handle, Handle(0xA0000001));
+        assert!(!is_arch_handle(e.handle));
+    }
+
+    fn handle_of_line_at(h: &str) -> Handle {
+        let dxf = format!("0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n{h}\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n");
+        let d = read(dxf.as_bytes()).unwrap();
+        d.model.iter().next().unwrap().handle
+    }
+
+    /// A LINE at a reserved-range handle keeps it: a file's handles keep their identity.
+    #[test]
+    fn a_file_handle_in_the_reserved_range_is_reassigned() {
+        let h = handle_of_line_at("FFFFFFFF00000005");
+        assert_eq!(h, Handle(0xFFFF_FFFF_0000_0005));
+        assert!(h.0 >= ARCH_HANDLE_BASE);
+    }
+
+    /// Likewise in the room range.
+    #[test]
+    fn a_file_handle_in_the_room_range_is_reassigned() {
+        assert_eq!(handle_of_line_at("FFFFFFFF00010005"), Handle(0xFFFF_FFFF_0001_0005));
+    }
+
+    /// Likewise in the opening range.
+    #[test]
+    fn a_file_handle_in_the_opening_range_is_reassigned() {
+        assert_eq!(handle_of_line_at("FFFFFFFF00008005"), Handle(0xFFFF_FFFF_0000_8005));
+    }
+
+    /// A LINE at a handle in the arch range keeps its handle: a file's handles keep their identity.
+    #[test]
+    fn a_file_handle_in_the_arch_ranges_keeps_its_handle() {
+        for h in ["FFFFFFFF00000005", "FFFFFFFF00010005", "FFFFFFFF00008005"] {
+            let d =
+                read(format!("0\nSECTION\n2\nENTITIES\n0\nLINE\n5\n{h}\n10\n0\n20\n0\n30\n0\n11\n10\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n").as_bytes())
+                    .unwrap();
+            let e = d.model.iter().next().unwrap();
+            assert_eq!(e.handle, Handle::parse_hex(h).unwrap());
+            assert!(e.handle.0 >= ARCH_HANDLE_BASE);
+        }
+    }
+}
