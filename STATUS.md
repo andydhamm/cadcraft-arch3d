@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 11 of 35 segments merged · 1 of 15 acceptance checks**
 
@@ -32,24 +32,25 @@ Updated 2026-11-24 00:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 1 / 15 | 6.5 h so far · expected done Nov 24 12:34–Nov 25 10:41 UTC |
+| 22 | Photoreal stills | building | 1 / 15 | 6.8 h so far · expected done Nov 24 13:17–Nov 25 12:14 UTC |
 
 ## Phase 22 segments
 
-14 queued, 11 merged, 7 working, 3 merging
+13 queued, 11 merged, 5 merging, 5 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `upstream-sync-05d4e64ad` | merge upstream upstream/main up to 05d4e64ad (27 commits) | merging | mai-flash-esc |
-| `p22-r3d-material-map` | Fill the GPU material's extension fields from MaterialExt | working | claude-sonnet-c |
+| `p22-r3d-material-map` | Fill the GPU material's extension fields from MaterialExt | merging | claude-sonnet-c |
 | `p22-engine-render-params` | Engine: the photoreal render params, the preset, focus pick and calibrate on RenderRequest | merging | claude-sonnet-b |
 | `p22-r3d-linear-out` | Path tracer: keep the linear image (radiance and film stages) | working | mai-flash |
 | `p22-r3d-lens-path` | Path tracer ray generation: Panini, shift and the thin lens | working | claude-sonnet-d |
 | `p22-engine-pick-lens` | pick3d maps the pixel back through the lens | merging | mai-flash-b |
 | `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | working | claude-sonnet-a |
-| `p22-r3d-clamp` | Per-sample clamp of indirect contributions, with its energy loss reported | working | mai-flash-b |
+| `p22-r3d-clamp` | Per-sample clamp of indirect contributions, with its energy loss reported | gate | mai-flash-b |
 | `p22-r3d-adaptive` | Adaptive sampling, the noise target and the time budget | working | tturbo-mac2 |
-| `p22-r3d-roughness-guide` | The edge-aware filter gains the roughness buffer as a guide | working | claude-sonnet-b |
+| `p22-r3d-roughness-guide` | The edge-aware filter gains the roughness buffer as a guide | merging | claude-sonnet-b |
+| `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | working | bonsai-b |
 
 ## Recent merges
 
@@ -72,18 +73,18 @@ Updated 2026-11-24 00:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1401 |
-| bonsai-b | bonsai2-27b | gate | 1310 |
+| bonsai-a | bonsai2-27b | gate | 1402 |
+| bonsai-b | bonsai2-27b | agent | 1311 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | agent | 166 |
-| claude-sonnet-b | sonnet | agent | 173 |
-| claude-sonnet-c | sonnet | agent | 107 |
+| claude-sonnet-b | sonnet | idle | 174 |
+| claude-sonnet-c | sonnet | idle | 108 |
 | claude-sonnet-d | sonnet | agent | 103 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | merging | 1296 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | agent | 128 |
-| mai-flash-b | mai-code-1.1-flash | agent | 83 |
+| mai-flash-b | mai-code-1.1-flash | gate | 83 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 177 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1198 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1199 |
 | tturbo-mac2 | tturbo-ultraheretic | agent | 703 |
