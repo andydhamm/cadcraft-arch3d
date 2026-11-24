@@ -31,7 +31,7 @@
 
 use super::scene_gpu::{GpuMaterial, GpuScene};
 use super::{DAY_EXPOSURE, DEFAULT_SPP, NIGHT_EXPOSURE, PathOptions, PathStats, PathStatus, PathTracer, SKY_ZENITH_NITS, SUN_LUX};
-use crate::device::{ComputeGpu, request_compute};
+use crate::pathtrace::device::{ComputeGpu, request_compute};
 
 const SAMPLES: u32 = 65_536;
 const NOV_VALUES: [f32; 3] = [0.2, 0.5, 0.9];
@@ -146,7 +146,7 @@ fn mean_bsdf_weights(
         spp_per_step: SAMPLES,
         furnace: Some(super::Furnace { albedo: 1.0, emission: 1.0 }),
         snapshots: Vec::new(),
-        tone_map: super::crate::exposure::TONE_NONE,
+        tone_map: crate::exposure::TONE_NONE,
         lambert: Some(1.0),
         edges: cadcraft_doc::arch::EdgeMode::Off,
         materials_full: false,
@@ -232,7 +232,7 @@ fn clearcoat_furnace_conserves_energy() {
         0.0,
     );
     for (i, w) in NOV_VALUES.iter().zip(weights.iter()).enumerate() {
-        assert!(*w >= BAND_LO && *w <= BAND_HI, "coat furnace NoV {NOV_VALUES[i]}: weight {:.6} not in [{} , {}]", w, BAND_LO, BAND_HI);
+        assert!(*w >= BAND_LO && *w <= BAND_HI, "coat furnace NoV {}: weight {:.6} not in [{}, {}]", NOV_VALUES[i], w, BAND_LO, BAND_HI);
     }
 }
 
@@ -254,7 +254,7 @@ fn sheen_furnace_conserves_energy() {
         0.0,
     );
     for (i, w) in NOV_VALUES.iter().zip(weights.iter()).enumerate() {
-        assert!(*w >= BAND_LO && *w <= BAND_HI, "sheen furnace NoV {NOV_VALUES[i]}: weight {:.6} not in [{}, {}]", w, BAND_LO, BAND_HI);
+        assert!(*w >= BAND_LO && *w <= BAND_HI, "sheen furnace NoV {}: weight {:.6} not in [{}, {}]", NOV_VALUES[i], w, BAND_LO, BAND_HI);
     }
 }
 
@@ -276,7 +276,7 @@ fn anisotropy_furnace_conserves_energy() {
         0.0,
     );
     for (i, w) in NOV_VALUES.iter().zip(weights.iter()).enumerate() {
-        assert!(*w >= BAND_LO && *w <= BAND_HI, "anisotropy furnace NoV {NOV_VALUES[i]}: weight {:.6} not in [{}, {}]", w, BAND_LO, BAND_HI);
+        assert!(*w >= BAND_LO && *w <= BAND_HI, "anisotropy furnace NoV {}: weight {:.6} not in [{}, {}]", NOV_VALUES[i], w, BAND_LO, BAND_HI);
     }
 }
 
