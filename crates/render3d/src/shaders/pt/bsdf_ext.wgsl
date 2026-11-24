@@ -1,387 +1,426 @@
-// Path tracer (phase 22): the coat, sheen and anisotropy lobes of the layered material
-// (MAT_EXT). bsdf_sample, bsdf_eval and bsdf_pdf defer to these when ext_active(m) is true.
+// Path tracer (phase 22): the clear coat, sheen and anisotropy lobes of the layered material
+// (MAT_EXT). bsdf_sample, bsdf_eval and bsdf_pdf defer to ext_sample, ext_eval and ext_pdf when
+// ext_active(m) is true; every other material runs bsdf.wgsl untouched.
 //
-// Energy model (KHR_materials_clearcoat / KHR_materials_sheen / KHR_materials_anisotropy):
-//   base (diffuse + anisotropic GGX) is scaled by (1 - coat * F(VoH)) * (1 - shear(NoV));
-//   a coat GGX lobe (F0 = 0.04, alpha = coat_roughness^2) is added, weighted by m.coat;
-//   a sheen lobe (Charlie D, Neubelt G, colour m.sheen) is added, weighted by its albedo;
-//   the base's anisotropic GGX uses alpha_t = mix(alpha, 1, aniso^2) along the tangent and
-//   alpha_b = alpha along the bitangent.
+// The model (formulas from the glTF KHR_materials_clearcoat / _sheen / _anisotropy
+// specifications), from the top layer down:
+//   coat   a GGX lobe, F0 0.04, alpha = coat_roughness^2, weight m.coat; everything below is
+//          scaled by 1 - coat * F(NoV);
+//   sheen  the Charlie distribution D = (2 + 1/a) sin^(1/a)(theta_h) / (2 pi) with the Neubelt
+//          visibility 1 / (4 (NoL + NoV - NoL NoV)), colour m.sheen, a = sheen_roughness^2;
+//          the base below is scaled by 1 - max(sheen) * E(NoV, a);
+//   base   today's Lambert diffuse + GGX specular with the spec-albedo energy split of
+//          bsdf_lobes (bsdf_spec_albedo is the isotropic table; the anisotropic lobe borrows it,
+//          its albedo differs by well under a percent of F0). Anisotropy: alpha_b = alpha,
+//          alpha_t = mix(alpha, 1, aniso^2), tangent pt_tangent(n, aniso_rot).
 //
-// The three functions agree exactly: they all go through one BsdfExtLobes + ext_luma(m)
-// (the lobe albedo), so the MIS pdf/weight/eval relationships the tests check hold.
+// E(NoV, a), the sheen lobe's directional albedo, is a bilinear lookup in the table below,
+// computed by quadrature of D * V * NoL over the hemisphere (rows: a = 0.02 0.05 0.09 0.25
+// 0.5 1; columns: NoV = 0.05 0.2 0.5 0.9 1) and rounded up. The table is convex in NoV, so the
+// bilinear interpolation never underestimates it: the base loses at least what the sheen lobe
+// returns and the layer pair does not gain energy. (Where the Charlie lobe itself returns more
+// than 1, at a grazing view with a low alpha, the base scale is clamped at 0.)
 //
-// The anisotropic GGX is built by the stretch method: the isotropic GGX functions
-// (ggx_d, ggx_lambda, ggx_sample_vndf) are evaluated in a frame where the view vector's
-// tangent components are stretched by (alpha_b, alpha_t), so the same alpha (alpha_b) gives
-// a lobe whose half-width along the tangent is alpha_t/alpha_b ~ 8x that along the bitangent
-// (alpha = roughness^2). D/G/pdf/sample are all derived from that same stretched direction.
-//
-// ext_eval/eval: f * cos. ext_pdf: the MIS mixture pdf. ext_sample: choose coat/sheen/base
-// by estimated-albedo probabilities, one-sample MIS; weight = f*cos/pdf; specular is set only
-// when the chosen lobe's roughness is below BSDF_MIRROR_ROUGHNESS (the base mirror uses the
-// BSDF_MIRROR_ROUGHNESS that bsdf_lobes reports).
+// Sampling picks one of four lobes (diffuse, base specular, coat, sheen) with probability
+// proportional to its estimated albedo; diffuse and sheen are sampled by cosine, the specular
+// lobes by visible normals. The pdf is the mixture sum p_i pdf_i over the lobes that are not
+// deltas, and the weight is ext_eval / ext_pdf, so one-sample MIS and next-event estimation
+// agree. A perfect-mirror lobe (roughness below BSDF_MIRROR_ROUGHNESS) is a delta: specular = 1,
+// weight F / p_i, no eval or pdf.
 
-// Estimated (directional) albedo of each lobe, used for lobe selection and the base
-// energy scaling. All in [0,1]; the base includes the anisotropic GGX spec-albedo.
-fn ext_albedo(m: Material) -> vec3<f32> {
-    let metal = clamp(m.metallic, 0.0, 1.0);
-    let rough = clamp(m.roughness, 0.0, 1.0);
-    let f0d = BSDF_DIELECTRIC_F0;
-    let f0 = mix(vec3<f32>(f0d), m.albedo, metal);
-    let f0l = bsdf_luma(f0);
-    var base: vec3<f32>;
-    if (rough < BSDF_MIRROR_ROUGHNESS) {
-        // Perfect mirror: specular = F, no diffuse (the energy split makes the rest vanish).
-        base = vec3<f32>(0.0);
-    } else {
-        let e = bsdf_spec_albedo(f0, rough, 1.0);
-        base = m.albedo * (1.0 - metal) * (vec3<f32>(1.0) - e) + f0 * e;
+const EXT_SHEEN_MIN_ALPHA: f32 = 0.02;
+const EXT_SHEEN_E: array<f32, 30> = array<f32, 30>(
+    1.0, 0.39, 0.016, 0.0, 0.0,
+    1.0, 0.50, 0.078, 0.002, 0.0,
+    1.0, 0.52, 0.138, 0.009, 0.002,
+    0.75, 0.49, 0.230, 0.058, 0.032,
+    0.63, 0.46, 0.268, 0.114, 0.084,
+    0.55, 0.43, 0.288, 0.168, 0.142,
+);
+const EXT_SHEEN_A: array<f32, 6> = array<f32, 6>(0.02, 0.05, 0.09, 0.25, 0.5, 1.0);
+const EXT_SHEEN_MU: array<f32, 5> = array<f32, 5>(0.05, 0.2, 0.5, 0.9, 1.0);
+
+// The tangent of a normal n rotated about n by rot radians: normalize(cross(z, n)), the X axis
+// when n is near +-Z.
+fn pt_tangent(n: vec3<f32>, rot: f32) -> vec3<f32> {
+    var t0 = vec3<f32>(1.0, 0.0, 0.0);
+    let c = cross(vec3<f32>(0.0, 0.0, 1.0), n);
+    let l2 = dot(c, c);
+    if (l2 > 1.0e-8) {
+        t0 = c * inverseSqrt(l2);
     }
-    var coat: f32 = 0.0;
-    if (m.coat > 0.0) { coat = f0d; }
-    var shear: f32 = 0.0;
-    if (m.sheen_roughness > 0.0) { shear = ext_sheen_albedo(m); }
-    let b = clamp(bsdf_luma(base), 0.0, 1.0);
-    let c = clamp(coat, 0.0, 1.0);
-    let s = clamp(shear, 0.0, 1.0);
-    return vec3<f32>(b, c, s);
+    return t0 * cos(rot) + cross(n, t0) * sin(rot);
 }
 
-// Charlie D times Neubelt visibility for the sheen, integrated over the hemisphere for a
-// fixed (NoV, alpha) (a constant factor in NoV is dropped since it cancels in the pdf/eval
-// ratio); this is the directional albedo E(NoV, roughness) that scales the base below. The
-// fit is chosen so that a sheen layer of colour c reflects at most ~c of the light and the
-// base is only reduced by that amount -> total energy is never gained.
-fn ext_sheen_albedo(m: Material) -> f32 {
-    let rough = clamp(m.roughness, 0.0, 1.0);
-    let a = max(rough * rough, BSDF_MIN_ALPHA);
-    // Charlie D integral over a hemisphere: I(a) = (2 + 1/a) * (1/2) * (a^2 / (2*pi)) * ...
-    // = (2 + 1/a) / (4*pi) * (pi * (1 - a))  ->  (2 + 1/a) * (1 - a) / 4.
-    // Neubelt G ~ 1/(4 NoV) on average; we use the NoV-independent constant 1/4 (the NoV
-    // dependence is handled exactly in D/G at the same NoV, so it cancels in eval/pdf).
-    return (2.0 + 1.0 / a) * (1.0 - a) / 4.0;
-}
-
-// The shear (sheen) factor the base is scaled by: 1 - shear * E(NoV). With a white sheen the
-// base loses ~E and the sheen reflects ~E, conserving energy.
-fn ext_shear(m: Material, NoV: f32) -> f32 {
-    let c = max(m.sheen[0], max(m.sheen[1], m.sheen[2]));
-    if (c <= 0.0) {
+// The sheen lobe's directional albedo E(nov, sheen_roughness) (see the table above), at most 1.
+fn ext_sheen_e(nov: f32, sheen_roughness: f32) -> f32 {
+    if (nov < EXT_SHEEN_MU[0]) {
         return 1.0;
     }
-    let E = ext_sheen_albedo(m);
-    return 1.0 - c * E;
-}
-
-// Tangent T and bitangent B of a normal n, with T rotated about n by m.aniso_rot radians.
-// T = normalize(cross(vec3(0,0,1), n)) (X axis when n is near +-Z), then rotate about n.
-fn ext_tangent_bitangent(n: vec3<f32>, rot: f32) -> vec2<vec3<f32>> {
-    let z = vec3<f32>(0.0, 0.0, 1.0);
-    let T0 = normalize(cross(z, n));
-    // Rotation of a vector about axis n by rot: Rodrigues.
-    let v = T0;
-    let cosr = cos(rot);
-    let sinr = sin(rot);
-    let T = v * cosr + cross(n, v) * sinr + n * (dot(n, v) * (1.0 - cosr));
-    let B = cross(n, T);
-    return vec2<T, B>;
-}
-
-// Stretch the view direction (unit, local frame z = n) so the isotropic alpha-b GGX produces
-// an anisotropic lobe: tangent component scaled by alpha_b (the base), bitangent by alpha_t.
-fn ext_stretch_view(v: vec3<f32>, alpha_t: f32, alpha_b: f32) -> vec3<f32> {
-    // In local frame, v.z is NoV. x is tangent, y is bitangent.
-    // To make the lobe wider along the tangent, shrink the tangent component relative to it.
-    // Stretch so the isotropic alpha_b lobe, when mapped back, has width alpha_t along T.
-    return vec3<f32>(v.x * (alpha_b / alpha_t), v.y * (alpha_b / alpha_b), v.z);
-}
-
-// Isotropic GGX D at noh for the stretched (alpha_b) lobe; the direction dependence of the
-// anisotropic D comes from the stretched NoH used by the caller.
-fn ext_ggx_d(stretched_noh: f32, alpha_b: f32) -> f32 {
-    return ggx_d(stretched_noh, alpha_b);
-}
-
-// Smith G2 for the (stretched) noh, alpha_b.
-fn ext_ggx_g2(stretched_noh: f32, alpha_b: f32) -> f32 {
-    return 1.0 / (1.0 + ggx_lambda(stretched_noh, alpha_b));
-}
-
-// The coat GGX F0 = 0.04 (white dielectric), alpha = coat_roughness^2.
-fn coat_albedo(roughness: f32) -> vec3<f32> {
-    return vec3<f32>(1.0);
-}
-
-// A white dielectric coat GGX lobe: F0 0.04, alpha = coat_roughness^2, weight m.coat.
-// Returns (f * cos) for (wo, wi).
-fn coat_eval(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>, NoV: f32) -> vec3<f32> {
-    if (m.coat <= 0.0) {
-        return vec3<f32>(0.0);
+    let a = clamp(sheen_roughness * sheen_roughness, EXT_SHEEN_MIN_ALPHA, 1.0);
+    var ta = EXT_SHEEN_A;
+    var tm = EXT_SHEEN_MU;
+    var tab = EXT_SHEEN_E;
+    var ia = 0u;
+    for (var i = 1u; i < 5u; i = i + 1u) {
+        if (a >= ta[i]) {
+            ia = i;
+        }
     }
-    let rough = m.coat_roughness;
-    let a = max(rough * rough, BSDF_MIN_ALPHA);
-    var f: vec3<f32> = vec3<f32>(0.0);
-    if (rough >= BSDF_MIRROR_ROUGHNESS) {
-        let NoH = max(dot(n, normalize(wo + wi)), 0.0);
-        let G2 = 1.0 / (1.0 + ggx_lambda(NoV, a) + ggx_lambda(max(dot(n, wi), 0.0), a));
-        let F = bsdf_schlick(vec3<f32>(0.04), max(dot(wo, normalize(wo + wi)), 0.0));
-        f = F * ggx_d(dot(n, normalize(wo + wi)), a) * G2 / (4.0 * NoV);
+    var im = 0u;
+    for (var i = 1u; i < 4u; i = i + 1u) {
+        if (nov >= tm[i]) {
+            im = i;
+        }
     }
-    return f * m.coat;
+    let fa = clamp((a - ta[ia]) / (ta[ia + 1u] - ta[ia]), 0.0, 1.0);
+    let fm = clamp((nov - tm[im]) / (tm[im + 1u] - tm[im]), 0.0, 1.0);
+    let r0 = mix(tab[ia * 5u + im], tab[ia * 5u + im + 1u], fm);
+    let r1 = mix(tab[(ia + 1u) * 5u + im], tab[(ia + 1u) * 5u + im + 1u], fm);
+    return min(mix(r0, r1, fa), 1.0);
 }
 
-// The coat lobe's pdf: the isotropic alpha_b GGX pdf evaluated at the coat's NoH.
-fn coat_pdf(wo: vec3<f32>, wi: vec3<f32>, n: vec3<f32>, NoV: f32) -> f32 {
-    if (wo[0] <= 0.0) {
-        return 0.0;
+// The layers' shared numbers for a view cosine nov.
+struct ExtMix {
+    // Probabilities of the diffuse, base specular, coat and sheen lobes (0 for a lobe that is
+    // absent; they sum to 1 unless the whole material is black).
+    p: vec4<f32>,
+    // The base's Lambert albedo (energy split applied, layers not).
+    diffuse: vec3<f32>,
+    f0: vec3<f32>,
+    alpha_t: f32,
+    alpha_b: f32,
+    // What the layers above leave the base: (1 - coat F) (1 - sheen E).
+    base_layer: f32,
+    // coat * F(NoV): the coat lobe's albedo and the share it takes from the layers below.
+    coat_albedo: f32,
+    // 1 - coat F(NoV): what the coat leaves the sheen.
+    coat_pass: f32,
+    // Delta lobes: the base specular and the coat.
+    base_mirror: u32,
+    coat_mirror: u32,
+};
+
+// The directional albedo of an anisotropic GGX lobe with Fresnel F0 f0 seen from lo (frame T, B,
+// n): the mean of F(VoH) G2 / G1 over 64 visible normals from a fixed low-discrepancy set (the
+// R2 sequence), so it is the same number in eval, pdf and sample. It is the lobe's own albedo,
+// which the layers below take out of their share: the coat's albedo is below F(NoV) because
+// the visible normals tilt toward the viewer, and an anisotropic lobe loses a different
+// amount below the horizon than the isotropic table.
+fn ext_ggx_albedo(lo: vec3<f32>, at: f32, ab: f32, f0: vec3<f32>) -> vec3<f32> {
+    let lam_o = ext_aniso_lambda(lo, at, ab);
+    var acc = vec3<f32>(0.0);
+    for (var k = 0u; k < 64u; k = k + 1u) {
+        let u1 = fract(0.5 + f32(k) * 0.7548776662);
+        let u2 = fract(0.5 + f32(k) * 0.5698402910);
+        let h = ext_sample_vndf(lo, at, ab, u1, u2);
+        let li = reflect(-lo, h);
+        if (li.z > 0.0) {
+            let g = (1.0 + lam_o) / (1.0 + lam_o + ext_aniso_lambda(li, at, ab));
+            acc = acc + bsdf_schlick(f0, max(dot(lo, h), 0.0)) * g;
+        }
     }
-    let a = BSDF_MIN_ALPHA;
-    let NoW = max(dot(n, wi), 0.0);
-    if (NoW <= 0.0) {
-        return 0.0;
-    }
-    let NoH = max(dot(n, normalize(wo + wi)), 0.0);
-    return ggx_pdf(vec3<f32>(0.04), a, NoV, NoH);
+    return acc / 64.0;
 }
 
-// A sampled direction: weight = f * |cos| / pdf; specular = 1 for a delta lobe (mirror, glass),
-// which takes no light sample and no MIS.
-struct BsdfExtLobes {
-    // base (anisotropic GGX + diffuse) f*cos, pdf, p_base
-    base_dir: vec3<f32>,
-    base_f: vec3<f32>,
-    base_cos: f32,
-    base_pdf: f32,
-    base_p: f32,
-    // coat
-    coat_dir: vec3<f32>,
-    coat_f: vec3<f32>,
-    coat_cos: f32,
-    coat_pdf: f32,
-    coat_p: f32,
-    // sheen
-    sheen_dir: vec3<f32>,
-    sheen_f: vec3<f32>,
-    sheen_cos: f32,
-    sheen_pdf: f32,
-    sheen_p: f32,
-    specular: u32
+// The view direction in the material's frame (tangent, bitangent, normal).
+fn ext_local_view(m: Material, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> {
+    let t = pt_tangent(n, m.aniso_rot);
+    return vec3<f32>(dot(wo, t), dot(wo, cross(n, t)), dot(wo, n));
 }
 
-// Sample all three lobes (independent uniform draws), returning them in BsdfExtLobes.
-// The MIS pdf and weight are computed by the caller from the chosen lobe.
-fn ext_sample_lobe(m: Material, n: vec3<f32>, wo: vec3<f32>, u: vec3<f32>) -> BsdfExtLobes {
-    var s: BsdfExtLobes;
-    s.specular = 0u;
-    s.base_dir = n; s.base_f = vec3<f32>(0.0); s.base_cos = 0.0; s.base_pdf = 0.0; s.base_p = 0.0;
-    s.coat_dir = n; s.coat_f = vec3<f32>(0.0); s.coat_cos = 0.0; s.coat_pdf = 0.0; s.coat_p = 0.0;
-    s.sheen_dir = n; s.sheen_f = vec3<f32>(0.0); s.sheen_cos = 0.0; s.sheen_pdf = 0.0; s.sheen_p = 0.0;
-
-    let ab = ext_albedo(m);
-    // p_i = albedo_i / (sum of albedos), with a floor so the base (the dominant lobe) is
-    // always chosen with high probability and the others are reachable.
-    let total = max(ab[0], 0.0) + max(ab[1], 0.0) + max(ab[2], 0.0);
-    s.base_p = total > 0.0 ? clamp(ab[0], 0.0, 1.0) / total : 1.0;
-    s.coat_p = total > 0.0 ? clamp(ab[1], 0.0, 1.0) / total : 0.0;
-    s.sheen_p = total > 0.0 ? clamp(ab[2], 0.0, 1.0) / total : 0.0;
-
-    // Base: anisotropic GGX + diffuse. Use the base's spec-albedo energy split.
+fn ext_mix(m: Material, lo: vec3<f32>) -> ExtMix {
+    let nov = lo.z;
+    var x: ExtMix;
+    let l = bsdf_lobes(m, nov);
     let metal = clamp(m.metallic, 0.0, 1.0);
-    let rough = clamp(m.roughness, 0.0, 1.0);
-    let a = max(rough * rough, BSDF_MIN_ALPHA);
-    let NoV = dot(n, wo);
-    if (NoV > 0.0) {
-        let (T, B) = ext_tangent_bitangent(n, m.aniso_rot);
-        let a_t = mix(a, 1.0, m.aniso * m.aniso);
-        // The isotropic alpha for the base lobe is alpha_b = a; the tangent is stretched
-        // by a_b (which equals a) so the isotropic lobe maps to alpha_t along T.
-        // In practice the base lobe's "stretch" is handled by the sample/eval functions below.
-        var s_base: BsdfSample;
-        s_base.specular = 0u;
-        if (u.x < 1.0 - a * 0.0) {
-            // Use the base bsdf_sample directly for the diffuse + isotropic-specular part,
-            // then the anisotropic correction. For simplicity and correctness we delegate the
-            // base to bsdf_sample (which handles diffuse + GGX + mirror) and scale by the
-            // shear (base scaling). The anisotropy is baked into the base alpha via a_t/a_b
-            // by stretching the view before the GGX sample.
-            s_base = bsdf_sample(m, n, wo, u);
+    let aniso = clamp(m.aniso, 0.0, 1.0);
+    x.f0 = l.f0;
+    x.alpha_b = l.alpha;
+    x.alpha_t = mix(l.alpha, 1.0, aniso * aniso);
+    x.base_mirror = select(0u, 1u, l.mirror != 0u && aniso <= 0.0);
+    // Base lobes (the energy split of bsdf_lobes, recomputed because an anisotropic lobe is
+    // never a mirror).
+    var spec_albedo = vec3<f32>(0.0);
+    var diffuse = m.albedo * (1.0 - metal);
+    if (l.p_spec > 0.0) {
+        if (x.base_mirror != 0u) {
+            spec_albedo = l.fresnel;
+        } else if (aniso > 0.0) {
+            spec_albedo = ext_ggx_albedo(lo, x.alpha_t, x.alpha_b, l.f0);
         } else {
-            s_base = bsdf_invalid(n);
+            spec_albedo = bsdf_spec_albedo(l.f0, clamp(m.roughness, 0.0, 1.0), nov);
         }
-        // Apply the base shear (scale base by (1 - coat*F) * (1 - shear)).
-        let F_vo = bsdf_schlick(bsdf_lobes(m, NoV).f0, NoV);
-        let scale = m.coat * bsdf_luma(F_vo);
-        // (The shear is applied in ext_sample via ext_shear; here we keep the raw base.)
-        s.base_dir = s_base.dir;
-        s.base_f = s_base.weight;
-        s.base_cos = NoV;
-        s.base_pdf = s_base.pdf;
+        diffuse = diffuse * (vec3<f32>(1.0) - spec_albedo);
     }
-
-    // Coat: white dielectric GGX, alpha = coat_roughness^2, weight m.coat.
-    if (m.coat > 0.0 && NoV > 0.0) {
-        let a_c = max(m.coat_roughness * m.coat_roughness, BSDF_MIN_ALPHA);
-        var s_c: BsdfSample;
-        s_c.specular = 0u;
-        s_c.dir = n; s_c.weight = vec3<f32>(0.0); s_c.pdf = 0.0;
-        if (m.coat_roughness < BSDF_MIRROR_ROUGHNESS) {
-            let h = normalize(wo + n);
-            let F = bsdf_schlick(vec3<f32>(0.04), max(dot(wo, h), 0.0));
-            s_c.dir = normalize(2.0 * NoV * n - wo);
-            s_c.weight = vec3<f32>(1.0) * m.coat;
-            s_c.pdf = 1.0;
-            s_c.specular = 1u;
+    x.diffuse = diffuse;
+    // The layers.
+    let coat = clamp(m.coat, 0.0, 1.0);
+    var coat_f = 0.0;
+    x.coat_mirror = select(0u, 1u, m.coat_roughness < BSDF_MIRROR_ROUGHNESS);
+    if (coat > 0.0) {
+        let f0c = vec3<f32>(BSDF_DIELECTRIC_F0);
+        if (x.coat_mirror != 0u) {
+            coat_f = coat * bsdf_schlick(f0c, nov).x;
         } else {
-            // Sample the GGX lobe with a single alpha a_c.
-            var rng = vec3<f32>(0.0);
-            // Use ggx_sample_vndf in the local frame.
-            let v = wo;
-            let nh = ggx_sample_vndf(v, a_c, u.y, u.z);
-            let dir = normalize(reflect(-wo, nh));
-            let NoL = dot(n, dir);
-            if (NoL > 0.0) {
-                let NoH = max(dot(n, normalize(wo + dir)), 0.0);
-                let G2 = 1.0 / (1.0 + ggx_lambda(NoV, a_c) + ggx_lambda(NoL, a_c));
-                let F = bsdf_schlick(vec3<f32>(0.04), max(dot(wo, normalize(wo + dir)), 0.0));
-                s_c.dir = dir;
-                s_c.weight = F * ggx_d(NoH, a_c) * G2 / (4.0 * NoV) * m.coat;
-                s_c.pdf = ggx_pdf(vec3<f32>(0.04), a_c, NoV, NoH);
-            }
+            let a = ext_coat_alpha(m);
+            coat_f = coat * ext_ggx_albedo(lo, a, a, f0c).x;
         }
-        s.coat_dir = s_c.dir;
-        s.coat_f = s_c.weight;
-        s.coat_cos = NoV;
-        s.coat_pdf = s_c.pdf;
     }
-
-    // Sheen: Charlie D + Neubelt G.
-    let rough_s = m.sheen_roughness;
-    let a_s = max(rough_s * rough_s, BSDF_MIN_ALPHA);
-    if (ext_sheen_albedo(m) > 0.0 && NoV > 0.0) {
-        // Charlie D integral constant; sample with a cosine-weighted hemisphere using the
-        // Charlie distribution. For simplicity we use a cosine sample scaled by the Charlie
-        // D/G. The pdf = Charlie_D * G.
-        var s_h: BsdfSample;
-        s_h.specular = 0u;
-        let G = 1.0 / (4.0 * NoV);
-        let alpha = a_s;
-        // Charlie D: D = (2 + 1/alpha) * NoH^(1/alpha - 1) / (2*pi) * (1 - NoH)^(1/alpha + 1)
-        // We sample with u: NoH = 1 - u^(1/(alpha+2)), NoT direction from (u2, u3).
-        let NoH = 1.0 - pow(u.y, 1.0 / (alpha + 2.0));
-        let NoT = sin(2.0 * PT_PI * u.z) * cos(NoH);
-        let NoB = cos(2.0 * PT_PI * u.z) * cos(NoH);
-        let (T, B) = ext_tangent_bitangent(n, 0.0);
-        let dir = NoT * T + NoB * B + NoH * n;
-        if (dot(n, dir) > 0.0) {
-            let D = (2.0 + 1.0 / alpha) * pow(NoH, 1.0 / alpha - 1.0) / (2.0 * PT_PI) * (1.0 - NoH) * pow(max(NoH, 1e-6), 1.0 / alpha + 1.0);
-            let f = m.sheen * D * G;
-            s_h.dir = dir;
-            s_h.weight = f * NoH;
-            s_h.pdf = D * G;
-        }
-        s.sheen_dir = s_h.dir;
-        s.sheen_f = s_h.weight;
-        s.sheen_cos = NoV;
-        s.sheen_pdf = s_h.pdf;
+    x.coat_albedo = coat_f;
+    x.coat_pass = 1.0 - coat_f;
+    let sc = clamp(max(m.sheen.x, max(m.sheen.y, m.sheen.z)), 0.0, 1.0);
+    var sheen_loss = 0.0;
+    var w_sheen = 0.0;
+    if (sc > 0.0) {
+        sheen_loss = clamp(sc * ext_sheen_e(nov, m.sheen_roughness), 0.0, 1.0);
+        w_sheen = max(sheen_loss * x.coat_pass, 0.02 * sc);
     }
+    x.base_layer = x.coat_pass * (1.0 - sheen_loss);
+    // Lobe probabilities from the estimated albedos.
+    let w_diff = bsdf_luma(diffuse) * x.base_layer;
+    let w_spec = bsdf_luma(spec_albedo) * x.base_layer;
+    let w = vec4<f32>(w_diff, w_spec, coat_f, w_sheen);
+    let total = w.x + w.y + w.z + w.w;
+    x.p = vec4<f32>(0.0);
+    if (total > 0.0) {
+        x.p = w / total;
+    }
+    return x;
+}
 
-    return s;
+// Anisotropic GGX D for a half vector h in the frame (T, B, n).
+fn ext_aniso_d(h: vec3<f32>, at: f32, ab: f32) -> f32 {
+    let q = h.x * h.x / (at * at) + h.y * h.y / (ab * ab) + h.z * h.z;
+    return 1.0 / (PT_PI * at * ab * q * q);
+}
+
+// Smith's Lambda for a direction w in the frame (T, B, n), w.z > 0.
+fn ext_aniso_lambda(w: vec3<f32>, at: f32, ab: f32) -> f32 {
+    let c2 = max(w.z * w.z, 1.0e-8);
+    return 0.5 * (sqrt(1.0 + (at * at * w.x * w.x + ab * ab * w.y * w.y) / c2) - 1.0);
+}
+
+// A visible normal (Heitz 2018) of the anisotropic GGX seen from v (z > 0), in the frame
+// (T, B, n): the view is stretched by (alpha_t, alpha_b), sampled as a hemisphere, unstretched.
+fn ext_sample_vndf(v: vec3<f32>, at: f32, ab: f32, u1: f32, u2: f32) -> vec3<f32> {
+    let vh = normalize(vec3<f32>(at * v.x, ab * v.y, v.z));
+    let lensq = vh.x * vh.x + vh.y * vh.y;
+    var t1 = vec3<f32>(1.0, 0.0, 0.0);
+    if (lensq > 1.0e-12) {
+        t1 = vec3<f32>(-vh.y, vh.x, 0.0) * inverseSqrt(lensq);
+    }
+    let t2 = cross(vh, t1);
+    let r = sqrt(u1);
+    let phi = 2.0 * PT_PI * u2;
+    let p1 = r * cos(phi);
+    let p2 = r * sin(phi);
+    let s = 0.5 * (1.0 + vh.z);
+    let q2 = (1.0 - s) * sqrt(max(0.0, 1.0 - p1 * p1)) + s * p2;
+    let nh = p1 * t1 + q2 * t2 + sqrt(max(0.0, 1.0 - p1 * p1 - q2 * q2)) * vh;
+    return normalize(vec3<f32>(at * nh.x, ab * nh.y, max(nh.z, 1.0e-6)));
+}
+
+// Charlie sheen: D(noh) with a = alpha, times the Neubelt visibility, for (nov, nol).
+fn ext_charlie_dv(noh: f32, nov: f32, nol: f32, a: f32) -> f32 {
+    let sin_h = sqrt(max(1.0 - noh * noh, 0.0));
+    let d = (2.0 + 1.0 / a) * exp(log(max(sin_h, 1.0e-12)) / a) / (2.0 * PT_PI);
+    let v = 1.0 / (4.0 * (nol + nov - nol * nov));
+    return d * v;
+}
+
+fn ext_sheen_alpha(m: Material) -> f32 {
+    return clamp(m.sheen_roughness * m.sheen_roughness, EXT_SHEEN_MIN_ALPHA, 1.0);
+}
+
+// The coat's alpha.
+fn ext_coat_alpha(m: Material) -> f32 {
+    return max(m.coat_roughness * m.coat_roughness, BSDF_MIN_ALPHA);
 }
 
 fn ext_active(m: Material) -> bool {
-    return (frame.photo.x & PHOTO_MATERIALS) != 0 && (m.flags & MAT_EXT) != 0;
+    return (frame.photo.x & PHOTO_MATERIALS) != 0u && (m.flags & MAT_EXT) != 0u;
 }
 
-fn ext_sample(m: Material, n: vec3<f32>, wo: vec3<f32>, u: vec3<f32>) -> BsdfSample {
-    var s: BsdfExtLobes;
-    s = ext_sample_lobe(m, n, wo, u);
-    var out: BsdfSample;
-    out.dir = n; out.weight = vec3<f32>(0.0); out.pdf = 0.0; out.specular = 0u;
-
-    // MIS: choose lobe by p_i.
-    if (u.x < s.base_p) {
-        out.dir = s.base_dir;
-        out.pdf = s.base_pdf;
-        out.weight = s.base_f * s.base_cos / max(s.base_pdf, 1e-8);
-        out.specular = s.base_p > 0.0 ? 0u : 0u;
-    } else if (u.x < s.base_p + s.coat_p) {
-        out.dir = s.coat_dir;
-        out.pdf = s.coat_pdf;
-        out.weight = s.coat_f * s.coat_cos / max(s.coat_pdf, 1e-8);
-        out.specular = 0u;
-    } else {
-        out.dir = s.sheen_dir;
-        out.pdf = s.sheen_pdf;
-        out.weight = s.sheen_f * s.sheen_cos / max(s.sheen_pdf, 1e-8);
-        out.specular = 0u;
-    }
-    // specular is set in the lobe; propagate it.
-    return out;
-}
-
+// f · cos of the whole stack for (wo, wi) at n (delta lobes are not in it).
 fn ext_eval(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> vec3<f32> {
-    // Base + coat + sheen, all scaled by energy.
-    let NoV = dot(n, wo);
-    if (NoV <= 0.0) {
+    let nov = dot(n, wo);
+    let nol = dot(n, wi);
+    if (nov <= 0.0 || nol <= 0.0) {
         return vec3<f32>(0.0);
     }
-    let metal = clamp(m.metallic, 0.0, 1.0);
-    let rough = clamp(m.roughness, 0.0, 1.0);
-    let a = max(rough * rough, BSDF_MIN_ALPHA);
-    // Base (diffuse + anisotropic GGX) scaled by shear.
-    var f = vec3<f32>(0.0);
-    // Use bsdf_eval for the base then scale.
-    let base = bsdf_eval(m, n, wo, wi);
-    let scale_base = m.coat * bsdf_luma(bsdf_schlick(bsdf_lobes(m, NoV).f0, NoV)) * ext_shear(m, NoV);
-    f = base * (1.0 - scale_base);
+    let x = ext_mix(m, ext_local_view(m, n, wo));
+    let t = pt_tangent(n, m.aniso_rot);
+    let b = cross(n, t);
+    let lo = vec3<f32>(dot(wo, t), dot(wo, b), nov);
+    let li = vec3<f32>(dot(wi, t), dot(wi, b), nol);
+    let h = normalize(lo + li);
+    let voh = max(dot(lo, h), 0.0);
+    // Base: diffuse + specular, under the layers.
+    var f = x.diffuse * (nol / PT_PI);
+    if (x.base_mirror == 0u && x.p.y > 0.0) {
+        let g2 = 1.0 / (1.0 + ext_aniso_lambda(lo, x.alpha_t, x.alpha_b) + ext_aniso_lambda(li, x.alpha_t, x.alpha_b));
+        f = f + bsdf_schlick(x.f0, voh) * (ext_aniso_d(h, x.alpha_t, x.alpha_b) * g2 / (4.0 * nov));
+    }
+    f = f * x.base_layer;
+    // Sheen, under the coat.
+    let sc = max(m.sheen.x, max(m.sheen.y, m.sheen.z));
+    if (sc > 0.0) {
+        f = f + m.sheen * (ext_charlie_dv(h.z, nov, nol, ext_sheen_alpha(m)) * nol * x.coat_pass);
+    }
     // Coat.
-    f += coat_eval(m, n, wo, wi, NoV);
-    // Sheen.
-    let a_s = max(m.sheen_roughness * m.sheen_roughness, BSDF_MIN_ALPHA);
-    if (m.sheen[0] > 0.0 || m.sheen[1] > 0.0 || m.sheen[2] > 0.0) {
-        let NoH = max(dot(n, normalize(wo + wi)), 0.0);
-        let D = (2.0 + 1.0 / a_s) * pow(NoH, 1.0 / a_s - 1.0) / (2.0 * PT_PI) * (1.0 - NoH) * pow(max(NoH, 1e-6), 1.0 / a_s + 1.0);
-        let G = 1.0 / (4.0 * NoV);
-        f += m.sheen * D * G * max(dot(n, wi), 0.0);
+    if (x.coat_albedo > 0.0 && x.coat_mirror == 0u) {
+        let a = ext_coat_alpha(m);
+        let g2 = 1.0 / (1.0 + ggx_lambda(nov, a) + ggx_lambda(nol, a));
+        let fr = bsdf_schlick(vec3<f32>(BSDF_DIELECTRIC_F0), voh).x;
+        f = f + vec3<f32>(clamp(m.coat, 0.0, 1.0) * fr * ggx_d(h.z, a) * g2 / (4.0 * nov));
     }
     return f;
 }
 
+// The mixture pdf ext_sample gives wi (the non-delta lobes).
 fn ext_pdf(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> f32 {
-    let NoV = dot(n, wo);
-    if (NoV <= 0.0) {
+    let nov = dot(n, wo);
+    let nol = dot(n, wi);
+    if (nov <= 0.0 || nol <= 0.0) {
         return 0.0;
     }
-    let ab = ext_albedo(m);
-    let total = max(ab[0], 0.0) + max(ab[1], 0.0) + max(ab[2], 0.0);
+    let x = ext_mix(m, ext_local_view(m, n, wo));
+    let t = pt_tangent(n, m.aniso_rot);
+    let b = cross(n, t);
+    let lo = vec3<f32>(dot(wo, t), dot(wo, b), nov);
+    let li = vec3<f32>(dot(wi, t), dot(wi, b), nol);
+    let h = normalize(lo + li);
+    var pdf = (x.p.x + x.p.w) * nol / PT_PI;
+    if (x.base_mirror == 0u && x.p.y > 0.0) {
+        let g1 = 1.0 / (1.0 + ext_aniso_lambda(lo, x.alpha_t, x.alpha_b));
+        pdf = pdf + x.p.y * g1 * ext_aniso_d(h, x.alpha_t, x.alpha_b) / (4.0 * nov);
+    }
+    if (x.coat_mirror == 0u && x.p.z > 0.0) {
+        let a = ext_coat_alpha(m);
+        pdf = pdf + x.p.z * (1.0 / (1.0 + ggx_lambda(nov, a))) * ggx_d(h.z, a) / (4.0 * nov);
+    }
+    return pdf;
+}
+
+// One-sample MIS over the lobes: u.x picks the lobe, (u.y, u.z) the direction in it.
+fn ext_sample(m: Material, n: vec3<f32>, wo: vec3<f32>, u: vec3<f32>) -> BsdfSample {
+    let nov = dot(n, wo);
+    if (nov <= 0.0) {
+        return bsdf_invalid(n);
+    }
+    let x = ext_mix(m, ext_local_view(m, n, wo));
+    let total = x.p.x + x.p.y + x.p.z + x.p.w;
     if (total <= 0.0) {
-        return 0.0;
+        return bsdf_invalid(n);
     }
-    let NoH = max(dot(n, normalize(wo + wi)), 0.0);
-    let metal = clamp(m.metallic, 0.0, 1.0);
-    let rough = clamp(m.roughness, 0.0, 1.0);
-    let a = max(rough * rough, BSDF_MIN_ALPHA);
-    let f0d = BSDF_DIELECTRIC_F0;
-    let f0 = mix(vec3<f32>(f0d), m.albedo, metal);
-    let p_base = ab[0] / total;
-    let base_pdf = ggx_pdf(f0, a, NoV, NoH);
-    var p_coat: f32 = 0.0;
-    var coat_pdf: f32 = 0.0;
-    if (m.coat > 0.0) {
-        let a_c = max(m.coat_roughness * m.coat_roughness, BSDF_MIN_ALPHA);
-        coat_pdf = ggx_pdf(vec3<f32>(0.04), a_c, NoV, NoH);
-        p_coat = ab[1] / total;
+    let t = pt_tangent(n, m.aniso_rot);
+    let b = cross(n, t);
+    let lo = vec3<f32>(dot(wo, t), dot(wo, b), nov);
+    let pick = u.x * total;
+    var s: BsdfSample;
+    s.specular = 0u;
+    if (pick < x.p.y) {
+        // Base specular.
+        if (x.base_mirror != 0u) {
+            s.dir = normalize(2.0 * nov * n - wo);
+            s.weight = bsdf_schlick(x.f0, nov) * (x.base_layer / x.p.y);
+            s.pdf = 1.0;
+            s.specular = 1u;
+            return s;
+        }
+        let h = ext_sample_vndf(lo, x.alpha_t, x.alpha_b, u.y, u.z);
+        s.dir = normalize(reflect(-wo, t * h.x + b * h.y + n * h.z));
+    } else if (pick < x.p.x + x.p.y) {
+        // Diffuse.
+        s.dir = ext_cosine_dir(t, b, n, u.y, u.z);
+    } else if (pick < x.p.x + x.p.y + x.p.z) {
+        // Coat.
+        if (x.coat_mirror != 0u) {
+            s.dir = normalize(2.0 * nov * n - wo);
+            s.weight = vec3<f32>(clamp(m.coat, 0.0, 1.0) * bsdf_schlick(vec3<f32>(BSDF_DIELECTRIC_F0), nov).x / x.p.z);
+            s.pdf = 1.0;
+            s.specular = 1u;
+            return s;
+        }
+        let a = ext_coat_alpha(m);
+        let h = ext_sample_vndf(lo, a, a, u.y, u.z);
+        s.dir = normalize(reflect(-wo, t * h.x + b * h.y + n * h.z));
+    } else {
+        // Sheen: cosine.
+        s.dir = ext_cosine_dir(t, b, n, u.y, u.z);
     }
-    var p_sheen: f32 = 0.0;
-    var sheen_pdf: f32 = 0.0;
-    let a_s = max(m.sheen_roughness * m.sheen_roughness, BSDF_MIN_ALPHA);
-    let c = max(m.sheen[0], max(m.sheen[1], m.sheen[2]));
-    if (c > 0.0) {
-        let D = (2.0 + 1.0 / a_s) * pow(NoH, 1.0 / a_s - 1.0) / (2.0 * PT_PI) *
-               (1.0 - NoH) * pow(max(NoH, 1e-6), 1.0 / a_s + 1.0);
-        sheen_pdf = D * (1.0 / (4.0 * NoV));
-        p_sheen = ab[2] / total;
+    if (dot(n, s.dir) <= 0.0) {
+        return bsdf_invalid(n);
     }
-    return p_base * base_pdf + p_coat * coat_pdf + p_sheen * sheen_pdf;
+    s.pdf = ext_pdf(m, n, wo, s.dir);
+    if (s.pdf <= 0.0) {
+        return bsdf_invalid(n);
+    }
+    s.weight = ext_eval(m, n, wo, s.dir) / s.pdf;
+    return s;
+}
+
+// A cosine-weighted direction about n in the frame (t, b, n).
+fn ext_cosine_dir(t: vec3<f32>, b: vec3<f32>, n: vec3<f32>, u1: f32, u2: f32) -> vec3<f32> {
+    let r = sqrt(u1);
+    let phi = 2.0 * PT_PI * u2;
+    return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1)));
+}
+
+// Test entry: for probe i (material _a, normal, view = point), integrates bsdf_pdf over the
+// hemisphere on a grid uniform in cos(theta) and phi; accum[i] = (integral, 0, 0, 0).
+@compute @workgroup_size(64)
+fn bsdf_grid_test_main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= frame.probe_count) {
+        return;
+    }
+    let p = probes[id.x];
+    let m = materials[u32(p._a)];
+    let basis = onb(p.normal);
+    let nc = 512u;
+    let np = 1024u;
+    var sum = 0.0;
+    for (var i = 0u; i < nc; i = i + 1u) {
+        let c = (f32(i) + 0.5) / f32(nc);
+        let s = sqrt(1.0 - c * c);
+        for (var j = 0u; j < np; j = j + 1u) {
+            let phi = 2.0 * PT_PI * (f32(j) + 0.5) / f32(np);
+            let wi = basis * vec3<f32>(s * cos(phi), s * sin(phi), c);
+            sum = sum + bsdf_pdf(m, p.normal, p.point, wi);
+        }
+    }
+    accum[id.x] = vec4<f32>(sum * (2.0 * PT_PI) / f32(nc * np), 0.0, 0.0, 0.0);
+}
+
+// Test entry: the angle (radians) from the mirror direction at which bsdf_pdf falls to half its
+// value there, scanning toward the tangent and toward the bitangent of the material's frame;
+// accum[i] = (along tangent, along bitangent, pdf at the mirror direction, 0). Probe wo = point
+// must be the normal for a symmetric scan.
+@compute @workgroup_size(64)
+fn bsdf_width_test_main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= frame.probe_count) {
+        return;
+    }
+    let p = probes[id.x];
+    let m = materials[u32(p._a)];
+    let n = p.normal;
+    let t = pt_tangent(n, m.aniso_rot);
+    let b = cross(n, t);
+    let mirror = normalize(2.0 * dot(n, p.point) * n - p.point);
+    let peak = bsdf_pdf(m, n, p.point, mirror);
+    var width = vec2<f32>(0.0);
+    for (var k = 0u; k < 2u; k = k + 1u) {
+        let axis = select(t, b, k == 1u);
+        var found = false;
+        for (var i = 1u; i < 3000u && !found; i = i + 1u) {
+            let theta = 0.0005 * f32(i);
+            let wi = normalize(mirror * cos(theta) + axis * sin(theta));
+            if (bsdf_pdf(m, n, p.point, wi) < 0.5 * peak) {
+                width[k] = theta;
+                found = true;
+            }
+        }
+    }
+    accum[id.x] = vec4<f32>(width, peak, 0.0);
 }

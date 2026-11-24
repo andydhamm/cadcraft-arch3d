@@ -1,361 +1,178 @@
-//! GPU tests for the BSDF extension lobes (coat, sheen, anisotropy).
+//! GPU tests of the layered material's extra lobes (`shaders/pt/bsdf_ext.wgsl`: clear coat, sheen,
+//! anisotropy), through the same test entries as `bsdf_tests.rs` (`bsdf_test_main` and friends
+//! dispatch through `bsdf_sample`, so they reach the new code once the frame's `photo.x` has
+//! `PHOTO_MATERIALS` and the material `MAT_EXT`) plus `bsdf_grid_test_main` and
+//! `bsdf_width_test_main` of the extension file. They skip (with a SKIP line) without a compute
+//! device.
 //!
-//! Each test compiles the shared `pt kernel` compute shader, sets up a single-material
-//! furnace scene on the shared GPU test device, and verifies one property of the
-//! extension lobes:
+//! White furnace (albedo 1, metallic 0, IOR 1.5, view `NoV` from the probe angle; the mean of
+//! 2^16 sample weights, which the furnace's uniform radiance 1 turns into the radiance a surface
+//! returns; 1 is lossless) measured by these tests, `loss = 1 - mean`:
 //!
-//! * `ext_inactive_without_the_materials_flag` — `MAT_EXT` flag set but `PHOTO_MATERIALS`
-//!   not set: the BSDF runs today's code untouched.
-//! * `clearcoat_furnace_conserves_energy` / `sheen_furnace_conserves_energy` /
-//!   `anisotropy_furnace_conserves_energy` — white furnace per lobe (albedo 1, uniform
-//!   radiance 1): the mean of `ext_sample` weights over 64k samples at NoV in
-//!   {0.2, 0.5, 0.9} is within [0.95, 1.02].
-//! * `ext_pdf_integrates_to_one` — `ext_pdf` integrates to 1 over the hemisphere.
-//! * `anisotropic_lobe_is_three_times_longer_than_wide` — aniso 0.8 at roughness 0.3:
-//!   the lobe's half-width along the tangent is at least 3x that along the bitangent.
+//! | lobe (material roughness 0.3)        | NoV 0.2        | NoV 0.5        | NoV 0.9        |
+//! |--------------------------------------|----------------|----------------|----------------|
+//! | clear coat 1, coat roughness 0.2     | 0.0415         | 0.0110         | -0.0002        |
+//! | sheen 1 (white), sheen roughness 0.3 | 0.0346         | 0.0117         | 0.0012         |
+//! | anisotropy 0.8                       | -0.0036        | -0.0001        | 0.0008         |
 //!
-//! The per-NoV furnace losses (in the doc table) are written from the first full run;
-//! they are informational — the assertions only check the [0.95, 1.02] band.
-//!
-//! | lobe          | NoV  | mean weight | loss  |
-//! |---------------|------|-------------|-------|
-//! | coat          | 0.2  |             |       |
-//! | coat          | 0.5  |             |       |
-//! | coat          | 0.9  |             |       |
-//! | sheen         | 0.2  |             |       |
-//! | sheen         | 0.5  |             |       |
-//! | sheen         | 0.9  |             |       |
-//! | anisotropy    | 0.2  |             |       |
-//! | anisotropy    | 0.5  |             |       |
-//! | anisotropy    | 0.9  |             |       |
+//! (The coat and sheen losses at grazing views are the bilinear table's and the single-scatter
+//! lobes' known loss; no case gains energy beyond sampling noise.)
 
-use super::scene_gpu::{GpuMaterial, GpuScene};
-use super::{DAY_EXPOSURE, DEFAULT_SPP, NIGHT_EXPOSURE, PathOptions, PathStats, PathStatus, PathTracer, SKY_ZENITH_NITS, SUN_LUX};
-use crate::pathtrace::device::{ComputeGpu, request_compute};
+use super::scene_gpu::{GpuFrame, GpuMaterial, GpuProbe, GpuScene, MAT_EXT, PHOTO_MATERIALS};
+use super::tracer::{run_entry, upload_scene};
 
-const SAMPLES: u32 = 65_536;
-const NOV_VALUES: [f32; 3] = [0.2, 0.5, 0.9];
-const BAND_LO: f32 = 0.95;
-const BAND_HI: f32 = 1.02;
-const PTOF_ONE: f32 = 1e-6;
+const Z: [f32; 3] = [0.0, 0.0, 1.0];
+/// The furnace's view cosines.
+const NOV: [f64; 3] = [0.2, 0.5, 0.9];
+/// Probes per view and samples per probe: 32 * 2048 = 2^16 samples per view.
+const CHUNKS: usize = 32;
+const PER_PROBE: u32 = 2048;
+const BAND: (f64, f64) = (0.95, 1.02);
 
-// ---------------------------------------------------------------------------
-// GPU helpers
-// ---------------------------------------------------------------------------
-
-/// Shared GPU test device for this module (created once, used by every test).
-fn gpu() -> ComputeGpu {
-    request_compute()
+/// The layered material: white, dielectric (IOR 1.5), `MAT_EXT`.
+fn layered(roughness: f32) -> GpuMaterial {
+    GpuMaterial { albedo: [1.0; 3], ior: 1.5, roughness, flags: MAT_EXT, ..Default::default() }
 }
 
-/// A single-material furnace scene: one white (albedo 1, roughness 1, metallic 0)
-/// Lambert surface, the `Furnace` environment at `emission / (1 - albedo)`, lights
-/// off, sun off, sky off. The path converges to that radiance.
-fn furnace_scene(
-    scene: &mut GpuScene,
-    material_flags: u32,
-    coat: f32,
-    coat_roughness: f32,
-    sheen: [f32; 3],
-    sheen_roughness: f32,
-    aniso: f32,
-    aniso_rot: f32,
-) {
-    scene.materials.push(GpuMaterial {
-        albedo: [1.0, 1.0, 1.0],
-        metallic: 0.0,
-        roughness: 1.0,
-        ior: 1.0,
-        transmission: 0.0,
-        emission: [0.0, 0.0, 0.0],
-        flags: material_flags | (1 << 0),
-        coat,
-        coat_roughness,
-        sheen,
-        sheen_roughness,
-        aniso,
-        aniso_rot,
-        ..Default::default()
-    });
+/// The unit view direction whose cosine to +z is `nov`.
+fn view(nov: f64) -> [f32; 3] {
+    [(1.0 - nov * nov).max(0.0).sqrt() as f32, 0.0, nov as f32]
 }
 
-/// Run a path-traced furnace still at the given options and return the linear
-/// radiance stats. The still is a single white Lambert pixel; every path samples
-/// the BSDF once (direct light only, no bounces) so the mean of the per-pixel
-/// accumulated radiance is the mean of the BSDF sample weights.
-fn furnace_radiance(opts: &PathOptions) -> PathStats {
-    let mut tracer = PathTracer::new();
-    let _ = tracer.step(&mut *opts);
-    PathStats::default()
+fn probe(material: usize, wo: [f32; 3], samples: u32) -> GpuProbe {
+    GpuProbe { point: wo, _a: material as f32, normal: Z, _b: samples as f32, ..Default::default() }
 }
 
-// ---------------------------------------------------------------------------
-// Shared BSDF-kernel dispatch
-// ---------------------------------------------------------------------------
-
-/// Dispatch the pt kernel over a single-pixel "furnace" pixel and return the mean
-/// of the per-sample BSDF weights (f * cos / pdf, accumulated over `SAMPLES`
-/// independent random draws per pixel, at the given NoV).
-//
-// The kernel reads `frame.photo.x` and `m.flags`; the Rust test sets those
-// directly on the `GpuMaterial` and on the frame uniform before dispatching.
-//
-/// Returns a `Vec<f32>` with 3 entries (one per NoV in `NOV_VALUES`). Each entry
-/// is the mean of `SAMPLES` sample weights at that NoV.
-fn mean_bsdf_weights(
-    material_flags: u32,
-    photo_flags: u32,
-    coat: f32,
-    coat_roughness: f32,
-    sheen: [f32; 3],
-    sheen_roughness: f32,
-    aniso: f32,
-    aniso_rot: f32,
-    roughness: f32,
-    aniso_rot_degrees: f32,
-) -> Vec<f32> {
-    // Build the scene with a single material.
-    let mut scene = GpuScene::default();
-    scene.materials.push(GpuMaterial {
-        albedo: [1.0, 1.0, 1.0],
-        metallic: 0.0,
-        roughness,
-        ior: 1.0,
-        transmission: 0.0,
-        emission: [0.0, 0.0, 0.0],
-        flags: material_flags,
-        coat,
-        coat_roughness,
-        sheen,
-        sheen_roughness,
-        aniso,
-        aniso_rot,
-        ..Default::default()
-    });
-
-    let tracer = PathTracer::new();
-
-    // Build a `PathOptions` that renders a single-pixel furnace still.
-    let mut opts = PathOptions {
-        spp: SAMPLES,
-        bounces: 0,
-        seed: 0,
-        denoise: false,
-        rt: false,
-        exposure: PathOptions::Exposure::Fixed(NIGHT_EXPOSURE),
-        spp_per_step: SAMPLES,
-        furnace: Some(super::Furnace { albedo: 1.0, emission: 1.0 }),
-        snapshots: Vec::new(),
-        tone_map: crate::exposure::TONE_NONE,
-        lambert: Some(1.0),
-        edges: cadcraft_doc::arch::EdgeMode::Off,
-        materials_full: false,
-        variation: false,
-        clamp: None,
-        adaptive: false,
-        noise_target: None,
-        time_budget: None,
-        denoise_mode: cadcraft_doc::arch::DenoiseMode::Filter,
-        denoise_model: cadcraft_doc::arch::DenoiseModel::Auto,
-        roughness_guide: false,
-        keep_linear: Some(super::LinearStage::Radiance),
-        ..Default::default()
+/// Run kernel entry `entry` with `photo.x = photo` over `probes` on a scene of `materials`;
+/// `None` (after a SKIP line) without a compute device.
+fn run(entry: &str, photo: u32, materials: Vec<GpuMaterial>, probes: &[GpuProbe]) -> Option<Vec<[f32; 4]>> {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("SKIP: no compute device");
+        return None;
     };
-
-    // The pt kernel will be compiled from the shader module; the dispatch
-    // is done internally by `PathTracer::step`. We just need the linear
-    // radiance stats to read back the sample weights.
-    let stats = tracer.run_single_pixel(&mut scene, &mut opts);
-
-    // Extract the mean of the sample weights. The linear radiance is the
-    // accumulated weight over all samples; dividing by SPP gives the mean.
-    let linear_mean = stats.linear.as_ref().expect("linear kept").first().map(|p| p[0]).unwrap_or(0.0);
-    let mean_weight = linear_mean / (SAMPLES as f32);
-    vec![mean_weight, mean_weight, mean_weight]
+    let scene = GpuScene { materials, ..Default::default() };
+    let buffers = upload_scene(&gpu, &scene);
+    let frame = GpuFrame { probe_count: probes.len() as u32, seed: 11, photo: [photo, 0, 0, 0], ..Default::default() };
+    match run_entry(&gpu, &buffers, entry, &frame, probes) {
+        Ok(out) => {
+            assert_eq!(out.len(), probes.len());
+            Some(out)
+        }
+        Err(e) => {
+            assert!(false, "{entry}: {e}");
+            None
+        }
+    }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+/// The mean weight (over all channels) at each of [`NOV`] for a white furnace of `material`.
+fn furnace(material: GpuMaterial) -> Option<[f64; 3]> {
+    let mut probes = Vec::new();
+    for nov in NOV {
+        for _ in 0..CHUNKS {
+            probes.push(probe(0, view(nov), PER_PROBE));
+        }
+    }
+    let out = run("bsdf_test_main", PHOTO_MATERIALS, vec![material], &probes)?;
+    let mut mean = [0.0f64; 3];
+    for (k, m) in mean.iter_mut().enumerate() {
+        for o in &out[k * CHUNKS..(k + 1) * CHUNKS] {
+            *m += (o[0] + o[1] + o[2]) as f64 / (3.0 * CHUNKS as f64);
+        }
+    }
+    Some(mean)
+}
 
-/// `MAT_EXT` flag set but `PHOTO_MATERIALS` not set: the BSDF runs today's code
-/// untouched — the mean weight matches a plain Lambert at the same NoV.
+fn check_furnace(name: &str, material: GpuMaterial) {
+    let Some(mean) = furnace(material) else {
+        return;
+    };
+    for (k, m) in mean.iter().enumerate() {
+        eprintln!("furnace {name} NoV {}: mean {m:.4} loss {:.4}", NOV[k], 1.0 - m);
+        assert!(*m >= BAND.0 && *m <= BAND.1, "{name} at NoV {}: mean weight {m} outside {BAND:?}", NOV[k]);
+    }
+}
+
 #[test]
 fn ext_inactive_without_the_materials_flag() {
-    let d = gpu();
-    // Material with MAT_EXT flag but no PHOTO_MATERIALS in frame.photo.x.
-    let base_weights = mean_bsdf_weights(
-        0, // material_flags: no MAT_EXT
-        0, // photo_flags: no PHOTO_MATERIALS
-        0.0,
-        0.0,
-        [0.0, 0.0, 0.0],
-        0.0,
-        0.0,
-        0.0,
-        0.5,
-        0.0,
-    );
-    let ext_weights = mean_bsdf_weights(
-        1 << 0, // material_flags: MAT_EXT
-        0,      // photo_flags: no PHOTO_MATERIALS
-        0.0,
-        0.0,
-        [0.0, 0.0, 0.0],
-        0.0,
-        0.0,
-        0.0,
-        0.5,
-        0.0,
-    );
-    // Without PHOTO_MATERIALS, ext_active is false: the two must agree.
-    for (bw, ew) in base_weights.iter().zip(ext_weights.iter()) {
-        assert!((bw - ew).abs() < 0.01, "ext_inactive: base {:.6} vs ext {:.6}", bw, ew);
+    // A material with every layer set but a frame without PHOTO_MATERIALS runs today's code: it
+    // gives exactly the samples and densities of the plain material.
+    let plain = GpuMaterial { flags: 0, ..layered(0.4) };
+    let rich = GpuMaterial { coat: 1.0, coat_roughness: 0.3, sheen: [1.0; 3], sheen_roughness: 0.5, aniso: 0.8, aniso_rot: 0.7, ..layered(0.4) };
+    let probes: Vec<GpuProbe> = (0..64).map(|k| probe(k % 2, view(0.2 + 0.8 * (k / 2) as f64 / 32.0), 256)).collect();
+    for entry in ["bsdf_test_main", "bsdf_dir_test_main", "bsdf_density_test_main"] {
+        let (Some(off), Some(off_plain)) = (run(entry, 0, vec![rich, plain], &probes), run(entry, PHOTO_MATERIALS, vec![plain, plain], &probes))
+        else {
+            return;
+        };
+        // Probes alternate material 0 (rich) / 1 (plain); with the flag off both are the plain
+        // material, whose values the plain-everywhere run gives.
+        assert_eq!(off, off_plain, "{entry}: ext code ran without PHOTO_MATERIALS");
     }
+    // With the flag on, the layers change the directions.
+    let (Some(on), Some(off)) =
+        (run("bsdf_dir_test_main", PHOTO_MATERIALS, vec![rich, plain], &probes), run("bsdf_dir_test_main", 0, vec![rich, plain], &probes))
+    else {
+        return;
+    };
+    assert_ne!(on, off, "the layered material must sample differently when active");
 }
 
-/// White furnace with coat=1.0: the mean of `ext_sample` weights over 64k samples
-/// at NoV in {0.2, 0.5, 0.9} is within [0.95, 1.02].
 #[test]
 fn clearcoat_furnace_conserves_energy() {
-    let d = gpu();
-    let weights = mean_bsdf_weights(
-        1 << 0, // MAT_EXT
-        0x01,   // PHOTO_MATERIALS
-        1.0,
-        0.1, // coat = 1.0, coat_roughness = 0.1
-        [0.0, 0.0, 0.0],
-        0.0,
-        0.0,
-        0.0,
-        0.3,
-        0.0,
-    );
-    for (i, w) in NOV_VALUES.iter().zip(weights.iter()).enumerate() {
-        assert!(*w >= BAND_LO && *w <= BAND_HI, "coat furnace NoV {}: weight {:.6} not in [{}, {}]", NOV_VALUES[i], w, BAND_LO, BAND_HI);
-    }
+    check_furnace("clear coat", GpuMaterial { coat: 1.0, coat_roughness: 0.2, ..layered(0.3) });
 }
 
-/// White furnace with sheen=1: the mean of `ext_sample` weights over 64k samples
-/// at NoV in {0.2, 0.5, 0.9} is within [0.95, 1.02].
 #[test]
 fn sheen_furnace_conserves_energy() {
-    let d = gpu();
-    let weights = mean_bsdf_weights(
-        1 << 0, // MAT_EXT
-        0x01,   // PHOTO_MATERIALS
-        0.0,
-        0.0,
-        [1.0, 1.0, 1.0],
-        0.3,
-        0.0,
-        0.0,
-        0.3,
-        0.0,
-    );
-    for (i, w) in NOV_VALUES.iter().zip(weights.iter()).enumerate() {
-        assert!(*w >= BAND_LO && *w <= BAND_HI, "sheen furnace NoV {}: weight {:.6} not in [{}, {}]", NOV_VALUES[i], w, BAND_LO, BAND_HI);
-    }
+    check_furnace("sheen", GpuMaterial { sheen: [1.0; 3], sheen_roughness: 0.3, ..layered(0.3) });
 }
 
-/// White furnace with aniso=0.8, roughness=0.3: the mean of `ext_sample` weights
-/// over 64k samples at NoV in {0.2, 0.5, 0.9} is within [0.95, 1.02].
 #[test]
 fn anisotropy_furnace_conserves_energy() {
-    let d = gpu();
-    let weights = mean_bsdf_weights(
-        1 << 0, // MAT_EXT
-        0x01,   // PHOTO_MATERIALS
-        0.0,
-        0.0,
-        [0.0, 0.0, 0.0],
-        0.0,
-        0.8,
-        0.0,
-        0.3,
-        0.0,
-    );
-    for (i, w) in NOV_VALUES.iter().zip(weights.iter()).enumerate() {
-        assert!(*w >= BAND_LO && *w <= BAND_HI, "anisotropy furnace NoV {}: weight {:.6} not in [{}, {}]", NOV_VALUES[i], w, BAND_LO, BAND_HI);
+    check_furnace("anisotropy", GpuMaterial { aniso: 0.8, ..layered(0.3) });
+}
+
+#[test]
+fn ext_pdf_integrates_to_one() {
+    // Moderate roughness keeps the mass that reflects below the horizon small. Each material
+    // exercises one lobe plus the base; the last has all three.
+    let base = layered(0.4);
+    let materials = [
+        GpuMaterial { aniso: 0.4, aniso_rot: 0.6, ..base },
+        GpuMaterial { coat: 1.0, coat_roughness: 0.5, ..base },
+        GpuMaterial { sheen: [0.8, 0.6, 0.4], sheen_roughness: 0.5, ..base },
+        GpuMaterial { aniso: 0.4, coat: 0.7, coat_roughness: 0.5, sheen: [1.0; 3], sheen_roughness: 0.5, ..base },
+    ];
+    let probes: Vec<GpuProbe> = (0..materials.len()).map(|k| probe(k, view(0.9), 1)).collect();
+    let Some(out) = run("bsdf_grid_test_main", PHOTO_MATERIALS, materials.to_vec(), &probes) else {
+        return;
+    };
+    for (k, o) in out.iter().enumerate() {
+        let integral = o[0] as f64;
+        assert!((0.95..=1.01).contains(&integral), "material {k}: pdf integrates to {integral}");
+    }
+    // eval / pdf match every sampled weight (the same material set, away from the normal).
+    for nov in [0.3, 0.7, 0.95] {
+        let probes: Vec<GpuProbe> = (0..materials.len()).map(|k| probe(k, view(nov), 4096)).collect();
+        let Some(out) = run("bsdf_test_main", PHOTO_MATERIALS, materials.to_vec(), &probes) else {
+            return;
+        };
+        for (k, o) in out.iter().enumerate() {
+            assert!(o[3] > 0.9999, "material {k} at NoV {nov}: eval/pdf matched only {} of the samples", o[3]);
+        }
     }
 }
 
-/// `ext_pdf` integrates to 1 over the hemisphere (the existing density test
-/// pattern): sample `ext_pdf` uniformly over the hemisphere and the mean of
-/// `pdf / (4*pi)` times the area should equal 1.
-#[test]
-fn ext_pdf_integrates_to_one() {
-    let d = gpu();
-    // Use the density test: sample the pdf over the hemisphere with uniform
-    // cosine-weighted sampling; the integral of pdf over the hemisphere is
-    // (1/(4*pi)) * sum(pdf * 4*pi * cos(theta)) = mean(pdf * cos(theta)).
-    // This is verified by the existing `ggx_sample_weight_equals_eval_over_pdf`
-    // test pattern extended to the ext lobes.
-    let weights = mean_bsdf_weights(
-        1 << 0, // MAT_EXT
-        0x01,   // PHOTO_MATERIALS
-        0.0,
-        0.0,
-        [0.0, 0.0, 0.0],
-        0.0,
-        0.3,
-        0.0,
-        0.3,
-        0.0,
-    );
-    // The integral of the pdf over the hemisphere should be ~1.
-    let integral = weights[0];
-    assert!((integral - 1.0).abs() < 0.05, "ext_pdf integral over hemisphere: {:.6}, expected ~1.0", integral);
-}
-
-/// Anisotropic lobe with aniso=0.8 at roughness=0.3: the lobe's half-width
-/// along the tangent is at least 3x that along the bitangent.
-///
-/// We measure the half-width by finding the NoV-1 direction where the pdf
-/// (or weight) drops to 50% of its peak, along T and along B. The ratio
-/// should be at least 3.
 #[test]
 fn anisotropic_lobe_is_three_times_longer_than_wide() {
-    let d = gpu();
-    // Build a scene with a single material: aniso=0.8, roughness=0.3.
-    let material_flags = 1u32;
-    let photo_flags = 0x01u32;
-    let roughness = 0.3f32;
-    let aniso = 0.8f32;
-
-    // Sample the pdf along T and along B at the NoV-0.5 direction.
-    // The tangent direction is the x-axis in local space; the bitangent is the y-axis.
-    // We measure the half-width by finding where the pdf drops to 50% of its peak.
-    //
-    // The pdf is highest along the normal (NoH=1) and falls off as the direction
-    // moves away. The half-width along T is the angle theta_T where pdf = peak/2.
-    // The half-width along B is the angle theta_B where pdf = peak/2.
-    //
-    // For anisotropic GGX with alpha_t = mix(alpha, 1, aniso^2) and alpha_b = alpha:
-    //   alpha_t = mix(alpha, 1, 0.64) = alpha * 0.36 + 1 * 0.64
-    //   alpha_b = alpha = 0.09
-    //
-    // alpha = 0.3^2 = 0.09
-    // alpha_t = 0.09 * (1 - 0.64) + 1.0 * 0.64 = 0.09 * 0.36 + 0.64 = 0.0324 + 0.64 = 0.6724
-    //
-    // The half-width along T is proportional to sqrt(alpha_t) = sqrt(0.6724) = 0.82
-    // The half-width along B is proportional to sqrt(alpha_b) = sqrt(0.09) = 0.3
-    // Ratio = 0.82 / 0.3 = 2.73
-    //
-    // We need at least 3x, so we check that the ratio is >= 3.
-    let alpha = roughness * roughness; // 0.09
-    let aniso_sq = aniso * aniso; // 0.64
-    let alpha_t = alpha * (1.0 - aniso_sq) + 1.0 * aniso_sq; // 0.6724
-    let alpha_b = alpha; // 0.09
-
-    // The ratio of half-widths is sqrt(alpha_t / alpha_b).
-    let ratio = (alpha_t / alpha_b).sqrt();
-    assert!(ratio >= 3.0, "anisotropic lobe half-width ratio: {:.4}, expected >= 3.0 (alpha_t={:.6}, alpha_b={:.6})", ratio, alpha_t, alpha_b);
-
-    // Also verify via sampling: the mean weight along T should be wider than
-    // along B. We use the furnace weights as a proxy for the lobe shape.
-    let weights = mean_bsdf_weights(material_flags, photo_flags, 0.0, 0.0, [0.0, 0.0, 0.0], 0.0, aniso, 0.0, roughness, 0.0);
-    // The weights are the same for all NoV values (we don't measure direction
-    // here), so we rely on the analytic ratio for the 3x check.
-    assert!(weights.len() == 3, "expected 3 weights");
+    let metal = GpuMaterial { metallic: 1.0, ..layered(0.3) };
+    let aniso = GpuMaterial { aniso: 0.8, ..metal };
+    let probes = [probe(0, Z, 1), probe(1, Z, 1)];
+    let Some(out) = run("bsdf_width_test_main", PHOTO_MATERIALS, vec![metal, aniso], &probes) else {
+        return;
+    };
+    let (iso, an) = (out[0], out[1]);
+    assert!(iso[0] > 0.0 && (iso[0] / iso[1] - 1.0).abs() < 0.05, "an isotropic lobe is round: {iso:?}");
+    assert!(an[1] > 0.0 && an[0] >= 3.0 * an[1], "anisotropy 0.8: half-width along the tangent {} vs the bitangent {}", an[0], an[1]);
 }
