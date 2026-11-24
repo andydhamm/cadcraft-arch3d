@@ -2514,4 +2514,46 @@ mod photo_tests {
         assert!(seen >= 10, "enough points are on screen: {seen}");
         assert!(moved > 0, "the lens moves at least one sample off its rectilinear pixel");
     }
+
+    #[test]
+    fn calibrate_scene_uses_calibration_lights_not_drawing_lights() {
+        let _g = serial();
+        let d = room(); // has 4 lights
+        let mut c = Calibration::default();
+        c.lights.push(CalibLight::default());
+        c.lights.push(CalibLight::default());
+        c.lights.push(CalibLight::default());
+        let mut req = plain(&d);
+        req.calibrate = Some(c);
+        let Some(v) = render(&req) else { return };
+        assert_eq!(v["lights"], 3, "calibration's 3 lights, not the drawing's 4: {v}");
+    }
+
+    #[test]
+    fn photo_reply_echoes_non_default_settings() {
+        let _g = serial();
+        let d = room();
+        let mut req = plain(&d);
+        req.photo.rung = Some(5);
+        req.photo.edges = EdgeMode::Radius(0.004);
+        req.photo.materials = cadcraft_engine::doc::arch::Materials::Full;
+        req.photo.variation = true;
+        req.photo.clamp = Some(5.0);
+        req.photo.adaptive = true;
+        req.photo.noise_target = Some(0.02);
+        req.photo.time_budget = Some(15.0);
+        req.photo.roughness_guide = true;
+        req.photo.denoise = DenoiseMode::Learned;
+        let Some(v) = render(&req) else { return };
+        assert_eq!(v["photo"]["rung"], json!(5), "{v}");
+        assert_eq!(v["photo"]["edges"], json!({ "radius": 0.004 }), "{v}");
+        assert_eq!(v["photo"]["materials"], "full", "{v}");
+        assert_eq!(v["photo"]["variation"], true, "{v}");
+        assert_eq!(v["photo"]["clamp"], json!(5.0), "{v}");
+        assert_eq!(v["photo"]["adaptive"], true, "{v}");
+        assert_eq!(v["photo"]["noiseTarget"], json!(0.02), "{v}");
+        assert_eq!(v["photo"]["timeBudget"], json!(15.0), "{v}");
+        assert_eq!(v["photo"]["roughnessGuide"], true, "{v}");
+        assert_eq!(v["photo"]["denoise"], "learned", "{v}");
+    }
 }
