@@ -281,7 +281,7 @@ fn aniso_metal_full_nov_range() {
             m += (o[0] + o[1] + o[2]) as f64 / (3.0 * CHUNKS as f64);
         }
         eprintln!("furnace anisotropic metal NoV {}: mean {:.4} loss {:.4}", nov, m, 1.0 - m);
-        assert!(m >= BAND.0 && m <= BAND.1, "anisotropic metal at NoV {}: mean weight {} outside {}", nov, m, BAND);
+        assert!(m >= BAND.0 && m <= BAND.1, "anisotropic metal at NoV {}: mean weight {} outside {:?}", nov, m, BAND);
     }
 }
 
