@@ -344,6 +344,9 @@ mod lens_tests;
 mod edges_tests;
 
 #[cfg(test)]
+mod variation_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
