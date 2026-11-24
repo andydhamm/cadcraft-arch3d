@@ -1619,8 +1619,7 @@ mod tests {
         let (plain, stats) = seeded_image(&gpu, 0);
         assert_eq!(stats.clamp_loss, 0.0, "nothing is clamped");
         // Every flag on a stub changes nothing; adaptive sampling's own-count index equals the uniform one.
-        let all =
-            PHOTO_PANINI | PHOTO_DOF | PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_SUN_DISC | PHOTO_CLAMP | PHOTO_ADAPTIVE | PHOTO_SHIFT;
+        let all = PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_SUN_DISC | PHOTO_CLAMP | PHOTO_ADAPTIVE;
         let (flagged, _) = seeded_image(&gpu, all);
         assert_eq!(plain, flagged, "the hook stubs draw no random number and change no arithmetic");
         let (again, _) = seeded_image(&gpu, 0);

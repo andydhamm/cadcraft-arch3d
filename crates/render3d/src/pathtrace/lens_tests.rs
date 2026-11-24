@@ -121,7 +121,7 @@ fn panini_directions_match_the_cpu_reference() {
         let frame = frame_for(&cam, opts, 0);
         assert_eq!(frame.photo[0] & PHOTO_PANINI, PHOTO_PANINI);
         assert_eq!(frame.photo[0] & PHOTO_SHIFT != 0, shift != 0.0);
-        let view = LensView { panini: true, compression: f64::from(compression), shift: f64::from(shift) };
+        let view = LensView { panini: true, compression: f64::from(compression), shift: f64::from(shift), ..LensView::default() };
         let out = rays(&gpu, &frame, &px, false);
         for (p, d) in px.iter().zip(&out) {
             let Some((_, want)) = ray_at_lens(&cam, &view, SIZE, *p) else {
@@ -147,7 +147,7 @@ fn vertical_bars_keep_their_column_under_panini() {
         let frame = frame_for(&cam, opts, 0);
         let rows: Vec<[f32; 2]> = (0..20).map(|j| [30.5, 2.5 + j as f32 * 4.9]).collect();
         let out = rays(&gpu, &frame, &rows, false);
-        let view = LensView { panini: true, compression: f64::from(compression), shift: 0.0 };
+        let view = LensView { panini: true, compression: f64::from(compression), ..LensView::default() };
         for d in &out {
             let c = [f64::from(dot(*d, frame.cam_right)), f64::from(dot(*d, frame.cam_up)), f64::from(dot(*d, frame.cam_fwd))];
             let Some(n) = dir_to_frame(&view, tan_h, tan_v, c) else {
