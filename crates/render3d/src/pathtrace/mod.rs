@@ -24,6 +24,8 @@ mod adaptive;
 mod adaptive_tests;
 #[cfg(test)]
 mod bsdf_tests;
+#[cfg(test)]
+mod bsdf_trans_tests;
 pub mod cache;
 pub mod denoise;
 pub mod device;
