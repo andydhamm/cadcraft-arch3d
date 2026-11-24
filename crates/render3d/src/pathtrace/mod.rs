@@ -43,6 +43,9 @@ pub mod tracer;
 #[cfg(test)]
 mod traverse_tests;
 
+#[cfg(test)]
+mod bsdf_ext_tests;
+
 pub use device::{ComputeGpu, request_compute};
 pub use tracer::{PathTracer, irradiance};
 
