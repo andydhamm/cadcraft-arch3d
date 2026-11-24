@@ -324,3 +324,147 @@ fn learned_is_unavailable_without_compute() {
         assert_eq!(available(&gpu).is_err(), off);
     }
 }
+
+// --- p22g: the rare-path room -------------------------------------------------------------------
+
+mod room {
+    use crate::camera::{Camera, FullCamera};
+    use crate::lit_frame::Lighting;
+    use crate::pathtrace::device::ComputeGpu;
+    use crate::pathtrace::tracer::PathTracer;
+    use crate::pathtrace::{LinearStage, PathOptions, PathStatus};
+    use crate::types::{ArchId, Mesh, Scene3d};
+    use cadcraft_arch3d::light::{LightKind, SceneLight, light_axis};
+    use cadcraft_doc::arch::DenoiseMode;
+    use cadcraft_geom::{Vec2, Vec3};
+
+    const SIZE: (u32, u32) = (96, 64);
+
+    fn slab(m: &mut Mesh, x: (f64, f64), y: (f64, f64), z: (f64, f64)) {
+        m.push_prism(&[Vec2::new(x.0, y.0), Vec2::new(x.1, y.0), Vec2::new(x.1, y.1), Vec2::new(x.0, y.1)], z.0, z.1);
+    }
+
+    /// A closed 6 m room. The sun (south-west, 45 degrees) comes through a window in the west wall
+    /// and lays a patch on the floor; a small emitter sits behind a baffle, so most of the room is
+    /// lit by rare bright paths.
+    fn scene() -> Scene3d {
+        let mut floor = Mesh::new("floor", ArchId(1));
+        slab(&mut floor, (-3.2, 3.2), (-3.2, 3.2), (-0.2, 0.0));
+        let mut ceiling = Mesh::new("ceiling", ArchId(2));
+        slab(&mut ceiling, (-3.2, 3.2), (-3.2, 3.2), (3.0, 3.2));
+        let mut wall = Mesh::new("wall", ArchId(3));
+        slab(&mut wall, (-3.2, -3.0), (-3.2, -0.15), (0.0, 3.0));
+        slab(&mut wall, (-3.2, -3.0), (0.15, 3.2), (0.0, 3.0));
+        slab(&mut wall, (-3.2, -3.0), (-0.15, 0.15), (0.0, 1.0));
+        slab(&mut wall, (-3.2, -3.0), (-0.15, 0.15), (1.3, 3.0));
+        slab(&mut wall, (3.0, 3.2), (-3.2, 3.2), (0.0, 3.0));
+        slab(&mut wall, (-3.0, 3.0), (-3.2, -3.0), (0.0, 3.0));
+        slab(&mut wall, (-3.0, 3.0), (3.0, 3.2), (0.0, 3.0));
+        let mut baffle = Mesh::new("wall", ArchId(4));
+        slab(&mut baffle, (0.8, 1.0), (-3.0, 1.0), (0.0, 3.0));
+        let light = SceneLight {
+            kind: LightKind::Point,
+            position: Vec3::new(2.2, -1.5, 2.6),
+            direction: Vec3::new(0.0, 0.0, -1.0),
+            intensity: 300.0,
+            color: [1.0; 3],
+            cos_inner: -1.0,
+            cos_outer: -1.0,
+            axis: light_axis(Vec3::new(0.0, 0.0, -1.0), 0.0),
+            ..Default::default()
+        };
+        let bounds = floor.bounds();
+        Scene3d { bounds, meshes: vec![floor, ceiling, wall, baffle], lights: vec![light], ..Default::default() }
+    }
+
+    fn render(gpu: &ComputeGpu, opts: &PathOptions) -> (Vec<[f32; 3]>, crate::pathtrace::PathStats) {
+        let camera = Camera::Full(FullCamera::new(Vec3::new(2.6, -2.6, 1.4), Vec3::new(-1.5, 0.8, 0.8), 70.0));
+        let opts = PathOptions { bounces: 2, keep_linear: Some(LinearStage::Radiance), ..opts.clone() };
+        let mut t = match PathTracer::new(gpu, &scene(), &camera, &Lighting::default(), false, SIZE, &opts, None) {
+            Ok(t) => t,
+            Err(e) => panic!("the tracer did not build: {e}"),
+        };
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { .. } => break,
+                other => panic!("the render ended {other:?}"),
+            }
+        }
+        let stats = t.stats();
+        (stats.linear.clone().unwrap_or_default(), stats)
+    }
+
+    fn lum(p: &[f32; 3]) -> f64 {
+        0.2126 * f64::from(p[0]) + 0.7152 * f64::from(p[1]) + 0.0722 * f64::from(p[2])
+    }
+
+    /// The check's cross estimator: mean of `(x - r1)(x - r2) / (rbar^2 + eps)` over pixels and channels.
+    fn cross_error(x: &[[f32; 3]], r1: &[[f32; 3]], r2: &[[f32; 3]]) -> f64 {
+        let mean_ref = r1.iter().zip(r2).map(|(a, b)| 0.5 * (lum(a) + lum(b))).sum::<f64>() / x.len().max(1) as f64;
+        let eps = (0.05 * mean_ref).powi(2);
+        let mut sum = 0.0;
+        for ((p, a), b) in x.iter().zip(r1).zip(r2) {
+            for c in 0..3 {
+                let (v, a, b) = (f64::from(p[c]), f64::from(a[c]), f64::from(b[c]));
+                let rbar = 0.5 * (a + b);
+                sum += (v - a) * (v - b) / (rbar * rbar + eps);
+            }
+        }
+        sum / (3 * x.len()).max(1) as f64
+    }
+
+    struct Frames {
+        input: Vec<[f32; 3]>,
+        filter: Vec<[f32; 3]>,
+        learned: Vec<[f32; 3]>,
+        r1: Vec<[f32; 3]>,
+        r2: Vec<[f32; 3]>,
+        learned_ran: bool,
+    }
+
+    fn frames(gpu: &ComputeGpu) -> Frames {
+        let base = PathOptions { spp: 64, spp_per_step: 16, seed: 3, ..PathOptions::default() };
+        let (input, _) = render(gpu, &PathOptions { denoise: false, ..base.clone() });
+        let (filter, _) = render(gpu, &PathOptions { denoise: true, denoise_mode: DenoiseMode::Filter, ..base.clone() });
+        let (learned, stats) = render(gpu, &PathOptions { denoise: true, denoise_mode: DenoiseMode::Learned, ..base });
+        let reference = |seed| render(gpu, &PathOptions { spp: 512, spp_per_step: 64, seed, denoise: false, ..PathOptions::default() }).0;
+        Frames { input, filter, learned, r1: reference(99), r2: reference(98), learned_ran: stats.denoiser == DenoiseMode::Learned }
+    }
+
+    fn gpu_or_skip() -> Option<ComputeGpu> {
+        let gpu = crate::gputest::shared_compute();
+        if gpu.is_none() {
+            eprintln!("SKIP: no compute device");
+        }
+        gpu
+    }
+
+    #[test]
+    fn learned_halves_the_filter_error_on_a_rare_path_room() {
+        let Some(gpu) = gpu_or_skip() else { return };
+        let f = frames(&gpu);
+        if !f.learned_ran {
+            eprintln!("SKIP: the learned denoiser is not available on this device");
+            return;
+        }
+        let (ef, el) = (cross_error(&f.filter, &f.r1, &f.r2), cross_error(&f.learned, &f.r1, &f.r2));
+        eprintln!("room: input {:.4} filter {ef:.4} learned {el:.4}", cross_error(&f.input, &f.r1, &f.r2));
+        assert!(el <= 0.5 * ef, "learned {el} is not under half the filter's {ef}");
+    }
+
+    #[test]
+    fn learned_keeps_the_frame_mean() {
+        let Some(gpu) = gpu_or_skip() else { return };
+        let f = frames(&gpu);
+        if !f.learned_ran {
+            eprintln!("SKIP: the learned denoiser is not available on this device");
+            return;
+        }
+        let mean = |v: &[[f32; 3]]| v.iter().map(lum).sum::<f64>() / v.len().max(1) as f64;
+        let (m_in, m_out) = (mean(&f.input), mean(&f.learned));
+        // Each pixel is held to within 2 sigma of its own unbiased samples, so the network can move
+        // the frame mean only by a few percent; 3 % is the bound.
+        assert!(m_in > 0.0 && (m_out - m_in).abs() <= 0.03 * m_in, "input mean {m_in}, learned mean {m_out}");
+    }
+}

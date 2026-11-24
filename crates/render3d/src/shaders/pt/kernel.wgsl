@@ -29,6 +29,8 @@
 
 // Up to this many lights are all sampled at every vertex; more, and one chosen uniformly is.
 const ALL_LIGHTS_MAX: u32 = 16u;
+// Frame photo flag (tracer.rs `PHOTO_AOV_MEAN`): the guides are sums over all samples, not sample 0's.
+const PHOTO_AOV_MEAN: u32 = 512u;
 
 // How the previous ray treats the area lights it meets.
 const AREA_SEEN: u32 = 0u; // visible as they are (camera ray, after a delta lobe)
@@ -356,6 +358,13 @@ fn trace_main(@builtin(global_invocation_id) id: vec3<u32>) {
     var sq = 0.0;
     var hits = 0u;
     var loss = 0.0;
+    // [p22g] Averaged guides (learned denoiser only): sums of albedo and normal over every sample; the
+    // hit flag + roughness and the distance stay sample 0's. post.rs divides by the pixel's count.
+    let aov_mean = (frame.photo.x & PHOTO_AOV_MEAN) != 0u;
+    var albedo_sum = vec3<f32>(0.0);
+    var normal_sum = vec3<f32>(0.0);
+    var first_a = 0.0;
+    var first_t = 0.0;
     for (var k = 0u; k < frame.spp_this_pass; k = k + 1u) {
         let s = base + k;
         var r = rng_new(i, s, frame.seed);
@@ -372,9 +381,29 @@ fn trace_main(@builtin(global_invocation_id) id: vec3<u32>) {
                 loss = loss + res.loss;
             }
         }
-        if (s == 0u) {
+        if (aov_mean) {
+            if (finite_rgb(res.albedo) && finite_rgb(res.normal)) {
+                albedo_sum = albedo_sum + res.albedo;
+                normal_sum = normal_sum + res.normal;
+            }
+            if (s == 0u) {
+                first_a = select(0.0, 1.0 + res.roughness, res.hit != 0u);
+                first_t = res.t;
+            }
+        } else if (s == 0u) {
             aov[2u * i] = vec4<f32>(res.albedo, select(0.0, 1.0 + res.roughness, res.hit != 0u));
             aov[2u * i + 1u] = vec4<f32>(res.normal, res.t);
+        }
+    }
+    if (aov_mean) {
+        if (base == 0u) {
+            aov[2u * i] = vec4<f32>(albedo_sum, first_a);
+            aov[2u * i + 1u] = vec4<f32>(normal_sum, first_t);
+        } else {
+            let a = aov[2u * i];
+            let nrm = aov[2u * i + 1u];
+            aov[2u * i] = vec4<f32>(a.xyz + albedo_sum, a.w);
+            aov[2u * i + 1u] = vec4<f32>(nrm.xyz + normal_sum, nrm.w);
         }
     }
     accum[i] = accum[i] + vec4<f32>(sum, f32(frame.spp_this_pass));
