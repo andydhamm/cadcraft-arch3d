@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 21:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 41 of 45 segments merged · 12 of 15 acceptance checks**
 
-12,047 workspace tests passing at the last merge · 1398 segments merged in all · 0 of 15 seats working
+12,052 workspace tests passing at the last merge · 1399 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,23 +32,24 @@ Updated 2026-11-24 21:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 27.8 h so far · expected done Nov 25 02:03–Nov 26 01:22 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 28.0 h so far · expected done Nov 25 02:18–Nov 26 01:37 UTC |
 
 ## Phase 22 segments
 
-41 merged, 3 gate, 1 working
+41 merged, 1 merging, 1 working, 1 escalate, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22g-trans-shadow-side` | Path tracer: light samples through thin and rough transmission leave from the far side (thin translucency furnace loses 20 % today) | gate | claude-sonnet-c |
+| `p22g-trans-shadow-side` | Path tracer: light samples through thin and rough transmission leave from the far side (thin translucency furnace loses 20 % today) | merging | claude-sonnet-c |
 | `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | working | claude-sonnet-d |
-| `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | gate | bonsai-b |
+| `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | escalate |  |
 | `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | gate | claude-sonnet-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 21:19 | `harden-p22f-adaptive-freeze` | merged | 12,052 pass | tturbo-mac |
 | Nov 24 20:35 | `harden-p22-arch3d-lens` | merged | 12,047 pass | tturbo-mac |
 | Nov 24 20:35 | `harden-p22-r3d-linear-out` | merged | 12,047 pass | tturbo-mac2 |
 | Nov 24 20:35 | `harden-p22-engine-denoiser-info` | merged | 12,047 pass | tturbo-mac |
@@ -60,24 +61,23 @@ Updated 2026-11-24 21:15 UTC. This page and the card in the README are regenerat
 | Nov 24 18:22 | `harden-p22f-learned-keeps-converged` | merged | 11,985 pass | tturbo-mac |
 | Nov 24 18:22 | `harden-p22f-ladder-reply-look` | merged | 11,985 pass | tturbo-mac2 |
 | Nov 24 17:47 | `harden-p22f-aniso-multiscatter` | merged | 11,972 pass | tturbo-mac2 |
-| Nov 24 17:02 | `harden-p22-engine-ladder` | merged | 11,964 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1440 |
-| bonsai-b | bonsai2-27b | gate | 1363 |
+| bonsai-a | bonsai2-27b | gate | 1440 |
+| bonsai-b | bonsai2-27b | agent | 1365 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | gate | 175 |
 | claude-sonnet-b | sonnet | idle | 184 |
-| claude-sonnet-c | sonnet | gate | 121 |
+| claude-sonnet-c | sonnet | idle | 121 |
 | claude-sonnet-d | sonnet | agent | 112 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1318 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1319 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1235 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 740 |
+| mai-flash-esc | mai-code-1.1-flash | down | 178 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1236 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 741 |
