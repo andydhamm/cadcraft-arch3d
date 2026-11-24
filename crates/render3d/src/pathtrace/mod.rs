@@ -332,6 +332,9 @@ pub use crate::exposure::auto_exposure_from_luminances;
 mod lights_tests;
 
 #[cfg(test)]
+mod clamp_tests;
+
+#[cfg(test)]
 mod kernel_tests;
 
 #[cfg(test)]
