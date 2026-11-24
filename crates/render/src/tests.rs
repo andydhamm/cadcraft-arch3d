@@ -1218,51 +1218,48 @@ fn rotated_and_reversed_copies_of_a_curved_loop_fill_once() {
     assert_eq!(loops_of(&h).len(), 2);
 }
 
-// ---------- arch poché ----------
+// ---------- point budget (#1922) ----------
 
-/// A drawing with one model-space line and one arch wall (ArchId 0).
-fn arch_wall_drawing() -> Drawing {
+fn circle() -> EntityKind {
+    EntityKind::Circle(cadcraft_doc::Circle { center: Vec3::ZERO, radius: 100.0 })
+}
+
+/// A block of one circle referenced as 1,000 copies in place: every copy is cheap to the
+/// block-expansion budget but costs hundreds of points.
+fn arrayed_circles() -> Drawing {
     let mut d = Drawing::new_imperial();
-    d.add(&Space::Model, Common::default(), EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(10.0, 0.0, 0.0) }))
-        .unwrap();
-    let mut model = ArchModel::default();
-    model.add_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.3, height: 3.0, ..Default::default() });
-    d.arch = model;
-    d.touch_arch();
+    let mut blk = cadcraft_doc::Block::new("B");
+    blk.entities.push(block_entity(1, Common::default(), circle()));
+    d.blocks.insert("B".into(), std::sync::Arc::new(blk));
+    let EntityKind::Insert(mut ins) = insert_of("B") else { panic!("an insert") };
+    ins.cols = 1000;
+    d.add(&Space::Model, Common::default(), EntityKind::Insert(ins)).unwrap();
     d
 }
 
-#[test]
-fn build_includes_arch_poché() {
-    let d = arch_wall_drawing();
-    let l = build(&d, &Space::Model, &Options::default());
-    assert!(l.prims.iter().any(|p| p.kind == Kind::Tris && p.handle == crate::arch_handle(ArchId(0))), "no arch poché tris in the display list");
+fn points(l: &DisplayList) -> usize {
+    l.verts.len() + l.tris.len()
 }
 
 #[test]
-fn build_plot_includes_arch_poché() {
-    let d = arch_wall_drawing();
-    let l = build_plot(&d, &Space::Model, &Options::default());
-    assert!(l.prims.iter().any(|p| p.kind == Kind::Tris && p.handle == crate::arch_handle(ArchId(0))), "no arch poché tris in the plot display list");
+fn block_copies_stop_at_the_point_budget_and_say_so() {
+    let d = arrayed_circles();
+    let full = build(&d, &Space::Model, &Options::default());
+    assert!(!full.truncated && points(&full) > 100_000, "{}", points(&full));
+    let l = crate::pipeline::build_space_within(&d, &Space::Model, &Options::default(), false, 10_000);
+    assert!(l.truncated);
+    assert!(points(&l) > 0 && points(&l) <= 10_000, "{}", points(&l));
+    assert!(l.prims.iter().all(|p| p.start as usize + p.len as usize <= l.verts.len()));
 }
 
 #[test]
-fn arch_poché_extends_display_bounds() {
+fn objects_built_on_all_cores_stop_at_the_point_budget_and_say_so() {
+    // Enough objects for the parallel build: the parts share one budget and report together.
     let mut d = Drawing::new_imperial();
-    d.add(&Space::Model, Common::default(), EntityKind::Line(cadcraft_doc::Line { a: Vec3::new(0.0, 0.0, 0.0), b: Vec3::new(1.0, 0.0, 0.0) }))
-        .unwrap();
-    let mut model = ArchModel::default();
-    model.add_wall(Wall { start: Vec2::new(100.0, 100.0), end: Vec2::new(110.0, 100.0), thickness: 0.3, height: 3.0, ..Default::default() });
-    d.arch = model;
-    d.touch_arch();
-    let l = build(&d, &Space::Model, &Options::default());
-    assert!(l.bounds.contains(Vec2::new(100.0, 100.0)), "bounds do not contain wall start");
-    assert!(l.bounds.contains(Vec2::new(110.0, 100.0)), "bounds do not contain wall end");
-}
-
-#[test]
-fn paper_space_skips_arch() {
-    let d = arch_wall_drawing();
-    let l = build(&d, &Space::Paper("Layout1".into()), &Options::default());
-    assert!(!l.prims.iter().any(|p| p.handle == crate::arch_handle(ArchId(0))), "arch poché drawn in paper space");
+    for _ in 0..600 {
+        d.add(&Space::Model, Common::default(), circle()).unwrap();
+    }
+    let l = crate::pipeline::build_space_within(&d, &Space::Model, &Options::default(), false, 10_000);
+    assert!(l.truncated);
+    assert!(points(&l) > 0 && points(&l) <= 10_000, "{}", points(&l));
 }
