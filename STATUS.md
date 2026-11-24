@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 33 of 36 segments merged · 8 of 15 acceptance checks**
 
-11,703 workspace tests passing at the last merge · 1358 segments merged in all · 0 of 15 seats working
+11,703 workspace tests passing at the last merge · 1358 segments merged in all · 0 of 15 seats working · PAUSED
 
 ## Phases
 
@@ -32,15 +32,15 @@ Updated 2026-11-24 08:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 8 / 15 | 15.0 h so far · expected done Nov 24 09:24–Nov 24 18:31 UTC |
+| 22 | Photoreal stills | building | 8 / 15 | 15.3 h so far · expected done Nov 24 09:39–Nov 24 18:46 UTC |
 
 ## Phase 22 segments
 
-33 merged, 2 merging, 1 working
+33 merged, 2 merging, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22-gallery-tool` | Gallery tool: realism ladders and Photoreal finals behind --full | working | bonsai-b |
+| `p22-gallery-tool` | Gallery tool: realism ladders and Photoreal finals behind --full | gate | bonsai-b |
 | `p22-docs-user-guide` | User guide and MCP example: Photoreal stills | merging | claude-sonnet-a |
 | `upstream-sync-bf1d872e5` | merge upstream upstream/main up to bf1d872e5 (51 commits) | merging | claude-sonnet-c |
 
@@ -66,7 +66,7 @@ Updated 2026-11-24 08:30 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1427 |
-| bonsai-b | bonsai2-27b | agent | 1339 |
+| bonsai-b | bonsai2-27b | gate | 1340 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 172 |
@@ -79,4 +79,4 @@ Updated 2026-11-24 08:30 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1214 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 716 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 717 |
