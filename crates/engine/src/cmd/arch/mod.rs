@@ -41,6 +41,7 @@ pub mod inspect;
 mod inspect_detail;
 #[cfg(test)]
 mod inspect_detail_tests;
+pub mod ladder;
 pub mod level;
 pub mod library;
 pub mod library_icon;
@@ -168,6 +169,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(material::specs());
     v.extend(illuminance::specs());
     v.extend(render::specs());
+    v.extend(ladder::specs());
     v.extend(sunstudy::specs());
     v.extend(sunangle::specs());
     v.extend(tray::specs());
