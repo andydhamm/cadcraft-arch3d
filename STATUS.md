@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 11 of 35 segments merged · 1 of 15 acceptance checks**
 
@@ -32,7 +32,7 @@ Updated 2026-11-24 00:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 1 / 15 | 7.3 h so far · expected done Nov 24 14:45–Nov 25 15:23 UTC |
+| 22 | Photoreal stills | building | 1 / 15 | 7.5 h so far · expected done Nov 24 15:29–Nov 25 16:58 UTC |
 
 ## Phase 22 segments
 
@@ -48,7 +48,7 @@ Updated 2026-11-24 00:45 UTC. This page and the card in the README are regenerat
 | `p22-engine-pick-lens` | pick3d maps the pixel back through the lens | merging | mai-flash-b |
 | `p22-r3d-sun-disc` | The sun as a 0.53 degree disc in the path tracer | merging | claude-sonnet-a |
 | `p22-r3d-clamp` | Per-sample clamp of indirect contributions, with its energy loss reported | merging | mai-flash-b |
-| `p22-r3d-adaptive` | Adaptive sampling, the noise target and the time budget | working | tturbo-mac2 |
+| `p22-r3d-adaptive` | Adaptive sampling, the noise target and the time budget | working | mai-flash-esc |
 | `p22-r3d-roughness-guide` | The edge-aware filter gains the roughness buffer as a guide | merging | claude-sonnet-b |
 | `p22-r3d-tza` | The .tza weight loader and the embedded denoiser weights | merging | bonsai-b |
 
@@ -73,8 +73,8 @@ Updated 2026-11-24 00:45 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1405 |
-| bonsai-b | bonsai2-27b | agent | 1313 |
+| bonsai-a | bonsai2-27b | agent | 1406 |
+| bonsai-b | bonsai2-27b | agent | 1314 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 167 |
@@ -85,6 +85,6 @@ Updated 2026-11-24 00:45 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 129 |
 | mai-flash-b | mai-code-1.1-flash | idle | 84 |
-| mai-flash-esc | mai-code-1.1-flash | idle | 177 |
+| mai-flash-esc | mai-code-1.1-flash | agent | 177 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1200 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 705 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 706 |
