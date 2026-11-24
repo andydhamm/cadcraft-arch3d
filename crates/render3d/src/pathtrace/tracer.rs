@@ -568,7 +568,13 @@ impl PathTracer {
         gpu.queue.submit([enc.finish()]);
 
         // Resolve.
-        match self.resolve(gpu) {
+        // A film that changes something resolves on the CPU; a neutral one keeps the GPU resolve.
+        let resolved = if self.film.is_neutral() {
+            self.resolve(gpu)
+        } else {
+            Some(super::post::film_rgba(&final_accum, self.exposure, self.frame.look[0], &self.film, self.size))
+        };
+        match resolved {
             Some(mut rgba) => {
                 self.backdrop_composite(gpu, &mut rgba);
                 self.status = PathStatus::Done { width: w, height: h, rgba };

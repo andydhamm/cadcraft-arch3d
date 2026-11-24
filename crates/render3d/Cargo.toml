@@ -8,6 +8,7 @@ repository.workspace = true
 [dependencies]
 cadcraft-geom = { workspace = true }
 cadcraft-color = { workspace = true }
+cadcraft-arch = { workspace = true }
 cadcraft-arch3d = { workspace = true }
 cadcraft-doc = { workspace = true }
 cadcraft-gpu-optin = { workspace = true }
