@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Render the showcase house in every view style (see README.md). Python 3 standard library only."""
-import argparse, hashlib, json, os, shlex, struct, subprocess, sys, zlib
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shlex
+import struct
+import subprocess
+import sys
+import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCRIPT = os.path.join(ROOT, 'docs', 'arch3d', 'showcase', 'bilevel.json')
@@ -267,12 +277,13 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64, with_photo=Fa
         if c in ('dusk', 'noon-hdri'):
             params['spp'] = spp  # their technique path-traces by itself
         add(f, 'look', c, [('render', params)])
+    # The photoreal run (phase 22) is added after the look cameras, only when `with_photo` is True
+    # (i.e. `--full` without `--no-photo`): replay the house plus the phase-22 camera script into
+    # photo.dxf, then, per photoreal camera, its ladder (8 rungs + a contact sheet in a folder)
+    # and its 1920x1080 final.
     if with_photo:
-        # The photoreal run (phase 22): replay the house plus the phase-22 camera
-        # script into photo.dxf, then the ladders and 1920x1080 finals for each
-        # photoreal camera. Skipped by --no-photo.
-        replay_photo = ['--commands', SCRIPT, '--commands', PHOTO_SCRIPT]
-        add('photo.dxf', 'replay', 'photo', replay_photo + ['--save', 'photo.dxf'])
+        replay_photo = ['--commands', SCRIPT, '--commands', PHOTO_SCRIPT, '--save', 'photo.dxf']
+        add('photo.dxf', 'replay', 'photo', replay_photo)
         for cam, folder in zip(PHOTO_CAMERA_NAMES, PHOTO_FOLDERS):
             ladder_dir = f'ladder-{folder}'
             add(ladder_dir, 'ladder', cam, [('render.ladder', {'camera': cam, 'out': ladder_dir, 'size': [640, 400]}])
@@ -305,10 +316,16 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64, with_photo=Fa
 
 def manifest(images, exports, skipped, script_sha256, set_scripts, drawing_set,
             photo_script=None, ladders=None, photoreal=None, sheet_images=True):
-    """The manifest.json content."""
-    return {'images': images, 'exports': exports, 'contactSheet': 'contact-sheet.png', 'technicalSkipped': skipped,
-            'scriptSha256': script_sha256, 'setScripts': set_scripts, 'drawingSet': drawing_set,
-            'photoScript': photo_script, 'ladders': ladders, 'photoreal': photoreal, 'sheetImages': sheet_images}
+    """The manifest.json content.
+
+    `photo_script` is the sha256 of the phase-22 camera script (or None), `ladders` the three
+    ladder folder names and `photoreal` the three 1920x1080 final file names; all default to None
+    so existing call sites that omit them still work.
+    """
+    return {'images': images, 'exports': exports, 'contactSheet': 'contact-sheet.png',
+            'technicalSkipped': skipped, 'scriptSha256': script_sha256, 'setScripts': set_scripts,
+            'drawingSet': drawing_set, 'photoScript': photo_script, 'ladders': ladders,
+            'photoreal': photoreal, 'sheetImages': sheet_images}
 
 
 def parse_args(argv):
