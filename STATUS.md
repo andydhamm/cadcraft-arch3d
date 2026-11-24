@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 20:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 20:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 41 of 45 segments merged · 12 of 15 acceptance checks**
 
@@ -32,18 +32,18 @@ Updated 2026-11-24 20:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 26.8 h so far · expected done Nov 25 01:03–Nov 26 00:22 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 27.0 h so far · expected done Nov 25 01:18–Nov 26 00:38 UTC |
 
 ## Phase 22 segments
 
-41 merged, 4 working
+41 merged, 2 working, 2 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p22g-trans-shadow-side` | Path tracer: light samples through thin and rough transmission leave from the far side (thin translucency furnace loses 20 % today) | working | claude-sonnet-c |
 | `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | working | claude-sonnet-d |
-| `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | working | bonsai-b |
-| `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | working | claude-sonnet-a |
+| `p22g-learned-kitchen-error` | Learned denoiser: halve the edge-aware filter's error on the showcase kitchen at 64 spp (measure where the error is, then averaged guides and sample-consistent output) | gate | bonsai-b |
+| `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | gate | claude-sonnet-a |
 
 ## Recent merges
 
@@ -67,17 +67,17 @@ Updated 2026-11-24 20:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | agent | 1436 |
-| bonsai-b | bonsai2-27b | agent | 1360 |
+| bonsai-b | bonsai2-27b | gate | 1360 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | agent | 175 |
+| claude-sonnet-a | sonnet | gate | 175 |
 | claude-sonnet-b | sonnet | idle | 184 |
 | claude-sonnet-c | sonnet | agent | 119 |
 | claude-sonnet-d | sonnet | agent | 111 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1315 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1316 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1234 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1234 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 739 |
