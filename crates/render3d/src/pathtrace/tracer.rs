@@ -2680,6 +2680,56 @@ mod tests {
     /// Separate ComputeGpu instances (even wrapping the same wgpu device) must have
     /// independent pipeline caches: building on one must not populate the other.
     #[test]
+    fn invert_mat4_identity() {
+        let m = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]];
+        let inv = invert_mat4(&m);
+        for i in 0..4 {
+            for j in 0..4 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!((inv[i][j] - expected).abs() < 1e-6, "inv[{}][{}] = {}", i, j, inv[i][j]);
+            }
+        }
+    }
+
+    #[test]
+    fn invert_mat4_translation() {
+        // Column-major translation matrix.
+        let m = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [3.0, 4.0, 5.0, 1.0]];
+        let inv = invert_mat4(&m);
+        // The inverse should be a translation by (-3, -4, -5).
+        assert!((inv[3][0] - (-3.0)).abs() < 1e-6, "inv[3][0] = {}", inv[3][0]);
+        assert!((inv[3][1] - (-4.0)).abs() < 1e-6, "inv[3][1] = {}", inv[3][1]);
+        assert!((inv[3][2] - (-5.0)).abs() < 1e-6, "inv[3][2] = {}", inv[3][2]);
+        assert!((inv[3][3] - 1.0).abs() < 1e-6, "inv[3][3] = {}", inv[3][3]);
+    }
+
+    #[test]
+    fn invert_mat4_singular_returns_identity() {
+        // A singular matrix (zero determinant).
+        let m = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]];
+        let inv = invert_mat4(&m);
+        // Should return the identity.
+        for i in 0..4 {
+            for j in 0..4 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!((inv[i][j] - expected).abs() < 1e-6, "inv[{}][{}] = {}", i, j, inv[i][j]);
+            }
+        }
+    }
+
+    #[test]
+    fn pixel_ray_centre_of_image() {
+        // Identity inverse view-projection matrix.
+        let inv_vp = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]];
+        // Center pixel of a 3x3 image.
+        let ray = pixel_ray(&inv_vp, 1, 1, 3, 3);
+        // With an identity matrix, the center pixel should give a ray pointing in the +z direction.
+        assert!((ray[0] - 0.0).abs() < 1e-6, "ray[0] = {}", ray[0]);
+        assert!((ray[1] - 0.0).abs() < 1e-6, "ray[1] = {}", ray[1]);
+        assert!((ray[2] - 1.0).abs() < 1e-6, "ray[2] = {}", ray[2]);
+    }
+
+    #[test]
     fn separate_compute_gpu_instances_have_independent_pipeline_slots() {
         let Some(gpu) = compute() else { return };
         let own1 =
