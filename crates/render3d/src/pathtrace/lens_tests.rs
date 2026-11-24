@@ -321,11 +321,8 @@ fn center_pixel_is_forward() {
     let Some(gpu) = gpu_or_skip() else { return };
     let cam = camera();
     let centre = [SIZE.0 as f32 / 2.0, SIZE.1 as f32 / 2.0];
-    for opts in [
-        LensOptions::default(),
-        LensOptions { panini: true, compression: 0.5, ..LensOptions::default() },
-        LensOptions { panini: true, compression: 0.5, aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() },
-    ] {
+    // Without DOF, the center pixel ray is exactly forward.
+    for opts in [LensOptions::default(), LensOptions { panini: true, compression: 0.5, ..LensOptions::default() }] {
         let frame = frame_for(&cam, opts, 0);
         let dirs = rays(&gpu, &frame, &[centre], false);
         let d = dirs[0];
@@ -333,5 +330,37 @@ fn center_pixel_is_forward() {
         for k in 0..3 {
             assert!((d[k] - fwd[k]).abs() < 1e-4, "options {:?}: center direction {d:?} vs forward {fwd:?}", opts);
         }
+    }
+    // With DOF, the center pixel ray passes through a random point on the aperture disc, so it is
+    // not exactly forward. Check that it lies inside the aperture cone (half-angle atan(radius/focus)).
+    let opts = LensOptions { panini: true, compression: 0.5, aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() };
+    let frame = frame_for(&cam, opts, 0);
+    let dirs = rays(&gpu, &frame, &[centre], false);
+    let d = dirs[0];
+    let fwd = [frame.cam_fwd[0], frame.cam_fwd[1], frame.cam_fwd[2]];
+    let dot = d[0] * fwd[0] + d[1] * fwd[1] + d[2] * fwd[2];
+    let half_angle = (frame.lens[2] / frame.lens[3]).atan();
+    let cos_half = half_angle.cos();
+    assert!(dot > cos_half - 1e-4, "DOF: center direction dot forward {dot} < cos(half_angle) {cos_half}");
+}
+
+#[test]
+fn lens_dir_at_center_is_forward_in_camera_space() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let cam = camera();
+    let centre = [SIZE.0 as f32 / 2.0, SIZE.1 as f32 / 2.0];
+    for opts in [LensOptions::default(), LensOptions { panini: true, compression: 0.5, ..LensOptions::default() }] {
+        let frame = frame_for(&cam, opts, 0);
+        let dirs = rays(&gpu, &frame, &[centre], false);
+        let d = dirs[0];
+        // In camera space the center pixel direction must be (0, 0, 1).
+        let c = [
+            f64::from(d[0]) * frame.cam_right[0] + f64::from(d[1]) * frame.cam_right[1] + f64::from(d[2]) * frame.cam_right[2],
+            f64::from(d[0]) * frame.cam_up[0] + f64::from(d[1]) * frame.cam_up[1] + f64::from(d[2]) * frame.cam_up[2],
+            f64::from(d[0]) * frame.cam_fwd[0] + f64::from(d[1]) * frame.cam_fwd[1] + f64::from(d[2]) * frame.cam_fwd[2],
+        ];
+        assert!(c[0].abs() < 1e-4, "options {:?}: camera-space x {} should be 0", opts, c[0]);
+        assert!(c[1].abs() < 1e-4, "options {:?}: camera-space y {} should be 0", opts, c[1]);
+        assert!((c[2] - 1.0).abs() < 1e-4, "options {:?}: camera-space z {} should be 1", opts, c[2]);
     }
 }

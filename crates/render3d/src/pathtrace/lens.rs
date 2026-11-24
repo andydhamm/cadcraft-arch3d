@@ -15,8 +15,14 @@ use cadcraft_arch3d::lens::{aperture_radius_m, camera_basis};
 /// aperture radius in metres, focus distance in metres) and the lens flags of `camera` at `size`
 /// pixels. A camera with a non-finite number leaves the frame as it was.
 pub(super) fn fill_frame(frame: &mut GpuFrame, lighting: &Lighting, camera: &Camera, size: (u32, u32)) {
+    let eye = camera.eye();
+    let target = camera.target();
+    let fov = camera.fov_deg();
+    if !eye.is_finite() || !target.is_finite() || !fov.is_finite() {
+        return;
+    }
     let (right, up, fwd) = camera_basis(camera);
-    let tan_v = (camera.fov_deg().to_radians() * 0.5).tan();
+    let tan_v = (fov.to_radians() * 0.5).tan();
     let aspect = f64::from(size.0.max(1)) / f64::from(size.1.max(1));
     let tan_h = tan_v * aspect;
     let all = [right[0], right[1], right[2], up[0], up[1], up[2], fwd[0], fwd[1], fwd[2], tan_v, tan_h];
@@ -123,5 +129,42 @@ mod tests {
         assert!((frame.lens[1] - 0.1).abs() < 1e-6);
         assert!(frame.lens[2] > 0.0);
         assert!((frame.lens[3] - 3.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn aperture_radius_matches_formula() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        let expected_radius = frame.lens2[0] / 2.8;
+        assert!((frame.lens[2] - expected_radius).abs() < 1e-6, "aperture radius {}/{}", frame.lens[2], expected_radius);
+    }
+
+    #[test]
+    fn nan_compression_is_ignored() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { panini: true, compression: f32::NAN, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0] & PHOTO_PANINI, 0, "NaN compression should not set PHOTO_PANINI");
+    }
+
+    #[test]
+    fn nan_shift_is_ignored() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { shift: f32::NAN, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0] & PHOTO_SHIFT, 0, "NaN shift should not set PHOTO_SHIFT");
+    }
+
+    #[test]
+    fn nan_aperture_is_ignored() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { aperture: Some(f32::NAN), focus: Some(3.0), ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0] & PHOTO_DOF, 0, "NaN aperture should not set PHOTO_DOF");
     }
 }
