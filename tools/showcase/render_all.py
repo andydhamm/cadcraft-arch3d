@@ -286,7 +286,7 @@ def plan(levels, views, sheets, with_set, size=(960, 720), spp=64, with_photo=Fa
         add('photo.dxf', 'replay', 'photo', replay_photo)
         for cam, folder in zip(PHOTO_CAMERA_NAMES, PHOTO_FOLDERS):
             ladder_dir = f'ladder-{folder}'
-            add(ladder_dir, 'ladder', cam, [('render.ladder', {'camera': cam, 'out': ladder_dir, 'size': [640, 400]}])
+            add(ladder_dir, 'ladder', cam, [('render.ladder', {'camera': cam, 'out': ladder_dir, 'size': [640, 400]})])
             f = file_name('photoreal', folder, '.png')
             add(f, 'photoreal', cam, [('render', {'camera': cam, 'size': [1920, 1080], 'out': f})])
     replay = ['--commands', SCRIPT]
