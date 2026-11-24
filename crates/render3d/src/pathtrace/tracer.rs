@@ -399,6 +399,8 @@ impl PathTracer {
         // Between passes: the adaptive sampler may end the still, and so may the time budget.
         if self.spp_done < self.opts.spp {
             let mut stop = self.adaptive.after_pass(gpu, &self.accum, &self.aov);
+            self.stats.noise = self.adaptive.last_noise();
+            self.adaptive.apply_stats(&mut self.stats);
             if stop.is_none() && self.opts.time_budget.is_some_and(|b| b.is_finite() && self.stats.seconds >= b) {
                 stop = Some(super::StopReason::TimeBudget);
             }
