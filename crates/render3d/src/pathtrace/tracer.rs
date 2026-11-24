@@ -8,7 +8,7 @@ use super::device::ComputeGpu;
 use super::rt::RqBuild;
 use super::scene_gpu::{
     FRAME_CLIP, FRAME_FURNACE, FRAME_GROUND, FRAME_MOON, FRAME_SKY, FRAME_SUN, FRAME_SUN_NO_SHADOW, GpuFrame, GpuProbe, GpuScene, MAX_GPU_TRIANGLES,
-    build_gpu_scene,
+    PHOTO_CLAMP, build_gpu_scene,
 };
 use super::shaders::{PtPipelines, RqPtPipelines, build_rq_pipelines};
 use super::{DAY_EXPOSURE, Exposure, MAX_SNAPSHOTS, MAX_SPP, SKY_HORIZON_NITS, SKY_ZENITH_NITS};
@@ -227,6 +227,11 @@ impl PathTracer {
         };
 
         let eye = camera.eye();
+        let exposure0 = match opts.exposure {
+            Exposure::Fixed(x) => x,
+            Exposure::Auto if daylight => DAY_EXPOSURE,
+            Exposure::Auto => lighting.exposure,
+        };
         let mut frame = GpuFrame {
             inv_view_proj: inv_vp,
             eye: [eye.x as f32, eye.y as f32, eye.z as f32, 0.0],
@@ -240,6 +245,12 @@ impl PathTracer {
             look: [1, 0, 0, 0],
             ..Default::default()
         };
+        if let Some(limit) = opts.clamp {
+            if limit.is_finite() && limit > 0.0 {
+                frame.photo[0] |= PHOTO_CLAMP;
+                frame.photo_f[2] = limit / exposure0;
+            }
+        }
         if let Some(f) = opts.furnace {
             frame.flags |= FRAME_FURNACE;
             frame.furnace = [f.albedo, f.emission, f.emission / (1.0 - f.albedo), 0.0];
