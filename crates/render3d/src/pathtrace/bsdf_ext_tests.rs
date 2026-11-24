@@ -231,3 +231,59 @@ fn anisotropic_lobe_is_three_times_longer_than_wide() {
     assert!(iso[0] > 0.0 && (iso[0] / iso[1] - 1.0).abs() < 0.05, "an isotropic lobe is round: {iso:?}");
     assert!(an[1] > 0.0 && an[0] >= 3.0 * an[1], "anisotropy 0.8: half-width along the tangent {} vs the bitangent {}", an[0], an[1]);
 }
+
+/// The compensation must work at both very smooth (narrow lobe, high masking) and very rough
+/// (broad lobe) surfaces, not just at roughness 0.3.
+#[test]
+fn aniso_metal_roughness_extremes() {
+    let smooth = GpuMaterial { albedo: [1.0; 3], metallic: 1.0, roughness: 0.01, aniso: 0.8, flags: MAT_EXT, ..Default::default() };
+    let rough = GpuMaterial { albedo: [1.0; 3], metallic: 1.0, roughness: 0.9, aniso: 0.8, flags: MAT_EXT, ..Default::default() };
+    check_furnace("anisotropic metal, smooth", smooth);
+    check_furnace("anisotropic metal, rough", rough);
+}
+
+/// aniso = 0 is the isotropic path (no compensation applied); aniso = 1 is maximum anisotropy
+/// (alpha_t = 1). Both must conserve energy.
+#[test]
+fn aniso_metal_aniso_extremes() {
+    let iso = GpuMaterial { albedo: [1.0; 3], metallic: 1.0, roughness: 0.3, aniso: 0.0, flags: MAT_EXT, ..Default::default() };
+    let mid = GpuMaterial { albedo: [1.0; 3], metallic: 1.0, roughness: 0.3, aniso: 0.5, flags: MAT_EXT, ..Default::default() };
+    let full = GpuMaterial { albedo: [1.0; 3], metallic: 1.0, roughness: 0.3, aniso: 1.0, flags: MAT_EXT, ..Default::default() };
+    check_furnace("isotropic metal (aniso 0)", iso);
+    check_furnace("anisotropic metal, aniso 0.5", mid);
+    check_furnace("anisotropic metal, aniso 1.0", full);
+}
+
+/// A material with both clear coat and anisotropy must still conserve energy: the coat layer
+/// takes its share first, then the anisotropic base lobe is compensated.
+#[test]
+fn aniso_with_coat_conserves_energy() {
+    let mat = GpuMaterial {
+        albedo: [1.0; 3],
+        metallic: 1.0,
+        roughness: 0.3,
+        aniso: 0.8,
+        coat: 1.0,
+        coat_roughness: 0.2,
+        flags: MAT_EXT,
+        ..Default::default()
+    };
+    check_furnace("anisotropic metal with coat", mat);
+}
+
+/// Rotating the anisotropy axis must not change the total reflected energy (the lobe is the
+/// same shape, just oriented differently). Sampling noise allows a small difference.
+#[test]
+fn aniso_rot_preserves_energy() {
+    let rot0 = aniso_metal([1.0; 3], 0.0);
+    let rot90 = aniso_metal([1.0; 3], std::f32::consts::FRAC_PI_2);
+    let m0 = furnace(rot0);
+    let m90 = furnace(rot90);
+    if let (Some(m0), Some(m90)) = (m0, m90) {
+        for k in 0..3 {
+            let diff = (m0[k] - m90[k]).abs();
+            eprintln!("aniso rotation energy difference at NoV {}: {:.4}", NOV[k], diff);
+            assert!(diff < 0.01, "aniso rotation changed energy at NoV {}: {:.4} vs {:.4}", NOV[k], m0[k], m90[k]);
+        }
+    }
+}
