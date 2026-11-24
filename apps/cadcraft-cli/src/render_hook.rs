@@ -54,7 +54,29 @@ static STATE: Mutex<Option<State>> = Mutex::new(None);
 
 /// Install the renderer as the engine's render hook (idempotent: the first call wins).
 pub(crate) fn install() {
-    set_render_hooks(RenderHooks::new(render_one, stats).with_illuminance(illuminance_one));
+    set_render_hooks(RenderHooks::new(render_one, stats).with_illuminance(illuminance_one).with_denoiser_info(denoiser_info));
+}
+
+/// The embedded denoiser weights and whether the learned denoiser can run on the session's
+/// compute device (created on first use, like a path render's).
+fn denoiser_info() -> Result<Value, String> {
+    let mut info = cadcraft_render3d::tza::info();
+    let (available, reason) = {
+        let mut guard = STATE.lock().map_err(|_| "renderer unavailable".to_string())?;
+        let state = ready(&mut guard, &cadcraft_engine::doc::Drawing::new_metric(), (64, 64), None)?;
+        match compute_of(state, false)? {
+            None => (false, "no compute shaders".to_string()),
+            Some(gpu) => match cadcraft_render3d::pathtrace::learned::available(&gpu) {
+                Ok(()) => (true, String::new()),
+                Err(why) => (false, why),
+            },
+        }
+    };
+    if let Some(map) = info.as_object_mut() {
+        map.insert("available".into(), json!(available));
+        map.insert("reason".into(), json!(reason));
+    }
+    Ok(info)
 }
 
 fn stats() -> RenderStats {

@@ -27,7 +27,7 @@ pub mod denoise;
 pub mod device;
 mod edge_table;
 pub mod env;
-mod learned;
+pub mod learned;
 mod lens;
 mod post;
 pub mod rt;
