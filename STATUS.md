@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 10:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 34 of 36 segments merged · 10 of 15 acceptance checks**
 
-11,736 workspace tests passing at the last merge · 1364 segments merged in all · 0 of 15 seats working
+11,736 workspace tests passing at the last merge · 1364 segments merged in all · 0 of 15 seats working · PAUSED
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-24 10:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 10 / 15 | 16.8 h so far · expected done Nov 24 10:52–Nov 24 20:06 UTC |
+| 22 | Photoreal stills | building | 10 / 15 | 17.0 h so far · expected done Nov 24 11:08–Nov 24 20:41 UTC |
 
 ## Phase 22 segments
 
@@ -78,4 +78,4 @@ Updated 2026-11-24 10:15 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1218 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 719 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 719 |
