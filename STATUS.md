@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-24 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 17:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 39 of 41 segments merged · 12 of 15 acceptance checks**
 
@@ -32,7 +32,7 @@ Updated 2026-11-24 17:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 23.8 h so far · expected done Nov 24 18:43–Nov 25 12:34 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 24.0 h so far · expected done Nov 24 19:06–Nov 25 14:25 UTC |
 
 ## Phase 22 segments
 
@@ -65,7 +65,7 @@ Updated 2026-11-24 17:15 UTC. This page and the card in the README are regenerat
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | gate | 1434 |
-| bonsai-b | bonsai2-27b | gate | 1353 |
+| bonsai-b | bonsai2-27b | idle | 1354 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 173 |
@@ -78,4 +78,4 @@ Updated 2026-11-24 17:15 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1227 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 735 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 735 |
