@@ -432,4 +432,35 @@ mod tests {
         assert!(matches!(r, Err(EngineError::BadParams { cmd: _, msg: _ })));
         assert_eq!(s.doc().unwrap().arch.railings.len(), 0);
     }
+
+    #[test]
+    fn railing_accepts_spacing_and_inset_boundaries() {
+        // postSpacing exactly at 0.3 and 3.0 are accepted.
+        let mut s = new_session();
+        let r = s.execute("railing", &json!({"path": simple_path(), "postSpacing": 0.3})).unwrap();
+        assert_eq!(r["postSpacing"], json!(0.3));
+        let r = s.execute("railing", &json!({"path": simple_path(), "postSpacing": 3.0})).unwrap();
+        assert_eq!(r["postSpacing"], json!(3.0));
+        // inset exactly at 0.5 and -0.5 are accepted.
+        let r = s.execute("railing", &json!({"path": simple_path(), "inset": 0.5})).unwrap();
+        assert_eq!(r["inset"], json!(0.5));
+        let r = s.execute("railing", &json!({"path": simple_path(), "inset": -0.5})).unwrap();
+        assert_eq!(r["inset"], json!(-0.5));
+    }
+
+    #[test]
+    fn railing_refuses_nan_spacing_and_inset() {
+        let mut s = new_session();
+        assert!(s.execute("railing", &json!({"path": simple_path(), "postSpacing": f64::NAN})).is_err());
+        assert!(s.execute("railing", &json!({"path": simple_path(), "inset": f64::NAN})).is_err());
+        assert_eq!(s.doc().unwrap().arch.railings.len(), 0);
+    }
+
+    #[test]
+    fn railing_with_minimum_two_points() {
+        let mut s = new_session();
+        let r = s.execute("railing", &json!({"path": [[0.0, 0.0], [1.0, 0.0]]})).unwrap();
+        assert!(r["posts"].as_array().is_some_and(|p| p.len() >= 2));
+        assert_eq!(s.doc().unwrap().arch.railings.len(), 1);
+    }
 }

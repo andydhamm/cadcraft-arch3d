@@ -1618,6 +1618,43 @@ mod tests {
         let o = d.arch.opening(ArchId(0)).expect("o0");
         assert!((o.offset - 7.5).abs() < 1e-6, "world position kept: {}", o.offset);
     }
+
+    #[test]
+    fn window_grille_at_boundary_counts() {
+        let mut s = session_with_wall();
+        // across=12, down=12 (max) are accepted.
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 2.0, "grille": {"across": 12, "down": 12}})).unwrap();
+        assert_eq!(r["openings"][0]["grille"]["across"], json!(12));
+        assert_eq!(r["openings"][0]["grille"]["down"], json!(12));
+        // across=1, down=1 (min) are accepted.
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 4.0, "grille": {"across": 1, "down": 1}})).unwrap();
+        assert_eq!(r["openings"][0]["grille"]["across"], json!(1));
+        assert_eq!(r["openings"][0]["grille"]["down"], json!(1));
+    }
+
+    #[test]
+    fn window_roof_offset_at_boundaries() {
+        let mut s = session_with_wall();
+        // roofOffset exactly at 0 and 1 are accepted.
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 2.0, "roofOffset": 0.0})).unwrap();
+        assert!(r.is_ok());
+        let r = s.execute("window", &json!({"wall": "w0", "offset": 4.0, "roofOffset": 1.0})).unwrap();
+        assert!(r.is_ok());
+        // Just outside the boundaries are refused.
+        assert!(s.execute("window", &json!({"wall": "w0", "offset": 6.0, "roofOffset": -0.001})).is_err());
+        assert!(s.execute("window", &json!({"wall": "w0", "offset": 6.0, "roofOffset": 1.001})).is_err());
+    }
+
+    #[test]
+    fn door_fixed_style_with_hinge_and_swing() {
+        let mut s = session_with_wall();
+        s.execute("door", &json!({"wall": "w0", "offset": 3.0, "width": 0.6, "style": "fixed", "hinge": "right", "swing": "out"})).unwrap();
+        let d = s.doc().unwrap();
+        let o = &d.arch.openings[0];
+        assert_eq!(o.style, "fixed");
+        assert_eq!(o.hinge, Hinge::Right);
+        assert_eq!(o.swing, Swing::Out);
+    }
 }
 
 pub(crate) fn valid_styles(kind: OpeningKind) -> &'static [&'static str] {

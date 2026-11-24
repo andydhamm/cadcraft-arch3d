@@ -597,4 +597,45 @@ mod tests {
         assert_eq!((room.deck_boards, room.deck_height), (Some(30.0), Some(0.9)));
         assert!(room.deck_rails.is_empty());
     }
+
+    #[test]
+    fn deck_accepts_boards_at_boundaries() {
+        // Boards exactly at 360, -360, and 0 are accepted and normalised.
+        let mut s = new_session();
+        let r = s.execute("deck", &with(json!({"boards": 360}))).unwrap();
+        assert_eq!(r["boards"], json!(0.0));
+        let r = s.execute("deck", &with(json!({"boards": -360}))).unwrap();
+        assert_eq!(r["boards"], json!(0.0));
+        let r = s.execute("deck", &with(json!({"boards": 0}))).unwrap();
+        assert_eq!(r["boards"], json!(0.0));
+        // Just outside the boundaries are refused.
+        let mut s2 = new_session();
+        assert!(s2.execute("deck", &with(json!({"boards": 360.1}))).is_err());
+        let mut s3 = new_session();
+        assert!(s3.execute("deck", &with(json!({"boards": -360.1}))).is_err());
+    }
+
+    #[test]
+    fn deck_edit_with_json_number_id() {
+        let mut s = new_session();
+        s.execute("deck", &with(json!({}))).unwrap();
+        let r = s.execute("deck.edit", &json!({"id": 0, "boards": 45})).unwrap();
+        assert_eq!(r["deck"], json!("r0"));
+        assert_eq!(r["boards"], json!(45.0));
+        assert_eq!(s.doc().unwrap().arch.rooms[0].deck_boards, Some(45.0));
+    }
+
+    #[test]
+    fn deck_edit_height_at_boundaries() {
+        let mut s = new_session();
+        s.execute("deck", &with(json!({}))).unwrap();
+        // Height exactly at 0 and 10 are refused (must be strictly between).
+        assert!(s.execute("deck.edit", &json!({"id": "r0", "height": 0.0})).is_err());
+        assert!(s.execute("deck.edit", &json!({"id": "r0", "height": 10.0})).is_err());
+        // Just inside the boundaries are accepted.
+        let r = s.execute("deck.edit", &json!({"id": "r0", "height": 0.001})).unwrap();
+        assert_eq!(r["deckHeight"], json!(0.001));
+        let r = s.execute("deck.edit", &json!({"id": "r0", "height": 9.999})).unwrap();
+        assert_eq!(r["deckHeight"], json!(9.999));
+    }
 }

@@ -1110,4 +1110,37 @@ mod tests {
         let st = &s.doc().unwrap().arch.stairs[0];
         assert_eq!((st.from_level, st.to_level), (0, 1));
     }
+
+    #[test]
+    fn stair_refuses_nan_direction() {
+        let mut s = two_level_session();
+        let r = s.execute("stair", &json!({ "start": [0.0, 0.0], "direction": f64::NAN, "fromLevel": 0, "toLevel": 1 }));
+        assert!(r.is_err());
+        assert_eq!(s.doc().unwrap().arch.stairs.len(), 0);
+    }
+
+    #[test]
+    fn stair_accepts_plan_cut_boundaries() {
+        let mut s = two_level_session();
+        let r = s.execute("stair", &detail_stair(json!({ "planCut": 0.3 }))).unwrap();
+        assert_eq!(r["planCut"], json!(0.3));
+        let mut s2 = two_level_session();
+        let r2 = s2.execute("stair", &detail_stair(json!({ "planCut": 3.0 }))).unwrap();
+        assert_eq!(r2["planCut"], json!(3.0));
+        // Just outside the boundaries are refused.
+        let mut s3 = two_level_session();
+        assert!(s3.execute("stair", &detail_stair(json!({ "planCut": 0.29 }))).is_err());
+        let mut s4 = two_level_session();
+        assert!(s4.execute("stair", &detail_stair(json!({ "planCut": 3.01 }))).is_err());
+    }
+
+    #[test]
+    fn stair_edit_with_json_number_id() {
+        let mut s = two_level_session();
+        s.execute("stair", &detail_stair(json!({}))).unwrap();
+        let r = s.execute("stair.edit", &json!({"id": 0, "stringers": "none"})).unwrap();
+        assert_eq!(r["stair"], json!("s0"));
+        assert_eq!(r["stringers"], json!("none"));
+        assert_eq!(s.doc().unwrap().arch.stairs[0].stringers, Stringers::None);
+    }
 }
