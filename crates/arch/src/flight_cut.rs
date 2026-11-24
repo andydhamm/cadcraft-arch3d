@@ -140,10 +140,10 @@ mod tests {
 
     #[test]
     fn clip_slab_cases() {
-        // d > 0: slab from s=0 to s=1, a=0, d=2, h=1 -> s in [0, 1].
+        // d > 0: a=0, d=2, h=1 -> the slab |2s| <= 1 gives s in [-0.5, 0.5], clipped to [0, 0.5].
         let (mut lo, mut hi) = (0.0f64, 1.0f64);
         assert!(super::clip_slab(0.0, 2.0, 1.0, &mut lo, &mut hi));
-        assert!((lo - 0.0).abs() < 1e-12 && (hi - 1.0).abs() < 1e-12);
+        assert!((lo - 0.0).abs() < 1e-12 && (hi - 0.5).abs() < 1e-12);
         // d < 0: a=2, d=-2, h=1 -> s in [0.5, 1.5], clipped to [0.5, 1.0].
         let (mut lo, mut hi) = (0.0f64, 1.0f64);
         assert!(super::clip_slab(2.0, -2.0, 1.0, &mut lo, &mut hi));

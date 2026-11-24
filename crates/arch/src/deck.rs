@@ -188,13 +188,26 @@ struct Chord {
 /// The chords of the line `u = c` inside the closed polygon `pts` (points are `(u, v)`): even-odd,
 /// half-open at vertices, sorted along `v`. Chords shorter than 1e-9 are dropped.
 fn chords(pts: &[(f64, f64)], c: f64) -> Vec<Chord> {
+    let n = pts.len();
     let mut hits: Vec<(f64, usize)> = Vec::new();
+    // Non-vertex crossings: endpoints strictly on opposite sides of the line.
     for (i, &(u0, v0)) in pts.iter().enumerate() {
-        let Some(&(u1, v1)) = pts.get((i + 1) % pts.len()) else { continue };
-        if (u0 > c) != (u1 > c) {
+        let Some(&(u1, v1)) = pts.get((i + 1) % n) else { continue };
+        if (u0 - c) * (u1 - c) < 0.0 {
             let v = v0 + (c - u0) / (u1 - u0) * (v1 - v0);
             if v.is_finite() {
                 hits.push((v, i));
+            }
+        }
+    }
+    // Vertex crossings: a vertex on the line counts only if the two adjacent edges are on
+    // opposite sides (the line passes through the interior at that vertex).
+    for (i, &(u0, v0)) in pts.iter().enumerate() {
+        if u0 == c {
+            let Some(&(u_prev, _)) = pts.get((i + n - 1) % n) else { continue };
+            let Some(&(u_next, _)) = pts.get((i + 1) % n) else { continue };
+            if (u_prev - c) * (u_next - c) < 0.0 {
+                hits.push((v0, i));
             }
         }
     }
