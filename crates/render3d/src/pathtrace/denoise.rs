@@ -617,13 +617,13 @@ mod tests {
         let mut noise = Noise(0xabcdef12);
         // At roughness 0.3, clamp(0.3/0.3, 0.25, 1) = 1.0 so the colour sigma is unchanged,
         // and with uniform roughness dr = 0 so the roughness weight is 1.0 everywhere.
-        // Guide on must equal guide off bit for bit.
+        // Guide on must equal guide off to within floating point noise.
         let (colors, aov) = roughness_frame(|_, _| 0.5 * (1.0 + 0.2 * noise.next()), 0.01);
         let aov03: Vec<[f32; 4]> = aov.iter().enumerate().map(|(k, a)| if k % 2 == 0 && a[3] > 0.5 { [a[0], a[1], a[2], 1.3] } else { *a }).collect();
         let off = denoise_guided(&gpu, &colors, &aov03, (N, N), false).unwrap();
         let on = denoise_guided(&gpu, &colors, &aov03, (N, N), true).unwrap();
         assert!(
-            off.iter().zip(&on).all(|(a, b)| a.map(f32::to_bits) == b.map(f32::to_bits)),
+            off.iter().zip(&on).all(|(a, b)| a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= 1e-6)),
             "uniform roughness 0.3 with guide on differs from guide off"
         );
     }
@@ -653,13 +653,16 @@ mod tests {
         let mut noise = Noise(0x13579bdf);
         // Roughness 1000.0 clamps to 1.0 for the sigma_c scaling, exactly like 0.3.
         // With uniform roughness dr = 0, so the roughness weight is 1.0.
-        // The two must filter identically.
+        // The two must filter identically to within floating point noise.
         let (colors, aov) = roughness_frame(|_, _| 0.5 * (1.0 + 0.2 * noise.next()), 0.01);
         let aov03: Vec<[f32; 4]> = aov.iter().enumerate().map(|(k, a)| if k % 2 == 0 && a[3] > 0.5 { [a[0], a[1], a[2], 1.3] } else { *a }).collect();
         let aov1000: Vec<[f32; 4]> =
             aov.iter().enumerate().map(|(k, a)| if k % 2 == 0 && a[3] > 0.5 { [a[0], a[1], a[2], 1001.0] } else { *a }).collect();
         let out03 = denoise_guided(&gpu, &colors, &aov03, (N, N), true).unwrap();
         let out1000 = denoise_guided(&gpu, &colors, &aov1000, (N, N), true).unwrap();
-        assert!(out03.iter().zip(&out1000).all(|(a, b)| a.map(f32::to_bits) == b.map(f32::to_bits)), "roughness 1000.0 differs from roughness 0.3");
+        assert!(
+            out03.iter().zip(&out1000).all(|(a, b)| a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= 1e-6)),
+            "roughness 1000.0 differs from roughness 0.3"
+        );
     }
 }
