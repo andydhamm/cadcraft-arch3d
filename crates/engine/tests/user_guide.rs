@@ -250,6 +250,10 @@ fn user_guide_sh_blocks_execute_through_the_engine() {
                         params["path"] = serde_json::Value::String(out_dir.join(path).to_string_lossy().into_owned());
                     }
                 }
+                // The ladder renders through the 3D renderer, which the engine alone does not have; check 09 runs it.
+                if id == "render.ladder" {
+                    continue;
+                }
                 if let Err(error) = session.execute(id, &params) {
                     panic!("sh block {}: user-guide command `{command}` failed: {error:?}", b + 1);
                 }
