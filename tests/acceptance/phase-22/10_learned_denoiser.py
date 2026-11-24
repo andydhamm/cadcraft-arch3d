@@ -47,9 +47,14 @@ if worst > 0.01:
 # (c) the showcase kitchen at 64 spp against 4096 spp.
 SIZE = (320, 200) if BIG else (96, 64)
 k = dict(final='path', bounces=2, exposure={'ev100': 12})
+# The reference is 4096 spp on a GPU and 1024 on the software adapter (operator 2026-11-24): there the 4096 spp frame
+# alone took about 10 of the gate's 15 minutes, and the check timed out on every merge once the denoiser existed, so
+# its real result (the error ratio) never reached the lead. A 1024 spp reference's own noise is far below the 64 spp
+# errors compared against it.
+REF_SPP = 4096 if BIG else 1024
 pr, pf, pl = [os.path.join(tmp, x + '.pfm') for x in ('ref', 'filter', 'learned')]
 cmds = showcase_cmds() + [
-    render_cmd(os.path.join(tmp, 'ref.png'), 'Kitchen', SIZE, spp=4096, seed=99, denoise=False, pfm=pr, **k),
+    render_cmd(os.path.join(tmp, 'ref.png'), 'Kitchen', SIZE, spp=REF_SPP, seed=99, denoise=False, pfm=pr, **k),
     render_cmd(os.path.join(tmp, 'filter.png'), 'Kitchen', SIZE, spp=64, seed=3, denoise='filter', pfm=pf, **k),
     render_cmd(os.path.join(tmp, 'learned.png'), 'Kitchen', SIZE, spp=64, seed=3, denoise='learned', pfm=pl, **k)]
 rc, rows, so, se = run(cmds, expect_ok=False, timeout=14000)

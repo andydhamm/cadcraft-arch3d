@@ -15,7 +15,10 @@
 //! | sheen 1 (white), sheen roughness 0.3 | 0.0346         | 0.0117         | 0.0012         |
 //! | anisotropy 0.8                       | -0.0036        | -0.0001        | 0.0008         |
 //!
-//! (The coat and sheen losses at grazing views are the bilinear table's and the single-scatter
+//! | anisotropic white metal (metallic 1), 0.8 | 0.0060 / 0.0381 | 0.0121 / 0.0340 | 0.0189 / 0.0259 |
+//!
+//! (The metal row is `unrotated / lobe turned 90 degrees`; before the multiple-scattering
+//! compensation it lost about 0.29 at NoV 0.5. The coat and sheen losses at grazing views are the bilinear table's and the single-scatter
 //! lobes' known loss; no case gains energy beyond sampling noise.)
 
 use super::scene_gpu::{GpuFrame, GpuMaterial, GpuProbe, GpuScene, MAT_EXT, PHOTO_MATERIALS};
@@ -131,6 +134,58 @@ fn sheen_furnace_conserves_energy() {
 #[test]
 fn anisotropy_furnace_conserves_energy() {
     check_furnace("anisotropy", GpuMaterial { aniso: 0.8, ..layered(0.3) });
+}
+
+/// A white metal with the anisotropic lobe of the furnace tests, its lobe turned by `rot`.
+fn aniso_metal(albedo: [f32; 3], rot: f32) -> GpuMaterial {
+    GpuMaterial { albedo, metallic: 1.0, roughness: 0.3, aniso: 0.8, aniso_rot: rot, flags: MAT_EXT, ..Default::default() }
+}
+
+/// The per-channel mean weight at each of [`NOV`] for `material`.
+fn furnace_rgb(material: GpuMaterial) -> Option<[[f64; 3]; 3]> {
+    let mut probes = Vec::new();
+    for nov in NOV {
+        for _ in 0..CHUNKS {
+            probes.push(probe(0, view(nov), PER_PROBE));
+        }
+    }
+    let out = run("bsdf_test_main", PHOTO_MATERIALS, vec![material], &probes)?;
+    let mut mean = [[0.0f64; 3]; 3];
+    for (k, m) in mean.iter_mut().enumerate() {
+        for o in &out[k * CHUNKS..(k + 1) * CHUNKS] {
+            for c in 0..3 {
+                m[c] += o[c] as f64 / CHUNKS as f64;
+            }
+        }
+    }
+    Some(mean)
+}
+
+#[test]
+fn anisotropic_metal_furnace_conserves_energy() {
+    // Multiple-scattering compensation: the lobe is rough (alpha_t 0.672) and a metal has no
+    // diffuse to return what masking loses. Rotating the lobe by 90 degrees covers both axes.
+    check_furnace("anisotropic metal", aniso_metal([1.0; 3], 0.0));
+    check_furnace("anisotropic metal, rotated", aniso_metal([1.0; 3], std::f32::consts::FRAC_PI_2));
+}
+
+#[test]
+fn coloured_anisotropic_metal_does_not_gain_energy() {
+    let albedo = [1.0f32, 0.6, 0.2];
+    let Some(mean) = furnace_rgb(aniso_metal(albedo, 0.0)) else {
+        return;
+    };
+    for (k, row) in mean.iter().enumerate() {
+        for (c, m) in row.iter().enumerate() {
+            let f0 = albedo[c] as f64;
+            eprintln!("furnace coloured metal NoV {} channel {c}: mean {m:.4} (f0 {f0})", NOV[k]);
+            // The floor is 0.75 f0, not 0.9: a real surface with f0 = 0.2 returns only f0^2 of
+            // what the second bounce would carry, so the compensation (which is exact at f0 = 1)
+            // leaves a physical loss of up to ~23 % on the darkest channel (measured 0.77 f0 at
+            // NoV 0.9).
+            assert!(*m <= f0 + 0.02 && *m >= 0.75 * f0, "NoV {} channel {c}: mean {m} outside {}..{}", NOV[k], 0.75 * f0, f0 + 0.02);
+        }
+    }
 }
 
 #[test]
