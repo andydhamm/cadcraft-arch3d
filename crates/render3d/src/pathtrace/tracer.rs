@@ -175,9 +175,14 @@ impl PathTracer {
         }
 
         let mut gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+        let mut material_flags = 0;
         if opts.furnace.is_none() {
+            let names = super::scene_gpu::material_names(scene, ground);
+            super::scene_gpu::apply_material_ext(&mut gpu_scene, scene, &names, opts);
+            material_flags = super::scene_gpu::material_photo_flags(opts);
             if let Some(a) = lambert_albedo(lighting, opts) {
                 super::scene_gpu::apply_lambert(&mut gpu_scene, a);
+                material_flags = 0;
             }
         }
         if gpu_scene.tris.len() > MAX_GPU_TRIANGLES {
@@ -257,6 +262,7 @@ impl PathTracer {
             && frame.env[3] & 2 != 0;
         super::lens::fill_frame(&mut frame, lighting, camera, size);
         super::edge_table::fill(&mut gpu_scene, &mut frame, opts);
+        frame.photo[0] |= material_flags;
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
 
         Ok(PathTracer {
