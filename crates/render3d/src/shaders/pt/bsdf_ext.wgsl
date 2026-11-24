@@ -149,24 +149,24 @@ fn coat_pdf(wo: vec3<f32>, wi: vec3<f32>, n: vec3<f32>, NoV: f32) -> f32 {
 // which takes no light sample and no MIS.
 struct BsdfExtLobes {
     // base (anisotropic GGX + diffuse) f*cos, pdf, p_base
-    base_dir: vec3<f32>;
-    base_f: vec3<f32>;
-    base_cos: f32;
-    base_pdf: f32;
-    base_p: f32;
+    base_dir: vec3<f32>,
+    base_f: vec3<f32>,
+    base_cos: f32,
+    base_pdf: f32,
+    base_p: f32,
     // coat
-    coat_dir: vec3<f32>;
-    coat_f: vec3<f32>;
-    coat_cos: f32;
-    coat_pdf: f32;
-    coat_p: f32;
+    coat_dir: vec3<f32>,
+    coat_f: vec3<f32>,
+    coat_cos: f32,
+    coat_pdf: f32,
+    coat_p: f32,
     // sheen
-    sheen_dir: vec3<f32>;
-    sheen_f: vec3<f32>;
-    sheen_cos: f32;
-    sheen_pdf: f32;
-    sheen_p: f32;
-    specular: u32;
+    sheen_dir: vec3<f32>,
+    sheen_f: vec3<f32>,
+    sheen_cos: f32,
+    sheen_pdf: f32,
+    sheen_p: f32,
+    specular: u32
 }
 
 // Sample all three lobes (independent uniform draws), returning them in BsdfExtLobes.
