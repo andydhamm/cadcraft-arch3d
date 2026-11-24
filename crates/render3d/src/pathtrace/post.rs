@@ -362,4 +362,87 @@ mod tests {
         assert_eq!(got[2], expected);
         assert_eq!(got[3], 255);
     }
+
+    #[test]
+    fn keep_converged_empty() {
+        let input: [[f32; 4]; 0] = [];
+        let mut out: Vec<[f32; 4]> = Vec::new();
+        keep_converged(&input, &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn keep_converged_single_pixel_converged() {
+        let input = [[0.5, 0.5, 0.5, 0.0]];
+        let mut out = vec![[0.3, 0.3, 0.3, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0][0], 0.5, "converged single pixel keeps input");
+        assert_eq!(out[0][1], 0.5);
+        assert_eq!(out[0][2], 0.5);
+    }
+
+    #[test]
+    fn keep_converged_mixed_luminance() {
+        // Bright pixel L=1.0, dark pixel L=0.1; mean Lbar=0.55, floor=0.0275
+        // Bright: variance 1e-6, e = 0.001/1.0 = 0.001 < 0.002, keep = 1.0
+        // Dark: variance 1e-7, e = 0.000316/0.1 = 0.00316, keep > 0.9
+        let input = [[1.0, 1.0, 1.0, 0.000001], [0.1, 0.1, 0.1, 0.0000001]];
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0]];
+        keep_converged(&input, &mut out);
+        assert!(out[0][0] > 0.99, "bright converged pixel keeps input: {}", out[0][0]);
+        assert!(out[1][0] > 0.12, "dark converged pixel mostly keeps input: {}", out[1][0]);
+    }
+
+    #[test]
+    fn keep_converged_non_finite_channels() {
+        let input = [[f32::NAN, 1.0, 1.0, 0.0]];
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0], [0.5, 0.5, 0.5, 1.0], "non-finite channel keeps denoised");
+    }
+
+    #[test]
+    fn keep_converged_negative_variance() {
+        let input = [[1.0, 1.0, 1.0, -0.1]];
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0], [0.5, 0.5, 0.5, 1.0], "negative variance keeps denoised");
+    }
+
+    #[test]
+    fn finish_linear_empty() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute adapter");
+            return;
+        };
+        let opts = PathOptions { denoise: false, ..PathOptions::default() };
+        let mut stats = PathStats::default();
+        let out = finish_linear(&gpu, &opts, &Film::default(), (0, 0), &[], || Ok(Vec::new()), 1.0, &mut stats).expect("finish");
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn finish_linear_no_denoise_keeps_linear() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute adapter");
+            return;
+        };
+        let accum = [[2.0, 4.0, 6.0, 2.0]];
+        let opts = PathOptions { denoise: false, keep_linear: Some(LinearStage::Radiance), ..PathOptions::default() };
+        let mut stats = PathStats::default();
+        let out = finish_linear(&gpu, &opts, &Film::default(), (1, 1), &accum, || Ok(Vec::new()), 1.0, &mut stats).expect("finish");
+        assert_eq!(out, vec![[2.0, 4.0, 6.0, 2.0]]);
+        assert!(stats.linear.is_some());
+        assert_eq!(stats.linear.as_ref().unwrap(), &vec![[1.0, 2.0, 3.0]]);
+    }
+
+    #[test]
+    fn film_rgba_zero_exposure() {
+        let accum = vec![[1.0, 1.0, 1.0, 1.0]];
+        let got = film_rgba(&accum, 0.0, crate::exposure::TONE_NONE, &Film::default(), (1, 1));
+        assert_eq!(got[0], 0, "zero exposure is black");
+        assert_eq!(got[1], 0);
+        assert_eq!(got[2], 0);
+        assert_eq!(got[3], 255);
+    }
 }

@@ -1219,4 +1219,24 @@ mod tests {
         finish_reply(&mut non_obj, &req);
         assert_eq!(non_obj, "hello");
     }
+
+    #[test]
+    fn finish_reply_includes_sun_dir_value_when_set() {
+        let d = Drawing::new_metric();
+        let req = RenderRequest::new(&d, None, (8, 8), None, false, SunChoice::Default, "shaded".into(), false, 8, Vec::new())
+            .with_look(Look::default(), Some([0.5, 0.5, 1.0]));
+        let mut reply = json!({});
+        finish_reply(&mut reply, &req);
+        assert_eq!(reply["sunDir"], json!([0.5, 0.5, 1.0]));
+    }
+
+    #[test]
+    fn finish_reply_nulls_absent_optional_fields() {
+        let d = Drawing::new_metric();
+        let req = RenderRequest::new(&d, None, (8, 8), None, false, SunChoice::Default, "shaded".into(), false, 8, Vec::new());
+        let mut reply = json!({});
+        finish_reply(&mut reply, &req);
+        assert_eq!(reply["sunDir"], json!(null));
+        assert_eq!(reply["albedo"], json!(null));
+    }
 }
