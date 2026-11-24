@@ -572,6 +572,7 @@ fn cameras_json(s: &Session) -> Result<Value, EngineError> {
                 "lightSet": c.light_set,
                 "level": c.level,
                 "lowerLevels": c.lower_levels,
+                "look": c.look.as_ref().map_or(Value::Null, super::look::describe_look),
             })
         })
         .collect();

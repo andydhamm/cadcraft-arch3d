@@ -676,7 +676,8 @@ fn describe_camera_kind(k: CameraKind) -> &'static str {
 
 /// A compact JSON description of a camera's pose and look.
 /// Used for the `saved` field; a saved copy always has `saved: None`
-/// so no further nesting occurs.
+/// so no further nesting occurs. Look fields are flattened onto the
+/// top level (e.g. `toneMap`) as well as nested under `look`.
 fn describe_camera(c: &Camera3d) -> Value {
     let mut obj = JsonMap::new();
     obj.insert("name".to_string(), json!(c.name));
@@ -690,7 +691,11 @@ fn describe_camera(c: &Camera3d) -> Value {
     obj.insert("fov".to_string(), json!(c.fov_deg));
     obj.insert("level".to_string(), json!(c.level));
     obj.insert("lowerLevels".to_string(), json!(c.lower_levels));
-    obj.insert("look".to_string(), c.look.as_ref().map_or(Value::Null, super::look::describe_look));
+    let look_json = c.look.as_ref().map_or(Value::Null, super::look::describe_look);
+    obj.insert("look".to_string(), look_json.clone());
+    if let Some(look) = c.look.as_ref() {
+        obj.insert("toneMap".to_string(), json!(super::look::describe_look(look)["toneMap"]));
+    }
     Value::Object(obj)
 }
 
@@ -3808,6 +3813,7 @@ mod tests {
                             shift: 0.25,
                             aperture: Some(2.8),
                             focus: Some(4.0),
+                            ..Default::default()
                         },
                         film: cadcraft_doc::arch::Film {
                             bloom: 0.3,
@@ -3817,8 +3823,16 @@ mod tests {
                             contrast: 1.1,
                             saturation: 0.9,
                             lift: 0.05,
+                            ..Default::default()
                         },
-                        sun: cadcraft_doc::arch::SunLook { on: true, intensity: 100000.0, shadows: true, angle: None, disc: 0.53 },
+                        sun: cadcraft_doc::arch::SunLook {
+                            on: true,
+                            intensity: 100000.0,
+                            shadows: true,
+                            angle: None,
+                            disc: 0.53,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     }),
                     ..Camera3d::default()
