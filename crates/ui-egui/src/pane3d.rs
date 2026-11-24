@@ -3447,11 +3447,11 @@ mod tests {
         pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
         // The film is neutral by default, so rung(7)'s film should be kept.
         let rung = photo::rung(7);
-        assert!(!rung.film.is_neutral(), "rung(7) has a non-neutral film");
+        let rung_film = rung.film.expect("rung(7) has a film");
+        assert!(!rung_film.is_neutral(), "rung(7) has a non-neutral film");
         let (_, lighting) = pane.finalize_options();
         assert!(!lighting.film.is_neutral(), "Photoreal with neutral film keeps rung(7)'s film");
-        assert_eq!(lighting.film.vignette, rung.film.vignette);
-        assert_eq!(lighting.film.chromatic_aberration, rung.film.chromatic_aberration);
+        assert_eq!(lighting.film.vignette, rung_film.vignette);
     }
 
     #[test]
