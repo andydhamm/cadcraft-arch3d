@@ -492,7 +492,10 @@ fn ramp(i: u32, t: u32, first: bool, last: bool) -> f32 {
         w = w.min((i as f32 + 0.5) / OVERLAP as f32);
     }
     let from_end = t - 1 - i;
-    if !last && from_end < OVERLAP {
+    // For a tile that is not first, the boundary pixel (i == OVERLAP) has full weight;
+    // the right ramp starts one pixel later.
+    let right_limit = if first { OVERLAP } else { OVERLAP - 1 };
+    if !last && from_end < right_limit {
         w = w.min((from_end as f32 + 0.5) / OVERLAP as f32);
     }
     w
