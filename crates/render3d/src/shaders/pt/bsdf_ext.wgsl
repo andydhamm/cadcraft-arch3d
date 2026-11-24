@@ -38,8 +38,10 @@ fn ext_albedo(m: Material) -> vec3<f32> {
         let e = bsdf_spec_albedo(f0, rough, 1.0);
         base = m.albedo * (1.0 - metal) * (vec3<f32>(1.0) - e) + f0 * e;
     }
-    let coat: f32 = m.coat > 0.0 ? f0d : 0.0;
-    let shear: f32 = m.sheen_roughness > 0.0 ? ext_sheen_albedo(m) : 0.0;
+    var coat: f32 = 0.0;
+    if (m.coat > 0.0) { coat = f0d; }
+    var shear: f32 = 0.0;
+    if (m.sheen_roughness > 0.0) { shear = ext_sheen_albedo(m); }
     let b = clamp(bsdf_luma(base), 0.0, 1.0);
     let c = clamp(coat, 0.0, 1.0);
     let s = clamp(shear, 0.0, 1.0);
@@ -353,8 +355,33 @@ fn ext_pdf(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> f32 {
     }
     let ab = ext_albedo(m);
     let total = max(ab[0], 0.0) + max(ab[1], 0.0) + max(ab[2], 0.0);
-    let p = total > 0.0 ? (vec3<f32>(0.0) - vec3<f32>(0.0)) : 0.0;
-    // Return the MIS mixture pdf (proportional to the chosen lobe's pdf).
-    // For consistency with ext_sample we return the base pdf weighted by p_base (the dominant).
-    return ext_sample_pdf(m, n, wo, wi);
+    if (total <= 0.0) {
+        return 0.0;
+    }
+    let NoH = max(dot(n, normalize(wo + wi)), 0.0);
+    let metal = clamp(m.metallic, 0.0, 1.0);
+    let rough = clamp(m.roughness, 0.0, 1.0);
+    let a = max(rough * rough, BSDF_MIN_ALPHA);
+    let f0d = BSDF_DIELECTRIC_F0;
+    let f0 = mix(vec3<f32>(f0d), m.albedo, metal);
+    let p_base = ab[0] / total;
+    let base_pdf = ggx_pdf(f0, a, NoV, NoH);
+    var p_coat: f32 = 0.0;
+    var coat_pdf: f32 = 0.0;
+    if (m.coat > 0.0) {
+        let a_c = max(m.coat_roughness * m.coat_roughness, BSDF_MIN_ALPHA);
+        coat_pdf = ggx_pdf(vec3<f32>(0.04), a_c, NoV, NoH);
+        p_coat = ab[1] / total;
+    }
+    var p_sheen: f32 = 0.0;
+    var sheen_pdf: f32 = 0.0;
+    let a_s = max(m.sheen_roughness * m.sheen_roughness, BSDF_MIN_ALPHA);
+    let c = max(m.sheen[0], max(m.sheen[1], m.sheen[2]));
+    if (c > 0.0) {
+        let D = (2.0 + 1.0 / a_s) * pow(NoH, 1.0 / a_s - 1.0) / (2.0 * PT_PI) *
+               (1.0 - NoH) * pow(max(NoH, 1e-6), 1.0 / a_s + 1.0);
+        sheen_pdf = D * (1.0 / (4.0 * NoV));
+        p_sheen = ab[2] / total;
+    }
+    return p_base * base_pdf + p_coat * coat_pdf + p_sheen * sheen_pdf;
 }
