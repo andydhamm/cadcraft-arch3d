@@ -441,4 +441,94 @@ mod tests {
         assert!(l.color[0] > l.color[2]);
         assert_eq!(s.lights[1].color, cadcraft_arch::light::kelvin_to_rgb(6500.0));
     }
+
+    #[test]
+    fn sphere_with_minimum_segments_is_closed() {
+        let o = CalibObject { size: [2.0, 2.0, 2.0], segments: 8, ..Default::default() };
+        let s = scene(&one(o));
+        let m = &s.meshes[0];
+        // Every vertex lies on the unit sphere.
+        for p in &m.positions {
+            let d = (p[0].powi(2) + p[1].powi(2) + p[2].powi(2)).sqrt();
+            assert!((d - 1.0).abs() < 1e-4, "vertex off radius: {d}");
+        }
+        // The mesh is closed: every directed edge appears exactly once.
+        let mut edges: BTreeMap<([i64; 3], [i64; 3]), i32> = BTreeMap::new();
+        for t in m.indices.chunks(3) {
+            let v: Vec<[f32; 3]> = t.iter().map(|i| m.positions[*i as usize]).collect();
+            for k in 0..3 {
+                *edges.entry((key(v[k]), key(v[(k + 1) % 3]))).or_default() += 1;
+            }
+        }
+        for ((a, b), n) in &edges {
+            assert_eq!(*n, 1, "edge {a:?}->{b:?} appears {n} times");
+            assert_eq!(edges.get(&(*b, *a)), Some(&1), "missing reverse edge");
+        }
+    }
+
+    #[test]
+    fn box_with_thin_dimension_has_correct_bounds() {
+        let o = CalibObject { shape: CalibShape::Box, at: [0.0, 0.0, 0.0], size: [2.0, 0.01, 2.0], ..Default::default() };
+        let s = scene(&one(o));
+        let b = &s.bounds;
+        assert!((b.min[0] - (-1.0)).abs() < 1e-9);
+        assert!((b.min[1] - (-0.005)).abs() < 1e-9);
+        assert!((b.min[2] - (-1.0)).abs() < 1e-9);
+        assert!((b.max[0] - 1.0).abs() < 1e-9);
+        assert!((b.max[1] - 0.005).abs() < 1e-9);
+        assert!((b.max[2] - 1.0).abs() < 1e-9);
+        assert_eq!(s.meshes[0].indices.len(), 36);
+    }
+
+    #[test]
+    fn validate_box_size_on_all_axes() {
+        let bad = |f: &dyn Fn(&mut CalibObject)| {
+            let mut o = CalibObject { shape: CalibShape::Box, ..Default::default() };
+            f(&mut o);
+            validate(&one(o)).is_err()
+        };
+        assert!(bad(&|o| o.size[0] = 0.0));
+        assert!(bad(&|o| o.size[1] = 0.0));
+        assert!(bad(&|o| o.size[2] = 0.0));
+        assert!(bad(&|o| o.size[1] = f64::NAN));
+        assert!(bad(&|o| o.size[2] = f64::NAN));
+        assert!(bad(&|o| o.size[1] = MAX_SIZE + 1.0));
+        // A sphere only validates size[0]; size[1] and size[2] are ignored.
+        let mut sphere = CalibObject::default();
+        sphere.size = [1.0, 0.0, 0.0];
+        assert!(validate(&one(sphere)).is_ok());
+    }
+
+    #[test]
+    fn empty_lights_are_valid() {
+        let c = Calibration { objects: vec![CalibObject::default()], lights: vec![] };
+        assert!(validate(&c).is_ok());
+        let s = scene(&c);
+        assert!(s.lights.is_empty());
+    }
+
+    #[test]
+    fn bounds_encompass_multiple_objects() {
+        let a = CalibObject { shape: CalibShape::Box, at: [-2.0, 0.0, 0.0], size: [1.0, 1.0, 1.0], ..Default::default() };
+        let b = CalibObject { shape: CalibShape::Box, at: [2.0, 0.0, 0.0], size: [1.0, 1.0, 1.0], ..Default::default() };
+        let s = scene(&Calibration { objects: vec![a, b], lights: vec![] });
+        assert!((s.bounds.min[0] - (-2.5)).abs() < 1e-9);
+        assert!((s.bounds.max[0] - 2.5).abs() < 1e-9);
+        assert!((s.bounds.min[1] - (-0.5)).abs() < 1e-9);
+        assert!((s.bounds.max[1] - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn light_at_kelvin_boundaries() {
+        let low = CalibLight { kelvin: 1000.0, ..Default::default() };
+        let high = CalibLight { kelvin: 20000.0, ..Default::default() };
+        let base = vec![CalibObject::default()];
+        assert!(validate(&Calibration { objects: base.clone(), lights: vec![low] }).is_ok());
+        assert!(validate(&Calibration { objects: base.clone(), lights: vec![high] }).is_ok());
+        // Just outside the range.
+        let too_low = CalibLight { kelvin: 999.0, ..Default::default() };
+        let too_high = CalibLight { kelvin: 20001.0, ..Default::default() };
+        assert!(validate(&Calibration { objects: base.clone(), lights: vec![too_low] }).is_err());
+        assert!(validate(&Calibration { objects: base, lights: vec![too_high] }).is_err());
+    }
 }

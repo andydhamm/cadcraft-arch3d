@@ -2102,6 +2102,59 @@ mod tests {
     }
 
     #[test]
+    fn gpu_tri_rejects_zero_area_triangles() {
+        // Three collinear points: zero area.
+        let tri = gpu_tri([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], 0, 0, 0);
+        assert!(tri.is_none(), "collinear points should be rejected");
+        // Three coincident points: zero area.
+        let tri = gpu_tri([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]], 0, 0, 0);
+        assert!(tri.is_none(), "coincident points should be rejected");
+        // A valid triangle.
+        let tri = gpu_tri([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], 0, 0, 0);
+        assert!(tri.is_some(), "a valid triangle should be accepted");
+    }
+
+    #[test]
+    fn trace_cpu_t_max_zero_or_negative_misses() {
+        let mut mesh = Mesh::new("wall", ArchId(1));
+        mesh.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        mesh.indices = vec![0, 1, 2];
+        let scene = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let gpu = build_gpu_scene(&scene, false, None);
+        // t_max = 0 should miss.
+        assert!(gpu.trace_cpu([0.5, 0.5, 1.0], [0.0, 0.0, -1.0], 0.0).is_none());
+        // t_max < 0 should miss.
+        assert!(gpu.trace_cpu([0.5, 0.5, 1.0], [0.0, 0.0, -1.0], -1.0).is_none());
+        // t_max just below the hit should miss.
+        assert!(gpu.trace_cpu([0.5, 0.5, 1.0], [0.0, 0.0, -1.0], 0.999).is_none());
+        // t_max just above the hit should hit.
+        assert!(gpu.trace_cpu([0.5, 0.5, 1.0], [0.0, 0.0, -1.0], 1.001).is_some());
+    }
+
+    #[test]
+    fn luminance_rgb_preserves_colour_ratios() {
+        let c = luminance_rgb([2.0, 1.0, 0.5]);
+        // The ratios should be preserved.
+        assert!((c[0] / c[1] - 2.0).abs() < 1e-5, "red/green ratio");
+        assert!((c[1] / c[2] - 2.0).abs() < 1e-5, "green/blue ratio");
+        // The luminance should be 1.
+        let y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        assert!((y - 1.0).abs() < 1e-5, "luminance should be 1");
+    }
+
+    #[test]
+    fn bvh_with_one_triangle_is_a_leaf() {
+        let mut mesh = Mesh::new("wall", ArchId(1));
+        mesh.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        mesh.indices = vec![0, 1, 2];
+        let scene = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let gpu = build_gpu_scene(&scene, false, None);
+        assert_eq!(gpu.tris.len(), 1);
+        assert_eq!(gpu.nodes.len(), 1, "one triangle should produce one node");
+        assert_eq!(gpu.nodes[0].count, 1, "the node should be a leaf with one triangle");
+    }
+
+    #[test]
     fn apply_lambert_makes_every_material_diffuse() {
         let mut scene = GpuScene {
             materials: vec![

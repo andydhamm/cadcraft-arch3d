@@ -3338,4 +3338,22 @@ mod tests {
             vec!["KHR_materials_anisotropy", "KHR_materials_clearcoat", "KHR_materials_sheen", "KHR_materials_transmission", "KHR_materials_volume"];
         assert_eq!(names, expected, "extensionsUsed: {:?}", names);
     }
+
+    #[test]
+    fn node_names_empty_scene() {
+        let scene = Scene3d::default();
+        assert_eq!(node_names(&scene), Vec::<String>::new());
+    }
+
+    #[test]
+    fn node_names_foundation_footings_only() {
+        let scene = p17_scene(&[("footing", 0), ("footing", 0)]);
+        assert_eq!(node_names(&scene), ["footing-fd0-0", "footing-fd0-1"]);
+    }
+
+    #[test]
+    fn node_names_multiple_foundations() {
+        let scene = p17_scene(&[("foundation", 0), ("foundation", 1), ("footing", 0), ("footing", 1)]);
+        assert_eq!(node_names(&scene), ["foundation-fd0-0", "foundation-fd1-0", "footing-fd0-0", "footing-fd1-0"]);
+    }
 }
