@@ -1307,6 +1307,37 @@ mod tests {
         assert!((ground_ceiling(&s) - 2.4).abs() < 1e-12);
     }
 
+    /// A level ceiling edit is not refused for rooms that have their own ceiling height.
+    #[test]
+    fn level_ceiling_guard_skips_rooms_with_own_height() {
+        let mut s = gabled_house();
+        // Give room r0 its own ceiling height (2.45), so the level guard skips it.
+        s.execute("room", &json!({"id": "r0", "ceiling": 2.45})).unwrap();
+        // Now raise the level ceiling to 2.6; it should be accepted because r0 has its own height.
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 2.6})).unwrap();
+        assert!((ground_ceiling(&s) - 2.6).abs() < 1e-12);
+    }
+
+    /// A level ceiling edit is not refused when there are no rooms on the level.
+    #[test]
+    fn level_ceiling_guard_with_no_rooms() {
+        let mut s = Session::new();
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 2.4})).ok();
+        // No rooms on the level; raising the ceiling should be accepted.
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 3.0})).unwrap();
+        let doc = s.doc().unwrap();
+        assert!((doc.arch.levels[0].ceiling_height - 3.0).abs() < 1e-12);
+    }
+
+    /// Raising the level ceiling to exactly the underside is accepted (touching is allowed).
+    #[test]
+    fn level_ceiling_at_underside_is_accepted() {
+        let mut s = gabled_house();
+        // The underside at y = 0.1 is 2.5 m. Raise the level ceiling to exactly 2.5.
+        s.execute("level.edit", &json!({"level": 0, "ceiling": 2.5})).unwrap();
+        assert!((ground_ceiling(&s) - 2.5).abs() < 1e-12);
+    }
+
     #[test]
     fn level_ceiling_lowering_is_never_refused() {
         let mut s = gabled_house();

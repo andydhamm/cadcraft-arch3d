@@ -253,6 +253,29 @@ mod tests {
         assert!(apply(&input(&vault, 0), Vec::new()).is_empty());
     }
 
+    /// A vaulted room under a flat roof plane (slope 0) builds a flat ceiling at the underside.
+    #[test]
+    fn vault_with_flat_roof_plane() {
+        let mut m = house(None);
+        m.rooms[0].flat_ceiling = false;
+        m.push_roof(Roof {
+            planes: vec![RoofPlane {
+                ring: rect(-1.0, -1.0, 11.0, 9.0),
+                slope: 0.0,
+                base_edge: [-1.0, -1.0, 11.0, -1.0],
+                eave_z: 3.5,
+                ..RoofPlane::default()
+            }],
+            ..Roof::default()
+        });
+        let i = input(&m, 0);
+        let pieces = rough_pieces(&i);
+        for piece in &pieces {
+            assert!(piece.plane.is_flat(), "piece should be flat");
+            assert!((piece.plane.c - 3.5).abs() < 1e-9, "piece at {}", piece.plane.c);
+        }
+    }
+
     #[test]
     fn vault_survives_hostile_roofs() {
         let mut m = house(Some(6.0));
