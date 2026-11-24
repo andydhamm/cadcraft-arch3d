@@ -281,7 +281,7 @@ fn env_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>, r: ptr<fun
     if (!(light_luminance(f) > 0.0)) {
         return vec3<f32>(0.0);
     }
-    let o = p + n * PT_EPS;
+    let o = p + trans_shadow_normal(m, n, wo, s.dir) * PT_EPS;
     let v = visibility(o, s.dir, 1.0e6);
     if (!(light_luminance(v) > 0.0)) {
         return vec3<f32>(0.0);
@@ -342,7 +342,7 @@ fn moon_direct(m: Material, p: vec3<f32>, n: vec3<f32>, wo: vec3<f32>) -> vec3<f
     if (!(light_luminance(f) > 0.0)) {
         return vec3<f32>(0.0);
     }
-    let v = visibility(p + n * PT_EPS, d, 1.0e6);
+    let v = visibility(p + trans_shadow_normal(m, n, wo, d) * PT_EPS, d, 1.0e6);
     if (!(light_luminance(v) > 0.0)) {
         return vec3<f32>(0.0);
     }
