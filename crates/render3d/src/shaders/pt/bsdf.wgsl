@@ -216,6 +216,12 @@ fn bsdf_sample_glass(m: Material, n: vec3<f32>, wo: vec3<f32>, u: f32) -> BsdfSa
 // Sample an incoming direction at a surface with unit shading normal n (facing wo), the unit
 // direction toward the viewer wo, and three uniform numbers u.
 fn bsdf_sample(m: Material, n: vec3<f32>, wo: vec3<f32>, u: vec3<f32>) -> BsdfSample {
+    if (trans_active(m)) {
+        return trans_sample(m, n, wo, u);
+    }
+    if (ext_active(m)) {
+        return ext_sample(m, n, wo, u);
+    }
     if ((m.flags & MAT_GLASS) != 0u) {
         return bsdf_sample_glass(m, n, wo, u.x);
     }
@@ -276,6 +282,12 @@ fn bsdf_sample(m: Material, n: vec3<f32>, wo: vec3<f32>, u: vec3<f32>) -> BsdfSa
 // f · cos for the pair (wo, wi) at n (0 below the surface). A delta lobe (mirror, glass) is not
 // in it.
 fn bsdf_eval(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> vec3<f32> {
+    if (trans_active(m)) {
+        return trans_eval(m, n, wo, wi);
+    }
+    if (ext_active(m)) {
+        return ext_eval(m, n, wo, wi);
+    }
     if ((m.flags & MAT_GLASS) != 0u) {
         return vec3<f32>(0.0);
     }
@@ -294,6 +306,12 @@ fn bsdf_eval(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> vec3<f3
 
 // The pdf bsdf_sample gives wi (the mixture of the lobes; a delta lobe has none).
 fn bsdf_pdf(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> f32 {
+    if (trans_active(m)) {
+        return trans_pdf(m, n, wo, wi);
+    }
+    if (ext_active(m)) {
+        return ext_pdf(m, n, wo, wi);
+    }
     if ((m.flags & MAT_GLASS) != 0u) {
         return 0.0;
     }

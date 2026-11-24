@@ -114,10 +114,19 @@ const TABLE: &[(Matcher, MaterialExt)] = &[
     // Glazing: today's glass alpha is 0.35, so transmission 0.65.
     (|n| n == "glass-wall", MaterialExt { transmission: 0.65, thickness: 0.01, edge_radius: Some(0.0), ..OFF }),
     (|n| n.starts_with("glass"), MaterialExt { transmission: 0.65, thickness: 0.006, edge_radius: Some(0.0), ..OFF }),
-    // Stainless steel appliances.
+    // Stainless steel appliances: brushed-steel anisotropy plus a soft sheen.
     (
         |n| matches!(n, "fixture-range" | "fixture-refrigerator" | "fixture-dishwasher") || n.contains("stainless"),
-        MaterialExt { anisotropy: 0.6, metallic: Some(1.0), roughness: Some(0.35), variation_scale: 0.4, variation_amount: 0.15, ..OFF },
+        MaterialExt {
+            anisotropy: 0.6,
+            sheen: [0.3; 3],
+            sheen_roughness: 0.35,
+            metallic: Some(1.0),
+            roughness: Some(0.35),
+            variation_scale: 0.4,
+            variation_amount: 0.15,
+            ..OFF
+        },
     ),
     // Quartz and tile.
     (

@@ -47,7 +47,22 @@ pub struct PathTracer {
     backdrop: Option<Backdrop>,
     /// The image an image backdrop shows, under its `Scene3d.textures` key (`item:<id>`); empty otherwise.
     backdrop_images: BTreeMap<String, ImageRgba>,
+    /// The film the look asks for (applied by `post::finish_linear`; neutral = none).
+    film: cadcraft_doc::arch::Film,
+    /// Decides which pixels still need samples and whether the still may stop early.
+    adaptive: super::adaptive::Adaptive,
+    /// When the still started (the `time_budget` and `stats.seconds`).
+    started: std::time::Instant,
+    /// A stop reason ended the sampling before `opts.spp`: the next step finishes.
+    stopped: bool,
 }
+
+// The accumulator's layout (`n = width · height`; kernel.wgsl documents the same):
+//   accum[i]     = (radiance sum r, g, b; sample count)
+//   accum[n + i] = (luminance-squared sum, hit count, clamp-loss luminance sum, adaptive state:
+//                   0 active, 1 converged)
+//   aov[2i]      = (first-hit albedo; w = 0 on a miss, 1 + the first hit's roughness on a hit)
+//   aov[2i + 1]  = (first-hit normal; distance)
 
 impl PathTracer {
     pub(crate) fn variance_of_mean(px: [f32; 4], sum_sq: f32) -> f32 {
@@ -240,6 +255,8 @@ impl PathTracer {
         let env_visible = lighting.environment.as_ref().is_some_and(|e| e.visible && e.is_valid())
             && frame.flags & super::scene_gpu::FRAME_ENV != 0
             && frame.env[3] & 2 != 0;
+        super::lens::fill_frame(&mut frame, lighting, camera, size);
+        super::edge_table::fill(&mut gpu_scene, &mut frame, opts);
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
 
         Ok(PathTracer {
@@ -265,6 +282,10 @@ impl PathTracer {
             snapshot_idx: 0,
             backdrop: scene.backdrop.clone(),
             backdrop_images: crate::backdrop::image_textures(scene.backdrop.as_ref(), &scene.textures),
+            film: lighting.film.clone(),
+            adaptive: super::adaptive::Adaptive::new(opts, size),
+            started: std::time::Instant::now(),
+            stopped: false,
         })
     }
 
@@ -280,7 +301,7 @@ impl PathTracer {
         }
 
         let remaining = self.opts.spp - self.spp_done;
-        if remaining == 0 {
+        if remaining == 0 || self.stopped {
             return self.finish(gpu);
         }
         let this_pass = remaining.min(self.opts.spp_per_step);
@@ -362,6 +383,8 @@ impl PathTracer {
 
         self.spp_done += this_pass;
         self.stats.spp_done = self.spp_done;
+        self.adaptive.stats(self.spp_done, &mut self.stats);
+        self.stats.seconds = self.started.elapsed().as_secs_f32();
 
         // Check for a snapshot at this spp.
         if self.snapshot_idx < self.opts.snapshots.len() && self.spp_done >= self.opts.snapshots[self.snapshot_idx] {
@@ -373,7 +396,19 @@ impl PathTracer {
             self.snapshot_idx += 1;
         }
 
-        let progress = self.spp_done as f32 / self.opts.spp as f32;
+        // Between passes: the adaptive sampler may end the still, and so may the time budget.
+        if self.spp_done < self.opts.spp {
+            let mut stop = self.adaptive.after_pass(gpu, &self.accum, &self.aov);
+            if stop.is_none() && self.opts.time_budget.is_some_and(|b| b.is_finite() && self.stats.seconds >= b) {
+                stop = Some(super::StopReason::TimeBudget);
+            }
+            if let Some(reason) = stop {
+                self.stats.stop = reason;
+                self.stopped = true;
+            }
+        }
+
+        let progress = if self.stopped { 1.0 } else { self.spp_done as f32 / self.opts.spp as f32 };
         self.status = PathStatus::Running { progress, spp: self.spp_done };
 
         if self.spp_done >= self.opts.spp {
@@ -481,34 +516,32 @@ impl PathTracer {
         let mean = if pixels > 0 { (sum / pixels as f64) as f32 } else { 0.0 };
         self.stats.radiance = Some(super::RadianceStats { min, max, mean, ..Default::default() });
 
-        // Denoise if requested.
-        let final_accum = if self.opts.denoise {
-            let aov_data = match self.read_buffer(gpu, &self.aov, aov_bytes) {
-                Ok(d) => d,
-                Err(e) => {
-                    self.status = PathStatus::Failed(format!("read aov: {e}"));
-                    return self.status.clone();
-                }
-            };
-            let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
-            let colors: Vec<[f32; 4]> = colors_accum
-                .iter()
-                .enumerate()
-                .map(|(i, p)| {
-                    let [r, g, b] = mean_of(p);
-                    let variance = Self::variance_of_mean(*p, accum[pixels + i][0]);
-                    [r, g, b, variance]
-                })
-                .collect();
-            match super::denoise::denoise(gpu, &colors, &aov, self.size) {
-                Ok(denoised) => denoised,
-                Err(e) => {
-                    self.status = PathStatus::Failed(format!("denoise: {e}"));
-                    return self.status.clone();
-                }
+        // The firefly clamp's share: what it removed over what it removed plus what was kept.
+        let loss: f64 = accum[pixels..].iter().map(|p| f64::from(p[2])).filter(|v| v.is_finite()).sum();
+        let kept: f64 = colors_accum.iter().map(|p| f64::from(super::luminance([p[0], p[1], p[2]]))).filter(|v| v.is_finite()).sum();
+        self.stats.clamp_loss = if loss > 0.0 && kept + loss > 0.0 { (loss / (kept + loss)) as f32 } else { 0.0 };
+
+        // Denoise as the options ask (`post`); a neutral film keeps the plain resolve below.
+        let mut stats = self.stats.clone();
+        let result = super::post::finish_linear(
+            gpu,
+            &self.opts,
+            &self.film,
+            self.size,
+            &accum,
+            || {
+                let data = self.read_buffer(gpu, &self.aov, aov_bytes)?;
+                Ok(bytemuck::cast_slice::<u8, [f32; 4]>(&data).to_vec())
+            },
+            &mut stats,
+        );
+        self.stats = stats;
+        let final_accum = match result {
+            Ok(c) => c,
+            Err(e) => {
+                self.status = PathStatus::Failed(e);
+                return self.status.clone();
             }
-        } else {
-            colors_accum.to_vec()
         };
 
         // Write denoised result back into the first half of accum so resolve reads it.
@@ -522,7 +555,6 @@ impl PathTracer {
         enc.copy_buffer_to_buffer(&src, 0, &self.accum, 0, (pixels * 16) as u64);
         gpu.queue.submit([enc.finish()]);
 
-        self.stats.denoised = self.opts.denoise;
         self.exposure = self.auto_exposure(gpu);
         self.stats.exposure = self.exposure;
 
@@ -1564,6 +1596,71 @@ mod tests {
                 PathStatus::Failed(e) => panic!("failed: {e}"),
             }
         }
+    }
+
+    /// A fixed-seed image, with `photo` flags forced on the frame after the tracer is built.
+    fn seeded_image(gpu: &ComputeGpu, photo: u32) -> (Vec<u8>, PathStats) {
+        let opts = PathOptions { spp: 8, spp_per_step: 4, seed: 7, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(gpu, &scene(), &camera(), &Lighting::default(), false, (16, 16), &opts, None).unwrap();
+        t.frame.photo[0] |= photo;
+        loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => return (rgba, t.stats()),
+                other => panic!("unexpected: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn inert_hooks_keep_a_fixed_seed_image() {
+        use super::super::scene_gpu::*;
+        let Some(gpu) = compute() else { return };
+        let (plain, stats) = seeded_image(&gpu, 0);
+        assert_eq!(stats.clamp_loss, 0.0, "nothing is clamped");
+        // Every flag on a stub changes nothing; adaptive sampling's own-count index equals the uniform one.
+        let all =
+            PHOTO_PANINI | PHOTO_DOF | PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_SUN_DISC | PHOTO_CLAMP | PHOTO_ADAPTIVE | PHOTO_SHIFT;
+        let (flagged, _) = seeded_image(&gpu, all);
+        assert_eq!(plain, flagged, "the hook stubs draw no random number and change no arithmetic");
+        let (again, _) = seeded_image(&gpu, 0);
+        assert_eq!(plain, again, "the same seed gives the same image");
+    }
+
+    #[test]
+    fn uniform_render_reports_spp_stats_and_stop_samples() {
+        let Some(gpu) = compute() else { return };
+        let opts = PathOptions { spp: 8, spp_per_step: 4, denoise: false, ..Default::default() };
+        let (_, stats) = render_to_rgba_stats(&gpu, &opts);
+        assert_eq!(stats.stop, super::super::StopReason::Samples);
+        assert_eq!((stats.spp_done, stats.spp_min, stats.spp_max), (8, 8, 8));
+        assert_eq!(stats.spp_mean, 8.0);
+        assert_eq!(stats.samples_total, 16 * 16 * 8);
+        assert!(stats.seconds >= 0.0 && stats.seconds.is_finite());
+        assert_eq!(stats.clamp_loss, 0.0);
+        // A time budget already spent stops after the first pass, and says so.
+        let spent = PathOptions { spp: 64, spp_per_step: 4, time_budget: Some(0.0), denoise: false, ..Default::default() };
+        let (_, stats) = render_to_rgba_stats(&gpu, &spent);
+        assert_eq!(stats.stop, super::super::StopReason::TimeBudget);
+        assert_eq!((stats.spp_done, stats.spp_min, stats.spp_max), (4, 4, 4));
+        assert_eq!(stats.samples_total, 16 * 16 * 4);
+    }
+
+    #[test]
+    fn learned_request_falls_back_to_the_filter_and_says_so() {
+        use cadcraft_doc::arch::DenoiseMode;
+        let Some(gpu) = compute() else { return };
+        let learned = PathOptions { spp: 4, denoise: true, denoise_mode: DenoiseMode::Learned, ..Default::default() };
+        let (_, stats) = render_to_rgba_stats(&gpu, &learned);
+        assert_eq!(stats.denoiser, DenoiseMode::Filter);
+        assert!(stats.denoised);
+        assert_eq!(stats.denoise_fallback.as_deref(), Some("the learned denoiser is not available yet"));
+        let filter = PathOptions { denoise_mode: DenoiseMode::Filter, ..learned.clone() };
+        let (_, stats) = render_to_rgba_stats(&gpu, &filter);
+        assert_eq!((stats.denoiser, stats.denoise_fallback), (DenoiseMode::Filter, None));
+        let none = PathOptions { denoise_mode: DenoiseMode::None, ..learned };
+        let (_, stats) = render_to_rgba_stats(&gpu, &none);
+        assert_eq!((stats.denoiser, stats.denoised, stats.denoise_fallback), (DenoiseMode::None, false, None));
     }
 
     fn mean_luminance(rgba: &[u8], w: u32, h: u32) -> f32 {
