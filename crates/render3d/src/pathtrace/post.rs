@@ -97,7 +97,12 @@ pub(super) fn finish_linear(
         }
         return Ok(sums.to_vec());
     }
-    let aov = aov().map_err(|e| format!("read aov: {e}"))?;
+    let mut aov = aov().map_err(|e| format!("read aov: {e}"))?;
+    let counts: Vec<f32> = sums.iter().map(|p| p[3]).collect();
+    if opts.denoise_mode == DenoiseMode::Learned {
+        // The kernel summed the guides over the samples (`PHOTO_AOV_MEAN`).
+        mean_guides(&mut aov, &counts);
+    }
     let colors: Vec<[f32; 4]> = sums
         .iter()
         .enumerate()
@@ -121,7 +126,7 @@ pub(super) fn finish_linear(
     };
     let (out, used) = match learned {
         Some(mut out) => {
-            keep_converged(&colors, &mut out);
+            keep_consistent(&colors, &counts, size, &mut out);
             (out, DenoiseMode::Learned)
         }
         None => (
@@ -140,24 +145,13 @@ pub(super) fn finish_linear(
 
 /// After a learned denoise: a pixel whose standard error is already small keeps its own value.
 ///
-/// `input` holds `[mean r, g, b, variance of the mean of the luminance]` per pixel, `denoised` the
-/// network's answer for the same pixels. With `e = sqrt(variance) / max(L, 0.05 * Lbar, 1e-6)` (the
-/// relative error of design decision 79; `L` the pixel's mean luminance, `Lbar` the frame's mean) the
-/// result is `keep * input + (1 - keep) * denoised` per channel, `keep = 1 - smoothstep(0.002, 0.01, e)`.
-/// A pixel under 0.2 % error is more exact than the 1 % the network may move it; one at 1 % or more is
-/// the network's answer unchanged. Non-finite input or variance counts as `e = infinity`.
+/// The fixed 0.2 % .. 1 % blend that [`keep_consistent`] generalises (kept for its tests). With
+/// `e = sqrt(variance) / max(L, 0.05 * Lbar, 1e-6)` the result is `keep * input + (1 - keep) * denoised`
+/// per channel, `keep = 1 - smoothstep(0.002, 0.01, e)`. Non-finite input or variance counts as `e = infinity`.
+#[allow(dead_code)]
 pub(super) fn keep_converged(input: &[[f32; 4]], denoised: &mut [[f32; 4]]) {
     let lum = |p: &[f32; 4]| super::luminance([p[0], p[1], p[2]]);
-    let (mut sum, mut count) = (0.0_f64, 0usize);
-    for p in input {
-        let l = lum(p);
-        if l.is_finite() {
-            sum += f64::from(l);
-            count += 1;
-        }
-    }
-    let mean = if count == 0 { 0.0 } else { (sum / count as f64) as f32 };
-    let floor = (0.05 * mean).max(1e-6);
+    let floor = luminance_floor(input);
     for (inp, out) in input.iter().zip(denoised.iter_mut()) {
         let l = lum(inp);
         let var = inp[3];
@@ -176,10 +170,152 @@ pub(super) fn keep_converged(input: &[[f32; 4]], denoised: &mut [[f32; 4]]) {
     }
 }
 
+/// Divide the guides' sums by the pixel's sample count (`PHOTO_AOV_MEAN`): albedo and normal become
+/// means over the pixel's samples (a miss added zero), the normal is renormalised when its length is
+/// above 1e-6. `aov` holds two entries a pixel; `counts` one count per pixel (at least 1 is used).
+pub(super) fn mean_guides(aov: &mut [[f32; 4]], counts: &[f32]) {
+    for (pair, &count) in aov.chunks_exact_mut(2).zip(counts) {
+        let n = if count.is_finite() { count.max(1.0) } else { 1.0 };
+        if let [a, nrm] = pair {
+            for c in &mut a[..3] {
+                *c /= n;
+            }
+            for c in &mut nrm[..3] {
+                *c /= n;
+            }
+            let len = (nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]).sqrt();
+            if len.is_finite() && len > 1e-6 {
+                for c in &mut nrm[..3] {
+                    *c /= len;
+                }
+            }
+        }
+    }
+}
+
+/// The frame's luminance floor: 5 % of the mean luminance over the finite pixels (never 0).
+fn luminance_floor(input: &[[f32; 4]]) -> f32 {
+    let (mut sum, mut count) = (0.0_f64, 0usize);
+    for p in input {
+        let l = super::luminance([p[0], p[1], p[2]]);
+        if l.is_finite() {
+            sum += f64::from(l);
+            count += 1;
+        }
+    }
+    let mean = if count == 0 { 0.0 } else { (sum / count as f64) as f32 };
+    (0.05 * mean).max(1e-6)
+}
+
+/// The robust standard error of each pixel's mean luminance (design decision 79's relative error with
+/// the neighbourhood's say): `max(s, sqrt(rho / n) * max(L, floor))`, where `s` is the pixel's own
+/// standard error (`colors[i][3]` is its variance), `n` its sample count and `rho` the relative per-sample
+/// variance pooled over the 5 x 5 window: the sum of `n * variance` over the sum of `max(L, floor)^2`.
+/// A pixel that happens to have seen no bright sample still gets the error its neighbours show.
+/// Non-finite or negative values count as 0 in the pools; a pixel with non-finite colour gets infinity.
+/// Empty when `colors` or `counts` do not match `size`.
+fn robust_sigma(colors: &[[f32; 4]], counts: &[f32], size: (u32, u32)) -> Vec<f32> {
+    let (w, h) = (size.0 as usize, size.1 as usize);
+    let Some(pixels) = w.checked_mul(h) else { return Vec::new() };
+    if colors.len() != pixels || counts.len() != pixels {
+        return Vec::new();
+    }
+    let floor = luminance_floor(colors);
+    let n_of = |i: usize| counts.get(i).copied().filter(|n| n.is_finite()).map_or(1.0, |n| n.max(1.0));
+    // Per-pixel pooled terms: n * variance of the mean, and the floored luminance squared.
+    let mut var = vec![0.0_f64; pixels];
+    let mut den = vec![0.0_f64; pixels];
+    let mut lum = vec![f32::NAN; pixels];
+    for (i, p) in colors.iter().enumerate() {
+        let l = super::luminance([p[0], p[1], p[2]]);
+        if let (Some(v), Some(d), Some(lm)) = (var.get_mut(i), den.get_mut(i), lum.get_mut(i)) {
+            *lm = l;
+            if l.is_finite() && p[3].is_finite() && p[3] >= 0.0 {
+                *v = f64::from(p[3]) * f64::from(n_of(i));
+                let f = f64::from(l.max(floor));
+                *d = f * f;
+            }
+        }
+    }
+    let mut out = vec![f32::INFINITY; pixels];
+    for y in 0..h {
+        for x in 0..w {
+            let i = y * w + x;
+            let (mut sv, mut sd) = (0.0_f64, 0.0_f64);
+            for yy in y.saturating_sub(2)..(y + 3).min(h) {
+                for xx in x.saturating_sub(2)..(x + 3).min(w) {
+                    let j = yy * w + xx;
+                    sv += var.get(j).copied().unwrap_or(0.0);
+                    sd += den.get(j).copied().unwrap_or(0.0);
+                }
+            }
+            let l = lum.get(i).copied().unwrap_or(f32::NAN);
+            let own = colors.get(i).map_or(f32::NAN, |p| p[3]);
+            if !l.is_finite() || !own.is_finite() || own < 0.0 {
+                continue;
+            }
+            let rho = if sd > 0.0 { sv / sd } else { 0.0 };
+            let pooled = (rho / f64::from(n_of(i))).sqrt() * f64::from(l.max(floor));
+            if let Some(o) = out.get_mut(i) {
+                *o = (own.sqrt()).max(pooled as f32);
+            }
+        }
+    }
+    out
+}
+
+/// Lever of the learned denoiser: each pixel's answer is pulled into the interval its own samples allow.
+///
+/// `input` holds `[mean r, g, b, variance of the mean of the luminance]` per pixel, `counts` the
+/// samples behind each, `denoised` the network's answer. With `s_r` the [`robust_sigma`] a pixel's
+/// network colour is scaled so its luminance lies in `[L - 2 s_r, L + 2 s_r]` (hue from the network; the
+/// input colour when the network's luminance is not positive). A pixel with `s_r` under 0.2 % of
+/// `max(L, floor)` is converged and keeps its input exactly (the flat frame must not move). A pixel
+/// with non-finite input keeps the network's answer. This is the general rule the old fixed
+/// 0.2 % .. 1 % blend of `keep_converged` was a special case of.
+pub(super) fn keep_consistent(input: &[[f32; 4]], counts: &[f32], size: (u32, u32), denoised: &mut [[f32; 4]]) {
+    const K: f32 = 2.0;
+    let sigma = robust_sigma(input, counts, size);
+    if sigma.len() != input.len() {
+        return;
+    }
+    let floor = luminance_floor(input);
+    for ((inp, out), &s) in input.iter().zip(denoised.iter_mut()).zip(&sigma) {
+        let l = super::luminance([inp[0], inp[1], inp[2]]);
+        if !l.is_finite() || !s.is_finite() {
+            continue;
+        }
+        if s < 0.002 * l.max(floor) {
+            out[..3].copy_from_slice(&inp[..3]);
+            continue;
+        }
+        let ld = super::luminance([out[0], out[1], out[2]]);
+        let (lo, hi) = ((l - K * s).max(0.0), l + K * s);
+        let from_net = ld.is_finite() && ld > 0.0;
+        let (base, lb) = if from_net { ([out[0], out[1], out[2]], ld) } else { ([inp[0], inp[1], inp[2]], l) };
+        if !(lb > 0.0) {
+            continue;
+        }
+        let scale = lb.clamp(lo, hi) / lb;
+        if from_net && scale == 1.0 {
+            continue;
+        }
+        for (o, b) in out[..3].iter_mut().zip(base) {
+            *o = b * scale;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use cadcraft_doc::arch::Film;
+
+    /// A `w x h` frame of pixels with luminance 1 (grey), sample count `n` and per-sample variance
+    /// `v` (so the variance of the mean is `v / n`).
+    fn grey_frame(w: u32, h: u32, n: f32, v: f32) -> (Vec<[f32; 4]>, Vec<f32>) {
+        (vec![[1.0, 1.0, 1.0, v / n]; (w * h) as usize], vec![n; (w * h) as usize])
+    }
 
     #[test]
     fn keep_converged_blends_by_relative_error() {
@@ -191,6 +327,115 @@ mod tests {
         assert_eq!(out[1], [0.5, 0.5, 0.5, 0.0], "e = 5 % keeps the denoised value");
         assert!(out[2][0] > 0.5 && out[2][0] < 1.0, "e = 0.6 % is in between: {}", out[2][0]);
         assert_eq!(out[3], [0.5, 0.5, 0.5, 0.0], "NaN variance keeps the denoised value");
+    }
+
+    #[test]
+    fn keep_converged_empty() {
+        let input: [[f32; 4]; 0] = [];
+        let mut out: Vec<[f32; 4]> = Vec::new();
+        keep_converged(&input, &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn keep_converged_single_pixel_converged() {
+        let input = [[0.5, 0.5, 0.5, 0.0]];
+        let mut out = vec![[0.3, 0.3, 0.3, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0][0], 0.5, "converged single pixel keeps input");
+        assert_eq!(out[0][1], 0.5);
+        assert_eq!(out[0][2], 0.5);
+    }
+
+    #[test]
+    fn keep_converged_mixed_luminance() {
+        let input = [[1.0, 1.0, 1.0, 0.000001], [0.1, 0.1, 0.1, 0.0000001]];
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0]];
+        keep_converged(&input, &mut out);
+        assert!(out[0][0] > 0.99, "bright converged pixel keeps input: {}", out[0][0]);
+        assert!(out[1][0] > 0.12, "dark converged pixel mostly keeps input: {}", out[1][0]);
+    }
+
+    #[test]
+    fn keep_converged_non_finite_channels() {
+        let input = [[f32::NAN, 1.0, 1.0, 0.0]];
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0], [0.5, 0.5, 0.5, 1.0], "non-finite channel keeps denoised");
+    }
+
+    #[test]
+    fn keep_converged_negative_variance() {
+        let input = [[1.0, 1.0, 1.0, -0.1]];
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0], [0.5, 0.5, 0.5, 1.0], "negative variance keeps denoised");
+    }
+
+    #[test]
+    fn keep_converged_smoothstep_boundaries() {
+        let input = [[1.0, 1.0, 1.0, 0.002 * 0.002], [1.0, 1.0, 1.0, 0.01 * 0.01]];
+        let mut out = vec![[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0][0], 1.0, "e = 0.2 % keeps the input");
+        assert_eq!(out[1][0], 0.0, "e = 1 % keeps the denoised value");
+    }
+
+    #[test]
+    fn robust_sigma_sees_the_neighbourhood() {
+        // 3 x 3 pixels, all luminance 1 (floor 0.05), 4 samples each. The eight outer pixels have a
+        // per-sample variance of 0.36 (variance of the mean 0.09), the centre pixel has none.
+        let mut colors = vec![[1.0, 1.0, 1.0, 0.09]; 9];
+        colors[4][3] = 0.0;
+        let counts = vec![4.0; 9];
+        let sigma = robust_sigma(&colors, &counts, (3, 3));
+        // The centre's 5 x 5 window is the whole frame: rho = 8 * 0.36 / 9 = 0.32 and
+        // s_r = sqrt(0.32 / 4) * max(1, 0.05) = 0.28284.
+        assert!((sigma[4] - 0.282_842_7).abs() < 1e-5, "{}", sigma[4]);
+        // A noisy pixel keeps at least its own error 0.3.
+        assert!(sigma[0] >= 0.3 - 1e-6, "{}", sigma[0]);
+        assert!(robust_sigma(&colors, &counts[..4], (3, 3)).is_empty(), "short counts give nothing");
+        assert!(robust_sigma(&[], &[], (0, 0)).is_empty());
+    }
+
+    #[test]
+    fn consistent_output_stays_within_the_sample_interval() {
+        // 5 x 5, luminance 1, 16 samples, per-sample variance 0.16: s = s_r = 0.1.
+        let (mut input, counts) = grey_frame(5, 5, 16.0, 0.16);
+        let mut out = vec![[5.0, 2.5, 0.0, 1.0]; 25]; // luminance 2.5 + 3.58 > 1.2: pulled down
+        keep_consistent(&input, &counts, (5, 5), &mut out);
+        let l0 = super::super::luminance([5.0, 2.5, 0.0]);
+        for p in &out {
+            let l = super::super::luminance([p[0], p[1], p[2]]);
+            assert!((l - 1.2).abs() < 1e-4, "luminance {l} should be L + 2 s_r = 1.2");
+            assert!((p[0] / p[1] - 2.0).abs() < 1e-4 && p[2].abs() < 1e-6, "hue kept: {p:?}");
+            assert_eq!(p[3], 1.0);
+        }
+        assert!(l0 > 1.2);
+        let mut low = vec![[0.01, 0.01, 0.01, 1.0]; 25];
+        keep_consistent(&input, &counts, (5, 5), &mut low);
+        for p in &low {
+            assert!((p[0] - 0.8).abs() < 1e-4 && (p[1] - 0.8).abs() < 1e-4, "pulled up to L - 2 s_r: {p:?}");
+        }
+        let mut zero = vec![[0.0, 0.0, 0.0, 1.0]; 25];
+        keep_consistent(&input, &counts, (5, 5), &mut zero);
+        assert!(zero.iter().all(|p| (p[0] - 1.0).abs() < 1e-6), "zero luminance takes the input colour");
+        let mut inside = vec![[1.05, 1.05, 1.05, 1.0]; 25];
+        keep_consistent(&input, &counts, (5, 5), &mut inside);
+        assert!(inside.iter().all(|p| p[0] == 1.05), "an answer inside the interval is not touched");
+        // A converged frame keeps its input bit for bit.
+        let (conv, counts) = grey_frame(5, 5, 16.0, 0.0);
+        let mut out = vec![[3.0, 0.0, 0.5, 1.0]; 25];
+        keep_consistent(&conv, &counts, (5, 5), &mut out);
+        assert!(out.iter().all(|p| p[0].to_bits() == 1.0f32.to_bits() && p[1].to_bits() == 1.0f32.to_bits() && p[2].to_bits() == 1.0f32.to_bits()));
+        // Hostile input does not panic and keeps the network's answer.
+        input[3] = [f32::NAN, 1.0, 1.0, f32::NAN];
+        input[7][3] = -1.0;
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0]; 25];
+        keep_consistent(&input, &vec![0.0; 25], (5, 5), &mut out);
+        assert_eq!(out[3], [0.5, 0.5, 0.5, 1.0]);
+        keep_consistent(&input, &[], (5, 5), &mut out);
+        keep_consistent(&[], &[], (0, 0), &mut []);
     }
 
     fn opts_learned() -> PathOptions {
@@ -224,8 +469,10 @@ mod tests {
                 } else {
                     [0.0, 0.0, 1.0]
                 };
-                aov.push([0.01, 0.01, 0.01, 1.0]);
-                aov.push([normal[0], normal[1], normal[2], 3.0]);
+                // The learned kernel's guides are sums over the samples.
+                let k = n as f32;
+                aov.push([0.01 * k, 0.01 * k, 0.01 * k, 1.0]);
+                aov.push([normal[0] * k, normal[1] * k, normal[2] * k, 3.0]);
             }
         }
         (accum, aov)
@@ -233,6 +480,11 @@ mod tests {
 
     #[test]
     fn flat_frame_through_finish_linear_changes_no_pixel_by_one_percent() {
+        flat_frame_still_changes_no_pixel_by_one_percent();
+    }
+
+    #[test]
+    fn flat_frame_still_changes_no_pixel_by_one_percent() {
         let Some(gpu) = crate::gputest::shared_compute() else {
             eprintln!("SKIP: no compute adapter");
             return;
@@ -364,52 +616,6 @@ mod tests {
     }
 
     #[test]
-    fn keep_converged_empty() {
-        let input: [[f32; 4]; 0] = [];
-        let mut out: Vec<[f32; 4]> = Vec::new();
-        keep_converged(&input, &mut out);
-        assert!(out.is_empty());
-    }
-
-    #[test]
-    fn keep_converged_single_pixel_converged() {
-        let input = [[0.5, 0.5, 0.5, 0.0]];
-        let mut out = vec![[0.3, 0.3, 0.3, 1.0]];
-        keep_converged(&input, &mut out);
-        assert_eq!(out[0][0], 0.5, "converged single pixel keeps input");
-        assert_eq!(out[0][1], 0.5);
-        assert_eq!(out[0][2], 0.5);
-    }
-
-    #[test]
-    fn keep_converged_mixed_luminance() {
-        // Bright pixel L=1.0, dark pixel L=0.1; mean Lbar=0.55, floor=0.0275
-        // Bright: variance 1e-6, e = 0.001/1.0 = 0.001 < 0.002, keep = 1.0
-        // Dark: variance 1e-7, e = 0.000316/0.1 = 0.00316, keep > 0.9
-        let input = [[1.0, 1.0, 1.0, 0.000001], [0.1, 0.1, 0.1, 0.0000001]];
-        let mut out = vec![[0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0]];
-        keep_converged(&input, &mut out);
-        assert!(out[0][0] > 0.99, "bright converged pixel keeps input: {}", out[0][0]);
-        assert!(out[1][0] > 0.12, "dark converged pixel mostly keeps input: {}", out[1][0]);
-    }
-
-    #[test]
-    fn keep_converged_non_finite_channels() {
-        let input = [[f32::NAN, 1.0, 1.0, 0.0]];
-        let mut out = vec![[0.5, 0.5, 0.5, 1.0]];
-        keep_converged(&input, &mut out);
-        assert_eq!(out[0], [0.5, 0.5, 0.5, 1.0], "non-finite channel keeps denoised");
-    }
-
-    #[test]
-    fn keep_converged_negative_variance() {
-        let input = [[1.0, 1.0, 1.0, -0.1]];
-        let mut out = vec![[0.5, 0.5, 0.5, 1.0]];
-        keep_converged(&input, &mut out);
-        assert_eq!(out[0], [0.5, 0.5, 0.5, 1.0], "negative variance keeps denoised");
-    }
-
-    #[test]
     fn finish_linear_empty() {
         let Some(gpu) = crate::gputest::shared_compute() else {
             eprintln!("SKIP: no compute adapter");
@@ -451,17 +657,6 @@ mod tests {
         let accum = [[f32::INFINITY, 1.0, 1.0, 1.0], [1.0, f32::NEG_INFINITY, 1.0, 1.0], [1.0, 1.0, f32::INFINITY, 1.0]];
         let got = linear_from_rgb(&accum, LinearStage::Radiance, 1.0, &Film::default(), (3, 1));
         assert_eq!(got, vec![[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]]);
-    }
-
-    #[test]
-    fn keep_converged_smoothstep_boundaries() {
-        // At e = 0.002 exactly, t = 0, keep = 1.0 (all input).
-        // At e = 0.01 exactly, t = 1, keep = 0.0 (all denoised).
-        let input = [[1.0, 1.0, 1.0, 0.002 * 0.002], [1.0, 1.0, 1.0, 0.01 * 0.01]];
-        let mut out = vec![[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 1.0]];
-        keep_converged(&input, &mut out);
-        assert_eq!(out[0][0], 1.0, "e = 0.2 % keeps the input");
-        assert_eq!(out[1][0], 0.0, "e = 1 % keeps the denoised value");
     }
 
     #[test]
