@@ -21,6 +21,8 @@
 
 mod adaptive;
 #[cfg(test)]
+mod adaptive_tests;
+#[cfg(test)]
 mod bsdf_tests;
 pub mod cache;
 pub mod denoise;
@@ -328,6 +330,9 @@ pub use crate::exposure::auto_exposure_from_luminances;
 
 #[cfg(test)]
 mod lights_tests;
+
+#[cfg(test)]
+mod clamp_tests;
 
 #[cfg(test)]
 mod kernel_tests;

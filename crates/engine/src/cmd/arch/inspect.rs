@@ -676,7 +676,8 @@ fn describe_camera_kind(k: CameraKind) -> &'static str {
 
 /// A compact JSON description of a camera's pose and look.
 /// Used for the `saved` field; a saved copy always has `saved: None`
-/// so no further nesting occurs.
+/// so no further nesting occurs. Look fields are flattened onto the
+/// top level (e.g. `toneMap`) as well as nested under `look`.
 fn describe_camera(c: &Camera3d) -> Value {
     let mut obj = JsonMap::new();
     obj.insert("name".to_string(), json!(c.name));
@@ -690,7 +691,11 @@ fn describe_camera(c: &Camera3d) -> Value {
     obj.insert("fov".to_string(), json!(c.fov_deg));
     obj.insert("level".to_string(), json!(c.level));
     obj.insert("lowerLevels".to_string(), json!(c.lower_levels));
-    obj.insert("look".to_string(), c.look.as_ref().map_or(Value::Null, super::look::describe_look));
+    let look_json = c.look.as_ref().map_or(Value::Null, super::look::describe_look);
+    obj.insert("look".to_string(), look_json.clone());
+    if let Some(look) = c.look.as_ref() {
+        obj.insert("toneMap".to_string(), json!(super::look::describe_look(look)["toneMap"]));
+    }
     Value::Object(obj)
 }
 
@@ -3784,5 +3789,152 @@ mod tests {
         cabinet_molding_inspect::inspect_cabinet_moldings(&model, &mut out);
         assert!(out["cabinets"][0]["crown"].is_null());
         assert!(out["cabinets"][0]["lightRail"].is_null());
+    }
+
+    #[test]
+    fn inspect_cameras_report_look_with_lens_and_film() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.cameras.push(Camera3d {
+                    name: "test".into(),
+                    kind: CameraKind::Orbit,
+                    target: Some([0.0, 0.0, 0.0]),
+                    azimuth_deg: Some(0.0),
+                    elevation_deg: Some(30.0),
+                    distance: Some(10.0),
+                    eye: Some([0.0, 0.0]),
+                    eye_height: Some(1.6),
+                    fov_deg: Some(50.0),
+                    look: Some(cadcraft_doc::arch::Look {
+                        lens: cadcraft_doc::arch::Lens {
+                            projection: cadcraft_doc::arch::LensProjection::Panini,
+                            compression: 0.5,
+                            shift: 0.25,
+                            aperture: Some(2.8),
+                            focus: Some(4.0),
+                            ..Default::default()
+                        },
+                        film: cadcraft_doc::arch::Film {
+                            bloom: 0.3,
+                            bloom_threshold: 1.5,
+                            vignette: 0.2,
+                            white_balance: Some(5000.0),
+                            contrast: 1.1,
+                            saturation: 0.9,
+                            lift: 0.05,
+                            ..Default::default()
+                        },
+                        sun: cadcraft_doc::arch::SunLook {
+                            on: true,
+                            intensity: 100000.0,
+                            shadows: true,
+                            angle: None,
+                            disc: 0.53,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }),
+                    ..Camera3d::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "cameras": true }));
+        let cameras = v["cameras"].as_array().expect("cameras array missing");
+        assert_eq!(cameras.len(), 1);
+        let c = &cameras[0];
+        let look = c["look"].as_object().expect("look must be an object");
+        assert_eq!(look["lens"]["projection"], "panini");
+        assert_eq!(look["lens"]["compression"], 0.5);
+        assert_eq!(look["lens"]["shift"], 0.25);
+        assert_eq!(look["lens"]["aperture"], 2.8);
+        assert_eq!(look["lens"]["focus"], 4.0);
+        assert_eq!(look["film"]["bloom"], 0.3);
+        assert_eq!(look["film"]["bloomThreshold"], 1.5);
+        assert_eq!(look["film"]["vignette"], 0.2);
+        assert_eq!(look["film"]["whiteBalance"], 5000.0);
+        assert_eq!(look["film"]["contrast"], 1.1);
+        assert_eq!(look["film"]["saturation"], 0.9);
+        assert_eq!(look["film"]["lift"], 0.05);
+        assert_eq!(look["sun"]["disc"], 0.53);
+    }
+
+    #[test]
+    fn inspect_cameras_saved_look_reported() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let cam = Camera3d {
+                    name: "test".into(),
+                    kind: CameraKind::Orbit,
+                    target: Some([0.0, 0.0, 0.0]),
+                    azimuth_deg: Some(0.0),
+                    elevation_deg: Some(30.0),
+                    distance: Some(10.0),
+                    eye: Some([0.0, 0.0]),
+                    eye_height: Some(1.6),
+                    fov_deg: Some(50.0),
+                    look: Some(cadcraft_doc::arch::Look { tone_map: cadcraft_doc::arch::ToneMap::Hable, ..Default::default() }),
+                    ..Camera3d::default()
+                };
+                let saved = cam.clone();
+                d.arch.cameras.push(Camera3d { saved: Some(Box::new(saved)), ..cam });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "cameras": true }));
+        let cameras = v["cameras"].as_array().expect("cameras array missing");
+        assert_eq!(cameras.len(), 1);
+        let c = &cameras[0];
+        assert!(c["saved"].is_object(), "saved must be an object");
+        assert_eq!(c["saved"]["toneMap"], "hable");
+        assert_eq!(c["modified"], false);
+    }
+
+    #[test]
+    fn inspect_cameras_modified_flag_correct() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let cam1 = Camera3d {
+                    name: "same".into(),
+                    kind: CameraKind::Orbit,
+                    target: Some([0.0, 0.0, 0.0]),
+                    azimuth_deg: Some(0.0),
+                    elevation_deg: Some(30.0),
+                    distance: Some(10.0),
+                    eye: Some([0.0, 0.0]),
+                    eye_height: Some(1.6),
+                    fov_deg: Some(50.0),
+                    ..Camera3d::default()
+                };
+                let saved1 = cam1.clone();
+                d.arch.cameras.push(Camera3d { saved: Some(Box::new(saved1)), ..cam1 });
+                let saved2 = Camera3d {
+                    name: "diff".into(),
+                    kind: CameraKind::Orbit,
+                    target: Some([0.0, 0.0, 0.0]),
+                    azimuth_deg: Some(0.0),
+                    elevation_deg: Some(30.0),
+                    distance: Some(10.0),
+                    eye: Some([0.0, 0.0]),
+                    eye_height: Some(1.6),
+                    fov_deg: Some(50.0),
+                    ..Camera3d::default()
+                };
+                let cam2 = Camera3d { azimuth_deg: Some(45.0), ..saved2.clone() };
+                d.arch.cameras.push(Camera3d { saved: Some(Box::new(saved2)), ..cam2 });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "cameras": true }));
+        let cameras = v["cameras"].as_array().expect("cameras array missing");
+        assert_eq!(cameras.len(), 2);
+        assert_eq!(cameras[0]["modified"], false);
+        assert_eq!(cameras[1]["modified"], true);
     }
 }
