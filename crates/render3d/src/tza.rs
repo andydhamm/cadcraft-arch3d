@@ -471,4 +471,108 @@ mod tests {
             let _ = result.ok();
         }
     }
+
+    #[test]
+    fn half_to_f32_special_values() {
+        // Zero and negative zero
+        assert_eq!(half_to_f32(0x0000), 0.0);
+        assert_eq!(half_to_f32(0x8000), -0.0);
+        // Infinities
+        assert!(half_to_f32(0x7C00).is_infinite() && half_to_f32(0x7C00) > 0.0);
+        assert!(half_to_f32(0xFC00).is_infinite() && half_to_f32(0xFC00) < 0.0);
+        // NaN (positive and negative)
+        assert!(half_to_f32(0x7C01).is_nan());
+        assert!(half_to_f32(0xFC01).is_nan());
+        // Max half value (65504.0)
+        assert_eq!(half_to_f32(0x7BFF), 65504.0);
+        // Largest subnormal: (1 - 2^-10) * 2^-14
+        let largest_subnormal = half_to_f32(0x03FF);
+        let expected = 2f32.powi(-14) * (1.0 - 2f32.powi(-10));
+        assert!((largest_subnormal - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn parse_empty_and_short() {
+        assert!(parse(&[]).is_err(), "empty input should fail");
+        assert!(parse(&[0, 0, 0, 0]).is_err(), "4 bytes should fail");
+        assert!(parse(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).is_err(), "11 bytes should fail");
+    }
+
+    #[test]
+    fn parse_header_errors() {
+        let base = include_bytes!("../../../assets/denoise/rt_hdr_alb_nrm.tza");
+
+        // Bad magic
+        let mut bad_magic = base.to_vec();
+        bad_magic[0] ^= 0xFF;
+        bad_magic[1] ^= 0xFF;
+        assert!(parse(&bad_magic).is_err(), "bad magic should fail");
+
+        // Bad major version
+        let mut bad_major = base.to_vec();
+        bad_major[2] = 1;
+        assert!(parse(&bad_major).is_err(), "bad major version should fail");
+
+        // Bad minor version
+        let mut bad_minor = base.to_vec();
+        bad_minor[3] = 1;
+        assert!(parse(&bad_minor).is_err(), "bad minor version should fail");
+    }
+
+    #[test]
+    fn model_tensor_lookup() {
+        let base = model(ModelChoice::Base).expect("base weights should parse");
+        let small = model(ModelChoice::Small).expect("small weights should parse");
+
+        // Existing tensors
+        assert!(base.tensor("enc_conv0.weight").is_some());
+        assert!(small.tensor("enc_conv0.weight").is_some());
+
+        // Non-existent tensor
+        assert!(base.tensor("nonexistent").is_none());
+        assert!(small.tensor("nonexistent").is_none());
+
+        // Case sensitivity
+        assert!(base.tensor("ENC_CONV0.WEIGHT").is_none());
+        assert!(base.tensor("enc_conv0.weight ").is_none());
+    }
+
+    #[test]
+    fn tensor_data_invariants() {
+        for which in [ModelChoice::Base, ModelChoice::Small] {
+            let m = model(which).expect("model should parse");
+            for tensor in &m.tensors {
+                // Data length must match the product of dimensions
+                let expected: usize = tensor.dims.iter().map(|&d| d as usize).product();
+                assert_eq!(tensor.data.len(), expected, "tensor '{}' data length {} != product of dims {}", tensor.name, tensor.data.len(), expected);
+                // All weight values must be finite
+                for &v in &tensor.data {
+                    assert!(v.is_finite(), "tensor '{}' has non-finite value {}", tensor.name, v);
+                }
+                // Names must be non-empty ASCII
+                assert!(!tensor.name.is_empty(), "tensor name is empty");
+                assert!(tensor.name.is_ascii(), "tensor '{}' name is not ASCII", tensor.name);
+            }
+        }
+    }
+
+    #[test]
+    fn info_returns_valid_json() {
+        let info = info();
+        let models = info["models"].as_array().expect("info should have a models array");
+        assert_eq!(models.len(), 2, "info should list 2 models");
+
+        let names: Vec<&str> = models.iter().map(|m| m["name"].as_str().unwrap()).collect();
+        assert!(names.contains(&"base"), "info should list the base model");
+        assert!(names.contains(&"small"), "info should list the small model");
+
+        for model_info in models {
+            assert!(model_info["file"].is_string(), "model should have a file");
+            assert!(model_info["bytes"].is_u64(), "model should have bytes");
+            assert!(model_info["sha256"].is_string(), "model should have sha256");
+            assert!(model_info["tensors"].is_u64(), "model should have tensor count");
+            let enc_conv0 = model_info["encConv0"].as_array().expect("model should have encConv0 dims");
+            assert_eq!(enc_conv0.len(), 4, "encConv0 should have 4 dims");
+        }
+    }
 }
