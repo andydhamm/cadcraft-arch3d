@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-24 17:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-24 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 39 of 41 segments merged · 12 of 15 acceptance checks**
 
-11,964 workspace tests passing at the last merge · 1387 segments merged in all · 0 of 15 seats working
+11,972 workspace tests passing at the last merge · 1388 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,21 +32,22 @@ Updated 2026-11-24 17:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 24.3 h so far · expected done Nov 24 19:21–Nov 25 14:40 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 24.5 h so far · expected done Nov 24 19:36–Nov 25 14:55 UTC |
 
 ## Phase 22 segments
 
-39 merged, 1 escalate, 1 gate
+39 merged, 1 working, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22f-adaptive-freeze` | Adaptive sampling that really adapts: set PHOTO_ADAPTIVE, freeze converged pixels, per-pixel sample statistics | escalate |  |
+| `p22f-adaptive-freeze` | Adaptive sampling that really adapts: set PHOTO_ADAPTIVE, freeze converged pixels, per-pixel sample statistics | working | claude-sonnet-a |
 | `upstream-sync-a1d92d995` | merge upstream upstream/main up to a1d92d995 (35 commits) | gate | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 24 17:47 | `harden-p22f-aniso-multiscatter` | merged | 11,972 pass | tturbo-mac2 |
 | Nov 24 17:02 | `harden-p22-engine-ladder` | merged | 11,964 pass | tturbo-mac |
 | Nov 24 17:02 | `harden-p22-r3d-variation` | merged | 11,964 pass | tturbo-mac2 |
 | Nov 24 17:02 | `harden-p17-scene-plumbing-arch` | merged | 11,964 pass | tturbo-mac |
@@ -58,7 +59,6 @@ Updated 2026-11-24 17:45 UTC. This page and the card in the README are regenerat
 | Nov 24 15:01 | `p22f-aniso-multiscatter` | merged | 11,929 pass | claude-sonnet-d |
 | Nov 24 14:06 | `harden-p22-engine-ladder` | refused | 0 pass | tturbo-mac |
 | Nov 24 14:06 | `harden-p22-r3d-bsdf-transmission` | merged | 11,904 pass | tturbo-mac |
-| Nov 24 14:06 | `harden-p22-gallery-tool` | merged | 11,904 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
@@ -68,14 +68,14 @@ Updated 2026-11-24 17:45 UTC. This page and the card in the README are regenerat
 | bonsai-b | bonsai2-27b | agent | 1354 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | idle | 173 |
+| claude-sonnet-a | sonnet | agent | 174 |
 | claude-sonnet-b | sonnet | gate | 183 |
 | claude-sonnet-c | sonnet | idle | 119 |
 | claude-sonnet-d | sonnet | idle | 111 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1310 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1310 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | agent | 1228 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 736 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 737 |
