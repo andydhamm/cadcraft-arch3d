@@ -445,4 +445,45 @@ mod tests {
         assert_eq!(got[2], 0);
         assert_eq!(got[3], 255);
     }
+
+    #[test]
+    fn linear_from_rgb_infinity_becomes_zero() {
+        let accum = [[f32::INFINITY, 1.0, 1.0, 1.0], [1.0, f32::NEG_INFINITY, 1.0, 1.0], [1.0, 1.0, f32::INFINITY, 1.0]];
+        let got = linear_from_rgb(&accum, LinearStage::Radiance, 1.0, &Film::default(), (3, 1));
+        assert_eq!(got, vec![[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]]);
+    }
+
+    #[test]
+    fn keep_converged_smoothstep_boundaries() {
+        // At e = 0.002 exactly, t = 0, keep = 1.0 (all input).
+        // At e = 0.01 exactly, t = 1, keep = 0.0 (all denoised).
+        let input = [[1.0, 1.0, 1.0, 0.002 * 0.002], [1.0, 1.0, 1.0, 0.01 * 0.01]];
+        let mut out = vec![[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 1.0]];
+        keep_converged(&input, &mut out);
+        assert_eq!(out[0][0], 1.0, "e = 0.2 % keeps the input");
+        assert_eq!(out[1][0], 0.0, "e = 1 % keeps the denoised value");
+    }
+
+    #[test]
+    fn finish_linear_keep_linear_film_stage() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute adapter");
+            return;
+        };
+        let accum = [[2.0, 4.0, 6.0, 2.0]];
+        let opts = PathOptions { denoise: false, keep_linear: Some(LinearStage::Film), ..PathOptions::default() };
+        let mut stats = PathStats::default();
+        let out = finish_linear(&gpu, &opts, &Film::default(), (1, 1), &accum, || Ok(Vec::new()), 3.0, &mut stats).expect("finish");
+        assert_eq!(out, vec![[2.0, 4.0, 6.0, 2.0]]);
+        assert!(stats.linear.is_some());
+        // Film stage: mean * exposure = [1.0, 2.0, 3.0] * 3.0 = [3.0, 6.0, 9.0]
+        assert_eq!(stats.linear.as_ref().unwrap(), &vec![[3.0, 6.0, 9.0]]);
+    }
+
+    #[test]
+    fn linear_from_rgb_film_stage_exposure_overflow_becomes_zero() {
+        let accum = [[f32::MAX, 1.0, 1.0, 1.0]];
+        let got = linear_from_rgb(&accum, LinearStage::Film, 2.0, &Film::default(), (1, 1));
+        assert_eq!(got, vec![[0.0, 2.0, 2.0]]);
+    }
 }
