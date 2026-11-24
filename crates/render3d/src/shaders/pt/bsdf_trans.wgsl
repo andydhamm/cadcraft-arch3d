@@ -201,6 +201,17 @@ fn trans_near(m: Material, n: vec3<f32>, wo: vec3<f32>) -> vec3<f32> {
     return select(n, -n, dot(n, wo) < 0.0);
 }
 
+// The normal a shadow ray toward wi leaves along: n unless m is an active MAT_TRANS material, whose
+// lobes also reach the far side, so a light sample there must start on the far side too (else it
+// hits its own triangle).
+fn trans_shadow_normal(m: Material, n: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>) -> vec3<f32> {
+    if (!trans_active(m)) {
+        return n;
+    }
+    let nf = trans_near(m, n, wo);
+    return select(nf, -nf, dot(nf, wi) < 0.0);
+}
+
 fn trans_rel(m: Material, n: vec3<f32>, wo: vec3<f32>) -> f32 {
     let ior = bsdf_glass_ior(m);
     return select(ior, 1.0 / ior, dot(n, wo) < 0.0);
