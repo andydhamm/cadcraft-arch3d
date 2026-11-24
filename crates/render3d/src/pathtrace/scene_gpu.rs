@@ -324,10 +324,95 @@ pub fn apply_lambert(scene: &mut GpuScene, albedo: f32) {
         m.roughness = 1.0;
         m.ior = 1.0;
         m.transmission = 0.0;
+        m.flags &= !(MAT_THIN | MAT_EXT | MAT_TRANS);
+        m.coat = 0.0;
+        m.coat_roughness = 0.0;
+        m.aniso = 0.0;
+        m.aniso_rot = 0.0;
+        m.sheen = [0.0; 3];
+        m.sheen_roughness = 0.0;
+        m.thickness = 0.0;
+        m.edge_radius = 0.0;
+        m.var_scale = 0.0;
+        m.var_amount = 0.0;
         if m.flags & MAT_EMIT_CAMERA_ONLY == 0 {
             m.emission = [0.0, 0.0, 0.0];
         }
     }
+}
+
+/// The material name of every entry of [`GpuScene::materials`] [`build_gpu_scene`] builds for
+/// `scene` and `ground`: one per mesh, then `ground`, then the horizon's.
+pub fn material_names(scene: &Scene3d, ground: bool) -> Vec<String> {
+    let mut names: Vec<String> = scene.meshes.iter().map(|m| m.material.clone()).collect();
+    if ground {
+        names.push("ground".into());
+    }
+    if let Some(h) = &scene.horizon {
+        names.push(h.material.clone());
+    }
+    names
+}
+
+/// Fill the extension fields of `gpu`'s materials (`names[i]` is material `i`'s name, see
+/// [`material_names`]) from [`cadcraft_arch3d::material_ext::resolve`] and `MaterialDef::emission`.
+/// `edge_radius` and `emission` are always set; the layered model only under
+/// `opts.materials_full`; the variation only under `opts.variation`. Sets nothing for a furnace.
+pub fn apply_material_ext(gpu: &mut GpuScene, scene: &Scene3d, names: &[String], opts: &super::PathOptions) {
+    if opts.furnace.is_some() {
+        return;
+    }
+    for (m, name) in gpu.materials.iter_mut().zip(names) {
+        let e = cadcraft_arch3d::material_ext::resolve(scene, name);
+        m.edge_radius = e.edge_radius.filter(|r| r.is_finite() && *r >= 0.0).unwrap_or(cadcraft_doc::arch::DEFAULT_EDGE_RADIUS as f32);
+        if let Some(def) = scene.materials.get(name.as_str()) {
+            if def.emission.is_finite() && def.emission > 0.0 {
+                m.emission = [def.emission; 3];
+            }
+        }
+        if opts.materials_full {
+            m.coat = e.clearcoat;
+            m.coat_roughness = e.clearcoat_roughness;
+            m.aniso = e.anisotropy;
+            m.aniso_rot = e.anisotropy_rotation;
+            m.sheen = e.sheen;
+            m.sheen_roughness = e.sheen_roughness;
+            m.thickness = e.thickness;
+            m.ior = e.ior;
+            if let Some(v) = e.metallic {
+                m.metallic = v;
+            }
+            if let Some(v) = e.roughness {
+                m.roughness = v;
+            }
+            if e.thin || (e.transmission > 0.0 && m.roughness > 0.02) {
+                m.transmission = e.transmission;
+                m.flags |= MAT_TRANS;
+            }
+            if e.thin {
+                m.flags |= MAT_THIN;
+            }
+            if e.clearcoat > 0.0 || e.anisotropy > 0.0 || e.sheen.iter().any(|c| *c > 0.0) {
+                m.flags |= MAT_EXT;
+            }
+        }
+        if opts.variation {
+            m.var_scale = e.variation_scale;
+            m.var_amount = e.variation_amount;
+        }
+    }
+}
+
+/// The frame's `PHOTO_*` flags the material options need.
+pub fn material_photo_flags(opts: &super::PathOptions) -> u32 {
+    let mut f = 0;
+    if opts.materials_full {
+        f |= PHOTO_MATERIALS;
+    }
+    if opts.variation {
+        f |= PHOTO_VARIATION;
+    }
+    f
 }
 
 /// The object id of the ground quad (`shadow::GROUND_OBJECT`).
@@ -2095,5 +2180,95 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+}
+
+#[cfg(test)]
+mod ext_tests {
+    use super::super::PathOptions;
+    use super::*;
+    use crate::types::ArchId;
+    use cadcraft_arch3d::MaterialDef;
+    use cadcraft_arch3d::material_ext::MaterialExt;
+
+    fn tri_mesh(material: &str, object: u32, z: f32) -> Mesh {
+        let mut m = Mesh::new(material, ArchId(object));
+        m.positions.extend([[0.0, 0.0, z], [1.0, 0.0, z], [0.0, 1.0, z]]);
+        m.indices.extend([0, 1, 2]);
+        m
+    }
+
+    fn ext_scene() -> Scene3d {
+        let mut scene = Scene3d::default();
+        scene.meshes.push(tri_mesh("quartz", 1, 0.0));
+        scene.meshes.push(tri_mesh("glow", 2, 1.0));
+        let ext = MaterialExt {
+            clearcoat: 0.6,
+            anisotropy: 0.4,
+            sheen: [0.3; 3],
+            thickness: 0.01,
+            variation_scale: 0.5,
+            variation_amount: 0.1,
+            metallic: Some(0.5),
+            ..Default::default()
+        };
+        scene.materials.insert("quartz".into(), MaterialDef { ext, ..Default::default() });
+        scene.materials.insert("glow".into(), MaterialDef { emission: 300.0, ..Default::default() });
+        scene
+    }
+
+    fn mapped(opts: &PathOptions) -> (GpuScene, GpuScene) {
+        let scene = ext_scene();
+        let base = build_gpu_scene(&scene, false, None);
+        let mut gpu = base.clone();
+        apply_material_ext(&mut gpu, &scene, &material_names(&scene, false), opts);
+        (base, gpu)
+    }
+
+    #[test]
+    fn materials_basic_leaves_extension_fields_zero() {
+        let (base, gpu) = mapped(&PathOptions::default());
+        for (m, b) in gpu.materials.iter().zip(&base.materials) {
+            assert_eq!(m.edge_radius, 0.002);
+            let mut m = *m;
+            m.edge_radius = 0.0;
+            m.emission = b.emission;
+            assert_eq!(m, *b);
+        }
+    }
+
+    #[test]
+    fn materials_full_copies_the_ext_table() {
+        let (_, gpu) = mapped(&PathOptions { materials_full: true, ..Default::default() });
+        let m = gpu.materials[0];
+        assert_eq!((m.coat, m.aniso, m.sheen, m.thickness, m.metallic), (0.6, 0.4, [0.3; 3], 0.01, 0.5));
+        assert_eq!(m.flags & MAT_EXT, MAT_EXT);
+        assert_eq!(m.var_scale, 0.0);
+    }
+
+    #[test]
+    fn variation_fields_only_with_the_option() {
+        let (_, gpu) = mapped(&PathOptions { variation: true, ..Default::default() });
+        assert_eq!((gpu.materials[0].var_scale, gpu.materials[0].var_amount), (0.5, 0.1));
+        assert_eq!(gpu.materials[0].coat, 0.0);
+        let (_, off) = mapped(&PathOptions::default());
+        assert_eq!(off.materials[0].var_scale, 0.0);
+    }
+
+    #[test]
+    fn lambert_calibration_clears_extensions() {
+        let (_, mut gpu) = mapped(&PathOptions { materials_full: true, variation: true, ..Default::default() });
+        apply_lambert(&mut gpu, 0.5);
+        for m in &gpu.materials {
+            assert_eq!((m.coat, m.aniso, m.sheen, m.thickness, m.edge_radius, m.var_scale, m.var_amount), (0.0, 0.0, [0.0; 3], 0.0, 0.0, 0.0, 0.0));
+            assert_eq!(m.flags & (MAT_EXT | MAT_TRANS | MAT_THIN), 0);
+        }
+    }
+
+    #[test]
+    fn material_def_emission_reaches_the_gpu_material() {
+        let (_, gpu) = mapped(&PathOptions::default());
+        assert_eq!(gpu.materials[1].emission, [300.0; 3]);
+        assert_eq!(gpu.materials[0].emission, [0.0; 3]);
     }
 }

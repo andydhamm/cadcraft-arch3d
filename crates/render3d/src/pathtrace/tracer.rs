@@ -175,9 +175,14 @@ impl PathTracer {
         }
 
         let mut gpu_scene = build_gpu_scene(scene, ground, opts.furnace);
+        let mut material_flags = 0;
         if opts.furnace.is_none() {
+            let names = super::scene_gpu::material_names(scene, ground);
+            super::scene_gpu::apply_material_ext(&mut gpu_scene, scene, &names, opts);
+            material_flags = super::scene_gpu::material_photo_flags(opts);
             if let Some(a) = lambert_albedo(lighting, opts) {
                 super::scene_gpu::apply_lambert(&mut gpu_scene, a);
+                material_flags = 0;
             }
         }
         if gpu_scene.tris.len() > MAX_GPU_TRIANGLES {
@@ -257,6 +262,7 @@ impl PathTracer {
             && frame.env[3] & 2 != 0;
         super::lens::fill_frame(&mut frame, lighting, camera, size);
         super::edge_table::fill(&mut gpu_scene, &mut frame, opts);
+        frame.photo[0] |= material_flags;
         let buffers = super::tracer::upload_scene(gpu, &gpu_scene);
 
         Ok(PathTracer {
@@ -523,6 +529,9 @@ impl PathTracer {
 
         // Denoise as the options ask (`post`); a neutral film keeps the plain resolve below.
         let mut stats = self.stats.clone();
+        let exposure = self.auto_exposure(gpu);
+        self.exposure = exposure;
+        stats.exposure = exposure;
         let result = super::post::finish_linear(
             gpu,
             &self.opts,
@@ -533,6 +542,7 @@ impl PathTracer {
                 let data = self.read_buffer(gpu, &self.aov, aov_bytes)?;
                 Ok(bytemuck::cast_slice::<u8, [f32; 4]>(&data).to_vec())
             },
+            exposure,
             &mut stats,
         );
         self.stats = stats;
@@ -554,9 +564,6 @@ impl PathTracer {
         let mut enc = d.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pt write denoised") });
         enc.copy_buffer_to_buffer(&src, 0, &self.accum, 0, (pixels * 16) as u64);
         gpu.queue.submit([enc.finish()]);
-
-        self.exposure = self.auto_exposure(gpu);
-        self.stats.exposure = self.exposure;
 
         // Resolve.
         match self.resolve(gpu) {
@@ -608,7 +615,7 @@ impl PathTracer {
             exposure: f32,
             tonemap: u32,
         }
-        let exposure = self.auto_exposure(gpu);
+        let exposure = self.exposure;
         let params = ResolveParams { size: [w, h], exposure, tonemap: self.frame.look[0] };
 
         let scope = d.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -743,13 +750,6 @@ fn frame_sun(frame: &mut GpuFrame, lighting: &Lighting) {
             let lux = lighting.look.sun.intensity as f32;
             frame.sun_dir = [d[0] as f32, d[1] as f32, d[2] as f32, 0.0];
             frame.sun_rgb = [lux, lux, lux, 0.0];
-            // The sun as a disc: `photo_f.y` = cos of half its angular diameter (`sun_disc.wgsl`).
-            let disc = lighting.sun_disc_deg;
-            if disc.is_finite() && disc > 0.0 {
-                let half = (f64::from(disc.min(90.0)) / 2.0).to_radians();
-                frame.photo[0] |= super::scene_gpu::PHOTO_SUN_DISC;
-                frame.photo_f[1] = half.cos() as f32;
-            }
         }
         if lighting.look.sky.on {
             frame.flags |= FRAME_SKY;
@@ -1626,7 +1626,7 @@ mod tests {
         let (plain, stats) = seeded_image(&gpu, 0);
         assert_eq!(stats.clamp_loss, 0.0, "nothing is clamped");
         // Every flag on a stub changes nothing; adaptive sampling's own-count index equals the uniform one.
-        let all = PHOTO_PANINI | PHOTO_DOF | PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_CLAMP | PHOTO_ADAPTIVE | PHOTO_SHIFT;
+        let all = PHOTO_EDGES | PHOTO_MATERIALS | PHOTO_VARIATION | PHOTO_SUN_DISC | PHOTO_CLAMP | PHOTO_ADAPTIVE;
         let (flagged, _) = seeded_image(&gpu, all);
         assert_eq!(plain, flagged, "the hook stubs draw no random number and change no arithmetic");
         let (again, _) = seeded_image(&gpu, 0);

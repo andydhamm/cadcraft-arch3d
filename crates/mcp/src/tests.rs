@@ -226,28 +226,20 @@ fn find_text_reads_texts_and_render_shows_one_area() {
     assert_eq!((w, h), (1600, 800));
 }
 
-/// `render {"final": true}` and `render {"view3d": true}` route to the engine `render` command.
-/// With no 3D renderer installed (headless mode) that command refuses, so the tool answers with
-/// an `isError` text ("render needs the 3D renderer…") instead of a 2D PNG.
+/// Guards #3011: `find_text` filters by `query` as it does by `contains`, instead of ignoring it
+/// and returning every text.
 #[test]
-fn mcp_render_final_goes_to_the_render_command() {
+fn find_text_filters_by_query() {
     let mut s = Server::new(Box::new(Headless::default()));
-    for (id, args) in [(1u64, json!({"final": true})), (2, json!({"view3d": true}))] {
-        let r = call(&mut s, id, "tools/call", json!({"name": "render", "arguments": args.clone()}));
-        assert_eq!(r["result"]["isError"], json!(true), "{args}");
-        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("3D"), "{args}");
-    }
-}
-
-/// A plain `render` (no `final`/`view3d`) still goes through the 2D `ui.render` path and
-/// returns a PNG image.
-#[test]
-fn mcp_render_without_final_is_still_2d() {
-    let mut s = Server::new(Box::new(Headless::default()));
-    let r = call(&mut s, 1, "tools/call", json!({"name": "render", "arguments": {}}));
-    let c = &r["result"]["content"][0];
-    assert_eq!(c["type"], "image", "{r}");
-    assert!(c["data"].as_str().unwrap().len() > 100, "{r}");
+    call(&mut s, 1, "initialize", json!({"protocolVersion": "2025-06-18"}));
+    tool(&mut s, "execute", json!({"command": "text", "params": {"at": [1, 1], "height": 0.15, "text": "RECAMARA 1"}}));
+    tool(&mut s, "execute", json!({"command": "text", "params": {"at": [50, 1], "height": 0.15, "text": "COCINA"}}));
+    assert_eq!(tool(&mut s, "find_text", json!({}))["count"], 2);
+    let r = tool(&mut s, "find_text", json!({"query": "cocina"}));
+    assert_eq!((r["count"].as_u64(), r["texts"][0]["text"].as_str()), (Some(1), Some("COCINA")), "{r}");
+    assert_eq!(tool(&mut s, "find_text", json!({"query": "nada"}))["count"], 0);
+    // `contains` still works and wins when both are given.
+    assert_eq!(tool(&mut s, "find_text", json!({"contains": "recamara", "query": "cocina"}))["texts"][0]["text"], "RECAMARA 1");
 }
 
 /// Guards a lazy Remote bridge: it serves tools without the app, reports how to start it

@@ -15,6 +15,7 @@ pub mod camera;
 pub mod edges;
 pub mod environment;
 pub mod exposure;
+pub mod film;
 pub mod final_render;
 pub mod frame_look;
 pub mod lens;

@@ -27,11 +27,10 @@ pub fn tool_definitions(has_ui: bool) -> Value {
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
                 "background": {"type": "string", "description": "\"dark\" (default without plot_style), \"white\" (default with one), \"paper\" or \"#rrggbb\""},
                 "plot_style": {"type": "string", "description": "a plot style table: monochrome.ctb, grayscale.ctb, default.ctb, default.stb, monochrome.stb, or one the drawing holds; \"none\" or \"\" for the objects' own properties"},
-                "path": {"type": "string"}, "final": {"type": "boolean"}, "view3d": {"type": "boolean"}, "camera": {"type": "object"},
-                "sun": {"anyOf": [{"type": "boolean", "const": false}, {"type": "object", "properties": {"date": {"type": "string"}, "time": {"type": "string"}}, "required": ["date", "time"]}]},
-                "samples": {"type": "array", "items": {"type": "number"}}, "out": {"type": "string"}}}}),
-        json!({"name": "find_text", "description": "Read the drawing's texts: TEXT, MTEXT (formatting removed), block attributes and multileaders, each with its text, insertion point `at`, height, rotation, style, layer and handle. Filter by `contains` (any case), `layer` and/or `window` [[x0,y0],[x1,y1]] around the insertion points; page with offset and limit (default 200). Use it to find room names, sheet titles and notes without reading all the geometry.",
-            "inputSchema": {"type": "object", "properties": {"contains": {"type": "string"}, "layer": {"type": "string"},
+                "sun": {"anyOf": [{"const": false}, {"type": "object", "properties": {"date": {"type": "string"}, "time": {"type": "string"}}, "required": ["date", "time"]}]},
+                "path": {"type": "string"}}}}),
+        json!({"name": "find_text", "description": "Read the drawing's texts: TEXT, MTEXT (formatting removed), block attributes and multileaders, each with its text, insertion point `at`, height, rotation, style, layer and handle. Filter by `contains` (any case; `query` is the same filter), `layer` and/or `window` [[x0,y0],[x1,y1]] around the insertion points; page with offset and limit (default 200). Use it to find room names, sheet titles and notes without reading all the geometry.",
+            "inputSchema": {"type": "object", "properties": {"contains": {"type": "string"}, "query": {"type": "string"}, "layer": {"type": "string"},
                 "window": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "minItems": 2, "maxItems": 2},
                 "limit": {"type": "integer", "minimum": 0}, "offset": {"type": "integer", "minimum": 0}}}}),
         json!({"name": "new_drawing", "description": "Create a new drawing (imperial by default, or metric).",
@@ -214,6 +213,60 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Default)]
+    struct Probe {
+        calls: Vec<(String, Value)>,
+    }
+
+    impl Backend for Probe {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.calls.push((method.to_string(), params));
+            Ok(json!({"ok": true}))
+        }
+
+        fn has_ui(&self) -> bool {
+            true
+        }
+
+        fn describe(&self) -> String {
+            "probe".into()
+        }
+    }
+
+    #[test]
+    fn mcp_render_final_goes_to_the_render_command() {
+        let mut probe = Probe::default();
+        let r = call_tool(&mut probe, "render", &json!({"final": true, "width": 64, "height": 32}));
+        assert!(r.is_ok(), "3D final render should dispatch cleanly: {r:?}");
+        assert_eq!(probe.calls.len(), 1, "render dispatches to one backend method");
+        assert_eq!(probe.calls[0].0, "engine.execute");
+        assert_eq!(probe.calls[0].1["command"], "render");
+        assert_eq!(probe.calls[0].1["params"]["final"], true);
+    }
+
+    #[test]
+    fn mcp_render_without_final_is_still_2d() {
+        let mut probe = Probe::default();
+        let r = call_tool(&mut probe, "render", &json!({"width": 64, "height": 32, "window": [[0.0, 0.0], [1.0, 1.0]]}));
+        assert!(r.is_ok(), "2D render should keep the UI render path: {r:?}");
+        assert_eq!(probe.calls.len(), 1, "2D render keeps one backend call");
+        assert_eq!(probe.calls[0].0, "ui.render");
+        assert_eq!(probe.calls[0].1["window"][0][0], 0.0);
+        assert_eq!(probe.calls[0].1["window"][1][1], 1.0);
+    }
+
+    #[test]
+    fn mcp_render_view3d_routes_to_engine_render_too() {
+        let mut probe = Probe::default();
+        let r = call_tool(&mut probe, "render", &json!({"view3d": true, "camera": {"mode": "orbit"}}));
+        assert!(r.is_ok(), "3D view render should dispatch to the render command: {r:?}");
+        assert_eq!(probe.calls.len(), 1, "view3d also routes through the engine");
+        assert_eq!(probe.calls[0].0, "engine.execute");
+        assert_eq!(probe.calls[0].1["command"], "render");
+        assert_eq!(probe.calls[0].1["params"]["camera"]["mode"], "orbit");
+        assert!(probe.calls[0].1["params"].get("view3d").is_none());
+    }
 
     #[test]
     fn mcp_render_sun_string_rejected() {

@@ -333,7 +333,7 @@ mod lights_tests;
 mod kernel_tests;
 
 #[cfg(test)]
-mod sun_disc_tests;
+mod lens_tests;
 
 #[cfg(test)]
 mod tests {
