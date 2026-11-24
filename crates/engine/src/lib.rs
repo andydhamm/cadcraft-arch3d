@@ -54,7 +54,7 @@ pub use cadcraft_render as render;
 pub use cmd::arch::look::{effective_look, effective_sun_dir};
 /// The app's 3D renderer behind `render` and `sunstudy` (phase 10): the CLI and the desktop app install it.
 pub use cmd::arch::render::{
-    FinalMode, IlluminanceRequest, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, render_hooks, set_render_hooks,
+    FinalMode, IlluminanceRequest, LinearStageParam, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, render_hooks, set_render_hooks,
     stats as render_stats,
 };
 pub use cmd::hatch::{HatchPicks, PatternChoice, PickMode, pattern_choices};
