@@ -240,6 +240,64 @@ mod tests {
         assert_eq!(source_extent(&LensOptions::default(), tan_h, 0.0, (0, 0)).1, 1);
     }
 
+    /// Large positive and negative shifts still cover every output pixel, even when the
+    /// source height hits the 4x cap.
+    #[test]
+    fn source_extent_with_large_shift() {
+        let (w, h) = (160u32, 90u32);
+        let tan_v = (50.0f64.to_radians() / 2.0).tan();
+        let tan_h = tan_v * f64::from(w) / f64::from(h);
+        for shift in [0.9f32, -0.9, 0.49, -0.49] {
+            let lens = LensOptions { shift, ..Default::default() };
+            let (tv, rows) = source_extent(&lens, tan_h, tan_v, (w, h));
+            assert!(rows >= h && rows <= h * MAX_SOURCE_SCALE, "shift {shift}: {rows}");
+            let l = lens_view(&lens);
+            for y in 0..h {
+                for x in 0..w {
+                    let n = [(f64::from(x) + 0.5) / f64::from(w) * 2.0 - 1.0, 1.0 - (f64::from(y) + 0.5) / f64::from(h) * 2.0];
+                    let d = frame_to_dir(&l, tan_h, tan_v, n);
+                    assert!(d[2] > 0.0 && (d[1] / d[2]).abs() <= tv + 1e-9, "shift {shift} pixel {x},{y}: {d:?} vs {tv}");
+                }
+            }
+        }
+    }
+
+    /// Panini at the extreme compression 0.0 (full) still covers every output pixel.
+    #[test]
+    fn source_extent_with_zero_compression() {
+        let (w, h) = (160u32, 90u32);
+        let tan_v = (50.0f64.to_radians() / 2.0).tan();
+        let tan_h = tan_v * f64::from(w) / f64::from(h);
+        let lens = LensOptions { panini: true, compression: 0.0, ..Default::default() };
+        let (tv, rows) = source_extent(&lens, tan_h, tan_v, (w, h));
+        assert!(rows >= h && rows <= h * MAX_SOURCE_SCALE, "{rows}");
+        let l = lens_view(&lens);
+        for y in 0..h {
+            for x in 0..w {
+                let n = [(f64::from(x) + 0.5) / f64::from(w) * 2.0 - 1.0, 1.0 - (f64::from(y) + 0.5) / f64::from(h) * 2.0];
+                let d = frame_to_dir(&l, tan_h, tan_v, n);
+                assert!(d[2] > 0.0 && (d[1] / d[2]).abs() <= tv + 1e-9, "pixel {x},{y}: {d:?} vs {tv}");
+            }
+        }
+    }
+
+    /// NaN in the lens options does not crash and produces a finite, bounded source extent.
+    #[test]
+    fn source_extent_with_nan_lens_options() {
+        let (w, h) = (160u32, 90u32);
+        let tan_v = (50.0f64.to_radians() / 2.0).tan();
+        let tan_h = tan_v * f64::from(w) / f64::from(h);
+        for lens in [
+            LensOptions { panini: true, compression: f32::NAN, ..Default::default() },
+            LensOptions { shift: f32::NAN, ..Default::default() },
+            LensOptions { panini: true, compression: 0.5, shift: f32::NAN, ..Default::default() },
+        ] {
+            let (tv, rows) = source_extent(&lens, tan_h, tan_v, (w, h));
+            assert!(tv.is_finite() && tv > 0.0, "{lens:?}: tan_v {tv}");
+            assert!(rows >= h && rows <= h * MAX_SOURCE_SCALE, "{lens:?}: {rows}");
+        }
+    }
+
     // ---- GPU tests on the shared test device (skipped without an adapter) ----
 
     use crate::camera::{Camera, FullCamera};
@@ -427,5 +485,47 @@ mod tests {
         assert!((base - 60.0).abs() < 2.0, "the horizon starts at the middle: {base}");
         let Some(down) = shot(&mut o, &scene, 50.0, LensOptions { shift: 0.25, ..Default::default() }).and_then(|i| centre(&i)) else { return };
         assert!((down - base - 30.0).abs() < 3.0, "a shift of 0.25 moves the horizon a quarter of 120 rows: {base} -> {down}");
+    }
+
+    /// An empty scene with a warping lens produces the clear colour everywhere (no crash, no
+    /// artefacts from sampling an empty source).
+    #[test]
+    fn warp_empty_scene_is_clear_colour() {
+        let size = (96u32, 64u32);
+        let Some(mut o) = renderer(size) else { return };
+        let scene = Scene3d::default();
+        let lens = LensOptions { panini: true, compression: 0.7, shift: 0.2, ..Default::default() };
+        let Some(img) = shot(&mut o, &scene, 50.0, lens) else { return };
+        assert_eq!(img.len(), (size.0 * size.1 * 4) as usize);
+        // Every pixel is the clear colour.
+        let enc = |c: f64| {
+            let s = if c <= 0.0031308 { 12.92 * c } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
+            (s * 255.0).round() as i32
+        };
+        let clear = [enc(CLEAR.r), enc(CLEAR.g), enc(CLEAR.b)];
+        for px in img.chunks_exact(4) {
+            assert!((0..3).all(|k| (i32::from(px[k]) - clear[k]).abs() <= 2), "pixel {:?} is not the clear colour {:?}", &px[..3], clear);
+        }
+    }
+
+    /// Panini at the extreme compression 0.0 (full) keeps verticals in one column, just as
+    /// the intermediate compressions do.
+    #[test]
+    fn panini_zero_compression_keeps_verticals_in_the_raster() {
+        let size = (200u32, 120u32);
+        let Some(mut o) = renderer(size) else { return };
+        let scene = scene_of(vec![cuboid([3.9, 10.0, -40.0], [4.1, 10.2, 40.0])]);
+        let lens = LensOptions { panini: true, compression: 0.0, ..Default::default() };
+        let Some(img) = shot(&mut o, &scene, 50.0, lens) else { return };
+        let mut cols = Vec::new();
+        for y in 8..size.1 - 8 {
+            let xs: Vec<u32> = (0..size.0).filter(|&x| covered(&img, size.0, x, y)).collect();
+            assert!(!xs.is_empty(), "row {y} has no bar");
+            cols.push(xs[0] + xs[xs.len() - 1]);
+        }
+        let lo = cols.iter().copied().min().unwrap_or(0) / 2;
+        let hi = cols.iter().copied().max().unwrap_or(0) / 2;
+        assert!(hi - lo <= 2, "the bar wanders from column {lo} to {hi}");
+        assert!(lo > size.0 / 2 + 20, "the bar should be off axis, at {lo}");
     }
 }
