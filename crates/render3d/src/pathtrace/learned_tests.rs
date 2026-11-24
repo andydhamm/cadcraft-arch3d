@@ -119,6 +119,157 @@ fn miss_pixels_keep_their_colour() {
     assert!(changed, "the hit pixels were not denoised at all");
 }
 
+/// `starts` produces non-overlapping-by-more-than-OVERLAP tile origins that cover the whole side,
+/// and `ramp` weights from two adjacent tiles sum to 1 at every overlap pixel.
+#[test]
+fn starts_and_ramp_are_consistent() {
+    // Exact fit: one tile.
+    assert_eq!(super::starts(64, 64), vec![0]);
+    // One pixel over: two tiles, the second flush with the end.
+    assert_eq!(super::starts(65, 64), vec![0, 1]);
+    // Three tiles with 32 px overlap each.
+    assert_eq!(super::starts(100, 64), vec![0, 32, 64]);
+    // Smaller tile.
+    assert_eq!(super::starts(128, 64), vec![0, 32, 64]);
+    // Tile larger than the side.
+    assert_eq!(super::starts(32, 64), vec![0]);
+
+    // Ramp: first tile, no left blend.
+    assert!((super::ramp(0, 64, true, false) - 1.0).abs() < 1e-6);
+    // Not first: left edge ramps up from 0.5/32.
+    assert!((super::ramp(0, 64, false, false) - 0.5 / 32.0).abs() < 1e-6);
+    assert!((super::ramp(31, 64, false, false) - 31.5 / 32.0).abs() < 1e-6);
+    // Past the overlap: full weight.
+    assert!((super::ramp(32, 64, false, false) - 1.0).abs() < 1e-6);
+    // Right edge ramps down.
+    assert!((super::ramp(63, 64, false, false) - 0.5 / 32.0).abs() < 1e-6);
+    // Last tile: no right blend.
+    assert!((super::ramp(63, 64, false, true) - 1.0).abs() < 1e-6);
+
+    // Adjacent tiles' weights sum to 1 across the overlap.
+    // Tile 0 at [0,63], tile 1 at [32,95]; overlap is global x in [32,63].
+    for x in 32..=63 {
+        let w0 = super::ramp(x, 64, true, false);
+        let w1 = super::ramp(x - 32, 64, false, true);
+        let sum = w0 + w1;
+        assert!((sum - 1.0).abs() < 1e-6, "at x={x} weights sum to {sum}, not 1");
+    }
+}
+
+#[test]
+fn zero_size_frame_errors() {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("skipped: no compute adapter");
+        return;
+    };
+    let err = super::denoise(&gpu, ModelChoice::Small, &[], &[], (0, 48)).unwrap_err();
+    assert!(err.contains("0 x 48"), "zero-width frame must error: {err}");
+    let err = super::denoise(&gpu, ModelChoice::Small, &[], &[], (48, 0)).unwrap_err();
+    assert!(err.contains("48 x 0"), "zero-height frame must error: {err}");
+}
+
+#[test]
+fn wrong_input_lengths_error() {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("skipped: no compute adapter");
+        return;
+    };
+    let size = (8, 8);
+    let color = vec![[0.5; 4]; 64];
+    let aov = vec![[0.5; 4]; 128];
+    // Too few colours.
+    let err = super::denoise(&gpu, ModelChoice::Small, &color[..32], &aov, size).unwrap_err();
+    assert!(err.contains("32"), "wrong colour count must error: {err}");
+    // Too few guide entries.
+    let err = super::denoise(&gpu, ModelChoice::Small, &color, &aov[..64], size).unwrap_err();
+    assert!(err.contains("64"), "wrong guide count must error: {err}");
+}
+
+#[test]
+fn all_miss_pixels_unchanged() {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("skipped: no compute adapter");
+        return;
+    };
+    let size = (32, 24);
+    let mut state = 42_u64;
+    // Every pixel misses (hit flag 0).
+    let (color, aov) = frame(size, |_, _| [0.3 + rand01(&mut state), 0.4, 0.2], |_, _| false);
+    let out = super::denoise(&gpu, ModelChoice::Small, &color, &aov, size).expect("denoise");
+    for (i, (o, c)) in out.iter().zip(&color).enumerate() {
+        assert_eq!(&o[..3], &c[..3], "pixel {i} missed and must keep its colour");
+    }
+}
+
+#[test]
+fn nan_in_input_survives() {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("skipped: no compute adapter");
+        return;
+    };
+    let size = (16, 16);
+    // One pixel has NaN in its red channel; the rest are mid-grey.
+    let (color, aov) = frame(
+        size,
+        |x, y| {
+            if x == 8 && y == 8 { [f32::NAN, 0.5, 0.5] } else { [0.5; 3] }
+        },
+        |_, _| true,
+    );
+    let out = super::denoise(&gpu, ModelChoice::Small, &color, &aov, size).expect("denoise");
+    // The NaN pixel is denoised (its neighbours pull it to a finite value) or stays NaN;
+    // either way the call must not panic and the surrounding pixels must be finite.
+    let i = (8 * 16 + 8) as usize;
+    for (k, v) in out[i][..3].iter().enumerate() {
+        if v.is_nan() {
+            // Propagated NaN is acceptable.
+        } else {
+            assert!(v.is_finite(), "pixel 8,8 channel {k} is not finite: {v}");
+        }
+    }
+    // A neighbour must be finite.
+    let i2 = (8 * 16 + 7) as usize;
+    for (k, v) in out[i2][..3].iter().enumerate() {
+        assert!(v.is_finite(), "neighbour pixel 8,7 channel {k} must be finite: {v}");
+    }
+}
+
+#[test]
+fn huge_values_dont_overflow() {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("skipped: no compute adapter");
+        return;
+    };
+    let size = (16, 16);
+    // Very bright frame (1e6 nits); autoexposure should scale it down.
+    let (color, aov) = frame(size, |_, _| [1e6, 1e6, 1e6], |_, _| true);
+    let out = super::denoise(&gpu, ModelChoice::Small, &color, &aov, size).expect("denoise");
+    for (i, o) in out.iter().enumerate() {
+        for (k, v) in o[..3].iter().enumerate() {
+            assert!(v.is_finite(), "pixel {i} channel {k} overflowed: {v}");
+        }
+    }
+}
+
+#[test]
+fn tile_edge_validation() {
+    let Some(gpu) = crate::gputest::shared_compute() else {
+        eprintln!("skipped: no compute adapter");
+        return;
+    };
+    let size = (64, 48);
+    let (color, aov) = frame(size, |_, _| [0.5; 3], |_, _| true);
+    // Tile edge must be a multiple of 16 and at least 64.
+    let err = super::denoise_tiled(&gpu, ModelChoice::Small, &color, &aov, size, Some(63)).unwrap_err();
+    assert!(err.contains("63"), "tile 63 must error: {err}");
+    let err = super::denoise_tiled(&gpu, ModelChoice::Small, &color, &aov, size, Some(65)).unwrap_err();
+    assert!(err.contains("65"), "tile 65 must error: {err}");
+    let err = super::denoise_tiled(&gpu, ModelChoice::Small, &color, &aov, size, Some(16)).unwrap_err();
+    assert!(err.contains("16"), "tile 16 must error: {err}");
+    // Valid tile edge works.
+    super::denoise_tiled(&gpu, ModelChoice::Small, &color, &aov, size, Some(64)).expect("tile 64 works");
+}
+
 #[test]
 fn learned_is_unavailable_without_compute() {
     // CADCRAFT_RENDER_LIMITS=webgl2 reaches `check_limits` as `compute_off`.
