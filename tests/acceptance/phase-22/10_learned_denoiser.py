@@ -4,7 +4,10 @@
 # mean relative squared error against a 4096 spp reference is at most half the edge-aware filter's; (d) a 1920 x 1080
 # frame denoises in under 5 s on a GPU (on the software adapter a 320 x 180 frame is denoised and the time printed);
 # (e) without compute shaders the still falls back and says so. No Open Image Denoise code is linked.
-# needs: p22-doc-look, p22-r3d-types, p22-r3d-kernel-hooks, p22-engine-look-keys, p22-engine-render-params, p22-cli-hook, p22-r3d-linear-out, p22-r3d-tza, p22-r3d-unet-cpu, p22-r3d-unet-gpu, p22-engine-denoiser-info
+# (c) uses two independent half references (2026-11-24): the kitchen is lit by rare bright paths, so even the reference
+# is noisy, and with one reference its noise was added to both errors (a floor neither denoiser can go under, which
+# hides the ratio the brief asks for). With r1 and r2 independent, (x - r1)(x - r2) has the expectation (x - truth)^2.
+# needs: p22-doc-look, p22-r3d-types, p22-r3d-kernel-hooks, p22-engine-look-keys, p22-engine-render-params, p22-cli-hook, p22-r3d-linear-out, p22-r3d-tza, p22-r3d-unet-cpu, p22-r3d-unet-gpu, p22-engine-denoiser-info, p22g-learned-kitchen-error
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p22lib.inc')).read())
 
@@ -44,38 +47,58 @@ within(f0[0][1], 0.18, 0.02, 'the furnace frame is mid grey (the check set-up)')
 if worst > 0.01:
     fail('(b) on a flat mid-grey frame the learned denoiser changes no pixel by more than 1 %%: %.3f %%' % (100 * worst))
 
-# (c) the showcase kitchen at 64 spp against 4096 spp.
+# (c) the showcase kitchen at 64 spp against the reference.
 SIZE = (320, 200) if BIG else (96, 64)
 k = dict(final='path', bounces=2, exposure={'ev100': 12})
-# The reference is 4096 spp on a GPU and 1024 on the software adapter (operator 2026-11-24): there the 4096 spp frame
-# alone took about 10 of the gate's 15 minutes, and the check timed out on every merge once the denoiser existed, so
-# its real result (the error ratio) never reached the lead. A 1024 spp reference's own noise is far below the 64 spp
-# errors compared against it.
+# The reference is 4096 spp on a GPU and 1024 on the software adapter (operator 2026-11-24: there the 4096 spp frame
+# alone took about 10 of the gate's 15 minutes). It is rendered as two halves with different seeds, see the header.
 REF_SPP = 4096 if BIG else 1024
-pr, pf, pl = [os.path.join(tmp, x + '.pfm') for x in ('ref', 'filter', 'learned')]
+HALF = REF_SPP // 2
+pr1, pr2, pn, pf, pl = [os.path.join(tmp, x + '.pfm') for x in ('ref1', 'ref2', 'noisy', 'filter', 'learned')]
 cmds = showcase_cmds() + [
-    render_cmd(os.path.join(tmp, 'ref.png'), 'Kitchen', SIZE, spp=REF_SPP, seed=99, denoise=False, pfm=pr, **k),
+    render_cmd(os.path.join(tmp, 'ref1.png'), 'Kitchen', SIZE, spp=HALF, seed=99, denoise=False, pfm=pr1, **k),
+    render_cmd(os.path.join(tmp, 'ref2.png'), 'Kitchen', SIZE, spp=HALF, seed=98, denoise=False, pfm=pr2, **k),
+    render_cmd(os.path.join(tmp, 'noisy.png'), 'Kitchen', SIZE, spp=64, seed=3, denoise=False, pfm=pn, **k),
     render_cmd(os.path.join(tmp, 'filter.png'), 'Kitchen', SIZE, spp=64, seed=3, denoise='filter', pfm=pf, **k),
     render_cmd(os.path.join(tmp, 'learned.png'), 'Kitchen', SIZE, spp=64, seed=3, denoise='learned', pfm=pl, **k)]
 rc, rows, so, se = run(cmds, expect_ok=False, timeout=14000)
-rs = [r for r in render_replies(rows) if r.get('finalMode') == 'path'][-3:]
-if rc != 0 or len(rs) != 3:
-    fail('three path-traced kitchen renders (rc %d, %d replies): %s' % (rc, len(rs), (errors(se)[-3:] or se[-600:])))
-if [r.get('denoiser') for r in rs] != ['none', 'filter', 'learned']:
-    fail('the kitchen renders used none, filter and learned: %r (fallback %r)' % ([r.get('denoiser') for r in rs], rs[2].get('denoiseFallback')))
-_, _, ref = read_pfm(pr)
-eps = (0.05 * sum(lum(p) for p in ref) / len(ref)) ** 2
+rs = [r for r in render_replies(rows) if r.get('finalMode') == 'path'][-5:]
+if rc != 0 or len(rs) != 5:
+    fail('five path-traced kitchen renders (rc %d, %d replies): %s' % (rc, len(rs), (errors(se)[-3:] or se[-600:])))
+if [r.get('denoiser') for r in rs] != ['none', 'none', 'none', 'filter', 'learned']:
+    fail('the kitchen renders used none, none, none, filter and learned: %r (fallback %r)' % ([r.get('denoiser') for r in rs], rs[4].get('denoiseFallback')))
+_, _, r1 = read_pfm(pr1)
+_, _, r2 = read_pfm(pr2)
+if len(r1) != len(r2) or r1 == r2:
+    fail('the two half references are two different renders of one size')
+ref = [tuple((a[c] + b[c]) / 2 for c in range(3)) for a, b in zip(r1, r2)]
+ref_mean = sum(lum(p) for p in ref) / len(ref)
+if ref_mean <= 0:
+    fail('the kitchen reference is black')
+eps = (0.05 * ref_mean) ** 2
 
 
 def mrse(path):
+    # the mean relative squared error, with the reference noise cancelled: E[(x - r1)(x - r2)] = (x - truth)^2
     _, _, px = read_pfm(path)
     if len(px) != len(ref):
         fail('image sizes differ')
-    return sum((x[c] - r[c]) ** 2 / (r[c] ** 2 + eps) for x, r in zip(px, ref) for c in range(3)) / (3 * len(ref))
+    return sum((x[c] - a[c]) * (x[c] - b[c]) / (m[c] ** 2 + eps) for x, a, b, m in zip(px, r1, r2, ref) for c in range(3)) / (3 * len(ref))
 
 
-e_f, e_l = mrse(pf), mrse(pl)
-print('kitchen, 64 spp against 4096: MRSE filter %.5f, learned %.5f (ratio %.2f)' % (e_f, e_l, e_l / e_f if e_f > 0 else 0))
+e_n, e_f, e_l = mrse(pn), mrse(pf), mrse(pl)
+print('kitchen, 64 spp against 2 x %d: MRSE noisy %.5f, filter %.5f, learned %.5f (learned / filter %.2f)' % (HALF, e_n, e_f, e_l, e_l / e_f if e_f > 0 else 0))
+if not e_n > 0:
+    fail('(c) the 64 spp frame differs from the reference (the check set-up): MRSE %.5f' % e_n)
+if not 0 < e_f < e_n:
+    fail('(c) the edge-aware filter lowers the 64 spp error (the check set-up): %.5f against %.5f' % (e_f, e_n))
+_, _, xn = read_pfm(pn)
+_, _, xl = read_pfm(pl)
+if xn == xl:
+    fail('(c) the learned denoiser returned its input unchanged')
+m_n, m_l = sum(lum(p) for p in xn) / len(xn), sum(lum(p) for p in xl) / len(xl)
+if abs(m_l - m_n) > 0.15 * m_n:
+    fail('(c) the learned result keeps the frame brightness: mean %.2f against %.2f nits' % (m_l, m_n))
 if not e_l <= 0.5 * e_f:
     fail('(c) the learned result error is at most half the edge-aware filter error: %.5f vs %.5f' % (e_l, e_f))
 
