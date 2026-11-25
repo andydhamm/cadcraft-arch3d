@@ -30,6 +30,7 @@ pub mod cache;
 pub mod denoise;
 pub mod device;
 mod edge_table;
+mod energy;
 pub mod env;
 pub mod learned;
 mod lens;
