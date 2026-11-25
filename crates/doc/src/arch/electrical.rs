@@ -258,4 +258,126 @@ mod tests {
         assert!(!is_electrical_handle(connection_handle(cn_id)));
         assert!(!is_connection_handle(electrical_handle(id)));
     }
+
+    #[test]
+    fn electrical_device_defaults_and_round_trip() {
+        let d = ElectricalDevice::default();
+        assert_eq!(d.id, ArchId(0));
+        assert_eq!(d.kind, ElectricalKind::Duplex);
+        assert_eq!(d.wall, ArchId(0));
+        assert_eq!(d.side, WallSide::Left);
+        assert_eq!(d.offset, 0.0);
+        assert_eq!(d.height, 0.3);
+        assert!(!d.counter);
+        assert_eq!(d.level, 0);
+
+        let json = serde_json::to_string(&d).unwrap();
+        let back: ElectricalDevice = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, d);
+    }
+
+    #[test]
+    fn connection_and_light_state_defaults_and_round_trip() {
+        let c = Connection::default();
+        assert_eq!(c.id, ArchId(0));
+        assert_eq!(c.from, ArchId(0));
+        assert!(c.to.is_empty());
+        assert_eq!(c.bulge, 0.0);
+
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Connection = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, c);
+
+        let ls = LightState::default();
+        assert!(ls.on);
+        assert_eq!(ls.brightness, 1.0);
+
+        let json = serde_json::to_string(&ls).unwrap();
+        let back: LightState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ls);
+    }
+
+    #[test]
+    fn handle_range_boundaries() {
+        let el_base = super::super::ARCH_HANDLE_BASE + ELECTRICAL_HANDLE_OFFSET;
+        let cn_base = super::super::ARCH_HANDLE_BASE + CONNECTION_HANDLE_OFFSET;
+
+        // Electrical: id 0 is in range, id 32767 is in range, id 32768 is out
+        assert!(is_electrical_handle(electrical_handle(ArchId(0))));
+        assert!(is_electrical_handle(electrical_handle(ArchId(32767))));
+        assert!(!is_electrical_handle(Handle(el_base + 32768)));
+
+        // Connection: id 0 is in range, id 32767 is in range, id 32768 is out
+        assert!(is_connection_handle(connection_handle(ArchId(0))));
+        assert!(is_connection_handle(connection_handle(ArchId(32767))));
+        assert!(!is_connection_handle(Handle(cn_base + 32768)));
+
+        // Electrical and connection ranges are disjoint
+        assert!(!is_electrical_handle(connection_handle(ArchId(0))));
+        assert!(!is_connection_handle(electrical_handle(ArchId(0))));
+    }
+
+    #[test]
+    fn label_parsing_edge_cases() {
+        // Empty string
+        assert_eq!(parse_electrical_label(""), None);
+        assert_eq!(parse_connection_label(""), None);
+
+        // Just prefix, no number
+        assert_eq!(parse_electrical_label("el"), None);
+        assert_eq!(parse_connection_label("cn"), None);
+
+        // Whitespace
+        assert_eq!(parse_electrical_label("  "), None);
+        assert_eq!(parse_electrical_label("  el7  "), Some(ArchId(7)));
+
+        // Negative number
+        assert_eq!(parse_electrical_label("el-1"), None);
+
+        // Very large number (overflow u32)
+        assert_eq!(parse_electrical_label("el4294967296"), None);
+
+        // Non-numeric suffix
+        assert_eq!(parse_electrical_label("el7x"), None);
+
+        // No prefix (just number)
+        assert_eq!(parse_electrical_label("7"), Some(ArchId(7)));
+        assert_eq!(parse_connection_label("3"), Some(ArchId(3)));
+    }
+
+    #[test]
+    fn electrical_kind_edge_cases() {
+        // parse with case variations (should fail - keys are lowercase)
+        assert_eq!(ElectricalKind::parse("Duplex"), None);
+        assert_eq!(ElectricalKind::parse("DUPLEX"), None);
+
+        // is_switch
+        assert!(!ElectricalKind::Duplex.is_switch());
+        assert!(!ElectricalKind::Gfci.is_switch());
+        assert!(!ElectricalKind::Outlet240.is_switch());
+        assert!(ElectricalKind::SinglePole.is_switch());
+        assert!(ElectricalKind::ThreeWay.is_switch());
+        assert!(ElectricalKind::Dimmer.is_switch());
+
+        // layer
+        assert_eq!(ElectricalKind::Duplex.layer(), "E-POWR");
+        assert_eq!(ElectricalKind::SinglePole.layer(), "E-LITE");
+
+        // default_height
+        assert_eq!(ElectricalKind::Duplex.default_height(), 0.3);
+        assert_eq!(ElectricalKind::SinglePole.default_height(), 1.2);
+    }
+
+    #[test]
+    fn light_set_round_trip() {
+        let mut ls = LightSet::default();
+        ls.name = "Evening".into();
+        ls.lights.insert("lf0".into(), LightState { on: true, brightness: 1.0 });
+        ls.lights.insert("lf1".into(), LightState { on: false, brightness: 0.0 });
+
+        let json = serde_json::to_string(&ls).unwrap();
+        let back: LightSet = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ls);
+        assert_eq!(back.lights.len(), 2);
+    }
 }
