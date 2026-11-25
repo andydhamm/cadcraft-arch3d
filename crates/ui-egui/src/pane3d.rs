@@ -2904,6 +2904,59 @@ mod tests {
         assert!(matches!(Style3d::Technical.render_style(), cadcraft_render3d::Style::Technical));
     }
 
+    #[test]
+    fn style_selector_next_from_each_start_returns_after_six() {
+        for start in Style3d::ALL {
+            let mut s = start;
+            let mut visited = Vec::with_capacity(6);
+            for _ in 0..6 {
+                visited.push(s);
+                s = s.next();
+            }
+            assert_eq!(s, start, "cycle from {:?} must return after six steps", start);
+            assert_eq!(visited.len(), 6);
+            for other in Style3d::ALL {
+                assert!(visited.contains(&other), "cycle from {:?} missed {:?}", start, other);
+            }
+        }
+    }
+
+    #[test]
+    fn style_selector_all_array_order_matches_next() {
+        let all = Style3d::ALL;
+        for (i, style) in all.iter().enumerate() {
+            let next_index = (i + 1) % all.len();
+            assert_eq!(style.next(), all[next_index], "{:?}.next() must be ALL[{}]", style, next_index);
+        }
+    }
+
+    #[test]
+    fn style_selector_all_labels_distinct() {
+        let all = Style3d::ALL;
+        let labels: Vec<&str> = all.iter().map(|s| s.label()).collect();
+        assert_eq!(labels.len(), 6);
+        for i in 0..labels.len() {
+            for j in (i + 1)..labels.len() {
+                assert_ne!(labels[i], labels[j], "duplicate label: {}", labels[i]);
+            }
+            assert!(!labels[i].is_empty(), "style {:?} has an empty label", all[i]);
+        }
+    }
+
+    #[test]
+    fn style_selector_default_is_first_in_all() {
+        assert_eq!(Style3d::default(), Style3d::ALL[0]);
+        assert_eq!(Style3d::default(), Style3d::Shaded);
+    }
+
+    #[test]
+    fn style_selector_clay_technical_uk_translations() {
+        let file = include_str!("i18n/uk.tsv");
+        for label in ["Clay", "Technical"] {
+            assert!(file.contains(&format!("\t{label}\t")), "uk.tsv missing row for {label}");
+        }
+    }
+
     fn full_of(pane: &Pane3d) -> cadcraft_render3d::camera::FullCamera {
         match pane.camera() {
             cadcraft_render3d::Camera::Full(f) => f,
