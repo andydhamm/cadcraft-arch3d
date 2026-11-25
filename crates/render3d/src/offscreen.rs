@@ -1088,6 +1088,12 @@ mod offscreen_behavior_tests {
     }
 
     #[test]
+    fn clay_style_code_matches_pipeline_constant() {
+        // The Style::Clay code must equal the pipeline constant so the shader recognises it.
+        assert_eq!(Style::Clay.code(), crate::pipeline::STYLE_CLAY);
+    }
+
+    #[test]
     fn offscreen_resize_same_size_returns_false() {
         with_offscreen((100, 100), |off| {
             assert!(!off.resize((100, 100)), "same size should return false");
