@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 18:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 18:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
-12,284 workspace tests passing at the last merge · 1422 segments merged in all · 0 of 15 seats working
+12,293 workspace tests passing at the last merge · 1423 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-25 18:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 25 23:29–Dec 10 20:04 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 25 23:44–Dec 10 20:18 UTC |
 
 ## Phase 23 segments
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 18:07 | `harden-p22-r3d-clamp` | merged | 12,293 pass | tturbo-mac |
 | Nov 25 17:40 | `harden-p15-io-electrical-node` | merged | 12,284 pass | tturbo-mac |
 | Nov 25 17:22 | `harden-p22-r3d-sun-disc` | merged | 12,280 pass | tturbo-mac |
 | Nov 25 15:29 | `harden-p16-tray-i18n` | merged | 12,275 pass | tturbo-mac |
@@ -55,7 +56,6 @@ none yet
 | Nov 25 06:49 | `p22i-learned-firefly-spread` | refused | 0 pass | claude-sonnet-b |
 | Nov 25 06:49 | `harden-p15-docs-user-guide` | refused | 12,271 pass | tturbo-mac |
 | Nov 25 05:56 | `harden-p16-rw-overhead-3d` | merged | 12,275 pass | tturbo-mac |
-| Nov 25 05:30 | `harden-p22h-learned-energy` | merged | 12,266 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
