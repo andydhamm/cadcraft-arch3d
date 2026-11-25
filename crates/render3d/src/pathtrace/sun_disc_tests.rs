@@ -184,3 +184,70 @@ fn glossy_floor_sees_the_sun_disc_with_mis() {
     let with_mis = mean(1, true);
     assert!((with_mis - point).abs() < point * 0.08, "disc with MIS {with_mis} vs point sun {point}");
 }
+
+#[test]
+fn nan_disc_is_treated_as_no_disc() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = open_scene();
+    let points = [[0.0, 0.0, 0.001]];
+    let nan = lux_at(&gpu, &scene, &sun_lighting(30.0, f32::NAN), &points, 256);
+    let zero = lux_at(&gpu, &scene, &sun_lighting(30.0, 0.0), &points, 256);
+    let want = f64::from(SUN_LUX) * 0.5;
+    for (n, z) in nan.iter().zip(&zero) {
+        assert!((n - want).abs() < want * 0.01, "NaN disc {n} lx, want {want}");
+        assert!((z - want).abs() < want * 0.01, "zero disc {z} lx, want {want}");
+        assert!((n - z).abs() < z * 0.01, "NaN disc {n} vs zero disc {z}");
+    }
+}
+
+#[test]
+fn disc_larger_than_ninety_is_clamped() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = open_scene();
+    let points = [[0.0, 0.0, 0.001]];
+    let big = lux_at(&gpu, &scene, &sun_lighting(30.0, 180.0), &points, 256);
+    let ninety = lux_at(&gpu, &scene, &sun_lighting(30.0, 90.0), &points, 256);
+    let want = f64::from(SUN_LUX) * 0.5;
+    for (b, n) in big.iter().zip(&ninety) {
+        assert!((b - want).abs() < want * 0.01, "180 disc {b} lx, want {want}");
+        assert!((n - want).abs() < want * 0.01, "90 disc {n} lx, want {want}");
+        assert!((b - n).abs() < n * 0.01, "180 disc {b} vs 90 disc {n}");
+    }
+}
+
+#[test]
+fn disc_with_sun_below_horizon_gives_no_light() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = open_scene();
+    let points = [[0.0, 0.0, 0.001]];
+    let below = lux_at(&gpu, &scene, &sun_lighting(-10.0, 0.53), &points, 64);
+    for v in below.iter() {
+        assert!(*v < 1.0, "sun below horizon should give no light: {v} lx");
+    }
+}
+
+#[test]
+fn disc_render_is_deterministic_with_same_seed() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = open_scene();
+    let points = [[0.0, 0.0, 0.001], [1.0, 0.0, 0.001], [2.0, 0.0, 0.001]];
+    let lighting = sun_lighting(30.0, 0.53);
+    let a = lux_at(&gpu, &scene, &lighting, &points, 64);
+    let b = lux_at(&gpu, &scene, &lighting, &points, 64);
+    assert_eq!(a, b, "same seed must give same disc irradiance");
+}
+
+#[test]
+fn very_small_disc_approaches_point_sun() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let scene = open_scene();
+    let points = [[0.0, 0.0, 0.001]];
+    let tiny = lux_at(&gpu, &scene, &sun_lighting(30.0, 0.001), &points, 256);
+    let point = lux_at(&gpu, &scene, &sun_lighting(30.0, 0.0), &points, 256);
+    let want = f64::from(SUN_LUX) * 0.5;
+    for (t, p) in tiny.iter().zip(&point) {
+        assert!((t - want).abs() < want * 0.01, "tiny disc {t} lx, want {want}");
+        assert!((p - want).abs() < want * 0.01, "point sun {p} lx, want {want}");
+        assert!((t - p).abs() < p * 0.01, "tiny disc {t} vs point {p}");
+    }
+}
