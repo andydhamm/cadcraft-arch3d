@@ -244,4 +244,56 @@ mod tests {
         restore_energy(&narrow, (3, 40), &mut o);
         assert!(o.iter().all(|p| p[0].is_finite()));
     }
+
+    #[test]
+    fn restore_energy_on_single_pixel_frame() {
+        let input = [[2.0, 2.0, 2.0, 0.0]];
+        let mut out = [[1.0, 1.0, 1.0, 0.0]];
+        restore_energy(&input, (1, 1), &mut out);
+        let ratio = 2.0 / 1.0;
+        for c in 0..3 {
+            assert!((out[0][c] - ratio).abs() < 1e-6, "channel {c}: {}", out[0][c]);
+        }
+    }
+
+    #[test]
+    fn restore_energy_on_colored_pixels() {
+        let (w, h) = (8usize, 8usize);
+        let input: Vec<[f32; 4]> = vec![[2.0, 0.5, 0.2, 0.0]; w * h];
+        let mut out: Vec<[f32; 4]> = vec![[1.0, 1.0, 1.0, 0.0]; w * h];
+        restore_energy(&input, (w as u32, h as u32), &mut out);
+        let li = super::super::luminance([2.0, 0.5, 0.2]);
+        let ld = super::super::luminance([1.0, 1.0, 1.0]);
+        let expected = li / ld;
+        for p in &out {
+            for c in 0..3 {
+                assert!((p[c] - expected).abs() < 0.01, "channel {c}: {}", p[c]);
+            }
+        }
+    }
+
+    #[test]
+    fn restore_energy_scales_down_when_denoised_is_brighter() {
+        let (w, h) = (8usize, 8usize);
+        let input: Vec<[f32; 4]> = vec![[0.5, 0.5, 0.5, 0.0]; w * h];
+        let mut out: Vec<[f32; 4]> = vec![[1.0, 1.0, 1.0, 0.0]; w * h];
+        restore_energy(&input, (w as u32, h as u32), &mut out);
+        for p in &out {
+            for c in 0..3 {
+                assert!((p[c] - 0.5).abs() < 1e-6, "channel {c}: {}", p[c]);
+            }
+        }
+    }
+
+    #[test]
+    fn restore_energy_all_converged_no_change() {
+        let (w, h) = (8usize, 8usize);
+        let input: Vec<[f32; 4]> = vec![[1.0, 0.5, 0.25, 0.0]; w * h];
+        let mut out = input.clone();
+        let before = out.clone();
+        restore_energy(&input, (w as u32, h as u32), &mut out);
+        for (i, (a, b)) in before.iter().zip(&out).enumerate() {
+            assert!(a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits()), "pixel {i} changed");
+        }
+    }
 }
