@@ -3895,6 +3895,33 @@ mod tests {
     }
 
     #[test]
+    fn inspect_wall_retaining_reports_base_and_top() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(0.0, 0.0),
+                end: cadcraft_geom::Vec2::new(5.0, 0.0),
+                thickness: 0.3,
+                height: 2.0,
+                retaining: true,
+                freeboard: Some(0.3),
+                footing: Some(0.4),
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        let w = &walls[0];
+        assert_eq!(w["retaining"], true);
+        assert!(w["base"].is_number());
+        assert!(w["top"].is_number());
+        assert!((w["freeboard"].as_f64().unwrap_or(f64::NAN) - 0.3).abs() < 1e-9);
+        assert!((w["footing"].as_f64().unwrap_or(f64::NAN) - 0.4).abs() < 1e-9);
+    }
+
+    #[test]
     fn inspect_cameras_modified_flag_correct() {
         let mut s = Session::new();
         match s.doc_mut() {

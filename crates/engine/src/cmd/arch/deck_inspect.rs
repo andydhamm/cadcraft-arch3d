@@ -130,4 +130,45 @@ mod tests {
     fn rows_of_model(m: &ArchModel) -> Vec<Value> {
         rows(m)
     }
+
+    #[test]
+    fn decks_rows_multiple_decks() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), 0.2));
+        m.rooms.push(Room {
+            id: ArchId(3),
+            room_type: RoomType::Deck,
+            polygon: vec![Vec2::new(2.0, 8.1), Vec2::new(6.0, 8.1), Vec2::new(6.0, 11.1), Vec2::new(2.0, 11.1)],
+            deck_height: Some(0.9),
+            ..Room::default()
+        });
+        m.rooms.push(Room {
+            id: ArchId(4),
+            room_type: RoomType::Deck,
+            polygon: vec![Vec2::new(7.0, 8.1), Vec2::new(10.0, 8.1), Vec2::new(10.0, 11.1), Vec2::new(7.0, 11.1)],
+            deck_height: Some(1.2),
+            ..Room::default()
+        });
+        let rows = rows(&m);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["id"], "r3");
+        assert_eq!(rows[1]["id"], "r4");
+        assert_eq!(rows[1]["top"], 1.2);
+    }
+
+    #[test]
+    fn decks_row_without_height_has_top_at_elevation() {
+        let mut m = model(None);
+        m.rooms[0].deck_height = None;
+        let rows = rows(&m);
+        assert_eq!(rows[0]["top"], 0.0);
+    }
+
+    #[test]
+    fn decks_rows_not_asked_for_is_empty() {
+        let m = model(None);
+        let mut out = JsonMap::new();
+        inspect_decks(&m, &json!({}), &mut out);
+        assert!(out.is_empty());
+    }
 }
