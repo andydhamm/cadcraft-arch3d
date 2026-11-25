@@ -482,4 +482,20 @@ mod tests {
         assert!((expected2 - 1000.0).abs() < 1.0, "albedo 0.999: expected = 1000 * emission, got {}", expected2);
         assert!(expected2.is_finite(), "expected must be finite");
     }
+
+    /// Furnace with albedo 1.0: division by zero, expected is infinite.
+    #[test]
+    fn furnace_albedo_one_diverges() {
+        let f = Furnace { albedo: 1.0, emission: 1.0 };
+        assert!(f.expected().is_infinite(), "albedo 1.0: expected must be infinite");
+    }
+
+    /// Furnace with albedo > 1.0: expected is negative (unphysical but defined).
+    #[test]
+    fn furnace_albedo_greater_than_one() {
+        let f = Furnace { albedo: 1.5, emission: 1.0 };
+        let expected = f.expected();
+        assert!(expected < 0.0, "albedo > 1.0: expected must be negative, got {}", expected);
+        assert!((expected - (-2.0)).abs() < 1e-6, "albedo 1.5: expected = -2 * emission, got {}", expected);
+    }
 }
