@@ -337,4 +337,54 @@ mod tests {
             }
         }
     }
+
+    /// A one-tread stair (two risers) builds exactly one tread and two risers.
+    #[test]
+    fn minimal_stair_one_tread() {
+        let s = Stair { treads: 1, risers: 2, riser_height: 0.15, tread_depth: 0.3, run: 0.3, rise: 0.3, ..phase5_stair() };
+        let ms = stair_meshes(&s, 0.0, [false, false]);
+        assert_eq!(of(&ms, "stair-tread").len(), 1);
+        assert_eq!(of(&ms, "stair-riser").len(), 2);
+        // Tread 1: u in [nosing_u(1)= -0.025, 0.3], z in [0.15 - 0.025, 0.15].
+        let t = bb(of(&ms, "stair-tread")[0]);
+        assert!(near(t[0], 1.975) && near(t[3], 2.3), "{t:?}");
+        assert!(near(t[2], 0.125) && near(t[5], 0.15), "{t:?}");
+        // Top riser reaches the full rise.
+        let rs = of(&ms, "stair-riser");
+        assert!(near(bb(rs[1])[5], 0.3));
+    }
+
+    /// A narrow stair (0.1 m) leaves a sliver for treads between two stringers.
+    #[test]
+    fn narrow_stair_stringers_dont_overlap() {
+        let s = Stair { width: 0.1, ..phase5_stair() };
+        let ms = stair_meshes(&s, 0.0, [false, false]);
+        // sL = sR = 0.038, so t0 = -0.05 + 0.038 = -0.012, t1 = 0.05 - 0.038 = 0.012.
+        // The flight is centred on start.y = 1.0.
+        let t = bb(of(&ms, "stair-tread")[0]);
+        assert!(near(t[1], 1.0 - 0.012) && near(t[4], 1.0 + 0.012), "{t:?}");
+        assert_eq!(of(&ms, "stair-stringer").len(), 2);
+        for m in of(&ms, "stair-stringer") {
+            assert!(m.is_manifold());
+        }
+    }
+
+    /// A stair travelling -x (direction 180°) places treads behind `start`.
+    #[test]
+    fn stair_direction_180() {
+        let s = Stair { direction: std::f64::consts::PI, start: Vec2::new(4.0, 1.0), ..phase5_stair() };
+        let ms = stair_meshes(&s, 0.0, [false, false]);
+        let t = bb(of(&ms, "stair-tread")[0]);
+        // Tread 1 spans u [-0.025, 0.254] along -x: x in [3.746, 4.025], y in [0.538, 1.462].
+        assert!(near(t[0], 3.746) && near(t[3], 4.025), "{t:?}");
+        assert!(near(t[1], 0.538) && near(t[4], 1.462), "{t:?}");
+    }
+
+    /// Riser meshes are capped at treads + 1 even when `risers` is larger.
+    #[test]
+    fn riser_count_capped_at_treads_plus_one() {
+        let s = Stair { risers: 20, treads: 15, ..phase5_stair() };
+        let ms = stair_meshes(&s, 0.0, [false, false]);
+        assert_eq!(of(&ms, "stair-riser").len(), 16);
+    }
 }
