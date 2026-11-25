@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 05:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 47 of 48 segments merged · 14 of 15 acceptance checks**
 
-12,244 workspace tests passing at the last merge · 1413 segments merged in all · 0 of 15 seats working
+12,257 workspace tests passing at the last merge · 1414 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,7 +32,7 @@ Updated 2026-11-25 05:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 14 / 15 | 35.5 h so far · expected done Nov 25 06:12–Nov 25 13:30 UTC |
+| 22 | Photoreal stills | building | 14 / 15 | 35.8 h so far · expected done Nov 25 06:27–Nov 25 13:45 UTC |
 
 ## Phase 22 segments
 
@@ -46,6 +46,7 @@ Updated 2026-11-25 05:00 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 05:06 | `harden-p17-observables-inspect` | merged | 12,257 pass | tturbo-mac |
 | Nov 25 04:15 | `harden-p17-scene-plumbing-pick` | merged | 12,244 pass | tturbo-mac |
 | Nov 25 03:56 | `p22h-learned-energy` | merged | 12,233 pass | claude-sonnet-d |
 | Nov 25 03:38 | `harden-p22g-adaptive-robust-error` | merged | 12,227 pass | tturbo-mac |
@@ -57,24 +58,23 @@ Updated 2026-11-25 05:00 UTC. This page and the card in the README are regenerat
 | Nov 25 00:55 | `harden-p22-arch3d-material-ext` | merged | 12,112 pass | tturbo-mac |
 | Nov 25 00:55 | `harden-p22-r3d-lens-path` | merged | 12,112 pass | tturbo-mac2 |
 | Nov 25 00:55 | `harden-p22g-trans-shadow-side` | merged | 12,112 pass | tturbo-mac2 |
-| Nov 25 00:10 | `upstream-sync-5e4bbe594` | merged | 12,084 pass | claude-sonnet-a |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1448 |
-| bonsai-b | bonsai2-27b | agent | 1382 |
+| bonsai-b | bonsai2-27b | agent | 1383 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | agent | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
 | claude-sonnet-d | sonnet | idle | 119 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1338 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1340 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1251 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1252 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 751 |
