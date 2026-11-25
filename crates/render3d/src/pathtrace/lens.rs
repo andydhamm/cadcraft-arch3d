@@ -6,6 +6,7 @@
 
 use super::scene_gpu::{GpuFrame, PHOTO_DOF, PHOTO_PANINI, PHOTO_SHIFT};
 use crate::camera::Camera;
+use crate::lens::LensOptions;
 use crate::lit_frame::Lighting;
 use cadcraft_arch3d::lens::{aperture_radius_m, camera_basis};
 
@@ -14,8 +15,14 @@ use cadcraft_arch3d::lens::{aperture_radius_m, camera_basis};
 /// aperture radius in metres, focus distance in metres) and the lens flags of `camera` at `size`
 /// pixels. A camera with a non-finite number leaves the frame as it was.
 pub(super) fn fill_frame(frame: &mut GpuFrame, lighting: &Lighting, camera: &Camera, size: (u32, u32)) {
+    let eye = camera.eye();
+    let target = camera.target();
+    let fov = camera.fov_deg();
+    if !eye.is_finite() || !target.is_finite() || !fov.is_finite() {
+        return;
+    }
     let (right, up, fwd) = camera_basis(camera);
-    let tan_v = (camera.fov_deg().to_radians() * 0.5).tan();
+    let tan_v = (fov.to_radians() * 0.5).tan();
     let aspect = f64::from(size.0.max(1)) / f64::from(size.1.max(1));
     let tan_h = tan_v * aspect;
     let all = [right[0], right[1], right[2], up[0], up[1], up[2], fwd[0], fwd[1], fwd[2], tan_v, tan_h];
@@ -82,5 +89,127 @@ mod tests {
         assert!((frame.lens2[0] - 2.0 * frame.lens2[1]).abs() < 1e-5);
         assert_eq!(frame.lens, [0.0; 4]);
         assert_eq!(frame.photo, [0; 4]);
+    }
+
+    #[test]
+    fn lens_flags_and_values() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { panini: true, compression: 0.5, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_PANINI);
+        assert!((frame.lens[0] - 0.5).abs() < 1e-6);
+        assert_eq!(frame.lens[1], 0.0);
+        assert_eq!(frame.lens[2], 0.0);
+        assert_eq!(frame.lens[3], 0.0);
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { shift: 0.1, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_SHIFT);
+        assert_eq!(frame.lens[0], 0.0);
+        assert!((frame.lens[1] - 0.1).abs() < 1e-6);
+        assert_eq!(frame.lens[2], 0.0);
+        assert_eq!(frame.lens[3], 0.0);
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_DOF);
+        assert_eq!(frame.lens[0], 0.0);
+        assert_eq!(frame.lens[1], 0.0);
+        assert!(frame.lens[2] > 0.0);
+        assert!((frame.lens[3] - 3.0).abs() < 1e-6);
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting {
+            lens: LensOptions { panini: true, compression: 0.5, shift: 0.1, aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() },
+            ..Lighting::default()
+        };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_PANINI | PHOTO_SHIFT | PHOTO_DOF);
+        assert!((frame.lens[0] - 0.5).abs() < 1e-6);
+        assert!((frame.lens[1] - 0.1).abs() < 1e-6);
+        assert!(frame.lens[2] > 0.0);
+        assert!((frame.lens[3] - 3.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn aperture_radius_matches_formula() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { aperture: Some(2.8), focus: Some(3.0), ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        let expected_radius = aperture_radius_m(f64::from(frame.lens2[0]), 2.8) as f32;
+        assert!((frame.lens[2] - expected_radius).abs() < 1e-6, "aperture radius {}/{}", frame.lens[2], expected_radius);
+    }
+
+    #[test]
+    fn nan_compression_is_ignored() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { panini: true, compression: f32::NAN, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0] & PHOTO_PANINI, 0, "NaN compression should not set PHOTO_PANINI");
+    }
+
+    #[test]
+    fn nan_shift_is_ignored() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { shift: f32::NAN, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0] & PHOTO_SHIFT, 0, "NaN shift should not set PHOTO_SHIFT");
+    }
+
+    #[test]
+    fn nan_aperture_is_ignored() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { aperture: Some(f32::NAN), focus: Some(3.0), ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0] & PHOTO_DOF, 0, "NaN aperture should not set PHOTO_DOF");
+    }
+
+    #[test]
+    fn large_compression_is_clamped() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { panini: true, compression: 1e9, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_PANINI);
+        assert!((frame.lens[0] - 1e6).abs() < 1e-3, "compression should be clamped to 1e6: {}", frame.lens[0]);
+    }
+
+    #[test]
+    fn small_focus_distance_is_clamped() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { aperture: Some(2.8), focus: Some(0.001), ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert!((frame.lens[3] - 0.01).abs() < 1e-6, "focus should be clamped to 0.01: {}", frame.lens[3]);
+    }
+
+    #[test]
+    fn square_image_has_equal_tan_h_and_tan_v() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        fill_frame(&mut frame, &Lighting::default(), &camera, (200, 200));
+        assert!((frame.lens2[0] - frame.lens2[1]).abs() < 1e-6, "square image: tan_h should equal tan_v: {} vs {}", frame.lens2[0], frame.lens2[1]);
+    }
+
+    #[test]
+    fn tiny_image_size_does_not_panic() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        fill_frame(&mut frame, &Lighting::default(), &camera, (1, 1));
+        assert!(frame.lens2[0] > 0.0 && frame.lens2[1] > 0.0, "tiny image: tan_h and tan_v should be positive");
+    }
+
+    #[test]
+    fn negative_shift_is_applied() {
+        let camera = Camera::Orbit(Orbit::new(Vec3::new(0.0, 0.0, 0.0), 30.0, 20.0, 10.0, 60.0));
+        let mut frame = GpuFrame::default();
+        let lighting = Lighting { lens: LensOptions { shift: -0.2, ..LensOptions::default() }, ..Lighting::default() };
+        fill_frame(&mut frame, &lighting, &camera, (200, 100));
+        assert_eq!(frame.photo[0], PHOTO_SHIFT);
+        assert!((frame.lens[1] - (-0.2)).abs() < 1e-6, "shift should be -0.2: {}", frame.lens[1]);
     }
 }
