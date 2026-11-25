@@ -143,14 +143,14 @@ fn run_railing(s: &mut Session, p: &Value) -> Result<Value> {
     let thickness = size_param("railing", p, "thickness", false)?.unwrap_or(DEFAULT_THICKNESS);
 
     // --- Post spacing in [0.3, 3.0] (default 1.8) and inset |i| <= 0.5 (default 0); never clamped ---
-    let post_spacing = match p.get("postSpacing").filter(|v| !v.is_null()) {
+    let post_spacing = match p.get("postSpacing") {
         None => Railing::default().post_spacing,
         Some(v) => match v.as_f64().filter(|x| x.is_finite() && (MIN_POST_SPACING..=MAX_POST_SPACING).contains(x)) {
             Some(x) => x,
             None => return Err(bad("railing", format!("`postSpacing` must be a number in [{MIN_POST_SPACING}, {MAX_POST_SPACING}]"))),
         },
     };
-    let inset = match p.get("inset").filter(|v| !v.is_null()) {
+    let inset = match p.get("inset") {
         None => 0.0,
         Some(v) => match v.as_f64().filter(|x| x.is_finite() && x.abs() <= MAX_INSET) {
             Some(x) => x,
