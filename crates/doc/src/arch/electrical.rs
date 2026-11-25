@@ -299,8 +299,8 @@ mod tests {
 
     #[test]
     fn handle_range_boundaries() {
-        let el_base = super::ARCH_HANDLE_BASE + ELECTRICAL_HANDLE_OFFSET;
-        let cn_base = super::ARCH_HANDLE_BASE + CONNECTION_HANDLE_OFFSET;
+        let el_base = super::super::ARCH_HANDLE_BASE + ELECTRICAL_HANDLE_OFFSET;
+        let cn_base = super::super::ARCH_HANDLE_BASE + CONNECTION_HANDLE_OFFSET;
 
         // Electrical: id 0 is in range, id 32767 is in range, id 32768 is out
         assert!(is_electrical_handle(electrical_handle(ArchId(0))));
