@@ -183,10 +183,12 @@ pub(super) fn mean_guides(aov: &mut [[f32; 4]], counts: &[f32]) {
             for c in &mut nrm[..3] {
                 *c /= n;
             }
-            let len = (nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]).sqrt();
-            if len.is_finite() && len > 1e-6 {
-                for c in &mut nrm[..3] {
-                    *c /= len;
+            if count.is_finite() {
+                let len = (nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]).sqrt();
+                if len.is_finite() && len > 1e-6 {
+                    for c in &mut nrm[..3] {
+                        *c /= len;
+                    }
                 }
             }
         }
