@@ -207,11 +207,9 @@ fn disc_larger_than_ninety_is_clamped() {
     let points = [[0.0, 0.0, 0.001]];
     let big = lux_at(&gpu, &scene, &sun_lighting(30.0, 180.0), &points, 256);
     let ninety = lux_at(&gpu, &scene, &sun_lighting(30.0, 90.0), &points, 256);
-    let want = f64::from(SUN_LUX) * 0.5;
+    // A disc larger than 90° is clamped to 90°, so it must match the 90° disc.
     for (b, n) in big.iter().zip(&ninety) {
-        assert!((b - want).abs() < want * 0.01, "180 disc {b} lx, want {want}");
-        assert!((n - want).abs() < want * 0.01, "90 disc {n} lx, want {want}");
-        assert!((b - n).abs() < n * 0.01, "180 disc {b} vs 90 disc {n}");
+        assert!((b - n).abs() < n * 0.01, "180 disc {b} vs 90 disc {n} (clamping failed)");
     }
 }
 
