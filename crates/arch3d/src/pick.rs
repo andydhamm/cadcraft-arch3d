@@ -456,4 +456,63 @@ mod tests {
         // The triangle has an Infinity corner, so it should be skipped.
         assert!(bvh.is_empty());
     }
+
+    #[test]
+    fn pick_empty_scene_returns_none() {
+        let scene = Scene3d::default();
+        let bvh = Bvh::build(&scene);
+        assert!(scene.pick_with(&bvh, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)).is_none());
+    }
+
+    #[test]
+    fn pick_zero_direction_returns_none() {
+        let mut m = Mesh::new("test", ArchId(1));
+        m.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        m.normals = vec![[0.0, 0.0, 1.0]; 3];
+        m.uvs = vec![[0.0, 0.0]; 3];
+        m.indices = vec![0, 1, 2];
+        let scene = Scene3d { meshes: vec![m], ..Scene3d::default() };
+        let bvh = Bvh::build(&scene);
+        assert!(scene.pick_with(&bvh, Vec3::new(0.5, 0.5, 1.0), Vec3::ZERO).is_none());
+    }
+
+    #[test]
+    fn pick_tie_breaks_by_lower_index() {
+        // Two triangles at same z, same distance from ray; lower mesh index wins.
+        let mut m1 = Mesh::new("test", ArchId(1));
+        m1.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        m1.normals = vec![[0.0, 0.0, 1.0]; 3];
+        m1.uvs = vec![[0.0, 0.0]; 3];
+        m1.indices = vec![0, 1, 2];
+        let mut m2 = Mesh::new("test", ArchId(2));
+        m2.positions = vec![[0.5, 0.5, 0.0], [1.5, 0.5, 0.0], [0.5, 1.5, 0.0]];
+        m2.normals = vec![[0.0, 0.0, 1.0]; 3];
+        m2.uvs = vec![[0.0, 0.0]; 3];
+        m2.indices = vec![0, 1, 2];
+        let scene = Scene3d { meshes: vec![m1, m2], ..Scene3d::default() };
+        let bvh = Bvh::build(&scene);
+        // Ray through center hits both triangles at z=0; m1's triangle comes first.
+        let hit = scene.pick_with(&bvh, Vec3::new(0.5, 0.5, 1.0), Vec3::new(0.0, 0.0, -1.0));
+        assert!(hit.is_some());
+        assert_eq!(hit.unwrap().object, ArchId(1));
+    }
+
+    #[test]
+    fn rays_all_returns_all_hits_in_order() {
+        let mut m1 = Mesh::new("test", ArchId(1));
+        m1.positions = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        m1.normals = vec![[0.0, 0.0, 1.0]; 3];
+        m1.uvs = vec![[0.0, 0.0]; 3];
+        m1.indices = vec![0, 1, 2];
+        let mut m2 = Mesh::new("test", ArchId(2));
+        m2.positions = vec![[0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [0.0, 1.0, 1.0]];
+        m2.normals = vec![[0.0, 0.0, 1.0]; 3];
+        m2.uvs = vec![[0.0, 0.0]; 3];
+        m2.indices = vec![0, 1, 2];
+        let scene = Scene3d { meshes: vec![m1, m2], ..Scene3d::default() };
+        let bvh = Bvh::build(&scene);
+        let hits = bvh.rays_all(Vec3::new(0.5, 0.5, 2.0), Vec3::new(0.0, 0.0, -1.0));
+        assert_eq!(hits.len(), 2);
+        assert!(hits[0].distance < hits[1].distance);
+    }
 }
