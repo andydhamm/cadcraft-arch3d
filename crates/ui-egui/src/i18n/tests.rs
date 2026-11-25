@@ -800,6 +800,44 @@ fn uk_rows_for_phase15_labels_exist() {
 }
 
 #[test]
+fn uk_roof_translations_exist_and_are_correct() {
+    with_language("uk", || {
+        assert_eq!(t("Roof"), "Дах");
+        assert_eq!(t("Roof Automatic"), "Автоматичний дах");
+        assert_eq!(t("Roof Plane"), "Площина даху");
+        assert_eq!(t("Automatic"), "Автоматичний");
+        assert_eq!(t("Plane"), "Площина");
+    });
+}
+
+#[test]
+fn uk_roof_translations_are_not_english_fallbacks() {
+    with_language("uk", || {
+        // If a translation is missing, t() returns the English source.
+        // Verify these are actually translated (different from source).
+        assert_ne!(t("Roof"), "Roof");
+        assert_ne!(t("Roof Automatic"), "Roof Automatic");
+        assert_ne!(t("Roof Plane"), "Roof Plane");
+        assert_ne!(t("Automatic"), "Automatic");
+        assert_ne!(t("Plane"), "Plane");
+    });
+}
+
+#[test]
+fn uk_roof_translations_use_correct_cyrillic() {
+    with_language("uk", || {
+        // Verify translations contain Cyrillic characters, not Latin.
+        for (source, expected) in [("Roof", "Дах"), ("Roof Automatic", "Автоматичний дах"), ("Roof Plane", "Площина даху")]
+        {
+            let translated = t(source);
+            assert_eq!(translated, expected, "{source}");
+            // All characters should be non-ASCII (Cyrillic) or spaces
+            assert!(translated.chars().all(|c| c == ' ' || !c.is_ascii()), "{source}: {translated}");
+        }
+    });
+}
+
+#[test]
 fn polish_plural_forms() {
     for (n, expected) in [(0, 2), (1, 0), (2, 1), (4, 1), (5, 2), (12, 2), (14, 2), (21, 2), (22, 1), (24, 1), (25, 2), (101, 2), (102, 1), (112, 2)]
     {
