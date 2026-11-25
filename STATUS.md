@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 03:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 04:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 46 of 47 segments merged · 14 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 47 of 47 segments merged · 14 of 15 acceptance checks**
 
-12,227 workspace tests passing at the last merge · 1411 segments merged in all · 0 of 15 seats working
+12,233 workspace tests passing at the last merge · 1412 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,20 +32,18 @@ Updated 2026-11-25 03:45 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 14 / 15 | 34.3 h so far · expected done Nov 25 05:07–Nov 25 21:19 UTC |
+| 22 | Photoreal stills | building | 14 / 15 | 34.5 h so far · expected done Nov 25 04:00–Nov 25 17:30 UTC |
 
 ## Phase 22 segments
 
-46 merged, 1 merging, 1 abandoned
+47 merged, 1 abandoned
 
-| Segment | What | State | Seat |
-|---|---|---|---|
-| `p22h-learned-energy` | Learned denoiser: restore the local energy the network removes from firefly-lit regions (kitchen mean within 15 %, error at most half the filter's) | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 03:56 | `p22h-learned-energy` | merged | 12,233 pass | claude-sonnet-d |
 | Nov 25 03:38 | `harden-p22g-adaptive-robust-error` | merged | 12,227 pass | tturbo-mac |
 | Nov 25 03:22 | `harden-p17-stair-flight` | merged | 12,219 pass | tturbo-mac |
 | Nov 25 02:55 | `harden-p17-commands` | merged | 12,215 pass | tturbo-mac |
@@ -57,24 +55,23 @@ Updated 2026-11-25 03:45 UTC. This page and the card in the README are regenerat
 | Nov 25 00:55 | `harden-p22g-trans-shadow-side` | merged | 12,112 pass | tturbo-mac2 |
 | Nov 25 00:10 | `upstream-sync-5e4bbe594` | merged | 12,084 pass | claude-sonnet-a |
 | Nov 24 23:26 | `p22g-learned-kitchen-error` | merged | 12,062 pass, 1 fail | claude-sonnet-b |
-| Nov 24 21:55 | `p22g-trans-shadow-side` | merged | 12,056 pass | claude-sonnet-c |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1448 |
-| bonsai-b | bonsai2-27b | gate | 1379 |
+| bonsai-b | bonsai2-27b | idle | 1382 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
 | claude-sonnet-d | sonnet | idle | 119 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1336 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1338 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1248 |
-| tturbo-mac2 | tturbo-ultraheretic | idle | 748 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1249 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 748 |
